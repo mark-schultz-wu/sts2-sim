@@ -969,6 +969,8 @@ pub struct DamageResult<V: ContentVersion> {
     pub receiver: crate::CombatId,
     /// `TotalDamage`: what the block took and what the hit points lost.
     pub total: V::Number,
+    /// `UnblockedDamage`: what the hit points lost.
+    pub unblocked: V::Number,
     /// `OverkillDamage`: what the hit had left once the hit points ran out.
     pub overkill: V::Number,
     /// `WasTargetKilled`.
@@ -2008,6 +2010,12 @@ pub trait Fight<V: ContentVersion> {
     /// `PowerCmd.Remove` of `power` from `creature`, where it holds one.
     fn remove_power(&mut self, _creature: crate::CombatId, _power: V::Power) {
         unimplemented!("removing a power")
+    }
+
+    /// `CreatureCmd.SetMaxHp`: the maximum, and the health down to it where
+    /// it stood above.
+    fn set_max_hp(&mut self, _creature: crate::CombatId, _hp: V::Health) {
+        unimplemented!("setting a creature's maximum health")
     }
 
     /// `CreatureCmd.SetMaxAndCurrentHp`: both numbers at once.
@@ -3282,6 +3290,8 @@ pub enum EventHook<V: ContentVersion> {
         attacker: crate::CombatId,
         /// `Attacker.Monster`, which is nothing for the player.
         monster: Option<V::Monster>,
+        /// `DamageProps.IsPoweredAttack()`.
+        powered: bool,
     },
 }
 
@@ -4012,6 +4022,13 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CreatureCmd.Damage` on the living creatures the event hit, from the
     /// listener's owner, unpowered.
     DamageTargets(V::Number),
+    /// `CardPileCmd.AddToCombatAndPreview(card)` into the discard pile of
+    /// each player the attack hit: `per` for each of its hits on that player
+    /// that took health.
+    GiveCardsPerUnblockedHit {
+        card: V::Card,
+        per: V::Number,
+    },
     /// `PotionFactory.CreateRandomPotionOutOfCombat` off the named stream and
     /// `PotionCmd.TryToProcure`, one at a time for as long as the belt has an
     /// open slot and the potion lands.

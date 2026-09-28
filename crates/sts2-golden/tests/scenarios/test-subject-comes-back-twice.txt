@@ -1,0 +1,20 @@
+# The Test Subject: Adaptable brings it back twice, each time on its respawn
+# move, with Painful Stabs and then Nemesis. Enrage gives it Strength for
+# each Skill played. Multi Claw hits once more each time, and Painful Stabs
+# gives a Wound for each hit that takes health, which the first hit blocked
+# in full does not. The third form falls for good, and Nemesis makes it
+# Intangible every other turn.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"TEST_SUBJECT_BOSS"}
+{"cmd":"play_card","index":2}
+{"cmd":"power","power":"STRENGTH_POWER","amount":200,"target":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"DEXTERITY_POWER","amount":5,"target":0}
+{"cmd":"play_card","index":1}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":1,"target":1}
+{"cmd":"play_card","index":3,"target":1}

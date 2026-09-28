@@ -703,6 +703,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 landed.push(sts2_core::DamageResult {
                     receiver,
                     total,
+                    unblocked: lost,
                     overkill,
                     killed,
                 });
@@ -2368,6 +2369,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 command,
                 attacker,
                 monster,
+                powered: scaling == Scaling::Dynamic,
             },
         );
         for (listener, effect) in asked {
@@ -2383,6 +2385,18 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 (Listener::Relic { .. }, HookEffect::GainBlock(amount)) => {
                     let player = self.live.player().id;
                     self.live.gain_unpowered_block(player, amount);
+                }
+                // A fight here has one player, whose piles take them all.
+                (Listener::Power { .. }, HookEffect::GiveCardsPerUnblockedHit { card, per }) => {
+                    let player = self.live.player().id;
+                    let hits = results
+                        .iter()
+                        .filter(|hit| hit.receiver == player && hit.unblocked > V::Number::zero())
+                        .count();
+                    let count = num_traits::cast::<_, usize>(per)
+                        .unwrap_or_else(|| unimplemented!("{per:?} cards for each hit"))
+                        * hits;
+                    self.add_generated_cards(CardIdent::new(card), Pile::Discard, count);
                 }
                 (listener, effect) => {
                     unimplemented!("{listener:?} asking for {effect:?} after an attack")
@@ -2452,6 +2466,18 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 fresh: held.state == V::PowerState::new(held.power()),
             })
             .collect()
+    }
+
+    fn set_max_hp(&mut self, creature: CombatId, hp: V::Health) {
+        // `SetMaxHp` kills a creature it sets to nothing, which no caller
+        // asks.
+        if hp <= num_traits::zero() {
+            unimplemented!("a maximum health set to nothing");
+        }
+        let Some(at) = self.at(creature) else { return };
+        let held = &mut self.live.creatures[at];
+        held.max_hp = hp;
+        held.hp = held.hp.min(hp);
     }
 
     fn set_max_and_current_hp(&mut self, creature: CombatId, hp: V::Health) {

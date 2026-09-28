@@ -672,9 +672,12 @@ impl sts2_core::Rules for V0_107_1 {
         let State::Move(held) = data.states[usize::from(at)] else {
             unimplemented!("{monster:?} sent to {move_id:?}, which is not a move")
         };
-        Ok(intents(held, ascension as u8, || {
-            unimplemented!("{monster:?} sent to {move_id:?}, whose damage the fight decides")
-        })
+        Ok(intents(
+            held,
+            ascension as u8,
+            || unimplemented!("{monster:?} sent to {move_id:?}, whose damage the fight decides"),
+            || unimplemented!("{monster:?} sent to {move_id:?}, whose hits the fight decides"),
+        )
         .expect("a move state publishes its own intents"))
     }
 
@@ -965,9 +968,12 @@ fn roll_monster_move<
         let State::Move(held) = state(machine.at)? else {
             return Err(sts2_core::ContentError::InvalidMonsterState { index: machine.at });
         };
-        return intents(held, ascension, || {
-            unimplemented!("a built state whose damage the fight decides")
-        })
+        return intents(
+            held,
+            ascension,
+            || unimplemented!("a built state whose damage the fight decides"),
+            || unimplemented!("a built state whose hits the fight decides"),
+        )
         .map(Some);
     }
 
@@ -996,10 +1002,15 @@ fn roll_monster_move<
     let State::Move(held) = state(machine.at)? else {
         return Err(sts2_core::ContentError::InvalidMonsterState { index: machine.at });
     };
-    intents(held, ascension, || {
-        read.extend(powers.take().into_iter().flatten());
-        behaviour::monsters::computed_damage(monster, held.id, ascension, &read)
-    })
+    intents(
+        held,
+        ascension,
+        || {
+            read.extend(powers.take().into_iter().flatten());
+            behaviour::monsters::computed_damage(monster, held.id, ascension, &read)
+        },
+        || behaviour::monsters::computed_repeats(monster, held.id, model),
+    )
     .map(Some)
 }
 
@@ -1066,12 +1077,13 @@ fn allowed(branch: &generated::monsters::Branch, machine: &sts2_core::MoveMachin
 
 /// The intents a move state publishes, at this ascension.
 ///
-/// `computed` works out a damage the table leaves to the fight, which the
-/// monster's own port answers.
+/// `computed` works out a damage the table leaves to the fight, and
+/// `computed_repeats` a hit count, which the monster's own port answers.
 fn intents(
     held: generated::monsters::Move,
     ascension: u8,
     computed: impl FnOnce() -> i32,
+    computed_repeats: impl FnOnce() -> u32,
 ) -> Result<sts2_core::NextMove<V0_107_1>, sts2_core::ContentError> {
     use crate::Field;
     use generated::monsters::IntentKind;
@@ -1085,13 +1097,11 @@ fn intents(
                 Field::Constant(damage) => i32::from(damage.at(ascension)),
                 Field::Computed => computed(),
             };
-            let Field::Constant(repeats) = attack.repeats else {
-                unimplemented!("a move whose repeats the fight decides");
+            let repeats = match attack.repeats {
+                Field::Constant(repeats) => u32::from(repeats.at(ascension)),
+                Field::Computed => computed_repeats(),
             };
-            Some(sts2_core::Attack {
-                damage,
-                repeats: u32::from(repeats.at(ascension)),
-            })
+            Some(sts2_core::Attack { damage, repeats })
         }
     };
     let intents = held
