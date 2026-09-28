@@ -224,6 +224,16 @@ impl sts2_core::Hooks for V0_107_1 {
         behaviour::powers::event_hook(power, amount, held, state, hook, asked)
     }
 
+    fn keyword_while_afflicted(affliction: Self::Affliction) -> Option<Self::CardKeyword> {
+        use generated::afflictions::Affliction;
+        use generated::cards::CardKeyword;
+
+        match affliction {
+            Affliction::Hexed => Some(CardKeyword::Ethereal),
+            _ => None,
+        }
+    }
+
     fn card_result_pile(
         card: Self::Card,
         base: Option<sts2_core::Pile>,

@@ -241,6 +241,12 @@ pub(super) fn perform<F: Fight<V>>(
             );
             fight.add_at_random(dazed, sts2_core::Pile::Draw);
         }
+        // `HexMove`: two Hex on each target.
+        (Monster::SpectralKnight, MoveId::Hex) => {
+            fight.apply_to_opponents(Power::HexPower, PowerAmount::Counted(2));
+        }
+        // `MagicBombMove`: its hit. The rest picks where its effect lands.
+        (Monster::MagiKnight, MoveId::MagicBomb) => fight.attack_opponents(),
         // `JudicialFlightMove`: Soar on itself. `IsFlying` picks its sounds
         // alone.
         (Monster::OwlMagistrate, MoveId::JudicialFlight) => {

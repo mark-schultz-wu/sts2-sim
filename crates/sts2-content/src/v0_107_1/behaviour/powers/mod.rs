@@ -1841,6 +1841,33 @@ pub(crate) fn event_hook(
         (Power::RingingPower, _, EventHook::Removed) => Some(HookEffect::ClearAffliction(
             sts2_core::Writing::EveryAfflictedWith(Affliction::Ringing),
         )),
+        // `HexPower.AfterApplied`: Hexed on every card its owner holds that
+        // has no affliction. `AfterCardEnteredCombat`: on a card that joins.
+        (Power::HexPower, PowerAmount::Counted(_), EventHook::Applied) => {
+            Some(HookEffect::Afflict {
+                to: sts2_core::Writing::Every,
+                affliction: Affliction::Hexed,
+            })
+        }
+        (Power::HexPower, _, EventHook::CardEnteredCombat { at, .. }) => Some(HookEffect::Afflict {
+            to: sts2_core::Writing::One(at),
+            affliction: Affliction::Hexed,
+        }),
+        // `HexPower.AfterDeath`: gone once the creature that applied it dies.
+        (
+            Power::HexPower,
+            _,
+            EventHook::AfterDeath {
+                creature,
+                removal_prevented: false,
+                ..
+            },
+        ) if Some(creature) == applier => Some(HookEffect::Remove),
+        (Power::HexPower, _, EventHook::AfterDeath { .. }) => None,
+        // `HexPower.AfterRemoved`: Hexed off every card that has it.
+        (Power::HexPower, _, EventHook::Removed) => Some(HookEffect::ClearAffliction(
+            sts2_core::Writing::EveryAfflictedWith(Affliction::Hexed),
+        )),
         (Power::TangledPower, _, EventHook::Applied) => Some(HookEffect::Afflict {
             to: sts2_core::Writing::EveryOfKind(sts2_core::CardKind::Attack),
             affliction: Affliction::Entangled,
