@@ -775,6 +775,18 @@ pub(crate) fn modify_hook(
             unimplemented!("an endless Tracking")
         }
         (Power::TrackingPower, _, ModifyHook::DamageMultiplicative { .. }) => Modify::Nothing,
+        // `DiamondDiademPower.ModifyDamageMultiplicative`: half of a powered
+        // hit on its holder.
+        (
+            Power::DiamondDiademPower,
+            _,
+            ModifyHook::DamageMultiplicative {
+                target,
+                powered: true,
+                ..
+            },
+        ) if target == Some(holder) => Modify::Scaled(0.5),
+        (Power::DiamondDiademPower, _, ModifyHook::DamageMultiplicative { .. }) => Modify::Nothing,
         // `CorruptionPower.TryModifyEnergyCostInCombatLate`: nothing for a
         // Skill its owner holds or is playing. A fight here has one player.
         (
@@ -2236,6 +2248,16 @@ pub(crate) fn event_hook(
             return;
         }
         (Power::RampartPower, _, EventHook::SideTurnStart { .. }) => None,
+        // `DiamondDiademPower.AfterSideTurnEnd`: gone once the enemies' turn
+        // ends.
+        (
+            Power::DiamondDiademPower,
+            _,
+            EventHook::SideTurnEnd {
+                side: CombatSide::Enemy,
+            },
+        ) => Some(HookEffect::Remove),
+        (Power::DiamondDiademPower, _, EventHook::SideTurnEnd { .. }) => None,
         // `NoDrawPower.AfterSideTurnEnd`: gone once its owner's turn ends.
         (Power::NoDrawPower, _, EventHook::SideTurnEnd { side }) if side == owner => {
             Some(HookEffect::Remove)

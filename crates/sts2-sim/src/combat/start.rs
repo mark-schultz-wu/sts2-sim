@@ -43,6 +43,9 @@ pub(crate) struct Entered<V: Rules> {
     pub(crate) streams: Streams<V>,
     /// How the fight ended before the player took a turn in it, if it did.
     pub(crate) ended: Option<super::Ended>,
+    /// What a listener asked of the run as the fight opened, which the run
+    /// carries out once it stands in the fight.
+    pub(crate) arriving: Vec<HookEffect<V>>,
 }
 
 /// The fight this run opens on the encounter it just travelled into.
@@ -181,6 +184,7 @@ pub(crate) fn enter<V: Rules>(
     // below. So an affliction asked for here lands once they are, before
     // anything draws.
     let mut afflicting: Vec<HookEffect<V>> = Vec::new();
+    let mut arriving: Vec<HookEffect<V>> = Vec::new();
     let starting = EventHook::CombatStarting { room: live.room() };
     for (listener, effect) in super::listen::notify::<V>(&mut live, relics, starting) {
         match (listener, effect) {
@@ -215,6 +219,10 @@ pub(crate) fn enter<V: Rules>(
                 );
             }
             (_, afflict @ HookEffect::Afflict { .. }) => afflicting.push(afflict),
+            // The belt is the run's.
+            (super::listen::Listener::Relic { .. }, fill @ HookEffect::FillPotionSlots { .. }) => {
+                arriving.push(fill)
+            }
             // `CreatureCmd.Heal` on the player who carries the relic.
             (super::listen::Listener::Relic { .. }, HookEffect::Heal(amount)) => {
                 let player = live.player().id;
@@ -297,6 +305,7 @@ pub(crate) fn enter<V: Rules>(
             live,
             streams,
             ended: Some(ended),
+            arriving,
         });
     }
     if let Some(ended) = super::turn::side_turn_started::<V>(
@@ -313,6 +322,7 @@ pub(crate) fn enter<V: Rules>(
             live,
             streams,
             ended: Some(ended),
+            arriving,
         });
     }
     // `OrbQueue.AfterTurnStart`, which a fight's opening turn runs too.
@@ -331,6 +341,7 @@ pub(crate) fn enter<V: Rules>(
         live,
         streams,
         ended,
+        arriving,
     })
 }
 

@@ -589,6 +589,8 @@ pub(super) struct CreatedFight<V: Rules> {
     queue: EncounterQueue,
     /// How the fight ended before the player took a turn in it, if it did.
     ended: Option<crate::combat::Ended>,
+    /// What the fight's opening asked of the run.
+    arriving: Vec<sts2_core::HookEffect<V>>,
 }
 
 /// Where the run stands when it enters a room.
@@ -2487,6 +2489,10 @@ impl<V: Rules> State<V> {
         for effect in self.notify_belt(hook(card)) {
             match effect {
                 sts2_core::HookEffect::UpgradeCard => card.upgrade += 1,
+                sts2_core::HookEffect::EnchantCard {
+                    enchantment,
+                    amount,
+                } => V::enchant(enchantment, amount, &mut card),
                 effect => unimplemented!("a relic asking for {effect:?} of a card it rewrites"),
             }
         }
@@ -2945,6 +2951,7 @@ impl<V: Rules> State<V> {
             streams,
             queue,
             ended,
+            arriving,
         } = fight;
         match queue {
             EncounterQueue::Normal => self.normal_fights += 1,
@@ -2953,6 +2960,7 @@ impl<V: Rules> State<V> {
         }
         self.drew(streams);
         self.enter(at, Phase::Combat(live));
+        self.arrived(arriving);
         // A fight its opening ended goes straight on, the way one a decision
         // ended does.
         self.settle(ended, 0)
@@ -3095,6 +3103,7 @@ impl<V: Rules> State<V> {
             live,
             streams,
             ended,
+            arriving,
         } = crate::combat::enter::<V>(
             raw_seed,
             character,
@@ -3109,6 +3118,7 @@ impl<V: Rules> State<V> {
             streams,
             queue,
             ended,
+            arriving,
         })
     }
 
@@ -3129,6 +3139,7 @@ impl<V: Rules> State<V> {
             live,
             streams,
             ended,
+            arriving,
             ..
         } = {
             let rolled = match &self.phase {
@@ -3150,7 +3161,17 @@ impl<V: Rules> State<V> {
         }
         self.drew(streams);
         self.phase = Phase::Combat(live);
+        self.arrived(arriving);
         Ok(self.settle(ended, 0))
+    }
+
+    /// Carry out what a fight's opening asked of the run, which asks nothing
+    /// back.
+    fn arrived(&mut self, arriving: Vec<sts2_core::HookEffect<V>>) {
+        if let Some(asked) = self.carry_out(arriving) {
+            let pickup = asked.pickup;
+            unimplemented!("a fight's opening asking for {pickup:?}");
+        }
     }
 
     /// Put the run into a named fight, rather than travel to one.

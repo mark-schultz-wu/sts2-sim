@@ -4189,6 +4189,12 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CardCmd.Upgrade` on a clone of the card the hook names, which takes
     /// its place.
     UpgradeCard,
+    /// `CardCmd.Enchant` by `amount` on a clone of the card the hook names,
+    /// which takes its place.
+    EnchantCard {
+        enchantment: V::Enchantment,
+        amount: u8,
+    },
     /// Keep this number on the card that asked, as a field of its own model
     /// that it prints nowhere.
     NoteOnSelf(V::Number),

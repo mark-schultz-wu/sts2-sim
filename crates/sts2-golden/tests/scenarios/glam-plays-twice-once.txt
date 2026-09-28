@@ -1,0 +1,6 @@
+# Glam plays its card one more time, the first time it is played in a
+# fight.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"BYGONE_EFFIGY_ELITE"}
+{"cmd":"enchant","enchantment":"GLAM","amount":1,"index":1}
+{"cmd":"play_card","index":1,"target":1}
