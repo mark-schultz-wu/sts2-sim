@@ -221,7 +221,12 @@ pub(crate) fn state_of(monster: Monster, wanted: MoveId, at: u8) -> Result<u8, C
 /// # Panics
 ///
 /// An override nobody has ported.
-pub(crate) fn event_hook(monster: Monster, hook: EventHook<V>) {
+pub(crate) fn event_hook(
+    monster: Monster,
+    model: &Model,
+    hook: EventHook<V>,
+    asked: &mut sts2_core::HookEffects<V>,
+) {
     match (monster, hook) {
         // A Decimillipede segment swaps its texture as it dies, the Vantom
         // moves the music on, and the Kin Priest talks and moves the music
@@ -241,8 +246,15 @@ pub(crate) fn event_hook(monster: Monster, hook: EventHook<V>) {
             EventHook::CurrentHpChanged { .. } | EventHook::BeforeDeath { .. },
         ) => {}
         // The Insatiable's own death does nothing but return. The Test
-        // Subject's sets its colour and the music.
-        (Monster::TheInsatiable | Monster::TestSubject, EventHook::AfterDeath { .. }) => {}
+        // Subject's sets its colour and the music, and the Aeonglass's
+        // returns.
+        (
+            Monster::TheInsatiable | Monster::TestSubject | Monster::Aeonglass,
+            EventHook::AfterDeath { .. },
+        ) => {}
+        (Monster::Aeonglass, EventHook::CardGeneratedForCombat { at, card, .. }) => {
+            glory::wither_generated(model, at, card, asked)
+        }
         (monster, hook) => unimplemented!("what {monster:?} does for {hook:?}"),
     }
 }
@@ -312,7 +324,8 @@ pub(crate) fn perform<F: Fight<V>>(
         | Monster::Noisebot
         | Monster::TheLost
         | Monster::TheForgotten
-        | Monster::TestSubject => glory::perform(monster, move_id, model, fight),
+        | Monster::TestSubject
+        | Monster::Aeonglass => glory::perform(monster, move_id, model, fight),
         _ => monster_moves::perform(monster, move_id, fight),
     }
     Played::Done
@@ -334,6 +347,8 @@ pub enum Model {
     Fabricator { last: Option<Monster> },
     /// `TestSubject.Respawns` and `ExtraMultiClawCount`.
     TestSubject { respawns: u8, extra_claws: u8 },
+    /// `Aeonglass.AdditionalStrength` and `WitherUpgradeCount`.
+    Aeonglass { strength: u8, wither_upgrades: u8 },
 }
 
 impl sts2_core::MonsterModel<V> for Model {
@@ -348,6 +363,10 @@ impl sts2_core::MonsterModel<V> for Model {
             Monster::TestSubject => Self::TestSubject {
                 respawns: 0,
                 extra_claws: 0,
+            },
+            Monster::Aeonglass => Self::Aeonglass {
+                strength: 0,
+                wither_upgrades: 0,
             },
             _ => Self::Stateless,
         }

@@ -922,6 +922,7 @@ impl<'a, V: Rules> Board<'a, V> {
             .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
         let at = CardAt::new(id, pile, index);
         self.card_entered_combat(at, card, false);
+        self.card_generated(at, card, self.creator());
         Some(at)
     }
 
@@ -942,6 +943,67 @@ impl<'a, V: Rules> Board<'a, V> {
             }
         }
         self.write_cards(rest);
+    }
+
+    /// `Hook.AfterCardGeneratedForCombat`, once a card made in the fight has
+    /// landed at `at`, and what it asked for. `CardPileCmd.Add` has raised
+    /// `AfterCardEnteredCombat` for it first.
+    fn card_generated(&mut self, at: CardAt<V>, card: V::Card, creator: Option<CombatId>) {
+        let asked = super::listen::notify::<V>(
+            self.live,
+            self.relics,
+            sts2_core::EventHook::CardGeneratedForCombat { at, card, creator },
+        );
+        let mut rest: SmallVec<[HookEffect<V>; 4]> = SmallVec::new();
+        for (listener, effect) in asked {
+            match (listener, effect) {
+                // Written on the card that asked, wherever it stands.
+                (Listener::Card { id }, HookEffect::ModifySelf { change, lasting }) => {
+                    self.live.modify_self(id, change, lasting)
+                }
+                (_, effect) => rest.push(effect),
+            }
+        }
+        self.write_cards(rest);
+    }
+
+    /// Who a card the acting creature makes is made by: the player, where
+    /// the player acts. A monster's cards are made by nobody.
+    fn creator(&self) -> Option<CombatId> {
+        let player = self.live.player().id;
+        (self.actor == player).then_some(player)
+    }
+
+    /// `CardPileCmd.AddGeneratedCardsToCombat` of `count` new copies into
+    /// `pile`, made by `creator`.
+    pub(super) fn generate(
+        &mut self,
+        card: CardIdent<V>,
+        pile: Pile,
+        count: usize,
+        creator: Option<CombatId>,
+    ) -> Vec<CardAt<V>> {
+        // `IsInProgress`, which a fight already over fails.
+        if self.ended.is_some() {
+            return Vec::new();
+        }
+        let mut added = Vec::with_capacity(count);
+        for _ in 0..count {
+            let id = self.live.card_ids.mint();
+            // A full hand sends the card to the discard pile instead.
+            let full = pile == Pile::Hand
+                && self.live.cards.len(Pile::Hand) >= super::pile::MAX_CARDS_IN_HAND;
+            let pile = if full { Pile::Discard } else { pile };
+            let index = num_traits::NumCast::from(self.live.cards.len(pile))
+                .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
+            self.live.cards.push(pile, CardInstance::new(card, id));
+            let at = CardAt::new(id, pile, index);
+            added.push(at);
+            // `CardPileCmd.Add` raises this for each card as it lands.
+            self.card_entered_combat(at, card.card, false);
+            self.card_generated(at, card.card, creator);
+        }
+        added
     }
 
     /// Carry out what the card-writing hooks asked for.
@@ -975,6 +1037,9 @@ impl<'a, V: Rules> Board<'a, V> {
                 sts2_core::HookEffect::ClearAffliction(to) => {
                     self.write_on(to, |held| held.ident.affliction = None)
                 }
+                sts2_core::HookEffect::ModifyCards { to, change } => self.write_on(to, |held| {
+                    held.modify(change, sts2_core::Lasting::ThisFight)
+                }),
                 effect => unimplemented!("a power asking for {effect:?} as it writes on cards"),
             }
         }
@@ -2539,6 +2604,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.landed.clone().unwrap_or_default()
     }
 
+    fn modify_cards(&mut self, to: sts2_core::Writing<V>, change: sts2_core::Change<V>) {
+        self.write_cards([HookEffect::ModifyCards { to, change }]);
+    }
+
     fn add_replays(&mut self, to: sts2_core::Writing<V>, amount: V::Number) {
         self.write_cards([HookEffect::AddReplays { to, amount }]);
     }
@@ -2691,6 +2760,14 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         {
             unimplemented!("{listener:?} asking for {effect:?} as a card changes piles")
         }
+        // `CardCmd.Transform` raises this once every replacement is in, made
+        // by the card's owner.
+        let player = self.live.player().id;
+        self.card_generated(
+            CardAt::new(id, card.pile(), card.index()),
+            into.card,
+            Some(player),
+        );
     }
 
     fn forge(&mut self, card: V::Card, key: V::CardVar, amount: V::Number) {
@@ -2720,6 +2797,8 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         // which is the order `ForgeCmd` adds and then increases in.
         if let Some(at) = created {
             self.card_entered_combat(at, card, false);
+            let player = self.live.player().id;
+            self.card_generated(at, card, Some(player));
         }
     }
 
@@ -3193,6 +3272,18 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         }
     }
 
+    fn store_model(&mut self, model: &V::MonsterState) {
+        let actor = self.actor;
+        if let Some(held) = self
+            .live
+            .machines
+            .iter_mut()
+            .find(|held| held.creature == actor)
+        {
+            held.state = *model;
+        }
+    }
+
     fn write_power(
         &mut self,
         at: CombatId,
@@ -3276,6 +3367,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.live.cards.push(pile, face.named(id));
         let at = CardAt::new(id, pile, index);
         self.card_entered_combat(at, face.ident.card, true);
+        self.card_generated(at, face.ident.card, self.creator());
         Some(at)
     }
 
@@ -3285,26 +3377,8 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         pile: Pile,
         count: usize,
     ) -> Vec<CardAt<V>> {
-        // `IsInProgress`, which a fight already over fails.
-        if self.ended.is_some() {
-            return Vec::new();
-        }
-        let mut added = Vec::with_capacity(count);
-        for _ in 0..count {
-            let id = self.live.card_ids.mint();
-            // A full hand sends the card to the discard pile instead.
-            let full = pile == Pile::Hand
-                && self.live.cards.len(Pile::Hand) >= super::pile::MAX_CARDS_IN_HAND;
-            let pile = if full { Pile::Discard } else { pile };
-            let index = num_traits::NumCast::from(self.live.cards.len(pile))
-                .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
-            self.live.cards.push(pile, CardInstance::new(card, id));
-            let at = CardAt::new(id, pile, index);
-            added.push(at);
-            // `CardPileCmd.Add` raises this for each card as it lands.
-            self.card_entered_combat(at, card.card, false);
-        }
-        added
+        let creator = self.creator();
+        self.generate(card, pile, count, creator)
     }
 
     fn cards_in(&self, pile: Pile) -> Vec<CardAt<V>> {

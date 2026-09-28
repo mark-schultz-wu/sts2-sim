@@ -1674,7 +1674,9 @@ static ROWS: [MonsterData; 126] = [
 /// The hooks each class overrides, from `hooks.txt`, indexed by the monster's place in the enum.
 static OVERRIDES: [sts2_core::Overrides; 126] = [
     // AEONGLASS
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDeath),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardGeneratedForCombat)
+        .with(sts2_core::ModelHook::AfterDeath),
     // ARCHITECT
     sts2_core::Overrides::from_bits(0),
     // ASSASSIN_RUBY_RAIDER

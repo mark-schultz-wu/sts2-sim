@@ -283,11 +283,12 @@ impl sts2_core::Hooks for V0_107_1 {
 
     fn monster_event_hook(
         monster: Self::Monster,
+        model: &Self::MonsterState,
         _creature: sts2_core::CombatId,
         hook: sts2_core::EventHook<Self>,
-        _asked: &mut sts2_core::HookEffects<Self>,
+        asked: &mut sts2_core::HookEffects<Self>,
     ) {
-        behaviour::monsters::event_hook(monster, hook)
+        behaviour::monsters::event_hook(monster, model, hook, asked)
     }
 
     fn enchant_modify(

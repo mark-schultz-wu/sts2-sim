@@ -68,6 +68,10 @@ pub enum State {
     Nemesis {
         intangible: bool,
     },
+    /// `WitheringPresencePower`'s `CardsLeft`.
+    WitheringPresence {
+        cards_left: u8,
+    },
     /// `SwipePower.StolenCard`.
     Swipe {
         stolen: Option<sts2_core::CardIdent<V>>,
@@ -181,6 +185,9 @@ impl sts2_core::PowerModel<V> for State {
             Power::ReattachPower => Self::Reattach { reviving: false },
             Power::AdaptablePower => Self::Adaptable { reviving: false },
             Power::NemesisPower => Self::Nemesis { intangible: false },
+            Power::WitheringPresencePower => Self::WitheringPresence {
+                cards_left: WITHERING_CARDS,
+            },
             Power::SwipePower => Self::Swipe { stolen: None },
             Power::VigorPower => Self::Vigor { bound: None },
             Power::FeralPower => Self::Feral { played: 0 },
@@ -223,6 +230,7 @@ impl sts2_core::PowerModel<V> for State {
             Self::Reattach { .. } => Power::ReattachPower,
             Self::Adaptable { .. } => Power::AdaptablePower,
             Self::Nemesis { .. } => Power::NemesisPower,
+            Self::WitheringPresence { .. } => Power::WitheringPresencePower,
             Self::Swipe { .. } => Power::SwipePower,
             Self::Vigor { .. } => Power::VigorPower,
             Self::Feral { .. } => Power::FeralPower,
@@ -1719,6 +1727,9 @@ pub(crate) fn decide_hook(
     }
 }
 
+/// `WitheringPresencePower`'s `CardsLeft` as it is applied.
+const WITHERING_CARDS: u8 = 6;
+
 /// Whose a power is, and what of the fight it can read, as a hook reaching
 /// it reads that.
 #[derive(Clone, Copy)]
@@ -2803,6 +2814,21 @@ pub(crate) fn event_hook(
             }
         }
         (Power::NemesisPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `WitheringPresencePower.AfterCardPlayed`, for each card its target
+        // plays, which is the one player: every sixth, a Wither into the hand.
+        (Power::WitheringPresencePower, _, EventHook::CardPlayed { .. }) => {
+            let State::WitheringPresence { cards_left } = state else {
+                unreachable!("Withering Presence holding {state:?}")
+            };
+            *cards_left -= 1;
+            (*cards_left == 0).then(|| {
+                *cards_left = WITHERING_CARDS;
+                HookEffect::GenerateInHand {
+                    card: Cards::Status(StatusCard::Wither),
+                    count: one,
+                }
+            })
+        }
         (
             Power::InfestedPower,
             PowerAmount::Counted(amount),

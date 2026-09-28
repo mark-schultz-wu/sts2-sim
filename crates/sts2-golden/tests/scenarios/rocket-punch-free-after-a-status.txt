@@ -1,0 +1,10 @@
+# Rocket Punch costs nothing until played once its owner makes a Status.
+# Turbo's Void is made while Rocket Punch lies in the discard pile, and the
+# shuffle brings it back free.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"grant","card":"ROCKET_PUNCH"}
+{"cmd":"grant","card":"TURBO"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":2}
+{"cmd":"end_turn"}

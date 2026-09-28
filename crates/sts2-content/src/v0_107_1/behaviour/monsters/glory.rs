@@ -38,6 +38,12 @@ pub(super) fn starting_powers(
         // Its `StartingHpReduction` is nothing outside the Punch-Off event's
         // encounter, which rolls it.
         Monster::PunchConstruct => vec![(Power::ArtifactPower, PowerAmount::Counted(1))],
+        // `WitheringPresencePower` on itself for each opponent, which the one
+        // player is, then Artifact.
+        Monster::Aeonglass => vec![
+            (Power::WitheringPresencePower, PowerAmount::Counted(6)),
+            (Power::ArtifactPower, PowerAmount::Counted(3)),
+        ],
         Monster::TestSubject => {
             let enrage = match ascension.has(AscensionLevel::DeadlyEnemies) {
                 true => 3,
@@ -130,6 +136,36 @@ pub(super) fn computed_repeats(monster: Monster, move_id: MoveId, model: &super:
             MULTI_CLAWS + u32::from(test_subject(model).1)
         }
         (monster, move_id) => unimplemented!("the hits {monster:?} works out for {move_id:?}"),
+    }
+}
+
+/// `Wither.FakeUpgrade`'s raise to its damage.
+const WITHER_RAISE: Number = 3;
+
+/// `Aeonglass.AfterCardGeneratedForCombat`: a Wither made in the fight takes
+/// every fake upgrade the Aeonglass has given the ones before it.
+pub(super) fn wither_generated(
+    model: &super::Model,
+    at: sts2_core::CardAt<V>,
+    card: super::super::super::generated::cards::Cards,
+    asked: &mut sts2_core::HookEffects<V>,
+) {
+    use super::super::super::generated::cards::{CardVar, Cards, StatusCard};
+
+    let super::Model::Aeonglass {
+        wither_upgrades, ..
+    } = *model
+    else {
+        unreachable!("an Aeonglass holding {model:?}")
+    };
+    if card == Cards::Status(StatusCard::Wither) && wither_upgrades > 0 {
+        asked.push(sts2_core::HookEffect::ModifyCards {
+            to: sts2_core::Writing::One(at),
+            change: sts2_core::Change::Raise(
+                CardVar::Damage,
+                WITHER_RAISE * Number::from(wither_upgrades),
+            ),
+        });
     }
 }
 
@@ -345,6 +381,37 @@ pub(super) fn perform<F: Fight<V>>(
                 fight.apply_power_from(target, Power::WeakPower, PowerAmount::Counted(3), None);
             }
             fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(3));
+        }
+        // `IncreasingIntensityMove`: every Wither the player holds takes a
+        // fake upgrade, the next ones one more, and then the Withers and the
+        // Strength.
+        (Monster::Aeonglass, MoveId::IncreasingIntensityMove) => {
+            use super::super::super::generated::cards::{CardVar, Cards, StatusCard};
+
+            let wither = Cards::Status(StatusCard::Wither);
+            fight.modify_cards(
+                sts2_core::Writing::EveryCopyOf(wither),
+                sts2_core::Change::Raise(CardVar::Damage, WITHER_RAISE),
+            );
+            let super::Model::Aeonglass {
+                strength,
+                wither_upgrades,
+            } = model
+            else {
+                unreachable!("an Aeonglass holding {model:?}")
+            };
+            *wither_upgrades += 1;
+            let bonus = Number::from(*strength);
+            // The Withers it gives read the count it has just raised.
+            fight.store_model(model);
+            let deadly = fight.ascension().has(AscensionLevel::DeadlyEnemies);
+            let (withers, base) = if deadly { (2, 4) } else { (1, 3) };
+            fight.give_cards(wither, withers);
+            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(base + bonus));
+            let super::Model::Aeonglass { strength, .. } = model else {
+                unreachable!("an Aeonglass holding {model:?}")
+            };
+            *strength += 1;
         }
         // `MultiClawMove`: its hits, then one more for the next.
         (Monster::TestSubject, MoveId::MultiClawMove) => {

@@ -1,0 +1,22 @@
+# The Aeonglass: Withering Presence puts a Wither in the hand for every sixth
+# card played. Increasing Intensity gives every Wither a fake upgrade, three
+# more damage, then gives Withers that take every upgrade so far, and
+# Strength that grows each time.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"AEONGLASS_BOSS"}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":1}
+{"cmd":"play_card","index":1}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"INTANGIBLE_POWER","amount":5,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":1000,"target":0}
+{"cmd":"play_card","index":0,"target":1}

@@ -4428,7 +4428,7 @@ static OVERRIDES: [sts2_core::Overrides; 578] = [
     // RIP_AND_TEAR
     sts2_core::Overrides::from_bits(0),
     // ROCKET_PUNCH
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardGeneratedForCombat),
     // ROLLING_BOULDER
     sts2_core::Overrides::from_bits(0),
     // ROYALTIES
@@ -4756,5 +4756,6 @@ static HEARD_BY_ANY: sts2_core::Overrides = sts2_core::Overrides::from_bits(0)
     .with(sts2_core::ModelHook::AfterCardPlayedLate)
     .with(sts2_core::ModelHook::AfterDeath)
     .with(sts2_core::ModelHook::BeforeSideTurnEnd)
+    .with(sts2_core::ModelHook::AfterCardGeneratedForCombat)
     .with(sts2_core::ModelHook::AfterCardChangedPiles)
     .with(sts2_core::ModelHook::BeforeCardPlayed);

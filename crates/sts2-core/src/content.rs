@@ -658,10 +658,11 @@ pub enum ModelHook {
     AfterModifyingPowerAmountReceived,
     ModifyXValue,
     AfterCardChangedPiles,
+    AfterCardGeneratedForCombat,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 108] = [
+    pub const ALL: [ModelHook; 109] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -770,6 +771,7 @@ impl ModelHook {
         ModelHook::AfterModifyingPowerAmountReceived,
         ModelHook::ModifyXValue,
         ModelHook::AfterCardChangedPiles,
+        ModelHook::AfterCardGeneratedForCombat,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -895,6 +897,7 @@ impl ModelHook {
             ModelHook::AfterModifyingPowerAmountReceived => "AfterModifyingPowerAmountReceived",
             ModelHook::ModifyXValue => "ModifyXValue",
             ModelHook::AfterCardChangedPiles => "AfterCardChangedPiles",
+            ModelHook::AfterCardGeneratedForCombat => "AfterCardGeneratedForCombat",
         }
     }
 }
@@ -2062,6 +2065,11 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("a creature killed outright")
     }
 
+    /// `change` written on each card `to` names, for the rest of the fight.
+    fn modify_cards(&mut self, _to: Writing<V>, _change: Change<V>) {
+        unimplemented!("writing on the cards a fight holds")
+    }
+
     /// `CardModel.BaseReplayCount += amount` on each card `to` names.
     fn add_replays(&mut self, _to: Writing<V>, _amount: V::Number) {
         unimplemented!("replays added to cards")
@@ -2245,6 +2253,19 @@ pub trait Fight<V: ContentVersion> {
     /// The health is capped at the recipient's maximum, and a dead creature
     /// healed above zero is alive again.
     fn heal(&mut self, at: crate::CombatId, amount: V::Number);
+
+    /// The acting monster's model as its move has written it so far.
+    ///
+    /// A move works on its own copy of the model, which the fight takes back
+    /// once the move is over. In the game the model is one object, so a hook
+    /// the move raises reads what the move has written. A move stores its copy
+    /// before raising a hook its own model answers.
+    fn store_model(&mut self, _model: &V::MonsterState)
+    where
+        V: Hooks,
+    {
+        unimplemented!("a monster's model stored mid-move")
+    }
 
     /// Write the fields `power` saves on the creature `at`, from inside one
     /// of that power's own methods.
@@ -3258,6 +3279,14 @@ pub enum EventHook<V: ContentVersion> {
         /// `IsClone`: the card is a clone of another, which is `CloneOf`.
         clone: bool,
     },
+    /// `AfterCardGeneratedForCombat`, once a card made in the fight has
+    /// landed where `at` says.
+    CardGeneratedForCombat {
+        at: crate::CardAt<V>,
+        card: V::Card,
+        /// The player that made it. Nothing for a card a monster gave.
+        creator: Option<crate::CombatId>,
+    },
     /// `Hook.BeforeAttack`, as an attack command starts and before its first
     /// hit.
     BeforeAttack {
@@ -3359,6 +3388,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::BlockBroken { .. } => ModelHook::AfterBlockBroken,
             EventHook::PowerAmountChanged { .. } => ModelHook::AfterPowerAmountChanged,
             EventHook::CardEnteredCombat { .. } => ModelHook::AfterCardEnteredCombat,
+            EventHook::CardGeneratedForCombat { .. } => ModelHook::AfterCardGeneratedForCombat,
             EventHook::BeforeAttack { .. } => ModelHook::BeforeAttack,
             EventHook::AfterAttack { .. } => ModelHook::AfterAttack,
             EventHook::PlayCountModified { .. } => ModelHook::AfterModifyingCardPlayCount,
@@ -4022,6 +4052,11 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CreatureCmd.Damage` on the living creatures the event hit, from the
     /// listener's owner, unpowered.
     DamageTargets(V::Number),
+    /// `change` written on each card `to` names, for the rest of the fight.
+    ModifyCards {
+        to: Writing<V>,
+        change: Change<V>,
+    },
     /// `CardPileCmd.AddToCombatAndPreview(card)` into the discard pile of
     /// each player the attack hit: `per` for each of its hits on that player
     /// that took health.
@@ -4688,6 +4723,7 @@ pub trait Hooks: ContentVersion {
     /// [`Hooks::power_event_hook`] for a monster's own model, on `creature`.
     fn monster_event_hook(
         monster: Self::Monster,
+        model: &Self::MonsterState,
         creature: crate::CombatId,
         hook: EventHook<Self>,
         asked: &mut HookEffects<Self>,
