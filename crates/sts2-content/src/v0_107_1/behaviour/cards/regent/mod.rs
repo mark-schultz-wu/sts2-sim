@@ -19,6 +19,8 @@ pub enum Resume {
     GuardsTransform,
     /// `Quasar`, after its owner chose a colorless card or none.
     QuasarChoice,
+    /// `HeirloomHammer`, after its owner picked the colorless card to copy.
+    HeirloomHammerCopy,
     /// `Glimmer`, after its owner picked the cards to put back.
     GlimmerPutBack,
     /// `PhotonCut`, after its owner picked the cards to put back.
@@ -61,6 +63,7 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
         RegentCard::Glitterstream => common::glitterstream(fight),
         RegentCard::BeatIntoShape => beat_into_shape(fight),
         RegentCard::Quasar => quasar(fight),
+        RegentCard::HeirloomHammer => heirloom_hammer(fight),
         // `Guards`: any number of the hand's cards picked, each transformed.
         RegentCard::Guards => Played::Asking {
             pile: Pile::Hand,
@@ -353,6 +356,33 @@ pub(super) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
     }
 }
 
+/// `HeirloomHammer`: its damage to the target, then one card of the hand
+/// that shows as colorless picked, to be copied.
+fn heirloom_hammer<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use sts2_core::{Amount, CardTable as _, Effect, Scaling};
+
+    let target = fight.target();
+    fight.attack(Scaling::Dynamic, |fight| {
+        let attack = fight.resolve(Effect::Attack {
+            dealer: fight.actor(),
+            target,
+            damage: Amount::Var(CardVar::Damage),
+            scaling: Scaling::Dynamic,
+        });
+        fight.apply(attack);
+    });
+    let cards = fight
+        .cards_in(Pile::Hand)
+        .into_iter()
+        .filter(|&card| fight.card_ident(card).card.visually_colorless())
+        .collect();
+    Played::AskingAmong {
+        cards,
+        selection: sts2_core::Selection::Exactly(nonmax::NonMaxUsize::ONE),
+        at: super::super::Resume::Card(super::Resume::Regent(Resume::HeirloomHammerCopy)),
+    }
+}
+
 /// `Quasar`: three distinct colorless cards off `CombatCardGeneration`, each
 /// upgraded where Quasar is, of which its owner takes one into hand or none.
 fn quasar<F: Fight<V>>(fight: &mut F) -> Played<V> {
@@ -423,5 +453,14 @@ pub(super) fn resume_play<F: Fight<V>>(
             Played::Done
         }
         Resume::QuasarChoice => unreachable!("Quasar stops on a choice, not a pick"),
+        // Its `Repeat` of clones of the one picked, each into hand.
+        Resume::HeirloomHammerCopy => {
+            if let Some(card) = chosen.one_or_none() {
+                for _ in 0..fight.var(CardVar::Repeat) {
+                    fight.clone_card(card, Pile::Hand);
+                }
+            }
+            Played::Done
+        }
     }
 }

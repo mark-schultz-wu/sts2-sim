@@ -838,6 +838,8 @@ pub struct CardData {
     pub tags: TagSet,
     /// `GainsBlock`, which a card overrides to say so.
     pub gains_block: bool,
+    /// `VisualCardPool.IsColorless`: whether it shows as colorless.
+    pub visually_colorless: bool,
 }
 
 /// Every card, grouped by the pool it belongs to.
@@ -3581,6 +3583,10 @@ impl sts2_core::CardTable for Cards {
 
     fn gains_block(self) -> bool {
         self.data().gains_block
+    }
+
+    fn visually_colorless(self) -> bool {
+        self.data().visually_colorless
     }
 
     fn exhausts(self) -> bool {

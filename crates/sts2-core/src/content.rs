@@ -322,6 +322,10 @@ pub trait CardTable: Table {
     /// `GainsBlock`, which a card that gives block overrides.
     fn gains_block(self) -> bool;
 
+    /// `VisualCardPool.IsColorless`: whether the card shows as colorless.
+    /// Most cards show their own pool, and a few event cards a character's.
+    fn visually_colorless(self) -> bool;
+
     /// Whether it carries the keyword that exhausts it from hand at the end
     /// of a turn.
     fn ethereal(self) -> bool;

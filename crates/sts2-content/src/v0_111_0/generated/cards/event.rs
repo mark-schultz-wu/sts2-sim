@@ -118,6 +118,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: true,
     },
     CardData {
         kind: Field::Constant(CardType::Skill),
@@ -130,6 +131,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[CardKeyword::Exhaust, CardKeyword::Innate]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: true,
     },
     CardData {
         kind: Field::Constant(CardType::Skill),
@@ -147,6 +149,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[CardKeyword::Ethereal, CardKeyword::Exhaust]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: true,
     },
     CardData {
         kind: Field::Constant(CardType::Skill),
@@ -178,6 +181,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: true,
     },
     CardData {
         kind: Field::Constant(CardType::Attack),
@@ -195,6 +199,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: true,
     },
     CardData {
         kind: Field::Constant(CardType::Power),
@@ -212,6 +217,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: false,
     },
     CardData {
         kind: Field::Constant(CardType::Attack),
@@ -229,6 +235,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: false,
     },
     CardData {
         kind: Field::Constant(CardType::Skill),
@@ -241,6 +248,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: false,
     },
     CardData {
         kind: Field::Constant(CardType::Skill),
@@ -258,6 +266,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: false,
     },
     CardData {
         kind: Field::Constant(CardType::Skill),
@@ -270,6 +279,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: true,
     },
     CardData {
         kind: Field::Constant(CardType::Skill),
@@ -282,6 +292,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[]),
         tags: TagSet::new(&[]),
         gains_block: true,
+        visually_colorless: false,
     },
     CardData {
         kind: Field::Constant(CardType::Attack),
@@ -307,6 +318,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: true,
     },
     CardData {
         kind: Field::Constant(CardType::Skill),
@@ -324,6 +336,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: true,
     },
     CardData {
         kind: Field::Constant(CardType::Power),
@@ -336,6 +349,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: false,
     },
     CardData {
         kind: Field::Constant(CardType::Attack),
@@ -415,6 +429,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: true,
     },
     CardData {
         kind: Field::Constant(CardType::Attack),
@@ -494,6 +509,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: true,
     },
     CardData {
         kind: Field::Constant(CardType::Attack),
@@ -573,6 +589,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: true,
     },
     CardData {
         kind: Field::Constant(CardType::Skill),
@@ -652,6 +669,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[]),
         tags: TagSet::new(&[]),
         gains_block: true,
+        visually_colorless: true,
     },
     CardData {
         kind: Field::Constant(CardType::Skill),
@@ -731,6 +749,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[]),
         tags: TagSet::new(&[]),
         gains_block: true,
+        visually_colorless: true,
     },
     CardData {
         kind: Field::Constant(CardType::Skill),
@@ -810,6 +829,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[]),
         tags: TagSet::new(&[]),
         gains_block: true,
+        visually_colorless: true,
     },
     CardData {
         kind: Field::Constant(CardType::Power),
@@ -889,6 +909,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: true,
     },
     CardData {
         kind: Field::Constant(CardType::Power),
@@ -968,6 +989,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: true,
     },
     CardData {
         kind: Field::Constant(CardType::Power),
@@ -1047,6 +1069,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: true,
     },
     CardData {
         kind: Field::Constant(CardType::Attack),
@@ -1072,6 +1095,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: true,
     },
     CardData {
         kind: Field::Constant(CardType::Skill),
@@ -1089,6 +1113,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: true,
     },
     CardData {
         kind: Field::Constant(CardType::Attack),
@@ -1114,6 +1139,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: true,
     },
     CardData {
         kind: Field::Constant(CardType::Skill),
@@ -1131,6 +1157,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: false,
     },
     CardData {
         kind: Field::Constant(CardType::Attack),
@@ -1156,6 +1183,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: true,
     },
     CardData {
         kind: Field::Constant(CardType::Attack),
@@ -1173,6 +1201,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: false,
     },
     CardData {
         kind: Field::Constant(CardType::Skill),
@@ -1204,6 +1233,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
         tags: TagSet::new(&[]),
         gains_block: true,
+        visually_colorless: true,
     },
     CardData {
         kind: Field::Constant(CardType::Attack),
@@ -1221,6 +1251,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: false,
     },
     CardData {
         kind: Field::Constant(CardType::Attack),
@@ -1246,6 +1277,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: true,
     },
     CardData {
         kind: Field::Constant(CardType::Skill),
@@ -1277,6 +1309,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[]),
         tags: TagSet::new(&[]),
         gains_block: true,
+        visually_colorless: false,
     },
     CardData {
         kind: Field::Constant(CardType::Skill),
@@ -1302,6 +1335,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[]),
         tags: TagSet::new(&[]),
         gains_block: true,
+        visually_colorless: true,
     },
     CardData {
         kind: Field::Constant(CardType::Attack),
@@ -1319,6 +1353,7 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: true,
     },
     CardData {
         kind: Field::Constant(CardType::Skill),
@@ -1331,5 +1366,6 @@ pub(super) static ROWS: [CardData; 36] = [
         keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: true,
     },
 ];
