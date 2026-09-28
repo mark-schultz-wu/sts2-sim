@@ -47,7 +47,7 @@ pub(super) type CardVarList = Option<[NonMaxI16; VARS]>;
 pub(crate) type PowerList<V> = Bounded<HeldPower<V>, POWERS>;
 
 /// How many powers one creature holds.
-const POWERS: usize = 16;
+const POWERS: usize = 24;
 
 /// How many creatures a fight holds, summons included.
 ///
@@ -2098,6 +2098,12 @@ impl<V: Rules> Live<V> {
     /// What the fight's end asked of the run, in the order it asked.
     pub(crate) fn leaving(&self) -> &[sts2_core::HookEffect<V>] {
         &self.leaving
+    }
+
+    /// Whether the fight asked anything of the run since the last decision
+    /// settled.
+    pub(crate) fn asked_for_run(&self) -> bool {
+        !self.for_run.is_empty()
     }
 
     /// What the fight asked of the run since the last decision settled.

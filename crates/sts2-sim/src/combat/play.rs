@@ -1084,11 +1084,11 @@ fn finished<V: Rules, S: LendsCombat>(
         .cards
         .named(id)
         .and_then(|held| held.face.ident.affliction);
+    // What the play's started entry spent, which both `AfterCardPlayed` and
+    // its late pass read.
     let spent = next
         .history()
-        .started_this_turn()
-        .filter(|started| started.id == id)
-        .last()
+        .last_started(id)
         .expect("a play that finished started this turn")
         .energy;
     let asked = super::listen::notify::<V>(
@@ -1211,14 +1211,11 @@ fn finished<V: Rules, S: LendsCombat>(
     }
     // `AfterCardPlayedLate`, with the energy the play's started entry spent.
     if ended.is_none() {
-        let energy = next
-            .history()
-            .started_this_turn()
-            .filter(|started| started.id == id)
-            .last()
-            .expect("a play that finished started this turn")
-            .energy;
-        let late = sts2_core::EventHook::CardPlayedLate { card, id, energy };
+        let late = sts2_core::EventHook::CardPlayedLate {
+            card,
+            id,
+            energy: spent,
+        };
         for (listener, effect) in super::listen::notify::<V>(next, relics, late) {
             match (listener, effect) {
                 // `CardPileCmd.Add(this, PileType.Hand)`, which a full hand

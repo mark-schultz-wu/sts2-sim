@@ -1200,6 +1200,9 @@ impl<V: Rules> State<V> {
         let Phase::Combat(live) = &mut self.phase else {
             return;
         };
+        if !live.asked_for_run() {
+            return;
+        }
         let asked = live.take_for_run();
         if self.carry_out(asked).is_some() {
             unimplemented!("a fight asking the run a question mid-decision");
