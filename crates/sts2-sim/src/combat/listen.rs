@@ -552,6 +552,7 @@ pub(crate) fn any_decides<V: Rules>(
 
 /// The first listener in the fight to answer `hook` with `answer`, by the
 /// model it is. `Hook.ShouldPlay` names it as the preventer.
+#[inline(always)]
 pub(crate) fn first_deciding<V: Rules>(
     fight: Walk<'_, V>,
     hook: DecisionHook<V>,
@@ -562,6 +563,17 @@ pub(crate) fn first_deciding<V: Rules>(
         .unwrap_or_else(|| unreachable!("{hook:?} is asked of one power, not raised"));
     let hooks = Overrides::of(model_hook);
     Kinds::hearing(fight.live, fight.relics, hooks)?;
+    first_of::<V>(fight, hooks, hook, answer)
+}
+
+/// [`first_deciding`] once something hears `hook`.
+#[inline(never)]
+fn first_of<V: Rules>(
+    fight: Walk<'_, V>,
+    hooks: Overrides,
+    hook: DecisionHook<V>,
+    answer: bool,
+) -> Option<sts2_core::ModelId<V>> {
     let mut first = None;
     each::<V>(fight, hooks, |listener, _| {
         if first.is_none() && V::decide_hook(listener, hook).is_decision_and(|said| said == answer)
