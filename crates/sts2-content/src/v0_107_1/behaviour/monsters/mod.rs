@@ -295,6 +295,7 @@ pub(crate) fn perform<F: Fight<V>>(
         | Monster::Fabricator
         | Monster::SpectralKnight
         | Monster::MagiKnight
+        | Monster::MechaKnight
         | Monster::Guardbot
         | Monster::Noisebot
         | Monster::TheLost
