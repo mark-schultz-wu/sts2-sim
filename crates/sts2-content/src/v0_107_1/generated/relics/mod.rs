@@ -1536,7 +1536,7 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // BONE_TEA
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
     // BOOKMARK
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterFlush),
     // BOOK_OF_FIVE_RINGS
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardChangedPiles),
     // BOOK_REPAIR_KNIFE

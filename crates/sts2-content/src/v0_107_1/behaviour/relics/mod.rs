@@ -34,6 +34,7 @@ mod blood_vial;
 mod bone_flute;
 mod bone_tea;
 mod book_of_five_rings;
+mod bookmark;
 mod booming_conch;
 mod bound_phylactery;
 mod bowler_hat;
@@ -444,6 +445,7 @@ pub enum State {
     JossPaper(joss_paper::State),
     MummifiedHand,
     IvoryTile,
+    Bookmark,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -687,6 +689,7 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::Bookmark => bookmark::event_hook(hook, asked),
         State::IvoryTile => ivory_tile::event_hook(hook, asked),
         State::MummifiedHand => mummified_hand::event_hook(hook, asked),
         State::JossPaper(state) => joss_paper::event_hook(state, hook, asked),
@@ -969,7 +972,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::Bellows
         | State::JossPaper(_)
         | State::MummifiedHand
-        | State::IvoryTile => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::IvoryTile
+        | State::Bookmark => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1148,6 +1152,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::Bookmark => State::Bookmark,
             Relic::IvoryTile => State::IvoryTile,
             Relic::MummifiedHand => State::MummifiedHand,
             Relic::JossPaper => State::JossPaper(joss_paper::State::default()),

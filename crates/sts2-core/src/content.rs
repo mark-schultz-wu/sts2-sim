@@ -676,10 +676,11 @@ pub enum ModelHook {
     BeforeCombatStartLate,
     TryModifyRestSiteOptions,
     ShouldForcePotionReward,
+    AfterFlush,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 115] = [
+    pub const ALL: [ModelHook; 116] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -795,6 +796,7 @@ impl ModelHook {
         ModelHook::BeforeCombatStartLate,
         ModelHook::TryModifyRestSiteOptions,
         ModelHook::ShouldForcePotionReward,
+        ModelHook::AfterFlush,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -927,6 +929,7 @@ impl ModelHook {
             ModelHook::BeforeCombatStartLate => "BeforeCombatStartLate",
             ModelHook::TryModifyRestSiteOptions => "TryModifyRestSiteOptions",
             ModelHook::ShouldForcePotionReward => "ShouldForcePotionReward",
+            ModelHook::AfterFlush => "AfterFlush",
         }
     }
 }
@@ -3416,6 +3419,9 @@ pub enum EventHook<V: ContentVersion> {
     BlockClearPrevented {
         block: V::Number,
     },
+    /// `AfterFlush`, once the player's hand is flushed. The cards left in
+    /// hand are the ones it retained.
+    Flushed,
     /// `TryModifyRestSiteOptions`, as a rest site opens. A listener answers
     /// with each option it adds.
     RestSiteOptions,
@@ -3568,6 +3574,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::CombatStarting { .. } => ModelHook::BeforeCombatStart,
             EventHook::CombatStartingLate { .. } => ModelHook::BeforeCombatStartLate,
             EventHook::RestSiteOptions => ModelHook::TryModifyRestSiteOptions,
+            EventHook::Flushed => ModelHook::AfterFlush,
             EventHook::CardRewardOptions { .. } => ModelHook::TryModifyCardRewardOptions,
             EventHook::CombatVictoryEarly { .. } => ModelHook::AfterCombatVictoryEarly,
             EventHook::CombatEnd { .. } => ModelHook::AfterCombatEnd,
@@ -4604,6 +4611,10 @@ pub enum HookEffect<V: ContentVersion> {
     /// a cost and cost something now. Failing that, over the hand's cards
     /// that cost something now, then those that print a cost, then the hand.
     FreeCostlyInHand,
+    /// `Bookmark.AfterFlush`'s pick: `NextItem` off `CombatCardSelection`
+    /// over the retained cards whose energy cost, with their own modifiers,
+    /// is more than nothing and not X, and one less on it until played.
+    LowerRetainedCost,
     /// `CardCmd.Upgrade` on a new card, then `CardPileCmd.Add` to the deck.
     AddUpgradedToDeck(V::Card),
     /// `CardFactory.CreateForReward` of one card from the character's pool,

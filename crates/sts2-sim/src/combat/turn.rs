@@ -62,7 +62,7 @@ pub(crate) fn end<V: Rules>(
         }
         return Ok(Some(ended));
     }
-    flush_hand(next, relics);
+    flush_hand(next, streams.combat(), relics, ascension);
     end_of_turn_cleanup(next);
     // `AfterTurnEnd` for the side that just ended.
     if let Some(ended) = after_turn_end::<V>(
@@ -1790,17 +1790,55 @@ pub(super) fn side_turn_started<V: Rules>(
 /// A card that retains stays where it is, whether it prints the keyword or
 /// something in the fight wrote it on.
 #[tracing::instrument(level = "trace", skip_all)]
-fn flush_hand<V: Rules>(live: &mut Live<V>, relics: &crate::run::Belt<V>) {
+fn flush_hand<V: Rules>(
+    live: &mut Live<V>,
+    rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    ascension: V::AscensionLevel,
+) {
     let player = live.player().id;
     let fight = listen::Walk { live, relics };
-    if listen::any_decides::<V>(
+    if !listen::any_decides::<V>(
         fight,
         sts2_core::DecisionHook::ShouldFlush { player },
         false,
     ) {
+        live.cards.sift(Pile::Hand, Pile::Discard, Face::retains);
+    }
+    // `Hook.AfterFlush`, with what stayed in hand retained.
+    let asked = listen::notify::<V>(live, relics, sts2_core::EventHook::Flushed);
+    if asked.is_empty() {
         return;
     }
-    live.cards.sift(Pile::Hand, Pile::Discard, Face::retains);
+    let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
+    for (listener, effect) in asked {
+        match effect {
+            sts2_core::HookEffect::LowerRetainedCost => {
+                let costly: Vec<_> = sts2_core::Fight::cards_in(&board, Pile::Hand)
+                    .into_iter()
+                    .filter(|&at| {
+                        matches!(
+                            sts2_core::Fight::card_costs(&board, at, false).0,
+                            sts2_core::Cost::Fixed(cost) if cost.get() > 0
+                        )
+                    })
+                    .collect();
+                let stream = <V::RunRngType as sts2_core::RunStreamKinds>::COMBAT_CARD_SELECTION;
+                if let Some(at) = sts2_core::Fight::random_card(&mut board, &costly, stream) {
+                    sts2_core::Fight::modify_card(
+                        &mut board,
+                        at,
+                        sts2_core::Change::ChangeCost(
+                            sts2_core::CostPool::Energy,
+                            -num_traits::one::<V::Number>(),
+                        ),
+                        sts2_core::Lasting::UntilPlayed,
+                    );
+                }
+            }
+            effect => unimplemented!("{listener:?} asking for {effect:?} after a flush"),
+        }
+    }
 }
 
 /// `Hook.AfterEnergyReset`, raised on every listener, and how the fight
