@@ -591,10 +591,14 @@ fn before_turn_end<V: Rules>(
     let hook = sts2_core::EventHook::BeforeSideTurnEnd {
         side,
         energy: live.energy,
+        hand: live.cards.len(Pile::Hand),
     };
     let mut ended = None;
     for (listener, effect) in listen::notify::<V>(live, relics, hook) {
         match (listener, effect) {
+            (Listener::Card { id }, sts2_core::HookEffect::NoteOnSelf(note)) => {
+                live.note(id, note);
+            }
             (Listener::Power { owner, .. }, sts2_core::HookEffect::DoomKill) => {
                 // `IsOverOrEnding`, and the owner dead already.
                 if ended.is_some() {

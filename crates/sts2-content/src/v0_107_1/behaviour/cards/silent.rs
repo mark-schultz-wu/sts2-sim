@@ -39,6 +39,26 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
         SilentCard::BladeDance => blade_dance(fight),
         SilentCard::PiercingWail => piercing_wail(fight),
         SilentCard::EchoingSlash => echoing_slash(fight),
+        // `EscapePlan`: a card drawn, then its block where that card is a
+        // Skill. The history holds the draw as it happens.
+        SilentCard::EscapePlan => {
+            let before = fight.history().drawn_this_turn().count();
+            fight.draw(1);
+            let skill = fight
+                .history()
+                .drawn_this_turn()
+                .nth(before)
+                .is_some_and(|card| V::card_kind(card) == Some(CardKind::Skill));
+            if skill {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
+            Played::Done
+        }
         // `CloakAndDagger`: its block, then its `Cards` of Shivs into hand
         // one at a time.
         SilentCard::CloakAndDagger => {

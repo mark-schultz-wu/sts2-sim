@@ -138,6 +138,17 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
                 Number::try_from(owner.hand_besides).expect("a hand fits the game's numbers");
             printed.face(CardVar::CalculationBase) - printed.face(CardVar::ExtraDamage) * others
         }
+        // `SoulStorm`: a base, and more for each Soul in its owner's exhaust
+        // pile.
+        (Cards::Necrobinder(NecrobinderCard::SoulStorm), CardVar::CalculatedDamage) => {
+            let souls = owner
+                .exhaust
+                .iter()
+                .filter(|&&card| card == Cards::Token(TokenCard::Soul))
+                .count();
+            let souls = Number::try_from(souls).expect("an exhaust pile fits the game's numbers");
+            printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * souls
+        }
         // `Sacrifice`: a base, and more for each of twice the maximum health a
         // living Osty has.
         (Cards::Necrobinder(NecrobinderCard::Sacrifice), CardVar::CalculatedBlock) => {
@@ -147,8 +158,8 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
         // `AshenStrike`: a base, and more for each card in its owner's
         // exhaust pile.
         (Cards::Ironclad(IroncladCard::AshenStrike), CardVar::CalculatedDamage) => {
-            let exhausted =
-                Number::try_from(owner.exhaust).expect("an exhaust pile fits the game's numbers");
+            let exhausted = Number::try_from(owner.exhaust.len())
+                .expect("an exhaust pile fits the game's numbers");
             printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * exhausted
         }
         // `Mirage`: a base, and one more for each Poison on the living
@@ -345,6 +356,7 @@ pub(crate) fn on_turn_end<F: Fight<V>>(card: Cards, fight: &mut F) {
 pub(crate) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
     card: Cards,
     id: sts2_core::CardId<V>,
+    pile: Option<sts2_core::Pile>,
     printed: &P,
     history: sts2_core::History<'_, V>,
     hook: sts2_core::EventHook<V>,
@@ -357,6 +369,7 @@ pub(crate) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
         Cards::Curse(CurseCard::Guilty)
             if matches!(hook, sts2_core::EventHook::CombatEnd { .. }) => {}
         Cards::Status(card) => status::event_hook(card, id, printed, hook, asked),
+        Cards::Curse(card) => curse::event_hook(card, pile, hook, asked),
         Cards::Ironclad(card) => ironclad::event_hook(card, id, history, hook, asked),
         Cards::Colorless(card) => colorless::event_hook(card, id, history, hook, asked),
         // `SovereignBlade.AfterCardChangedPiles` plays the forge's effects and

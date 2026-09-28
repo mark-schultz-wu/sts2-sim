@@ -58,6 +58,18 @@ pub(super) struct Board<'a, V: Rules> {
     /// `CheckWinCondition` runs after the command that killed it, so this is
     /// read once the effect is over rather than acted on where it is set.
     pub(super) ended: Option<super::Ended>,
+    /// The results of the attack command whose hits are landing, which
+    /// `AttackCommand.Results` gathers.
+    landed: Option<sts2_core::AttackResults<V>>,
+}
+
+/// What one hit took off one creature's hit points, before its block is
+/// counted in.
+struct Lost<V: Rules> {
+    receiver: CombatId,
+    lost: V::Number,
+    overkill: V::Number,
+    killed: bool,
 }
 
 /// An effect after a simulator fight's listeners have modified it.
@@ -136,6 +148,7 @@ impl<'a, V: Rules> Board<'a, V> {
             ascension,
             skipped: Vec::new(),
             ended: None,
+            landed: None,
         }
     }
 
@@ -160,6 +173,7 @@ impl<'a, V: Rules> Board<'a, V> {
             ascension,
             skipped: Vec::new(),
             ended: None,
+            landed: None,
         }
     }
 
@@ -588,16 +602,26 @@ impl<'a, V: Rules> Board<'a, V> {
 
         // The taker loses what reached it. Anything past its health
         // goes back to the creature the hit was aimed at.
-        let mut results: SmallVec<[(CombatId, V::Number, bool); 2]> = SmallVec::new();
+        let mut results: SmallVec<[Lost<V>; 2]> = SmallVec::new();
         let (lost, overkill, killed) = self.lose_hp(taker, unblocked);
-        results.push((taker, lost, killed));
+        results.push(Lost {
+            receiver: taker,
+            lost,
+            overkill,
+            killed,
+        });
         if taker != target {
             let rest = self.hp_lost_after_osty(target, overkill);
-            let (lost, _, killed) = match rest > zero {
+            let (lost, overkill, killed) = match rest > zero {
                 true => self.lose_hp(target, rest),
                 false => (zero, zero, false),
             };
-            results.push((target, lost, killed));
+            results.push(Lost {
+                receiver: target,
+                lost,
+                overkill,
+                killed,
+            });
         }
         // Each result's hooks, in the command's order. A creature the
         // hit killed is not told it was hit: it dies once they are
@@ -606,7 +630,13 @@ impl<'a, V: Rules> Board<'a, V> {
         let pet_of = dealer
             .and_then(|dealer| self.at(dealer))
             .and_then(|at| self.live.creatures[at].owner);
-        for (receiver, lost, killed) in results {
+        for Lost {
+            receiver,
+            lost,
+            overkill,
+            killed,
+        } in results
+        {
             let aimed = receiver == target;
             // `TotalDamage`, whose blocked part is the aimed
             // creature's alone.
@@ -614,6 +644,14 @@ impl<'a, V: Rules> Board<'a, V> {
                 true => blocked + lost,
                 false => lost,
             };
+            if let Some(landed) = self.landed.as_mut() {
+                landed.push(sts2_core::DamageResult {
+                    receiver,
+                    total,
+                    overkill,
+                    killed,
+                });
+            }
             if aimed && block_broken {
                 let asked = super::listen::notify::<V>(
                     self.live,
@@ -1935,6 +1973,11 @@ pub(crate) fn var<V: Rules>(
             let osty_max_hp = standing.map(|osty| osty.max_hp);
             let targeted: Option<SmallVec<[Stack<V>; 8]>> =
                 target.map(|target| live.powers.of(target).map(HeldPower::stack).collect());
+            let exhausted: SmallVec<[V::Card; 16]> = live
+                .cards
+                .iter(Pile::Exhaust)
+                .map(|held| held.face.ident.card)
+                .collect();
             let enemy_powers: SmallVec<[Stack<V>; 16]> = live
                 .creatures
                 .iter()
@@ -1948,7 +1991,7 @@ pub(crate) fn var<V: Rules>(
                 osty,
                 osty_max_hp,
                 draw: live.cards.len(Pile::Draw),
-                exhaust: live.cards.len(Pile::Exhaust),
+                exhaust: &exhausted,
                 hand_besides: live.cards.len(Pile::Hand)
                     - usize::from(live.cards.find(Pile::Hand, held.id).is_some()),
                 enemy_powers: &enemy_powers,
@@ -2169,16 +2212,25 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         orb_value::<V>(self.walk(), orb, base)
     }
 
-    fn attack(&mut self, scaling: Scaling, hits: impl FnOnce(&mut Self)) {
-        self.attack_from(self.actor, scaling, hits);
+    fn attack(
+        &mut self,
+        scaling: Scaling,
+        hits: impl FnOnce(&mut Self),
+    ) -> sts2_core::AttackResults<V> {
+        self.attack_from(self.actor, scaling, hits)
     }
 
-    fn attack_from(&mut self, attacker: CombatId, scaling: Scaling, hits: impl FnOnce(&mut Self)) {
+    fn attack_from(
+        &mut self,
+        attacker: CombatId,
+        scaling: Scaling,
+        hits: impl FnOnce(&mut Self),
+    ) -> sts2_core::AttackResults<V> {
         let attacking = self
             .at(attacker)
             .is_some_and(|at| self.live.creatures[at].alive);
         if self.ended.is_some() || self.ending() || !attacking {
-            return;
+            return sts2_core::AttackResults::new();
         }
         let monster = self
             .at(attacker)
@@ -2208,14 +2260,17 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         if let Some((listener, effect)) = asked.first() {
             unimplemented!("{listener:?} asking for {effect:?} before an attack")
         }
+        // A command inside another's hits keeps its own results.
+        let outer = self.landed.replace(sts2_core::AttackResults::new());
         hits(self);
+        let results = std::mem::replace(&mut self.landed, outer).unwrap_or_default();
         // `History.CreatureAttacked`, before `AfterAttack` and whether or not
         // the fight is ending.
         self.live.history.attacked(monster);
         // `IterateCombatHookListeners` hands a fight that is ending no
         // listeners.
         if self.ended.is_some() || self.ending() {
-            return;
+            return results;
         }
         let asked = super::listen::notify::<V>(
             self.live,
@@ -2245,6 +2300,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 }
             }
         }
+        results
     }
 
     #[tracing::instrument(level = "trace", skip_all)]
@@ -2331,6 +2387,20 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn kill(&mut self, creature: CombatId) {
         self.kill_outright(creature);
+    }
+
+    fn self_note(&self) -> V::Number {
+        let playing = self.playing.expect("a card behavior has a card");
+        self.live.noted(playing)
+    }
+
+    fn set_self_note(&mut self, note: V::Number) {
+        let playing = self.playing.expect("a card behavior has a card");
+        self.live.note(playing, note);
+    }
+
+    fn attack_results(&self) -> sts2_core::AttackResults<V> {
+        self.landed.clone().unwrap_or_default()
     }
 
     fn add_replays(&mut self, to: sts2_core::Writing<V>, amount: V::Number) {

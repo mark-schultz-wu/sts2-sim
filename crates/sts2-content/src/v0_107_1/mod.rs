@@ -289,12 +289,13 @@ impl sts2_core::Hooks for V0_107_1 {
     fn card_event_hook<P: sts2_core::Printed<Self> + ?Sized>(
         card: Self::Card,
         id: sts2_core::CardId<Self>,
+        pile: Option<sts2_core::Pile>,
         printed: &P,
         history: sts2_core::History<'_, Self>,
         hook: sts2_core::EventHook<Self>,
         asked: &mut sts2_core::HookEffects<Self>,
     ) {
-        behaviour::cards::event_hook(card, id, printed, history, hook, asked)
+        behaviour::cards::event_hook(card, id, pile, printed, history, hook, asked)
     }
 }
 /// Nothing yet. The rules land here as they are ported, one pool at a time.

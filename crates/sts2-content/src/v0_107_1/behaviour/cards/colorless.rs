@@ -35,8 +35,45 @@ pub(super) fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played
             }
         }
         ColorlessCard::JackOfAllTrades => jack_of_all_trades(fight),
+        ColorlessCard::Omnislice => omnislice(fight),
         card => card_plays::colorless::on_play(card, fight),
     }
+}
+
+/// `Omnislice`: its damage to the target, then what that hit dealt, block
+/// and overkill included, to each other enemy that can be hit, unpowered.
+/// Both are hits of one attack.
+fn omnislice<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use sts2_core::{Amount, Effect, Scaling};
+
+    let target = fight.target();
+    fight.attack(Scaling::Dynamic, |fight| {
+        let attack = fight.resolve(Effect::Attack {
+            dealer: fight.actor(),
+            target,
+            damage: Amount::Var(CardVar::Damage),
+            scaling: Scaling::Dynamic,
+        });
+        fight.apply(attack);
+        let Some(first) = fight.attack_results().first().copied() else {
+            return;
+        };
+        let others: Vec<_> = fight
+            .hittable_opponents()
+            .into_iter()
+            .filter(|&other| other != target)
+            .collect();
+        for other in others {
+            let hit = fight.resolve(Effect::Attack {
+                dealer: fight.actor(),
+                target: other,
+                damage: Amount::Number(first.total + first.overkill),
+                scaling: Scaling::Static,
+            });
+            fight.apply(hit);
+        }
+    });
+    Played::Done
 }
 
 /// `JackOfAllTrades`: `GetDistinctForCombat` of its `Cards` of colorless

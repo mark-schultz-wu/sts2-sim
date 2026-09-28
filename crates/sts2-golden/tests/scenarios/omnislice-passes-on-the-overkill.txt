@@ -1,0 +1,8 @@
+# Omnislice hits its target, then hits each other enemy, unpowered, for
+# what that hit dealt with its overkill. Five Strength make thirteen on
+# the eight-point Twig Slime, and thirteen on each of the others.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":5,"target":0}
+{"cmd":"grant","card":"OMNISLICE"}
+{"cmd":"play_card","index":7,"target":1}

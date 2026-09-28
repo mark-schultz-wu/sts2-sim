@@ -1,0 +1,8 @@
+# Regret costs as many hit points as the hand held as the turn began to
+# end: seven here, the Dazed that Ethereal exhausts before Regret acts
+# counted among them.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"DAZED"}
+{"cmd":"grant","card":"REGRET"}
+{"cmd":"end_turn"}

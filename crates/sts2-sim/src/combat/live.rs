@@ -1573,6 +1573,9 @@ pub(crate) struct Live<V: Rules> {
     /// How many attack commands this fight has started, which is what the
     /// next one is told apart by.
     pub(super) attacks: u32,
+    /// Numbers a card keeps on its own model and prints nowhere, by copy,
+    /// such as Regret's `CardsInHand`.
+    pub(super) notes: smallvec::SmallVec<[(CardId<V>, V::Number); 2]>,
     /// A card play waiting on an answer, which is the only thing the fight
     /// will take while it is set.
     pub(super) asking: Option<Asking<V>>,
@@ -1712,6 +1715,7 @@ impl<V: Rules> Clone for Live<V> {
             powers: self.powers.clone(),
             orbs: self.orbs.clone(),
             card_ids: self.card_ids.clone(),
+            notes: self.notes.clone(),
             asking: self.asking.clone(),
             ..*self
         }
@@ -1744,6 +1748,7 @@ impl<V: Rules> Clone for Live<V> {
             skip_tick,
             card_ids,
             attacks,
+            notes,
             asking,
         } = self;
         *character = source.character;
@@ -1769,7 +1774,26 @@ impl<V: Rules> Clone for Live<V> {
         skip_tick.copy_from(&source.skip_tick);
         card_ids.clone_from(&source.card_ids);
         *attacks = source.attacks;
+        notes.clone_from(&source.notes);
         asking.clone_from(&source.asking);
+    }
+}
+
+impl<V: Rules> Live<V> {
+    /// Keep `note` on the copy `id`'s own model, over what it kept before.
+    pub(super) fn note(&mut self, id: CardId<V>, note: V::Number) {
+        match self.notes.iter_mut().find(|(noted, _)| *noted == id) {
+            Some((_, kept)) => *kept = note,
+            None => self.notes.push((id, note)),
+        }
+    }
+
+    /// What the copy `id` keeps on its own model, zero for nothing kept.
+    pub(super) fn noted(&self, id: CardId<V>) -> V::Number {
+        self.notes
+            .iter()
+            .find(|(noted, _)| *noted == id)
+            .map_or_else(num_traits::zero, |&(_, kept)| kept)
     }
 }
 
@@ -2417,6 +2441,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             skip_tick: Bounded::new(),
             card_ids: CardIds::new(),
             attacks: 0,
+            notes: smallvec::SmallVec::new(),
             asking: None,
         }
     }
