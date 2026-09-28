@@ -4471,6 +4471,12 @@ pub enum HookEffect<V: ContentVersion> {
     },
     /// `OstyCmd.Summon` for the listener's owner.
     Summon(V::Number),
+    /// `CardPileCmd.AddGeneratedCardToCombat` of `count` clones of the copy
+    /// `card`, each into hand.
+    CloneIntoHand {
+        card: crate::CardId<V>,
+        count: V::Number,
+    },
     /// `CreatureCmd.Damage` on every enemy that can be hit, from the
     /// listener's owner, for a number no power scales.
     DamageOpponents(V::Number),

@@ -2700,7 +2700,11 @@ pub(super) fn player<V: Rules>(creatures: &[Fighter<V>]) -> CombatId {
 impl<V: Rules> Board<'_, V> {
     /// `CreateClone` of the card `id` into `pile`, as
     /// `AddGeneratedCardToCombat` puts it there.
-    fn clone_named(&mut self, id: sts2_core::CardId<V>, pile: Pile) -> Option<CardAt<V>> {
+    pub(super) fn clone_named(
+        &mut self,
+        id: sts2_core::CardId<V>,
+        pile: Pile,
+    ) -> Option<CardAt<V>> {
         let face = self
             .live
             .cards

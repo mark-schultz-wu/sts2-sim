@@ -1,0 +1,20 @@
+# Juggling counts the attacks played this turn, those before it too, and
+# clones the third into hand. A Shiv comes before it, then two more. The
+# next turn counts from nothing again.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"grant","card":"JUGGLING"}
+{"cmd":"play_card","index":7}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"play_card","index":5,"target":1}

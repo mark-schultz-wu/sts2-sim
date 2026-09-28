@@ -1166,6 +1166,21 @@ fn finished<V: Rules, S: LendsCombat>(
                     board.land(owner, power, amount, Some(owner));
                     ended = ended.or(board.ended);
                 }
+                // Clones of the card just played, which is still in the
+                // play pile, into hand.
+                (
+                    super::listen::Listener::Power { .. },
+                    sts2_core::HookEffect::CloneIntoHand { card, count },
+                ) => {
+                    let count: usize = num_traits::cast(count)
+                        .unwrap_or_else(|| unimplemented!("{count:?} clones"));
+                    let mut board =
+                        Board::for_card(next, streams.combat(), relics, ascension, None, None);
+                    for _ in 0..count {
+                        board.clone_named(card, sts2_core::Pile::Hand);
+                    }
+                    ended = ended.or(board.ended);
+                }
                 // `PowerCmd.Apply` from nobody.
                 (
                     super::listen::Listener::Power { .. },

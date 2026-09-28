@@ -39,6 +39,10 @@ pub enum State {
     DarkEmbrace {
         counted: Number,
     },
+    /// `JugglingPower`'s `attacksPlayedThisTurn`.
+    Juggling {
+        counted: Number,
+    },
     Imbalanced {
         off_balance: bool,
     },
@@ -180,6 +184,9 @@ pub struct Bound {
     amount: Number,
 }
 
+/// `JugglingPower`'s third attack in a turn.
+const JUGGLING_ATTACKS: Number = 3;
+
 /// What a card's note does to the power it just applied.
 ///
 /// # Panics
@@ -201,6 +208,7 @@ impl sts2_core::PowerModel<V> for State {
             Power::SlowPower => Self::Slow { counted: 0 },
             Power::TenderPower => Self::Tender { counted: 0 },
             Power::DarkEmbracePower => Self::DarkEmbrace { counted: 0 },
+            Power::JugglingPower => Self::Juggling { counted: 0 },
             Power::ImbalancedPower => Self::Imbalanced { off_balance: false },
             Power::RitualPower => Self::Ritual {
                 just_applied: false,
@@ -255,6 +263,7 @@ impl sts2_core::PowerModel<V> for State {
             Self::Slow { .. } => Power::SlowPower,
             Self::Tender { .. } => Power::TenderPower,
             Self::DarkEmbrace { .. } => Power::DarkEmbracePower,
+            Self::Juggling { .. } => Power::JugglingPower,
             Self::Imbalanced { .. } => Power::ImbalancedPower,
             Self::Ritual { .. } => Power::RitualPower,
             Self::Possess { power, .. } => *power,
@@ -335,9 +344,10 @@ pub(crate) fn lends(power: Power) -> Option<(Power, bool)> {
 impl State {
     fn counted(&self) -> Number {
         match self {
-            Self::Slow { counted } | Self::Tender { counted } | Self::DarkEmbrace { counted } => {
-                *counted
-            }
+            Self::Slow { counted }
+            | Self::Tender { counted }
+            | Self::DarkEmbrace { counted }
+            | Self::Juggling { counted } => *counted,
             _ => 0,
         }
     }
@@ -375,18 +385,20 @@ impl State {
 
     fn count(&mut self, amount: Number) {
         match self {
-            Self::Slow { counted } | Self::Tender { counted } | Self::DarkEmbrace { counted } => {
-                *counted += amount
-            }
+            Self::Slow { counted }
+            | Self::Tender { counted }
+            | Self::DarkEmbrace { counted }
+            | Self::Juggling { counted } => *counted += amount,
             state => unreachable!("counted state for {:?}", state.power()),
         }
     }
 
     fn clear(&mut self) {
         match self {
-            Self::Slow { counted } | Self::Tender { counted } | Self::DarkEmbrace { counted } => {
-                *counted = 0
-            }
+            Self::Slow { counted }
+            | Self::Tender { counted }
+            | Self::DarkEmbrace { counted }
+            | Self::Juggling { counted } => *counted = 0,
             state => unreachable!("counted state for {:?}", state.power()),
         }
     }
@@ -3314,6 +3326,37 @@ pub(crate) fn event_hook(
             let counted = state.counted();
             state.clear();
             Some(HookEffect::Draw(amount * counted))
+        }
+        // `JugglingPower.AfterApplied`: the attacks whose plays started this
+        // turn, counted. A fight here has one player, whose every card is.
+        (Power::JugglingPower, _, EventHook::Applied) => {
+            let attacks = history
+                .started_this_turn()
+                .filter(|started| <V as sts2_core::Rules>::card_kind(started.card) == Some(sts2_core::CardKind::Attack))
+                .count();
+            state.clear();
+            state.count(Number::try_from(attacks).expect("a turn's plays fit a number"));
+            None
+        }
+        // `AfterCardPlayed`: one more attack, and on the third, its stack of
+        // clones of that attack into hand.
+        (Power::JugglingPower, PowerAmount::Counted(amount), EventHook::CardPlayed { card, id, .. })
+            if <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Attack) =>
+        {
+            state.count(one);
+            (state.counted() == JUGGLING_ATTACKS)
+                .then_some(HookEffect::CloneIntoHand { card: id, count: amount })
+        }
+        (Power::JugglingPower, PowerAmount::Endless, EventHook::CardPlayed { .. }) => {
+            unimplemented!("an endless Juggling")
+        }
+        (Power::JugglingPower, _, EventHook::CardPlayed { .. }) => None,
+        // `AfterSideTurnEnd` on its owner's side starts the count again.
+        (Power::JugglingPower, _, EventHook::SideTurnEnd { side, .. }) => {
+            if side == owner {
+                state.clear();
+            }
+            None
         }
         (Power::DarkEmbracePower, PowerAmount::Endless, _) => unimplemented!("an endless Dark Embrace"),
         (Power::DarkEmbracePower, _, EventHook::CardExhausted { .. } | EventHook::SideTurnEnd { .. }) => {
