@@ -150,6 +150,14 @@ pub(super) fn perform<F: Fight<V>>(
             fight.apply_to_actor(Power::DexterityPower, PowerAmount::Counted(STOLEN));
         }
         (Monster::TheForgotten, MoveId::Dread) => fight.attack_opponents(),
+        // `LeechingHugMove`: three Weak on each target from nobody, then
+        // three Strength onto itself.
+        (Monster::SlimedBerserker, MoveId::LeechingHugMove) => {
+            for target in fight.opponents() {
+                fight.apply_power_from(target, Power::WeakPower, PowerAmount::Counted(3), None);
+            }
+            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(3));
+        }
         _ => monster_moves::perform(monster, move_id, fight),
     }
 }

@@ -290,6 +290,7 @@ pub(crate) fn perform<F: Fight<V>>(
         Monster::DevotedSculptor
         | Monster::FrogKnight
         | Monster::Axebot
+        | Monster::SlimedBerserker
         | Monster::TheLost
         | Monster::TheForgotten => glory::perform(monster, move_id, model, fight),
         _ => monster_moves::perform(monster, move_id, fight),
