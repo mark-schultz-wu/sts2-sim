@@ -555,7 +555,8 @@ pub(super) fn before_side_turn_start<V: Rules>(
 
 /// `AggressionPower.BeforeSideTurnStart`: the discard pile's attacks, in an
 /// unstable shuffle off `CombatCardSelection`, and the first `count` of them
-/// into hand. Each is upgraded where an upgrade can still raise it.
+/// into hand. Once the hand is full, each goes back onto the discard pile.
+/// Each is upgraded where an upgrade can still raise it.
 fn attacks_from_discard<V: Rules>(live: &mut Live<V>, rngs: CombatRngs<'_>, count: V::Number) {
     use sts2_core::rng::GameRng as _;
 
@@ -569,16 +570,19 @@ fn attacks_from_discard<V: Rules>(live: &mut Live<V>, rngs: CombatRngs<'_>, coun
         .collect();
     rngs.selection.unstable_shuffle(&mut attacks);
     for id in attacks.into_iter().take(count) {
-        if live.cards.len(Pile::Hand) >= MAX_CARDS_IN_HAND {
-            unimplemented!("an attack from the discard pile into a full hand");
-        }
+        // A full hand sends the card to the discard pile instead, onto its
+        // end, and it is upgraded there all the same.
+        let to = match live.cards.len(Pile::Hand) >= MAX_CARDS_IN_HAND {
+            true => Pile::Discard,
+            false => Pile::Hand,
+        };
         let at = live
             .cards
             .find(Pile::Discard, id)
             .expect("a shuffled attack is still in the discard pile");
-        live.cards.move_to(Pile::Discard, at, Pile::Hand);
-        let at = live.cards.len(Pile::Hand) - 1;
-        live.cards.write(Pile::Hand, at, |held| {
+        live.cards.move_to(Pile::Discard, at, to);
+        let at = live.cards.len(to) - 1;
+        live.cards.write(to, at, |held| {
             held.modify(sts2_core::Change::Upgrade, sts2_core::Lasting::ThisFight);
             true
         });
