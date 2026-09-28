@@ -634,6 +634,19 @@ pub(crate) fn resume_play<F: Fight<V>>(
     }
 }
 
+/// The rest of a play that stopped on a choose-a-card screen, once the
+/// player took one or skipped it.
+pub(crate) fn resume_chosen<F: Fight<V>>(
+    fight: &mut F,
+    at: Resume,
+    chosen: Option<sts2_core::CardIdent<V>>,
+) -> Played<V> {
+    match at {
+        Resume::Regent(at) => regent::resume_chosen(fight, at, chosen),
+        at => unimplemented!("{at:?} resumed with a chosen card"),
+    }
+}
+
 /// The act, counted from zero, in which the Lantern Key answers.
 const LANTERN_KEY_ACT: usize = 2;
 

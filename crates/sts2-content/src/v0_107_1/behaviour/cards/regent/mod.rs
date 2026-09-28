@@ -17,6 +17,8 @@ pub enum Resume {
     /// `Guards`, after its owner picked the cards to turn into Minion
     /// Sacrifices.
     GuardsTransform,
+    /// `Quasar`, after its owner chose a colorless card or none.
+    QuasarChoice,
     /// `Glimmer`, after its owner picked the cards to put back.
     GlimmerPutBack,
     /// `PhotonCut`, after its owner picked the cards to put back.
@@ -58,6 +60,7 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
     match card {
         RegentCard::Glitterstream => common::glitterstream(fight),
         RegentCard::BeatIntoShape => beat_into_shape(fight),
+        RegentCard::Quasar => quasar(fight),
         // `Guards`: any number of the hand's cards picked, each transformed.
         RegentCard::Guards => Played::Asking {
             pile: Pile::Hand,
@@ -350,6 +353,48 @@ pub(super) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
     }
 }
 
+/// `Quasar`: three distinct colorless cards off `CombatCardGeneration`, each
+/// upgraded where Quasar is, of which its owner takes one into hand or none.
+fn quasar<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use sts2_core::CardTable as _;
+
+    let mut pool = <V as sts2_core::Rules>::combat_colorless_cards().to_vec();
+    let stream = <<V as sts2_core::ContentVersion>::RunRngType as sts2_core::RunStreamKinds>::COMBAT_CARD_GENERATION;
+    let mut offered: [CardIdent<V>; sts2_core::CHOICES] = fight
+        .generate_cards(&mut pool, stream)
+        .unwrap_or_else(|_| unimplemented!("a colorless pool offering fewer than three"));
+    if fight.upgraded() {
+        for card in &mut offered {
+            if card.upgrade < card.card.max_upgrade() {
+                card.upgrade += 1;
+            }
+        }
+    }
+    Played::Choosing {
+        offered: offered.into_iter().collect(),
+        skippable: true,
+        at: super::super::Resume::Card(super::Resume::Regent(Resume::QuasarChoice)),
+    }
+}
+
+/// The rest of a play that stopped on a choice, once the player chose.
+pub(super) fn resume_chosen<F: Fight<V>>(
+    fight: &mut F,
+    at: Resume,
+    chosen: Option<CardIdent<V>>,
+) -> Played<V> {
+    match at {
+        // `CardPileCmd.AddGeneratedCardToCombat` of the one taken, into hand.
+        Resume::QuasarChoice => {
+            if let Some(card) = chosen {
+                fight.add_generated_cards(card, Pile::Hand, 1);
+            }
+            Played::Done
+        }
+        at => unreachable!("{at:?} stops on a pick of a pile"),
+    }
+}
+
 /// The rest of a play that stopped, once the fight has its answer.
 pub(super) fn resume_play<F: Fight<V>>(
     fight: &mut F,
@@ -377,5 +422,6 @@ pub(super) fn resume_play<F: Fight<V>>(
             fight.act_on(sts2_core::PileAct::OntoDrawTop, chosen.as_slice());
             Played::Done
         }
+        Resume::QuasarChoice => unreachable!("Quasar stops on a choice, not a pick"),
     }
 }
