@@ -1,0 +1,11 @@
+# Alchemize procures a random potion off the combat potion stream, among
+# those a fight can make. Three plays fill the belt, and on this seed a
+# potion no fight makes would move one of the picks.
+{"cmd":"start","seed":"0RACLE2","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"ALCHEMIZE"}
+{"cmd":"play_card","index":5}
+{"cmd":"grant","card":"ALCHEMIZE"}
+{"cmd":"play_card","index":5}
+{"cmd":"grant","card":"ALCHEMIZE"}
+{"cmd":"play_card","index":5}

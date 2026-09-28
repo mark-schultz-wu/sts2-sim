@@ -16,6 +16,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
         asked.extend([
             HookEffect::GainPotionSlots(SLOTS),
             HookEffect::ProcureRandomPotions {
+                in_combat: false,
                 count: SLOTS,
                 stream: RunRngType::CombatPotionGeneration,
                 into_gained: true,

@@ -3171,6 +3171,17 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         })
     }
 
+    fn procure_random_potion(&mut self, stream: V::RunRngType) {
+        self.live
+            .for_run
+            .push(sts2_core::HookEffect::ProcureRandomPotions {
+                count: 1,
+                stream,
+                in_combat: true,
+                into_gained: false,
+            });
+    }
+
     fn gain_max_hp(&mut self, creature: CombatId, amount: V::Number) {
         let Some(at) = self.at(creature) else { return };
         let gained: V::Health =

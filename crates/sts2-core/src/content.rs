@@ -1120,6 +1120,10 @@ pub trait PotionTable: Table {
     /// for the one potion that answers it from live state, which
     /// [`Rules::computed_potion_check`] answers.
     fn passes_own_check(self) -> Option<bool>;
+
+    /// `PotionModel.CanBeGeneratedInCombat`, which a potion made mid-fight
+    /// is drawn among.
+    fn generated_in_combat(self) -> bool;
 }
 
 /// When a potion can be drunk, reduced to what a rule asks.
@@ -2209,6 +2213,13 @@ pub trait Fight<V: ContentVersion> {
     /// `creature.Powers.All(p => p.ShouldOwnerDeathTriggerFatal())`.
     fn death_triggers_fatal(&self, _creature: crate::CombatId) -> bool {
         unimplemented!("whether a death triggers Fatal")
+    }
+
+    /// `PotionCmd.TryToProcure` of `CreateRandomPotionInCombat` off
+    /// `stream`, which the run carries out once the decision settles. The
+    /// stream is the run's own, so no draw in the fight moves it.
+    fn procure_random_potion(&mut self, _stream: V::RunRngType) {
+        unimplemented!("a potion made mid-fight")
     }
 
     /// `CreatureCmd.GainMaxHp`: the maximum grows by `amount`, then a heal
@@ -4412,6 +4423,9 @@ pub enum HookEffect<V: ContentVersion> {
     ProcureRandomPotions {
         count: usize,
         stream: V::RunRngType,
+        /// `CreateRandomPotionInCombat`, which draws among the potions
+        /// `CanBeGeneratedInCombat` alone.
+        in_combat: bool,
         /// Each into the slot at `originalSlotCount + i`: the last `count`
         /// slots, which a `GainMaxPotionCount` just before opened. Otherwise
         /// each into the first open slot.

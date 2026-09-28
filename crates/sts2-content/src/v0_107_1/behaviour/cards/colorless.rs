@@ -41,6 +41,16 @@ pub(super) fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played
     match card {
         ColorlessCard::Volley => volley(fight),
         ColorlessCard::Catastrophe => catastrophe(fight),
+        // `Alchemize`: a potion made off `CombatPotionGeneration` among those
+        // a fight can make, procured.
+        ColorlessCard::Alchemize => {
+            use sts2_core::RunStreamKinds as _;
+
+            fight.procure_random_potion(
+                <V as sts2_core::ContentVersion>::RunRngType::COMBAT_POTION_GENERATION,
+            );
+            Played::Done
+        }
         // `Prolong`: as much Block Next Turn on its owner as the block it
         // holds.
         ColorlessCard::Prolong => {

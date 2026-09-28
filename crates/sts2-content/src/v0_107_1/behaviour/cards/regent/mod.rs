@@ -14,6 +14,9 @@ mod uncommon;
 pub enum Resume {
     /// `Begone`, after it selected the card to turn into a Minion Strike.
     BegoneTransform,
+    /// `Guards`, after its owner picked the cards to turn into Minion
+    /// Sacrifices.
+    GuardsTransform,
     /// `Glimmer`, after its owner picked the cards to put back.
     GlimmerPutBack,
     /// `PhotonCut`, after its owner picked the cards to put back.
@@ -55,6 +58,14 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
     match card {
         RegentCard::Glitterstream => common::glitterstream(fight),
         RegentCard::BeatIntoShape => beat_into_shape(fight),
+        // `Guards`: any number of the hand's cards picked, each transformed.
+        RegentCard::Guards => Played::Asking {
+            pile: Pile::Hand,
+            selection: sts2_core::Selection::UpTo(
+                nonmax::NonMaxUsize::new(999_999_999).expect("a count below the maximum"),
+            ),
+            at: super::super::Resume::Card(super::Resume::Regent(Resume::GuardsTransform)),
+        },
         RegentCard::Begone => common::begone(),
         // `Charge`: its `Cards` of the draw pile picked, each transformed.
         RegentCard::Charge => Played::Asking {
@@ -347,11 +358,15 @@ pub(super) fn resume_play<F: Fight<V>>(
 ) -> Played<V> {
     match at {
         Resume::BegoneTransform => common::begone_transform(fight, chosen),
-        // `CardCmd.TransformTo<MinionDiveBomb>` of each, upgraded where
-        // Charge is.
-        Resume::ChargeTransform => {
+        // `CardCmd.Transform` of each into a `MinionDiveBomb` for Charge,
+        // or a `MinionSacrifice` for Guards, upgraded where the card is.
+        Resume::ChargeTransform | Resume::GuardsTransform => {
+            let token = match at {
+                Resume::ChargeTransform => TokenCard::MinionDiveBomb,
+                _ => TokenCard::MinionSacrifice,
+            };
             for &card in chosen.as_slice() {
-                let mut into = CardIdent::new(Cards::Token(TokenCard::MinionDiveBomb));
+                let mut into = CardIdent::new(Cards::Token(token));
                 into.upgrade = u8::from(fight.upgraded());
                 fight.transform(card, into);
             }

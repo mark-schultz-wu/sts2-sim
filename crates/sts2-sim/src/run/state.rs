@@ -1191,6 +1191,21 @@ impl<V: Rules> State<V> {
         }
     }
 
+    /// What the fight asked of the run during a decision, carried out.
+    ///
+    /// # Panics
+    ///
+    /// Something that asks the run a question.
+    pub(super) fn asked_by_fight(&mut self) {
+        let Phase::Combat(live) = &mut self.phase else {
+            return;
+        };
+        let asked = live.take_for_run();
+        if self.carry_out(asked).is_some() {
+            unimplemented!("a fight asking the run a question mid-decision");
+        }
+    }
+
     /// The player's gold, back from the fight that held it.
     pub(super) fn gold_from_fight(&mut self) {
         if let Phase::Combat(live) = &self.phase {
@@ -1673,6 +1688,7 @@ impl<V: Rules> State<V> {
                             self.streams.run(stream),
                             character,
                             1,
+                            false,
                         );
                         let Some(&potion) = potion.first() else {
                             break;
@@ -1687,6 +1703,7 @@ impl<V: Rules> State<V> {
                 HookEffect::ProcureRandomPotions {
                     count,
                     stream,
+                    in_combat,
                     into_gained,
                 } => {
                     let character = self.character();
@@ -1694,6 +1711,7 @@ impl<V: Rules> State<V> {
                         self.streams.run(stream),
                         character,
                         count,
+                        in_combat,
                     );
                     let slots: usize = num_traits::cast(self.player.potion_slots)
                         .expect("the belt has an addressable number of slots");

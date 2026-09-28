@@ -405,6 +405,17 @@ const READS_ITS_ROW: &str = r#"
             Field::Computed => None,
         }
     }
+
+    /// Whether a card or a relic can make one mid-fight.
+    fn generated_in_combat(self) -> bool {
+        match sts2_core::Table::data(self)
+            .flags
+            .get(PotionFlag::GeneratedInCombat)
+        {
+            Field::Constant(generated) => generated,
+            Field::Computed => unimplemented!("whether {self:?} can be made mid-fight"),
+        }
+    }
 "#;
 
 fn emit_potions(

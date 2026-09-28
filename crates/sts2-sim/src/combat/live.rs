@@ -1710,6 +1710,9 @@ pub(crate) struct Live<V: Rules> {
     /// What `AfterCombatEnd` asked of the run, which carries it out as it
     /// takes the fight's rewards.
     pub(super) leaving: Vec<sts2_core::HookEffect<V>>,
+    /// What the fight asked of the run in the middle of a decision, which the
+    /// run carries out as the decision settles.
+    pub(super) for_run: Vec<sts2_core::HookEffect<V>>,
     /// What `AfterShuffle` listeners asked for behind one that asked the
     /// player to pick, which waits for the pick.
     pub(super) after_pick: Vec<sts2_core::HookEffect<V>>,
@@ -1904,6 +1907,7 @@ impl<V: Rules> Clone for Live<V> {
             history: self.history.clone(),
             kept: self.kept.clone(),
             leaving: self.leaving.clone(),
+            for_run: self.for_run.clone(),
             after_pick: self.after_pick.clone(),
             powers: self.powers.clone(),
             orbs: self.orbs.clone(),
@@ -1935,6 +1939,7 @@ impl<V: Rules> Clone for Live<V> {
             extra_cards,
             exhaust_next,
             leaving,
+            for_run,
             after_pick,
             creatures,
             powers,
@@ -1963,6 +1968,7 @@ impl<V: Rules> Clone for Live<V> {
         extra_cards.clone_from(&source.extra_cards);
         exhaust_next.clone_from(&source.exhaust_next);
         leaving.clone_from(&source.leaving);
+        for_run.clone_from(&source.for_run);
         after_pick.clone_from(&source.after_pick);
         creatures.copy_from(&source.creatures);
         powers.clone_from(&source.powers);
@@ -2092,6 +2098,11 @@ impl<V: Rules> Live<V> {
     /// What the fight's end asked of the run, in the order it asked.
     pub(crate) fn leaving(&self) -> &[sts2_core::HookEffect<V>] {
         &self.leaving
+    }
+
+    /// What the fight asked of the run since the last decision settled.
+    pub(crate) fn take_for_run(&mut self) -> Vec<sts2_core::HookEffect<V>> {
+        std::mem::take(&mut self.for_run)
     }
 
     /// Where each card a selection from `pile` offers stands in it, in the
@@ -2688,6 +2699,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             extra_cards: Vec::new(),
             exhaust_next: smallvec::SmallVec::new(),
             leaving: Vec::new(),
+            for_run: Vec::new(),
             after_pick: Vec::new(),
             creatures: creatures.into_iter().collect(),
             powers: PowerStore::new(),

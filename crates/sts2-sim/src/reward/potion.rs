@@ -17,7 +17,7 @@ const UNCOMMON: f32 = 0.35;
 /// Nothing is blacklisted. The blacklist is for a screen that offers more than
 /// one, and no fight does.
 pub(crate) fn rolled<V: Rules, R: GameRng>(rng: &mut R, character: V::Character) -> V::Potion {
-    let [potion] = distinct::<V, R>(rng, character, 1)[..] else {
+    let [potion] = distinct::<V, R>(rng, character, 1, false)[..] else {
         unreachable!("one draw returns one potion")
     };
     potion
@@ -32,6 +32,7 @@ pub(crate) fn distinct<V: Rules, R: GameRng>(
     rng: &mut R,
     character: V::Character,
     count: usize,
+    in_combat: bool,
 ) -> Vec<V::Potion> {
     let pool = V::reward_potions(character);
     let mut drawn = Vec::with_capacity(count);
@@ -44,7 +45,7 @@ pub(crate) fn distinct<V: Rules, R: GameRng>(
         } else {
             RewardRarity::Common
         };
-        drawn.push(at::<V, R>(pool, wanted, &drawn, rng));
+        drawn.push(at::<V, R>(pool, wanted, &drawn, in_combat, rng));
     }
     drawn
 }
@@ -54,6 +55,7 @@ fn at<V: Rules, R: GameRng>(
     pool: Drafted<'_, V::Potion>,
     wanted: RewardRarity,
     drawn: &[V::Potion],
+    in_combat: bool,
     rng: &mut R,
 ) -> V::Potion {
     let choices: Vec<V::Potion> = pool
@@ -61,6 +63,7 @@ fn at<V: Rules, R: GameRng>(
         .iter()
         .copied()
         .filter(|potion| !drawn.contains(potion))
+        .filter(|&potion| !in_combat || sts2_core::PotionTable::generated_in_combat(potion))
         .collect();
     let count = num_traits::cast(choices.len()).expect("a potion pool fits the RNG integer");
     let bound = Bound::try_new(count).unwrap_or_else(|_| unimplemented!("a rarity with no potion"));
