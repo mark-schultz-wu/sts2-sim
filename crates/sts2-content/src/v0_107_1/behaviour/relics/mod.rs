@@ -40,6 +40,7 @@ mod bronze_scales;
 mod burning_blood;
 mod byrdpip;
 mod calling_bell;
+mod candelabra;
 mod centennial_puzzle;
 mod chandelier;
 mod charons_ashes;
@@ -430,6 +431,7 @@ pub enum State {
     WhiteBeastStatue,
     OrangeDough,
     LastingCandy(lasting_candy::State),
+    Candelabra,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -673,6 +675,7 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::Candelabra => candelabra::event_hook(hook, asked),
         State::LastingCandy(state) => lasting_candy::event_hook(state, hook, asked),
         State::OrangeDough => orange_dough::event_hook(hook, asked),
         State::WhiteBeastStatue => white_beast_statue::event_hook(hook, asked),
@@ -941,7 +944,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::SymbioticVirus
         | State::WhiteBeastStatue
         | State::OrangeDough
-        | State::LastingCandy(_) => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::LastingCandy(_)
+        | State::Candelabra => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1120,6 +1124,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::Candelabra => State::Candelabra,
             Relic::LastingCandy => State::LastingCandy(lasting_candy::State::default()),
             Relic::OrangeDough => State::OrangeDough,
             Relic::WhiteBeastStatue => State::WhiteBeastStatue,

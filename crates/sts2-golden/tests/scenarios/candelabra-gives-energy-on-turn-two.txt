@@ -1,0 +1,7 @@
+# Candelabra gives two energy as its owner's second turn starts, and
+# nothing on the first or the third.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"CANDELABRA"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

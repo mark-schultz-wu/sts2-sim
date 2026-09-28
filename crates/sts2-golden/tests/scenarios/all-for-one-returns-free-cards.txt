@@ -1,0 +1,10 @@
+# All for One hits its target, then brings every Attack, Skill or Power in
+# the discard pile that costs nothing back into the hand. Claw comes back,
+# and the Strike stays.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"grant","card":"CLAW"}
+{"cmd":"play_card","index":5,"target":2}
+{"cmd":"play_card","index":0,"target":2}
+{"cmd":"grant","card":"ALL_FOR_ONE"}
+{"cmd":"play_card","index":4,"target":2}

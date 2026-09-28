@@ -120,6 +120,98 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
             Played::Done
         }
         DefectCard::Compact => compact(fight),
+        // `MeteorStrike`: its damage to the target, then three Plasma orbs.
+        DefectCard::MeteorStrike => {
+            let target = fight.target();
+            hit(fight, target, 1);
+            for _ in 0..3 {
+                fight.channel(Orb::PlasmaOrb);
+            }
+            Played::Done
+        }
+        // `Chaos`: a random orb off `CombatOrbGeneration` for each of its
+        // `Repeat`.
+        DefectCard::Chaos => {
+            for _ in 0..fight.var(CardVar::Repeat) {
+                if let Some(orb) = fight.random_orb(&super::super::super::generated::orbs::ROLLABLE)
+                {
+                    fight.channel(orb);
+                }
+            }
+            Played::Done
+        }
+        // `WhiteNoise`: a Power of the character's pool, free this turn, into
+        // the hand.
+        DefectCard::WhiteNoise => {
+            super::super::free_card_into_hand(
+                fight,
+                |card| <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Power),
+                true,
+            );
+            Played::Done
+        }
+        // `MultiCast`: the first orb evoked X times, one more upgraded, and
+        // dequeued only on the last.
+        DefectCard::MultiCast => {
+            let mut count = fight.x_value();
+            if fight.upgraded() {
+                count += 1;
+            }
+            for at in 0..count {
+                fight.evoke_next(at == count - 1);
+            }
+            Played::Done
+        }
+        // `Hyperbeam`: its damage to every enemy, then its `FocusPower` taken
+        // off its owner.
+        DefectCard::Hyperbeam => {
+            fight.attack(Scaling::Dynamic, |fight| {
+                for target in fight.opponents() {
+                    let hit = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(hit);
+                }
+            });
+            fight.apply_to_actor(
+                Power::FocusPower,
+                PowerAmount::Counted(-fight.var(CardVar::FocusPower)),
+            );
+            Played::Done
+        }
+        // `AllForOne`: its damage to the target, then every Attack, Skill or
+        // Power in the discard pile that costs nothing into the hand.
+        DefectCard::AllForOne => {
+            let target = fight.target();
+            hit(fight, target, 1);
+            let free: Vec<_> = fight
+                .cards_in(Pile::Discard)
+                .into_iter()
+                .filter(|&card| {
+                    matches!(
+                        <V as sts2_core::Rules>::card_kind(fight.card_ident(card).card),
+                        Some(
+                            sts2_core::CardKind::Attack
+                                | sts2_core::CardKind::Skill
+                                | sts2_core::CardKind::Power
+                        )
+                    ) && fight.card_costs(card, true).0 == sts2_core::Cost::fixed(0)
+                })
+                .collect();
+            for card in free {
+                let at = fight
+                    .cards_in(Pile::Discard)
+                    .into_iter()
+                    .find(|held| held.id() == card.id());
+                if let Some(at) = at {
+                    fight.act_on(PileAct::IntoHand, &[at]);
+                }
+            }
+            Played::Done
+        }
         // `SweepingBeam`: its damage to every enemy, then its `Cards` drawn.
         DefectCard::SweepingBeam => {
             fight.attack(Scaling::Dynamic, |fight| {
