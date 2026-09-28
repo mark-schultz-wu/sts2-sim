@@ -4673,6 +4673,10 @@ pub struct MonsterSpawn<E> {
     /// `GetTeammatesOf(Creature).Count(IsAlive)`: how many on its side stand
     /// as it rolls, itself included.
     pub standing: u8,
+    /// `Creature.CurrentHp` as it rolls.
+    pub hp: u32,
+    /// `Creature.MaxHp` as it rolls.
+    pub max_hp: u32,
 }
 
 /// One creature an encounter's roster names, as `GenerateMonsters` returns it.

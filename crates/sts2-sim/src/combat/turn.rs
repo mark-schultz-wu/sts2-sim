@@ -2196,6 +2196,9 @@ fn roll_moves<V: Rules>(
                 ascension,
                 sts2_core::MonsterSpawn {
                     standing,
+                    hp: num_traits::cast(creature.hp).expect("a monster's health fits a u32"),
+                    max_hp: num_traits::cast(creature.max_hp)
+                        .expect("a monster's health fits a u32"),
                     ..held.spawn
                 },
                 powers,

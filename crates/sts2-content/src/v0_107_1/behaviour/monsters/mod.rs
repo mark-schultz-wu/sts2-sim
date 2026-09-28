@@ -76,7 +76,7 @@ pub(crate) fn starting_powers(
 
     match overgrowth::starting_powers(monster, ascension)
         .or_else(|| hive::starting_powers(monster, ascension, side))
-        .or_else(|| glory::starting_powers(monster))
+        .or_else(|| glory::starting_powers(monster, ascension))
         .or_else(|| summoned::starting_powers(monster))
     {
         Some(applied) => applied,
@@ -138,7 +138,9 @@ pub(crate) fn conditional<P: sts2_core::Printed<V> + ?Sized>(
             hive::conditional(monster, at, spawn, powers)
         }
         Monster::Exoskeleton | Monster::Myte => opens_by_slot(monster, at, spawn),
-        Monster::LivingShield => glory::conditional(monster, at, spawn),
+        Monster::LivingShield | Monster::FrogKnight => {
+            glory::conditional(monster, at, spawn, model)
+        }
         _ => overgrowth::conditional(monster, at, spawn),
     }
 }
@@ -269,7 +271,9 @@ pub(crate) fn perform<F: Fight<V>>(
         | Monster::CrossbowRubyRaider
         | Monster::CeremonialBeast
         | Monster::KinPriest => overgrowth::perform(monster, move_id, fight),
-        Monster::DevotedSculptor => glory::perform(monster, move_id, fight),
+        Monster::DevotedSculptor | Monster::FrogKnight => {
+            glory::perform(monster, move_id, model, fight)
+        }
         _ => monster_moves::perform(monster, move_id, fight),
     }
     Played::Done
@@ -283,12 +287,17 @@ pub enum Model {
     /// `KnowledgeDemon.CurseOfKnowledgeCounter`: the curses it has cast. Its
     /// `IsBurnt` picks animations alone.
     KnowledgeDemon { curses: u8 },
+    /// `FrogKnight.HasBeetleCharged`.
+    FrogKnight { beetle_charged: bool },
 }
 
 impl sts2_core::MonsterModel<V> for Model {
     fn new(monster: Monster) -> Self {
         match monster {
             Monster::KnowledgeDemon => Self::KnowledgeDemon { curses: 0 },
+            Monster::FrogKnight => Self::FrogKnight {
+                beetle_charged: false,
+            },
             _ => Self::Stateless,
         }
     }
