@@ -2843,6 +2843,17 @@ pub enum ModifyHook<V: ContentVersion> {
         target: Option<crate::CombatId>,
         player: crate::CombatId,
     },
+    /// `ModifyPowerAmountGivenMultiplicative`, over what the additions left,
+    /// which is `amount`.
+    PowerAmountGivenMultiplicative {
+        power: V::Power,
+        giver: crate::CombatId,
+        target: Option<crate::CombatId>,
+        player: crate::CombatId,
+        amount: V::Number,
+        /// `cardSource`: which copy gives the power.
+        source: Option<crate::CardId<V>>,
+    },
     /// `TryModifyPowerAmountReceived`: what `amount` of `power` lands on
     /// `target`, as an application or a change to one it carries. `player`
     /// is the player's creature, which a relic reads its owner as.
@@ -2920,6 +2931,9 @@ impl<V: ContentVersion> ModifyHook<V> {
             ModifyHook::HandDraw { .. } => ModelHook::ModifyHandDraw,
             ModifyHook::PowerAmountGivenAdditive { .. } => {
                 ModelHook::ModifyPowerAmountGivenAdditive
+            }
+            ModifyHook::PowerAmountGivenMultiplicative { .. } => {
+                ModelHook::ModifyPowerAmountGivenMultiplicative
             }
             ModifyHook::PowerAmountReceived { .. } => ModelHook::TryModifyPowerAmountReceived,
             ModifyHook::HandDrawLate { .. } => ModelHook::ModifyHandDrawLate,
@@ -3447,6 +3461,20 @@ pub enum EventHook<V: ContentVersion> {
     Flushed,
     /// `AfterOrbChanneled`, once an orb is in the player's queue.
     OrbChanneled,
+    /// `BeforePowerAmountChanged`, as `amount` of `power` is about to land on
+    /// `target`, or to change what it carries.
+    PowerAmountChanging {
+        power: V::Power,
+        amount: V::Number,
+        target: crate::CombatId,
+        /// The side `target` fights on.
+        target_side: V::CombatSide,
+        applier: Option<crate::CombatId>,
+        /// The player's creature, which a relic reads its owner as.
+        player: crate::CombatId,
+        /// `cardSource`: which copy gives the power.
+        source: Option<crate::CardId<V>>,
+    },
     /// `AfterModifyingBlockAmount`, asked of each relic whose block hook
     /// changed a gain, with what the gain came to.
     BlockAmountModified {
@@ -3613,6 +3641,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::RestSiteOptions => ModelHook::TryModifyRestSiteOptions,
             EventHook::Flushed => ModelHook::AfterFlush,
             EventHook::OrbChanneled => ModelHook::AfterOrbChanneled,
+            EventHook::PowerAmountChanging { .. } => ModelHook::BeforePowerAmountChanged,
             EventHook::BlockAmountModified { .. } => ModelHook::AfterModifyingBlockAmount,
             EventHook::DiedToDoom { .. } => ModelHook::AfterDiedToDoom,
             EventHook::CardRewardOptions { .. } => ModelHook::TryModifyCardRewardOptions,

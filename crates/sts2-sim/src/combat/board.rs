@@ -344,13 +344,37 @@ impl<'a, V: Rules> Board<'a, V> {
         if !super::listen::heard_any::<V>(self.live, self.relics, AROUND) {
             return (amount, Received::<V>::new());
         }
-        self.unheard(sts2_core::ModelHook::BeforePowerAmountChanged);
+        // `Hook.BeforePowerAmountChanged`, which no listener here answers with
+        // a command.
+        let source = self.playing;
+        if super::listen::heard::<V>(self.live, self.relics, ModelHook::BeforePowerAmountChanged) {
+            let target_side = self
+                .live
+                .creatures
+                .iter()
+                .find(|creature| creature.id == target)
+                .expect("a power lands on a creature in the fight")
+                .side;
+            let hook = sts2_core::EventHook::PowerAmountChanging {
+                power,
+                amount,
+                target,
+                target_side,
+                applier,
+                player: self.live.player().id,
+                source,
+            };
+            let asked = super::listen::notify::<V>(self.live, self.relics, hook);
+            if let Some((listener, effect)) = asked.into_iter().next() {
+                unimplemented!("{listener:?} asking for {effect:?} before {power:?} changes");
+            }
+        }
         // `ModifyPowerAmountGiven`, asked when the applier is in the fight.
         let mut amount = amount;
         if let Some(giver) = applier.filter(|&applier| self.at(applier).is_some()) {
-            self.unheard(sts2_core::ModelHook::ModifyPowerAmountGivenMultiplicative);
             let modifying;
-            (amount, modifying) = given_by::<V>(self.walk(), giver, Some(target), power, amount);
+            (amount, modifying) =
+                given_by::<V>(self.walk(), giver, Some(target), power, amount, source);
             // `AfterModifyingPowerAmountGiven`, asked of each relic that
             // changed it. The game asks once the power has landed, and asking
             // here instead is the same while none of them asks for anything.
@@ -2253,9 +2277,10 @@ pub(super) enum Receiver<V: Rules> {
 /// The listeners whose `TryModifyPowerAmountReceived` changed an amount.
 pub(super) type Received<V> = SmallVec<[Receiver<V>; 1]>;
 
-/// `ModifyPowerAmountGivenAdditive`, over the listeners in the fight: what
+/// `Hook.ModifyPowerAmountGiven`, over the listeners in the fight: what
 /// `amount` of `power` from `giver` to `target` becomes, and the relics that
-/// changed it.
+/// changed it. Every addition lands, then every share multiplies what they
+/// left. `source` is the card giving it.
 ///
 /// # Panics
 ///
@@ -2266,27 +2291,42 @@ pub(super) fn given_by<V: Rules>(
     target: Option<CombatId>,
     power: V::Power,
     amount: V::Number,
+    source: Option<CardId<V>>,
 ) -> (V::Number, SmallVec<[V::Relic; 2]>) {
+    use sts2_core::ModelHook;
+
     let mut modifying = SmallVec::new();
-    let hook = sts2_core::ModelHook::ModifyPowerAmountGivenAdditive;
-    if !super::listen::heard::<V>(fight.live, fight.relics, hook) {
-        return (amount, modifying);
-    }
-    let asked = ModifyHook::PowerAmountGivenAdditive {
-        power,
-        giver,
-        target,
-        player: fight.live.player().id,
-    };
+    let player = fight.live.player().id;
     let mut amount = amount;
-    super::listen::each::<V>(fight, sts2_core::Overrides::of(hook), |listener, _| match (
-        <V as sts2_core::Hooks>::modify_hook(listener, asked),
-        listener,
-    ) {
-        (Modify::Nothing, _) => {}
-        (Modify::Added(added), sts2_core::Listener::Relic(state)) => {
-            amount = amount + added;
-            if added != V::Number::zero() {
+    let mut modified = |hook: ModelHook, asked: ModifyHook<V>, amount: &mut V::Number| {
+        if !super::listen::heard::<V>(fight.live, fight.relics, hook) {
+            return;
+        }
+        super::listen::each::<V>(fight, sts2_core::Overrides::of(hook), |listener, _| {
+            let moved = match (
+                <V as sts2_core::Hooks>::modify_hook(listener, asked),
+                listener,
+            ) {
+                (Modify::Nothing, _) => false,
+                (Modify::Added(added), sts2_core::Listener::Relic(_)) => {
+                    *amount = *amount + added;
+                    added != V::Number::zero()
+                }
+                (Modify::Scaled(share), sts2_core::Listener::Relic(_)) => {
+                    let scaled = num_traits::ToPrimitive::to_f64(amount)
+                        .expect("a power's amount is a finite number")
+                        * share;
+                    *amount = num_traits::cast(scaled)
+                        .unwrap_or_else(|| unimplemented!("{power:?} given as {scaled}"));
+                    share != 1.0
+                }
+                (answer, _) => {
+                    unimplemented!(
+                        "a listener answering {answer:?} for what {power:?} is given with"
+                    )
+                }
+            };
+            if moved && let sts2_core::Listener::Relic(state) = listener {
                 let held = fight
                     .relics
                     .iter()
@@ -2294,11 +2334,32 @@ pub(super) fn given_by<V: Rules>(
                     .expect("a relic asked is on the belt");
                 modifying.push(held.relic);
             }
-        }
-        (answer, _) => {
-            unimplemented!("a listener answering {answer:?} for what {power:?} is given with")
-        }
-    });
+        });
+    };
+    let additive = ModifyHook::PowerAmountGivenAdditive {
+        power,
+        giver,
+        target,
+        player,
+    };
+    modified(
+        ModelHook::ModifyPowerAmountGivenAdditive,
+        additive,
+        &mut amount,
+    );
+    let multiplicative = ModifyHook::PowerAmountGivenMultiplicative {
+        power,
+        giver,
+        target,
+        player,
+        amount,
+        source,
+    };
+    modified(
+        ModelHook::ModifyPowerAmountGivenMultiplicative,
+        multiplicative,
+        &mut amount,
+    );
     (amount, modifying)
 }
 

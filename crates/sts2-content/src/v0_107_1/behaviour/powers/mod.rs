@@ -1522,7 +1522,7 @@ pub(crate) fn modify_hook(
 ///
 /// A counter that allows negatives is a debuff below zero, and a debuff that
 /// does not allow them is a buff there.
-fn debuff_at(power: Power, amount: Number) -> bool {
+pub(crate) fn debuff_at(power: Power, amount: Number) -> bool {
     use sts2_core::PowerTable as _;
 
     use super::super::generated::powers::{PowerFlag, PowerStackType};

@@ -595,8 +595,14 @@ fn previewed<V: Rules>(
                     let power = sts2_core::CardVars::power(var.id)
                         .unwrap_or_else(|| unreachable!("{:?} is a PowerVar of no power", var.id));
                     let giver = super::board::dealer_of::<V>(modifier, creatures);
-                    let (given, _) =
-                        super::board::given_by::<V>(fight, giver, target, power, printed());
+                    let (given, _) = super::board::given_by::<V>(
+                        fight,
+                        giver,
+                        target,
+                        power,
+                        printed(),
+                        Some(held.id),
+                    );
                     Some(given)
                 }
                 (Some(modifier), _) => {
