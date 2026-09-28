@@ -182,6 +182,10 @@ impl<V: Rules> HeldRelic<V> {
 
 /// The relics a run carries, and which of them override each hook.
 ///
+/// `CookRestSiteOption`'s `_cardsToRemove`, which it needs removable to be
+/// enabled.
+const COOK_CARDS: usize = 2;
+
 /// A relic joins or leaves the belt only through here, which keeps the slots
 /// true. Everything else reads and writes the belt as a slice. A
 /// slice reaches a relic's own saved fields, and cannot add a relic or take
@@ -532,6 +536,7 @@ pub(super) enum Pickup<V: Rules> {
     /// `CardSelectCmd.FromDeckFor*`, and what happens to each card it takes.
     FromDeck {
         act: sts2_core::DeckAct<V>,
+        min: usize,
         count: usize,
     },
     /// Cards made for the run to take into its deck, between `min` and
@@ -833,13 +838,17 @@ impl<V: Rules> State<V> {
     ///
     /// `RestSiteOption.IsEnabled` is true unless the option overrides it.
     /// `SMITH` does: it is off when the deck holds nothing left to upgrade.
+    /// `COOK` is off below two cards the deck can remove.
     fn rest_option_enabled(&self, option: V::RestSiteOption) -> bool {
         use sts2_core::RestKinds;
 
-        if option != <V::RestSiteOption as RestKinds<V>>::SMITH {
-            return true;
+        if option == <V::RestSiteOption as RestKinds<V>>::SMITH {
+            return self.upgradable().next().is_some();
         }
-        self.upgradable().next().is_some()
+        if option == <V::RestSiteOption as RestKinds<V>>::COOK {
+            return self.offered(sts2_core::DeckAct::Remove).len() >= COOK_CARDS;
+        }
+        true
     }
 
     /// The deck's cards that `CardModel.IsUpgradable` holds, each with where
@@ -887,7 +896,9 @@ impl<V: Rules> State<V> {
             sts2_core::DeckAct::Upgrade => self.upgradable().collect(),
             // `IsTransformable` in the deck is `IsRemovable`, and a quest
             // card is never offered.
-            sts2_core::DeckAct::Transform(_) | sts2_core::DeckAct::TransformUpgraded(_) => deck
+            sts2_core::DeckAct::Transform(_)
+            | sts2_core::DeckAct::TransformUpgraded(_)
+            | sts2_core::DeckAct::TransformInto(_) => deck
                 .filter(|(_, card)| {
                     !card.card.eternal()
                         && V::card_kind(card.card) != Some(sts2_core::CardKind::Quest)
@@ -1005,6 +1016,37 @@ impl<V: Rules> State<V> {
                     self.player.deck_mut().remove(at);
                 }
                 for (_, card) in replaced {
+                    self.add_to_deck(sts2_core::DeckCard::new(card));
+                }
+            }
+            // `CardCmd.Transform` with the replacements made first. The
+            // originals leave the deck, and the replacements join its end in
+            // the originals' deck order.
+            sts2_core::DeckAct::TransformInto(into) => {
+                use sts2_core::CardTable as _;
+
+                let mut gone = taken.to_vec();
+                gone.sort_unstable();
+                let replaced: Vec<CardIdent<V>> = gone
+                    .iter()
+                    .map(|&at| {
+                        let original = self.player.deck[at].ident;
+                        let mut ident = CardIdent::new(into);
+                        if original.upgrade > 0 && into.max_upgrade() > 0 {
+                            ident.upgrade = 1;
+                        }
+                        if let Some(enchanted) = original.enchantment
+                            && V::can_enchant(enchanted.enchantment, &ident)
+                        {
+                            V::enchant(enchanted.enchantment, enchanted.amount, &mut ident);
+                        }
+                        ident
+                    })
+                    .collect();
+                for &at in gone.iter().rev() {
+                    self.player.deck_mut().remove(at);
+                }
+                for card in replaced {
                     self.add_to_deck(sts2_core::DeckCard::new(card));
                 }
             }
@@ -1685,7 +1727,21 @@ impl<V: Rules> State<V> {
                         self.act_on_deck(act, &taken);
                         continue;
                     }
-                    Pickup::FromDeck { act, count }
+                    Pickup::FromDeck {
+                        act,
+                        min: count,
+                        count,
+                    }
+                }
+                HookEffect::SelectFromDeckConfirmed { act, min, max } => {
+                    if self.offered(act).is_empty() {
+                        continue;
+                    }
+                    Pickup::FromDeck {
+                        act,
+                        min,
+                        count: max,
+                    }
                 }
                 HookEffect::ChooseCards {
                     draw,
@@ -3258,14 +3314,22 @@ impl<V: Rules> State<V> {
             }
             // `RestSiteOption.OnSelect` for an option the run carries out,
             // which uses the rest site up.
-            if option == <V::RestSiteOption as sts2_core::RestKinds<V>>::HATCH {
+            if option == <V::RestSiteOption as sts2_core::RestKinds<V>>::HATCH
+                || option == <V::RestSiteOption as sts2_core::RestKinds<V>>::COOK
+            {
+                if !self.rest_option_enabled(option) {
+                    unimplemented!("a rest site option the run cannot take");
+                }
+                // The options stay up while the option's pickup asks.
                 let effects = sts2_core::RestKinds::selected(option);
-                let Phase::RestSite { options, .. } = &mut self.phase else {
-                    unreachable!("the phase was a rest site when this began");
-                };
-                options.clear();
                 return Ok(match self.carry_out(effects) {
-                    None => Decided::Resolved,
+                    None => {
+                        let Phase::RestSite { options, .. } = &mut self.phase else {
+                            unreachable!("the phase was a rest site when this began");
+                        };
+                        options.clear();
+                        Decided::Resolved
+                    }
                     Some(asked) => self.park(asked),
                 });
             }
@@ -3467,7 +3531,7 @@ impl<V: Rules> State<V> {
                     self.add_to_deck(sts2_core::DeckCard::new(card));
                 }
             }
-            Pickup::FromDeck { act, count } => {
+            Pickup::FromDeck { act, min, count } => {
                 let offered = self.offered(act);
                 let taken: Option<Vec<usize>> = picks
                     .iter()
@@ -3479,8 +3543,10 @@ impl<V: Rules> State<V> {
                 let mut distinct = taken.clone();
                 distinct.sort_unstable();
                 distinct.dedup();
-                if taken.len() != count || distinct.len() != count {
-                    unimplemented!("a deck selection of other than {count} different cards");
+                if taken.len() < min || taken.len() > count || distinct.len() != taken.len() {
+                    unimplemented!(
+                        "a deck selection of other than {min} to {count} different cards"
+                    );
                 }
                 self.act_on_deck(act, &taken);
             }
@@ -3491,6 +3557,10 @@ impl<V: Rules> State<V> {
         // The rest of the pickup, which can ask again.
         if let Some(next) = self.carry_out(asked.rest) {
             return Ok(self.park(next));
+        }
+        // A rest site's option is done once its pickup is.
+        if let Phase::RestSite { options, .. } = &mut self.phase {
+            options.clear();
         }
         Ok(Decided::Resolved)
     }
@@ -3788,8 +3858,8 @@ impl<V: Rules> State<V> {
                     Pickup::Cards { offered, min, max } => {
                         selections(*min, *max, offered.len(), moves)
                     }
-                    Pickup::FromDeck { act, count } => {
-                        selections(*count, *count, self.offered(*act).len(), moves)
+                    Pickup::FromDeck { act, min, count } => {
+                        selections(*min, *count, self.offered(*act).len(), moves)
                     }
                     Pickup::CloneDeckCard { .. } => unreachable!("a room parks on no clone"),
                     Pickup::Rewards { offered } => reward_moves(offered, moves),
@@ -4091,8 +4161,8 @@ impl<V: Rules> State<V> {
                         offered.clone(),
                     ),
                     Pickup::CloneDeckCard { .. } => unreachable!("a room parks on no clone"),
-                    Pickup::FromDeck { act, count } => (
-                        u32::try_from(*count).expect("a selection counts in a few cards"),
+                    Pickup::FromDeck { act, min, count } => (
+                        u32::try_from(*min).expect("a selection counts in a few cards"),
                         u32::try_from(*count).expect("a selection counts in a few cards"),
                         self.offered(*act)
                             .into_iter()

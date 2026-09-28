@@ -593,10 +593,11 @@ fn decides<V: Rules>(
 /// once the fight is won.
 ///
 /// The listeners that counted something in the fight forget it at the first.
-/// A Max HP gain there lands on the player's creature. The fight keeps the
-/// rest of what it asks for the run to carry out.
+/// A Max HP gain there lands on the player's creature, and the run carries
+/// out the rest.
 ///
 /// A heal at the second lands on the player, whom a won fight leaves alive.
+/// The run carries out a deck upgrade there.
 ///
 /// # Panics
 ///
@@ -626,6 +627,8 @@ pub(crate) fn combat_ended<V: Rules>(live: &mut Live<V>, relics: &mut Belt<V>) {
                 let player = player_of(live);
                 player.hp = (player.hp + healed).min(player.max_hp);
             }
+            // The deck is the run's, which carries this out as it leaves.
+            effect @ HookEffect::UpgradeRandomDeckCards { .. } => live.leaving.push(effect),
             effect => unimplemented!("a listener asking for {effect:?} as a fight is won"),
         }
     }

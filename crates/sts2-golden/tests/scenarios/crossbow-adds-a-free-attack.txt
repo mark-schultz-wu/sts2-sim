@@ -1,0 +1,7 @@
+# Crossbow adds one Attack of the character's pool, free this turn, as each
+# of the player's turns begins.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"CROSSBOW"}
+{"cmd":"fight","encounter":"BYGONE_EFFIGY_ELITE"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"end_turn"}

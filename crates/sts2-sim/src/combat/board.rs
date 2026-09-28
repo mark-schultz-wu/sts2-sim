@@ -487,6 +487,38 @@ impl<'a, V: Rules> Board<'a, V> {
         }
     }
 
+    /// `Creature.Stun` builds a state and hands it to `SetMoveImmediate`. So a
+    /// monster advertising a move it has to perform is not stunned out of it.
+    fn stun_monster(
+        &mut self,
+        owner: CombatId,
+        stun: &'static sts2_core::NextMove<V>,
+        then: sts2_core::StunResume,
+    ) {
+        let Some(machine) = self
+            .live
+            .machines
+            .iter_mut()
+            .find(|held| held.creature == owner)
+        else {
+            return;
+        };
+        if !V::can_leave_current_move(machine.monster, &machine.machine) {
+            return;
+        }
+        match then {
+            sts2_core::StunResume::Interrupted => machine.machine.interpose(),
+            sts2_core::StunResume::AfterInterrupted => {
+                let after = V::follow_up(machine.monster, &machine.machine);
+                machine.machine.interpose_to(after);
+            }
+            sts2_core::StunResume::At(then) => machine.machine.interpose_to(then),
+        }
+        if let Some(at) = self.at(owner) {
+            self.live.creatures[at].next_move = Some(stun.into());
+        }
+    }
+
     /// `PowerCmd.Remove`, with what its `AfterRemoved` asks carried out.
     fn remove_power_carried(&mut self, id: CombatId, power: V::Power) {
         for effect in self.live.remove_power_asking(id, power) {
@@ -1510,34 +1542,7 @@ impl<'a, V: Rules> Board<'a, V> {
                     );
                     self.apply(hit);
                 }
-                // `Creature.Stun` builds a state and hands it to
-                // `SetMoveImmediate`, so it is held to the same guard: a
-                // monster advertising a move it has to perform is not stunned
-                // out of it.
-                HookEffect::StunOwner { stun, then } => {
-                    let Some(machine) = self
-                        .live
-                        .machines
-                        .iter_mut()
-                        .find(|held| held.creature == owner)
-                    else {
-                        continue;
-                    };
-                    if !V::can_leave_current_move(machine.monster, &machine.machine) {
-                        continue;
-                    }
-                    match then {
-                        sts2_core::StunResume::Interrupted => machine.machine.interpose(),
-                        sts2_core::StunResume::AfterInterrupted => {
-                            let after = V::follow_up(machine.monster, &machine.machine);
-                            machine.machine.interpose_to(after);
-                        }
-                        sts2_core::StunResume::At(then) => machine.machine.interpose_to(then),
-                    }
-                    if let Some(at) = self.at(owner) {
-                        self.live.creatures[at].next_move = Some(stun.into());
-                    }
-                }
+                HookEffect::StunOwner { stun, then } => self.stun_monster(owner, stun, then),
                 effect => unimplemented!("a power asking for {effect:?} after a hit"),
             }
         }
@@ -3315,6 +3320,15 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             unimplemented!("a card putting itself into the hand");
         }
         self.live.cards.leave_play(playing, Some(pile), position);
+    }
+
+    fn stun(
+        &mut self,
+        target: CombatId,
+        stun: &'static sts2_core::NextMove<V>,
+        then: sts2_core::StunResume,
+    ) {
+        self.stun_monster(target, stun, then);
     }
 
     fn this_has_keyword(&self, keyword: V::CardKeyword) -> bool {

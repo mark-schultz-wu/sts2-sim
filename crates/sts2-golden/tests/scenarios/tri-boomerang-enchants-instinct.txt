@@ -1,0 +1,8 @@
+# Tri-Boomerang, which Tanx offers first on this seed, enchants three attacks
+# with Instinct. Instinct doubles a powered hit.
+{"cmd":"start","seed":"0RACLE6","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"TANX"}
+{"cmd":"choose_option","index":0}
+{"cmd":"answer","cards":[0,1,5]}
+{"cmd":"fight","encounter":"BYGONE_EFFIGY_ELITE"}
+{"cmd":"play_card","index":2,"target":1}

@@ -1,0 +1,7 @@
+# Spiked Gauntlets give one more energy each turn, and a Power costs one
+# more.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"SPIKED_GAUNTLETS"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"INFLAME"}
+{"cmd":"play_card","index":5}

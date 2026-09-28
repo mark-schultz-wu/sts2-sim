@@ -1,0 +1,7 @@
+# War Hammer upgrades four cards, stably shuffled off the niche stream, after
+# an elite is won.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"WAR_HAMMER"}
+{"cmd":"fight","encounter":"BYGONE_EFFIGY_ELITE"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":200,"target":0}
+{"cmd":"play_card","index":0,"target":1}
