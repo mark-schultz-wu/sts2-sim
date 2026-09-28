@@ -1,0 +1,9 @@
+# On this seed the Fabricator builds two Zapbots, each of which enters
+# with High Voltage and gains its stack of Strength as its turn ends.
+{"cmd":"start","seed":"0RACLE3","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"FABRICATOR_NORMAL"}
+{"cmd":"power","power":"PLATING_POWER","amount":99,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

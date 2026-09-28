@@ -2331,6 +2331,12 @@ pub(crate) fn event_hook(
         (Power::PossessStrengthPower | Power::PossessSpeedPower, _, EventHook::AfterDeath { .. }) => {
             None
         }
+        // `HighVoltagePower.AfterSideTurnEnd`: its stack of Strength as its
+        // owner's side ends a turn.
+        (Power::HighVoltagePower, amount, EventHook::SideTurnEnd { side }) if side == owner => {
+            Some(HookEffect::ApplyToOwner(Power::StrengthPower, amount))
+        }
+        (Power::HighVoltagePower, _, EventHook::SideTurnEnd { .. }) => None,
         // `GalvanicPower.BeforeCombatStart`: Galvanized on every Power the
         // player holds. `AfterCardEnteredCombat`: on a Power that joins the
         // fight. The fight leaves a card afflicted already as it is.
