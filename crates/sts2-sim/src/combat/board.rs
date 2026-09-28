@@ -2739,6 +2739,28 @@ impl<V: Rules> Board<'_, V> {
             .named(id)
             .unwrap_or_else(|| unimplemented!("a card cloned from outside the fight"))
             .face;
+        self.clone_face(face, pile)
+    }
+
+    /// `CardPileCmd.AddGeneratedCardToCombat` of a clone of the card the fight
+    /// keeps as `kept`.
+    pub(super) fn clone_kept(
+        &mut self,
+        kept: sts2_core::CardId<V>,
+        pile: Pile,
+    ) -> Option<CardAt<V>> {
+        let face = self
+            .live
+            .kept_faces
+            .iter()
+            .find(|(id, _)| *id == kept)
+            .map(|&(_, face)| face)
+            .unwrap_or_else(|| unimplemented!("cloning a kept card the fight lost"));
+        self.clone_face(face, pile)
+    }
+
+    /// A clone of `face` into `pile`, marked a clone and generated.
+    fn clone_face(&mut self, face: Face<V>, pile: Pile) -> Option<CardAt<V>> {
         let id = self.live.card_ids.mint();
         // A full hand sends the card to the discard pile instead.
         let full =
@@ -3225,6 +3247,29 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .last()
         {
             <V as sts2_core::Hooks>::power_noted(&mut held.state, note);
+        }
+    }
+
+    fn keep_card_on_power(&mut self, creature: CombatId, power: V::Power, card: CardAt<V>) {
+        let at = self.standing(card);
+        let mut face = self
+            .live
+            .cards
+            .get(card.pile(), at)
+            .expect("a card stands where it was found")
+            .face;
+        // `CardCmd.ClearAffliction` on the clone.
+        face.ident.affliction = None;
+        let kept = self.live.card_ids.mint();
+        self.live.kept_faces.push((kept, face));
+        if let Some(held) = self
+            .live
+            .powers
+            .of_mut(creature)
+            .filter(|held| held.power() == power)
+            .last()
+        {
+            <V as sts2_core::Hooks>::power_kept_card(&mut held.state, kept);
         }
     }
 

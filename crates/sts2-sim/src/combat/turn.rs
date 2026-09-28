@@ -957,6 +957,23 @@ pub(super) fn carry_setup<V: Rules>(
                             };
                             live.remove_power(owner, power);
                         }
+                        // Clones of the card a power keeps, one at a time, each
+                        // past a full hand to the discard pile.
+                        sts2_core::HookEffect::CloneKeptIntoHand { kept, count } => {
+                            let count: usize = num_traits::cast(count)
+                                .unwrap_or_else(|| unimplemented!("{count:?} clones"));
+                            let mut board = Board::for_card(
+                                live,
+                                rngs.reborrow(),
+                                relics,
+                                ascension,
+                                None,
+                                None,
+                            );
+                            for _ in 0..count {
+                                board.clone_kept(kept, Pile::Hand);
+                            }
+                        }
                         // `CardPileCmd.Add(this, PileType.Hand)`, which sends a
                         // card past a full hand to the discard pile.
                         sts2_core::HookEffect::ToHand => {

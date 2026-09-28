@@ -2248,6 +2248,18 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("a card writing on a power it applied")
     }
 
+    /// A clone of `card` as it stands, its affliction cleared, kept on the
+    /// instance of `power` that `creature` carries last, as Nightmare's
+    /// `SetSelectedCard` keeps it. `Hooks::power_kept_card` says where.
+    fn keep_card_on_power(
+        &mut self,
+        _creature: crate::CombatId,
+        _power: V::Power,
+        _card: crate::CardAt<V>,
+    ) {
+        unimplemented!("a power keeping a card")
+    }
+
     /// `CreatureCmd.GainMaxHp`: the maximum grows by `amount`, then a heal
     /// for as much.
     fn gain_max_hp(&mut self, _creature: crate::CombatId, _amount: V::Number) {
@@ -4537,6 +4549,13 @@ pub enum HookEffect<V: ContentVersion> {
     },
     /// `OstyCmd.Summon` for the listener's owner.
     Summon(V::Number),
+    /// `CardPileCmd.AddGeneratedCardToCombat` of `count` clones of the card a
+    /// power keeps, which [`Fight::keep_card_on_power`] put there, each into
+    /// hand.
+    CloneKeptIntoHand {
+        kept: crate::CardId<V>,
+        count: V::Number,
+    },
     /// `CardPileCmd.AddGeneratedCardToCombat` of `count` clones of the copy
     /// `card`, each into hand.
     CloneIntoHand {
@@ -5222,6 +5241,10 @@ pub trait Hooks: ContentVersion {
     /// What a card's note does to the model of a power it just applied,
     /// which [`Fight::note_on_power`] hands it.
     fn power_noted(state: &mut Self::PowerState, note: Self::Number);
+
+    /// Where a power's model keeps the clone `kept` of a card, which
+    /// [`Fight::keep_card_on_power`] hands it.
+    fn power_kept_card(state: &mut Self::PowerState, kept: crate::CardId<Self>);
 
     fn modify_hook<P: Printed<Self> + ?Sized>(
         listener: Listener<'_, Self, P>,

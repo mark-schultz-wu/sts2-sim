@@ -80,6 +80,11 @@ pub enum State {
     Inferno {
         self_damage: Number,
     },
+    /// `NightmarePower`'s `selectedCard`, a clone the fight keeps, which
+    /// `SetSelectedCard` sets just after the power lands.
+    Nightmare {
+        card: Option<sts2_core::CardId<V>>,
+    },
     /// `WitheringPresencePower`'s `CardsLeft`.
     WitheringPresence {
         cards_left: u8,
@@ -187,6 +192,19 @@ pub struct Bound {
 /// `JugglingPower`'s third attack in a turn.
 const JUGGLING_ATTACKS: Number = 3;
 
+/// Where a power keeps the clone of a card the fight holds for it.
+///
+/// # Panics
+///
+/// A power that keeps no card.
+pub(crate) fn kept_card(state: &mut State, kept: sts2_core::CardId<V>) {
+    match state {
+        // `NightmarePower.SetSelectedCard`.
+        State::Nightmare { card } => *card = Some(kept),
+        state => unimplemented!("{:?} keeping a card", state.power()),
+    }
+}
+
 /// What a card's note does to the power it just applied.
 ///
 /// # Panics
@@ -222,6 +240,7 @@ impl sts2_core::PowerModel<V> for State {
             Power::NemesisPower => Self::Nemesis { intangible: false },
             Power::ToricToughnessPower => Self::ToricToughness { block: 0 },
             Power::InfernoPower => Self::Inferno { self_damage: 0 },
+            Power::NightmarePower => Self::Nightmare { card: None },
             Power::WitheringPresencePower => Self::WitheringPresence {
                 cards_left: WITHERING_CARDS,
             },
@@ -273,6 +292,7 @@ impl sts2_core::PowerModel<V> for State {
             Self::Nemesis { .. } => Power::NemesisPower,
             Self::ToricToughness { .. } => Power::ToricToughnessPower,
             Self::Inferno { .. } => Power::InfernoPower,
+            Self::Nightmare { .. } => Power::NightmarePower,
             Self::WitheringPresence { .. } => Power::WitheringPresencePower,
             Self::ChainsOfBinding { .. } => Power::ChainsOfBindingPower,
             Self::Swipe { .. } => Power::SwipePower,
@@ -2018,6 +2038,23 @@ pub(crate) fn event_hook(
             })
         }
         (Power::InfernoPower, _, EventHook::PlayerTurnStart { .. }) => None,
+        // `NightmarePower.BeforeHandDraw`: its stack of clones of the card it
+        // keeps into its owner's hand, then `PowerCmd.Remove(this)`.
+        (Power::NightmarePower, PowerAmount::Counted(amount), EventHook::BeforeHandDraw { player, .. })
+            if player == holder =>
+        {
+            let State::Nightmare { card } = *state else {
+                unreachable!("Nightmare keeps its card")
+            };
+            let kept = card.unwrap_or_else(|| unimplemented!("a Nightmare keeping no card"));
+            asked.push(HookEffect::CloneKeptIntoHand {
+                kept,
+                count: amount,
+            });
+            asked.push(HookEffect::Remove);
+            return;
+        }
+        (Power::NightmarePower, _, EventHook::BeforeHandDraw { .. }) => None,
         // `InfernoPower.AfterDamageReceived`: its stack on every enemy that
         // can be hit, unpowered, where its owner lost health in its own
         // side's turn.

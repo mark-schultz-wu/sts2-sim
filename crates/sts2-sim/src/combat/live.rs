@@ -1775,6 +1775,9 @@ pub(crate) struct Live<V: Rules> {
     pub(super) skip_tick: Skips<V>,
     /// The ids this fight has given out, and the next one it will.
     pub(super) card_ids: CardIds<V>,
+    /// Clones of cards the fight keeps outside every pile, by the id they
+    /// were minted under, which a power's model names.
+    pub(super) kept_faces: Vec<(CardId<V>, Face<V>)>,
     /// How many attack commands this fight has started, which is what the
     /// next one is told apart by.
     pub(super) attacks: u32,
@@ -1962,6 +1965,7 @@ impl<V: Rules> Clone for Live<V> {
             powers: self.powers.clone(),
             orbs: self.orbs.clone(),
             card_ids: self.card_ids.clone(),
+            kept_faces: self.kept_faces.clone(),
             notes: self.notes.clone(),
             asking: self.asking.clone(),
             deferred: self.deferred.clone(),
@@ -1999,6 +2003,7 @@ impl<V: Rules> Clone for Live<V> {
             machines,
             skip_tick,
             card_ids,
+            kept_faces,
             attacks,
             notes,
             asking,
@@ -2030,6 +2035,7 @@ impl<V: Rules> Clone for Live<V> {
         machines.copy_from(&source.machines);
         skip_tick.copy_from(&source.skip_tick);
         card_ids.clone_from(&source.card_ids);
+        kept_faces.clone_from(&source.kept_faces);
         *attacks = source.attacks;
         notes.clone_from(&source.notes);
         asking.clone_from(&source.asking);
@@ -2776,6 +2782,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             machines: Bounded::new(),
             skip_tick: Bounded::new(),
             card_ids: CardIds::new(),
+            kept_faces: Vec::new(),
             attacks: 0,
             notes: smallvec::SmallVec::new(),
             asking: None,

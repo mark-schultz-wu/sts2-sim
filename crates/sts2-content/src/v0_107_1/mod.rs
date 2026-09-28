@@ -112,6 +112,10 @@ impl sts2_core::Hooks for V0_107_1 {
         behaviour::powers::noted(state, note);
     }
 
+    fn power_kept_card(state: &mut Self::PowerState, kept: sts2_core::CardId<Self>) {
+        behaviour::powers::kept_card(state, kept);
+    }
+
     fn modify_hook<P: sts2_core::Printed<Self> + ?Sized>(
         listener: sts2_core::Listener<'_, Self, P>,
         hook: sts2_core::ModifyHook<Self>,
