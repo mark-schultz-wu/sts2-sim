@@ -862,6 +862,8 @@ impl<'a, V: Rules> Board<'a, V> {
                             card: card.and(self.playing),
                             player: self.live.player().id,
                             side: self.live.side,
+                            fully_blocked: aimed && fully_blocked,
+                            turn: self.live.turn,
                         },
                     );
                     self.after_hit(asked);

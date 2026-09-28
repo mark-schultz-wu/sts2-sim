@@ -61,6 +61,7 @@ mod distinguished_cape;
 mod divine_destiny;
 mod divine_right;
 mod dollys_mirror;
+mod emotion_chip;
 mod empty_cage;
 mod eternal_feather;
 mod fake_anchor;
@@ -456,6 +457,7 @@ pub enum State {
     BookRepairKnife,
     Vambrace(vambrace::State),
     UnsettlingLamp(unsettling_lamp::State),
+    EmotionChip(emotion_chip::State),
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -699,6 +701,7 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::EmotionChip(state) => emotion_chip::event_hook(state, hook, asked),
         State::UnsettlingLamp(state) => unsettling_lamp::event_hook(state, hook),
         State::Vambrace(state) => vambrace::event_hook(state, hook),
         State::BookRepairKnife => book_repair_knife::event_hook(hook, asked),
@@ -993,7 +996,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::Bookmark
         | State::ParryingShield
         | State::Metronome(_)
-        | State::BookRepairKnife => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::BookRepairKnife
+        | State::EmotionChip(_) => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1172,6 +1176,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::EmotionChip => State::EmotionChip(emotion_chip::State::default()),
             Relic::UnsettlingLamp => State::UnsettlingLamp(unsettling_lamp::State::default()),
             Relic::Vambrace => State::Vambrace(vambrace::State::default()),
             Relic::BookRepairKnife => State::BookRepairKnife,

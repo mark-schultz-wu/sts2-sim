@@ -3365,6 +3365,12 @@ pub enum EventHook<V: ContentVersion> {
         player: crate::CombatId,
         /// `CombatState.CurrentSide`: whose turn the hit lands in.
         side: V::CombatSide,
+        /// `DamageResult.WasFullyBlocked`, which only the creature the hit was
+        /// aimed at can be.
+        fully_blocked: bool,
+        /// The player's `TurnNumber` as the hit lands, which its history entry
+        /// keeps.
+        turn: V::Count,
     },
     /// `AfterDamageGiven`, carrying the creature that dealt the hit.
     DamageGiven {
@@ -4598,6 +4604,8 @@ pub enum HookEffect<V: ContentVersion> {
     /// `OrbCmd.Passive` on the first orb the owner holds, `count` times, and
     /// nothing with no orb.
     FirstOrbPassive(V::Number),
+    /// `OrbCmd.Passive` on each orb the owner holds, front first.
+    EachOrbPassive,
     /// `count` times, one card of the character's combat pool that `filter`
     /// keeps, drawn by `CardFactory.GetDistinctForCombat` off
     /// `CombatCardGeneration`. Each takes `writes`, and they go into hand.

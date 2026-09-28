@@ -1144,6 +1144,34 @@ pub(super) fn carry_setup<V: Rules>(
                                 keep_orb(live, 0, first);
                             }
                         }
+                        // `OrbCmd.Passive` on each orb of `OrbQueue.Orbs`, in
+                        // queue order, which returns once the fight is ending.
+                        sts2_core::HookEffect::EachOrbPassive => {
+                            let held = live.orbs.as_ref().map_or(0, |orbs| orbs.queue.len());
+                            for place in 0..held {
+                                let Some(mut orb) = live
+                                    .orbs
+                                    .as_ref()
+                                    .and_then(|orbs| orbs.queue.get(place).cloned())
+                                else {
+                                    break;
+                                };
+                                if ended.is_some() {
+                                    break;
+                                }
+                                let mut board = Board::for_card(
+                                    live,
+                                    rngs.reborrow(),
+                                    relics,
+                                    ascension,
+                                    None,
+                                    None,
+                                );
+                                V::orb_passive(&mut orb, &mut board);
+                                ended = ended.or(board.ended);
+                                keep_orb(live, place, orb);
+                            }
+                        }
                         // `CardPileCmd.Draw` for the player, which a shuffle's
                         // question can pause. A fight that is over draws
                         // nothing, and a negative count draws nothing.
