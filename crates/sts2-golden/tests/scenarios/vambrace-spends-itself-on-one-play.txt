@@ -1,0 +1,10 @@
+# Vambrace doubles one play's block. Particle Wall comes back to hand once
+# played, and its second play, once Venerate paid for it, gives its block
+# once.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","relic":"VAMBRACE"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"PARTICLE_WALL"}
+{"cmd":"play_card","index":5}
+{"cmd":"play_card","index":1}
+{"cmd":"play_card","index":4}

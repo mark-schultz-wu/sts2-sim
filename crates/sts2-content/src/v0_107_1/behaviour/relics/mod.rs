@@ -198,6 +198,7 @@ mod tungsten_rod;
 mod tuning_fork;
 mod twisted_funnel;
 mod vajra;
+mod vambrace;
 mod venerable_tea_set;
 mod very_hot_cocoa;
 mod vexing_puzzlebox;
@@ -452,6 +453,7 @@ pub enum State {
     ParryingShield,
     Metronome(metronome::State),
     BookRepairKnife,
+    Vambrace(vambrace::State),
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -695,6 +697,7 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::Vambrace(state) => vambrace::event_hook(state, hook),
         State::BookRepairKnife => book_repair_knife::event_hook(hook, asked),
         State::Metronome(state) => metronome::event_hook(state, hook, asked),
         State::ParryingShield => parrying_shield::event_hook(hook, asked),
@@ -784,6 +787,7 @@ pub(crate) fn decide_hook(
 pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> {
     match state {
         State::Pocketwatch(state) => pocketwatch::modify_hook(state, hook),
+        State::Vambrace(state) => vambrace::modify_hook(state, hook),
         State::PollinousCore(state) => pollinous_core::modify_hook(state, hook),
         State::RingOfTheSnake => ring_of_the_snake::modify_hook(hook),
         State::BoomingConch => booming_conch::modify_hook(hook),
@@ -1164,6 +1168,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::Vambrace => State::Vambrace(vambrace::State::default()),
             Relic::BookRepairKnife => State::BookRepairKnife,
             Relic::Metronome => State::Metronome(metronome::State::default()),
             Relic::ParryingShield => State::ParryingShield,

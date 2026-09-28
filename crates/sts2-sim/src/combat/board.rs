@@ -101,6 +101,10 @@ enum Resolved<V: Rules> {
         powered: bool,
         /// The play that gives it.
         play: Option<sts2_core::PlayAt>,
+        /// `cardSource`: which copy gives it.
+        source: Option<CardId<V>>,
+        /// The relics whose block hooks changed it.
+        modifying: SmallVec<[V::Relic; 1]>,
     },
 }
 
@@ -2160,7 +2164,8 @@ pub(super) fn blocked<V: Rules>(
     powered: bool,
     card: Option<V::Card>,
     play: Option<sts2_core::PlayAt>,
-) -> V::Number {
+    source: Option<CardId<V>>,
+) -> (V::Number, SmallVec<[V::Relic; 1]>) {
     let phases = [
         ModifyHook::BlockAdditive {
             target: recipient,
@@ -2172,9 +2177,39 @@ pub(super) fn blocked<V: Rules>(
             powered,
             card,
             play,
+            source,
         },
     ];
-    modified_by::<V>(fight, amount, &phases)
+    let amount = modified_by::<V>(fight, amount, &phases);
+    // The `modifiers` `Hook.ModifyBlock` hands `AfterModifyingBlockAmount`:
+    // the listeners whose answer moved the number. Only a relic acts on it.
+    let mut modifying = SmallVec::new();
+    let after = sts2_core::ModelHook::AfterModifyingBlockAmount;
+    if super::listen::heard::<V>(fight.live, fight.relics, after) {
+        for phase in phases {
+            let hook = sts2_core::Overrides::of(phase.model_hook());
+            super::listen::each::<V>(fight, hook, |listener, _| {
+                let sts2_core::Listener::Relic(state) = listener else {
+                    return;
+                };
+                let moved = match <V as sts2_core::Hooks>::modify_hook(listener, phase) {
+                    Modify::Nothing => false,
+                    Modify::Added(added) => added != V::Number::zero(),
+                    Modify::Scaled(share) => share != 1.0,
+                    answer => unimplemented!("a relic answering {answer:?} for block"),
+                };
+                let held = fight
+                    .relics
+                    .iter()
+                    .find(|held| std::ptr::eq(&held.state, state))
+                    .expect("a relic asked is on the belt");
+                if moved && !modifying.contains(&held.relic) {
+                    modifying.push(held.relic);
+                }
+            });
+        }
+    }
+    (amount, modifying)
 }
 
 /// `CardCmd.Afflict` on one copy, once `AfflictionModel.CanAfflict` lets it.
@@ -2366,20 +2401,25 @@ pub(crate) fn resolve<V: Rules>(
             };
             let powered = scaling == Scaling::Dynamic;
             let play = playing.and_then(|held| fight.live.history.play_at(held.id));
+            let source = playing.map(|held| held.id);
+            // `CreatureCmd.GainBlock` always runs `Hook.ModifyBlock`. A card's
+            // block and a monster move's are the powered ones.
+            let (amount, modifying) = blocked::<V>(
+                fight,
+                recipient,
+                amount,
+                powered,
+                playing.map(|held| held.face.ident.card),
+                play,
+                source,
+            );
             Resolved::GainBlock {
                 recipient,
-                // `CreatureCmd.GainBlock` always runs `Hook.ModifyBlock`. A
-                // card's block and a monster move's are the powered ones.
-                amount: blocked::<V>(
-                    fight,
-                    recipient,
-                    amount,
-                    powered,
-                    playing.map(|held| held.face.ident.card),
-                    play,
-                ),
+                amount,
                 powered,
                 play,
+                source,
+                modifying,
             }
         }
     };
@@ -2894,7 +2934,18 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 amount,
                 powered,
                 play,
+                source,
+                modifying,
             } => {
+                // `Hook.AfterModifyingBlockAmount`, asked of each relic that
+                // changed the gain, before it lands.
+                for relic in modifying {
+                    let hook = sts2_core::EventHook::BlockAmountModified { amount, source };
+                    if let Some(effect) = super::listen::ask_relic(self.relics, relic, hook).first()
+                    {
+                        unimplemented!("{relic:?} asking for {effect:?} once it changed block")
+                    }
+                }
                 let Some(at) = self.at(recipient) else { return };
                 if amount > V::Number::zero() {
                     self.live.creatures[at].block = self.live.creatures[at].block + amount;

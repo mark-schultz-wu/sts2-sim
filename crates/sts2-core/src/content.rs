@@ -677,10 +677,11 @@ pub enum ModelHook {
     TryModifyRestSiteOptions,
     ShouldForcePotionReward,
     AfterFlush,
+    AfterModifyingBlockAmount,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 116] = [
+    pub const ALL: [ModelHook; 117] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -797,6 +798,7 @@ impl ModelHook {
         ModelHook::TryModifyRestSiteOptions,
         ModelHook::ShouldForcePotionReward,
         ModelHook::AfterFlush,
+        ModelHook::AfterModifyingBlockAmount,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -930,6 +932,7 @@ impl ModelHook {
             ModelHook::TryModifyRestSiteOptions => "TryModifyRestSiteOptions",
             ModelHook::ShouldForcePotionReward => "ShouldForcePotionReward",
             ModelHook::AfterFlush => "AfterFlush",
+            ModelHook::AfterModifyingBlockAmount => "AfterModifyingBlockAmount",
         }
     }
 }
@@ -2810,6 +2813,8 @@ pub enum ModifyHook<V: ContentVersion> {
         card: Option<V::Card>,
         /// `cardPlay`, as the play's [`PlayAt`].
         play: Option<PlayAt>,
+        /// `cardSource`: which copy gives the block.
+        source: Option<crate::CardId<V>>,
     },
     /// `ModifyHpLostBeforeOsty`, over what the block did not take.
     HpLostBeforeOsty {
@@ -3442,6 +3447,13 @@ pub enum EventHook<V: ContentVersion> {
     Flushed,
     /// `AfterOrbChanneled`, once an orb is in the player's queue.
     OrbChanneled,
+    /// `AfterModifyingBlockAmount`, asked of each relic whose block hook
+    /// changed a gain, with what the gain came to.
+    BlockAmountModified {
+        amount: V::Number,
+        /// `cardSource`: which copy gives the block.
+        source: Option<crate::CardId<V>>,
+    },
     /// `AfterDiedToDoom`, once Doom killed its creatures. `fatal` counts those
     /// besides the player whose powers all let the death trigger Fatal.
     DiedToDoom {
@@ -3601,6 +3613,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::RestSiteOptions => ModelHook::TryModifyRestSiteOptions,
             EventHook::Flushed => ModelHook::AfterFlush,
             EventHook::OrbChanneled => ModelHook::AfterOrbChanneled,
+            EventHook::BlockAmountModified { .. } => ModelHook::AfterModifyingBlockAmount,
             EventHook::DiedToDoom { .. } => ModelHook::AfterDiedToDoom,
             EventHook::CardRewardOptions { .. } => ModelHook::TryModifyCardRewardOptions,
             EventHook::CombatVictoryEarly { .. } => ModelHook::AfterCombatVictoryEarly,

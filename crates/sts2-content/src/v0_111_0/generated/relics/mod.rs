@@ -1964,6 +1964,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCardPlayed)
         .with(sts2_core::ModelHook::AfterCombatEnd)
+        .with(sts2_core::ModelHook::AfterModifyingBlockAmount)
         .with(sts2_core::ModelHook::AfterSideTurnStart)
         .with(sts2_core::ModelHook::BeforeCombatStart)
         .with(sts2_core::ModelHook::ModifyBlockMultiplicative),
@@ -2250,6 +2251,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCardPlayed)
         .with(sts2_core::ModelHook::AfterCombatEnd)
+        .with(sts2_core::ModelHook::AfterModifyingBlockAmount)
         .with(sts2_core::ModelHook::BeforeCombatStart)
         .with(sts2_core::ModelHook::ModifyBlockMultiplicative),
     // VELVET_CHOKER
