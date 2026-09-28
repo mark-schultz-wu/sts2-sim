@@ -993,21 +993,27 @@ impl<'a, V: Rules> Board<'a, V> {
         }
         let mut added = Vec::with_capacity(count);
         for _ in 0..count {
-            let id = self.live.card_ids.mint();
-            // A full hand sends the card to the discard pile instead.
-            let full = pile == Pile::Hand
-                && self.live.cards.len(Pile::Hand) >= super::pile::MAX_CARDS_IN_HAND;
-            let pile = if full { Pile::Discard } else { pile };
-            let index = num_traits::NumCast::from(self.live.cards.len(pile))
-                .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
-            self.live.cards.push(pile, CardInstance::new(card, id));
-            let at = CardAt::new(id, pile, index);
+            let at = self.put(card, pile);
             added.push(at);
-            // `CardPileCmd.Add` raises this for each card as it lands.
-            self.card_entered_combat(at, card.card, false);
             self.card_generated(at, card.card, creator);
         }
         added
+    }
+
+    /// `CardPileCmd.Add` of a new copy of `card` into `pile`, and the
+    /// `AfterCardEnteredCombat` it raises as it lands.
+    fn put(&mut self, card: CardIdent<V>, pile: Pile) -> CardAt<V> {
+        let id = self.live.card_ids.mint();
+        // A full hand sends the card to the discard pile instead.
+        let full =
+            pile == Pile::Hand && self.live.cards.len(Pile::Hand) >= super::pile::MAX_CARDS_IN_HAND;
+        let pile = if full { Pile::Discard } else { pile };
+        let index = num_traits::NumCast::from(self.live.cards.len(pile))
+            .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
+        self.live.cards.push(pile, CardInstance::new(card, id));
+        let at = CardAt::new(id, pile, index);
+        self.card_entered_combat(at, card.card, false);
+        at
     }
 
     /// Carry out what the card-writing hooks asked for.
@@ -3446,6 +3452,14 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.card_entered_combat(at, face.ident.card, true);
         self.card_generated(at, face.ident.card, self.creator());
         Some(at)
+    }
+
+    fn add_card(&mut self, card: CardIdent<V>, pile: Pile) -> Option<CardAt<V>> {
+        // `IsInProgress`, which a fight already over fails.
+        if self.ended.is_some() {
+            return None;
+        }
+        Some(self.put(card, pile))
     }
 
     fn add_generated_cards(

@@ -1,0 +1,12 @@
+# Tinker Time's Skill with Energized: a Mad Science that blocks, then gives
+# two energy.
+#
+# Tinker Time offers two of three types, then two of the type's three
+# riders, each pair drawn off the event's stream.
+{"cmd":"start","seed":"0RACLE4","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"TINKER_TIME"}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":1}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":4}

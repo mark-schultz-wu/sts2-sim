@@ -93,3 +93,12 @@ fn wire<T: serde::Serialize>(value: &T) -> String {
         .trim_matches('"')
         .to_string()
 }
+
+/// The dump's id for a card the tables generate: the class's, which the nine
+/// Mad Sciences share. Their names add the rider the game keeps on a copy.
+fn dumped_id(wire: &str) -> &str {
+    match wire.strip_prefix("MAD_SCIENCE_") {
+        Some(_) => "MAD_SCIENCE",
+        None => wire,
+    }
+}

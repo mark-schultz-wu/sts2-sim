@@ -1,0 +1,12 @@
+# Tinker Time's Attack with Choking: a Mad Science that hits once, then
+# puts Strangle on the target.
+#
+# Tinker Time offers two of three types, then two of the type's three
+# riders, each pair drawn off the event's stream.
+{"cmd":"start","seed":"0RACLE2","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"TINKER_TIME"}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":1}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":3,"target":1}

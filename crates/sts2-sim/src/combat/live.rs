@@ -60,9 +60,10 @@ const SKIPS: usize = 32;
 
 /// How many differences one copy of a card holds.
 ///
-/// Five, which covers 577 of the 578 cards this build prints. The one that
-/// prints more is `Event(MadScience)`, at eleven, and no event is ported.
-/// `only_one_card_prints_more_than_a_copy_holds` is what keeps that true.
+/// Five, which covers every card this build prints but the nine Mad
+/// Sciences, at eleven each. Only an upgrade writes on one, and it writes a
+/// keyword. `only_mad_science_prints_more_than_a_copy_holds` is what keeps
+/// that true.
 const VARS: usize = 5;
 
 /// How many local price changes one copy of a card carries.
@@ -2438,27 +2439,35 @@ mod tests {
         costs::<sts2_content::v0_111_0::V0_111_0>("v0.111.0");
     }
 
-    /// One card in each ported build prints more than a copy holds.
+    /// Only the Mad Sciences, in each ported build, print more than a copy
+    /// holds.
     ///
     /// [`VARS`] is a measured constant, so it goes stale the moment a build
-    /// prints another wide card. The one that is already wide is an event's,
-    /// and no event is ported, so no fight raises it. A second one is a
-    /// decision somebody has to make rather than a panic in a fight.
+    /// prints another wide card. Nothing raises a Mad Science's numbers. A
+    /// wide card of any other kind is a decision somebody has to make rather
+    /// than a panic in a fight.
     #[test]
-    fn only_one_card_prints_more_than_a_copy_holds() {
+    fn only_mad_science_prints_more_than_a_copy_holds() {
         fn wide<V: sts2_core::ContentVersion>(build: &str) {
+            // The nine print one class's numbers, so they print the same.
             let mut wide = 0;
+            let mut first = None;
             for &card in <V::Card as sts2_core::Table>::ALL {
-                let printed = card.vars().len();
-                if printed > VARS {
+                let printed = card.vars();
+                if printed.len() > VARS {
                     wide += 1;
+                    let first = *first.get_or_insert(printed);
                     assert!(
-                        wide <= 1,
-                        "{build} holds {VARS} a copy, and {card:?} prints {printed}",
+                        printed == first,
+                        "{build} holds {VARS} a copy, and {card:?} prints {}",
+                        printed.len(),
                     );
                 }
             }
-            assert_eq!(wide, 1, "{build} prints one card wider than {VARS}");
+            assert_eq!(
+                wide, 9,
+                "{build} prints the nine Mad Sciences wider than {VARS}"
+            );
         }
         wide::<sts2_content::v0_107_1::V0_107_1>("v0.107.1");
         wide::<sts2_content::v0_111_0::V0_111_0>("v0.111.0");

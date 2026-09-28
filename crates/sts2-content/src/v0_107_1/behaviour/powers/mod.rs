@@ -875,6 +875,24 @@ pub(crate) fn modify_hook(
             unimplemented!("an endless Borrowed Time")
         }
         (Power::BorrowedTimePower, _, ModifyHook::EnergyCost { .. }) => Modify::Nothing,
+        // `CuriousPower.TryModifyEnergyCostInCombat`: its stack off a Power
+        // its owner holds. A cost it would take below nothing is nothing,
+        // which the fold's own clamp gives.
+        (
+            Power::CuriousPower,
+            PowerAmount::Counted(amount),
+            ModifyHook::EnergyCost {
+                card: (_, card), ..
+            },
+        ) if owner == CombatSide::Player
+            && <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Power) =>
+        {
+            Modify::Added(-amount)
+        }
+        (Power::CuriousPower, PowerAmount::Endless, ModifyHook::EnergyCost { .. }) => {
+            unimplemented!("an endless Curious")
+        }
+        (Power::CuriousPower, _, ModifyHook::EnergyCost { .. }) => Modify::Nothing,
         // `TangledPower.TryModifyEnergyCostInCombat`: its stack onto a card
         // with Entangled. A fight here has one player, whose cards are its
         // holder's.
@@ -4206,6 +4224,25 @@ pub(crate) fn event_hook(
         }
         (Power::RoyaltiesPower, PowerAmount::Endless, EventHook::CombatEnd { .. }) => {
             unimplemented!("an endless Royalties")
+        }
+        // `ImprovementPower.AfterCombatEnd`: its stack of upgradable deck
+        // cards upgraded, each `NextItem` off `CombatCardSelection`. Every
+        // card upgrades once, so the list is the deck's as each draw is made.
+        (Power::ImprovementPower, PowerAmount::Counted(amount), EventHook::CombatEnd { .. }) => {
+            use sts2_core::RunStreamKinds as _;
+
+            let count = usize::try_from(amount).expect("a stack is not negative");
+            let stream = sts2_core::Stream::Run(
+                <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_SELECTION,
+            );
+            asked.extend(std::iter::repeat_n(
+                HookEffect::UpgradeRandomDeckCard { stream },
+                count,
+            ));
+            return;
+        }
+        (Power::ImprovementPower, PowerAmount::Endless, EventHook::CombatEnd { .. }) => {
+            unimplemented!("an endless Improvement")
         }
         // `ForbiddenGrimoirePower.AfterCombatEnd`: a card removal reward for
         // each of its stack.

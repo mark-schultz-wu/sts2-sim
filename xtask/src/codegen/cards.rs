@@ -410,7 +410,8 @@ impl std::fmt::Display for PoolAt {
 ///
 /// Returns the dump's content hash, which stamps the roll-up too.
 pub fn generate(root: &Path) -> Result<Build, Error> {
-    let dump = Dump::read("cards.txt")?;
+    let mut dump = Dump::read("cards.txt")?;
+    super::mad_science::expand(&mut dump);
     let build = dump.build.clone();
 
     let cards: Vec<Card> = dump
@@ -502,10 +503,13 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     let mut stripped = 0usize;
 
     // Every card's place in the build's own id order. `ModelId.CompareTo` is
-    // ordinal over the id, and shuffling a pile sorts by it.
+    // ordinal over the id, and shuffling a pile sorts by it. The id is the
+    // game's, which the nine Mad Sciences share.
     let ranks: BTreeMap<&str, u16> = {
-        let mut ids: Vec<&str> = cards.iter().map(|card| card.id.as_str()).collect();
-        ids.sort_unstable();
+        let ids: std::collections::BTreeSet<&str> = cards
+            .iter()
+            .map(|card| super::mad_science::game_id(&card.id))
+            .collect();
         ids.into_iter()
             .enumerate()
             .map(|(rank, id)| {
@@ -564,7 +568,7 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
         .unwrap();
         writeln!(out, "static ORDER: [u16; {}] = [", members.len()).unwrap();
         for card in &members {
-            writeln!(out, "    {},", ranks[card.id.as_str()]).unwrap();
+            writeln!(out, "    {},", ranks[super::mad_science::game_id(&card.id)]).unwrap();
         }
         writeln!(out, "];\n").unwrap();
 

@@ -24,6 +24,15 @@ pub(super) fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> 
         EventCard::Whistle => whistle(fight),
         EventCard::Apotheosis => apotheosis(fight),
         EventCard::Maul => maul(fight),
+        EventCard::MadScienceSapping
+        | EventCard::MadScienceViolence
+        | EventCard::MadScienceChoking
+        | EventCard::MadScienceEnergized
+        | EventCard::MadScienceWisdom
+        | EventCard::MadScienceChaos
+        | EventCard::MadScienceExpertise
+        | EventCard::MadScienceCurious
+        | EventCard::MadScienceImprovement => mad_science(card, fight),
         // `Wish`: one card of the draw pile into hand.
         EventCard::Wish => Played::Asking {
             pile: Pile::Draw,
@@ -131,6 +140,102 @@ fn hit<F: Fight<V>>(fight: &mut F, target: sts2_core::CombatId, hits: usize) {
             fight.apply(attack);
         }
     });
+}
+
+/// `MadScience`: what its type does, then its rider.
+///
+/// An attack hits the target once, or `ViolenceHits` times with Violence,
+/// each hit its own command. A skill gains its block. A power applies what
+/// its rider names to its owner. Sapping and Choking then debuff the target,
+/// Energized gives energy, Wisdom draws, and Chaos adds a card of the
+/// character's pool, free this turn.
+fn mad_science<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
+    use super::super::super::generated::powers::Power;
+    use sts2_core::{PowerAmount, RunStreamKinds as _};
+
+    let counted = |fight: &F, key| PowerAmount::Counted(fight.var(key));
+    match card {
+        EventCard::MadScienceSapping
+        | EventCard::MadScienceViolence
+        | EventCard::MadScienceChoking => {
+            let target = fight.target();
+            let hits = match card {
+                EventCard::MadScienceViolence => {
+                    num_traits::cast(fight.var(CardVar::ViolenceHits)).expect("a few hits")
+                }
+                _ => 1,
+            };
+            for _ in 0..hits {
+                hit(fight, target, 1);
+            }
+            match card {
+                EventCard::MadScienceSapping => {
+                    let weak = counted(fight, CardVar::SappingWeak);
+                    fight.apply_power(target, Power::WeakPower, weak);
+                    let vulnerable = counted(fight, CardVar::SappingVulnerable);
+                    fight.apply_power(target, Power::VulnerablePower, vulnerable);
+                }
+                EventCard::MadScienceChoking => {
+                    let strangle = counted(fight, CardVar::ChokingDamage);
+                    fight.apply_power(target, Power::StranglePower, strangle);
+                }
+                _ => {}
+            }
+        }
+        EventCard::MadScienceEnergized
+        | EventCard::MadScienceWisdom
+        | EventCard::MadScienceChaos => {
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Var(CardVar::Block),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+            match card {
+                EventCard::MadScienceEnergized => {
+                    fight.modify_energy(fight.var(CardVar::EnergizedEnergy))
+                }
+                EventCard::MadScienceWisdom => fight.draw(fight.var(CardVar::WisdomCards)),
+                _ => {
+                    // `GetDistinctForCombat` of one card off
+                    // `CombatCardGeneration`, `SetToFreeThisTurn`, then
+                    // `CardPileCmd.Add` into the hand.
+                    let mut pool =
+                        <V as sts2_core::Rules>::combat_cards(fight.character()).to_vec();
+                    let stream =
+                        <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_GENERATION;
+                    let [made] =
+                        fight
+                            .generate_cards::<1>(&mut pool, stream)
+                            .unwrap_or_else(|_| {
+                                unimplemented!("a character pool with no card to make")
+                            });
+                    if let Some(at) = fight.add_card(made, Pile::Hand) {
+                        fight.modify_card(
+                            at,
+                            Change::SetCost(CostPool::Energy, 0),
+                            Lasting::ThisTurnOrUntilPlayed,
+                        );
+                    }
+                }
+            }
+        }
+        EventCard::MadScienceExpertise => {
+            let strength = counted(fight, CardVar::ExpertiseStrength);
+            fight.apply_to_actor(Power::StrengthPower, strength);
+            let dexterity = counted(fight, CardVar::ExpertiseDexterity);
+            fight.apply_to_actor(Power::DexterityPower, dexterity);
+        }
+        EventCard::MadScienceCurious => {
+            let curious = counted(fight, CardVar::CuriousReduction);
+            fight.apply_to_actor(Power::CuriousPower, curious);
+        }
+        EventCard::MadScienceImprovement => {
+            fight.apply_to_actor(Power::ImprovementPower, PowerAmount::Counted(1));
+        }
+        card => unreachable!("{card:?} is not a Mad Science"),
+    }
+    Played::Done
 }
 
 /// `Whistle`: its damage to the target, then `CreatureCmd.Stun` on it with

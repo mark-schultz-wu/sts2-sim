@@ -1793,6 +1793,17 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("a card cloning itself")
     }
 
+    /// `CardPileCmd.Add` of a new card to one combat pile, made for the fight
+    /// but not through `AddGeneratedCardToCombat`, so no generation hook
+    /// hears it. Nothing once the fight is over.
+    fn add_card(
+        &mut self,
+        _card: crate::CardIdent<V>,
+        _pile: crate::Pile,
+    ) -> Option<crate::CardAt<V>> {
+        unimplemented!("a card added to the fight")
+    }
+
     /// Add copies of a generated card to one combat pile.
     fn add_generated_cards(
         &mut self,

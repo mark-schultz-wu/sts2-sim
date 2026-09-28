@@ -1,0 +1,14 @@
+# Tinker Time's Power with Curious: a Mad Science whose power takes one off
+# the cost of each Power, which Demon Form then plays at.
+#
+# Tinker Time offers two of three types, then two of the type's three
+# riders, each pair drawn off the event's stream.
+{"cmd":"start","seed":"0RACLE6","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","card":"DEMON_FORM"}
+{"cmd":"event","event":"TINKER_TIME"}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":1}
+{"cmd":"choose_option","index":1}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":4}
+{"cmd":"play_card","index":2}
