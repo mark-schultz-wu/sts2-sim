@@ -116,6 +116,21 @@ pub(crate) fn health_after_added(
     hive::health_after_added(monster, ascension, rolled, teammates)
 }
 
+/// A move's attack damage that the monster works out from the fight, from
+/// the powers on its own creature as the move rolls.
+///
+/// # Panics
+///
+/// A move nobody has ported.
+pub(crate) fn computed_damage<P: sts2_core::Printed<V> + ?Sized>(
+    monster: Monster,
+    move_id: MoveId,
+    ascension: u8,
+    powers: &[sts2_core::Listener<'_, V, P>],
+) -> i32 {
+    glory::computed_damage(monster, move_id, ascension, powers)
+}
+
 /// Which branch a monster's conditional state takes.
 ///
 /// `ConditionalBranchState`, whose predicates read fields an encounter set on
@@ -271,9 +286,10 @@ pub(crate) fn perform<F: Fight<V>>(
         | Monster::CrossbowRubyRaider
         | Monster::CeremonialBeast
         | Monster::KinPriest => overgrowth::perform(monster, move_id, fight),
-        Monster::DevotedSculptor | Monster::FrogKnight => {
-            glory::perform(monster, move_id, model, fight)
-        }
+        Monster::DevotedSculptor
+        | Monster::FrogKnight
+        | Monster::TheLost
+        | Monster::TheForgotten => glory::perform(monster, move_id, model, fight),
         _ => monster_moves::perform(monster, move_id, fight),
     }
     Played::Done

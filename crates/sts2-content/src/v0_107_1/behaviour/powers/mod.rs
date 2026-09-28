@@ -46,6 +46,12 @@ pub enum State {
     Ritual {
         just_applied: bool,
     },
+    /// `PossessStrengthPower`'s `StolenStrength` and `PossessSpeedPower`'s
+    /// `StolenDexterity`, for the one player a fight here has.
+    Possess {
+        power: Power,
+        stolen: Number,
+    },
     /// `IllusionPower`'s `isReviving`.
     Illusion {
         reviving: bool,
@@ -160,6 +166,9 @@ impl sts2_core::PowerModel<V> for State {
             Power::RitualPower => Self::Ritual {
                 just_applied: false,
             },
+            Power::PossessStrengthPower | Power::PossessSpeedPower => {
+                Self::Possess { power, stolen: 0 }
+            }
             Power::IllusionPower => Self::Illusion { reviving: false },
             Power::ReattachPower => Self::Reattach { reviving: false },
             Power::SwipePower => Self::Swipe { stolen: None },
@@ -199,6 +208,7 @@ impl sts2_core::PowerModel<V> for State {
             Self::DarkEmbrace { .. } => Power::DarkEmbracePower,
             Self::Imbalanced { .. } => Power::ImbalancedPower,
             Self::Ritual { .. } => Power::RitualPower,
+            Self::Possess { power, .. } => *power,
             Self::Illusion { .. } => Power::IllusionPower,
             Self::Reattach { .. } => Power::ReattachPower,
             Self::Swipe { .. } => Power::SwipePower,
@@ -324,6 +334,14 @@ impl State {
             }
             state => unreachable!("counted state for {:?}", state.power()),
         }
+    }
+
+    /// The stolen stack a Possess power keeps, to write on.
+    fn stolen_mut(&mut self) -> &mut Number {
+        let Self::Possess { stolen, .. } = self else {
+            unreachable!("stolen state for {:?}", self.power())
+        };
+        stolen
     }
 
     /// `WasJustAppliedByEnemy`, set to `just_applied`, and what it held.
@@ -636,6 +654,7 @@ fn temporary(
                 creature,
                 power: changed,
                 delta,
+                ..
             },
         ) if creature == held.holder && changed == power && delta != total => asked.push(
             HookEffect::ApplyToOwner(lent, PowerAmount::Counted(signed(delta))),
@@ -2251,6 +2270,55 @@ pub(crate) fn event_hook(
             return;
         }
         (Power::RampartPower, _, EventHook::SideTurnStart { .. }) => None,
+        // `PossessStrengthPower.AfterPowerAmountChanged` and its Dexterity
+        // twin: a stack its holder took off the player is counted as stolen.
+        (
+            Power::PossessStrengthPower | Power::PossessSpeedPower,
+            _,
+            EventHook::PowerAmountChanged {
+                creature,
+                power: changed,
+                delta,
+                applier,
+            },
+        ) => {
+            let possessed = match power {
+                Power::PossessStrengthPower => Power::StrengthPower,
+                _ => Power::DexterityPower,
+            };
+            if applier == Some(holder)
+                && creature == fight.player()
+                && changed == possessed
+                && delta < 0
+            {
+                *state.stolen_mut() += delta;
+            }
+            None
+        }
+        // `AfterDeath` for its own holder: the stolen stack given back, from
+        // nobody.
+        (
+            Power::PossessStrengthPower | Power::PossessSpeedPower,
+            _,
+            EventHook::AfterDeath {
+                creature,
+                removal_prevented: false,
+                ..
+            },
+        ) if creature == holder => {
+            let stolen = *state.stolen_mut();
+            (stolen != 0).then(|| HookEffect::ApplyPower {
+                target: fight.player(),
+                power: match power {
+                    Power::PossessStrengthPower => Power::StrengthPower,
+                    _ => Power::DexterityPower,
+                },
+                amount: PowerAmount::Counted(-stolen),
+            })
+        }
+        (Power::PossessStrengthPower | Power::PossessSpeedPower, _, EventHook::AfterDeath { .. }) => {
+            None
+        }
         // `GalvanicPower.BeforeCombatStart`: Galvanized on every Power the
         // player holds. `AfterCardEnteredCombat`: on a Power that joins the
         // fight. The fight leaves a card afflicted already as it is.
@@ -2821,6 +2889,7 @@ pub(crate) fn event_hook(
                 creature,
                 power: Power::SwordSagePower,
                 delta,
+                ..
             },
         ) if creature == holder => Some(HookEffect::AddReplays {
             to: sts2_core::Writing::EveryCopyOf(Cards::Token(TokenCard::SovereignBlade)),

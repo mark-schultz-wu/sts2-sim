@@ -18,6 +18,8 @@ pub(super) fn starting_powers(
         Monster::ScrollOfBiting => vec![(Power::PaperCutsPower, PowerAmount::Counted(2))],
         Monster::LivingShield => vec![(Power::RampartPower, PowerAmount::Counted(25))],
         Monster::GlobeHead => vec![(Power::GalvanicPower, PowerAmount::Counted(6))],
+        Monster::TheLost => vec![(Power::PossessStrengthPower, PowerAmount::Counted(1))],
+        Monster::TheForgotten => vec![(Power::PossessSpeedPower, PowerAmount::Counted(1))],
         // Its `StartingHpReduction` is nothing outside the Punch-Off event's
         // encounter, which rolls it.
         Monster::PunchConstruct => vec![(Power::ArtifactPower, PowerAmount::Counted(1))],
@@ -61,6 +63,13 @@ pub(super) fn conditional(
     super::state_of(monster, wanted, at)
 }
 
+/// `DebilitatingSmogStrengthStealAmount` and
+/// `DebilitatingSmogDexStealAmount`, two at every ascension.
+const STOLEN: Number = 2;
+
+/// Miasma's block.
+const MIASMA_BLOCK: Number = 8;
+
 /// `DevotedSculptor`'s `_ritualGain`.
 const RITUAL: Number = 9;
 
@@ -91,6 +100,58 @@ pub(super) fn perform<F: Fight<V>>(
                 None,
             );
         }
+        // `DebilitatingSmogMove`: two Strength off each target, then two
+        // onto itself.
+        (Monster::TheLost, MoveId::DebilitatingSmog) => {
+            fight.apply_to_opponents(Power::StrengthPower, PowerAmount::Counted(-STOLEN));
+            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(STOLEN));
+        }
+        // `MiasmaMove`: two Dexterity off each target, eight block, then two
+        // Dexterity onto itself.
+        (Monster::TheForgotten, MoveId::Miasma) => {
+            use sts2_core::{Amount, Effect, Scaling};
+
+            fight.apply_to_opponents(Power::DexterityPower, PowerAmount::Counted(-STOLEN));
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Number(MIASMA_BLOCK),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+            fight.apply_to_actor(Power::DexterityPower, PowerAmount::Counted(STOLEN));
+        }
+        (Monster::TheForgotten, MoveId::Dread) => fight.attack_opponents(),
         _ => monster_moves::perform(monster, move_id, fight),
+    }
+}
+
+/// A Glory monster's attack damage that it works out from the fight.
+pub(super) fn computed_damage<P: sts2_core::Printed<V> + ?Sized>(
+    monster: Monster,
+    move_id: MoveId,
+    ascension: u8,
+    powers: &[sts2_core::Listener<'_, V, P>],
+) -> i32 {
+    let held = |wanted| {
+        powers
+            .iter()
+            .find_map(|listener| match listener {
+                sts2_core::Listener::Power { power, amount, .. } if *power == wanted => {
+                    Some(*amount)
+                }
+                _ => None,
+            })
+            .map_or(0, |amount| match amount {
+                PowerAmount::Counted(amount) => amount,
+                PowerAmount::Endless => unimplemented!("an endless {wanted:?}"),
+            })
+    };
+    let deadly = ascension >= AscensionLevel::DeadlyEnemies as u8;
+    match (monster, move_id) {
+        // `DreadDamage`: its base, and its own Dexterity.
+        (Monster::TheForgotten, MoveId::Dread) => {
+            (if deadly { 15 } else { 13 }) + held(Power::DexterityPower)
+        }
+        (monster, move_id) => unimplemented!("the damage {monster:?} works out for {move_id:?}"),
     }
 }

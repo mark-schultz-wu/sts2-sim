@@ -3217,6 +3217,8 @@ pub enum EventHook<V: ContentVersion> {
         creature: crate::CombatId,
         power: V::Power,
         delta: V::Number,
+        /// The creature whose command moved it, which a tick names nobody.
+        applier: Option<crate::CombatId>,
     },
     /// `AfterCardEnteredCombat`, carrying the card that has just joined the
     /// fight.

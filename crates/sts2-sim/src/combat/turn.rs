@@ -1935,6 +1935,7 @@ fn tick_powers<V: Rules>(
             creature: owner,
             power,
             delta: -num_traits::one::<V::Number>(),
+            applier: None,
         };
         if let Some((listener, effect)) = listen::notify::<V>(live, relics, hook).into_iter().next()
         {
