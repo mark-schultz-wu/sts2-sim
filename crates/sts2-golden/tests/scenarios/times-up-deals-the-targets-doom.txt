@@ -1,0 +1,6 @@
+# Time's Up deals one for each Doom on its target.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"DOOM_POWER","amount":13,"target":1}
+{"cmd":"grant","card":"TIMES_UP"}
+{"cmd":"play_card","index":5,"target":1}
