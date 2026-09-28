@@ -1,0 +1,8 @@
+# Consuming Shadow channels two Dark orbs, then evokes the last orb in the
+# queue as each of its owner's turns ends, after the orbs' own triggers.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"grant","card":"CONSUMING_SHADOW"}
+{"cmd":"play_card","index":5}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

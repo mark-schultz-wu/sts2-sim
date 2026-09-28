@@ -794,27 +794,13 @@ pub(super) fn carry_setup<V: Rules>(
                             );
                         }
                         sts2_core::HookEffect::GenerateDistinctColorless { count } => {
-                            let count: usize = num_traits::cast(count).unwrap_or_else(|| {
-                                unimplemented!("making {count:?} colorless cards")
-                            });
-                            let mut cards = V::combat_colorless_cards().to_vec();
-                            sts2_core::rng::GameRng::unstable_shuffle(rngs.generation, &mut cards);
-                            let mut board = Board::for_card(
+                            generate_distinct_colorless::<V>(
                                 live,
                                 rngs.reborrow(),
                                 relics,
                                 ascension,
-                                None,
-                                None,
+                                count,
                             );
-                            for card in cards.into_iter().take(count) {
-                                sts2_core::Fight::add_generated_cards(
-                                    &mut board,
-                                    sts2_core::CardIdent::new(card),
-                                    Pile::Hand,
-                                    1,
-                                );
-                            }
                         }
                         sts2_core::HookEffect::ExhaustFromDrawTop { passing_innate } => {
                             let passed = passing_innate
@@ -1290,6 +1276,30 @@ pub(super) fn carry_setup<V: Rules>(
 /// drawn by `CardFactory.GetDistinctForCombat` off `CombatCardGeneration`
 /// from the pool afresh, in the pool's own order. An empty pool gives
 /// nothing. Each takes `keyword` where one is named, and goes into hand.
+/// `count` distinct colorless cards from one `GetDistinctForCombat` off
+/// `CombatCardGeneration`, into the hand.
+fn generate_distinct_colorless<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    ascension: V::AscensionLevel,
+    count: V::Number,
+) {
+    let count: usize = num_traits::cast(count)
+        .unwrap_or_else(|| unimplemented!("making {count:?} colorless cards"));
+    let mut cards = V::combat_colorless_cards().to_vec();
+    sts2_core::rng::GameRng::unstable_shuffle(rngs.generation, &mut cards);
+    let mut board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+    for card in cards.into_iter().take(count) {
+        sts2_core::Fight::add_generated_cards(
+            &mut board,
+            sts2_core::CardIdent::new(card),
+            Pile::Hand,
+            1,
+        );
+    }
+}
+
 fn generate_from_pool<V: Rules>(
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
@@ -1731,6 +1741,9 @@ pub(super) fn side_turn_started<V: Rules>(
                 count,
                 writes,
             ),
+            sts2_core::HookEffect::GenerateDistinctColorless { count } => {
+                generate_distinct_colorless::<V>(live, rngs.reborrow(), relics, ascension, count)
+            }
             effect => unimplemented!("a listener asking for {effect:?} as a side turn starts"),
         }
     }
@@ -2021,6 +2034,7 @@ fn tick_powers<V: Rules>(
             // `PowerCmd.Decrement(this)`.
             sts2_core::HookEffect::Decrement => applying.push(TurnEndAsk::Decrement(owner, power)),
             sts2_core::HookEffect::Escape => applying.push(TurnEndAsk::Escape(owner)),
+            sts2_core::HookEffect::EvokeLast(count) => applying.push(TurnEndAsk::EvokeLast(count)),
             other => unimplemented!("a power asking for {other:?} as a turn ends"),
         }
     }
@@ -2119,6 +2133,8 @@ enum TurnEndAsk<V: Rules> {
     Decrement(CombatId, V::Power),
     /// `CreatureCmd.Escape`.
     Escape(CombatId),
+    /// `OrbCmd.EvokeLast`, this many times.
+    EvokeLast(V::Number),
 }
 
 /// What the powers that just ticked asked for, and whatever that ended.
@@ -2152,6 +2168,11 @@ fn applied<V: Rules>(
                 board.modify_amount(at, power, -num_traits::one::<V::Number>())
             }
             TurnEndAsk::Escape(at) => board.escape_creature(at),
+            TurnEndAsk::EvokeLast(count) => {
+                for _ in 0..num_traits::cast::<_, usize>(count).unwrap_or(0) {
+                    board.evoke_last();
+                }
+            }
         }
         if let Some(ended) = board.ended {
             return Some(ended);

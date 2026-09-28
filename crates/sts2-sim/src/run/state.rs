@@ -1371,6 +1371,12 @@ impl<V: Rules> State<V> {
     /// The room the relic was picked up in is what parks on it.
     #[must_use]
     pub(super) fn obtain(&mut self, relic: V::Relic) -> Option<Asked<V>> {
+        use sts2_core::RelicTable as _;
+
+        // Out of both bags, unless a run can hold more than one.
+        if !relic.stackable() && !self.dealt_relics.contains(&relic) {
+            Arc::make_mut(&mut self.dealt_relics).push(relic);
+        }
         let mut held = HeldRelic::new(relic);
         let effects = crate::combat::obtained::<V>(&mut held);
         self.player.relics.push(held);
@@ -2559,15 +2565,27 @@ impl<V: Rules> State<V> {
     /// # Panics
     ///
     /// A relic listening to one of them.
-    pub(super) fn card_reward_unheard(&self) {
-        use sts2_core::ModelHook;
-
-        for hook in [
-            ModelHook::ModifyCardRewardUpgradeOdds,
-            ModelHook::TryModifyCardRewardOptions,
-        ] {
-            self.unheard(hook);
+    pub(super) fn card_reward_unheard(&mut self) {
+        self.unheard(sts2_core::ModelHook::ModifyCardRewardUpgradeOdds);
+        if let Some(effect) = self
+            .notify_belt(sts2_core::EventHook::CardRewardOptions { encounter: false })
+            .first()
+        {
+            unimplemented!("a relic asking for {effect:?} over a card reward");
         }
+    }
+
+    /// `TryModifyCardRewardOptions` over a won fight's card reward: the kind
+    /// of each option the belt adds.
+    pub(super) fn card_reward_added(&mut self) -> Vec<sts2_core::CardKind> {
+        self.unheard(sts2_core::ModelHook::ModifyCardRewardUpgradeOdds);
+        self.notify_belt(sts2_core::EventHook::CardRewardOptions { encounter: true })
+            .into_iter()
+            .map(|effect| match effect {
+                sts2_core::HookEffect::AddCardRewardOption(kind) => kind,
+                effect => unimplemented!("a relic asking for {effect:?} over a card reward"),
+            })
+            .collect()
     }
 
     /// `TryModifyCardRewardOptionsLate` over each card a reward offers.
@@ -4195,6 +4213,22 @@ impl<V: Rules> State<V> {
             }
         }
         false
+    }
+
+    /// `Hook.ShouldForcePotionReward` for a fight won in `room`, which any
+    /// relic on the belt can answer yes to.
+    pub(super) fn potion_forced(&self, room: V::RoomType) -> bool {
+        let hook = sts2_core::DecisionHook::ShouldForcePotionReward { room };
+        let hooks = sts2_core::Overrides::of(sts2_core::ModelHook::ShouldForcePotionReward);
+        let mut left = self.player.relics.hearing(hooks);
+        let mut forced = false;
+        while left != 0 {
+            let held = &self.player.relics[left.trailing_zeros() as usize];
+            left &= left - 1;
+            forced |= V::decide_hook(crate::combat::Heard::<V>::Relic(&held.state), hook)
+                .is_decision_and(|force| force);
+        }
+        forced
     }
 
     /// `Hook.ShouldAllowFreeTravel`, which any relic on the belt can answer

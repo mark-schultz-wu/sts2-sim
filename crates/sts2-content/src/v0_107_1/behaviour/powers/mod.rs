@@ -1872,6 +1872,19 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Debilitate")
         }
         (Power::DebilitatePower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `ConsumingShadowPower.AfterSideTurnEnd`: `OrbCmd.EvokeLast` once for
+        // each of its stack as its owner's turn ends, while an orb is left.
+        (
+            Power::ConsumingShadowPower,
+            PowerAmount::Counted(amount),
+            EventHook::SideTurnEnd { side },
+        ) if side == owner => Some(HookEffect::EvokeLast(amount)),
+        (Power::ConsumingShadowPower, PowerAmount::Endless, EventHook::SideTurnEnd { side })
+            if side == owner =>
+        {
+            unimplemented!("an endless Consuming Shadow")
+        }
+        (Power::ConsumingShadowPower, _, EventHook::SideTurnEnd { .. }) => None,
         // `ConquerorPower.AfterSideTurnEnd`: one off its stack as its owner's
         // side's turn ends.
         (Power::ConquerorPower, PowerAmount::Counted(_), EventHook::SideTurnEnd { side })

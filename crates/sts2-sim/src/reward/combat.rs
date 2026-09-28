@@ -34,6 +34,16 @@ impl Room {
     }
 }
 
+/// What the belt says of a won fight's rewards before they roll.
+pub(crate) struct Modifiers<'a> {
+    /// `Hook.ShouldForcePotionReward`, which pays the potion whatever the
+    /// roll.
+    pub(crate) forced: bool,
+    /// `TryModifyCardRewardOptions`: the kind of each option added to the
+    /// card reward, drawn once its own cards are.
+    pub(crate) added: &'a [sts2_core::CardKind],
+}
+
 /// The rewards a won fight offers.
 ///
 /// The potion rolls while the set is built. The gold rolls while the set is
@@ -41,6 +51,7 @@ impl Room {
 ///
 /// An elite adds a relic. `Populate` runs in build order and `RewardsSet`
 /// sorts by `RewardsSetIndex` after, so the relic draws last and shows third.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn won<V: Rules, R: GameRng>(
     rng: &mut R,
     odds: &mut Odds,
@@ -49,9 +60,10 @@ pub(crate) fn won<V: Rules, R: GameRng>(
     gold: Option<Interval<u16>>,
     act: usize,
     room: Room,
+    modifiers: Modifiers<'_>,
 ) -> (Vec<Offer<V>>, Option<Rarity<V>>) {
     let elite = room == Room::Elite;
-    let pays_potion = potion(rng, odds, elite);
+    let pays_potion = potion(rng, odds, elite, modifiers.forced);
     let mut offered: Vec<Offer<V>> = gold
         .into_iter()
         .map(|gold| Offer::Gold {
@@ -65,16 +77,41 @@ pub(crate) fn won<V: Rules, R: GameRng>(
             taken: false,
         });
     }
+    let mut cards = card::encounter::<V, R>(
+        rng,
+        odds,
+        ascension,
+        character,
+        CARDS_OFFERED,
+        act,
+        room.card_odds(),
+    );
+    for &kind in modifiers.added {
+        // The pool the reward drew, of the kind, less what it offers. Every
+        // card of the kind when it offers them all, and nothing with none.
+        let pool = V::reward_cards(character);
+        let of_kind: Vec<V::Card> = [pool.common, pool.uncommon, pool.rare]
+            .into_iter()
+            .flatten()
+            .copied()
+            .filter(|&card| V::card_kind(card) == Some(kind))
+            .collect();
+        let unoffered: Vec<V::Card> = of_kind
+            .iter()
+            .copied()
+            .filter(|&card| cards.iter().all(|offered| offered.card != card))
+            .collect();
+        let drawn = if unoffered.is_empty() {
+            of_kind
+        } else {
+            unoffered
+        };
+        if !drawn.is_empty() {
+            cards.push(card::added::<V, R>(rng, &drawn, room.card_odds(), act));
+        }
+    }
     offered.push(Offer::Card {
-        cards: card::encounter::<V, R>(
-            rng,
-            odds,
-            ascension,
-            character,
-            CARDS_OFFERED,
-            act,
-            room.card_odds(),
-        ),
+        cards,
         taken: false,
     });
     // The rarity is rolled here and the relic is pulled by the caller, which
@@ -95,12 +132,12 @@ fn purse<V: Rules, R: GameRng>(rng: &mut R, gold: Interval<u16>) -> V::Number {
 }
 
 /// `PotionRewardOdds.Roll`, which draws whether or not a potion follows.
+/// A `forced` roll pays one whatever it draws.
 ///
 /// The chance moves either way by a tenth, so a run that has gone without one
 /// is likelier to see the next. An elite adds a quarter of a bonus, halved,
-/// to what the draw is held against. The pity counter itself does not move by
-/// it: the bonus applies to this roll and no later one.
-fn potion<R: GameRng>(rng: &mut R, odds: &mut Odds, elite: bool) -> bool {
+/// to what the draw is held against, for this roll and no later one.
+fn potion<R: GameRng>(rng: &mut R, odds: &mut Odds, elite: bool, forced: bool) -> bool {
     const STEP: f32 = 0.1;
     const ELITE_BONUS: f32 = 0.25;
     let against = match elite {
@@ -108,7 +145,7 @@ fn potion<R: GameRng>(rng: &mut R, odds: &mut Odds, elite: bool) -> bool {
         false => odds.potion,
     };
     let rolled = rng.next_double() as f32;
-    match rolled < against {
+    match forced || rolled < against {
         true => {
             odds.potion -= STEP;
             true

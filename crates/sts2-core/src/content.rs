@@ -675,10 +675,11 @@ pub enum ModelHook {
     ShouldPlayerResetEnergy,
     BeforeCombatStartLate,
     TryModifyRestSiteOptions,
+    ShouldForcePotionReward,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 114] = [
+    pub const ALL: [ModelHook; 115] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -793,6 +794,7 @@ impl ModelHook {
         ModelHook::ShouldPlayerResetEnergy,
         ModelHook::BeforeCombatStartLate,
         ModelHook::TryModifyRestSiteOptions,
+        ModelHook::ShouldForcePotionReward,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -924,6 +926,7 @@ impl ModelHook {
             ModelHook::ShouldPlayerResetEnergy => "ShouldPlayerResetEnergy",
             ModelHook::BeforeCombatStartLate => "BeforeCombatStartLate",
             ModelHook::TryModifyRestSiteOptions => "TryModifyRestSiteOptions",
+            ModelHook::ShouldForcePotionReward => "ShouldForcePotionReward",
         }
     }
 }
@@ -1079,6 +1082,10 @@ pub trait RelicTable: Table {
 
     /// Whether a merchant is allowed to stock it, which is `IsAllowedInShops`.
     fn allowed_in_shops(self) -> bool;
+
+    /// `IsStackable`: whether a run can hold more than one. `RelicCmd.Obtain`
+    /// takes one that is not out of both relic bags.
+    fn stackable(self) -> bool;
 }
 
 /// What a table says about a potion, beyond its row.
@@ -2914,6 +2921,9 @@ pub enum DecisionHook<V: ContentVersion> {
         creature: crate::CombatId,
         player: crate::CombatId,
     },
+    /// `ShouldForcePotionReward`, as a won fight's rewards roll for a potion
+    /// in a room of this type. One listener answering yes gives the potion.
+    ShouldForcePotionReward { room: V::RoomType },
     /// `ShouldPlayerResetEnergy`, as `player` sets up their turn `turn`. A
     /// player no listener lets reset adds their maximum to what they have.
     ShouldPlayerResetEnergy {
@@ -2990,6 +3000,7 @@ impl<V: ContentVersion> DecisionHook<V> {
             DecisionHook::ShouldDraw { .. } => ModelHook::ShouldDraw,
             DecisionHook::ShouldDieLate { .. } => ModelHook::ShouldDieLate,
             DecisionHook::ShouldPlayerResetEnergy { .. } => ModelHook::ShouldPlayerResetEnergy,
+            DecisionHook::ShouldForcePotionReward { .. } => ModelHook::ShouldForcePotionReward,
             DecisionHook::ShouldCountForCombatEnd
             | DecisionHook::ShouldRemoveSelfAfterOwnerDeath => return None,
         })
@@ -3374,6 +3385,12 @@ pub enum EventHook<V: ContentVersion> {
     /// `TryModifyRestSiteOptions`, as a rest site opens. A listener answers
     /// with each option it adds.
     RestSiteOptions,
+    /// `TryModifyCardRewardOptions`, once a card reward has drawn its cards.
+    /// `encounter` is whether a won fight made it, which is
+    /// `CardCreationSource.Encounter`.
+    CardRewardOptions {
+        encounter: bool,
+    },
     /// `LiftRestSiteOption.OnSelect`, asked of the relic it lifts.
     Lifted,
     /// `AfterPreventingDeath`, asked of the one model whose `ShouldDieLate`
@@ -3517,6 +3534,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::CombatStarting { .. } => ModelHook::BeforeCombatStart,
             EventHook::CombatStartingLate { .. } => ModelHook::BeforeCombatStartLate,
             EventHook::RestSiteOptions => ModelHook::TryModifyRestSiteOptions,
+            EventHook::CardRewardOptions { .. } => ModelHook::TryModifyCardRewardOptions,
             EventHook::CombatVictoryEarly { .. } => ModelHook::AfterCombatVictoryEarly,
             EventHook::CombatEnd { .. } => ModelHook::AfterCombatEnd,
             EventHook::RestSiteHeal { .. } => ModelHook::AfterRestSiteHeal,
@@ -4190,6 +4208,10 @@ pub enum HookEffect<V: ContentVersion> {
     ProcurePotion(V::Potion),
     /// A rest site option added to those a rest site offers.
     OfferRestOption(V::RestSiteOption),
+    /// One more option on a card reward: a card of this kind from the pool
+    /// the reward drew, by `CreateForReward` from `CardCreationSource.Other`.
+    /// It is one the reward does not offer, unless it offers them all.
+    AddCardRewardOption(CardKind),
     /// `LiftRestSiteOption.OnSelect`, which the relic carries out when asked
     /// [`EventHook::Lifted`].
     Lift(V::Relic),
@@ -4613,6 +4635,9 @@ pub enum HookEffect<V: ContentVersion> {
     },
     /// `CreatureCmd.LoseBlock` on the owner, for all of it.
     LoseBlock,
+    /// `OrbCmd.EvokeLast` this many times, each on the last orb then in the
+    /// player's queue.
+    EvokeLast(V::Number),
     /// `CreatureCmd.LoseBlock` on the owner, for this much of it.
     LoseSomeBlock(V::Number),
     /// A card the fight took from the deck, handed back as a reward once the

@@ -2524,6 +2524,62 @@ pub(super) fn player<V: Rules>(creatures: &[Fighter<V>]) -> CombatId {
 }
 
 impl<V: Rules> Board<'_, V> {
+    /// `OrbCmd.EvokeLast`, which does nothing once the fight is ending.
+    pub(super) fn evoke_last(&mut self) {
+        self.evoke(true, true);
+    }
+
+    /// `OrbCmd.Evoke` on the first orb in the queue, or the last, leaving
+    /// when `dequeue` says so.
+    fn evoke(&mut self, last: bool, dequeue: bool) {
+        if self.ended.is_some() || self.ending() {
+            return;
+        }
+        let Some(orb) = self.live.orbs.as_mut().and_then(|orbs| {
+            let at = match last {
+                true => orbs.queue.len().checked_sub(1)?,
+                false => 0,
+            };
+            (at < orbs.queue.len()).then(|| match dequeue {
+                true => orbs.queue.remove(at),
+                false => orbs.queue[at],
+            })
+        }) else {
+            return;
+        };
+        let targets = V::orb_evoke(&orb, self);
+        let hook = sts2_core::EventHook::OrbEvoked { orb: orb.orb };
+        for (listener, effect) in super::listen::notify::<V>(self.live, self.relics, hook) {
+            match (listener, effect) {
+                // `CreatureCmd.Damage` on the evoke's targets still alive.
+                (Listener::Power { owner, .. }, HookEffect::DamageTargets(amount)) => {
+                    for &target in &targets {
+                        if !self
+                            .at(target)
+                            .is_some_and(|at| self.live.creatures[at].alive)
+                        {
+                            continue;
+                        }
+                        let hit = resolve::<V>(
+                            self.walk(),
+                            None,
+                            Effect::Attack {
+                                dealer: owner,
+                                target,
+                                damage: Amount::Number(amount),
+                                scaling: Scaling::Static,
+                            },
+                        );
+                        self.apply(hit);
+                    }
+                }
+                (listener, effect) => {
+                    unimplemented!("{listener:?} asking for {effect:?} as an orb is evoked")
+                }
+            }
+        }
+    }
+
     /// `PlayerCmd.AddPet`: `monster` for the player, at the health its own
     /// row starts on, standing after the last of the player's side.
     ///
@@ -3141,48 +3197,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     ///
     /// A listener to `AfterOrbEvoked`.
     fn evoke_next(&mut self, dequeue: bool) {
-        if self.ended.is_some() || self.ending() {
-            return;
-        }
-        let Some(orb) = self.live.orbs.as_mut().and_then(|orbs| {
-            (!orbs.queue.is_empty()).then(|| match dequeue {
-                true => orbs.queue.remove(0),
-                false => orbs.queue[0],
-            })
-        }) else {
-            return;
-        };
-        let targets = V::orb_evoke(&orb, self);
-        let hook = sts2_core::EventHook::OrbEvoked { orb: orb.orb };
-        for (listener, effect) in super::listen::notify::<V>(self.live, self.relics, hook) {
-            match (listener, effect) {
-                // `CreatureCmd.Damage` on the evoke's targets still alive.
-                (Listener::Power { owner, .. }, HookEffect::DamageTargets(amount)) => {
-                    for &target in &targets {
-                        if !self
-                            .at(target)
-                            .is_some_and(|at| self.live.creatures[at].alive)
-                        {
-                            continue;
-                        }
-                        let hit = resolve::<V>(
-                            self.walk(),
-                            None,
-                            Effect::Attack {
-                                dealer: owner,
-                                target,
-                                damage: Amount::Number(amount),
-                                scaling: Scaling::Static,
-                            },
-                        );
-                        self.apply(hit);
-                    }
-                }
-                (listener, effect) => {
-                    unimplemented!("{listener:?} asking for {effect:?} as an orb is evoked")
-                }
-            }
-        }
+        self.evoke(false, dequeue);
     }
 
     /// `OstyCmd.Summon` for the player.

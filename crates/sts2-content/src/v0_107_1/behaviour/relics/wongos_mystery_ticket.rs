@@ -44,3 +44,8 @@ pub(super) fn event_hook(
 pub(super) fn display_amount(state: &State) -> Number {
     COMBATS - state.combats_finished
 }
+
+/// `IsUsedUp`, which is `GaveRelic`.
+pub(super) fn used_up(state: &State) -> bool {
+    state.gave_relic
+}

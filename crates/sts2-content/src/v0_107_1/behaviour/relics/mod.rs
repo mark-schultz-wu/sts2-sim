@@ -93,6 +93,7 @@ mod juzu_bracelet;
 mod kunai;
 mod kusarigama;
 mod lantern;
+mod lasting_candy;
 mod lava_rock;
 mod lead_paperweight;
 mod leafy_poultice;
@@ -116,6 +117,7 @@ mod nunchaku;
 mod nutritious_oyster;
 mod oddly_smooth_stone;
 mod old_coin;
+mod orange_dough;
 mod orichalcum;
 mod ornamental_fan;
 mod paels_blood;
@@ -191,6 +193,7 @@ mod vexing_puzzlebox;
 mod war_hammer;
 mod war_paint;
 mod whetstone;
+mod white_beast_statue;
 mod white_star;
 mod winged_boots;
 mod wongos_mystery_ticket;
@@ -424,6 +427,9 @@ pub enum State {
     SwordOfJade,
     RuinedHelmet(ruined_helmet::State),
     SymbioticVirus,
+    WhiteBeastStatue,
+    OrangeDough,
+    LastingCandy(lasting_candy::State),
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -667,6 +673,9 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::LastingCandy(state) => lasting_candy::event_hook(state, hook, asked),
+        State::OrangeDough => orange_dough::event_hook(hook, asked),
+        State::WhiteBeastStatue => white_beast_statue::event_hook(hook, asked),
         State::SymbioticVirus => symbiotic_virus::event_hook(hook, asked),
         State::RuinedHelmet(state) => ruined_helmet::event_hook(state, hook, asked),
         State::SwordOfJade => sword_of_jade::event_hook(hook, asked),
@@ -729,6 +738,7 @@ pub(crate) fn decide_hook(
         State::Fiddle => fiddle::decide_hook(hook),
         State::SturdyClamp => sturdy_clamp::decide_hook(hook),
         State::IceCream => ice_cream::decide_hook(hook),
+        State::WhiteBeastStatue => white_beast_statue::decide_hook(hook),
         State::LizardTail(state) => lizard_tail::decide_hook(state, hook),
         _ => match hook.model_hook() {
             Some(_) => unimplemented!("what {state:?} decides for {hook:?}"),
@@ -928,7 +938,10 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::Shovel
         | State::Girya(_)
         | State::SwordOfJade
-        | State::SymbioticVirus => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::SymbioticVirus
+        | State::WhiteBeastStatue
+        | State::OrangeDough
+        | State::LastingCandy(_) => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1107,6 +1120,9 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::LastingCandy => State::LastingCandy(lasting_candy::State::default()),
+            Relic::OrangeDough => State::OrangeDough,
+            Relic::WhiteBeastStatue => State::WhiteBeastStatue,
             Relic::SymbioticVirus => State::SymbioticVirus,
             Relic::RuinedHelmet => State::RuinedHelmet(ruined_helmet::State::default()),
             Relic::SwordOfJade => State::SwordOfJade,
@@ -1148,6 +1164,9 @@ impl sts2_core::RelicModel<V> for State {
 
         match (self, Table::data(relic).flags.get(RelicFlag::UsedUp)) {
             (State::LizardTail(state), _) => lizard_tail::used_up(state),
+            (State::BoneTea(state), _) => bone_tea::used_up(state),
+            (State::WingedBoots(state), _) => state.used_up(),
+            (State::WongosMysteryTicket(state), _) => wongos_mystery_ticket::used_up(state),
             (_, Field::Constant(used_up)) => used_up,
             (_, Field::Computed) => unimplemented!("whether {relic:?} is used up"),
         }
@@ -1174,6 +1193,7 @@ impl sts2_core::RelicModel<V> for State {
                 State::Kusarigama(state) => kusarigama::display_amount(state),
                 State::HappyFlower(state) => happy_flower::display_amount(state),
                 State::Kunai(state) => kunai::display_amount(state),
+                State::LastingCandy(state) => lasting_candy::display_amount(state),
                 State::Girya(state) => girya::display_amount(state),
                 State::TuningFork(state) => tuning_fork::display_amount(state),
                 State::LetterOpener(state) => letter_opener::display_amount(state),

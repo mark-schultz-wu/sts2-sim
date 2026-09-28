@@ -1452,6 +1452,14 @@ impl sts2_core::RelicTable for Relic {
         self.data().flags.get(RelicFlag::AllowedInShops) == Field::Constant(true)
     }
 
+    /// Whether a run can hold more than one.
+    fn stackable(self) -> bool {
+        match self.data().flags.get(RelicFlag::Stackable) {
+            Field::Constant(stackable) => stackable,
+            Field::Computed => unimplemented!("whether {self:?} stacks"),
+        }
+    }
+
     fn overrides(self) -> sts2_core::Overrides {
         OVERRIDES[self as usize]
     }
@@ -2262,7 +2270,7 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // WHISPERING_EARRING
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyMaxEnergy),
     // WHITE_BEAST_STATUE
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ShouldForcePotionReward),
     // WHITE_STAR
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyRewards),
     // WINGED_BOOTS

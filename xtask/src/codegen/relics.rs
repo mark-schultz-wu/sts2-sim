@@ -508,6 +508,15 @@ fn emit_relics(
         "        self.data().flags.get(RelicFlag::AllowedInShops) == Field::Constant(true)"
     )
     .unwrap();
+    writeln!(extras, "    }}\n").unwrap();
+
+    writeln!(extras, "    /// Whether a run can hold more than one.").unwrap();
+    writeln!(extras, "    fn stackable(self) -> bool {{").unwrap();
+    writeln!(
+        extras,
+        "        match self.data().flags.get(RelicFlag::Stackable) {{\n            Field::Constant(stackable) => stackable,\n            Field::Computed => unimplemented!(\"whether {{self:?}} stacks\"),\n        }}"
+    )
+    .unwrap();
     writeln!(extras, "    }}").unwrap();
 
     writeln!(out, "impl sts2_core::Table for Relic {{").unwrap();
