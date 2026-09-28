@@ -119,6 +119,7 @@ mod ripple_basin;
 mod runic_pyramid;
 mod sand_castle;
 mod seal_of_gold;
+mod self_forming_clay;
 mod sozu;
 mod sparkling_rouge;
 mod stone_humidifier;
@@ -313,6 +314,7 @@ pub enum State {
     FrozenEgg,
     MoltenEgg,
     ToxicEgg,
+    SelfFormingClay,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -529,6 +531,7 @@ pub(crate) fn event_hook(
         State::FrozenEgg => frozen_egg::event_hook(hook, asked),
         State::MoltenEgg => molten_egg::event_hook(hook, asked),
         State::ToxicEgg => toxic_egg::event_hook(hook, asked),
+        State::SelfFormingClay => self_forming_clay::event_hook(hook, asked),
     }
 }
 
@@ -685,7 +688,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::TinyMailbox
         | State::FrozenEgg
         | State::MoltenEgg
-        | State::ToxicEgg => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::ToxicEgg
+        | State::SelfFormingClay => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -832,6 +836,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::FrozenEgg => State::FrozenEgg,
             Relic::MoltenEgg => State::MoltenEgg,
             Relic::ToxicEgg => State::ToxicEgg,
+            Relic::SelfFormingClay => State::SelfFormingClay,
             relic => unimplemented!("what {relic:?} does in a run that carries it"),
         }
     }

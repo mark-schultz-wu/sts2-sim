@@ -1,0 +1,7 @@
+# `SelfFormingClay` puts three Self-Forming Clay on its owner after a hit
+# that takes hit points, which becomes three block as the next turn clears
+# the old.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"SELF_FORMING_CLAY"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}

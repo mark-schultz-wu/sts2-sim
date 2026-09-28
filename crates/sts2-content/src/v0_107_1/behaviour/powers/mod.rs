@@ -1889,6 +1889,17 @@ pub(crate) fn event_hook(
         (Power::AfterimagePower, _, EventHook::CardPlayed { id, .. }) => take_noted(state, id)
             .filter(|&amount| amount > 0)
             .map(HookEffect::GainBlock),
+        // `SelfFormingClayPower.AfterBlockCleared`: its stack as unpowered
+        // block once its owner's block clears, then gone.
+        (
+            Power::SelfFormingClayPower,
+            PowerAmount::Counted(amount),
+            EventHook::BlockCleared { creature, .. },
+        ) if creature == holder => Some(HookEffect::GainBlockAndRemove(amount)),
+        (Power::SelfFormingClayPower, PowerAmount::Endless, EventHook::BlockCleared { .. }) => {
+            unimplemented!("an endless Self-Forming Clay")
+        }
+        (Power::SelfFormingClayPower, _, EventHook::BlockCleared { .. }) => None,
         // `SubroutinePower.BeforeCardPlayed`: a Power its owner plays noted
         // with the stack as it begins. A fight here has one player.
         (Power::SubroutinePower, PowerAmount::Counted(amount), EventHook::CardPlaying { card, id, .. })
