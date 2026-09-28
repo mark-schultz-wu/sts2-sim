@@ -988,8 +988,11 @@ fn roll_monster_move<
         return intents(
             held,
             ascension,
-            || unimplemented!("a built state whose damage the fight decides"),
-            || unimplemented!("a built state whose hits the fight decides"),
+            || {
+                read.extend(powers.take().into_iter().flatten());
+                behaviour::monsters::computed_damage(monster, held.id, ascension, &read)
+            },
+            || behaviour::monsters::computed_repeats(monster, held.id, model),
         )
         .map(Some);
     }
