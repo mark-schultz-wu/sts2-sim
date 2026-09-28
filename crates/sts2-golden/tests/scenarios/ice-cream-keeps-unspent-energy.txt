@@ -1,0 +1,8 @@
+# `IceCream` keeps the energy a turn left unspent: two left from the first
+# turn open the second with five.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"ICE_CREAM"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":0,"target":1}

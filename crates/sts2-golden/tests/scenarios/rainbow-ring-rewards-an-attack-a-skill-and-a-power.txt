@@ -1,0 +1,18 @@
+# `RainbowRing` gives one Strength and one Dexterity once a turn, when
+# its owner has played an attack, a skill and a power in it. A second
+# round in the same turn gives nothing.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","relic":"RAINBOW_RING"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"FOOTWORK"}
+{"cmd":"play_card","index":7}
+{"cmd":"grant","card":"DEFLECT"}
+{"cmd":"play_card","index":7}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"grant","card":"DEFLECT"}
+{"cmd":"play_card","index":7}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"grant","card":"FOOTWORK"}
+{"cmd":"play_card","index":7}

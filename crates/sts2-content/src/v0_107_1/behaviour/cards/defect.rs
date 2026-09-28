@@ -1,10 +1,11 @@
 //! The Defect's cards the generator leaves to a hand port.
 
-use sts2_core::{Amount, Effect, Fight, Pile, PileAct, Played, Scaling};
+use sts2_core::{Amount, Effect, Fight, Pile, PileAct, Played, PowerAmount, Scaling};
 
 use super::super::super::generated::card_plays;
 use super::super::super::generated::cards::{CardVar, DefectCard, StatusCard};
 use super::super::super::generated::orbs::Orb;
+use super::super::super::generated::powers::Power;
 use super::V;
 
 /// Where a Defect card's play stops to ask something.
@@ -119,6 +120,18 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
             Played::Done
         }
         DefectCard::Compact => compact(fight),
+        // `ConsumingShadow`: a Dark orb for each of its `Repeat`, then its
+        // power on its owner.
+        DefectCard::ConsumingShadow => {
+            for _ in 0..fight.var(CardVar::Repeat) {
+                fight.channel(Orb::DarkOrb);
+            }
+            fight.apply_to_actor(
+                Power::ConsumingShadowPower,
+                PowerAmount::Counted(fight.var(CardVar::ConsumingShadowPower)),
+            );
+            Played::Done
+        }
         DefectCard::Ftl => ftl(fight),
         // `Reboot`: the whole hand into the draw pile, shuffled, then its
         // `Cards` drawn.

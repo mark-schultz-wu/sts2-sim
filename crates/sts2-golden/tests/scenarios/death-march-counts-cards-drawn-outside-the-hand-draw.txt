@@ -1,0 +1,9 @@
+# Death March deals four more for each card its owner drew this turn
+# outside the turn's own hand draw. Swift Potion draws three, so it deals
+# twenty.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","potion":"SWIFT_POTION"}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"grant","card":"DEATH_MARCH"}
+{"cmd":"play_card","index":8,"target":1}

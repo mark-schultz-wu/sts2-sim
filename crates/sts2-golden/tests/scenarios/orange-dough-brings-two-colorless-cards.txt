@@ -1,0 +1,6 @@
+# Orange Dough puts two distinct colorless cards into the hand as its
+# owner's first turn starts, and none on the next.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"ORANGE_DOUGH"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}

@@ -362,11 +362,17 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::orbs::channelled(orb)
     }
 
-    fn orb_turn_end<F: sts2_core::Fight<Self>>(orb: &sts2_core::Channelled<Self>, fight: &mut F) {
+    fn orb_turn_end<F: sts2_core::Fight<Self>>(
+        orb: &mut sts2_core::Channelled<Self>,
+        fight: &mut F,
+    ) {
         behaviour::orbs::turn_end(orb, fight);
     }
 
-    fn orb_turn_start<F: sts2_core::Fight<Self>>(orb: &sts2_core::Channelled<Self>, fight: &mut F) {
+    fn orb_turn_start<F: sts2_core::Fight<Self>>(
+        orb: &mut sts2_core::Channelled<Self>,
+        fight: &mut F,
+    ) {
         behaviour::orbs::turn_start(orb, fight);
     }
 
@@ -385,7 +391,10 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::orbs::evoke(orb, fight)
     }
 
-    fn orb_passive<F: sts2_core::Fight<Self>>(orb: &sts2_core::Channelled<Self>, fight: &mut F) {
+    fn orb_passive<F: sts2_core::Fight<Self>>(
+        orb: &mut sts2_core::Channelled<Self>,
+        fight: &mut F,
+    ) {
         behaviour::orbs::passive(orb, fight);
     }
 

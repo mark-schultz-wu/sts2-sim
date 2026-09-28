@@ -28,22 +28,14 @@ impl RestKinds<V0_107_1> for RestSiteOption {
     const MEND: RestSiteOption = RestSiteOption::Mend;
     const SMITH: RestSiteOption = RestSiteOption::Smith;
 
-    /// `HEAL` and `SMITH`, and the three things that change that.
+    /// `HEAL` and `SMITH`, and what `TryModifyRestSiteOptions` adds.
     ///
-    /// `MEND` is the second player's, and a run here has one player. Girya,
-    /// Meat Cleaver and the Byrdonis Egg implement `TryModifyRestSiteOptions`
-    /// in this build, the belt ahead of the deck. Girya is not ported, so
-    /// carrying it stops the run, rather than offering a list the game does
-    /// not. Each Byrdonis Egg adds `HATCH`.
-    fn offered(relics: &[Relic], deck: &[CardIdent<V0_107_1>]) -> Vec<RestSiteOption> {
-        if relics.contains(&Relic::Girya) {
-            unimplemented!("Girya changes what a rest site offers");
-        }
+    /// `MEND` is the second player's, and a run here has one player. The
+    /// belt answers the hook ahead of the deck, where each Byrdonis Egg adds
+    /// `HATCH`.
+    fn offered(from_belt: &[RestSiteOption], deck: &[CardIdent<V0_107_1>]) -> Vec<RestSiteOption> {
         let mut offered = vec![RestSiteOption::Heal, RestSiteOption::Smith];
-        // `MeatCleaver` adds `COOK`.
-        if relics.contains(&Relic::MeatCleaver) {
-            offered.push(RestSiteOption::Cook);
-        }
+        offered.extend_from_slice(from_belt);
         offered.extend(
             deck.iter()
                 .filter(|card| card.card == Cards::Quest(QuestCard::ByrdonisEgg))
@@ -53,11 +45,18 @@ impl RestKinds<V0_107_1> for RestSiteOption {
     }
 
     /// `HatchRestSiteOption.OnSelect`: `RelicCmd.Obtain<Byrdpip>`.
+    /// `DigRestSiteOption.OnSelect`: `RelicCmd.Obtain` of the next relic off
+    /// the front of the bag.
+    /// `LiftRestSiteOption.OnSelect`: Girya's `TimesLifted` one higher.
     /// `CookRestSiteOption.OnSelect`: two cards removed from the deck, asked
     /// for with `RequireManualConfirmation`, then nine more maximum health.
     fn selected(self) -> Vec<sts2_core::HookEffect<V0_107_1>> {
         match self {
             RestSiteOption::Hatch => vec![sts2_core::HookEffect::ObtainRelic(Relic::Byrdpip)],
+            RestSiteOption::Dig => vec![sts2_core::HookEffect::ObtainNextRelic(
+                sts2_core::RelicPull::Rolled,
+            )],
+            RestSiteOption::Lift => vec![sts2_core::HookEffect::Lift(Relic::Girya)],
             RestSiteOption::Cook => vec![
                 sts2_core::HookEffect::SelectFromDeckConfirmed {
                     act: sts2_core::DeckAct::Remove,

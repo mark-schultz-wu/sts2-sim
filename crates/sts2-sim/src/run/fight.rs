@@ -255,10 +255,22 @@ impl<V: Rules> State<V> {
             room if room == <_ as sts2_core::RoomKinds>::BOSS => crate::reward::combat::Room::Boss,
             _ => crate::reward::combat::Room::Monster,
         };
-        self.card_reward_unheard();
+        let added = self.card_reward_added();
+        let forced = self.potion_forced(<_ as sts2_core::EncounterTable>::room(encounter));
         let (rng, odds) = self.rewarding();
-        let (mut offered, rarity) =
-            crate::reward::combat::won::<V, _>(rng, odds, ascension, character, gold, act, room);
+        let (mut offered, rarity) = crate::reward::combat::won::<V, _>(
+            rng,
+            odds,
+            ascension,
+            character,
+            gold,
+            act,
+            room,
+            crate::reward::combat::Modifiers {
+                forced,
+                added: &added,
+            },
+        );
         if let Some(rarity) = rarity {
             // `PullNextRelicFromFront`, which the run's own bookkeeping covers.
             let relic = self.pull_relic(rarity);

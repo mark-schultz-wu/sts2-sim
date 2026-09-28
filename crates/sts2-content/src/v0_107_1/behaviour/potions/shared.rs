@@ -435,24 +435,12 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
             }
             for card in made {
                 for at in fight.add_generated_cards(card, Pile::Hand, 1) {
-                    free_this_turn(fight, at);
+                    super::super::free_this_turn(fight, at);
                 }
             }
             Played::Done
         }
         potion => unimplemented!("what {potion:?} does when it is drunk"),
-    }
-}
-
-/// `CardModel.SetToFreeThisTurn`: energy and stars at nothing this turn or
-/// until played.
-fn free_this_turn<F: Fight<V>>(fight: &mut F, at: sts2_core::CardAt<V>) {
-    for pool in [CostPool::Energy, CostPool::Star] {
-        fight.modify_card(
-            at,
-            Change::SetCost(pool, num_traits::zero()),
-            Lasting::ThisTurnOrUntilPlayed,
-        );
     }
 }
 
@@ -482,7 +470,7 @@ pub(super) fn resume<F: Fight<V>>(
         (Resume::FreeCardChoice, sts2_core::Taken::Chosen(chosen)) => {
             if let Some(card) = chosen {
                 for at in fight.add_generated_cards(card, Pile::Hand, 1) {
-                    free_this_turn(fight, at);
+                    super::super::free_this_turn(fight, at);
                 }
             }
             Played::Done
@@ -490,7 +478,7 @@ pub(super) fn resume<F: Fight<V>>(
         // `SetToFreeThisTurn`, then `CardPileCmd.Add` into hand.
         (Resume::LiquidMemories, sts2_core::Taken::Selected(picked)) => {
             for &at in picked.as_slice() {
-                free_this_turn(fight, at);
+                super::super::free_this_turn(fight, at);
             }
             fight.act_on(PileAct::IntoHand, picked.as_slice());
             Played::Done

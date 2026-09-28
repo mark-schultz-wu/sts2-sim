@@ -54,7 +54,7 @@ pub use content::{
     Stream, StreamKinds, StunResume, Table, Taken, TargetKinds, Temporary, TurnHistory,
     TurnPhaseKinds, UnplayableReasonKinds, Version, Writing,
 };
-pub use event::{EventBehavior, EventView};
+pub use event::{CarriedRelic, EventBehavior, EventView};
 pub use hook_response::HookResponse;
 pub use ident::{CardAt, CardId, CardIdent, Coord, Enchanted, ModelId, OutOfRange, Pile};
 pub use seed::Seed;

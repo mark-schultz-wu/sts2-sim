@@ -23,6 +23,39 @@ use sts2_core::{Fight, Played, Table as _, Taken};
 use super::V0_107_1 as V;
 use super::generated::cards::{CardType, Cards, combat_cards};
 
+/// `CardModel.SetToFreeThisTurn`: energy and stars at nothing this turn or
+/// until played.
+pub(crate) fn free_this_turn<F: Fight<V>>(fight: &mut F, at: sts2_core::CardAt<V>) {
+    for pool in [sts2_core::CostPool::Energy, sts2_core::CostPool::Star] {
+        fight.modify_card(
+            at,
+            sts2_core::Change::SetCost(pool, num_traits::zero()),
+            sts2_core::Lasting::ThisTurnOrUntilPlayed,
+        );
+    }
+}
+
+/// `GetDistinctForCombat` of one card of the character's pool that `keeps`
+/// holds, off `CombatCardGeneration`, then `SetToFreeThisTurn` and
+/// `CardPileCmd.Add` into the hand. Nothing when the pool holds none.
+pub(crate) fn free_card_into_hand<F: Fight<V>>(fight: &mut F, keeps: impl Fn(Cards) -> bool) {
+    let mut pool: Vec<Cards> = <V as sts2_core::Rules>::combat_cards(fight.character())
+        .iter()
+        .copied()
+        .filter(|&card| keeps(card))
+        .collect();
+    if pool.is_empty() {
+        return;
+    }
+    let stream = <<V as sts2_core::ContentVersion>::RunRngType as sts2_core::RunStreamKinds>::COMBAT_CARD_GENERATION;
+    let [made] = fight
+        .generate_cards::<1>(&mut pool, stream)
+        .unwrap_or_else(|_| unreachable!("a pool with a card in it makes one"));
+    if let Some(at) = fight.add_card(made, sts2_core::Pile::Hand) {
+        free_this_turn(fight, at);
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Resume {
     Card(cards::Resume),

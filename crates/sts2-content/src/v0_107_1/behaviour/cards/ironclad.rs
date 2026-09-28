@@ -59,6 +59,14 @@ pub(super) fn resume_play<F: Fight<V>>(
 pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
     match card {
         IroncladCard::Thrash => thrash(fight),
+        // `InfernalBlade`: an Attack of the character's pool, free this turn,
+        // into the hand.
+        IroncladCard::InfernalBlade => {
+            super::super::free_card_into_hand(fight, |card| {
+                V::card_kind(card) == Some(CardKind::Attack)
+            });
+            Played::Done
+        }
         // `Anger`: its damage to the target, then a clone of itself into the
         // discard pile.
         IroncladCard::Anger => {

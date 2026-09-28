@@ -16,7 +16,7 @@ pub struct State {
 
 impl State {
     /// `IsUsedUp`, once every step is spent.
-    fn used_up(self) -> bool {
+    pub(super) fn used_up(self) -> bool {
         self.times_used >= ROOMS
     }
 }

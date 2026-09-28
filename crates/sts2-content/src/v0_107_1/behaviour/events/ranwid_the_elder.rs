@@ -40,7 +40,11 @@ impl EventBehavior<V> for RanwidTheElder {
         let Some(potion) = next_item(rng, &held) else {
             unimplemented!("Ranwid with no potion to ask for");
         };
-        let relics: Vec<Relic> = run.relics().filter(|&relic| tradable(relic)).collect();
+        let relics: Vec<Relic> = run
+            .relics()
+            .filter(|&held| tradable(held))
+            .map(|held| held.relic)
+            .collect();
         let Some(relic) = next_item(rng, &relics) else {
             unimplemented!("Ranwid with no relic to ask for");
         };

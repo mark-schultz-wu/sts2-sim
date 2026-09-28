@@ -1417,6 +1417,7 @@ pub(crate) fn modify_hook(
                 power: landing,
                 target,
                 amount,
+                ..
             },
         ) if target == holder && debuff_at(landing, amount) => Modify::Replaced(0),
         (Power::ArtifactPower, _, ModifyHook::PowerAmountReceived { .. }) => Modify::Nothing,
@@ -1745,7 +1746,7 @@ pub(crate) fn decide_hook(
         // `AfterPreventingBlockClear` only flashes.
         (
             Power::BurrowedPower | Power::BarricadePower | Power::BlurPower,
-            DecisionHook::ShouldClearBlock { creature },
+            DecisionHook::ShouldClearBlock { creature, .. },
         ) => HookResponse::Decision(creature != held.holder),
         // `InfestedPower.ShouldStopCombatFromEnding` and `StockPower`'s, for as
         // long as it is on a creature in the fight.
@@ -1871,6 +1872,46 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Debilitate")
         }
         (Power::DebilitatePower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `ConsumingShadowPower.AfterSideTurnEnd`: `OrbCmd.EvokeLast` once for
+        // each of its stack as its owner's turn ends, while an orb is left.
+        (
+            Power::ConsumingShadowPower,
+            PowerAmount::Counted(amount),
+            EventHook::SideTurnEnd { side },
+        ) if side == owner => Some(HookEffect::EvokeLast(amount)),
+        (Power::ConsumingShadowPower, PowerAmount::Endless, EventHook::SideTurnEnd { side })
+            if side == owner =>
+        {
+            unimplemented!("an endless Consuming Shadow")
+        }
+        (Power::ConsumingShadowPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `SicEmPower.AfterDamageGiven`: `OstyCmd.Summon` of its stack for the
+        // player whose Osty hit its owner, where that player applied it.
+        (
+            Power::SicEmPower,
+            PowerAmount::Counted(amount),
+            EventHook::DamageGiven {
+                dealer: Some(dealer),
+                pet_of: Some(pet_of),
+                target,
+                ..
+            },
+        ) if target == holder
+            && applier == Some(pet_of)
+            && fight.monster(dealer) == Some(Monster::Osty) =>
+        {
+            Some(HookEffect::Summon(amount))
+        }
+        (Power::SicEmPower, PowerAmount::Endless, EventHook::DamageGiven { .. }) => {
+            unimplemented!("an endless Sic 'Em")
+        }
+        (Power::SicEmPower, _, EventHook::DamageGiven { .. }) => None,
+        // `SicEmPower.AfterSideTurnEnd`: `PowerCmd.Remove(this)` as its
+        // owner's turn ends.
+        (Power::SicEmPower, _, EventHook::SideTurnEnd { side }) if side == owner => {
+            Some(HookEffect::Remove)
+        }
+        (Power::SicEmPower, _, EventHook::SideTurnEnd { .. }) => None,
         // `ConquerorPower.AfterSideTurnEnd`: one off its stack as its owner's
         // side's turn ends.
         (Power::ConquerorPower, PowerAmount::Counted(_), EventHook::SideTurnEnd { side })
@@ -2658,6 +2699,9 @@ pub(crate) fn event_hook(
             Some(HookEffect::Decrement)
         }
         (Power::SandpitPower, _, EventHook::SideTurnStartLate { .. }) => None,
+        // `SandpitPower.AfterCreatureAddedToCombat` moves creatures on the
+        // screen, and nothing else.
+        (Power::SandpitPower, _, EventHook::CreatureAdded { .. }) => None,
         // `SandpitPower.AfterRemoved`: while its owner and its target both
         // live, `CreatureCmd.Kill` on the target, forced. A fight here has one
         // player, who is the target, and the player's death ends the fight

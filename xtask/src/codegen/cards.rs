@@ -64,6 +64,11 @@ pub enum Error {
     },
     #[error("no card prints a CalculationBase, which a calculated number reads")]
     NoCalculationBase,
+    #[error("{var} is a PowerVar of {} on one card and of {} on another", powers.0, powers.1)]
+    PowerVarPowers {
+        var: String,
+        powers: (String, String),
+    },
     #[error("{pool}: the dump has no {kind} rows to order it")]
     NoOrder { kind: &'static str, pool: String },
 }
@@ -182,6 +187,7 @@ fn previewed(class: &str) -> Option<&'static str> {
         "OstyDamageVar" | "CalculatedDamageVar+FromOsty" => "Some(CardNumberModifier::OstyDamage)",
         "DamageVar+Unpowered" => "Some(CardNumberModifier::UnpoweredDamage)",
         "BlockVar" | "CalculatedBlockVar" => "Some(CardNumberModifier::Block)",
+        class if class.starts_with("PowerVar+") => "Some(CardNumberModifier::PowerGiven)",
         "CalculationBaseVar"
         | "CalculationExtraVar"
         | "CalculatedVar"
@@ -195,7 +201,6 @@ fn previewed(class: &str) -> Option<&'static str> {
         | "HpLossVar"
         | "IntVar"
         | "MaxHpVar"
-        | "PowerVar"
         | "RepeatVar"
         | "StarsVar"
         | "SummonVar" => "None",
@@ -753,7 +758,27 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     if !keys.contains(&"CalculationBase") {
         return Err(Error::NoCalculationBase);
     }
+    // The power each key's `PowerVar` applies. One key names one power
+    // wherever it is filed.
+    let mut powers: BTreeMap<&str, &str> = BTreeMap::new();
+    for card in &cards {
+        for (name, _, _, class) in &card.vars {
+            let Some(power) = class.strip_prefix("PowerVar+") else {
+                continue;
+            };
+            if let Some(&was) = powers.get(name.as_str())
+                && was != power
+            {
+                return Err(Error::PowerVarPowers {
+                    var: name.clone(),
+                    powers: (was.to_owned(), power.to_owned()),
+                });
+            }
+            powers.insert(name, power);
+        }
+    }
     writeln!(out, "impl sts2_core::CardVars for CardVar {{").unwrap();
+    writeln!(out, "    type Power = super::powers::Power;\n").unwrap();
     writeln!(
         out,
         "    const CALCULATION_BASE: CardVar = CardVar::CalculationBase;\n"
@@ -771,7 +796,22 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
         writeln!(out, "            CardVar::{} => \"{key}\",", sanitize(key)).unwrap();
     }
     writeln!(out, "        }}").unwrap();
-    writeln!(out, "    }}").unwrap();
+    writeln!(out, "    }}\n").unwrap();
+    writeln!(
+        out,
+        "    fn power(self) -> Option<super::powers::Power> {{\n        Some(match self {{"
+    )
+    .unwrap();
+    for (key, power) in &powers {
+        writeln!(
+            out,
+            "            CardVar::{} => super::powers::Power::{},",
+            sanitize(key),
+            camel(power)
+        )
+        .unwrap();
+    }
+    writeln!(out, "            _ => return None,\n        }})\n    }}").unwrap();
     writeln!(out, "}}\n").unwrap();
 
     // A bitset rather than a slice. The game keeps keywords in a

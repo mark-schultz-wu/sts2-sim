@@ -1,0 +1,16 @@
+# A Dark orb adds its passive to its evoke as each turn ends, six a time,
+# and its evoke hits the enemy with the least health. Null channels one
+# behind Cracked Core's Lightning, and three Zaps on the third turn push
+# it out at eighteen.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"grant","card":"NULL"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"ZAP"}
+{"cmd":"play_card","index":5}
+{"cmd":"grant","card":"ZAP"}
+{"cmd":"play_card","index":5}
+{"cmd":"grant","card":"ZAP"}
+{"cmd":"play_card","index":5}

@@ -239,6 +239,12 @@ public static class CardDump
     /// A <c>DamageVar</c> whose <c>Props</c> carry <c>Unpowered</c> is dumped
     /// with <c>+Unpowered</c> on its class. Its preview hands those props to
     /// the damage hooks, and a hook that reads a powered attack skips it.
+    ///
+    /// A <c>PowerVar</c> is dumped with the power it applies on its class, as
+    /// <c>PowerVar+STRANGLE_POWER</c>. Its preview asks
+    /// <c>Hook.ModifyPowerAmountGiven</c> about that power, and the key it is
+    /// filed under need not name it: Mad Science's Choking is
+    /// <c>ChokingDamage</c>.
     /// </remarks>
     private static string VarClass(DynamicVar var)
     {
@@ -252,6 +258,11 @@ public static class CardDump
         if (var is DamageVar damage && damage.Props.HasFlag(ValueProp.Unpowered))
         {
             name += "+Unpowered";
+        }
+        Type type = var.GetType();
+        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(PowerVar<>))
+        {
+            name += "+" + ModelDb.GetEntry(type.GetGenericArguments()[0]);
         }
         return name;
     }

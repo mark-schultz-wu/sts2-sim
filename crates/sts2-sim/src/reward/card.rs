@@ -55,6 +55,7 @@ pub(crate) fn keeps<V: Rules>(filter: sts2_core::PoolFilter, card: V::Card) -> b
     use sts2_core::CardRarityKinds as _;
 
     match filter {
+        sts2_core::PoolFilter::Every => true,
         sts2_core::PoolFilter::OfKind(kind) => V::card_kind(card) == Some(kind),
         sts2_core::PoolFilter::NotBasicOrAncient => {
             let rarity = card.rarity();
@@ -259,6 +260,55 @@ pub(crate) fn encounter<V: Rules, R: GameRng>(
         offered.push(roll_for_upgrade::<V, R>(rng, card, act));
     }
     offered
+}
+
+/// `CreateForReward` of one card of `pool` from `CardCreationSource.Other`,
+/// as a relic adds an option to a reward.
+///
+/// The reward's odds roll with `RollWithBaseOdds`, which leaves the run's
+/// offset where it was. Then the next rarity `pool` holds, one card at it,
+/// and the upgrade roll.
+///
+/// # Panics
+///
+/// An empty pool.
+pub(crate) fn added<V: Rules, R: GameRng>(
+    rng: &mut R,
+    pool: &[V::Card],
+    bands: RarityOdds,
+    act: usize,
+) -> CardIdent<V> {
+    let (rare, uncommon) = bands.bands();
+    let roll = rng.next_double() as f32;
+    let wanted = if roll < rare {
+        RewardRarity::Rare
+    } else if roll < uncommon {
+        RewardRarity::Uncommon
+    } else {
+        RewardRarity::Common
+    };
+    let at = |rarity| -> Vec<V::Card> {
+        pool.iter()
+            .copied()
+            .filter(|&card| V::reward_rarity(card) == rarity)
+            .collect()
+    };
+    let (common, uncommon, rare) = (
+        at(RewardRarity::Common),
+        at(RewardRarity::Uncommon),
+        at(RewardRarity::Rare),
+    );
+    let drafted = Drafted {
+        common: &common,
+        uncommon: &uncommon,
+        rare: &rare,
+    };
+    let choices = available::<V>(drafted, &[], wanted);
+    let count = num_traits::cast(choices.len()).expect("a rarity fits the RNG integer");
+    let bound = Bound::try_new(count).expect("an available rarity has a card");
+    let at: usize =
+        num_traits::cast(rng.next_int(bound)).expect("a bounded draw is a valid card index");
+    roll_for_upgrade::<V, R>(rng, choices[at], act)
 }
 
 /// One rarity, and the offset it leaves behind.

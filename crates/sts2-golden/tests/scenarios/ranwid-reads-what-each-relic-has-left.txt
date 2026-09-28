@@ -1,0 +1,11 @@
+# Winged Boots, Bone Tea and Wongo's Mystery Ticket each work out whether
+# they are used up from what they saved, and Ranwid reads it of every
+# relic before drawing the one he asks for. None of the three is used up.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"WINGED_BOOTS"}
+{"cmd":"grant","relic":"BONE_TEA"}
+{"cmd":"grant","relic":"WONGOS_MYSTERY_TICKET"}
+{"cmd":"grant","relic":"ANCHOR"}
+{"cmd":"grant","potion":"FIRE_POTION"}
+{"cmd":"event","event":"RANWID_THE_ELDER"}
+{"cmd":"choose_option","index":0}

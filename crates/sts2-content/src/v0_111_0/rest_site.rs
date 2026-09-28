@@ -7,7 +7,6 @@
 use sts2_core::{CardIdent, RestKinds};
 
 use super::V0_111_0;
-use super::generated::relics::Relic;
 use super::generated::restsite::RestSiteOption;
 
 impl RestKinds<V0_111_0> for RestSiteOption {
@@ -26,7 +25,10 @@ impl RestKinds<V0_111_0> for RestSiteOption {
     /// No rule drives this build yet, so nothing calls this. What
     /// `TryModifyRestSiteOptions` implements here is unread, and a run that
     /// reaches a rest site on this build stops rather than guessing.
-    fn offered(_relics: &[Relic], _deck: &[CardIdent<V0_111_0>]) -> Vec<RestSiteOption> {
+    fn offered(
+        _from_belt: &[RestSiteOption],
+        _deck: &[CardIdent<V0_111_0>],
+    ) -> Vec<RestSiteOption> {
         unimplemented!("what a rest site offers on v0.111.0")
     }
 

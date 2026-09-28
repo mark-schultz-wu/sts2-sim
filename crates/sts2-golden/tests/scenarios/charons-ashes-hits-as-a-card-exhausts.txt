@@ -1,0 +1,7 @@
+# `CharonsAshes` deals three to every enemy as a card exhausts, which a
+# Shiv does as it is played.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","relic":"CHARONS_ASHES"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"play_card","index":7,"target":1}

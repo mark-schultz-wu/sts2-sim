@@ -57,3 +57,8 @@ pub(super) fn event_hook(
 pub(super) fn display_amount(state: &State) -> Number {
     state.combats_left.max(0)
 }
+
+/// `IsUsedUp`, once no fight is left.
+pub(super) fn used_up(state: &State) -> bool {
+    state.combats_left <= 0
+}

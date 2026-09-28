@@ -151,7 +151,7 @@ fn hit<F: Fight<V>>(fight: &mut F, target: sts2_core::CombatId, hits: usize) {
 /// character's pool, free this turn.
 fn mad_science<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
     use super::super::super::generated::powers::Power;
-    use sts2_core::{PowerAmount, RunStreamKinds as _};
+    use sts2_core::PowerAmount;
 
     let counted = |fight: &F, key| PowerAmount::Counted(fight.var(key));
     match card {
@@ -196,28 +196,7 @@ fn mad_science<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
                     fight.modify_energy(fight.var(CardVar::EnergizedEnergy))
                 }
                 EventCard::MadScienceWisdom => fight.draw(fight.var(CardVar::WisdomCards)),
-                _ => {
-                    // `GetDistinctForCombat` of one card off
-                    // `CombatCardGeneration`, `SetToFreeThisTurn`, then
-                    // `CardPileCmd.Add` into the hand.
-                    let mut pool =
-                        <V as sts2_core::Rules>::combat_cards(fight.character()).to_vec();
-                    let stream =
-                        <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_GENERATION;
-                    let [made] =
-                        fight
-                            .generate_cards::<1>(&mut pool, stream)
-                            .unwrap_or_else(|_| {
-                                unimplemented!("a character pool with no card to make")
-                            });
-                    if let Some(at) = fight.add_card(made, Pile::Hand) {
-                        fight.modify_card(
-                            at,
-                            Change::SetCost(CostPool::Energy, 0),
-                            Lasting::ThisTurnOrUntilPlayed,
-                        );
-                    }
-                }
+                _ => super::super::free_card_into_hand(fight, |_| true),
             }
         }
         EventCard::MadScienceExpertise => {

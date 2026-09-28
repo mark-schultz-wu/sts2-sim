@@ -274,8 +274,20 @@ fn enemies_act<V: Rules>(
         relics,
         <V::CombatSide as SideKinds>::PLAYER,
     );
-    // `ResetEnergy`, to `MaxEnergy`, which runs `Hook.ModifyMaxEnergy`.
-    next.energy = super::board::max_energy::<V>(listen::Walk { live: next, relics }, max_energy);
+    // `ResetEnergy`, to `MaxEnergy`, which runs `Hook.ModifyMaxEnergy`. A
+    // player `Hook.ShouldPlayerResetEnergy` keeps from it adds the maximum
+    // to what they have instead.
+    let player = next.player().id;
+    let kept = listen::any_decides::<V>(
+        listen::Walk { live: next, relics },
+        sts2_core::DecisionHook::ShouldPlayerResetEnergy {
+            player,
+            turn: next.turn,
+        },
+        false,
+    );
+    let max = super::board::max_energy::<V>(listen::Walk { live: next, relics }, max_energy);
+    next.energy = if kept { next.energy + max } else { max };
     // An evoke that ends the fight ends `SetupPlayerTurn` with it, as a
     // relic's damage before the hand does below.
     if let Some(ended) = energy_reset::<V>(next, streams, relics, ascension) {
@@ -442,17 +454,33 @@ pub(super) fn orb_triggers<V: Rules>(
     ) {
         unimplemented!("a listener changing how often an orb triggers");
     }
-    for orb in &held {
+    for (place, orb) in held.into_iter().enumerate() {
+        let mut orb = orb;
         let mut board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
         match at {
-            OrbMoment::TurnEnd => V::orb_turn_end(orb, &mut board),
-            OrbMoment::TurnStart => V::orb_turn_start(orb, &mut board),
+            OrbMoment::TurnEnd => V::orb_turn_end(&mut orb, &mut board),
+            OrbMoment::TurnStart => V::orb_turn_start(&mut orb, &mut board),
         }
-        if let Some(ended) = board.ended {
+        let ended = board.ended;
+        keep_orb(live, place, orb);
+        if let Some(ended) = ended {
             return Some(ended);
         }
     }
     None
+}
+
+/// The numbers an orb's trigger moved, kept on the orb at `place` while that
+/// orb still stands there.
+fn keep_orb<V: Rules>(live: &mut Live<V>, place: usize, orb: sts2_core::Channelled<V>) {
+    if let Some(held) = live
+        .orbs
+        .as_mut()
+        .and_then(|orbs| orbs.queue.get_mut(place))
+        && held.orb == orb.orb
+    {
+        *held = orb;
+    }
 }
 
 /// `PlayerCombatState.EndOfTurnCleanup`: what a card carried only for the turn.
@@ -657,6 +685,17 @@ fn before_turn_end<V: Rules>(
                 board.land(player, power, amount, Some(player));
                 ended = ended.or(board.ended);
             }
+            // `CreatureCmd.Damage` over `HittableEnemies`, from the player who
+            // carries the relic.
+            (Listener::Relic { .. }, effect @ sts2_core::HookEffect::DamageOpponents(_)) => {
+                if ended.is_some() {
+                    continue;
+                }
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                super::hook::apply(&mut board, [effect]);
+                ended = board.ended;
+            }
             // Written on the fight's cards.
             (_, effect @ sts2_core::HookEffect::ClearAffliction(_)) => {
                 let mut board =
@@ -755,27 +794,13 @@ pub(super) fn carry_setup<V: Rules>(
                             );
                         }
                         sts2_core::HookEffect::GenerateDistinctColorless { count } => {
-                            let count: usize = num_traits::cast(count).unwrap_or_else(|| {
-                                unimplemented!("making {count:?} colorless cards")
-                            });
-                            let mut cards = V::combat_colorless_cards().to_vec();
-                            sts2_core::rng::GameRng::unstable_shuffle(rngs.generation, &mut cards);
-                            let mut board = Board::for_card(
+                            generate_distinct_colorless::<V>(
                                 live,
                                 rngs.reborrow(),
                                 relics,
                                 ascension,
-                                None,
-                                None,
+                                count,
                             );
-                            for card in cards.into_iter().take(count) {
-                                sts2_core::Fight::add_generated_cards(
-                                    &mut board,
-                                    sts2_core::CardIdent::new(card),
-                                    Pile::Hand,
-                                    1,
-                                );
-                            }
                         }
                         sts2_core::HookEffect::ExhaustFromDrawTop { passing_innate } => {
                             let passed = passing_innate
@@ -1096,7 +1121,7 @@ pub(super) fn carry_setup<V: Rules>(
                                 unimplemented!("{count:?} orb passives at once")
                             });
                             for _ in 0..count {
-                                let Some(first) = live
+                                let Some(mut first) = live
                                     .orbs
                                     .as_ref()
                                     .and_then(|orbs| orbs.queue.first().cloned())
@@ -1114,8 +1139,9 @@ pub(super) fn carry_setup<V: Rules>(
                                     None,
                                     None,
                                 );
-                                V::orb_passive(&first, &mut board);
+                                V::orb_passive(&mut first, &mut board);
                                 ended = ended.or(board.ended);
+                                keep_orb(live, 0, first);
                             }
                         }
                         // `CardPileCmd.Draw` for the player, which a shuffle's
@@ -1149,6 +1175,19 @@ pub(super) fn carry_setup<V: Rules>(
                             );
                             ended = ended.or(board.ended);
                         }
+                        sts2_core::HookEffect::GenerateFromPool {
+                            filter,
+                            count,
+                            writes,
+                        } => generate_from_pool::<V>(
+                            live,
+                            rngs.reborrow(),
+                            relics,
+                            ascension,
+                            filter,
+                            count,
+                            writes,
+                        ),
                         effect => unimplemented!(
                             "a listener asking for {effect:?} as the player's turn starts"
                         ),
@@ -1237,6 +1276,30 @@ pub(super) fn carry_setup<V: Rules>(
 /// drawn by `CardFactory.GetDistinctForCombat` off `CombatCardGeneration`
 /// from the pool afresh, in the pool's own order. An empty pool gives
 /// nothing. Each takes `keyword` where one is named, and goes into hand.
+/// `count` distinct colorless cards from one `GetDistinctForCombat` off
+/// `CombatCardGeneration`, into the hand.
+fn generate_distinct_colorless<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    ascension: V::AscensionLevel,
+    count: V::Number,
+) {
+    let count: usize = num_traits::cast(count)
+        .unwrap_or_else(|| unimplemented!("making {count:?} colorless cards"));
+    let mut cards = V::combat_colorless_cards().to_vec();
+    sts2_core::rng::GameRng::unstable_shuffle(rngs.generation, &mut cards);
+    let mut board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+    for card in cards.into_iter().take(count) {
+        sts2_core::Fight::add_generated_cards(
+            &mut board,
+            sts2_core::CardIdent::new(card),
+            Pile::Hand,
+            1,
+        );
+    }
+}
+
 fn generate_from_pool<V: Rules>(
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
@@ -1678,6 +1741,9 @@ pub(super) fn side_turn_started<V: Rules>(
                 count,
                 writes,
             ),
+            sts2_core::HookEffect::GenerateDistinctColorless { count } => {
+                generate_distinct_colorless::<V>(live, rngs.reborrow(), relics, ascension, count)
+            }
             effect => unimplemented!("a listener asking for {effect:?} as a side turn starts"),
         }
     }
@@ -1833,18 +1899,52 @@ fn clear_block<V: Rules>(
         .filter(|c| c.side == side)
         .map(|creature| creature.id)
         .collect();
+    let player = live.player().id;
     for &creature in &clearing {
-        // `Hook.ShouldClearBlock`.
-        let kept = listen::any_decides::<V>(
+        // `Hook.ShouldClearBlock`, and the model that kept the block.
+        let preventer = listen::first_deciding::<V>(
             listen::Walk { live, relics },
-            sts2_core::DecisionHook::ShouldClearBlock { creature },
+            sts2_core::DecisionHook::ShouldClearBlock { creature, player },
             false,
         );
-        if !kept && let Some(held) = live.creatures.iter_mut().find(|c| c.id == creature) {
-            held.block = num_traits::zero();
+        match preventer {
+            None => {
+                if let Some(held) = live.creatures.iter_mut().find(|c| c.id == creature) {
+                    held.block = num_traits::zero();
+                }
+            }
+            // `Hook.AfterPreventingBlockClear`, asked of that model alone. A
+            // power's only flashes.
+            Some(sts2_core::ModelId::Relic(relic)) => {
+                let block = live
+                    .creatures
+                    .iter()
+                    .find(|c| c.id == creature)
+                    .map_or_else(num_traits::zero, |held| held.block);
+                let hook = sts2_core::EventHook::BlockClearPrevented { block };
+                for effect in listen::ask_relic(relics, relic, hook) {
+                    match effect {
+                        sts2_core::HookEffect::LoseSomeBlock(amount) => {
+                            let ascension = live.ascension;
+                            let mut board = Board::for_card(
+                                live,
+                                rngs.reborrow(),
+                                relics,
+                                ascension,
+                                None,
+                                None,
+                            );
+                            sts2_core::Fight::lose_block(&mut board, creature, amount);
+                        }
+                        effect => {
+                            unimplemented!("{relic:?} asking for {effect:?} as it keeps block")
+                        }
+                    }
+                }
+            }
+            Some(_) => {}
         }
     }
-    let player = live.player().id;
     for creature in clearing {
         let hook = sts2_core::EventHook::BlockCleared {
             creature,
@@ -1934,6 +2034,7 @@ fn tick_powers<V: Rules>(
             // `PowerCmd.Decrement(this)`.
             sts2_core::HookEffect::Decrement => applying.push(TurnEndAsk::Decrement(owner, power)),
             sts2_core::HookEffect::Escape => applying.push(TurnEndAsk::Escape(owner)),
+            sts2_core::HookEffect::EvokeLast(count) => applying.push(TurnEndAsk::EvokeLast(count)),
             other => unimplemented!("a power asking for {other:?} as a turn ends"),
         }
     }
@@ -2032,6 +2133,8 @@ enum TurnEndAsk<V: Rules> {
     Decrement(CombatId, V::Power),
     /// `CreatureCmd.Escape`.
     Escape(CombatId),
+    /// `OrbCmd.EvokeLast`, this many times.
+    EvokeLast(V::Number),
 }
 
 /// What the powers that just ticked asked for, and whatever that ended.
@@ -2065,6 +2168,11 @@ fn applied<V: Rules>(
                 board.modify_amount(at, power, -num_traits::one::<V::Number>())
             }
             TurnEndAsk::Escape(at) => board.escape_creature(at),
+            TurnEndAsk::EvokeLast(count) => {
+                for _ in 0..num_traits::cast::<_, usize>(count).unwrap_or(0) {
+                    board.evoke_last();
+                }
+            }
         }
         if let Some(ended) = board.ended {
             return Some(ended);

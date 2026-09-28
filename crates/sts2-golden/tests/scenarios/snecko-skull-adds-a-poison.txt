@@ -1,0 +1,8 @@
+# `SneckoSkull` adds one to every Poison its owner applies, so Deadly
+# Poison lands six.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","relic":"SNECKO_SKULL"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"DEADLY_POISON"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"end_turn"}
