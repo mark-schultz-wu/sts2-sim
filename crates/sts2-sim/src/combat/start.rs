@@ -35,6 +35,9 @@ pub(crate) struct Entering<'a, V: Rules> {
     /// The monsters' health, where an event rolled it as it opened. Empty
     /// for a fight that rolls its own.
     pub(crate) rolled: &'a [V::Health],
+    /// The monsters an encounter whose roster is configured opens on, and
+    /// nothing for any other.
+    pub(crate) roster: &'a [V::Monster],
 }
 
 /// A fight as it opens, with the streams it drew from.
@@ -120,7 +123,7 @@ pub(crate) fn enter<V: Rules>(
         next_move: None,
         owner: None,
     });
-    let monsters = encounter::opening::<V>(raw_seed, entering.floor, encounter)?;
+    let monsters = encounter::opening::<V>(raw_seed, entering.floor, encounter, entering.roster)?;
     let Live {
         creatures,
         powers,
@@ -394,7 +397,7 @@ pub(crate) fn roll_layout<V: Rules>(
     encounter: V::Encounter,
     streams: &mut Streams<V>,
 ) -> Result<smallvec::SmallVec<[V::Health; 2]>, Error> {
-    let monsters = encounter::opening::<V>(raw_seed, floor, encounter)?;
+    let monsters = encounter::opening::<V>(raw_seed, floor, encounter, &[])?;
     Ok(monster::roll_layout::<V>(
         &monsters,
         ascension,

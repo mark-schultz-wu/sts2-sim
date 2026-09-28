@@ -103,6 +103,14 @@ pub trait EventBehavior<V: ContentVersion> {
         unimplemented!("an event resumed after its pickup")
     }
 
+    /// `EventModel.Resume(room)`, once the fight the event entered is over
+    /// and its rewards' proceed goes back to the event. `escaped` is whether
+    /// an enemy escaped that fight. What it does to the run comes back, in
+    /// the order the game does it.
+    fn resume_from_fight(&self, _state: &mut Self::State, escaped: bool) -> crate::HookEffects<V> {
+        unimplemented!("an event resumed after its fight, escaped {escaped}")
+    }
+
     /// The rewards
     /// [`HookEffect::OfferEventRewards`](crate::HookEffect::OfferEventRewards)
     /// offers, in the order the game makes them.

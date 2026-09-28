@@ -4038,7 +4038,7 @@ pub enum HookEffect<V: ContentVersion> {
     /// `kind` names it.
     UpgradeRandomDeckCards {
         count: usize,
-        stream: V::RunRngType,
+        stream: Stream<V>,
         kind: Option<CardKind>,
     },
     /// Take a room type out of what an unknown map point can roll.
@@ -4097,6 +4097,9 @@ pub enum HookEffect<V: ContentVersion> {
         to: Writing<V>,
         change: Change<V>,
     },
+    /// `CreatureCmd.Escape` on the listener's owner: its powers go with no
+    /// hook, and it leaves the fight without dying.
+    Escape,
     /// `CardPileCmd.AddToCombatAndPreview(card)` into the discard pile of
     /// each player the attack hit: `per` for each of its hits on that player
     /// that took health.
@@ -4250,12 +4253,18 @@ pub enum HookEffect<V: ContentVersion> {
     /// `PlayerCmd.MimicRestSiteHeal`: a rest site's heal, given by an event.
     MimicRestSiteHeal,
     /// `EventModel.EnterCombatWithoutExitingEvent`, which fights inside the
-    /// event's room and does not come back to it. It is the whole of the
-    /// option that starts it. `reward` is a card its extra rewards offer as
-    /// a `SpecialCardReward`.
+    /// event's room. It is the whole of the option that starts it. `reward`
+    /// is a card its extra rewards offer as a `SpecialCardReward`.
+    ///
+    /// `roster` is the monsters an encounter whose roster is configured opens
+    /// on, and nothing for any other. `resume` is `shouldResumeAfterCombat`:
+    /// the rewards' proceed goes back to the event, which
+    /// [`crate::EventBehavior::resume_from_fight`] carries on.
     FightInEvent {
         encounter: V::Encounter,
         reward: Option<V::Card>,
+        roster: &'static [V::Monster],
+        resume: bool,
     },
     /// `CardPileCmd.Add(card, PileType.Deck)`, a new card into the run's deck.
     AddToDeck(V::Card),
@@ -5893,6 +5902,14 @@ pub trait Rules: Hooks {
     /// [`crate::EventBehavior::resume`] for the event entered.
     fn resume_event(_state: &mut Self::EventState) -> crate::HookEffects<Self> {
         unimplemented!("an event resumed after its pickup")
+    }
+
+    /// [`crate::EventBehavior::resume_from_fight`] for the event entered.
+    fn resume_event_from_fight(
+        _state: &mut Self::EventState,
+        _escaped: bool,
+    ) -> crate::HookEffects<Self> {
+        unimplemented!("an event resumed after its fight")
     }
 
     /// [`crate::EventBehavior::rewards`] for the event entered.

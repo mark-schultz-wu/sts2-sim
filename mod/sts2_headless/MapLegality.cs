@@ -36,6 +36,12 @@ public static class MapLegality
 {
     public static IReadOnlyList<MapPoint> TravelableFrom(RunState state)
     {
+        // The map stays shut until the event the fight belongs to is resumed.
+        if (ResumesEvent(state))
+        {
+            return new List<MapPoint>();
+        }
+
         ActMap map = state.Map;
         IReadOnlyList<MapCoord> visited = state.VisitedMapCoords;
 
@@ -90,8 +96,24 @@ public static class MapLegality
     public static bool CanProceed(RunState state)
     {
         AbstractRoom? room = state.CurrentRoom;
-        return room != null && (room.RoomType == RoomType.Boss || room.IsVictoryRoom);
+        return room != null && (room.RoomType == RoomType.Boss || room.IsVictoryRoom)
+            || ResumesEvent(state);
     }
+
+    /// <summary>
+    /// Whether the run stands in a fight an event entered, which goes back to
+    /// that event once it is over.
+    /// </summary>
+    /// <remarks>
+    /// <c>RunManager.ProceedFromTerminalRewardsScreen</c>'s own test, which the
+    /// rewards screen's proceed button calls for every terminal set. After any
+    /// other fight that call only opens the map. After this one it is the
+    /// <c>ResumePreviousRoom</c> that hands the event its <c>Resume</c>, so it is
+    /// a move the client makes.
+    /// </remarks>
+    public static bool ResumesEvent(RunState state) =>
+        state.CurrentRoomCount > 1
+        && state.CurrentRoom is CombatRoom { ShouldResumeParentEventAfterCombat: true };
 
     private static IReadOnlyList<MapPoint> One(MapPoint p) => new[] { p };
 

@@ -80,6 +80,19 @@ pub(crate) struct State<V: Rules> {
     /// removal price climbs with. It counts over the run, not the room.
     removals_used: usize,
     phase: Phase<V>,
+    /// The event a fight was entered from, which the rewards' proceed goes
+    /// back to: the room under the fight in `RunState`'s room stack. Only a
+    /// fight an event entered with `shouldResumeAfterCombat` has one.
+    pub(super) resuming: Option<Box<Resuming<V>>>,
+}
+
+/// An event waiting under the fight it entered.
+#[derive(Debug, Clone)]
+pub(super) struct Resuming<V: Rules> {
+    /// The event's own phase, as it stood when the fight began.
+    pub(super) event: Phase<V>,
+    /// Whether an enemy escaped the fight, once it is over.
+    pub(super) escaped: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -337,6 +350,7 @@ impl<V: Rules> Clone for State<V> {
             visited_events: Arc::clone(&self.visited_events),
             dealt_relics: Arc::clone(&self.dealt_relics),
             phase: self.phase.clone(),
+            resuming: self.resuming.clone(),
             ..*self
         }
     }
@@ -363,6 +377,7 @@ impl<V: Rules> Clone for State<V> {
             dealt_relics,
             removals_used,
             phase,
+            resuming,
         } = self;
         shared.clone_from(&source.shared);
         map.clone_from(&source.map);
@@ -379,6 +394,7 @@ impl<V: Rules> Clone for State<V> {
         *odds = source.odds;
         dealt_relics.clone_from(&source.dealt_relics);
         *removals_used = source.removals_used;
+        resuming.clone_from(&source.resuming);
         match (phase, &source.phase) {
             (Phase::Combat(live), Phase::Combat(from)) => live.clone_from(from),
             (phase, from) => *phase = from.clone(),
@@ -808,6 +824,7 @@ impl<V: Rules> State<V> {
             dealt_relics: Arc::new(Vec::new()),
             removals_used: 0,
             streams,
+            resuming: None,
             phase: Phase::Neow {
                 options: neow_options.into_iter().collect(),
                 chosen: None,
@@ -1299,14 +1316,26 @@ impl<V: Rules> State<V> {
     }
 
     /// `RunManager.EnterNextAct`, which the finished act's boss room offers.
-    ///
-    /// `SetActInternal` moves the index on and forgets the points the last act
-    /// visited. It puts the question mark odds back where they started, and
-    /// generates the new act's map. The run then stands on the map itself
-    /// rather than in a room, which is what an act with nothing visited is.
-    ///
     /// A run that has beaten the last act's boss wins.
+    ///
+    /// `SetActInternal` moves the index on, forgets the last act's points,
+    /// resets the question mark odds and generates the new map.
+    ///
+    /// After a fight an event entered to come back to, the event resumes:
+    /// `ProceedFromTerminalRewardsScreen` is `ResumePreviousRoom` there.
     pub(crate) fn proceed(&mut self) -> Result<Decided, Error> {
+        if let Some(resuming) = self.resuming.take() {
+            let Resuming { event, escaped } = *resuming;
+            self.phase = event;
+            let Phase::Event { state, .. } = &mut self.phase else {
+                unreachable!("only an event resumes after its fight")
+            };
+            let effects = V::resume_event_from_fight(state, escaped);
+            return Ok(match self.carry_out(effects) {
+                None => Decided::Resolved,
+                Some(asked) => self.park(asked),
+            });
+        }
         let next = self.act + 1;
         let Some(&(act, _)) = self.shared.opening.acts.get(next) else {
             self.phase = Phase::Won;
@@ -3120,7 +3149,7 @@ impl<V: Rules> State<V> {
         at: Location,
     ) -> Result<CreatedFight<V>, Error> {
         let floor = self.floor + num_traits::one();
-        self.build_fight(encounter, queue, at, floor, &[])
+        self.build_fight(encounter, queue, at, floor, &[], &[])
     }
 
     /// [`State::create_fight`] on a floor the caller names.
@@ -3131,6 +3160,7 @@ impl<V: Rules> State<V> {
         at: Location,
         floor: V::Count,
         rolled: &[V::Health],
+        roster: &[V::Monster],
     ) -> Result<CreatedFight<V>, Error> {
         let standing = self.standing();
         let (raw_seed, character, ascension) =
@@ -3144,6 +3174,7 @@ impl<V: Rules> State<V> {
             deck: &self.player.deck,
             strayed: self.strays(at),
             rolled,
+            roster,
         };
         let crate::combat::Entered {
             live,
@@ -3174,12 +3205,14 @@ impl<V: Rules> State<V> {
     /// `EnterRoomWithoutExitingCurrentRoom` adds a room to the point the run
     /// stands on rather than a point, so the floor stays where it is. The
     /// room stack is two deep, so `MarkRoomVisited` counts nothing. The fight
-    /// is won to the rewards a monster room gives, and the run travels on
-    /// from the event's point.
+    /// is won to the rewards a monster room gives. The run then travels on
+    /// from the event's point, or with `resume` goes back to the event.
     fn fight_in_event(
         &mut self,
         encounter: V::Encounter,
         reward: Option<V::Card>,
+        roster: &[V::Monster],
+        resume: bool,
     ) -> Result<Decided, Error> {
         let CreatedFight {
             live,
@@ -3198,6 +3231,7 @@ impl<V: Rules> State<V> {
                 Location::NoLocation,
                 self.floor,
                 &rolled,
+                roster,
             )?
         };
         let mut live = live;
@@ -3206,7 +3240,13 @@ impl<V: Rules> State<V> {
             live.add_extra_card(CardIdent::new(card));
         }
         self.drew(streams);
-        self.phase = Phase::Combat(live);
+        let event = std::mem::replace(&mut self.phase, Phase::Combat(live));
+        if resume {
+            self.resuming = Some(Box::new(Resuming {
+                event,
+                escaped: false,
+            }));
+        }
         self.arrived(arriving);
         Ok(self.settle(ended, 0))
     }
@@ -3444,9 +3484,16 @@ impl<V: Rules> State<V> {
                 finished: false,
                 layout,
             };
-            if let [sts2_core::HookEffect::FightInEvent { encounter, reward }] = effects.as_slice()
+            if let [
+                sts2_core::HookEffect::FightInEvent {
+                    encounter,
+                    reward,
+                    roster,
+                    resume,
+                },
+            ] = effects.as_slice()
             {
-                return self.fight_in_event(*encounter, *reward);
+                return self.fight_in_event(*encounter, *reward, roster, *resume);
             }
             return Ok(match self.carry_out(effects) {
                 None => Decided::Resolved,
@@ -4043,6 +4090,10 @@ impl<V: Rules> State<V> {
     /// Beside the report rather than inside it, because deciding whether a
     /// move is legal reads this list and nothing else around it.
     pub(crate) fn travelable(&self) -> Vec<Reachable<V>> {
+        // The map stays shut until the event under the fight is resumed.
+        if self.resuming.is_some() {
+            return Vec::new();
+        }
         self.reachable().into_vec()
     }
 
@@ -4171,6 +4222,10 @@ impl<V: Rules> State<V> {
         let Phase::Rewards { combat, .. } = &self.phase else {
             return false;
         };
+        // `ProceedFromTerminalRewardsScreen` goes back to the event.
+        if self.resuming.is_some() {
+            return true;
+        }
         combat.encounter.is_some_and(|encounter| {
             <V::Encounter as sts2_core::EncounterTable>::room(encounter)
                 == <V::RoomType as sts2_core::RoomKinds>::BOSS
@@ -4469,7 +4524,7 @@ impl<V: Rules> State<V> {
     fn upgrade_random_deck_cards(
         &mut self,
         count: usize,
-        stream: V::RunRngType,
+        stream: sts2_core::Stream<V>,
         kind: Option<sts2_core::CardKind>,
     ) {
         use sts2_core::CardTable as _;
@@ -4483,8 +4538,7 @@ impl<V: Rules> State<V> {
             .filter(|(_, card)| kind.is_none_or(|kind| V::card_kind(card.card) == Some(kind)))
             .map(|(at, _)| at)
             .collect();
-        self.streams
-            .run(stream)
+        stream_of(&mut self.phase, &mut self.streams, stream)
             .stable_shuffle_by_key(&mut upgradable, |&at| {
                 (deck[at].ident.card.order(), deck[at].ident.upgrade)
             });

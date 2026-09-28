@@ -10,11 +10,13 @@ use super::Error;
 /// from the encounter's private stream.
 ///
 /// A fixed roster opens each monster on the state its own table entry
-/// carries, or on the one the encounter writes onto it.
+/// carries, or on the one the encounter writes onto it. A configured one
+/// opens on `roster`, which whoever built the encounter set on it.
 pub(crate) fn opening<V: Rules>(
     raw_seed: u64,
     floor: V::Count,
     encounter: V::Encounter,
+    roster: &[V::Monster],
 ) -> Result<Vec<Spawned<V>>, Error> {
     match encounter.roster() {
         EncounterRoster::Fixed(monsters) => Ok(monsters
@@ -35,9 +37,10 @@ pub(crate) fn opening<V: Rules>(
             let mut rng = MegaRng::new(seed);
             V::random_encounter_monsters(encounter, &mut rng).map_err(Error::from)
         }
-        EncounterRoster::Configured => {
+        EncounterRoster::Configured if roster.is_empty() => {
             unimplemented!("an encounter whose caller supplies its roster")
         }
+        EncounterRoster::Configured => Ok(roster.iter().copied().map(Spawned::new).collect()),
     }
 }
 
@@ -49,7 +52,7 @@ mod tests {
     #[test]
     fn weak_slimes_are_generated_from_the_encounter_private_stream() {
         assert_eq!(
-            opening::<V0_107_1>(123, 2, Encounter::SlimesWeak),
+            opening::<V0_107_1>(123, 2, Encounter::SlimesWeak, &[]),
             Ok(vec![
                 Spawned::new(Monster::TwigSlimeS),
                 Spawned::new(Monster::TwigSlimeM),
@@ -61,7 +64,7 @@ mod tests {
     #[test]
     fn a_fixed_roster_does_not_need_a_ported_generator() {
         assert_eq!(
-            opening::<V0_107_1>(123, 2, Encounter::MockMonsterEncounter),
+            opening::<V0_107_1>(123, 2, Encounter::MockMonsterEncounter, &[]),
             Ok(vec![Spawned::new(Monster::BigDummy)])
         );
     }
@@ -75,7 +78,7 @@ mod tests {
     fn the_decimillipede_segments_open_on_three_different_moves() {
         use sts2_content::v0_107_1::monsters::MoveId;
 
-        let roster = opening::<V0_107_1>(123, 2, Encounter::DecimillipedeElite)
+        let roster = opening::<V0_107_1>(123, 2, Encounter::DecimillipedeElite, &[])
             .expect("the segments are generated");
 
         assert_eq!(
@@ -109,13 +112,13 @@ mod unported_tests {
     #[test]
     #[should_panic(expected = "an encounter whose caller supplies its roster")]
     fn a_configured_roster_stops_the_run() {
-        let _ = opening::<V0_107_1>(123, 2, Encounter::BattlewornDummyEventEncounter);
+        let _ = opening::<V0_107_1>(123, 2, Encounter::BattlewornDummyEventEncounter, &[]);
     }
 
     /// So is a roster this build rolls that the port has not reached.
     #[test]
     #[should_panic(expected = "the roster")]
     fn an_unported_random_roster_stops_the_run() {
-        let _ = opening::<V0_107_1>(123, 2, Encounter::CorpseSlugsNormal);
+        let _ = opening::<V0_107_1>(123, 2, Encounter::CorpseSlugsNormal, &[]);
     }
 }

@@ -21,7 +21,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
             HookEffect::DamageOwner(DAMAGE),
             HookEffect::UpgradeRandomDeckCards {
                 count: CARDS,
-                stream: RunRngType::Niche,
+                stream: sts2_core::Stream::Run(RunRngType::Niche),
                 kind: None,
             },
         ]);

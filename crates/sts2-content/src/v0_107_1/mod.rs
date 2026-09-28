@@ -865,6 +865,13 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::events::resume(state)
     }
 
+    fn resume_event_from_fight(
+        state: &mut Self::EventState,
+        escaped: bool,
+    ) -> sts2_core::HookEffects<Self> {
+        behaviour::events::resume_from_fight(state, escaped)
+    }
+
     fn event_rewards(state: &Self::EventState) -> Vec<sts2_core::CustomReward<Self>> {
         behaviour::events::rewards(state)
     }

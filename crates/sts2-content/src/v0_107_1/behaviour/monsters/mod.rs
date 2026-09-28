@@ -336,6 +336,8 @@ pub(crate) fn perform<F: Fight<V>>(
         | Monster::Aeonglass
         | Monster::Queen
         | Monster::TorchHeadAmalgam => glory::perform(monster, move_id, model, fight),
+        // `NOTHING_MOVE`, whose lambda is `Task.CompletedTask`.
+        Monster::BattleFriendV1 | Monster::BattleFriendV2 | Monster::BattleFriendV3 => {}
         _ => monster_moves::perform(monster, move_id, fight),
     }
     Played::Done

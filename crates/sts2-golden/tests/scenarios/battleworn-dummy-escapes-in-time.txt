@@ -1,0 +1,10 @@
+# Battleworn Dummy's time limit runs out after three turns and the dummy
+# escapes. Only the card reward is offered, and the event pays nothing.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"BATTLEWORN_DUMMY"}
+{"cmd":"choose_option","index":2}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"answer","skip":true}
+{"cmd":"proceed"}

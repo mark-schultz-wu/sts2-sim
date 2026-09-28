@@ -92,6 +92,8 @@ impl EventBehavior<V> for DenseVegetation {
                 smallvec::smallvec![HookEffect::FightInEvent {
                     encounter: Encounter::DenseVegetationEventEncounter,
                     reward: None,
+                    roster: &[],
+                    resume: false,
                 }]
             }
         }

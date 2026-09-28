@@ -1933,6 +1933,7 @@ fn tick_powers<V: Rules>(
             sts2_core::HookEffect::Heal(amount) => applying.push(TurnEndAsk::Heal(owner, amount)),
             // `PowerCmd.Decrement(this)`.
             sts2_core::HookEffect::Decrement => applying.push(TurnEndAsk::Decrement(owner, power)),
+            sts2_core::HookEffect::Escape => applying.push(TurnEndAsk::Escape(owner)),
             other => unimplemented!("a power asking for {other:?} as a turn ends"),
         }
     }
@@ -2029,6 +2030,8 @@ enum TurnEndAsk<V: Rules> {
     Heal(CombatId, V::Number),
     /// `PowerCmd.Decrement`.
     Decrement(CombatId, V::Power),
+    /// `CreatureCmd.Escape`.
+    Escape(CombatId),
 }
 
 /// What the powers that just ticked asked for, and whatever that ended.
@@ -2061,6 +2064,7 @@ fn applied<V: Rules>(
             TurnEndAsk::Decrement(at, power) => {
                 board.modify_amount(at, power, -num_traits::one::<V::Number>())
             }
+            TurnEndAsk::Escape(at) => board.escape_creature(at),
         }
         if let Some(ended) = board.ended {
             return Some(ended);
