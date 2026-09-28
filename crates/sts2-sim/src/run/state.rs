@@ -511,6 +511,12 @@ pub(super) enum Phase<V: Rules> {
     Lost {
         combat: Combat<V>,
     },
+    /// The last act's boss beaten, which `RunManager.WinRun` ends the run on.
+    ///
+    /// The game enters The Architect's room first. It is dialogue, and its
+    /// proceed wins, so the run goes straight to the win. `WinRun` then kills
+    /// every player, which leaves nothing to decide.
+    Won,
     /// A merchant, and how far through its shelves the run has bought.
     ///
     /// The entries are stocked once, when the run walks in. A slot the run
@@ -646,6 +652,7 @@ impl<V: Rules> Phase<V> {
             | Phase::Combat(_)
             | Phase::Rewards { .. }
             | Phase::Lost { .. }
+            | Phase::Won
             | Phase::Event { .. } => false,
         }
     }
@@ -829,6 +836,7 @@ impl<V: Rules> State<V> {
             | Phase::Neow { .. }
             | Phase::Rewards { .. }
             | Phase::Lost { .. }
+            | Phase::Won
             | Phase::Event { .. }
             | Phase::Treasure { .. }
             | Phase::RestSite { .. }
@@ -1297,17 +1305,13 @@ impl<V: Rules> State<V> {
     /// generates the new act's map. The run then stands on the map itself
     /// rather than in a room, which is what an act with nothing visited is.
     ///
-    /// # Panics
-    ///
-    /// A run that has beaten the last act's boss, which wins it.
+    /// A run that has beaten the last act's boss wins.
     pub(crate) fn proceed(&mut self) -> Result<Decided, Error> {
         let next = self.act + 1;
-        let (act, _) = *self
-            .shared
-            .opening
-            .acts
-            .get(next)
-            .unwrap_or_else(|| unimplemented!("a run that has no act left to enter"));
+        let Some(&(act, _)) = self.shared.opening.acts.get(next) else {
+            self.phase = Phase::Won;
+            return Ok(Decided::Resolved);
+        };
         self.map = Arc::new(Self::act_map(
             self.shared.raw_seed,
             act,
@@ -3828,6 +3832,12 @@ impl<V: Rules> State<V> {
                     alive: player.alive,
                 }
             }
+            // `GuaranteeKillAllPlayers`, which `WinRun` ends on.
+            Phase::Won => Standing {
+                hp: num_traits::zero(),
+                max_hp: self.player.max_hp,
+                alive: false,
+            },
             Phase::Map
             | Phase::Neow { .. }
             | Phase::Rewards { .. }
@@ -4124,9 +4134,8 @@ impl<V: Rules> State<V> {
                 // with one player has its answer in `alive`.
                 run_over: !standing.alive,
                 // `CurrentRoom.IsVictoryRoom`, asked only once the run is
-                // over. No room a run can reach is one yet, because the act
-                // that ends a run in victory is not ported.
-                victory: (!standing.alive).then_some(false),
+                // over, which The Architect's room is.
+                victory: (!standing.alive).then_some(matches!(self.phase, Phase::Won)),
                 gold: self.player.gold,
                 relics: self.carried().collect(),
                 potions: self.belt(),
@@ -4199,6 +4208,7 @@ impl<V: Rules> State<V> {
                 Some(combat)
             }
             Phase::Map
+            | Phase::Won
             | Phase::Neow { .. }
             | Phase::Event { .. }
             | Phase::Treasure { .. }
@@ -4321,7 +4331,7 @@ impl<V: Rules> State<V> {
                 })
             }
             // An act opens on its map, which is no room and asks nothing.
-            Phase::Map | Phase::Lost { .. } | Phase::Treasure { .. } => None,
+            Phase::Map | Phase::Lost { .. } | Phase::Won | Phase::Treasure { .. } => None,
         }
     }
 
@@ -4446,7 +4456,11 @@ impl<V: Rules> State<V> {
                     .collect();
                 Some(Room::Shop { entries })
             }
-            Phase::Map | Phase::Combat(_) | Phase::Lost { .. } | Phase::Rewards { .. } => None,
+            Phase::Map
+            | Phase::Combat(_)
+            | Phase::Lost { .. }
+            | Phase::Won
+            | Phase::Rewards { .. } => None,
         }
     }
 }
@@ -4727,6 +4741,21 @@ mod tests {
             [Some(Undrinkable::Dead)],
             "a dead run drinks nothing"
         );
+    }
+
+    /// Past the last act's boss the run is won: `WinRun` kills every player,
+    /// and the room it ends in is the victory room.
+    #[test]
+    fn a_run_past_its_last_act_is_over_and_won() {
+        let mut run = opened();
+        run.act = run.shared.opening.acts.len() - 1;
+        run.proceed()
+            .expect("the last act's boss room is left by proceeding");
+
+        let seen = run.report().observation;
+        assert!(seen.run_over, "so the run is over");
+        assert!(!seen.alive, "and every player is dead");
+        assert_eq!(seen.victory, Some(true), "and it was a victory");
     }
 
     /// `CardSelectCmd.FromDeckForUpgrade` offers the upgradable cards alone,
