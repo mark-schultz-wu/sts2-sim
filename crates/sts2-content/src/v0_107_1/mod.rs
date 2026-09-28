@@ -658,7 +658,10 @@ impl sts2_core::Rules for V0_107_1 {
         let State::Move(held) = data.states[usize::from(at)] else {
             unimplemented!("{monster:?} sent to {move_id:?}, which is not a move")
         };
-        Ok(intents(held, ascension as u8).expect("a move state publishes its own intents"))
+        Ok(intents(held, ascension as u8, || {
+            unimplemented!("{monster:?} sent to {move_id:?}, whose damage the fight decides")
+        })
+        .expect("a move state publishes its own intents"))
     }
 
     fn opening_move_machine(
@@ -943,7 +946,10 @@ fn roll_monster_move<
         let State::Move(held) = state(machine.at)? else {
             return Err(sts2_core::ContentError::InvalidMonsterState { index: machine.at });
         };
-        return intents(held, ascension).map(Some);
+        return intents(held, ascension, || {
+            unimplemented!("a built state whose damage the fight decides")
+        })
+        .map(Some);
     }
 
     if !pinned(state(machine.at)?, machine) {
@@ -971,7 +977,11 @@ fn roll_monster_move<
     let State::Move(held) = state(machine.at)? else {
         return Err(sts2_core::ContentError::InvalidMonsterState { index: machine.at });
     };
-    intents(held, ascension).map(Some)
+    intents(held, ascension, || {
+        read.extend(powers.take().into_iter().flatten());
+        behaviour::monsters::computed_damage(monster, held.id, ascension, &read)
+    })
+    .map(Some)
 }
 
 /// Whether the machine cannot leave the state it stands on.
@@ -1036,9 +1046,13 @@ fn allowed(branch: &generated::monsters::Branch, machine: &sts2_core::MoveMachin
 }
 
 /// The intents a move state publishes, at this ascension.
+///
+/// `computed` works out a damage the table leaves to the fight, which the
+/// monster's own port answers.
 fn intents(
     held: generated::monsters::Move,
     ascension: u8,
+    computed: impl FnOnce() -> i32,
 ) -> Result<sts2_core::NextMove<V0_107_1>, sts2_core::ContentError> {
     use crate::Field;
     use generated::monsters::IntentKind;
@@ -1046,16 +1060,17 @@ fn intents(
     let attack = match held.intents.attack {
         None => None,
         Some(attack) => {
-            let Field::Constant(damage) = attack.damage else {
-                unimplemented!("a move whose damage the fight decides");
+            let damage = match attack.damage {
+                // The table holds each column's own width, and a fight counts
+                // in the build's own types. Widening here is where they meet.
+                Field::Constant(damage) => i32::from(damage.at(ascension)),
+                Field::Computed => computed(),
             };
             let Field::Constant(repeats) = attack.repeats else {
                 unimplemented!("a move whose repeats the fight decides");
             };
             Some(sts2_core::Attack {
-                // The table holds each column's own width, and a fight counts
-                // in the build's own types. Widening here is where they meet.
-                damage: i32::from(damage.at(ascension)),
+                damage,
                 repeats: u32::from(repeats.at(ascension)),
             })
         }

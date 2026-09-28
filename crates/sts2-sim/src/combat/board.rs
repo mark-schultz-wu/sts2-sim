@@ -552,6 +552,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 creature: id,
                 power,
                 delta,
+                applier,
             },
         );
         let mut cards: SmallVec<[HookEffect<V>; 4]> = SmallVec::new();
@@ -1205,6 +1206,13 @@ impl<'a, V: Rules> Board<'a, V> {
                         summoned.next_move = Some(opening.into());
                     }
                 }
+                // `PowerCmd.Apply` from nobody, which the Possess powers
+                // hand back with.
+                sts2_core::HookEffect::ApplyPower {
+                    target,
+                    power,
+                    amount,
+                } => self.land(target, power, amount, None),
                 other => unimplemented!("a dead power asking for {other:?}"),
             }
         }
