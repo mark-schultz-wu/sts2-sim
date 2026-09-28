@@ -149,6 +149,20 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
             let souls = Number::try_from(souls).expect("an exhaust pile fits the game's numbers");
             printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * souls
         }
+        // `Rattle`: a base, and more for each of one and the attacks Osty made
+        // this turn. A fight here has one player, whose Osty every Osty is.
+        (Cards::Necrobinder(NecrobinderCard::Rattle), CardVar::CalculatedHits) => {
+            let attacks = owner
+                .history
+                .attacked_this_turn()
+                .filter(|&monster| {
+                    monster == Some(super::super::generated::monsters::Monster::Osty)
+                })
+                .count();
+            let hits =
+                Number::try_from(1 + attacks).expect("a turn's attacks fit the game's numbers");
+            printed.face(CardVar::CalculationBase) + printed.face(CardVar::CalculationExtra) * hits
+        }
         // `Sacrifice`: a base, and more for each of twice the maximum health a
         // living Osty has.
         (Cards::Necrobinder(NecrobinderCard::Sacrifice), CardVar::CalculatedBlock) => {

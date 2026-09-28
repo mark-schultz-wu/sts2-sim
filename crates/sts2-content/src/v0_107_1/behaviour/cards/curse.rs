@@ -16,6 +16,7 @@ pub(super) fn on_turn_end<F: Fight<V>>(card: CurseCard, fight: &mut F) {
         CurseCard::Shame => shame(fight),
         CurseCard::Doubt => doubt(fight),
         CurseCard::Regret => regret(fight),
+        CurseCard::BadLuck => bad_luck(fight),
         CurseCard::Debt => debt(fight),
         CurseCard::Decay => decay(fight),
         card => card_plays::curse::on_turn_end(card, fight),
@@ -46,6 +47,13 @@ fn doubt<F: Fight<V>>(fight: &mut F) {
 fn regret<F: Fight<V>>(fight: &mut F) {
     fight.damage_unblockable(fight.actor(), fight.self_note());
     fight.set_self_note(0);
+    fight.discard_this();
+}
+
+/// `BadLuck`: its `HpLoss` off its holder, unblockable, and then it goes to
+/// the discard pile.
+fn bad_luck<F: Fight<V>>(fight: &mut F) {
+    fight.damage_unblockable(fight.actor(), fight.var(CardVar::HpLoss));
     fight.discard_this();
 }
 

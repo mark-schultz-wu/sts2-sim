@@ -1,0 +1,3 @@
+# `OldCoin` gives three hundred gold as it is picked up.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"OLD_COIN"}
