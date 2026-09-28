@@ -2067,14 +2067,18 @@ fn enemy_turn<V: Rules>(
         let Some(creature) = live.creatures.iter().find(|c| c.id == id) else {
             continue;
         };
-        let next_move = creature
-            .next_move
-            .unwrap_or_else(|| unimplemented!("an enemy with no move to make"));
+        let next_move = creature.next_move;
         let held = live
             .machines
             .iter_mut()
             .find(|held| held.creature == id)
             .unwrap_or_else(|| unimplemented!("an enemy with no move graph"));
+        // `new MoveState()`, which a monster that joined on its own side's
+        // turn still advertises. It does nothing, and the graph still stands
+        // on the state it opened on.
+        let Some(next_move) = next_move else {
+            continue;
+        };
         let monster = held.monster;
         let mut state = held.state;
         // `OnMovePerformed`, which is what lets the graph leave this move. It
