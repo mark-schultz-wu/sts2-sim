@@ -3847,6 +3847,11 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CreatureCmd.LoseMaxHp` on the owner. The health falls to the new
     /// maximum when it stood above it.
     LoseMaxHp(V::Number),
+    /// `CreatureCmd.LoseMaxHp` on a creature the listener names.
+    LoseMaxHpOf {
+        target: crate::CombatId,
+        amount: V::Number,
+    },
     /// `CreatureCmd.Damage` on the owner, unpowered and from nobody.
     DamageOwner(V::Number),
     /// `CreatureCmd.Damage` on the listener's owner in a fight, unpowered.
@@ -4173,6 +4178,12 @@ pub enum HookEffect<V: ContentVersion> {
     },
     /// `CreatureCmd.GainBlock` on the listener's owner.
     GainBlock(V::Number),
+    /// `CreatureCmd.GainBlock(target, amount, Unpowered)` on a creature the
+    /// listener names.
+    GainBlockOf {
+        target: crate::CombatId,
+        amount: V::Number,
+    },
     /// `CardCmd.Upgrade` over every card in the hand.
     UpgradeHand,
     /// `CardCmd.Upgrade` on a clone of the card the hook names, which takes

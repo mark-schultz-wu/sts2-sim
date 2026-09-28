@@ -29,6 +29,8 @@ pub(crate) fn generate<R: GameRng>(encounter: Encounter, rng: &mut R) -> Vec<Spa
         Encounter::FlyconidNormal => flyconid_normal(rng),
         Encounter::BowlbugsWeak => bowlbugs_weak(rng),
         Encounter::BowlbugsNormal => bowlbugs_normal(rng),
+        Encounter::ScrollsOfBitingWeak => scrolls_of_biting(rng, false),
+        Encounter::ScrollsOfBitingNormal => scrolls_of_biting(rng, true),
         encounter => unimplemented!("the roster {encounter:?} rolls"),
     }
 }
@@ -54,6 +56,28 @@ fn decimillipede_elite<R: GameRng>(rng: &mut R) -> Vec<Spawned<V>> {
     .enumerate()
     .map(|(at, monster)| Spawned::opening_on(monster, CYCLE[(first + at) % CYCLE.len()]))
     .collect()
+}
+
+/// `ScrollsOfBitingWeak` and `ScrollsOfBitingNormal`. Three scrolls, each
+/// opening on its own move, as the Decimillipede's segments do. The normal
+/// encounter adds a fourth, which opens on More Teeth.
+fn scrolls_of_biting<R: GameRng>(rng: &mut R, normal: bool) -> Vec<Spawned<V>> {
+    // `StarterMoveIdx % 3`, as `GenerateMoveStateMachine` switches on it.
+    const CYCLE: [MoveId; 3] = [MoveId::Chomp, MoveId::Chew, MoveId::MoreTeeth];
+
+    let first: usize =
+        num_traits::cast(rng.next_int(Bound::try_new(three::<R>()).expect("three starting moves")))
+            .expect("a three-way draw is a valid cycle index");
+    let mut roster: Vec<_> = (0..CYCLE.len())
+        .map(|at| Spawned::opening_on(Monster::ScrollOfBiting, CYCLE[(first + at) % CYCLE.len()]))
+        .collect();
+    if normal {
+        roster.push(Spawned::opening_on(
+            Monster::ScrollOfBiting,
+            MoveId::MoreTeeth,
+        ));
+    }
+    roster
 }
 
 /// The RNG integer three, which has no literal in the trait's own arithmetic.

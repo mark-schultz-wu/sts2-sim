@@ -1,0 +1,5 @@
+# The normal Scrolls of Biting add a fourth scroll, which opens on More
+# Teeth.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"SCROLLS_OF_BITING_NORMAL"}
+{"cmd":"end_turn"}

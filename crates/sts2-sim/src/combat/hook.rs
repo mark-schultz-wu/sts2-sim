@@ -35,6 +35,14 @@ pub(crate) fn apply<V: Rules, F: Fight<V>>(
                 });
                 fight.apply(block);
             }
+            HookEffect::GainBlockOf { target, amount } => {
+                let block = fight.resolve(sts2_core::Effect::GainBlock {
+                    recipient: target,
+                    amount: sts2_core::Amount::Number(amount),
+                    scaling: sts2_core::Scaling::Static,
+                });
+                fight.apply(block);
+            }
             // `PowerCmd.Apply` on the creature carrying the listener. Every
             // hook delivered here names the creature acting, and a power only
             // answers one that its own owner is party to, so the two are the

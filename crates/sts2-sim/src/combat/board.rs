@@ -1528,6 +1528,9 @@ impl<'a, V: Rules> Board<'a, V> {
                     power,
                     amount,
                 } => self.land(target, power, amount, Some(owner)),
+                HookEffect::LoseMaxHpOf { target, amount } => {
+                    sts2_core::Fight::lose_max_hp(self, target, amount)
+                }
                 // `CreatureCmd.Damage`, unpowered, from the power's owner.
                 HookEffect::Damage { target, amount } => {
                     let hit = resolve::<V>(

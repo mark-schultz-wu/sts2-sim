@@ -1,0 +1,11 @@
+# The Living Shield's Rampart blocks the Turret Operator as each player turn
+# begins. It slams while the turret stands, and smashes once it falls.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"TURRET_OPERATOR_WEAK"}
+{"cmd":"power","power":"PLATING_POWER","amount":60,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":200,"target":0}
+{"cmd":"play_card","index":0,"target":2}
+{"cmd":"power","power":"STRENGTH_POWER","amount":-200,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
