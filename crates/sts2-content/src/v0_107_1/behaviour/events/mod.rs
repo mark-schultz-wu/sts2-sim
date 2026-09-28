@@ -19,6 +19,7 @@ mod jungle_maze_adventure;
 mod lost_wisp;
 mod luminous_choir;
 mod morphic_grove;
+mod nonupeipe;
 mod orobas;
 mod pael;
 mod potion_courier;
@@ -33,12 +34,14 @@ mod stone_of_all_time;
 mod sunken_statue;
 mod symbiote;
 mod tablet_of_truth;
+mod tanx;
 mod tea_master;
 mod tezcatara;
 mod the_future_of_potions;
 mod the_lantern_key;
 mod the_legends_were_true;
 mod this_or_that;
+mod vakuu;
 mod welcome_to_wongos;
 mod wellspring;
 mod whispering_hollow;
@@ -89,6 +92,7 @@ pub enum State {
     LuminousChoir(luminous_choir::State),
     MorphicGrove(morphic_grove::State),
     Orobas(ancient::Offered),
+    Nonupeipe(ancient::Offered),
     Pael(ancient::Offered),
     RoomFullOfCheese(room_full_of_cheese::State),
     SapphireSeed(sapphire_seed::State),
@@ -97,7 +101,9 @@ pub enum State {
     SunkenStatue(sunken_statue::State),
     TabletOfTruth(tablet_of_truth::State),
     TeaMaster(tea_master::State),
+    Tanx(ancient::Offered),
     Tezcatara(ancient::Offered),
+    Vakuu(ancient::Offered),
     TheFutureOfPotions(the_future_of_potions::State),
     TheLegendsWereTrue(the_legends_were_true::State),
     ThisOrThat(this_or_that::State),
@@ -162,11 +168,14 @@ pub(crate) fn allowed(event: Event, run: &impl EventView<V>) -> bool {
         Event::ByrdonisNest => byrdonis_nest::ByrdonisNest.allowed(run),
         Event::MorphicGrove => morphic_grove::MorphicGrove.allowed(run),
         Event::Orobas => orobas::Orobas.allowed(run),
+        Event::Nonupeipe => nonupeipe::Nonupeipe.allowed(run),
         Event::Pael => pael::Pael.allowed(run),
         Event::RoomFullOfCheese => room_full_of_cheese::RoomFullOfCheese.allowed(run),
         Event::SunkenStatue => sunken_statue::SunkenStatue.allowed(run),
         Event::TeaMaster => tea_master::TeaMaster.allowed(run),
+        Event::Tanx => tanx::Tanx.allowed(run),
         Event::Tezcatara => tezcatara::Tezcatara.allowed(run),
+        Event::Vakuu => vakuu::Vakuu.allowed(run),
         Event::TheLegendsWereTrue => the_legends_were_true::TheLegendsWereTrue.allowed(run),
         Event::ThisOrThat => this_or_that::ThisOrThat.allowed(run),
         Event::Wellspring => wellspring::Wellspring.allowed(run),
@@ -286,6 +295,7 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
         Event::LuminousChoir => State::LuminousChoir(luminous_choir::LuminousChoir.enter(run, rng)),
         Event::MorphicGrove => State::MorphicGrove(morphic_grove::MorphicGrove.enter(run, rng)),
         Event::Orobas => State::Orobas(orobas::Orobas.enter(run, rng)),
+        Event::Nonupeipe => State::Nonupeipe(nonupeipe::Nonupeipe.enter(run, rng)),
         Event::Pael => State::Pael(pael::Pael.enter(run, rng)),
         Event::RoomFullOfCheese => {
             State::RoomFullOfCheese(room_full_of_cheese::RoomFullOfCheese.enter(run, rng))
@@ -300,7 +310,9 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
             State::TabletOfTruth(tablet_of_truth::TabletOfTruth.enter(run, rng))
         }
         Event::TeaMaster => State::TeaMaster(tea_master::TeaMaster.enter(run, rng)),
+        Event::Tanx => State::Tanx(tanx::Tanx.enter(run, rng)),
         Event::Tezcatara => State::Tezcatara(tezcatara::Tezcatara.enter(run, rng)),
+        Event::Vakuu => State::Vakuu(vakuu::Vakuu.enter(run, rng)),
         Event::TheFutureOfPotions => {
             State::TheFutureOfPotions(the_future_of_potions::TheFutureOfPotions.enter(run, rng))
         }
@@ -403,6 +415,7 @@ pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
         State::LuminousChoir(state) => luminous_choir::LuminousChoir.observe(state, run),
         State::MorphicGrove(state) => morphic_grove::MorphicGrove.observe(state, run),
         State::Orobas(state) => orobas::Orobas.observe(state, run),
+        State::Nonupeipe(state) => nonupeipe::Nonupeipe.observe(state, run),
         State::Pael(state) => pael::Pael.observe(state, run),
         State::RoomFullOfCheese(state) => room_full_of_cheese::RoomFullOfCheese.observe(state, run),
         State::SapphireSeed(state) => sapphire_seed::SapphireSeed.observe(state, run),
@@ -411,7 +424,9 @@ pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
         State::SunkenStatue(state) => sunken_statue::SunkenStatue.observe(state, run),
         State::TabletOfTruth(state) => tablet_of_truth::TabletOfTruth.observe(state, run),
         State::TeaMaster(state) => tea_master::TeaMaster.observe(state, run),
+        State::Tanx(state) => tanx::Tanx.observe(state, run),
         State::Tezcatara(state) => tezcatara::Tezcatara.observe(state, run),
+        State::Vakuu(state) => vakuu::Vakuu.observe(state, run),
         State::TheFutureOfPotions(state) => {
             the_future_of_potions::TheFutureOfPotions.observe(state, run)
         }
@@ -486,6 +501,7 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
         }
         State::MorphicGrove(state) => morphic_grove::MorphicGrove.choose(state, option, run, rng),
         State::Orobas(state) => orobas::Orobas.choose(state, option, run, rng),
+        State::Nonupeipe(state) => nonupeipe::Nonupeipe.choose(state, option, run, rng),
         State::Pael(state) => pael::Pael.choose(state, option, run, rng),
         State::RoomFullOfCheese(state) => {
             room_full_of_cheese::RoomFullOfCheese.choose(state, option, run, rng)
@@ -503,7 +519,9 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
             the_future_of_potions::TheFutureOfPotions.choose(state, option, run, rng)
         }
         State::TeaMaster(state) => tea_master::TeaMaster.choose(state, option, run, rng),
+        State::Tanx(state) => tanx::Tanx.choose(state, option, run, rng),
         State::Tezcatara(state) => tezcatara::Tezcatara.choose(state, option, run, rng),
+        State::Vakuu(state) => vakuu::Vakuu.choose(state, option, run, rng),
         State::TheLegendsWereTrue(state) => {
             the_legends_were_true::TheLegendsWereTrue.choose(state, option, run, rng)
         }

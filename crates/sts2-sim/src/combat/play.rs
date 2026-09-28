@@ -611,6 +611,9 @@ pub(super) fn play_count<V: Rules, S: LendsCombat>(
     };
     let mut count = card.face.play_count();
     let mut modifiers: SmallVec<[(CombatId, V::Power); 2]> = SmallVec::new();
+    // A relic's listener carries its state alone, so the walk keeps where
+    // that state lives, and the belt names the slot after.
+    let mut relic_modifiers: SmallVec<[*const V::RelicState; 1]> = SmallVec::new();
     super::listen::each::<V>(
         super::listen::Walk { live, relics },
         sts2_core::Overrides::of(sts2_core::ModelHook::ModifyCardPlayCount),
@@ -626,9 +629,10 @@ pub(super) fn play_count<V: Rules, S: LendsCombat>(
                     sts2_core::Listener::Power { holder, power, .. } => {
                         modifiers.push((holder, power))
                     }
-                    _ => {
-                        unimplemented!("a listener other than a power changing a card's play count")
-                    }
+                    sts2_core::Listener::Relic(state) => relic_modifiers.push(state),
+                    _ => unimplemented!(
+                        "a listener other than a power or a relic changing a card's play count"
+                    ),
                 }
             }
         },
@@ -667,6 +671,29 @@ pub(super) fn play_count<V: Rules, S: LendsCombat>(
                 }
                 effect => unimplemented!("a power asking for {effect:?} after a play count"),
             }
+        }
+    }
+    for state in relic_modifiers {
+        let slot = relics
+            .iter()
+            .position(|held| std::ptr::eq(&held.state, state))
+            .expect("a relic that answered the walk is on the belt");
+        let held = &mut relics[slot];
+        if !sts2_core::RelicTable::overrides(held.relic)
+            .contains(sts2_core::ModelHook::AfterModifyingCardPlayCount)
+        {
+            continue;
+        }
+        let mut asked = sts2_core::HookEffects::new();
+        V::relic_event_hook(
+            &mut held.state,
+            sts2_core::EventHook::PlayCountModified {
+                card: card.face.ident.card,
+            },
+            &mut asked,
+        );
+        if let Some(effect) = asked.first() {
+            unimplemented!("a relic asking for {effect:?} after a play count");
         }
     }
     count

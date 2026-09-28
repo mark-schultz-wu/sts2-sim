@@ -1798,6 +1798,18 @@ pub trait Fight<V: ContentVersion> {
     /// `CardCmd.Discard(this)`, for the card whose behavior is running.
     fn discard_this(&mut self);
 
+    /// `CreatureCmd.Stun(target, nextMoveId)` on a monster: `stun` in place of
+    /// the move it advertised, then `then`. A monster that has to perform
+    /// the move it advertises keeps it.
+    fn stun(
+        &mut self,
+        _target: crate::CombatId,
+        _stun: &'static crate::NextMove<V>,
+        _then: StunResume,
+    ) {
+        unimplemented!("a monster stunned by a card")
+    }
+
     /// `CardPileCmd.Add(this, pile, position)`, for the card being played,
     /// which then stays there rather than going to its result pile.
     fn add_this(&mut self, _pile: crate::Pile, _position: PilePosition) {
@@ -3651,6 +3663,10 @@ pub enum DeckAct<V: ContentVersion> {
     /// `FromDeckGeneric` over the deck's basic cards that can be transformed,
     /// then `CardCmd.TransformTo` this card.
     TransformBasicInto(V::Card),
+    /// `FromDeckForTransformation`, then `CardCmd.Transform` of each into this
+    /// card. The replacement is upgraded where the original was, and carries
+    /// the original's enchantment where that enchantment takes it.
+    TransformInto(V::Card),
     /// `FromDeckForEnchantment` over the cards the enchantment takes, of one
     /// type where `kind` names it, in deck order. Then `CardCmd.Enchant` by
     /// `amount`.
@@ -3785,6 +3801,13 @@ pub enum HookEffect<V: ContentVersion> {
     SelectFromDeck {
         act: DeckAct<V>,
         count: usize,
+    },
+    /// The same for `min` to `max` cards, with `RequireManualConfirmation`:
+    /// the owner is asked whenever the deck offers a card at all.
+    SelectFromDeckConfirmed {
+        act: DeckAct<V>,
+        min: usize,
+        max: usize,
     },
     /// `CardCmd.Upgrade` or `CardCmd.Transform` on the deck cards the picks
     /// name, all picked before any is changed.
@@ -3977,12 +4000,11 @@ pub enum HookEffect<V: ContentVersion> {
     FirstOrbPassive(V::Number),
     /// `count` times, one card of the character's combat pool that `filter`
     /// keeps, drawn by `CardFactory.GetDistinctForCombat` off
-    /// `CombatCardGeneration`. Each carries `keyword` where one is named, and
-    /// they go into hand.
+    /// `CombatCardGeneration`. Each takes `writes`, and they go into hand.
     GenerateFromPool {
         filter: PoolFilter,
         count: V::Number,
-        keyword: Option<V::CardKeyword>,
+        writes: &'static [(Change<V>, Lasting)],
     },
     /// `count` distinct cards of the colorless pool, from one
     /// `CardFactory.GetDistinctForCombat` off `CombatCardGeneration`. It

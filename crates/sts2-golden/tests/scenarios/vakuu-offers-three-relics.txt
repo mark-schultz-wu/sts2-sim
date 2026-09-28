@@ -1,0 +1,4 @@
+# Vakuu shuffles each of its three pools off the event's stream in turn, and
+# offers the first of each.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"VAKUU"}

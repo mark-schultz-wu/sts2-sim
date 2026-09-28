@@ -30,9 +30,10 @@ pub(crate) fn can_enchant(enchantment: Enchantment, card: &CardIdent<V>) -> bool
         Enchantment::Slither => base && card.card.cost() != Cost::X,
         Enchantment::Sown | Enchantment::Swift => base,
         // `CanEnchantCardType`, which takes an attack alone.
-        Enchantment::Corrupted | Enchantment::Sharp | Enchantment::Vigorous => {
-            base && V::card_kind(card.card) == Some(CardKind::Attack)
-        }
+        Enchantment::Corrupted
+        | Enchantment::Instinct
+        | Enchantment::Sharp
+        | Enchantment::Vigorous => base && V::card_kind(card.card) == Some(CardKind::Attack),
         Enchantment::Nimble => base && card.card.gains_block(),
         Enchantment::Goopy => base && card.card.tagged(CardTag::Defend),
         _ => unimplemented!("which cards {enchantment:?} can enchant"),
@@ -48,6 +49,7 @@ pub(crate) fn can_enchant(enchantment: Enchantment, card: &CardIdent<V>) -> bool
 pub(crate) fn enchant(enchantment: Enchantment, amount: u8, card: &mut CardIdent<V>) {
     match enchantment {
         Enchantment::Corrupted
+        | Enchantment::Instinct
         | Enchantment::Vigorous
         | Enchantment::Nimble
         | Enchantment::PerfectFit
@@ -81,6 +83,10 @@ pub(crate) fn modify(
         (Enchantment::Corrupted, EnchantHook::DamageMultiplicative { powered: true }) => {
             Modify::Scaled(1.5)
         }
+        // `Instinct`: double on a powered hit.
+        (Enchantment::Instinct, EnchantHook::DamageMultiplicative { powered: true }) => {
+            Modify::Scaled(2.0)
+        }
         (Enchantment::Nimble, EnchantHook::BlockAdditive) => Modify::Added(amount),
         // Its amount on a powered hit, until its card is first played.
         (Enchantment::Vigorous, EnchantHook::DamageAdditive { powered: true })
@@ -92,6 +98,7 @@ pub(crate) fn modify(
         (Enchantment::Spiral, EnchantHook::PlayCount) => Modify::Added(1),
         (
             Enchantment::Corrupted
+            | Enchantment::Instinct
             | Enchantment::Vigorous
             | Enchantment::Nimble
             | Enchantment::PerfectFit
@@ -163,7 +170,8 @@ pub(crate) fn on_play<F: Fight<V>>(
             let owner = fight.actor();
             fight.damage_unblockable(owner, 2);
         }
-        Enchantment::Nimble
+        Enchantment::Instinct
+        | Enchantment::Nimble
         | Enchantment::PerfectFit
         | Enchantment::Sharp
         | Enchantment::Slither

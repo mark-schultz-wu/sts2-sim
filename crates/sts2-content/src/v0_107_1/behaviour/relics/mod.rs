@@ -38,7 +38,9 @@ mod byrdpip;
 mod calling_bell;
 mod centennial_puzzle;
 mod chosen_cheese;
+mod claws;
 mod cracked_core;
+mod crossbow;
 mod cursed_pearl;
 mod data_disk;
 mod daughter_of_the_wind;
@@ -68,6 +70,7 @@ mod hefty_tablet;
 mod horn_cleat;
 mod infused_core;
 mod intimidating_helmet;
+mod iron_club;
 mod juzu_bracelet;
 mod kunai;
 mod kusarigama;
@@ -118,25 +121,31 @@ mod ring_of_the_drake;
 mod ring_of_the_snake;
 mod ripple_basin;
 mod runic_pyramid;
+mod sai;
 mod sand_castle;
 mod seal_of_gold;
 mod self_forming_clay;
 mod sozu;
 mod sparkling_rouge;
+mod spiked_gauntlets;
 mod stone_humidifier;
 mod storybook;
 mod strawberry;
 mod strike_dummy;
 mod sword_of_stone;
+mod tanxs_whistle;
+mod throwing_axe;
 mod tiny_mailbox;
 mod toasty_mittens;
 mod touch_of_orobas;
 mod toxic_egg;
+mod tri_boomerang;
 mod tungsten_rod;
 mod twisted_funnel;
 mod vajra;
 mod venerable_tea_set;
 mod very_hot_cocoa;
+mod war_hammer;
 mod war_paint;
 mod white_star;
 mod winged_boots;
@@ -317,6 +326,16 @@ pub enum State {
     ToxicEgg,
     SelfFormingClay,
     OldCoin,
+    Claws,
+    Crossbow,
+    IronClub(iron_club::State),
+    MeatCleaver,
+    Sai,
+    SpikedGauntlets,
+    TanxsWhistle,
+    ThrowingAxe(throwing_axe::State),
+    TriBoomerang,
+    WarHammer,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -535,6 +554,21 @@ pub(crate) fn event_hook(
         State::ToxicEgg => toxic_egg::event_hook(hook, asked),
         State::SelfFormingClay => self_forming_clay::event_hook(hook, asked),
         State::OldCoin => old_coin::event_hook(hook, asked),
+        State::Claws => claws::event_hook(hook, asked),
+        State::Crossbow => crossbow::event_hook(hook, asked),
+        State::IronClub(state) => iron_club::event_hook(state, hook, asked),
+        State::Sai => sai::event_hook(hook, asked),
+        State::TanxsWhistle => tanxs_whistle::event_hook(hook, asked),
+        State::ThrowingAxe(state) => throwing_axe::event_hook(state, hook),
+        State::TriBoomerang => tri_boomerang::event_hook(hook, asked),
+        State::WarHammer => war_hammer::event_hook(hook, asked),
+        // Their hooks are ones the run and the fight ask of them:
+        // `TryModifyRestSiteOptions`, and `ModifyMaxEnergy` with
+        // `TryModifyEnergyCostInCombat`.
+        State::MeatCleaver | State::SpikedGauntlets => match hook {
+            EventHook::Obtained => {}
+            hook => unimplemented!("what {state:?} does for {hook:?}"),
+        },
     }
 }
 
@@ -577,6 +611,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         State::MiniatureCannon => miniature_cannon::modify_hook(hook),
         State::RegalPillow => regal_pillow::modify_hook(hook),
         State::BeatingRemnant(state) => beating_remnant::modify_hook(state, hook),
+        State::SpikedGauntlets => spiked_gauntlets::modify_hook(hook),
+        State::ThrowingAxe(state) => throwing_axe::modify_hook(state, hook),
         // The fight asks only a relic that overrides the hook, and none of
         // the rest overrides one of these.
         State::AlchemicalCoffer
@@ -693,7 +729,15 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::MoltenEgg
         | State::ToxicEgg
         | State::SelfFormingClay
-        | State::OldCoin => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::OldCoin
+        | State::Claws
+        | State::Crossbow
+        | State::IronClub(_)
+        | State::MeatCleaver
+        | State::Sai
+        | State::TanxsWhistle
+        | State::TriBoomerang
+        | State::WarHammer => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -842,6 +886,16 @@ impl sts2_core::RelicModel<V> for State {
             Relic::ToxicEgg => State::ToxicEgg,
             Relic::SelfFormingClay => State::SelfFormingClay,
             Relic::OldCoin => State::OldCoin,
+            Relic::Claws => State::Claws,
+            Relic::Crossbow => State::Crossbow,
+            Relic::IronClub => State::IronClub(iron_club::State::default()),
+            Relic::MeatCleaver => State::MeatCleaver,
+            Relic::Sai => State::Sai,
+            Relic::SpikedGauntlets => State::SpikedGauntlets,
+            Relic::TanxsWhistle => State::TanxsWhistle,
+            Relic::ThrowingAxe => State::ThrowingAxe(throwing_axe::State::default()),
+            Relic::TriBoomerang => State::TriBoomerang,
+            Relic::WarHammer => State::WarHammer,
             relic => unimplemented!("what {relic:?} does in a run that carries it"),
         }
     }
@@ -874,6 +928,7 @@ impl sts2_core::RelicModel<V> for State {
                 State::HappyFlower(state) => happy_flower::display_amount(state),
                 State::Kunai(state) => kunai::display_amount(state),
                 State::Nunchaku(state) => nunchaku::display_amount(state),
+                State::IronClub(state) => iron_club::display_amount(state),
                 State::Pendulum(state) => pendulum::display_amount(state),
                 _ => unimplemented!("the number {relic:?} shows"),
             },

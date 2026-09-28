@@ -409,7 +409,7 @@ fn built(id: MoveId, kind: IntentKind) -> sts2_core::NextMove<V> {
 }
 
 /// `Creature.Stun`'s state.
-static STUNNED: LazyLock<sts2_core::NextMove<V>> =
+pub(crate) static STUNNED: LazyLock<sts2_core::NextMove<V>> =
     LazyLock::new(|| built(MoveId::Stunned, IntentKind::Stun));
 
 /// `IllusionPower`'s revive, a heal.
@@ -3439,7 +3439,7 @@ pub(crate) fn event_hook(
         ) if player == holder => Some(HookEffect::GenerateFromPool {
             filter: sts2_core::PoolFilter::OfKind(sts2_core::CardKind::Power),
             count: amount,
-            keyword: None,
+            writes: &[],
         }),
         (Power::CreativeAiPower, PowerAmount::Endless, EventHook::BeforeHandDraw { player, .. })
             if player == holder =>
@@ -3469,7 +3469,10 @@ pub(crate) fn event_hook(
         ) if player == holder => Some(HookEffect::GenerateFromPool {
             filter: sts2_core::PoolFilter::NotBasicOrAncient,
             count: amount,
-            keyword: Some(CardKeyword::Ethereal),
+            writes: &[(
+                sts2_core::Change::AddKeyword(CardKeyword::Ethereal),
+                sts2_core::Lasting::ThisFight,
+            )],
         }),
         // `SentryModePower.BeforeHandDraw`: its stack of Sweeping Gazes.
         (

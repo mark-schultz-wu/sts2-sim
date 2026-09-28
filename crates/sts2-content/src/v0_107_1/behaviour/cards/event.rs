@@ -19,6 +19,8 @@ pub(super) fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> 
     match card {
         EventCard::NeowsFury => neows_fury(fight),
         EventCard::Metamorphosis => metamorphosis(fight),
+        EventCard::Whistle => whistle(fight),
+        EventCard::Maul => maul(fight),
         // `BrightestFlame`: its Energy, its Cards drawn, then its `MaxHp` off
         // its owner's maximum.
         EventCard::BrightestFlame => {
@@ -104,5 +106,54 @@ fn metamorphosis<F: Fight<V>>(fight: &mut F) -> Played<V> {
             }
         }
     }
+    Played::Done
+}
+
+/// Its damage to `target`, `hits` times, as one attack.
+fn hit<F: Fight<V>>(fight: &mut F, target: sts2_core::CombatId, hits: usize) {
+    fight.attack(Scaling::Dynamic, |fight| {
+        for _ in 0..hits {
+            let attack = fight.resolve(Effect::Attack {
+                dealer: fight.actor(),
+                target,
+                damage: Amount::Var(CardVar::Damage),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(attack);
+        }
+    });
+}
+
+/// `Whistle`: its damage to the target, then `CreatureCmd.Stun` on it with
+/// no move named after.
+fn whistle<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let target = fight.target();
+    hit(fight, target, 1);
+    fight.stun(
+        target,
+        &super::super::powers::STUNNED,
+        sts2_core::StunResume::Interrupted,
+    );
+    Played::Done
+}
+
+/// `Maul`: its damage to the target twice, then its `Increase` onto the
+/// damage of every Maul its owner holds in the fight, itself included.
+fn maul<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use super::super::super::generated::cards::Cards;
+
+    let target = fight.target();
+    hit(fight, target, 2);
+    let raise = Change::Raise(CardVar::Damage, fight.var(CardVar::Increase));
+    // `AllCards`: the hand, the draw, discard and exhaust piles, then the
+    // play pile, which holds the Maul being played.
+    for pile in [Pile::Hand, Pile::Draw, Pile::Discard, Pile::Exhaust] {
+        for card in fight.cards_in(pile) {
+            if fight.card_ident(card).card == Cards::Event(EventCard::Maul) {
+                fight.modify_card(card, raise, Lasting::ThisFight);
+            }
+        }
+    }
+    fight.modify_this(raise, Lasting::ThisFight);
     Played::Done
 }

@@ -728,7 +728,7 @@ pub(super) fn carry_setup<V: Rules>(
                         sts2_core::HookEffect::GenerateFromPool {
                             filter,
                             count,
-                            keyword,
+                            writes,
                         } => {
                             generate_from_pool::<V>(
                                 live,
@@ -737,7 +737,7 @@ pub(super) fn carry_setup<V: Rules>(
                                 ascension,
                                 filter,
                                 count,
-                                keyword,
+                                writes,
                             );
                         }
                         sts2_core::HookEffect::GenerateDistinctColorless { count } => {
@@ -1153,7 +1153,7 @@ fn generate_from_pool<V: Rules>(
     ascension: V::AscensionLevel,
     filter: sts2_core::PoolFilter,
     count: V::Number,
-    keyword: Option<V::CardKeyword>,
+    writes: &[(sts2_core::Change<V>, sts2_core::Lasting)],
 ) {
     let count: usize = num_traits::cast(count)
         .unwrap_or_else(|| unimplemented!("making {count:?} cards from a pool"));
@@ -1173,13 +1173,8 @@ fn generate_from_pool<V: Rules>(
             return;
         };
         for at in sts2_core::Fight::add_generated_cards(&mut board, card, Pile::Hand, 1) {
-            if let Some(keyword) = keyword {
-                sts2_core::Fight::modify_card(
-                    &mut board,
-                    at,
-                    sts2_core::Change::AddKeyword(keyword),
-                    sts2_core::Lasting::ThisFight,
-                );
+            for &(change, lasting) in writes {
+                sts2_core::Fight::modify_card(&mut board, at, change, lasting);
             }
         }
     }
@@ -1561,6 +1556,29 @@ pub(super) fn side_turn_started<V: Rules>(
             sts2_core::HookEffect::Summon(amount) => {
                 super::board::summon_osty::<V>(live, rngs.reborrow(), relics, ascension, amount);
             }
+            // `CreatureCmd.GainBlock`, unpowered, on a relic's owner, who is
+            // the player the board acts for.
+            effect @ sts2_core::HookEffect::GainBlock(_)
+                if matches!(listener, Listener::Relic { .. }) =>
+            {
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                super::hook::apply::<V, _>(&mut board, [effect]);
+                ended = ended.or(board.ended);
+            }
+            sts2_core::HookEffect::GenerateFromPool {
+                filter,
+                count,
+                writes,
+            } => generate_from_pool::<V>(
+                live,
+                rngs.reborrow(),
+                relics,
+                ascension,
+                filter,
+                count,
+                writes,
+            ),
             effect => unimplemented!("a listener asking for {effect:?} as a side turn starts"),
         }
     }
