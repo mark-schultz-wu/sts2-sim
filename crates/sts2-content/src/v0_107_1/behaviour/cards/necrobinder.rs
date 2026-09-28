@@ -512,6 +512,18 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
         // `Friendship`: its Strength off its owner, then its Energy as
         // Friendship.
         NecrobinderCard::Dredge => dredge(fight),
+        // `Eidolon`: every card of the hand exhausted, one at a time, then one
+        // Intangible where that came to nine or more.
+        NecrobinderCard::Eidolon => {
+            use super::super::super::generated::powers::Power;
+
+            let hand = fight.cards_in(Pile::Hand);
+            fight.act_on(PileAct::Exhaust, &hand);
+            if hand.len() >= EIDOLON_CARDS {
+                fight.apply_to_actor(Power::IntangiblePower, sts2_core::PowerAmount::Counted(1));
+            }
+            Played::Done
+        }
         // `CaptureSpirit`: its damage to the target, unblockable and
         // unpowered, then its `Cards` of Souls into the draw pile at random.
         NecrobinderCard::CaptureSpirit => {
@@ -614,6 +626,9 @@ pub(super) fn resume_play<F: Fight<V>>(
         }
     }
 }
+
+/// `Eidolon`'s `_intangibleThreshold`.
+const EIDOLON_CARDS: usize = 9;
 
 /// `Dredge`: its `Cards` from the discard pile picked into hand, as many as
 /// the hand has room for.

@@ -1,0 +1,6 @@
+# Shockwave puts three Weak and three Vulnerable on each enemy that can be
+# hit.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"grant","card":"SHOCKWAVE"}
+{"cmd":"play_card","index":5}

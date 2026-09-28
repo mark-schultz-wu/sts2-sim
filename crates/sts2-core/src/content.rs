@@ -4045,6 +4045,20 @@ impl<V: ContentVersion> History<'_, V> {
             .count()
     }
 
+    /// Every `DamageReceivedEntry` of the fight, the turn it stands in first
+    /// and then the turns before it, latest first.
+    pub fn damage_received_this_fight(&self) -> impl Iterator<Item = DamageReceived<V>> + '_ {
+        let before = std::iter::successors(self.before, |before| before.before.as_deref())
+            .flat_map(|before| before.entries.iter());
+        self.this_turn
+            .iter()
+            .chain(before)
+            .filter_map(|entry| match entry {
+                HistoryEntry::DamageReceived(received) => Some(*received),
+                _ => None,
+            })
+    }
+
     /// Each `DamageReceivedEntry` where `HappenedThisTurn`.
     pub fn damage_received_this_turn(&self) -> impl Iterator<Item = DamageReceived<V>> + '_ {
         self.this_turn.iter().filter_map(|entry| match entry {

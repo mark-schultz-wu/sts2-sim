@@ -1,0 +1,8 @@
+# Tear Asunder hits once, and once more for each hit this fight that took
+# health from its owner. The Nibbit's first hit landed, so twice.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"TEAR_ASUNDER"}
+{"cmd":"play_card","index":5,"target":1}

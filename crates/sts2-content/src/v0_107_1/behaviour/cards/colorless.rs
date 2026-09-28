@@ -41,6 +41,33 @@ pub(super) fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played
     match card {
         ColorlessCard::Volley => volley(fight),
         ColorlessCard::Catastrophe => catastrophe(fight),
+        // `SecretTechnique`: one skill of the draw pile picked, into hand.
+        ColorlessCard::SecretTechnique => {
+            let skills = fight
+                .cards_in(Pile::Draw)
+                .into_iter()
+                .filter(|&at| V::card_kind(fight.card_ident(at).card) == Some(CardKind::Skill))
+                .collect();
+            Played::AskingAmong {
+                cards: skills,
+                selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
+                at: super::super::Resume::Card(super::Resume::Colorless(
+                    Resume::SecretTechniqueTakes,
+                )),
+            }
+        }
+        // `Shockwave`: its `Power` of Weak, then of Vulnerable, on each enemy
+        // that can be hit, one enemy at a time.
+        ColorlessCard::Shockwave => {
+            use super::super::super::generated::powers::Power;
+
+            let amount = sts2_core::PowerAmount::Counted(fight.var(CardVar::Power));
+            for target in fight.hittable_opponents() {
+                fight.apply_power(target, Power::WeakPower, amount);
+                fight.apply_power(target, Power::VulnerablePower, amount);
+            }
+            Played::Done
+        }
         // `Alchemize`: a potion made off `CombatPotionGeneration` among those
         // a fight can make, procured.
         ColorlessCard::Alchemize => {
@@ -166,6 +193,8 @@ pub enum Resume {
     PurityExhausts,
     /// `ThinkingAhead`, after the card picked from hand to put back.
     ThinkingAheadPutBack,
+    /// `SecretTechnique`, after the skill picked from the draw pile.
+    SecretTechniqueTakes,
 }
 
 pub(super) fn resume_play<F: Fight<V>>(
@@ -176,6 +205,11 @@ pub(super) fn resume_play<F: Fight<V>>(
     match at {
         Resume::PurityExhausts => {
             fight.act_on(PileAct::Exhaust, chosen.as_slice());
+            Played::Done
+        }
+        // `CardPileCmd.Add` of the one taken, into hand.
+        Resume::SecretTechniqueTakes => {
+            fight.act_on(PileAct::IntoHand, chosen.as_slice());
             Played::Done
         }
         // `CardPileCmd.Add` onto the top of the draw pile.

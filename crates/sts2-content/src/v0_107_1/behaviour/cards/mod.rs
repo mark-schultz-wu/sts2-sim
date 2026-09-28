@@ -260,6 +260,17 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
             let hits = Number::try_from(hits).expect("a turn's hits fit the game's numbers");
             printed.face(CardVar::CalculationBase) + printed.face(CardVar::CalculationExtra) * hits
         }
+        // `TearAsunder`: a base, and more for each of one and the hits this
+        // fight that took hit points from its owner.
+        (Cards::Ironclad(IroncladCard::TearAsunder), CardVar::CalculatedHits) => {
+            let hurt = owner
+                .history
+                .damage_received_this_fight()
+                .filter(|received| received.receiver == owner.player && received.unblocked > 0)
+                .count();
+            let hits = Number::try_from(1 + hurt).expect("a fight's hits fit the game's numbers");
+            printed.face(CardVar::CalculationBase) + printed.face(CardVar::CalculationExtra) * hits
+        }
         // `BodySlam`: a base, and more for each point of its owner's block.
         (Cards::Ironclad(IroncladCard::BodySlam), CardVar::CalculatedDamage) => {
             printed.face(CardVar::CalculationBase)

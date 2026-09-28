@@ -67,6 +67,24 @@ pub(super) fn resume_play<F: Fight<V>>(
 pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
     match card {
         IroncladCard::Thrash => thrash(fight),
+        // `TearAsunder`: its damage to the target, as many times as its
+        // calculated hits, counted before the first, as one attack.
+        IroncladCard::TearAsunder => {
+            let target = fight.target();
+            let hits = fight.var(CardVar::CalculatedHits);
+            fight.attack(Scaling::Dynamic, |fight| {
+                for _ in 0..hits {
+                    let hit = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(hit);
+                }
+            });
+            Played::Done
+        }
         // `Inferno`: its Inferno on its owner, then one more self damage on
         // the power it landed or stacked into.
         IroncladCard::Inferno => {
