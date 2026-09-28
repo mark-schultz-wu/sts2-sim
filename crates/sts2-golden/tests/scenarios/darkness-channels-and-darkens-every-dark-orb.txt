@@ -1,0 +1,8 @@
+# Darkness channels a Dark orb, then triggers every Dark orb's passive. The
+# second Darkness grows the first orb twice and its own once.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"DARKNESS"}
+{"cmd":"play_card","index":5}
+{"cmd":"grant","card":"DARKNESS"}
+{"cmd":"play_card","index":5}

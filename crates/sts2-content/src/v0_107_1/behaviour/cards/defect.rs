@@ -120,6 +120,51 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
             Played::Done
         }
         DefectCard::Compact => compact(fight),
+        // `SweepingBeam`: its damage to every enemy, then its `Cards` drawn.
+        DefectCard::SweepingBeam => {
+            fight.attack(Scaling::Dynamic, |fight| {
+                for target in fight.opponents() {
+                    let hit = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(hit);
+                }
+            });
+            fight.draw(fight.var(CardVar::Cards));
+            Played::Done
+        }
+        // `Refract`: its damage to the target twice, then a Glass orb for
+        // each of its `Repeat`.
+        DefectCard::Refract => {
+            let target = fight.target();
+            hit(fight, target, 2);
+            for _ in 0..fight.var(CardVar::Repeat) {
+                fight.channel(Orb::GlassOrb);
+            }
+            Played::Done
+        }
+        // `Darkness`: a Dark orb, then every Dark orb's passive, once or twice
+        // upgraded, one orb after another.
+        DefectCard::Darkness => {
+            fight.channel(Orb::DarkOrb);
+            let times = if fight.upgraded() { 2 } else { 1 };
+            let dark: Vec<usize> = fight
+                .channelled()
+                .iter()
+                .enumerate()
+                .filter(|(_, held)| held.orb == Orb::DarkOrb)
+                .map(|(place, _)| place)
+                .collect();
+            for place in dark {
+                for _ in 0..times {
+                    fight.orb_passive_at(place);
+                }
+            }
+            Played::Done
+        }
         // `Synchronize`: its calculated Focus, lent until the turn ends.
         DefectCard::Synchronize => {
             fight.apply_to_actor(

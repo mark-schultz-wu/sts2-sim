@@ -2548,6 +2548,29 @@ pub(super) fn player<V: Rules>(creatures: &[Fighter<V>]) -> CombatId {
 }
 
 impl<V: Rules> Board<'_, V> {
+    /// `CreateClone` of the card `id` into `pile`, as
+    /// `AddGeneratedCardToCombat` puts it there.
+    fn clone_named(&mut self, id: sts2_core::CardId<V>, pile: Pile) -> Option<CardAt<V>> {
+        let face = self
+            .live
+            .cards
+            .named(id)
+            .unwrap_or_else(|| unimplemented!("a card cloned from outside the fight"))
+            .face;
+        let id = self.live.card_ids.mint();
+        // A full hand sends the card to the discard pile instead.
+        let full =
+            pile == Pile::Hand && self.live.cards.len(Pile::Hand) >= super::pile::MAX_CARDS_IN_HAND;
+        let pile = if full { Pile::Discard } else { pile };
+        let index = num_traits::NumCast::from(self.live.cards.len(pile))
+            .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
+        self.live.cards.push(pile, face.named(id));
+        let at = CardAt::new(id, pile, index);
+        self.card_entered_combat(at, face.ident.card, true);
+        self.card_generated(at, face.ident.card, self.creator());
+        Some(at)
+    }
+
     /// `OrbCmd.EvokeLast`, which does nothing once the fight is ending.
     pub(super) fn evoke_last(&mut self) {
         self.evoke(true, true);
@@ -3676,24 +3699,44 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         let playing = self
             .playing
             .unwrap_or_else(|| unimplemented!("a card cloning itself with none being played"));
-        let face = self
+        self.clone_named(playing, pile)
+    }
+
+    fn clone_card(&mut self, card: CardAt<V>, pile: Pile) -> Option<CardAt<V>> {
+        if self.ended.is_some() {
+            return None;
+        }
+        self.clone_named(card.id(), pile)
+    }
+
+    fn orb_capacity(&self) -> usize {
+        self.live.orbs.as_ref().map_or(0, |orbs| {
+            num_traits::cast(orbs.capacity).expect("an orb capacity fits a length")
+        })
+    }
+
+    fn orb_passive_at(&mut self, place: usize) {
+        if self.ended.is_some() || self.ending() {
+            return;
+        }
+        let Some(mut orb) = self
             .live
-            .cards
-            .named(playing)
-            .unwrap_or_else(|| unimplemented!("a card cloning itself from outside the fight"))
-            .face;
-        let id = self.live.card_ids.mint();
-        // A full hand sends the card to the discard pile instead.
-        let full =
-            pile == Pile::Hand && self.live.cards.len(Pile::Hand) >= super::pile::MAX_CARDS_IN_HAND;
-        let pile = if full { Pile::Discard } else { pile };
-        let index = num_traits::NumCast::from(self.live.cards.len(pile))
-            .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
-        self.live.cards.push(pile, face.named(id));
-        let at = CardAt::new(id, pile, index);
-        self.card_entered_combat(at, face.ident.card, true);
-        self.card_generated(at, face.ident.card, self.creator());
-        Some(at)
+            .orbs
+            .as_ref()
+            .and_then(|orbs| orbs.queue.get(place).copied())
+        else {
+            return;
+        };
+        V::orb_passive(&mut orb, self);
+        if let Some(held) = self
+            .live
+            .orbs
+            .as_mut()
+            .and_then(|orbs| orbs.queue.get_mut(place))
+            && held.orb == orb.orb
+        {
+            *held = orb;
+        }
     }
 
     fn add_card(&mut self, card: CardIdent<V>, pile: Pile) -> Option<CardAt<V>> {

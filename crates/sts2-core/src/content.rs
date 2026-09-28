@@ -1853,6 +1853,16 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("a card cloning itself")
     }
 
+    /// [`Fight::clone_this`] for another card in the fight, as it holds
+    /// now.
+    fn clone_card(
+        &mut self,
+        _card: crate::CardAt<V>,
+        _pile: crate::Pile,
+    ) -> Option<crate::CardAt<V>> {
+        unimplemented!("a card cloned")
+    }
+
     /// `CardPileCmd.Add` of a new card to one combat pile, made for the fight
     /// but not through `AddGeneratedCardToCombat`, so no generation hook
     /// hears it. Nothing once the fight is over.
@@ -2223,6 +2233,18 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("counting orbs")
     }
 
+    /// How many orb slots the player has, which is `OrbQueue.Capacity`.
+    fn orb_capacity(&self) -> usize {
+        unimplemented!("counting orb slots")
+    }
+
+    /// `OrbCmd.Passive(orb, null)` on the orb at `place` in the queue, which
+    /// does nothing once the fight is ending. The numbers it moves stay on
+    /// it.
+    fn orb_passive_at(&mut self, _place: usize) {
+        unimplemented!("an orb's passive")
+    }
+
     /// The player's orbs, front first, which is `OrbQueue.Orbs`.
     fn channelled(&self) -> Vec<crate::Channelled<V>> {
         unimplemented!("listing orbs")
@@ -2437,6 +2459,9 @@ pub enum Change<V: ContentVersion> {
     /// `EnergyCost.SetThisTurn` and its kin. `SetToFreeThisTurn` is this at
     /// zero on both pools, for [`Lasting::ThisTurn`].
     SetCost(CostPool, V::Number),
+    /// `SetThisTurnOrUntilPlayed(cost, reduceOnly: true)` and its kind: the
+    /// cost set to this where that lowers it, and left where it does not.
+    LowerCost(CostPool, V::Number),
     /// `CardModel.AddKeyword`: the copy carries a word its table does not.
     /// The word is on the copy for as long as the copy lasts.
     AddKeyword(V::CardKeyword),

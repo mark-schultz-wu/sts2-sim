@@ -20,6 +20,18 @@ pub enum Resume {
 pub(super) fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
     match card {
         EventCard::NeowsFury => neows_fury(fight),
+        // `Enlightenment`: every card in hand costs at most one, this turn or
+        // until played, or for the fight once upgraded.
+        EventCard::Enlightenment => {
+            let lasting = match fight.upgraded() {
+                true => Lasting::ThisFight,
+                false => Lasting::ThisTurnOrUntilPlayed,
+            };
+            for card in fight.cards_in(Pile::Hand) {
+                fight.modify_card(card, Change::LowerCost(CostPool::Energy, 1), lasting);
+            }
+            Played::Done
+        }
         EventCard::Metamorphosis => metamorphosis(fight),
         EventCard::Whistle => whistle(fight),
         EventCard::Apotheosis => apotheosis(fight),

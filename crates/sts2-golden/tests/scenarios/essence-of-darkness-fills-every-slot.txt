@@ -1,0 +1,6 @@
+# Essence of Darkness channels a Dark orb for each orb slot, which evokes
+# Cracked Core's Lightning on the way.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","potion":"ESSENCE_OF_DARKNESS"}
+{"cmd":"use_potion","index":0,"target":null}
