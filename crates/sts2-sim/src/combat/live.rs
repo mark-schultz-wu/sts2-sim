@@ -1759,14 +1759,17 @@ impl<V: Rules> CombatHistory<V> {
             .push(sts2_core::HistoryEntry::Attacked(monster));
     }
 
-    /// `History.CardDrawn`, in the turn the fight stands in.
+    /// `History.CardAfflicted`, in the turn the fight stands in.
     pub(super) fn afflicted(&mut self, affliction: V::Affliction) {
         self.this_turn
             .push(sts2_core::HistoryEntry::Afflicted(affliction));
     }
 
-    pub(super) fn draw(&mut self, card: V::Card) {
-        self.this_turn.push(sts2_core::HistoryEntry::Drawn(card));
+    /// `History.CardDrawn`, in the turn the fight stands in. `hand_draw` is
+    /// `fromHandDraw`.
+    pub(super) fn draw(&mut self, card: V::Card, hand_draw: bool) {
+        self.this_turn
+            .push(sts2_core::HistoryEntry::Drawn { card, hand_draw });
     }
 
     /// `History.BlockGained`, in the turn the fight stands in.

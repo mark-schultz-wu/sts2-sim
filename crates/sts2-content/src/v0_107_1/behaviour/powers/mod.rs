@@ -1885,6 +1885,33 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Consuming Shadow")
         }
         (Power::ConsumingShadowPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `SicEmPower.AfterDamageGiven`: `OstyCmd.Summon` of its stack for the
+        // player whose Osty hit its owner, where that player applied it.
+        (
+            Power::SicEmPower,
+            PowerAmount::Counted(amount),
+            EventHook::DamageGiven {
+                dealer: Some(dealer),
+                pet_of: Some(pet_of),
+                target,
+                ..
+            },
+        ) if target == holder
+            && applier == Some(pet_of)
+            && fight.monster(dealer) == Some(Monster::Osty) =>
+        {
+            Some(HookEffect::Summon(amount))
+        }
+        (Power::SicEmPower, PowerAmount::Endless, EventHook::DamageGiven { .. }) => {
+            unimplemented!("an endless Sic 'Em")
+        }
+        (Power::SicEmPower, _, EventHook::DamageGiven { .. }) => None,
+        // `SicEmPower.AfterSideTurnEnd`: `PowerCmd.Remove(this)` as its
+        // owner's turn ends.
+        (Power::SicEmPower, _, EventHook::SideTurnEnd { side }) if side == owner => {
+            Some(HookEffect::Remove)
+        }
+        (Power::SicEmPower, _, EventHook::SideTurnEnd { .. }) => None,
         // `ConquerorPower.AfterSideTurnEnd`: one off its stack as its owner's
         // side's turn ends.
         (Power::ConquerorPower, PowerAmount::Counted(_), EventHook::SideTurnEnd { side })

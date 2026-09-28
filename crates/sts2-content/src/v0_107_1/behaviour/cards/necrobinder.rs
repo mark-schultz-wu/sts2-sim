@@ -8,6 +8,7 @@ use sts2_core::{
 use super::super::super::generated::card_plays;
 use super::super::super::generated::cards::{CardKeyword, CardVar, NecrobinderCard};
 use super::super::super::generated::monsters::Monster;
+use super::super::super::generated::powers::Power;
 use super::V;
 
 /// Its damage to the target, as one attack.
@@ -395,6 +396,18 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
         NecrobinderCard::Graveblast => graveblast(fight),
         NecrobinderCard::SculptingStrike => sculpting_strike(fight),
         NecrobinderCard::Snap => snap(fight),
+        // `SicEm`: Osty's damage to the target, where Osty stands, then its
+        // power on the target.
+        NecrobinderCard::SicEm => {
+            osty_hit(fight, CardVar::OstyDamage);
+            let target = fight.target();
+            fight.apply_power(
+                target,
+                Power::SicEmPower,
+                sts2_core::PowerAmount::Counted(fight.var(CardVar::SicEmPower)),
+            );
+            Played::Done
+        }
         NecrobinderCard::Fetch => fetch(fight),
         NecrobinderCard::DrainPower => drain_power(fight),
         NecrobinderCard::Reave => reave(fight),

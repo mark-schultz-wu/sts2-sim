@@ -1,0 +1,10 @@
+# Sic 'Em has Osty hit the target, then puts its power on it. Each later
+# hit Osty lands on that enemy summons three for the player, and the power
+# comes off as the enemy's turn ends.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"SIC_EM"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"grant","card":"SIC_EM"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"end_turn"}

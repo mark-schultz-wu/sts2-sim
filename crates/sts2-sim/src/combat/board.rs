@@ -1825,6 +1825,8 @@ impl<'a, V: Rules> Board<'a, V> {
                     }
                 }
                 HookEffect::KillOwner => self.kill_outright(owner),
+                // `OstyCmd.Summon` for the player.
+                HookEffect::Summon(amount) => sts2_core::Fight::summon_osty(self, amount),
                 // `CreatureCmd.Damage` over `HittableEnemies`, from the
                 // power's owner, unblockable and unpowered.
                 HookEffect::DamageOpponentsUnblockable(amount) => {
@@ -4066,7 +4068,7 @@ pub(super) fn draw_pausing<V: Rules>(
             .expect("a draw pile just checked for cards");
         // `History.CardDrawn`, before the hook, so a listener counts this
         // draw among the turn's.
-        live.history.draw(drawn.face.ident.card);
+        live.history.draw(drawn.face.ident.card, hand_draw);
         // `Hook.AfterCardDrawn` makes its early pass over every listener first.
         let hook = sts2_core::EventHook::CardDrawnEarly {
             card: drawn.face.ident.card,

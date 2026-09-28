@@ -337,6 +337,13 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
             printed.face(CardVar::CalculationBase)
                 + printed.face(CardVar::CalculationExtra) * gained
         }
+        // `DeathMarch`: a base, and more for each card its owner drew this
+        // turn outside the hand draw. A fight here has one player.
+        (Cards::Necrobinder(NecrobinderCard::DeathMarch), CardVar::CalculatedDamage) => {
+            let drawn = owner.history.drawn_outside_hand_draw_this_turn();
+            let drawn = Number::try_from(drawn).expect("a turn's draws fit the game's numbers");
+            printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * drawn
+        }
         (card, key) => unimplemented!("the {} {card:?} works out", key.name()),
     }
 }

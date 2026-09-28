@@ -3688,8 +3688,11 @@ pub struct PlayFinished<V: ContentVersion> {
 pub enum HistoryEntry<V: ContentVersion> {
     Started(PlayStarted<V>),
     Finished(PlayFinished<V>),
-    /// A `CardDrawnEntry`, by the card drawn.
-    Drawn(V::Card),
+    /// A `CardDrawnEntry`, by the card drawn and `FromHandDraw`.
+    Drawn {
+        card: V::Card,
+        hand_draw: bool,
+    },
     /// A `CreatureAttackedEntry`, by the attacker's `Monster`: nothing for
     /// the player.
     Attacked(Option<V::Monster>),
@@ -3813,9 +3816,26 @@ impl<V: ContentVersion> History<'_, V> {
     /// Each `CardDrawnEntry` where `HappenedThisTurn`, by the card drawn.
     pub fn drawn_this_turn(&self) -> impl Iterator<Item = V::Card> + '_ {
         self.this_turn.iter().filter_map(|entry| match entry {
-            HistoryEntry::Drawn(card) => Some(*card),
+            HistoryEntry::Drawn { card, .. } => Some(*card),
             _ => None,
         })
+    }
+
+    /// How many `CardDrawnEntry` where `HappenedThisTurn` are not
+    /// `FromHandDraw`.
+    pub fn drawn_outside_hand_draw_this_turn(&self) -> usize {
+        self.this_turn
+            .iter()
+            .filter(|entry| {
+                matches!(
+                    entry,
+                    HistoryEntry::Drawn {
+                        hand_draw: false,
+                        ..
+                    }
+                )
+            })
+            .count()
     }
 
     /// How many `CardAfflictedEntry` of `affliction` are where
