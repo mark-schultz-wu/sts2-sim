@@ -17,6 +17,7 @@ using MegaCrit.Sts2.Core.Models.Events;
 using MegaCrit.Sts2.Core.Localization;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Cards;
 using MegaCrit.Sts2.Core.Multiplayer.Game;
 using MegaCrit.Sts2.Core.MonsterMoves.Intents;
 using MegaCrit.Sts2.Core.Rooms;
@@ -244,9 +245,17 @@ public static class Observation
         return cost < 0 ? null : cost;
     }
 
+    /// <remarks>
+    /// A Mad Science is named with its rider, <c>MAD_SCIENCE_SAPPING</c> and
+    /// the like. One class serves nine cards: <c>TinkerTimeRider</c> fixes the
+    /// type, the target and the play, and nothing else in a copy says which it
+    /// is.
+    /// </remarks>
     public static string Ident(CardModel card)
     {
-        string s = card.Id.Entry;
+        string s = card is MadScience mad
+            ? card.Id.Entry + "_" + mad.TinkerTimeRider.ToString().ToUpperInvariant()
+            : card.Id.Entry;
         if (card.CurrentUpgradeLevel > 0)
         {
             s += "+" + card.CurrentUpgradeLevel;

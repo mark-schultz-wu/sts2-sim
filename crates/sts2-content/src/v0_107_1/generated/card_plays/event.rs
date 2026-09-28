@@ -67,7 +67,23 @@ pub fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
             Played::Done
         }
         // `switch`
-        EventCard::MadScience => unimplemented!("what {card:?} does when it is played"),
+        EventCard::MadScienceSapping => unimplemented!("what {card:?} does when it is played"),
+        // `switch`
+        EventCard::MadScienceViolence => unimplemented!("what {card:?} does when it is played"),
+        // `switch`
+        EventCard::MadScienceChoking => unimplemented!("what {card:?} does when it is played"),
+        // `switch`
+        EventCard::MadScienceEnergized => unimplemented!("what {card:?} does when it is played"),
+        // `switch`
+        EventCard::MadScienceWisdom => unimplemented!("what {card:?} does when it is played"),
+        // `switch`
+        EventCard::MadScienceChaos => unimplemented!("what {card:?} does when it is played"),
+        // `switch`
+        EventCard::MadScienceExpertise => unimplemented!("what {card:?} does when it is played"),
+        // `switch`
+        EventCard::MadScienceCurious => unimplemented!("what {card:?} does when it is played"),
+        // `switch`
+        EventCard::MadScienceImprovement => unimplemented!("what {card:?} does when it is played"),
         // `call Owner.PlayerCombatState.AllCards.OfType`
         EventCard::Maul => unimplemented!("what {card:?} does when it is played"),
         // `call CardFactory.GetForCombat`
@@ -193,7 +209,15 @@ pub fn upgrade(card: EventCard) -> &'static [Change<V>] {
         EventCard::Exterminate => &[Change::Raise(CardVar::Damage, 1)],
         EventCard::FeedingFrenzy => &[Change::Raise(CardVar::StrengthPower, 2)],
         EventCard::HelloWorld => &[Change::AddKeyword(CardKeyword::Innate)],
-        EventCard::MadScience => &[Change::AddKeyword(CardKeyword::Innate)],
+        EventCard::MadScienceSapping => &[Change::AddKeyword(CardKeyword::Innate)],
+        EventCard::MadScienceViolence => &[Change::AddKeyword(CardKeyword::Innate)],
+        EventCard::MadScienceChoking => &[Change::AddKeyword(CardKeyword::Innate)],
+        EventCard::MadScienceEnergized => &[Change::AddKeyword(CardKeyword::Innate)],
+        EventCard::MadScienceWisdom => &[Change::AddKeyword(CardKeyword::Innate)],
+        EventCard::MadScienceChaos => &[Change::AddKeyword(CardKeyword::Innate)],
+        EventCard::MadScienceExpertise => &[Change::AddKeyword(CardKeyword::Innate)],
+        EventCard::MadScienceCurious => &[Change::AddKeyword(CardKeyword::Innate)],
+        EventCard::MadScienceImprovement => &[Change::AddKeyword(CardKeyword::Innate)],
         EventCard::Maul => &[
             Change::Raise(CardVar::Damage, 1),
             Change::Raise(CardVar::Increase, 1),

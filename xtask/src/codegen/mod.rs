@@ -25,6 +25,7 @@ mod characters;
 mod enchantments;
 mod encounters;
 mod events;
+mod mad_science;
 mod modifiers;
 mod monster_moves;
 mod monsters;

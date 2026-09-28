@@ -2,7 +2,7 @@
 
 use super::super::cards::*;
 use super::super::{CARDS, VERSION};
-use super::{build, rows, wire};
+use super::{build, dumped_id, rows, wire};
 use crate::{Cost, Field};
 use sts2_core::CardVars;
 use sts2_core::{CardNumberModifier, CardTable, Table};
@@ -48,70 +48,83 @@ fn star_cost(canonical: &str, costs_x: &str) -> Cost {
 fn the_generated_table_matches_the_dump() {
     let mut checked = 0;
     for row in rows(CARDS, "card") {
-        let card = Cards::ALL
+        let generated: Vec<&Cards> = Cards::ALL
             .iter()
-            .find(|c| wire(c) == row[1])
-            .unwrap_or_else(|| panic!("{} is in the dump but not generated", row[1]));
-
-        let d = card.data();
-        assert_eq!(d.cost, cost(row[6], row[7]), "{}: cost", row[1]);
-        assert_eq!(
-            d.star_cost,
-            star_cost(row[8], row[9]),
-            "{}: star_cost",
+            .filter(|c| dumped_id(&wire(c)) == row[1])
+            .collect();
+        assert!(
+            !generated.is_empty(),
+            "{} is in the dump but not generated",
             row[1]
         );
-        assert_eq!(
-            d.max_upgrade.to_string(),
-            row[10],
-            "{}: max_upgrade",
-            row[1]
-        );
-        assert_eq!(format!("{:?}", d.rarity), row[4], "{}: rarity", row[1]);
+        for card in generated {
+            let d = card.data();
+            assert_eq!(d.cost, cost(row[6], row[7]), "{}: cost", row[1]);
+            assert_eq!(
+                d.star_cost,
+                star_cost(row[8], row[9]),
+                "{}: star_cost",
+                row[1]
+            );
+            assert_eq!(
+                d.max_upgrade.to_string(),
+                row[10],
+                "{}: max_upgrade",
+                row[1]
+            );
+            assert_eq!(format!("{:?}", d.rarity), row[4], "{}: rarity", row[1]);
 
-        // Matched, not converted to an Option: `Constant(TargetType::None)`
-        // means "targets nothing" and `Computed` means "ask the card", and
-        // an Option would spell both with the word None again.
-        //
-        // Compared through serde rather than Debug, because
-        // `TargetType::Self` is a Rust keyword and generates as
-        // `SelfTarget` — only the rename carries the game's own spelling,
-        // and that is what the wire depends on.
-        match d.kind {
-            Field::Computed => assert_eq!(row[3], "dynamic", "{}: kind", row[1]),
-            Field::Constant(kind) => assert_eq!(wire(&kind), row[3], "{}: kind", row[1]),
+            // Matched, not converted to an Option: `Constant(TargetType::None)`
+            // means "targets nothing" and `Computed` means "ask the card", and
+            // an Option would spell both with the word None again.
+            //
+            // Compared through serde rather than Debug, because
+            // `TargetType::Self` is a Rust keyword and generates as
+            // `SelfTarget` — only the rename carries the game's own spelling,
+            // and that is what the wire depends on.
+            // A Mad Science's rider fixes the type and target the dump leaves to
+            // the copy, and whether it gains block.
+            let rider = wire(card) != row[1];
+            match d.kind {
+                Field::Constant(_) if rider => assert_eq!(row[3], "dynamic", "{}: kind", row[1]),
+                Field::Computed => assert_eq!(row[3], "dynamic", "{}: kind", row[1]),
+                Field::Constant(kind) => assert_eq!(wire(&kind), row[3], "{}: kind", row[1]),
+            }
+            match d.target {
+                Field::Constant(_) if rider => assert_eq!(row[5], "dynamic", "{}: target", row[1]),
+                Field::Computed => assert_eq!(row[5], "dynamic", "{}: target", row[1]),
+                Field::Constant(target) => assert_eq!(wire(&target), row[5], "{}: target", row[1]),
+            }
+
+            // Sorted, because the set iterates in the game's declaration order
+            // and the dump sorts alphabetically. Neither order is meaningful:
+            // `CardKeywordOrder` gives the display order separately, and the
+            // game itself stores a `HashSet`.
+            let mut keywords: Vec<String> = d.keywords.iter().map(|k| format!("{k:?}")).collect();
+            keywords.sort();
+            let expected = if row[11] == "-" {
+                Vec::new()
+            } else {
+                row[11].split(',').map(String::from).collect()
+            };
+            assert_eq!(keywords, expected, "{}: keywords", row[1]);
+
+            let mut tags: Vec<String> = d.tags.iter().map(|t| format!("{t:?}")).collect();
+            tags.sort();
+            let expected = if row[12] == "-" {
+                Vec::new()
+            } else {
+                row[12].split(',').map(String::from).collect()
+            };
+            assert_eq!(tags, expected, "{}: tags", row[1]);
+            if !rider {
+                assert_eq!(d.gains_block, row[13] == "1", "{}: gains_block", row[1]);
+            }
+
+            checked += 1;
         }
-        match d.target {
-            Field::Computed => assert_eq!(row[5], "dynamic", "{}: target", row[1]),
-            Field::Constant(target) => assert_eq!(wire(&target), row[5], "{}: target", row[1]),
-        }
-
-        // Sorted, because the set iterates in the game's declaration order
-        // and the dump sorts alphabetically. Neither order is meaningful:
-        // `CardKeywordOrder` gives the display order separately, and the
-        // game itself stores a `HashSet`.
-        let mut keywords: Vec<String> = d.keywords.iter().map(|k| format!("{k:?}")).collect();
-        keywords.sort();
-        let expected = if row[11] == "-" {
-            Vec::new()
-        } else {
-            row[11].split(',').map(String::from).collect()
-        };
-        assert_eq!(keywords, expected, "{}: keywords", row[1]);
-
-        let mut tags: Vec<String> = d.tags.iter().map(|t| format!("{t:?}")).collect();
-        tags.sort();
-        let expected = if row[12] == "-" {
-            Vec::new()
-        } else {
-            row[12].split(',').map(String::from).collect()
-        };
-        assert_eq!(tags, expected, "{}: tags", row[1]);
-        assert_eq!(d.gains_block, row[13] == "1", "{}: gains_block", row[1]);
-
-        checked += 1;
     }
-    assert_eq!(checked, 578);
+    assert_eq!(checked, 586);
 }
 
 /// The anchor. A dump from another build has another hash, and a table
@@ -286,7 +299,10 @@ fn every_printed_number_matches_the_dump() {
     assert_eq!(dumped.values().map(Vec::len).sum::<usize>(), 775);
 
     for card in Cards::ALL {
-        let want = dumped.remove(wire(&card).as_str()).unwrap_or_default();
+        let want = dumped
+            .get(dumped_id(&wire(&card)))
+            .cloned()
+            .unwrap_or_default();
         let got: Vec<DumpedNumber<'_>> = card
             .vars()
             .iter()
@@ -295,6 +311,9 @@ fn every_printed_number_matches_the_dump() {
         assert_eq!(got, want, "{}: printed numbers", wire(&card));
     }
 
+    for card in Cards::ALL {
+        dumped.remove(dumped_id(&wire(&card)));
+    }
     assert!(
         dumped.is_empty(),
         "the dump has numbers for cards that are not generated: {:?}",

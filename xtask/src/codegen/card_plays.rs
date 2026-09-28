@@ -237,7 +237,8 @@ fn comment(out: &mut String, stmt: &str) {
 
 /// Every card's play and upgrade, one module per pool.
 pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
-    let dump = Dump::read_any("card_plays.txt")?;
+    let mut dump = Dump::read_any("card_plays.txt")?;
+    super::mad_science::expand(&mut dump);
     // No content hash: the dump is read from the assembly, and the game
     // works the hash out at runtime.
     if (
@@ -254,7 +255,8 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
         .into());
     }
 
-    let cards_dump = Dump::read("cards.txt")?;
+    let mut cards_dump = Dump::read("cards.txt")?;
+    super::mad_science::expand(&mut cards_dump);
     let mut cards: BTreeMap<String, (String, Card)> = BTreeMap::new();
     for row in cards_dump.of("card") {
         cards.insert(row[1].clone(), (row[2].clone(), Card::default()));

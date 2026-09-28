@@ -1,0 +1,17 @@
+# Tinker Time's Skill with Chaos: a Mad Science that blocks, then adds a
+# card of the character's pool off the combat generation stream, free this
+# turn. Drawn again later, it costs what it prints.
+#
+# Tinker Time offers two of three types, then two of the type's three
+# riders, each pair drawn off the event's stream.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"TINKER_TIME"}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

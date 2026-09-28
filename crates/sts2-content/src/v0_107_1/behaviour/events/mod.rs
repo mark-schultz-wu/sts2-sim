@@ -46,6 +46,7 @@ mod the_future_of_potions;
 mod the_lantern_key;
 mod the_legends_were_true;
 mod this_or_that;
+mod tinker_time;
 mod trial;
 mod vakuu;
 mod war_historian_repy;
@@ -107,6 +108,7 @@ pub enum State {
     HungryForMushrooms(hungry_for_mushrooms::State),
     Reflections(reflections::State),
     RoundTeaParty(round_tea_party::State),
+    TinkerTime(tinker_time::State),
     Trial(trial::State),
     WarHistorianRepy(war_historian_repy::State),
     SapphireSeed(sapphire_seed::State),
@@ -190,6 +192,7 @@ pub(crate) fn allowed(event: Event, run: &impl EventView<V>) -> bool {
         Event::HungryForMushrooms => hungry_for_mushrooms::HungryForMushrooms.allowed(run),
         Event::Reflections => reflections::Reflections.allowed(run),
         Event::RoundTeaParty => round_tea_party::RoundTeaParty.allowed(run),
+        Event::TinkerTime => tinker_time::TinkerTime.allowed(run),
         Event::Trial => trial::Trial.allowed(run),
         Event::WarHistorianRepy => war_historian_repy::WarHistorianRepy.allowed(run),
         Event::SunkenStatue => sunken_statue::SunkenStatue.allowed(run),
@@ -331,6 +334,7 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
         Event::RoundTeaParty => {
             State::RoundTeaParty(round_tea_party::RoundTeaParty.enter(run, rng))
         }
+        Event::TinkerTime => State::TinkerTime(tinker_time::TinkerTime.enter(run, rng)),
         Event::Trial => State::Trial(trial::Trial.enter(run, rng)),
         Event::WarHistorianRepy => {
             State::WarHistorianRepy(war_historian_repy::WarHistorianRepy.enter(run, rng))
@@ -462,6 +466,7 @@ pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
         }
         State::Reflections(state) => reflections::Reflections.observe(state, run),
         State::RoundTeaParty(state) => round_tea_party::RoundTeaParty.observe(state, run),
+        State::TinkerTime(state) => tinker_time::TinkerTime.observe(state, run),
         State::Trial(state) => trial::Trial.observe(state, run),
         State::WarHistorianRepy(state) => war_historian_repy::WarHistorianRepy.observe(state, run),
         State::SapphireSeed(state) => sapphire_seed::SapphireSeed.observe(state, run),
@@ -565,6 +570,7 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
         State::RoundTeaParty(state) => {
             round_tea_party::RoundTeaParty.choose(state, option, run, rng)
         }
+        State::TinkerTime(state) => tinker_time::TinkerTime.choose(state, option, run, rng),
         State::Trial(state) => trial::Trial.choose(state, option, run, rng),
         State::WarHistorianRepy(state) => {
             war_historian_repy::WarHistorianRepy.choose(state, option, run, rng)

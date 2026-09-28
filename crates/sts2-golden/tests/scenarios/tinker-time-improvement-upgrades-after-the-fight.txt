@@ -1,0 +1,15 @@
+# Tinker Time's Power with Improvement: a Mad Science whose power upgrades
+# a random upgradable deck card, off combat card selection, as the fight
+# ends.
+#
+# Tinker Time offers two of three types, then two of the type's three
+# riders, each pair drawn off the event's stream.
+{"cmd":"start","seed":"0RACLE3","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"TINKER_TIME"}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":4}
+{"cmd":"power","power":"STRENGTH_POWER","amount":300,"target":0}
+{"cmd":"play_card","index":2,"target":1}
