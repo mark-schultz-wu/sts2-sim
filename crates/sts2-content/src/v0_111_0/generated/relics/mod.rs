@@ -1870,7 +1870,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
         .with(sts2_core::ModelHook::AfterCurrentHpChanged)
         .with(sts2_core::ModelHook::BeforeCombatStart),
     // MEMBERSHIP_CARD
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyMerchantPrice),
     // MERCURY_HOURGLASS
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // METRONOME
@@ -2198,7 +2198,9 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
         .with(sts2_core::ModelHook::AfterModifyingHpLostAfterOsty)
         .with(sts2_core::ModelHook::ModifyHpLostAfterOstyLate),
     // THE_COURIER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::ModifyMerchantPrice)
+        .with(sts2_core::ModelHook::ShouldRefillMerchantEntry),
     // THROWING_AXE
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCombatEnd)

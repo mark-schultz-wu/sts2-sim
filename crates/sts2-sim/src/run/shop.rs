@@ -111,6 +111,76 @@ impl<V: Rules> Merchant<'_, V> {
         entries
     }
 
+    /// `RestockAfterPurchase`: what shelf `index` holds once a purchase
+    /// refilled it, and its price. `on_shelves` is every card the merchant
+    /// shows, the one just bought included.
+    ///
+    /// A card shelf is `Populate` again, off sale, leaving those out. A relic
+    /// shelf rolls a rarity and pulls from the back of the bag. A potion
+    /// shelf draws one potion, with the blacklist it builds never passed.
+    pub(super) fn restock(
+        &mut self,
+        index: usize,
+        stock: Stock<V>,
+        on_shelves: &[V::Card],
+    ) -> (Stock<V>, i32) {
+        match stock {
+            Stock::Card(_) => {
+                let (card, cost) = match SHELVES.get(index) {
+                    Some(&kind) => {
+                        let rarity = self.rolled_rarity();
+                        let rarity = self.allowed_rarity(kind, rarity, on_shelves);
+                        let card =
+                            self.pick(V::merchant_cards(self.character, kind, rarity), on_shelves);
+                        (card, self.haggled(card_cost(rarity, false), CARD_SPREAD))
+                    }
+                    None => {
+                        let rarity = COLORLESS[index - SHELVES.len()];
+                        let card = self.pick(V::merchant_colorless_cards(rarity), on_shelves);
+                        (card, self.haggled(card_cost(rarity, true), CARD_SPREAD))
+                    }
+                };
+                let card: CardIdent<V> = CardIdent::new(card);
+                let shelf = ShopCard {
+                    card,
+                    cost: card.card.cost(),
+                    star_cost: card.card.star_cost(),
+                };
+                (Stock::Card(Some(shelf)), cost)
+            }
+            Stock::Relic(_) => {
+                let rarity = self.rolled_relic_rarity();
+                let relic =
+                    self.player_relics
+                        .back(rarity, self.dealt_relics, V::Relic::allowed_in_shops);
+                self.dealt_relics.push(relic);
+                let base = relic
+                    .merchant_price()
+                    .unwrap_or_else(|| unimplemented!("a merchant stocking {relic:?}"));
+                (
+                    Stock::Relic(Some(relic)),
+                    self.haggled(i32::from(base), RELIC_SPREAD),
+                )
+            }
+            Stock::Potion(_) => {
+                let character = self.character;
+                let [potion] = crate::reward::potion::distinct::<V, MegaRng>(
+                    self.shops(),
+                    character,
+                    1,
+                    false,
+                )[..] else {
+                    unreachable!("one draw returns one potion")
+                };
+                (
+                    Stock::Potion(Some(potion)),
+                    potion_cost::<V>(character, potion),
+                )
+            }
+            Stock::CardRemoval => unreachable!("the card removal never restocks"),
+        }
+    }
+
     /// One shelf, priced and numbered. What the run can afford is derived.
     fn entry(&self, stock: Stock<V>, cost: i32, index: usize) -> Entry<V> {
         Entry {

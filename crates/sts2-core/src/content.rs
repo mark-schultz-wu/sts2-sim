@@ -682,10 +682,12 @@ pub enum ModelHook {
     ShouldForcePotionReward,
     AfterFlush,
     AfterModifyingBlockAmount,
+    ModifyMerchantPrice,
+    ShouldRefillMerchantEntry,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 117] = [
+    pub const ALL: [ModelHook; 119] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -803,6 +805,8 @@ impl ModelHook {
         ModelHook::ShouldForcePotionReward,
         ModelHook::AfterFlush,
         ModelHook::AfterModifyingBlockAmount,
+        ModelHook::ModifyMerchantPrice,
+        ModelHook::ShouldRefillMerchantEntry,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -937,6 +941,8 @@ impl ModelHook {
             ModelHook::ShouldForcePotionReward => "ShouldForcePotionReward",
             ModelHook::AfterFlush => "AfterFlush",
             ModelHook::AfterModifyingBlockAmount => "AfterModifyingBlockAmount",
+            ModelHook::ModifyMerchantPrice => "ModifyMerchantPrice",
+            ModelHook::ShouldRefillMerchantEntry => "ShouldRefillMerchantEntry",
         }
     }
 }
@@ -2912,6 +2918,9 @@ pub enum ModifyHook<V: ContentVersion> {
         turn: V::Count,
         room: V::RoomType,
     },
+    /// `ModifyMerchantPrice`: what a merchant's shelf costs, which
+    /// `MerchantEntry.Cost` asks every time it is read in a merchant's room.
+    MerchantPrice,
     /// `ModifyMaxEnergy`: the energy `player`'s turn resets to, which
     /// `PlayerCombatState.MaxEnergy` asks every time it is read.
     MaxEnergy {
@@ -2975,6 +2984,7 @@ impl<V: ContentVersion> ModifyHook<V> {
             ModifyHook::GoldGained => ModelHook::ModifyGoldGained,
             ModifyHook::RestSiteHealAmount => ModelHook::ModifyRestSiteHealAmount,
             ModifyHook::MaxEnergy { .. } => ModelHook::ModifyMaxEnergy,
+            ModifyHook::MerchantPrice => ModelHook::ModifyMerchantPrice,
             ModifyHook::EnergyCost { .. } => ModelHook::TryModifyEnergyCostInCombat,
             ModifyHook::EnergyCostLate { .. } => ModelHook::TryModifyEnergyCostInCombatLate,
             ModifyHook::CardPlayCount { .. } => ModelHook::ModifyCardPlayCount,
@@ -3025,6 +3035,9 @@ pub enum DecisionHook<V: ContentVersion> {
     /// `ShouldForcePotionReward`, as a won fight's rewards roll for a potion
     /// in a room of this type. One listener answering yes gives the potion.
     ShouldForcePotionReward { room: V::RoomType },
+    /// `ShouldRefillMerchantEntry`, once a shelf's purchase went through. One
+    /// listener answering yes restocks the shelf rather than emptying it.
+    ShouldRefillMerchantEntry,
     /// `ShouldPlayerResetEnergy`, as `player` sets up their turn `turn`. A
     /// player no listener lets reset adds their maximum to what they have.
     ShouldPlayerResetEnergy {
@@ -3105,6 +3118,7 @@ impl<V: ContentVersion> DecisionHook<V> {
             DecisionHook::ShouldDieLate { .. } => ModelHook::ShouldDieLate,
             DecisionHook::ShouldPlayerResetEnergy { .. } => ModelHook::ShouldPlayerResetEnergy,
             DecisionHook::ShouldForcePotionReward { .. } => ModelHook::ShouldForcePotionReward,
+            DecisionHook::ShouldRefillMerchantEntry => ModelHook::ShouldRefillMerchantEntry,
             DecisionHook::ShouldCountForCombatEnd
             | DecisionHook::ShouldRemoveSelfAfterOwnerDeath
             | DecisionHook::ShouldOwnerDeathTriggerFatal => return None,

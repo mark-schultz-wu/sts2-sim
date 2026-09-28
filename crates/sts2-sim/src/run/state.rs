@@ -2846,10 +2846,10 @@ impl<V: Rules> State<V> {
         if !entry.stocked {
             unimplemented!("buying a shelf this merchant has sold");
         }
-        if entry.cost > self.player.gold {
+        let (stock, cost) = (entry.stock, self.merchant_price(entry.cost));
+        if cost > self.player.gold {
             unimplemented!("buying a shelf this run cannot afford");
         }
-        let (stock, cost) = (entry.stock, entry.cost);
 
         // `PlayerCmd.LoseGold` runs after the entry's own purchase in the
         // game. Nothing between the two reads the gold, so it is spent here,
@@ -2892,18 +2892,16 @@ impl<V: Rules> State<V> {
             stock => unimplemented!("buying {stock:?}"),
         };
 
-        let Phase::Shop {
-            entries,
-            unfinished,
-        } = &mut self.phase
-        else {
-            unreachable!("the phase was a shop when this began");
-        };
         // `ClearAfterPurchase` runs once the entry's own purchase returns, so a
         // shelf whose purchase is still asking stays stocked until it does.
         match asking {
-            Some(_) => *unfinished = asking,
-            None => sold(entries, index),
+            Some(_) => {
+                let Phase::Shop { unfinished, .. } = &mut self.phase else {
+                    unreachable!("the phase was a shop when this began");
+                };
+                *unfinished = asking;
+            }
+            None => self.purchased(index),
         }
         // A purchase that has not returned leaves the decision unresolved,
         // which is what the game reports.
@@ -2975,12 +2973,9 @@ impl<V: Rules> State<V> {
             unimplemented!("a clone naming a card that was not offered");
         };
         self.add_to_deck(sts2_core::DeckCard::new(card));
-        // `OnTryPurchaseWrapper` has returned now, so `ClearAfterPurchase`
-        // runs and the shelf the relic came off empties.
-        let Phase::Shop { entries, .. } = &mut self.phase else {
-            unreachable!("the phase was a shop when this began");
-        };
-        sold(entries, shelf);
+        // `OnTryPurchaseWrapper` has returned now, so the shelf the relic came
+        // off empties or restocks.
+        self.purchased(shelf);
     }
 
     /// Take the card the merchant's removal was pointed at out of the deck.
@@ -2994,7 +2989,7 @@ impl<V: Rules> State<V> {
         self.player.deck_mut().remove(at);
         // `DoLocalMerchantCardRemoval` spends the gold once the card comes
         // back, and `CardShopRemovalsUsed` climbs over the run.
-        let spent = removal_cost::<V>(self.removals_used);
+        let spent = self.merchant_price(removal_cost::<V>(self.removals_used));
         self.player.gold = self.player.gold - spent;
         self.removals_used += 1;
         // The entry itself is left where it was. `CalcCost` runs in its
@@ -4162,7 +4157,7 @@ impl<V: Rules> State<V> {
                         .iter()
                         .filter(|entry| {
                             entry.stocked
-                                && entry.cost <= gold
+                                && self.merchant_price(entry.cost) <= gold
                                 && (room_for_a_potion
                                     || !matches!(entry.stock, sts2_core::Stock::Potion(_)))
                         })
@@ -4244,6 +4239,104 @@ impl<V: Rules> State<V> {
             }
         }
         false
+    }
+
+    /// `MerchantEntry.Cost` in a merchant's room: `Hook.ModifyMerchantPrice`
+    /// over what the shelf holds, which `(int)` truncates.
+    fn merchant_price(&self, cost: V::Number) -> V::Number {
+        let hook = sts2_core::ModifyHook::MerchantPrice;
+        let mut left = self
+            .player
+            .relics
+            .hearing(sts2_core::Overrides::of(hook.model_hook()));
+        if left == 0 {
+            return cost;
+        }
+        let mut price = num_traits::ToPrimitive::to_f64(&cost).expect("a price is a finite number");
+        while left != 0 {
+            let held = &self.player.relics[left.trailing_zeros() as usize];
+            left &= left - 1;
+            match V::modify_hook(crate::combat::Heard::<V>::Relic(&held.state), hook) {
+                sts2_core::Modify::Nothing => {}
+                sts2_core::Modify::Scaled(share) => price *= share,
+                answer => unimplemented!("a relic answering {answer:?} for a merchant's price"),
+            }
+        }
+        num_traits::cast(price.trunc()).expect("a merchant's price fits the build's number")
+    }
+
+    /// `Hook.ShouldRefillMerchantEntry`, which any relic on the belt can
+    /// answer yes to.
+    fn refills(&self) -> bool {
+        let hook = sts2_core::DecisionHook::ShouldRefillMerchantEntry;
+        let hooks = sts2_core::Overrides::of(sts2_core::ModelHook::ShouldRefillMerchantEntry);
+        let mut left = self.player.relics.hearing(hooks);
+        let mut refills = false;
+        while left != 0 {
+            let held = &self.player.relics[left.trailing_zeros() as usize];
+            left &= left - 1;
+            refills |= V::decide_hook(crate::combat::Heard::<V>::Relic(&held.state), hook)
+                .is_decision_and(|refill| refill);
+        }
+        refills
+    }
+
+    /// What a merchant's shelf does once its purchase went through:
+    /// `RestockAfterPurchase` where a listener refills it, and
+    /// `ClearAfterPurchase` otherwise.
+    fn purchased(&mut self, index: u8) {
+        if !self.refills() {
+            let Phase::Shop { entries, .. } = &mut self.phase else {
+                unreachable!("a purchase is made in a shop");
+            };
+            sold(entries, index);
+            return;
+        }
+        let Phase::Shop { entries, .. } = &self.phase else {
+            unreachable!("a purchase is made in a shop");
+        };
+        let at = entries
+            .iter()
+            .position(|entry| entry.index == index)
+            .expect("the shelf bought from is on the merchant");
+        let on_shelves: Vec<V::Card> = entries
+            .iter()
+            .filter_map(|entry| match entry.stock {
+                sts2_core::Stock::Card(Some(on_sale)) => Some(on_sale.card.card),
+                _ => None,
+            })
+            .collect();
+        let stock = entries[at].stock;
+        let mut streams = self.streams;
+        let mut dealt = self.dealt_relics.to_vec();
+        let (stock, cost) = super::shop::Merchant::<V> {
+            streams: &mut streams,
+            player_relics: &self.shared.opening.player_relics,
+            dealt_relics: &mut dealt,
+            character: self.shared.character,
+            offset: self.odds.rarity,
+            removals_used: self.removals_used,
+        }
+        .restock(usize::from(index), stock, &on_shelves);
+        self.streams = streams;
+        self.dealt_relics = Arc::new(dealt);
+        // `Hook.ModifyMerchantCardCreationResults` over the card it stocked.
+        let stock = match stock {
+            sts2_core::Stock::Card(Some(mut on_sale)) => {
+                on_sale.card = self.rewritten(on_sale.card, |card| {
+                    sts2_core::EventHook::MerchantCardCreated { card }
+                });
+                sts2_core::Stock::Card(Some(on_sale))
+            }
+            stock => stock,
+        };
+        let Phase::Shop { entries, .. } = &mut self.phase else {
+            unreachable!("a purchase is made in a shop");
+        };
+        let entry = &mut entries[at];
+        entry.stock = stock;
+        entry.cost = num_traits::cast(cost).expect("a merchant's price fits the build's number");
+        entry.stocked = true;
     }
 
     /// `Hook.ShouldForcePotionReward` for a fight won in `room`, which any
@@ -4607,7 +4700,8 @@ impl<V: Rules> State<V> {
                     .iter()
                     .cloned()
                     .map(|entry| sts2_core::Entry {
-                        affordable: entry.cost <= gold,
+                        cost: self.merchant_price(entry.cost),
+                        affordable: self.merchant_price(entry.cost) <= gold,
                         blocked: match entry.stock {
                             sts2_core::Stock::Potion(_) if !room_for_a_potion => {
                                 Some(sts2_core::Blocked::NoPotionSlot)
