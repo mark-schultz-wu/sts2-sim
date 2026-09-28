@@ -423,6 +423,22 @@ pub(crate) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
         }
         Cards::Regent(card) => regent::event_hook(card, id, printed, history, hook, asked),
         Cards::Silent(card) => silent::event_hook(card, id, history, hook, asked),
+        // `RocketPunch.AfterCardGeneratedForCombat`: free until played once
+        // its owner makes a Status.
+        Cards::Defect(DefectCard::RocketPunch) => match hook {
+            sts2_core::EventHook::CardGeneratedForCombat {
+                card,
+                creator: Some(_),
+                ..
+            } if <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Status) => {
+                asked.push(sts2_core::HookEffect::ModifySelf {
+                    change: sts2_core::Change::SetCost(sts2_core::CostPool::Energy, 0),
+                    lasting: sts2_core::Lasting::UntilPlayed,
+                })
+            }
+            sts2_core::EventHook::CardGeneratedForCombat { .. } => {}
+            hook => unimplemented!("what RocketPunch does for {hook:?}"),
+        },
         card => unimplemented!("what {card:?} does for {hook:?}"),
     }
 }

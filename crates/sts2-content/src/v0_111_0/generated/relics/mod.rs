@@ -2062,6 +2062,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
         .with(sts2_core::ModelHook::AfterRoomEntered),
     // REGALITE
     sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardGeneratedForCombat)
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::BeforeSideTurnStart),
     // REGAL_PILLOW

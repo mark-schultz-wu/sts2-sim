@@ -85,6 +85,15 @@ pub(crate) fn apply<V: Rules, F: Fight<V>>(
                     fight.damage_unpowered(dealer, target, amount, unblockable);
                 }
             }
+            HookEffect::ChannelRandomOrbs { orbs, count } => {
+                let count: usize = num_traits::cast(count)
+                    .unwrap_or_else(|| unimplemented!("{count:?} orbs channelled"));
+                for _ in 0..count {
+                    if let Some(orb) = fight.random_orb(orbs) {
+                        fight.channel(orb);
+                    }
+                }
+            }
             other => unimplemented!("a model asking for {other:?} inside a fight"),
         }
     }

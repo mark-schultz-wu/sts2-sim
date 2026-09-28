@@ -60,6 +60,18 @@ pub enum State {
     Reattach {
         reviving: bool,
     },
+    /// `AdaptablePower`'s `isReviving`.
+    Adaptable {
+        reviving: bool,
+    },
+    /// `NemesisPower._shouldApplyIntangible`.
+    Nemesis {
+        intangible: bool,
+    },
+    /// `WitheringPresencePower`'s `CardsLeft`.
+    WitheringPresence {
+        cards_left: u8,
+    },
     /// `SwipePower.StolenCard`.
     Swipe {
         stolen: Option<sts2_core::CardIdent<V>>,
@@ -171,6 +183,11 @@ impl sts2_core::PowerModel<V> for State {
             }
             Power::IllusionPower => Self::Illusion { reviving: false },
             Power::ReattachPower => Self::Reattach { reviving: false },
+            Power::AdaptablePower => Self::Adaptable { reviving: false },
+            Power::NemesisPower => Self::Nemesis { intangible: false },
+            Power::WitheringPresencePower => Self::WitheringPresence {
+                cards_left: WITHERING_CARDS,
+            },
             Power::SwipePower => Self::Swipe { stolen: None },
             Power::VigorPower => Self::Vigor { bound: None },
             Power::FeralPower => Self::Feral { played: 0 },
@@ -211,6 +228,9 @@ impl sts2_core::PowerModel<V> for State {
             Self::Possess { power, .. } => *power,
             Self::Illusion { .. } => Power::IllusionPower,
             Self::Reattach { .. } => Power::ReattachPower,
+            Self::Adaptable { .. } => Power::AdaptablePower,
+            Self::Nemesis { .. } => Power::NemesisPower,
+            Self::WitheringPresence { .. } => Power::WitheringPresencePower,
             Self::Swipe { .. } => Power::SwipePower,
             Self::Vigor { .. } => Power::VigorPower,
             Self::Feral { .. } => Power::FeralPower,
@@ -373,7 +393,9 @@ impl State {
     /// as it brings the owner back.
     pub(crate) fn set_reviving(&mut self, to: bool) {
         match self {
-            Self::Illusion { reviving } | Self::Reattach { reviving } => *reviving = to,
+            Self::Illusion { reviving }
+            | Self::Reattach { reviving }
+            | Self::Adaptable { reviving } => *reviving = to,
             state => unreachable!("reviving state for {:?}", state.power()),
         }
     }
@@ -381,7 +403,9 @@ impl State {
     fn reviving(&self) -> bool {
         matches!(
             self,
-            Self::Illusion { reviving: true } | Self::Reattach { reviving: true }
+            Self::Illusion { reviving: true }
+                | Self::Reattach { reviving: true }
+                | Self::Adaptable { reviving: true }
         )
     }
 
@@ -1614,7 +1638,11 @@ pub(crate) fn decide_hook(
         // `ShouldCreatureBeRemovedFromCombatAfterDeath`, which keeps its own
         // holder and no other.
         (
-            Power::IllusionPower | Power::ReattachPower | Power::DieForYouPower,
+            Power::IllusionPower
+            | Power::ReattachPower
+            | Power::DieForYouPower
+            | Power::AdaptablePower
+            | Power::PainfulStabsPower,
             DecisionHook::ShouldRemoveCreatureAfterDeath { creature },
         ) => HookResponse::Decision(creature != held.holder),
         // `OwnerIsSecondaryEnemy`.
@@ -1625,7 +1653,11 @@ pub(crate) fn decide_hook(
         // in the fight keeps itself, or the creature would come back without
         // whatever brought it back.
         (
-            Power::ReattachPower | Power::MinionPower | Power::DieForYouPower,
+            Power::ReattachPower
+            | Power::MinionPower
+            | Power::DieForYouPower
+            | Power::AdaptablePower
+            | Power::PainfulStabsPower,
             DecisionHook::ShouldRemoveSelfAfterOwnerDeath,
         ) => HookResponse::Decision(false),
         // `IllusionPower.ShouldPowerBeRemovedOnDeath`, which reads the power
@@ -1645,7 +1677,7 @@ pub(crate) fn decide_hook(
         }
         // `ShouldAllowHitting`, which refuses its own holder while it revives.
         (
-            Power::IllusionPower | Power::ReattachPower,
+            Power::IllusionPower | Power::ReattachPower | Power::AdaptablePower,
             DecisionHook::ShouldAllowHitting { creature, .. },
         ) => HookResponse::Decision(creature != held.holder || !state.reviving()),
         // `DieForYouPower.ShouldAllowHitting`, which refuses any creature that
@@ -1684,15 +1716,28 @@ pub(crate) fn decide_hook(
         ) => HookResponse::Decision(creature != held.holder),
         // `InfestedPower.ShouldStopCombatFromEnding` and `StockPower`'s, for as
         // long as it is on a creature in the fight.
-        (Power::InfestedPower | Power::StockPower, DecisionHook::ShouldStopCombatFromEnding) => {
-            HookResponse::Decision(true)
-        }
+        (
+            Power::InfestedPower | Power::StockPower | Power::AdaptablePower,
+            DecisionHook::ShouldStopCombatFromEnding,
+        ) => HookResponse::Decision(true),
         (power, hook) if hook.model_hook().is_some() => {
             unimplemented!("what {power:?} decides for {hook:?}")
         }
         _ => HookResponse::DoesNotImplement,
     }
 }
+
+/// `OrbModel._validOrbs`, which `GetRandomOrb` draws from.
+const VALID_ORBS: [Orb; 5] = [
+    Orb::LightningOrb,
+    Orb::FrostOrb,
+    Orb::DarkOrb,
+    Orb::PlasmaOrb,
+    Orb::GlassOrb,
+];
+
+/// `WitheringPresencePower`'s `CardsLeft` as it is applied.
+const WITHERING_CARDS: u8 = 6;
 
 /// Whose a power is, and what of the fight it can read, as a hook reaching
 /// it reads that.
@@ -2713,6 +2758,130 @@ pub(crate) fn event_hook(
         (Power::IllusionPower, _, EventHook::AfterDeath { creature, .. }) if creature == holder => {
             state.set_reviving(true);
             Some(HookEffect::InstallMove(&REVIVE))
+        }
+        // `AdaptablePower.AfterDeath`: a Test Subject that dies is sent to
+        // its respawn. `TriggerDeadState` also counts the kill for the run's
+        // title, which nothing here reads.
+        (
+            Power::AdaptablePower,
+            _,
+            EventHook::AfterDeath {
+                creature,
+                removal_prevented: false,
+                ..
+            },
+        ) if creature == holder && monster == Some(Monster::TestSubject) => {
+            state.set_reviving(true);
+            Some(HookEffect::EnterMove(MoveId::RespawnMove))
+        }
+        // `EnragePower.AfterCardPlayed`: its stack as Strength on its owner for
+        // every Skill played.
+        (Power::EnragePower, PowerAmount::Counted(amount), EventHook::CardPlayed { card, .. }) => {
+            (<V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Skill)).then_some(
+                HookEffect::ApplyToOwner(Power::StrengthPower, PowerAmount::Counted(amount)),
+            )
+        }
+        (Power::EnragePower, PowerAmount::Endless, EventHook::CardPlayed { .. }) => {
+            unimplemented!("an endless Enrage")
+        }
+        // `PainfulStabsPower.AfterAttack`: Wounds for each hit its owner's
+        // powered attack lands on a player's health.
+        (
+            Power::PainfulStabsPower,
+            PowerAmount::Counted(amount),
+            EventHook::AfterAttack {
+                attacker,
+                powered: true,
+                ..
+            },
+        ) if attacker == holder => Some(HookEffect::GiveCardsPerUnblockedHit {
+            card: Cards::Status(StatusCard::Wound),
+            per: amount,
+        }),
+        (Power::PainfulStabsPower, PowerAmount::Endless, EventHook::AfterAttack { attacker, .. })
+            if attacker == holder =>
+        {
+            unimplemented!("endless Painful Stabs")
+        }
+        (Power::PainfulStabsPower, _, EventHook::AfterAttack { .. }) => None,
+        // `NemesisPower.AfterSideTurnEnd`, as its owner's side's turn ends:
+        // Intangible every other turn, and taken off on the turns between.
+        (Power::NemesisPower, _, EventHook::SideTurnEnd { side }) if side == owner => {
+            let State::Nemesis { intangible } = state else {
+                unreachable!("Nemesis holding {state:?}")
+            };
+            *intangible = !*intangible;
+            if *intangible {
+                Some(HookEffect::ApplyToOwner(
+                    Power::IntangiblePower,
+                    PowerAmount::Counted(one),
+                ))
+            } else {
+                fight
+                    .power(holder, Power::IntangiblePower)
+                    .map(|_| HookEffect::RemoveFromOwner(Power::IntangiblePower))
+            }
+        }
+        (Power::NemesisPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `AfterCardGeneratedForCombat`, for a card its holder made: every
+        // enemy hit for a Status, orbs channelled for a Status, Strength or
+        // block for any card.
+        (
+            Power::SmokestackPower
+            | Power::TrashToTreasurePower
+            | Power::ArsenalPower
+            | Power::PillarOfCreationPower,
+            PowerAmount::Counted(amount),
+            EventHook::CardGeneratedForCombat {
+                card,
+                creator: Some(creator),
+                ..
+            },
+        ) if creator == holder => {
+            let status = <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Status);
+            match power {
+                Power::SmokestackPower => status.then_some(HookEffect::DamageOpponents(amount)),
+                Power::TrashToTreasurePower => status.then_some(HookEffect::ChannelRandomOrbs {
+                    orbs: &VALID_ORBS,
+                    count: amount,
+                }),
+                Power::ArsenalPower => Some(HookEffect::ApplyToOwner(
+                    Power::StrengthPower,
+                    PowerAmount::Counted(amount),
+                )),
+                _ => Some(HookEffect::GainBlock(amount)),
+            }
+        }
+        (
+            Power::SmokestackPower
+            | Power::TrashToTreasurePower
+            | Power::ArsenalPower
+            | Power::PillarOfCreationPower,
+            PowerAmount::Endless,
+            EventHook::CardGeneratedForCombat { .. },
+        ) => unimplemented!("an endless {power:?}"),
+        (
+            Power::SmokestackPower
+            | Power::TrashToTreasurePower
+            | Power::ArsenalPower
+            | Power::PillarOfCreationPower,
+            _,
+            EventHook::CardGeneratedForCombat { .. },
+        ) => None,
+        // `WitheringPresencePower.AfterCardPlayed`, for each card its target
+        // plays, which is the one player: every sixth, a Wither into the hand.
+        (Power::WitheringPresencePower, _, EventHook::CardPlayed { .. }) => {
+            let State::WitheringPresence { cards_left } = state else {
+                unreachable!("Withering Presence holding {state:?}")
+            };
+            *cards_left -= 1;
+            (*cards_left == 0).then(|| {
+                *cards_left = WITHERING_CARDS;
+                HookEffect::GenerateInHand {
+                    card: Cards::Status(StatusCard::Wither),
+                    count: one,
+                }
+            })
         }
         (
             Power::InfestedPower,
@@ -3996,6 +4165,7 @@ pub(crate) fn event_hook(
             Power::IllusionPower
             | Power::InfestedPower
             | Power::ReattachPower
+            | Power::AdaptablePower
             | Power::ShrinkPower,
             _,
             EventHook::AfterDeath { .. },

@@ -1127,6 +1127,36 @@ fn finished<V: Rules, S: LendsCombat>(
                     board.hit_unpowered(self_dealt.then_some(owner), owner, amount, unblockable);
                     ended = ended.or(board.ended);
                 }
+                // Made by the power's owner, which for a monster's power is
+                // nobody.
+                (
+                    super::listen::Listener::Power { owner, .. },
+                    sts2_core::HookEffect::GenerateInHand { card, count },
+                ) => {
+                    let player = next.player().id;
+                    let count = num_traits::cast(count)
+                        .unwrap_or_else(|| unimplemented!("{count:?} cards generated"));
+                    let mut board =
+                        Board::for_card(next, streams.combat(), relics, ascension, None, None);
+                    board.generate(
+                        sts2_core::CardIdent::new(card),
+                        sts2_core::Pile::Hand,
+                        count,
+                        (owner == player).then_some(player),
+                    );
+                    ended = ended.or(board.ended);
+                }
+                // `PowerCmd.Apply` on the power's owner, from its owner, which
+                // for a monster's power is not the player playing the card.
+                (
+                    super::listen::Listener::Power { owner, .. },
+                    sts2_core::HookEffect::ApplyToOwner(power, amount),
+                ) => {
+                    let mut board =
+                        Board::for_card(next, streams.combat(), relics, ascension, None, None);
+                    board.land(owner, power, amount, Some(owner));
+                    ended = ended.or(board.ended);
+                }
                 // `PowerCmd.Apply` from nobody.
                 (
                     super::listen::Listener::Power { .. },

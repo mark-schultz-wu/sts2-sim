@@ -1395,7 +1395,7 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
         .with(sts2_core::ModelHook::AfterPowerAmountChanged)
         .with(sts2_core::ModelHook::AfterSideTurnEnd),
     // ARSENAL_POWER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardGeneratedForCombat),
     // ARTIFACT_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterModifyingPowerAmountReceived)
@@ -1909,7 +1909,7 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
         .with(sts2_core::ModelHook::AfterPowerAmountChanged)
         .with(sts2_core::ModelHook::AfterSideTurnEnd),
     // PILLAR_OF_CREATION_POWER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardGeneratedForCombat),
     // PLATING_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterSideTurnStart)
@@ -2062,7 +2062,7 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
         .with(sts2_core::ModelHook::AfterSideTurnEnd)
         .with(sts2_core::ModelHook::ShouldPlay),
     // SMOKESTACK_POWER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardGeneratedForCombat),
     // SNEAKY_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
     // SOAR_POWER
@@ -2177,7 +2177,7 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
     // TRACKING_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyDamageMultiplicative),
     // TRASH_TO_TREASURE_POWER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardGeneratedForCombat),
     // TYRANNY_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterPlayerTurnStart)

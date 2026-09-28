@@ -38,6 +38,22 @@ pub(super) fn starting_powers(
         // Its `StartingHpReduction` is nothing outside the Punch-Off event's
         // encounter, which rolls it.
         Monster::PunchConstruct => vec![(Power::ArtifactPower, PowerAmount::Counted(1))],
+        // `WitheringPresencePower` on itself for each opponent, which the one
+        // player is, then Artifact.
+        Monster::Aeonglass => vec![
+            (Power::WitheringPresencePower, PowerAmount::Counted(6)),
+            (Power::ArtifactPower, PowerAmount::Counted(3)),
+        ],
+        Monster::TestSubject => {
+            let enrage = match ascension.has(AscensionLevel::DeadlyEnemies) {
+                true => 3,
+                false => 2,
+            };
+            vec![
+                (Power::AdaptablePower, PowerAmount::Counted(1)),
+                (Power::EnragePower, PowerAmount::Counted(enrage)),
+            ]
+        }
         Monster::FrogKnight => {
             let plating = match ascension.has(AscensionLevel::ToughEnemies) {
                 true => 19,
@@ -86,9 +102,79 @@ pub(super) fn conditional(
                 false => disintegrate,
             });
         }
+        // `REVIVE_BRANCH`: Multi Claw after the first respawn, and Lacerate
+        // after the second.
+        Monster::TestSubject => match test_subject(model).0 < 2 {
+            true => MoveId::MultiClawMove,
+            false => MoveId::Phase3LacerateMove,
+        },
         monster => unimplemented!("what {monster:?} asks the fight at state {at}"),
     };
     super::state_of(monster, wanted, at)
+}
+
+/// `TestSubject.Respawns` and `ExtraMultiClawCount`.
+fn test_subject(model: &super::Model) -> (u8, u8) {
+    let super::Model::TestSubject {
+        respawns,
+        extra_claws,
+    } = *model
+    else {
+        unreachable!("a Test Subject holding {model:?}")
+    };
+    (respawns, extra_claws)
+}
+
+/// `TestSubject.BaseMultiClawCount`.
+const MULTI_CLAWS: u32 = 3;
+
+/// A Glory monster's hit count that it works out from its own model.
+pub(super) fn computed_repeats(monster: Monster, move_id: MoveId, model: &super::Model) -> u32 {
+    match (monster, move_id) {
+        // `MultiClawTotalCount`: its base, and one for each Multi Claw before.
+        (Monster::TestSubject, MoveId::MultiClawMove) => {
+            MULTI_CLAWS + u32::from(test_subject(model).1)
+        }
+        (monster, move_id) => unimplemented!("the hits {monster:?} works out for {move_id:?}"),
+    }
+}
+
+/// `Wither.FakeUpgrade`'s raise to its damage.
+const WITHER_RAISE: Number = 3;
+
+/// `Aeonglass.AfterCardGeneratedForCombat`: a Wither made in the fight takes
+/// every fake upgrade the Aeonglass has given the ones before it.
+pub(super) fn wither_generated(
+    model: &super::Model,
+    at: sts2_core::CardAt<V>,
+    card: super::super::super::generated::cards::Cards,
+    asked: &mut sts2_core::HookEffects<V>,
+) {
+    use super::super::super::generated::cards::{CardVar, Cards, StatusCard};
+
+    let super::Model::Aeonglass {
+        wither_upgrades, ..
+    } = *model
+    else {
+        unreachable!("an Aeonglass holding {model:?}")
+    };
+    if card == Cards::Status(StatusCard::Wither) && wither_upgrades > 0 {
+        asked.push(sts2_core::HookEffect::ModifyCards {
+            to: sts2_core::Writing::One(at),
+            change: sts2_core::Change::Raise(
+                CardVar::Damage,
+                WITHER_RAISE * Number::from(wither_upgrades),
+            ),
+        });
+    }
+}
+
+/// `TestSubject.Revive`: `CreatureCmd.SetMaxHp`, then a heal of as much.
+/// A fight here has one player, so the health is not scaled.
+fn revive_at<F: Fight<V>>(fight: &mut F, hp: Number) {
+    let actor = fight.actor();
+    fight.set_max_hp(actor, hp);
+    fight.heal(actor, hp);
 }
 
 /// `DebilitatingSmogStrengthStealAmount` and
@@ -295,6 +381,82 @@ pub(super) fn perform<F: Fight<V>>(
                 fight.apply_power_from(target, Power::WeakPower, PowerAmount::Counted(3), None);
             }
             fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(3));
+        }
+        // `IncreasingIntensityMove`: every Wither the player holds takes a
+        // fake upgrade, the next ones one more, and then the Withers and the
+        // Strength.
+        (Monster::Aeonglass, MoveId::IncreasingIntensityMove) => {
+            use super::super::super::generated::cards::{CardVar, Cards, StatusCard};
+
+            let wither = Cards::Status(StatusCard::Wither);
+            fight.modify_cards(
+                sts2_core::Writing::EveryCopyOf(wither),
+                sts2_core::Change::Raise(CardVar::Damage, WITHER_RAISE),
+            );
+            let super::Model::Aeonglass {
+                strength,
+                wither_upgrades,
+            } = model
+            else {
+                unreachable!("an Aeonglass holding {model:?}")
+            };
+            *wither_upgrades += 1;
+            let bonus = Number::from(*strength);
+            // The Withers it gives read the count it has just raised.
+            fight.store_model(model);
+            let deadly = fight.ascension().has(AscensionLevel::DeadlyEnemies);
+            let (withers, base) = if deadly { (2, 4) } else { (1, 3) };
+            fight.give_cards(wither, withers);
+            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(base + bonus));
+            let super::Model::Aeonglass { strength, .. } = model else {
+                unreachable!("an Aeonglass holding {model:?}")
+            };
+            *strength += 1;
+        }
+        // `MultiClawMove`: its hits, then one more for the next.
+        (Monster::TestSubject, MoveId::MultiClawMove) => {
+            fight.attack_opponents();
+            let super::Model::TestSubject { extra_claws, .. } = model else {
+                unreachable!("a Test Subject holding {model:?}")
+            };
+            *extra_claws += 1;
+        }
+        // `BurningGrowlMove`: Burns into the discard pile, then Strength.
+        (Monster::TestSubject, MoveId::BurningGrowlMove) => {
+            use super::super::super::generated::cards::{Cards, StatusCard};
+
+            let deadly = fight.ascension().has(AscensionLevel::DeadlyEnemies);
+            let (burns, strength) = if deadly { (5, 3) } else { (3, 2) };
+            fight.give_cards(Cards::Status(StatusCard::Burn), burns);
+            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(strength));
+        }
+        // `RespawnMove`: `AdaptablePower.DoRevive`, then the next form's
+        // health and what it gains. The second respawn is the last, and
+        // takes Adaptable and Painful Stabs off.
+        (Monster::TestSubject, MoveId::RespawnMove) => {
+            let super::Model::TestSubject { respawns, .. } = model else {
+                unreachable!("a Test Subject holding {model:?}")
+            };
+            *respawns += 1;
+            let respawns = *respawns;
+            let actor = fight.actor();
+            fight.write_power(actor, Power::AdaptablePower, |state| {
+                state.set_reviving(false)
+            });
+            let tough = fight.ascension().has(AscensionLevel::ToughEnemies);
+            match respawns {
+                1 => {
+                    revive_at(fight, if tough { 212 } else { 200 });
+                    fight.apply_to_actor(Power::PainfulStabsPower, PowerAmount::Counted(1));
+                }
+                2 => {
+                    revive_at(fight, if tough { 313 } else { 300 });
+                    fight.apply_to_actor(Power::NemesisPower, PowerAmount::Counted(1));
+                    fight.remove_power(actor, Power::AdaptablePower);
+                    fight.remove_power(actor, Power::PainfulStabsPower);
+                }
+                _ => {}
+            }
         }
         _ => monster_moves::perform(monster, move_id, fight),
     }

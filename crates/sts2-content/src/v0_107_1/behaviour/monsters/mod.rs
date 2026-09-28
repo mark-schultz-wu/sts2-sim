@@ -132,6 +132,16 @@ pub(crate) fn computed_damage<P: sts2_core::Printed<V> + ?Sized>(
     glory::computed_damage(monster, move_id, ascension, powers)
 }
 
+/// A move's hit count that the monster works out from what its own model
+/// saved.
+///
+/// # Panics
+///
+/// A move nobody has ported.
+pub(crate) fn computed_repeats(monster: Monster, move_id: MoveId, model: &Model) -> u32 {
+    glory::computed_repeats(monster, move_id, model)
+}
+
 /// Which branch a monster's conditional state takes.
 ///
 /// `ConditionalBranchState`, whose predicates read fields an encounter set on
@@ -154,9 +164,10 @@ pub(crate) fn conditional<P: sts2_core::Printed<V> + ?Sized>(
             hive::conditional(monster, at, spawn, powers)
         }
         Monster::Exoskeleton | Monster::Myte => opens_by_slot(monster, at, spawn),
-        Monster::LivingShield | Monster::FrogKnight | Monster::Fabricator => {
-            glory::conditional(monster, at, spawn, model)
-        }
+        Monster::LivingShield
+        | Monster::FrogKnight
+        | Monster::Fabricator
+        | Monster::TestSubject => glory::conditional(monster, at, spawn, model),
         _ => overgrowth::conditional(monster, at, spawn),
     }
 }
@@ -210,7 +221,12 @@ pub(crate) fn state_of(monster: Monster, wanted: MoveId, at: u8) -> Result<u8, C
 /// # Panics
 ///
 /// An override nobody has ported.
-pub(crate) fn event_hook(monster: Monster, hook: EventHook<V>) {
+pub(crate) fn event_hook(
+    monster: Monster,
+    model: &Model,
+    hook: EventHook<V>,
+    asked: &mut sts2_core::HookEffects<V>,
+) {
     match (monster, hook) {
         // A Decimillipede segment swaps its texture as it dies, the Vantom
         // moves the music on, and the Kin Priest talks and moves the music
@@ -229,8 +245,16 @@ pub(crate) fn event_hook(monster: Monster, hook: EventHook<V>) {
             Monster::Crusher | Monster::Rocket,
             EventHook::CurrentHpChanged { .. } | EventHook::BeforeDeath { .. },
         ) => {}
-        // The Insatiable's own death does nothing but return.
-        (Monster::TheInsatiable, EventHook::AfterDeath { .. }) => {}
+        // The Insatiable's own death does nothing but return. The Test
+        // Subject's sets its colour and the music, and the Aeonglass's
+        // returns.
+        (
+            Monster::TheInsatiable | Monster::TestSubject | Monster::Aeonglass,
+            EventHook::AfterDeath { .. },
+        ) => {}
+        (Monster::Aeonglass, EventHook::CardGeneratedForCombat { at, card, .. }) => {
+            glory::wither_generated(model, at, card, asked)
+        }
         (monster, hook) => unimplemented!("what {monster:?} does for {hook:?}"),
     }
 }
@@ -299,7 +323,9 @@ pub(crate) fn perform<F: Fight<V>>(
         | Monster::Guardbot
         | Monster::Noisebot
         | Monster::TheLost
-        | Monster::TheForgotten => glory::perform(monster, move_id, model, fight),
+        | Monster::TheForgotten
+        | Monster::TestSubject
+        | Monster::Aeonglass => glory::perform(monster, move_id, model, fight),
         _ => monster_moves::perform(monster, move_id, fight),
     }
     Played::Done
@@ -319,6 +345,10 @@ pub enum Model {
     Axebot { stock: Option<u8> },
     /// `Fabricator._lastSpawned`.
     Fabricator { last: Option<Monster> },
+    /// `TestSubject.Respawns` and `ExtraMultiClawCount`.
+    TestSubject { respawns: u8, extra_claws: u8 },
+    /// `Aeonglass.AdditionalStrength` and `WitherUpgradeCount`.
+    Aeonglass { strength: u8, wither_upgrades: u8 },
 }
 
 impl sts2_core::MonsterModel<V> for Model {
@@ -330,6 +360,14 @@ impl sts2_core::MonsterModel<V> for Model {
             },
             Monster::Axebot => Self::Axebot { stock: None },
             Monster::Fabricator => Self::Fabricator { last: None },
+            Monster::TestSubject => Self::TestSubject {
+                respawns: 0,
+                extra_claws: 0,
+            },
+            Monster::Aeonglass => Self::Aeonglass {
+                strength: 0,
+                wither_upgrades: 0,
+            },
             _ => Self::Stateless,
         }
     }

@@ -658,10 +658,11 @@ pub enum ModelHook {
     AfterModifyingPowerAmountReceived,
     ModifyXValue,
     AfterCardChangedPiles,
+    AfterCardGeneratedForCombat,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 108] = [
+    pub const ALL: [ModelHook; 109] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -770,6 +771,7 @@ impl ModelHook {
         ModelHook::AfterModifyingPowerAmountReceived,
         ModelHook::ModifyXValue,
         ModelHook::AfterCardChangedPiles,
+        ModelHook::AfterCardGeneratedForCombat,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -895,6 +897,7 @@ impl ModelHook {
             ModelHook::AfterModifyingPowerAmountReceived => "AfterModifyingPowerAmountReceived",
             ModelHook::ModifyXValue => "ModifyXValue",
             ModelHook::AfterCardChangedPiles => "AfterCardChangedPiles",
+            ModelHook::AfterCardGeneratedForCombat => "AfterCardGeneratedForCombat",
         }
     }
 }
@@ -969,6 +972,8 @@ pub struct DamageResult<V: ContentVersion> {
     pub receiver: crate::CombatId,
     /// `TotalDamage`: what the block took and what the hit points lost.
     pub total: V::Number,
+    /// `UnblockedDamage`: what the hit points lost.
+    pub unblocked: V::Number,
     /// `OverkillDamage`: what the hit had left once the hit points ran out.
     pub overkill: V::Number,
     /// `WasTargetKilled`.
@@ -2010,6 +2015,12 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("removing a power")
     }
 
+    /// `CreatureCmd.SetMaxHp`: the maximum, and the health down to it where
+    /// it stood above.
+    fn set_max_hp(&mut self, _creature: crate::CombatId, _hp: V::Health) {
+        unimplemented!("setting a creature's maximum health")
+    }
+
     /// `CreatureCmd.SetMaxAndCurrentHp`: both numbers at once.
     fn set_max_and_current_hp(&mut self, _creature: crate::CombatId, _hp: V::Health) {
         unimplemented!("setting a creature's hit points")
@@ -2052,6 +2063,17 @@ pub trait Fight<V: ContentVersion> {
     /// `CreatureCmd.Kill`: `creature` loses what hit points it has, and dies.
     fn kill(&mut self, _creature: crate::CombatId) {
         unimplemented!("a creature killed outright")
+    }
+
+    /// `Rng.CombatOrbGeneration.NextItem(orbs)`: one orb of the list,
+    /// nothing for an empty one.
+    fn random_orb(&mut self, _orbs: &[V::Orb]) -> Option<V::Orb> {
+        unimplemented!("a random orb")
+    }
+
+    /// `change` written on each card `to` names, for the rest of the fight.
+    fn modify_cards(&mut self, _to: Writing<V>, _change: Change<V>) {
+        unimplemented!("writing on the cards a fight holds")
     }
 
     /// `CardModel.BaseReplayCount += amount` on each card `to` names.
@@ -2237,6 +2259,19 @@ pub trait Fight<V: ContentVersion> {
     /// The health is capped at the recipient's maximum, and a dead creature
     /// healed above zero is alive again.
     fn heal(&mut self, at: crate::CombatId, amount: V::Number);
+
+    /// The acting monster's model as its move has written it so far.
+    ///
+    /// A move works on its own copy of the model, which the fight takes back
+    /// once the move is over. In the game the model is one object, so a hook
+    /// the move raises reads what the move has written. A move stores its copy
+    /// before raising a hook its own model answers.
+    fn store_model(&mut self, _model: &V::MonsterState)
+    where
+        V: Hooks,
+    {
+        unimplemented!("a monster's model stored mid-move")
+    }
 
     /// Write the fields `power` saves on the creature `at`, from inside one
     /// of that power's own methods.
@@ -3250,6 +3285,14 @@ pub enum EventHook<V: ContentVersion> {
         /// `IsClone`: the card is a clone of another, which is `CloneOf`.
         clone: bool,
     },
+    /// `AfterCardGeneratedForCombat`, once a card made in the fight has
+    /// landed where `at` says.
+    CardGeneratedForCombat {
+        at: crate::CardAt<V>,
+        card: V::Card,
+        /// The player that made it. Nothing for a card a monster gave.
+        creator: Option<crate::CombatId>,
+    },
     /// `Hook.BeforeAttack`, as an attack command starts and before its first
     /// hit.
     BeforeAttack {
@@ -3282,6 +3325,8 @@ pub enum EventHook<V: ContentVersion> {
         attacker: crate::CombatId,
         /// `Attacker.Monster`, which is nothing for the player.
         monster: Option<V::Monster>,
+        /// `DamageProps.IsPoweredAttack()`.
+        powered: bool,
     },
 }
 
@@ -3349,6 +3394,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::BlockBroken { .. } => ModelHook::AfterBlockBroken,
             EventHook::PowerAmountChanged { .. } => ModelHook::AfterPowerAmountChanged,
             EventHook::CardEnteredCombat { .. } => ModelHook::AfterCardEnteredCombat,
+            EventHook::CardGeneratedForCombat { .. } => ModelHook::AfterCardGeneratedForCombat,
             EventHook::BeforeAttack { .. } => ModelHook::BeforeAttack,
             EventHook::AfterAttack { .. } => ModelHook::AfterAttack,
             EventHook::PlayCountModified { .. } => ModelHook::AfterModifyingCardPlayCount,
@@ -3978,6 +4024,12 @@ pub enum HookEffect<V: ContentVersion> {
     HealPercent(V::Number),
     /// `OrbCmd.Channel` for the listener's owner.
     Channel(V::Orb),
+    /// `OrbModel.GetRandomOrb` off `CombatOrbGeneration`, over `orbs`, then
+    /// `OrbCmd.Channel` for the listener's owner, `count` times.
+    ChannelRandomOrbs {
+        orbs: &'static [V::Orb],
+        count: V::Number,
+    },
     /// `OstyCmd.Summon` for the listener's owner.
     Summon(V::Number),
     /// `CreatureCmd.Damage` on every enemy that can be hit, from the
@@ -4012,6 +4064,18 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CreatureCmd.Damage` on the living creatures the event hit, from the
     /// listener's owner, unpowered.
     DamageTargets(V::Number),
+    /// `change` written on each card `to` names, for the rest of the fight.
+    ModifyCards {
+        to: Writing<V>,
+        change: Change<V>,
+    },
+    /// `CardPileCmd.AddToCombatAndPreview(card)` into the discard pile of
+    /// each player the attack hit: `per` for each of its hits on that player
+    /// that took health.
+    GiveCardsPerUnblockedHit {
+        card: V::Card,
+        per: V::Number,
+    },
     /// `PotionFactory.CreateRandomPotionOutOfCombat` off the named stream and
     /// `PotionCmd.TryToProcure`, one at a time for as long as the belt has an
     /// open slot and the potion lands.
@@ -4671,6 +4735,7 @@ pub trait Hooks: ContentVersion {
     /// [`Hooks::power_event_hook`] for a monster's own model, on `creature`.
     fn monster_event_hook(
         monster: Self::Monster,
+        model: &Self::MonsterState,
         creature: crate::CombatId,
         hook: EventHook<Self>,
         asked: &mut HookEffects<Self>,
