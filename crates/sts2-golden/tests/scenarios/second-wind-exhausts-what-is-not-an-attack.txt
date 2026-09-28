@@ -1,0 +1,6 @@
+# Second Wind exhausts every card in hand that is not an Attack, and gives
+# its block for each.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"SECOND_WIND"}
+{"cmd":"play_card","index":5}

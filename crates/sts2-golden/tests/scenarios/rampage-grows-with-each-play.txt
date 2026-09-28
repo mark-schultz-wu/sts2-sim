@@ -1,0 +1,10 @@
+# Rampage adds its Increase to its own damage for the fight each time it is
+# played. Liquid Memories brings the same copy back from the discard pile,
+# and it deals five more the second time.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"RAMPAGE"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"grant","potion":"LIQUID_MEMORIES"}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"play_card","index":5,"target":1}
