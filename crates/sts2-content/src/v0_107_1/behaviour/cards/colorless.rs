@@ -10,6 +10,7 @@ use super::V;
 
 pub(super) fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
     match card {
+        ColorlessCard::Volley => volley(fight),
         ColorlessCard::Restlessness => restlessness(fight),
         ColorlessCard::Impatience => impatience(fight),
         ColorlessCard::Anointed => anointed(fight),
@@ -198,4 +199,27 @@ pub(super) fn event_hook(
         }
         (card, hook) => unimplemented!("what {card:?} does for {hook:?}"),
     }
+}
+
+/// `Volley`: its damage once for each energy its X spent, each hit at an
+/// enemy drawn at random.
+fn volley<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use sts2_core::{Amount, Effect, Scaling};
+
+    let hits = fight.x_value();
+    fight.attack(Scaling::Dynamic, |fight| {
+        for _ in 0..hits {
+            let Some(target) = fight.random_target() else {
+                break;
+            };
+            let attack = fight.resolve(Effect::Attack {
+                dealer: fight.actor(),
+                target,
+                damage: Amount::Var(CardVar::Damage),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(attack);
+        }
+    });
+    Played::Done
 }

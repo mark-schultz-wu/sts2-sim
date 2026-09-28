@@ -110,6 +110,24 @@ pub(crate) fn decide_hook(
     }
 }
 
+/// `GetResultPileTypeForCardPlay`, which this build's `ParticleWall` alone
+/// overrides.
+pub(crate) fn result_pile(
+    card: Cards,
+    base: Option<sts2_core::Pile>,
+) -> sts2_core::HookResponse<Option<sts2_core::Pile>> {
+    use sts2_core::{HookResponse, Pile};
+
+    match card {
+        // `ParticleWall`: back into the hand where the base class discards.
+        Cards::Regent(RegentCard::ParticleWall) => HookResponse::Decision(match base {
+            Some(Pile::Discard) => Some(Pile::Hand),
+            pile => pile,
+        }),
+        _ => HookResponse::DoesNotImplement,
+    }
+}
+
 /// What a card works out from the fight for a number it prints.
 pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
     card: Cards,

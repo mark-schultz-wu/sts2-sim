@@ -1,0 +1,9 @@
+# Particle Wall gives its block and goes back into the hand rather than to
+# the discard pile, so it plays again.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"STAR_NEXT_TURN_POWER","amount":4,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"PARTICLE_WALL"}
+{"cmd":"play_card","index":5}
+{"cmd":"play_card","index":5}

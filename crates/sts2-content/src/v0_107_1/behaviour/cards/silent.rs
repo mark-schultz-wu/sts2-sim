@@ -39,6 +39,20 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
         SilentCard::BladeDance => blade_dance(fight),
         SilentCard::PiercingWail => piercing_wail(fight),
         SilentCard::EchoingSlash => echoing_slash(fight),
+        // `Expose`: the target loses all its block and any Artifact, then
+        // takes its `Power` of Vulnerable.
+        SilentCard::Expose => {
+            let target = fight.target();
+            let block = fight
+                .creatures()
+                .find(|creature| creature.id() == target)
+                .map_or(0, |creature| creature.block());
+            fight.lose_block(target, block);
+            fight.remove_power(target, Power::ArtifactPower);
+            let amount = fight.var(CardVar::Power);
+            fight.apply_power(target, Power::VulnerablePower, PowerAmount::Counted(amount));
+            Played::Done
+        }
         // `DodgeAndRoll`: its block, then as much as it gave as Block Next
         // Turn.
         SilentCard::DodgeAndRoll => {

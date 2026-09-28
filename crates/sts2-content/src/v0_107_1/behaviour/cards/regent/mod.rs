@@ -59,6 +59,19 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
             }
         }
         RegentCard::BundleOfJoy => bundle_of_joy(fight),
+        // `ParticleWall`: its block. Where it goes after is its own
+        // `GetResultPileTypeForCardPlay`.
+        RegentCard::ParticleWall => {
+            use sts2_core::{Amount, Effect, Scaling};
+
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Var(CardVar::Block),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+            Played::Done
+        }
         RegentCard::PhotonCut => photon_cut(fight),
         RegentCard::SummonForth => summon_forth(fight),
         // `Glimmer`: its `Cards` drawn, then its `PutBack` of the hand onto

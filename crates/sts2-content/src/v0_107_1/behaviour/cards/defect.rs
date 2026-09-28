@@ -104,6 +104,7 @@ fn compact<F: Fight<V>>(fight: &mut F) -> Played<V> {
 pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
     match card {
         DefectCard::Barrage => barrage(fight),
+        DefectCard::Uproar => uproar(fight),
         // `DoubleEnergy`: as much energy again as its owner has left.
         DefectCard::DoubleEnergy => {
             fight.modify_energy(fight.energy());
@@ -443,6 +444,52 @@ fn tesla_coil<F: Fight<V>>(fight: &mut F) -> Played<V> {
         for _ in 0..times {
             super::super::orbs::passive_at(orb, target, fight);
         }
+    }
+    Played::Done
+}
+
+/// `Uproar`: its damage to the target twice, then an Attack from the draw
+/// pile auto-played. The first of the playable Attacks stably shuffled off
+/// `Shuffle`, or where none is playable, the first of all of them.
+fn uproar<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use sts2_core::{CardKind, Rules as _, RunStreamKinds as _};
+
+    use super::super::super::generated::cards::CardKeyword;
+
+    let target = fight.target();
+    fight.attack(Scaling::Dynamic, |fight| {
+        for _ in 0..2 {
+            let attack = fight.resolve(Effect::Attack {
+                dealer: fight.actor(),
+                target,
+                damage: Amount::Var(CardVar::Damage),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(attack);
+        }
+    });
+    let stream = <V as sts2_core::ContentVersion>::RunRngType::SHUFFLE;
+    let attacks: Vec<_> = fight
+        .cards_in(Pile::Draw)
+        .into_iter()
+        .filter(|&at| V::card_kind(fight.card_ident(at).card) == Some(CardKind::Attack))
+        .collect();
+    let mut playable: Vec<_> = attacks
+        .iter()
+        .copied()
+        .filter(|&at| !fight.card_keyword(at, CardKeyword::Unplayable))
+        .collect();
+    fight.stable_shuffle_cards(&mut playable, stream);
+    let chosen = match playable.first() {
+        Some(&card) => Some(card),
+        None => {
+            let mut attacks = attacks;
+            fight.stable_shuffle_cards(&mut attacks, stream);
+            attacks.first().copied()
+        }
+    };
+    if let Some(card) = chosen {
+        fight.auto_play_card(card);
     }
     Played::Done
 }
