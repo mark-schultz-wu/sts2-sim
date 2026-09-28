@@ -72,6 +72,10 @@ pub enum State {
     ToricToughness {
         block: Number,
     },
+    /// `InfernoPower`'s `SelfDamage`, which `IncrementSelfDamage` raises.
+    Inferno {
+        self_damage: Number,
+    },
     /// `WitheringPresencePower`'s `CardsLeft`.
     WitheringPresence {
         cards_left: u8,
@@ -185,6 +189,8 @@ pub(crate) fn noted(state: &mut State, note: Number) {
     match state {
         // `ToricToughnessPower.SetBlock`.
         State::ToricToughness { block } => *block = note,
+        // `InfernoPower.IncrementSelfDamage`, once for each note of one.
+        State::Inferno { self_damage } => *self_damage += note,
         state => unimplemented!("a card writing {note} on {:?}", state.power()),
     }
 }
@@ -207,6 +213,7 @@ impl sts2_core::PowerModel<V> for State {
             Power::AdaptablePower => Self::Adaptable { reviving: false },
             Power::NemesisPower => Self::Nemesis { intangible: false },
             Power::ToricToughnessPower => Self::ToricToughness { block: 0 },
+            Power::InfernoPower => Self::Inferno { self_damage: 0 },
             Power::WitheringPresencePower => Self::WitheringPresence {
                 cards_left: WITHERING_CARDS,
             },
@@ -256,6 +263,7 @@ impl sts2_core::PowerModel<V> for State {
             Self::Adaptable { .. } => Power::AdaptablePower,
             Self::Nemesis { .. } => Power::NemesisPower,
             Self::ToricToughness { .. } => Power::ToricToughnessPower,
+            Self::Inferno { .. } => Power::InfernoPower,
             Self::WitheringPresence { .. } => Power::WitheringPresencePower,
             Self::ChainsOfBinding { .. } => Power::ChainsOfBindingPower,
             Self::Swipe { .. } => Power::SwipePower,
@@ -1985,6 +1993,38 @@ pub(crate) fn event_hook(
             return;
         }
         (Power::ToricToughnessPower, _, EventHook::BlockCleared { .. }) => None,
+        // `InfernoPower.AfterPlayerTurnStart`: its self damage on its owner,
+        // unblockable and unpowered, from its owner.
+        (Power::InfernoPower, _, EventHook::PlayerTurnStart { player, .. }) if player == holder => {
+            let State::Inferno { self_damage } = *state else {
+                unreachable!("Inferno keeps its self damage")
+            };
+            Some(HookEffect::DamageOwnerInFight {
+                amount: self_damage,
+                unblockable: true,
+                self_dealt: true,
+            })
+        }
+        (Power::InfernoPower, _, EventHook::PlayerTurnStart { .. }) => None,
+        // `InfernoPower.AfterDamageReceived`: its stack on every enemy that
+        // can be hit, unpowered, where its owner lost health in its own
+        // side's turn.
+        (
+            Power::InfernoPower,
+            PowerAmount::Counted(amount),
+            EventHook::DamageReceived {
+                target,
+                unblocked,
+                side,
+                ..
+            },
+        ) if target == holder && unblocked > 0 && side == owner => {
+            Some(HookEffect::DamageOpponents(amount))
+        }
+        (Power::InfernoPower, PowerAmount::Endless, EventHook::DamageReceived { .. }) => {
+            unimplemented!("an endless Inferno")
+        }
+        (Power::InfernoPower, _, EventHook::DamageReceived { .. }) => None,
         // `SicEmPower.AfterDamageGiven`: `OstyCmd.Summon` of its stack for the
         // player whose Osty hit its owner, where that player applied it.
         (

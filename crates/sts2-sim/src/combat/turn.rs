@@ -1153,12 +1153,21 @@ pub(super) fn carry_setup<V: Rules>(
                                 break;
                             }
                         }
-                        // `CreatureCmd.Damage` on the relic's owner, the player.
+                        // `CreatureCmd.Damage` on the listener's owner: the
+                        // player for a relic, the holder for a power.
                         sts2_core::HookEffect::DamageOwnerInFight {
                             amount,
                             unblockable,
                             self_dealt,
-                        } if matches!(listener, Listener::Relic { .. }) => {
+                        } if matches!(
+                            listener,
+                            Listener::Relic { .. } | Listener::Power { .. }
+                        ) =>
+                        {
+                            let owner = match listener {
+                                Listener::Power { owner, .. } => owner,
+                                _ => player,
+                            };
                             let mut board = Board::for_card(
                                 live,
                                 rngs.reborrow(),
@@ -1168,8 +1177,8 @@ pub(super) fn carry_setup<V: Rules>(
                                 None,
                             );
                             board.hit_unpowered(
-                                self_dealt.then_some(player),
-                                player,
+                                self_dealt.then_some(owner),
+                                owner,
                                 amount,
                                 unblockable,
                             );

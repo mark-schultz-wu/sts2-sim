@@ -861,6 +861,7 @@ impl<'a, V: Rules> Board<'a, V> {
                             powered,
                             card: card.and(self.playing),
                             player: self.live.player().id,
+                            side: self.live.side,
                         },
                     );
                     self.after_hit(asked);
@@ -1903,6 +1904,12 @@ impl<'a, V: Rules> Board<'a, V> {
                 HookEffect::DamageOpponentsUnblockable(amount) => {
                     for target in self.hittable_opponents_of(owner) {
                         self.hit_unpowered(Some(owner), target, amount, true);
+                    }
+                }
+                // The same, and blockable.
+                HookEffect::DamageOpponents(amount) => {
+                    for target in self.hittable_opponents_of(owner) {
+                        self.hit_unpowered(Some(owner), target, amount, false);
                     }
                 }
                 HookEffect::ApplyPower {

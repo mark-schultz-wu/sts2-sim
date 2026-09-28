@@ -3353,6 +3353,8 @@ pub enum EventHook<V: ContentVersion> {
         card: Option<crate::CardId<V>>,
         /// The fight's player, which a relic's owner is.
         player: crate::CombatId,
+        /// `CombatState.CurrentSide`: whose turn the hit lands in.
+        side: V::CombatSide,
     },
     /// `AfterDamageGiven`, carrying the creature that dealt the hit.
     DamageGiven {

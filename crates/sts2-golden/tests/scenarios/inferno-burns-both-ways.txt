@@ -1,0 +1,10 @@
+# Inferno hurts its owner at the start of each turn, one for each Inferno
+# played, and hits every enemy each time its owner loses health in its own
+# turn. Two Infernos hurt for two, which hits the slimes twice over.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"grant","card":"INFERNO"}
+{"cmd":"play_card","index":5}
+{"cmd":"grant","card":"INFERNO"}
+{"cmd":"play_card","index":5}
+{"cmd":"end_turn"}

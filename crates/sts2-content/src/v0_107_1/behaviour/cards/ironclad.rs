@@ -67,6 +67,14 @@ pub(super) fn resume_play<F: Fight<V>>(
 pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
     match card {
         IroncladCard::Thrash => thrash(fight),
+        // `Inferno`: its Inferno on its owner, then one more self damage on
+        // the power it landed or stacked into.
+        IroncladCard::Inferno => {
+            let inferno = PowerAmount::Counted(fight.var(CardVar::InfernoPower));
+            fight.apply_to_actor(Power::InfernoPower, inferno);
+            fight.note_on_power(fight.actor(), Power::InfernoPower, 1);
+            Played::Done
+        }
         // `Dominate`: its Vulnerable on the target, then as much Strength on
         // its owner as the target then carries Vulnerable.
         IroncladCard::Dominate => {
