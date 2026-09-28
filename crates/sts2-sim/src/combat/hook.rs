@@ -35,6 +35,9 @@ pub(crate) fn apply<V: Rules, F: Fight<V>>(
                 });
                 fight.apply(block);
             }
+            HookEffect::DamageUnpowered { target, amount } => {
+                fight.damage_unpowered(None, target, amount, false);
+            }
             HookEffect::GainBlockOf { target, amount } => {
                 let block = fight.resolve(sts2_core::Effect::GainBlock {
                     recipient: target,

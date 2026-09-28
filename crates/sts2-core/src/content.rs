@@ -3854,6 +3854,11 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CreatureCmd.LoseMaxHp` on the owner. The health falls to the new
     /// maximum when it stood above it.
     LoseMaxHp(V::Number),
+    /// `CreatureCmd.Damage(target, amount, Unpowered)` from nobody.
+    DamageUnpowered {
+        target: crate::CombatId,
+        amount: V::Number,
+    },
     /// `CreatureCmd.LoseMaxHp` on a creature the listener names.
     LoseMaxHpOf {
         target: crate::CombatId,
