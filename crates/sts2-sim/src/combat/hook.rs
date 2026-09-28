@@ -85,6 +85,8 @@ pub(crate) fn apply<V: Rules, F: Fight<V>>(
                     fight.damage_unpowered(dealer, target, amount, unblockable);
                 }
             }
+            HookEffect::Afflict { to, affliction } => fight.afflict(to, affliction),
+            HookEffect::ClearAffliction(to) => fight.clear_affliction(to),
             HookEffect::ChannelRandomOrbs { orbs, count } => {
                 let count: usize = num_traits::cast(count)
                     .unwrap_or_else(|| unimplemented!("{count:?} orbs channelled"));

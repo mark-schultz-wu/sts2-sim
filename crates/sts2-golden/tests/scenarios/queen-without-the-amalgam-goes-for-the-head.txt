@@ -1,0 +1,8 @@
+# The Amalgam dying before the Queen's second move sends her branch to Off
+# With Your Head rather than Burn Bright For Me.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"QUEEN_BOSS"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":300,"target":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

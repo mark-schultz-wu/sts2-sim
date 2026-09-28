@@ -1036,7 +1036,15 @@ impl<'a, V: Rules> Board<'a, V> {
                     if self.ended.is_some() || self.ending() {
                         continue;
                     }
-                    self.write_on(to, |held| afflict::<V>(held, affliction));
+                    let afflicted = std::cell::Cell::new(0);
+                    self.write_on(to, |held| {
+                        if afflict::<V>(held, affliction) {
+                            afflicted.set(afflicted.get() + 1);
+                        }
+                    });
+                    for _ in 0..afflicted.get() {
+                        self.live.history.afflicted(affliction);
+                    }
                 }
                 sts2_core::HookEffect::ClearAffliction(to) => {
                     self.write_on(to, |held| held.ident.affliction = None)
@@ -1079,6 +1087,10 @@ impl<'a, V: Rules> Board<'a, V> {
                 .live
                 .cards
                 .write_all_cards(|held| held.ident.affliction == Some(affliction), write),
+            sts2_core::Writing::Named(id) => self.live.cards.write_named(id, |held| {
+                write(held);
+                true
+            }),
         }
     }
 
@@ -1412,12 +1424,19 @@ impl<'a, V: Rules> Board<'a, V> {
         creature: CombatId,
         side: V::CombatSide,
     ) -> sts2_core::HookEffects<V> {
+        let monster = self
+            .at(creature)
+            .and_then(|at| match self.live.creatures[at].model {
+                Some(sts2_core::ModelId::Monster(monster)) => Some(monster),
+                _ => None,
+            });
         let asked = super::listen::notify::<V>(
             self.live,
             self.relics,
             sts2_core::EventHook::AfterDeath {
                 creature,
                 side,
+                monster,
                 removal_prevented: false,
             },
         );
@@ -1451,12 +1470,41 @@ impl<'a, V: Rules> Board<'a, V> {
                 (Listener::Card { id }, HookEffect::ModifySelf { change, lasting }) => {
                     self.live.modify_self(id, change, lasting)
                 }
+                (Listener::Monster { creature, .. }, HookEffect::EnterMoveFrom { from, to }) => {
+                    self.enter_move_from(creature, from, to)
+                }
                 (listener, effect) => {
                     unimplemented!("{listener:?} asking for {effect:?} over another's death")
                 }
             }
         }
         own
+    }
+
+    /// `SetMoveImmediate(to)` on `creature`'s graph where it advertises
+    /// `from`, and where the graph can leave the move it stands on.
+    fn enter_move_from(&mut self, creature: CombatId, from: V::MoveId, to: V::MoveId) {
+        let Some(at) = self.at(creature) else { return };
+        if self.live.creatures[at]
+            .next_move
+            .as_ref()
+            .map(|next| next.id)
+            != Some(from)
+        {
+            return;
+        }
+        let ascension = self.live.ascension;
+        let Some(held) = self
+            .live
+            .machines
+            .iter_mut()
+            .find(|held| held.creature == creature)
+        else {
+            unreachable!("a monster in the fight has its graph")
+        };
+        if let Ok(next) = V::set_move_immediate(held.monster, ascension, to, &mut held.machine) {
+            self.live.creatures[at].next_move = Some((&next).into());
+        }
     }
 
     /// `ModifyHpLost` in the phases after a hit found who takes it, then
@@ -1960,23 +2008,29 @@ pub(super) fn blocked<V: Rules>(
 ///
 /// A card of a type the affliction refuses keeps what it has. So does a card
 /// with another affliction, or with this one where it does not stack.
-fn afflict<V: Rules>(held: &mut Face<V>, affliction: V::Affliction) {
+///
+/// Whether the card carries it after, which is when `CardCmd.Afflict` writes
+/// a `CardAfflictedEntry`. A card that had it already counts again.
+fn afflict<V: Rules>(held: &mut Face<V>, affliction: V::Affliction) -> bool {
     use sts2_core::AfflictionTable as _;
 
     let kind = V::card_kind(held.ident.card)
         .unwrap_or_else(|| unimplemented!("afflicting a card whose type is worked out"));
     if !affliction.afflicts(kind) {
-        return;
+        return false;
     }
     if !affliction.afflicts_unplayable() {
         unimplemented!("{affliction:?}, which refuses a card with Unplayable");
     }
     match held.ident.affliction {
-        None => held.ident.affliction = Some(affliction),
+        None => {
+            held.ident.affliction = Some(affliction);
+            true
+        }
         Some(already) if already == affliction && affliction.stackable() => {
             unimplemented!("{affliction:?} stacking onto a card that has it")
         }
-        Some(_) => {}
+        Some(already) => already == affliction,
     }
 }
 
@@ -2612,6 +2666,14 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         use sts2_core::rng::GameRng as _;
 
         self.rngs.orbs.choose(orbs).ok().copied()
+    }
+
+    fn afflict(&mut self, to: sts2_core::Writing<V>, affliction: V::Affliction) {
+        self.write_cards([HookEffect::Afflict { to, affliction }]);
+    }
+
+    fn clear_affliction(&mut self, to: sts2_core::Writing<V>) {
+        self.write_cards([HookEffect::ClearAffliction(to)]);
     }
 
     fn modify_cards(&mut self, to: sts2_core::Writing<V>, change: sts2_core::Change<V>) {

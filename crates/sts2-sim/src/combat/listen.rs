@@ -327,10 +327,14 @@ fn raise<V: Rules>(
             && let Some(monster) = carrier.monster
             && monster.overrides().contains(model_hook)
         {
-            let Some(machine) = live.machines.iter().find(|machine| machine.creature == id) else {
+            let Some(machine) = live
+                .machines
+                .iter_mut()
+                .find(|machine| machine.creature == id)
+            else {
                 unreachable!("a monster in the fight has its graph")
             };
-            V::monster_event_hook(monster, &machine.state, id, hook, &mut answer);
+            V::monster_event_hook(monster, &mut machine.state, id, hook, &mut answer);
             let listener = Listener::Monster {
                 creature: id,
                 monster,

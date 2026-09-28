@@ -472,6 +472,7 @@ fn before_played<V: Rules, S: LendsCombat>(
     let hook = sts2_core::EventHook::CardPlaying {
         card: card.face.ident.card,
         id: card.id,
+        affliction: card.face.ident.affliction,
         target,
         ethereal: card.face.ethereal(),
         resolved,

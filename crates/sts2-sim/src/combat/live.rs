@@ -1666,6 +1666,11 @@ impl<V: Rules> CombatHistory<V> {
     }
 
     /// `History.CardDrawn`, in the turn the fight stands in.
+    pub(super) fn afflicted(&mut self, affliction: V::Affliction) {
+        self.this_turn
+            .push(sts2_core::HistoryEntry::Afflicted(affliction));
+    }
+
     pub(super) fn draw(&mut self, card: V::Card) {
         self.this_turn.push(sts2_core::HistoryEntry::Drawn(card));
     }

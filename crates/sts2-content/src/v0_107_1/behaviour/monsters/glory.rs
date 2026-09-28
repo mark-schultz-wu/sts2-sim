@@ -44,6 +44,10 @@ pub(super) fn starting_powers(
             (Power::WitheringPresencePower, PowerAmount::Counted(6)),
             (Power::ArtifactPower, PowerAmount::Counted(3)),
         ],
+        Monster::TorchHeadAmalgam => vec![(Power::MinionPower, PowerAmount::Counted(1))],
+        // It finds the Amalgam among the enemies, which the fight asks it
+        // about as it dies.
+        Monster::Queen => Vec::new(),
         Monster::TestSubject => {
             let enrage = match ascension.has(AscensionLevel::DeadlyEnemies) {
                 true => 3,
@@ -101,6 +105,18 @@ pub(super) fn conditional(
                 true => fabricate,
                 false => disintegrate,
             });
+        }
+        // `YOURE_MINE_NOW_BRANCH` and `BURN_BRIGHT_FOR_ME_BRANCH`: Burn Bright
+        // For Me while the Amalgam stands, and Off With Your Head once it has
+        // died.
+        Monster::Queen => {
+            let super::Model::Queen { amalgam_died } = *model else {
+                unreachable!("a Queen holding {model:?}")
+            };
+            match amalgam_died {
+                false => MoveId::BurnBrightForMeMove,
+                true => MoveId::OffWithYourHeadMove,
+            }
         }
         // `REVIVE_BRANCH`: Multi Claw after the first respawn, and Lacerate
         // after the second.
@@ -167,6 +183,19 @@ pub(super) fn wither_generated(
             ),
         });
     }
+}
+
+/// `Queen.AfterDeath` for the Amalgam: it has died, and a Queen about to
+/// burn it brighter enrages instead.
+pub(super) fn amalgam_died(model: &mut super::Model, asked: &mut sts2_core::HookEffects<V>) {
+    let super::Model::Queen { amalgam_died } = model else {
+        unreachable!("a Queen holding {model:?}")
+    };
+    *amalgam_died = true;
+    asked.push(sts2_core::HookEffect::EnterMoveFrom {
+        from: MoveId::BurnBrightForMeMove,
+        to: MoveId::EnrageMove,
+    });
 }
 
 /// `TestSubject.Revive`: `CreatureCmd.SetMaxHp`, then a heal of as much.
@@ -413,6 +442,37 @@ pub(super) fn perform<F: Fight<V>>(
             };
             *strength += 1;
         }
+        // `BurnBrightForMeMove`: Strength on each of its teammates, then its
+        // block.
+        (Monster::Queen, MoveId::BurnBrightForMeMove) => {
+            use sts2_core::{Amount, CreatureView as _, Effect, Scaling};
+
+            let actor = fight.actor();
+            let side = fight.side();
+            let teammates: Vec<_> = fight
+                .creatures()
+                .filter(|creature| {
+                    creature.side() == side && creature.alive() && creature.id() != actor
+                })
+                .map(|creature| creature.id())
+                .collect();
+            for teammate in teammates {
+                fight.apply_power_from(
+                    teammate,
+                    Power::StrengthPower,
+                    PowerAmount::Counted(1),
+                    Some(actor),
+                );
+            }
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: actor,
+                amount: Amount::Number(20),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+        }
+        // `SoulBeamMove`: its three hits, aimed past the first target's node.
+        (Monster::TorchHeadAmalgam, MoveId::BeamMove) => fight.attack_opponents(),
         // `MultiClawMove`: its hits, then one more for the next.
         (Monster::TestSubject, MoveId::MultiClawMove) => {
             fight.attack_opponents();
