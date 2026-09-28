@@ -1,0 +1,8 @@
+# The Globe Head enters with Galvanic, which afflicts every Power the player
+# holds with Galvanized as the fight opens, and each Power that joins it
+# later. Playing a Galvanized card deals six to the player, unpowered.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","card":"INFLAME"}
+{"cmd":"fight","encounter":"GLOBE_HEAD_NORMAL"}
+{"cmd":"grant","card":"INFLAME"}
+{"cmd":"play_card","index":5}

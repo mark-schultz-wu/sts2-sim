@@ -17,6 +17,7 @@ pub(super) fn starting_powers(
         // `_buffAmt`, which is also Paper Cuts'.
         Monster::ScrollOfBiting => vec![(Power::PaperCutsPower, PowerAmount::Counted(2))],
         Monster::LivingShield => vec![(Power::RampartPower, PowerAmount::Counted(25))],
+        Monster::GlobeHead => vec![(Power::GalvanicPower, PowerAmount::Counted(6))],
         Monster::FrogKnight => {
             let plating = match ascension.has(AscensionLevel::ToughEnemies) {
                 true => 19,

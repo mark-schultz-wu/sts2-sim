@@ -2251,6 +2251,38 @@ pub(crate) fn event_hook(
             return;
         }
         (Power::RampartPower, _, EventHook::SideTurnStart { .. }) => None,
+        // `GalvanicPower.BeforeCombatStart`: Galvanized on every Power the
+        // player holds. `AfterCardEnteredCombat`: on a Power that joins the
+        // fight. The fight leaves a card afflicted already as it is.
+        (Power::GalvanicPower, _, EventHook::CombatStarting { .. }) => {
+            Some(HookEffect::Afflict {
+                to: sts2_core::Writing::EveryOfKind(sts2_core::CardKind::Power),
+                affliction: Affliction::Galvanized,
+            })
+        }
+        (Power::GalvanicPower, _, EventHook::CardEnteredCombat { at, card, .. })
+            if <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Power) =>
+        {
+            Some(HookEffect::Afflict {
+                to: sts2_core::Writing::One(at),
+                affliction: Affliction::Galvanized,
+            })
+        }
+        (Power::GalvanicPower, _, EventHook::CardEnteredCombat { .. }) => None,
+        // `GalvanicPower.AfterCardPlayed`: its amount to the player who
+        // played a Galvanized card, unpowered and from nobody.
+        (
+            Power::GalvanicPower,
+            PowerAmount::Counted(amount),
+            EventHook::CardPlayed {
+                affliction: Some(Affliction::Galvanized),
+                ..
+            },
+        ) => Some(HookEffect::DamageUnpowered {
+            target: fight.player(),
+            amount,
+        }),
+        (Power::GalvanicPower, _, EventHook::CardPlayed { .. }) => None,
         // `DiamondDiademPower.AfterSideTurnEnd`: gone once the enemies' turn
         // ends.
         (
