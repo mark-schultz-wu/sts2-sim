@@ -25,6 +25,10 @@ pub(super) fn starting_powers(
         Monster::ScrollOfBiting => vec![(Power::PaperCutsPower, PowerAmount::Counted(2))],
         Monster::LivingShield => vec![(Power::RampartPower, PowerAmount::Counted(25))],
         Monster::GlobeHead => vec![(Power::GalvanicPower, PowerAmount::Counted(6))],
+        Monster::MechaKnight => vec![(Power::ArtifactPower, PowerAmount::Counted(3))],
+        // It listens for its own death to clear its animation, which touches
+        // nothing in the fight.
+        Monster::SoulNexus => Vec::new(),
         Monster::Zapbot => vec![(Power::HighVoltagePower, PowerAmount::Counted(2))],
         // Each calls the base alone, and places itself where the Fabricator's
         // bots fall.
@@ -241,6 +245,30 @@ pub(super) fn perform<F: Fight<V>>(
             );
             fight.add_at_random(dazed, sts2_core::Pile::Draw);
         }
+        // `FlamethrowerMove`: four Burns into the hand of the one player.
+        (Monster::MechaKnight, MoveId::FlamethrowerMove) => {
+            use super::super::super::generated::cards::{Cards, StatusCard};
+
+            fight.add_generated_cards(
+                sts2_core::CardIdent::new(Cards::Status(StatusCard::Burn)),
+                sts2_core::Pile::Hand,
+                4,
+            );
+        }
+        // `WindupMove`: fifteen block and five Strength. `IsWoundUp` picks its
+        // animations alone.
+        (Monster::MechaKnight, MoveId::WindupMove) => {
+            use sts2_core::{Amount, Effect, Scaling};
+
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Number(15),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(5));
+        }
+        (Monster::MechaKnight, MoveId::HeavyCleaveMove) => fight.attack_opponents(),
         // `HexMove`: two Hex on each target.
         (Monster::SpectralKnight, MoveId::Hex) => {
             fight.apply_to_opponents(Power::HexPower, PowerAmount::Counted(2));
