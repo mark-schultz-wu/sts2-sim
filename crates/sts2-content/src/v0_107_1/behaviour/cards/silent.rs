@@ -39,6 +39,27 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
         SilentCard::BladeDance => blade_dance(fight),
         SilentCard::PiercingWail => piercing_wail(fight),
         SilentCard::EchoingSlash => echoing_slash(fight),
+        // `DodgeAndRoll`: its block, then as much as it gave as Block Next
+        // Turn.
+        SilentCard::DodgeAndRoll => {
+            let actor = fight.actor();
+            let held = |fight: &F| {
+                fight
+                    .creatures()
+                    .find(|creature| creature.id() == actor)
+                    .map_or(0, |creature| creature.block())
+            };
+            let before = held(fight);
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: actor,
+                amount: Amount::Var(CardVar::Block),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+            let gained = held(fight) - before;
+            fight.apply_to_actor(Power::BlockNextTurnPower, PowerAmount::Counted(gained));
+            Played::Done
+        }
         // `EscapePlan`: a card drawn, then its block where that card is a
         // Skill. The history holds the draw as it happens.
         SilentCard::EscapePlan => {

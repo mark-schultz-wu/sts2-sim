@@ -89,6 +89,7 @@ mod neows_torment;
 mod new_leaf;
 mod nunchaku;
 mod nutritious_oyster;
+mod old_coin;
 mod orichalcum;
 mod paels_blood;
 mod paels_flesh;
@@ -315,6 +316,7 @@ pub enum State {
     MoltenEgg,
     ToxicEgg,
     SelfFormingClay,
+    OldCoin,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -532,6 +534,7 @@ pub(crate) fn event_hook(
         State::MoltenEgg => molten_egg::event_hook(hook, asked),
         State::ToxicEgg => toxic_egg::event_hook(hook, asked),
         State::SelfFormingClay => self_forming_clay::event_hook(hook, asked),
+        State::OldCoin => old_coin::event_hook(hook, asked),
     }
 }
 
@@ -689,7 +692,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::FrozenEgg
         | State::MoltenEgg
         | State::ToxicEgg
-        | State::SelfFormingClay => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::SelfFormingClay
+        | State::OldCoin => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -837,6 +841,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::MoltenEgg => State::MoltenEgg,
             Relic::ToxicEgg => State::ToxicEgg,
             Relic::SelfFormingClay => State::SelfFormingClay,
+            Relic::OldCoin => State::OldCoin,
             relic => unimplemented!("what {relic:?} does in a run that carries it"),
         }
     }

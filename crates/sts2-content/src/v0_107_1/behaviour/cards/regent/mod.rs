@@ -18,6 +18,8 @@ pub enum Resume {
     GlimmerPutBack,
     /// `PhotonCut`, after its owner picked the cards to put back.
     PhotonCutPutBack,
+    /// `CosmicIndifference`, after its owner picked the card to put back.
+    CosmicIndifferencePutBack,
 }
 
 pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
@@ -37,6 +39,26 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
             Played::Done
         }
         RegentCard::KnockoutBlow => knockout_blow(fight),
+        // `CosmicIndifference`: its block, then one card of the discard pile
+        // onto the top of the draw pile.
+        RegentCard::CosmicIndifference => {
+            use sts2_core::{Amount, Effect, Scaling};
+
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Var(CardVar::Block),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+            Played::Asking {
+                pile: sts2_core::Pile::Discard,
+                selection: sts2_core::Selection::Exactly(nonmax::NonMaxUsize::ONE),
+                at: super::super::Resume::Card(super::Resume::Regent(
+                    Resume::CosmicIndifferencePutBack,
+                )),
+            }
+        }
+        RegentCard::BundleOfJoy => bundle_of_joy(fight),
         RegentCard::PhotonCut => photon_cut(fight),
         RegentCard::SummonForth => summon_forth(fight),
         // `Glimmer`: its `Cards` drawn, then its `PutBack` of the hand onto
@@ -150,6 +172,25 @@ fn make_it_so<P: sts2_core::Printed<V> + ?Sized>(
     }
 }
 
+/// `BundleOfJoy`: `GetDistinctForCombat` of its `Cards` of colorless cards
+/// off `CombatCardGeneration`, into hand.
+fn bundle_of_joy<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use sts2_core::{Rules as _, RunStreamKinds as _};
+
+    let mut cards = V::combat_colorless_cards().to_vec();
+    let stream = <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_GENERATION;
+    let made: Vec<_> = match fight.var(CardVar::Cards) {
+        3 => fight.generate_cards::<3>(&mut cards, stream).map(Vec::from),
+        4 => fight.generate_cards::<4>(&mut cards, stream).map(Vec::from),
+        count => unimplemented!("Bundle of Joy making {count} cards"),
+    }
+    .unwrap_or_else(|_| unimplemented!("a colorless pool short of Bundle of Joy's cards"));
+    for card in made {
+        fight.add_generated_cards(card, sts2_core::Pile::Hand, 1);
+    }
+    Played::Done
+}
+
 /// `HeavenlyDrill`: its damage to the target, once for each energy its X
 /// spent, and twice that from its `Energy` on.
 fn heavenly_drill<F: Fight<V>>(fight: &mut F) -> Played<V> {
@@ -231,7 +272,7 @@ pub(super) fn resume_play<F: Fight<V>>(
     match at {
         Resume::BegoneTransform => common::begone_transform(fight, chosen),
         // `CardPileCmd.Add` onto the top of the draw pile.
-        Resume::GlimmerPutBack | Resume::PhotonCutPutBack => {
+        Resume::GlimmerPutBack | Resume::PhotonCutPutBack | Resume::CosmicIndifferencePutBack => {
             fight.act_on(sts2_core::PileAct::OntoDrawTop, chosen.as_slice());
             Played::Done
         }
