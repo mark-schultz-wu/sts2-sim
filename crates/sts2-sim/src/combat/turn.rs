@@ -2087,13 +2087,6 @@ fn clear_block<V: Rules>(
                     });
                     board.apply(block);
                 }
-                // `PowerCmd.Decrement(this)`.
-                (Listener::Power { owner, power, .. }, sts2_core::HookEffect::Decrement) => {
-                    let ascension = live.ascension;
-                    let mut board =
-                        Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
-                    board.modify_amount(owner, power, -num_traits::one::<V::Number>());
-                }
                 (_, effect) => {
                     unimplemented!("a listener asking for {effect:?} as block clears")
                 }

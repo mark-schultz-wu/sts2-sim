@@ -1,0 +1,13 @@
+# Toric Toughness is instanced. A second one played the next turn lands
+# beside the first, and each gives its block and counts down its own turns.
+# The first comes off while the second still has a turn to go.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"TORIC_TOUGHNESS"}
+{"cmd":"play_card","index":5}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"TORIC_TOUGHNESS"}
+{"cmd":"play_card","index":5}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

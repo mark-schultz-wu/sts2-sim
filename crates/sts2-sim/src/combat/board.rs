@@ -275,12 +275,14 @@ impl<'a, V: Rules> Board<'a, V> {
         // power takes the amount through `ModifyAmount`, which is the whole of
         // what happens. Everything below to the stacking itself is the other
         // branch, the one that builds an instance.
-        let fresh = !self.live.powers.of(id).any(|held| held.power() == power);
-        // An instanced power builds another instance beside the one there,
-        // which a creature here holds only one of.
-        if !fresh && sts2_core::PowerTable::instanced(power) {
-            unimplemented!("a second instance of {power:?}")
-        }
+        // An instanced power builds another instance beside any there.
+        let held = self
+            .live
+            .powers
+            .of(id)
+            .filter(|held| held.power() == power)
+            .count();
+        let fresh = held == 0 || sts2_core::PowerTable::instanced(power);
         // `FindExistingInstanceForStacking`: a counter stacks into the one
         // already there through `ModifyAmount`. An endless instance is one
         // instance however many times it lands.
@@ -313,7 +315,14 @@ impl<'a, V: Rules> Board<'a, V> {
             return;
         };
         debug_assert_eq!(found, at, "a power landing does not reorder the fight");
-        if self.live.powers.of(id).any(|held| held.power() == power) {
+        if self
+            .live
+            .powers
+            .of(id)
+            .filter(|held| held.power() == power)
+            .count()
+            != held
+        {
             unimplemented!("{power:?} landing during its own `BeforeApplied`")
         }
         // `ApplyInternal`, which puts nothing on for an amount of zero.
@@ -496,11 +505,15 @@ impl<'a, V: Rules> Board<'a, V> {
     }
 
     fn applied(&mut self, id: CombatId, power: V::Power) {
+        // The instance that just landed, which is the last of its kind.
         let Some(at) = self
             .live
             .powers
             .of(id)
-            .position(|held| held.power() == power)
+            .enumerate()
+            .filter(|(_, held)| held.power() == power)
+            .map(|(at, _)| at)
+            .last()
         else {
             return;
         };
@@ -3202,11 +3215,14 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn note_on_power(&mut self, creature: CombatId, power: V::Power, note: V::Number) {
+        // The instance `PowerCmd.Apply` handed back, which is the last of its
+        // kind.
         if let Some(held) = self
             .live
             .powers
             .of_mut(creature)
-            .find(|held| held.power() == power)
+            .filter(|held| held.power() == power)
+            .last()
         {
             <V as sts2_core::Hooks>::power_noted(&mut held.state, note);
         }
