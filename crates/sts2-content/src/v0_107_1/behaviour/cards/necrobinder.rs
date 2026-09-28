@@ -417,6 +417,24 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
         NecrobinderCard::Eradicate => eradicate(fight),
         NecrobinderCard::GraveWarden => grave_warden(fight),
         NecrobinderCard::Dirge => dirge(fight),
+        // `PullFromBelow`: its damage to the target, as many times as its
+        // calculated hits, counted before the first.
+        NecrobinderCard::PullFromBelow => {
+            let target = fight.target();
+            let hits = fight.var(CardVar::CalculatedHits);
+            fight.attack(Scaling::Dynamic, |fight| {
+                for _ in 0..hits {
+                    let hit = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(hit);
+                }
+            });
+            Played::Done
+        }
         // `Rattle`: where Osty stands, its damage from Osty to the target, as
         // many times as its calculated hits, counted before the first.
         NecrobinderCard::Rattle => {

@@ -1,0 +1,10 @@
+# Pull From Below hits once for each play of an Ethereal card this fight,
+# and a Strike is no such play. A Strike and a Defy come first, so it hits
+# once.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"grant","card":"DEFY"}
+{"cmd":"play_card","index":4,"target":1}
+{"cmd":"grant","card":"PULL_FROM_BELOW"}
+{"cmd":"play_card","index":4,"target":1}

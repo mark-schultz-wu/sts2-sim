@@ -120,6 +120,14 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
             Played::Done
         }
         DefectCard::Compact => compact(fight),
+        // `Synchronize`: its calculated Focus, lent until the turn ends.
+        DefectCard::Synchronize => {
+            fight.apply_to_actor(
+                Power::SynchronizePower,
+                PowerAmount::Counted(fight.var(CardVar::CalculatedFocus)),
+            );
+            Played::Done
+        }
         // `ConsumingShadow`: a Dark orb for each of its `Repeat`, then its
         // power on its owner.
         DefectCard::ConsumingShadow => {

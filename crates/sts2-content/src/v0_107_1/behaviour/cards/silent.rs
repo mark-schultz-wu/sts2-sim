@@ -140,6 +140,12 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
             hit_target(fight, fight.var(CardVar::CalculatedHits));
             Played::Done
         }
+        // `Flechettes`: its damage to the target, once for each Skill in its
+        // owner's hand.
+        SilentCard::Flechettes => {
+            hit_target(fight, fight.var(CardVar::CalculatedHits));
+            Played::Done
+        }
         // `Expertise`: cards drawn up to its `Cards` in hand.
         SilentCard::Expertise => {
             let hand = super::Number::try_from(fight.cards_in(Pile::Hand).len())

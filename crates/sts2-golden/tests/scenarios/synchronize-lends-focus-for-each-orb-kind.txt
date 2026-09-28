@@ -1,0 +1,12 @@
+# Synchronize lends two Focus for each kind of orb its owner holds, until
+# the turn ends. Cracked Core's Lightning, a Zap's and a Cold Snap's Frost
+# make two kinds.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"ZAP"}
+{"cmd":"play_card","index":5}
+{"cmd":"grant","card":"COLD_SNAP"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"grant","card":"SYNCHRONIZE"}
+{"cmd":"play_card","index":5}
+{"cmd":"end_turn"}

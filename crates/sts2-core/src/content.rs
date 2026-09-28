@@ -3703,6 +3703,26 @@ pub enum HistoryEntry<V: ContentVersion> {
     /// A `CardAfflictedEntry` on one of the player's cards, by the
     /// affliction. Its `Actor` is the card's owner.
     Afflicted(V::Affliction),
+    /// A `CardDiscardedEntry`, by the card discarded, which is the player's.
+    Discarded(V::Card),
+    /// A `CardGeneratedEntry`, by whether its `Creator` is the player.
+    Generated {
+        by_player: bool,
+    },
+    /// A `DamageReceivedEntry`.
+    DamageReceived(DamageReceived<V>),
+}
+
+/// One `DamageReceivedEntry` in `CombatManager.History`, as far as a
+/// listener reads it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DamageReceived<V: ContentVersion> {
+    pub receiver: crate::CombatId,
+    pub dealer: Option<crate::CombatId>,
+    /// `Result.UnblockedDamage`.
+    pub unblocked: V::Number,
+    /// `Result.Props.IsPoweredAttack()`.
+    pub powered: bool,
 }
 
 /// One `BlockGainedEntry` in `CombatManager.History`, as far as a listener
@@ -3851,6 +3871,34 @@ impl<V: ContentVersion> History<'_, V> {
     pub fn block_gained_this_turn(&self) -> impl Iterator<Item = BlockGained> + '_ {
         self.this_turn.iter().filter_map(|entry| match entry {
             HistoryEntry::BlockGained(gained) => Some(*gained),
+            _ => None,
+        })
+    }
+
+    /// How many `CardDiscardedEntry` are where `HappenedThisTurn`.
+    pub fn discarded_this_turn(&self) -> usize {
+        self.this_turn
+            .iter()
+            .filter(|entry| matches!(entry, HistoryEntry::Discarded(_)))
+            .count()
+    }
+
+    /// How many `CardGeneratedEntry` of the fight name the player as their
+    /// `Creator`.
+    pub fn generated_by_player(&self) -> usize {
+        let before = std::iter::successors(self.before, |before| before.before.as_deref())
+            .flat_map(|before| before.entries.iter());
+        self.this_turn
+            .iter()
+            .chain(before)
+            .filter(|entry| matches!(entry, HistoryEntry::Generated { by_player: true }))
+            .count()
+    }
+
+    /// Each `DamageReceivedEntry` where `HappenedThisTurn`.
+    pub fn damage_received_this_turn(&self) -> impl Iterator<Item = DamageReceived<V>> + '_ {
+        self.this_turn.iter().filter_map(|entry| match entry {
+            HistoryEntry::DamageReceived(received) => Some(*received),
             _ => None,
         })
     }
@@ -4803,6 +4851,11 @@ pub struct CardOwner<'a, V: ContentVersion> {
     pub block: V::Number,
     /// `PlayerCombatState.OrbQueue.Orbs`, in queue order.
     pub orbs: &'a [crate::Channelled<V>],
+    /// The cards in the owner's hand, in hand order.
+    pub hand: &'a [V::Card],
+    /// How many of the owner's cards in the fight, every pile included,
+    /// print a star cost, which is `CanonicalStarCost >= 0 || HasStarCostX`.
+    pub star_cards: usize,
 }
 
 /// What one copy of a card prints, as a rule reads it.

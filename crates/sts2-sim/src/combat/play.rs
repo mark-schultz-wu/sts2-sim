@@ -150,7 +150,8 @@ pub(crate) fn apply_power<V: Rules>(
 }
 
 /// `Driver.GrantCard` in a fight: `CombatState.AddCard`, then
-/// `CardPileCmd.Add` into hand, which raises `AfterCardEnteredCombat`.
+/// `CardPileCmd.Add` into hand, which raises `AfterCardEnteredCombat`. The
+/// card is not generated, so nothing records it or hears it made.
 ///
 /// Scenario construction, as [`apply_power`] is.
 pub(crate) fn grant_card<V: Rules>(fighting: Fighting<'_, V>, card: V::Card) {
@@ -161,11 +162,10 @@ pub(crate) fn grant_card<V: Rules>(fighting: Fighting<'_, V>, card: V::Card) {
     } = fighting;
     let ascension = live.ascension;
     let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
-    sts2_core::Fight::add_generated_cards(
+    sts2_core::Fight::add_card(
         &mut board,
         sts2_core::CardIdent::new(card),
         sts2_core::Pile::Hand,
-        1,
     );
     let skipped = std::mem::take(&mut board.skipped);
     merge::<V>(&mut live.skip_tick, skipped);

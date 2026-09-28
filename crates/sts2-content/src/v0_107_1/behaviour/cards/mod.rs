@@ -337,6 +337,76 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
             printed.face(CardVar::CalculationBase)
                 + printed.face(CardVar::CalculationExtra) * gained
         }
+        // `CrescentSpear`: a base, and more for each of its owner's cards in
+        // the fight that prints a star cost, itself included.
+        (Cards::Regent(RegentCard::CrescentSpear), CardVar::CalculatedDamage) => {
+            let starred =
+                Number::try_from(owner.star_cards).expect("a fight's cards fit the game's numbers");
+            printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * starred
+        }
+        // `GoldAxe`: a base, and more for each card play the fight has
+        // finished.
+        (Cards::Colorless(ColorlessCard::GoldAxe), CardVar::CalculatedDamage) => {
+            let plays = owner.history.finished_this_fight().count();
+            let plays = Number::try_from(plays).expect("a fight's plays fit the game's numbers");
+            printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * plays
+        }
+        // `PullFromBelow`: a base, and one more hit for each of its owner's
+        // plays this fight of a card that was Ethereal. A fight here has one
+        // player.
+        (Cards::Necrobinder(NecrobinderCard::PullFromBelow), CardVar::CalculatedHits) => {
+            let ethereal = owner
+                .history
+                .finished_this_fight()
+                .filter(|finished| finished.ethereal)
+                .count();
+            let ethereal =
+                Number::try_from(ethereal).expect("a fight's plays fit the game's numbers");
+            printed.face(CardVar::CalculationBase)
+                + printed.face(CardVar::CalculationExtra) * ethereal
+        }
+        // `Supermassive`: a base, and more for each card its owner made in
+        // the fight.
+        (Cards::Regent(RegentCard::Supermassive), CardVar::CalculatedDamage) => {
+            let made = Number::try_from(owner.history.generated_by_player())
+                .expect("a fight's cards fit the game's numbers");
+            printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * made
+        }
+        // `MementoMori`: a base, and more for each card its owner discarded
+        // this turn. A fight here has one player.
+        (Cards::Silent(SilentCard::MementoMori), CardVar::CalculatedDamage) => {
+            let discarded = Number::try_from(owner.history.discarded_this_turn())
+                .expect("a turn's discards fit the game's numbers");
+            printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * discarded
+        }
+        // `Synchronize`: a base, and more Focus for each kind of orb its
+        // owner holds.
+        (Cards::Defect(DefectCard::Synchronize), CardVar::CalculatedFocus) => {
+            let mut kinds: smallvec::SmallVec<[_; 10]> = smallvec::SmallVec::new();
+            for held in owner.orbs {
+                if !kinds.contains(&held.orb) {
+                    kinds.push(held.orb);
+                }
+            }
+            let kinds =
+                Number::try_from(kinds.len()).expect("an orb queue fits the game's numbers");
+            printed.face(CardVar::CalculationBase) + printed.face(CardVar::CalculationExtra) * kinds
+        }
+        // `Flechettes`: a base, and one more hit for each Skill in its owner's
+        // hand.
+        (Cards::Silent(SilentCard::Flechettes), CardVar::CalculatedHits) => {
+            let skills = owner
+                .hand
+                .iter()
+                .filter(|&&card| {
+                    <V0_107_1 as sts2_core::Rules>::card_kind(card)
+                        == Some(sts2_core::CardKind::Skill)
+                })
+                .count();
+            let skills = Number::try_from(skills).expect("a hand fits the game's numbers");
+            printed.face(CardVar::CalculationBase)
+                + printed.face(CardVar::CalculationExtra) * skills
+        }
         // `TimesUp`: a base, and more for each Doom on its target.
         (Cards::Necrobinder(NecrobinderCard::TimesUp), CardVar::CalculatedDamage) => {
             let doom = owner

@@ -1772,6 +1772,25 @@ impl<V: Rules> CombatHistory<V> {
             .push(sts2_core::HistoryEntry::Drawn { card, hand_draw });
     }
 
+    /// `History.CardDiscarded`, in the turn the fight stands in.
+    pub(super) fn discarded(&mut self, card: V::Card) {
+        self.this_turn
+            .push(sts2_core::HistoryEntry::Discarded(card));
+    }
+
+    /// `History.CardGenerated`, in the turn the fight stands in, by whether
+    /// the player made it.
+    pub(super) fn generated(&mut self, by_player: bool) {
+        self.this_turn
+            .push(sts2_core::HistoryEntry::Generated { by_player });
+    }
+
+    /// `History.DamageReceived`, in the turn the fight stands in.
+    pub(super) fn damage_received(&mut self, received: sts2_core::DamageReceived<V>) {
+        self.this_turn
+            .push(sts2_core::HistoryEntry::DamageReceived(received));
+    }
+
     /// `History.BlockGained`, in the turn the fight stands in.
     pub(super) fn block_gained(&mut self, gained: sts2_core::BlockGained) {
         self.this_turn

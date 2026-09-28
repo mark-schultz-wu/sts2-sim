@@ -1406,6 +1406,8 @@ pub(super) fn act_on<V: Rules>(
                 if held.face.sly() {
                     sly.push(held.id);
                 }
+                let card = held.face.ident.card;
+                live.history.discarded(card);
                 unheard::<V>(live, relics, sts2_core::ModelHook::AfterCardDiscarded);
                 Pile::Discard
             }

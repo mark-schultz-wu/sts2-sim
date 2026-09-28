@@ -779,6 +779,17 @@ impl<'a, V: Rules> Board<'a, V> {
             if lost > zero {
                 self.current_hp_changed(receiver, -lost);
             }
+            // `History.DamageReceived`, while the fight is in progress.
+            if self.ended.is_none() && !self.ending() {
+                self.live
+                    .history
+                    .damage_received(sts2_core::DamageReceived {
+                        receiver,
+                        dealer,
+                        unblocked: lost,
+                        powered,
+                    });
+            }
             let asked = super::listen::notify::<V>(
                 self.live,
                 self.relics,
@@ -1010,6 +1021,8 @@ impl<'a, V: Rules> Board<'a, V> {
     /// landed at `at`, and what it asked for. `CardPileCmd.Add` has raised
     /// `AfterCardEnteredCombat` for it first.
     fn card_generated(&mut self, at: CardAt<V>, card: V::Card, creator: Option<CombatId>) {
+        let by_player = creator == Some(self.live.player().id);
+        self.live.history.generated(by_player);
         let asked = super::listen::notify::<V>(
             self.live,
             self.relics,
@@ -2399,6 +2412,11 @@ pub(crate) fn var<V: Rules>(
                 })
                 .flat_map(|creature| live.powers.of(creature.id).map(HeldPower::stack))
                 .collect();
+            let hand: SmallVec<[V::Card; 12]> = live
+                .cards
+                .iter(Pile::Hand)
+                .map(|held| held.face.ident.card)
+                .collect();
             let owner = sts2_core::CardOwner {
                 powers: &powers::<V>(live),
                 osty,
@@ -2422,6 +2440,10 @@ pub(crate) fn var<V: Rules>(
                     .find(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER)
                     .map_or_else(num_traits::zero, |player| player.block),
                 orbs: live.orbs.as_ref().map_or(&[], |orbs| orbs.queue.as_slice()),
+                hand: &hand,
+                star_cards: live.cards.count_all(|face| {
+                    sts2_core::CardTable::star_cost(face.ident.card) != sts2_core::Cost::None
+                }),
             };
             V::calculated_card_var(held.face.ident.card, key, held, owner)
         }
@@ -3816,9 +3838,18 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         let Some(at) = self.live.cards.find(Pile::Hand, playing) else {
             return;
         };
+        let card = self
+            .live
+            .cards
+            .get(Pile::Hand, at)
+            .expect("a card stands where it was found")
+            .face
+            .ident
+            .card;
         // `CardCmd.Discard`, whose hook nothing ported answers.
-        self.unheard(sts2_core::ModelHook::AfterCardDiscarded);
         self.live.cards.move_to(Pile::Hand, at, Pile::Discard);
+        self.live.history.discarded(card);
+        self.unheard(sts2_core::ModelHook::AfterCardDiscarded);
     }
 
     fn summon(&mut self, monster: V::Monster, position: usize) -> CombatId {

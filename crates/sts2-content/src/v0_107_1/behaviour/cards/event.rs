@@ -196,7 +196,7 @@ fn mad_science<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
                     fight.modify_energy(fight.var(CardVar::EnergizedEnergy))
                 }
                 EventCard::MadScienceWisdom => fight.draw(fight.var(CardVar::WisdomCards)),
-                _ => super::super::free_card_into_hand(fight, |_| true),
+                _ => super::super::free_card_into_hand(fight, |_| true, false),
             }
         }
         EventCard::MadScienceExpertise => {
