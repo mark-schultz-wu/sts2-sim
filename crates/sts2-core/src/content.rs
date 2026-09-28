@@ -2065,6 +2065,12 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("a creature killed outright")
     }
 
+    /// `Rng.CombatOrbGeneration.NextItem(orbs)`: one orb of the list,
+    /// nothing for an empty one.
+    fn random_orb(&mut self, _orbs: &[V::Orb]) -> Option<V::Orb> {
+        unimplemented!("a random orb")
+    }
+
     /// `change` written on each card `to` names, for the rest of the fight.
     fn modify_cards(&mut self, _to: Writing<V>, _change: Change<V>) {
         unimplemented!("writing on the cards a fight holds")
@@ -4018,6 +4024,12 @@ pub enum HookEffect<V: ContentVersion> {
     HealPercent(V::Number),
     /// `OrbCmd.Channel` for the listener's owner.
     Channel(V::Orb),
+    /// `OrbModel.GetRandomOrb` off `CombatOrbGeneration`, over `orbs`, then
+    /// `OrbCmd.Channel` for the listener's owner, `count` times.
+    ChannelRandomOrbs {
+        orbs: &'static [V::Orb],
+        count: V::Number,
+    },
     /// `OstyCmd.Summon` for the listener's owner.
     Summon(V::Number),
     /// `CreatureCmd.Damage` on every enemy that can be hit, from the

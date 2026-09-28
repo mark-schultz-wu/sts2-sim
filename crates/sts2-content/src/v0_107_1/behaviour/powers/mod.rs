@@ -1727,6 +1727,15 @@ pub(crate) fn decide_hook(
     }
 }
 
+/// `OrbModel._validOrbs`, which `GetRandomOrb` draws from.
+const VALID_ORBS: [Orb; 5] = [
+    Orb::LightningOrb,
+    Orb::FrostOrb,
+    Orb::DarkOrb,
+    Orb::PlasmaOrb,
+    Orb::GlassOrb,
+];
+
 /// `WitheringPresencePower`'s `CardsLeft` as it is applied.
 const WITHERING_CARDS: u8 = 6;
 
@@ -2814,6 +2823,51 @@ pub(crate) fn event_hook(
             }
         }
         (Power::NemesisPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `AfterCardGeneratedForCombat`, for a card its holder made: every
+        // enemy hit for a Status, orbs channelled for a Status, Strength or
+        // block for any card.
+        (
+            Power::SmokestackPower
+            | Power::TrashToTreasurePower
+            | Power::ArsenalPower
+            | Power::PillarOfCreationPower,
+            PowerAmount::Counted(amount),
+            EventHook::CardGeneratedForCombat {
+                card,
+                creator: Some(creator),
+                ..
+            },
+        ) if creator == holder => {
+            let status = <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Status);
+            match power {
+                Power::SmokestackPower => status.then_some(HookEffect::DamageOpponents(amount)),
+                Power::TrashToTreasurePower => status.then_some(HookEffect::ChannelRandomOrbs {
+                    orbs: &VALID_ORBS,
+                    count: amount,
+                }),
+                Power::ArsenalPower => Some(HookEffect::ApplyToOwner(
+                    Power::StrengthPower,
+                    PowerAmount::Counted(amount),
+                )),
+                _ => Some(HookEffect::GainBlock(amount)),
+            }
+        }
+        (
+            Power::SmokestackPower
+            | Power::TrashToTreasurePower
+            | Power::ArsenalPower
+            | Power::PillarOfCreationPower,
+            PowerAmount::Endless,
+            EventHook::CardGeneratedForCombat { .. },
+        ) => unimplemented!("an endless {power:?}"),
+        (
+            Power::SmokestackPower
+            | Power::TrashToTreasurePower
+            | Power::ArsenalPower
+            | Power::PillarOfCreationPower,
+            _,
+            EventHook::CardGeneratedForCombat { .. },
+        ) => None,
         // `WitheringPresencePower.AfterCardPlayed`, for each card its target
         // plays, which is the one player: every sixth, a Wither into the hand.
         (Power::WitheringPresencePower, _, EventHook::CardPlayed { .. }) => {

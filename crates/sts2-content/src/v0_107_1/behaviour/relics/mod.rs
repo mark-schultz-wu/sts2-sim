@@ -41,6 +41,7 @@ mod burning_blood;
 mod byrdpip;
 mod calling_bell;
 mod centennial_puzzle;
+mod chandelier;
 mod chosen_cheese;
 mod claws;
 mod cracked_core;
@@ -334,6 +335,7 @@ pub enum State {
     DataDisk,
     BoneFlute,
     HappyFlower(happy_flower::State),
+    Chandelier,
     Kunai(kunai::State),
     Nunchaku(nunchaku::State),
     VenerableTeaSet(venerable_tea_set::State),
@@ -581,6 +583,7 @@ pub(crate) fn event_hook(
         State::DataDisk => data_disk::event_hook(hook, asked),
         State::BoneFlute => bone_flute::event_hook(hook, asked),
         State::HappyFlower(state) => happy_flower::event_hook(state, hook, asked),
+        State::Chandelier => chandelier::event_hook(hook, asked),
         State::Kunai(state) => kunai::event_hook(state, hook, asked),
         State::Nunchaku(state) => nunchaku::event_hook(state, hook, asked),
         State::VenerableTeaSet(state) => venerable_tea_set::event_hook(state, hook, asked),
@@ -786,6 +789,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::DataDisk
         | State::BoneFlute
         | State::HappyFlower(_)
+        | State::Chandelier
         | State::Kunai(_)
         | State::Nunchaku(_)
         | State::VenerableTeaSet(_)
@@ -958,6 +962,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::DataDisk => State::DataDisk,
             Relic::BoneFlute => State::BoneFlute,
             Relic::HappyFlower => State::HappyFlower(happy_flower::State::default()),
+            Relic::Chandelier => State::Chandelier,
             Relic::Kunai => State::Kunai(kunai::State::default()),
             Relic::Nunchaku => State::Nunchaku(nunchaku::State::default()),
             Relic::VenerableTeaSet => State::VenerableTeaSet(venerable_tea_set::State::default()),

@@ -961,10 +961,14 @@ impl<'a, V: Rules> Board<'a, V> {
                 (Listener::Card { id }, HookEffect::ModifySelf { change, lasting }) => {
                     self.live.modify_self(id, change, lasting)
                 }
+                // Written on the cards it names.
+                (_, effect @ HookEffect::ModifyCards { .. }) => self.write_cards([effect]),
                 (_, effect) => rest.push(effect),
             }
         }
-        self.write_cards(rest);
+        // A power answers a card its own holder made, and that holder is the
+        // creature acting.
+        super::hook::apply::<V, _>(self, rest);
     }
 
     /// Who a card the acting creature makes is made by: the player, where
@@ -2602,6 +2606,12 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn attack_results(&self) -> sts2_core::AttackResults<V> {
         self.landed.clone().unwrap_or_default()
+    }
+
+    fn random_orb(&mut self, orbs: &[V::Orb]) -> Option<V::Orb> {
+        use sts2_core::rng::GameRng as _;
+
+        self.rngs.orbs.choose(orbs).ok().copied()
     }
 
     fn modify_cards(&mut self, to: sts2_core::Writing<V>, change: sts2_core::Change<V>) {

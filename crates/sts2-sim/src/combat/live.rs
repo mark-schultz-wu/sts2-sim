@@ -771,6 +771,20 @@ impl<V: Rules> Face<V> {
         {
             self.kept(|modifier| modifier.pool() == sts2_core::CostPool::Energy);
         }
+        // A set on the energy pool the copy already carries, alike in every
+        // part, adds nothing the fold reads: the fold lands on the last set,
+        // and the two wear off together. So the older goes, and the newer
+        // lands last. Rocket Punch writes one for each Status its owner makes.
+        if pool == sts2_core::CostPool::Energy && matches!(held.change(), CostChange::Absolute(_)) {
+            let count = usize::from(self.modifiers);
+            if let Some(found) = self.cost_modifiers[..count]
+                .iter()
+                .position(|&modifier| modifier == held)
+            {
+                self.cost_modifiers.copy_within(found + 1..count, found);
+                self.modifiers -= 1;
+            }
+        }
         let at = usize::from(self.modifiers);
         // A shift right after another on the same pool, which wears off when
         // it does, is one shift of their sum. The fold clamps nothing between

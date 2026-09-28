@@ -77,6 +77,7 @@ impl<V: Rules> Streams<V> {
             energy_costs,
             ai,
             targets,
+            orbs,
         ] = self
             .run
             .get_disjoint_mut([
@@ -87,6 +88,7 @@ impl<V: Rules> Streams<V> {
                 slot(kinds, V::RunRngType::COMBAT_ENERGY_COSTS),
                 slot(kinds, V::RunRngType::MONSTER_AI),
                 slot(kinds, V::RunRngType::COMBAT_TARGETS),
+                slot(kinds, V::RunRngType::COMBAT_ORBS),
             ])
             .expect("a build names each of its streams once");
         CombatRngs {
@@ -97,6 +99,7 @@ impl<V: Rules> Streams<V> {
             energy_costs,
             ai,
             targets,
+            orbs,
         }
     }
 
@@ -174,6 +177,8 @@ pub(crate) struct CombatRngs<'a> {
     pub(crate) ai: &'a mut MegaRng,
     /// The stream a random target is drawn from.
     pub(crate) targets: &'a mut MegaRng,
+    /// The stream a random orb is drawn from.
+    pub(crate) orbs: &'a mut MegaRng,
 }
 
 impl CombatRngs<'_> {
@@ -188,6 +193,7 @@ impl CombatRngs<'_> {
             energy_costs: self.energy_costs,
             ai: self.ai,
             targets: self.targets,
+            orbs: self.orbs,
         }
     }
 }

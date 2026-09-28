@@ -1,0 +1,13 @@
+# A Status the player makes: Smokestack hits every enemy, Trash to Treasure
+# channels a random orb off the orb stream, Arsenal gives Strength and
+# Pillar of Creation gives block. Turbo's Void is the Status.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"grant","card":"ROCKET_PUNCH"}
+{"cmd":"grant","card":"TURBO"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"SMOKESTACK_POWER","amount":3,"target":0}
+{"cmd":"power","power":"TRASH_TO_TREASURE_POWER","amount":1,"target":0}
+{"cmd":"power","power":"ARSENAL_POWER","amount":2,"target":0}
+{"cmd":"power","power":"PILLAR_OF_CREATION_POWER","amount":4,"target":0}
+{"cmd":"play_card","index":2}
