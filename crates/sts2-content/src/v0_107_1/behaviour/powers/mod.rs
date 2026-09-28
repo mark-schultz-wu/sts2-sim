@@ -1885,6 +1885,23 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Consuming Shadow")
         }
         (Power::ConsumingShadowPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `RagePower.AfterCardPlayed`: its stack of block, unpowered, for
+        // each Attack its owner plays.
+        (Power::RagePower, PowerAmount::Counted(amount), EventHook::CardPlayed { card, .. })
+            if <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Attack) =>
+        {
+            Some(HookEffect::GainBlock(amount))
+        }
+        (Power::RagePower, PowerAmount::Endless, EventHook::CardPlayed { .. }) => {
+            unimplemented!("an endless Rage")
+        }
+        (Power::RagePower, _, EventHook::CardPlayed { .. }) => None,
+        // `RagePower.AfterSideTurnEnd`: `PowerCmd.Remove(this)` as its owner's
+        // turn ends.
+        (Power::RagePower, _, EventHook::SideTurnEnd { side }) if side == owner => {
+            Some(HookEffect::Remove)
+        }
+        (Power::RagePower, _, EventHook::SideTurnEnd { .. }) => None,
         // `SicEmPower.AfterDamageGiven`: `OstyCmd.Summon` of its stack for the
         // player whose Osty hit its owner, where that player applied it.
         (

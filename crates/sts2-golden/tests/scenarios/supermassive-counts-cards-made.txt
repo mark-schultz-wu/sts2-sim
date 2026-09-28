@@ -1,0 +1,9 @@
+# Supermassive deals three more for each card its owner made this fight,
+# which its preview shows. An Attack Potion makes one.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"SUPERMASSIVE"}
+{"cmd":"grant","potion":"ATTACK_POTION"}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"answer","cards":[0]}
+{"cmd":"end_turn"}

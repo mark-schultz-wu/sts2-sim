@@ -1,0 +1,7 @@
+# Chaos channels an orb drawn off the combat orb stream.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"grant","card":"CHAOS"}
+{"cmd":"play_card","index":5}
+{"cmd":"grant","card":"CHAOS"}
+{"cmd":"play_card","index":5}

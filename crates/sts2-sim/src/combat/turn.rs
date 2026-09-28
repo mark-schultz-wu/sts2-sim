@@ -1188,6 +1188,17 @@ pub(super) fn carry_setup<V: Rules>(
                             count,
                             writes,
                         ),
+                        // `CardCmd.Upgrade` of every card in hand.
+                        sts2_core::HookEffect::UpgradeHand => live.cards.write_every(
+                            &[Pile::Hand],
+                            |_| true,
+                            |card| {
+                                card.modify(
+                                    sts2_core::Change::Upgrade,
+                                    sts2_core::Lasting::ThisFight,
+                                )
+                            },
+                        ),
                         effect => unimplemented!(
                             "a listener asking for {effect:?} as the player's turn starts"
                         ),
@@ -1272,10 +1283,6 @@ pub(super) fn carry_setup<V: Rules>(
     }
 }
 
-/// `count` cards of the character's combat pool that `filter` keeps, each
-/// drawn by `CardFactory.GetDistinctForCombat` off `CombatCardGeneration`
-/// from the pool afresh, in the pool's own order. An empty pool gives
-/// nothing. Each takes `keyword` where one is named, and goes into hand.
 /// `count` distinct colorless cards from one `GetDistinctForCombat` off
 /// `CombatCardGeneration`, into the hand.
 fn generate_distinct_colorless<V: Rules>(
@@ -1300,6 +1307,10 @@ fn generate_distinct_colorless<V: Rules>(
     }
 }
 
+/// `count` cards of the character's combat pool that `filter` keeps, each
+/// drawn by `CardFactory.GetDistinctForCombat` off `CombatCardGeneration`
+/// from the pool afresh, in the pool's own order. An empty pool gives
+/// nothing. Each takes `keyword` where one is named, and goes into hand.
 fn generate_from_pool<V: Rules>(
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
@@ -1406,6 +1417,8 @@ pub(super) fn act_on<V: Rules>(
                 if held.face.sly() {
                     sly.push(held.id);
                 }
+                let card = held.face.ident.card;
+                live.history.discarded(card);
                 unheard::<V>(live, relics, sts2_core::ModelHook::AfterCardDiscarded);
                 Pile::Discard
             }
@@ -2003,6 +2016,11 @@ fn tick_powers<V: Rules>(
     let mut ticking: SmallVec<[(CombatId, V::Power); 8]> = SmallVec::new();
     let mut leaving: SmallVec<[(CombatId, V::Power); 4]> = SmallVec::new();
     for (listener, effect) in listen::notify::<V>(live, relics, hook) {
+        // `CardPileCmd.Draw` for the player who carries the relic.
+        if let (Listener::Relic { .. }, sts2_core::HookEffect::Draw(amount)) = (listener, effect) {
+            applying.push(TurnEndAsk::Draw(amount));
+            continue;
+        }
         let Listener::Power { owner, power, .. } = listener else {
             unimplemented!("{listener:?} asking for {effect:?} as a turn ends")
         };

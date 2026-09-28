@@ -1,0 +1,6 @@
+# Refract hits its target twice, then channels two Glass orbs behind
+# Cracked Core's Lightning.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"grant","card":"REFRACT"}
+{"cmd":"play_card","index":5,"target":2}

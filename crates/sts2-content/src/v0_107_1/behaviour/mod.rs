@@ -36,9 +36,17 @@ pub(crate) fn free_this_turn<F: Fight<V>>(fight: &mut F, at: sts2_core::CardAt<V
 }
 
 /// `GetDistinctForCombat` of one card of the character's pool that `keeps`
-/// holds, off `CombatCardGeneration`, then `SetToFreeThisTurn` and
-/// `CardPileCmd.Add` into the hand. Nothing when the pool holds none.
-pub(crate) fn free_card_into_hand<F: Fight<V>>(fight: &mut F, keeps: impl Fn(Cards) -> bool) {
+/// holds, off `CombatCardGeneration`, then `SetToFreeThisTurn` and into the
+/// hand. Nothing when the pool holds none.
+///
+/// `generated` is `CardPileCmd.AddGeneratedCardToCombat`, which the fight
+/// records and raises `AfterCardGeneratedForCombat` for. Otherwise it is a
+/// plain `CardPileCmd.Add`.
+pub(crate) fn free_card_into_hand<F: Fight<V>>(
+    fight: &mut F,
+    keeps: impl Fn(Cards) -> bool,
+    generated: bool,
+) {
     let mut pool: Vec<Cards> = <V as sts2_core::Rules>::combat_cards(fight.character())
         .iter()
         .copied()
@@ -51,7 +59,14 @@ pub(crate) fn free_card_into_hand<F: Fight<V>>(fight: &mut F, keeps: impl Fn(Car
     let [made] = fight
         .generate_cards::<1>(&mut pool, stream)
         .unwrap_or_else(|_| unreachable!("a pool with a card in it makes one"));
-    if let Some(at) = fight.add_card(made, sts2_core::Pile::Hand) {
+    let at = match generated {
+        true => fight
+            .add_generated_cards(made, sts2_core::Pile::Hand, 1)
+            .first()
+            .copied(),
+        false => fight.add_card(made, sts2_core::Pile::Hand),
+    };
+    if let Some(at) = at {
         free_this_turn(fight, at);
     }
 }

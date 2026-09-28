@@ -213,11 +213,13 @@ impl<V: Rules> CardIds<V> {
 pub(super) enum CostChange<N> {
     Relative(N),
     Absolute(N),
+    /// `Absolute` with `IsReduceOnly`: the lower of the cost so far and this.
+    Lower(N),
 }
 
 /// One entry of a card's cost modifier list, in two bytes.
 ///
-/// `LocalCostModifier`, minus `reduceOnly`: no ported effect passes it.
+/// `LocalCostModifier`.
 ///
 /// Sixteen bits say all of it: which pool, which expiration, whether it sets
 /// the cost or shifts it, and by how much.
@@ -238,7 +240,9 @@ pub(super) struct CostModifier {
     /// [`SHIFT_BIAS`], because eight bits cannot be both.
     #[bits(8)]
     amount: u8,
-    #[bits(4)]
+    /// `IsReduceOnly`, which only a set here carries.
+    reduce_only: bool,
+    #[bits(3)]
     __: u8,
 }
 
@@ -279,11 +283,14 @@ impl CostModifier {
         };
         let (absolute, amount) = match change {
             CostChange::Relative(shift) => (false, fits(shift, SHIFT_WITHIN) + SHIFT_BIAS),
-            CostChange::Absolute(set) => (true, fits(set, 0..=SET_AT_MOST)),
+            CostChange::Absolute(set) | CostChange::Lower(set) => {
+                (true, fits(set, 0..=SET_AT_MOST))
+            }
         };
         Self::from_bits(0)
             .with_star(pool == sts2_core::CostPool::Star)
             .with_absolute(absolute)
+            .with_reduce_only(matches!(change, CostChange::Lower(_)))
             .with_turn_end(lasting.clears_when_turn_ends())
             .with_when_played(lasting.clears_when_played())
             .with_amount(amount as u8)
@@ -298,9 +305,10 @@ impl CostModifier {
 
     fn change(self) -> CostChange<i16> {
         let amount = i16::from(self.amount());
-        match self.absolute() {
-            true => CostChange::Absolute(amount),
-            false => CostChange::Relative(amount - SHIFT_BIAS),
+        match (self.absolute(), self.reduce_only()) {
+            (true, false) => CostChange::Absolute(amount),
+            (true, true) => CostChange::Lower(amount),
+            (false, _) => CostChange::Relative(amount - SHIFT_BIAS),
         }
     }
 
@@ -588,15 +596,13 @@ impl<V: Rules> Face<V> {
                 .take(usize::from(self.modifiers))
                 .filter(|held| held.pool() == pool)
                 .fold(printed, |cost, held| {
-                    let (shift, amount) = match held.change() {
-                        CostChange::Relative(amount) => (true, amount),
-                        CostChange::Absolute(amount) => (false, amount),
+                    let number = |amount: i16| -> V::Number {
+                        num_traits::NumCast::from(amount).expect("a cost change fits a game number")
                     };
-                    let amount: V::Number = num_traits::NumCast::from(amount)
-                        .expect("a cost change fits a game number");
-                    match shift {
-                        true => cost + amount,
-                        false => amount,
+                    match held.change() {
+                        CostChange::Relative(amount) => cost + number(amount),
+                        CostChange::Absolute(amount) => number(amount),
+                        CostChange::Lower(amount) => cost.min(number(amount)),
                     }
                 });
             let folded = match (pool, global.take()) {
@@ -634,6 +640,9 @@ impl<V: Rules> Face<V> {
             }
             sts2_core::Change::SetCost(pool, to) => {
                 self.modify_cost(pool, CostChange::Absolute(to), lasting)
+            }
+            sts2_core::Change::LowerCost(pool, to) => {
+                self.modify_cost(pool, CostChange::Lower(to), lasting)
             }
             // `Keywords` is one set the copy owns, which both of these write.
             // A word already on the copy is not added twice.
@@ -1686,6 +1695,9 @@ pub(crate) struct Live<V: Rules> {
     /// What `AfterCombatEnd` asked of the run, which carries it out as it
     /// takes the fight's rewards.
     pub(super) leaving: Vec<sts2_core::HookEffect<V>>,
+    /// What `AfterShuffle` listeners asked for behind one that asked the
+    /// player to pick, which waits for the pick.
+    pub(super) after_pick: Vec<sts2_core::HookEffect<V>>,
     pub(super) creatures: Creatures<V>,
     /// What every creature carries, in the order it gained it.
     pub(super) powers: PowerStore<V>,
@@ -1772,6 +1784,25 @@ impl<V: Rules> CombatHistory<V> {
             .push(sts2_core::HistoryEntry::Drawn { card, hand_draw });
     }
 
+    /// `History.CardDiscarded`, in the turn the fight stands in.
+    pub(super) fn discarded(&mut self, card: V::Card) {
+        self.this_turn
+            .push(sts2_core::HistoryEntry::Discarded(card));
+    }
+
+    /// `History.CardGenerated`, in the turn the fight stands in, by whether
+    /// the player made it.
+    pub(super) fn generated(&mut self, by_player: bool) {
+        self.this_turn
+            .push(sts2_core::HistoryEntry::Generated { by_player });
+    }
+
+    /// `History.DamageReceived`, in the turn the fight stands in.
+    pub(super) fn damage_received(&mut self, received: sts2_core::DamageReceived<V>) {
+        self.this_turn
+            .push(sts2_core::HistoryEntry::DamageReceived(received));
+    }
+
     /// `History.BlockGained`, in the turn the fight stands in.
     pub(super) fn block_gained(&mut self, gained: sts2_core::BlockGained) {
         self.this_turn
@@ -1852,6 +1883,7 @@ impl<V: Rules> Clone for Live<V> {
             history: self.history.clone(),
             kept: self.kept.clone(),
             leaving: self.leaving.clone(),
+            after_pick: self.after_pick.clone(),
             powers: self.powers.clone(),
             orbs: self.orbs.clone(),
             card_ids: self.card_ids.clone(),
@@ -1882,6 +1914,7 @@ impl<V: Rules> Clone for Live<V> {
             extra_cards,
             exhaust_next,
             leaving,
+            after_pick,
             creatures,
             powers,
             orbs,
@@ -1909,6 +1942,7 @@ impl<V: Rules> Clone for Live<V> {
         extra_cards.clone_from(&source.extra_cards);
         exhaust_next.clone_from(&source.exhaust_next);
         leaving.clone_from(&source.leaving);
+        after_pick.clone_from(&source.after_pick);
         creatures.copy_from(&source.creatures);
         powers.clone_from(&source.powers);
         orbs.clone_from(&source.orbs);
@@ -2633,6 +2667,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             extra_cards: Vec::new(),
             exhaust_next: smallvec::SmallVec::new(),
             leaving: Vec::new(),
+            after_pick: Vec::new(),
             creatures: creatures.into_iter().collect(),
             powers: PowerStore::new(),
             orbs: None,

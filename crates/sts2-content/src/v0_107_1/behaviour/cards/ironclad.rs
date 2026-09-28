@@ -21,6 +21,8 @@ pub enum Resume {
     ArmamentsUpgrade,
     /// `Brand`, after its owner picked the card to exhaust.
     BrandExhaust,
+    /// `BurningPact`, after its owner picked the card to exhaust.
+    BurningPactExhaust,
 }
 
 pub(super) fn resume_play<F: Fight<V>>(
@@ -37,6 +39,12 @@ pub(super) fn resume_play<F: Fight<V>>(
         // `CardCmd.Exhaust` of the one taken.
         Resume::TrueGritExhaust => {
             fight.act_on(PileAct::Exhaust, chosen.as_slice());
+            Played::Done
+        }
+        // `CardCmd.Exhaust` of the one taken, then its cards drawn.
+        Resume::BurningPactExhaust => {
+            fight.act_on(PileAct::Exhaust, chosen.as_slice());
+            fight.draw(fight.var(CardVar::Cards));
             Played::Done
         }
         // `CardCmd.Exhaust` of the one taken, then its Strength.
@@ -59,12 +67,110 @@ pub(super) fn resume_play<F: Fight<V>>(
 pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
     match card {
         IroncladCard::Thrash => thrash(fight),
+        // `Spite`: its damage to the target, once, or its `Repeat` times
+        // where its owner lost health this turn.
+        IroncladCard::Spite => {
+            let owner = fight.actor();
+            let hurt = fight
+                .history()
+                .damage_received_this_turn()
+                .any(|received| received.receiver == owner && received.unblocked > 0);
+            let hits = if hurt { fight.var(CardVar::Repeat) } else { 1 };
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                for _ in 0..hits {
+                    let hit = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(hit);
+                }
+            });
+            Played::Done
+        }
+        // `SecondWind`: each card in hand that is not an Attack exhausted,
+        // and its block for each, one after another.
+        IroncladCard::SecondWind => {
+            let cards: Vec<_> = fight
+                .cards_in(Pile::Hand)
+                .into_iter()
+                .filter(|&card| V::card_kind(fight.card_ident(card).card) != Some(CardKind::Attack))
+                .collect();
+            for card in cards {
+                fight.act_on(PileAct::Exhaust, &[card]);
+                block(fight);
+            }
+            Played::Done
+        }
+        // `PactsEnd`: its damage to every enemy, once the exhaust pile holds
+        // its `Cards`.
+        IroncladCard::PactsEnd => {
+            let exhausted = fight.cards_in(Pile::Exhaust).len();
+            if num_traits::cast::<_, super::Number>(exhausted)
+                .is_some_and(|exhausted| exhausted >= fight.var(CardVar::Cards))
+            {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    for target in fight.opponents() {
+                        let hit = fight.resolve(Effect::Attack {
+                            dealer: fight.actor(),
+                            target,
+                            damage: Amount::Var(CardVar::Damage),
+                            scaling: Scaling::Dynamic,
+                        });
+                        fight.apply(hit);
+                    }
+                });
+            }
+            Played::Done
+        }
+        // `FiendFire`: every card in hand exhausted, then its damage to the
+        // target once for each.
+        IroncladCard::FiendFire => {
+            let cards = fight.cards_in(Pile::Hand);
+            let hits = cards.len();
+            for card in cards {
+                fight.act_on(PileAct::Exhaust, &[card]);
+            }
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                for _ in 0..hits {
+                    let hit = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(hit);
+                }
+            });
+            Played::Done
+        }
+        // `BurningPact`: one card of the hand exhausted, then its `Cards`
+        // drawn.
+        IroncladCard::BurningPact => Played::Asking {
+            pile: Pile::Hand,
+            selection: sts2_core::Selection::Exactly(nonmax::NonMaxUsize::ONE),
+            at: super::super::Resume::Card(super::Resume::Ironclad(Resume::BurningPactExhaust)),
+        },
+        // `Rampage`: its damage to the target, then its `Increase` onto its
+        // own damage for the fight.
+        IroncladCard::Rampage => {
+            let target = fight.target();
+            strike(fight, target);
+            let increase = fight.var(CardVar::Increase);
+            fight.modify_this(Change::Raise(CardVar::Damage, increase), Lasting::ThisFight);
+            Played::Done
+        }
         // `InfernalBlade`: an Attack of the character's pool, free this turn,
         // into the hand.
         IroncladCard::InfernalBlade => {
-            super::super::free_card_into_hand(fight, |card| {
-                V::card_kind(card) == Some(CardKind::Attack)
-            });
+            super::super::free_card_into_hand(
+                fight,
+                |card| V::card_kind(card) == Some(CardKind::Attack),
+                true,
+            );
             Played::Done
         }
         // `Anger`: its damage to the target, then a clone of itself into the

@@ -1,0 +1,12 @@
+# Joss Paper counts a card Ethereal exhausts as the turn ends once the hand
+# is flushed, and draws then when that makes five. Second Wind and True
+# Grit exhaust four first, and a Dazed exhausts itself at the turn's end.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"JOSS_PAPER"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"SECOND_WIND"}
+{"cmd":"play_card","index":5}
+{"cmd":"grant","card":"TRUE_GRIT"}
+{"cmd":"play_card","index":2}
+{"cmd":"grant","card":"DAZED"}
+{"cmd":"end_turn"}

@@ -3411,7 +3411,17 @@ impl<V: Rules> State<V> {
                 // and the belt in the next observation says whether it landed.
                 self.procure(*potion);
             }
-            Gift::Relic(relic) => self.obtain_here(*relic),
+            // `RelicCmd.Obtain`, whose pickup asks where the room can park on
+            // it, as Neow's can.
+            Gift::Relic(relic) => {
+                if self.phase.asking_mut().is_some() {
+                    return Ok(match self.obtain(*relic) {
+                        None => Decided::Resolved,
+                        Some(asked) => self.park(asked),
+                    });
+                }
+                self.obtain_here(*relic)
+            }
         }
         Ok(Decided::Resolved)
     }

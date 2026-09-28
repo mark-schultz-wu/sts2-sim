@@ -1853,6 +1853,16 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("a card cloning itself")
     }
 
+    /// [`Fight::clone_this`] for another card in the fight, as it holds
+    /// now.
+    fn clone_card(
+        &mut self,
+        _card: crate::CardAt<V>,
+        _pile: crate::Pile,
+    ) -> Option<crate::CardAt<V>> {
+        unimplemented!("a card cloned")
+    }
+
     /// `CardPileCmd.Add` of a new card to one combat pile, made for the fight
     /// but not through `AddGeneratedCardToCombat`, so no generation hook
     /// hears it. Nothing once the fight is over.
@@ -2223,6 +2233,18 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("counting orbs")
     }
 
+    /// How many orb slots the player has, which is `OrbQueue.Capacity`.
+    fn orb_capacity(&self) -> usize {
+        unimplemented!("counting orb slots")
+    }
+
+    /// `OrbCmd.Passive(orb, null)` on the orb at `place` in the queue, which
+    /// does nothing once the fight is ending. The numbers it moves stay on
+    /// it.
+    fn orb_passive_at(&mut self, _place: usize) {
+        unimplemented!("an orb's passive")
+    }
+
     /// The player's orbs, front first, which is `OrbQueue.Orbs`.
     fn channelled(&self) -> Vec<crate::Channelled<V>> {
         unimplemented!("listing orbs")
@@ -2437,6 +2459,9 @@ pub enum Change<V: ContentVersion> {
     /// `EnergyCost.SetThisTurn` and its kin. `SetToFreeThisTurn` is this at
     /// zero on both pools, for [`Lasting::ThisTurn`].
     SetCost(CostPool, V::Number),
+    /// `SetThisTurnOrUntilPlayed(cost, reduceOnly: true)` and its kind: the
+    /// cost set to this where that lowers it, and left where it does not.
+    LowerCost(CostPool, V::Number),
     /// `CardModel.AddKeyword`: the copy carries a word its table does not.
     /// The word is on the copy for as long as the copy lasts.
     AddKeyword(V::CardKeyword),
@@ -3703,6 +3728,26 @@ pub enum HistoryEntry<V: ContentVersion> {
     /// A `CardAfflictedEntry` on one of the player's cards, by the
     /// affliction. Its `Actor` is the card's owner.
     Afflicted(V::Affliction),
+    /// A `CardDiscardedEntry`, by the card discarded, which is the player's.
+    Discarded(V::Card),
+    /// A `CardGeneratedEntry`, by whether its `Creator` is the player.
+    Generated {
+        by_player: bool,
+    },
+    /// A `DamageReceivedEntry`.
+    DamageReceived(DamageReceived<V>),
+}
+
+/// One `DamageReceivedEntry` in `CombatManager.History`, as far as a
+/// listener reads it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DamageReceived<V: ContentVersion> {
+    pub receiver: crate::CombatId,
+    pub dealer: Option<crate::CombatId>,
+    /// `Result.UnblockedDamage`.
+    pub unblocked: V::Number,
+    /// `Result.Props.IsPoweredAttack()`.
+    pub powered: bool,
 }
 
 /// One `BlockGainedEntry` in `CombatManager.History`, as far as a listener
@@ -3851,6 +3896,34 @@ impl<V: ContentVersion> History<'_, V> {
     pub fn block_gained_this_turn(&self) -> impl Iterator<Item = BlockGained> + '_ {
         self.this_turn.iter().filter_map(|entry| match entry {
             HistoryEntry::BlockGained(gained) => Some(*gained),
+            _ => None,
+        })
+    }
+
+    /// How many `CardDiscardedEntry` are where `HappenedThisTurn`.
+    pub fn discarded_this_turn(&self) -> usize {
+        self.this_turn
+            .iter()
+            .filter(|entry| matches!(entry, HistoryEntry::Discarded(_)))
+            .count()
+    }
+
+    /// How many `CardGeneratedEntry` of the fight name the player as their
+    /// `Creator`.
+    pub fn generated_by_player(&self) -> usize {
+        let before = std::iter::successors(self.before, |before| before.before.as_deref())
+            .flat_map(|before| before.entries.iter());
+        self.this_turn
+            .iter()
+            .chain(before)
+            .filter(|entry| matches!(entry, HistoryEntry::Generated { by_player: true }))
+            .count()
+    }
+
+    /// Each `DamageReceivedEntry` where `HappenedThisTurn`.
+    pub fn damage_received_this_turn(&self) -> impl Iterator<Item = DamageReceived<V>> + '_ {
+        self.this_turn.iter().filter_map(|entry| match entry {
+            HistoryEntry::DamageReceived(received) => Some(*received),
             _ => None,
         })
     }
@@ -4803,6 +4876,11 @@ pub struct CardOwner<'a, V: ContentVersion> {
     pub block: V::Number,
     /// `PlayerCombatState.OrbQueue.Orbs`, in queue order.
     pub orbs: &'a [crate::Channelled<V>],
+    /// The cards in the owner's hand, in hand order.
+    pub hand: &'a [V::Card],
+    /// How many of the owner's cards in the fight, every pile included,
+    /// print a star cost, which is `CanonicalStarCost >= 0 || HasStarCostX`.
+    pub star_cards: usize,
 }
 
 /// What one copy of a card prints, as a rule reads it.

@@ -1,0 +1,6 @@
+# White Noise puts a Power of the character's pool into the hand, free this
+# turn.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"grant","card":"WHITE_NOISE"}
+{"cmd":"play_card","index":5}

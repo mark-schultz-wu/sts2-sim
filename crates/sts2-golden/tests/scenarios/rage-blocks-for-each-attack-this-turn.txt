@@ -1,0 +1,9 @@
+# Rage gives three block, unpowered, for each Attack its owner plays this
+# turn, and comes off as the turn ends.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"RAGE"}
+{"cmd":"play_card","index":5}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":1}
+{"cmd":"end_turn"}

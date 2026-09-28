@@ -1,0 +1,5 @@
+# Sweeping Beam hits every enemy, then draws one.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"grant","card":"SWEEPING_BEAM"}
+{"cmd":"play_card","index":5}

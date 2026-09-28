@@ -1,0 +1,7 @@
+# Joss Paper draws a card with every fifth card its owner exhausts. Fiend
+# Fire exhausts the five in hand, and then itself.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"JOSS_PAPER"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"FIEND_FIRE"}
+{"cmd":"play_card","index":5,"target":1}

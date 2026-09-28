@@ -30,6 +30,13 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
             fight.add_orb_slots(CAPACITY);
             Played::Done
         }
+        // `OrbCmd.Channel<DarkOrb>` once for each of its drinker's orb slots.
+        Potion::EssenceOfDarkness => {
+            for _ in 0..fight.orb_capacity() {
+                fight.channel(super::super::super::generated::orbs::Orb::DarkOrb);
+            }
+            Played::Done
+        }
         potion => unimplemented!("what {potion:?} does when it is drunk"),
     }
 }

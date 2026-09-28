@@ -1,0 +1,9 @@
+# Modded adds an orb slot and draws one, then costs one more for the rest
+# of the fight. Hologram brings it back from the discard pile to show the
+# new cost.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"MODDED"}
+{"cmd":"play_card","index":5}
+{"cmd":"grant","card":"HOLOGRAM"}
+{"cmd":"play_card","index":6}

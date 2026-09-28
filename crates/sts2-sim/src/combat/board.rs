@@ -779,6 +779,19 @@ impl<'a, V: Rules> Board<'a, V> {
             if lost > zero {
                 self.current_hp_changed(receiver, -lost);
             }
+            // `History.DamageReceived`, while the fight is in progress. One
+            // that is ending plays no card after it, so nothing reads what it
+            // records then, and it is not asked.
+            if self.ended.is_none() {
+                self.live
+                    .history
+                    .damage_received(sts2_core::DamageReceived {
+                        receiver,
+                        dealer,
+                        unblocked: lost,
+                        powered,
+                    });
+            }
             let asked = super::listen::notify::<V>(
                 self.live,
                 self.relics,
@@ -1010,6 +1023,8 @@ impl<'a, V: Rules> Board<'a, V> {
     /// landed at `at`, and what it asked for. `CardPileCmd.Add` has raised
     /// `AfterCardEnteredCombat` for it first.
     fn card_generated(&mut self, at: CardAt<V>, card: V::Card, creator: Option<CombatId>) {
+        let by_player = creator == Some(self.live.player().id);
+        self.live.history.generated(by_player);
         let asked = super::listen::notify::<V>(
             self.live,
             self.relics,
@@ -2399,6 +2414,11 @@ pub(crate) fn var<V: Rules>(
                 })
                 .flat_map(|creature| live.powers.of(creature.id).map(HeldPower::stack))
                 .collect();
+            let hand: SmallVec<[V::Card; 12]> = live
+                .cards
+                .iter(Pile::Hand)
+                .map(|held| held.face.ident.card)
+                .collect();
             let owner = sts2_core::CardOwner {
                 powers: &powers::<V>(live),
                 osty,
@@ -2422,6 +2442,10 @@ pub(crate) fn var<V: Rules>(
                     .find(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER)
                     .map_or_else(num_traits::zero, |player| player.block),
                 orbs: live.orbs.as_ref().map_or(&[], |orbs| orbs.queue.as_slice()),
+                hand: &hand,
+                star_cards: live.cards.count_all(|face| {
+                    sts2_core::CardTable::star_cost(face.ident.card) != sts2_core::Cost::None
+                }),
             };
             V::calculated_card_var(held.face.ident.card, key, held, owner)
         }
@@ -2526,6 +2550,29 @@ pub(super) fn player<V: Rules>(creatures: &[Fighter<V>]) -> CombatId {
 }
 
 impl<V: Rules> Board<'_, V> {
+    /// `CreateClone` of the card `id` into `pile`, as
+    /// `AddGeneratedCardToCombat` puts it there.
+    fn clone_named(&mut self, id: sts2_core::CardId<V>, pile: Pile) -> Option<CardAt<V>> {
+        let face = self
+            .live
+            .cards
+            .named(id)
+            .unwrap_or_else(|| unimplemented!("a card cloned from outside the fight"))
+            .face;
+        let id = self.live.card_ids.mint();
+        // A full hand sends the card to the discard pile instead.
+        let full =
+            pile == Pile::Hand && self.live.cards.len(Pile::Hand) >= super::pile::MAX_CARDS_IN_HAND;
+        let pile = if full { Pile::Discard } else { pile };
+        let index = num_traits::NumCast::from(self.live.cards.len(pile))
+            .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
+        self.live.cards.push(pile, face.named(id));
+        let at = CardAt::new(id, pile, index);
+        self.card_entered_combat(at, face.ident.card, true);
+        self.card_generated(at, face.ident.card, self.creator());
+        Some(at)
+    }
+
     /// `OrbCmd.EvokeLast`, which does nothing once the fight is ending.
     pub(super) fn evoke_last(&mut self) {
         self.evoke(true, true);
@@ -3654,24 +3701,44 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         let playing = self
             .playing
             .unwrap_or_else(|| unimplemented!("a card cloning itself with none being played"));
-        let face = self
+        self.clone_named(playing, pile)
+    }
+
+    fn clone_card(&mut self, card: CardAt<V>, pile: Pile) -> Option<CardAt<V>> {
+        if self.ended.is_some() {
+            return None;
+        }
+        self.clone_named(card.id(), pile)
+    }
+
+    fn orb_capacity(&self) -> usize {
+        self.live.orbs.as_ref().map_or(0, |orbs| {
+            num_traits::cast(orbs.capacity).expect("an orb capacity fits a length")
+        })
+    }
+
+    fn orb_passive_at(&mut self, place: usize) {
+        if self.ended.is_some() || self.ending() {
+            return;
+        }
+        let Some(mut orb) = self
             .live
-            .cards
-            .named(playing)
-            .unwrap_or_else(|| unimplemented!("a card cloning itself from outside the fight"))
-            .face;
-        let id = self.live.card_ids.mint();
-        // A full hand sends the card to the discard pile instead.
-        let full =
-            pile == Pile::Hand && self.live.cards.len(Pile::Hand) >= super::pile::MAX_CARDS_IN_HAND;
-        let pile = if full { Pile::Discard } else { pile };
-        let index = num_traits::NumCast::from(self.live.cards.len(pile))
-            .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
-        self.live.cards.push(pile, face.named(id));
-        let at = CardAt::new(id, pile, index);
-        self.card_entered_combat(at, face.ident.card, true);
-        self.card_generated(at, face.ident.card, self.creator());
-        Some(at)
+            .orbs
+            .as_ref()
+            .and_then(|orbs| orbs.queue.get(place).copied())
+        else {
+            return;
+        };
+        V::orb_passive(&mut orb, self);
+        if let Some(held) = self
+            .live
+            .orbs
+            .as_mut()
+            .and_then(|orbs| orbs.queue.get_mut(place))
+            && held.orb == orb.orb
+        {
+            *held = orb;
+        }
     }
 
     fn add_card(&mut self, card: CardIdent<V>, pile: Pile) -> Option<CardAt<V>> {
@@ -3816,9 +3883,18 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         let Some(at) = self.live.cards.find(Pile::Hand, playing) else {
             return;
         };
+        let card = self
+            .live
+            .cards
+            .get(Pile::Hand, at)
+            .expect("a card stands where it was found")
+            .face
+            .ident
+            .card;
         // `CardCmd.Discard`, whose hook nothing ported answers.
-        self.unheard(sts2_core::ModelHook::AfterCardDiscarded);
         self.live.cards.move_to(Pile::Hand, at, Pile::Discard);
+        self.live.history.discarded(card);
+        self.unheard(sts2_core::ModelHook::AfterCardDiscarded);
     }
 
     fn summon(&mut self, monster: V::Monster, position: usize) -> CombatId {
@@ -3962,25 +4038,38 @@ pub(super) fn shuffle_asking<V: Rules>(
     let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
     for (listener, effect) in asked {
         match effect {
-            // The selection waits for the draw to pause, so nothing may
-            // follow it.
+            // The listeners after one that asked wait for the pick, which
+            // waits for the draw to pause.
+            effect @ HookEffect::AddToDrawAtRandom { .. } if asks.is_some() => {
+                board.live.after_pick.push(effect)
+            }
             effect if asks.is_some() => {
                 unimplemented!("{listener:?} asking for {effect:?} after a shuffle's selection")
             }
             HookEffect::SelectFromPile { pile, count, act } => {
                 asks = Some((pile, count, act));
             }
-            HookEffect::AddToDrawAtRandom { card, count } => {
-                let count: usize = num_traits::cast(count)
-                    .unwrap_or_else(|| unimplemented!("{count:?} cards into the draw pile"));
-                for _ in 0..count {
-                    board.add_to_draw_at_random(card);
-                }
-            }
+            effect @ HookEffect::AddToDrawAtRandom { .. } => board.after_shuffle(effect),
             effect => unimplemented!("{listener:?} asking for {effect:?} after a shuffle"),
         }
     }
     asks
+}
+
+impl<V: Rules> Board<'_, V> {
+    /// What an `AfterShuffle` listener asked for, carried out.
+    fn after_shuffle(&mut self, effect: HookEffect<V>) {
+        match effect {
+            HookEffect::AddToDrawAtRandom { card, count } => {
+                let count: usize = num_traits::cast(count)
+                    .unwrap_or_else(|| unimplemented!("{count:?} cards into the draw pile"));
+                for _ in 0..count {
+                    self.add_to_draw_at_random(card);
+                }
+            }
+            effect => unimplemented!("{effect:?} after a shuffle"),
+        }
+    }
 }
 
 /// `CardPileCmd.Draw`, which shuffles the discard pile back in when the draw
@@ -4037,6 +4126,15 @@ pub(super) fn draw_pausing<V: Rules>(
         hand_draw,
         side: live.side,
     };
+    // The `AfterShuffle` listeners that waited for the pick this resumes
+    // from.
+    if resumed && !live.after_pick.is_empty() {
+        let waiting = std::mem::take(&mut live.after_pick);
+        let mut board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+        for effect in waiting {
+            board.after_shuffle(effect);
+        }
+    }
     if !resumed && super::listen::any_decides::<V>(Walk { live, relics }, hook, false) {
         let asked = super::listen::notify::<V>(live, relics, sts2_core::EventHook::DrawPrevented);
         if let Some((listener, effect)) = asked.first() {
