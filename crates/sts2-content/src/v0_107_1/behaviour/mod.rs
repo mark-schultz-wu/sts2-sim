@@ -82,6 +82,7 @@ pub(crate) fn resume<F: Fight<V>>(fight: &mut F, at: Resume, answer: Taken<V>) -
     match (at, answer) {
         (Resume::Card(at), Taken::Selected(cards)) => cards::resume_play(fight, at, cards),
         (Resume::Card(at), Taken::Chosen(card)) => cards::resume_chosen(fight, at, card),
+        (Resume::Card(at), Taken::Waited) => cards::resume_waited(fight, at),
         (Resume::Potion(at), answer) => potions::resume(fight, at, answer),
         (Resume::Monster(at), Taken::Chosen(card)) => monsters::resume(fight, at, card),
         (at, answer) => unimplemented!("{at:?} resumed with {answer:?}"),

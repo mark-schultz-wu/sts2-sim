@@ -2056,6 +2056,13 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("reading the fight's history")
     }
 
+    /// Whether a card this effect auto-played stopped on a question, which
+    /// the rest of the effect waits behind. `CardCmd.AutoPlay` is awaited,
+    /// so the game's own loop stands still there.
+    fn waiting(&self) -> bool {
+        unimplemented!("reading whether a question waits")
+    }
+
     /// The copy of the card whose play is running, which is `this` to it.
     fn playing(&self) -> crate::CardId<V> {
         unimplemented!("naming the card being played")
@@ -2602,6 +2609,10 @@ pub enum Played<V: ContentVersion> {
         skippable: bool,
         at: V::Resume,
     },
+    /// A card the play auto-played stopped on a question, which
+    /// [`Fight::waiting`] says. The play carries on from `at`, with
+    /// [`Taken::Waited`], once that card's play is over.
+    Waiting { at: V::Resume },
 }
 
 /// What a stopped effect resumes with.
@@ -2609,6 +2620,8 @@ pub enum Played<V: ContentVersion> {
 pub enum Taken<V: ContentVersion> {
     Selected(SelectedCards<V>),
     Chosen(Option<crate::CardIdent<V>>),
+    /// Nothing asked: the play waited on a card it auto-played.
+    Waited,
 }
 
 /// The choose-a-card screen's fixed capacity.

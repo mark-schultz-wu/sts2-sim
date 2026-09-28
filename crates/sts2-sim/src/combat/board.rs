@@ -58,6 +58,10 @@ pub(super) struct Board<'a, V: Rules> {
     /// `CheckWinCondition` runs after the command that killed it, so this is
     /// read once the effect is over rather than acted on where it is set.
     pub(super) ended: Option<super::Ended>,
+    /// A card's or a potion's own effect, whose play can stand still while a
+    /// card it auto-plays asks a question. [`super::live::Deferred`] holds
+    /// what waits.
+    pausable: bool,
     /// The results of the attack command whose hits are landing, which
     /// `AttackCommand.Results` gathers.
     landed: Option<sts2_core::AttackResults<V>>,
@@ -152,8 +156,16 @@ impl<'a, V: Rules> Board<'a, V> {
             ascension,
             skipped: Vec::new(),
             ended: None,
+            pausable: false,
             landed: None,
         }
+    }
+
+    /// This board for a card's or a potion's own effect, which a card it
+    /// auto-plays can pause.
+    pub(super) fn pausable(mut self) -> Self {
+        self.pausable = true;
+        self
     }
 
     /// A board for one move, made by a monster.
@@ -177,6 +189,7 @@ impl<'a, V: Rules> Board<'a, V> {
             ascension,
             skipped: Vec::new(),
             ended: None,
+            pausable: false,
             landed: None,
         }
     }
@@ -3340,6 +3353,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .unwrap_or_else(|| unimplemented!("naming the card being played with none played"))
     }
 
+    fn waiting(&self) -> bool {
+        self.live.asking.is_some()
+    }
+
     fn playing_ident(&self) -> CardIdent<V> {
         self.acting()
             .unwrap_or_else(|| unimplemented!("reading the card being played with none played"))
@@ -3592,8 +3609,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             sts2_core::Fight::draw(self, draw);
         }
         if self.ended.is_none() {
-            self.ended =
-                super::turn::play_sly::<V>(self.live, self.rngs.reborrow(), self.relics, sly);
+            self.ended = super::turn::play_sly::<V>(
+                self.live,
+                self.rngs.reborrow(),
+                self.relics,
+                sly,
+                self.pausable,
+            );
         }
     }
 
@@ -3685,6 +3707,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 self.relics,
                 card,
                 None,
+                false,
             );
             if ended.is_some() {
                 self.ended = ended;
@@ -3787,6 +3810,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             card.id(),
             card.pile(),
             None,
+            self.pausable,
         );
     }
 
@@ -3802,6 +3826,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             card.id(),
             card.pile(),
             Some(target),
+            self.pausable,
         );
     }
 
@@ -4099,8 +4124,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             super::turn::act_on::<V>(self.live, self.rngs.reborrow(), self.relics, act, cards);
         self.ended = self.ended.or(ended);
         if self.ended.is_none() {
-            self.ended =
-                super::turn::play_sly::<V>(self.live, self.rngs.reborrow(), self.relics, sly);
+            self.ended = super::turn::play_sly::<V>(
+                self.live,
+                self.rngs.reborrow(),
+                self.relics,
+                sly,
+                self.pausable,
+            );
         }
     }
 
@@ -4451,6 +4481,7 @@ pub(super) fn draw_pausing<V: Rules>(
                             card,
                             Pile::Hand,
                             None,
+                            false,
                         );
                     }
                 }

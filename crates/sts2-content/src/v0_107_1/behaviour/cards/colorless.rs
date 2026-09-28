@@ -6,16 +6,19 @@ use sts2_core::{
 
 use super::super::super::generated::card_plays;
 use super::super::super::generated::cards::{CardKeyword, CardRarity, CardVar, ColorlessCard};
-use super::V;
+use super::{Number, V};
 
 /// `Catastrophe`: its `Cards` times, a card of the draw pile auto-played.
 /// Each is the first of the playable ones `StableShuffle`d off the shuffle
 /// stream, or of the whole pile where none is playable.
-fn catastrophe<F: Fight<V>>(fight: &mut F) -> Played<V> {
+///
+/// A card it plays that asks stands the loop still. `left` is how many it
+/// still has to play once that card's play is over.
+fn catastrophe<F: Fight<V>>(fight: &mut F, left: Number) -> Played<V> {
     use sts2_core::RunStreamKinds as _;
 
     let stream = <V as sts2_core::ContentVersion>::RunRngType::SHUFFLE;
-    for _ in 0..fight.var(CardVar::Cards) {
+    for played in 1..=left {
         let mut playable: Vec<_> = fight
             .cards_in(Pile::Draw)
             .into_iter()
@@ -33,6 +36,14 @@ fn catastrophe<F: Fight<V>>(fight: &mut F) -> Played<V> {
         if let Some(card) = chosen {
             fight.auto_play_card(card);
         }
+        if fight.waiting() {
+            let left = u8::try_from(left - played).expect("a few cards left to play");
+            return Played::Waiting {
+                at: super::super::Resume::Card(super::Resume::Colorless(Resume::CatastropheLeft(
+                    left,
+                ))),
+            };
+        }
     }
     Played::Done
 }
@@ -40,7 +51,7 @@ fn catastrophe<F: Fight<V>>(fight: &mut F) -> Played<V> {
 pub(super) fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
     match card {
         ColorlessCard::Volley => volley(fight),
-        ColorlessCard::Catastrophe => catastrophe(fight),
+        ColorlessCard::Catastrophe => catastrophe(fight, fight.var(CardVar::Cards)),
         // `Fisticuffs`: its damage to the target, then as much block as the
         // hit dealt, overkill included.
         ColorlessCard::Fisticuffs => {
@@ -222,6 +233,17 @@ pub enum Resume {
     ThinkingAheadPutBack,
     /// `SecretTechnique`, after the skill picked from the draw pile.
     SecretTechniqueTakes,
+    /// `Catastrophe`, once a card it played has its answer, with this many
+    /// cards still to play.
+    CatastropheLeft(u8),
+}
+
+/// The rest of a play that waited on a card it auto-played.
+pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
+    match at {
+        Resume::CatastropheLeft(left) => catastrophe(fight, Number::from(left)),
+        at => unreachable!("{at:?} stops on a pick, not on a card it played"),
+    }
 }
 
 pub(super) fn resume_play<F: Fight<V>>(
@@ -234,6 +256,7 @@ pub(super) fn resume_play<F: Fight<V>>(
             fight.act_on(PileAct::Exhaust, chosen.as_slice());
             Played::Done
         }
+        Resume::CatastropheLeft(_) => unreachable!("Catastrophe waits, and picks nothing"),
         // `CardPileCmd.Add` of the one taken, into hand.
         Resume::SecretTechniqueTakes => {
             fight.act_on(PileAct::IntoHand, chosen.as_slice());

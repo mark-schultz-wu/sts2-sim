@@ -1410,7 +1410,7 @@ fn select<V: Rules>(
             if ended.is_some() {
                 return Ok(ended);
             }
-            Ok(play_sly::<V>(live, rngs, relics, sly))
+            Ok(play_sly::<V>(live, rngs, relics, sly, false))
         }
         None => Err(super::live::Asked::Pile { pile, selection }),
     }
@@ -1510,6 +1510,7 @@ pub(super) fn play_sly<V: Rules>(
     mut rngs: CombatRngs<'_>,
     relics: &mut crate::run::Belt<V>,
     sly: SmallVec<[sts2_core::CardId<V>; 2]>,
+    pausable: bool,
 ) -> Option<super::Ended> {
     for id in sly {
         // `CardPileCmd.Add` to the play pile from wherever the card stands
@@ -1520,7 +1521,8 @@ pub(super) fn play_sly<V: Rules>(
         else {
             unimplemented!("a Sly card that left every pile before it played");
         };
-        let ended = super::play::auto_play::<V>(live, rngs.reborrow(), relics, id, from, None);
+        let ended =
+            super::play::auto_play::<V>(live, rngs.reborrow(), relics, id, from, None, pausable);
         if ended.is_some() {
             return ended;
         }
@@ -1589,7 +1591,8 @@ pub(super) fn resume_setup<V: Rules>(
     } = fighting;
     let (sly, ended) = act_on::<V>(live, streams.combat(), relics, act, picked.as_slice());
     let ascension = live.ascension;
-    let carried = match ended.or_else(|| play_sly::<V>(live, streams.combat(), relics, sly)) {
+    let carried = match ended.or_else(|| play_sly::<V>(live, streams.combat(), relics, sly, false))
+    {
         Some(ended) => Carried::Done(Some(ended)),
         None => carry_setup(live, streams.combat(), relics, ascension, stage),
     };
@@ -2394,6 +2397,9 @@ fn enemy_turn<V: Rules>(
             }
             sts2_core::Played::Asking { .. } | sts2_core::Played::AskingAmong { .. } => {
                 unimplemented!("a monster's move selecting from a pile")
+            }
+            sts2_core::Played::Waiting { .. } => {
+                unimplemented!("a monster's move waiting on a card it auto-played")
             }
         }
         move_performed::<V>(live, id, next_move.id);

@@ -250,7 +250,8 @@ pub(crate) fn play<V: Rules>(
         ascension,
         play.target,
         Some(card.id),
-    );
+    )
+    .pausable();
     let played = V::on_play(card.face.ident.card, &mut board);
     let ended = board.ended;
     let skipped = std::mem::take(&mut board.skipped);
@@ -301,13 +302,23 @@ pub(super) fn auto_play<V: Rules>(
     id: sts2_core::CardId<V>,
     from: sts2_core::Pile,
     named: Option<CombatId>,
+    pausable: bool,
 ) -> Option<super::Ended> {
+    // A question an earlier auto-play asked stands the effect still, and
+    // this one waits behind it where it lies.
+    if live.asking.is_some() {
+        if !pausable {
+            unimplemented!("auto-playing {id:?} while a question waits outside an effect");
+        }
+        live.defer(super::live::Deferred::AutoPlay { id, named });
+        return None;
+    }
     let Some(at) = live.cards.find(from, id) else {
         unimplemented!("auto-playing {id:?}, which left the {from:?} pile");
     };
     // `CardPileCmd.Add` to the play pile, where it stands while it runs.
     let card = live.cards.play(from, at);
-    auto_play_in_play::<V>(live, rngs, relics, card, named)
+    auto_play_in_play::<V>(live, rngs, relics, card, named, pausable)
 }
 
 /// `CardCmd.AutoPlay` for a card already in the play pile. `named` is the
@@ -319,6 +330,7 @@ pub(super) fn auto_play_in_play<V: Rules>(
     relics: &mut crate::run::Belt<V>,
     card: super::live::CardInstance<V>,
     named: Option<CombatId>,
+    pausable: bool,
 ) -> Option<super::Ended> {
     use sts2_core::{CardTable as _, TargetKinds as _};
 
@@ -375,6 +387,9 @@ pub(super) fn auto_play_in_play<V: Rules>(
         target,
         Some(card.id),
     );
+    if pausable {
+        board = board.pausable();
+    }
     let played = V::on_play(card.face.ident.card, &mut board);
     let ended = board.ended;
     let skipped = std::mem::take(&mut board.skipped);
@@ -405,8 +420,10 @@ pub(super) fn auto_play_in_play<V: Rules>(
         false,
     )
     .unwrap_or_else(|error| unimplemented!("an auto-play that failed: {error:?}"));
-    if live.asking.is_some() {
-        unimplemented!("an auto-played {ident:?} that stops on a question");
+    // A card that asks stands the effect around it still, which only a
+    // card's or a potion's own effect can do.
+    if live.asking.is_some() && !pausable {
+        unimplemented!("an auto-played {ident:?} that stops on a question outside an effect");
     }
     ended
 }
@@ -721,6 +738,8 @@ pub(crate) fn answer<V: Rules>(
         .asking
         .take()
         .unwrap_or_else(|| unimplemented!("an answer to a fight that asked nothing"));
+    // What this answer's play defers goes above what already waits.
+    live.deferring_at = None;
     let taken =
         match &asking.question {
             Asked::Pile {
@@ -779,8 +798,12 @@ pub(crate) fn answer<V: Rules>(
             }
         };
 
-    let (mut effect, at) = match asking.then {
-        Then::Play { effect, at } => (effect, at),
+    let (mut effect, at, outermost) = match asking.then {
+        Then::Play {
+            effect,
+            at,
+            outermost,
+        } => (effect, at, outermost),
         Then::Setup { act, stage } => {
             let sts2_core::Taken::Selected(picked) = taken else {
                 unreachable!("a turn's setup asks for cards of a pile")
@@ -820,22 +843,98 @@ pub(crate) fn answer<V: Rules>(
         ascension,
         effect.target,
         playing,
-    );
+    )
+    .pausable();
     let played = V::resume_play(&mut board, at, taken);
     effect.ended = effect.ended.or(board.ended);
     let skipped = std::mem::take(&mut board.skipped);
     merge::<V>(&mut live.skip_tick, skipped);
-    carry_on(
+    let ended = carry_on(
+        Fighting {
+            live: &mut *live,
+            streams: &mut *streams,
+            relics: &mut *relics,
+        },
+        ascension,
+        effect,
+        played,
+        outermost,
+    )?;
+    run_deferred(
         Fighting {
             live,
             streams,
             relics,
         },
         ascension,
-        effect,
-        played,
-        true,
+        ended,
     )
+}
+
+/// What waited behind an answered question, run until nothing does or
+/// another question is asked. An auto-play waiting on a fight already over
+/// never runs, and the effects it stood inside still end.
+fn run_deferred<V: Rules>(
+    fighting: Fighting<'_, V>,
+    ascension: V::AscensionLevel,
+    mut ended: Option<super::Ended>,
+) -> Result<Option<super::Ended>, Error> {
+    let Fighting {
+        live,
+        streams,
+        relics,
+    } = fighting;
+    while live.asking.is_none() {
+        let Some(deferred) = live.deferred.pop() else {
+            break;
+        };
+        live.deferring_at = None;
+        let fighting = Fighting {
+            live: &mut *live,
+            streams: &mut *streams,
+            relics: &mut *relics,
+        };
+        ended = match deferred {
+            super::live::Deferred::AutoPlay { id, named } => {
+                let from = [
+                    sts2_core::Pile::Discard,
+                    sts2_core::Pile::Draw,
+                    sts2_core::Pile::Hand,
+                    sts2_core::Pile::Exhaust,
+                ]
+                .into_iter()
+                .find(|&pile| fighting.live.cards.find(pile, id).is_some());
+                match (ended, from) {
+                    (None, Some(from)) => auto_play::<V>(
+                        fighting.live,
+                        fighting.streams.combat(),
+                        fighting.relics,
+                        id,
+                        from,
+                        named,
+                        true,
+                    ),
+                    (ended, _) => ended,
+                }
+            }
+            super::live::Deferred::Resume {
+                mut effect,
+                played,
+                outermost,
+            } => {
+                effect.ended = effect.ended.or(ended);
+                carry_on(fighting, ascension, effect, played, outermost)?
+            }
+            super::live::Deferred::Finish {
+                mut effect,
+                outermost,
+            } => {
+                effect.ended = effect.ended.or(ended);
+                finish_effect(fighting, ascension, effect, outermost)?
+            }
+        };
+    }
+    Ok(ended)
 }
 
 /// Carry a play on from wherever it got to.
@@ -860,6 +959,38 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
         relics,
     } = fighting;
     loop {
+        // A card this effect auto-played asked a question, and the effect
+        // stands where its own code left it until that card's play is over.
+        if next.asking.is_some() {
+            let ended = effect.ended;
+            next.defer(super::live::Deferred::Resume {
+                effect,
+                played,
+                outermost,
+            });
+            return Ok(ended);
+        }
+        // The effect waited on a card it auto-played, whose play is over.
+        if let sts2_core::Played::Waiting { at } = played {
+            let playing = match &effect.asker {
+                Asker::Card(card) => Some(card.id),
+                Asker::Potion(_) => None,
+            };
+            let mut board = Board::for_card(
+                next,
+                streams.combat(),
+                relics,
+                ascension,
+                effect.target,
+                playing,
+            )
+            .pausable();
+            played = V::resume_play(&mut board, at, sts2_core::Taken::Waited);
+            effect.ended = effect.ended.or(board.ended);
+            let skipped = std::mem::take(&mut board.skipped);
+            merge::<V>(&mut next.skip_tick, skipped);
+            continue;
+        }
         let (at, question, answer) = match played {
             // One turn of `GeneratePlayCount`'s loop is over. A card carrying
             // replays runs its own effect again, from the top.
@@ -889,7 +1020,8 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                         ascension,
                         effect.target,
                         Some(card),
-                    );
+                    )
+                    .pausable();
                     V::enchantment_on_play(enchanted, &mut status, &mut board);
                     effect.ended = effect.ended.or(board.ended);
                     let skipped = std::mem::take(&mut board.skipped);
@@ -912,6 +1044,9 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                 if effect.plays.done >= effect.plays.count {
                     break;
                 }
+                if next.asking.is_some() {
+                    unimplemented!("a replay waiting behind a question its last play's hook asked");
+                }
                 let replaying = next
                     .cards
                     .named(card)
@@ -932,7 +1067,8 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                     ascension,
                     effect.target,
                     Some(card),
-                );
+                )
+                .pausable();
                 played = V::on_play(played_card, &mut board);
                 effect.ended = effect.ended.or(board.ended);
                 let skipped = std::mem::take(&mut board.skipped);
@@ -965,11 +1101,16 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                 skippable,
                 at,
             } => (at, Asked::Offered { offered, skippable }, None),
+            sts2_core::Played::Waiting { .. } => unreachable!("a waiting effect resumed above"),
         };
         let Some(answer) = answer else {
             let ended = effect.ended;
             next.asking = Some(super::live::Asking {
-                then: Then::Play { effect, at },
+                then: Then::Play {
+                    effect,
+                    at,
+                    outermost,
+                },
                 question,
             });
             return Ok(ended);
@@ -986,13 +1127,45 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
             ascension,
             effect.target,
             playing,
-        );
+        )
+        .pausable();
         played = V::resume_play(&mut board, at, answer);
         effect.ended = effect.ended.or(board.ended);
         let skipped = std::mem::take(&mut board.skipped);
         merge::<V>(&mut next.skip_tick, skipped);
     }
 
+    // A question a hook of the last play asked stands the end still too.
+    if next.asking.is_some() {
+        let ended = effect.ended;
+        next.defer(super::live::Deferred::Finish { effect, outermost });
+        return Ok(ended);
+    }
+    finish_effect(
+        Fighting {
+            live: next,
+            streams,
+            relics,
+        },
+        ascension,
+        effect,
+        outermost,
+    )
+}
+
+/// The end of an effect whose last play is over: `Hook.AfterPotionUsed` for
+/// a potion, and for a card the pile its play sends it to.
+fn finish_effect<V: Rules, S: LendsCombat>(
+    fighting: Fighting<'_, V, S>,
+    ascension: V::AscensionLevel,
+    effect: Resuming<V>,
+    outermost: bool,
+) -> Result<Option<super::Ended>, Error> {
+    let Fighting {
+        live: next,
+        streams,
+        relics,
+    } = fighting;
     let mut ended = effect.ended;
     let Asker::Card(play) = effect.asker else {
         // `Hook.AfterPotionUsed`, once the potion is done, for a fight still

@@ -29,7 +29,8 @@ pub(crate) fn drink<V: Rules>(
     if let Some((listener, effect)) = super::listen::notify::<V>(live, relics, hook).first() {
         unimplemented!("{listener:?} asking for {effect:?} before a potion")
     }
-    let mut board = Board::for_card(live, streams.combat(), relics, ascension, target, None);
+    let mut board =
+        Board::for_card(live, streams.combat(), relics, ascension, target, None).pausable();
     let used = V::on_use(potion, &mut board);
     let ended = board.ended;
     let skipped = std::mem::take(&mut board.skipped);
