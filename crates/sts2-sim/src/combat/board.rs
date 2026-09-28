@@ -779,8 +779,10 @@ impl<'a, V: Rules> Board<'a, V> {
             if lost > zero {
                 self.current_hp_changed(receiver, -lost);
             }
-            // `History.DamageReceived`, while the fight is in progress.
-            if self.ended.is_none() && !self.ending() {
+            // `History.DamageReceived`, while the fight is in progress. One
+            // that is ending plays no card after it, so nothing reads what it
+            // records then, and it is not asked.
+            if self.ended.is_none() {
                 self.live
                     .history
                     .damage_received(sts2_core::DamageReceived {
