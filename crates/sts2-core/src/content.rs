@@ -2198,6 +2198,12 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("the player's energy")
     }
 
+    /// `CreatureCmd.GainMaxHp`: the maximum grows by `amount`, then a heal
+    /// for as much.
+    fn gain_max_hp(&mut self, _creature: crate::CombatId, _amount: V::Number) {
+        unimplemented!("gaining maximum health in a fight")
+    }
+
     /// `CreatureCmd.LoseMaxHp`: unblockable, unpowered damage from nobody for
     /// what the new maximum leaves above the current, then that maximum, at
     /// one or more.
@@ -2473,7 +2479,8 @@ pub enum Change<V: ContentVersion> {
     /// cost set to this where that lowers it, and left where it does not.
     LowerCost(CostPool, V::Number),
     /// `CardModel.AddKeyword`: the copy carries a word its table does not.
-    /// The word is on the copy for as long as the copy lasts.
+    /// The word is on the copy for as long as the copy lasts. Written to last
+    /// the turn, it is `GiveSingleTurnSly`, which the turn's end clears.
     AddKeyword(V::CardKeyword),
     /// `CardModel.RemoveKeyword`: the copy no longer carries a word, whether
     /// its table prints it or something wrote it on.
@@ -4901,6 +4908,10 @@ pub struct CardOwner<'a, V: ContentVersion> {
     /// How many of the owner's cards in the fight, every pile included, are
     /// tagged Strike. `PlayerCombatState.AllCards`.
     pub strikes: usize,
+    /// The owner's creature.
+    pub player: crate::CombatId,
+    /// The creature the card is pointed at, where it is pointed at one.
+    pub targeted: Option<crate::CombatId>,
     /// The powers of the creature the card is pointed at, where it is pointed
     /// at one.
     pub target: Option<&'a [crate::Stack<V>]>,

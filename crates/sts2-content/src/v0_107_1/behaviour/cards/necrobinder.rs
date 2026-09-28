@@ -511,6 +511,29 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
         NecrobinderCard::Severance => severance(fight),
         // `Friendship`: its Strength off its owner, then its Energy as
         // Friendship.
+        NecrobinderCard::Dredge => dredge(fight),
+        // `CaptureSpirit`: its damage to the target, unblockable and
+        // unpowered, then its `Cards` of Souls into the draw pile at random.
+        NecrobinderCard::CaptureSpirit => {
+            use super::super::super::generated::cards::{Cards, TokenCard};
+
+            let damage = fight.resolve(Effect::Attack {
+                dealer: fight.actor(),
+                target: fight.target(),
+                damage: Amount::Var(CardVar::Damage),
+                scaling: Scaling::Static,
+            });
+            fight.apply(damage);
+            for _ in 0..fight.var(CardVar::Cards) {
+                if fight
+                    .add_at_random(Cards::Token(TokenCard::Soul), Pile::Draw)
+                    .is_none()
+                {
+                    break;
+                }
+            }
+            Played::Done
+        }
         NecrobinderCard::Friendship => {
             use super::super::super::generated::powers::Power;
 
@@ -533,6 +556,8 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
 /// Where a Necrobinder card stopped inside its own play.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Resume {
+    /// `Dredge`, after its owner picked the cards to take back.
+    DredgeTakeBack,
     /// `Graveblast`, after its owner picked the card to take back.
     GraveblastTakeBack,
     /// `SculptingStrike`, after its owner picked the card to make Ethereal.
@@ -549,8 +574,8 @@ pub(super) fn resume_play<F: Fight<V>>(
     chosen: sts2_core::SelectedCards<V>,
 ) -> Played<V> {
     match at {
-        // `CardPileCmd.Add` of the one taken, into hand.
-        Resume::GraveblastTakeBack => {
+        // `CardPileCmd.Add` of those taken, into hand.
+        Resume::GraveblastTakeBack | Resume::DredgeTakeBack => {
             fight.act_on(PileAct::IntoHand, chosen.as_slice());
             Played::Done
         }
@@ -587,6 +612,22 @@ pub(super) fn resume_play<F: Fight<V>>(
             }
             Played::Done
         }
+    }
+}
+
+/// `Dredge`: its `Cards` from the discard pile picked into hand, as many as
+/// the hand has room for.
+fn dredge<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let cards: usize =
+        num_traits::cast(fight.var(CardVar::Cards)).expect("a count of cards is not negative");
+    let room = sts2_core::MAX_CARDS_IN_HAND.saturating_sub(fight.cards_in(Pile::Hand).len());
+    match nonmax::NonMaxUsize::new(cards.min(room)) {
+        Some(count) if count.get() > 0 => Played::Asking {
+            pile: Pile::Discard,
+            selection: Selection::Exactly(count),
+            at: super::super::Resume::Card(super::Resume::Necrobinder(Resume::DredgeTakeBack)),
+        },
+        _ => Played::Done,
     }
 }
 

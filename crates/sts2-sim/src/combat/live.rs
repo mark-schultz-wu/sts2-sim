@@ -416,6 +416,9 @@ pub(crate) struct Face<V: Rules> {
     /// Keywords `RemoveKeyword` took off, whether the table prints them or
     /// they were written on.
     removed_keywords: V::CardKeywordSet,
+    /// `HasSingleTurnSly`: words the copy carries until the turn ends,
+    /// whatever `RemoveKeyword` took off.
+    turn_keywords: V::CardKeywordSet,
     /// `CardModel.BaseReplayCount`, the extra times this copy's play runs.
     ///
     /// Zero for every card the table prints. Only a power hands these out, and
@@ -552,6 +555,7 @@ impl<V: Rules> Face<V> {
             modifiers: 0,
             added_keywords: sts2_core::FlagSet::from_members(&[]),
             removed_keywords: sts2_core::FlagSet::from_members(&[]),
+            turn_keywords: sts2_core::FlagSet::from_members(&[]),
             replays: 0,
             enchantment_status: sts2_core::EnchantmentStatus::Normal,
         };
@@ -646,7 +650,14 @@ impl<V: Rules> Face<V> {
             }
             // `Keywords` is one set the copy owns, which both of these write.
             // A word already on the copy is not added twice.
+            sts2_core::Change::AddKeyword(keyword) if lasting == sts2_core::Lasting::ThisTurn => {
+                self.turn_keywords = sts2_core::FlagSet::with(self.turn_keywords, keyword);
+            }
             sts2_core::Change::AddKeyword(keyword) => {
+                assert!(
+                    lasting == sts2_core::Lasting::ThisFight,
+                    "a keyword written until played"
+                );
                 self.added_keywords = sts2_core::FlagSet::with(self.added_keywords, keyword);
                 self.removed_keywords = sts2_core::FlagSet::without(self.removed_keywords, keyword);
             }
@@ -664,6 +675,7 @@ impl<V: Rules> Face<V> {
     fn keyword(&self, printed: bool, keyword: V::CardKeyword) -> bool {
         (printed || sts2_core::FlagSet::contains(self.added_keywords, keyword))
             && !sts2_core::FlagSet::contains(self.removed_keywords, keyword)
+            || sts2_core::FlagSet::contains(self.turn_keywords, keyword)
             || self
                 .ident
                 .affliction
@@ -729,7 +741,7 @@ impl<V: Rules> Face<V> {
     }
 
     /// `IsSlyThisTurn` for this copy, the keyword the way [`Face::innate`]
-    /// reads Innate. Nothing ported makes a card Sly for one turn.
+    /// reads Innate, or Sly written on for the turn.
     pub(super) fn sly(&self) -> bool {
         use sts2_core::{CardTable as _, KeywordKinds};
 
@@ -818,16 +830,19 @@ impl<V: Rules> Face<V> {
         self.modifiers += 1;
     }
 
-    /// Drop the cost modifiers that do not outlive this turn.
+    /// Drop the cost modifiers and keywords that do not outlive this turn.
     pub(super) fn turn_ended(&mut self) {
         self.kept(CostModifier::clears_when_turn_ends);
+        self.turn_keywords = sts2_core::FlagSet::from_members(&[]);
     }
 
-    /// Whether this copy holds a cost modifier that ends with the turn.
+    /// Whether this copy holds a cost modifier or a keyword that ends with
+    /// the turn.
     pub(super) fn lasts_the_turn(&self) -> bool {
-        self.cost_modifiers[..usize::from(self.modifiers)]
-            .iter()
-            .any(|held| held.clears_when_turn_ends())
+        self.turn_keywords != sts2_core::FlagSet::from_members(&[])
+            || self.cost_modifiers[..usize::from(self.modifiers)]
+                .iter()
+                .any(|held| held.clears_when_turn_ends())
     }
 
     /// `GetEnchantedReplayCount` and one: the replays this copy holds, through

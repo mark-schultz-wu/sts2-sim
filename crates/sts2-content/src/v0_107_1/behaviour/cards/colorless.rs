@@ -5,12 +5,42 @@ use sts2_core::{
 };
 
 use super::super::super::generated::card_plays;
-use super::super::super::generated::cards::{CardRarity, CardVar, ColorlessCard};
+use super::super::super::generated::cards::{CardKeyword, CardRarity, CardVar, ColorlessCard};
 use super::V;
+
+/// `Catastrophe`: its `Cards` times, a card of the draw pile auto-played.
+/// Each is the first of the playable ones `StableShuffle`d off the shuffle
+/// stream, or of the whole pile where none is playable.
+fn catastrophe<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use sts2_core::RunStreamKinds as _;
+
+    let stream = <V as sts2_core::ContentVersion>::RunRngType::SHUFFLE;
+    for _ in 0..fight.var(CardVar::Cards) {
+        let mut playable: Vec<_> = fight
+            .cards_in(Pile::Draw)
+            .into_iter()
+            .filter(|&at| !fight.card_keyword(at, CardKeyword::Unplayable))
+            .collect();
+        fight.stable_shuffle_cards(&mut playable, stream);
+        let chosen = match playable.first() {
+            Some(&card) => Some(card),
+            None => {
+                let mut every = fight.cards_in(Pile::Draw);
+                fight.stable_shuffle_cards(&mut every, stream);
+                every.first().copied()
+            }
+        };
+        if let Some(card) = chosen {
+            fight.auto_play_card(card);
+        }
+    }
+    Played::Done
+}
 
 pub(super) fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
     match card {
         ColorlessCard::Volley => volley(fight),
+        ColorlessCard::Catastrophe => catastrophe(fight),
         ColorlessCard::Restlessness => restlessness(fight),
         ColorlessCard::Impatience => impatience(fight),
         ColorlessCard::Anointed => anointed(fight),

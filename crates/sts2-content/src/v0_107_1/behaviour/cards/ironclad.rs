@@ -67,6 +67,35 @@ pub(super) fn resume_play<F: Fight<V>>(
 pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
     match card {
         IroncladCard::Thrash => thrash(fight),
+        // `Feed`: its damage to the target, then its `MaxHp` onto its owner's
+        // maximum where the hit killed a target no Minion or Reattach kept
+        // from being Fatal.
+        IroncladCard::Feed => {
+            let target = fight.target();
+            let fatal = fight
+                .creatures()
+                .find(|creature| creature.id() == target)
+                .is_some_and(|creature| {
+                    creature.power(Power::MinionPower).is_none()
+                        && creature.power(Power::ReattachPower).is_none()
+                });
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            let standing = fight
+                .creatures()
+                .any(|creature| creature.id() == target && creature.alive());
+            if fatal && !standing {
+                fight.gain_max_hp(fight.actor(), fight.var(CardVar::MaxHp));
+            }
+            Played::Done
+        }
         // `ForgottenRitual`: its energy, where its owner exhausted a card this
         // turn.
         IroncladCard::ForgottenRitual => {

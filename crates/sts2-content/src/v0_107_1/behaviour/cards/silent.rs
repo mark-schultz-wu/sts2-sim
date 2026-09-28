@@ -6,7 +6,7 @@ use sts2_core::{
 };
 
 use super::super::super::generated::card_plays;
-use super::super::super::generated::cards::{CardVar, Cards, SilentCard, TokenCard};
+use super::super::super::generated::cards::{CardKeyword, CardVar, Cards, SilentCard, TokenCard};
 use super::super::super::generated::powers::Power;
 use super::V;
 
@@ -23,6 +23,8 @@ pub enum Resume {
     HiddenDaggers,
     /// `Acrobatics`, after its owner picked the card to discard.
     Acrobatics,
+    /// `HandTrick`, after its owner picked the skill to make Sly.
+    HandTrick,
 }
 
 pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
@@ -39,6 +41,7 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
         SilentCard::BladeDance => blade_dance(fight),
         SilentCard::PiercingWail => piercing_wail(fight),
         SilentCard::EchoingSlash => echoing_slash(fight),
+        SilentCard::HandTrick => hand_trick(fight),
         // `Expose`: the target loses all its block and any Artifact, then
         // takes its `Power` of Vulnerable.
         SilentCard::Expose => {
@@ -238,6 +241,30 @@ fn haze<F: Fight<V>>(fight: &mut F) -> Played<V> {
     Played::Done
 }
 
+/// `HandTrick`: its block, then one skill of the hand that is not Sly this
+/// turn picked, to be Sly until the turn ends.
+fn hand_trick<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let block = fight.resolve(Effect::GainBlock {
+        recipient: fight.actor(),
+        amount: Amount::Var(CardVar::Block),
+        scaling: Scaling::Dynamic,
+    });
+    fight.apply(block);
+    let cards = fight
+        .cards_in(Pile::Hand)
+        .into_iter()
+        .filter(|&card| {
+            V::card_kind(fight.card_ident(card).card) == Some(CardKind::Skill)
+                && !fight.card_keyword(card, CardKeyword::Sly)
+        })
+        .collect();
+    Played::AskingAmong {
+        cards,
+        selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
+        at: super::super::Resume::Card(super::Resume::Silent(Resume::HandTrick)),
+    }
+}
+
 pub(super) fn resume_play<F: Fight<V>>(
     fight: &mut F,
     at: Resume,
@@ -247,6 +274,14 @@ pub(super) fn resume_play<F: Fight<V>>(
         // `CardCmd.Discard` of the one taken.
         Resume::Survivor | Resume::Prepared | Resume::DaggerThrow | Resume::Acrobatics => {
             fight.act_on(sts2_core::PileAct::Discard, chosen.as_slice());
+            Played::Done
+        }
+        // `CardCmd.ApplySingleTurnSly` on the one taken.
+        Resume::HandTrick => {
+            for &card in chosen.as_slice() {
+                let sly = Change::AddKeyword(CardKeyword::Sly);
+                fight.modify_card(card, sly, Lasting::ThisTurn);
+            }
             Played::Done
         }
         // `CardCmd.Discard` of those taken, then its `Shivs` into hand,

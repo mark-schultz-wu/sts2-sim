@@ -2438,6 +2438,8 @@ pub(crate) fn var<V: Rules>(
                         <<V::Card as sts2_core::CardTable>::Tag as sts2_core::CardTagKinds>::STRIKE,
                     )
                 }),
+                player: live.player().id,
+                targeted: target,
                 target: targeted.as_deref(),
                 history: live.history(),
                 block: live
@@ -3012,6 +3014,15 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn energy(&self) -> V::Number {
         num_traits::cast(self.live.energy).expect("energy fits a game number")
+    }
+
+    fn gain_max_hp(&mut self, creature: CombatId, amount: V::Number) {
+        let Some(at) = self.at(creature) else { return };
+        let gained: V::Health =
+            num_traits::cast(amount).expect("a maximum health gain fits the build's health");
+        let held = &mut self.live.creatures[at];
+        held.max_hp = held.max_hp + gained;
+        self.heal(creature, amount);
     }
 
     fn lose_max_hp(&mut self, creature: CombatId, amount: V::Number) {

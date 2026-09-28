@@ -245,6 +245,21 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
             printed.face(CardVar::CalculationBase)
                 + printed.face(CardVar::CalculationExtra) * started
         }
+        // `BeatIntoShape`: a base, and more for each powered hit its owner
+        // landed on its target this turn.
+        (Cards::Regent(RegentCard::BeatIntoShape), CardVar::CalculatedForge) => {
+            let hits = owner
+                .history
+                .damage_received_this_turn()
+                .filter(|received| {
+                    Some(received.receiver) == owner.targeted
+                        && received.dealer == Some(owner.player)
+                        && received.powered
+                })
+                .count();
+            let hits = Number::try_from(hits).expect("a turn's hits fit the game's numbers");
+            printed.face(CardVar::CalculationBase) + printed.face(CardVar::CalculationExtra) * hits
+        }
         // `BodySlam`: a base, and more for each point of its owner's block.
         (Cards::Ironclad(IroncladCard::BodySlam), CardVar::CalculatedDamage) => {
             printed.face(CardVar::CalculationBase)

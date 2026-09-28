@@ -1,0 +1,10 @@
+# Hand Trick blocks, then makes one skill of the hand Sly for the turn.
+# Survivor then discards that Defend, and it plays itself.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"HAND_TRICK"}
+{"cmd":"grant","card":"SURVIVOR"}
+{"cmd":"play_card","index":7}
+{"cmd":"answer","cards":[0]}
+{"cmd":"play_card","index":7}
+{"cmd":"answer","cards":[0]}

@@ -25,9 +25,36 @@ pub enum Resume {
     ChargeTransform,
 }
 
+/// `BeatIntoShape`: its damage to the target, then a Forge of its calculated
+/// number, less its extra for each hit of its own attack.
+fn beat_into_shape<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use sts2_core::{Amount, Effect, Scaling};
+
+    let target = fight.target();
+    let results = fight.attack(Scaling::Dynamic, |fight| {
+        let attack = fight.resolve(Effect::Attack {
+            dealer: fight.actor(),
+            target,
+            damage: Amount::Var(CardVar::Damage),
+            scaling: Scaling::Dynamic,
+        });
+        fight.apply(attack);
+    });
+    let count = |n: usize| super::Number::try_from(n).expect("an attack's hits fit a number");
+    let amount = fight.var(CardVar::CalculatedForge)
+        - count(results.len()) * fight.var(CardVar::CalculationExtra);
+    fight.forge(
+        Cards::Token(TokenCard::SovereignBlade),
+        CardVar::Damage,
+        amount,
+    );
+    Played::Done
+}
+
 pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
     match card {
         RegentCard::Glitterstream => common::glitterstream(fight),
+        RegentCard::BeatIntoShape => beat_into_shape(fight),
         RegentCard::Begone => common::begone(),
         // `Charge`: its `Cards` of the draw pile picked, each transformed.
         RegentCard::Charge => Played::Asking {
