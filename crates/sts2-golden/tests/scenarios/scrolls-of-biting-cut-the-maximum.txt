@@ -1,0 +1,8 @@
+# Three Scrolls of Biting open on the three moves of their cycle, as one
+# draw decides. Each carries Paper Cuts, so a hit past the block takes two
+# off the player's maximum health.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"SCROLLS_OF_BITING_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

@@ -18,6 +18,7 @@ use super::super::generated::powers::Power;
 /// What a move's own numbers are held as.
 pub(crate) type Number = <V0_107_1 as sts2_core::ContentVersion>::Number;
 
+mod glory;
 mod hive;
 mod overgrowth;
 mod summoned;
@@ -75,6 +76,7 @@ pub(crate) fn starting_powers(
 
     match overgrowth::starting_powers(monster, ascension)
         .or_else(|| hive::starting_powers(monster, ascension, side))
+        .or_else(|| glory::starting_powers(monster))
         .or_else(|| summoned::starting_powers(monster))
     {
         Some(applied) => applied,
@@ -136,6 +138,7 @@ pub(crate) fn conditional<P: sts2_core::Printed<V> + ?Sized>(
             hive::conditional(monster, at, spawn, powers)
         }
         Monster::Exoskeleton | Monster::Myte => opens_by_slot(monster, at, spawn),
+        Monster::LivingShield => glory::conditional(monster, at, spawn),
         _ => overgrowth::conditional(monster, at, spawn),
     }
 }

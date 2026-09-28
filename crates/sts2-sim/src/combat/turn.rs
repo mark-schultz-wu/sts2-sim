@@ -1566,6 +1566,14 @@ pub(super) fn side_turn_started<V: Rules>(
                 super::hook::apply::<V, _>(&mut board, [effect]);
                 ended = ended.or(board.ended);
             }
+            // `CreatureCmd.GainBlock`, unpowered, on a creature the listener
+            // names.
+            effect @ sts2_core::HookEffect::GainBlockOf { .. } => {
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                super::hook::apply::<V, _>(&mut board, [effect]);
+                ended = ended.or(board.ended);
+            }
             sts2_core::HookEffect::GenerateFromPool {
                 filter,
                 count,

@@ -2175,6 +2175,48 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Envenom")
         }
         (Power::EnvenomPower, _, EventHook::DamageGiven { .. }) => None,
+        // `PaperCutsPower.AfterDamageGiven`: a powered hit from its owner that
+        // gets past the player's block takes its amount off their maximum.
+        (
+            Power::PaperCutsPower,
+            PowerAmount::Counted(amount),
+            EventHook::DamageGiven {
+                dealer,
+                target,
+                unblocked,
+                powered: true,
+                ..
+            },
+        ) if dealer == Some(holder) && target == fight.player() && unblocked > 0 => {
+            Some(HookEffect::LoseMaxHpOf { target, amount })
+        }
+        (Power::PaperCutsPower, PowerAmount::Endless, EventHook::DamageGiven { dealer, .. })
+            if dealer == Some(holder) =>
+        {
+            unimplemented!("an endless Paper Cuts")
+        }
+        (Power::PaperCutsPower, _, EventHook::DamageGiven { .. }) => None,
+        // `RampartPower.AfterSideTurnStart`, for the player's side: its
+        // amount of block on each Turret Operator among the enemies.
+        (
+            Power::RampartPower,
+            PowerAmount::Counted(amount),
+            EventHook::SideTurnStart {
+                side: CombatSide::Player,
+                ..
+            },
+        ) => {
+            let player = fight.player();
+            asked.extend(
+                fight
+                    .living_opponents(player)
+                    .into_iter()
+                    .filter(|&enemy| fight.monster(enemy) == Some(Monster::TurretOperator))
+                    .map(|target| HookEffect::GainBlockOf { target, amount }),
+            );
+            return;
+        }
+        (Power::RampartPower, _, EventHook::SideTurnStart { .. }) => None,
         // `NoDrawPower.AfterSideTurnEnd`: gone once its owner's turn ends.
         (Power::NoDrawPower, _, EventHook::SideTurnEnd { side }) if side == owner => {
             Some(HookEffect::Remove)
