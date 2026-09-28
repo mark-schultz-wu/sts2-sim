@@ -258,6 +258,86 @@ fn blight_strike<F: Fight<V>>(fight: &mut F) -> Played<V> {
     Played::Done
 }
 
+/// `Misery`: the target's debuffs as they stand, then its damage to the
+/// target. Each other hittable enemy then takes each of those debuffs: onto
+/// the instance it stacks with through `PowerCmd.ModifyAmount`, else as a
+/// new one through `PowerCmd.Apply`. Both come from the debuff's applier.
+fn misery<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use super::super::super::generated::powers::{Power, PowerInstanceType};
+    use sts2_core::{PowerAmount, Table as _};
+
+    let target = fight.target();
+    let debuffs: Vec<_> = fight
+        .powers_on(target)
+        .into_iter()
+        .filter(|held| debuff_for_amount(held.power, held.amount))
+        .collect();
+    strike(fight);
+    for enemy in fight.hittable_opponents() {
+        if enemy == target {
+            continue;
+        }
+        for held in &debuffs {
+            let power = held.power;
+            // `ITemporaryPower.IgnoreNextInstance`, which the copy is given.
+            if super::super::powers::lends(power).is_some() {
+                unimplemented!("Misery copying {power:?}, which ignores its next instance");
+            }
+            if !held.fresh {
+                unimplemented!("Misery copying {power:?}, whose model carries state");
+            }
+            let PowerAmount::Counted(amount) = held.amount else {
+                unimplemented!("Misery copying an endless {power:?}");
+            };
+            match Power::data(power).instance {
+                None if fight.powers_on(enemy).iter().any(|on| on.power == power) => {
+                    fight.modify_power_amount(enemy, power, amount, held.applier);
+                }
+                None | Some(PowerInstanceType::Instanced) => {
+                    fight.apply_power_from(enemy, power, held.amount, held.applier);
+                }
+                Some(PowerInstanceType::InstancedPerApplier) => {
+                    unimplemented!("Misery copying {power:?}, kept apart by its applier")
+                }
+            }
+        }
+    }
+    Played::Done
+}
+
+/// `PowerModel.TypeForCurrentAmount == PowerType.Debuff`.
+///
+/// A counter that allows negatives is a debuff below zero, and a debuff
+/// that does not allow them is a buff there.
+fn debuff_for_amount(
+    power: super::super::super::generated::powers::Power,
+    amount: sts2_core::PowerAmount<i32>,
+) -> bool {
+    use super::super::super::generated::powers::{Power, PowerFlag, PowerStackType, PowerType};
+    use crate::Field;
+    use sts2_core::{PowerAmount, Table as _};
+
+    let data = Power::data(power);
+    let Field::Constant(kind) = data.kind else {
+        unimplemented!("the type {power:?} works out at the time");
+    };
+    let Field::Constant(stack) = data.stack else {
+        unimplemented!("the stacking {power:?} works out at the time");
+    };
+    let Field::Constant(negative) = data.flags.get(PowerFlag::AllowNegative) else {
+        unimplemented!("whether {power:?} allows negatives, which it works out at the time");
+    };
+    let below_zero = match amount {
+        PowerAmount::Counted(amount) => amount < 0,
+        PowerAmount::Endless => false,
+    };
+    match kind {
+        _ if stack == Some(PowerStackType::Counter) && negative && below_zero => true,
+        PowerType::Debuff if !negative && below_zero => false,
+        kind => kind == PowerType::Debuff,
+    }
+}
+
 /// `Dirge`: its `Summon` of Osty once for each energy its X spent. Then as
 /// many Souls go into the draw pile at random, upgraded where Dirge is.
 fn dirge<F: Fight<V>>(fight: &mut F) -> Played<V> {
@@ -346,6 +426,7 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
             Played::Done
         }
         NecrobinderCard::BlightStrike => blight_strike(fight),
+        NecrobinderCard::Misery => misery(fight),
         // `NoEscape`: its calculated Doom on the target.
         NecrobinderCard::NoEscape => {
             use super::super::super::generated::powers::Power;

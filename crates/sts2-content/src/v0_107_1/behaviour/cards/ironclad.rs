@@ -388,9 +388,10 @@ fn whirlwind<F: Fight<V>>(fight: &mut F) -> Played<V> {
 }
 
 /// Deliver a notification to one Ironclad card in the fight.
-pub(super) fn event_hook(
+pub(super) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
     card: IroncladCard,
     id: sts2_core::CardId<V>,
+    printed: &P,
     history: sts2_core::History<'_, V>,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
@@ -429,7 +430,10 @@ pub(super) fn event_hook(
         // `DrumOfBattle.AfterCardExhausted`, for its own exhaust alone.
         (IroncladCard::DrumOfBattle, EventHook::CardExhausted { id: exhausted, .. }) => {
             if exhausted == id {
-                unimplemented!("a Drum of Battle exhausted, which gains energy for each play")
+                asked.push(HookEffect::GainEnergyForEachPlay {
+                    card: id,
+                    energy: printed.face(CardVar::Energy),
+                });
             }
         }
         (card, hook) => unimplemented!("what {card:?} does for {hook:?}"),

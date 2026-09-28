@@ -2362,8 +2362,29 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.add_at_random_here(card, pile)
     }
 
-    fn modify_power_amount(&mut self, creature: CombatId, power: V::Power, amount: V::Number) {
-        self.modify_amount_from(creature, power, amount, Some(creature));
+    fn modify_power_amount(
+        &mut self,
+        creature: CombatId,
+        power: V::Power,
+        amount: V::Number,
+        applier: Option<CombatId>,
+    ) {
+        self.modify_amount_from(creature, power, amount, applier);
+    }
+
+    fn powers_on(&self, creature: CombatId) -> Vec<sts2_core::HeldInstance<V>> {
+        use sts2_core::PowerModel as _;
+
+        self.live
+            .powers
+            .of(creature)
+            .map(|held| sts2_core::HeldInstance {
+                power: held.power(),
+                amount: held.amount.amount(),
+                applier: held.applier,
+                fresh: held.state == V::PowerState::new(held.power()),
+            })
+            .collect()
     }
 
     fn set_max_and_current_hp(&mut self, creature: CombatId, hp: V::Health) {
@@ -2473,6 +2494,16 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn apply_power(&mut self, at: CombatId, power: V::Power, amount: PowerAmount<V::Number>) {
         self.land(at, power, amount, Some(self.actor));
+    }
+
+    fn apply_power_from(
+        &mut self,
+        at: CombatId,
+        power: V::Power,
+        amount: PowerAmount<V::Number>,
+        applier: Option<CombatId>,
+    ) {
+        self.land(at, power, amount, applier);
     }
 
     fn apply_to_opponents(&mut self, power: V::Power, amount: PowerAmount<V::Number>) {
@@ -3005,6 +3036,15 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         });
     }
 
+    fn generate_play_count(&mut self, card: CardId<V>) -> V::Number {
+        let held = self
+            .live
+            .cards
+            .named(card)
+            .unwrap_or_else(|| unimplemented!("a play count for a card that left the fight"));
+        super::play::play_count::<V, _>(self.live, &mut self.rngs, self.relics, &held)
+    }
+
     fn next_energy_cost(&mut self, below: u8) -> V::Number {
         use sts2_core::rng::GameRng as _;
 
@@ -3262,6 +3302,26 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn hittable_opponents(&self) -> sts2_core::Opponents {
         Board::hittable_opponents(self).into_iter().collect()
+    }
+
+    fn add_this(&mut self, pile: Pile, position: sts2_core::PilePosition) {
+        let playing = self
+            .playing
+            .unwrap_or_else(|| unimplemented!("a card moving itself with none being played"));
+        if !self.live.cards.in_play(playing) {
+            unimplemented!("a card moving itself from outside the play pile");
+        }
+        if pile == Pile::Hand {
+            unimplemented!("a card putting itself into the hand");
+        }
+        self.live.cards.leave_play(playing, Some(pile), position);
+    }
+
+    fn this_has_keyword(&self, keyword: V::CardKeyword) -> bool {
+        self.acting()
+            .unwrap_or_else(|| unimplemented!("the keywords of no card being played"))
+            .face
+            .has_keyword(keyword)
     }
 
     fn discard_this(&mut self) {

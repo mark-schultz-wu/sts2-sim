@@ -18,6 +18,12 @@ pub(crate) fn apply<V: Rules, F: Fight<V>>(
     for effect in asked {
         match effect {
             HookEffect::GainEnergy(amount) => fight.modify_energy(amount),
+            HookEffect::GainEnergyForEachPlay { card, energy } => {
+                let plays = fight.generate_play_count(card);
+                for _ in 0..num_traits::ToPrimitive::to_usize(&plays).unwrap_or(0) {
+                    fight.modify_energy(energy);
+                }
+            }
             HookEffect::LoseEnergy(amount) => fight.modify_energy(-amount),
             HookEffect::Draw(amount) => fight.draw(amount),
             HookEffect::GainStars(amount) => fight.gain_stars(amount),

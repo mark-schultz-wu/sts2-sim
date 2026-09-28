@@ -29,7 +29,7 @@ fn frantic_escape<F: Fight<V>>(fight: &mut F) -> sts2_core::Played<V> {
         })
         .map(|creature| creature.id());
     if let Some(pit) = pit {
-        fight.modify_power_amount(pit, Power::SandpitPower, 1);
+        fight.modify_power_amount(pit, Power::SandpitPower, 1, Some(pit));
     }
     fight.modify_this(
         sts2_core::Change::ChangeCost(sts2_core::CostPool::Energy, 1),

@@ -598,7 +598,7 @@ fn result_pile<V: Rules>(
 ///
 /// A listener other than a power changing the count, or one that does
 /// something other than add plays.
-fn play_count<V: Rules, S: LendsCombat>(
+pub(super) fn play_count<V: Rules, S: LendsCombat>(
     live: &mut Live<V>,
     streams: &mut S,
     relics: &mut crate::run::Belt<V>,
@@ -982,8 +982,18 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
         return Ok(ended);
     };
 
+    // `AfterCardPlayedCleanup`, wherever the card went.
     next.cards
-        .write_in_play(play.id, super::live::Face::was_played);
+        .write_named(play.id, super::live::Face::was_played);
+
+    // `Pile.Type == PileType.Play`: a card that put itself elsewhere while it
+    // ran stays there.
+    if !next.cards.in_play(play.id) {
+        if outermost && ended == Some(super::Ended::Won) {
+            super::listen::combat_ended::<V>(next, relics);
+        }
+        return Ok(ended);
+    }
 
     // Where the result pile said, worked out before the first play. A full
     // hand sends the card to the discard pile instead.

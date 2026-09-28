@@ -1658,6 +1658,18 @@ pub trait Fight<V: ContentVersion> {
     /// and the fight only has to put it somewhere.
     fn apply_power(&mut self, at: crate::CombatId, power: V::Power, amount: PowerAmount<V::Number>);
 
+    /// `PowerCmd.Apply(power, at, amount, applier, this)`, for a copy whose
+    /// applier is the original's rather than whoever is acting.
+    fn apply_power_from(
+        &mut self,
+        _at: crate::CombatId,
+        _power: V::Power,
+        _amount: PowerAmount<V::Number>,
+        _applier: Option<crate::CombatId>,
+    ) {
+        unimplemented!("a power applied on another creature's behalf")
+    }
+
     /// What the acting monster's move advertises it will hit for.
     ///
     /// A move's damage and the intent beside it are one number in the game:
@@ -1785,6 +1797,17 @@ pub trait Fight<V: ContentVersion> {
 
     /// `CardCmd.Discard(this)`, for the card whose behavior is running.
     fn discard_this(&mut self);
+
+    /// `CardPileCmd.Add(this, pile, position)`, for the card being played,
+    /// which then stays there rather than going to its result pile.
+    fn add_this(&mut self, _pile: crate::Pile, _position: PilePosition) {
+        unimplemented!("a card moving itself as it is played")
+    }
+
+    /// `Keywords.Contains(keyword)` for the card being played.
+    fn this_has_keyword(&self, _keyword: V::CardKeyword) -> bool {
+        unimplemented!("reading the keywords of the card being played")
+    }
 
     /// `act` on each of `cards`, from the pile each stands in. A Sly card
     /// discarded answers by playing itself.
@@ -1951,14 +1974,20 @@ pub trait Fight<V: ContentVersion> {
     }
 
     /// `PowerCmd.ModifyAmount` on `creature`'s `power`, by a signed amount,
-    /// from the creature holding it.
+    /// from `applier`.
     fn modify_power_amount(
         &mut self,
         _creature: crate::CombatId,
         _power: V::Power,
         _amount: V::Number,
+        _applier: Option<crate::CombatId>,
     ) {
         unimplemented!("a power's amount moved")
+    }
+
+    /// `creature.Powers`: each instance it holds, in the order it holds them.
+    fn powers_on(&self, _creature: crate::CombatId) -> Vec<HeldInstance<V>> {
+        unimplemented!("listing a creature's powers")
     }
 
     /// `PowerCmd.Remove` of `power` from `creature`, where it holds one.
@@ -2136,6 +2165,13 @@ pub trait Fight<V: ContentVersion> {
     /// game's card order, then shuffled.
     fn stable_shuffle_cards(&mut self, _cards: &mut [crate::CardAt<V>], _stream: V::RunRngType) {
         unimplemented!("shuffling cards named in the fight")
+    }
+
+    /// `CardModel.GeneratePlayCount(null)` for the copy `card` names,
+    /// wherever it stands: its replays and one, through
+    /// `ModifyCardPlayCount`, then `AfterModifyingCardPlayCount`.
+    fn generate_play_count(&mut self, _card: crate::CardId<V>) -> V::Number {
+        unimplemented!("a play count worked out outside a play")
     }
 
     /// `CombatEnergyCosts.NextInt(below)`: a cost drawn at random.
@@ -3314,6 +3350,18 @@ pub enum PowerVirtual {
     AfterRemoved,
 }
 
+/// One power instance a creature holds, as a card that copies it reads it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HeldInstance<V: ContentVersion> {
+    pub power: V::Power,
+    pub amount: PowerAmount<V::Number>,
+    /// `PowerModel.Applier`.
+    pub applier: Option<crate::CombatId>,
+    /// Whether its model holds nothing a new one does not. A new model is
+    /// then the copy `ClonePreservingMutability` makes.
+    pub fresh: bool,
+}
+
 /// Which cards a hook writes on, for [`HookEffect::AddReplays`] and
 /// [`HookEffect::AddKeyword`].
 ///
@@ -4063,6 +4111,12 @@ pub enum HookEffect<V: ContentVersion> {
     },
     /// `PlayerCmd.GainEnergy`.
     GainEnergy(V::Number),
+    /// `GeneratePlayCount(null)` for the copy `card` names, then
+    /// `PlayerCmd.GainEnergy(energy)` once for each play it counts.
+    GainEnergyForEachPlay {
+        card: crate::CardId<V>,
+        energy: V::Number,
+    },
     /// `PlayerCmd.LoseEnergy`.
     LoseEnergy(V::Number),
     /// `CardPileCmd.Draw` for the player.

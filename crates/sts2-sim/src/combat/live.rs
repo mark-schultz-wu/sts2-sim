@@ -50,7 +50,10 @@ pub(crate) type PowerList<V> = Bounded<HeldPower<V>, POWERS>;
 const POWERS: usize = 16;
 
 /// How many creatures a fight holds, summons included.
-pub(crate) const CREATURES: usize = 8;
+///
+/// The most slots an encounter has is six. Beside them stand the player,
+/// Osty and a Byrdpip.
+pub(crate) const CREATURES: usize = 10;
 
 /// How many powers a fight holds that skip their next tick.
 const SKIPS: usize = 32;
@@ -2186,6 +2189,14 @@ impl<V: Rules> Live<V> {
                     unimplemented!("{power:?} taking block as it comes off")
                 }
                 sts2_core::HookEffect::LoseBlock => {}
+                // `BaseReplayCount` over `AllCards`, the play and exhaust piles
+                // among them.
+                sts2_core::HookEffect::AddReplays {
+                    to: sts2_core::Writing::EveryCopyOf(card),
+                    amount,
+                } => self
+                    .cards
+                    .write_all_cards(|held| held.ident.card == card, |held| held.replay(amount)),
                 // `CardCmd.ClearAffliction` over `AllCards`.
                 sts2_core::HookEffect::ClearAffliction(sts2_core::Writing::EveryAfflictedWith(
                     affliction,

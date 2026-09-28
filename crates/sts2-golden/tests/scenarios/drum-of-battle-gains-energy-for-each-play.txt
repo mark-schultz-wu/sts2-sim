@@ -1,0 +1,12 @@
+# Drum of Battle, exhausted, works out its play count and gains its energy
+# once for each play. Brand spends one Duplication on its own play count,
+# plays twice, and exhausts the Drum first. The Drum's own play count then
+# spends the second Duplication and gains its energy twice.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"DUPLICATION_POWER","amount":2,"target":0}
+{"cmd":"grant","card":"DRUM_OF_BATTLE"}
+{"cmd":"grant","card":"BRAND"}
+{"cmd":"play_card","index":6}
+{"cmd":"answer","cards":[5]}
+{"cmd":"answer","cards":[0]}

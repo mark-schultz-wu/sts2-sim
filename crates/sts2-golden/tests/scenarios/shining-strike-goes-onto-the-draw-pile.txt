@@ -1,0 +1,9 @@
+# Shining Strike hits and gives its stars, then puts itself on top of the
+# draw pile rather than going to the discard pile. The next turn draws it
+# first, and it does the same again.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"BYGONE_EFFIGY_ELITE"}
+{"cmd":"grant","card":"SHINING_STRIKE"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":0,"target":1}
