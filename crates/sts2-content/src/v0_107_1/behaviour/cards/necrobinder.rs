@@ -234,6 +234,30 @@ fn bone_shards<F: Fight<V>>(fight: &mut F) -> Played<V> {
     Played::Done
 }
 
+/// `BlightStrike`: its damage to the target, then as much Doom on it as the
+/// attack's hits dealt, block included.
+fn blight_strike<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use super::super::super::generated::powers::Power;
+
+    let target = fight.target();
+    let results = fight.attack(Scaling::Dynamic, |fight| {
+        let attack = fight.resolve(Effect::Attack {
+            dealer: fight.actor(),
+            target,
+            damage: Amount::Var(CardVar::Damage),
+            scaling: Scaling::Dynamic,
+        });
+        fight.apply(attack);
+    });
+    let doom = results.iter().map(|result| result.total).sum();
+    fight.apply_power(
+        target,
+        Power::DoomPower,
+        sts2_core::PowerAmount::Counted(doom),
+    );
+    Played::Done
+}
+
 /// `Dirge`: its `Summon` of Osty once for each energy its X spent. Then as
 /// many Souls go into the draw pile at random, upgraded where Dirge is.
 fn dirge<F: Fight<V>>(fight: &mut F) -> Played<V> {
@@ -300,6 +324,7 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
         NecrobinderCard::Eradicate => eradicate(fight),
         NecrobinderCard::GraveWarden => grave_warden(fight),
         NecrobinderCard::Dirge => dirge(fight),
+        NecrobinderCard::BlightStrike => blight_strike(fight),
         // `NoEscape`: its calculated Doom on the target.
         NecrobinderCard::NoEscape => {
             use super::super::super::generated::powers::Power;

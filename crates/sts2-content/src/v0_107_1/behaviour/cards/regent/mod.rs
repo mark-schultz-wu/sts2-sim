@@ -28,6 +28,14 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
         RegentCard::Radiate => uncommon::radiate(fight),
         RegentCard::LunarBlast => uncommon::lunar_blast(fight),
         RegentCard::HeavenlyDrill => heavenly_drill(fight),
+        // `Monologue`: one Monologue on its owner, whose Strength is the
+        // card's `Power`, which the power's own constant holds.
+        RegentCard::Monologue => {
+            use super::super::super::generated::powers::Power;
+
+            fight.apply_to_actor(Power::MonologuePower, sts2_core::PowerAmount::Counted(1));
+            Played::Done
+        }
         RegentCard::KnockoutBlow => knockout_blow(fight),
         RegentCard::PhotonCut => photon_cut(fight),
         RegentCard::SummonForth => summon_forth(fight),

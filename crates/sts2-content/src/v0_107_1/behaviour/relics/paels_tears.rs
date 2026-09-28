@@ -28,6 +28,7 @@ pub(super) fn event_hook(
         EventHook::BeforeSideTurnEnd {
             side: CombatSide::Player,
             energy,
+            ..
         } => state.had_leftover = energy > 0,
         // `AfterSideTurnStart`: `PlayerCmd.GainEnergy` after a turn that
         // ended with energy left.

@@ -1,0 +1,11 @@
+# Escape Plan draws a card and gives its block only when that card is a
+# Skill. The three draw a Survivor, a Defend and a Strike, so only the
+# first two give block.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"ESCAPE_PLAN"}
+{"cmd":"play_card","index":7}
+{"cmd":"grant","card":"ESCAPE_PLAN"}
+{"cmd":"play_card","index":8}
+{"cmd":"grant","card":"ESCAPE_PLAN"}
+{"cmd":"play_card","index":9}

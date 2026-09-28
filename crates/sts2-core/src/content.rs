@@ -963,6 +963,21 @@ pub enum EnchantmentStatus {
     Disabled,
 }
 
+/// One `DamageResult`: what a hit did to one creature it reached.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DamageResult<V: ContentVersion> {
+    pub receiver: crate::CombatId,
+    /// `TotalDamage`: what the block took and what the hit points lost.
+    pub total: V::Number,
+    /// `OverkillDamage`: what the hit had left once the hit points ran out.
+    pub overkill: V::Number,
+    /// `WasTargetKilled`.
+    pub killed: bool,
+}
+
+/// `AttackCommand.Results`: every hit's results, in the order they landed.
+pub type AttackResults<V> = smallvec::SmallVec<[DamageResult<V>; 4]>;
+
 /// The player's current and maximum hit points.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlayerHealth<V: ContentVersion> {
@@ -1655,12 +1670,12 @@ pub trait Fight<V: ContentVersion> {
     fn intent_repeats(&self) -> V::Count;
 
     /// `AttackCommand.Execute` from the acting creature, whose hits are
-    /// `hits`.
+    /// `hits`, and the command's `Results`.
     ///
     /// `BeforeAttack` before the first hit and `AfterAttack` after the last,
     /// once each however many hits land. A command whose attacker is dead, or
     /// that starts as the fight is ending, does neither and lands nothing.
-    fn attack(&mut self, scaling: Scaling, hits: impl FnOnce(&mut Self))
+    fn attack(&mut self, scaling: Scaling, hits: impl FnOnce(&mut Self)) -> AttackResults<V>
     where
         Self: Sized;
 
@@ -1672,10 +1687,17 @@ pub trait Fight<V: ContentVersion> {
         _attacker: crate::CombatId,
         _scaling: Scaling,
         _hits: impl FnOnce(&mut Self),
-    ) where
+    ) -> AttackResults<V>
+    where
         Self: Sized,
     {
         unimplemented!("an attack from a creature other than the one acting")
+    }
+
+    /// The results the attack command under way has gathered so far, which a
+    /// hit inside it can read before the command ends.
+    fn attack_results(&self) -> AttackResults<V> {
+        unimplemented!("reading an attack's results as it lands")
     }
 
     /// Perform the acting monster's advertised attack against every opponent.
@@ -1968,6 +1990,17 @@ pub trait Fight<V: ContentVersion> {
         _unblockable: bool,
     ) {
         unimplemented!("unpowered damage")
+    }
+
+    /// The number the card being resolved keeps on its own model, which
+    /// [`HookEffect::NoteOnSelf`] wrote. Nothing written is zero.
+    fn self_note(&self) -> V::Number {
+        unimplemented!("a number a card keeps on itself")
+    }
+
+    /// Write the number the card being resolved keeps on its own model.
+    fn set_self_note(&mut self, _note: V::Number) {
+        unimplemented!("a number a card keeps on itself")
     }
 
     /// `CreatureCmd.Kill`: `creature` loses what hit points it has, and dies.
@@ -3019,6 +3052,9 @@ pub enum EventHook<V: ContentVersion> {
         side: V::CombatSide,
         /// The player's `PlayerCombatState.Energy`, which a listener reads.
         energy: V::Count,
+        /// How many cards the player's hand holds, which a card in it reads
+        /// off its own pile.
+        hand: usize,
     },
     SideTurnEnd {
         side: V::CombatSide,
@@ -4028,6 +4064,9 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CardCmd.Upgrade` on a clone of the card the hook names, which takes
     /// its place.
     UpgradeCard,
+    /// Keep this number on the card that asked, as a field of its own model
+    /// that it prints nowhere.
+    NoteOnSelf(V::Number),
     /// `CardPileCmd.Add(this, PileType.Hand)` for the card that asked, where
     /// it stands in `only_from`, or anywhere but the hand with none named.
     AddSelfToHand {
@@ -4206,8 +4245,8 @@ pub struct CardOwner<'a, V: ContentVersion> {
     pub osty_max_hp: Option<V::Health>,
     /// How many cards the owner's draw pile holds.
     pub draw: usize,
-    /// How many cards the owner's exhaust pile holds.
-    pub exhaust: usize,
+    /// The cards in the owner's exhaust pile.
+    pub exhaust: &'a [V::Card],
     /// How many cards the owner's hand holds besides this one.
     pub hand_besides: usize,
     /// The powers of every living enemy, one creature's after another's.
@@ -4425,9 +4464,11 @@ pub trait Hooks: ContentVersion {
     /// `printed`.
     ///
     /// `history` is the fight's, which a card reads the way a power does.
+    /// `pile` is where the copy stands, and nothing in the play pile.
     fn card_event_hook<P: Printed<Self> + ?Sized>(
         card: Self::Card,
         id: crate::CardId<Self>,
+        pile: Option<crate::Pile>,
         printed: &P,
         history: History<'_, Self>,
         hook: EventHook<Self>,

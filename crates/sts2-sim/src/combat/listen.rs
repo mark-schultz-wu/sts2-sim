@@ -365,6 +365,7 @@ fn raise<V: Rules>(
                     V::card_event_hook(
                         card.face.ident.card,
                         id,
+                        live.cards.pile_of(id),
                         &card,
                         live.history(),
                         hook,

@@ -1,0 +1,13 @@
+# Soul Storm deals two more for each Soul in the exhaust pile, and nothing
+# for the other cards there. Two Souls and the card True Grit exhausts
+# lie there, so it deals thirteen.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"SOUL"}
+{"cmd":"play_card","index":5}
+{"cmd":"grant","card":"SOUL"}
+{"cmd":"play_card","index":7}
+{"cmd":"grant","card":"TRUE_GRIT"}
+{"cmd":"play_card","index":9}
+{"cmd":"grant","card":"SOUL_STORM"}
+{"cmd":"play_card","index":8,"target":1}

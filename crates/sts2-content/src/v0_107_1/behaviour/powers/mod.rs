@@ -91,6 +91,12 @@ pub enum State {
     Sloth {
         played: Number,
     },
+    /// `MonologuePower`: its own `amountsForPlayedCards`, and
+    /// `StrengthApplied`, the Strength it has lent this turn.
+    Monologue {
+        playing: [Option<(sts2_core::CardId<V>, Number)>; NOTED_AT_ONCE],
+        applied: Number,
+    },
     /// `amountsForPlayedCards`, which Strangle, Oblivion and Afterimage keep:
     /// each card started and not finished, with the stack as it began.
     Noted {
@@ -105,7 +111,7 @@ const NOTED_AT_ONCE: usize = 2;
 
 /// `amountsForPlayedCards.Add`: `id`'s play noted with the stack as it began.
 fn note(state: &mut State, id: sts2_core::CardId<V>, amount: Number) {
-    let State::Noted { playing, .. } = state else {
+    let (State::Noted { playing, .. } | State::Monologue { playing, .. }) = state else {
         unreachable!("plays noted for {:?}", state.power())
     };
     let Some(free) = playing.iter_mut().find(|slot| slot.is_none()) else {
@@ -120,7 +126,7 @@ fn note(state: &mut State, id: sts2_core::CardId<V>, amount: Number) {
 /// `amountsForPlayedCards.Remove`: the stack noted as `id`'s play began, if
 /// it was noted.
 fn take_noted(state: &mut State, id: sts2_core::CardId<V>) -> Option<Number> {
-    let State::Noted { playing, .. } = state else {
+    let (State::Noted { playing, .. } | State::Monologue { playing, .. }) = state else {
         unreachable!("plays noted for {:?}", state.power())
     };
     playing
@@ -163,6 +169,10 @@ impl sts2_core::PowerModel<V> for State {
             Power::CurlUpPower => Self::CurlUp { played: None },
             Power::SurroundedPower => Self::Surrounded { facing_left: false },
             Power::SlothPower => Self::Sloth { played: 0 },
+            Power::MonologuePower => Self::Monologue {
+                playing: [None; NOTED_AT_ONCE],
+                applied: 0,
+            },
             Power::StranglePower
             | Power::OblivionPower
             | Power::AfterimagePower
@@ -193,6 +203,7 @@ impl sts2_core::PowerModel<V> for State {
             Self::Surrounded { .. } => Power::SurroundedPower,
             Self::Sloth { .. } => Power::SlothPower,
             Self::Noted { power, .. } => *power,
+            Self::Monologue { .. } => Power::MonologuePower,
         }
     }
 
@@ -454,6 +465,10 @@ const AUTOMATION_CARDS: u8 = 10;
 /// `PaleBlueDotPower.cardPlayThresholdValue`: the plays its owner finishes in
 /// one turn for the next turn's hand to grow.
 const PALE_BLUE_DOT_PLAYS: usize = 5;
+
+/// `MonologuePower`'s Strength, which Monologue sets to its own
+/// `DynamicVar("Power", 1)`, and which no upgrade changes.
+const MONOLOGUE_STRENGTH: Number = 1;
 
 /// `ConfusedPower.NextEnergyCost`'s `NextInt(4)`.
 const CONFUSED_COSTS: u8 = 4;
@@ -1900,6 +1915,39 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Self-Forming Clay")
         }
         (Power::SelfFormingClayPower, _, EventHook::BlockCleared { .. }) => None,
+        // `MonologuePower.BeforeCardPlayed`: a play of its owner's noted with
+        // its Strength, which the card that applied it set to its own
+        // `Power`, one. A fight here has one player.
+        (Power::MonologuePower, _, EventHook::CardPlaying { id, .. })
+            if owner == CombatSide::Player =>
+        {
+            note(state, id, MONOLOGUE_STRENGTH);
+            None
+        }
+        // `MonologuePower.AfterCardPlayed`: the Strength noted lent to its
+        // owner, and counted as lent.
+        (Power::MonologuePower, _, EventHook::CardPlayed { id, .. }) => {
+            take_noted(state, id).map(|lent| {
+                let State::Monologue { applied, .. } = state else {
+                    unreachable!("Strength counted for {:?}", state.power())
+                };
+                *applied += MONOLOGUE_STRENGTH;
+                HookEffect::ApplyToOwner(Power::StrengthPower, PowerAmount::Counted(lent))
+            })
+        }
+        // `MonologuePower.AfterSideTurnEnd` on its owner's side: gone, and
+        // all it lent taken back.
+        (Power::MonologuePower, _, EventHook::SideTurnEnd { side }) if side == owner => {
+            let State::Monologue { applied, .. } = state else {
+                unreachable!("Strength counted for {:?}", state.power())
+            };
+            asked.extend([
+                HookEffect::Remove,
+                HookEffect::ApplyToOwner(Power::StrengthPower, PowerAmount::Counted(-*applied)),
+            ]);
+            return;
+        }
+        (Power::MonologuePower, _, EventHook::SideTurnEnd { .. }) => None,
         // `SubroutinePower.BeforeCardPlayed`: a Power its owner plays noted
         // with the stack as it begins. A fight here has one player.
         (Power::SubroutinePower, PowerAmount::Counted(amount), EventHook::CardPlaying { card, id, .. })

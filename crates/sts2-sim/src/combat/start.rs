@@ -101,6 +101,7 @@ pub(crate) fn enter<V: Rules>(
         skip_tick: Bounded::new(),
         card_ids: CardIds::new(),
         attacks: 0,
+        notes: smallvec::SmallVec::new(),
         asking: None,
     });
 
