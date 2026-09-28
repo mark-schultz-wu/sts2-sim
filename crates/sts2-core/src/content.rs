@@ -2359,6 +2359,12 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("auto-playing from the draw pile")
     }
 
+    /// [`Fight::auto_play_card`] with `target` named, which a card aimed at
+    /// one enemy plays at rather than drawing one.
+    fn auto_play_card_at(&mut self, _card: crate::CardAt<V>, _target: crate::CombatId) {
+        unimplemented!("auto-playing a card at a named target")
+    }
+
     /// `CardCmd.AutoPlay` of the card at one place, with no target named.
     /// Nothing once the fight is ending or its owner is dead.
     fn auto_play_card(&mut self, _card: crate::CardAt<V>) {

@@ -1488,7 +1488,7 @@ pub(super) fn play_sly<V: Rules>(
         else {
             unimplemented!("a Sly card that left every pile before it played");
         };
-        let ended = super::play::auto_play::<V>(live, rngs.reborrow(), relics, id, from);
+        let ended = super::play::auto_play::<V>(live, rngs.reborrow(), relics, id, from, None);
         if ended.is_some() {
             return ended;
         }

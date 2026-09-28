@@ -55,6 +55,38 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
             fight.add_generated_cards(shiv, Pile::Hand, count);
             Played::Done
         }
+        // `KnifeTrap`: each Shiv of the exhaust pile, upgraded where Knife
+        // Trap is, auto-played at its target, one at a time.
+        SilentCard::KnifeTrap => {
+            let target = fight.target();
+            let shivs: Vec<_> = fight
+                .cards_in(Pile::Exhaust)
+                .into_iter()
+                .filter(|&at| {
+                    sts2_core::CardTable::tagged(
+                        fight.card_ident(at).card,
+                        sts2_core::CardTagKinds::SHIV,
+                    )
+                })
+                .map(|at| at.id())
+                .collect();
+            let upgraded = fight.upgraded();
+            for id in shivs {
+                let find = |fight: &F| {
+                    fight
+                        .cards_in(Pile::Exhaust)
+                        .into_iter()
+                        .find(|at| at.id() == id)
+                };
+                if upgraded && let Some(at) = find(fight) {
+                    fight.modify_card(at, Change::Upgrade, Lasting::ThisFight);
+                }
+                if let Some(at) = find(fight) {
+                    fight.auto_play_card_at(at, target);
+                }
+            }
+            Played::Done
+        }
         // `Scare`: one Weak on each enemy that can be hit.
         SilentCard::Scare => {
             for target in fight.hittable_opponents() {

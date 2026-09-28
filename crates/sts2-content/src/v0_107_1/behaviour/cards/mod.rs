@@ -260,6 +260,17 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
             let hits = Number::try_from(hits).expect("a turn's hits fit the game's numbers");
             printed.face(CardVar::CalculationBase) + printed.face(CardVar::CalculationExtra) * hits
         }
+        // `KnifeTrap`: a base, and more for each Shiv in its owner's exhaust
+        // pile.
+        (Cards::Silent(SilentCard::KnifeTrap), CardVar::CalculatedShivs) => {
+            let shivs = owner
+                .exhaust
+                .iter()
+                .filter(|&&card| sts2_core::CardTable::tagged(card, sts2_core::CardTagKinds::SHIV))
+                .count();
+            let shivs = Number::try_from(shivs).expect("an exhaust pile fits the game's numbers");
+            printed.face(CardVar::CalculationBase) + printed.face(CardVar::CalculationExtra) * shivs
+        }
         // `TearAsunder`: a base, and more for each of one and the hits this
         // fight that took hit points from its owner.
         (Cards::Ironclad(IroncladCard::TearAsunder), CardVar::CalculatedHits) => {

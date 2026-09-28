@@ -3682,6 +3682,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 self.rngs.reborrow(),
                 self.relics,
                 card,
+                None,
             );
             if ended.is_some() {
                 self.ended = ended;
@@ -3783,6 +3784,22 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             self.relics,
             card.id(),
             card.pile(),
+            None,
+        );
+    }
+
+    fn auto_play_card_at(&mut self, card: CardAt<V>, target: CombatId) {
+        if self.ended.is_some() || self.ending() || !self.live.player().alive {
+            return;
+        }
+        self.standing(card);
+        self.ended = super::play::auto_play::<V>(
+            self.live,
+            self.rngs.reborrow(),
+            self.relics,
+            card.id(),
+            card.pile(),
+            Some(target),
         );
     }
 
@@ -4431,6 +4448,7 @@ pub(super) fn draw_pausing<V: Rules>(
                             relics,
                             card,
                             Pile::Hand,
+                            None,
                         );
                     }
                 }
