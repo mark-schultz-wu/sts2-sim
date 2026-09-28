@@ -2071,6 +2071,16 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("a random orb")
     }
 
+    /// `CardCmd.Afflict` on each card `to` names.
+    fn afflict(&mut self, _to: Writing<V>, _affliction: V::Affliction) {
+        unimplemented!("afflicting the cards a fight holds")
+    }
+
+    /// `CardCmd.ClearAffliction` on each card `to` names.
+    fn clear_affliction(&mut self, _to: Writing<V>) {
+        unimplemented!("clearing the cards a fight holds")
+    }
+
     /// `change` written on each card `to` names, for the rest of the fight.
     fn modify_cards(&mut self, _to: Writing<V>, _change: Change<V>) {
         unimplemented!("writing on the cards a fight holds")
@@ -3132,6 +3142,8 @@ pub enum EventHook<V: ContentVersion> {
     CardPlaying {
         card: V::Card,
         id: crate::CardId<V>,
+        /// The copy's `Affliction`.
+        affliction: Option<V::Affliction>,
         /// `CardPlay.Target`.
         target: Option<crate::CombatId>,
         /// `Keywords.Contains(Ethereal)` for the copy.
@@ -3252,6 +3264,8 @@ pub enum EventHook<V: ContentVersion> {
     AfterDeath {
         creature: crate::CombatId,
         side: V::CombatSide,
+        /// `Creature.Monster`, which is nothing for the player.
+        monster: Option<V::Monster>,
         /// `wasRemovalPrevented`: a `ShouldDie` listener kept the creature
         /// alive. The fight asks no `ShouldDie`, so it raises this for no
         /// death but one that happened.
@@ -3466,6 +3480,8 @@ pub enum Writing<V: ContentVersion> {
     /// Every card the fight holds that carries this affliction, in every
     /// pile.
     EveryAfflictedWith(V::Affliction),
+    /// One copy, named by its id wherever it stands.
+    Named(crate::CardId<V>),
 }
 
 /// One `CardPlayStartedEntry` in `CombatManager.History`: a card's play that
@@ -3509,6 +3525,9 @@ pub enum HistoryEntry<V: ContentVersion> {
     /// A `StarsModifiedEntry`, by its `Amount`: the change to the player's
     /// stars.
     StarsModified(V::Number),
+    /// A `CardAfflictedEntry` on one of the player's cards, by the
+    /// affliction. Its `Actor` is the card's owner.
+    Afflicted(V::Affliction),
 }
 
 /// One `BlockGainedEntry` in `CombatManager.History`, as far as a listener
@@ -3625,6 +3644,15 @@ impl<V: ContentVersion> History<'_, V> {
             HistoryEntry::Drawn(card) => Some(*card),
             _ => None,
         })
+    }
+
+    /// How many `CardAfflictedEntry` of `affliction` are where
+    /// `HappenedThisTurn`.
+    pub fn afflicted_this_turn(&self, affliction: V::Affliction) -> usize {
+        self.this_turn
+            .iter()
+            .filter(|entry| **entry == HistoryEntry::Afflicted(affliction))
+            .count()
     }
 
     /// Each `BlockGainedEntry` where `HappenedThisTurn`.
@@ -4369,6 +4397,12 @@ pub enum HookEffect<V: ContentVersion> {
     /// [`HookEffect::InstallMove`] is the other half of the same command, for
     /// the states a power builds rather than names.
     EnterMove(V::MoveId),
+    /// [`HookEffect::EnterMove`] of `to` for the listener's own monster, where
+    /// the move it advertises is `from`.
+    EnterMoveFrom {
+        from: V::MoveId,
+        to: V::MoveId,
+    },
     ///
     /// A power builds the same state every time. So this and the two moves
     /// below point at one the build keeps. A move is the widest thing an
@@ -4735,7 +4769,7 @@ pub trait Hooks: ContentVersion {
     /// [`Hooks::power_event_hook`] for a monster's own model, on `creature`.
     fn monster_event_hook(
         monster: Self::Monster,
-        model: &Self::MonsterState,
+        model: &mut Self::MonsterState,
         creature: crate::CombatId,
         hook: EventHook<Self>,
         asked: &mut HookEffects<Self>,

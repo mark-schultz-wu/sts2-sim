@@ -167,7 +167,8 @@ pub(crate) fn conditional<P: sts2_core::Printed<V> + ?Sized>(
         Monster::LivingShield
         | Monster::FrogKnight
         | Monster::Fabricator
-        | Monster::TestSubject => glory::conditional(monster, at, spawn, model),
+        | Monster::TestSubject
+        | Monster::Queen => glory::conditional(monster, at, spawn, model),
         _ => overgrowth::conditional(monster, at, spawn),
     }
 }
@@ -223,7 +224,7 @@ pub(crate) fn state_of(monster: Monster, wanted: MoveId, at: u8) -> Result<u8, C
 /// An override nobody has ported.
 pub(crate) fn event_hook(
     monster: Monster,
-    model: &Model,
+    model: &mut Model,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
@@ -245,11 +246,18 @@ pub(crate) fn event_hook(
             Monster::Crusher | Monster::Rocket,
             EventHook::CurrentHpChanged { .. } | EventHook::BeforeDeath { .. },
         ) => {}
+        (
+            Monster::Queen,
+            EventHook::AfterDeath {
+                monster: Some(Monster::TorchHeadAmalgam),
+                ..
+            },
+        ) => glory::amalgam_died(model, asked),
         // The Insatiable's own death does nothing but return. The Test
         // Subject's sets its colour and the music, and the Aeonglass's
-        // returns.
+        // returns. The Queen's own sets the music and the portrait.
         (
-            Monster::TheInsatiable | Monster::TestSubject | Monster::Aeonglass,
+            Monster::TheInsatiable | Monster::TestSubject | Monster::Aeonglass | Monster::Queen,
             EventHook::AfterDeath { .. },
         ) => {}
         (Monster::Aeonglass, EventHook::CardGeneratedForCombat { at, card, .. }) => {
@@ -325,7 +333,9 @@ pub(crate) fn perform<F: Fight<V>>(
         | Monster::TheLost
         | Monster::TheForgotten
         | Monster::TestSubject
-        | Monster::Aeonglass => glory::perform(monster, move_id, model, fight),
+        | Monster::Aeonglass
+        | Monster::Queen
+        | Monster::TorchHeadAmalgam => glory::perform(monster, move_id, model, fight),
         _ => monster_moves::perform(monster, move_id, fight),
     }
     Played::Done
@@ -349,6 +359,8 @@ pub enum Model {
     TestSubject { respawns: u8, extra_claws: u8 },
     /// `Aeonglass.AdditionalStrength` and `WitherUpgradeCount`.
     Aeonglass { strength: u8, wither_upgrades: u8 },
+    /// `Queen.HasAmalgamDied`.
+    Queen { amalgam_died: bool },
 }
 
 impl sts2_core::MonsterModel<V> for Model {
@@ -367,6 +379,9 @@ impl sts2_core::MonsterModel<V> for Model {
             Monster::Aeonglass => Self::Aeonglass {
                 strength: 0,
                 wither_upgrades: 0,
+            },
+            Monster::Queen => Self::Queen {
+                amalgam_died: false,
             },
             _ => Self::Stateless,
         }

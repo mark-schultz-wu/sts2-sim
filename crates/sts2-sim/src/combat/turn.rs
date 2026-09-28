@@ -657,6 +657,12 @@ fn before_turn_end<V: Rules>(
                 board.land(player, power, amount, Some(player));
                 ended = ended.or(board.ended);
             }
+            // Written on the fight's cards.
+            (_, effect @ sts2_core::HookEffect::ClearAffliction(_)) => {
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                board.write_cards([effect]);
+            }
             (_, effect) => unimplemented!("a listener asking for {effect:?} before a turn ends"),
         }
     }

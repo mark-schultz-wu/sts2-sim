@@ -283,7 +283,7 @@ impl sts2_core::Hooks for V0_107_1 {
 
     fn monster_event_hook(
         monster: Self::Monster,
-        model: &Self::MonsterState,
+        model: &mut Self::MonsterState,
         _creature: sts2_core::CombatId,
         hook: sts2_core::EventHook<Self>,
         asked: &mut sts2_core::HookEffects<Self>,

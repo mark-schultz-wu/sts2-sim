@@ -72,6 +72,10 @@ pub enum State {
     WitheringPresence {
         cards_left: u8,
     },
+    /// `ChainsOfBindingPower`'s `boundCardPlayed`.
+    ChainsOfBinding {
+        bound_played: bool,
+    },
     /// `SwipePower.StolenCard`.
     Swipe {
         stolen: Option<sts2_core::CardIdent<V>>,
@@ -188,6 +192,9 @@ impl sts2_core::PowerModel<V> for State {
             Power::WitheringPresencePower => Self::WitheringPresence {
                 cards_left: WITHERING_CARDS,
             },
+            Power::ChainsOfBindingPower => Self::ChainsOfBinding {
+                bound_played: false,
+            },
             Power::SwipePower => Self::Swipe { stolen: None },
             Power::VigorPower => Self::Vigor { bound: None },
             Power::FeralPower => Self::Feral { played: 0 },
@@ -231,6 +238,7 @@ impl sts2_core::PowerModel<V> for State {
             Self::Adaptable { .. } => Power::AdaptablePower,
             Self::Nemesis { .. } => Power::NemesisPower,
             Self::WitheringPresence { .. } => Power::WitheringPresencePower,
+            Self::ChainsOfBinding { .. } => Power::ChainsOfBindingPower,
             Self::Swipe { .. } => Power::SwipePower,
             Self::Vigor { .. } => Power::VigorPower,
             Self::Feral { .. } => Power::FeralPower,
@@ -1629,6 +1637,13 @@ pub(crate) fn decide_hook(
             };
             HookResponse::Decision(*played < amount)
         }
+        // `ChainsOfBindingPower.ShouldPlay`: one Bound card a turn.
+        (Power::ChainsOfBindingPower, DecisionHook::ShouldPlay { affliction, .. }) => {
+            let State::ChainsOfBinding { bound_played } = state else {
+                unreachable!("Chains of Binding holding {state:?}")
+            };
+            HookResponse::Decision(affliction != Some(Affliction::Bound) || !*bound_played)
+        }
         (Power::RingingPower, DecisionHook::ShouldPlay { affliction, .. }) => {
             HookResponse::Decision(
                 affliction != Some(Affliction::Ringing)
@@ -2868,6 +2883,52 @@ pub(crate) fn event_hook(
             _,
             EventHook::CardGeneratedForCombat { .. },
         ) => None,
+        // `ChainsOfBindingPower.AfterCardDrawn`, in its owner's turn: Bound on
+        // the card drawn, while fewer cards than its stack were Bound this
+        // turn.
+        (
+            Power::ChainsOfBindingPower,
+            PowerAmount::Counted(amount),
+            EventHook::CardDrawn { id, side, .. },
+        ) if side == owner => {
+            let bound = history.afflicted_this_turn(Affliction::Bound);
+            (Number::try_from(bound).is_ok_and(|bound| bound < amount)).then_some(
+                HookEffect::Afflict {
+                    to: sts2_core::Writing::Named(id),
+                    affliction: Affliction::Bound,
+                },
+            )
+        }
+        (Power::ChainsOfBindingPower, PowerAmount::Endless, EventHook::CardDrawn { .. }) => {
+            unimplemented!("endless Chains of Binding")
+        }
+        (Power::ChainsOfBindingPower, _, EventHook::CardDrawn { .. }) => None,
+        // `BeforeCardPlayed`: a Bound card of its owner's is played.
+        (
+            Power::ChainsOfBindingPower,
+            _,
+            EventHook::CardPlaying {
+                affliction: Some(Affliction::Bound),
+                ..
+            },
+        ) => {
+            *state = State::ChainsOfBinding { bound_played: true };
+            None
+        }
+        (Power::ChainsOfBindingPower, _, EventHook::CardPlaying { .. }) => None,
+        // `BeforeSideTurnEnd`, as its owner's side's turn ends: none played,
+        // and Bound off every card that has it.
+        (Power::ChainsOfBindingPower, _, EventHook::BeforeSideTurnEnd { side, .. })
+            if side == owner =>
+        {
+            *state = State::ChainsOfBinding {
+                bound_played: false,
+            };
+            Some(HookEffect::ClearAffliction(
+                sts2_core::Writing::EveryAfflictedWith(Affliction::Bound),
+            ))
+        }
+        (Power::ChainsOfBindingPower, _, EventHook::BeforeSideTurnEnd { .. }) => None,
         // `WitheringPresencePower.AfterCardPlayed`, for each card its target
         // plays, which is the one player: every sixth, a Wither into the hand.
         (Power::WitheringPresencePower, _, EventHook::CardPlayed { .. }) => {
