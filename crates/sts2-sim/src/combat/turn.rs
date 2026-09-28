@@ -1283,10 +1283,6 @@ pub(super) fn carry_setup<V: Rules>(
     }
 }
 
-/// `count` cards of the character's combat pool that `filter` keeps, each
-/// drawn by `CardFactory.GetDistinctForCombat` off `CombatCardGeneration`
-/// from the pool afresh, in the pool's own order. An empty pool gives
-/// nothing. Each takes `keyword` where one is named, and goes into hand.
 /// `count` distinct colorless cards from one `GetDistinctForCombat` off
 /// `CombatCardGeneration`, into the hand.
 fn generate_distinct_colorless<V: Rules>(
@@ -1311,6 +1307,10 @@ fn generate_distinct_colorless<V: Rules>(
     }
 }
 
+/// `count` cards of the character's combat pool that `filter` keeps, each
+/// drawn by `CardFactory.GetDistinctForCombat` off `CombatCardGeneration`
+/// from the pool afresh, in the pool's own order. An empty pool gives
+/// nothing. Each takes `keyword` where one is named, and goes into hand.
 fn generate_from_pool<V: Rules>(
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,

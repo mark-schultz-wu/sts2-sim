@@ -1,0 +1,10 @@
+# Stratagem's power asks for a card out of the draw pile after a shuffle,
+# and Biiig Hug's Soot goes into the draw pile once the pick is made, since
+# the power hears the shuffle first. The turn-two draw shuffles.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","relic":"BIIIG_HUG"}
+{"cmd":"answer","cards":[0,1,2,3]}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"STRATAGEM_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"answer","cards":[0]}

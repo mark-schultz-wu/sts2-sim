@@ -4036,25 +4036,38 @@ pub(super) fn shuffle_asking<V: Rules>(
     let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
     for (listener, effect) in asked {
         match effect {
-            // The selection waits for the draw to pause, so nothing may
-            // follow it.
+            // The listeners after one that asked wait for the pick, which
+            // waits for the draw to pause.
+            effect @ HookEffect::AddToDrawAtRandom { .. } if asks.is_some() => {
+                board.live.after_pick.push(effect)
+            }
             effect if asks.is_some() => {
                 unimplemented!("{listener:?} asking for {effect:?} after a shuffle's selection")
             }
             HookEffect::SelectFromPile { pile, count, act } => {
                 asks = Some((pile, count, act));
             }
-            HookEffect::AddToDrawAtRandom { card, count } => {
-                let count: usize = num_traits::cast(count)
-                    .unwrap_or_else(|| unimplemented!("{count:?} cards into the draw pile"));
-                for _ in 0..count {
-                    board.add_to_draw_at_random(card);
-                }
-            }
+            effect @ HookEffect::AddToDrawAtRandom { .. } => board.after_shuffle(effect),
             effect => unimplemented!("{listener:?} asking for {effect:?} after a shuffle"),
         }
     }
     asks
+}
+
+impl<V: Rules> Board<'_, V> {
+    /// What an `AfterShuffle` listener asked for, carried out.
+    fn after_shuffle(&mut self, effect: HookEffect<V>) {
+        match effect {
+            HookEffect::AddToDrawAtRandom { card, count } => {
+                let count: usize = num_traits::cast(count)
+                    .unwrap_or_else(|| unimplemented!("{count:?} cards into the draw pile"));
+                for _ in 0..count {
+                    self.add_to_draw_at_random(card);
+                }
+            }
+            effect => unimplemented!("{effect:?} after a shuffle"),
+        }
+    }
 }
 
 /// `CardPileCmd.Draw`, which shuffles the discard pile back in when the draw
@@ -4111,6 +4124,15 @@ pub(super) fn draw_pausing<V: Rules>(
         hand_draw,
         side: live.side,
     };
+    // The `AfterShuffle` listeners that waited for the pick this resumes
+    // from.
+    if resumed && !live.after_pick.is_empty() {
+        let waiting = std::mem::take(&mut live.after_pick);
+        let mut board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+        for effect in waiting {
+            board.after_shuffle(effect);
+        }
+    }
     if !resumed && super::listen::any_decides::<V>(Walk { live, relics }, hook, false) {
         let asked = super::listen::notify::<V>(live, relics, sts2_core::EventHook::DrawPrevented);
         if let Some((listener, effect)) = asked.first() {

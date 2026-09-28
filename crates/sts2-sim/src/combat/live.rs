@@ -1695,6 +1695,9 @@ pub(crate) struct Live<V: Rules> {
     /// What `AfterCombatEnd` asked of the run, which carries it out as it
     /// takes the fight's rewards.
     pub(super) leaving: Vec<sts2_core::HookEffect<V>>,
+    /// What `AfterShuffle` listeners asked for behind one that asked the
+    /// player to pick, which waits for the pick.
+    pub(super) after_pick: Vec<sts2_core::HookEffect<V>>,
     pub(super) creatures: Creatures<V>,
     /// What every creature carries, in the order it gained it.
     pub(super) powers: PowerStore<V>,
@@ -1880,6 +1883,7 @@ impl<V: Rules> Clone for Live<V> {
             history: self.history.clone(),
             kept: self.kept.clone(),
             leaving: self.leaving.clone(),
+            after_pick: self.after_pick.clone(),
             powers: self.powers.clone(),
             orbs: self.orbs.clone(),
             card_ids: self.card_ids.clone(),
@@ -1910,6 +1914,7 @@ impl<V: Rules> Clone for Live<V> {
             extra_cards,
             exhaust_next,
             leaving,
+            after_pick,
             creatures,
             powers,
             orbs,
@@ -1937,6 +1942,7 @@ impl<V: Rules> Clone for Live<V> {
         extra_cards.clone_from(&source.extra_cards);
         exhaust_next.clone_from(&source.exhaust_next);
         leaving.clone_from(&source.leaving);
+        after_pick.clone_from(&source.after_pick);
         creatures.copy_from(&source.creatures);
         powers.clone_from(&source.powers);
         orbs.clone_from(&source.orbs);
@@ -2661,6 +2667,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             extra_cards: Vec::new(),
             exhaust_next: smallvec::SmallVec::new(),
             leaving: Vec::new(),
+            after_pick: Vec::new(),
             creatures: creatures.into_iter().collect(),
             powers: PowerStore::new(),
             orbs: None,

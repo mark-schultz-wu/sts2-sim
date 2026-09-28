@@ -89,6 +89,7 @@ pub(crate) fn enter<V: Rules>(
         extra_cards: Vec::new(),
         exhaust_next: smallvec::SmallVec::new(),
         leaving: Vec::new(),
+        after_pick: Vec::new(),
         creatures: super::live::Creatures::new(),
         powers: PowerStore::new(),
         // Absent rather than an empty queue: the subsystem is inert until
