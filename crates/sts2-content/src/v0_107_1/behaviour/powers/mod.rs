@@ -68,6 +68,10 @@ pub enum State {
     Nemesis {
         intangible: bool,
     },
+    /// `ToricToughnessPower`'s `BlockVar`, which `SetBlock` writes.
+    ToricToughness {
+        block: Number,
+    },
     /// `WitheringPresencePower`'s `CardsLeft`.
     WitheringPresence {
         cards_left: u8,
@@ -172,6 +176,19 @@ pub struct Bound {
     amount: Number,
 }
 
+/// What a card's note does to the power it just applied.
+///
+/// # Panics
+///
+/// A power no card writes on.
+pub(crate) fn noted(state: &mut State, note: Number) {
+    match state {
+        // `ToricToughnessPower.SetBlock`.
+        State::ToricToughness { block } => *block = note,
+        state => unimplemented!("a card writing {note} on {:?}", state.power()),
+    }
+}
+
 impl sts2_core::PowerModel<V> for State {
     fn new(power: Power) -> Self {
         match power {
@@ -189,6 +206,7 @@ impl sts2_core::PowerModel<V> for State {
             Power::ReattachPower => Self::Reattach { reviving: false },
             Power::AdaptablePower => Self::Adaptable { reviving: false },
             Power::NemesisPower => Self::Nemesis { intangible: false },
+            Power::ToricToughnessPower => Self::ToricToughness { block: 0 },
             Power::WitheringPresencePower => Self::WitheringPresence {
                 cards_left: WITHERING_CARDS,
             },
@@ -237,6 +255,7 @@ impl sts2_core::PowerModel<V> for State {
             Self::Reattach { .. } => Power::ReattachPower,
             Self::Adaptable { .. } => Power::AdaptablePower,
             Self::Nemesis { .. } => Power::NemesisPower,
+            Self::ToricToughness { .. } => Power::ToricToughnessPower,
             Self::WitheringPresence { .. } => Power::WitheringPresencePower,
             Self::ChainsOfBinding { .. } => Power::ChainsOfBindingPower,
             Self::Swipe { .. } => Power::SwipePower,
@@ -1926,6 +1945,46 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Vicious")
         }
         (Power::ViciousPower, _, EventHook::PowerAmountChanged { .. }) => None,
+        // `SleightOfFleshPower.AfterPowerAmountChanged`: its stack as damage,
+        // unpowered, on an enemy its owner just debuffed, but not through a
+        // temporary power. The player's side is the player and its pets.
+        (
+            Power::SleightOfFleshPower,
+            PowerAmount::Counted(amount),
+            EventHook::PowerAmountChanged {
+                creature,
+                power: changed,
+                delta,
+                applier: Some(applier),
+            },
+        ) if applier == holder
+            && creature != fight.player()
+            && fight.pet_owner(creature).is_none()
+            && lends(changed).is_none()
+            && debuff_at(changed, delta) =>
+        {
+            Some(HookEffect::Damage {
+                target: creature,
+                amount,
+            })
+        }
+        (Power::SleightOfFleshPower, PowerAmount::Endless, EventHook::PowerAmountChanged { .. }) => {
+            unimplemented!("an endless Sleight of Flesh")
+        }
+        (Power::SleightOfFleshPower, _, EventHook::PowerAmountChanged { .. }) => None,
+        // `ToricToughnessPower.AfterBlockCleared`: its block on its owner,
+        // then one off its turns.
+        (Power::ToricToughnessPower, _, EventHook::BlockCleared { creature, .. })
+            if creature == holder =>
+        {
+            let State::ToricToughness { block } = *state else {
+                unreachable!("Toric Toughness keeps its block")
+            };
+            asked.push(HookEffect::GainBlock(block));
+            asked.push(HookEffect::Decrement);
+            return;
+        }
+        (Power::ToricToughnessPower, _, EventHook::BlockCleared { .. }) => None,
         // `SicEmPower.AfterDamageGiven`: `OstyCmd.Summon` of its stack for the
         // player whose Osty hit its owner, where that player applied it.
         (

@@ -675,6 +675,10 @@ impl<'a, V: Rules> Board<'a, V> {
                 (Listener::Power { .. }, HookEffect::Draw(count)) => {
                     sts2_core::Fight::draw(self, count)
                 }
+                // `CreatureCmd.Damage`, unpowered, from the power's owner.
+                (Listener::Power { owner, .. }, HookEffect::Damage { target, amount }) => {
+                    self.hit_unpowered(Some(owner), target, amount, false)
+                }
                 (_, effect) => cards.push(effect),
             }
         }
@@ -3169,6 +3173,17 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             )
             .is_decision_and(|fatal| !fatal)
         })
+    }
+
+    fn note_on_power(&mut self, creature: CombatId, power: V::Power, note: V::Number) {
+        if let Some(held) = self
+            .live
+            .powers
+            .of_mut(creature)
+            .find(|held| held.power() == power)
+        {
+            <V as sts2_core::Hooks>::power_noted(&mut held.state, note);
+        }
     }
 
     fn procure_random_potion(&mut self, stream: V::RunRngType) {

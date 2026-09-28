@@ -2222,6 +2222,15 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("a potion made mid-fight")
     }
 
+    /// A number a card writes on the instance of `power` that `creature`
+    /// carries, once `PowerCmd.Apply` hands that instance back, as
+    /// `SetBlock` does. `Hooks::power_noted` says what it does there. Nothing
+    /// where the creature carries none, which is `?.` on a power that did not
+    /// land.
+    fn note_on_power(&mut self, _creature: crate::CombatId, _power: V::Power, _note: V::Number) {
+        unimplemented!("a card writing on a power it applied")
+    }
+
     /// `CreatureCmd.GainMaxHp`: the maximum grows by `amount`, then a heal
     /// for as much.
     fn gain_max_hp(&mut self, _creature: crate::CombatId, _amount: V::Number) {
@@ -5133,6 +5142,10 @@ pub trait Hooks: ContentVersion {
     /// What one deck card's own model saves, its `[SavedProperty]` fields,
     /// which the run carries for it between fights.
     type CardState: CardModel<Self>;
+
+    /// What a card's note does to the model of a power it just applied,
+    /// which [`Fight::note_on_power`] hands it.
+    fn power_noted(state: &mut Self::PowerState, note: Self::Number);
 
     fn modify_hook<P: Printed<Self> + ?Sized>(
         listener: Listener<'_, Self, P>,

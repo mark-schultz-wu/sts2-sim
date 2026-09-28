@@ -2028,6 +2028,28 @@ fn clear_block<V: Rules>(
                     live.gain_unpowered_block(owner, amount);
                     live.remove_power(owner, power);
                 }
+                // `CreatureCmd.GainBlock` of a power's unpowered block on its
+                // owner, which runs `Hook.ModifyBlock`.
+                (Listener::Power { owner, .. }, sts2_core::HookEffect::GainBlock(amount)) => {
+                    use sts2_core::Fight as _;
+
+                    let ascension = live.ascension;
+                    let mut board =
+                        Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                    let block = board.resolve(sts2_core::Effect::GainBlock {
+                        recipient: owner,
+                        amount: sts2_core::Amount::Number(amount),
+                        scaling: sts2_core::Scaling::Static,
+                    });
+                    board.apply(block);
+                }
+                // `PowerCmd.Decrement(this)`.
+                (Listener::Power { owner, power, .. }, sts2_core::HookEffect::Decrement) => {
+                    let ascension = live.ascension;
+                    let mut board =
+                        Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                    board.modify_amount(owner, power, -num_traits::one::<V::Number>());
+                }
                 (_, effect) => {
                     unimplemented!("a listener asking for {effect:?} as block clears")
                 }
