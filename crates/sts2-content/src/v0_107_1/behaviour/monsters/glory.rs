@@ -1,10 +1,11 @@
 //! The third act's monsters.
 
-use sts2_core::PowerAmount;
+use sts2_core::{Fight, PowerAmount};
 
+use super::super::super::generated::monster_moves;
 use super::super::super::generated::monsters::{Monster, MoveId};
 use super::super::super::generated::powers::Power;
-use super::Number;
+use super::{Number, V};
 
 /// Powers a Glory monster applies to itself as it enters combat.
 pub(super) fn starting_powers(monster: Monster) -> Option<Vec<(Power, PowerAmount<Number>)>> {
@@ -32,4 +33,25 @@ pub(super) fn conditional(
         monster => unimplemented!("what {monster:?} asks the fight at state {at}"),
     };
     super::state_of(monster, wanted, at)
+}
+
+/// `DevotedSculptor`'s `_ritualGain`.
+const RITUAL: Number = 9;
+
+/// Perform one of the Glory monsters' moves, where the generator left it to
+/// a hand port.
+pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
+    match (monster, move_id) {
+        // `ForbiddenIncantationMove`: Ritual on itself, from nobody.
+        (Monster::DevotedSculptor, MoveId::ForbiddenIncantationMove) => {
+            let actor = fight.actor();
+            fight.apply_power_from(
+                actor,
+                Power::RitualPower,
+                PowerAmount::Counted(RITUAL),
+                None,
+            );
+        }
+        _ => monster_moves::perform(monster, move_id, fight),
+    }
 }

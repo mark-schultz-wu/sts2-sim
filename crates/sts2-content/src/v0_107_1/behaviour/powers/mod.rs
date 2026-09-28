@@ -42,6 +42,10 @@ pub enum State {
     Imbalanced {
         off_balance: bool,
     },
+    /// `RitualPower`'s `WasJustAppliedByEnemy`.
+    Ritual {
+        just_applied: bool,
+    },
     /// `IllusionPower`'s `isReviving`.
     Illusion {
         reviving: bool,
@@ -153,6 +157,9 @@ impl sts2_core::PowerModel<V> for State {
             Power::TenderPower => Self::Tender { counted: 0 },
             Power::DarkEmbracePower => Self::DarkEmbrace { counted: 0 },
             Power::ImbalancedPower => Self::Imbalanced { off_balance: false },
+            Power::RitualPower => Self::Ritual {
+                just_applied: false,
+            },
             Power::IllusionPower => Self::Illusion { reviving: false },
             Power::ReattachPower => Self::Reattach { reviving: false },
             Power::SwipePower => Self::Swipe { stolen: None },
@@ -191,6 +198,7 @@ impl sts2_core::PowerModel<V> for State {
             Self::Tender { .. } => Power::TenderPower,
             Self::DarkEmbrace { .. } => Power::DarkEmbracePower,
             Self::Imbalanced { .. } => Power::ImbalancedPower,
+            Self::Ritual { .. } => Power::RitualPower,
             Self::Illusion { .. } => Power::IllusionPower,
             Self::Reattach { .. } => Power::ReattachPower,
             Self::Swipe { .. } => Power::SwipePower,
@@ -316,6 +324,17 @@ impl State {
             }
             state => unreachable!("counted state for {:?}", state.power()),
         }
+    }
+
+    /// `WasJustAppliedByEnemy`, set to `just_applied`, and what it held.
+    fn swap_just_applied(&mut self, just_applied: bool) -> bool {
+        let Self::Ritual {
+            just_applied: current,
+        } = self
+        else {
+            unreachable!("just-applied state for {:?}", self.power())
+        };
+        std::mem::replace(current, just_applied)
     }
 
     fn set_off_balance(&mut self, off_balance: bool) {
@@ -3272,19 +3291,19 @@ pub(crate) fn event_hook(
         // `RitualPower.AfterSideTurnEnd`: its stack of Strength as its
         // owner's side ends a turn. A monster's skips the turn it was applied
         // in, through `AfterApplied`.
-        (Power::RitualPower, amount, EventHook::SideTurnEnd { side })
-            if side == owner && owner == CombatSide::Player =>
-        {
-            Some(HookEffect::ApplyToOwner(Power::StrengthPower, amount))
-        }
-        (Power::RitualPower, _, EventHook::SideTurnEnd { side }) if side == owner => {
-            unimplemented!("a monster's Ritual, which skips the turn it was applied in")
+        (Power::RitualPower, amount, EventHook::SideTurnEnd { side }) if side == owner => {
+            match state.swap_just_applied(false) {
+                true => None,
+                false => Some(HookEffect::ApplyToOwner(Power::StrengthPower, amount)),
+            }
         }
         (Power::RitualPower, _, EventHook::SideTurnEnd { .. }) => None,
         // `RitualPower.AfterApplied`, which marks a monster's alone.
-        (Power::RitualPower, _, EventHook::Applied) if owner == CombatSide::Player => None,
         (Power::RitualPower, _, EventHook::Applied) => {
-            unimplemented!("a monster's Ritual, which skips the turn it was applied in")
+            if owner != CombatSide::Player {
+                state.swap_just_applied(true);
+            }
+            None
         }
         // `RadiancePower.AfterEnergyReset`: its `Energy`, then one off.
         (Power::RadiancePower, PowerAmount::Counted(_), EventHook::EnergyReset { player })
