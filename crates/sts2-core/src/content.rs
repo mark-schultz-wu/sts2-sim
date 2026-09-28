@@ -2745,6 +2745,8 @@ pub enum DecisionHook<V: ContentVersion> {
     ShouldPlay {
         card: V::Card,
         affliction: Option<V::Affliction>,
+        /// `autoPlayType != AutoPlayType.None`: the play is an auto-play.
+        auto: bool,
     },
     /// `ShouldStopCombatFromEnding`, which any listener can answer yes to.
     ShouldStopCombatFromEnding,
@@ -2754,6 +2756,8 @@ pub enum DecisionHook<V: ContentVersion> {
     ShouldDraw {
         player: crate::CombatId,
         hand_draw: bool,
+        /// `CombatState.CurrentSide`: whose turn it is.
+        side: V::CombatSide,
     },
     /// `ShouldAllowHitting`, about `creature`. A creature no listener lets be
     /// hit is not hittable, and cannot receive powers.
@@ -2866,6 +2870,8 @@ pub enum EventHook<V: ContentVersion> {
     /// changed the turn's hand, before it is drawn. The listener reads for
     /// itself whether it did.
     HandDrawModified,
+    /// `AfterPreventingDraw`, once a listener answered no to `ShouldDraw`.
+    DrawPrevented,
     /// `AfterShuffle`, once the discard pile is shuffled into the draw pile.
     /// A fight here has one player, who is the shuffler.
     Shuffled,
@@ -3273,6 +3279,7 @@ impl<V: ContentVersion> EventHook<V> {
         Some(match self {
             EventHook::ShuffleOrder { .. } => ModelHook::ModifyShuffleOrder,
             EventHook::Shuffled => ModelHook::AfterShuffle,
+            EventHook::DrawPrevented => ModelHook::AfterPreventingDraw,
             EventHook::HandDrawModified => ModelHook::AfterModifyingHandDraw,
             EventHook::PotionUsing { .. } => ModelHook::BeforePotionUsed,
             EventHook::PotionUsed { .. } => ModelHook::AfterPotionUsed,
@@ -4121,6 +4128,19 @@ pub enum HookEffect<V: ContentVersion> {
     },
     /// `CardPileCmd.Add(card, PileType.Deck)`, a new card into the run's deck.
     AddToDeck(V::Card),
+    /// `count` of `cards` into the deck, each `NextItem` off `stream` over
+    /// those not drawn already.
+    AddDistinctToDeck {
+        cards: &'static [V::Card],
+        count: usize,
+        stream: V::RunRngType,
+    },
+    /// `NextItem` off `CombatCardSelection` over the draw pile's cards of
+    /// `kind`, `SetToFreeThisTurn`, then `CardPileCmd.Add` into the hand.
+    /// Nothing where the draw pile holds none.
+    FreeRandomFromDraw {
+        kind: CardKind,
+    },
     /// `CardCmd.Upgrade` on a new card, then `CardPileCmd.Add` to the deck.
     AddUpgradedToDeck(V::Card),
     /// `CardFactory.CreateForReward` of one card from the character's pool,

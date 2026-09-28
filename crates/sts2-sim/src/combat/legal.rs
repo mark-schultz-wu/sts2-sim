@@ -134,6 +134,7 @@ pub(super) fn reasons<V: Rules>(
                 sts2_core::DecisionHook::ShouldPlay {
                     card: card.card,
                     affliction: card.affliction,
+                    auto: false,
                 },
                 false,
             )

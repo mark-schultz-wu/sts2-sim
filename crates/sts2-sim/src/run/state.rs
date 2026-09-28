@@ -1420,6 +1420,23 @@ impl<V: Rules> State<V> {
                     self.add_to_deck(sts2_core::DeckCard::new(CardIdent::new(card)));
                     continue;
                 }
+                HookEffect::AddDistinctToDeck {
+                    cards,
+                    count,
+                    stream,
+                } => {
+                    use sts2_core::rng::GameRng as _;
+
+                    let mut left = cards.to_vec();
+                    for _ in 0..count {
+                        let Ok(&card) = self.streams.run(stream).choose(&left) else {
+                            break;
+                        };
+                        left.retain(|&held| held != card);
+                        self.add_to_deck(sts2_core::DeckCard::new(CardIdent::new(card)));
+                    }
+                    continue;
+                }
                 HookEffect::AddRegularCard(filter) => {
                     self.card_reward_unheard();
                     let character = self.character();

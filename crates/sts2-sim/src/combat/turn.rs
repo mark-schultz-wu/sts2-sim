@@ -820,6 +820,43 @@ pub(super) fn carry_setup<V: Rules>(
                         }
                         // A shuffle's question parks the setup, and the rest
                         // of these listeners follow the answer.
+                        sts2_core::HookEffect::FreeRandomFromDraw { kind } => {
+                            let mut board = Board::for_card(
+                                live,
+                                rngs.reborrow(),
+                                relics,
+                                ascension,
+                                None,
+                                None,
+                            );
+                            let kinds: Vec<_> = sts2_core::Fight::cards_in(&board, Pile::Draw)
+                                .into_iter()
+                                .filter(|&at| {
+                                    V::card_kind(sts2_core::Fight::card_ident(&board, at).card)
+                                        == Some(kind)
+                                })
+                                .collect();
+                            let stream =
+                                <V::RunRngType as sts2_core::RunStreamKinds>::COMBAT_CARD_SELECTION;
+                            if let Some(at) =
+                                sts2_core::Fight::random_card(&mut board, &kinds, stream)
+                            {
+                                for pool in [sts2_core::CostPool::Energy, sts2_core::CostPool::Star]
+                                {
+                                    sts2_core::Fight::modify_card(
+                                        &mut board,
+                                        at,
+                                        sts2_core::Change::SetCost(pool, num_traits::zero()),
+                                        sts2_core::Lasting::ThisTurnOrUntilPlayed,
+                                    );
+                                }
+                                sts2_core::Fight::act_on(
+                                    &mut board,
+                                    sts2_core::PileAct::IntoHand,
+                                    &[at],
+                                );
+                            }
+                        }
                         // `AddGeneratedCardsToCombat` into the draw pile, each
                         // at `CardPilePosition.Random`.
                         sts2_core::HookEffect::AddToDrawAtRandom { card, count } => {

@@ -3537,9 +3537,16 @@ pub(super) fn draw_pausing<V: Rules>(
     // `Hook.ShouldDraw`, once for the whole draw, and `AfterPreventingDraw`
     // when a listener stops it.
     let player = live.player().id;
-    let hook = sts2_core::DecisionHook::ShouldDraw { player, hand_draw };
+    let hook = sts2_core::DecisionHook::ShouldDraw {
+        player,
+        hand_draw,
+        side: live.side,
+    };
     if !resumed && super::listen::any_decides::<V>(Walk { live, relics }, hook, false) {
-        super::turn::unheard::<V>(live, relics, sts2_core::ModelHook::AfterPreventingDraw);
+        let asked = super::listen::notify::<V>(live, relics, sts2_core::EventHook::DrawPrevented);
+        if let Some((listener, effect)) = asked.first() {
+            unimplemented!("{listener:?} asking for {effect:?} after preventing a draw");
+        }
         return Drawn::Done(None);
     }
     let mut ended = None;
