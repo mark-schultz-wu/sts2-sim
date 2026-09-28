@@ -41,6 +41,23 @@ pub(super) fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played
     match card {
         ColorlessCard::Volley => volley(fight),
         ColorlessCard::Catastrophe => catastrophe(fight),
+        // `Prolong`: as much Block Next Turn on its owner as the block it
+        // holds.
+        ColorlessCard::Prolong => {
+            use super::super::super::generated::powers::Power;
+            use sts2_core::CreatureView as _;
+
+            let owner = fight.actor();
+            let block = fight
+                .creatures()
+                .find(|creature| creature.id() == owner)
+                .map_or(0, |creature| creature.block());
+            fight.apply_to_actor(
+                Power::BlockNextTurnPower,
+                sts2_core::PowerAmount::Counted(block),
+            );
+            Played::Done
+        }
         ColorlessCard::Restlessness => restlessness(fight),
         ColorlessCard::Impatience => impatience(fight),
         ColorlessCard::Anointed => anointed(fight),

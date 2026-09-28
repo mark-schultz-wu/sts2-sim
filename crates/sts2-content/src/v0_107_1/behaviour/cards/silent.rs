@@ -42,6 +42,26 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
         SilentCard::PiercingWail => piercing_wail(fight),
         SilentCard::EchoingSlash => echoing_slash(fight),
         SilentCard::HandTrick => hand_trick(fight),
+        // `BladeOfInk`: its `Cards` of Shivs into hand, each enchanted with
+        // one Inky. `CardCmd.Enchant` raises no hook, so the Shivs arrive
+        // enchanted.
+        SilentCard::BladeOfInk => {
+            use super::super::super::generated::enchantments::Enchantment;
+
+            let mut shiv = CardIdent::new(Cards::Token(TokenCard::Shiv));
+            <V as sts2_core::Rules>::enchant(Enchantment::Inky, 1, &mut shiv);
+            let count: usize =
+                num_traits::cast(fight.var(CardVar::Cards)).expect("a count of Shivs");
+            fight.add_generated_cards(shiv, Pile::Hand, count);
+            Played::Done
+        }
+        // `Scare`: one Weak on each enemy that can be hit.
+        SilentCard::Scare => {
+            for target in fight.hittable_opponents() {
+                fight.apply_power(target, Power::WeakPower, PowerAmount::Counted(1));
+            }
+            Played::Done
+        }
         // `Expose`: the target loses all its block and any Artifact, then
         // takes its `Power` of Vulnerable.
         SilentCard::Expose => {

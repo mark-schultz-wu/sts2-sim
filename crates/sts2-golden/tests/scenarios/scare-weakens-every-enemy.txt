@@ -1,0 +1,5 @@
+# Scare puts one Weak on each enemy that can be hit.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"grant","card":"SCARE"}
+{"cmd":"play_card","index":7}

@@ -3301,6 +3301,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .unwrap_or_else(|| unimplemented!("naming the card being played with none played"))
     }
 
+    fn playing_ident(&self) -> CardIdent<V> {
+        self.acting()
+            .unwrap_or_else(|| unimplemented!("reading the card being played with none played"))
+            .face
+            .ident
+    }
+
     fn upgraded(&self) -> bool {
         self.acting()
             .unwrap_or_else(|| unimplemented!("the upgrade of no card being played"))

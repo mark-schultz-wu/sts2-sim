@@ -2047,6 +2047,11 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("naming the card being played")
     }
 
+    /// What the copy whose play is running is, as it stands.
+    fn playing_ident(&self) -> crate::CardIdent<V> {
+        unimplemented!("reading the card being played")
+    }
+
     /// `CardCmd.Transform(original, replacement)`.
     ///
     /// The replacement takes the original's place: the same pile, at the same

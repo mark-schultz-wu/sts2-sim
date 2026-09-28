@@ -67,6 +67,24 @@ pub(super) fn resume_play<F: Fight<V>>(
 pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
     match card {
         IroncladCard::Thrash => thrash(fight),
+        // `Dominate`: its Vulnerable on the target, then as much Strength on
+        // its owner as the target then carries Vulnerable.
+        IroncladCard::Dominate => {
+            let target = fight.target();
+            let vulnerable = PowerAmount::Counted(fight.var(CardVar::VulnerablePower));
+            fight.apply_power(target, Power::VulnerablePower, vulnerable);
+            let carried = fight
+                .creatures()
+                .find(|creature| creature.id() == target)
+                .and_then(|creature| creature.power(Power::VulnerablePower));
+            let strength = match carried {
+                Some(PowerAmount::Counted(amount)) => amount,
+                Some(PowerAmount::Endless) => unimplemented!("an endless Vulnerable"),
+                None => 0,
+            };
+            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(strength));
+            Played::Done
+        }
         // `Feed`: its damage to the target, then its `MaxHp` onto its owner's
         // maximum where the hit killed a target whose death, read before the
         // hit, triggers Fatal.

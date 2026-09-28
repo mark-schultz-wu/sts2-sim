@@ -77,6 +77,7 @@ pub(crate) fn enchant(enchantment: Enchantment, amount: u8, card: &mut CardIdent
     match enchantment {
         Enchantment::Corrupted
         | Enchantment::Glam
+        | Enchantment::Inky
         | Enchantment::Instinct
         | Enchantment::Vigorous
         | Enchantment::Nimble
@@ -95,6 +96,12 @@ pub(crate) fn enchant(enchantment: Enchantment, amount: u8, card: &mut CardIdent
         _ => unimplemented!("what enchanting a card with {enchantment:?} does to it"),
     }
 }
+
+/// `Inky`'s `DamageVar(1, ValueProp.Move)`.
+const INKY_DAMAGE: i32 = 1;
+
+/// `Inky`'s `PowerVar<WeakPower>(1)`.
+const INKY_WEAK: i32 = 1;
 
 /// An enchantment's `EnchantDamageAdditive`, `EnchantDamageMultiplicative`,
 /// `EnchantBlockAdditive` or `EnchantPlayCount`, over the card it is on.
@@ -116,6 +123,10 @@ pub(crate) fn modify(
         (Enchantment::Instinct, EnchantHook::DamageMultiplicative { powered: true }) => {
             Modify::Scaled(2.0)
         }
+        // `Inky`: its `DamageVar(1)` on a powered hit, whatever its amount.
+        (Enchantment::Inky, EnchantHook::DamageAdditive { powered: true }) => {
+            Modify::Added(INKY_DAMAGE)
+        }
         (Enchantment::Nimble, EnchantHook::BlockAdditive) => Modify::Added(amount),
         // Its amount on a powered hit, until its card is first played.
         (Enchantment::Vigorous, EnchantHook::DamageAdditive { powered: true })
@@ -132,6 +143,7 @@ pub(crate) fn modify(
         (
             Enchantment::Corrupted
             | Enchantment::Glam
+            | Enchantment::Inky
             | Enchantment::Instinct
             | Enchantment::Vigorous
             | Enchantment::Nimble
@@ -204,6 +216,23 @@ pub(crate) fn on_play<F: Fight<V>>(
         Enchantment::Corrupted => {
             let owner = fight.actor();
             fight.damage_unblockable(owner, 2);
+        }
+        // Its Weak on the card's target, or on every enemy that can be hit
+        // for a card aimed at all of them.
+        Enchantment::Inky => {
+            use super::super::generated::powers::Power;
+            use sts2_core::{PowerAmount, TargetKinds as _};
+
+            let weak = PowerAmount::Counted(INKY_WEAK);
+            let every = fight.playing_ident().card.target()
+                == Some(<V as sts2_core::ContentVersion>::TargetType::ALL_ENEMIES);
+            let targets = match every {
+                true => fight.hittable_opponents(),
+                false => smallvec::smallvec![fight.target()],
+            };
+            for target in targets {
+                fight.apply_power(target, Power::WeakPower, weak);
+            }
         }
         Enchantment::Glam
         | Enchantment::Instinct
