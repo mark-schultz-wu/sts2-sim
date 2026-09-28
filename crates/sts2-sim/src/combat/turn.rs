@@ -810,14 +810,32 @@ pub(super) fn carry_setup<V: Rules>(
                             );
                             sts2_core::Fight::apply_to_actor(&mut board, power, amount);
                         }
+                        // A shuffle's question parks the setup, and the rest
+                        // of these listeners follow the answer.
                         sts2_core::HookEffect::ShuffleIfNecessary => {
-                            if live.cards.is_empty(Pile::Draw) {
-                                super::board::shuffle::<V>(
-                                    live,
-                                    rngs.reborrow(),
-                                    relics,
-                                    ascension,
-                                );
+                            if !live.cards.is_empty(Pile::Draw) {
+                                continue;
+                            }
+                            let Some((pile, count, act)) = super::board::shuffle_asking::<V>(
+                                live,
+                                rngs.reborrow(),
+                                relics,
+                                ascension,
+                            ) else {
+                                continue;
+                            };
+                            match select::<V>(live, rngs.reborrow(), relics, pile, count, act) {
+                                Err(question) => {
+                                    return Carried::Parked(super::live::Asking {
+                                        then: Then::Setup {
+                                            act,
+                                            stage: Setup::BeforeHandDraw(rest),
+                                        },
+                                        question,
+                                    });
+                                }
+                                Ok(Some(ended)) => return Carried::Done(Some(ended)),
+                                Ok(None) => {}
                             }
                         }
                         sts2_core::HookEffect::SelectFromPile { pile, count, act } => {
