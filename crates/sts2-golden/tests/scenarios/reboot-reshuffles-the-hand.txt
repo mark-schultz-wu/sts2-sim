@@ -1,0 +1,5 @@
+# Reboot puts the hand into the draw pile, shuffles it, and draws four.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"REBOOT"}
+{"cmd":"play_card","index":5}

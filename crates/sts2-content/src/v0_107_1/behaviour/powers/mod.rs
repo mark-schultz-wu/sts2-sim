@@ -720,6 +720,27 @@ pub(crate) fn modify_hook(
             _,
             ModifyHook::EnergyCostLate { .. },
         ) => Modify::Nothing,
+        // `TrackingPower.ModifyDamageMultiplicative`: its stack as a
+        // multiplier on a powered hit from a card, by its owner or one of its
+        // pets, on a target carrying Weak.
+        (
+            Power::TrackingPower,
+            PowerAmount::Counted(amount),
+            ModifyHook::DamageMultiplicative {
+                target: Some(target),
+                dealer: Some(dealer),
+                card: Some(_),
+                powered: true,
+            },
+        ) if (dealer == holder || fight.pet_owner(dealer) == Some(holder))
+            && fight.power(target, Power::WeakPower).is_some() =>
+        {
+            Modify::Scaled(f64::from(amount))
+        }
+        (Power::TrackingPower, PowerAmount::Endless, ModifyHook::DamageMultiplicative { .. }) => {
+            unimplemented!("an endless Tracking")
+        }
+        (Power::TrackingPower, _, ModifyHook::DamageMultiplicative { .. }) => Modify::Nothing,
         // `CorruptionPower.TryModifyEnergyCostInCombatLate`: nothing for a
         // Skill its owner holds or is playing. A fight here has one player.
         (
