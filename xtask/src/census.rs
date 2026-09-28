@@ -14,7 +14,11 @@
 //! ```text
 //! cargo xtask census
 //! cargo xtask census --runs 500 --character REGENT --top 30
+//! cargo xtask census --seed C000000151 --character SILENT
 //! ```
+//!
+//! `--seed` plays that one seed and prints the runner's command line with
+//! every move the census avoided, which replays the run to where it stopped.
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
@@ -82,6 +86,8 @@ struct Run {
     avoided: Vec<(usize, Ending)>,
     /// The step whose every move panicked, when that is how it stopped.
     exhausted: Option<usize>,
+    /// Each move avoided, by its step and its place in that step's moves.
+    avoid: Vec<(usize, usize)>,
 }
 
 impl Run {
@@ -129,6 +135,9 @@ pub struct Args {
     /// A character to play, by id. Every playable one when none is named.
     #[arg(long = "character")]
     characters: Vec<String>,
+    /// One seed to play, whose command line to replay it is printed.
+    #[arg(long)]
+    seed: Option<String>,
 }
 
 pub fn run(args: Args) -> Result<String, crate::error::ProcessError> {
@@ -136,12 +145,20 @@ pub fn run(args: Args) -> Result<String, crate::error::ProcessError> {
         runs,
         top,
         mut characters,
+        seed,
     } = args;
     if characters.is_empty() {
         characters = CHARACTERS.iter().map(|c| c.to_string()).collect();
     }
 
     let binary = crate::error::build_example(&crate::workspace(), "random_run")?;
+
+    if let Some(seed) = seed {
+        return Ok(characters
+            .iter()
+            .map(|character| replay(&binary, &one(&binary, &seed, character)))
+            .collect());
+    }
 
     // Every character plays the same seeds, so two characters differ by what
     // they carry and not by the map they drew.
@@ -195,10 +212,20 @@ fn one(binary: &std::path::Path, seed: &str, character: &str) -> Run {
                     reached: attempt.reached,
                     avoided,
                     exhausted: step,
+                    avoid,
                 };
             }
         }
     }
+}
+
+/// How `run` ended, and the command line that plays it there again.
+fn replay(binary: &std::path::Path, run: &Run) -> String {
+    let mut line = format!("{} {} {}", binary.display(), run.seed, run.character);
+    for (step, at) in &run.avoid {
+        line.push_str(&format!(" --avoid {step}:{at}"));
+    }
+    format!("{:?}\n{line}\n", run.ending)
 }
 
 /// One process of the runner, with the moves it avoids.
