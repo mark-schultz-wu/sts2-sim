@@ -1670,9 +1670,9 @@ pub(crate) fn decide_hook(
             Power::BurrowedPower | Power::BarricadePower | Power::BlurPower,
             DecisionHook::ShouldClearBlock { creature },
         ) => HookResponse::Decision(creature != held.holder),
-        // `InfestedPower.ShouldStopCombatFromEnding`, for as long as it is on
-        // a creature in the fight.
-        (Power::InfestedPower, DecisionHook::ShouldStopCombatFromEnding) => {
+        // `InfestedPower.ShouldStopCombatFromEnding` and `StockPower`'s, for as
+        // long as it is on a creature in the fight.
+        (Power::InfestedPower | Power::StockPower, DecisionHook::ShouldStopCombatFromEnding) => {
             HookResponse::Decision(true)
         }
         (power, hook) if hook.model_hook().is_some() => {
@@ -2683,6 +2683,22 @@ pub(crate) fn event_hook(
         {
             unimplemented!("an endless Infested power")
         }
+        // `StockPower.AfterDeath` for its own holder: a new Axebot in its
+        // slot, with one stock fewer, which opens on Boot Up.
+        (
+            Power::StockPower,
+            PowerAmount::Counted(amount),
+            EventHook::AfterDeath {
+                creature,
+                removal_prevented: false,
+                ..
+            },
+        ) if creature == holder && amount > 0 => Some(HookEffect::SummonWritten {
+            monster: Monster::Axebot,
+            written: amount - 1,
+            opens_on: Some(MoveId::BootUpMove),
+        }),
+        (Power::StockPower, _, EventHook::AfterDeath { .. }) => None,
         // `TenderPower.AfterCardPlayed`, which counts only its owner's own
         // cards. A fight here has one player, so every card played is theirs.
         // Each one takes a point of Strength and of Dexterity, and the count

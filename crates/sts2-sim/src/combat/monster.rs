@@ -193,7 +193,7 @@ pub(crate) fn initialize<V: Rules>(
         });
         // A fight opens on the player's side.
         let side = <V::CombatSide as SideKinds>::PLAYER;
-        for (power, amount) in V::monster_starting_powers(monster, ascension, side) {
+        for (power, amount) in V::monster_starting_powers(monster, ascension, side, &state) {
             powers.push(id, HeldPower::new(power, Stacked::from(amount), Some(id)));
         }
         let opponents: SmallVec<[CombatId; 2]> = creatures
@@ -253,6 +253,35 @@ pub(super) fn summon<V: Rules>(
     slot: Option<u8>,
     niche: &mut MegaRng,
 ) -> CombatId {
+    summon_built::<V>(
+        live,
+        relics,
+        sts2_core::Spawned {
+            monster,
+            opens_on: None,
+            slot,
+        },
+        sts2_core::MonsterModel::new(monster),
+        position,
+        niche,
+    )
+}
+
+/// [`summon`] of a monster whose model something wrote on before it joined,
+/// opening where `spawned` says.
+pub(super) fn summon_built<V: Rules>(
+    live: &mut Live<V>,
+    relics: &crate::run::Belt<V>,
+    spawned: sts2_core::Spawned<V>,
+    state: V::MonsterState,
+    position: usize,
+    niche: &mut MegaRng,
+) -> CombatId {
+    let sts2_core::Spawned {
+        monster,
+        opens_on,
+        slot,
+    } = spawned;
     let encounter = live.encounter;
     let Some(roster_size) = live
         .machines
@@ -318,10 +347,8 @@ pub(super) fn summon<V: Rules>(
                 max_hp: num_traits::cast(hp).expect("a monster's health fits a u32"),
             },
             slot,
-            // Nothing writes onto a monster a fight summons: the
-            // roster that could have is long built.
-            machine: V::opening_move_machine(monster, None),
-            state: sts2_core::MonsterModel::new(monster),
+            machine: V::opening_move_machine(monster, opens_on),
+            state,
         },
     );
     for (position, held) in live.machines.iter_mut().enumerate() {

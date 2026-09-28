@@ -12,8 +12,15 @@ use super::{Number, V};
 pub(super) fn starting_powers(
     monster: Monster,
     ascension: AscensionLevel,
+    model: &super::Model,
 ) -> Option<Vec<(Power, PowerAmount<Number>)>> {
     Some(match monster {
+        // `StockAmount`, which is two unless a respawn wrote it. Nothing is
+        // applied at none.
+        Monster::Axebot => match axebot_stock(model) {
+            0 => Vec::new(),
+            stock => vec![(Power::StockPower, PowerAmount::Counted(Number::from(stock)))],
+        },
         // `_buffAmt`, which is also Paper Cuts'.
         Monster::ScrollOfBiting => vec![(Power::PaperCutsPower, PowerAmount::Counted(2))],
         Monster::LivingShield => vec![(Power::RampartPower, PowerAmount::Counted(25))],
@@ -70,6 +77,14 @@ const STOLEN: Number = 2;
 /// Miasma's block.
 const MIASMA_BLOCK: Number = 8;
 
+/// `Axebot.StockAmount`.
+fn axebot_stock(model: &super::Model) -> u8 {
+    let super::Model::Axebot { stock } = *model else {
+        unreachable!("an Axebot holding {model:?}")
+    };
+    stock.unwrap_or(2)
+}
+
 /// `DevotedSculptor`'s `_ritualGain`.
 const RITUAL: Number = 9;
 
@@ -82,6 +97,20 @@ pub(super) fn perform<F: Fight<V>>(
     fight: &mut F,
 ) {
     match (monster, move_id) {
+        // `BootUpMove`: its block, then Strength for each stock it lost.
+        (Monster::Axebot, MoveId::BootUpMove) => {
+            use sts2_core::{Amount, Effect, Scaling};
+
+            let deadly = fight.ascension().has(AscensionLevel::DeadlyEnemies);
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Number(if deadly { 15 } else { 10 }),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+            let strength = if deadly { 4 } else { 3 } * (2 - Number::from(axebot_stock(model)));
+            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(strength));
+        }
         // `BeetleChargeMove`: it marks the charge, then hits.
         (Monster::FrogKnight, MoveId::BeetleCharge) => {
             let super::Model::FrogKnight { beetle_charged } = model else {

@@ -68,6 +68,7 @@ pub(crate) fn starting_powers(
     monster: Monster,
     ascension: <V0_107_1 as sts2_core::ContentVersion>::AscensionLevel,
     side: super::super::generated::runstate::CombatSide,
+    model: &Model,
 ) -> Vec<(
     super::super::generated::powers::Power,
     sts2_core::PowerAmount<Number>,
@@ -76,7 +77,7 @@ pub(crate) fn starting_powers(
 
     match overgrowth::starting_powers(monster, ascension)
         .or_else(|| hive::starting_powers(monster, ascension, side))
-        .or_else(|| glory::starting_powers(monster, ascension))
+        .or_else(|| glory::starting_powers(monster, ascension, model))
         .or_else(|| summoned::starting_powers(monster))
     {
         Some(applied) => applied,
@@ -288,6 +289,7 @@ pub(crate) fn perform<F: Fight<V>>(
         | Monster::KinPriest => overgrowth::perform(monster, move_id, fight),
         Monster::DevotedSculptor
         | Monster::FrogKnight
+        | Monster::Axebot
         | Monster::TheLost
         | Monster::TheForgotten => glory::perform(monster, move_id, model, fight),
         _ => monster_moves::perform(monster, move_id, fight),
@@ -305,6 +307,8 @@ pub enum Model {
     KnowledgeDemon { curses: u8 },
     /// `FrogKnight.HasBeetleCharged`.
     FrogKnight { beetle_charged: bool },
+    /// `Axebot._stockOverrideAmount`, which a respawn writes.
+    Axebot { stock: Option<u8> },
 }
 
 impl sts2_core::MonsterModel<V> for Model {
@@ -314,7 +318,17 @@ impl sts2_core::MonsterModel<V> for Model {
             Monster::FrogKnight => Self::FrogKnight {
                 beetle_charged: false,
             },
+            Monster::Axebot => Self::Axebot { stock: None },
             _ => Self::Stateless,
+        }
+    }
+
+    fn written(monster: Monster, written: Number) -> Self {
+        match monster {
+            Monster::Axebot => Self::Axebot {
+                stock: Some(u8::try_from(written).expect("a stock fits a byte")),
+            },
+            monster => unimplemented!("a power writing {written} onto a new {monster:?}"),
         }
     }
 }

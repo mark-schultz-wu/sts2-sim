@@ -3861,6 +3861,14 @@ pub enum HookEffect<V: ContentVersion> {
         target: crate::CombatId,
         amount: V::Number,
     },
+    /// `CreatureCmd.Add` of a monster the power built as its dying owner goes,
+    /// in the owner's slot. `written` is what the power wrote on the new
+    /// model, and the model opens on `opens_on` where it names one.
+    SummonWritten {
+        monster: V::Monster,
+        written: V::Number,
+        opens_on: Option<V::MoveId>,
+    },
     /// `CreatureCmd.LoseMaxHp` on a creature the listener names.
     LoseMaxHpOf {
         target: crate::CombatId,
@@ -4366,6 +4374,10 @@ impl<V: Hooks> DeckCard<V> {
 pub trait MonsterModel<V: ContentVersion>: Copy + std::fmt::Debug + PartialEq + Eq + Sized {
     /// The model as a monster enters a fight.
     fn new(monster: V::Monster) -> Self;
+
+    /// The model a power builds for a monster it adds, with `written` on the
+    /// one field the power writes. `StockPower` writes `StockAmount`.
+    fn written(monster: V::Monster, written: V::Number) -> Self;
 }
 
 /// One power's own model, as the creature carrying it holds one.
@@ -5542,6 +5554,7 @@ pub trait Rules: Hooks {
         monster: Self::Monster,
         ascension: Self::AscensionLevel,
         side: Self::CombatSide,
+        model: &Self::MonsterState,
     ) -> impl Iterator<Item = (Self::Power, PowerAmount<Self::Number>)>;
 
     /// Powers a monster's `AfterAddedToRoom` applies to each of its
