@@ -4612,8 +4612,8 @@ pub enum HookEffect<V: ContentVersion> {
     /// that cost something now, then those that print a cost, then the hand.
     FreeCostlyInHand,
     /// `Bookmark.AfterFlush`'s pick: `NextItem` off `CombatCardSelection`
-    /// over the retained cards whose energy cost, with their own modifiers,
-    /// is more than nothing and not X, and one less on it until played.
+    /// over the retained cards that cost more than nothing and not X, their
+    /// own modifiers counted. The pick then costs one less until played.
     LowerRetainedCost,
     /// `CardCmd.Upgrade` on a new card, then `CardPileCmd.Add` to the deck.
     AddUpgradedToDeck(V::Card),
