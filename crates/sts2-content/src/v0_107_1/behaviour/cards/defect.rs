@@ -120,6 +120,17 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
             Played::Done
         }
         DefectCard::Compact => compact(fight),
+        // `Modded`: its `Repeat` orb slots, its `Cards` drawn, then one more
+        // energy on its own cost for the fight.
+        DefectCard::Modded => {
+            fight.add_orb_slots(fight.var(CardVar::Repeat));
+            fight.draw(fight.var(CardVar::Cards));
+            fight.modify_this(
+                sts2_core::Change::ChangeCost(sts2_core::CostPool::Energy, 1),
+                sts2_core::Lasting::ThisFight,
+            );
+            Played::Done
+        }
         // `MeteorStrike`: its damage to the target, then three Plasma orbs.
         DefectCard::MeteorStrike => {
             let target = fight.target();
