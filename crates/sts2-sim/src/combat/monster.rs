@@ -150,11 +150,14 @@ pub(crate) fn initialize<V: Rules>(
             .map(CombatId::new)
             .ok_or(Error::CreatureIdOverflow)?;
         // The whole roster stands as each opening rolls.
+        let whole: u32 = num_traits::cast(hp).expect("a monster's health fits a u32");
         let spawn = sts2_core::MonsterSpawn {
             encounter,
             position,
             roster_size,
             standing: roster_size.get(),
+            hp: whole,
+            max_hp: whole,
         };
         let mut machine = V::opening_move_machine(monster, opens_on);
         let state = sts2_core::MonsterModel::new(monster);
@@ -311,6 +314,8 @@ pub(super) fn summon<V: Rules>(
                 position: spawn_position,
                 roster_size,
                 standing: roster_size.get(),
+                hp: num_traits::cast(hp).expect("a monster's health fits a u32"),
+                max_hp: num_traits::cast(hp).expect("a monster's health fits a u32"),
             },
             slot,
             // Nothing writes onto a monster a fight summons: the
