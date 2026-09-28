@@ -106,6 +106,15 @@ pub(crate) fn decide_hook(
                     || history.started_this_turn().count() < NORMALITY_PLAYS,
             )
         }
+        // `Enthralled.ShouldPlay`: from the hand, nothing but itself is played
+        // by hand. An auto-play goes ahead.
+        (Cards::Curse(CurseCard::Enthralled), DecisionHook::ShouldPlay { card, auto, .. }) => {
+            HookResponse::Decision(
+                pile != Some(sts2_core::Pile::Hand)
+                    || card == Cards::Curse(CurseCard::Enthralled)
+                    || auto,
+            )
+        }
         (card, hook) => unimplemented!("what {card:?} answers for {hook:?}"),
     }
 }

@@ -332,6 +332,7 @@ pub(super) fn auto_play_in_play<V: Rules>(
         sts2_core::DecisionHook::ShouldPlay {
             card: ident.card,
             affliction: ident.affliction,
+            auto: true,
         },
         false,
     )

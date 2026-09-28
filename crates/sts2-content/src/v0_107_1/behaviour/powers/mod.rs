@@ -1635,9 +1635,12 @@ pub(crate) fn decide_hook(
         ) => HookResponse::Decision(pet_of == Some(target) && alive && powered),
         // `NoDrawPower.ShouldDraw`: its owner draws nothing but the turn's own
         // hand.
-        (Power::NoDrawPower, DecisionHook::ShouldDraw { player, hand_draw }) => {
-            HookResponse::Decision(hand_draw || player != held.holder)
-        }
+        (
+            Power::NoDrawPower,
+            DecisionHook::ShouldDraw {
+                player, hand_draw, ..
+            },
+        ) => HookResponse::Decision(hand_draw || player != held.holder),
         // `RetainHandPower.ShouldFlush`, which keeps its own holder's hand.
         (Power::RetainHandPower, DecisionHook::ShouldFlush { player }) => {
             HookResponse::Decision(player != held.holder)

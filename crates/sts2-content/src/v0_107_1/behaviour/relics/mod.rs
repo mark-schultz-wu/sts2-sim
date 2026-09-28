@@ -27,6 +27,7 @@ mod bing_bong;
 mod black_blood;
 mod black_star;
 mod blessed_antler;
+mod blood_soaked_rose;
 mod blood_vial;
 mod bone_flute;
 mod bone_tea;
@@ -48,6 +49,7 @@ mod data_disk;
 mod daughter_of_the_wind;
 mod delicate_frond;
 mod diamond_diadem;
+mod distinguished_cape;
 mod divine_destiny;
 mod divine_right;
 mod dollys_mirror;
@@ -63,6 +65,7 @@ mod fake_snecko_eye;
 mod fake_strike_dummy;
 mod fake_venerable_tea_set;
 mod festive_popper;
+mod fiddle;
 mod fishing_rod;
 mod frozen_egg;
 mod glass_eye;
@@ -76,6 +79,7 @@ mod horn_cleat;
 mod infused_core;
 mod intimidating_helmet;
 mod iron_club;
+mod jeweled_mask;
 mod jewelry_box;
 mod juzu_bracelet;
 mod kunai;
@@ -119,6 +123,7 @@ mod pomander;
 mod prayer_wheel;
 mod precarious_shears;
 mod precise_scissors;
+mod preserved_fog;
 mod radiant_pearl;
 mod red_mask;
 mod red_skull;
@@ -132,6 +137,7 @@ mod sai;
 mod sand_castle;
 mod seal_of_gold;
 mod self_forming_clay;
+mod sere_talon;
 mod signet_ring;
 mod sozu;
 mod sparkling_rouge;
@@ -352,6 +358,12 @@ pub enum State {
     SignetRing,
     DelicateFrond,
     Glitter,
+    BloodSoakedRose,
+    DistinguishedCape,
+    Fiddle,
+    JeweledMask,
+    PreservedFog,
+    SereTalon,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -586,6 +598,18 @@ pub(crate) fn event_hook(
         State::SignetRing => signet_ring::event_hook(hook, asked),
         State::DelicateFrond => delicate_frond::event_hook(hook, asked),
         State::Glitter => glitter::event_hook(hook, asked),
+        State::BloodSoakedRose => blood_soaked_rose::event_hook(hook, asked),
+        State::DistinguishedCape => distinguished_cape::event_hook(hook, asked),
+        State::JeweledMask => jeweled_mask::event_hook(hook, asked),
+        State::PreservedFog => preserved_fog::event_hook(hook, asked),
+        State::SereTalon => sere_talon::event_hook(hook, asked),
+        // Its hooks are `ShouldDraw` and `ModifyHandDrawLate`, which the fight
+        // asks of it.
+        // `AfterPreventingDraw` flashes it and does nothing else.
+        State::Fiddle => match hook {
+            EventHook::Obtained | EventHook::DrawPrevented => {}
+            hook => unimplemented!("what Fiddle does for {hook:?}"),
+        },
         // Their hooks are ones the run and the fight ask of them:
         // `TryModifyRestSiteOptions`, and `ModifyMaxEnergy` with
         // `TryModifyEnergyCostInCombat`.
@@ -607,6 +631,7 @@ pub(crate) fn decide_hook(
         State::WingedBoots(state) => winged_boots::decide_hook(state, hook),
         State::RunicPyramid => runic_pyramid::decide_hook(hook),
         State::Sozu => sozu::decide_hook(hook),
+        State::Fiddle => fiddle::decide_hook(hook),
         _ => match hook.model_hook() {
             Some(_) => unimplemented!("what {state:?} decides for {hook:?}"),
             None => sts2_core::HookResponse::DoesNotImplement,
@@ -638,6 +663,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         State::SpikedGauntlets => spiked_gauntlets::modify_hook(hook),
         State::ThrowingAxe(state) => throwing_axe::modify_hook(state, hook),
         State::BlessedAntler => blessed_antler::modify_hook(hook),
+        State::BloodSoakedRose => blood_soaked_rose::modify_hook(hook),
+        State::Fiddle => fiddle::modify_hook(hook),
         // The fight asks only a relic that overrides the hook, and none of
         // the rest overrides one of these.
         State::AlchemicalCoffer
@@ -769,7 +796,11 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::LoomingFruit
         | State::SignetRing
         | State::DelicateFrond
-        | State::Glitter => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::Glitter
+        | State::DistinguishedCape
+        | State::JeweledMask
+        | State::PreservedFog
+        | State::SereTalon => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -936,6 +967,12 @@ impl sts2_core::RelicModel<V> for State {
             Relic::SignetRing => State::SignetRing,
             Relic::DelicateFrond => State::DelicateFrond,
             Relic::Glitter => State::Glitter,
+            Relic::BloodSoakedRose => State::BloodSoakedRose,
+            Relic::DistinguishedCape => State::DistinguishedCape,
+            Relic::Fiddle => State::Fiddle,
+            Relic::JeweledMask => State::JeweledMask,
+            Relic::PreservedFog => State::PreservedFog,
+            Relic::SereTalon => State::SereTalon,
             relic => unimplemented!("what {relic:?} does in a run that carries it"),
         }
     }

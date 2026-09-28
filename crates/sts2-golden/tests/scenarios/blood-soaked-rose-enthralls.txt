@@ -1,0 +1,9 @@
+# Blood-Soaked Rose gives one more energy each turn, and adds Enthralled to
+# the deck. While Enthralled is in hand, no other card can be played by hand.
+# Played itself, it lets the rest go.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"BLOOD_SOAKED_ROSE"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":1}
+{"cmd":"play_card","index":0,"target":1}

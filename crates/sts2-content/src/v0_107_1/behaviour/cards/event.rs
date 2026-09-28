@@ -13,6 +13,8 @@ use super::V;
 pub enum Resume {
     /// `NeowsFury`, after its owner picked the cards to take back.
     NeowsFuryPicks,
+    /// `Wish`, after its owner picked the card to take.
+    WishPick,
 }
 
 pub(super) fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
@@ -22,6 +24,12 @@ pub(super) fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> 
         EventCard::Whistle => whistle(fight),
         EventCard::Apotheosis => apotheosis(fight),
         EventCard::Maul => maul(fight),
+        // `Wish`: one card of the draw pile into hand.
+        EventCard::Wish => Played::Asking {
+            pile: Pile::Draw,
+            selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
+            at: super::super::Resume::Card(super::Resume::Event(Resume::WishPick)),
+        },
         // `BrightestFlame`: its Energy, its Cards drawn, then its `MaxHp` off
         // its owner's maximum.
         EventCard::BrightestFlame => {
@@ -55,7 +63,7 @@ pub(super) fn resume_play<F: Fight<V>>(
 ) -> Played<V> {
     match at {
         // `CardPileCmd.Add(picked, PileType.Hand)`.
-        Resume::NeowsFuryPicks => {
+        Resume::NeowsFuryPicks | Resume::WishPick => {
             fight.act_on(PileAct::IntoHand, chosen.as_slice());
             Played::Done
         }

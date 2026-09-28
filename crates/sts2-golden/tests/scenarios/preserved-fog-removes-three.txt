@@ -1,0 +1,8 @@
+# Vakuu offers Preserved Fog second on this seed. It removes three cards and
+# adds Folly, which is innate, unplayable and ethereal.
+{"cmd":"start","seed":"0RACLE3","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"VAKUU"}
+{"cmd":"choose_option","index":1}
+{"cmd":"answer","cards":[0,1,2]}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
