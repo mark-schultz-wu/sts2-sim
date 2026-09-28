@@ -20,6 +20,7 @@ pub(super) fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> 
         EventCard::NeowsFury => neows_fury(fight),
         EventCard::Metamorphosis => metamorphosis(fight),
         EventCard::Whistle => whistle(fight),
+        EventCard::Apotheosis => apotheosis(fight),
         EventCard::Maul => maul(fight),
         // `BrightestFlame`: its Energy, its Cards drawn, then its `MaxHp` off
         // its owner's maximum.
@@ -155,5 +156,18 @@ fn maul<F: Fight<V>>(fight: &mut F) -> Played<V> {
         }
     }
     fight.modify_this(raise, Lasting::ThisFight);
+    Played::Done
+}
+
+/// `Apotheosis`: every other card its owner holds in the fight upgraded,
+/// where it can be.
+fn apotheosis<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    // `AllCards` less itself: the hand, the draw, discard and exhaust piles.
+    // `CardCmd.Upgrade` leaves a card at its highest alone.
+    for pile in [Pile::Hand, Pile::Draw, Pile::Discard, Pile::Exhaust] {
+        for card in fight.cards_in(pile) {
+            fight.modify_card(card, Change::Upgrade, Lasting::ThisFight);
+        }
+    }
     Played::Done
 }

@@ -28,7 +28,7 @@ pub(crate) fn can_enchant(enchantment: Enchantment, card: &CardIdent<V>) -> bool
         Enchantment::SoulsPower => base && card.card.exhausts(),
         // Its own check adds an X cost to the base's refusals.
         Enchantment::Slither => base && card.card.cost() != Cost::X,
-        Enchantment::Sown | Enchantment::Swift => base,
+        Enchantment::Glam | Enchantment::Sown | Enchantment::Swift => base,
         // `CanEnchantCardType`, which takes an attack alone.
         Enchantment::Corrupted
         | Enchantment::Instinct
@@ -49,6 +49,7 @@ pub(crate) fn can_enchant(enchantment: Enchantment, card: &CardIdent<V>) -> bool
 pub(crate) fn enchant(enchantment: Enchantment, amount: u8, card: &mut CardIdent<V>) {
     match enchantment {
         Enchantment::Corrupted
+        | Enchantment::Glam
         | Enchantment::Instinct
         | Enchantment::Vigorous
         | Enchantment::Nimble
@@ -96,8 +97,13 @@ pub(crate) fn modify(
         }
         // Its `Times`, which it prints as one.
         (Enchantment::Spiral, EnchantHook::PlayCount) => Modify::Added(1),
+        // Its `Times`, one, until its card is first played in the fight.
+        (Enchantment::Glam, EnchantHook::PlayCount) if status == EnchantmentStatus::Normal => {
+            Modify::Added(1)
+        }
         (
             Enchantment::Corrupted
+            | Enchantment::Glam
             | Enchantment::Instinct
             | Enchantment::Vigorous
             | Enchantment::Nimble
@@ -130,7 +136,7 @@ pub(crate) fn event_hook(
             }
         }
         // `AfterCardPlayed` for its own card: spent once that play is over.
-        (Enchantment::Vigorous, EventHook::CardPlayed { id: played, .. }) => {
+        (Enchantment::Vigorous | Enchantment::Glam, EventHook::CardPlayed { id: played, .. }) => {
             if played == id {
                 asked.push(HookEffect::DisableOwnEnchantment);
             }
@@ -170,7 +176,8 @@ pub(crate) fn on_play<F: Fight<V>>(
             let owner = fight.actor();
             fight.damage_unblockable(owner, 2);
         }
-        Enchantment::Instinct
+        Enchantment::Glam
+        | Enchantment::Instinct
         | Enchantment::Nimble
         | Enchantment::PerfectFit
         | Enchantment::Sharp

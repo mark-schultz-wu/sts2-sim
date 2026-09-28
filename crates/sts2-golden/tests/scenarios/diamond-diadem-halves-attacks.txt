@@ -1,0 +1,11 @@
+# Diamond Diadem gives its power at the end of a turn of two cards or fewer.
+# The power halves the next powered hits, and goes as the enemies' turn ends.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"DIAMOND_DIADEM"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}

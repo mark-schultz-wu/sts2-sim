@@ -1,0 +1,6 @@
+# Jewelry Box adds an Apotheosis to the deck. Played, it upgrades every
+# other card the player holds in the fight.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"JEWELRY_BOX"}
+{"cmd":"fight","encounter":"BYGONE_EFFIGY_ELITE"}
+{"cmd":"play_card","index":0}

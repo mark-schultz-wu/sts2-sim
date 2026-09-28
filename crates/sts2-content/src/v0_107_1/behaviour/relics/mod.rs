@@ -21,10 +21,12 @@ mod astrolabe;
 mod bag_of_marbles;
 mod bag_of_preparation;
 mod beating_remnant;
+mod beautiful_bracelet;
 mod biiig_hug;
 mod bing_bong;
 mod black_blood;
 mod black_star;
+mod blessed_antler;
 mod blood_vial;
 mod bone_flute;
 mod bone_tea;
@@ -44,6 +46,8 @@ mod crossbow;
 mod cursed_pearl;
 mod data_disk;
 mod daughter_of_the_wind;
+mod delicate_frond;
+mod diamond_diadem;
 mod divine_destiny;
 mod divine_right;
 mod dollys_mirror;
@@ -62,6 +66,7 @@ mod festive_popper;
 mod fishing_rod;
 mod frozen_egg;
 mod glass_eye;
+mod glitter;
 mod golden_pearl;
 mod gorget;
 mod gremlin_horn;
@@ -71,6 +76,7 @@ mod horn_cleat;
 mod infused_core;
 mod intimidating_helmet;
 mod iron_club;
+mod jewelry_box;
 mod juzu_bracelet;
 mod kunai;
 mod kusarigama;
@@ -78,6 +84,7 @@ mod lantern;
 mod lava_rock;
 mod lead_paperweight;
 mod leafy_poultice;
+mod looming_fruit;
 mod lost_coffer;
 mod lost_wisp;
 mod lucky_fysh;
@@ -125,6 +132,7 @@ mod sai;
 mod sand_castle;
 mod seal_of_gold;
 mod self_forming_clay;
+mod signet_ring;
 mod sozu;
 mod sparkling_rouge;
 mod spiked_gauntlets;
@@ -336,6 +344,14 @@ pub enum State {
     ThrowingAxe(throwing_axe::State),
     TriBoomerang,
     WarHammer,
+    BeautifulBracelet,
+    BlessedAntler,
+    DiamondDiadem(diamond_diadem::State),
+    JewelryBox,
+    LoomingFruit,
+    SignetRing,
+    DelicateFrond,
+    Glitter,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -562,6 +578,14 @@ pub(crate) fn event_hook(
         State::ThrowingAxe(state) => throwing_axe::event_hook(state, hook),
         State::TriBoomerang => tri_boomerang::event_hook(hook, asked),
         State::WarHammer => war_hammer::event_hook(hook, asked),
+        State::BeautifulBracelet => beautiful_bracelet::event_hook(hook, asked),
+        State::BlessedAntler => blessed_antler::event_hook(hook, asked),
+        State::DiamondDiadem(state) => diamond_diadem::event_hook(state, hook, asked),
+        State::JewelryBox => jewelry_box::event_hook(hook, asked),
+        State::LoomingFruit => looming_fruit::event_hook(hook, asked),
+        State::SignetRing => signet_ring::event_hook(hook, asked),
+        State::DelicateFrond => delicate_frond::event_hook(hook, asked),
+        State::Glitter => glitter::event_hook(hook, asked),
         // Their hooks are ones the run and the fight ask of them:
         // `TryModifyRestSiteOptions`, and `ModifyMaxEnergy` with
         // `TryModifyEnergyCostInCombat`.
@@ -613,6 +637,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         State::BeatingRemnant(state) => beating_remnant::modify_hook(state, hook),
         State::SpikedGauntlets => spiked_gauntlets::modify_hook(hook),
         State::ThrowingAxe(state) => throwing_axe::modify_hook(state, hook),
+        State::BlessedAntler => blessed_antler::modify_hook(hook),
         // The fight asks only a relic that overrides the hook, and none of
         // the rest overrides one of these.
         State::AlchemicalCoffer
@@ -737,7 +762,14 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::Sai
         | State::TanxsWhistle
         | State::TriBoomerang
-        | State::WarHammer => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::WarHammer
+        | State::BeautifulBracelet
+        | State::DiamondDiadem(_)
+        | State::JewelryBox
+        | State::LoomingFruit
+        | State::SignetRing
+        | State::DelicateFrond
+        | State::Glitter => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -896,6 +928,14 @@ impl sts2_core::RelicModel<V> for State {
             Relic::ThrowingAxe => State::ThrowingAxe(throwing_axe::State::default()),
             Relic::TriBoomerang => State::TriBoomerang,
             Relic::WarHammer => State::WarHammer,
+            Relic::BeautifulBracelet => State::BeautifulBracelet,
+            Relic::BlessedAntler => State::BlessedAntler,
+            Relic::DiamondDiadem => State::DiamondDiadem(diamond_diadem::State::default()),
+            Relic::JewelryBox => State::JewelryBox,
+            Relic::LoomingFruit => State::LoomingFruit,
+            Relic::SignetRing => State::SignetRing,
+            Relic::DelicateFrond => State::DelicateFrond,
+            Relic::Glitter => State::Glitter,
             relic => unimplemented!("what {relic:?} does in a run that carries it"),
         }
     }
@@ -929,6 +969,7 @@ impl sts2_core::RelicModel<V> for State {
                 State::Kunai(state) => kunai::display_amount(state),
                 State::Nunchaku(state) => nunchaku::display_amount(state),
                 State::IronClub(state) => iron_club::display_amount(state),
+                State::DiamondDiadem(state) => diamond_diadem::display_amount(state),
                 State::Pendulum(state) => pendulum::display_amount(state),
                 _ => unimplemented!("the number {relic:?} shows"),
             },

@@ -649,6 +649,14 @@ fn before_turn_end<V: Rules>(
                 let player = live.player().id;
                 live.gain_unpowered_block(player, amount);
             }
+            // `PowerCmd.Apply` on the player who carries the relic.
+            (Listener::Relic { .. }, sts2_core::HookEffect::ApplyToOwner(power, amount)) => {
+                let player = live.player().id;
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                board.land(player, power, amount, Some(player));
+                ended = ended.or(board.ended);
+            }
             (_, effect) => unimplemented!("a listener asking for {effect:?} before a turn ends"),
         }
     }
@@ -812,6 +820,24 @@ pub(super) fn carry_setup<V: Rules>(
                         }
                         // A shuffle's question parks the setup, and the rest
                         // of these listeners follow the answer.
+                        // `AddGeneratedCardsToCombat` into the draw pile, each
+                        // at `CardPilePosition.Random`.
+                        sts2_core::HookEffect::AddToDrawAtRandom { card, count } => {
+                            let count: usize = num_traits::cast(count).unwrap_or_else(|| {
+                                unimplemented!("adding {count:?} cards to the draw pile")
+                            });
+                            let mut board = Board::for_card(
+                                live,
+                                rngs.reborrow(),
+                                relics,
+                                ascension,
+                                None,
+                                None,
+                            );
+                            for _ in 0..count {
+                                sts2_core::Fight::add_at_random(&mut board, card, Pile::Draw);
+                            }
+                        }
                         sts2_core::HookEffect::ShuffleIfNecessary => {
                             if !live.cards.is_empty(Pile::Draw) {
                                 continue;
