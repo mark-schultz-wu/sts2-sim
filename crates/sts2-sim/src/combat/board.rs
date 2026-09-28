@@ -3228,7 +3228,8 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     ///
     /// # Panics
     ///
-    /// A listener to `AfterOrbChanneled`.
+    /// A listener to `AfterOrbChanneled` asking for anything but damage on
+    /// every enemy.
     fn channel(&mut self, orb: V::Orb) {
         if self.ended.is_some() || self.ending() {
             return;
@@ -3258,12 +3259,22 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             return;
         };
         orbs.queue.push(V::channelled(orb));
-        if super::listen::heard::<V>(
-            self.live,
-            self.relics,
-            sts2_core::ModelHook::AfterOrbChanneled,
-        ) {
-            unimplemented!("a listener to an orb channelled");
+        let asked =
+            super::listen::notify::<V>(self.live, self.relics, sts2_core::EventHook::OrbChanneled);
+        let player = self.live.player().id;
+        for (listener, effect) in asked {
+            match (listener, effect) {
+                // `CreatureCmd.Damage` over `HittableEnemies`, unpowered and
+                // from the relic's owner.
+                (Listener::Relic { .. }, HookEffect::DamageOpponents(amount)) => {
+                    for target in self.hittable_opponents_of(player) {
+                        self.hit_unpowered(Some(player), target, amount, false);
+                    }
+                }
+                (listener, effect) => {
+                    unimplemented!("{listener:?} asking for {effect:?} as an orb is channelled")
+                }
+            }
         }
     }
 

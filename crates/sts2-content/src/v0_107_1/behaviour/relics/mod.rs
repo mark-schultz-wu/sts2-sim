@@ -113,6 +113,7 @@ mod mango;
 mod meal_ticket;
 mod meat_on_the_bone;
 mod mercury_hourglass;
+mod metronome;
 mod miniature_cannon;
 mod molten_egg;
 mod mr_struggles;
@@ -134,6 +135,7 @@ mod paels_tears;
 mod pandoras_box;
 mod pantograph;
 mod paper_phrog;
+mod parrying_shield;
 mod pear;
 mod pen_nib;
 mod pendulum;
@@ -446,6 +448,8 @@ pub enum State {
     MummifiedHand,
     IvoryTile,
     Bookmark,
+    ParryingShield,
+    Metronome(metronome::State),
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -689,6 +693,8 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::Metronome(state) => metronome::event_hook(state, hook, asked),
+        State::ParryingShield => parrying_shield::event_hook(hook, asked),
         State::Bookmark => bookmark::event_hook(hook, asked),
         State::IvoryTile => ivory_tile::event_hook(hook, asked),
         State::MummifiedHand => mummified_hand::event_hook(hook, asked),
@@ -973,7 +979,9 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::JossPaper(_)
         | State::MummifiedHand
         | State::IvoryTile
-        | State::Bookmark => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::Bookmark
+        | State::ParryingShield
+        | State::Metronome(_) => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1152,6 +1160,8 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::Metronome => State::Metronome(metronome::State::default()),
+            Relic::ParryingShield => State::ParryingShield,
             Relic::Bookmark => State::Bookmark,
             Relic::IvoryTile => State::IvoryTile,
             Relic::MummifiedHand => State::MummifiedHand,
@@ -1233,6 +1243,7 @@ impl sts2_core::RelicModel<V> for State {
                 State::Kusarigama(state) => kusarigama::display_amount(state),
                 State::HappyFlower(state) => happy_flower::display_amount(state),
                 State::Kunai(state) => kunai::display_amount(state),
+                State::Metronome(state) => metronome::display_amount(state),
                 State::JossPaper(state) => joss_paper::display_amount(state),
                 State::LastingCandy(state) => lasting_candy::display_amount(state),
                 State::Girya(state) => girya::display_amount(state),

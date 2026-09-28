@@ -665,7 +665,9 @@ fn temporary(
                 PowerAmount::Counted(signed(landing)),
             ))
         }
-        (PowerAmount::Counted(amount), EventHook::SideTurnEnd { side }) if side == held.owner => {
+        (PowerAmount::Counted(amount), EventHook::SideTurnEnd { side, .. })
+            if side == held.owner =>
+        {
             // `PowerCmd.Remove(this)` and then the lent amount back, which is the
             // order the game hands them over in.
             asked.extend([
@@ -1857,16 +1859,17 @@ pub(crate) fn event_hook(
             _,
             EventHook::SideTurnEnd {
                 side: CombatSide::Enemy,
+                ..
             },
         ) => Some(HookEffect::TickDownDuration),
         // `DebilitatePower.AfterSideTurnEnd`: one off its stack as its owner's
         // turn ends. What it does to Vulnerable and Weak, they read.
-        (Power::DebilitatePower, PowerAmount::Counted(_), EventHook::SideTurnEnd { side })
+        (Power::DebilitatePower, PowerAmount::Counted(_), EventHook::SideTurnEnd { side, .. })
             if side == owner =>
         {
             Some(HookEffect::Decrement)
         }
-        (Power::DebilitatePower, PowerAmount::Endless, EventHook::SideTurnEnd { side })
+        (Power::DebilitatePower, PowerAmount::Endless, EventHook::SideTurnEnd { side, .. })
             if side == owner =>
         {
             unimplemented!("an endless Debilitate")
@@ -1877,9 +1880,9 @@ pub(crate) fn event_hook(
         (
             Power::ConsumingShadowPower,
             PowerAmount::Counted(amount),
-            EventHook::SideTurnEnd { side },
+            EventHook::SideTurnEnd { side, .. },
         ) if side == owner => Some(HookEffect::EvokeLast(amount)),
-        (Power::ConsumingShadowPower, PowerAmount::Endless, EventHook::SideTurnEnd { side })
+        (Power::ConsumingShadowPower, PowerAmount::Endless, EventHook::SideTurnEnd { side, .. })
             if side == owner =>
         {
             unimplemented!("an endless Consuming Shadow")
@@ -1898,7 +1901,7 @@ pub(crate) fn event_hook(
         (Power::RagePower, _, EventHook::CardPlayed { .. }) => None,
         // `RagePower.AfterSideTurnEnd`: `PowerCmd.Remove(this)` as its owner's
         // turn ends.
-        (Power::RagePower, _, EventHook::SideTurnEnd { side }) if side == owner => {
+        (Power::RagePower, _, EventHook::SideTurnEnd { side, .. }) if side == owner => {
             Some(HookEffect::Remove)
         }
         (Power::RagePower, _, EventHook::SideTurnEnd { .. }) => None,
@@ -1941,18 +1944,18 @@ pub(crate) fn event_hook(
         (Power::SicEmPower, _, EventHook::DamageGiven { .. }) => None,
         // `SicEmPower.AfterSideTurnEnd`: `PowerCmd.Remove(this)` as its
         // owner's turn ends.
-        (Power::SicEmPower, _, EventHook::SideTurnEnd { side }) if side == owner => {
+        (Power::SicEmPower, _, EventHook::SideTurnEnd { side, .. }) if side == owner => {
             Some(HookEffect::Remove)
         }
         (Power::SicEmPower, _, EventHook::SideTurnEnd { .. }) => None,
         // `ConquerorPower.AfterSideTurnEnd`: one off its stack as its owner's
         // side's turn ends.
-        (Power::ConquerorPower, PowerAmount::Counted(_), EventHook::SideTurnEnd { side })
+        (Power::ConquerorPower, PowerAmount::Counted(_), EventHook::SideTurnEnd { side, .. })
             if side == owner =>
         {
             Some(HookEffect::Decrement)
         }
-        (Power::ConquerorPower, PowerAmount::Endless, EventHook::SideTurnEnd { side })
+        (Power::ConquerorPower, PowerAmount::Endless, EventHook::SideTurnEnd { side, .. })
             if side == owner =>
         {
             unimplemented!("an endless Conqueror")
@@ -1985,7 +1988,7 @@ pub(crate) fn event_hook(
         }
         // `RingingPower.AfterSideTurnEnd`: gone as its owner's side ends a
         // turn.
-        (Power::RingingPower, _, EventHook::SideTurnEnd { side }) if side == owner => {
+        (Power::RingingPower, _, EventHook::SideTurnEnd { side, .. }) if side == owner => {
             Some(HookEffect::Remove)
         }
         (Power::RingingPower, _, EventHook::SideTurnEnd { .. }) => None,
@@ -2037,7 +2040,7 @@ pub(crate) fn event_hook(
         (Power::TangledPower, _, EventHook::CardEnteredCombat { .. }) => None,
         // `TangledPower.AfterSideTurnEnd`: gone as its owner's side ends a
         // turn.
-        (Power::TangledPower, _, EventHook::SideTurnEnd { side }) if side == owner => {
+        (Power::TangledPower, _, EventHook::SideTurnEnd { side, .. }) if side == owner => {
             Some(HookEffect::Remove)
         }
         (Power::TangledPower, _, EventHook::SideTurnEnd { .. }) => None,
@@ -2047,7 +2050,7 @@ pub(crate) fn event_hook(
         )),
         // `DemisePower.AfterSideTurnEnd`: its stack off its owner as its
         // owner's side's turn ends.
-        (Power::DemisePower, PowerAmount::Counted(amount), EventHook::SideTurnEnd { side })
+        (Power::DemisePower, PowerAmount::Counted(amount), EventHook::SideTurnEnd { side, .. })
             if side == owner =>
         {
             Some(HookEffect::DamageOwnerInFight {
@@ -2056,7 +2059,7 @@ pub(crate) fn event_hook(
                 self_dealt: false,
             })
         }
-        (Power::DemisePower, PowerAmount::Endless, EventHook::SideTurnEnd { side })
+        (Power::DemisePower, PowerAmount::Endless, EventHook::SideTurnEnd { side, .. })
             if side == owner =>
         {
             unimplemented!("an endless Demise")
@@ -2101,7 +2104,7 @@ pub(crate) fn event_hook(
         }
         // `StranglePower.AfterSideTurnEnd`: gone as its owner's side ends a
         // turn.
-        (Power::StranglePower, _, EventHook::SideTurnEnd { side }) if side == owner => {
+        (Power::StranglePower, _, EventHook::SideTurnEnd { side, .. }) if side == owner => {
             Some(HookEffect::Remove)
         }
         (Power::StranglePower, _, EventHook::SideTurnEnd { .. }) => None,
@@ -2127,7 +2130,7 @@ pub(crate) fn event_hook(
             })
         }
         // `OblivionPower.AfterSideTurnEnd`: gone as the player's turn ends.
-        (Power::OblivionPower, _, EventHook::SideTurnEnd { side: CombatSide::Player }) => {
+        (Power::OblivionPower, _, EventHook::SideTurnEnd { side: CombatSide::Player, .. }) => {
             Some(HookEffect::Remove)
         }
         (Power::OblivionPower, _, EventHook::SideTurnEnd { .. }) => None,
@@ -2181,7 +2184,7 @@ pub(crate) fn event_hook(
         }
         // `MonologuePower.AfterSideTurnEnd` on its owner's side: gone, and
         // all it lent taken back.
-        (Power::MonologuePower, _, EventHook::SideTurnEnd { side }) if side == owner => {
+        (Power::MonologuePower, _, EventHook::SideTurnEnd { side, .. }) if side == owner => {
             let State::Monologue { applied, .. } = state else {
                 unreachable!("Strength counted for {:?}", state.power())
             };
@@ -2295,7 +2298,7 @@ pub(crate) fn event_hook(
         }
         // `ConstrictPower.AfterSideTurnEnd`: its stack off its owner, dealt by
         // the owner and unpowered, as its owner's side's turn ends.
-        (Power::ConstrictPower, PowerAmount::Counted(amount), EventHook::SideTurnEnd { side })
+        (Power::ConstrictPower, PowerAmount::Counted(amount), EventHook::SideTurnEnd { side, .. })
             if side == owner =>
         {
             Some(HookEffect::DamageOwnerInFight {
@@ -2304,7 +2307,7 @@ pub(crate) fn event_hook(
                 self_dealt: true,
             })
         }
-        (Power::ConstrictPower, PowerAmount::Endless, EventHook::SideTurnEnd { side })
+        (Power::ConstrictPower, PowerAmount::Endless, EventHook::SideTurnEnd { side, .. })
             if side == owner =>
         {
             unimplemented!("an endless Constrict")
@@ -2339,6 +2342,7 @@ pub(crate) fn event_hook(
             PowerAmount::Counted(_),
             EventHook::SideTurnEnd {
                 side: CombatSide::Enemy,
+                ..
             },
         ) => Some(HookEffect::Decrement),
         (
@@ -2346,12 +2350,13 @@ pub(crate) fn event_hook(
             PowerAmount::Endless,
             EventHook::SideTurnEnd {
                 side: CombatSide::Enemy,
+                ..
             },
         ) => unimplemented!("an endless Intangible"),
         (Power::IntangiblePower, _, EventHook::SideTurnEnd { .. }) => None,
         // `BorrowedTimePower.AfterSideTurnEnd`: gone once its owner's turn
         // ends.
-        (Power::BorrowedTimePower, _, EventHook::SideTurnEnd { side }) if side == owner => {
+        (Power::BorrowedTimePower, _, EventHook::SideTurnEnd { side, .. }) if side == owner => {
             Some(HookEffect::Remove)
         }
         (Power::BorrowedTimePower, _, EventHook::SideTurnEnd { .. }) => None,
@@ -2512,7 +2517,7 @@ pub(crate) fn event_hook(
         }
         // `HighVoltagePower.AfterSideTurnEnd`: its stack of Strength as its
         // owner's side ends a turn.
-        (Power::HighVoltagePower, amount, EventHook::SideTurnEnd { side }) if side == owner => {
+        (Power::HighVoltagePower, amount, EventHook::SideTurnEnd { side, .. }) if side == owner => {
             Some(HookEffect::ApplyToOwner(Power::StrengthPower, amount))
         }
         (Power::HighVoltagePower, _, EventHook::SideTurnEnd { .. }) => None,
@@ -2555,11 +2560,12 @@ pub(crate) fn event_hook(
             _,
             EventHook::SideTurnEnd {
                 side: CombatSide::Enemy,
+                ..
             },
         ) => Some(HookEffect::Remove),
         (Power::DiamondDiademPower, _, EventHook::SideTurnEnd { .. }) => None,
         // `NoDrawPower.AfterSideTurnEnd`: gone once its owner's turn ends.
-        (Power::NoDrawPower, _, EventHook::SideTurnEnd { side }) if side == owner => {
+        (Power::NoDrawPower, _, EventHook::SideTurnEnd { side, .. }) if side == owner => {
             Some(HookEffect::Remove)
         }
         (Power::NoDrawPower, _, EventHook::SideTurnEnd { .. }) => None,
@@ -2582,6 +2588,7 @@ pub(crate) fn event_hook(
             PowerAmount::Counted(_),
             EventHook::SideTurnEnd {
                 side: CombatSide::Enemy,
+                ..
             },
         ) => Some(HookEffect::Decrement),
         (
@@ -2589,13 +2596,14 @@ pub(crate) fn event_hook(
             PowerAmount::Endless,
             EventHook::SideTurnEnd {
                 side: CombatSide::Enemy,
+                ..
             },
         ) => unimplemented!("an endless Colossus"),
         (Power::ColossusPower, _, EventHook::SideTurnEnd { .. }) => None,
         // `ShrinkPower.AfterSideTurnEnd`, for the side its owner is among the
         // participants of. An infinite Shrink, the one the game gives a
         // negative amount, lasts the fight.
-        (Power::ShrinkPower, PowerAmount::Counted(_), EventHook::SideTurnEnd { side })
+        (Power::ShrinkPower, PowerAmount::Counted(_), EventHook::SideTurnEnd { side, .. })
             if side == owner =>
         {
             Some(HookEffect::Decrement)
@@ -2613,7 +2621,7 @@ pub(crate) fn event_hook(
         (
             Power::TerritorialPower,
             PowerAmount::Counted(amount),
-            EventHook::SideTurnEnd { side },
+            EventHook::SideTurnEnd { side, .. },
         ) if side == owner => Some(HookEffect::ApplyToOwner(
             Power::StrengthPower,
             PowerAmount::Counted(amount),
@@ -2625,7 +2633,7 @@ pub(crate) fn event_hook(
         (
             Power::EscapeArtistPower,
             PowerAmount::Counted(amount),
-            EventHook::SideTurnEnd { side },
+            EventHook::SideTurnEnd { side, .. },
         ) if side == owner && amount > one => Some(HookEffect::Decrement),
         (Power::EscapeArtistPower, PowerAmount::Endless, EventHook::SideTurnEnd { .. }) => {
             unimplemented!("an endless Escape Artist")
@@ -2633,12 +2641,12 @@ pub(crate) fn event_hook(
         (Power::EscapeArtistPower, _, EventHook::SideTurnEnd { .. }) => None,
         // `HatchPower.AfterSideTurnEnd`: `PowerCmd.Decrement` as its owner's
         // side ends.
-        (Power::HatchPower, PowerAmount::Counted(_), EventHook::SideTurnEnd { side })
+        (Power::HatchPower, PowerAmount::Counted(_), EventHook::SideTurnEnd { side, .. })
             if side == owner =>
         {
             Some(HookEffect::Decrement)
         }
-        (Power::HatchPower, PowerAmount::Endless, EventHook::SideTurnEnd { side })
+        (Power::HatchPower, PowerAmount::Endless, EventHook::SideTurnEnd { side, .. })
             if side == owner =>
         {
             unimplemented!("an endless Hatch")
@@ -2801,7 +2809,7 @@ pub(crate) fn event_hook(
         // own amount, which nothing here reads.
         (Power::VitalSparkPower, _, EventHook::PowerAmountChanged { .. }) => None,
         // `TaintedPower.AfterSideTurnEnd`: gone as the enemies' turn ends.
-        (Power::TaintedPower, _, EventHook::SideTurnEnd { side: CombatSide::Enemy }) => {
+        (Power::TaintedPower, _, EventHook::SideTurnEnd { side: CombatSide::Enemy, .. }) => {
             Some(HookEffect::Remove)
         }
         (Power::TaintedPower, _, EventHook::SideTurnEnd { .. }) => None,
@@ -2916,7 +2924,7 @@ pub(crate) fn event_hook(
         (Power::PainfulStabsPower, _, EventHook::AfterAttack { .. }) => None,
         // `NemesisPower.AfterSideTurnEnd`, as its owner's side's turn ends:
         // Intangible every other turn, and taken off on the turns between.
-        (Power::NemesisPower, _, EventHook::SideTurnEnd { side }) if side == owner => {
+        (Power::NemesisPower, _, EventHook::SideTurnEnd { side, .. }) if side == owner => {
             let State::Nemesis { intangible } = state else {
                 unreachable!("Nemesis holding {state:?}")
             };
@@ -2939,12 +2947,12 @@ pub(crate) fn event_hook(
         (
             Power::BattlewornDummyTimeLimitPower,
             PowerAmount::Counted(amount),
-            EventHook::SideTurnEnd { side },
+            EventHook::SideTurnEnd { side, .. },
         ) if side == owner => Some(match amount > one {
             true => HookEffect::Decrement,
             false => HookEffect::Escape,
         }),
-        (Power::BattlewornDummyTimeLimitPower, PowerAmount::Endless, EventHook::SideTurnEnd { side })
+        (Power::BattlewornDummyTimeLimitPower, PowerAmount::Endless, EventHook::SideTurnEnd { side, .. })
             if side == owner =>
         {
             unimplemented!("an endless time limit")
@@ -3138,7 +3146,7 @@ pub(crate) fn event_hook(
         // `TenderPower.AfterSideTurnEnd` for the side its owner is among the
         // participants of. Everything taken this turn comes back, and the
         // count starts again.
-        (Power::TenderPower, _, EventHook::SideTurnEnd { side }) if side == owner => {
+        (Power::TenderPower, _, EventHook::SideTurnEnd { side, .. }) if side == owner => {
             state.clear();
             asked.extend([
                 HookEffect::ApplyToOwner(Power::StrengthPower, PowerAmount::Counted(counted)),
@@ -3150,7 +3158,7 @@ pub(crate) fn event_hook(
         // `SlumberPower.AfterSideTurnEnd` for the side its owner is among. The
         // beetle sleeps through its own turns and wakes when the count is
         // spent, which `PowerCmd.Decrement` taking the last instance off is.
-        (Power::SlumberPower, PowerAmount::Counted(amount), EventHook::SideTurnEnd { side })
+        (Power::SlumberPower, PowerAmount::Counted(amount), EventHook::SideTurnEnd { side, .. })
             if side == owner =>
         {
             if amount == one {
@@ -3196,7 +3204,7 @@ pub(crate) fn event_hook(
         {
             Some(HookEffect::Draw(amount))
         }
-        (Power::DarkEmbracePower, PowerAmount::Counted(amount), EventHook::SideTurnEnd { side })
+        (Power::DarkEmbracePower, PowerAmount::Counted(amount), EventHook::SideTurnEnd { side, .. })
             if side == owner =>
         {
             let counted = state.counted();
@@ -3624,7 +3632,7 @@ pub(crate) fn event_hook(
         }
         // `PanachePower.AfterSideTurnEnd`: the count starts again as its
         // owner's side ends a turn.
-        (Power::PanachePower, _, EventHook::SideTurnEnd { side }) => {
+        (Power::PanachePower, _, EventHook::SideTurnEnd { side, .. }) => {
             if side == owner {
                 let State::Panache { cards_left, .. } = state else {
                     unreachable!("cards left for {:?}", state.power())
@@ -3694,7 +3702,7 @@ pub(crate) fn event_hook(
         (Power::ClarityPower, _, EventHook::SideTurnStart { .. }) => None,
         // `FlameBarrierPower.AfterSideTurnEnd`, which goes once the other side
         // has had its turn.
-        (Power::FlameBarrierPower, _, EventHook::SideTurnEnd { side }) if side != owner => {
+        (Power::FlameBarrierPower, _, EventHook::SideTurnEnd { side, .. }) if side != owner => {
             Some(HookEffect::Remove)
         }
         // `DuplicationPower.AfterModifyingCardPlayCount`, and its
@@ -3703,7 +3711,7 @@ pub(crate) fn event_hook(
         (Power::DuplicationPower, _, EventHook::PlayCountModified { .. }) => {
             Some(HookEffect::Decrement)
         }
-        (Power::DuplicationPower, _, EventHook::SideTurnEnd { side }) if side == owner => {
+        (Power::DuplicationPower, _, EventHook::SideTurnEnd { side, .. }) if side == owner => {
             Some(HookEffect::Remove)
         }
         (Power::DuplicationPower, _, EventHook::SideTurnEnd { .. }) => None,
@@ -3712,7 +3720,7 @@ pub(crate) fn event_hook(
         }
         // `EchoFormPower.AfterModifyingCardPlayCount` does nothing.
         (Power::EchoFormPower, _, EventHook::PlayCountModified { .. }) => None,
-        (Power::BurstPower | Power::ShadowmeldPower | Power::CorrosiveWavePower, _, EventHook::SideTurnEnd { side })
+        (Power::BurstPower | Power::ShadowmeldPower | Power::CorrosiveWavePower, _, EventHook::SideTurnEnd { side, .. })
             if side == owner =>
         {
             Some(HookEffect::Remove)
@@ -3725,6 +3733,7 @@ pub(crate) fn event_hook(
             _,
             EventHook::SideTurnEnd {
                 side: CombatSide::Enemy,
+                ..
             },
         ) => {
             Some(HookEffect::Decrement)
@@ -3844,20 +3853,20 @@ pub(crate) fn event_hook(
         (Power::MonarchsGazePower, _, EventHook::DamageGiven { .. }) => None,
         // `RegenPower.AfterSideTurnEnd`: its stack healed, then one off, as
         // its owner's side ends a turn.
-        (Power::RegenPower, PowerAmount::Counted(amount), EventHook::SideTurnEnd { side })
+        (Power::RegenPower, PowerAmount::Counted(amount), EventHook::SideTurnEnd { side, .. })
             if side == owner =>
         {
             asked.extend([HookEffect::Heal(amount), HookEffect::Decrement]);
             return;
         }
-        (Power::RegenPower, PowerAmount::Endless, EventHook::SideTurnEnd { side }) if side == owner => {
+        (Power::RegenPower, PowerAmount::Endless, EventHook::SideTurnEnd { side, .. }) if side == owner => {
             unimplemented!("an endless Regen")
         }
         (Power::RegenPower, _, EventHook::SideTurnEnd { .. }) => None,
         // `RitualPower.AfterSideTurnEnd`: its stack of Strength as its
         // owner's side ends a turn. A monster's skips the turn it was applied
         // in, through `AfterApplied`.
-        (Power::RitualPower, amount, EventHook::SideTurnEnd { side }) if side == owner => {
+        (Power::RitualPower, amount, EventHook::SideTurnEnd { side, .. }) if side == owner => {
             match state.swap_just_applied(false) {
                 true => None,
                 false => Some(HookEffect::ApplyToOwner(Power::StrengthPower, amount)),
@@ -3889,7 +3898,7 @@ pub(crate) fn event_hook(
         (Power::OneTwoPunchPower, _, EventHook::PlayCountModified { .. }) => {
             Some(HookEffect::Decrement)
         }
-        (Power::OneTwoPunchPower, _, EventHook::SideTurnEnd { side }) if side == owner => {
+        (Power::OneTwoPunchPower, _, EventHook::SideTurnEnd { side, .. }) if side == owner => {
             Some(HookEffect::Remove)
         }
         (Power::FlameBarrierPower | Power::OneTwoPunchPower, _, EventHook::SideTurnEnd { .. }) => {
@@ -4381,7 +4390,7 @@ pub(crate) fn event_hook(
         }
         (Power::DrawCardsNextTurnPower, _, EventHook::SideTurnStart { .. }) => None,
         // `RetainHandPower.AfterSideTurnEnd`, for the side its owner is among.
-        (Power::RetainHandPower, _, EventHook::SideTurnEnd { side }) if side == owner => {
+        (Power::RetainHandPower, _, EventHook::SideTurnEnd { side, .. }) if side == owner => {
             Some(HookEffect::Decrement)
         }
         (Power::RetainHandPower, _, EventHook::SideTurnEnd { .. }) => None,

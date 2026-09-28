@@ -3399,6 +3399,8 @@ pub enum EventHook<V: ContentVersion> {
     },
     SideTurnEnd {
         side: V::CombatSide,
+        /// The player's `Creature.Block`, which a listener reads.
+        block: V::Number,
     },
     /// `AfterSideTurnEndLate`, once every `AfterSideTurnEnd` has run.
     SideTurnEndLate {
@@ -3429,6 +3431,8 @@ pub enum EventHook<V: ContentVersion> {
     /// `AfterFlush`, once the player's hand is flushed. The cards left in
     /// hand are the ones it retained.
     Flushed,
+    /// `AfterOrbChanneled`, once an orb is in the player's queue.
+    OrbChanneled,
     /// `TryModifyRestSiteOptions`, as a rest site opens. A listener answers
     /// with each option it adds.
     RestSiteOptions,
@@ -3582,6 +3586,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::CombatStartingLate { .. } => ModelHook::BeforeCombatStartLate,
             EventHook::RestSiteOptions => ModelHook::TryModifyRestSiteOptions,
             EventHook::Flushed => ModelHook::AfterFlush,
+            EventHook::OrbChanneled => ModelHook::AfterOrbChanneled,
             EventHook::CardRewardOptions { .. } => ModelHook::TryModifyCardRewardOptions,
             EventHook::CombatVictoryEarly { .. } => ModelHook::AfterCombatVictoryEarly,
             EventHook::CombatEnd { .. } => ModelHook::AfterCombatEnd,

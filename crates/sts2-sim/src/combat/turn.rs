@@ -2056,9 +2056,9 @@ fn tick_powers<V: Rules>(
     let mut ticking: SmallVec<[(CombatId, V::Power); 8]> = SmallVec::new();
     let mut leaving: SmallVec<[(CombatId, V::Power); 4]> = SmallVec::new();
     for (listener, effect) in listen::notify::<V>(live, relics, hook) {
-        // `CardPileCmd.Draw` for the player who carries the relic.
-        if let (Listener::Relic { .. }, sts2_core::HookEffect::Draw(amount)) = (listener, effect) {
-            applying.push(TurnEndAsk::Draw(amount));
+        // What a relic asks for, on the player who carries it.
+        if let Listener::Relic { .. } = listener {
+            applying.push(TurnEndAsk::Relic(effect));
             continue;
         }
         let Listener::Power { owner, power, .. } = listener else {
@@ -2156,7 +2156,10 @@ fn after_turn_end<V: Rules>(
     side: V::CombatSide,
 ) -> Option<super::Ended> {
     let hooks = [
-        sts2_core::EventHook::SideTurnEnd { side },
+        sts2_core::EventHook::SideTurnEnd {
+            side,
+            block: live.player().block,
+        },
         sts2_core::EventHook::SideTurnEndLate { side },
     ];
     for hook in hooks {
@@ -2193,6 +2196,8 @@ enum TurnEndAsk<V: Rules> {
     Escape(CombatId),
     /// `OrbCmd.EvokeLast`, this many times.
     EvokeLast(V::Number),
+    /// What a relic asked for, carried out for the player.
+    Relic(sts2_core::HookEffect<V>),
 }
 
 /// What the powers that just ticked asked for, and whatever that ended.
@@ -2221,6 +2226,7 @@ fn applied<V: Rules>(
                 dealer,
             } => board.hit_unpowered(dealer, owner, amount, unblockable),
             TurnEndAsk::Draw(amount) => sts2_core::Fight::draw(&mut board, amount),
+            TurnEndAsk::Relic(effect) => super::hook::apply::<V, _>(&mut board, [effect]),
             TurnEndAsk::Heal(at, amount) => sts2_core::Fight::heal(&mut board, at, amount),
             TurnEndAsk::Decrement(at, power) => {
                 board.modify_amount(at, power, -num_traits::one::<V::Number>())
