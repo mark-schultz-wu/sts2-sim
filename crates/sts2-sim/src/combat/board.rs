@@ -1453,7 +1453,7 @@ impl<'a, V: Rules> Board<'a, V> {
             .map(|(held, _)| held.power())
             .collect();
         for power in going {
-            self.live.remove_power(id, power);
+            self.remove_power_carried(id, power);
         }
     }
 
@@ -1749,9 +1749,9 @@ impl<'a, V: Rules> Board<'a, V> {
                 unimplemented!("{listener:?} asking for {effect:?} after a hit")
             };
             match effect {
-                HookEffect::RemoveFromOwner(power) => self.live.remove_power(owner, power),
+                HookEffect::RemoveFromOwner(power) => self.remove_power_carried(owner, power),
                 // `PowerCmd.Remove(this)`.
-                HookEffect::Remove => self.live.remove_power(owner, this),
+                HookEffect::Remove => self.remove_power_carried(owner, this),
                 HookEffect::AddToDrawAtRandom { card, count } => {
                     let count: usize = num_traits::cast(count)
                         .unwrap_or_else(|| unimplemented!("{count:?} cards into the draw pile"));
