@@ -1188,6 +1188,17 @@ pub(super) fn carry_setup<V: Rules>(
                             count,
                             writes,
                         ),
+                        // `CardCmd.Upgrade` of every card in hand.
+                        sts2_core::HookEffect::UpgradeHand => live.cards.write_every(
+                            &[Pile::Hand],
+                            |_| true,
+                            |card| {
+                                card.modify(
+                                    sts2_core::Change::Upgrade,
+                                    sts2_core::Lasting::ThisFight,
+                                )
+                            },
+                        ),
                         effect => unimplemented!(
                             "a listener asking for {effect:?} as the player's turn starts"
                         ),

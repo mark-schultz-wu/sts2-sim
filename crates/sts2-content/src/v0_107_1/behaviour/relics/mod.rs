@@ -22,6 +22,7 @@ mod bag_of_marbles;
 mod bag_of_preparation;
 mod beating_remnant;
 mod beautiful_bracelet;
+mod bellows;
 mod big_mushroom;
 mod biiig_hug;
 mod bing_bong;
@@ -75,6 +76,7 @@ mod fishing_rod;
 mod forgotten_soul;
 mod fragrant_mushroom;
 mod frozen_egg;
+mod game_piece;
 mod girya;
 mod glass_eye;
 mod glitter;
@@ -90,6 +92,7 @@ mod intimidating_helmet;
 mod iron_club;
 mod jeweled_mask;
 mod jewelry_box;
+mod joss_paper;
 mod juzu_bracelet;
 mod kunai;
 mod kusarigama;
@@ -148,6 +151,7 @@ mod rainbow_ring;
 mod red_mask;
 mod red_skull;
 mod regal_pillow;
+mod regalite;
 mod reptile_trinket;
 mod ring_of_the_drake;
 mod ring_of_the_snake;
@@ -432,6 +436,10 @@ pub enum State {
     OrangeDough,
     LastingCandy(lasting_candy::State),
     Candelabra,
+    GamePiece,
+    Regalite,
+    Bellows,
+    JossPaper(joss_paper::State),
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -675,6 +683,10 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::JossPaper(state) => joss_paper::event_hook(state, hook, asked),
+        State::Bellows => bellows::event_hook(hook, asked),
+        State::Regalite => regalite::event_hook(hook, asked),
+        State::GamePiece => game_piece::event_hook(hook, asked),
         State::Candelabra => candelabra::event_hook(hook, asked),
         State::LastingCandy(state) => lasting_candy::event_hook(state, hook, asked),
         State::OrangeDough => orange_dough::event_hook(hook, asked),
@@ -945,7 +957,11 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::WhiteBeastStatue
         | State::OrangeDough
         | State::LastingCandy(_)
-        | State::Candelabra => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::Candelabra
+        | State::GamePiece
+        | State::Regalite
+        | State::Bellows
+        | State::JossPaper(_) => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1124,6 +1140,10 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::JossPaper => State::JossPaper(joss_paper::State::default()),
+            Relic::Bellows => State::Bellows,
+            Relic::Regalite => State::Regalite,
+            Relic::GamePiece => State::GamePiece,
             Relic::Candelabra => State::Candelabra,
             Relic::LastingCandy => State::LastingCandy(lasting_candy::State::default()),
             Relic::OrangeDough => State::OrangeDough,
@@ -1198,6 +1218,7 @@ impl sts2_core::RelicModel<V> for State {
                 State::Kusarigama(state) => kusarigama::display_amount(state),
                 State::HappyFlower(state) => happy_flower::display_amount(state),
                 State::Kunai(state) => kunai::display_amount(state),
+                State::JossPaper(state) => joss_paper::display_amount(state),
                 State::LastingCandy(state) => lasting_candy::display_amount(state),
                 State::Girya(state) => girya::display_amount(state),
                 State::TuningFork(state) => tuning_fork::display_amount(state),

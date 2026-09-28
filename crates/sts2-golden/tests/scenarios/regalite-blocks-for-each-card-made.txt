@@ -1,0 +1,7 @@
+# Regalite gives two block for each card its owner makes in a fight. Blade
+# Dance makes three Shivs.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","relic":"REGALITE"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"BLADE_DANCE"}
+{"cmd":"play_card","index":7}
