@@ -1834,6 +1834,13 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("reading a card's costs")
     }
 
+    /// One card's energy and star costs with no modifier at all, which is
+    /// `GetWithModifiers(CostModifiers.None)` and `BaseStarCost`: what it
+    /// prints, upgrades included.
+    fn printed_costs(&self, _card: crate::CardAt<V>) -> (Cost, Cost) {
+        unimplemented!("reading a card's printed costs")
+    }
+
     /// `Keywords.Contains(keyword)` for one card: what its table prints and
     /// what the fight wrote on it, less what the fight took off.
     fn card_keyword(&self, _card: crate::CardAt<V>, _keyword: V::CardKeyword) -> bool {
@@ -3237,6 +3244,8 @@ pub enum EventHook<V: ContentVersion> {
         affliction: Option<V::Affliction>,
         /// `Keywords.Contains(Ethereal)` for the copy.
         ethereal: bool,
+        /// `CardPlay.Resources.EnergyValue`: the energy this play spent.
+        spent: V::Count,
     },
     /// `BeforeDamageReceived`, once the damage hooks worked the hit out and
     /// before it meets block.
@@ -4590,6 +4599,11 @@ pub enum HookEffect<V: ContentVersion> {
     FreeRandomFromDraw {
         kind: CardKind,
     },
+    /// `MummifiedHand.AfterCardPlayed`'s pick, off `CombatCardSelection`, and
+    /// `SetToFreeThisTurn` on it. `NextItem` over the hand's cards that print
+    /// a cost and cost something now. Failing that, over the hand's cards
+    /// that cost something now, then those that print a cost, then the hand.
+    FreeCostlyInHand,
     /// `CardCmd.Upgrade` on a new card, then `CardPileCmd.Add` to the deck.
     AddUpgradedToDeck(V::Card),
     /// `CardFactory.CreateForReward` of one card from the character's pool,

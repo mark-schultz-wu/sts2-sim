@@ -90,6 +90,7 @@ mod ice_cream;
 mod infused_core;
 mod intimidating_helmet;
 mod iron_club;
+mod ivory_tile;
 mod jeweled_mask;
 mod jewelry_box;
 mod joss_paper;
@@ -114,6 +115,7 @@ mod mercury_hourglass;
 mod miniature_cannon;
 mod molten_egg;
 mod mr_struggles;
+mod mummified_hand;
 mod neows_talisman;
 mod neows_torment;
 mod new_leaf;
@@ -440,6 +442,8 @@ pub enum State {
     Regalite,
     Bellows,
     JossPaper(joss_paper::State),
+    MummifiedHand,
+    IvoryTile,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -683,6 +687,8 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::IvoryTile => ivory_tile::event_hook(hook, asked),
+        State::MummifiedHand => mummified_hand::event_hook(hook, asked),
         State::JossPaper(state) => joss_paper::event_hook(state, hook, asked),
         State::Bellows => bellows::event_hook(hook, asked),
         State::Regalite => regalite::event_hook(hook, asked),
@@ -961,7 +967,9 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::GamePiece
         | State::Regalite
         | State::Bellows
-        | State::JossPaper(_) => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::JossPaper(_)
+        | State::MummifiedHand
+        | State::IvoryTile => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1140,6 +1148,8 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::IvoryTile => State::IvoryTile,
+            Relic::MummifiedHand => State::MummifiedHand,
             Relic::JossPaper => State::JossPaper(joss_paper::State::default()),
             Relic::Bellows => State::Bellows,
             Relic::Regalite => State::Regalite,

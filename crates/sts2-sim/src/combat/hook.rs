@@ -96,6 +96,39 @@ pub(crate) fn apply<V: Rules, F: Fight<V>>(
                     }
                 }
             }
+            HookEffect::FreeCostlyInHand => {
+                use sts2_core::Cost;
+
+                let hand = fight.cards_in(sts2_core::Pile::Hand);
+                let positive = |cost: Cost| matches!(cost, Cost::Fixed(n) if n.get() > 0);
+                let prints: Vec<_> = hand
+                    .iter()
+                    .copied()
+                    .filter(|&at| {
+                        let (energy, stars) = fight.printed_costs(at);
+                        positive(energy) || positive(stars)
+                    })
+                    .collect();
+                let costly = |at: &sts2_core::CardAt<V>| {
+                    let (energy, stars) = fight.card_costs(*at, true);
+                    positive(energy) || positive(stars)
+                };
+                let stream = <V::RunRngType as sts2_core::RunStreamKinds>::COMBAT_CARD_SELECTION;
+                let both: Vec<_> = prints.iter().copied().filter(costly).collect();
+                let now: Vec<_> = hand.iter().copied().filter(costly).collect();
+                let picked = [both, now, prints, hand]
+                    .into_iter()
+                    .find_map(|among| fight.random_card(&among, stream));
+                if let Some(at) = picked {
+                    for pool in [sts2_core::CostPool::Energy, sts2_core::CostPool::Star] {
+                        fight.modify_card(
+                            at,
+                            sts2_core::Change::SetCost(pool, num_traits::zero()),
+                            sts2_core::Lasting::ThisTurnOrUntilPlayed,
+                        );
+                    }
+                }
+            }
             other => unimplemented!("a model asking for {other:?} inside a fight"),
         }
     }

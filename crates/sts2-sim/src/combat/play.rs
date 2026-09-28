@@ -1079,6 +1079,13 @@ fn finished<V: Rules, S: LendsCombat>(
         .cards
         .named(id)
         .and_then(|held| held.face.ident.affliction);
+    let spent = next
+        .history()
+        .started_this_turn()
+        .filter(|started| started.id == id)
+        .last()
+        .expect("a play that finished started this turn")
+        .energy;
     let asked = super::listen::notify::<V>(
         next,
         relics,
@@ -1087,6 +1094,7 @@ fn finished<V: Rules, S: LendsCombat>(
             id,
             affliction,
             ethereal,
+            spent,
         },
     );
     if !asked.is_empty() {

@@ -3046,8 +3046,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 .unwrap_or_else(|| unimplemented!("an energy change of {amount:?}"))
         };
         // `PlayerCombatState` holds the pool as a count and clamps it at zero.
+        // `PlayerCmd.GainEnergy` gains nothing once the fight is ending.
         match amount < V::Number::zero() {
             true => self.live.energy = self.live.energy.saturating_sub(size(-amount)),
+            false if self.ended.is_some() || self.ending() => {}
             false => self.live.energy = self.live.energy + size(amount),
         }
     }
@@ -3389,6 +3391,16 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 },
             ),
         }
+    }
+
+    fn printed_costs(&self, card: CardAt<V>) -> (sts2_core::Cost, sts2_core::Cost) {
+        let at = self.standing(card);
+        let held = self
+            .live
+            .cards
+            .get(card.pile(), at)
+            .expect("a card stands where it was found");
+        (held.face.cost, held.face.star_cost)
     }
 
     fn card_keyword(&self, card: CardAt<V>, keyword: V::CardKeyword) -> bool {
