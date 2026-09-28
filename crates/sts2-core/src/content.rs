@@ -1524,6 +1524,9 @@ pub trait CreatureView<V: ContentVersion> {
     /// monster.
     fn owner(&self) -> Option<crate::CombatId>;
 
+    /// `Creature.Monster`, or nothing for a player.
+    fn monster(&self) -> Option<V::Monster>;
+
     /// `Creature.GetPower<T>()?.Amount`, and `None` for one without it.
     ///
     /// Both of the questions the game asks a power from outside: whether the
@@ -2184,6 +2187,19 @@ pub trait Fight<V: ContentVersion> {
     /// `ModifyCardPlayCount`, then `AfterModifyingCardPlayCount`.
     fn generate_play_count(&mut self, _card: crate::CardId<V>) -> V::Number {
         unimplemented!("a play count worked out outside a play")
+    }
+
+    /// `RunRng.MonsterAi.NextItem(items)`, which draws nothing from an empty
+    /// list.
+    fn monster_ai_choose<T: Copy>(&mut self, _items: &[T]) -> Option<T> {
+        unimplemented!("a monster choosing at random")
+    }
+
+    /// `CreatureCmd.Add` into `Encounter.GetNextSlot`: the first of the
+    /// encounter's slots no enemy in the fight holds. Nothing where every
+    /// slot is held.
+    fn summon_into_first_free_slot(&mut self, _monster: V::Monster) -> Option<crate::CombatId> {
+        unimplemented!("a monster summoned into the first free slot")
     }
 
     /// `CombatEnergyCosts.NextInt(below)`: a cost drawn at random.

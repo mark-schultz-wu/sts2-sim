@@ -3446,6 +3446,31 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         Some(self.summon_into_slot(monster, slot))
     }
 
+    fn summon_into_first_free_slot(&mut self, monster: V::Monster) -> Option<CombatId> {
+        use sts2_core::EncounterTable as _;
+
+        let held: SmallVec<[u8; 8]> = self
+            .live
+            .machines
+            .iter()
+            .filter(|held| {
+                self.live
+                    .creatures
+                    .iter()
+                    .any(|creature| creature.id == held.creature)
+            })
+            .filter_map(|held| held.slot)
+            .collect();
+        let slot = (0..self.live.encounter.slots()).find(|slot| !held.contains(slot))?;
+        Some(self.summon_into_slot(monster, slot))
+    }
+
+    fn monster_ai_choose<T: Copy>(&mut self, items: &[T]) -> Option<T> {
+        use sts2_core::rng::GameRng as _;
+
+        self.rngs.ai.choose(items).ok().copied()
+    }
+
     fn summon_into_slot(&mut self, monster: V::Monster, slot: u8) -> CombatId {
         // `SortEnemiesBySlotName`: after every enemy in an earlier slot.
         let position = self

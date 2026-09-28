@@ -922,6 +922,13 @@ impl<V: Rules> sts2_core::CreatureView<V> for Seen<'_, V> {
         self.fighter.owner
     }
 
+    fn monster(&self) -> Option<V::Monster> {
+        match self.fighter.model {
+            Some(sts2_core::ModelId::Monster(monster)) => Some(monster),
+            _ => None,
+        }
+    }
+
     fn power(&self, power: V::Power) -> Option<sts2_core::PowerAmount<V::Number>> {
         self.powers
             .of(self.fighter.id)

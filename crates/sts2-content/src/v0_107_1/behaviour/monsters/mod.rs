@@ -154,7 +154,7 @@ pub(crate) fn conditional<P: sts2_core::Printed<V> + ?Sized>(
             hive::conditional(monster, at, spawn, powers)
         }
         Monster::Exoskeleton | Monster::Myte => opens_by_slot(monster, at, spawn),
-        Monster::LivingShield | Monster::FrogKnight => {
+        Monster::LivingShield | Monster::FrogKnight | Monster::Fabricator => {
             glory::conditional(monster, at, spawn, model)
         }
         _ => overgrowth::conditional(monster, at, spawn),
@@ -292,6 +292,9 @@ pub(crate) fn perform<F: Fight<V>>(
         | Monster::Axebot
         | Monster::SlimedBerserker
         | Monster::OwlMagistrate
+        | Monster::Fabricator
+        | Monster::Guardbot
+        | Monster::Noisebot
         | Monster::TheLost
         | Monster::TheForgotten => glory::perform(monster, move_id, model, fight),
         _ => monster_moves::perform(monster, move_id, fight),
@@ -311,6 +314,8 @@ pub enum Model {
     FrogKnight { beetle_charged: bool },
     /// `Axebot._stockOverrideAmount`, which a respawn writes.
     Axebot { stock: Option<u8> },
+    /// `Fabricator._lastSpawned`.
+    Fabricator { last: Option<Monster> },
 }
 
 impl sts2_core::MonsterModel<V> for Model {
@@ -321,6 +326,7 @@ impl sts2_core::MonsterModel<V> for Model {
                 beetle_charged: false,
             },
             Monster::Axebot => Self::Axebot { stock: None },
+            Monster::Fabricator => Self::Fabricator { last: None },
             _ => Self::Stateless,
         }
     }
