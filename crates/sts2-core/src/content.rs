@@ -588,6 +588,7 @@ pub enum ModelHook {
     TryModifyCardBeingAddedToDeck,
     TryModifyCardBeingAddedToDeckLate,
     ModifyMerchantCardCreationResults,
+    AfterCardPlayedLate,
     AfterSideTurnStartLate,
     ShouldDraw,
     AfterPreventingDraw,
@@ -660,7 +661,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 107] = [
+    pub const ALL: [ModelHook; 108] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -699,6 +700,7 @@ impl ModelHook {
         ModelHook::TryModifyCardBeingAddedToDeck,
         ModelHook::TryModifyCardBeingAddedToDeckLate,
         ModelHook::ModifyMerchantCardCreationResults,
+        ModelHook::AfterCardPlayedLate,
         ModelHook::AfterSideTurnStartLate,
         ModelHook::ShouldDraw,
         ModelHook::AfterPreventingDraw,
@@ -811,6 +813,7 @@ impl ModelHook {
             ModelHook::TryModifyCardBeingAddedToDeck => "TryModifyCardBeingAddedToDeck",
             ModelHook::TryModifyCardBeingAddedToDeckLate => "TryModifyCardBeingAddedToDeckLate",
             ModelHook::ModifyMerchantCardCreationResults => "ModifyMerchantCardCreationResults",
+            ModelHook::AfterCardPlayedLate => "AfterCardPlayedLate",
             ModelHook::AfterSideTurnStartLate => "AfterSideTurnStartLate",
             ModelHook::ShouldDraw => "ShouldDraw",
             ModelHook::AfterPreventingDraw => "AfterPreventingDraw",
@@ -2733,6 +2736,13 @@ pub enum EventHook<V: ContentVersion> {
     MerchantCardCreated {
         card: crate::CardIdent<V>,
     },
+    /// `AfterCardPlayedLate`, once every `AfterCardPlayed` of a play has run.
+    CardPlayedLate {
+        card: V::Card,
+        id: crate::CardId<V>,
+        /// `CardPlay.Resources.EnergyValue`: the energy the play spent.
+        energy: V::Count,
+    },
     /// `AfterModifyingHandDraw`, to each listener whose `ModifyHandDraw`
     /// changed the turn's hand, before it is drawn. The listener reads for
     /// itself whether it did.
@@ -3147,6 +3157,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::CardRewardOption { .. } => ModelHook::TryModifyCardRewardOptionsLate,
             EventHook::CardBeingAddedToDeck { .. } => ModelHook::TryModifyCardBeingAddedToDeck,
             EventHook::MerchantCardCreated { .. } => ModelHook::ModifyMerchantCardCreationResults,
+            EventHook::CardPlayedLate { .. } => ModelHook::AfterCardPlayedLate,
             EventHook::SideTurnStartLate { .. } => ModelHook::AfterSideTurnStartLate,
             EventHook::RoomEntered { .. } => ModelHook::AfterRoomEntered,
             EventHook::UnknownRoomTypes => ModelHook::ModifyUnknownMapPointRoomTypes,
@@ -4017,6 +4028,11 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CardCmd.Upgrade` on a clone of the card the hook names, which takes
     /// its place.
     UpgradeCard,
+    /// `CardPileCmd.Add(this, PileType.Hand)` for the card that asked, where
+    /// it stands in `only_from`, or anywhere but the hand with none named.
+    AddSelfToHand {
+        only_from: Option<crate::Pile>,
+    },
     /// `PowerCmd.Apply<P>(Owner, amount, Owner)`, on the creature the listener
     /// is carried by.
     ApplyToOwner(V::Power, PowerAmount<V::Number>),

@@ -4202,7 +4202,7 @@ static OVERRIDES: [sts2_core::Overrides; 578] = [
     // MAD_SCIENCE
     sts2_core::Overrides::from_bits(0),
     // MAKE_IT_SO
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayedLate),
     // MALAISE
     sts2_core::Overrides::from_bits(0),
     // MANGLE
@@ -4424,7 +4424,7 @@ static OVERRIDES: [sts2_core::Overrides; 578] = [
     // RICOCHET
     sts2_core::Overrides::from_bits(0),
     // RIGHT_HAND_HAND
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayedLate),
     // RIP_AND_TEAR
     sts2_core::Overrides::from_bits(0),
     // ROCKET_PUNCH
@@ -4753,6 +4753,7 @@ static HEARD_BY_ANY: sts2_core::Overrides = sts2_core::Overrides::from_bits(0)
     .with(sts2_core::ModelHook::AfterCardDrawn)
     .with(sts2_core::ModelHook::ModifyNextEvent)
     .with(sts2_core::ModelHook::ModifyUnknownMapPointRoomTypes)
+    .with(sts2_core::ModelHook::AfterCardPlayedLate)
     .with(sts2_core::ModelHook::AfterDeath)
     .with(sts2_core::ModelHook::BeforeSideTurnEnd)
     .with(sts2_core::ModelHook::AfterCardChangedPiles)

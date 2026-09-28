@@ -1107,6 +1107,40 @@ fn finished<V: Rules, S: LendsCombat>(
         let skipped = std::mem::take(&mut board.skipped);
         merge::<V>(&mut next.skip_tick, skipped);
     }
+    // `AfterCardPlayedLate`, with the energy the play's started entry spent.
+    if ended.is_none() {
+        let energy = next
+            .history()
+            .started_this_turn()
+            .filter(|started| started.id == id)
+            .last()
+            .expect("a play that finished started this turn")
+            .energy;
+        let late = sts2_core::EventHook::CardPlayedLate { card, id, energy };
+        for (listener, effect) in super::listen::notify::<V>(next, relics, late) {
+            match (listener, effect) {
+                // `CardPileCmd.Add(this, PileType.Hand)`, which a full hand
+                // turns away.
+                (
+                    super::listen::Listener::Card { id },
+                    sts2_core::HookEffect::AddSelfToHand { only_from },
+                ) => {
+                    let from = next.cards.pile_of(id).filter(|&pile| {
+                        pile != sts2_core::Pile::Hand && only_from.is_none_or(|only| only == pile)
+                    });
+                    if let Some(from) = from
+                        && next.cards.len(sts2_core::Pile::Hand) < super::pile::MAX_CARDS_IN_HAND
+                        && let Some(at) = next.cards.find(from, id)
+                    {
+                        next.cards.move_to(from, at, sts2_core::Pile::Hand);
+                    }
+                }
+                (listener, effect) => {
+                    unimplemented!("{listener:?} asking for {effect:?} late after a play")
+                }
+            }
+        }
+    }
     ended
 }
 

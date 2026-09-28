@@ -115,6 +115,33 @@ fn summon_forth<F: Fight<V>>(fight: &mut F) -> Played<V> {
     Played::Done
 }
 
+/// `MakeItSo.AfterCardPlayedLate`: after a Skill of its owner's, into hand
+/// from outside it. That is once the Skills finished this turn come to a
+/// whole multiple of its `Cards`. A fight here has one player.
+fn make_it_so<P: sts2_core::Printed<V> + ?Sized>(
+    printed: &P,
+    history: sts2_core::History<'_, V>,
+    hook: sts2_core::EventHook<V>,
+    asked: &mut sts2_core::HookEffects<V>,
+) {
+    use sts2_core::{CardKind, Rules as _};
+
+    let sts2_core::EventHook::CardPlayedLate { card, .. } = hook else {
+        unimplemented!("what MakeItSo does for {hook:?}");
+    };
+    if V::card_kind(card) != Some(CardKind::Skill) {
+        return;
+    }
+    let skills = history
+        .finished_this_turn()
+        .filter(|&card| V::card_kind(card) == Some(CardKind::Skill))
+        .count();
+    let skills = super::Number::try_from(skills).expect("a turn's plays fit a game number");
+    if skills % printed.face(CardVar::Cards) == 0 {
+        asked.push(sts2_core::HookEffect::AddSelfToHand { only_from: None });
+    }
+}
+
 /// `HeavenlyDrill`: its damage to the target, once for each energy its X
 /// spent, and twice that from its `Energy` on.
 fn heavenly_drill<F: Fight<V>>(fight: &mut F) -> Played<V> {
@@ -175,12 +202,14 @@ pub(super) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
     card: RegentCard,
     id: sts2_core::CardId<V>,
     printed: &P,
+    history: sts2_core::History<'_, V>,
     hook: sts2_core::EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     match card {
         RegentCard::KinglyKick => uncommon::kingly_kick(id, hook, asked),
         RegentCard::KinglyPunch => uncommon::kingly_punch(id, printed, hook, asked),
+        RegentCard::MakeItSo => make_it_so(printed, history, hook, asked),
         card => unimplemented!("what {card:?} does for {hook:?}"),
     }
 }
