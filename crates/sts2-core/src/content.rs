@@ -3730,6 +3730,8 @@ pub enum HistoryEntry<V: ContentVersion> {
     Afflicted(V::Affliction),
     /// A `CardDiscardedEntry`, by the card discarded, which is the player's.
     Discarded(V::Card),
+    /// A `CardExhaustedEntry`, by the card exhausted, which is the player's.
+    Exhausted(V::Card),
     /// A `CardGeneratedEntry`, by whether its `Creator` is the player.
     Generated {
         by_player: bool,
@@ -3906,6 +3908,13 @@ impl<V: ContentVersion> History<'_, V> {
             .iter()
             .filter(|entry| matches!(entry, HistoryEntry::Discarded(_)))
             .count()
+    }
+
+    /// Whether any `CardExhaustedEntry` is where `HappenedThisTurn`.
+    pub fn exhausted_this_turn(&self) -> bool {
+        self.this_turn
+            .iter()
+            .any(|entry| matches!(entry, HistoryEntry::Exhausted(_)))
     }
 
     /// How many `CardGeneratedEntry` of the fight name the player as their
@@ -4881,6 +4890,9 @@ pub struct CardOwner<'a, V: ContentVersion> {
     /// How many of the owner's cards in the fight, every pile included,
     /// print a star cost, which is `CanonicalStarCost >= 0 || HasStarCostX`.
     pub star_cards: usize,
+    /// How many of the owner's cards in the fight, every pile included, are
+    /// tagged `OstyAttack`, this one left out.
+    pub osty_attacks_besides: usize,
 }
 
 /// What one copy of a card prints, as a rule reads it.

@@ -67,6 +67,14 @@ pub(super) fn resume_play<F: Fight<V>>(
 pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
     match card {
         IroncladCard::Thrash => thrash(fight),
+        // `ForgottenRitual`: its energy, where its owner exhausted a card this
+        // turn.
+        IroncladCard::ForgottenRitual => {
+            if fight.history().exhausted_this_turn() {
+                fight.modify_energy(fight.var(CardVar::Energy));
+            }
+            Played::Done
+        }
         // `Spite`: its damage to the target, once, or its `Repeat` times
         // where its owner lost health this turn.
         IroncladCard::Spite => {

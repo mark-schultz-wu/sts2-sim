@@ -1512,6 +1512,8 @@ pub(super) fn exhausted<V: Rules>(
     card: &super::live::CardInstance<V>,
     ethereal: bool,
 ) -> Option<super::Ended> {
+    // `History.CardExhausted`, before the hook.
+    live.history.exhausted(card.face.ident.card);
     let hook = sts2_core::EventHook::CardExhausted {
         card: card.face.ident.card,
         id: card.id,

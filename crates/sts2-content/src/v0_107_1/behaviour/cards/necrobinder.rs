@@ -396,6 +396,19 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
         NecrobinderCard::Graveblast => graveblast(fight),
         NecrobinderCard::SculptingStrike => sculpting_strike(fight),
         NecrobinderCard::Snap => snap(fight),
+        // `Transfigure`: one card of the hand picked, to cost one more and
+        // play once more.
+        NecrobinderCard::Transfigure => Played::Asking {
+            pile: Pile::Hand,
+            selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
+            at: super::super::Resume::Card(super::Resume::Necrobinder(Resume::TransfigureReplay)),
+        },
+        // `Squeeze`: its calculated damage from Osty to the target, where
+        // Osty stands.
+        NecrobinderCard::Squeeze => {
+            osty_hit(fight, CardVar::CalculatedDamage);
+            Played::Done
+        }
         // `SicEm`: Osty's damage to the target, where Osty stands, then its
         // power on the target.
         NecrobinderCard::SicEm => {
@@ -526,6 +539,8 @@ pub enum Resume {
     SculptingStrikeEthereal,
     /// `Snap`, after its owner picked the card to Retain.
     SnapRetain,
+    /// `Transfigure`, after its owner picked the card to replay.
+    TransfigureReplay,
 }
 
 pub(super) fn resume_play<F: Fight<V>>(
@@ -537,6 +552,23 @@ pub(super) fn resume_play<F: Fight<V>>(
         // `CardPileCmd.Add` of the one taken, into hand.
         Resume::GraveblastTakeBack => {
             fight.act_on(PileAct::IntoHand, chosen.as_slice());
+            Played::Done
+        }
+        // One more energy on its cost for the fight, where it has a cost that
+        // is not X, and one more replay.
+        Resume::TransfigureReplay => {
+            for &card in chosen.as_slice() {
+                if let sts2_core::Cost::Fixed(_) =
+                    sts2_core::CardTable::cost(fight.card_ident(card).card)
+                {
+                    fight.modify_card(
+                        card,
+                        Change::ChangeCost(sts2_core::CostPool::Energy, 1),
+                        Lasting::ThisFight,
+                    );
+                }
+                fight.add_replays(sts2_core::Writing::One(card), 1);
+            }
             Played::Done
         }
         // `CardCmd.ApplyKeyword(cardModel, CardKeyword.Retain)`.

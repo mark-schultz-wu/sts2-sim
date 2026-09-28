@@ -643,6 +643,10 @@ impl<'a, V: Rules> Board<'a, V> {
                 (Listener::Power { owner, .. }, HookEffect::ApplyToOwner(lent, amount)) => {
                     self.land(owner, lent, amount, applier)
                 }
+                // `CardPileCmd.Draw` for the player.
+                (Listener::Power { .. }, HookEffect::Draw(count)) => {
+                    sts2_core::Fight::draw(self, count)
+                }
                 (_, effect) => cards.push(effect),
             }
         }
@@ -2446,6 +2450,16 @@ pub(crate) fn var<V: Rules>(
                 star_cards: live.cards.count_all(|face| {
                     sts2_core::CardTable::star_cost(face.ident.card) != sts2_core::Cost::None
                 }),
+                osty_attacks_besides: {
+                    let osty_attack = |card| {
+                        sts2_core::CardTable::tagged(
+                            card,
+                            <<V::Card as sts2_core::CardTable>::Tag as sts2_core::CardTagKinds>::OSTY_ATTACK,
+                        )
+                    };
+                    live.cards.count_all(|face| osty_attack(face.ident.card))
+                        - usize::from(osty_attack(held.face.ident.card))
+                },
             };
             V::calculated_card_var(held.face.ident.card, key, held, owner)
         }

@@ -407,6 +407,13 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
             printed.face(CardVar::CalculationBase)
                 + printed.face(CardVar::CalculationExtra) * skills
         }
+        // `Squeeze`: a base, and more for each of its owner's other cards in
+        // the fight tagged as Osty's attack.
+        (Cards::Necrobinder(NecrobinderCard::Squeeze), CardVar::CalculatedDamage) => {
+            let attacks = Number::try_from(owner.osty_attacks_besides)
+                .expect("a fight's cards fit the game's numbers");
+            printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * attacks
+        }
         // `TimesUp`: a base, and more for each Doom on its target.
         (Cards::Necrobinder(NecrobinderCard::TimesUp), CardVar::CalculatedDamage) => {
             let doom = owner

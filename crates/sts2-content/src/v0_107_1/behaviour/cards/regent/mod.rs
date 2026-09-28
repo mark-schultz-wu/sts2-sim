@@ -1,9 +1,9 @@
 //! The Regent's cards the generator leaves to a hand port, filed by rarity.
 
-use sts2_core::{Fight, Played};
+use sts2_core::{CardIdent, Fight, Pile, Played};
 
 use super::super::super::generated::card_plays;
-use super::super::super::generated::cards::{CardVar, RegentCard};
+use super::super::super::generated::cards::{CardVar, Cards, RegentCard, TokenCard};
 use super::V;
 
 mod common;
@@ -20,12 +20,24 @@ pub enum Resume {
     PhotonCutPutBack,
     /// `CosmicIndifference`, after its owner picked the card to put back.
     CosmicIndifferencePutBack,
+    /// `Charge`, after its owner picked the cards to turn into Minion Dive
+    /// Bombs.
+    ChargeTransform,
 }
 
 pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
     match card {
         RegentCard::Glitterstream => common::glitterstream(fight),
         RegentCard::Begone => common::begone(),
+        // `Charge`: its `Cards` of the draw pile picked, each transformed.
+        RegentCard::Charge => Played::Asking {
+            pile: Pile::Draw,
+            selection: sts2_core::Selection::Exactly(
+                nonmax::NonMaxUsize::new(num_traits::cast(fight.var(CardVar::Cards)).unwrap_or(0))
+                    .unwrap_or(nonmax::NonMaxUsize::ONE),
+            ),
+            at: super::super::Resume::Card(super::Resume::Regent(Resume::ChargeTransform)),
+        },
         RegentCard::CollisionCourse => common::collision_course(fight),
         RegentCard::Radiate => uncommon::radiate(fight),
         RegentCard::LunarBlast => uncommon::lunar_blast(fight),
@@ -308,6 +320,16 @@ pub(super) fn resume_play<F: Fight<V>>(
 ) -> Played<V> {
     match at {
         Resume::BegoneTransform => common::begone_transform(fight, chosen),
+        // `CardCmd.TransformTo<MinionDiveBomb>` of each, upgraded where
+        // Charge is.
+        Resume::ChargeTransform => {
+            for &card in chosen.as_slice() {
+                let mut into = CardIdent::new(Cards::Token(TokenCard::MinionDiveBomb));
+                into.upgrade = u8::from(fight.upgraded());
+                fight.transform(card, into);
+            }
+            Played::Done
+        }
         // `CardPileCmd.Add` onto the top of the draw pile.
         Resume::GlimmerPutBack | Resume::PhotonCutPutBack | Resume::CosmicIndifferencePutBack => {
             fight.act_on(sts2_core::PileAct::OntoDrawTop, chosen.as_slice());

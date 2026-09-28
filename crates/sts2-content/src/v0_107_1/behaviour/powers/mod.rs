@@ -1902,6 +1902,22 @@ pub(crate) fn event_hook(
             Some(HookEffect::Remove)
         }
         (Power::RagePower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `ViciousPower.AfterPowerAmountChanged`: its stack drawn each time
+        // its owner puts more Vulnerable on anything.
+        (
+            Power::ViciousPower,
+            PowerAmount::Counted(amount),
+            EventHook::PowerAmountChanged {
+                power: Power::VulnerablePower,
+                delta,
+                applier: Some(applier),
+                ..
+            },
+        ) if delta > 0 && applier == holder => Some(HookEffect::Draw(amount)),
+        (Power::ViciousPower, PowerAmount::Endless, EventHook::PowerAmountChanged { .. }) => {
+            unimplemented!("an endless Vicious")
+        }
+        (Power::ViciousPower, _, EventHook::PowerAmountChanged { .. }) => None,
         // `SicEmPower.AfterDamageGiven`: `OstyCmd.Summon` of its stack for the
         // player whose Osty hit its owner, where that player applied it.
         (

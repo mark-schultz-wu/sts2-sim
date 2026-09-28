@@ -1790,6 +1790,12 @@ impl<V: Rules> CombatHistory<V> {
             .push(sts2_core::HistoryEntry::Discarded(card));
     }
 
+    /// `History.CardExhausted`, in the turn the fight stands in.
+    pub(super) fn exhausted(&mut self, card: V::Card) {
+        self.this_turn
+            .push(sts2_core::HistoryEntry::Exhausted(card));
+    }
+
     /// `History.CardGenerated`, in the turn the fight stands in, by whether
     /// the player made it.
     pub(super) fn generated(&mut self, by_player: bool) {
