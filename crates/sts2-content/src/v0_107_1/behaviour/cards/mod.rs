@@ -402,7 +402,7 @@ pub(crate) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
             if matches!(hook, sts2_core::EventHook::CombatEnd { .. }) => {}
         Cards::Status(card) => status::event_hook(card, id, printed, hook, asked),
         Cards::Curse(card) => curse::event_hook(card, pile, hook, asked),
-        Cards::Ironclad(card) => ironclad::event_hook(card, id, history, hook, asked),
+        Cards::Ironclad(card) => ironclad::event_hook(card, id, printed, history, hook, asked),
         Cards::Colorless(card) => colorless::event_hook(card, id, history, hook, asked),
         // `SovereignBlade.AfterCardChangedPiles` plays the forge's effects and
         // removes its node, and its `AfterTransformedFrom` removes the node

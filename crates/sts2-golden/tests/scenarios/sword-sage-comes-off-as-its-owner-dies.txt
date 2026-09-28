@@ -1,0 +1,11 @@
+# `SwordSagePower.AfterRemoved` takes its replays back off every Sovereign
+# Blade as the power goes, which the player's death does here.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","card":"REFINE_BLADE"}
+{"cmd":"grant","card":"REFINE_BLADE"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"play_card","index":4}
+{"cmd":"power","power":"SWORD_SAGE_POWER","amount":1,"target":0}
+{"cmd":"power","power":"STRENGTH_POWER","amount":100,"target":1}
+{"cmd":"power","power":"STRENGTH_POWER","amount":100,"target":2}
+{"cmd":"end_turn"}

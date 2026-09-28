@@ -369,6 +369,19 @@ impl<V: Rules, P: Piles> Cards<V, P> {
         self.write_card(card, write);
     }
 
+    /// Write on the copy `id` names, wherever the fight holds it.
+    ///
+    /// # Panics
+    ///
+    /// A copy the fight does not hold.
+    pub(crate) fn write_named(&mut self, id: CardId<V>, write: impl FnOnce(&mut Face<V>) -> bool) {
+        let card = number(id);
+        if self.piles.place(card).is_none() {
+            unimplemented!("a card written after it left the fight");
+        }
+        self.write_card(card, write);
+    }
+
     /// Write on the copy at `at` in `pile`.
     pub(crate) fn write(
         &mut self,

@@ -59,6 +59,30 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
             }
         }
         RegentCard::BundleOfJoy => bundle_of_joy(fight),
+        // `ShiningStrike`: its damage to the target and its stars, then onto
+        // the top of the draw pile unless it exhausts. `ExhaustOnNextPlay`
+        // was cleared when its result pile was picked, before the play.
+        RegentCard::ShiningStrike => {
+            use sts2_core::{Amount, Effect, Pile, PilePosition, Scaling};
+
+            use super::super::super::generated::cards::CardKeyword;
+
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            fight.gain_stars(fight.var(CardVar::Stars));
+            if !fight.this_has_keyword(CardKeyword::Exhaust) {
+                fight.add_this(Pile::Draw, PilePosition::Top);
+            }
+            Played::Done
+        }
         // `ParticleWall`: its block. Where it goes after is its own
         // `GetResultPileTypeForCardPlay`.
         RegentCard::ParticleWall => {

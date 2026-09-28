@@ -233,7 +233,7 @@ impl sts2_core::PowerModel<V> for State {
 /// `TemporaryFocusPower`, which is `InternallyAppliedPower`, and its
 /// `IsPositive` override. None of them overrides anything else, so
 /// [`temporary`] is the whole of each.
-fn lends(power: Power) -> Option<(Power, bool)> {
+pub(crate) fn lends(power: Power) -> Option<(Power, bool)> {
     use Power::{DexterityPower as Dexterity, FocusPower as Focus, StrengthPower as Strength};
 
     Some(match power {
@@ -3782,8 +3782,16 @@ pub(crate) fn event_hook(
                 Power::MinionPower,
                 PowerAmount::Counted(one),
             )),
-        (Power::SwordSagePower, _, EventHook::Removed) => {
-            unimplemented!("the replays Sword Sage takes back off the blades as it goes")
+        // `SwordSagePower.AfterRemoved`: every Sovereign Blade its owner holds
+        // loses as many replays as the instance held.
+        (Power::SwordSagePower, PowerAmount::Counted(amount), EventHook::Removed) => {
+            Some(HookEffect::AddReplays {
+                to: sts2_core::Writing::EveryCopyOf(Cards::Token(TokenCard::SovereignBlade)),
+                amount: -amount,
+            })
+        }
+        (Power::SwordSagePower, PowerAmount::Endless, EventHook::Removed) => {
+            unimplemented!("an endless Sword Sage coming off")
         }
         // `BeforeApplied`, `AfterApplied` and `AfterRemoved` are a power's
         // own, and a move being performed is the move state's. Every power is
