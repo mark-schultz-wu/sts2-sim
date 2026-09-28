@@ -554,6 +554,11 @@ impl<V: Rules> Face<V> {
                 card.modify(change, sts2_core::Lasting::ThisFight);
             }
         }
+        if let Some(enchanted) = card.ident.enchantment {
+            for &change in V::enchanted_changes(enchanted.enchantment) {
+                card.modify(change, sts2_core::Lasting::ThisFight);
+            }
+        }
         card
     }
 

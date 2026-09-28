@@ -2,10 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Emit;
 using System.Threading.Tasks;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.CardSelection;
 using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Multiplayer;
@@ -14,6 +16,7 @@ using MegaCrit.Sts2.Core.GameActions;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Events;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Models.Monsters;
@@ -190,6 +193,62 @@ internal static class SoulNexusDiesWithoutAScene
 
         return false;
     }
+}
+
+/// <summary>
+/// Lets Trial pick its defendant without an event room to draw the portrait in.
+/// </summary>
+/// <remarks>
+/// <c>Trial.Accept</c> and <c>AddVfxAnchoredToPortrait</c> guard their portrait
+/// work with <c>LocalContext.IsMe(Owner)</c> alone, then write
+/// <c>NEventRoom.Instance.Layout</c> and <c>NEventRoom.Instance.SetPortrait</c>.
+/// Every other event that touches the room writes <c>NEventRoom.Instance?.</c>.
+/// Headless there is no room, and the dereference takes the process down the
+/// way <see cref="SoulNexusDiesWithoutAScene"/> describes: "the game closed the
+/// connection" as the first Accept is taken.
+///
+/// The transpiler swaps each <c>IsMe</c> in those two methods for
+/// <see cref="IsMeWithARoom"/>. Everything else in <c>Accept</c> runs as
+/// written: the <c>Rng.NextInt(3)</c> for the defendant, and the page it sets.
+/// </remarks>
+[HarmonyPatch(typeof(Trial))]
+internal static class TrialWithoutARoom
+{
+    private static readonly MethodInfo IsMe =
+        AccessTools.Method(typeof(LocalContext), nameof(LocalContext.IsMe), new[] { typeof(Player) });
+
+    private static IEnumerable<MethodBase> TargetMethods()
+    {
+        yield return AccessTools.Method(typeof(Trial), "Accept");
+        yield return AccessTools.Method(typeof(Trial), "AddVfxAnchoredToPortrait");
+    }
+
+    private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+    {
+        int swapped = 0;
+        foreach (CodeInstruction instruction in instructions)
+        {
+            if (instruction.Calls(IsMe))
+            {
+                swapped++;
+                yield return new CodeInstruction(
+                    OpCodes.Call,
+                    AccessTools.Method(typeof(TrialWithoutARoom), nameof(IsMeWithARoom)));
+            }
+            else
+            {
+                yield return instruction;
+            }
+        }
+
+        if (swapped == 0)
+        {
+            throw new InvalidOperationException("Trial no longer calls LocalContext.IsMe(Player)");
+        }
+    }
+
+    private static bool IsMeWithARoom(Player? player) =>
+        LocalContext.IsMe(player) && NEventRoom.Instance != null;
 }
 
 /// <inheritdoc cref="KaiserCrabNeedsNoScene"/>

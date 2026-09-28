@@ -1,0 +1,9 @@
+# War Historian Repy with two Lantern Keys: the chest spends the first, and
+# once its rewards close the page offers the cage alone.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","card":"LANTERN_KEY"}
+{"cmd":"grant","card":"LANTERN_KEY"}
+{"cmd":"event","event":"WAR_HISTORIAN_REPY"}
+{"cmd":"choose_option","index":1}
+{"cmd":"answer","take":[{"index":0}]}
+{"cmd":"answer","skip":true}

@@ -14,6 +14,8 @@ mod dense_vegetation;
 mod doll_room;
 mod fake_merchant;
 mod field_of_man_sized_holes;
+mod grave_of_the_forgotten;
+mod hungry_for_mushrooms;
 mod infested_automaton;
 mod jungle_maze_adventure;
 mod lost_wisp;
@@ -24,8 +26,10 @@ mod orobas;
 mod pael;
 mod potion_courier;
 mod ranwid_the_elder;
+mod reflections;
 mod relic_trader;
 mod room_full_of_cheese;
+mod round_tea_party;
 mod sapphire_seed;
 mod self_help_book;
 mod slippery_bridge;
@@ -41,7 +45,9 @@ mod the_future_of_potions;
 mod the_lantern_key;
 mod the_legends_were_true;
 mod this_or_that;
+mod trial;
 mod vakuu;
+mod war_historian_repy;
 mod welcome_to_wongos;
 mod wellspring;
 mod whispering_hollow;
@@ -95,6 +101,12 @@ pub enum State {
     Nonupeipe(ancient::Offered),
     Pael(ancient::Offered),
     RoomFullOfCheese(room_full_of_cheese::State),
+    GraveOfTheForgotten(grave_of_the_forgotten::State),
+    HungryForMushrooms(hungry_for_mushrooms::State),
+    Reflections(reflections::State),
+    RoundTeaParty(round_tea_party::State),
+    Trial(trial::State),
+    WarHistorianRepy(war_historian_repy::State),
     SapphireSeed(sapphire_seed::State),
     SelfHelpBook(self_help_book::State),
     SlipperyBridge(slippery_bridge::State),
@@ -171,6 +183,12 @@ pub(crate) fn allowed(event: Event, run: &impl EventView<V>) -> bool {
         Event::Nonupeipe => nonupeipe::Nonupeipe.allowed(run),
         Event::Pael => pael::Pael.allowed(run),
         Event::RoomFullOfCheese => room_full_of_cheese::RoomFullOfCheese.allowed(run),
+        Event::GraveOfTheForgotten => grave_of_the_forgotten::GraveOfTheForgotten.allowed(run),
+        Event::HungryForMushrooms => hungry_for_mushrooms::HungryForMushrooms.allowed(run),
+        Event::Reflections => reflections::Reflections.allowed(run),
+        Event::RoundTeaParty => round_tea_party::RoundTeaParty.allowed(run),
+        Event::Trial => trial::Trial.allowed(run),
+        Event::WarHistorianRepy => war_historian_repy::WarHistorianRepy.allowed(run),
         Event::SunkenStatue => sunken_statue::SunkenStatue.allowed(run),
         Event::TeaMaster => tea_master::TeaMaster.allowed(run),
         Event::Tanx => tanx::Tanx.allowed(run),
@@ -187,7 +205,6 @@ pub(crate) fn allowed(event: Event, run: &impl EventView<V>) -> bool {
         Event::PotionCourier | Event::Symbiote => act > 0,
         Event::WelcomeToWongos => act == 1 && gold >= 100,
         Event::CrystalSphere => gold >= 100 && act > 0,
-        Event::WarHistorianRepy => false,
 
         Event::EndlessConveyor => gold >= 120,
         Event::WaterloggedScriptorium => gold >= 55,
@@ -195,7 +212,6 @@ pub(crate) fn allowed(event: Event, run: &impl EventView<V>) -> bool {
         // `GoldVar(149)`, before `CalculateVars` takes up to 50 off it.
         Event::LuminousChoir => gold >= 149 && run.relics_left(),
 
-        Event::RoundTeaParty => run.hp() >= 12,
         Event::ColossalFlower => run.hp() >= 19,
         Event::TrashHeap => run.hp() > 5,
         // `CurrentHp <= MaxHp * 0.70m`, in whole numbers.
@@ -219,7 +235,6 @@ pub(crate) fn allowed(event: Event, run: &impl EventView<V>) -> bool {
 
         Event::FieldOfManSizedHoles => enchantable(run, Enchantment::PerfectFit),
         Event::SpiralingWhirlpool => enchantable(run, Enchantment::Spiral),
-        Event::GraveOfTheForgotten => enchantable(run, Enchantment::SoulsPower),
 
         Event::RelicTrader | Event::RanwidTheElder if act == 0 => false,
         Event::RelicTrader => run.relics().filter(|&relic| tradable(relic)).count() >= 5,
@@ -299,6 +314,20 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
         Event::Pael => State::Pael(pael::Pael.enter(run, rng)),
         Event::RoomFullOfCheese => {
             State::RoomFullOfCheese(room_full_of_cheese::RoomFullOfCheese.enter(run, rng))
+        }
+        Event::GraveOfTheForgotten => {
+            State::GraveOfTheForgotten(grave_of_the_forgotten::GraveOfTheForgotten.enter(run, rng))
+        }
+        Event::HungryForMushrooms => {
+            State::HungryForMushrooms(hungry_for_mushrooms::HungryForMushrooms.enter(run, rng))
+        }
+        Event::Reflections => State::Reflections(reflections::Reflections.enter(run, rng)),
+        Event::RoundTeaParty => {
+            State::RoundTeaParty(round_tea_party::RoundTeaParty.enter(run, rng))
+        }
+        Event::Trial => State::Trial(trial::Trial.enter(run, rng)),
+        Event::WarHistorianRepy => {
+            State::WarHistorianRepy(war_historian_repy::WarHistorianRepy.enter(run, rng))
         }
         Event::SapphireSeed => State::SapphireSeed(sapphire_seed::SapphireSeed.enter(run, rng)),
         Event::SelfHelpBook => State::SelfHelpBook(self_help_book::SelfHelpBook.enter(run, rng)),
@@ -418,6 +447,16 @@ pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
         State::Nonupeipe(state) => nonupeipe::Nonupeipe.observe(state, run),
         State::Pael(state) => pael::Pael.observe(state, run),
         State::RoomFullOfCheese(state) => room_full_of_cheese::RoomFullOfCheese.observe(state, run),
+        State::GraveOfTheForgotten(state) => {
+            grave_of_the_forgotten::GraveOfTheForgotten.observe(state, run)
+        }
+        State::HungryForMushrooms(state) => {
+            hungry_for_mushrooms::HungryForMushrooms.observe(state, run)
+        }
+        State::Reflections(state) => reflections::Reflections.observe(state, run),
+        State::RoundTeaParty(state) => round_tea_party::RoundTeaParty.observe(state, run),
+        State::Trial(state) => trial::Trial.observe(state, run),
+        State::WarHistorianRepy(state) => war_historian_repy::WarHistorianRepy.observe(state, run),
         State::SapphireSeed(state) => sapphire_seed::SapphireSeed.observe(state, run),
         State::SelfHelpBook(state) => self_help_book::SelfHelpBook.observe(state, run),
         State::SlipperyBridge(state) => slippery_bridge::SlipperyBridge.observe(state, run),
@@ -506,6 +545,20 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
         State::RoomFullOfCheese(state) => {
             room_full_of_cheese::RoomFullOfCheese.choose(state, option, run, rng)
         }
+        State::GraveOfTheForgotten(state) => {
+            grave_of_the_forgotten::GraveOfTheForgotten.choose(state, option, run, rng)
+        }
+        State::HungryForMushrooms(state) => {
+            hungry_for_mushrooms::HungryForMushrooms.choose(state, option, run, rng)
+        }
+        State::Reflections(state) => reflections::Reflections.choose(state, option, run, rng),
+        State::RoundTeaParty(state) => {
+            round_tea_party::RoundTeaParty.choose(state, option, run, rng)
+        }
+        State::Trial(state) => trial::Trial.choose(state, option, run, rng),
+        State::WarHistorianRepy(state) => {
+            war_historian_repy::WarHistorianRepy.choose(state, option, run, rng)
+        }
         State::SapphireSeed(state) => sapphire_seed::SapphireSeed.choose(state, option, run, rng),
         State::SelfHelpBook(state) => self_help_book::SelfHelpBook.choose(state, option, run, rng),
         State::SlipperyBridge(state) => {
@@ -550,6 +603,14 @@ pub(crate) fn answer(state: &mut State, answer: &sts2_core::Answer) -> HookEffec
     match state {
         State::CrystalSphere(state) => crystal_sphere::CrystalSphere.answer(state, answer),
         state => unimplemented!("{state:?} answered with {answer:?}"),
+    }
+}
+
+/// [`EventBehavior::resume`] for the event entered.
+pub(crate) fn resume(state: &mut State) -> HookEffects<V> {
+    match state {
+        State::WarHistorianRepy(state) => war_historian_repy::WarHistorianRepy.resume(state),
+        state => unimplemented!("{state:?} resumed after its pickup"),
     }
 }
 

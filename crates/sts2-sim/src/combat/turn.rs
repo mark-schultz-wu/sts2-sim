@@ -1121,6 +1121,28 @@ pub(super) fn carry_setup<V: Rules>(
                                 break;
                             }
                         }
+                        // `CreatureCmd.Damage` on the relic's owner, the player.
+                        sts2_core::HookEffect::DamageOwnerInFight {
+                            amount,
+                            unblockable,
+                            self_dealt,
+                        } if matches!(listener, Listener::Relic { .. }) => {
+                            let mut board = Board::for_card(
+                                live,
+                                rngs.reborrow(),
+                                relics,
+                                ascension,
+                                None,
+                                None,
+                            );
+                            board.hit_unpowered(
+                                self_dealt.then_some(player),
+                                player,
+                                amount,
+                                unblockable,
+                            );
+                            ended = ended.or(board.ended);
+                        }
                         effect => unimplemented!(
                             "a listener asking for {effect:?} as the player's turn starts"
                         ),

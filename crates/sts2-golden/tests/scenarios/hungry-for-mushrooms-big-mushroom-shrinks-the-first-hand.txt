@@ -1,0 +1,7 @@
+# Hungry for Mushrooms' big mushroom adds twenty maximum health, and its
+# owner draws two fewer cards on the first turn of a fight alone.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"HUNGRY_FOR_MUSHROOMS"}
+{"cmd":"choose_option","index":0}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
