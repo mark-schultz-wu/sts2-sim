@@ -1,0 +1,12 @@
+# Round Tea Party. Picking the fight and going on with it deals eleven and
+# gives the next relic from the front of the bag. Enjoying the tea gives
+# Royal Poison and heals to full. Royal Poison deals four as the first turn
+# of a fight starts, and nothing as the second.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"ROUND_TEA_PARTY"}
+{"cmd":"choose_option","index":1}
+{"cmd":"choose_option","index":0}
+{"cmd":"event","event":"ROUND_TEA_PARTY"}
+{"cmd":"choose_option","index":0}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}

@@ -3720,8 +3720,10 @@ pub enum CustomReward<V: ContentVersion> {
     /// of the player's bag, pulled as the reward fills in.
     Relic(<V::Relic as crate::RelicTable>::Rarity),
     /// `CardReward` over the character's own pool at `RegularEncounter` odds,
-    /// from `CardCreationSource.Other`, offering this many cards.
-    CharacterCards(usize),
+    /// from `CardCreationSource.Other`, offering `count` cards.
+    /// `ForNonCombatWithDefaultOdds` sets `NoUpgradeRoll`, which clears
+    /// `upgrade_roll`.
+    CharacterCards { count: usize, upgrade_roll: bool },
     /// `PotionReward(player)`, a random potion out of combat.
     Potion,
     /// `PotionReward(potion, player)` for this potion.
@@ -3853,6 +3855,9 @@ pub enum HookEffect<V: ContentVersion> {
     /// The event parks on a question of its own, which
     /// [`Rules::event_question`] asks.
     AskEvent,
+    /// [`Rules::resume_event`]: the rest of the option's body, after the
+    /// pickup before this has closed.
+    ResumeEvent,
     /// `NextItem` over the deck's upgradable cards off `stream`, then
     /// `CardCmd.Upgrade` on the one it draws.
     UpgradeRandomDeckCard {
@@ -3866,6 +3871,9 @@ pub enum HookEffect<V: ContentVersion> {
     },
     /// `CardCmd.Upgrade` on every deck card an upgrade can still raise.
     UpgradeDeck,
+    /// `RunState.CloneCard` of each card the deck held as this began, in deck
+    /// order, each then `CardPileCmd.Add` to the deck.
+    CloneDeck,
     /// `CreatureCmd.GainMaxHp` on the owner: the maximum grows, and the
     /// health with it.
     GainMaxHp(V::Number),
@@ -4610,6 +4618,11 @@ pub trait Hooks: ContentVersion {
     /// as it goes. So a card carries the keyword exactly while it carries the
     /// affliction.
     fn keyword_while_afflicted(affliction: Self::Affliction) -> Option<Self::CardKeyword>;
+
+    /// What an enchantment's `OnEnchant` writes on the card it goes on, which
+    /// every copy of that card carries from then on. Nothing for an
+    /// enchantment whose `OnEnchant` writes nothing.
+    fn enchanted_changes(enchantment: Self::Enchantment) -> &'static [Change<Self>];
 
     /// `CardModel.GetResultPileTypeForCardPlay`, for a card whose class
     /// overrides it: where the card goes once its play is over, given what
@@ -5776,6 +5789,11 @@ pub trait Rules: Hooks {
         answer: &crate::Answer,
     ) -> crate::HookEffects<Self> {
         unimplemented!("an event answered with {answer:?}")
+    }
+
+    /// [`crate::EventBehavior::resume`] for the event entered.
+    fn resume_event(_state: &mut Self::EventState) -> crate::HookEffects<Self> {
+        unimplemented!("an event resumed after its pickup")
     }
 
     /// [`crate::EventBehavior::rewards`] for the event entered.

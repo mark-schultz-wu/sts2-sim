@@ -22,6 +22,7 @@ mod bag_of_marbles;
 mod bag_of_preparation;
 mod beating_remnant;
 mod beautiful_bracelet;
+mod big_mushroom;
 mod biiig_hug;
 mod bing_bong;
 mod black_blood;
@@ -67,6 +68,8 @@ mod fake_venerable_tea_set;
 mod festive_popper;
 mod fiddle;
 mod fishing_rod;
+mod forgotten_soul;
+mod fragrant_mushroom;
 mod frozen_egg;
 mod glass_eye;
 mod glitter;
@@ -132,6 +135,7 @@ mod reptile_trinket;
 mod ring_of_the_drake;
 mod ring_of_the_snake;
 mod ripple_basin;
+mod royal_poison;
 mod runic_pyramid;
 mod sai;
 mod sand_castle;
@@ -161,6 +165,7 @@ mod venerable_tea_set;
 mod very_hot_cocoa;
 mod war_hammer;
 mod war_paint;
+mod whetstone;
 mod white_star;
 mod winged_boots;
 mod wongos_mystery_ticket;
@@ -301,6 +306,10 @@ pub enum State {
     MealTicket,
     Strawberry,
     WarPaint,
+    BigMushroom,
+    ForgottenSoul,
+    FragrantMushroom,
+    Whetstone,
     JuzuBracelet,
     BagOfPreparation,
     WingedBoots(winged_boots::State),
@@ -364,6 +373,7 @@ pub enum State {
     JeweledMask,
     PreservedFog,
     SereTalon,
+    RoyalPoison,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -535,6 +545,10 @@ pub(crate) fn event_hook(
         State::MealTicket => meal_ticket::event_hook(hook, asked),
         State::Strawberry => strawberry::event_hook(hook, asked),
         State::WarPaint => war_paint::event_hook(hook, asked),
+        State::BigMushroom => big_mushroom::event_hook(hook, asked),
+        State::ForgottenSoul => forgotten_soul::event_hook(hook, asked),
+        State::FragrantMushroom => fragrant_mushroom::event_hook(hook, asked),
+        State::Whetstone => whetstone::event_hook(hook, asked),
         State::JuzuBracelet => juzu_bracelet::event_hook(hook, asked),
         // Its one hook is `ModifyHandDraw`, which the fight asks of it
         // rather than tells it. `AfterObtained` reaches every relic, and its
@@ -603,6 +617,7 @@ pub(crate) fn event_hook(
         State::JeweledMask => jeweled_mask::event_hook(hook, asked),
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
+        State::RoyalPoison => royal_poison::event_hook(hook, asked),
         // Its hooks are `ShouldDraw` and `ModifyHandDrawLate`, which the fight
         // asks of it.
         // `AfterPreventingDraw` flashes it and does nothing else.
@@ -647,6 +662,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         State::RingOfTheSnake => ring_of_the_snake::modify_hook(hook),
         State::BoomingConch => booming_conch::modify_hook(hook),
         State::BagOfPreparation => bag_of_preparation::modify_hook(hook),
+        State::BigMushroom => big_mushroom::modify_hook(hook),
         State::StrikeDummy => strike_dummy::modify_hook(hook),
         State::BowlerHat => bowler_hat::modify_hook(hook),
         State::FakeStrikeDummy => fake_strike_dummy::modify_hook(hook),
@@ -748,6 +764,9 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::MealTicket
         | State::Strawberry
         | State::WarPaint
+        | State::ForgottenSoul
+        | State::FragrantMushroom
+        | State::Whetstone
         | State::JuzuBracelet
         | State::WingedBoots(_)
         | State::YummyCookie
@@ -800,7 +819,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::DistinguishedCape
         | State::JeweledMask
         | State::PreservedFog
-        | State::SereTalon => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::SereTalon
+        | State::RoyalPoison => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -910,6 +930,10 @@ impl sts2_core::RelicModel<V> for State {
             Relic::MealTicket => State::MealTicket,
             Relic::Strawberry => State::Strawberry,
             Relic::WarPaint => State::WarPaint,
+            Relic::BigMushroom => State::BigMushroom,
+            Relic::ForgottenSoul => State::ForgottenSoul,
+            Relic::FragrantMushroom => State::FragrantMushroom,
+            Relic::Whetstone => State::Whetstone,
             Relic::JuzuBracelet => State::JuzuBracelet,
             Relic::BagOfPreparation => State::BagOfPreparation,
             Relic::WingedBoots => State::WingedBoots(winged_boots::State::default()),
@@ -973,6 +997,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::JeweledMask => State::JeweledMask,
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
+            Relic::RoyalPoison => State::RoyalPoison,
             relic => unimplemented!("what {relic:?} does in a run that carries it"),
         }
     }

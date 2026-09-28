@@ -1,0 +1,6 @@
+# Hungry for Mushrooms' fragrant mushroom deals fifteen as it is picked up,
+# then upgrades two of the deck's upgradable cards, shuffled off the niche
+# stream.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"HUNGRY_FOR_MUSHROOMS"}
+{"cmd":"choose_option","index":1}

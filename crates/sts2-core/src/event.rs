@@ -95,6 +95,14 @@ pub trait EventBehavior<V: ContentVersion> {
         unimplemented!("an event answered with {answer:?}")
     }
 
+    /// The rest of an option's body once a pickup it offered has closed,
+    /// which [`HookEffect::ResumeEvent`](crate::HookEffect::ResumeEvent)
+    /// asks for. What it does to the run comes back, in the order the game
+    /// does it.
+    fn resume(&self, _state: &mut Self::State) -> crate::HookEffects<V> {
+        unimplemented!("an event resumed after its pickup")
+    }
+
     /// The rewards
     /// [`HookEffect::OfferEventRewards`](crate::HookEffect::OfferEventRewards)
     /// offers, in the order the game makes them.

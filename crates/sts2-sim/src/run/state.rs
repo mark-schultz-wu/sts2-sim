@@ -1391,6 +1391,19 @@ impl<V: Rules> State<V> {
                     *finished = true;
                     continue;
                 }
+                HookEffect::ResumeEvent => {
+                    let Phase::Event { state, .. } = &mut self.phase else {
+                        unreachable!("only an event's option resumes it")
+                    };
+                    let resumed = V::resume_event(state);
+                    match self.carry_out(resumed) {
+                        None => continue,
+                        Some(mut asked) => {
+                            asked.rest.extend(effects);
+                            return Some(asked);
+                        }
+                    }
+                }
                 HookEffect::LoseGold(amount) => {
                     let left = self.player.gold - amount;
                     self.player.gold = left.max(num_traits::zero());
@@ -1716,6 +1729,15 @@ impl<V: Rules> State<V> {
                 }
                 HookEffect::AskEvent => Pickup::Event,
                 HookEffect::CloneDeckCard { excluding } => Pickup::CloneDeckCard { excluding },
+                // `Deck.Cards[i]` for each place the deck had as it began, so
+                // the clones are not cloned again.
+                HookEffect::CloneDeck => {
+                    for at in 0..self.player.deck.len() {
+                        let card = self.player.deck[at].ident;
+                        self.add_to_deck(sts2_core::DeckCard::new(card));
+                    }
+                    continue;
+                }
                 // `CardSelectCmd` takes the whole list without asking when it
                 // holds no more than it must take, and returns nothing from an
                 // empty one.
@@ -2035,7 +2057,7 @@ impl<V: Rules> State<V> {
         if rewards.iter().any(|reward| {
             matches!(
                 reward,
-                CustomReward::CharacterCards(_)
+                CustomReward::CharacterCards { .. }
                     | CustomReward::ColorlessCards(_)
                     | CustomReward::CardsOf { .. }
                     | CustomReward::UpgradedCardsOf { .. }
@@ -2094,12 +2116,15 @@ impl<V: Rules> State<V> {
                     amount: crate::reward::fixed_gold::<V, _>(rng, amount),
                     taken: false,
                 },
-                CustomReward::CharacterCards(count) => Offer::Card {
+                CustomReward::CharacterCards {
+                    count,
+                    upgrade_roll,
+                } => Offer::Card {
                     cards: crate::reward::card::regular::<V, _>(
                         rng,
                         V::reward_cards(character),
                         count,
-                        true,
+                        upgrade_roll,
                     )
                     .into_iter()
                     .map(CardIdent::new)

@@ -1,0 +1,7 @@
+# Trial's nondescript woman found guilty adds a Doubt, then offers two card
+# rewards of three from the character's pool, with no upgrade roll.
+{"cmd":"start","seed":"0RACLE2","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"TRIAL"}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}
+{"cmd":"answer","take":[{"index":0,"card":1}]}

@@ -1,0 +1,9 @@
+# Grave of the Forgotten's confrontation adds Decay, then enchants a card
+# that exhausts with Souls Power, which takes its Exhaust off. The only such
+# card is taken without asking. Played, it goes to the discard pile.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","card":"OFFERING"}
+{"cmd":"event","event":"GRAVE_OF_THE_FORGOTTEN"}
+{"cmd":"choose_option","index":0}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":4}

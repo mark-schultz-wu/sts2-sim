@@ -1,12 +1,12 @@
 //! Which cards an enchantment takes, and what it does on them in a fight.
 
 use sts2_core::{
-    CardId, CardIdent, CardKind, CardTable as _, Cost, EnchantHook, Enchanted, EnchantmentStatus,
-    EventHook, Fight, HookEffect, HookEffects, Modify, Rules as _,
+    CardId, CardIdent, CardKind, CardTable as _, Change, Cost, EnchantHook, Enchanted,
+    EnchantmentStatus, EventHook, Fight, HookEffect, HookEffects, Modify, Rules as _,
 };
 
 use super::super::V0_107_1 as V;
-use super::super::generated::cards::{CardRarity, CardTag};
+use super::super::generated::cards::{CardKeyword, CardRarity, CardTag};
 use super::super::generated::enchantments::Enchantment;
 
 /// `EnchantmentModel.CanEnchant`, for a card in the deck.
@@ -25,10 +25,12 @@ pub(crate) fn can_enchant(enchantment: Enchantment, card: &CardIdent<V>) -> bool
             base && card.card.rarity() == CardRarity::Basic
                 && (card.card.tagged(CardTag::Strike) || card.card.tagged(CardTag::Defend))
         }
-        Enchantment::SoulsPower => base && card.card.exhausts(),
         // Its own check adds an X cost to the base's refusals.
         Enchantment::Slither => base && card.card.cost() != Cost::X,
         Enchantment::Glam | Enchantment::Sown | Enchantment::Swift => base,
+        // Exhaust among the card's own keywords, which its upgrade can take
+        // off.
+        Enchantment::SoulsPower => base && card_exhausts(card),
         // `CanEnchantCardType`, which takes an attack alone.
         Enchantment::Corrupted
         | Enchantment::Instinct
@@ -37,6 +39,31 @@ pub(crate) fn can_enchant(enchantment: Enchantment, card: &CardIdent<V>) -> bool
         Enchantment::Nimble => base && card.card.gains_block(),
         Enchantment::Goopy => base && card.card.tagged(CardTag::Defend),
         _ => unimplemented!("which cards {enchantment:?} can enchant"),
+    }
+}
+
+/// `GetKeywordsWithSources(Local).Contains(Exhaust)`: what the card prints,
+/// then what its upgrade writes where it has one.
+fn card_exhausts(card: &CardIdent<V>) -> bool {
+    let upgrade: &[Change<V>] = if card.upgrade > 0 {
+        V::card_upgrade(card.card)
+    } else {
+        &[]
+    };
+    upgrade
+        .iter()
+        .fold(card.card.exhausts(), |exhausts, change| match change {
+            Change::AddKeyword(CardKeyword::Exhaust) => true,
+            Change::RemoveKeyword(CardKeyword::Exhaust) => false,
+            _ => exhausts,
+        })
+}
+
+/// `OnEnchant`'s writes on the card. Souls Power takes its Exhaust off.
+pub(crate) fn enchanted_changes(enchantment: Enchantment) -> &'static [Change<V>] {
+    match enchantment {
+        Enchantment::SoulsPower => &[Change::RemoveKeyword(CardKeyword::Exhaust)],
+        _ => &[],
     }
 }
 
@@ -56,6 +83,7 @@ pub(crate) fn enchant(enchantment: Enchantment, amount: u8, card: &mut CardIdent
         | Enchantment::PerfectFit
         | Enchantment::Sharp
         | Enchantment::Slither
+        | Enchantment::SoulsPower
         | Enchantment::Sown
         | Enchantment::Spiral
         | Enchantment::Swift => {
@@ -110,6 +138,7 @@ pub(crate) fn modify(
             | Enchantment::PerfectFit
             | Enchantment::Sharp
             | Enchantment::Slither
+            | Enchantment::SoulsPower
             | Enchantment::Sown
             | Enchantment::Spiral
             | Enchantment::Swift,
@@ -182,6 +211,7 @@ pub(crate) fn on_play<F: Fight<V>>(
         | Enchantment::PerfectFit
         | Enchantment::Sharp
         | Enchantment::Slither
+        | Enchantment::SoulsPower
         | Enchantment::Spiral
         | Enchantment::Vigorous => {}
         enchantment => unimplemented!("what {enchantment:?} does when its card is played"),

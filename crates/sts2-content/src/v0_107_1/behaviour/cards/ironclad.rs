@@ -80,6 +80,14 @@ pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<
         }
         IroncladCard::Whirlwind => whirlwind(fight),
         IroncladCard::Bloodletting => bloodletting(fight),
+        // `Offering`: its `HpLoss` off its owner, unblockable, then its
+        // energy and its cards drawn.
+        IroncladCard::Offering => {
+            fight.damage_unblockable(fight.actor(), fight.var(CardVar::HpLoss));
+            fight.modify_energy(fight.var(CardVar::Energy));
+            fight.draw(fight.var(CardVar::Cards));
+            Played::Done
+        }
         IroncladCard::Uppercut => uppercut(fight),
         IroncladCard::MoltenFist => molten_fist(fight),
         // `Cinder`: its damage to the target, then a card from hand drawn off

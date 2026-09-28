@@ -1,0 +1,5 @@
+# Trial's noble found innocent adds a Regret and gives 300 gold.
+{"cmd":"start","seed":"0RACLE6","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"TRIAL"}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":1}

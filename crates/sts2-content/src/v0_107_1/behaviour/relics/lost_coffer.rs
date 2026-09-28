@@ -5,7 +5,13 @@ use sts2_core::{CustomReward, EventHook, HookEffect};
 use super::super::super::V0_107_1 as V;
 
 /// A three-card reward from the character's pool, then a potion.
-const REWARDS: &[CustomReward<V>] = &[CustomReward::CharacterCards(3), CustomReward::Potion];
+const REWARDS: &[CustomReward<V>] = &[
+    CustomReward::CharacterCards {
+        count: 3,
+        upgrade_roll: true,
+    },
+    CustomReward::Potion,
+];
 
 /// `AfterObtained`: `RewardsCmd.OfferCustom` with a `CardReward` of three
 /// over its owner's pool at `RegularEncounter` odds, and a `PotionReward`.

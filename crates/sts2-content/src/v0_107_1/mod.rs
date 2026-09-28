@@ -234,6 +234,10 @@ impl sts2_core::Hooks for V0_107_1 {
         }
     }
 
+    fn enchanted_changes(enchantment: Self::Enchantment) -> &'static [sts2_core::Change<Self>] {
+        behaviour::enchantments::enchanted_changes(enchantment)
+    }
+
     fn card_result_pile(
         card: Self::Card,
         base: Option<sts2_core::Pile>,
@@ -851,6 +855,10 @@ impl sts2_core::Rules for V0_107_1 {
         answer: &sts2_core::Answer,
     ) -> sts2_core::HookEffects<Self> {
         behaviour::events::answer(state, answer)
+    }
+
+    fn resume_event(state: &mut Self::EventState) -> sts2_core::HookEffects<Self> {
+        behaviour::events::resume(state)
     }
 
     fn event_rewards(state: &Self::EventState) -> Vec<sts2_core::CustomReward<Self>> {
