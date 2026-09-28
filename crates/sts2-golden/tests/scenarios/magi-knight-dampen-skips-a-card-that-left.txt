@@ -1,0 +1,18 @@
+# A copy Dampen downgraded and that then left the fight is not upgraded
+# back: Armaments upgrades Inflame, Dampen downgrades it, and it is played,
+# which takes a Power out of the fight, before the Magi Knight dies.
+{"cmd":"start","seed":"0RACLE6","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","card":"ARMAMENTS"}
+{"cmd":"grant","card":"INFLAME"}
+{"cmd":"fight","encounter":"KNIGHTS_ELITE"}
+{"cmd":"power","power":"INTANGIBLE_POWER","amount":9,"target":0}
+{"cmd":"power","power":"STRENGTH_POWER","amount":300,"target":0}
+{"cmd":"play_card","index":2}
+{"cmd":"answer","cards":[3]}
+{"cmd":"play_card","index":1,"target":2}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":2}
+{"cmd":"play_card","index":0,"target":3}
+{"cmd":"end_turn"}

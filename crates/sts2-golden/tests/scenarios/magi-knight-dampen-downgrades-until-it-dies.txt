@@ -1,0 +1,14 @@
+# The Magi Knight's Dampen downgrades every upgraded card the player holds,
+# and keeps each with the level it had. Hex's affliction stays on them.
+# Once its one caster dies, the power comes off and upgrades those cards
+# back, the exhausted ones among them.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"WHETSTONE"}
+{"cmd":"grant","relic":"WAR_PAINT"}
+{"cmd":"fight","encounter":"KNIGHTS_ELITE"}
+{"cmd":"power","power":"INTANGIBLE_POWER","amount":9,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":300,"target":0}
+{"cmd":"play_card","index":4,"target":3}
+{"cmd":"end_turn"}

@@ -198,6 +198,7 @@ pub(crate) fn unblocked_damage_target<V: Rules>(
             let onlookers = super::live::Onlookers {
                 creatures: &fight.live.creatures,
                 powers: &fight.live.powers,
+                kept: &fight.live.kept,
                 relics: Some(fight.relics),
             };
             let listener = held.listener(creature.carrier(), fight.live.history(), &onlookers);
@@ -461,6 +462,7 @@ pub(crate) fn each<V: Rules>(
     let onlookers = super::live::Onlookers {
         creatures: &live.creatures,
         powers: &live.powers,
+        kept: &live.kept,
         relics: Some(relics),
     };
     for creature in live.creatures.iter() {
