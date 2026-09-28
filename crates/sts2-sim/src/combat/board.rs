@@ -450,6 +450,11 @@ impl<'a, V: Rules> Board<'a, V> {
             sts2_core::EventHook::Applied,
             &mut asked,
         );
+        if asked.contains(&HookEffect::DowngradeUpgraded) {
+            asked.retain(|effect| *effect != HookEffect::DowngradeUpgraded);
+            let downgraded = self.downgrade_upgraded();
+            self.live.kept_mut(id, power).cards.extend(downgraded);
+        }
         let (owned, cards): (SmallVec<[_; 2]>, SmallVec<[_; 2]>) = asked
             .into_iter()
             .partition(|effect| matches!(effect, HookEffect::ApplyToOwner(..)));
@@ -541,11 +546,45 @@ impl<'a, V: Rules> Board<'a, V> {
         }
     }
 
+    /// `CardCmd.Downgrade` on every upgraded copy the player holds, in
+    /// `AllCards` order, and the level each had.
+    ///
+    /// `Downgrade` does nothing while the fight is ending, but the level is
+    /// still what the copy had.
+    fn downgrade_upgraded(&mut self) -> Vec<(CardId<V>, u8)> {
+        let upgraded: Vec<(CardId<V>, u8)> = [Pile::Hand, Pile::Draw, Pile::Discard, Pile::Exhaust]
+            .into_iter()
+            .flat_map(|pile| self.live.cards.iter(pile))
+            .filter(|held| held.face.ident.upgrade > 0)
+            .map(|held| (held.id, held.face.ident.upgrade))
+            .collect();
+        if !(self.ended.is_some() || self.ending()) {
+            for &(card, _) in &upgraded {
+                self.live.cards.write_named(card, |face| {
+                    face.downgrade();
+                    true
+                });
+            }
+        }
+        upgraded
+    }
+
     /// `PowerCmd.Remove`, with what its `AfterRemoved` asks carried out.
-    fn remove_power_carried(&mut self, id: CombatId, power: V::Power) {
+    pub(super) fn remove_power_carried(&mut self, id: CombatId, power: V::Power) {
         for effect in self.live.remove_power_asking(id, power) {
             match effect {
                 HookEffect::KillCreature(creature) => self.kill_outright(creature),
+                // `CardCmd.Upgrade` on a copy that has left the fight writes on
+                // a model the fight no longer holds.
+                HookEffect::UpgradeCopy { card, .. } if self.live.cards.named(card).is_none() => {}
+                HookEffect::UpgradeCopy { card, times } => {
+                    self.live.cards.write_named(card, |face| {
+                        for _ in 0..times {
+                            face.upgrade();
+                        }
+                        true
+                    });
+                }
                 other => unimplemented!("{power:?} asking for {other:?} as it comes off"),
             }
         }
@@ -844,6 +883,7 @@ impl<'a, V: Rules> Board<'a, V> {
         let fight = super::live::Onlookers {
             creatures: &self.live.creatures,
             powers: &self.live.powers,
+            kept: &self.live.kept,
             relics: Some(&*self.relics),
         };
         let listener = sts2_core::EventPower {
@@ -1165,6 +1205,7 @@ impl<'a, V: Rules> Board<'a, V> {
                             &super::live::Onlookers {
                                 creatures: &self.live.creatures,
                                 powers: &self.live.powers,
+                                kept: &self.live.kept,
                                 relics: Some(&*self.relics),
                             },
                         ),
@@ -1383,6 +1424,7 @@ impl<'a, V: Rules> Board<'a, V> {
                         &super::live::Onlookers {
                             creatures: &self.live.creatures,
                             powers: &self.live.powers,
+                            kept: &self.live.kept,
                             relics: Some(&*self.relics),
                         },
                     ),
@@ -1457,7 +1499,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 // `PowerCmd.Remove(this)`, from a power that goes with the
                 // creature that applied it.
                 (Listener::Power { owner, power, .. }, HookEffect::Remove) if owner != creature => {
-                    self.live.remove_power(owner, power)
+                    self.remove_power_carried(owner, power)
                 }
                 (Listener::Power { owner, .. }, effect) if owner == creature => own.push(effect),
                 // `PowerCmd.Apply` on the power's owner, from itself.
@@ -1479,6 +1521,11 @@ impl<'a, V: Rules> Board<'a, V> {
                 (Listener::Monster { creature, .. }, HookEffect::EnterMoveFrom { from, to }) => {
                     self.enter_move_from(creature, from, to)
                 }
+                (Listener::Power { owner, power, .. }, HookEffect::ForgetCreature(gone)) => self
+                    .live
+                    .kept_mut(owner, power)
+                    .creatures
+                    .retain(|kept| *kept != gone),
                 (listener, effect) => {
                     unimplemented!("{listener:?} asking for {effect:?} over another's death")
                 }
@@ -2671,6 +2718,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn attack_results(&self) -> sts2_core::AttackResults<V> {
         self.landed.clone().unwrap_or_default()
+    }
+
+    fn keep_creature(&mut self, holder: CombatId, power: V::Power, creature: CombatId) {
+        let creatures = &mut self.live.kept_mut(holder, power).creatures;
+        if !creatures.contains(&creature) {
+            creatures.push(creature);
+        }
     }
 
     fn random_orb(&mut self, orbs: &[V::Orb]) -> Option<V::Orb> {

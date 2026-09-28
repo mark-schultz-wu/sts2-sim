@@ -1543,6 +1543,27 @@ pub trait CreatureView<V: ContentVersion> {
     fn intents(&self) -> impl Iterator<Item = V::IntentKind> + '_;
 }
 
+/// What a power keeps beside its model for as long as it lasts. That is the
+/// creatures it waits on, and the cards it changed, each with a level.
+///
+/// `DampenPower`'s `casters` and `downgradedCardsToOldUpgradeLevels`. Every
+/// fight a search makes copies a model, but not this. The fight holds it once
+/// for each power that keeps any, and its copies share it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Kept<V: ContentVersion> {
+    pub creatures: smallvec::SmallVec<[crate::CombatId; 2]>,
+    pub cards: Vec<(crate::CardId<V>, u8)>,
+}
+
+impl<V: ContentVersion> Default for Kept<V> {
+    fn default() -> Self {
+        Kept {
+            creatures: smallvec::SmallVec::new(),
+            cards: Vec::new(),
+        }
+    }
+}
+
 /// The creatures in a fight, as a hook reads ones it does not own.
 ///
 /// How a power asks about a dealer or a target. A narrowing like
@@ -1575,6 +1596,12 @@ pub trait FightView<V: ContentVersion> {
     /// `Creature.Player?.GetRelic<T>() != null`: whether `creature` is a player
     /// holding `relic`. A pet is no player, so it holds none.
     fn relic(&self, creature: crate::CombatId, relic: V::Relic) -> bool;
+
+    /// What the fight keeps beside the instance of `power` that `holder`
+    /// carries, or `None` while it keeps nothing.
+    fn kept(&self, _holder: crate::CombatId, _power: V::Power) -> Option<&Kept<V>> {
+        None
+    }
 }
 
 /// The fight, as a card's own behaviour reaches it.
@@ -2024,6 +2051,17 @@ pub trait Fight<V: ContentVersion> {
     /// `PowerCmd.Remove` of `power` from `creature`, where it holds one.
     fn remove_power(&mut self, _creature: crate::CombatId, _power: V::Power) {
         unimplemented!("removing a power")
+    }
+
+    /// `creature` onto what the fight keeps beside the instance of `power`
+    /// that `holder` carries, in [`Kept::creatures`].
+    fn keep_creature(
+        &mut self,
+        _holder: crate::CombatId,
+        _power: V::Power,
+        _creature: crate::CombatId,
+    ) {
+        unimplemented!("a creature kept beside a power")
     }
 
     /// `CreatureCmd.SetMaxHp`: the maximum, and the health down to it where
@@ -4111,6 +4149,19 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CreatureCmd.Escape` on the listener's owner: its powers go with no
     /// hook, and it leaves the fight without dying.
     Escape,
+    /// `CardCmd.Downgrade` on every upgraded card the power's owner holds in
+    /// the fight. The fight keeps each copy and the level it had beside the
+    /// power, in [`Kept::cards`].
+    DowngradeUpgraded,
+    /// `creature` off what the fight keeps beside the listener, in
+    /// [`Kept::creatures`].
+    ForgetCreature(crate::CombatId),
+    /// `CardCmd.Upgrade` on one copy, `times` over, wherever it stands in
+    /// the fight. Nothing for a copy that has left it.
+    UpgradeCopy {
+        card: crate::CardId<V>,
+        times: u8,
+    },
     /// `CardPileCmd.AddToCombatAndPreview(card)` into the discard pile of
     /// each player the attack hit: `per` for each of its hits on that player
     /// that took health.

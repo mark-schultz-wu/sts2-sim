@@ -1,0 +1,14 @@
+# Dampen puts an upgraded card's printed cost back, as `ResetForDowngrade`
+# does: Havoc upgraded costs nothing, and downgraded costs one again. The
+# Spectral Knight falls first, so Hex leaves the cards alone. Once the Magi
+# Knight dies, Havoc is upgraded back and costs nothing.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","card":"HAVOC"}
+{"cmd":"grant","relic":"WAR_PAINT"}
+{"cmd":"fight","encounter":"KNIGHTS_ELITE"}
+{"cmd":"power","power":"INTANGIBLE_POWER","amount":9,"target":0}
+{"cmd":"power","power":"STRENGTH_POWER","amount":300,"target":0}
+{"cmd":"play_card","index":0,"target":2}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":0,"target":3}

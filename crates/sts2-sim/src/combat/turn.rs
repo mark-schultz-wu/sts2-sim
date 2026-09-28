@@ -2231,6 +2231,7 @@ pub(super) fn roll_moves_of<V: Rules>(
             let fight = super::live::Onlookers {
                 creatures: &live.creatures,
                 powers: &live.powers,
+                kept: &live.kept,
                 relics: Some(relics),
             };
             let creature = live

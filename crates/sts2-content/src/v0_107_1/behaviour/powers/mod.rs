@@ -2964,6 +2964,43 @@ pub(crate) fn event_hook(
             ))
         }
         (Power::ChainsOfBindingPower, _, EventHook::BeforeSideTurnEnd { .. }) => None,
+        // `DampenPower.AfterApplied`: every upgraded card its owner holds in
+        // the fight downgraded, and kept with the level it had.
+        (Power::DampenPower, _, EventHook::Applied) => Some(HookEffect::DowngradeUpgraded),
+        // `AfterDeath` of one of its casters, which the fight keeps beside it:
+        // off the list, and once none is left, it comes off.
+        (
+            Power::DampenPower,
+            _,
+            EventHook::AfterDeath {
+                creature,
+                removal_prevented: false,
+                ..
+            },
+        ) => {
+            let casters = fight
+                .kept(holder, power)
+                .map_or(&[][..], |kept| &kept.creatures[..]);
+            if !casters.contains(&creature) {
+                return;
+            }
+            asked.push(HookEffect::ForgetCreature(creature));
+            (casters.len() == 1).then_some(HookEffect::Remove)
+        }
+        (Power::DampenPower, _, EventHook::AfterDeath { .. }) => None,
+        // `AfterRemoved`: each copy it downgraded upgraded back, once for each
+        // level it had.
+        (Power::DampenPower, _, EventHook::Removed) => {
+            let downgraded = fight
+                .kept(holder, power)
+                .map_or(&[][..], |kept| &kept.cards[..]);
+            asked.extend(
+                downgraded
+                    .iter()
+                    .map(|&(card, times)| HookEffect::UpgradeCopy { card, times }),
+            );
+            return;
+        }
         // `WitheringPresencePower.AfterCardPlayed`, for each card its target
         // plays, which is the one player: every sixth, a Wither into the hand.
         (Power::WitheringPresencePower, _, EventHook::CardPlayed { .. }) => {

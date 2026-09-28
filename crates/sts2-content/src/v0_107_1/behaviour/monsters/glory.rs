@@ -390,6 +390,28 @@ pub(super) fn perform<F: Fight<V>>(
         }
         // `MagicBombMove`: its hit. The rest picks where its effect lands.
         (Monster::MagiKnight, MoveId::MagicBomb) => fight.attack_opponents(),
+        // `DampenMove`: each opponent's Dampen takes the knight as a caster,
+        // and one that has none yet gets it, applied from the knight.
+        (Monster::MagiKnight, MoveId::DampenMove) => {
+            use sts2_core::CreatureView as _;
+
+            let actor = fight.actor();
+            for target in fight.opponents() {
+                let fresh = fight
+                    .creatures()
+                    .find(|creature| creature.id() == target)
+                    .is_none_or(|creature| creature.power(Power::DampenPower).is_none());
+                if fresh {
+                    fight.apply_power_from(
+                        target,
+                        Power::DampenPower,
+                        PowerAmount::Counted(1),
+                        Some(actor),
+                    );
+                }
+                fight.keep_creature(target, Power::DampenPower, actor);
+            }
+        }
         // `JudicialFlightMove`: Soar on itself. `IsFlying` picks its sounds
         // alone.
         (Monster::OwlMagistrate, MoveId::JudicialFlight) => {

@@ -552,7 +552,7 @@ impl<V: Rules> Face<V> {
             // The level is already on the identity, so this writes what the
             // upgrade writes without counting it again.
             for &change in V::card_upgrade(card.ident.card) {
-                card.modify(change, sts2_core::Lasting::ThisFight);
+                card.upgrade_change(change);
             }
         }
         if let Some(enchanted) = card.ident.enchantment {
@@ -889,14 +889,91 @@ impl<V: Rules> Face<V> {
         dropped
     }
 
-    fn upgrade(&mut self) {
+    /// One of what an upgrade writes. A price change moves the printed cost,
+    /// the rest are written for the fight.
+    fn upgrade_change(&mut self, change: sts2_core::Change<V>) {
+        match change {
+            sts2_core::Change::ChangeCost(pool, by) => self.upgrade_cost(pool, by),
+            change => self.modify(change, sts2_core::Lasting::ThisFight),
+        }
+    }
+
+    /// `CardEnergyCost.UpgradeBy` and `CardModel.UpgradeStarCostBy`: the
+    /// printed cost itself moves, which a downgrade puts back.
+    ///
+    /// An energy cost stops at nothing. A lower one also lowers every set
+    /// above it, and a lower star cost drops the star sets above it.
+    fn upgrade_cost(&mut self, pool: sts2_core::CostPool, by: V::Number) {
+        let printed = match pool {
+            sts2_core::CostPool::Energy => &mut self.cost,
+            sts2_core::CostPool::Star => &mut self.star_cost,
+        };
+        let sts2_core::Cost::Fixed(was) = *printed else {
+            return;
+        };
+        let by: i16 = num_traits::cast(by)
+            .unwrap_or_else(|| unimplemented!("an upgrade moving a cost by {by:?}"));
+        let was = i16::from(was.get());
+        let now = match pool {
+            sts2_core::CostPool::Energy => (was + by).max(0),
+            sts2_core::CostPool::Star if was + by < 0 => {
+                unimplemented!("an upgrade taking a star cost below nothing")
+            }
+            sts2_core::CostPool::Star => was + by,
+        };
+        *printed = sts2_core::Cost::Fixed(
+            u8::try_from(now)
+                .ok()
+                .and_then(nonmax::NonMaxU8::new)
+                .unwrap_or_else(|| unimplemented!("an upgraded cost of {now}")),
+        );
+        if now >= was {
+            return;
+        }
+        let above = |held: CostModifier| {
+            held.pool() == pool && matches!(held.change(), CostChange::Absolute(set) if set > now)
+        };
+        let mut to = 0;
+        for at in 0..usize::from(self.modifiers) {
+            let held = self.cost_modifiers[at];
+            match pool {
+                sts2_core::CostPool::Energy if above(held) => {
+                    self.cost_modifiers[to] = held.with_amount(now as u8);
+                    to += 1;
+                }
+                sts2_core::CostPool::Star if above(held) => {}
+                _ => {
+                    self.cost_modifiers[to] = held;
+                    to += 1;
+                }
+            }
+        }
+        self.modifiers = to as u8;
+    }
+
+    /// `CardModel.DowngradeInternal`: the level to nothing, and the printed
+    /// numbers, prices and keywords back, which drops what the fight wrote on
+    /// them. The cost modifiers stay, and the enchantment writes again.
+    pub(super) fn downgrade(&mut self) {
+        let mut fresh = Self::fresh(CardIdent {
+            upgrade: 0,
+            ..self.ident
+        });
+        fresh.cost_modifiers = self.cost_modifiers;
+        fresh.modifiers = self.modifiers;
+        fresh.replays = self.replays;
+        fresh.enchantment_status = self.enchantment_status;
+        *self = fresh;
+    }
+
+    pub(super) fn upgrade(&mut self) {
         // `CardModel.IsUpgradable`, which a card already at its own maximum is
         // not. A status card prints no upgrade at all.
         if self.ident.upgrade >= self.ident.card.max_upgrade() {
             return;
         }
         for &change in V::card_upgrade(self.ident.card) {
-            self.modify(change, sts2_core::Lasting::ThisFight);
+            self.upgrade_change(change);
         }
         // `RecalculateForUpgradeOrEnchant`, which gives a calculated number
         // the base its `CalculationBase` now prints.
@@ -977,12 +1054,20 @@ impl<V: Rules> sts2_core::CreatureView<V> for Seen<'_, V> {
 pub(crate) struct Onlookers<'a, V: Rules> {
     pub(crate) creatures: &'a Creatures<V>,
     pub(crate) powers: &'a PowerStore<V>,
+    pub(crate) kept: &'a [KeptBeside<V>],
     /// The belt, where the caller has one to lend. A relic asked about with
     /// none lent panics by name.
     pub(crate) relics: Option<&'a crate::run::Belt<V>>,
 }
 
 impl<V: Rules> sts2_core::FightView<V> for Onlookers<'_, V> {
+    fn kept(&self, holder: CombatId, power: V::Power) -> Option<&sts2_core::Kept<V>> {
+        self.kept
+            .iter()
+            .find(|(at, kept, _)| *at == holder && *kept == power)
+            .map(|(_, _, kept)| &**kept)
+    }
+
     fn power(
         &self,
         creature: CombatId,
@@ -1583,6 +1668,9 @@ pub(crate) struct Live<V: Rules> {
     pub(super) side: V::CombatSide,
     /// `CombatManager.History`.
     pub(super) history: CombatHistory<V>,
+    /// What each power that keeps anything beside its model keeps, by the
+    /// creature carrying it. Empty in nearly every fight.
+    pub(super) kept: Vec<KeptBeside<V>>,
     /// The encounter this active fight belongs to.
     pub(super) encounter: V::Encounter,
     pub(super) cards: super::cards::Cards<V>,
@@ -1759,6 +1847,7 @@ impl<V: Rules> Clone for Live<V> {
             extra_cards: self.extra_cards.clone(),
             exhaust_next: self.exhaust_next.clone(),
             history: self.history.clone(),
+            kept: self.kept.clone(),
             leaving: self.leaving.clone(),
             powers: self.powers.clone(),
             orbs: self.orbs.clone(),
@@ -1783,6 +1872,7 @@ impl<V: Rules> Clone for Live<V> {
             round,
             side,
             history,
+            kept,
             encounter,
             cards,
             removed_from_deck,
@@ -1809,6 +1899,7 @@ impl<V: Rules> Clone for Live<V> {
         *round = source.round;
         *side = source.side;
         history.clone_from(&source.history);
+        kept.clone_from(&source.kept);
         *encounter = source.encounter;
         cards.clone_from(&source.cards);
         removed_from_deck.clone_from(&source.removed_from_deck);
@@ -1827,7 +1918,36 @@ impl<V: Rules> Clone for Live<V> {
     }
 }
 
+/// What one power keeps beside its model: the creature carrying it, which
+/// power, and the record, shared between the fights a search copies.
+pub(crate) type KeptBeside<V> = (
+    CombatId,
+    <V as sts2_core::ContentVersion>::Power,
+    std::sync::Arc<sts2_core::Kept<V>>,
+);
+
 impl<V: Rules> Live<V> {
+    /// What the fight keeps beside the instance of `power` that `holder`
+    /// carries, to write on, begun empty where it keeps nothing yet.
+    pub(super) fn kept_mut(
+        &mut self,
+        holder: CombatId,
+        power: V::Power,
+    ) -> &mut sts2_core::Kept<V> {
+        let at = match self
+            .kept
+            .iter()
+            .position(|(at, kept, _)| *at == holder && *kept == power)
+        {
+            Some(at) => at,
+            None => {
+                self.kept.push((holder, power, std::sync::Arc::default()));
+                self.kept.len() - 1
+            }
+        };
+        std::sync::Arc::make_mut(&mut self.kept[at].2)
+    }
+
     /// Keep `note` on the copy `id`'s own model, over what it kept before.
     pub(super) fn note(&mut self, id: CardId<V>, note: V::Number) {
         match self.notes.iter_mut().find(|(noted, _)| *noted == id) {
@@ -2165,6 +2285,7 @@ impl<V: Rules> Live<V> {
         let fight = Onlookers {
             creatures: &self.creatures,
             powers: &self.powers,
+            kept: &self.kept,
             relics,
         };
         V::power_event_hook(
@@ -2218,6 +2339,7 @@ impl<V: Rules> Live<V> {
         let fight = Onlookers {
             creatures: &self.creatures,
             powers: &self.powers,
+            kept: &self.kept,
             relics: None,
         };
         V::power_event_hook(
@@ -2225,6 +2347,9 @@ impl<V: Rules> Live<V> {
             sts2_core::EventHook::Removed,
             &mut asked,
         );
+        // What it kept goes with it, once it has read it.
+        self.kept
+            .retain(|(holder, kept, _)| !(*holder == owner && *kept == power));
         let block = self
             .creatures
             .iter()
@@ -2498,6 +2623,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             round: 1,
             side: CombatSide::Player,
             history: CombatHistory::new(),
+            kept: Vec::new(),
             encounter: Encounter::SlimesWeak,
             cards: super::cards::Cards::with_cards(0),
             removed_from_deck: Vec::new(),
