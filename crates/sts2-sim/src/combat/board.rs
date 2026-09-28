@@ -389,8 +389,14 @@ impl<'a, V: Rules> Board<'a, V> {
     /// enters with, each through `PowerCmd.Apply` from itself.
     fn arrived(&mut self, id: CombatId, monster: V::Monster) {
         let side = self.live.side;
+        let model = self
+            .live
+            .machines
+            .iter()
+            .find(|held| held.creature == id)
+            .map_or_else(|| sts2_core::MonsterModel::new(monster), |held| held.state);
         let entering: SmallVec<[_; 2]> =
-            V::monster_starting_powers(monster, self.live.ascension, side).collect();
+            V::monster_starting_powers(monster, self.live.ascension, side, &model).collect();
         for (power, amount) in entering {
             self.land(id, power, amount, Some(id));
         }
@@ -409,6 +415,22 @@ impl<'a, V: Rules> Board<'a, V> {
                 self.land(opponent, power, amount, Some(id));
             }
         }
+    }
+
+    /// `CombatManager.AfterCreatureAdded`: an enemy that joins on the
+    /// player's side rolls its move there and then.
+    ///
+    /// Not for a monster that opens on a state something built for it, whose
+    /// roll from that state lands where it stands.
+    fn roll_joined(&mut self, id: CombatId) {
+        if self.live.side != <V::CombatSide as SideKinds>::PLAYER {
+            return;
+        }
+        let ascension = self.live.ascension;
+        super::turn::roll_moves_of::<V>(self.live, self.relics, ascension, self.rngs.ai, |at| {
+            at == id
+        })
+        .unwrap_or_else(|e| unimplemented!("rolling the move of a monster that joined: {e}"));
     }
 
     fn applied(&mut self, id: CombatId, power: V::Power) {
@@ -1174,6 +1196,13 @@ impl<'a, V: Rules> Board<'a, V> {
             .iter()
             .filter(|creature| creature.side == owner)
             .count();
+        // `SlotName`, which a monster added in its place takes.
+        let slot = self
+            .live
+            .machines
+            .iter()
+            .find(|held| held.creature == id)
+            .and_then(|held| held.slot);
         // Its move graph is finished, but the creature remains addressable
         // until its death commands finish. Monsters those commands add must
         // receive ids after its own rather than reuse the one being removed.
@@ -1205,6 +1234,28 @@ impl<'a, V: Rules> Board<'a, V> {
                             .expect("a summoned monster is in the fight");
                         summoned.next_move = Some(opening.into());
                     }
+                }
+                // `CreatureCmd.Add` in the owner's slot, of a model the power
+                // wrote on.
+                sts2_core::HookEffect::SummonWritten {
+                    monster,
+                    written,
+                    opens_on,
+                } => {
+                    let id = super::monster::summon_built::<V>(
+                        self.live,
+                        self.relics,
+                        sts2_core::Spawned {
+                            monster,
+                            opens_on,
+                            slot,
+                        },
+                        sts2_core::MonsterModel::written(monster, written),
+                        position,
+                        self.rngs.niche,
+                    );
+                    self.arrived(id, monster);
+                    self.roll_joined(id);
                 }
                 // `PowerCmd.Apply` from nobody, which the Possess powers
                 // hand back with.

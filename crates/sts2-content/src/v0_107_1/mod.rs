@@ -694,8 +694,9 @@ impl sts2_core::Rules for V0_107_1 {
         monster: Self::Monster,
         ascension: Self::AscensionLevel,
         side: Self::CombatSide,
+        model: &Self::MonsterState,
     ) -> impl Iterator<Item = (Self::Power, sts2_core::PowerAmount<Self::Number>)> {
-        behaviour::monsters::starting_powers(monster, ascension, side).into_iter()
+        behaviour::monsters::starting_powers(monster, ascension, side, model).into_iter()
     }
 
     fn monster_starting_opponent_powers(

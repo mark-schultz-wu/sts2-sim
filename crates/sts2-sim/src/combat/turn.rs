@@ -2166,6 +2166,17 @@ fn roll_moves<V: Rules>(
 ) -> Result<(), Error> {
     live.machines
         .retain(|held| live.creatures.iter().any(|c| c.id == held.creature));
+    roll_moves_of::<V>(live, relics, ascension, ai, |_| true)
+}
+
+/// `MonsterModel.RollMove` for each enemy `which` picks, in fight order.
+pub(super) fn roll_moves_of<V: Rules>(
+    live: &mut Live<V>,
+    relics: &crate::run::Belt<V>,
+    ascension: V::AscensionLevel,
+    ai: &mut MegaRng,
+    which: impl Fn(CombatId) -> bool,
+) -> Result<(), Error> {
     // `GetTeammatesOf(Creature).Count(IsAlive)`. Every creature with a move
     // graph is an enemy.
     let standing: u8 = live
@@ -2176,6 +2187,9 @@ fn roll_moves<V: Rules>(
         .try_into()
         .expect("a side's creatures fit a byte");
     for held in live.machines.iter_mut() {
+        if !which(held.creature) {
+            continue;
+        }
         let rolled = {
             // Field by field, because the machines are borrowed.
             let fight = super::live::Onlookers {
