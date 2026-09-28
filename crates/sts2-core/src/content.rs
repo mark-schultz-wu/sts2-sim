@@ -4602,6 +4602,15 @@ pub trait Hooks: ContentVersion {
         asked: &mut HookEffects<Self>,
     );
 
+    /// `TryModifyKeywordsInCombat` of the power that afflicts cards with
+    /// `affliction`: the keyword it gives each card that carries it. Nothing
+    /// for an affliction whose power gives none.
+    ///
+    /// `HexPower` gives Hexed cards Ethereal, and takes Hexed off every card
+    /// as it goes. So a card carries the keyword exactly while it carries the
+    /// affliction.
+    fn keyword_while_afflicted(affliction: Self::Affliction) -> Option<Self::CardKeyword>;
+
     /// `CardModel.GetResultPileTypeForCardPlay`, for a card whose class
     /// overrides it: where the card goes once its play is over, given what
     /// the base class answers.

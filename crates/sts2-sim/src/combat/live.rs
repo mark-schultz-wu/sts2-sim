@@ -644,9 +644,16 @@ impl<V: Rules> Face<V> {
 
     /// `Keywords.Contains(keyword)` for this copy: what the table prints, as
     /// `printed` says, and what has been written on, less what was taken off.
+    /// Then what a power gives it for the affliction it carries, which
+    /// `TryModifyKeywordsInCombat` adds after the rest.
     fn keyword(&self, printed: bool, keyword: V::CardKeyword) -> bool {
         (printed || sts2_core::FlagSet::contains(self.added_keywords, keyword))
             && !sts2_core::FlagSet::contains(self.removed_keywords, keyword)
+            || self
+                .ident
+                .affliction
+                .and_then(V::keyword_while_afflicted)
+                .is_some_and(|granted| granted == keyword)
     }
 
     /// `Keywords.Contains(keyword)` for this copy, for the words the table

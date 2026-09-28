@@ -293,6 +293,8 @@ pub(crate) fn perform<F: Fight<V>>(
         | Monster::SlimedBerserker
         | Monster::OwlMagistrate
         | Monster::Fabricator
+        | Monster::SpectralKnight
+        | Monster::MagiKnight
         | Monster::Guardbot
         | Monster::Noisebot
         | Monster::TheLost
