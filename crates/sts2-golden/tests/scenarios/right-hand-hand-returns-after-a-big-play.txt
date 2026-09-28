@@ -1,0 +1,11 @@
+# Right Hand Hand has Osty hit, then comes back from the discard pile into
+# hand after a play that spent two energy or more. Blood Wall spends two,
+# and the Strike after spends one, which leaves it where it is.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"RIGHT_HAND_HAND"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"grant","card":"BLOOD_WALL"}
+{"cmd":"play_card","index":5}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"play_card","index":0,"target":1}

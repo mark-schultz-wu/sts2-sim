@@ -286,6 +286,7 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
         NecrobinderCard::Unleash | NecrobinderCard::Protector => {
             osty_attack(fight, CardVar::CalculatedDamage)
         }
+        NecrobinderCard::RightHandHand => osty_attack(fight, CardVar::OstyDamage),
         NecrobinderCard::Poke | NecrobinderCard::Flatten => osty_attack(fight, CardVar::OstyDamage),
         NecrobinderCard::Graveblast => graveblast(fight),
         NecrobinderCard::SculptingStrike => sculpting_strike(fight),
@@ -455,6 +456,16 @@ pub(super) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     match (card, hook) {
+        // `RightHandHand.AfterCardPlayedLate`: back into hand from the discard
+        // pile after a play of its owner's that spent its `Energy` or more. A
+        // fight here has one player.
+        (NecrobinderCard::RightHandHand, EventHook::CardPlayedLate { energy, .. }) => {
+            if i64::from(energy) >= i64::from(printed.face(CardVar::Energy)) {
+                asked.push(HookEffect::AddSelfToHand {
+                    only_from: Some(Pile::Discard),
+                });
+            }
+        }
         // `Flatten.AfterAttack`, which answers an attack by its owner's Osty
         // alone. A fight here has one player, so any Osty is theirs.
         (

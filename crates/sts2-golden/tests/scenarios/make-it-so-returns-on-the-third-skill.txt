@@ -1,0 +1,9 @@
+# Make It So comes back into hand from the discard pile once its owner has
+# finished three Skills this turn: two Defends and a Venerate.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"MAKE_IT_SO"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"play_card","index":3}
+{"cmd":"play_card","index":3}
+{"cmd":"play_card","index":1}
