@@ -102,7 +102,7 @@ fn pool_three(run: &impl EventView<V>) -> Vec<Relic> {
     let mut pool = Vec::new();
     if run
         .relics()
-        .any(|relic| relic.rarity() == RelicRarity::Starter)
+        .any(|held| held.relic.rarity() == RelicRarity::Starter)
     {
         pool.push(Relic::TouchOfOrobas);
     }

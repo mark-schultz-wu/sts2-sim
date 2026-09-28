@@ -3,6 +3,15 @@
 use crate::rng::GameRng;
 use crate::{ContentVersion, Room};
 
+/// A relic the run carries, as an event reads it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CarriedRelic<V: ContentVersion> {
+    pub relic: V::Relic,
+    /// `RelicModel.IsUsedUp`, which some relics work out from what they
+    /// saved.
+    pub used_up: bool,
+}
+
 /// The read-only run facts event behavior can inspect.
 pub trait EventView<V: ContentVersion> {
     fn act(&self) -> V::Count;
@@ -19,7 +28,7 @@ pub trait EventView<V: ContentVersion> {
     /// is holding it. The run itself is what answers an event's questions.
     fn character(&self) -> V::Character;
     /// The relics the run carries, in panel order.
-    fn relics(&self) -> impl Iterator<Item = V::Relic> + '_;
+    fn relics(&self) -> impl Iterator<Item = CarriedRelic<V>> + '_;
     /// The deck as it stands, in deck order, by what each card is.
     fn deck(&self) -> Vec<crate::CardIdent<V>>;
     /// `RelicGrabBag.HasAvailableRelics` on the player's own bag: whether a

@@ -454,17 +454,33 @@ pub(super) fn orb_triggers<V: Rules>(
     ) {
         unimplemented!("a listener changing how often an orb triggers");
     }
-    for orb in &held {
+    for (place, orb) in held.into_iter().enumerate() {
+        let mut orb = orb;
         let mut board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
         match at {
-            OrbMoment::TurnEnd => V::orb_turn_end(orb, &mut board),
-            OrbMoment::TurnStart => V::orb_turn_start(orb, &mut board),
+            OrbMoment::TurnEnd => V::orb_turn_end(&mut orb, &mut board),
+            OrbMoment::TurnStart => V::orb_turn_start(&mut orb, &mut board),
         }
-        if let Some(ended) = board.ended {
+        let ended = board.ended;
+        keep_orb(live, place, orb);
+        if let Some(ended) = ended {
             return Some(ended);
         }
     }
     None
+}
+
+/// The numbers an orb's trigger moved, kept on the orb at `place` while that
+/// orb still stands there.
+fn keep_orb<V: Rules>(live: &mut Live<V>, place: usize, orb: sts2_core::Channelled<V>) {
+    if let Some(held) = live
+        .orbs
+        .as_mut()
+        .and_then(|orbs| orbs.queue.get_mut(place))
+        && held.orb == orb.orb
+    {
+        *held = orb;
+    }
 }
 
 /// `PlayerCombatState.EndOfTurnCleanup`: what a card carried only for the turn.
@@ -1119,7 +1135,7 @@ pub(super) fn carry_setup<V: Rules>(
                                 unimplemented!("{count:?} orb passives at once")
                             });
                             for _ in 0..count {
-                                let Some(first) = live
+                                let Some(mut first) = live
                                     .orbs
                                     .as_ref()
                                     .and_then(|orbs| orbs.queue.first().cloned())
@@ -1137,8 +1153,9 @@ pub(super) fn carry_setup<V: Rules>(
                                     None,
                                     None,
                                 );
-                                V::orb_passive(&first, &mut board);
+                                V::orb_passive(&mut first, &mut board);
                                 ended = ended.or(board.ended);
+                                keep_orb(live, 0, first);
                             }
                         }
                         // `CardPileCmd.Draw` for the player, which a shuffle's

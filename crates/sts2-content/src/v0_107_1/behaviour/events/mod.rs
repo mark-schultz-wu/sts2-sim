@@ -243,7 +243,7 @@ pub(crate) fn allowed(event: Event, run: &impl EventView<V>) -> bool {
         Event::SpiralingWhirlpool => enchantable(run, Enchantment::Spiral),
 
         Event::RelicTrader | Event::RanwidTheElder if act == 0 => false,
-        Event::RelicTrader => run.relics().filter(|&relic| tradable(relic)).count() >= 5,
+        Event::RelicTrader => run.relics().filter(|&held| tradable(held)).count() >= 5,
         Event::RanwidTheElder => {
             run.relics().any(tradable) && gold >= 100 && run.potions().next().is_some()
         }
@@ -255,7 +255,7 @@ pub(crate) fn allowed(event: Event, run: &impl EventView<V>) -> bool {
 /// `Player.HasEventPet`: a relic that adds a pet, or a Byrdonis Egg in the
 /// deck.
 fn has_event_pet(run: &impl EventView<V>) -> bool {
-    run.relics().any(adds_pet)
+    run.relics().any(|held| adds_pet(held.relic))
         || run
             .deck()
             .iter()

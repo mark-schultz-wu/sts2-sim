@@ -4620,8 +4620,16 @@ impl<V: Rules> sts2_core::EventView<V> for State<V> {
         self.shared.character
     }
 
-    fn relics(&self) -> impl Iterator<Item = V::Relic> + '_ {
-        self.player.relics.iter().map(|held| held.relic)
+    fn relics(&self) -> impl Iterator<Item = sts2_core::CarriedRelic<V>> + '_ {
+        use sts2_core::RelicModel as _;
+
+        self.player
+            .relics
+            .iter()
+            .map(|held| sts2_core::CarriedRelic {
+                relic: held.relic,
+                used_up: held.state.used_up(held.relic),
+            })
     }
 
     fn deck(&self) -> Vec<CardIdent<V>> {

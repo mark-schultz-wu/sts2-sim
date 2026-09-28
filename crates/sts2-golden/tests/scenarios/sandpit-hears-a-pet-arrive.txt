@@ -1,0 +1,9 @@
+# Sandpit hears `AfterCreatureAddedToCombat`, which only moves the
+# creatures on screen. Bodyguard brings the Ironclad an Osty once The
+# Insatiable has liquified the ground.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"THE_INSATIABLE_BOSS"}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"BODYGUARD"}
+{"cmd":"play_card","index":5}
+{"cmd":"end_turn"}

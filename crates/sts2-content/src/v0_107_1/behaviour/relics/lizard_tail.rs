@@ -14,6 +14,11 @@ pub struct State {
     was_used: bool,
 }
 
+/// `IsUsedUp`, which is `WasUsed`.
+pub(super) fn used_up(state: &State) -> bool {
+    state.was_used
+}
+
 /// `ShouldDieLate`: its owner does not die while it is unused.
 pub(super) fn decide_hook(state: &State, hook: DecisionHook<V>) -> HookResponse<bool> {
     match hook {

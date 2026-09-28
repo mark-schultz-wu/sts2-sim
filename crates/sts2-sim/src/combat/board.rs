@@ -363,7 +363,18 @@ impl<'a, V: Rules> Board<'a, V> {
     /// `Hook.AfterModifyingPowerAmountReceived`, asked of each listener that
     /// changed what `power` landed with.
     fn power_received(&mut self, modifiers: Received<V>, power: V::Power) {
-        for (holder, modifier) in modifiers {
+        for modifier in modifiers {
+            let (holder, modifier) = match modifier {
+                Receiver::Power(holder, modifier) => (holder, modifier),
+                Receiver::Relic(relic) => {
+                    let hook = sts2_core::EventHook::PowerAmountReceivedModified { power };
+                    let asked = super::listen::ask_relic(self.relics, relic, hook);
+                    if let Some(effect) = asked.first() {
+                        unimplemented!("{relic:?} asking for {effect:?} once it changed {power:?}");
+                    }
+                    continue;
+                }
+            };
             let Some(at) = self
                 .live
                 .powers
@@ -2155,9 +2166,16 @@ fn afflict<V: Rules>(held: &mut Face<V>, affliction: V::Affliction) -> bool {
     }
 }
 
-/// The listeners whose `TryModifyPowerAmountReceived` changed an amount, by
-/// the creature carrying each and the power it is.
-pub(super) type Received<V> = SmallVec<[(CombatId, <V as sts2_core::ContentVersion>::Power); 1]>;
+/// A listener whose `TryModifyPowerAmountReceived` changed an amount.
+#[derive(Debug, Clone, Copy)]
+pub(super) enum Receiver<V: Rules> {
+    /// A power, by the creature carrying it and the power it is.
+    Power(CombatId, V::Power),
+    Relic(V::Relic),
+}
+
+/// The listeners whose `TryModifyPowerAmountReceived` changed an amount.
+pub(super) type Received<V> = SmallVec<[Receiver<V>; 1]>;
 
 /// `ModifyPowerAmountGivenAdditive`, over the listeners in the fight: what
 /// `amount` of `power` from `giver` to `target` becomes, and the relics that
@@ -2227,6 +2245,7 @@ pub(super) fn received_by<V: Rules>(
             power,
             target,
             amount,
+            player: fight.live.player().id,
         };
         match (
             <V as sts2_core::Hooks>::modify_hook(listener, asked),
@@ -2235,7 +2254,16 @@ pub(super) fn received_by<V: Rules>(
             (Modify::Nothing, _) => {}
             (Modify::Replaced(with), sts2_core::Listener::Power { holder, power, .. }) => {
                 amount = with;
-                modifiers.push((holder, power));
+                modifiers.push(Receiver::Power(holder, power));
+            }
+            (Modify::Replaced(with), sts2_core::Listener::Relic(state)) => {
+                amount = with;
+                let held = fight
+                    .relics
+                    .iter()
+                    .find(|held| std::ptr::eq(&held.state, state))
+                    .expect("a relic asked is on the belt");
+                modifiers.push(Receiver::Relic(held.relic));
             }
             (answer, _) => {
                 unimplemented!("a listener answering {answer:?} for what {power:?} lands with")
@@ -2503,7 +2531,7 @@ impl<V: Rules> Board<'_, V> {
     ///
     /// # Panics
     ///
-    /// A listener to `AfterCreatureAddedToCombat`.
+    /// A listener asking for anything as the pet arrives.
     pub(super) fn add_pet(&mut self, monster: V::Monster) -> CombatId {
         let Some(id) = self
             .live
@@ -2540,7 +2568,15 @@ impl<V: Rules> Board<'_, V> {
                 owner: Some(player),
             },
         );
-        self.unheard(sts2_core::ModelHook::AfterCreatureAddedToCombat);
+        let hook = sts2_core::EventHook::CreatureAdded {
+            creature: id,
+            side: <V::CombatSide as SideKinds>::PLAYER,
+        };
+        if let Some((listener, effect)) =
+            super::listen::notify::<V>(self.live, self.relics, hook).first()
+        {
+            unimplemented!("{listener:?} asking for {effect:?} as a pet arrives");
+        }
         id
     }
 

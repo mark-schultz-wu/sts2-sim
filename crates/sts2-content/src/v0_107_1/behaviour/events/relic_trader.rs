@@ -41,7 +41,11 @@ impl EventBehavior<V> for RelicTrader {
     /// stream, the first three. The shuffle sorts them by id first, which is
     /// the order the relic table is declared in.
     fn enter<R: sts2_core::rng::GameRng>(&self, run: &impl EventView<V>, rng: &mut R) -> State {
-        let mut owned: Vec<Relic> = run.relics().filter(|&relic| tradable(relic)).collect();
+        let mut owned: Vec<Relic> = run
+            .relics()
+            .filter(|&held| tradable(held))
+            .map(|held| held.relic)
+            .collect();
         owned.sort_by_key(|&relic| relic as u16);
         rng.unstable_shuffle(&mut owned);
         owned.truncate(OPTIONS.len());

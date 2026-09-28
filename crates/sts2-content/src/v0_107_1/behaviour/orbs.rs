@@ -3,7 +3,7 @@
 //! `OrbModel`'s own triggers, one match per trigger, the way each orb's class
 //! overrides them. An orb nobody has ported panics as it is channelled.
 
-use sts2_core::{Amount, Channelled, Effect, Fight, Scaling};
+use sts2_core::{Amount, Channelled, CreatureView as _, Effect, Fight, Scaling};
 
 use super::super::V0_107_1 as V;
 use super::super::generated::orbs::Orb;
@@ -23,7 +23,7 @@ fn printed(amount: Option<nonmax::NonMaxU8>) -> Number {
 /// An orb nobody has ported.
 pub(crate) fn channelled(orb: Orb) -> Channelled<V> {
     match orb {
-        Orb::LightningOrb | Orb::FrostOrb | Orb::PlasmaOrb => {
+        Orb::LightningOrb | Orb::FrostOrb | Orb::PlasmaOrb | Orb::DarkOrb => {
             let data = orb.data();
             Channelled {
                 orb,
@@ -31,21 +31,30 @@ pub(crate) fn channelled(orb: Orb) -> Channelled<V> {
                 evoke: printed(data.evoke.amount),
             }
         }
+        // `GlassOrb.EvokeVal` is twice its passive, which the getter works out.
+        Orb::GlassOrb => {
+            let passive = printed(orb.data().passive.amount);
+            Channelled {
+                orb,
+                passive,
+                evoke: passive * 2,
+            }
+        }
         orb => unimplemented!("channelling {orb:?}"),
     }
 }
 
 /// `BeforeTurnEndOrbTrigger`.
-pub(crate) fn turn_end<F: Fight<V>>(orb: &Channelled<V>, fight: &mut F) {
+pub(crate) fn turn_end<F: Fight<V>>(orb: &mut Channelled<V>, fight: &mut F) {
     match orb.orb {
-        Orb::LightningOrb | Orb::FrostOrb => passive(orb, fight),
+        Orb::LightningOrb | Orb::FrostOrb | Orb::DarkOrb | Orb::GlassOrb => passive(orb, fight),
         Orb::PlasmaOrb => {}
         orb => unimplemented!("what {orb:?} does as a turn ends"),
     }
 }
 
-/// `Passive(null)`.
-pub(crate) fn passive<F: Fight<V>>(orb: &Channelled<V>, fight: &mut F) {
+/// `Passive(null)`. An orb whose numbers move writes them on `orb`.
+pub(crate) fn passive<F: Fight<V>>(orb: &mut Channelled<V>, fight: &mut F) {
     match orb.orb {
         // Its passive number to a random enemy.
         Orb::LightningOrb => {
@@ -54,6 +63,21 @@ pub(crate) fn passive<F: Fight<V>>(orb: &Channelled<V>, fight: &mut F) {
         Orb::FrostOrb => frost(passive_val(orb, |n| fight.orb_value(orb.orb, n)), fight),
         // `PlayerCmd.GainEnergy` by its passive.
         Orb::PlasmaOrb => fight.modify_energy(passive_val(orb, |n| fight.orb_value(orb.orb, n))),
+        // `_evokeVal += PassiveVal`.
+        Orb::DarkOrb => orb.evoke += passive_val(orb, |n| fight.orb_value(orb.orb, n)),
+        // Its passive to every enemy that can be hit, the list taken first,
+        // and one off what it deals next while it deals anything.
+        Orb::GlassOrb => {
+            let targets = fight.hittable_opponents();
+            let value = passive_val(orb, |n| fight.orb_value(orb.orb, n));
+            if value > 0 {
+                orb.passive = (orb.passive - 1).max(0);
+                orb.evoke = orb.passive * 2;
+                for target in targets {
+                    unpowered(value, target, fight);
+                }
+            }
+        }
         orb => unimplemented!("what {orb:?} does as its passive"),
     }
 }
@@ -88,9 +112,9 @@ pub(crate) fn passive_at<F: Fight<V>>(
 }
 
 /// `AfterTurnStartOrbTrigger`, which the base orb leaves empty.
-pub(crate) fn turn_start<F: Fight<V>>(orb: &Channelled<V>, fight: &mut F) {
+pub(crate) fn turn_start<F: Fight<V>>(orb: &mut Channelled<V>, fight: &mut F) {
     match orb.orb {
-        Orb::LightningOrb | Orb::FrostOrb => {}
+        Orb::LightningOrb | Orb::FrostOrb | Orb::DarkOrb | Orb::GlassOrb => {}
         // `PlasmaOrb.AfterTurnStartOrbTrigger`, which is its passive.
         Orb::PlasmaOrb => passive(orb, fight),
         orb => unimplemented!("what {orb:?} does as a turn starts"),
@@ -115,6 +139,40 @@ pub(crate) fn evoke<F: Fight<V>>(orb: &Channelled<V>, fight: &mut F) -> sts2_cor
             fight.modify_energy(evoke_val(orb, |n| fight.orb_value(orb.orb, n)));
             std::iter::once(fight.actor()).collect()
         }
+        // Its evoke at the enemy with the least health, the first of them.
+        Orb::DarkOrb => {
+            let weakest = fight
+                .hittable_opponents()
+                .into_iter()
+                .filter_map(|id| {
+                    fight
+                        .creatures()
+                        .find(|creature| creature.id() == id)
+                        .map(|creature| (creature.hp(), id))
+                })
+                .reduce(|least, next| if next.0 < least.0 { next } else { least });
+            let Some((_, target)) = weakest else {
+                return sts2_core::Opponents::new();
+            };
+            unpowered(
+                evoke_val(orb, |n| fight.orb_value(orb.orb, n)),
+                target,
+                fight,
+            );
+            std::iter::once(target).collect()
+        }
+        // Its evoke to every enemy that can be hit, while it deals anything.
+        Orb::GlassOrb => {
+            let targets = fight.hittable_opponents();
+            let value = evoke_val(orb, |n| fight.orb_value(orb.orb, n));
+            if value <= 0 {
+                return sts2_core::Opponents::new();
+            }
+            for &target in &targets {
+                unpowered(value, target, fight);
+            }
+            targets.into_iter().collect()
+        }
         orb => unimplemented!("what {orb:?} does as it is evoked"),
     }
 }
@@ -122,7 +180,7 @@ pub(crate) fn evoke<F: Fight<V>>(orb: &Channelled<V>, fight: &mut F) -> sts2_cor
 /// `PassiveVal`. `modify` is `ModifyOrbValue`.
 pub(crate) fn passive_val(orb: &Channelled<V>, modify: impl FnOnce(Number) -> Number) -> Number {
     match orb.orb {
-        Orb::LightningOrb | Orb::FrostOrb => modify(orb.passive),
+        Orb::LightningOrb | Orb::FrostOrb | Orb::DarkOrb | Orb::GlassOrb => modify(orb.passive),
         // `PlasmaOrb.PassiveVal`, its number as printed.
         Orb::PlasmaOrb => orb.passive,
         orb => unimplemented!("{orb:?}'s passive value"),
@@ -133,10 +191,24 @@ pub(crate) fn passive_val(orb: &Channelled<V>, modify: impl FnOnce(Number) -> Nu
 pub(crate) fn evoke_val(orb: &Channelled<V>, modify: impl FnOnce(Number) -> Number) -> Number {
     match orb.orb {
         Orb::LightningOrb | Orb::FrostOrb => modify(orb.evoke),
-        // `PlasmaOrb.EvokeVal`, its number as printed.
-        Orb::PlasmaOrb => orb.evoke,
+        // `PlasmaOrb.EvokeVal`, and `DarkOrb`'s, their numbers as held.
+        Orb::PlasmaOrb | Orb::DarkOrb => orb.evoke,
+        // `GlassOrb.EvokeVal`: twice `PassiveVal`.
+        Orb::GlassOrb => modify(orb.passive) * 2,
         orb => unimplemented!("{orb:?}'s evoke value"),
     }
+}
+
+/// `CreatureCmd.Damage` of `value` on `target`, `ValueProp.Unpowered`, from
+/// the player.
+fn unpowered<F: Fight<V>>(value: Number, target: sts2_core::CombatId, fight: &mut F) {
+    let hit = fight.resolve(Effect::Attack {
+        dealer: fight.actor(),
+        target,
+        damage: Amount::Number(value),
+        scaling: Scaling::Static,
+    });
+    fight.apply(hit);
 }
 
 /// `FrostOrb`'s block: `value` on the player, unpowered.

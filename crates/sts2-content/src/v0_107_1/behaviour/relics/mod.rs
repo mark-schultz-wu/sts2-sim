@@ -150,6 +150,7 @@ mod ring_of_the_drake;
 mod ring_of_the_snake;
 mod ripple_basin;
 mod royal_poison;
+mod ruined_helmet;
 mod runic_pyramid;
 mod sai;
 mod sand_castle;
@@ -172,6 +173,7 @@ mod strike_dummy;
 mod sturdy_clamp;
 mod sword_of_jade;
 mod sword_of_stone;
+mod symbiotic_virus;
 mod tanxs_whistle;
 mod throwing_axe;
 mod tiny_mailbox;
@@ -420,6 +422,8 @@ pub enum State {
     Shovel,
     Girya(girya::State),
     SwordOfJade,
+    RuinedHelmet(ruined_helmet::State),
+    SymbioticVirus,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -428,11 +432,12 @@ pub enum State {
 ///
 /// # Panics
 ///
-/// A relic whose model decides for itself whether it is used up, or whether
-/// it does something on pickup or brings a pet.
-pub(crate) fn tradable(relic: Relic) -> bool {
+/// A relic whose model decides for itself whether it does something on
+/// pickup or brings a pet.
+pub(crate) fn tradable(held: sts2_core::CarriedRelic<V>) -> bool {
     use super::super::generated::relics::{RelicFlag, RelicRarity};
 
+    let relic = held.relic;
     let data = relic.data();
     if matches!(
         data.rarity,
@@ -440,16 +445,13 @@ pub(crate) fn tradable(relic: Relic) -> bool {
     ) {
         return false;
     }
-    [
-        RelicFlag::UsedUp,
-        RelicFlag::UponPickup,
-        RelicFlag::SpawnsPets,
-    ]
-    .into_iter()
-    .all(|flag| match data.flags.get(flag) {
-        Field::Constant(set) => !set,
-        Field::Computed => unimplemented!("whether {relic:?} is {flag:?}"),
-    })
+    !held.used_up
+        && [RelicFlag::UponPickup, RelicFlag::SpawnsPets]
+            .into_iter()
+            .all(|flag| match data.flags.get(flag) {
+                Field::Constant(set) => !set,
+                Field::Computed => unimplemented!("whether {relic:?} is {flag:?}"),
+            })
 }
 
 /// `RelicModel.AddsPet`, which two relics override.
@@ -665,6 +667,8 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::SymbioticVirus => symbiotic_virus::event_hook(hook, asked),
+        State::RuinedHelmet(state) => ruined_helmet::event_hook(state, hook, asked),
         State::SwordOfJade => sword_of_jade::event_hook(hook, asked),
         State::Girya(state) => girya::event_hook(state, hook, asked),
         State::Shovel => shovel::event_hook(hook, asked),
@@ -761,6 +765,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         State::BloodSoakedRose => blood_soaked_rose::modify_hook(hook),
         State::Fiddle => fiddle::modify_hook(hook),
         State::SneckoSkull => snecko_skull::modify_hook(hook),
+        State::RuinedHelmet(state) => ruined_helmet::modify_hook(state, hook),
         // The fight asks only a relic that overrides the hook, and none of
         // the rest overrides one of these.
         State::AlchemicalCoffer
@@ -922,7 +927,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::VexingPuzzlebox
         | State::Shovel
         | State::Girya(_)
-        | State::SwordOfJade => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::SwordOfJade
+        | State::SymbioticVirus => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1101,6 +1107,8 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::SymbioticVirus => State::SymbioticVirus,
+            Relic::RuinedHelmet => State::RuinedHelmet(ruined_helmet::State::default()),
             Relic::SwordOfJade => State::SwordOfJade,
             Relic::Girya => State::Girya(girya::State::default()),
             Relic::Shovel => State::Shovel,
@@ -1133,6 +1141,18 @@ impl sts2_core::RelicModel<V> for State {
     /// # Panics
     ///
     /// A relic that works its number out and nobody has ported.
+    /// `IsUsedUp`. The table answers for a relic that returns a constant,
+    /// and the rest work it out from what they saved.
+    fn used_up(&self, relic: Relic) -> bool {
+        use super::super::generated::relics::RelicFlag;
+
+        match (self, Table::data(relic).flags.get(RelicFlag::UsedUp)) {
+            (State::LizardTail(state), _) => lizard_tail::used_up(state),
+            (_, Field::Constant(used_up)) => used_up,
+            (_, Field::Computed) => unimplemented!("whether {relic:?} is used up"),
+        }
+    }
+
     fn display_amount(&self, relic: Relic) -> Number {
         match Table::data(relic).display_amount {
             // The table holds the column's own width, and a relic counts in

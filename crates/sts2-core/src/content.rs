@@ -2785,11 +2785,13 @@ pub enum ModifyHook<V: ContentVersion> {
         player: crate::CombatId,
     },
     /// `TryModifyPowerAmountReceived`: what `amount` of `power` lands on
-    /// `target`, as an application or a change to one it carries.
+    /// `target`, as an application or a change to one it carries. `player`
+    /// is the player's creature, which a relic reads its owner as.
     PowerAmountReceived {
         power: V::Power,
         target: crate::CombatId,
         amount: V::Number,
+        player: crate::CombatId,
     },
     /// `ModifyHandDraw`: how many cards the player draws to open a turn, in a
     /// room of this type.
@@ -3144,6 +3146,12 @@ pub enum EventHook<V: ContentVersion> {
     Obtained,
     /// `AfterOstyRevived`, once a dead Osty stands back up.
     OstyRevived,
+    /// `AfterCreatureAddedToCombat`, once `creature` stands in the fight on
+    /// `side`.
+    CreatureAdded {
+        creature: crate::CombatId,
+        side: V::CombatSide,
+    },
     /// `AfterCardChangedPiles` for a card that joined the deck, outside a
     /// fight. `cloned` is `clonedBy` being set, for a copy a listener made.
     AddedToDeck {
@@ -3556,6 +3564,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::PlayCountModified { .. } => ModelHook::AfterModifyingCardPlayCount,
             EventHook::HpLostModified => ModelHook::AfterModifyingHpLostAfterOsty,
             EventHook::OstyRevived => ModelHook::AfterOstyRevived,
+            EventHook::CreatureAdded { .. } => ModelHook::AfterCreatureAddedToCombat,
             EventHook::ResultPileModified { .. } => {
                 ModelHook::AfterModifyingCardPlayResultPileOrPosition
             }
@@ -4639,6 +4648,13 @@ pub trait RelicModel<V: ContentVersion>: Copy + std::fmt::Debug + PartialEq + Eq
     ///
     /// A relic that works its number out and nobody has ported.
     fn display_amount(&self, relic: V::Relic) -> V::Number;
+
+    /// `RelicModel.IsUsedUp`.
+    ///
+    /// # Panics
+    ///
+    /// A relic that works it out and nobody has ported.
+    fn used_up(&self, relic: V::Relic) -> bool;
 }
 
 /// One deck card's own model, as the run's deck holds one.
@@ -5626,10 +5642,12 @@ pub trait Rules: Hooks {
     fn channelled(orb: Self::Orb) -> crate::Channelled<Self>;
 
     /// `OrbModel.BeforeTurnEndOrbTrigger`, once for each trigger.
-    fn orb_turn_end<F: Fight<Self>>(orb: &crate::Channelled<Self>, fight: &mut F);
+    /// An orb whose numbers move writes them on `orb`, which the fight
+    /// keeps.
+    fn orb_turn_end<F: Fight<Self>>(orb: &mut crate::Channelled<Self>, fight: &mut F);
 
     /// `OrbModel.AfterTurnStartOrbTrigger`, once for each trigger.
-    fn orb_turn_start<F: Fight<Self>>(orb: &crate::Channelled<Self>, fight: &mut F);
+    fn orb_turn_start<F: Fight<Self>>(orb: &mut crate::Channelled<Self>, fight: &mut F);
 
     /// `OrbModel.Evoke`: what the orb does as it leaves.
     ///
@@ -5646,7 +5664,7 @@ pub trait Rules: Hooks {
     );
 
     /// `OrbModel.Passive` with no target named, which `OrbCmd.Passive` runs.
-    fn orb_passive<F: Fight<Self>>(orb: &crate::Channelled<Self>, fight: &mut F);
+    fn orb_passive<F: Fight<Self>>(orb: &mut crate::Channelled<Self>, fight: &mut F);
 
     /// `OrbModel.PassiveVal`: the passive number the orb shows and uses.
     /// `modify` is `ModifyOrbValue`, which the getter runs or leaves out.

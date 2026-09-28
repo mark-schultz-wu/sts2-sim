@@ -1417,6 +1417,7 @@ pub(crate) fn modify_hook(
                 power: landing,
                 target,
                 amount,
+                ..
             },
         ) if target == holder && debuff_at(landing, amount) => Modify::Replaced(0),
         (Power::ArtifactPower, _, ModifyHook::PowerAmountReceived { .. }) => Modify::Nothing,
@@ -2658,6 +2659,9 @@ pub(crate) fn event_hook(
             Some(HookEffect::Decrement)
         }
         (Power::SandpitPower, _, EventHook::SideTurnStartLate { .. }) => None,
+        // `SandpitPower.AfterCreatureAddedToCombat` moves creatures on the
+        // screen, and nothing else.
+        (Power::SandpitPower, _, EventHook::CreatureAdded { .. }) => None,
         // `SandpitPower.AfterRemoved`: while its owner and its target both
         // live, `CreatureCmd.Kill` on the target, forced. A fight here has one
         // player, who is the target, and the player's death ends the fight
