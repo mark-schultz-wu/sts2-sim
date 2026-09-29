@@ -2125,10 +2125,14 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // SIGNET_RING
     sts2_core::Overrides::from_bits(0),
     // SILKEN_TRESS
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyCardRewardOptionsLate),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterModifyingCardRewardOptions)
+        .with(sts2_core::ModelHook::TryModifyCardRewardOptionsLate),
     // SILVER_CRUCIBLE
     sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterModifyingCardRewardOptions)
         .with(sts2_core::ModelHook::AfterRoomEntered)
+        .with(sts2_core::ModelHook::ShouldGenerateTreasure)
         .with(sts2_core::ModelHook::TryModifyCardRewardOptionsLate),
     // SLING_OF_COURAGE
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRoomEntered),
