@@ -1037,7 +1037,7 @@ pub(super) fn carry_setup<V: Rules>(
                             if !live.cards.is_empty(Pile::Draw) {
                                 continue;
                             }
-                            let Some((pile, count, act)) = super::board::shuffle_asking::<V>(
+                            let Some((pile, selection, act)) = super::board::shuffle_asking::<V>(
                                 live,
                                 rngs.reborrow(),
                                 relics,
@@ -1045,7 +1045,7 @@ pub(super) fn carry_setup<V: Rules>(
                             ) else {
                                 continue;
                             };
-                            match select::<V>(live, rngs.reborrow(), relics, pile, count, act) {
+                            match select::<V>(live, rngs.reborrow(), relics, pile, selection, act) {
                                 Err(question) => {
                                     return park_setup(
                                         live,
@@ -1058,8 +1058,12 @@ pub(super) fn carry_setup<V: Rules>(
                                 Ok(None) => {}
                             }
                         }
-                        sts2_core::HookEffect::SelectFromPile { pile, count, act } => {
-                            match select::<V>(live, rngs.reborrow(), relics, pile, count, act) {
+                        sts2_core::HookEffect::SelectFromPile {
+                            pile,
+                            selection,
+                            act,
+                        } => {
+                            match select::<V>(live, rngs.reborrow(), relics, pile, selection, act) {
                                 Err(question) => {
                                     return park_setup(
                                         live,
@@ -1161,13 +1165,13 @@ pub(super) fn carry_setup<V: Rules>(
                     }
                     super::board::Drawn::Paused {
                         left,
-                        asks: (pile, count, act),
+                        asks: (pile, selection, act),
                     } => {
                         let rest = Setup::Drawing {
                             left,
                             resumed: true,
                         };
-                        match select::<V>(live, rngs.reborrow(), relics, pile, count, act) {
+                        match select::<V>(live, rngs.reborrow(), relics, pile, selection, act) {
                             Err(question) => {
                                 return park_setup(live, act, rest, question);
                             }
@@ -1210,8 +1214,12 @@ pub(super) fn carry_setup<V: Rules>(
                             }
                             ended = ended.or(board.ended());
                         }
-                        sts2_core::HookEffect::SelectFromPile { pile, count, act } => {
-                            match select::<V>(live, rngs.reborrow(), relics, pile, count, act) {
+                        sts2_core::HookEffect::SelectFromPile {
+                            pile,
+                            selection,
+                            act,
+                        } => {
+                            match select::<V>(live, rngs.reborrow(), relics, pile, selection, act) {
                                 Err(question) => {
                                     return park_setup(
                                         live,
@@ -1435,14 +1443,14 @@ pub(super) fn carry_setup<V: Rules>(
                 super::board::Drawn::Done(None) => Setup::PlayerTurnStart(rest),
                 super::board::Drawn::Paused {
                     left,
-                    asks: (pile, count, act),
+                    asks: (pile, selection, act),
                 } => {
                     let next = Setup::TurnStartDrawing {
                         left,
                         resumed: true,
                         rest,
                     };
-                    match select::<V>(live, rngs.reborrow(), relics, pile, count, act) {
+                    match select::<V>(live, rngs.reborrow(), relics, pile, selection, act) {
                         Err(question) => {
                             return park_setup(live, act, next, question);
                         }
@@ -1527,13 +1535,9 @@ pub(super) fn select<V: Rules>(
     rngs: CombatRngs<'_>,
     relics: &mut crate::run::Belt<V>,
     pile: Pile,
-    count: V::Number,
+    selection: sts2_core::Selection,
     act: sts2_core::PileAct,
 ) -> Result<Option<super::Ended>, super::live::Asked<V>> {
-    let count = num_traits::cast(count)
-        .and_then(nonmax::NonMaxUsize::new)
-        .unwrap_or_else(|| unimplemented!("a selection of {count:?} cards"));
-    let selection = sts2_core::Selection::Exactly(count);
     match super::play::taken(live, pile, selection) {
         Some(picked) => {
             let mut rngs = rngs;
@@ -1580,8 +1584,8 @@ pub(super) fn act_on<V: Rules>(
                 continue;
             }
             // `CardCmd.Discard`, which plays a Sly card once every card is
-            // down.
-            sts2_core::PileAct::Discard => {
+            // down. `DiscardAndDraw` draws before that.
+            sts2_core::PileAct::Discard | sts2_core::PileAct::DiscardAndDraw => {
                 let held = live
                     .cards
                     .get(from, at)
@@ -1633,6 +1637,16 @@ pub(super) fn act_on<V: Rules>(
             }
         };
         live.cards.move_to(from, at, to);
+    }
+    // `CardCmd.DiscardAndDraw`: as many drawn as were discarded, and the Sly
+    // ones only after that, which the caller plays.
+    if act == sts2_core::PileAct::DiscardAndDraw && !picked.is_empty() {
+        let draw: V::Number =
+            num_traits::cast(picked.len()).expect("a hand's worth fits a game number");
+        let ascension = live.ascension;
+        let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
+        sts2_core::Fight::draw(&mut board, draw);
+        return (sly, board.ended());
     }
     (sly, None)
 }

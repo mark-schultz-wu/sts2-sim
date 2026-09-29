@@ -4669,13 +4669,9 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 }
 
-/// A selection a listener asks for after a shuffle: from `pile`, `count`
-/// cards, and what happens to them.
-pub(super) type ShuffleAsks<V> = (
-    Pile,
-    <V as sts2_core::ContentVersion>::Number,
-    sts2_core::PileAct,
-);
+/// A selection a listener asks for after a shuffle: from `pile`, as many as
+/// the selection allows, and what happens to them.
+pub(super) type ShuffleAsks = (Pile, sts2_core::Selection, sts2_core::PileAct);
 
 /// `CardPileCmd.Shuffle`: the discard pile shuffled into the draw pile, then
 /// `ModifyShuffleOrder` over the result.
@@ -4702,7 +4698,7 @@ pub(super) fn shuffle_asking<V: Rules>(
     rngs: CombatRngs<'_>,
     relics: &mut Belt<V>,
     ascension: V::AscensionLevel,
-) -> Option<ShuffleAsks<V>> {
+) -> Option<ShuffleAsks> {
     live.cards.reshuffle(rngs.shuffle);
     let hook = sts2_core::EventHook::ShuffleOrder { initial: false };
     for (listener, effect) in super::listen::notify::<V>(live, relics, hook) {
@@ -4736,8 +4732,12 @@ pub(super) fn shuffle_asking<V: Rules>(
             effect if asks.is_some() => {
                 unimplemented!("{listener:?} asking for {effect:?} after a shuffle's selection")
             }
-            HookEffect::SelectFromPile { pile, count, act } => {
-                asks = Some((pile, count, act));
+            HookEffect::SelectFromPile {
+                pile,
+                selection,
+                act,
+            } => {
+                asks = Some((pile, selection, act));
             }
             effect @ HookEffect::AddToDrawAtRandom { .. } => board.after_shuffle(effect),
             effect => unimplemented!("{listener:?} asking for {effect:?} after a shuffle"),
@@ -5092,9 +5092,10 @@ pub(super) fn draw_in_effect<V: Rules>(
             Drawn::Done(ended) => return ended,
             Drawn::Paused {
                 left,
-                asks: (pile, picks, act),
+                asks: (pile, selection, act),
             } => {
-                match super::turn::select::<V>(live, rngs.reborrow(), relics, pile, picks, act) {
+                match super::turn::select::<V>(live, rngs.reborrow(), relics, pile, selection, act)
+                {
                     Ok(Some(ended)) => return Some(ended),
                     Ok(None) => {}
                     Err(question) => {
@@ -5117,12 +5118,12 @@ pub(super) fn draw_in_effect<V: Rules>(
 }
 
 /// How a draw that can pause stopped.
-pub(super) enum Drawn<V: Rules> {
+pub(super) enum Drawn {
     /// As many cards as there were to draw, and how the fight ended if it did.
     Done(Option<super::Ended>),
     /// A shuffle inside it asked for a selection, with `left` cards still to
     /// draw once it is answered.
-    Paused { left: usize, asks: ShuffleAsks<V> },
+    Paused { left: usize, asks: ShuffleAsks },
 }
 
 /// [`draw`], stopping where a shuffle inside it asks the player something.
@@ -5136,7 +5137,7 @@ pub(super) fn draw_pausing<V: Rules>(
     count: usize,
     hand_draw: bool,
     resumed: bool,
-) -> Drawn<V> {
+) -> Drawn {
     // `Hook.ShouldDraw`, once for the whole draw, and `AfterPreventingDraw`
     // when a listener stops it.
     let player = live.player().id;
