@@ -30,6 +30,8 @@ pub enum Resume {
     /// `Charge`, after its owner picked the cards to turn into Minion Dive
     /// Bombs.
     ChargeTransform,
+    /// `Glow`, after a question inside its draw was answered.
+    GlowDrew,
 }
 
 /// `BeatIntoShape`: its damage to the target, then a Forge of its calculated
@@ -61,6 +63,18 @@ fn beat_into_shape<F: Fight<V>>(fight: &mut F) -> Played<V> {
 pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
     match card {
         RegentCard::Glitterstream => common::glitterstream(fight),
+        // `Glow`: its stars, its draw, then Draw Cards Next Turn at as many.
+        RegentCard::Glow => {
+            fight.gain_stars(fight.var(CardVar::Stars));
+            fight.draw(fight.var(CardVar::Cards));
+            // A shuffle inside the draw can ask, and the rest waits for it.
+            if fight.waiting() {
+                return Played::Waiting {
+                    at: super::super::Resume::Card(super::Resume::Regent(Resume::GlowDrew)),
+                };
+            }
+            glow_drew(fight)
+        }
         RegentCard::BeatIntoShape => beat_into_shape(fight),
         RegentCard::Quasar => quasar(fight),
         RegentCard::HeirloomHammer => heirloom_hammer(fight),
@@ -453,6 +467,7 @@ pub(super) fn resume_play<F: Fight<V>>(
             Played::Done
         }
         Resume::QuasarChoice => unreachable!("Quasar stops on a choice, not a pick"),
+        Resume::GlowDrew => unreachable!("{at:?} waits on a question, not a pick"),
         // Its `Repeat` of clones of the one picked, each into hand.
         Resume::HeirloomHammerCopy => {
             if let Some(card) = chosen.one_or_none() {
@@ -462,5 +477,27 @@ pub(super) fn resume_play<F: Fight<V>>(
             }
             Played::Done
         }
+    }
+}
+
+/// `Glow`'s Draw Cards Next Turn, once its draw is over.
+fn glow_drew<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use sts2_core::PowerAmount;
+
+    use super::super::super::generated::powers::Power;
+
+    fight.apply_to_actor(
+        Power::DrawCardsNextTurnPower,
+        PowerAmount::Counted(fight.var(CardVar::Cards)),
+    );
+    Played::Done
+}
+
+/// The rest of a Regent card's play that stood still on a question its own
+/// command raised.
+pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
+    match at {
+        Resume::GlowDrew => glow_drew(fight),
+        at => unreachable!("{at:?} stops on a pick, not on a question it waited for"),
     }
 }
