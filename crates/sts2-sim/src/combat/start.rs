@@ -32,6 +32,8 @@ pub(crate) struct Entering<'a, V: Rules> {
     pub(crate) deck: &'a [sts2_core::DeckCard<V>],
     /// Whether the run reached this room off the map's lines.
     pub(crate) strayed: bool,
+    /// The type of the map point the fight stands on. None off the map.
+    pub(crate) point: Option<V::MapPointType>,
     /// The monsters' health, where an event rolled it as it opened. Empty
     /// for a fight that rolls its own.
     pub(crate) rolled: &'a [V::Health],
@@ -176,6 +178,7 @@ pub(crate) fn enter<V: Rules>(
     let entered = EventHook::RoomEntered {
         room: live.room(),
         strayed: entering.strayed,
+        point: entering.point,
         deck: entering.deck.len(),
         player: sts2_core::PlayerHealth {
             hp: live.player().hp,
@@ -216,6 +219,13 @@ pub(crate) fn enter<V: Rules>(
                 for at in upgradable.into_iter().take(count) {
                     order[at].face.upgrade();
                 }
+            }
+            // `CreatureCmd.Heal` on the player who carries the relic.
+            HookEffect::Heal(amount) => {
+                let player = live.player().id;
+                let mut board =
+                    Board::for_card(&mut live, streams.combat(), relics, ascension, None, None);
+                sts2_core::Fight::heal(&mut board, player, amount);
             }
             other => unimplemented!("a listener asking for {other:?} as a room opens"),
         }

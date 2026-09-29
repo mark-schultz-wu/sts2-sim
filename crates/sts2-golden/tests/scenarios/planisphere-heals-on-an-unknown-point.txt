@@ -1,0 +1,15 @@
+# Planisphere heals five as the run enters a room through an unknown map
+# point, whatever room that point rolls: here a merchant. Four turns of the
+# Shrinker Beetle leave the health to heal.
+{"cmd":"start","seed":"C000000019","character":"IRONCLAD","ascension":"None"}
+{"cmd":"choose_option","index":0}
+{"cmd":"travel","col":4,"row":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":100,"target":0}
+{"cmd":"play_card","index":1,"target":1}
+{"cmd":"answer","skip":true}
+{"cmd":"grant","relic":"PLANISPHERE"}
+{"cmd":"travel","col":4,"row":2}

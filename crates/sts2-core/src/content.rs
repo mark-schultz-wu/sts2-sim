@@ -3231,6 +3231,9 @@ pub enum EventHook<V: ContentVersion> {
         /// Whether the map point entered is one the point before does not
         /// lead on to, which only free travel reaches.
         strayed: bool,
+        /// `RunState.CurrentMapPoint.PointType`: the type of the map point the
+        /// room stands on, whatever room it rolled. None off the map.
+        point: Option<V::MapPointType>,
         /// How many cards the deck holds, which a relic reads off its owner.
         deck: usize,
         /// The player's hit points, which a relic reads off its owner.

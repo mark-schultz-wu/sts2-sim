@@ -168,6 +168,7 @@ mod permafrost;
 mod petrified_toad;
 mod phial_holster;
 mod phylactery_unbound;
+mod planisphere;
 mod pocketwatch;
 mod pollinous_core;
 mod pomander;
@@ -500,6 +501,7 @@ pub enum State {
     SilkenTress(silken_tress::State),
     ScrollBoxes,
     Kaleidoscope,
+    Planisphere,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -743,6 +745,7 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::Planisphere => planisphere::event_hook(hook, asked),
         State::Kaleidoscope => kaleidoscope::event_hook(hook, asked),
         State::ScrollBoxes => scroll_boxes::event_hook(hook, asked),
         State::SilkenTress(state) => silken_tress::event_hook(state, hook, asked),
@@ -1065,7 +1068,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::SilverCrucible(_)
         | State::SilkenTress(_)
         | State::ScrollBoxes
-        | State::Kaleidoscope => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::Kaleidoscope
+        | State::Planisphere => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1244,6 +1248,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::Planisphere => State::Planisphere,
             Relic::Kaleidoscope => State::Kaleidoscope,
             Relic::ScrollBoxes => State::ScrollBoxes,
             Relic::SilkenTress => State::SilkenTress(silken_tress::State::default()),
