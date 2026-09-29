@@ -738,8 +738,8 @@ pub(crate) fn answer<V: Rules>(
         .asking
         .take()
         .unwrap_or_else(|| unimplemented!("an answer to a fight that asked nothing"));
-    // What this answer's play defers goes above what already waits.
-    live.deferring_at = None;
+    // What this answer's play defers runs ahead of what already waits.
+    live.deferred.close();
     let taken =
         match &asking.question {
             Asked::Pile {
@@ -918,10 +918,9 @@ fn run_deferred<V: Rules>(
         relics,
     } = fighting;
     while live.asking.is_none() {
-        let Some(deferred) = live.deferred.pop() else {
+        let Some(deferred) = live.deferred.next() else {
             break;
         };
-        live.deferring_at = None;
         let fighting = Fighting {
             live: &mut *live,
             streams: &mut *streams,

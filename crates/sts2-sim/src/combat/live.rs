@@ -225,6 +225,61 @@ pub(super) enum Deferred<V: Rules> {
     },
 }
 
+/// What waits behind the question asked, in the order it runs.
+///
+/// A batch is what the fight defers between one answer, or one entry run,
+/// and the next. A batch runs first in, first out, and ahead of every batch
+/// deferred before it. That is how the game's awaited commands nest: the
+/// innermost finishes first, and inside it the first to stop goes on first.
+#[derive(Debug, PartialEq)]
+pub(super) struct Deferrals<V: Rules> {
+    /// Every entry, the next to run last.
+    waiting: Vec<Deferred<V>>,
+    /// Where the open batch starts in `waiting`. Each entry of it goes under
+    /// the last, so the first runs first.
+    batch: Option<usize>,
+}
+
+impl<V: Rules> Deferrals<V> {
+    pub(super) fn new() -> Self {
+        Deferrals {
+            waiting: Vec::new(),
+            batch: None,
+        }
+    }
+
+    /// Put `deferred` last in the open batch, opening one if none is.
+    pub(super) fn push(&mut self, deferred: Deferred<V>) {
+        let at = *self.batch.get_or_insert(self.waiting.len());
+        self.waiting.insert(at, deferred);
+    }
+
+    /// Close the open batch, so what comes next opens one that runs first.
+    pub(super) fn close(&mut self) {
+        self.batch = None;
+    }
+
+    /// The next entry to run, which closes the open batch first.
+    pub(super) fn next(&mut self) -> Option<Deferred<V>> {
+        self.close();
+        self.waiting.pop()
+    }
+}
+
+impl<V: Rules> Clone for Deferrals<V> {
+    fn clone(&self) -> Self {
+        Deferrals {
+            waiting: self.waiting.clone(),
+            batch: self.batch,
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.waiting.clone_from(&source.waiting);
+        self.batch = source.batch;
+    }
+}
+
 /// The attack command whose hits wait, which `AfterAttack` names once they
 /// have landed.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1817,12 +1872,8 @@ pub(crate) struct Live<V: Rules> {
     /// A card play waiting on an answer, which is the only thing the fight
     /// will take while it is set.
     pub(super) asking: Option<Asking<V>>,
-    /// What waits behind that answer, the next to run last.
-    pub(super) deferred: Vec<Deferred<V>>,
-    /// Where what an effect defers goes in [`Live::deferred`], once the
-    /// question it waits behind is asked. Each one goes under the last, so
-    /// the first deferred runs first.
-    pub(super) deferring_at: Option<usize>,
+    /// What waits behind that answer.
+    pub(super) deferred: Deferrals<V>,
 }
 
 /// How many history entries one turn holds before its list reaches the heap:
@@ -2020,7 +2071,6 @@ impl<V: Rules> Clone for Live<V> {
             notes: self.notes.clone(),
             asking: self.asking.clone(),
             deferred: self.deferred.clone(),
-            deferring_at: self.deferring_at,
             ..*self
         }
     }
@@ -2060,7 +2110,6 @@ impl<V: Rules> Clone for Live<V> {
             notes,
             asking,
             deferred,
-            deferring_at,
         } = self;
         *character = source.character;
         *ascension = source.ascension;
@@ -2093,7 +2142,6 @@ impl<V: Rules> Clone for Live<V> {
         notes.clone_from(&source.notes);
         asking.clone_from(&source.asking);
         deferred.clone_from(&source.deferred);
-        *deferring_at = source.deferring_at;
     }
 }
 
@@ -2215,11 +2263,9 @@ impl<V: Rules> Live<V> {
         &self.leaving
     }
 
-    /// Put `deferred` behind the question asked, under what else waits
-    /// behind it.
+    /// Put `deferred` behind the question asked. See [`Deferrals::push`].
     pub(super) fn defer(&mut self, deferred: Deferred<V>) {
-        let at = *self.deferring_at.get_or_insert(self.deferred.len());
-        self.deferred.insert(at, deferred);
+        self.deferred.push(deferred);
     }
 
     /// Whether the fight asked anything of the run since the last decision
@@ -2846,8 +2892,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             last_creature: CombatId::new(nonmax::NonMaxU8::ZERO),
             notes: smallvec::SmallVec::new(),
             asking: None,
-            deferred: Vec::new(),
-            deferring_at: None,
+            deferred: Deferrals::new(),
         }
     }
 }
