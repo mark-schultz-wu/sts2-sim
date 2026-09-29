@@ -121,7 +121,20 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
             fight.write_deck_version(super::DeckWrite::BuffFromPlay(increase));
             Played::Done
         }
-        DefectCard::Barrage => barrage(fight),
+        // `HelixDrill`: its damage to the target, once for each hit it works
+        // out, as `Barrage` does.
+        DefectCard::Barrage | DefectCard::HelixDrill => barrage(fight),
+        // `Spinner`: a Glass orb channelled once upgraded, then its Spinner.
+        DefectCard::Spinner => {
+            if fight.upgraded() {
+                fight.channel(Orb::GlassOrb);
+            }
+            fight.apply_to_actor(
+                Power::SpinnerPower,
+                PowerAmount::Counted(fight.var(CardVar::SpinnerPower)),
+            );
+            Played::Done
+        }
         DefectCard::Uproar => uproar(fight),
         // `DoubleEnergy`: as much energy again as its owner has left.
         DefectCard::DoubleEnergy => {

@@ -140,8 +140,9 @@ pub enum State {
         playing: [Option<(sts2_core::CardId<V>, Number)>; NOTED_AT_ONCE],
         applied: Number,
     },
-    /// `amountsForPlayedCards`, which Strangle, Oblivion and Afterimage keep:
-    /// each card started and not finished, with the stack as it began.
+    /// `amountsForPlayedCards`, which Strangle, Oblivion, Afterimage and
+    /// Storm keep: each card started and not finished, with the stack as it
+    /// began. Rupture's `playedCards` keeps the Strength each play has owed.
     Noted {
         power: Power,
         playing: [Option<(sts2_core::CardId<V>, Number)>; NOTED_AT_ONCE],
@@ -164,6 +165,21 @@ fn note(state: &mut State, id: sts2_core::CardId<V>, amount: Number) {
         )
     };
     *free = Some((id, amount));
+}
+
+/// `playedCards[id] += amount`, where `id`'s play was noted. Whether it
+/// was.
+fn add_noted(state: &mut State, id: sts2_core::CardId<V>, amount: Number) -> bool {
+    let (State::Noted { playing, .. } | State::Monologue { playing, .. }) = state else {
+        unreachable!("plays noted for {:?}", state.power())
+    };
+    match playing.iter_mut().flatten().find(|(noted, _)| *noted == id) {
+        Some((_, owed)) => {
+            *owed += amount;
+            true
+        }
+        None => false,
+    }
 }
 
 /// `amountsForPlayedCards.Remove`: the stack noted as `id`'s play began, if
@@ -268,7 +284,9 @@ impl sts2_core::PowerModel<V> for State {
             Power::StranglePower
             | Power::OblivionPower
             | Power::AfterimagePower
-            | Power::SubroutinePower => Self::Noted {
+            | Power::SubroutinePower
+            | Power::StormPower
+            | Power::RupturePower => Self::Noted {
                 power,
                 playing: [None; NOTED_AT_ONCE],
             },
@@ -1980,6 +1998,78 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Devour Life")
         }
         (Power::DevourLifePower, _, EventHook::CardPlayed { .. }) => None,
+        // `SpinnerPower.AfterEnergyReset`: a Glass orb channelled for each of
+        // its stack as its owner's energy resets.
+        (Power::SpinnerPower, PowerAmount::Counted(amount), EventHook::EnergyReset { player })
+            if player == holder =>
+        {
+            for _ in 0..amount {
+                asked.push(HookEffect::Channel(Orb::GlassOrb));
+            }
+            return;
+        }
+        (Power::SpinnerPower, PowerAmount::Endless, EventHook::EnergyReset { .. }) => {
+            unimplemented!("an endless Spinner")
+        }
+        (Power::SpinnerPower, _, EventHook::EnergyReset { .. }) => None,
+        // `StormPower.BeforeCardPlayed`: a Power its owner plays noted with
+        // the stack as it begins. A fight here has one player, whose cards
+        // are all its holder's.
+        (Power::StormPower, PowerAmount::Counted(amount), EventHook::CardPlaying { card, id, .. }) => {
+            if <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Power) {
+                note(state, id, amount);
+            }
+            None
+        }
+        (Power::StormPower, PowerAmount::Endless, EventHook::CardPlaying { .. }) => {
+            unimplemented!("an endless Storm")
+        }
+        // `StormPower.AfterCardPlayed`: a Lightning orb channelled for each of
+        // the stack it noted.
+        (Power::StormPower, _, EventHook::CardPlayed { id, .. }) => {
+            if let Some(lightning) = take_noted(state, id) {
+                for _ in 0..lightning {
+                    asked.push(HookEffect::Channel(Orb::LightningOrb));
+                }
+            }
+            return;
+        }
+        // `RupturePower.BeforeCardPlayed`: a play of its owner's, in its
+        // owner's own turn, noted as owing nothing yet.
+        (Power::RupturePower, _, EventHook::CardPlaying { id, side, .. }) => {
+            if side == owner {
+                note(state, id, 0);
+            }
+            None
+        }
+        // `RupturePower.AfterDamageReceived`: its stack of Strength for health
+        // its owner loses in its own turn. A play it noted owes it instead,
+        // until the play is over.
+        (
+            Power::RupturePower,
+            PowerAmount::Counted(amount),
+            EventHook::DamageReceived {
+                target,
+                unblocked,
+                card,
+                side,
+                ..
+            },
+        ) if target == holder && unblocked > 0 && side == owner => {
+            let owed = card.is_some_and(|card| add_noted(state, card, amount));
+            (!owed).then_some(HookEffect::ApplyPower {
+                target: holder,
+                power: Power::StrengthPower,
+                amount: PowerAmount::Counted(amount),
+            })
+        }
+        (Power::RupturePower, PowerAmount::Endless, EventHook::DamageReceived { .. }) => {
+            unimplemented!("an endless Rupture")
+        }
+        (Power::RupturePower, _, EventHook::DamageReceived { .. }) => None,
+        // `RupturePower.AfterCardPlayed`: the Strength a play it noted owes.
+        (Power::RupturePower, _, EventHook::CardPlayed { id, .. }) => take_noted(state, id)
+            .map(|owed| HookEffect::ApplyToOwner(Power::StrengthPower, PowerAmount::Counted(owed))),
         // `MasterPlannerPower.AfterCardPlayed`: Sly written on each Skill its
         // owner plays, for as long as the copy lasts. A fight here has one
         // player, whose cards are all its holder's.

@@ -62,6 +62,32 @@ fn beat_into_shape<F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
     match card {
+        // `CrashLanding`: its damage to every enemy, as one attack, then
+        // Debris into hand until the hand is full.
+        RegentCard::CrashLanding => {
+            use sts2_core::{Amount, Effect, Scaling};
+
+            fight.attack(Scaling::Dynamic, |fight| {
+                for target in fight.opponents() {
+                    let hit = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(hit);
+                }
+            });
+            let room =
+                sts2_core::MAX_CARDS_IN_HAND.saturating_sub(fight.cards_in(Pile::Hand).len());
+            if room > 0 {
+                use super::super::super::generated::cards::StatusCard;
+
+                let debris = CardIdent::new(Cards::Status(StatusCard::Debris));
+                fight.add_generated_cards(debris, Pile::Hand, room);
+            }
+            Played::Done
+        }
         RegentCard::Glitterstream => common::glitterstream(fight),
         // `Glow`: its stars, its draw, then Draw Cards Next Turn at as many.
         RegentCard::Glow => {

@@ -1,0 +1,5 @@
+# Crash Landing hits every enemy, then fills the hand with Debris.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_NORMAL"}
+{"cmd":"grant","card":"CRASH_LANDING"}
+{"cmd":"play_card","index":5}

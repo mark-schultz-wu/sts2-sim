@@ -1,0 +1,10 @@
+# Helix Drill hits once for each energy its owner spent this turn: a Strike
+# and a Defend, so twice.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"STRIKE_DEFECT"}
+{"cmd":"grant","card":"DEFEND_DEFECT"}
+{"cmd":"grant","card":"HELIX_DRILL"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"play_card","index":5}
+{"cmd":"play_card","index":5,"target":1}
