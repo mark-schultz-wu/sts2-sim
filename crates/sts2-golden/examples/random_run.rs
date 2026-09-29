@@ -1,14 +1,13 @@
 //! One run of the simulator at random, for `cargo xtask census`.
 //!
 //! ```text
-//! random_run <seed> <character> [--avoid <step>:<move>]...
+//! random_run <seed> <character>
 //! ```
 //!
 //! Every decision is a legal move, picked by a generator seeded from the seed,
 //! so a run repeats exactly. Ending the turn is picked one time in ten while
 //! anything else is legal. The run carries 25 Gorgets and a Mercury
 //! Hourglass, so random play reaches content instead of dying early.
-//! `--avoid` takes one move out of one step, by its place in the legal list.
 //!
 //! It prints `at <act> <floor>` as the floor changes, and `step <n> <move>
 //! <moves>` before each decision and `done` after. The last line is `over
@@ -60,10 +59,6 @@ struct Cli {
     /// The character, by id, such as `IRONCLAD`.
     #[arg(value_parser = character)]
     character: Character,
-    /// A move to leave out, as `<step>:<move>`: its place in that step's
-    /// legal list.
-    #[arg(long = "avoid", value_parser = avoided)]
-    avoid: Vec<(usize, usize)>,
 }
 
 fn seed(text: &str) -> Result<Seed, sts2_core::seed::Error> {
@@ -73,19 +68,6 @@ fn seed(text: &str) -> Result<Seed, sts2_core::seed::Error> {
 /// A character by the id the game spells it with.
 fn character(id: &str) -> Result<Character, serde_json::Error> {
     serde_json::from_value(serde_json::Value::String(id.to_owned()))
-}
-
-/// A move left out of one step.
-#[derive(Debug, thiserror::Error)]
-#[error("expected <step>:<move>, two whole numbers")]
-struct NotAMove;
-
-fn avoided(text: &str) -> Result<(usize, usize), NotAMove> {
-    let (step, at) = text.split_once(':').ok_or(NotAMove)?;
-    Ok((
-        step.parse().map_err(|_| NotAMove)?,
-        at.parse().map_err(|_| NotAMove)?,
-    ))
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -105,8 +87,6 @@ enum Error {
     },
     #[error("a run with nothing legal to do")]
     NothingLegal,
-    #[error("every move of step {0} was avoided")]
-    AllAvoided(usize),
     #[error("step {step}: {source}")]
     Decide {
         step: usize,
@@ -134,11 +114,7 @@ fn main() -> ExitCode {
 }
 
 fn run(cli: Cli) -> Result<(), Error> {
-    let Cli {
-        seed,
-        character,
-        avoid,
-    } = cli;
+    let Cli { seed, character } = cli;
     let start = Start::<V> {
         seed,
         character,
@@ -182,21 +158,14 @@ fn run(cli: Cli) -> Result<(), Error> {
         if legal.is_empty() {
             return Err(Error::NothingLegal);
         }
-        // The moves this step picks from, by their place in the legal list.
-        let open: Vec<usize> = (0..legal.len())
-            .filter(|at| !avoid.contains(&(step, *at)))
-            .collect();
-        let others: Vec<usize> = open
-            .iter()
-            .copied()
+        let others: Vec<usize> = (0..legal.len())
             .filter(|&at| !matches!(legal[at], Decision::EndTurn))
             .collect();
-        let at = match open
+        let end = legal
             .iter()
-            .find(|&&at| matches!(legal[at], Decision::EndTurn))
-        {
-            Some(&end) if others.is_empty() || pick.below(10) == 0 => end,
-            _ if others.is_empty() => return Err(Error::AllAvoided(step)),
+            .position(|decision| matches!(decision, Decision::EndTurn));
+        let at = match end {
+            Some(end) if others.is_empty() || pick.below(10) == 0 => end,
             _ => others[pick.below(others.len())],
         };
         writeln!(out, "step {step} {at} {}", legal.len())?;

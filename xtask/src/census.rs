@@ -2,14 +2,9 @@
 //!
 //! Each run is `sts2-golden`'s `random_run` for one seed and character, in a
 //! process of its own. It carries 25 Gorgets and a Mercury Hourglass, so a
-//! run stops on what the simulator cannot play rather than on bad play. A path nobody has ported panics, and the panic ends that
-//! process and nothing else.
-//!
-//! A panic inside a decision the run had alternatives to is one a player
-//! steps round. The census plays the run again with that move avoided, until
-//! the run ends or every move at some step panics. It reports both kinds.
-//! A panic that stopped a run is a hole in what the simulator can play. A
-//! panic a run stepped round is a choice an agent cannot make.
+//! run stops on what the simulator cannot play rather than on bad play. A
+//! path nobody has ported panics, and the panic ends that run and nothing
+//! else. The panics that stop the most runs are what to port first.
 //!
 //! ```text
 //! cargo xtask census
@@ -17,8 +12,8 @@
 //! cargo xtask census --seed C000000151 --character SILENT
 //! ```
 //!
-//! `--seed` plays that one seed and prints the runner's command line with
-//! every move the census avoided, which replays the run to where it stopped.
+//! `--seed` plays that one seed and prints how it ended, with the runner's
+//! command line that plays it again.
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
@@ -34,9 +29,6 @@ const ACTS: u32 = 3;
 
 /// Seconds a run gets before it counts as stuck.
 const TIMEOUT: &str = "120";
-
-/// The moves one run steps round before the census gives up on it.
-const RETRIES: usize = 200;
 
 /// A run the census itself did not see through, rather than one that
 /// stopped in the simulator.
@@ -81,47 +73,6 @@ struct Run {
     ending: Ending,
     /// The act and floor it last stood on.
     reached: (u32, u32),
-    /// The panics it stepped round on the way, each a move it avoided, by
-    /// the step it was avoided at.
-    avoided: Vec<(usize, Ending)>,
-    /// The step whose every move panicked, when that is how it stopped.
-    exhausted: Option<usize>,
-    /// Each move avoided, by its step and its place in that step's moves.
-    avoid: Vec<(usize, usize)>,
-}
-
-impl Run {
-    /// What stopped the run: every panic at the step that ran out of moves,
-    /// or else how it ended.
-    fn stoppers(&self) -> Vec<&Ending> {
-        match self.exhausted {
-            Some(step) => self
-                .avoided
-                .iter()
-                .filter(|(at, _)| *at == step)
-                .map(|(_, ending)| ending)
-                .chain([&self.ending])
-                .collect(),
-            None => vec![&self.ending],
-        }
-    }
-
-    /// The panics it stepped round and went on from.
-    fn stepped_round(&self) -> impl Iterator<Item = &Ending> {
-        self.avoided
-            .iter()
-            .filter(|(at, _)| Some(*at) != self.exhausted)
-            .map(|(_, ending)| ending)
-    }
-}
-
-/// One attempt at a run, and where it panicked when it did.
-struct Attempt {
-    ending: Ending,
-    reached: (u32, u32),
-    /// The step whose decision was running when it stopped, the move it
-    /// took there, and how many moves that step had.
-    stopped_in: Option<(usize, usize, usize)>,
 }
 
 #[derive(clap::Args)]
@@ -183,77 +134,38 @@ pub fn run(args: Args) -> Result<String, crate::error::ProcessError> {
     Ok(report(&done, top))
 }
 
-/// One run, played again round every move that panicked while the step
-/// that took it had others.
+/// One run of the runner, in a process of its own.
 fn one(binary: &std::path::Path, seed: &str, character: &str) -> Run {
-    let mut avoid: Vec<(usize, usize)> = Vec::new();
-    let mut avoided = Vec::new();
-    loop {
-        let attempt = attempt(binary, seed, character, &avoid);
-        let (step, exhausted) = match (&attempt.ending, attempt.stopped_in) {
-            (Ending::Panicked { .. } | Ending::Failed { .. }, Some((step, at, moves)))
-                if avoid.len() < RETRIES =>
-            {
-                avoid.push((step, at));
-                let left = (0..moves)
-                    .filter(|at| !avoid.contains(&(step, *at)))
-                    .count();
-                (Some(step), left == 0)
-            }
-            _ => (None, false),
-        };
-        match step {
-            Some(step) if !exhausted => avoided.push((step, attempt.ending)),
-            _ => {
-                return Run {
-                    seed: seed.to_owned(),
-                    character: character.to_owned(),
-                    ending: attempt.ending,
-                    reached: attempt.reached,
-                    avoided,
-                    exhausted: step,
-                    avoid,
-                };
-            }
-        }
+    let (ending, reached) = attempt(binary, seed, character);
+    Run {
+        seed: seed.to_owned(),
+        character: character.to_owned(),
+        ending,
+        reached,
     }
 }
 
 /// How `run` ended, and the command line that plays it there again.
 fn replay(binary: &std::path::Path, run: &Run) -> String {
-    let mut line = format!("{} {} {}", binary.display(), run.seed, run.character);
-    for (step, at) in &run.avoid {
-        line.push_str(&format!(" --avoid {step}:{at}"));
-    }
-    format!("{:?}\n{line}\n", run.ending)
+    format!(
+        "{:?}\n{} {} {}\n",
+        run.ending,
+        binary.display(),
+        run.seed,
+        run.character
+    )
 }
 
-/// One process of the runner, with the moves it avoids.
-fn attempt(
-    binary: &std::path::Path,
-    seed: &str,
-    character: &str,
-    avoid: &[(usize, usize)],
-) -> Attempt {
+/// How the runner ended, and the act and floor it last stood on.
+fn attempt(binary: &std::path::Path, seed: &str, character: &str) -> (Ending, (u32, u32)) {
     let output = Command::new("timeout")
         .args(["-k", "5", TIMEOUT])
         .arg(binary)
         .args([seed, character])
-        .args(
-            avoid
-                .iter()
-                .flat_map(|(step, at)| ["--avoid".to_owned(), format!("{step}:{at}")]),
-        )
         .output();
     let output = match output {
         Ok(output) => output,
-        Err(e) => {
-            return Attempt {
-                ending: Ending::Broken(Broken::Launching(e.kind())),
-                reached: (0, 0),
-                stopped_in: None,
-            };
-        }
+        Err(e) => return (Ending::Broken(Broken::Launching(e.kind())), (0, 0)),
     };
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -266,18 +178,6 @@ fn attempt(
             Some((act.parse().ok()?, floor.parse().ok()?))
         })
         .unwrap_or((0, 0));
-    // A `step` line with no `done` after it is the decision that stopped.
-    let mut stopped_in = None;
-    for line in stdout.lines() {
-        match line.split_whitespace().collect::<Vec<_>>()[..] {
-            ["step", step, at, moves] => {
-                stopped_in =
-                    (|| Some((step.parse().ok()?, at.parse().ok()?, moves.parse().ok()?)))()
-            }
-            ["done"] => stopped_in = None,
-            _ => {}
-        }
-    }
     let last = stdout.lines().last().unwrap_or_default();
     let ending = match (output.status.code(), last) {
         (Some(0), "over won") => Ending::Won,
@@ -288,11 +188,7 @@ fn attempt(
             .or_else(|| failed(&stderr))
             .unwrap_or(Ending::Broken(Broken::Exited(output.status.code()))),
     };
-    Attempt {
-        ending,
-        reached,
-        stopped_in,
-    }
+    (ending, reached)
 }
 
 /// The panic stderr reports: `thread '...' panicked at <where>:` and then the
@@ -357,6 +253,56 @@ fn report(runs: &[Run], top: usize) -> String {
         );
     }
 
+    // The goal: each character's lowest stop, and what stopped runs there.
+    // A loss is apart, since no port raises the floor a run died on.
+    out.push_str("lowest stop, by character: floor, runs stopped there, lowest loss\n");
+    let mut characters: Vec<&str> = runs.iter().map(|run| run.character.as_str()).collect();
+    characters.sort_unstable();
+    characters.dedup();
+    for character in characters {
+        let theirs = || runs.iter().filter(move |run| run.character == character);
+        let lost = theirs()
+            .filter(|run| run.ending == Ending::Lost)
+            .map(|run| run.reached.1)
+            .min()
+            .map_or_else(|| "none".to_owned(), |floor| floor.to_string());
+        let stopped: Vec<&Run> = theirs()
+            .filter(|run| matches!(run.ending, Ending::Panicked { .. } | Ending::Failed { .. }))
+            .collect();
+        let Some(floor) = stopped.iter().map(|run| run.reached.1).min() else {
+            writeln(&mut out, format!("  {character:<12}   -     0  {lost:>4}"));
+            continue;
+        };
+        let lowest: Vec<&Run> = stopped
+            .into_iter()
+            .filter(|run| run.reached.1 == floor)
+            .collect();
+        writeln(
+            &mut out,
+            format!(
+                "  {character:<12} {floor:>3} {:>5}  {lost:>4}",
+                lowest.len()
+            ),
+        );
+        let mut by_stop: BTreeMap<String, (usize, &Run)> = BTreeMap::new();
+        for run in lowest {
+            let message = match &run.ending {
+                Ending::Panicked { message, .. } | Ending::Failed { message } => message,
+                _ => continue,
+            };
+            let key: String = message.chars().filter(|c| !c.is_ascii_digit()).collect();
+            by_stop.entry(key).or_insert((0, run)).0 += 1;
+        }
+        let mut by_stop: Vec<_> = by_stop.into_iter().collect();
+        by_stop.sort_by_key(|(_, (count, _))| std::cmp::Reverse(*count));
+        for (message, (count, run)) in by_stop.into_iter().take(top) {
+            writeln(
+                &mut out,
+                format!("      {count:>5}  {message}  e.g. {}", run.seed),
+            );
+        }
+    }
+
     // How many runs cleared each act: stood in a later one, or won.
     out.push_str("acts cleared, of every run\n");
     for act in 0..ACTS {
@@ -375,28 +321,26 @@ fn report(runs: &[Run], top: usize) -> String {
         );
     }
 
-    // What holds the lowest runs down: each stopper by the lowest floor it
+    // What holds the lowest runs down: each stop by the lowest floor it
     // stopped a run on, then by how many runs it stopped there.
     let mut lowest: BTreeMap<Stop, (u32, usize, Cow<str>, &Run)> = BTreeMap::new();
     for run in runs {
-        for ending in run.stoppers() {
-            let (message, at) = match ending {
-                Ending::Panicked { message, at } => (Cow::Borrowed(message.as_str()), at.as_str()),
-                Ending::Failed { message } => (Cow::Borrowed(message.as_str()), ""),
-                Ending::Broken(why) => (Cow::Owned(why.to_string()), ""),
-                _ => continue,
-            };
-            let key: String = message.chars().filter(|c| !c.is_ascii_digit()).collect();
-            let floor = run.reached.1;
-            let entry = lowest
-                .entry((key, at))
-                .or_insert((floor, 0, message.clone(), run));
-            if floor < entry.0 {
-                *entry = (floor, 0, message, run);
-            }
-            if floor == entry.0 {
-                entry.1 += 1;
-            }
+        let (message, at) = match &run.ending {
+            Ending::Panicked { message, at } => (Cow::Borrowed(message.as_str()), at.as_str()),
+            Ending::Failed { message } => (Cow::Borrowed(message.as_str()), ""),
+            Ending::Broken(why) => (Cow::Owned(why.to_string()), ""),
+            _ => continue,
+        };
+        let key: String = message.chars().filter(|c| !c.is_ascii_digit()).collect();
+        let floor = run.reached.1;
+        let entry = lowest
+            .entry((key, at))
+            .or_insert((floor, 0, message.clone(), run));
+        if floor < entry.0 {
+            *entry = (floor, 0, message, run);
+        }
+        if floor == entry.0 {
+            entry.1 += 1;
         }
     }
     let mut lowest: Vec<_> = lowest.into_values().collect();
@@ -415,10 +359,7 @@ fn report(runs: &[Run], top: usize) -> String {
         );
     }
 
-    // A run that ran out of moves counts against every panic at that step.
-    let stopped = runs
-        .iter()
-        .flat_map(|run| run.stoppers().into_iter().map(move |ending| (ending, run)));
+    let stopped = runs.iter().map(|run| (&run.ending, run));
     table(
         &mut out,
         "panics and errors that stopped a run",
@@ -431,7 +372,7 @@ fn report(runs: &[Run], top: usize) -> String {
         let stopped: Vec<_> = runs
             .iter()
             .filter(|run| run.reached.0 == act)
-            .flat_map(|run| run.stoppers().into_iter().map(move |ending| (ending, run)))
+            .map(|run| (&run.ending, run))
             .collect();
         if stopped.is_empty() {
             continue;
@@ -443,15 +384,6 @@ fn report(runs: &[Run], top: usize) -> String {
             top,
         );
     }
-    let avoided = runs
-        .iter()
-        .flat_map(|run| run.stepped_round().map(move |ending| (ending, run)));
-    table(
-        &mut out,
-        "panics and errors a run stepped round",
-        avoided,
-        top,
-    );
     out
 }
 
