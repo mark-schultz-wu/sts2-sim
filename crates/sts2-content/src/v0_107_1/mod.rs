@@ -12,7 +12,7 @@
 //! encounter fields. What any of it *does* is code, and gets ported by hand.
 //!
 //! Where a value is code, the dump says so rather than guessing, and it
-//! generates as [`Field::Computed`](sts2_core::Field). That is the simulator's
+//! generates as [`Field::Computed`](crate::Field::Computed). That is the simulator's
 //! cue to ask rather than look up. Each domain decides it differently, because
 //! each had to. A card is marked from its overrides, a power from its IL, and
 //! an encounter by running it and reading the `Rng` counter afterwards. All of

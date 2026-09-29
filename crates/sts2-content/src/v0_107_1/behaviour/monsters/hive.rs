@@ -11,7 +11,7 @@ use super::super::super::generated::monster_moves;
 use super::super::super::generated::monsters::{Monster, MoveId};
 use super::super::super::generated::powers::Power;
 use super::super::super::generated::runstate::CombatSide;
-use super::{Number, V};
+use super::{Number, Resume, V};
 
 /// `FlutterMove`'s `PowerCmd.Apply<FlutterPower>(…, 5m, …)`.
 const FLUTTER: Number = 5;
@@ -378,7 +378,7 @@ pub(super) fn perform<F: Fight<V>>(
         (_, MoveId::BulkMove) if segment => return bulk(fight, step),
         (_, MoveId::ConstrictMove) if segment => return constrict(fight, step),
         (_, MoveId::ReattachMove) if segment => reattach(fight),
-        (monster, move_id) => return monster_moves::perform(monster, move_id, step, fight),
+        (monster, move_id) => return monster_moves::hive::perform(monster, move_id, step, fight),
     }
     None
 }
@@ -623,16 +623,6 @@ pub(super) fn knowledge_demon<F: Fight<V>>(
         }
         move_id => unimplemented!("what {move_id:?} does when a Knowledge Demon performs it"),
     }
-}
-
-/// Where a monster's move stopped on the player's answer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Resume {
-    /// `ChooseCurse`, for the set at this index.
-    CurseOfKnowledge { set: u8 },
-    /// A move whose attack stood still on a question the player had to
-    /// answer, from this step once the answer is in.
-    Step(u8),
 }
 
 /// `IChoosable.OnChosen` for the card the player took, which applies its

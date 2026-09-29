@@ -12,10 +12,9 @@ use super::{Number, V};
 
 /// The powers an Overgrowth monster applies to itself as it spawns.
 ///
-/// Seven monsters of this act have an `AfterAddedToRoom` that applies one:
-/// Byrdonis, the Phrog Parasite, the Bygone Effigy, the Vantom, each Inklet,
-/// the Cubex Construct and a Kin Follower. The Cubex gains block first, which
-/// `CreatureCmd.GainBlock` refuses while the fight is not yet in progress.
+/// Six monsters of this act have an `AfterAddedToRoom` that applies one:
+/// Byrdonis, the Phrog Parasite, the Bygone Effigy, the Vantom, each Inklet
+/// and a Kin Follower.
 ///
 /// Nothing for a monster this act does not port.
 pub(super) fn starting_powers(
@@ -26,7 +25,6 @@ pub(super) fn starting_powers(
         Monster::Byrdonis => vec![(Power::TerritorialPower, PowerAmount::Counted(1))],
         Monster::PhrogParasite => vec![(Power::InfestedPower, PowerAmount::Counted(4))],
         Monster::BygoneEffigy => vec![(Power::SlowPower, PowerAmount::Counted(1))],
-        Monster::CubexConstruct => vec![(Power::ArtifactPower, PowerAmount::Counted(1))],
         Monster::KinFollower => vec![(Power::MinionPower, PowerAmount::Counted(1))],
         Monster::Inklet => vec![(Power::SlipperyPower, PowerAmount::Counted(1))],
         Monster::Vantom => vec![(
@@ -92,14 +90,6 @@ pub(super) fn perform<F: Fight<V>>(
                 PowerAmount::Counted(ENERGY_ORB_STRENGTH),
             );
         }
-        // `IsBurrowed` and `IsCharging`, which it sets first, pick its
-        // animation.
-        (Monster::CubexConstruct, MoveId::ChargeUpMove) => {
-            fight.apply_to_actor(
-                Power::StrengthPower,
-                PowerAmount::Counted(CHARGE_UP_STRENGTH),
-            );
-        }
         // `IsCrossbowReloaded`, which each of these two sets last, picks its
         // animation.
         (Monster::CrossbowRubyRaider, MoveId::FireMove) => fight.attack_opponents(),
@@ -149,7 +139,9 @@ pub(super) fn perform<F: Fight<V>>(
             }
             fight.apply_to_opponents(Power::FrailPower, PowerAmount::Counted(SPORES));
         }
-        (monster, move_id) => return monster_moves::perform(monster, move_id, step, fight),
+        (monster, move_id) => {
+            return monster_moves::overgrowth::perform(monster, move_id, step, fight);
+        }
     }
     None
 }
@@ -168,9 +160,6 @@ const PLOW_STRENGTH: Number = 2;
 /// `CeremonialBeast.CrushStrength`, either side of `DeadlyEnemies`.
 const CRUSH_STRENGTH: Number = 3;
 const CRUSH_STRENGTH_DEADLY: Number = 4;
-
-/// What the Cubex Construct's Charge Up adds to it, a constant in the move.
-const CHARGE_UP_STRENGTH: Number = 2;
 
 /// What the Snapping Jaxfruit's Energy Orb adds to it, a constant in the move.
 const ENERGY_ORB_STRENGTH: Number = 2;

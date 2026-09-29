@@ -376,7 +376,7 @@ fn emit_events(
         extras,
         "    /// The acts whose own list offers this event.\n\
          \x20   ///\n\
-         \x20   /// Empty for one in the any-act pool — see [`Event::any_act`] —\n\
+         \x20   /// Empty for one in the any-act pool — see [`Event::any_act`](sts2_core::EventTable::any_act) —\n\
          \x20   /// and for the four nothing offers."
     )
     .unwrap();

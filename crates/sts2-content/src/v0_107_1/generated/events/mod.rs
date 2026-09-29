@@ -420,7 +420,7 @@ impl sts2_core::EventTable for Event {
 
     /// The acts whose own list offers this event.
     ///
-    /// Empty for one in the any-act pool — see [`Event::any_act`] —
+    /// Empty for one in the any-act pool — see [`Event::any_act`](sts2_core::EventTable::any_act) —
     /// and for the four nothing offers.
     fn acts(self) -> &'static [Act] {
         match self {
