@@ -4113,6 +4113,20 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         modified_exactly::<V>(self.walk(), Some(player), None, Some(&held), damage, true)
     }
 
+    fn over_or_ending(&self) -> bool {
+        self.over()
+    }
+
+    fn card_target_type(&self, card: CardAt<V>) -> V::TargetType {
+        let at = self.standing(card);
+        let held = self
+            .live
+            .cards
+            .get(card.pile(), at)
+            .expect("a card stands where it was found");
+        super::legal::target_type::<V>(held.face.ident, self.live)
+    }
+
     fn auto_play_card(&mut self, card: CardAt<V>) {
         if self.over() || !self.live.player().alive {
             return;

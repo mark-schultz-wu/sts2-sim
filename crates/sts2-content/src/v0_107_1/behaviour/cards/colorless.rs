@@ -272,6 +272,8 @@ pub(super) fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played
             }
         }
         ColorlessCard::JackOfAllTrades => jack_of_all_trades(fight),
+        ColorlessCard::BeatDown => beat_down(fight),
+        ColorlessCard::Splash => splash(fight),
         ColorlessCard::Omnislice => omnislice(fight),
         card => card_plays::colorless::on_play(card, fight),
     }
@@ -311,6 +313,95 @@ fn omnislice<F: Fight<V>>(fight: &mut F) -> Played<V> {
         }
     });
     Played::Done
+}
+
+/// `BeatDown`: up to its `Cards` of the discard pile's playable Attacks,
+/// `StableShuffle`d off `Shuffle`, each auto-played. One aimed at one enemy
+/// is played at an enemy drawn off `CombatTargets` before the play begins.
+/// It plays nothing more once the fight is ending.
+///
+/// It takes the list before playing any, and plays each wherever it stands
+/// by then: an earlier play can move one.
+///
+/// # Panics
+///
+/// A card it plays that stops on a question with more cards still to play,
+/// and one no pile holds by its turn.
+fn beat_down<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use sts2_core::{RunStreamKinds as _, TargetKinds as _};
+
+    let mut attacks: Vec<_> = fight
+        .cards_in(Pile::Discard)
+        .into_iter()
+        .filter(|&at| V::card_kind(fight.card_ident(at).card) == Some(CardKind::Attack))
+        .filter(|&at| !fight.card_keyword(at, CardKeyword::Unplayable))
+        .collect();
+    let stream = <V as sts2_core::ContentVersion>::RunRngType::SHUFFLE;
+    fight.stable_shuffle_cards(&mut attacks, stream);
+    attacks.truncate(cards(fight));
+    let last = attacks.len();
+    for (played, card) in (1..).zip(attacks) {
+        if fight.over_or_ending() {
+            break;
+        }
+        let card = [Pile::Discard, Pile::Hand, Pile::Draw, Pile::Exhaust]
+            .into_iter()
+            .find_map(|pile| {
+                fight
+                    .cards_in(pile)
+                    .into_iter()
+                    .find(|at| at.id() == card.id())
+            })
+            .unwrap_or_else(|| unimplemented!("Beat Down playing a card no pile holds"));
+        let aimed =
+            fight.card_target_type(card) == <V as sts2_core::ContentVersion>::TargetType::ANY_ENEMY;
+        match aimed.then(|| fight.random_opponent()).flatten() {
+            Some(target) => fight.auto_play_card_at(card, target),
+            None => fight.auto_play_card(card),
+        }
+        if fight.waiting() {
+            assert!(
+                played == last,
+                "Beat Down waiting on a card, with more to play"
+            );
+            return Played::Waiting {
+                at: super::super::Resume::Card(super::Resume::Colorless(Resume::BeatDownPlayed)),
+            };
+        }
+    }
+    Played::Done
+}
+
+/// `Splash`: three distinct Attacks of the other characters' pools, off
+/// `CombatCardGeneration` and upgraded where Splash is. Its owner takes one
+/// into hand, free this turn, or none.
+///
+/// The pools run in `UnlockState.CharacterCardPools`' order, every
+/// character unlocked, each narrowed for combat.
+fn splash<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use sts2_core::RunStreamKinds as _;
+
+    let own = fight.character();
+    let mut attacks: Vec<_> = super::super::ALL_CHARACTERS
+        .into_iter()
+        .filter(|&character| character != own)
+        .flat_map(|character| V::combat_cards(character).iter().copied())
+        .filter(|&card| V::card_kind(card) == Some(CardKind::Attack))
+        .collect();
+    let stream = <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_GENERATION;
+    let mut offered: [sts2_core::CardIdent<V>; sts2_core::CHOICES] = fight
+        .generate_cards(&mut attacks, stream)
+        .unwrap_or_else(|_| unimplemented!("other pools offering fewer than three Attacks"));
+    if fight.upgraded() {
+        for card in &mut offered {
+            card.upgrade = 1;
+        }
+    }
+    Played::Choosing {
+        offered: offered.into_iter().collect(),
+        skippable: true,
+        at: super::super::Resume::Card(super::Resume::Colorless(Resume::SplashChoice)),
+    }
 }
 
 /// `JackOfAllTrades`: `GetDistinctForCombat` of its `Cards` of colorless
@@ -353,6 +444,10 @@ pub enum Resume {
     SecretWeaponTakes,
     /// `Discovery`, after the card chosen from the three it offered.
     DiscoveryChoice,
+    /// `Splash`, after the Attack chosen from the three it offered.
+    SplashChoice,
+    /// `BeatDown`, once the last card it played has its answer.
+    BeatDownPlayed,
     /// `Catastrophe`, once a card it played has its answer, with this many
     /// cards still to play.
     CatastropheLeft(u8),
@@ -367,7 +462,7 @@ pub(super) fn resume_chosen<F: Fight<V>>(
     match at {
         // `SetToFreeThisTurn`, then `CardPileCmd.AddGeneratedCardToCombat`
         // into hand.
-        Resume::DiscoveryChoice => {
+        Resume::DiscoveryChoice | Resume::SplashChoice => {
             if let Some(card) = chosen {
                 for at in fight.add_generated_cards(card, Pile::Hand, 1) {
                     super::super::free_this_turn(fight, at);
@@ -383,6 +478,7 @@ pub(super) fn resume_chosen<F: Fight<V>>(
 pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
     match at {
         Resume::CatastropheLeft(left) => catastrophe(fight, Number::from(left)),
+        Resume::BeatDownPlayed => Played::Done,
         at => unreachable!("{at:?} stops on a pick, not on a card it played"),
     }
 }
@@ -398,7 +494,10 @@ pub(super) fn resume_play<F: Fight<V>>(
             Played::Done
         }
         Resume::CatastropheLeft(_) => unreachable!("Catastrophe waits, and picks nothing"),
-        Resume::DiscoveryChoice => unreachable!("Discovery chooses, and picks nothing"),
+        Resume::DiscoveryChoice | Resume::SplashChoice => {
+            unreachable!("{at:?} chooses, and picks nothing")
+        }
+        Resume::BeatDownPlayed => unreachable!("Beat Down waits, and picks nothing"),
         // `CardPileCmd.Add` of the one taken, into hand.
         Resume::SecretTechniqueTakes | Resume::SeekerStrikeTakes | Resume::SecretWeaponTakes => {
             fight.act_on(PileAct::IntoHand, chosen.as_slice());
