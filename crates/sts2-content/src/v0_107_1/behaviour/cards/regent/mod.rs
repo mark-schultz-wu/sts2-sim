@@ -88,6 +88,28 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
             }
             Played::Done
         }
+        // `Stardust`: its damage once for each star its X spent, each hit at
+        // an enemy drawn at random.
+        RegentCard::Stardust => {
+            use sts2_core::{Amount, Effect, Scaling};
+
+            let hits = fight.star_x_value();
+            fight.attack(Scaling::Dynamic, |fight| {
+                for _ in 0..hits {
+                    let Some(target) = fight.random_target() else {
+                        break;
+                    };
+                    let hit = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(hit);
+                }
+            });
+            Played::Done
+        }
         RegentCard::Glitterstream => common::glitterstream(fight),
         // `Glow`: its stars, its draw, then Draw Cards Next Turn at as many.
         RegentCard::Glow => {

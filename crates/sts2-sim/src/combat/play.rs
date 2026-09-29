@@ -11,7 +11,7 @@
 
 use crate::stream::LendsCombat;
 use smallvec::SmallVec;
-use sts2_core::{CardTable, CombatId, Cost, HandIndex, Reason, Rules};
+use sts2_core::{CardTable, CombatId, HandIndex, Reason, Rules};
 
 use super::board::Board;
 use super::live::{Asked, Asker, CardPlay, Live, Plays, Resuming, Skips, Then};
@@ -97,12 +97,6 @@ pub(crate) fn resolve<V: Rules>(
             target,
             takes,
         });
-    }
-
-    if star_cost == Cost::X {
-        // `GetStarCostWithModifiers` is a number, not a pool to drain. No card
-        // on this build prices its stars at X.
-        unimplemented!("a card priced at X stars");
     }
 
     // `SpendResources`, worked out where the play was held to the pools rather
@@ -240,9 +234,19 @@ pub(crate) fn play<V: Rules>(
     let ascension = live.ascension;
     let (pile, position) = result_pile::<V>(live, relics, &card, play.energy);
     let count = play_count::<V, _>(live, streams, relics, &card);
-    before_played::<V, _>(live, streams, relics, &card, play.energy, play.target);
+    // `SpendEnergy` captures what an X cost spent, and `SpendStars` what the
+    // stars cost.
+    let begun = CardPlay {
+        id: card.id,
+        energy: play.energy,
+        x: play.energy,
+        stars: play.stars,
+        pile,
+        position,
+    };
+    before_played::<V, _>(live, streams, relics, &card, begun, play.target);
     live.history
-        .start(card.face.ident.card, card.id, play.energy, true);
+        .start(card.face.ident.card, card.id, begun, true);
     let mut board = Board::for_card(
         live,
         streams.combat(),
@@ -270,12 +274,7 @@ pub(crate) fn play<V: Rules>(
                 done: num_traits::zero(),
                 count,
             },
-            asker: Asker::Card(CardPlay {
-                id: card.id,
-                energy: play.energy,
-                pile,
-                position,
-            }),
+            asker: Asker::Card(begun),
             target: play.target,
             ended,
         },
@@ -362,9 +361,6 @@ pub(super) fn auto_play_in_play<V: Rules>(
     if ident.card.unplayable() {
         return without_playing::<V>(live, rngs, relics, &card);
     }
-    if ident.card.cost() == sts2_core::Cost::X {
-        unimplemented!("auto-playing {ident:?}, which costs X");
-    }
     // `Hook.ShouldPlay`, with the auto-play's type. A refused card goes to
     // its pile unplayed.
     if super::listen::first_deciding::<V>(
@@ -400,9 +396,25 @@ pub(super) fn auto_play_in_play<V: Rules>(
     let energy = num_traits::zero();
     let (pile, position) = result_pile::<V>(live, relics, &card, energy);
     let count = play_count::<V, _>(live, &mut rngs, relics, &card);
-    before_played::<V, _>(live, &mut rngs, relics, &card, energy, target);
+    // `AutoPlay` spends nothing, and captures an X from what the pools hold.
+    let x = match ident.card.cost() {
+        sts2_core::Cost::X => live.energy,
+        _ => num_traits::zero(),
+    };
+    let star_cost = super::legal::costs::<V>(&card, super::listen::Walk { live, relics }).1;
+    let stars = super::legal::spend(star_cost, live.stars)
+        .unwrap_or_else(|| unimplemented!("a star cost the count cannot hold"));
+    let begun = CardPlay {
+        id: card.id,
+        energy,
+        x,
+        stars,
+        pile,
+        position,
+    };
+    before_played::<V, _>(live, &mut rngs, relics, &card, begun, target);
     live.history
-        .start(card.face.ident.card, card.id, energy, true);
+        .start(card.face.ident.card, card.id, begun, true);
     let mut board = Board::for_card(
         live,
         rngs.reborrow(),
@@ -431,12 +443,7 @@ pub(super) fn auto_play_in_play<V: Rules>(
                 done: num_traits::zero(),
                 count,
             },
-            asker: Asker::Card(CardPlay {
-                id: card.id,
-                energy,
-                pile,
-                position,
-            }),
+            asker: Asker::Card(begun),
             target,
             ended,
         },
@@ -497,14 +504,15 @@ fn before_played<V: Rules, S: LendsCombat>(
     streams: &mut S,
     relics: &mut crate::run::Belt<V>,
     card: &super::live::CardInstance<V>,
-    energy: V::Count,
+    play: CardPlay<V>,
     target: Option<sts2_core::CombatId>,
 ) {
     if !super::listen::heard::<V>(live, relics, sts2_core::ModelHook::BeforeCardPlayed) {
         return;
     }
+    let energy = play.energy;
     let resolved = match card.face.ident.card.cost() {
-        sts2_core::Cost::X => num_traits::cast(energy).expect("an energy fits a game number"),
+        sts2_core::Cost::X => num_traits::cast(play.x).expect("an energy fits a game number"),
         _ => {
             let fight = super::listen::Walk { live, relics };
             match super::legal::costs::<V>(card, fight).0 {
@@ -1186,15 +1194,8 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                     .cards
                     .named(card)
                     .expect("a card replaying stands in the play pile");
-                before_played::<V, _>(
-                    next,
-                    streams,
-                    relics,
-                    &replaying,
-                    play.energy,
-                    effect.target,
-                );
-                next.history.start(played_card, card, play.energy, false);
+                before_played::<V, _>(next, streams, relics, &replaying, play, effect.target);
+                next.history.start(played_card, card, play, false);
                 let mut board = Board::for_card(
                     next,
                     streams.combat(),
