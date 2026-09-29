@@ -1,0 +1,11 @@
+# The Phrog Parasite infects on its first turn and lashes four times on its
+# second. The first lash is the first to take the Ironclad's health, and
+# Centennial Puzzle's draw shuffles a dry draw pile, so Stratagem asks after
+# one hit. The other three wait on the answer.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"CENTENNIAL_PUZZLE"}
+{"cmd":"fight","encounter":"PHROG_PARASITE_ELITE"}
+{"cmd":"power","power":"STRATAGEM_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"answer","cards":[0]}
