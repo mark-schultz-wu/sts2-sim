@@ -2187,6 +2187,30 @@ pub(crate) fn event_hook(
         // `RupturePower.AfterCardPlayed`: the Strength a play it noted owes.
         (Power::RupturePower, _, EventHook::CardPlayed { id, .. }) => take_noted(state, id)
             .map(|owed| HookEffect::ApplyToOwner(Power::StrengthPower, PowerAmount::Counted(owed))),
+        // `BlackHolePower.AfterCardPlayed`: its stack, unpowered, to each enemy
+        // that can be hit, once a play that spent stars is over and it ends
+        // its replays. The play's started entry keeps what it spent. A fight
+        // here has one player, whose cards are all its holder's.
+        (
+            Power::BlackHolePower,
+            PowerAmount::Counted(amount),
+            EventHook::CardPlayed { id, last, .. },
+        ) => {
+            let spent = history
+                .started_this_turn()
+                .filter(|started| started.id == id)
+                .last()
+                .is_some_and(|started| started.stars > 0);
+            (spent && last).then_some(HookEffect::DamageOpponents(amount))
+        }
+        // `BlackHolePower.AfterStarsGained`: the same, for stars its owner
+        // gains.
+        (Power::BlackHolePower, PowerAmount::Counted(amount), EventHook::StarsGained { amount: gained }) => {
+            (gained > 0).then_some(HookEffect::DamageOpponents(amount))
+        }
+        (Power::BlackHolePower, PowerAmount::Endless, EventHook::CardPlayed { .. } | EventHook::StarsGained { .. }) => {
+            unimplemented!("an endless Black Hole")
+        }
         // `MasterPlannerPower.AfterCardPlayed`: Sly written on each Skill its
         // owner plays, for as long as the copy lasts. A fight here has one
         // player, whose cards are all its holder's.

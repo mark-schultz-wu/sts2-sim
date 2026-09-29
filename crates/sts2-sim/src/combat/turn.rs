@@ -1925,7 +1925,11 @@ pub(super) fn side_turn_started<V: Rules>(
                 ended = ended.or(board.ended());
             }
             // `PlayerCmd.GainStars`.
-            sts2_core::HookEffect::GainStars(amount) => live.modify_stars(amount),
+            sts2_core::HookEffect::GainStars(amount) => {
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                sts2_core::Fight::gain_stars(&mut board, amount);
+            }
             // `OrbCmd.Channel` on the player, which evokes an orb to make room.
             sts2_core::HookEffect::Channel(orb) => {
                 let mut board =
@@ -2085,7 +2089,11 @@ pub(super) fn energy_reset<V: Rules>(
                 live.remove_power(owner, power);
             }
             // `PlayerCmd.GainStars`.
-            (_, sts2_core::HookEffect::GainStars(amount)) => live.modify_stars(amount),
+            (_, sts2_core::HookEffect::GainStars(amount)) => {
+                let mut board =
+                    Board::for_card(live, streams.combat(), relics, ascension, None, None);
+                sts2_core::Fight::gain_stars(&mut board, amount);
+            }
             // `PowerCmd.Remove(this)`.
             (Listener::Power { owner, power, .. }, sts2_core::HookEffect::Remove) => {
                 live.remove_power(owner, power)

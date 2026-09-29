@@ -195,7 +195,12 @@ pub(crate) fn enter<V: Rules>(
     };
     for (_, effect) in super::listen::notify::<V>(&mut live, relics, entered) {
         match effect {
-            HookEffect::GainStars(gained) => live.modify_stars(gained),
+            // `PlayerCmd.GainStars`.
+            HookEffect::GainStars(gained) => {
+                let mut board =
+                    Board::for_card(&mut live, streams.combat(), relics, ascension, None, None);
+                sts2_core::Fight::gain_stars(&mut board, gained);
+            }
             // `PowerCmd.Apply` on the relic's owner, which is the player.
             HookEffect::ApplyToOwner(power, amount) => {
                 let mut board =

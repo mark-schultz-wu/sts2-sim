@@ -1,0 +1,9 @@
+# Black Hole hits every enemy for its stack once a play that spent stars is
+# over, as after Falling Star, and whenever its owner gains stars, as from
+# Venerate.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_NORMAL"}
+{"cmd":"grant","card":"BLACK_HOLE"}
+{"cmd":"play_card","index":5}
+{"cmd":"play_card","index":2,"target":1}
+{"cmd":"play_card","index":1}

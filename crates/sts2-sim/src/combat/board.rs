@@ -3377,7 +3377,32 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         if amount < V::Number::zero() {
             unimplemented!("a card spending stars as it plays");
         }
+        // `PlayerCmd.GainStars`, which gains nothing once the fight is ending.
+        if self.over() {
+            return;
+        }
         self.live.modify_stars(amount);
+        // `Hook.AfterStarsGained`.
+        let gained = sts2_core::ModelHook::AfterStarsGained;
+        if !super::listen::heard::<V>(self.live, self.relics, gained) {
+            return;
+        }
+        let hook = sts2_core::EventHook::StarsGained { amount };
+        let asked = super::listen::notify::<V>(self.live, self.relics, hook);
+        for (listener, effect) in asked {
+            match (listener, effect) {
+                // `CreatureCmd.Damage` over `HittableEnemies`, unpowered, from
+                // the power's owner.
+                (Listener::Power { owner, .. }, HookEffect::DamageOpponents(amount)) => {
+                    for target in self.hittable_opponents_of(owner) {
+                        self.hit_unpowered(Some(owner), target, amount, false);
+                    }
+                }
+                (listener, effect) => {
+                    unimplemented!("{listener:?} asking for {effect:?} once stars are gained")
+                }
+            }
+        }
     }
 
     fn modify_energy(&mut self, amount: V::Number) {
