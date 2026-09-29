@@ -1610,6 +1610,18 @@ fn finished<V: Rules, S: LendsCombat>(
                     board.land(target, power, amount, None);
                     ended = ended.or(board.ended());
                 }
+                // `CardCmd.Upgrade` on a copy wherever it stands, which skips
+                // one at its maximum. A fight that is ending upgrades nothing.
+                (_, sts2_core::HookEffect::UpgradeCopy { card, times }) => {
+                    if ended.is_none() {
+                        next.cards.write_named(card, |face| {
+                            for _ in 0..times {
+                                face.upgrade();
+                            }
+                            true
+                        });
+                    }
+                }
                 // `CardCmd.ApplyKeyword`, on cards wherever they stand.
                 (_, effect @ sts2_core::HookEffect::AddKeyword { .. }) => {
                     Board::for_card(next, streams.combat(), relics, ascension, None, None)
