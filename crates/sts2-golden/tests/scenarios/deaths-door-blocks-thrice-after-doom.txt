@@ -1,0 +1,10 @@
+# Death's Door blocks once. After Negative Pulse applies Doom, the second
+# blocks three times.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"DEATHS_DOOR"}
+{"cmd":"grant","card":"NEGATIVE_PULSE"}
+{"cmd":"grant","card":"DEATHS_DOOR"}
+{"cmd":"play_card","index":5}
+{"cmd":"play_card","index":5}
+{"cmd":"play_card","index":5}

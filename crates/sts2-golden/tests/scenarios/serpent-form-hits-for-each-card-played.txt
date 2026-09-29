@@ -1,0 +1,9 @@
+# Serpent Form hits a random enemy for four once each card its owner plays
+# is over. Its own play does not.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_NORMAL"}
+{"cmd":"grant","card":"SERPENT_FORM"}
+{"cmd":"play_card","index":7}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"STRIKE_SILENT"}
+{"cmd":"play_card","index":5,"target":1}

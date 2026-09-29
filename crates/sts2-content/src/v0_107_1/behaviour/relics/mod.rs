@@ -124,6 +124,7 @@ mod kusarigama;
 mod lantern;
 mod large_capsule;
 mod lasting_candy;
+mod lava_lamp;
 mod lava_rock;
 mod lead_paperweight;
 mod leafy_poultice;
@@ -506,6 +507,7 @@ pub enum State {
     Planisphere,
     GhostSeed,
     LeesWaffle,
+    LavaLamp(lava_lamp::State),
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -749,6 +751,7 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::LavaLamp(state) => lava_lamp::event_hook(state, hook, asked),
         State::LeesWaffle => lees_waffle::event_hook(hook, asked),
         State::GhostSeed => ghost_seed::event_hook(hook, asked),
         State::Planisphere => planisphere::event_hook(hook, asked),
@@ -1077,7 +1080,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::Kaleidoscope
         | State::Planisphere
         | State::GhostSeed
-        | State::LeesWaffle => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::LeesWaffle
+        | State::LavaLamp(_) => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1256,6 +1260,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::LavaLamp => State::LavaLamp(lava_lamp::State::default()),
             Relic::LeesWaffle => State::LeesWaffle,
             Relic::GhostSeed => State::GhostSeed,
             Relic::Planisphere => State::Planisphere,
