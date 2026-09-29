@@ -4113,6 +4113,16 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         modified_exactly::<V>(self.walk(), Some(player), None, Some(&held), damage, true)
     }
 
+    fn card_replays(&self, card: CardAt<V>) -> V::Number {
+        let at = self.standing(card);
+        let held = self
+            .live
+            .cards
+            .get(card.pile(), at)
+            .expect("a card stands where it was found");
+        held.face.play_count() - num_traits::one()
+    }
+
     fn over_or_ending(&self) -> bool {
         self.over()
     }

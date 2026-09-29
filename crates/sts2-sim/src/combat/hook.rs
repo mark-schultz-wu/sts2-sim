@@ -26,6 +26,25 @@ pub(crate) fn apply<V: Rules, F: Fight<V>>(
             }
             HookEffect::LoseEnergy(amount) => fight.modify_energy(-amount),
             HookEffect::Draw(amount) => fight.draw(amount),
+            HookEffect::GenerateForCombat { kind, count } => {
+                let pool: Vec<V::Card> = V::combat_cards(fight.character())
+                    .iter()
+                    .copied()
+                    .filter(|&card| V::card_kind(card) == Some(kind))
+                    .collect();
+                let count: usize = num_traits::cast(count)
+                    .unwrap_or_else(|| unimplemented!("{count:?} cards generated"));
+                let made: Vec<V::Card> = (0..count)
+                    .filter_map(|_| fight.generate_card(&pool))
+                    .collect();
+                for card in made {
+                    fight.add_generated_cards(
+                        sts2_core::CardIdent::new(card),
+                        sts2_core::Pile::Hand,
+                        1,
+                    );
+                }
+            }
             HookEffect::Summon(amount) => fight.summon_osty(amount),
             HookEffect::Channel(orb) => fight.channel(orb),
             // `CreatureCmd.Heal` on the listener's owner, the actor.

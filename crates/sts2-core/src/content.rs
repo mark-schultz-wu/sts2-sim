@@ -2284,6 +2284,12 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("writing on the cards a fight holds")
     }
 
+    /// `GetEnchantedReplayCount` of the card at one place: its replays,
+    /// through its enchantment's `EnchantPlayCount`.
+    fn card_replays(&self, _card: crate::CardAt<V>) -> V::Number {
+        unimplemented!("reading a card's replays")
+    }
+
     /// `CardModel.BaseReplayCount += amount` on each card `to` names.
     fn add_replays(&mut self, _to: Writing<V>, _amount: V::Number) {
         unimplemented!("replays added to cards")
@@ -5111,6 +5117,13 @@ pub enum HookEffect<V: ContentVersion> {
     /// to the top. Nothing, for an empty pile.
     ExhaustFromDrawTop {
         passing_innate: bool,
+    },
+    /// `CardFactory.GetForCombat` of `count` cards of one type from the
+    /// character's combat pool: each `NextItem` off `CombatCardGeneration`,
+    /// repeats allowed. All are made, then each goes into hand in turn.
+    GenerateForCombat {
+        kind: CardKind,
+        count: V::Number,
     },
     /// `CardPileCmd.AddGeneratedCardsToCombat`: this many new copies of a
     /// card into the player's hand, the way `Shiv.CreateInHand` makes them.
