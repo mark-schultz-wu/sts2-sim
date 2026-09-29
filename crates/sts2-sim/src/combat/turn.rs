@@ -906,6 +906,34 @@ pub(super) fn carry_setup<V: Rules>(
                 while !rest.is_empty() {
                     let (listener, effect) = rest.remove(0);
                     match effect {
+                        sts2_core::HookEffect::ChooseColorlessIntoHand => {
+                            let mut pool = V::combat_colorless_cards().to_vec();
+                            let mut board = Board::for_card(
+                                live,
+                                rngs.reborrow(),
+                                relics,
+                                ascension,
+                                None,
+                                None,
+                            );
+                            let stream = <V::RunRngType as sts2_core::RunStreamKinds>::COMBAT_CARD_GENERATION;
+                            let offered: [sts2_core::CardIdent<V>; sts2_core::CHOICES] =
+                                sts2_core::Fight::generate_cards(&mut board, &mut pool, stream)
+                                    .unwrap_or_else(|_| {
+                                        unimplemented!("a colorless pool offering fewer than three")
+                                    });
+                            live.asking = Some(super::live::Asking {
+                                then: Then::SetupChosen,
+                                // `FromChooseACardScreen` hands its selector
+                                // a minimum of none, whatever `canSkip` says.
+                                question: super::live::Asked::Offered {
+                                    offered: offered.into_iter().collect(),
+                                    skippable: true,
+                                },
+                            });
+                            live.defer(super::live::Deferred::Setup(Setup::BeforeHandDraw(rest)));
+                            return Carried::Parked;
+                        }
                         sts2_core::HookEffect::GenerateInHand { card, count } => {
                             let count = num_traits::cast(count).unwrap_or_else(|| {
                                 unimplemented!("making {count:?} cards in hand")

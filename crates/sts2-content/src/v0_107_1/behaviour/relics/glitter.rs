@@ -18,7 +18,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
                 });
             }
         }
-        EventHook::Obtained { .. } => {}
+        EventHook::Obtained { .. } | EventHook::CardRewardPick { .. } => {}
         hook => unimplemented!("what Glitter does for {hook:?}"),
     }
 }

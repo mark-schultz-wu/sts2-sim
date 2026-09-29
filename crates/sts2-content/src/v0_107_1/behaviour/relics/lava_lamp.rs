@@ -45,7 +45,9 @@ pub(super) fn event_hook(
                 asked.push(HookEffect::UpgradeCard);
             }
         }
-        EventHook::Obtained { .. } | EventHook::CardRewardOptionsModified => {}
+        EventHook::Obtained { .. }
+        | EventHook::CardRewardOptionsModified
+        | EventHook::CardRewardPick { .. } => {}
         hook => unimplemented!("what LavaLamp does for {hook:?}"),
     }
 }
