@@ -2111,6 +2111,18 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("reading the fight's history")
     }
 
+    /// `CombatManager.IsOverOrEnding`: a loss waits, or no primary enemy
+    /// stands.
+    fn over_or_ending(&self) -> bool {
+        unimplemented!("asking whether the fight is ending")
+    }
+
+    /// `TargetType` of the card at one place, including one that works its
+    /// target out from the fight.
+    fn card_target_type(&self, _card: crate::CardAt<V>) -> V::TargetType {
+        unimplemented!("a card's target type")
+    }
+
     /// Whether a card this effect auto-played stopped on a question, which
     /// the rest of the effect waits behind. `CardCmd.AutoPlay` is awaited,
     /// so the game's own loop stands still there.

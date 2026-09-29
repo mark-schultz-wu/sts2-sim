@@ -27,17 +27,6 @@ const POOL_TWO: [Relic; 3] = [
     Relic::RadiantPearl,
 ];
 
-/// The characters `ModelDb.AllCharacters` lists, in its order.
-///
-/// Not the table's, which is alphabetical. The draw indexes into this one.
-const ALL_CHARACTERS: [Character; 5] = [
-    Character::Ironclad,
-    Character::Silent,
-    Character::Regent,
-    Character::Necrobinder,
-    Character::Defect,
-];
-
 pub struct Orobas;
 
 impl EventBehavior<V> for Orobas {
@@ -53,7 +42,7 @@ impl EventBehavior<V> for Orobas {
         // One of the other characters, drawn whether or not the sea glass that
         // would name it is the option taken. The relic offered is the one
         // relic either way, so which character it was does not show here.
-        let others: Vec<Character> = ALL_CHARACTERS
+        let others: Vec<Character> = super::super::ALL_CHARACTERS
             .into_iter()
             .filter(|&other| other != run.character())
             .collect();

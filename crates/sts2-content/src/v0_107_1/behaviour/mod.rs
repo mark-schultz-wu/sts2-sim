@@ -23,6 +23,18 @@ use sts2_core::{Fight, Played, Table as _, Taken};
 use super::V0_107_1 as V;
 use super::generated::cards::{CardType, Cards, combat_cards};
 
+/// The characters `ModelDb.AllCharacters` lists, in its order, which is
+/// also `UnlockState.CharacterCardPools`' with every character unlocked.
+///
+/// Not the table's, which is alphabetical. A draw indexes into this one.
+pub(crate) const ALL_CHARACTERS: [super::generated::characters::Character; 5] = [
+    super::generated::characters::Character::Ironclad,
+    super::generated::characters::Character::Silent,
+    super::generated::characters::Character::Regent,
+    super::generated::characters::Character::Necrobinder,
+    super::generated::characters::Character::Defect,
+];
+
 /// `CardModel.SetToFreeThisTurn`: energy and stars at nothing this turn or
 /// until played.
 pub(crate) fn free_this_turn<F: Fight<V>>(fight: &mut F, at: sts2_core::CardAt<V>) {

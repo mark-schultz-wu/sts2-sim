@@ -1,0 +1,8 @@
+# The first turn's hand ends in the discard pile. Beat Down then plays three
+# of its Attacks, shuffled off the shuffle stream. Each one aimed at a single
+# enemy hits a slime drawn off the targets stream before it is played.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"BEAT_DOWN"}
+{"cmd":"play_card","index":5}
