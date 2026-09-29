@@ -2112,7 +2112,7 @@ pub(crate) fn event_hook(
         (Power::DevourLifePower, _, EventHook::CardPlayed { .. }) => None,
         // `SpinnerPower.AfterEnergyReset`: a Glass orb channelled for each of
         // its stack as its owner's energy resets.
-        (Power::SpinnerPower, PowerAmount::Counted(amount), EventHook::EnergyReset { player })
+        (Power::SpinnerPower, PowerAmount::Counted(amount), EventHook::EnergyReset { player, .. })
             if player == holder =>
         {
             for _ in 0..amount {
@@ -3406,11 +3406,11 @@ pub(crate) fn event_hook(
         (
             Power::EnergyNextTurnPower,
             PowerAmount::Counted(amount),
-            EventHook::EnergyReset { player },
+            EventHook::EnergyReset { player, .. },
         ) if player == holder => {
             Some(HookEffect::GainEnergyAndRemove(amount))
         }
-        (Power::EnergyNextTurnPower, PowerAmount::Endless, EventHook::EnergyReset { player })
+        (Power::EnergyNextTurnPower, PowerAmount::Endless, EventHook::EnergyReset { player, .. })
             if player == holder =>
         {
             unimplemented!("an endless EnergyNextTurnPower handing over energy")
@@ -4498,13 +4498,13 @@ pub(crate) fn event_hook(
             None
         }
         // `RadiancePower.AfterEnergyReset`: its `Energy`, then one off.
-        (Power::RadiancePower, PowerAmount::Counted(_), EventHook::EnergyReset { player })
+        (Power::RadiancePower, PowerAmount::Counted(_), EventHook::EnergyReset { player, .. })
             if player == holder =>
         {
             asked.extend([HookEffect::GainEnergy(RADIANCE_ENERGY), HookEffect::Decrement]);
             return;
         }
-        (Power::RadiancePower, PowerAmount::Endless, EventHook::EnergyReset { player })
+        (Power::RadiancePower, PowerAmount::Endless, EventHook::EnergyReset { player, .. })
             if player == holder =>
         {
             unimplemented!("an endless Radiance")
@@ -4766,7 +4766,7 @@ pub(crate) fn event_hook(
         }
         (Power::SummonNextTurnPower, _, EventHook::PlayerTurnStart { .. }) => None,
         // `GenesisPower.AfterEnergyReset`: its stack of stars, every turn.
-        (Power::GenesisPower, PowerAmount::Counted(amount), EventHook::EnergyReset { player })
+        (Power::GenesisPower, PowerAmount::Counted(amount), EventHook::EnergyReset { player, .. })
             if player == holder =>
         {
             Some(HookEffect::GainStars(amount))
@@ -4776,12 +4776,12 @@ pub(crate) fn event_hook(
         (
             Power::LightningRodPower,
             PowerAmount::Counted(_),
-            EventHook::EnergyReset { player },
+            EventHook::EnergyReset { player, .. },
         ) if player == holder => {
             asked.extend([HookEffect::Channel(Orb::LightningOrb), HookEffect::Decrement]);
             return;
         }
-        (Power::LightningRodPower, PowerAmount::Endless, EventHook::EnergyReset { player })
+        (Power::LightningRodPower, PowerAmount::Endless, EventHook::EnergyReset { player, .. })
             if player == holder =>
         {
             unimplemented!("an endless LightningRodPower")
@@ -4791,7 +4791,7 @@ pub(crate) fn event_hook(
         (
             Power::StarNextTurnPower,
             PowerAmount::Counted(amount),
-            EventHook::EnergyReset { player },
+            EventHook::EnergyReset { player, .. },
         ) if player == holder => {
             asked.extend([HookEffect::GainStars(amount), HookEffect::Remove]);
             return;
@@ -4799,7 +4799,7 @@ pub(crate) fn event_hook(
         (
             Power::GenesisPower | Power::StarNextTurnPower,
             PowerAmount::Endless,
-            EventHook::EnergyReset { player },
+            EventHook::EnergyReset { player, .. },
         ) if player == holder => unimplemented!("an endless {power:?}"),
         (Power::GenesisPower | Power::StarNextTurnPower, _, EventHook::EnergyReset { .. }) => None,
         // `TyrannyPower.AfterPlayerTurnStart`: its owner picks its stack of

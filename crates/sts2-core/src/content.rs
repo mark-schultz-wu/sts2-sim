@@ -3677,6 +3677,8 @@ pub enum EventHook<V: ContentVersion> {
     /// `AfterEnergyReset`, carrying the player's creature.
     EnergyReset {
         player: crate::CombatId,
+        /// The player's `TurnNumber`.
+        turn: V::Count,
     },
     /// `AfterBlockCleared`, carrying the creature whose block has just gone.
     ///

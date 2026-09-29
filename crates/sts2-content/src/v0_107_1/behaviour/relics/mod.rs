@@ -35,6 +35,7 @@ mod amethyst_aubergine;
 mod anchor;
 mod arcane_scroll;
 mod archaic_tooth;
+mod art_of_war;
 mod astrolabe;
 mod bag_of_marbles;
 mod bag_of_preparation;
@@ -59,9 +60,11 @@ mod bound_phylactery;
 mod bowler_hat;
 mod bronze_scales;
 mod burning_blood;
+mod burning_sticks;
 mod byrdpip;
 mod calling_bell;
 mod candelabra;
+mod captains_wheel;
 mod centennial_puzzle;
 mod chandelier;
 mod charons_ashes;
@@ -99,6 +102,7 @@ mod fishing_rod;
 mod forgotten_soul;
 mod fragrant_mushroom;
 mod frozen_egg;
+mod funerary_mask;
 mod gambling_chip;
 mod game_piece;
 mod ghost_seed;
@@ -520,6 +524,10 @@ pub enum State {
     TeaOfDiscourtesy(tea_of_discourtesy::State),
     HelicalDart,
     GamblingChip,
+    BurningSticks(burning_sticks::State),
+    ArtOfWar(art_of_war::State),
+    CaptainsWheel,
+    FuneraryMask,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -763,6 +771,10 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::FuneraryMask => funerary_mask::event_hook(hook, asked),
+        State::CaptainsWheel => captains_wheel::event_hook(hook, asked),
+        State::ArtOfWar(state) => art_of_war::event_hook(state, hook, asked),
+        State::BurningSticks(state) => burning_sticks::event_hook(state, hook, asked),
         State::GamblingChip => gambling_chip::event_hook(hook, asked),
         State::HelicalDart => helical_dart::event_hook(hook, asked),
         State::TeaOfDiscourtesy(state) => tea_of_discourtesy::event_hook(state, hook, asked),
@@ -1105,7 +1117,11 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::PunchDagger
         | State::TeaOfDiscourtesy(_)
         | State::HelicalDart
-        | State::GamblingChip => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::GamblingChip
+        | State::BurningSticks(_)
+        | State::ArtOfWar(_)
+        | State::CaptainsWheel
+        | State::FuneraryMask => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1284,6 +1300,10 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::FuneraryMask => State::FuneraryMask,
+            Relic::CaptainsWheel => State::CaptainsWheel,
+            Relic::ArtOfWar => State::ArtOfWar(art_of_war::State::default()),
+            Relic::BurningSticks => State::BurningSticks(burning_sticks::State::default()),
             Relic::GamblingChip => State::GamblingChip,
             Relic::HelicalDart => State::HelicalDart,
             Relic::TeaOfDiscourtesy => {
