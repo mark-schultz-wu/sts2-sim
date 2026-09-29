@@ -296,18 +296,7 @@ pub(super) fn summon_built<V: Rules>(
     let Some(spawn_position) = u8::try_from(position).ok().and_then(nonmax::NonMaxU8::new) else {
         unreachable!("a position in the bounded roster fits its spawn field");
     };
-    let Some(id) = live
-        .creatures
-        .iter()
-        .map(|creature| creature.id.get())
-        .max()
-        .unwrap_or(0)
-        .checked_add(1)
-        .and_then(nonmax::NonMaxU8::new)
-        .map(CombatId::new)
-    else {
-        panic!("combat has too many creatures to assign an id");
-    };
+    let id = live.next_creature();
     let used = monster_hps::<V>(&live.creatures);
     let hp = health::<V>(monster, live.ascension, &used, niche);
     let creature_at = live

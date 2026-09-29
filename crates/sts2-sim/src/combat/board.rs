@@ -70,6 +70,10 @@ pub(super) struct Board<'a, V: Rules> {
     moving: bool,
     /// The hits of the attack under way that wait on a question, in order.
     held: Vec<Effect<V>>,
+    /// The model of a monster that left the fight during its own move. The
+    /// game's model object outlives the creature, so the rest of the move
+    /// still reads and writes it.
+    left: Option<V::MonsterState>,
     /// The results of the attack command whose hits are landing, which
     /// `AttackCommand.Results` gathers.
     landed: Option<sts2_core::AttackResults<V>>,
@@ -173,6 +177,7 @@ impl<'a, V: Rules> Board<'a, V> {
             pausable: false,
             moving: false,
             held: Vec::new(),
+            left: None,
             landed: None,
         }
     }
@@ -208,6 +213,7 @@ impl<'a, V: Rules> Board<'a, V> {
             pausable: false,
             moving: true,
             held: Vec::new(),
+            left: None,
             landed: None,
         }
     }
@@ -1468,7 +1474,7 @@ impl<'a, V: Rules> Board<'a, V> {
         // Its move graph is finished, but the creature remains addressable
         // until its death commands finish. Monsters those commands add must
         // receive ids after its own rather than reuse the one being removed.
-        self.live.machines.retain(|held| held.creature != id);
+        self.leave_machine(id);
         for effect in after_death {
             match effect {
                 sts2_core::HookEffect::SummonAfterOwnerDeath {
@@ -1707,7 +1713,7 @@ impl<'a, V: Rules> Board<'a, V> {
         }
         // `RemoveAllPowersInternalExcept`, which asks no power anything.
         self.live.powers.clear(id);
-        self.live.machines.retain(|held| held.creature != id);
+        self.leave_machine(id);
         self.live.creatures.escape(id);
         self.end_if_ending();
     }
@@ -2859,19 +2865,7 @@ impl<V: Rules> Board<'_, V> {
     ///
     /// A listener asking for anything as the pet arrives.
     pub(super) fn add_pet(&mut self, monster: V::Monster) -> CombatId {
-        let Some(id) = self
-            .live
-            .creatures
-            .iter()
-            .map(|creature| creature.id.get())
-            .max()
-            .unwrap_or(0)
-            .checked_add(1)
-            .and_then(nonmax::NonMaxU8::new)
-            .map(CombatId::new)
-        else {
-            panic!("combat has too many creatures to assign an id");
-        };
+        let id = self.live.next_creature();
         let at = self
             .live
             .creatures
@@ -3953,15 +3947,19 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         }
     }
 
-    fn store_model(&mut self, model: &V::MonsterState) {
+    fn model<R>(&mut self, with: impl FnOnce(&mut V::MonsterState) -> R) -> R {
         let actor = self.actor;
-        if let Some(held) = self
+        match self
             .live
             .machines
             .iter_mut()
             .find(|held| held.creature == actor)
         {
-            held.state = *model;
+            Some(held) => with(&mut held.state),
+            None => match &mut self.left {
+                Some(left) => with(left),
+                None => unreachable!("a model read outside its monster's move"),
+            },
         }
     }
 
@@ -4597,6 +4595,20 @@ pub(super) struct Frame<V: Rules> {
 }
 
 impl<'a, V: Rules> Board<'a, V> {
+    /// Take `id`'s move graph out of the fight. The model of the monster
+    /// whose move this is stays on the board until the move is over.
+    fn leave_machine(&mut self, id: CombatId) {
+        if self.moving && id == self.actor {
+            self.left = self
+                .live
+                .machines
+                .iter()
+                .find(|held| held.creature == id)
+                .map(|held| held.state);
+        }
+        self.live.machines.retain(|held| held.creature != id);
+    }
+
     /// What this board was built for.
     fn frame(&self) -> Frame<V> {
         Frame {
@@ -4640,6 +4652,7 @@ impl<'a, V: Rules> Board<'a, V> {
             pausable: true,
             moving,
             held: Vec::new(),
+            left: None,
             landed: None,
         }
     }

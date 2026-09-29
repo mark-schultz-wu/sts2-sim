@@ -285,13 +285,8 @@ pub(crate) fn event_hook(
 ///
 /// A monster nobody has ported.
 #[tracing::instrument(level = "trace", skip_all, fields(monster = ?monster, move_id = ?move_id))]
-pub(crate) fn perform<F: Fight<V>>(
-    monster: Monster,
-    move_id: MoveId,
-    model: &mut Model,
-    fight: &mut F,
-) -> Played<V> {
-    perform_from(monster, move_id, 0, model, fight)
+pub(crate) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) -> Played<V> {
+    perform_from(monster, move_id, 0, fight)
 }
 
 /// A move whose attack stood still on a question the player had to answer,
@@ -300,13 +295,12 @@ pub(crate) fn resume_move<F: Fight<V>>(
     monster: Monster,
     move_id: MoveId,
     at: Resume,
-    model: &mut Model,
     fight: &mut F,
 ) -> Played<V> {
     let Resume::Step(step) = at else {
         unreachable!("{at:?} resumes a choice, not a move")
     };
-    perform_from(monster, move_id, step, model, fight)
+    perform_from(monster, move_id, step, fight)
 }
 
 /// A move from `step`, which stands still, naming the step it goes on from,
@@ -315,7 +309,6 @@ fn perform_from<F: Fight<V>>(
     monster: Monster,
     move_id: MoveId,
     step: u8,
-    model: &mut Model,
     fight: &mut F,
 ) -> Played<V> {
     // Two states no table names. `Creature.Stun` builds one and
@@ -330,10 +323,10 @@ fn perform_from<F: Fight<V>>(
         _ => {}
     }
     if monster == Monster::KnowledgeDemon {
-        return hive::knowledge_demon(move_id, step, model, fight);
+        return hive::knowledge_demon(move_id, step, fight);
     }
     let next = match monster_moves::filed(monster) {
-        Filed::Glory => glory::perform(monster, move_id, step, model, fight),
+        Filed::Glory => glory::perform(monster, move_id, step, fight),
         Filed::Hive => hive::perform(monster, move_id, step, fight),
         Filed::Overgrowth => overgrowth::perform(monster, move_id, step, fight),
         Filed::Shared => shared::perform(monster, move_id, step, fight),

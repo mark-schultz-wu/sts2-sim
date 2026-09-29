@@ -561,7 +561,6 @@ const CURSE_SETS: usize = 3;
 pub(super) fn knowledge_demon<F: Fight<V>>(
     move_id: MoveId,
     step: u8,
-    model: &mut super::Model,
     fight: &mut F,
 ) -> sts2_core::Played<V> {
     use sts2_core::CardIdent;
@@ -577,19 +576,22 @@ pub(super) fn knowledge_demon<F: Fight<V>>(
     let deadly = fight.ascension().has(AscensionLevel::DeadlyEnemies);
     match move_id {
         MoveId::CurseOfKnowledgeMove => {
-            let super::Model::KnowledgeDemon { curses } = model else {
-                unimplemented!("a Knowledge Demon holding {model:?}")
-            };
-            let set = *curses;
+            // `CurseOfKnowledgeCounter++`, after the choice in the game.
+            // Nothing reads it before the enemy turn is over.
+            let set = fight.model(|model| {
+                let super::Model::KnowledgeDemon { curses } = model else {
+                    unimplemented!("a Knowledge Demon holding {model:?}")
+                };
+                let set = *curses;
+                *curses = set + 1;
+                set
+            });
             let other = match set {
                 0 => TokenCard::MindRot,
                 1 => TokenCard::Sloth,
                 2 => TokenCard::WasteAway,
                 _ => unimplemented!("a Knowledge Demon with no set left at {set}"),
             };
-            // `CurseOfKnowledgeCounter++`, after the choice in the game.
-            // Nothing reads it before the enemy turn is over.
-            *curses = set + 1;
             sts2_core::Played::Choosing {
                 offered: [
                     CardIdent::new(Cards::Token(TokenCard::Disintegration)),
