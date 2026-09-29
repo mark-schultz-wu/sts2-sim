@@ -1221,10 +1221,29 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
             // `FromHand` over what its filter lets through, which takes them
             // all unasked the way an unfiltered selection does.
             sts2_core::Played::AskingAmong {
-                cards,
+                mut cards,
                 selection,
                 at,
             } => {
+                use sts2_core::CardTable as _;
+
+                // `FromCombatPile` hands a draw pile's cards over sorted by
+                // rarity and then by id, a stable sort.
+                if cards
+                    .iter()
+                    .all(|card| card.pile() == sts2_core::Pile::Draw)
+                {
+                    cards.sort_by_key(|card| {
+                        let card = next
+                            .cards
+                            .named(card.id())
+                            .expect("an offered card stands in its pile")
+                            .face
+                            .ident
+                            .card;
+                        (card.rarity(), card.order())
+                    });
+                }
                 let taken = selection
                     .validate_automatic(cards.iter().copied().collect())
                     .map(sts2_core::Taken::Selected);
