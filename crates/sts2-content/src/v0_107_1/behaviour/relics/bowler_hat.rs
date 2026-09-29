@@ -6,7 +6,7 @@ use super::super::super::V0_107_1 as V;
 use super::Number;
 
 /// `DynamicVar("GoldIncrease", 1.25)`.
-const GOLD_INCREASE: f64 = 1.25;
+const GOLD_INCREASE: sts2_core::Fixed = sts2_core::Fixed::new(125, 2);
 
 /// `ModifyGoldGained`, which scales every gain its owner makes.
 pub(super) fn modify_hook(hook: ModifyHook<V>) -> Modify<Number> {

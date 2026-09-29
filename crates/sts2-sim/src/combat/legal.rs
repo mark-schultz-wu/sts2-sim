@@ -603,13 +603,8 @@ fn previewed<V: Rules>(
                     // A card's `DamageVar` is a powered attack's unless its
                     // props say otherwise.
                     let powered = modifier != sts2_core::CardNumberModifier::UnpoweredDamage;
-                    Some(super::board::modified::<V>(
-                        fight,
-                        Some(dealer),
-                        None,
-                        Some(held),
-                        printed(),
-                        powered,
+                    Some(super::board::card_hit::<V>(
+                        fight, dealer, None, held, var.id, powered,
                     ))
                 }
                 // `PowerVar<T>.UpdateCardPreview`: `Hook.ModifyPowerAmountGiven`

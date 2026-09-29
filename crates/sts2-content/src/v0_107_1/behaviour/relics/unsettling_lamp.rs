@@ -71,7 +71,7 @@ pub(super) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
                 .is_some_and(|doubled| lends(doubled).is_some_and(|(lent, _)| lent == power))
             && debuff_at(power, amount) =>
         {
-            Modify::Scaled(2.0)
+            Modify::Scaled(sts2_core::Fixed::new(2, 0))
         }
         _ => Modify::Nothing,
     }

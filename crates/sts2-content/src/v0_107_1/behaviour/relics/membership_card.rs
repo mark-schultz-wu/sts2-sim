@@ -6,13 +6,13 @@ use super::super::super::V0_107_1 as V;
 use super::Number;
 
 /// `DynamicVar("Discount", 50)`, as the share of the price that is paid.
-const DISCOUNT: f64 = 50.0;
+const DISCOUNT: i32 = 50;
 
 /// `ModifyMerchantPrice`: the price times its discount, for its owner, the
 /// one player a run here has, who is the local one.
 pub(super) fn modify_hook(hook: ModifyHook<V>) -> Modify<Number> {
     match hook {
-        ModifyHook::MerchantPrice => Modify::Scaled(DISCOUNT / 100.0),
+        ModifyHook::MerchantPrice => Modify::Scaled(sts2_core::Fixed::new(DISCOUNT, 2)),
         _ => Modify::Nothing,
     }
 }

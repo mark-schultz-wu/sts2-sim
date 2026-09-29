@@ -2049,7 +2049,7 @@ impl<V: Rules> State<V> {
     /// A relic answering one of the hooks in a way nothing here carries out.
     fn gain_gold(&mut self, amount: V::Number) {
         let hook = sts2_core::ModifyHook::GoldGained;
-        let mut gained: f64 = num_traits::cast(amount).expect("gold fits a float");
+        let mut gained = crate::combat::exact::<V>(amount);
         let mut left = self
             .player
             .relics
@@ -2061,7 +2061,7 @@ impl<V: Rules> State<V> {
                 sts2_core::Listener::Relic(&self.player.relics[slot].state);
             match V::modify_hook(listener, hook) {
                 sts2_core::Modify::Nothing => {}
-                sts2_core::Modify::Scaled(scale) => gained *= scale,
+                sts2_core::Modify::Scaled(scale) => gained *= scale.exact(),
                 answer => unimplemented!("a relic answering {hook:?} with {answer:?}"),
             }
         }
@@ -2072,10 +2072,8 @@ impl<V: Rules> State<V> {
             unimplemented!("a relic asking for {effect:?} as a gold gain is modified");
         }
         self.unheard(sts2_core::ModelHook::AfterGoldGained);
-        if gained > 0.0 {
-            let whole: V::Number =
-                num_traits::cast(gained.trunc()).expect("gold fits a game number");
-            self.player.gold = self.player.gold + whole;
+        if gained > sts2_core::Decimal::ZERO {
+            self.player.gold = self.player.gold + crate::combat::whole::<V>(gained);
         }
     }
 
@@ -4614,17 +4612,17 @@ impl<V: Rules> State<V> {
         if left == 0 {
             return cost;
         }
-        let mut price = num_traits::ToPrimitive::to_f64(&cost).expect("a price is a finite number");
+        let mut price = crate::combat::exact::<V>(cost);
         while left != 0 {
             let held = &self.player.relics[left.trailing_zeros() as usize];
             left &= left - 1;
             match V::modify_hook(crate::combat::Heard::<V>::Relic(&held.state), hook) {
                 sts2_core::Modify::Nothing => {}
-                sts2_core::Modify::Scaled(share) => price *= share,
+                sts2_core::Modify::Scaled(share) => price *= share.exact(),
                 answer => unimplemented!("a relic answering {answer:?} for a merchant's price"),
             }
         }
-        num_traits::cast(price.trunc()).expect("a merchant's price fits the build's number")
+        crate::combat::whole::<V>(price)
     }
 
     /// `Hook.ShouldRefillMerchantEntry`, which any relic on the belt can

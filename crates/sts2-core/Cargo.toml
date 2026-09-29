@@ -15,6 +15,7 @@ readme = "README.md"
 libm = { workspace = true }
 nonmax = { workspace = true }
 num-traits = { workspace = true }
+rust_decimal = { workspace = true }
 # Bounds only: `ContentVersion`'s associated types require `Serialize` so that a
 # build's ids can be spelled by whatever does the spelling. Nothing in this
 # crate derives serde. See the note above.

@@ -52,7 +52,7 @@ pub(super) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         Some(id) => source.id == id,
     };
     match doubled {
-        true => Modify::Scaled(2.0),
+        true => Modify::Scaled(sts2_core::Fixed::new(2, 0)),
         false => Modify::Nothing,
     }
 }
