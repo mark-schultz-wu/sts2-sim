@@ -13,7 +13,7 @@ use smallvec::SmallVec;
 use sts2_core::rng::GameRng;
 use sts2_core::{
     Amount, CardAt, CardId, CardIdent, CardNumberModifier, CardTable as _, CardVars, CombatId,
-    Effect, EffectResolution, EnchantHook, Fight, HookEffect, Modify, ModifyHook, Pile,
+    Decimal, Effect, EffectResolution, EnchantHook, Fight, HookEffect, Modify, ModifyHook, Pile,
     PowerAmount, Rules, RunStreamKinds, Scaling, SideKinds, Stack,
 };
 
@@ -1835,10 +1835,8 @@ impl<'a, V: Rules> Board<'a, V> {
         ) {
             return lost;
         }
-        let float = |number: V::Number| -> f64 {
-            num_traits::cast(number).expect("a number a fight works out fits a float")
-        };
-        let mut number = float(amount);
+        let exact = exact::<V>;
+        let mut number = exact(amount);
         let mut modifiers: SmallVec<[(CombatId, V::Power); 2]> = SmallVec::new();
         let player = self.live.player().id;
         for phase in [
@@ -1856,10 +1854,10 @@ impl<'a, V: Rules> Board<'a, V> {
                     let before = number;
                     number = match <V as sts2_core::Hooks>::modify_hook(listener, phase) {
                         Modify::Nothing => number,
-                        Modify::Added(more) => number + float(more),
-                        Modify::Scaled(by) => number * by,
-                        Modify::AtMost(most) => number.min(float(most)),
-                        Modify::Replaced(with) => float(with),
+                        Modify::Added(more) => number + exact(more),
+                        Modify::Scaled(by) => number * by.exact(),
+                        Modify::AtMost(most) => number.min(exact(most)),
+                        Modify::Replaced(with) => exact(with),
                     };
                     if before.trunc() != number.trunc() {
                         match listener {
@@ -2086,84 +2084,121 @@ pub(super) fn modified_by<V: Rules>(
     scaled_by::<V>(fight, amount, None, phases)
 }
 
-fn float<V: Rules>(number: V::Number) -> f64 {
-    num_traits::cast(number).expect("a number a fight works out fits a float")
+/// A game number as the decimal the game works it out in.
+pub(crate) fn exact<V: Rules>(number: V::Number) -> Decimal {
+    Decimal::from(num_traits::ToPrimitive::to_i64(&number).expect("a game number fits a long"))
+}
+
+/// The whole part of `number`, which is `(int)` on a decimal.
+pub(crate) fn whole<V: Rules>(number: Decimal) -> V::Number {
+    num_traits::ToPrimitive::to_i64(&number.trunc())
+        .and_then(num_traits::cast)
+        .expect("a modified number is a game number")
 }
 
 /// [`modified_by`] over a number an enchantment scaled first, where `scale`
 /// says so. The game holds the scaled number as a decimal until the
 /// listeners are done.
+///
+/// A whole number stays one until something scales it, and the game's own
+/// integers work out every addition before that.
 fn scaled_by<V: Rules>(
     fight: Walk<'_, V>,
     amount: V::Number,
-    scale: Option<f64>,
+    scale: Option<Decimal>,
     phases: &[ModifyHook<V>],
 ) -> V::Number {
-    num_traits::cast(scaled_exactly::<V>(fight, amount, scale, phases).trunc())
-        .expect("a modified number is a game number")
+    // Its own walk rather than [`answers`], which keeps the walk inlined on
+    // this, the hot path.
+    let mut answers = Answers::new();
+    super::listen::each::<V>(fight, hooks_of(phases), |listener, overrides| {
+        answer::<V>(listener, overrides, phases, &mut answers)
+    });
+    answers.sort_by_key(|&(at, _)| at);
+    let mut number = amount;
+    let mut at = 0;
+    if scale.is_none() {
+        while let Some(&(_, answer)) = answers.get(at) {
+            number = match answer {
+                Modify::Nothing => number,
+                Modify::Added(more) => number + more,
+                Modify::AtMost(most) => number.min(most),
+                Modify::Replaced(with) => with,
+                Modify::Scaled(_) => break,
+            };
+            at += 1;
+        }
+        if at == answers.len() {
+            return number.max(V::Number::zero());
+        }
+    }
+    let number = exact::<V>(number);
+    let number = scale.map_or(number, |scale| number * scale);
+    whole::<V>(worked_out::<V>(number, &answers[at..]))
 }
 
 /// [`scaled_by`] before the floor, which is the decimal the game's hook
 /// hands back. Never below nothing.
 fn scaled_exactly<V: Rules>(
     fight: Walk<'_, V>,
-    amount: V::Number,
-    scale: Option<f64>,
+    amount: Decimal,
+    scale: Option<Decimal>,
     phases: &[ModifyHook<V>],
-) -> f64 {
-    let hooks = phases
+) -> Decimal {
+    let mut answers = Answers::new();
+    super::listen::each::<V>(fight, hooks_of(phases), |listener, overrides| {
+        answer::<V>(listener, overrides, phases, &mut answers)
+    });
+    answers.sort_by_key(|&(at, _)| at);
+    let number = scale.map_or(amount, |scale| amount * scale);
+    worked_out::<V>(number, &answers)
+}
+
+/// What the listeners answer for a hook's phases, each beside its phase. A
+/// stable sort on the phase puts them in the order the game applies them:
+/// phase by phase, and within a phase in the order the walk asked.
+type Answers<N> = SmallVec<[(u8, Modify<N>); 8]>;
+
+/// Every hook among `phases`, for one walk to ask them all.
+fn hooks_of<V: Rules>(phases: &[ModifyHook<V>]) -> sts2_core::Overrides {
+    phases
         .iter()
         .fold(sts2_core::Overrides::default(), |hooks, phase| {
             hooks.with(phase.model_hook())
-        });
-    let mut answers: SmallVec<[(usize, Modify<V::Number>); 8]> = SmallVec::new();
-    super::listen::each::<V>(fight, hooks, |listener, overrides| {
-        for (at, phase) in phases.iter().enumerate() {
-            if overrides.contains(phase.model_hook()) {
-                match <V as sts2_core::Hooks>::modify_hook(listener, *phase) {
-                    Modify::Nothing => {}
-                    answer => answers.push((at, answer)),
-                }
-            }
-        }
-    });
-    // A number nothing changes is only floored.
-    if answers.is_empty() {
-        return (float::<V>(amount) * scale.unwrap_or(1.0)).max(0.0);
-    }
+        })
+}
 
-    let float = float::<V>;
-    // Phase by phase, and within a phase in the order the walk asked. The
-    // sort is stable, so it keeps that order.
-    answers.sort_by_key(|&(at, _)| at);
-    let mut number = float(amount) * scale.unwrap_or(1.0);
-    let mut share = 1.0f64;
-    let mut phase = answers[0].0;
-    for &(at, answer) in &answers {
-        if at != phase {
-            number *= share;
-            share = 1.0;
-            phase = at;
-        }
-        match answer {
-            Modify::Nothing => {}
-            Modify::Scaled(by) => share *= by,
-            Modify::Added(more) => {
-                number = number * share + float(more);
-                share = 1.0;
-            }
-            Modify::AtMost(most) => {
-                number = (number * share).min(float(most));
-                share = 1.0;
-            }
-            Modify::Replaced(with) => {
-                number = float(with);
-                share = 1.0;
+/// What `listener` answers for each of `phases` it overrides.
+#[inline(always)]
+fn answer<V: Rules>(
+    listener: super::live::Heard<'_, V>,
+    overrides: sts2_core::Overrides,
+    phases: &[ModifyHook<V>],
+    answers: &mut Answers<V::Number>,
+) {
+    for (at, phase) in (0u8..).zip(phases) {
+        if overrides.contains(phase.model_hook()) {
+            match <V as sts2_core::Hooks>::modify_hook(listener, *phase) {
+                Modify::Nothing => {}
+                answer => answers.push((at, answer)),
             }
         }
     }
-    number *= share;
-    number.max(0.0)
+}
+
+/// `number` after each of `answers` in turn. Never below nothing.
+fn worked_out<V: Rules>(mut number: Decimal, answers: &[(u8, Modify<V::Number>)]) -> Decimal {
+    let exact = exact::<V>;
+    for &(_, answer) in answers {
+        number = match answer {
+            Modify::Nothing => number,
+            Modify::Scaled(by) => number * by.exact(),
+            Modify::Added(more) => number + exact(more),
+            Modify::AtMost(most) => number.min(exact(most)),
+            Modify::Replaced(with) => exact(with),
+        };
+    }
+    number.max(Decimal::ZERO)
 }
 
 /// The most orb slots `OrbCmd.AddSlots` gives a player.
@@ -2202,8 +2237,9 @@ pub(crate) fn modified<V: Rules>(
     damage: V::Number,
     powered: bool,
 ) -> V::Number {
-    num_traits::cast(modified_exactly::<V>(fight, dealer, target, card, damage, powered).trunc())
-        .expect("a modified number is a game number")
+    let (added, scale) = enchanted_hit::<V>(card, powered);
+    let phases = hit_phases::<V>(fight, dealer, target, card, powered);
+    scaled_by::<V>(fight, damage + added, scale, &phases)
 }
 
 /// [`modified`] before the floor, which is the decimal `Hook.ModifyDamage`
@@ -2213,44 +2249,61 @@ fn modified_exactly<V: Rules>(
     dealer: Option<CombatId>,
     target: Option<CombatId>,
     card: Option<&CardInstance<V>>,
-    damage: V::Number,
+    damage: Decimal,
     powered: bool,
-) -> f64 {
-    // The card's enchantment has its say first, and only when a card deals
-    // the hit. Its scale stays a decimal until the listeners are done.
-    let enchanted = card.and_then(|held| {
+) -> Decimal {
+    let (added, scale) = enchanted_hit::<V>(card, powered);
+    let phases = hit_phases::<V>(fight, dealer, target, card, powered);
+    scaled_exactly::<V>(fight, damage + exact::<V>(added), scale, &phases)
+}
+
+/// What the dealing card's enchantment adds to a hit, and what it scales the
+/// sum by. The enchantment has its say before any listener, and only when a
+/// card deals the hit. Its scale stays a decimal until the listeners are done.
+fn enchanted_hit<V: Rules>(
+    card: Option<&CardInstance<V>>,
+    powered: bool,
+) -> (V::Number, Option<Decimal>) {
+    let Some((enchanted, status)) = card.and_then(|held| {
         held.face
             .ident
             .enchantment
             .map(|enchanted| (enchanted, held.face.enchantment_status()))
-    });
-    let (damage, scale) = match enchanted {
-        Some((enchanted, status)) => {
-            let added = enchanted_by::<V>(
-                enchanted,
-                status,
-                EnchantHook::DamageAdditive { powered },
-                damage,
-            );
-            match <V as sts2_core::Hooks>::enchant_modify(
-                enchanted,
-                status,
-                EnchantHook::DamageMultiplicative { powered },
-            ) {
-                Modify::Nothing => (added, None),
-                Modify::Scaled(by) => (added, Some(by)),
-                answer => unimplemented!("an enchantment scaling a hit with {answer:?}"),
-            }
-        }
-        None => (damage, None),
+    }) else {
+        return (V::Number::zero(), None);
     };
+    let added = enchanted_by::<V>(
+        enchanted,
+        status,
+        EnchantHook::DamageAdditive { powered },
+        V::Number::zero(),
+    );
+    match <V as sts2_core::Hooks>::enchant_modify(
+        enchanted,
+        status,
+        EnchantHook::DamageMultiplicative { powered },
+    ) {
+        Modify::Nothing => (added, None),
+        Modify::Scaled(by) => (added, Some(by.exact())),
+        answer => unimplemented!("an enchantment scaling a hit with {answer:?}"),
+    }
+}
+
+/// `Hook.ModifyDamage`'s three phases for one hit.
+fn hit_phases<V: Rules>(
+    fight: Walk<'_, V>,
+    dealer: Option<CombatId>,
+    target: Option<CombatId>,
+    card: Option<&CardInstance<V>>,
+    powered: bool,
+) -> [ModifyHook<V>; 3] {
     let card = card.map(|held| sts2_core::CardSource {
         id: held.id,
         card: held.face.ident.card,
         playing: fight.live.cards.in_play(held.id),
         upgraded: held.face.ident.upgrade > 0,
     });
-    let phases = [
+    [
         ModifyHook::DamageAdditive {
             target,
             dealer,
@@ -2268,8 +2321,7 @@ fn modified_exactly<V: Rules>(
             dealer,
             powered,
         },
-    ];
-    scaled_exactly::<V>(fight, damage, scale, &phases)
+    ]
 }
 
 /// `amount` after an enchantment's `hook`, which the game asks before any
@@ -2358,7 +2410,7 @@ pub(super) fn blocked<V: Rules>(
                 let moved = match <V as sts2_core::Hooks>::modify_hook(listener, phase) {
                     Modify::Nothing => false,
                     Modify::Added(added) => added != V::Number::zero(),
-                    Modify::Scaled(share) => share != 1.0,
+                    Modify::Scaled(share) => share.exact() != Decimal::ONE,
                     answer => unimplemented!("a relic answering {answer:?} for block"),
                 };
                 let held = fight
@@ -2452,12 +2504,12 @@ pub(super) fn given_by<V: Rules>(
                     added != V::Number::zero()
                 }
                 (Modify::Scaled(share), sts2_core::Listener::Relic(_)) => {
-                    let scaled = num_traits::ToPrimitive::to_f64(amount)
-                        .expect("a power's amount is a finite number")
-                        * share;
-                    *amount = num_traits::cast(scaled)
+                    let scaled = exact::<V>(*amount) * share.exact();
+                    *amount = num_traits::ToPrimitive::to_i64(&scaled)
+                        .filter(|_| scaled.fract().is_zero())
+                        .and_then(num_traits::cast)
                         .unwrap_or_else(|| unimplemented!("{power:?} given as {scaled}"));
-                    share != 1.0
+                    share.exact() != Decimal::ONE
                 }
                 (answer, _) => {
                     unimplemented!(
@@ -2573,9 +2625,16 @@ pub(crate) fn resolve<V: Rules>(
             card: playing.map(|held| held.face.ident.card),
             powered: scaling == Scaling::Dynamic,
             damage: {
-                let damage = carried::<V>(playing, fight.live, damage, Some(target));
                 let powered = scaling == Scaling::Dynamic;
-                modified::<V>(fight, Some(dealer), Some(target), playing, damage, powered)
+                match (damage, playing) {
+                    (Amount::Var(key), Some(held)) => {
+                        card_hit::<V>(fight, dealer, Some(target), held, key, powered)
+                    }
+                    (damage, _) => {
+                        let damage = carried::<V>(playing, fight.live, damage, Some(target));
+                        modified::<V>(fight, Some(dealer), Some(target), playing, damage, powered)
+                    }
+                }
             },
         },
         Effect::GainBlock {
@@ -2624,6 +2683,47 @@ pub(crate) fn resolve<V: Rules>(
         }
     };
     ResolvedEffect { effect }
+}
+
+/// One of `held`'s numbers dealt as a hit, which is `Hook.ModifyDamage` over
+/// its `BaseValue` and then the floor. A fraction the copy holds goes into the
+/// hook whole, the way the game's decimal does.
+pub(crate) fn card_hit<V: Rules>(
+    fight: Walk<'_, V>,
+    dealer: CombatId,
+    target: Option<CombatId>,
+    held: &CardInstance<V>,
+    key: V::CardVar,
+    powered: bool,
+) -> V::Number {
+    if !held.face.fractional() {
+        let damage = var::<V>(held, key, fight.live, target);
+        return modified::<V>(fight, Some(dealer), target, Some(held), damage, powered);
+    }
+    let damage = exact_var::<V>(held, key, fight.live, target);
+    whole::<V>(modified_exactly::<V>(
+        fight,
+        Some(dealer),
+        target,
+        Some(held),
+        damage,
+        powered,
+    ))
+}
+
+/// [`var`] as the game's decimal, which holds the fraction Thrash writes.
+pub(crate) fn exact_var<V: Rules>(
+    held: &CardInstance<V>,
+    key: V::CardVar,
+    live: &Live<V>,
+    target: Option<CombatId>,
+) -> Decimal {
+    let calculated =
+        (held.face.ident.card.vars().iter()).any(|number| number.id == key && number.calculated);
+    match calculated {
+        false => held.face.exact(key),
+        true => exact::<V>(var::<V>(held, key, live, target)),
+    }
 }
 
 /// The number an effect carries, before any hook of its own runs.
@@ -3992,17 +4092,17 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         }
     }
 
-    fn card_number(&self, card: CardAt<V>, key: V::CardVar) -> V::Number {
+    fn card_number(&self, card: CardAt<V>, key: V::CardVar) -> Decimal {
         let at = self.standing(card);
         let held = self
             .live
             .cards
             .get(card.pile(), at)
             .expect("a card stands where it was found");
-        var::<V>(&held, key, self.live, None)
+        exact_var::<V>(&held, key, self.live, None)
     }
 
-    fn card_damage(&self, card: CardAt<V>, damage: V::Number) -> V::Number {
+    fn card_damage(&self, card: CardAt<V>, damage: Decimal) -> Decimal {
         let at = self.standing(card);
         let held = self
             .live
@@ -4010,12 +4110,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .get(card.pile(), at)
             .expect("a card stands where it was found");
         let player = self.live.player().id;
-        let exactly =
-            modified_exactly::<V>(self.walk(), Some(player), None, Some(&held), damage, true);
-        if exactly.fract() != 0.0 {
-            unimplemented!("a card's damage worked out to the fraction {exactly}");
-        }
-        num_traits::cast(exactly).expect("a modified number is a game number")
+        modified_exactly::<V>(self.walk(), Some(player), None, Some(&held), damage, true)
     }
 
     fn auto_play_card(&mut self, card: CardAt<V>) {

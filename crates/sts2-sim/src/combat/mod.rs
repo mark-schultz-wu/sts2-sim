@@ -6,6 +6,7 @@ mod board;
 mod cards;
 mod piles;
 pub use board::ResolvedEffect;
+pub(crate) use board::{exact, whole};
 mod encounter;
 mod hook;
 mod legal;

@@ -120,11 +120,11 @@ pub(crate) fn modify(
             Modify::Added(amount)
         }
         (Enchantment::Corrupted, EnchantHook::DamageMultiplicative { powered: true }) => {
-            Modify::Scaled(1.5)
+            Modify::Scaled(sts2_core::Fixed::new(15, 1))
         }
         // `Instinct`: double on a powered hit.
         (Enchantment::Instinct, EnchantHook::DamageMultiplicative { powered: true }) => {
-            Modify::Scaled(2.0)
+            Modify::Scaled(sts2_core::Fixed::new(2, 0))
         }
         // `Inky`: its `DamageVar(1)` on a powered hit, whatever its amount.
         (Enchantment::Inky, EnchantHook::DamageAdditive { powered: true }) => {

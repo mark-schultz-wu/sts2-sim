@@ -386,6 +386,13 @@ pub trait CardTable: Table {
     fn heard_by_any() -> Overrides;
 }
 
+/// The game's `decimal`: a whole number of up to 96 bits over a power of ten
+/// no higher than 28.
+///
+/// What a hit works out to before its floor, and what a card like Thrash
+/// writes on itself. A product of a few hundredths stays exact in one.
+pub use rust_decimal::Decimal;
+
 /// An exact finite decimal as the game writes it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Fixed {
@@ -403,6 +410,25 @@ impl Fixed {
     }
     pub const fn scale(self) -> u8 {
         self.scale
+    }
+
+    /// `number` held exactly, or `None` for one too wide to be.
+    pub fn from_exact(number: Decimal) -> Option<Self> {
+        let number = number.normalize();
+        let coefficient = i32::try_from(number.mantissa()).ok()?;
+        let scale = u8::try_from(number.scale()).ok()?;
+        Some(Self { coefficient, scale })
+    }
+
+    /// The same number as the game's `decimal`.
+    pub const fn exact(self) -> Decimal {
+        Decimal::from_parts(
+            self.coefficient.unsigned_abs(),
+            0,
+            0,
+            self.coefficient < 0,
+            self.scale as u32,
+        )
     }
 }
 
@@ -2402,19 +2428,15 @@ pub trait Fight<V: ContentVersion> {
     }
 
     /// `DynamicVars[key]` on the card at one place: its `BaseValue`, or
-    /// `Calculate(null)` for a number the fight works out.
-    fn card_number(&self, _card: crate::CardAt<V>, _key: V::CardVar) -> V::Number {
+    /// `Calculate(null)` for a number the fight works out. A decimal, because
+    /// Thrash writes a fraction on its own.
+    fn card_number(&self, _card: crate::CardAt<V>, _key: V::CardVar) -> Decimal {
         unimplemented!("reading another card's number")
     }
 
     /// `Hook.ModifyDamage` for `damage` from the player against nobody, as a
     /// `Move` from the card at one place, before any flooring.
-    ///
-    /// # Panics
-    ///
-    /// Where the listeners leave a fraction, which a game number cannot
-    /// carry.
-    fn card_damage(&self, _card: crate::CardAt<V>, _damage: V::Number) -> V::Number {
+    fn card_damage(&self, _card: crate::CardAt<V>, _damage: Decimal) -> Decimal {
         unimplemented!("another card's damage")
     }
 
@@ -2602,6 +2624,9 @@ pub enum Change<V: ContentVersion> {
     Upgrade,
     /// `DynamicVars[key].UpgradeValueBy(amount)`, and `ForgeCmd`'s raise.
     Raise(V::CardVar, V::Number),
+    /// `DynamicVars[key].BaseValue += amount` for a decimal amount, which
+    /// Thrash writes: the hit it took from the card it exhausted.
+    RaiseExactly(V::CardVar, Fixed),
     /// `LocalCostType.Relative`: the cost moves by an amount.
     ///
     /// `EnergyCost.UpgradeBy`, which an upgrade uses, and `AddThisTurn`.
@@ -2873,8 +2898,9 @@ pub enum Modify<N> {
     Nothing,
     /// The `Additive` half, which lands before anything multiplies.
     Added(N),
-    /// The `Multiplicative` half, over what the additions left.
-    Scaled(f64),
+    /// The `Multiplicative` half, over what the additions left. Every share a
+    /// hook hands back is a few hundredths, which a [`Fixed`] holds exactly.
+    Scaled(Fixed),
     /// A ceiling on what is left. The listener returns a number of its own
     /// rather than a share of the one it was handed.
     ///

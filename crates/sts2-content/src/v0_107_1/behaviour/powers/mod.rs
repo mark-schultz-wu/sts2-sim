@@ -11,7 +11,7 @@
 use std::sync::LazyLock;
 
 use sts2_core::{
-    CardTable as _, Modify, ModifyHook, PowerAmount, PowerModel as _, PowerTable as _,
+    CardTable as _, Fixed, Modify, ModifyHook, PowerAmount, PowerModel as _, PowerTable as _,
 };
 
 use super::super::V0_107_1 as V;
@@ -608,9 +608,7 @@ static SPAWNED: LazyLock<sts2_core::NextMove<V>> =
 /// `VulnerablePower`'s `DamageIncrease`, in hundredths.
 ///
 /// Vulnerable's and Weak's multipliers are sums of the game's decimals, which
-/// a binary float adds a hair off. So they are summed in hundredths, which is
-/// exact, and turned into a float once. The float nearest a decimal fraction
-/// lands every product that is a whole number on that whole number.
+/// are summed here in hundredths.
 const DAMAGE_INCREASE: i32 = 150;
 
 /// `WeakPower`'s `DamageDecrease`, in hundredths.
@@ -623,7 +621,7 @@ const PHROG: i32 = 25;
 const KRANE: i32 = 15;
 
 /// `SurroundedPower`'s `1.5m` on a hit from behind.
-const SURROUNDED: f64 = 1.5;
+const SURROUNDED: Fixed = Fixed::new(15, 1);
 
 /// `CrabRagePower`'s `PowerVar<StrengthPower>(6m)`.
 const CRAB_RAGE: Number = 6;
@@ -632,13 +630,13 @@ const CRAB_RAGE: Number = 6;
 const CRAB_BLOCK: Number = 99;
 
 /// `FlutterPower`'s `DamageDecrease` of 50, as the share left.
-const FLUTTER: f64 = 0.5;
+const FLUTTER: Fixed = Fixed::new(5, 1);
 
 /// `FrailPower.ModifyBlockMultiplicative`'s `0.75m`.
-const FRAIL: f64 = 0.75;
+const FRAIL: Fixed = Fixed::new(75, 2);
 
 /// `ColossusPower`'s `DamageDecrease`.
-const COLOSSAL: f64 = 0.5;
+const COLOSSAL: Fixed = Fixed::new(5, 1);
 
 /// `PanachePower._baseCardsLeft`: the plays for each payout.
 const PANACHE_CARDS: u8 = 5;
@@ -659,18 +657,14 @@ const MONOLOGUE_STRENGTH: Number = 1;
 const CONFUSED_COSTS: u8 = 4;
 
 /// `GigantificationPower.ModifyDamageMultiplicative`'s `3m`.
-const GIGANTIFIED: f64 = 3.0;
+const GIGANTIFIED: Fixed = Fixed::new(3, 0);
 
-/// `ShrinkPower`'s own `DamageDecrease`, which the power stores as the
-/// percentage taken off rather than as what is left.
-const SHRUNK: f64 = 1.0 - 30.0 / 100.0;
+/// `ShrinkPower`'s own `DamageDecrease` of 30, which the power stores as the
+/// percentage taken off, as the share left.
+const SHRUNK: Fixed = Fixed::new(70, 2);
 
-/// What one card played adds to what `SlowPower`'s owner takes.
-///
-/// The game works this out in decimal, where a tenth is exact. A binary float
-/// holds a tenth a hair high. So every product lands at or above the decimal
-/// one, and truncates to the same whole number.
-const SLOW_PER_CARD: f64 = 0.1;
+/// What one card played adds to what `SlowPower`'s owner takes, in tenths.
+const SLOW_TENTHS: i32 = 1;
 
 /// Whether a power that makes a card free takes `card`. The three `Free`
 /// powers take an Attack, a Skill or a Power, and Veilpiercer an Ethereal card.
@@ -705,7 +699,7 @@ fn vulnerable(
     fight: &dyn sts2_core::FightView<V>,
     holder: sts2_core::CombatId,
     dealer: Option<sts2_core::CombatId>,
-) -> f64 {
+) -> Fixed {
     let mut by = DAMAGE_INCREASE;
     // `if (dealer != null)`, and both answer the dealer hitting itself with
     // nothing.
@@ -726,7 +720,7 @@ fn vulnerable(
     if fight.power(holder, Power::DebilitatePower).is_some() {
         by += by - 100;
     }
-    f64::from(by) / 100.0
+    Fixed::new(by, 2)
 }
 
 /// What Weak on `holder` multiplies a powered hit it deals `target` by.
@@ -734,7 +728,7 @@ fn weak(
     fight: &dyn sts2_core::FightView<V>,
     holder: sts2_core::CombatId,
     target: Option<sts2_core::CombatId>,
-) -> f64 {
+) -> Fixed {
     let mut by = DAMAGE_DECREASE;
     if target.is_some_and(|target| fight.relic(target, Relic::PaperKrane)) {
         by -= KRANE;
@@ -743,7 +737,7 @@ fn weak(
     if fight.power(holder, Power::DebilitatePower).is_some() {
         by -= 100 - by;
     }
-    f64::from(by) / 100.0
+    Fixed::new(by, 2)
 }
 
 /// `TemporaryStrengthPower` and `TemporaryDexterityPower`, which lend `lent`
@@ -853,7 +847,7 @@ pub(crate) fn modify_hook(
                 powered: true,
                 ..
             },
-        ) if target == Some(holder) => Modify::Scaled(1.0 + SLOW_PER_CARD * f64::from(counted)),
+        ) if target == Some(holder) => Modify::Scaled(Fixed::new(10 + SLOW_TENTHS * counted, 1)),
         // `VulnerablePower.ModifyDamageMultiplicative`: its `DamageIncrease`,
         // raised by the dealer's Paper Phrog and Cruelty, then by the
         // holder's own Debilitate.
@@ -937,7 +931,7 @@ pub(crate) fn modify_hook(
                     }),
                 ..
             },
-        ) if target == holder => Modify::Scaled(f64::from(amount)),
+        ) if target == holder => Modify::Scaled(Fixed::new(amount, 0)),
         (Power::HangPower, PowerAmount::Endless, ModifyHook::DamageMultiplicative { .. }) => {
             unimplemented!("an endless Hang")
         }
@@ -953,7 +947,9 @@ pub(crate) fn modify_hook(
                 powered: true,
                 ..
             },
-        ) if dealer == holder || fight.pet_owner(dealer) == Some(holder) => Modify::Scaled(2.0),
+        ) if dealer == holder || fight.pet_owner(dealer) == Some(holder) => {
+            Modify::Scaled(Fixed::new(2, 0))
+        }
         (Power::DoubleDamagePower, _, ModifyHook::DamageMultiplicative { .. }) => Modify::Nothing,
         // `TrackingPower.ModifyDamageMultiplicative`: its stack as a
         // multiplier on a powered hit from a card, by its owner or one of its
@@ -970,7 +966,7 @@ pub(crate) fn modify_hook(
         ) if (dealer == holder || fight.pet_owner(dealer) == Some(holder))
             && fight.power(target, Power::WeakPower).is_some() =>
         {
-            Modify::Scaled(f64::from(amount))
+            Modify::Scaled(Fixed::new(amount, 0))
         }
         (Power::TrackingPower, PowerAmount::Endless, ModifyHook::DamageMultiplicative { .. }) => {
             unimplemented!("an endless Tracking")
@@ -986,7 +982,7 @@ pub(crate) fn modify_hook(
                 powered: true,
                 ..
             },
-        ) if target == Some(holder) => Modify::Scaled(0.5),
+        ) if target == Some(holder) => Modify::Scaled(Fixed::new(5, 1)),
         (Power::SoarPower, _, ModifyHook::DamageMultiplicative { .. }) => Modify::Nothing,
         // `DiamondDiademPower.ModifyDamageMultiplicative`: half of a powered
         // hit on its holder.
@@ -998,7 +994,7 @@ pub(crate) fn modify_hook(
                 powered: true,
                 ..
             },
-        ) if target == Some(holder) => Modify::Scaled(0.5),
+        ) if target == Some(holder) => Modify::Scaled(Fixed::new(5, 1)),
         (Power::DiamondDiademPower, _, ModifyHook::DamageMultiplicative { .. }) => Modify::Nothing,
         // `CorruptionPower.TryModifyEnergyCostInCombatLate`: nothing for a
         // Skill its owner holds or is playing. A fight here has one player.
@@ -1245,7 +1241,7 @@ pub(crate) fn modify_hook(
                 .count();
             match attacks > usize::from(source.playing) {
                 true => Modify::Nothing,
-                false => Modify::Scaled(f64::from(100 + amount) / 100.0),
+                false => Modify::Scaled(Fixed::new(100 + amount, 2)),
             }
         }
         (
@@ -1287,7 +1283,7 @@ pub(crate) fn modify_hook(
                 powered: true,
                 ..
             },
-        ) if target == Some(holder) => Modify::Scaled(2.0),
+        ) if target == Some(holder) => Modify::Scaled(Fixed::new(2, 0)),
         (Power::ConquerorPower, _, ModifyHook::DamageMultiplicative { .. }) => Modify::Nothing,
         // `GigantificationPower.ModifyDamageMultiplicative`: a powered hit
         // from a card its owner played, before it binds or from the card it
@@ -1455,7 +1451,15 @@ pub(crate) fn modify_hook(
             Power::ShadowmeldPower,
             PowerAmount::Counted(amount),
             ModifyHook::BlockMultiplicative { target, .. },
-        ) if target == holder => Modify::Scaled(2f64.powi(amount)),
+        ) if target == holder => {
+            // `(decimal)Math.Pow(2.0, Amount)`, which is exact for any stack
+            // a fight reaches.
+            let doubled = u32::try_from(amount)
+                .ok()
+                .and_then(|amount| 1_i32.checked_shl(amount))
+                .unwrap_or_else(|| unimplemented!("Shadowmeld at {amount}"));
+            Modify::Scaled(Fixed::new(doubled, 0))
+        }
         (
             Power::ShadowmeldPower,
             PowerAmount::Endless,
@@ -1475,7 +1479,7 @@ pub(crate) fn modify_hook(
                 card: Some(_),
                 ..
             },
-        ) if target == holder => Modify::Scaled(0.0),
+        ) if target == holder => Modify::Scaled(Fixed::new(0, 0)),
         (Power::NoBlockPower, _, ModifyHook::BlockMultiplicative { .. }) => Modify::Nothing,
         // `UnmovablePower.ModifyBlockMultiplicative`: double a card's or a
         // move's block on its owner, while fewer such gains than its stack
@@ -1499,7 +1503,7 @@ pub(crate) fn modify_hook(
                 .count();
             match gained >= usize::try_from(amount).unwrap_or(0) {
                 true => Modify::Nothing,
-                false => Modify::Scaled(2.0),
+                false => Modify::Scaled(Fixed::new(2, 0)),
             }
         }
         (

@@ -16,8 +16,8 @@ use nonmax::{NonMaxI16, NonMaxU8};
 use num_traits::CheckedAdd;
 use std::sync::Arc;
 use sts2_core::{
-    CardId, CardIdent, CardNumber, CardTable, CardVars, Combat, CombatId, Creature, Orbs, Pile,
-    Rules, SideKinds,
+    CardId, CardIdent, CardNumber, CardTable, CardVars, Combat, CombatId, Creature, Decimal, Orbs,
+    Pile, Rules, SideKinds,
 };
 
 use super::monster::Machine;
@@ -534,6 +534,12 @@ pub(crate) struct Face<V: Rules> {
     /// rule asks [`sts2_core::Printed::face`] for one by name, and the fight
     /// asks [`Face::numbers`] for all of them.
     vars: CardVarList,
+    /// How many decimal places [`Face::vars`] are written in.
+    ///
+    /// Zero but on a copy a fight wrote a fraction on. Only Thrash does: it
+    /// adds a hit worked out by `Hook.ModifyDamage`, which a share can leave
+    /// a fraction in. Every difference then counts in that place's units.
+    places: u8,
     /// `CardModel.EnergyCost` and `StarCost` for this copy.
     ///
     /// Per copy, because an upgrade writes on them. The table prices a fresh
@@ -602,14 +608,36 @@ impl<V: Rules> Face<V> {
     /// The entry this copy holds for `key`.
     ///
     /// A key the card does not print is a mistake in the port, the way a card
-    /// asking for a number no card prints is.
+    /// asking for a number no card prints is. So is a fraction a fight wrote
+    /// on it, which only [`Face::exact`] reads.
     pub(super) fn number(&self, key: V::CardVar) -> CardNumber<V::CardVar, V::Number> {
         let vars = self.ident.card.vars();
         let at = Self::at(vars, key);
-        self.printed(&vars[at], self.moved(at))
+        match self.printed(&vars[at], at) {
+            (number, true) => number,
+            (_, false) => unimplemented!("the fractional {} a fight wrote on it", key.name()),
+        }
     }
 
-    /// How far this copy has moved the number its row holds at `at`.
+    /// `BaseValue` for `key`: the decimal this copy prints.
+    pub(super) fn exact(&self, key: V::CardVar) -> Decimal {
+        let vars = self.ident.card.vars();
+        let at = Self::at(vars, key);
+        let printed = Self::table(&vars[at]);
+        let printed = Decimal::from(
+            num_traits::ToPrimitive::to_i64(&printed).expect("a game number fits a long"),
+        );
+        printed + Decimal::new(i64::from(self.moved(at)), u32::from(self.places))
+    }
+
+    /// Whether a fight wrote a fraction on this copy, which only
+    /// [`Face::exact`] reads.
+    pub(super) fn fractional(&self) -> bool {
+        self.places != 0
+    }
+
+    /// How far this copy has moved the number its row holds at `at`, in
+    /// units of [`Face::places`].
     fn moved(&self, at: usize) -> Amount {
         self.vars.map_or(0, |row| row[at].get())
     }
@@ -617,14 +645,16 @@ impl<V: Rules> Face<V> {
     /// Every number this copy prints, in the order its table prints them.
     ///
     /// The table names each one and says how it is worked out. This copy
-    /// carries the amounts, which is the half a fight writes on.
+    /// carries the amounts, which is the half a fight writes on. A fraction
+    /// reads as its whole part, which is the `(int)BaseValue` a front end
+    /// sees.
     pub(super) fn numbers(&self) -> impl Iterator<Item = CardNumber<V::CardVar, V::Number>> + '_ {
         self.ident
             .card
             .vars()
             .iter()
             .enumerate()
-            .map(|(at, named)| self.printed(named, self.moved(at)))
+            .map(|(at, named)| self.printed(named, at).0)
     }
 
     /// Where in the card's own row, `vars`, `key` sits.
@@ -640,23 +670,55 @@ impl<V: Rules> Face<V> {
             .unwrap_or_else(|| unimplemented!("the {} this card does not print", key.name()))
     }
 
-    /// One of the table's numbers, as this copy prints it.
+    /// What the table prints for one of its numbers.
+    fn table(
+        named: &CardNumber<V::CardVar, <V::Card as sts2_core::CardTable>::Number>,
+    ) -> V::Number {
+        num_traits::NumCast::from(named.base).unwrap_or_else(|| {
+            unimplemented!("the fractional {} this card prints", named.id.name())
+        })
+    }
+
+    /// One of the table's numbers, the one at `at`, as this copy prints it.
+    /// Its whole part, and whether that is all of it.
+    #[inline]
     fn printed(
         &self,
         named: &CardNumber<V::CardVar, <V::Card as sts2_core::CardTable>::Number>,
-        moved: Amount,
-    ) -> CardNumber<V::CardVar, V::Number> {
-        let printed: V::Number = num_traits::NumCast::from(named.base).unwrap_or_else(|| {
-            unimplemented!("the fractional {} this card prints", named.id.name())
-        });
+        at: usize,
+    ) -> (CardNumber<V::CardVar, V::Number>, bool) {
+        if self.places != 0 {
+            return self.printed_exactly(named);
+        }
         let moved: V::Number =
-            num_traits::NumCast::from(moved).expect("a difference fits a game number");
-        CardNumber {
+            num_traits::NumCast::from(self.moved(at)).expect("a difference fits a game number");
+        let number = CardNumber {
             id: named.id,
-            base: printed + moved,
+            base: Self::table(named) + moved,
             calculated: named.calculated,
             modifier: named.modifier,
-        }
+        };
+        (number, true)
+    }
+
+    /// [`Face::printed`] on a copy a fight wrote a fraction on.
+    #[cold]
+    #[inline(never)]
+    fn printed_exactly(
+        &self,
+        named: &CardNumber<V::CardVar, <V::Card as sts2_core::CardTable>::Number>,
+    ) -> (CardNumber<V::CardVar, V::Number>, bool) {
+        let exact = self.exact(named.id);
+        let base = num_traits::ToPrimitive::to_i64(&exact.trunc())
+            .and_then(num_traits::cast)
+            .expect("a printed number fits a game number");
+        let number = CardNumber {
+            id: named.id,
+            base,
+            calculated: named.calculated,
+            modifier: named.modifier,
+        };
+        (number, exact.fract().is_zero())
     }
 
     /// Add to what this copy prints for `key`.
@@ -671,6 +733,10 @@ impl<V: Rules> Face<V> {
     /// thing that raises one repeatedly, and arriving here takes two thousand
     /// smiths in one fight.
     pub(super) fn raise(&mut self, key: V::CardVar, by: V::Number) {
+        if self.places != 0 {
+            let by = num_traits::ToPrimitive::to_i64(&by).expect("a game number fits a long");
+            return self.raise_exactly(key, Decimal::from(by));
+        }
         let at = Self::at(self.ident.card.vars(), key);
         let by: Amount = num_traits::NumCast::from(by)
             .unwrap_or_else(|| unimplemented!("the {} raised by {by:?}", key.name()));
@@ -685,6 +751,46 @@ impl<V: Rules> Face<V> {
         row[at] = moved;
     }
 
+    /// Add `by`, which can hold a fraction, to what this copy prints for
+    /// `key`.
+    ///
+    /// A fraction finer than the row's places moves every difference to
+    /// finer units first.
+    ///
+    /// # Panics
+    ///
+    /// As [`Face::raise`] does, and for a difference too wide for an
+    /// [`Amount`] in the units the row counts in.
+    pub(super) fn raise_exactly(&mut self, key: V::CardVar, by: Decimal) {
+        let at = Self::at(self.ident.card.vars(), key);
+        let past = || -> ! { unimplemented!("the {} raised past what a card holds", key.name()) };
+        let row = self.vars.as_mut().unwrap_or_else(|| {
+            unimplemented!("the {} raised on a card too wide to hold one", key.name())
+        });
+        let by = by.normalize();
+        let places = u8::try_from(by.scale()).unwrap_or_else(|_| past());
+        if places > self.places {
+            let finer = 10_i16
+                .checked_pow(u32::from(places - self.places))
+                .unwrap_or_else(|| past());
+            for moved in row.iter_mut() {
+                *moved = moved
+                    .get()
+                    .checked_mul(finer)
+                    .and_then(NonMaxI16::new)
+                    .unwrap_or_else(|| past());
+            }
+            self.places = places;
+        }
+        let by = by.mantissa() * 10_i128.pow(u32::from(self.places) - by.scale());
+        let by = Amount::try_from(by).unwrap_or_else(|_| past());
+        row[at] = row[at]
+            .get()
+            .checked_add(by)
+            .and_then(NonMaxI16::new)
+            .unwrap_or_else(|| past());
+    }
+
     /// A fresh copy's state, printing what the table prints.
     fn fresh(ident: CardIdent<V>) -> Self {
         // Zeroes, because a fresh copy prints what its row prints. A card too
@@ -694,6 +800,7 @@ impl<V: Rules> Face<V> {
         let mut card = Self {
             ident,
             vars,
+            places: 0,
             cost: ident.card.cost(),
             star_cost: ident.card.star_cost(),
             cost_modifiers: [CostModifier::from_bits(0); MODIFIERS],
@@ -789,6 +896,7 @@ impl<V: Rules> Face<V> {
         match change {
             sts2_core::Change::Upgrade => self.upgrade(),
             sts2_core::Change::Raise(key, amount) => self.raise(key, amount),
+            sts2_core::Change::RaiseExactly(key, amount) => self.raise_exactly(key, amount.exact()),
             sts2_core::Change::ChangeCost(pool, by) => {
                 self.modify_cost(pool, CostChange::Relative(by), lasting)
             }

@@ -1,0 +1,19 @@
+# Bash goes first, which leaves a Strike as the one Attack in hand. Thrash
+# takes in its damage as Weak leaves it, (6 + 12) x 0.75, which is 13.5. Its
+# own damage becomes 17.5 and keeps the half. An Energy Potion pays for
+# Headbutt, which puts it back on the draw pile. The next turn's hit is (17.5 + 12) x 0.75 x 1.5 against the
+# Vulnerable Beast, which is 33.1875. Only the hit is floored, so it deals 33.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"CEREMONIAL_BEAST_BOSS"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":12,"target":0}
+{"cmd":"power","power":"WEAK_POWER","amount":3,"target":0}
+{"cmd":"grant","card":"THRASH"}
+{"cmd":"play_card","index":1,"target":1}
+{"cmd":"play_card","index":4,"target":1}
+{"cmd":"grant","potion":"ENERGY_POTION"}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"grant","card":"HEADBUTT"}
+{"cmd":"play_card","index":3,"target":1}
+{"cmd":"answer","cards":[1]}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":0,"target":1}

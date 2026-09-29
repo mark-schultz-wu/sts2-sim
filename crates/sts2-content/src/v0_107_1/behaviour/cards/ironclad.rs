@@ -560,9 +560,16 @@ fn thrash<F: Fight<V>>(fight: &mut F) -> Played<V> {
     ]
     .into_iter()
     .find(|&key| vars.iter().any(|number| number.id == key));
-    let damage = printed.map_or(0, |key| fight.card_number(chosen, key));
+    let damage = printed.map_or(sts2_core::Decimal::ZERO, |key| {
+        fight.card_number(chosen, key)
+    });
     let damage = fight.card_damage(chosen, damage);
-    fight.modify_this(Change::Raise(CardVar::Damage, damage), Lasting::ThisFight);
+    let damage = sts2_core::Fixed::from_exact(damage)
+        .unwrap_or_else(|| unimplemented!("Thrash taking in {damage}"));
+    fight.modify_this(
+        Change::RaiseExactly(CardVar::Damage, damage),
+        Lasting::ThisFight,
+    );
     fight.act_on(PileAct::Exhaust, &[chosen]);
     Played::Done
 }

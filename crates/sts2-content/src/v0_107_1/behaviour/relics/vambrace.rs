@@ -40,7 +40,7 @@ pub(super) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
             source: Some(card),
             ..
         } if state.triggering.is_none_or(|taken| taken == card) && !state.gained => {
-            Modify::Scaled(2.0)
+            Modify::Scaled(sts2_core::Fixed::new(2, 0))
         }
         _ => Modify::Nothing,
     }
