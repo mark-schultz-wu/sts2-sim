@@ -106,6 +106,10 @@ pub enum State {
     Outbreak {
         poisoned: u8,
     },
+    /// `TheBombPower`'s `DamageVar`, which `SetDamage` writes.
+    TheBomb {
+        damage: Number,
+    },
     /// `VoidFormPower`'s `cardsPlayedThisTurn`.
     VoidForm {
         played: u32,
@@ -156,6 +160,9 @@ pub enum State {
         playing: [Option<(sts2_core::CardId<V>, Number)>; NOTED_AT_ONCE],
     },
 }
+
+/// `TheBombPower`'s `DamageVar(40)`, before `SetDamage` writes its own.
+const THE_BOMB_DAMAGE: Number = 40;
 
 /// `VoidFormPower.HideTemporaryZeroCostVisual`'s count, which leaves no
 /// card free for the rest of the turn.
@@ -283,6 +290,9 @@ impl sts2_core::PowerModel<V> for State {
             Power::FeralPower => Self::Feral { played: 0 },
             Power::OutbreakPower => Self::Outbreak { poisoned: 0 },
             Power::VoidFormPower => Self::VoidForm { played: 0 },
+            Power::TheBombPower => Self::TheBomb {
+                damage: THE_BOMB_DAMAGE,
+            },
             Power::GigantificationPower => Self::Gigantification { bound: None },
             Power::PanachePower => Self::Panache {
                 cards_left: PANACHE_CARDS,
@@ -334,6 +344,7 @@ impl sts2_core::PowerModel<V> for State {
             Self::Swipe { .. } => Power::SwipePower,
             Self::Outbreak { .. } => Power::OutbreakPower,
             Self::VoidForm { .. } => Power::VoidFormPower,
+            Self::TheBomb { .. } => Power::TheBombPower,
             Self::Vigor { .. } => Power::VigorPower,
             Self::Feral { .. } => Power::FeralPower,
             Self::Gigantification { .. } => Power::GigantificationPower,
@@ -545,6 +556,14 @@ impl State {
             Self::Gigantification { bound } => *bound,
             state => unreachable!("gigantification state for {:?}", state.power()),
         }
+    }
+
+    /// `TheBombPower.SetDamage`.
+    pub(crate) fn set_bomb_damage(&mut self, to: Number) {
+        let Self::TheBomb { damage } = self else {
+            unreachable!("bomb damage for {:?}", self.power())
+        };
+        *damage = to;
     }
 
     /// `SwipePower.Steal`, which remembers the deck card taken.
@@ -3533,6 +3552,29 @@ pub(crate) fn event_hook(
             ))
         }
         (Power::ChainsOfBindingPower, _, EventHook::BeforeSideTurnEnd { .. }) => None,
+        // `TheBombPower.BeforeSideTurnEnd`: one off its turns as its owner's
+        // turn is about to end. At the last, its damage, unpowered, to each
+        // enemy that can be hit, and then it goes.
+        (Power::TheBombPower, PowerAmount::Counted(turns), EventHook::BeforeSideTurnEnd { side, .. })
+            if side == owner =>
+        {
+            if turns > 1 {
+                Some(HookEffect::Decrement)
+            } else {
+                let State::TheBomb { damage } = *state else {
+                    unreachable!("The Bomb keeps its damage")
+                };
+                asked.push(HookEffect::DamageOpponents(damage));
+                asked.push(HookEffect::Remove);
+                return;
+            }
+        }
+        (Power::TheBombPower, PowerAmount::Endless, EventHook::BeforeSideTurnEnd { side, .. })
+            if side == owner =>
+        {
+            unimplemented!("an endless Bomb")
+        }
+        (Power::TheBombPower, _, EventHook::BeforeSideTurnEnd { .. }) => None,
         // `DampenPower.AfterApplied`: every upgraded card its owner holds in
         // the fight downgraded, and kept with the level it had.
         (Power::DampenPower, _, EventHook::Applied) => Some(HookEffect::DowngradeUpgraded),

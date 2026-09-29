@@ -1,0 +1,7 @@
+# Discovery offers three cards of the Silent's pool, and the one taken goes
+# into hand, free this turn.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"DISCOVERY"}
+{"cmd":"play_card","index":7}
+{"cmd":"answer","cards":[0]}

@@ -1,0 +1,6 @@
+# Ice Lance deals nineteen, then channels three Frost orbs. The third
+# evokes Cracked Core's Lightning to make room.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"ICE_LANCE"}
+{"cmd":"play_card","index":5,"target":1}

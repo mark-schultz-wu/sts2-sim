@@ -124,6 +124,16 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
         // `HelixDrill`: its damage to the target, once for each hit it works
         // out, as `Barrage` does.
         DefectCard::Barrage | DefectCard::HelixDrill => barrage(fight),
+        // `IceLance`: its damage to the target, then its `Repeat` of Frost orbs
+        // channelled.
+        DefectCard::IceLance => {
+            let target = fight.target();
+            hit(fight, target, 1);
+            for _ in 0..fight.var(CardVar::Repeat) {
+                fight.channel(Orb::FrostOrb);
+            }
+            Played::Done
+        }
         // `Voltaic`: a Lightning orb channelled for each its owner channelled
         // this fight before.
         DefectCard::Voltaic => {

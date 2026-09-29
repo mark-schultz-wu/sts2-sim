@@ -2539,8 +2539,9 @@ pub trait Fight<V: ContentVersion> {
     /// of that power's own methods.
     ///
     /// A move a power builds for its owner, such as a revive, is the power's
-    /// method in the game and writes the power's own data. Nothing when the
-    /// creature does not carry it.
+    /// method in the game and writes the power's own data. Of an instanced
+    /// power, the instance applied last. Nothing when the creature does not
+    /// carry it.
     fn write_power(
         &mut self,
         at: crate::CombatId,

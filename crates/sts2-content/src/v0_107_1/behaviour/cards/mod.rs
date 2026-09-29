@@ -852,6 +852,7 @@ pub(crate) fn resume_chosen<F: Fight<V>>(
 ) -> Played<V> {
     match at {
         Resume::Regent(at) => regent::resume_chosen(fight, at, chosen),
+        Resume::Colorless(at) => colorless::resume_chosen(fight, at, chosen),
         at => unimplemented!("{at:?} resumed with a chosen card"),
     }
 }
