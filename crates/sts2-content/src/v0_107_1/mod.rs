@@ -916,6 +916,26 @@ impl sts2_core::Rules for V0_107_1 {
         &generated::events::NEOW_FLIPS
     }
 
+    /// The curses, the blessings, then the six options a coin flip picks
+    /// from, which `AllPossibleOptions` adds one by one in this order.
+    fn neow_options() -> impl Iterator<Item = Self::Relic> {
+        use generated::relics::Relic;
+
+        const ADDED: [Relic; 6] = [
+            Relic::LavaRock,
+            Relic::NeowsTalisman,
+            Relic::NutritiousOyster,
+            Relic::Pomander,
+            Relic::SmallCapsule,
+            Relic::StoneHumidifier,
+        ];
+        generated::events::NEOW_CURSES
+            .iter()
+            .chain(&generated::events::NEOW_POSITIVES)
+            .chain(&ADDED)
+            .copied()
+    }
+
     fn neow_pairs() -> &'static [(Self::Relic, Self::Relic)] {
         &generated::events::NEOW_PAIRS
     }

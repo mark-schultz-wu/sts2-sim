@@ -12,7 +12,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
         EventHook::CombatStarting { .. } => asked.push(HookEffect::FillPotionSlots {
             stream: RunRngType::CombatPotionGeneration,
         }),
-        EventHook::Obtained => {}
+        EventHook::Obtained { .. } => {}
         hook => unimplemented!("what DelicateFrond does for {hook:?}"),
     }
 }

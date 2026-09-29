@@ -23,7 +23,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
             },
             HookEffect::ApplyToOwner(Power::StrengthPower, PowerAmount::Counted(STRENGTH)),
         ]),
-        EventHook::Obtained => {}
+        EventHook::Obtained { .. } => {}
         hook => unimplemented!("what ToastyMittens does for {hook:?}"),
     }
 }

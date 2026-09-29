@@ -10,7 +10,7 @@ use super::super::super::V0_107_1 as V;
 /// `Filter` is every card but a quest card, so a quest card is in the deck and
 /// not in the selection.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
-    if let EventHook::Obtained = hook {
+    if let EventHook::Obtained { .. } = hook {
         asked.push(HookEffect::CloneDeckCard {
             excluding: CardKind::Quest,
         });

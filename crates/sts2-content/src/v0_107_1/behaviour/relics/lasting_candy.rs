@@ -26,7 +26,7 @@ pub(super) fn event_hook(
         {
             asked.push(HookEffect::AddCardRewardOption(CardKind::Power));
         }
-        EventHook::CardRewardOptions { .. } | EventHook::Obtained => {}
+        EventHook::CardRewardOptions { .. } | EventHook::Obtained { .. } => {}
         hook => unimplemented!("what LastingCandy does for {hook:?}"),
     }
 }

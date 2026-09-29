@@ -16,7 +16,7 @@ pub struct State {
 pub(super) fn event_hook(state: &mut State, hook: EventHook<V>) {
     match hook {
         EventHook::RoomEntered { room, .. } if super::combat_room(room) => state.used = false,
-        EventHook::RoomEntered { .. } | EventHook::Obtained => {}
+        EventHook::RoomEntered { .. } | EventHook::Obtained { .. } => {}
         EventHook::CombatEnd { .. } => state.used = false,
         EventHook::PlayCountModified { .. } => state.used = true,
         hook => unimplemented!("what ThrowingAxe does for {hook:?}"),

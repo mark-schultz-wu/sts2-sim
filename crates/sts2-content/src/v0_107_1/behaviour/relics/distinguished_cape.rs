@@ -15,7 +15,7 @@ const CARDS: usize = 3;
 /// `AfterObtained`: `CreatureCmd.LoseMaxHp`, then three Apparitions into
 /// the deck.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
-    if let EventHook::Obtained = hook {
+    if let EventHook::Obtained { .. } = hook {
         asked.push(HookEffect::LoseMaxHp(HP_LOSS));
         for _ in 0..CARDS {
             asked.push(HookEffect::AddToDeck(Cards::Event(EventCard::Apparition)));

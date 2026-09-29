@@ -7,7 +7,7 @@ use super::super::super::generated::cards::{Cards, EventCard};
 
 /// `AfterObtained`, which adds one Neow's Fury to the deck.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
-    if let EventHook::Obtained = hook {
+    if let EventHook::Obtained { .. } = hook {
         asked.push(HookEffect::AddToDeck(Cards::Event(EventCard::NeowsFury)));
     }
 }

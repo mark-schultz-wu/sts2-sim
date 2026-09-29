@@ -29,7 +29,7 @@ pub(super) fn decide_hook(hook: DecisionHook<V>) -> HookResponse<bool> {
 /// It overrides no event but its pickup, which does nothing.
 pub(super) fn event_hook(hook: EventHook<V>) {
     match hook {
-        EventHook::Obtained => {}
+        EventHook::Obtained { .. } => {}
         hook => unimplemented!("what TheCourier does for {hook:?}"),
     }
 }

@@ -11,6 +11,24 @@
 //! Every hook dispatches on the state alone. The state names the relic that
 //! saved it, so no caller can pair a relic with another relic's model.
 
+/// `CurseCardPool`'s cards whose `CanBeGeneratedByModifiers` holds, ordered
+/// by id. Ascender's Bane, Bad Luck, Curse of the Bell, Enthralled, Folly,
+/// Greed, Poor Sleep and Spore Mind override it to refuse.
+pub(super) const MODIFIER_CURSES: [super::super::generated::cards::Cards; 10] = [
+    super::super::generated::cards::Cards::Curse(super::super::generated::cards::CurseCard::Clumsy),
+    super::super::generated::cards::Cards::Curse(super::super::generated::cards::CurseCard::Debt),
+    super::super::generated::cards::Cards::Curse(super::super::generated::cards::CurseCard::Decay),
+    super::super::generated::cards::Cards::Curse(super::super::generated::cards::CurseCard::Doubt),
+    super::super::generated::cards::Cards::Curse(super::super::generated::cards::CurseCard::Guilty),
+    super::super::generated::cards::Cards::Curse(super::super::generated::cards::CurseCard::Injury),
+    super::super::generated::cards::Cards::Curse(
+        super::super::generated::cards::CurseCard::Normality,
+    ),
+    super::super::generated::cards::Cards::Curse(super::super::generated::cards::CurseCard::Regret),
+    super::super::generated::cards::Cards::Curse(super::super::generated::cards::CurseCard::Shame),
+    super::super::generated::cards::Cards::Curse(super::super::generated::cards::CurseCard::Writhe),
+];
+
 mod akabeko;
 mod alchemical_coffer;
 mod amethyst_aubergine;
@@ -102,6 +120,7 @@ mod juzu_bracelet;
 mod kunai;
 mod kusarigama;
 mod lantern;
+mod large_capsule;
 mod lasting_candy;
 mod lava_rock;
 mod lead_paperweight;
@@ -122,6 +141,7 @@ mod miniature_cannon;
 mod molten_egg;
 mod mr_struggles;
 mod mummified_hand;
+mod neows_bones;
 mod neows_talisman;
 mod neows_torment;
 mod new_leaf;
@@ -176,6 +196,7 @@ mod sere_talon;
 mod shovel;
 mod shuriken;
 mod signet_ring;
+mod small_capsule;
 mod snecko_skull;
 mod sozu;
 mod sparkling_rouge;
@@ -468,6 +489,9 @@ pub enum State {
     Tingsha,
     ToughBandages,
     FencingManual,
+    SmallCapsule,
+    LargeCapsule,
+    NeowsBones,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -529,7 +553,7 @@ pub(crate) fn event_hook(
         // named, upgraded. The relic's model comes with nothing written on
         // it, so Darv hands that card over beside it.
         State::DustyTome => match hook {
-            EventHook::Obtained => {}
+            EventHook::Obtained { .. } => {}
             hook => unimplemented!("what DustyTome does for {hook:?}"),
         },
         State::FishingRod(state) => fishing_rod::event_hook(state, hook, asked),
@@ -561,7 +585,7 @@ pub(crate) fn event_hook(
         // Its hooks are `ShouldProcurePotion` and `ModifyMaxEnergy`, which the
         // run and the fight ask of it.
         State::Sozu => match hook {
-            EventHook::Obtained => {}
+            EventHook::Obtained { .. } => {}
             hook => unimplemented!("what Sozu does for {hook:?}"),
         },
         State::TungstenRod => tungsten_rod::event_hook(hook),
@@ -574,17 +598,17 @@ pub(crate) fn event_hook(
         State::InfusedCore => infused_core::event_hook(hook, asked),
         // Its one hook is `ModifyHandDraw`, which the fight asks of it.
         State::RingOfTheDrake => match hook {
-            EventHook::Obtained => {}
+            EventHook::Obtained { .. } => {}
             hook => unimplemented!("what RingOfTheDrake does for {hook:?}"),
         },
         // It overrides nothing.
         State::Circlet => match hook {
-            EventHook::Obtained => {}
+            EventHook::Obtained { .. } => {}
             hook => unimplemented!("what Circlet does for {hook:?}"),
         },
         // Its one hook is `ShouldFlush`, which the fight asks of it.
         State::RunicPyramid => match hook {
-            EventHook::Obtained => {}
+            EventHook::Obtained { .. } => {}
             hook => unimplemented!("what RunicPyramid does for {hook:?}"),
         },
         State::NeowsTalisman => neows_talisman::event_hook(hook, asked),
@@ -593,7 +617,7 @@ pub(crate) fn event_hook(
         State::NutritiousOyster => nutritious_oyster::event_hook(hook, asked),
         // Its one hook is `ModifyHandDraw`, which the fight asks of it.
         State::PaelsBlood => match hook {
-            EventHook::Obtained => {}
+            EventHook::Obtained { .. } => {}
             hook => unimplemented!("what PaelsBlood does for {hook:?}"),
         },
         State::PaelsFlesh(state) => paels_flesh::event_hook(state, hook),
@@ -610,7 +634,7 @@ pub(crate) fn event_hook(
         // rather than tells it. `AfterObtained` reaches every relic, and its
         // own does nothing.
         State::RingOfTheSnake => match hook {
-            EventHook::Obtained => {}
+            EventHook::Obtained { .. } => {}
             hook => unimplemented!("what RingOfTheSnake does for {hook:?}"),
         },
         State::SandCastle => sand_castle::event_hook(hook, asked),
@@ -646,7 +670,7 @@ pub(crate) fn event_hook(
         // rather than tells it. `AfterObtained` reaches every relic, and its
         // own does nothing.
         State::BagOfPreparation => match hook {
-            EventHook::Obtained => {}
+            EventHook::Obtained { .. } => {}
             hook => unimplemented!("what BagOfPreparation does for {hook:?}"),
         },
         State::WingedBoots(state) => winged_boots::event_hook(state, hook),
@@ -711,6 +735,9 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::NeowsBones => neows_bones::event_hook(hook, asked),
+        State::LargeCapsule => large_capsule::event_hook(hook, asked),
+        State::SmallCapsule => small_capsule::event_hook(hook, asked),
         State::FencingManual => fencing_manual::event_hook(hook, asked),
         State::ToughBandages => tough_bandages::event_hook(hook, asked),
         State::Tingsha => tingsha::event_hook(hook, asked),
@@ -761,12 +788,12 @@ pub(crate) fn event_hook(
         // asks of it.
         // `AfterPreventingDraw` flashes it and does nothing else.
         State::Fiddle => match hook {
-            EventHook::Obtained | EventHook::DrawPrevented => {}
+            EventHook::Obtained { .. } | EventHook::DrawPrevented => {}
             hook => unimplemented!("what Fiddle does for {hook:?}"),
         },
         // `TryModifyRestSiteOptions`: `COOK`.
         State::MeatCleaver => match hook {
-            EventHook::Obtained => {}
+            EventHook::Obtained { .. } => {}
             EventHook::RestSiteOptions => asked.push(sts2_core::HookEffect::OfferRestOption(
                 super::super::generated::restsite::RestSiteOption::Cook,
             )),
@@ -775,7 +802,7 @@ pub(crate) fn event_hook(
         // Its hooks are ones the fight asks of it: `ModifyMaxEnergy` and
         // `TryModifyEnergyCostInCombat`.
         State::SpikedGauntlets => match hook {
-            EventHook::Obtained => {}
+            EventHook::Obtained { .. } => {}
             hook => unimplemented!("what {state:?} does for {hook:?}"),
         },
     }
@@ -1018,7 +1045,10 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::EmotionChip(_)
         | State::Tingsha
         | State::ToughBandages
-        | State::FencingManual => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::FencingManual
+        | State::SmallCapsule
+        | State::LargeCapsule
+        | State::NeowsBones => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1197,6 +1227,9 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::NeowsBones => State::NeowsBones,
+            Relic::LargeCapsule => State::LargeCapsule,
+            Relic::SmallCapsule => State::SmallCapsule,
             Relic::FencingManual => State::FencingManual,
             Relic::ToughBandages => State::ToughBandages,
             Relic::Tingsha => State::Tingsha,

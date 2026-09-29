@@ -13,7 +13,7 @@ const PICKS: &[DeckPick<V>] = &[
 
 /// `AfterObtained`: `CardCmd.Upgrade` on each card it names.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
-    if let EventHook::Obtained = hook {
+    if let EventHook::Obtained { .. } = hook {
         asked.push(HookEffect::OnDeckCards {
             act: DeckAct::Upgrade,
             picks: PICKS,

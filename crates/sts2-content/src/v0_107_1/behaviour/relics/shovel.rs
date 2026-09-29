@@ -9,7 +9,7 @@ use super::super::super::generated::restsite::RestSiteOption;
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
     match hook {
         EventHook::RestSiteOptions => asked.push(HookEffect::OfferRestOption(RestSiteOption::Dig)),
-        EventHook::Obtained => {}
+        EventHook::Obtained { .. } => {}
         hook => unimplemented!("what Shovel does for {hook:?}"),
     }
 }

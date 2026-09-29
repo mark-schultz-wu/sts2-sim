@@ -7,7 +7,7 @@ use super::super::super::generated::cards::{Cards, EventCard};
 
 /// `AfterObtained`: `CardPileCmd.Add` of a Relax to the deck, twice.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
-    if let EventHook::Obtained = hook {
+    if let EventHook::Obtained { .. } = hook {
         asked.extend([HookEffect::AddToDeck(Cards::Event(EventCard::Relax)); 2]);
     }
 }

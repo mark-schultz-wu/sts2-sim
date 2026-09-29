@@ -38,7 +38,7 @@ pub(super) fn event_hook(
     match hook {
         EventHook::PowerAmountReceivedModified { .. } => state.used_this_combat = true,
         EventHook::CombatEnd { .. } => state.used_this_combat = false,
-        EventHook::Obtained => {}
+        EventHook::Obtained { .. } => {}
         hook => unimplemented!("what RuinedHelmet does for {hook:?}"),
     }
 }

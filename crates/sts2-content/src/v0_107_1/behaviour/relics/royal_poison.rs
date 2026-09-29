@@ -19,7 +19,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
                 self_dealt: false,
             })
         }
-        EventHook::PlayerTurnStart { .. } | EventHook::Obtained => {}
+        EventHook::PlayerTurnStart { .. } | EventHook::Obtained { .. } => {}
         hook => unimplemented!("what RoyalPoison does for {hook:?}"),
     }
 }

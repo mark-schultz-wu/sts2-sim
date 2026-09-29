@@ -11,7 +11,7 @@ const CARDS: usize = 6;
 /// Nothing in a fight. Its one override is `AfterObtained`, which upgrades six
 /// of the deck's cards, and the run is what carries that out.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
-    if let EventHook::Obtained = hook {
+    if let EventHook::Obtained { .. } = hook {
         asked.push(HookEffect::UpgradeRandomDeckCards {
             count: CARDS,
             stream: sts2_core::Stream::Run(RunRngType::Niche),

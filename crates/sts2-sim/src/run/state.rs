@@ -574,8 +574,11 @@ pub(super) enum Pickup<V: Rules> {
         max: usize,
     },
     /// `RewardsCmd.OfferCustom`: a screen to take rewards from until every
-    /// one is taken or the rest are skipped.
-    Rewards { offered: Vec<Offer<V>> },
+    /// one is taken or, where `skippable`, the rest are skipped.
+    Rewards {
+        offered: Vec<Offer<V>>,
+        skippable: bool,
+    },
     /// The event's own question, which [`Rules::event_question`] asks.
     Event,
 }
@@ -1400,7 +1403,7 @@ impl<V: Rules> State<V> {
             Arc::make_mut(&mut self.dealt_relics).push(relic);
         }
         let mut held = HeldRelic::new(relic);
-        let effects = crate::combat::obtained::<V>(&mut held);
+        let effects = crate::combat::obtained::<V>(&mut held, self.character());
         self.player.relics.push(held);
         self.carry_out(effects)
     }
@@ -1601,7 +1604,7 @@ impl<V: Rules> State<V> {
                         unimplemented!("replacing {from:?}, which the run does not carry");
                     };
                     let mut held = HeldRelic::new(to);
-                    let effects = crate::combat::obtained::<V>(&mut held);
+                    let effects = crate::combat::obtained::<V>(&mut held, self.character());
                     self.player.relics.replace(slot, held);
                     if let Some(effect) = effects.first() {
                         unimplemented!("{to:?} asking for {effect:?} as it replaces {from:?}");
@@ -1625,7 +1628,7 @@ impl<V: Rules> State<V> {
                         .find(|&&(from, _)| from == starter)
                         .map_or(fallback, |&(_, to)| to);
                     let mut held = HeldRelic::new(upgraded);
-                    let effects = crate::combat::obtained::<V>(&mut held);
+                    let effects = crate::combat::obtained::<V>(&mut held, self.character());
                     self.player.relics.replace(slot, held);
                     if let Some(effect) = effects.first() {
                         unimplemented!(
@@ -1819,7 +1822,33 @@ impl<V: Rules> State<V> {
                         rewards,
                         sts2_core::Stream::Player(V::PlayerRngType::REWARDS),
                     ),
+                    skippable: true,
                 },
+                // `RewardsSet.WithSkippingDisallowed`, over a `RelicReward` for
+                // each relic, which reports `RelicRarity.None`.
+                HookEffect::OfferNeowRelics { count, except } => {
+                    use sts2_core::rng::GameRng as _;
+
+                    // A run here has one player, as Neow's own roll does.
+                    let mut relics: Vec<V::Relic> = V::neow_options()
+                        .filter(|&relic| relic != except && V::allowed_at_neow(relic, 1))
+                        .collect();
+                    self.streams
+                        .player(V::PlayerRngType::REWARDS)
+                        .unstable_shuffle(&mut relics);
+                    Pickup::Rewards {
+                        offered: relics
+                            .into_iter()
+                            .take(count)
+                            .map(|relic| Offer::Relic {
+                                relic,
+                                rarity: <_ as sts2_core::RarityKinds>::UNDRAFTED,
+                                taken: false,
+                            })
+                            .collect(),
+                        skippable: false,
+                    }
+                }
                 HookEffect::OfferEventRewards => {
                     let Phase::Event { state, .. } = &self.phase else {
                         unreachable!("only an event offers rewards of its own")
@@ -1827,6 +1856,7 @@ impl<V: Rules> State<V> {
                     let rewards = V::event_rewards(state);
                     Pickup::Rewards {
                         offered: self.custom_rewards(&rewards, sts2_core::Stream::Event),
+                        skippable: true,
                     }
                 }
                 HookEffect::AskEvent => Pickup::Event,
@@ -3643,7 +3673,11 @@ impl<V: Rules> State<V> {
             unreachable!("the room was parked when this began");
         };
         let Some(Asked {
-            pickup: Pickup::Rewards { mut offered },
+            pickup:
+                Pickup::Rewards {
+                    mut offered,
+                    skippable,
+                },
             rest,
         }) = asking.take()
         else {
@@ -3652,7 +3686,7 @@ impl<V: Rules> State<V> {
         self.take_reward(&mut offered, answer);
         if offered.iter().any(|offer| !offer.taken()) {
             return self.park(Asked {
-                pickup: Pickup::Rewards { offered },
+                pickup: Pickup::Rewards { offered, skippable },
                 rest,
             });
         }
@@ -4073,7 +4107,9 @@ impl<V: Rules> State<V> {
                         selections(*min, *count, self.offered(*act).len(), moves)
                     }
                     Pickup::CloneDeckCard { .. } => unreachable!("a room parks on no clone"),
-                    Pickup::Rewards { offered } => reward_moves(offered, moves),
+                    Pickup::Rewards { offered, skippable } => {
+                        reward_moves(offered, *skippable, moves)
+                    }
                     Pickup::Event => event_moves(self.event_question(), moves),
                 }
             }
@@ -4094,7 +4130,7 @@ impl<V: Rules> State<V> {
                 removing: Some(_), ..
             } => selections(1, 1, self.offered(sts2_core::DeckAct::Remove).len(), moves),
             Phase::Rewards { offered, .. } if offered.iter().any(|offer| !offer.taken()) => {
-                reward_moves(offered, moves)
+                reward_moves(offered, true, moves)
             }
             _ => return false,
         }
@@ -4486,7 +4522,9 @@ impl<V: Rules> State<V> {
                 asking: Some(_), ..
             } => self.phase.asking().map(|asking| {
                 let (min, max, cards): (u32, u32, Vec<CardIdent<V>>) = match &asking.pickup {
-                    Pickup::Rewards { offered } => return asked::<V>(offered),
+                    Pickup::Rewards { offered, skippable } => {
+                        return asked::<V>(offered, *skippable);
+                    }
                     Pickup::Event => return self.event_question(),
                     Pickup::Cards { offered, min, max } => (
                         u32::try_from(*min).expect("a selection counts in a few cards"),
@@ -4541,7 +4579,7 @@ impl<V: Rules> State<V> {
             Phase::Rewards { offered, .. } => offered
                 .iter()
                 .any(|offer| !offer.taken())
-                .then(|| asked::<V>(offered)),
+                .then(|| asked::<V>(offered, true)),
             // `CardSelectCmd.FromDeckForUpgrade` offers the deck's upgradable
             // cards alone, so a card already at its highest is not offered and
             // the indices are that list's rather than the deck's. One card, and
@@ -4825,7 +4863,7 @@ fn option_index(at: usize) -> u8 {
 
 /// Taking each reward still on offer, each card of a card reward on its own,
 /// and skipping the rest.
-fn reward_moves<V: Rules>(offered: &[Offer<V>], moves: &mut Legal<V>) {
+fn reward_moves<V: Rules>(offered: &[Offer<V>], skippable: bool, moves: &mut Legal<V>) {
     for (index, offer) in offered.iter().enumerate() {
         if offer.taken() {
             continue;
@@ -4838,8 +4876,9 @@ fn reward_moves<V: Rules>(offered: &[Offer<V>], moves: &mut Legal<V>) {
             _ => moves.push(Decision::Answer(Answer::Take(TakeReward::non_card(index)))),
         }
     }
-    // Nothing a fight or a ported relic offers disallows skipping. See `asked`.
-    moves.push(Decision::Answer(Answer::Skip));
+    if skippable {
+        moves.push(Decision::Answer(Answer::Skip));
+    }
 }
 
 /// The answers to an event's own question: each hidden cell of a grid, with
@@ -4866,11 +4905,9 @@ fn event_moves<V: Rules>(question: Question<V>, moves: &mut Legal<V>) {
     }
 }
 
-fn asked<V: Rules>(offered: &[Offer<V>]) -> Question<V> {
+fn asked<V: Rules>(offered: &[Offer<V>], skippable: bool) -> Question<V> {
     Question::Rewards {
-        // `RewardsSet` disallows skipping only where something says so, and
-        // nothing a fight or a ported relic offers does.
-        skippable: true,
+        skippable,
         rewards: offered
             .iter()
             .enumerate()

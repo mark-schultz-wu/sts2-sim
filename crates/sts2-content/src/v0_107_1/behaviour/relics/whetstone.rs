@@ -11,7 +11,7 @@ const CARDS: usize = 2;
 /// `AfterObtained`: the deck's upgradable Attacks stably shuffled off
 /// `RunState.Rng.Niche`, and the first two upgraded.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
-    if let EventHook::Obtained = hook {
+    if let EventHook::Obtained { .. } = hook {
         asked.push(HookEffect::UpgradeRandomDeckCards {
             count: CARDS,
             stream: sts2_core::Stream::Run(RunRngType::Niche),

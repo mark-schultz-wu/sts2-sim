@@ -24,7 +24,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
         EventHook::CombatVictoryEarly { .. }
         | EventHook::CombatStarting { .. }
         | EventHook::CurrentHpChanged { .. }
-        | EventHook::Obtained => {}
+        | EventHook::Obtained { .. } => {}
         hook => unimplemented!("what MeatOnTheBone does for {hook:?}"),
     }
 }

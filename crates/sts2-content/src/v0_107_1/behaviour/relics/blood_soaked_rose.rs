@@ -12,7 +12,7 @@ const ENERGY: Number = 1;
 /// `AfterObtained`: `CardPileCmd.AddCurseToDeck<Enthralled>`.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
     match hook {
-        EventHook::Obtained => {
+        EventHook::Obtained { .. } => {
             asked.push(HookEffect::AddToDeck(Cards::Curse(CurseCard::Enthralled)))
         }
         hook => unimplemented!("what BloodSoakedRose does for {hook:?}"),

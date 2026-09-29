@@ -12,7 +12,7 @@ const SLOTS: usize = 4;
 /// `CreateRandomPotionsOutOfCombat` off `RunState.Rng.CombatPotionGeneration`,
 /// each into one of the slots just gained.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
-    if let EventHook::Obtained = hook {
+    if let EventHook::Obtained { .. } = hook {
         asked.extend([
             HookEffect::GainPotionSlots(SLOTS),
             HookEffect::ProcureRandomPotions {

@@ -25,7 +25,7 @@ pub(super) fn modify_hook(hook: ModifyHook<V>) -> Modify<Number> {
 /// nothing else.
 pub(super) fn event_hook(hook: EventHook<V>) {
     match hook {
-        EventHook::Obtained => {}
+        EventHook::Obtained { .. } => {}
         hook => unimplemented!("what TungstenRod does for {hook:?}"),
     }
 }

@@ -11,7 +11,7 @@ const CARDS: usize = 3;
 /// `AfterObtained`: `CardSelectCmd.FromDeckForRemoval` for three, each
 /// removed, then `CardPileCmd.AddCurseToDeck<Folly>`.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
-    if let EventHook::Obtained = hook {
+    if let EventHook::Obtained { .. } = hook {
         asked.extend([
             HookEffect::SelectFromDeck {
                 act: DeckAct::Remove,

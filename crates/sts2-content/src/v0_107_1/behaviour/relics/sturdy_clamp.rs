@@ -25,7 +25,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
         EventHook::BlockClearPrevented { block } if block > KEPT => {
             asked.push(HookEffect::LoseSomeBlock(block - KEPT));
         }
-        EventHook::BlockClearPrevented { .. } | EventHook::Obtained => {}
+        EventHook::BlockClearPrevented { .. } | EventHook::Obtained { .. } => {}
         hook => unimplemented!("what SturdyClamp does for {hook:?}"),
     }
 }

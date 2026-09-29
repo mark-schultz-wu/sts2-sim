@@ -20,7 +20,7 @@ pub(super) fn modify_hook(hook: ModifyHook<V>) -> Modify<Number> {
 /// every relic and does nothing here.
 pub(super) fn event_hook(hook: EventHook<V>) {
     match hook {
-        EventHook::GoldGainModified | EventHook::Obtained => {}
+        EventHook::GoldGainModified | EventHook::Obtained { .. } => {}
         hook => unimplemented!("what BowlerHat does for {hook:?}"),
     }
 }

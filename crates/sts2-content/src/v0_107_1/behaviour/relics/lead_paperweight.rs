@@ -12,7 +12,7 @@ use super::super::super::V0_107_1 as V;
 /// Obtained anywhere but Neow's blessing, which is the one path that runs the
 /// offer. The relic reaching the belt by another route skips the offer.
 pub(super) fn event_hook(hook: EventHook<V>) {
-    if let EventHook::Obtained = hook {
+    if let EventHook::Obtained { .. } = hook {
         unimplemented!("Lead Paperweight obtained outside the blessing");
     }
 }
