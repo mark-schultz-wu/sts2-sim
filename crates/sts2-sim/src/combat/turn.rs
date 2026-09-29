@@ -153,7 +153,111 @@ pub(super) fn resume_enemy_turn<V: Rules>(
     if played != sts2_core::Played::Done {
         unimplemented!("a monster's move asking a second question");
     }
-    move_performed::<V>(live, parked.actor, parked.move_id);
+    live.skip_tick = skipping;
+    after_move(
+        Fighting {
+            live,
+            streams,
+            relics,
+        },
+        parked.actor,
+        parked.move_id,
+        &parked.acting,
+        parked.max_energy,
+        ended,
+    )
+}
+
+/// The rest of a move that stood still on a command the player had to
+/// answer. It goes on from `at`, on a board built as the move's was. `None`
+/// where the move stood still again, which [`Live::deferred`] now holds.
+pub(super) fn resume_move<V: Rules>(
+    fighting: Fighting<'_, V>,
+    parked: &super::live::Deferred<V>,
+) -> Option<Option<super::Ended>> {
+    let super::live::Deferred::Move {
+        actor,
+        monster,
+        move_id,
+        at,
+        damage,
+        repeats,
+        ref acting,
+        max_energy,
+    } = *parked
+    else {
+        unreachable!("only a move resumes as one")
+    };
+    let Fighting {
+        live,
+        streams,
+        relics,
+    } = fighting;
+    let Some(at) = at else {
+        return Some(None);
+    };
+    // A monster the fight took out took its model and its move with it.
+    let Some(mut state) = live
+        .machines
+        .iter()
+        .find(|held| held.creature == actor)
+        .map(|held| held.state)
+    else {
+        return Some(None);
+    };
+    let ascension = live.ascension;
+    let mut board = Board::for_move(
+        live,
+        streams.combat(),
+        relics,
+        ascension,
+        (actor, damage, repeats),
+    )
+    .pausable();
+    let played = V::resume_move(monster, move_id, at, &mut state, &mut board);
+    let ended = board.ended;
+    let skipped = std::mem::take(&mut board.skipped);
+    super::play::merge::<V>(&mut live.skip_tick, skipped);
+    if let Some(held) = live.machines.iter_mut().find(|held| held.creature == actor) {
+        held.state = state;
+    }
+    let again = match played {
+        sts2_core::Played::Done if live.asking.is_none() => return Some(ended),
+        sts2_core::Played::Done => None,
+        sts2_core::Played::Waiting { at } if live.asking.is_some() => Some(at),
+        played => unimplemented!("a resumed move handing back {played:?}"),
+    };
+    live.defer(super::live::Deferred::Move {
+        actor,
+        monster,
+        move_id,
+        at: again,
+        damage,
+        repeats,
+        acting: acting.clone(),
+        max_energy,
+    });
+    None
+}
+
+/// The enemy turn once the move `move_id` of `actor` is over:
+/// `OnMovePerformed`, then the enemies in `acting` unless the fight ended.
+pub(super) fn after_move<V: Rules>(
+    fighting: Fighting<'_, V>,
+    actor: CombatId,
+    move_id: V::MoveId,
+    acting: &[CombatId],
+    max_energy: V::Count,
+    ended: Option<super::Ended>,
+) -> Result<Option<super::Ended>, Error> {
+    let Fighting {
+        live,
+        streams,
+        relics,
+    } = fighting;
+    let skipping = std::mem::take(&mut live.skip_tick);
+    let ascension = live.ascension;
+    move_performed::<V>(live, actor, move_id);
     if let Some(ended) = ended {
         live.skip_tick = skipping;
         if ended == super::Ended::Won {
@@ -168,9 +272,9 @@ pub(super) fn resume_enemy_turn<V: Rules>(
             relics,
         },
         ascension,
-        parked.max_energy,
+        max_energy,
         skipping,
-        &parked.acting,
+        acting,
     )
 }
 
@@ -200,6 +304,10 @@ fn enemies_act<V: Rules>(
         // The turn waits on the player's answer.
         Acted::Parked(asking) => {
             next.asking = Some(asking);
+            next.skip_tick = skipping;
+            return Ok(None);
+        }
+        Acted::Deferred => {
             next.skip_tick = skipping;
             return Ok(None);
         }
@@ -2359,6 +2467,9 @@ enum Acted<V: Rules> {
     Over(Option<super::Ended>),
     /// A move stopped on the player's answer.
     Parked(super::live::Asking<V>),
+    /// A command inside a move asked, and the rest of the turn waits in
+    /// [`Live::deferred`].
+    Deferred,
 }
 
 /// `ExecuteEnemyTurn`: each enemy in `acting` performs what it advertised.
@@ -2408,7 +2519,8 @@ fn enemy_turn<V: Rules>(
             relics,
             ascension,
             (id, damage, repeats),
-        );
+        )
+        .pausable();
         let played = V::perform_move(monster, next_move.id, &mut state, &mut board);
         ended = ended.or(board.ended);
         super::play::merge::<V>(skipping, std::mem::take(&mut board.skipped));
@@ -2440,9 +2552,38 @@ fn enemy_turn<V: Rules>(
             sts2_core::Played::Asking { .. } | sts2_core::Played::AskingAmong { .. } => {
                 unimplemented!("a monster's move selecting from a pile")
             }
-            sts2_core::Played::Waiting { .. } => {
-                unimplemented!("a monster's move waiting on a card it auto-played")
+            // A command inside the move asked, and the move stands still on
+            // it with the rest of the turn behind it.
+            sts2_core::Played::Waiting { at: resume } => {
+                if live.asking.is_none() {
+                    unimplemented!("a move waiting on nothing asked");
+                }
+                live.defer(super::live::Deferred::Move {
+                    actor: id,
+                    monster,
+                    move_id: next_move.id,
+                    at: Some(resume),
+                    damage,
+                    repeats,
+                    acting: acting[at + 1..].iter().copied().collect(),
+                    max_energy,
+                });
+                return Acted::Deferred;
             }
+        }
+        // Its last command asked: the move is over, and the turn waits.
+        if live.asking.is_some() {
+            live.defer(super::live::Deferred::Move {
+                actor: id,
+                monster,
+                move_id: next_move.id,
+                at: None,
+                damage,
+                repeats,
+                acting: acting[at + 1..].iter().copied().collect(),
+                max_energy,
+            });
+            return Acted::Deferred;
         }
         move_performed::<V>(live, id, next_move.id);
         // `CheckWinCondition` after each enemy's turn: an ended fight gives

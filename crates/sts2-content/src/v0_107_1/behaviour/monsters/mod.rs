@@ -279,6 +279,33 @@ pub(crate) fn perform<F: Fight<V>>(
     model: &mut Model,
     fight: &mut F,
 ) -> Played<V> {
+    perform_from(monster, move_id, 0, model, fight)
+}
+
+/// A move that stood still on a command the player had to answer, carried
+/// on from where it stopped.
+pub(crate) fn resume_move<F: Fight<V>>(
+    monster: Monster,
+    move_id: MoveId,
+    at: Resume,
+    model: &mut Model,
+    fight: &mut F,
+) -> Played<V> {
+    let Resume::Step(step) = at else {
+        unreachable!("{at:?} resumes a choice, not a move")
+    };
+    perform_from(monster, move_id, step, model, fight)
+}
+
+/// A move from `step`, which stands still, naming the step it goes on from,
+/// where a command made the player answer something.
+fn perform_from<F: Fight<V>>(
+    monster: Monster,
+    move_id: MoveId,
+    step: u8,
+    model: &mut Model,
+    fight: &mut F,
+) -> Played<V> {
     // Two states no table names. `Creature.Stun` builds one and
     // `IllusionPower` builds the other, and what each does belongs to
     // whoever built it rather than to the monster standing on it.
@@ -291,9 +318,9 @@ pub(crate) fn perform<F: Fight<V>>(
         _ => {}
     }
     if monster == Monster::KnowledgeDemon {
-        return hive::knowledge_demon(move_id, model, fight);
+        return hive::knowledge_demon(move_id, step, model, fight);
     }
-    match monster {
+    let next = match monster {
         Monster::ThievingHopper
         | Monster::LouseProgenitor
         | Monster::SpinyToad
@@ -309,7 +336,7 @@ pub(crate) fn perform<F: Fight<V>>(
         | Monster::SlumberingBeetle
         | Monster::DecimillipedeSegmentFront
         | Monster::DecimillipedeSegmentMiddle
-        | Monster::DecimillipedeSegmentBack => hive::perform(monster, move_id, fight),
+        | Monster::DecimillipedeSegmentBack => hive::perform(monster, move_id, step, fight),
         Monster::ShrinkerBeetle
         | Monster::FuzzyWurmCrawler
         | Monster::Fogmog
@@ -318,7 +345,7 @@ pub(crate) fn perform<F: Fight<V>>(
         | Monster::CubexConstruct
         | Monster::CrossbowRubyRaider
         | Monster::CeremonialBeast
-        | Monster::KinPriest => overgrowth::perform(monster, move_id, fight),
+        | Monster::KinPriest => overgrowth::perform(monster, move_id, step, fight),
         Monster::DevotedSculptor
         | Monster::FrogKnight
         | Monster::Axebot
@@ -335,12 +362,27 @@ pub(crate) fn perform<F: Fight<V>>(
         | Monster::TestSubject
         | Monster::Aeonglass
         | Monster::Queen
-        | Monster::TorchHeadAmalgam => glory::perform(monster, move_id, model, fight),
+        | Monster::TorchHeadAmalgam => glory::perform(monster, move_id, step, model, fight),
         // `NOTHING_MOVE`, whose lambda is `Task.CompletedTask`.
-        Monster::BattleFriendV1 | Monster::BattleFriendV2 | Monster::BattleFriendV3 => {}
-        _ => monster_moves::perform(monster, move_id, fight),
+        Monster::BattleFriendV1 | Monster::BattleFriendV2 | Monster::BattleFriendV3 => None,
+        _ => monster_moves::perform(monster, move_id, step, fight),
+    };
+    match next {
+        Some(step) => Played::Waiting {
+            at: super::Resume::Monster(Resume::Step(step)),
+        },
+        None => Played::Done,
     }
-    Played::Done
+}
+
+/// A move's opening attack, at step 0. True where a command inside it made
+/// the player answer something, and the move stands still until step 1.
+fn attack_first<F: Fight<V>>(fight: &mut F, step: u8) -> bool {
+    if step == 0 {
+        fight.attack_opponents();
+        return fight.waiting();
+    }
+    false
 }
 
 /// What a monster's own model saves between its moves.

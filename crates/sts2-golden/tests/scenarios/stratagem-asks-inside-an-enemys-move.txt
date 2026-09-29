@@ -1,0 +1,14 @@
+# Centennial Puzzle draws three the first time its owner loses health, which
+# the Nibbit's Slice does. The draw pile is dry by then, so the shuffle asks
+# for Stratagem's pick in the middle of the move. The Nibbit's block after
+# its hit, the rest of the draw and the enemy turn wait on the answer.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"CENTENNIAL_PUZZLE"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"STRATAGEM_POWER","amount":1,"target":0}
+{"cmd":"play_card","index":2}
+{"cmd":"play_card","index":2}
+{"cmd":"play_card","index":2}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"answer","cards":[0]}

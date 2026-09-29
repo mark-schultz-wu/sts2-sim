@@ -6372,6 +6372,17 @@ pub trait Rules: Hooks {
         fight: &mut F,
     ) -> Played<Self>;
 
+    /// The rest of a move that handed back [`Played::Waiting`], from `at`,
+    /// once what it waited on is over. `state` is the monster's model, as
+    /// [`Rules::perform_move`] has it.
+    fn resume_move<F: Fight<Self>>(
+        monster: Self::Monster,
+        move_id: Self::MoveId,
+        at: Self::Resume,
+        state: &mut Self::MonsterState,
+        fight: &mut F,
+    ) -> Played<Self>;
+
     /// Generate an encounter whose roster is code rather than table data.
     /// An unported build-specific rule returns a typed error.
     fn random_encounter_monsters<R: crate::rng::GameRng>(

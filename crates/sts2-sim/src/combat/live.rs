@@ -187,6 +187,21 @@ pub(super) enum Deferred<V: Rules> {
         id: CardId<V>,
         named: Option<CombatId>,
     },
+    /// The move `move_id` of `actor`, which stood still on a command the
+    /// player had to answer. It goes on from `at`, where it handed a resume
+    /// point back, and is over otherwise. Then `OnMovePerformed`, the enemies
+    /// in `acting`, and the end of the turn. `damage` and `repeats` are what
+    /// the move advertised, which its attacks read.
+    Move {
+        actor: CombatId,
+        monster: V::Monster,
+        move_id: V::MoveId,
+        at: Option<V::Resume>,
+        damage: V::Number,
+        repeats: V::Count,
+        acting: smallvec::SmallVec<[CombatId; CREATURES]>,
+        max_energy: V::Count,
+    },
     /// `CardPileCmd.Draw` of `count` cards. `resumed` for the rest of a draw
     /// a shuffle's question stopped, which asked `ShouldDraw` already.
     Draw {

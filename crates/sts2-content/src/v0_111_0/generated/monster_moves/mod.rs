@@ -16,8 +16,9 @@ type V = super::super::V0_111_0;
 pub fn perform<F: sts2_core::Fight<V>>(
     monster: super::monsters::Monster,
     move_id: super::monsters::MoveId,
+    step: u8,
     fight: &mut F,
-) {
+) -> Option<u8> {
     use super::monsters::Monster;
     match monster {
         Monster::Aeonglass
@@ -44,7 +45,7 @@ pub fn perform<F: sts2_core::Fight<V>>(
         | Monster::TheLost
         | Monster::TorchHeadAmalgam
         | Monster::TurretOperator
-        | Monster::Zapbot => glory::perform(monster, move_id, fight),
+        | Monster::Zapbot => glory::perform(monster, move_id, step, fight),
         Monster::BowlbugEgg
         | Monster::BowlbugNectar
         | Monster::BowlbugRock
@@ -70,7 +71,7 @@ pub fn perform<F: sts2_core::Fight<V>>(
         | Monster::TheObscura
         | Monster::ThievingHopper
         | Monster::ToughEgg
-        | Monster::Tunneler => hive::perform(monster, move_id, fight),
+        | Monster::Tunneler => hive::perform(monster, move_id, step, fight),
         Monster::AssassinRubyRaider
         | Monster::AxeRubyRaider
         | Monster::BruteRubyRaider
@@ -98,9 +99,9 @@ pub fn perform<F: sts2_core::Fight<V>>(
         | Monster::TwigSlimeS
         | Monster::Vantom
         | Monster::VineShambler
-        | Monster::Wriggler => overgrowth::perform(monster, move_id, fight),
+        | Monster::Wriggler => overgrowth::perform(monster, move_id, step, fight),
         Monster::CubexConstruct | Monster::PunchConstruct => {
-            shared::perform(monster, move_id, fight)
+            shared::perform(monster, move_id, step, fight)
         }
         Monster::Architect
         | Monster::BattleFriendV1
@@ -125,7 +126,7 @@ pub fn perform<F: sts2_core::Fight<V>>(
         | Monster::TenHpMonster
         | Monster::TheAdversaryMkOne
         | Monster::TheAdversaryMkThree
-        | Monster::TheAdversaryMkTwo => summoned::perform(monster, move_id, fight),
+        | Monster::TheAdversaryMkTwo => summoned::perform(monster, move_id, step, fight),
         Monster::CalcifiedCultist
         | Monster::CorpseSlug
         | Monster::DampCultist
@@ -146,6 +147,6 @@ pub fn perform<F: sts2_core::Fight<V>>(
         | Monster::TerrorEel
         | Monster::Toadpole
         | Monster::TwoTailedRat
-        | Monster::WaterfallGiant => underdocks::perform(monster, move_id, fight),
+        | Monster::WaterfallGiant => underdocks::perform(monster, move_id, step, fight),
     }
 }

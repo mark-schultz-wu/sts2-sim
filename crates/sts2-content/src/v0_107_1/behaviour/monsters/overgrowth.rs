@@ -64,7 +64,12 @@ fn wriggler_opens(at: u8, spawn: MonsterSpawn<Encounter>) -> Result<u8, ContentE
 
 /// Perform one of an Overgrowth monster's moves, where the generator left
 /// it to a hand port.
-pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
+pub(super) fn perform<F: Fight<V>>(
+    monster: Monster,
+    move_id: MoveId,
+    step: u8,
+    fight: &mut F,
+) -> Option<u8> {
     match (monster, move_id) {
         (Monster::ShrinkerBeetle, MoveId::ShrinkerMove) => {
             fight.apply_to_opponents(Power::ShrinkPower, PowerAmount::Endless)
@@ -79,7 +84,9 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         // The `TestMode.IsOff` block these open with only finds the creature
         // node.
         (Monster::SnappingJaxfruit, MoveId::EnergyOrbMove) => {
-            fight.attack_opponents();
+            if super::attack_first(fight, step) {
+                return Some(1);
+            }
             fight.apply_to_actor(
                 Power::StrengthPower,
                 PowerAmount::Counted(ENERGY_ORB_STRENGTH),
@@ -106,12 +113,16 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         }
         // The Ceremonial Beast's moves set flags that pick its animation.
         (Monster::CeremonialBeast, MoveId::PlowMove) => {
-            fight.attack_opponents();
+            if super::attack_first(fight, step) {
+                return Some(1);
+            }
             fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(PLOW_STRENGTH));
         }
         (Monster::CeremonialBeast, MoveId::StompMove) => fight.attack_opponents(),
         (Monster::CeremonialBeast, MoveId::CrushMove) => {
-            fight.attack_opponents();
+            if super::attack_first(fight, step) {
+                return Some(1);
+            }
             let strength = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
                 true => CRUSH_STRENGTH_DEADLY,
                 false => CRUSH_STRENGTH,
@@ -133,11 +144,14 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
             fight.apply_to_opponents(Power::VulnerablePower, PowerAmount::Counted(SPORES));
         }
         (Monster::Flyconid, MoveId::FrailSporesMove) => {
-            fight.attack_opponents();
+            if super::attack_first(fight, step) {
+                return Some(1);
+            }
             fight.apply_to_opponents(Power::FrailPower, PowerAmount::Counted(SPORES));
         }
-        (monster, move_id) => monster_moves::perform(monster, move_id, fight),
+        (monster, move_id) => return monster_moves::perform(monster, move_id, step, fight),
     }
+    None
 }
 
 /// The block the Crossbow Ruby Raider's Reload gives it, a constant in the

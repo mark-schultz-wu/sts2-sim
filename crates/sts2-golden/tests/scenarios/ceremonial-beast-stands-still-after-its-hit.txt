@@ -1,0 +1,11 @@
+# The Ceremonial Beast's Plow hits, then gains Strength. Its hit is the first
+# to take the Ironclad's health, and Centennial Puzzle's draw shuffles a dry
+# draw pile, so Stratagem asks in the middle of Plow. The Strength waits on
+# the answer.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"CENTENNIAL_PUZZLE"}
+{"cmd":"fight","encounter":"CEREMONIAL_BEAST_BOSS"}
+{"cmd":"power","power":"STRATAGEM_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"answer","cards":[0]}

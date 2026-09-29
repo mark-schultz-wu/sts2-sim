@@ -262,9 +262,10 @@ const RITUAL: Number = 9;
 pub(super) fn perform<F: Fight<V>>(
     monster: Monster,
     move_id: MoveId,
+    step: u8,
     model: &mut super::Model,
     fight: &mut F,
-) {
+) -> Option<u8> {
     match (monster, move_id) {
         // `BootUpMove`: its block, then Strength for each stock it lost.
         (Monster::Axebot, MoveId::BootUpMove) => {
@@ -326,7 +327,9 @@ pub(super) fn perform<F: Fight<V>>(
         }
         // `FabricatingStrikeMove`: its hit, then an aggressive bot.
         (Monster::Fabricator, MoveId::FabricatingStrikeMove) => {
-            fight.attack_opponents();
+            if super::attack_first(fight, step) {
+                return Some(1);
+            }
             spawn_bot(fight, model, &AGGRO_SPAWNS);
         }
         // `GuardMove`: fifteen block, unpowered, on each Fabricator.
@@ -420,7 +423,9 @@ pub(super) fn perform<F: Fight<V>>(
         // `VerdictMove`: its hit, four Vulnerable on each target, then Soar
         // comes off.
         (Monster::OwlMagistrate, MoveId::Verdict) => {
-            fight.attack_opponents();
+            if super::attack_first(fight, step) {
+                return Some(1);
+            }
             fight.apply_to_opponents(Power::VulnerablePower, PowerAmount::Counted(4));
             let actor = fight.actor();
             fight.remove_power(actor, Power::SoarPower);
@@ -497,7 +502,9 @@ pub(super) fn perform<F: Fight<V>>(
         (Monster::TorchHeadAmalgam, MoveId::BeamMove) => fight.attack_opponents(),
         // `MultiClawMove`: its hits, then one more for the next.
         (Monster::TestSubject, MoveId::MultiClawMove) => {
-            fight.attack_opponents();
+            if super::attack_first(fight, step) {
+                return Some(1);
+            }
             let super::Model::TestSubject { extra_claws, .. } = model else {
                 unreachable!("a Test Subject holding {model:?}")
             };
@@ -540,8 +547,9 @@ pub(super) fn perform<F: Fight<V>>(
                 _ => {}
             }
         }
-        _ => monster_moves::perform(monster, move_id, fight),
+        _ => return monster_moves::perform(monster, move_id, step, fight),
     }
+    None
 }
 
 /// A Glory monster's attack damage that it works out from the fight.

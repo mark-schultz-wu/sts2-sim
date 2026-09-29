@@ -171,7 +171,12 @@ pub(super) fn conditional<P: sts2_core::Printed<V> + ?Sized>(
 
 /// Perform one of the Hive monsters' moves, where the generator left it to a
 /// hand port.
-pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
+pub(super) fn perform<F: Fight<V>>(
+    monster: Monster,
+    move_id: MoveId,
+    step: u8,
+    fight: &mut F,
+) -> Option<u8> {
     let segment = matches!(
         monster,
         Monster::DecimillipedeSegmentFront
@@ -183,7 +188,9 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         // `WebMove`: its hit, then Frail at two on each target. `Curled`
         // picks its animations alone.
         (Monster::LouseProgenitor, MoveId::WebCannonMove) => {
-            fight.attack_opponents();
+            if super::attack_first(fight, step) {
+                return Some(1);
+            }
             fight.apply_to_opponents(Power::FrailPower, PowerAmount::Counted(2));
         }
         (Monster::LouseProgenitor, MoveId::PounceMove) => fight.attack_opponents(),
@@ -276,7 +283,9 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         // `BugStingMove`: its two hits, then Weak and Frail at two on each
         // target.
         (Monster::Crusher, MoveId::BugStingMove) => {
-            fight.attack_opponents();
+            if super::attack_first(fight, step) {
+                return Some(1);
+            }
             fight.apply_to_opponents(Power::WeakPower, PowerAmount::Counted(2));
             fight.apply_to_opponents(Power::FrailPower, PowerAmount::Counted(2));
         }
@@ -289,7 +298,9 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         }
         // `GuardedStrikeMove`: its hit, then eighteen block as a move.
         (Monster::Crusher, MoveId::GuardedStrikeMove) => {
-            fight.attack_opponents();
+            if super::attack_first(fight, step) {
+                return Some(1);
+            }
             let block = fight.resolve(Effect::GainBlock {
                 recipient: fight.actor(),
                 amount: Amount::Number(GUARDED_BLOCK),
@@ -337,7 +348,9 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         }
         // `ExplosionMove`: its hit, then the same Thorns taken back.
         (Monster::SpinyToad, MoveId::SpikeExplosionMove) => {
-            fight.attack_opponents();
+            if super::attack_first(fight, step) {
+                return Some(1);
+            }
             fight.apply_to_actor(Power::ThornsPower, PowerAmount::Counted(-SPINES));
         }
         // `CurlAndGrowMove`: `CreatureCmd.GainBlock` of its `CurlBlock` as a
@@ -359,42 +372,52 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         // `EscapeMove`: `CreatureCmd.Escape` on itself.
         (Monster::ThievingHopper, MoveId::EscapeMove) => fight.escape(),
         (Monster::BowlbugRock, MoveId::HeadbuttMove) => fight.attack_opponents(),
-        (Monster::SlumberingBeetle, MoveId::RollOutMove) => roll_out(fight),
+        (Monster::SlumberingBeetle, MoveId::RollOutMove) => return roll_out(fight, step),
         // `WritheMove`, whose two hits are the intent's own repeat count.
         (_, MoveId::WritheMove) if segment => fight.attack_opponents(),
-        (_, MoveId::BulkMove) if segment => bulk(fight),
-        (_, MoveId::ConstrictMove) if segment => constrict(fight),
+        (_, MoveId::BulkMove) if segment => return bulk(fight, step),
+        (_, MoveId::ConstrictMove) if segment => return constrict(fight, step),
         (_, MoveId::ReattachMove) if segment => reattach(fight),
-        (monster, move_id) => monster_moves::perform(monster, move_id, fight),
+        (monster, move_id) => return monster_moves::perform(monster, move_id, step, fight),
     }
+    None
 }
 
 /// Roll over the target, then harden.
 ///
 /// `RolloutMove` applies the Strength to the beetle itself, so the fight it
 /// hits and the creature it grows are not the same one.
-fn roll_out<F: Fight<V>>(fight: &mut F) {
+fn roll_out<F: Fight<V>>(fight: &mut F, step: u8) -> Option<u8> {
     const HARDENS: Number = 2;
 
-    fight.attack_opponents();
+    if super::attack_first(fight, step) {
+        return Some(1);
+    }
     fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(HARDENS));
+    None
 }
 
 /// Swell: hit, then grow.
 ///
 /// `BulkMove` applies the Strength to the segment itself, so the creature it
 /// hits and the one it grows are not the same.
-fn bulk<F: Fight<V>>(fight: &mut F) {
+fn bulk<F: Fight<V>>(fight: &mut F, step: u8) -> Option<u8> {
     const BULKS: Number = 2;
 
-    fight.attack_opponents();
+    if super::attack_first(fight, step) {
+        return Some(1);
+    }
     fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(BULKS));
+    None
 }
 
 /// Squeeze: hit, and leave the target weakened.
-fn constrict<F: Fight<V>>(fight: &mut F) {
-    fight.attack_opponents();
+fn constrict<F: Fight<V>>(fight: &mut F, step: u8) -> Option<u8> {
+    if super::attack_first(fight, step) {
+        return Some(1);
+    }
     fight.apply_to_opponents(Power::WeakPower, PowerAmount::Counted(1));
+    None
 }
 
 /// Join the row again, for the health the power carries.
@@ -537,6 +560,7 @@ const CURSE_SETS: usize = 3;
 /// `resume` carries out.
 pub(super) fn knowledge_demon<F: Fight<V>>(
     move_id: MoveId,
+    step: u8,
     model: &mut super::Model,
     fight: &mut F,
 ) -> sts2_core::Played<V> {
@@ -583,7 +607,11 @@ pub(super) fn knowledge_demon<F: Fight<V>>(
             sts2_core::Played::Done
         }
         MoveId::PonderMove => {
-            fight.attack_opponents();
+            if super::attack_first(fight, step) {
+                return sts2_core::Played::Waiting {
+                    at: super::super::Resume::Monster(Resume::Step(1)),
+                };
+            }
             let actor = fight.actor();
             fight.heal(actor, PONDER_HEAL);
             let strength = match deadly {
@@ -602,6 +630,9 @@ pub(super) fn knowledge_demon<F: Fight<V>>(
 pub enum Resume {
     /// `ChooseCurse`, for the set at this index.
     CurseOfKnowledge { set: u8 },
+    /// A move that stood still on a command the player had to answer, from
+    /// this step once the answer is in.
+    Step(u8),
 }
 
 /// `IChoosable.OnChosen` for the card the player took, which applies its
@@ -616,7 +647,9 @@ pub(super) fn resume<F: Fight<V>>(
     // `_disintegrationDamageValues`.
     const DISINTEGRATION: [Number; CURSE_SETS] = [6, 7, 8];
 
-    let Resume::CurseOfKnowledge { set } = at;
+    let Resume::CurseOfKnowledge { set } = at else {
+        unreachable!("{at:?} resumes a move, not a choice")
+    };
     let Some(chosen) = chosen else {
         return sts2_core::Played::Done;
     };

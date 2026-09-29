@@ -953,6 +953,38 @@ fn run_deferred<V: Rules>(
                 effect.ended = effect.ended.or(ended);
                 finish_effect(fighting, ascension, effect, outermost)?
             }
+            parked @ super::live::Deferred::Move { .. } => {
+                let resumed = match ended {
+                    None => super::turn::resume_move::<V>(
+                        Fighting {
+                            live: &mut *fighting.live,
+                            streams: &mut *fighting.streams,
+                            relics: &mut *fighting.relics,
+                        },
+                        &parked,
+                    ),
+                    ended => Some(ended),
+                };
+                match resumed {
+                    // It stood still again, and waits once more.
+                    None => ended,
+                    Some(ended) => {
+                        let super::live::Deferred::Move {
+                            actor,
+                            move_id,
+                            acting,
+                            max_energy,
+                            ..
+                        } = parked
+                        else {
+                            unreachable!("a move was parked")
+                        };
+                        super::turn::after_move::<V>(
+                            fighting, actor, move_id, &acting, max_energy, ended,
+                        )?
+                    }
+                }
+            }
             super::live::Deferred::Draw {
                 count,
                 hand_draw,
