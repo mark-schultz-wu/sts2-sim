@@ -161,12 +161,12 @@ pub(super) enum Then<V: Rules> {
     Pick { act: sts2_core::PileAct },
 }
 
-/// What waits behind a question that a card, auto-played inside another
-/// effect, asked. The game's commands are coroutines, so the effect around the
-/// card stands still until the card's play is over. These run once it is.
+/// What waits behind a question raised inside an effect, a move or an
+/// attack's hit. The game's commands are coroutines, so what surrounds the
+/// question stands still until it is answered. These run once it is.
 ///
 /// An effect that does not wait runs on to its end first. So one whose code
-/// goes on past the auto-play does that part early.
+/// goes on past the question does that part early.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum Deferred<V: Rules> {
     /// The rest of an effect, from where its own code handed back `played`.
@@ -209,6 +209,30 @@ pub(super) enum Deferred<V: Rules> {
         hand_draw: bool,
         resumed: bool,
     },
+    /// The hits of an attack that came up while a question one of its
+    /// earlier hits raised waited, each resolved as it lands. Then the end of
+    /// the attack, over every hit in `landed` and the rest.
+    ///
+    /// `AttackCommand`'s hit loop awaits each hit, so the later ones stand
+    /// still until the answer comes.
+    Hits {
+        frame: super::board::Frame<V>,
+        attack: HeldAttack<V>,
+        hits: Vec<sts2_core::Effect<V>>,
+        landed: sts2_core::AttackResults<V>,
+    },
+}
+
+/// The attack command whose hits wait, which `AfterAttack` names once they
+/// have landed.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct HeldAttack<V: Rules> {
+    pub(super) command: sts2_core::AttackId,
+    pub(super) attacker: CombatId,
+    /// The monster swinging, which `History.CreatureAttacked` counts.
+    pub(super) monster: Option<V::Monster>,
+    /// `IsPoweredAttack`.
+    pub(super) powered: bool,
 }
 
 /// Where the enemy turn stands while a monster's move waits on the player.

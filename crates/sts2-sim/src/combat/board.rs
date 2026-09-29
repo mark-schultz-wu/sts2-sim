@@ -68,6 +68,8 @@ pub(super) struct Board<'a, V: Rules> {
     /// other command it runs takes a `ThrowingPlayerChoiceContext`, which
     /// throws on one.
     moving: bool,
+    /// The hits of the attack under way that wait on a question, in order.
+    held: Vec<Effect<V>>,
     /// The results of the attack command whose hits are landing, which
     /// `AttackCommand.Results` gathers.
     landed: Option<sts2_core::AttackResults<V>>,
@@ -116,6 +118,9 @@ enum Resolved<V: Rules> {
         /// The relics whose block hooks changed it.
         modifying: SmallVec<[V::Relic; 1]>,
     },
+    /// A hit inside an attack while a question an earlier hit raised waits.
+    /// It lands after the answer, resolved then.
+    Held(Effect<V>),
 }
 
 impl<V: Rules> EffectResolution<V> for ResolvedEffect<V> {
@@ -123,6 +128,9 @@ impl<V: Rules> EffectResolution<V> for ResolvedEffect<V> {
         match self.effect {
             Resolved::Attack { damage, .. } => damage,
             Resolved::GainBlock { amount, .. } => amount,
+            Resolved::Held(effect) => {
+                unimplemented!("reading what {effect:?} comes to while it waits on a question")
+            }
         }
     }
 }
@@ -164,6 +172,7 @@ impl<'a, V: Rules> Board<'a, V> {
             ended: None,
             pausable: false,
             moving: false,
+            held: Vec::new(),
             landed: None,
         }
     }
@@ -198,6 +207,7 @@ impl<'a, V: Rules> Board<'a, V> {
             ended: None,
             pausable: false,
             moving: true,
+            held: Vec::new(),
             landed: None,
         }
     }
@@ -2943,6 +2953,11 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn resolve(&self, effect: Effect<V>) -> Self::ResolvedEffect {
+        if self.hits_wait() && matches!(effect, Effect::Attack { .. }) {
+            return ResolvedEffect {
+                effect: Resolved::Held(effect),
+            };
+        }
         resolve::<V>(self.walk(), self.acting().as_ref(), effect)
     }
 
@@ -2983,6 +2998,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 powered,
                 card,
             } => self.hit(Some(dealer), target, damage, powered, false, card),
+            Resolved::Held(effect) => self.held.push(effect),
             Resolved::GainBlock {
                 recipient,
                 amount,
@@ -3110,6 +3126,9 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn attack_results(&self) -> sts2_core::AttackResults<V> {
+        if !self.held.is_empty() {
+            unimplemented!("reading an attack's results while its hits wait on a question");
+        }
         self.landed.clone().unwrap_or_default()
     }
 
@@ -3902,6 +3921,9 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     fn random_target(&mut self) -> Option<CombatId> {
         use sts2_core::rng::GameRng as _;
 
+        if self.hits_wait() {
+            unimplemented!("a random target drawn while an attack's hits wait on a question");
+        }
         let alive = sts2_core::Fight::opponents(self);
         self.rngs.targets.choose(&alive).ok().copied()
     }
@@ -4434,6 +4456,43 @@ impl<V: Rules> Board<'_, V> {
         let outer = self.landed.replace(sts2_core::AttackResults::new());
         hits(self);
         let results = std::mem::replace(&mut self.landed, outer).unwrap_or_default();
+        let attack = super::live::HeldAttack {
+            command,
+            attacker,
+            monster,
+            powered: scaling == Scaling::Dynamic,
+        };
+        if !self.held.is_empty() {
+            self.live.defer(super::live::Deferred::Hits {
+                frame: self.frame(),
+                attack,
+                hits: std::mem::take(&mut self.held),
+                landed: results.clone(),
+            });
+            return results;
+        }
+        self.attack_over(attack, results)
+    }
+
+    /// Whether a hit resolved now waits: inside an attack whose earlier hit
+    /// raised a question, on a board that can stand still for it.
+    fn hits_wait(&self) -> bool {
+        self.live.asking.is_some() && self.pausable && self.landed.is_some()
+    }
+
+    /// The end of an attack once all its hits have landed: `History
+    /// .CreatureAttacked`, then `AfterAttack` over `results`.
+    fn attack_over(
+        &mut self,
+        attack: super::live::HeldAttack<V>,
+        results: sts2_core::AttackResults<V>,
+    ) -> sts2_core::AttackResults<V> {
+        let super::live::HeldAttack {
+            command,
+            attacker,
+            monster,
+            powered,
+        } = attack;
         // `History.CreatureAttacked`, before `AfterAttack` and whether or not
         // the fight is ending.
         self.live.history.attacked(monster);
@@ -4449,7 +4508,7 @@ impl<V: Rules> Board<'_, V> {
                 command,
                 attacker,
                 monster,
-                powered: scaling == Scaling::Dynamic,
+                powered,
             },
         );
         for (listener, effect) in asked {
@@ -4524,6 +4583,108 @@ pub(super) fn draw<V: Rules>(
             unimplemented!("a shuffle asking for {asks:?} inside a draw that cannot pause")
         }
     }
+}
+
+/// What a board was built for, which the hits it held are landed on again.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct Frame<V: Rules> {
+    actor: CombatId,
+    target: Option<CombatId>,
+    playing: Option<CardId<V>>,
+    intent_damage: V::Number,
+    intent_repeats: V::Count,
+    moving: bool,
+}
+
+impl<'a, V: Rules> Board<'a, V> {
+    /// What this board was built for.
+    fn frame(&self) -> Frame<V> {
+        Frame {
+            actor: self.actor,
+            target: self.target,
+            playing: self.playing,
+            intent_damage: self.intent_damage,
+            intent_repeats: self.intent_repeats,
+            moving: self.moving,
+        }
+    }
+
+    /// A board as `frame` was, inside the attack whose hits it held.
+    fn in_frame(
+        live: &'a mut Live<V>,
+        rngs: CombatRngs<'a>,
+        relics: &'a mut Belt<V>,
+        ascension: V::AscensionLevel,
+        frame: Frame<V>,
+    ) -> Self {
+        let Frame {
+            actor,
+            target,
+            playing,
+            intent_damage,
+            intent_repeats,
+            moving,
+        } = frame;
+        Board {
+            live,
+            rngs,
+            relics,
+            actor,
+            target,
+            playing,
+            intent_damage,
+            intent_repeats,
+            ascension,
+            skipped: Vec::new(),
+            ended: None,
+            pausable: true,
+            moving,
+            held: Vec::new(),
+            landed: None,
+        }
+    }
+}
+
+/// Land the hits an attack held while a question waited, each resolved now,
+/// then end the attack. A question one of them raises holds the rest again.
+pub(super) fn land_held<V: Rules>(
+    live: &mut Live<V>,
+    rngs: CombatRngs<'_>,
+    relics: &mut Belt<V>,
+    ascension: V::AscensionLevel,
+    held: super::live::Deferred<V>,
+) -> Option<super::Ended> {
+    let super::live::Deferred::Hits {
+        frame,
+        attack,
+        hits,
+        landed,
+    } = held
+    else {
+        unreachable!("only held hits land as them")
+    };
+    let mut board = Board::in_frame(live, rngs, relics, ascension, frame);
+    board.landed = Some(landed);
+    for effect in hits {
+        let hit = Fight::resolve(&board, effect);
+        Fight::apply(&mut board, hit);
+    }
+    let results = board.landed.take().unwrap_or_default();
+    if board.held.is_empty() {
+        board.attack_over(attack, results);
+    } else {
+        let hits = std::mem::take(&mut board.held);
+        board.live.defer(super::live::Deferred::Hits {
+            frame,
+            attack,
+            hits,
+            landed: results,
+        });
+    }
+    let ended = board.ended;
+    let skipped = std::mem::take(&mut board.skipped);
+    super::play::merge::<V>(&mut live.skip_tick, skipped);
+    ended
 }
 
 /// [`draw`] inside a card's or a potion's effect, which a shuffle's question

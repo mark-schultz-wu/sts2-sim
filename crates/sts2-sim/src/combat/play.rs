@@ -985,6 +985,16 @@ fn run_deferred<V: Rules>(
                     }
                 }
             }
+            held @ super::live::Deferred::Hits { .. } => match ended {
+                None => super::board::land_held::<V>(
+                    fighting.live,
+                    fighting.streams.combat(),
+                    fighting.relics,
+                    ascension,
+                    held,
+                ),
+                ended => ended,
+            },
             super::live::Deferred::Draw {
                 count,
                 hand_draw,
