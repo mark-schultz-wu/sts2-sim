@@ -2117,9 +2117,9 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("asking whether the fight is ending")
     }
 
-    /// `TargetType` of the card at one place, including one that works its
-    /// target out from the fight.
-    fn card_target_type(&self, _card: crate::CardAt<V>) -> V::TargetType {
+    /// `TargetType` of a card in this fight. Some cards work theirs out from
+    /// it: a Shiv under Fan of Knives hits every enemy.
+    fn card_target_type(&self, _card: crate::CardIdent<V>) -> V::TargetType {
         unimplemented!("a card's target type")
     }
 

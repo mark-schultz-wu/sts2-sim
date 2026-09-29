@@ -4117,14 +4117,8 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.over()
     }
 
-    fn card_target_type(&self, card: CardAt<V>) -> V::TargetType {
-        let at = self.standing(card);
-        let held = self
-            .live
-            .cards
-            .get(card.pile(), at)
-            .expect("a card stands where it was found");
-        super::legal::target_type::<V>(held.face.ident, self.live)
+    fn card_target_type(&self, card: CardIdent<V>) -> V::TargetType {
+        super::legal::target_type::<V>(card, self.live)
     }
 
     fn auto_play_card(&mut self, card: CardAt<V>) {

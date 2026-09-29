@@ -1,0 +1,8 @@
+# A Shiv works its target out from the fight, and under Fan of Knives it
+# hits every enemy. Inky on it then puts its Weak on every enemy it hit.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_NORMAL"}
+{"cmd":"grant","card":"FAN_OF_KNIVES"}
+{"cmd":"play_card","index":7}
+{"cmd":"enchant","enchantment":"INKY","amount":1,"index":7}
+{"cmd":"play_card","index":7}
