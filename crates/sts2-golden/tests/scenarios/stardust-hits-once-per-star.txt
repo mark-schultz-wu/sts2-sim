@@ -1,0 +1,6 @@
+# Stardust spends every star its owner holds, and hits a random enemy once
+# for each.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_NORMAL"}
+{"cmd":"grant","card":"STARDUST"}
+{"cmd":"play_card","index":5}

@@ -93,6 +93,10 @@ pub(super) struct CardPlay<V: Rules> {
     pub(super) id: CardId<V>,
     /// `CardPlay.Resources.EnergyValue`.
     pub(super) energy: V::Count,
+    /// `EnergyCost.CapturedXValue` and `LastStarsSpent`, which every play
+    /// of the series reads.
+    pub(super) x: V::Count,
+    pub(super) stars: V::Count,
     /// `ModifyCardPlayResultPileTypeAndPosition`'s answer, worked out before
     /// the first play. Nothing for a card that leaves the fight.
     pub(super) pile: Option<sts2_core::Pile>,
@@ -1966,11 +1970,13 @@ impl<V: Rules> CombatHistory<V> {
     }
 
     /// `History.CardPlayStarted`, in the turn the fight stands in.
-    pub(super) fn start(&mut self, card: V::Card, id: CardId<V>, energy: V::Count, first: bool) {
+    pub(super) fn start(&mut self, card: V::Card, id: CardId<V>, play: CardPlay<V>, first: bool) {
         let started = sts2_core::PlayStarted {
             card,
             id,
-            energy,
+            energy: play.energy,
+            x: play.x,
+            stars: play.stars,
             first,
         };
         self.this_turn

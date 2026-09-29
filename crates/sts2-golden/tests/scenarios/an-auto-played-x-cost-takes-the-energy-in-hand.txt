@@ -1,0 +1,27 @@
+# Havoc auto-plays the Whirlwind on top of a draw pile stacked with them. An
+# auto-play spends nothing, and the Whirlwind's X is the two energy left in
+# hand, so it hits twice.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","card":"WHIRLWIND"}
+{"cmd":"grant","card":"WHIRLWIND"}
+{"cmd":"grant","card":"WHIRLWIND"}
+{"cmd":"grant","card":"WHIRLWIND"}
+{"cmd":"grant","card":"WHIRLWIND"}
+{"cmd":"grant","card":"WHIRLWIND"}
+{"cmd":"grant","card":"WHIRLWIND"}
+{"cmd":"grant","card":"WHIRLWIND"}
+{"cmd":"grant","card":"WHIRLWIND"}
+{"cmd":"grant","card":"WHIRLWIND"}
+{"cmd":"grant","card":"WHIRLWIND"}
+{"cmd":"grant","card":"WHIRLWIND"}
+{"cmd":"grant","card":"WHIRLWIND"}
+{"cmd":"grant","card":"WHIRLWIND"}
+{"cmd":"grant","card":"WHIRLWIND"}
+{"cmd":"grant","card":"WHIRLWIND"}
+{"cmd":"grant","card":"WHIRLWIND"}
+{"cmd":"grant","card":"WHIRLWIND"}
+{"cmd":"grant","card":"WHIRLWIND"}
+{"cmd":"grant","card":"WHIRLWIND"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"HAVOC"}
+{"cmd":"play_card","index":5}

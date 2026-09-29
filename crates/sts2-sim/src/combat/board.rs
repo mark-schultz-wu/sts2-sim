@@ -4005,7 +4005,20 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .started_this_turn()
             .last()
             .expect("an X-cost card resolving its X is a play started this turn");
-        num_traits::cast(started.energy).expect("an energy fits a game number")
+        num_traits::cast(started.x).expect("an energy fits a game number")
+    }
+
+    /// `LastStarsSpent` is what the play spent, which the history's latest
+    /// started play records: the one being resolved.
+    fn star_x_value(&self) -> V::Number {
+        self.unheard(sts2_core::ModelHook::ModifyXValue);
+        let started = self
+            .live
+            .history()
+            .started_this_turn()
+            .last()
+            .expect("an X star cost resolving its X is a play started this turn");
+        num_traits::cast(started.stars).expect("a star count fits a game number")
     }
 
     fn random_target(&mut self) -> Option<CombatId> {

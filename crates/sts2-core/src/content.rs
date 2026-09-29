@@ -2465,6 +2465,12 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("an X-cost card's X")
     }
 
+    /// `ResolveStarXValue` for the card being played: the stars its play
+    /// spent, which `Hook.ModifyXValue` can change.
+    fn star_x_value(&self) -> V::Number {
+        unimplemented!("an X star cost's X")
+    }
+
     /// One of the enemies that can be hit, drawn off `CombatTargets` by
     /// `NextItem`. Nothing when none can.
     fn random_opponent(&mut self) -> Option<crate::CombatId> {
@@ -3925,6 +3931,12 @@ pub struct PlayStarted<V: ContentVersion> {
     pub id: crate::CardId<V>,
     /// `CardPlay.Resources.EnergyValue`.
     pub energy: V::Count,
+    /// `EnergyCost.CapturedXValue`, for a card that costs X energy: what
+    /// its play spent, or the energy in hand where it was auto-played.
+    pub x: V::Count,
+    /// `LastStarsSpent`: what its play spent in stars, or the stars in hand
+    /// for an X star cost it was auto-played at.
+    pub stars: V::Count,
     /// `CardPlay.IsFirstInSeries`: not a replay of the play before it.
     pub first: bool,
 }
