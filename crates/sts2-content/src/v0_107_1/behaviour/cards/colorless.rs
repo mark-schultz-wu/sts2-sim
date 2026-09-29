@@ -345,14 +345,7 @@ fn beat_down<F: Fight<V>>(fight: &mut F) -> Played<V> {
         if fight.over_or_ending() {
             break;
         }
-        let card = [Pile::Discard, Pile::Hand, Pile::Draw, Pile::Exhaust]
-            .into_iter()
-            .find_map(|pile| {
-                fight
-                    .cards_in(pile)
-                    .into_iter()
-                    .find(|at| at.id() == card.id())
-            })
+        let card = super::standing(fight, card)
             .unwrap_or_else(|| unimplemented!("Beat Down playing a card no pile holds"));
         let aimed = fight.card_target_type(fight.card_ident(card))
             == <V as sts2_core::ContentVersion>::TargetType::ANY_ENEMY;

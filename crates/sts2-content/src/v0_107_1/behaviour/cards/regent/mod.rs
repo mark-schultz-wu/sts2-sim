@@ -32,6 +32,12 @@ pub enum Resume {
     ChargeTransform,
     /// `Glow`, after a question inside its draw was answered.
     GlowDrew,
+    /// `DecisionsDecisions`, after a question inside its draw was answered.
+    DecisionsDrew,
+    /// `DecisionsDecisions`, after its owner picked the Skill to play.
+    DecisionsPicked,
+    /// `DecisionsDecisions`, once the last play of its Skill has its answer.
+    DecisionsPlayed,
 }
 
 /// `BeatIntoShape`: its damage to the target, then a Forge of its calculated
@@ -170,6 +176,17 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
                 };
             }
             glow_drew(fight)
+        }
+        // `DecisionsDecisions`: its `Cards` drawn, then a playable Skill of the
+        // hand picked. A shuffle inside the draw can ask, and the rest waits.
+        RegentCard::DecisionsDecisions => {
+            fight.draw(fight.var(CardVar::Cards));
+            if fight.waiting() {
+                return Played::Waiting {
+                    at: super::super::Resume::Card(super::Resume::Regent(Resume::DecisionsDrew)),
+                };
+            }
+            decisions_ask(fight)
         }
         RegentCard::BeatIntoShape => beat_into_shape(fight),
         RegentCard::Quasar => quasar(fight),
@@ -563,7 +580,14 @@ pub(super) fn resume_play<F: Fight<V>>(
             Played::Done
         }
         Resume::QuasarChoice => unreachable!("Quasar stops on a choice, not a pick"),
-        Resume::GlowDrew => unreachable!("{at:?} waits on a question, not a pick"),
+        Resume::GlowDrew | Resume::DecisionsDrew | Resume::DecisionsPlayed => {
+            unreachable!("{at:?} waits on a question, not a pick")
+        }
+        Resume::DecisionsPicked => match chosen.as_slice() {
+            [] => Played::Done,
+            &[card] => decisions_play(fight, card),
+            picked => unreachable!("Decisions, Decisions picked {} cards", picked.len()),
+        },
         // Its `Repeat` of clones of the one picked, each into hand.
         Resume::HeirloomHammerCopy => {
             if let Some(card) = chosen.one_or_none() {
@@ -577,6 +601,59 @@ pub(super) fn resume_play<F: Fight<V>>(
 }
 
 /// `Glow`'s Draw Cards Next Turn, once its draw is over.
+/// `DecisionsDecisions`' `FromHand` of one Skill that can be played.
+///
+/// # Panics
+///
+/// A card in hand whose type the fight works out.
+fn decisions_ask<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use sts2_core::{CardKind, Rules as _};
+
+    use super::super::super::generated::cards::CardKeyword;
+
+    let skills = fight
+        .cards_in(Pile::Hand)
+        .into_iter()
+        .filter(|&at| {
+            let kind = V::card_kind(fight.card_ident(at).card).unwrap_or_else(|| {
+                unimplemented!("Decisions, Decisions reading a card whose type is computed")
+            });
+            kind == CardKind::Skill && !fight.card_keyword(at, CardKeyword::Unplayable)
+        })
+        .collect();
+    Played::AskingAmong {
+        cards: skills,
+        selection: sts2_core::Selection::Exactly(nonmax::NonMaxUsize::ONE),
+        at: super::super::Resume::Card(super::Resume::Regent(Resume::DecisionsPicked)),
+    }
+}
+
+/// `CardCmd.AutoPlay` of the Skill picked, its `Repeat` times, wherever the
+/// card stands by each play.
+///
+/// # Panics
+///
+/// A play that stops on a question with more to come, and a card no pile
+/// holds by its turn.
+fn decisions_play<F: Fight<V>>(fight: &mut F, card: sts2_core::CardAt<V>) -> Played<V> {
+    let repeats = fight.var(CardVar::Repeat);
+    for played in 1..=repeats {
+        let at = super::standing(fight, card)
+            .unwrap_or_else(|| unimplemented!("Decisions, Decisions playing a card no pile holds"));
+        fight.auto_play_card(at);
+        if fight.waiting() {
+            assert!(
+                played == repeats,
+                "Decisions, Decisions waiting, with more to play"
+            );
+            return Played::Waiting {
+                at: super::super::Resume::Card(super::Resume::Regent(Resume::DecisionsPlayed)),
+            };
+        }
+    }
+    Played::Done
+}
+
 fn glow_drew<F: Fight<V>>(fight: &mut F) -> Played<V> {
     use sts2_core::PowerAmount;
 
@@ -594,6 +671,8 @@ fn glow_drew<F: Fight<V>>(fight: &mut F) -> Played<V> {
 pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
     match at {
         Resume::GlowDrew => glow_drew(fight),
+        Resume::DecisionsDrew => decisions_ask(fight),
+        Resume::DecisionsPlayed => Played::Done,
         at => unreachable!("{at:?} stops on a pick, not on a question it waited for"),
     }
 }
