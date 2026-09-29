@@ -343,6 +343,25 @@ pub(crate) fn enter<V: Rules>(
             }
         }
     }
+    // The whole deck into the draw pile in the order the shuffle left it.
+    live.cards = Cards::dealt(&[], &order);
+    if !afflicting.is_empty() {
+        super::board::Board::for_card(&mut live, streams.combat(), relics, ascension, None, None)
+            .write_cards(afflicting);
+    }
+    if !shuffled_in.is_empty() {
+        let mut board = super::board::Board::for_card(
+            &mut live,
+            streams.combat(),
+            relics,
+            ascension,
+            None,
+            None,
+        );
+        for card in shuffled_in {
+            board.add_to_draw_at_random(card);
+        }
+    }
     // `BeforeSideTurnStart`, which is where a monster that opens the fight
     // behind block gains it.
     super::turn::before_side_turn_start::<V>(
@@ -367,25 +386,6 @@ pub(crate) fn enter<V: Rules>(
         unimplemented!("a fight that ends {ended:?} as its first energy resets");
     }
     super::turn::energy_reset_late::<V>(&mut live, streams.combat(), relics, ascension);
-    // The whole deck into the draw pile in the order the shuffle left it.
-    live.cards = Cards::dealt(&[], &order);
-    if !afflicting.is_empty() {
-        super::board::Board::for_card(&mut live, streams.combat(), relics, ascension, None, None)
-            .write_cards(afflicting);
-    }
-    if !shuffled_in.is_empty() {
-        let mut board = super::board::Board::for_card(
-            &mut live,
-            streams.combat(),
-            relics,
-            ascension,
-            None,
-            None,
-        );
-        for card in shuffled_in {
-            board.add_to_draw_at_random(card);
-        }
-    }
     // `RandomizeOrderInternal` raises `ModifyShuffleOrder` before the innate
     // cards move. No listener answers it.
     let hook = sts2_core::EventHook::ShuffleOrder { initial: true };

@@ -186,6 +186,7 @@ mod pocketwatch;
 mod pollinous_core;
 mod pomander;
 mod potion_belt;
+mod power_cell;
 mod prayer_wheel;
 mod precarious_shears;
 mod precise_scissors;
@@ -538,6 +539,7 @@ pub enum State {
     MiniRegent(mini_regent::State),
     RazorTooth,
     SlingOfCourage,
+    PowerCell,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -781,6 +783,7 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::PowerCell => power_cell::event_hook(hook, asked),
         State::SlingOfCourage => sling_of_courage::event_hook(hook, asked),
         State::RazorTooth => razor_tooth::event_hook(hook, asked),
         State::MiniRegent(state) => mini_regent::event_hook(state, hook, asked),
@@ -1141,7 +1144,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::GalacticDust(_)
         | State::MiniRegent(_)
         | State::RazorTooth
-        | State::SlingOfCourage => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::SlingOfCourage
+        | State::PowerCell => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1320,6 +1324,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::PowerCell => State::PowerCell,
             Relic::SlingOfCourage => State::SlingOfCourage,
             Relic::RazorTooth => State::RazorTooth,
             Relic::MiniRegent => State::MiniRegent(mini_regent::State::default()),

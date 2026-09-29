@@ -5086,6 +5086,11 @@ pub enum HookEffect<V: ContentVersion> {
         count: usize,
         stream: V::RunRngType,
     },
+    /// The draw pile's cards whose energy cost, with their own modifiers
+    /// alone, is a fixed nothing. They are `StableShuffle`d off
+    /// `CombatCardSelection`, and `CardPileCmd.Add` puts the first `count`
+    /// into the hand.
+    ZeroCostFromDraw(usize),
     /// `NextItem` off `CombatCardSelection` over the draw pile's cards of
     /// `kind`, `SetToFreeThisTurn`, then `CardPileCmd.Add` into the hand.
     /// Nothing where the draw pile holds none.
