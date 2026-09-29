@@ -4026,15 +4026,6 @@ impl<V: ContentVersion> History<'_, V> {
         })
     }
 
-    /// The latest `CardPlayStartedEntry` this turn of the copy `id`, found
-    /// from the turn's end, where a play still running stands.
-    pub fn last_started(&self, id: crate::CardId<V>) -> Option<PlayStarted<V>> {
-        self.this_turn.iter().rev().find_map(|entry| match entry {
-            HistoryEntry::Started(started) if started.id == id => Some(*started),
-            _ => None,
-        })
-    }
-
     /// `CardPlaysStarted` where `HappenedThisTurn`.
     pub fn started_this_turn(&self) -> impl Iterator<Item = PlayStarted<V>> + '_ {
         self.this_turn.iter().filter_map(|entry| match entry {

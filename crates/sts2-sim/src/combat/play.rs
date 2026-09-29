@@ -1137,6 +1137,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                     played_card,
                     card,
                     ethereal,
+                    play.energy,
                 );
                 effect.ended = effect.ended.or(ended);
                 if effect.plays.done >= effect.plays.count {
@@ -1331,7 +1332,8 @@ fn finish_effect<V: Rules, S: LendsCombat>(
 }
 
 /// The end of one play of `card`: `History.CardPlayFinished`, then
-/// `AfterCardPlayed`, with the card still in the play pile.
+/// `AfterCardPlayed`, with the card still in the play pile. `spent` is the
+/// energy the play's started entry records.
 ///
 /// Once for each play, so a card with replays finishes more than once. A
 /// relic that answers acts through the board a card acts through, and draws
@@ -1342,6 +1344,7 @@ fn finished<V: Rules, S: LendsCombat>(
     card: V::Card,
     id: sts2_core::CardId<V>,
     ethereal: bool,
+    spent: V::Count,
 ) -> Option<super::Ended> {
     let Fighting {
         live: next,
@@ -1355,13 +1358,6 @@ fn finished<V: Rules, S: LendsCombat>(
         .cards
         .named(id)
         .and_then(|held| held.face.ident.affliction);
-    // What the play's started entry spent, which both `AfterCardPlayed` and
-    // its late pass read.
-    let spent = next
-        .history()
-        .last_started(id)
-        .expect("a play that finished started this turn")
-        .energy;
     let asked = super::listen::notify::<V>(
         next,
         relics,
