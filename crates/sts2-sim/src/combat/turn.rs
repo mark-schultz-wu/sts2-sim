@@ -148,7 +148,7 @@ pub(super) fn resume_enemy_turn<V: Rules>(
     // does.
     let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
     let played = V::resume_play(&mut board, parked.at, taken);
-    let ended = board.ended;
+    let ended = board.ended();
     super::play::merge::<V>(&mut skipping, std::mem::take(&mut board.skipped));
     if played != sts2_core::Played::Done {
         unimplemented!("a monster's move asking a second question");
@@ -209,7 +209,7 @@ pub(super) fn resume_move<V: Rules>(
         (actor, damage, repeats),
     );
     let played = V::resume_move(monster, move_id, at, &mut board);
-    let ended = board.ended;
+    let ended = board.ended();
     let skipped = std::mem::take(&mut board.skipped);
     super::play::merge::<V>(&mut live.skip_tick, skipped);
     let again = match played {
@@ -509,7 +509,7 @@ fn turn_end<V: Rules>(
         );
         V::on_card_turn_end(card.face.ident.card, &mut board);
         let skipped = std::mem::take(&mut board.skipped);
-        let ended = board.ended;
+        let ended = board.ended();
         super::play::merge::<V>(&mut live.skip_tick, skipped);
         if ended.is_some() {
             return ended;
@@ -560,7 +560,7 @@ pub(super) fn orb_triggers<V: Rules>(
             OrbMoment::TurnEnd => V::orb_turn_end(&mut orb, &mut board),
             OrbMoment::TurnStart => V::orb_turn_start(&mut orb, &mut board),
         }
-        let ended = board.ended;
+        let ended = board.ended();
         keep_orb(live, place, orb);
         if let Some(ended) = ended {
             return Some(ended);
@@ -744,7 +744,7 @@ fn before_turn_end<V: Rules>(
                 let mut board =
                     Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
                 board.doom_kill(&doomed);
-                ended = board.ended;
+                ended = board.ended();
             }
             (
                 Listener::Power { owner, .. },
@@ -772,7 +772,7 @@ fn before_turn_end<V: Rules>(
                     );
                     sts2_core::Fight::apply(&mut board, hit);
                 }
-                ended = board.ended;
+                ended = board.ended();
             }
             // `CreatureCmd.GainBlock`, unpowered, on the player who carries
             // the relic.
@@ -786,7 +786,7 @@ fn before_turn_end<V: Rules>(
                 let mut board =
                     Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
                 board.land(player, power, amount, Some(player));
-                ended = ended.or(board.ended);
+                ended = ended.or(board.ended());
             }
             // `CreatureCmd.Damage` over `HittableEnemies`, from the player who
             // carries the relic.
@@ -797,7 +797,7 @@ fn before_turn_end<V: Rules>(
                 let mut board =
                     Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
                 super::hook::apply(&mut board, [effect]);
-                ended = board.ended;
+                ended = board.ended();
             }
             // Written on the fight's cards.
             (_, effect @ sts2_core::HookEffect::ClearAffliction(_)) => {
@@ -1189,7 +1189,7 @@ pub(super) fn carry_setup<V: Rules>(
                                 );
                                 sts2_core::Fight::apply(&mut board, hit);
                             }
-                            ended = ended.or(board.ended);
+                            ended = ended.or(board.ended());
                         }
                         sts2_core::HookEffect::SelectFromPile { pile, count, act } => {
                             match select::<V>(live, rngs.reborrow(), relics, pile, count, act) {
@@ -1260,7 +1260,7 @@ pub(super) fn carry_setup<V: Rules>(
                                     None,
                                 );
                                 V::orb_passive(&mut first, &mut board);
-                                ended = ended.or(board.ended);
+                                ended = ended.or(board.ended());
                                 keep_orb(live, 0, first);
                             }
                         }
@@ -1288,7 +1288,7 @@ pub(super) fn carry_setup<V: Rules>(
                                     None,
                                 );
                                 V::orb_passive(&mut orb, &mut board);
-                                ended = ended.or(board.ended);
+                                ended = ended.or(board.ended());
                                 keep_orb(live, place, orb);
                             }
                         }
@@ -1330,7 +1330,7 @@ pub(super) fn carry_setup<V: Rules>(
                                 amount,
                                 unblockable,
                             );
-                            ended = ended.or(board.ended);
+                            ended = ended.or(board.ended());
                         }
                         sts2_core::HookEffect::GenerateFromPool {
                             filter,
@@ -1597,7 +1597,7 @@ pub(super) fn act_on<V: Rules>(
                 let mut board =
                     Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
                 sts2_core::Fight::transform(&mut board, *card, sts2_core::CardIdent::new(into));
-                if let Some(ended) = board.ended {
+                if let Some(ended) = board.ended() {
                     return (sly, Some(ended));
                 }
                 continue;
@@ -1648,7 +1648,7 @@ pub(super) fn card_discarded<V: Rules>(
     let ascension = live.ascension;
     let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
     super::hook::apply::<V, _>(&mut board, effects);
-    board.ended
+    board.ended()
 }
 
 /// `CardCmd.AutoPlay` with `SlyDiscard` for each Sly card a discard took, in
@@ -1718,7 +1718,7 @@ pub(super) fn exhausted<V: Rules>(
     let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
     super::hook::apply::<V, _>(&mut board, asked.into_iter().map(|(_, effect)| effect));
     let skipped = std::mem::take(&mut board.skipped);
-    let ended = board.ended;
+    let ended = board.ended();
     super::play::merge::<V>(&mut live.skip_tick, skipped);
     ended
 }
@@ -1889,7 +1889,7 @@ pub(super) fn side_turn_started<V: Rules>(
                     if alive {
                         board.modify_amount(owner, power, -num_traits::one::<V::Number>());
                     }
-                    ended = ended.or(board.ended);
+                    ended = ended.or(board.ended());
                 }
             }
             // `PowerCmd.Apply<P>(HittableEnemies, amount, Owner)`.
@@ -1902,7 +1902,7 @@ pub(super) fn side_turn_started<V: Rules>(
                 for target in board.hittable_opponents() {
                     board.land(target, power, amount, Some(owner));
                 }
-                ended = ended.or(board.ended);
+                ended = ended.or(board.ended());
             }
             // `PlayerCmd.GainStars`.
             sts2_core::HookEffect::GainStars(amount) => live.modify_stars(amount),
@@ -1911,7 +1911,7 @@ pub(super) fn side_turn_started<V: Rules>(
                 let mut board =
                     Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
                 sts2_core::Fight::channel(&mut board, orb);
-                ended = ended.or(board.ended);
+                ended = ended.or(board.ended());
             }
             // `OstyCmd.Summon` for the player.
             sts2_core::HookEffect::Summon(amount) => {
@@ -1925,7 +1925,7 @@ pub(super) fn side_turn_started<V: Rules>(
                 let mut board =
                     Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
                 super::hook::apply::<V, _>(&mut board, [effect]);
-                ended = ended.or(board.ended);
+                ended = ended.or(board.ended());
             }
             // `CreatureCmd.GainBlock`, unpowered, on a creature the listener
             // names.
@@ -1933,7 +1933,7 @@ pub(super) fn side_turn_started<V: Rules>(
                 let mut board =
                     Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
                 super::hook::apply::<V, _>(&mut board, [effect]);
-                ended = ended.or(board.ended);
+                ended = ended.or(board.ended());
             }
             sts2_core::HookEffect::GenerateFromPool {
                 filter,
@@ -1966,7 +1966,7 @@ pub(super) fn side_turn_started<V: Rules>(
                 let mut board =
                     Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
                 board.modify_amount(owner, power, -num_traits::one::<V::Number>());
-                ended = ended.or(board.ended);
+                ended = ended.or(board.ended());
             }
             (listener, effect) => {
                 unimplemented!("{listener:?} asking for {effect:?} late as a side turn starts")
@@ -2088,7 +2088,7 @@ pub(super) fn energy_reset<V: Rules>(
                 let mut board =
                     Board::for_card(live, streams.combat(), relics, ascension, None, None);
                 sts2_core::Fight::channel(&mut board, orb);
-                ended = ended.or(board.ended);
+                ended = ended.or(board.ended());
             }
             (_, effect) => unimplemented!("a listener asking for {effect:?} as energy resets"),
         }
@@ -2445,7 +2445,7 @@ fn applied<V: Rules>(
                 }
             }
         }
-        if let Some(ended) = board.ended {
+        if let Some(ended) = board.ended() {
             return Some(ended);
         }
     }
@@ -2511,7 +2511,7 @@ fn enemy_turn<V: Rules>(
             (id, damage, repeats),
         );
         let played = V::perform_move(monster, next_move.id, &mut board);
-        ended = ended.or(board.ended);
+        ended = ended.or(board.ended());
         super::play::merge::<V>(skipping, std::mem::take(&mut board.skipped));
         match played {
             sts2_core::Played::Done => {}

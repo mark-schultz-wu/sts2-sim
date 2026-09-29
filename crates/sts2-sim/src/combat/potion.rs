@@ -32,7 +32,7 @@ pub(crate) fn drink<V: Rules>(
     let mut board =
         Board::for_card(live, streams.combat(), relics, ascension, target, None).pausable();
     let used = V::on_use(potion, &mut board);
-    let ended = board.ended;
+    let ended = board.ended();
     let skipped = std::mem::take(&mut board.skipped);
 
     super::play::merge::<V>(&mut live.skip_tick, skipped);
