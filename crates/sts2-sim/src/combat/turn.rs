@@ -1827,15 +1827,15 @@ pub(super) fn side_turn_started<V: Rules>(
             }
             // `PlayerCmd.GainEnergy`.
             sts2_core::HookEffect::GainEnergy(amount) => {
-                let gained: V::Count = num_traits::cast(amount)
-                    .unwrap_or_else(|| unimplemented!("{amount:?} energy at once"));
-                live.energy = live.energy + gained;
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                sts2_core::Fight::modify_energy(&mut board, amount);
             }
             sts2_core::HookEffect::GainEnergyForGold { energy, gold } => {
                 if live.gold >= gold {
-                    let gained: V::Count = num_traits::cast(energy)
-                        .unwrap_or_else(|| unimplemented!("{energy:?} energy at once"));
-                    live.energy = live.energy + gained;
+                    let mut board =
+                        Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                    sts2_core::Fight::modify_energy(&mut board, energy);
                     live.gold = live.gold - gold;
                 }
             }
@@ -2051,9 +2051,9 @@ pub(super) fn energy_reset<V: Rules>(
                 Listener::Power { owner, power, .. },
                 sts2_core::HookEffect::GainEnergyAndRemove(amount),
             ) => {
-                let gained: V::Count = num_traits::cast(amount)
-                    .unwrap_or_else(|| unimplemented!("a {power:?} worth {amount:?} of energy"));
-                live.energy = live.energy + gained;
+                let mut board =
+                    Board::for_card(live, streams.combat(), relics, ascension, None, None);
+                sts2_core::Fight::modify_energy(&mut board, amount);
                 live.remove_power(owner, power);
             }
             // `PlayerCmd.GainStars`.
@@ -2064,9 +2064,9 @@ pub(super) fn energy_reset<V: Rules>(
             }
             // `PlayerCmd.GainEnergy`.
             (_, sts2_core::HookEffect::GainEnergy(amount)) => {
-                let gained: V::Count = num_traits::cast(amount)
-                    .unwrap_or_else(|| unimplemented!("gaining {amount:?} energy"));
-                live.energy = live.energy + gained;
+                let mut board =
+                    Board::for_card(live, streams.combat(), relics, ascension, None, None);
+                sts2_core::Fight::modify_energy(&mut board, amount);
             }
             // `PowerCmd.Decrement(this)`.
             (Listener::Power { owner, power, .. }, sts2_core::HookEffect::Decrement) => {

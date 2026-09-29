@@ -1867,7 +1867,10 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
         .with(sts2_core::ModelHook::AfterSideTurnEnd)
         .with(sts2_core::ModelHook::ShouldDraw),
     // NO_ENERGY_GAIN_POWER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterModifyingEnergyGain)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd)
+        .with(sts2_core::ModelHook::ModifyEnergyGain),
     // OBLIVION_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCardPlayed)
