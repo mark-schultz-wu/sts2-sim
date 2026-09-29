@@ -99,6 +99,7 @@ mod forgotten_soul;
 mod fragrant_mushroom;
 mod frozen_egg;
 mod game_piece;
+mod ghost_seed;
 mod girya;
 mod glass_eye;
 mod glitter;
@@ -126,6 +127,7 @@ mod lasting_candy;
 mod lava_rock;
 mod lead_paperweight;
 mod leafy_poultice;
+mod lees_waffle;
 mod letter_opener;
 mod lizard_tail;
 mod looming_fruit;
@@ -502,6 +504,8 @@ pub enum State {
     ScrollBoxes,
     Kaleidoscope,
     Planisphere,
+    GhostSeed,
+    LeesWaffle,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -745,6 +749,8 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::LeesWaffle => lees_waffle::event_hook(hook, asked),
+        State::GhostSeed => ghost_seed::event_hook(hook, asked),
         State::Planisphere => planisphere::event_hook(hook, asked),
         State::Kaleidoscope => kaleidoscope::event_hook(hook, asked),
         State::ScrollBoxes => scroll_boxes::event_hook(hook, asked),
@@ -1069,7 +1075,9 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::SilkenTress(_)
         | State::ScrollBoxes
         | State::Kaleidoscope
-        | State::Planisphere => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::Planisphere
+        | State::GhostSeed
+        | State::LeesWaffle => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1248,6 +1256,8 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::LeesWaffle => State::LeesWaffle,
+            Relic::GhostSeed => State::GhostSeed,
             Relic::Planisphere => State::Planisphere,
             Relic::Kaleidoscope => State::Kaleidoscope,
             Relic::ScrollBoxes => State::ScrollBoxes,

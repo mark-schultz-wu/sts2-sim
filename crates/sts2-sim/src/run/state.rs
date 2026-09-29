@@ -1868,6 +1868,10 @@ impl<V: Rules> State<V> {
                     self.heal(amount);
                     continue;
                 }
+                HookEffect::HealMissing => {
+                    self.heal(self.player.max_hp - self.player.hp);
+                    continue;
+                }
                 // `SetCurrentHpInternal` truncates, and the health it adds to
                 // is whole, so the share heals its whole part.
                 HookEffect::HealPercent(percent) => {
@@ -4218,7 +4222,7 @@ impl<V: Rules> State<V> {
                 // `PotionCmd.TryToProcure` fails on a full belt, and the
                 // reward is then neither taken nor gone.
                 if self.player.potions.len() >= slots {
-                    unimplemented!("a potion offered to a full belt");
+                    return None;
                 }
                 *taken = true;
                 self.procure(potion);
