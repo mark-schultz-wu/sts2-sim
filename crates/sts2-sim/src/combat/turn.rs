@@ -401,8 +401,8 @@ fn enemies_act<V: Rules>(
             }
             return Ok(Some(ended));
         }
-        Carried::Done(None) => None,
-        Carried::Parked(asking) => Some(asking),
+        Carried::Done(None) => false,
+        Carried::Parked => true,
     };
     if let Some(ended) = side_turn_started::<V>(
         next,
@@ -434,9 +434,8 @@ fn enemies_act<V: Rules>(
 
     // `RunAutoPrePlayPhase` waits for the setup, so a parked one keeps the
     // turn in its start until the answer.
-    match parked {
-        Some(asking) => next.asking = Some(asking),
-        None => next.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY,
+    if !parked {
+        next.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY;
     }
 
     next.skip_tick = skipping;
@@ -814,10 +813,27 @@ fn doomed<V: Rules>(live: &Live<V>, side: V::CombatSide) -> SmallVec<[CombatId; 
 }
 
 /// What part of `SetupPlayerTurn` came to: the end of it, and how the fight
-/// ended if it did, or a question it stopped on.
-pub(super) enum Carried<V: Rules> {
+/// ended if it did, or a question it stopped on. The rest of a stopped
+/// setup waits in [`Live::deferred`].
+pub(super) enum Carried {
     Done(Option<super::Ended>),
-    Parked(super::live::Asking<V>),
+    Parked,
+}
+
+/// Stop `SetupPlayerTurn` on `question`, which picks cards to `act` on, with
+/// the rest of the setup from `stage` waiting behind it.
+fn park_setup<V: Rules>(
+    live: &mut Live<V>,
+    act: sts2_core::PileAct,
+    stage: Setup<V>,
+    question: super::live::Asked<V>,
+) -> Carried {
+    live.asking = Some(super::live::Asking {
+        then: Then::Setup { act },
+        question,
+    });
+    live.defer(super::live::Deferred::Setup(stage));
+    Carried::Parked
 }
 
 /// Carry `SetupPlayerTurn` on from `stage` to its end: what the hook it
@@ -832,7 +848,7 @@ pub(super) fn carry_setup<V: Rules>(
     relics: &mut crate::run::Belt<V>,
     ascension: V::AscensionLevel,
     mut stage: Setup<V>,
-) -> Carried<V> {
+) -> Carried {
     let player = live.player().id;
     loop {
         stage = match stage {
@@ -1003,13 +1019,12 @@ pub(super) fn carry_setup<V: Rules>(
                             };
                             match select::<V>(live, rngs.reborrow(), relics, pile, count, act) {
                                 Err(question) => {
-                                    return Carried::Parked(super::live::Asking {
-                                        then: Then::Setup {
-                                            act,
-                                            stage: Setup::BeforeHandDraw(rest),
-                                        },
+                                    return park_setup(
+                                        live,
+                                        act,
+                                        Setup::BeforeHandDraw(rest),
                                         question,
-                                    });
+                                    );
                                 }
                                 Ok(Some(ended)) => return Carried::Done(Some(ended)),
                                 Ok(None) => {}
@@ -1018,13 +1033,12 @@ pub(super) fn carry_setup<V: Rules>(
                         sts2_core::HookEffect::SelectFromPile { pile, count, act } => {
                             match select::<V>(live, rngs.reborrow(), relics, pile, count, act) {
                                 Err(question) => {
-                                    return Carried::Parked(super::live::Asking {
-                                        then: Then::Setup {
-                                            act,
-                                            stage: Setup::BeforeHandDraw(rest),
-                                        },
+                                    return park_setup(
+                                        live,
+                                        act,
+                                        Setup::BeforeHandDraw(rest),
                                         question,
-                                    });
+                                    );
                                 }
                                 Ok(Some(ended)) => return Carried::Done(Some(ended)),
                                 Ok(None) => {}
@@ -1127,10 +1141,7 @@ pub(super) fn carry_setup<V: Rules>(
                         };
                         match select::<V>(live, rngs.reborrow(), relics, pile, count, act) {
                             Err(question) => {
-                                return Carried::Parked(super::live::Asking {
-                                    then: Then::Setup { act, stage: rest },
-                                    question,
-                                });
+                                return park_setup(live, act, rest, question);
                             }
                             Ok(Some(ended)) => return Carried::Done(Some(ended)),
                             Ok(None) => rest,
@@ -1174,13 +1185,12 @@ pub(super) fn carry_setup<V: Rules>(
                         sts2_core::HookEffect::SelectFromPile { pile, count, act } => {
                             match select::<V>(live, rngs.reborrow(), relics, pile, count, act) {
                                 Err(question) => {
-                                    return Carried::Parked(super::live::Asking {
-                                        then: Then::Setup {
-                                            act,
-                                            stage: Setup::PlayerTurnStart(rest),
-                                        },
+                                    return park_setup(
+                                        live,
+                                        act,
+                                        Setup::PlayerTurnStart(rest),
                                         question,
-                                    });
+                                    );
                                 }
                                 Ok(Some(ended)) => return Carried::Done(Some(ended)),
                                 Ok(None) => {}
@@ -1406,10 +1416,7 @@ pub(super) fn carry_setup<V: Rules>(
                     };
                     match select::<V>(live, rngs.reborrow(), relics, pile, count, act) {
                         Err(question) => {
-                            return Carried::Parked(super::live::Asking {
-                                then: Then::Setup { act, stage: next },
-                                question,
-                            });
+                            return park_setup(live, act, next, question);
                         }
                         Ok(Some(ended)) => return Carried::Done(Some(ended)),
                         Ok(None) => next,
@@ -1704,39 +1711,44 @@ pub(super) fn exhausted<V: Rules>(
 }
 
 /// Answer the question `SetupPlayerTurn` stopped on: `act` on the cards
-/// picked, then the rest of the setup from where it stopped.
+/// picked. The rest of the setup waits in [`Live::deferred`].
 #[tracing::instrument(level = "trace", skip_all)]
-pub(super) fn resume_setup<V: Rules>(
-    fighting: Fighting<'_, V>,
+pub(super) fn answer_setup<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
     act: sts2_core::PileAct,
     picked: sts2_core::SelectedCards<V>,
+) -> Option<super::Ended> {
+    let (sly, ended) = act_on::<V>(live, rngs.reborrow(), relics, act, picked.as_slice());
+    ended.or_else(|| play_sly::<V>(live, rngs, relics, sly, false))
+}
+
+/// `SetupPlayerTurn` from `stage` to its end, once a question it stopped on
+/// is answered, then `RunAutoPrePlayPhase`. `ended` is how the answer ended
+/// the fight, which leaves the setup unfinished.
+#[tracing::instrument(level = "trace", skip_all)]
+pub(super) fn finish_setup<V: Rules>(
+    live: &mut Live<V>,
+    rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    ascension: V::AscensionLevel,
     stage: Setup<V>,
-) -> Result<Option<super::Ended>, Error> {
-    let Fighting {
-        live,
-        streams,
-        relics,
-    } = fighting;
-    let (sly, ended) = act_on::<V>(live, streams.combat(), relics, act, picked.as_slice());
-    let ascension = live.ascension;
-    let carried = match ended.or_else(|| play_sly::<V>(live, streams.combat(), relics, sly, false))
-    {
+    ended: Option<super::Ended>,
+) -> Option<super::Ended> {
+    let carried = match ended {
         Some(ended) => Carried::Done(Some(ended)),
-        None => carry_setup(live, streams.combat(), relics, ascension, stage),
+        None => carry_setup(live, rngs, relics, ascension, stage),
     };
     match carried {
-        Carried::Parked(asking) => {
-            live.asking = Some(asking);
-            Ok(None)
-        }
+        Carried::Parked => None,
         Carried::Done(ended) => {
             match ended {
                 Some(super::Ended::Won) => listen::combat_ended::<V>(live, relics),
                 Some(super::Ended::Lost) => {}
-                // `RunAutoPrePlayPhase`, once the setup is over.
                 None => live.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY,
             }
-            Ok(ended)
+            ended
         }
     }
 }
