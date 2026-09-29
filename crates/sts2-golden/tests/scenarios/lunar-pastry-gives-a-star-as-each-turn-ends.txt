@@ -1,0 +1,6 @@
+# Lunar Pastry gives a star as each of its owner's turns ends.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","relic":"LUNAR_PASTRY"}
+{"cmd":"fight","encounter":"CEREMONIAL_BEAST_BOSS"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

@@ -1,0 +1,8 @@
+# Mystic Lighter adds nine to each powered hit from an enchanted card. The
+# Sharp Strike takes it, and the Bash beside it does not.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"MYSTIC_LIGHTER"}
+{"cmd":"fight","encounter":"CEREMONIAL_BEAST_BOSS"}
+{"cmd":"enchant","enchantment":"SHARP","amount":1,"index":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":0,"target":1}

@@ -1759,7 +1759,8 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     sts2_core::Overrides::from_bits(0),
     // GOLD_PLATED_CABLES
     sts2_core::Overrides::from_bits(0)
-        .with(sts2_core::ModelHook::AfterModifyingOrbPassiveTriggerCount),
+        .with(sts2_core::ModelHook::AfterModifyingOrbPassiveTriggerCount)
+        .with(sts2_core::ModelHook::ModifyOrbPassiveTriggerCounts),
     // GORGET
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRoomEntered),
     // GREMLIN_HORN

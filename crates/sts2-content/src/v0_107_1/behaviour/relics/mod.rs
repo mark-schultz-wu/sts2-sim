@@ -65,9 +65,11 @@ mod byrdpip;
 mod calling_bell;
 mod candelabra;
 mod captains_wheel;
+mod cauldron;
 mod centennial_puzzle;
 mod chandelier;
 mod charons_ashes;
+mod chemical_x;
 mod chosen_cheese;
 mod claws;
 mod cloak_clasp;
@@ -110,6 +112,7 @@ mod ghost_seed;
 mod girya;
 mod glass_eye;
 mod glitter;
+mod gold_plated_cables;
 mod golden_pearl;
 mod gorget;
 mod gremlin_horn;
@@ -144,6 +147,7 @@ mod looming_fruit;
 mod lost_coffer;
 mod lost_wisp;
 mod lucky_fysh;
+mod lunar_pastry;
 mod mango;
 mod meal_ticket;
 mod meat_on_the_bone;
@@ -155,6 +159,7 @@ mod miniature_cannon;
 mod molten_egg;
 mod mr_struggles;
 mod mummified_hand;
+mod mystic_lighter;
 mod neows_bones;
 mod neows_talisman;
 mod neows_torment;
@@ -542,6 +547,11 @@ pub enum State {
     SlingOfCourage,
     PowerCell,
     Orrery,
+    ChemicalX,
+    MysticLighter,
+    GoldPlatedCables,
+    Cauldron,
+    LunarPastry,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -785,6 +795,11 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::LunarPastry => lunar_pastry::event_hook(hook, asked),
+        State::Cauldron => cauldron::event_hook(hook, asked),
+        State::GoldPlatedCables => gold_plated_cables::event_hook(hook, asked),
+        State::MysticLighter => mystic_lighter::event_hook(hook, asked),
+        State::ChemicalX => chemical_x::event_hook(hook, asked),
         State::Orrery => orrery::event_hook(hook, asked),
         State::PowerCell => power_cell::event_hook(hook, asked),
         State::SlingOfCourage => sling_of_courage::event_hook(hook, asked),
@@ -924,6 +939,9 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         State::StrikeDummy => strike_dummy::modify_hook(hook),
         State::BowlerHat => bowler_hat::modify_hook(hook),
         State::FakeStrikeDummy => fake_strike_dummy::modify_hook(hook),
+        State::ChemicalX => chemical_x::modify_hook(hook),
+        State::MysticLighter => mystic_lighter::modify_hook(hook),
+        State::GoldPlatedCables => gold_plated_cables::modify_hook(hook),
         State::PaelsBlood => paels_blood::modify_hook(hook),
         State::PaelsFlesh(_) => paels_flesh::modify_hook(hook),
         State::Sozu => sozu::modify_hook(hook),
@@ -1149,7 +1167,9 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::RazorTooth
         | State::SlingOfCourage
         | State::PowerCell
-        | State::Orrery => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::Orrery
+        | State::Cauldron
+        | State::LunarPastry => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1328,6 +1348,11 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::LunarPastry => State::LunarPastry,
+            Relic::Cauldron => State::Cauldron,
+            Relic::GoldPlatedCables => State::GoldPlatedCables,
+            Relic::MysticLighter => State::MysticLighter,
+            Relic::ChemicalX => State::ChemicalX,
             Relic::Orrery => State::Orrery,
             Relic::PowerCell => State::PowerCell,
             Relic::SlingOfCourage => State::SlingOfCourage,

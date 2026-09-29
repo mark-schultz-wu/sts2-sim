@@ -525,24 +525,27 @@ pub(super) fn orb_triggers<V: Rules>(
         Some(orbs) if !orbs.queue.is_empty() => orbs.queue.clone(),
         _ => return None,
     };
-    if listen::heard::<V>(
-        live,
-        relics,
-        sts2_core::ModelHook::AfterModifyingOrbPassiveTriggerCount,
-    ) {
-        unimplemented!("a listener changing how often an orb triggers");
-    }
     for (place, orb) in held.into_iter().enumerate() {
+        // `Hook.ModifyOrbPassiveTriggerCount` from one. Its
+        // `AfterModifyingOrbPassiveTriggerCount` only flashes the one relic
+        // that answers.
+        let triggers = super::board::modified_by::<V>(
+            super::listen::Walk { live, relics },
+            num_traits::one(),
+            &[sts2_core::ModifyHook::OrbPassiveTriggerCount { first: place == 0 }],
+        );
         let mut orb = orb;
-        let mut board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
-        match at {
-            OrbMoment::TurnEnd => V::orb_turn_end(&mut orb, &mut board),
-            OrbMoment::TurnStart => V::orb_turn_start(&mut orb, &mut board),
-        }
-        let ended = board.ended();
-        keep_orb(live, place, orb);
-        if let Some(ended) = ended {
-            return Some(ended);
+        for _ in 0..num_traits::ToPrimitive::to_usize(&triggers).unwrap_or(0) {
+            let mut board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+            match at {
+                OrbMoment::TurnEnd => V::orb_turn_end(&mut orb, &mut board),
+                OrbMoment::TurnStart => V::orb_turn_start(&mut orb, &mut board),
+            }
+            let ended = board.ended();
+            keep_orb(live, place, orb);
+            if let Some(ended) = ended {
+                return Some(ended);
+            }
         }
     }
     None
