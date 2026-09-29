@@ -1461,7 +1461,7 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
         .with(sts2_core::ModelHook::BeforeSideTurnEnd)
         .with(sts2_core::ModelHook::ShouldPlay),
     // CHILD_OF_THE_STARS_POWER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterStarsSpent),
     // CLARITY_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterSideTurnStart)

@@ -1734,7 +1734,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
         .with(sts2_core::ModelHook::AfterCreatureAddedToCombat)
         .with(sts2_core::ModelHook::BeforeCombatStart),
     // GALACTIC_DUST
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterStarsSpent),
     // GAMBLING_CHIP
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // GAME_PIECE
@@ -1886,6 +1886,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // MINI_REGENT
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCombatEnd)
+        .with(sts2_core::ModelHook::AfterStarsSpent)
         .with(sts2_core::ModelHook::BeforeSideTurnStart),
     // MOLTEN_EGG
     sts2_core::Overrides::from_bits(0)
@@ -2242,7 +2243,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // TWISTED_FUNNEL
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeSideTurnStart),
     // UNCEASING_TOP
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterHandEmptied),
     // UNDYING_SIGIL
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyDamageMultiplicative),
     // UNSETTLING_LAMP

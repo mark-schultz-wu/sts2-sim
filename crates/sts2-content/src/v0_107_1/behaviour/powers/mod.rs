@@ -2273,6 +2273,17 @@ pub(crate) fn event_hook(
             Some(HookEffect::Decrement)
         }
         (Power::DoubleDamagePower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `ChildOfTheStarsPower.AfterStarsSpent`: its stack of block,
+        // unpowered, for each star its owner spent.
+        (
+            Power::ChildOfTheStarsPower,
+            PowerAmount::Counted(stack),
+            EventHook::StarsSpent { player, amount },
+        ) if player == holder && amount > 0 => Some(HookEffect::GainBlock(stack * amount)),
+        (Power::ChildOfTheStarsPower, PowerAmount::Endless, EventHook::StarsSpent { .. }) => {
+            unimplemented!("an endless Child of the Stars")
+        }
+        (Power::ChildOfTheStarsPower, _, EventHook::StarsSpent { .. }) => None,
         // `RagePower.AfterCardPlayed`: its stack of block, unpowered, for
         // each Attack its owner plays.
         (Power::RagePower, PowerAmount::Counted(amount), EventHook::CardPlayed { card, .. })

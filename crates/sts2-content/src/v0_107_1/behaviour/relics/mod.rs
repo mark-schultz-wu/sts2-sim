@@ -103,6 +103,7 @@ mod forgotten_soul;
 mod fragrant_mushroom;
 mod frozen_egg;
 mod funerary_mask;
+mod galactic_dust;
 mod gambling_chip;
 mod game_piece;
 mod ghost_seed;
@@ -149,6 +150,7 @@ mod meat_on_the_bone;
 mod membership_card;
 mod mercury_hourglass;
 mod metronome;
+mod mini_regent;
 mod miniature_cannon;
 mod molten_egg;
 mod mr_struggles;
@@ -242,6 +244,7 @@ mod tri_boomerang;
 mod tungsten_rod;
 mod tuning_fork;
 mod twisted_funnel;
+mod unceasing_top;
 mod unsettling_lamp;
 mod vajra;
 mod vambrace;
@@ -528,6 +531,9 @@ pub enum State {
     ArtOfWar(art_of_war::State),
     CaptainsWheel,
     FuneraryMask,
+    UnceasingTop,
+    GalacticDust(galactic_dust::State),
+    MiniRegent(mini_regent::State),
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -771,6 +777,9 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::MiniRegent(state) => mini_regent::event_hook(state, hook, asked),
+        State::GalacticDust(state) => galactic_dust::event_hook(state, hook, asked),
+        State::UnceasingTop => unceasing_top::event_hook(hook, asked),
         State::FuneraryMask => funerary_mask::event_hook(hook, asked),
         State::CaptainsWheel => captains_wheel::event_hook(hook, asked),
         State::ArtOfWar(state) => art_of_war::event_hook(state, hook, asked),
@@ -1121,7 +1130,10 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::BurningSticks(_)
         | State::ArtOfWar(_)
         | State::CaptainsWheel
-        | State::FuneraryMask => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::FuneraryMask
+        | State::UnceasingTop
+        | State::GalacticDust(_)
+        | State::MiniRegent(_) => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1300,6 +1312,9 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::MiniRegent => State::MiniRegent(mini_regent::State::default()),
+            Relic::GalacticDust => State::GalacticDust(galactic_dust::State::default()),
+            Relic::UnceasingTop => State::UnceasingTop,
             Relic::FuneraryMask => State::FuneraryMask,
             Relic::CaptainsWheel => State::CaptainsWheel,
             Relic::ArtOfWar => State::ArtOfWar(art_of_war::State::default()),
@@ -1419,6 +1434,7 @@ impl sts2_core::RelicModel<V> for State {
                 State::Kusarigama(state) => kusarigama::display_amount(state),
                 State::HappyFlower(state) => happy_flower::display_amount(state),
                 State::Kunai(state) => kunai::display_amount(state),
+                State::GalacticDust(state) => galactic_dust::display_amount(state),
                 State::EmberTea(state) => ember_tea::display_amount(state),
                 State::SilverCrucible(state) => silver_crucible::display_amount(state),
                 State::Metronome(state) => metronome::display_amount(state),

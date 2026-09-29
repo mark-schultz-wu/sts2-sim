@@ -1,0 +1,28 @@
+# Stars spent wake three listeners. Five Venerates, paid for with an Energy
+# Potion, raise the stars to thirteen. Falling Star, Comet, Cloak of Stars
+# and Alignment then spend eleven. Mini Regent gives Strength on the first
+# spend alone. Child of the Stars gives a block for each star spent. Galactic
+# Dust gives ten block once the count reaches ten, and keeps the one over.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","relic":"GALACTIC_DUST"}
+{"cmd":"grant","relic":"MINI_REGENT"}
+{"cmd":"fight","encounter":"CEREMONIAL_BEAST_BOSS"}
+{"cmd":"power","power":"CHILD_OF_THE_STARS_POWER","amount":1,"target":0}
+{"cmd":"grant","potion":"ENERGY_POTION"}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"play_card","index":1}
+{"cmd":"grant","card":"VENERATE"}
+{"cmd":"play_card","index":4}
+{"cmd":"grant","card":"VENERATE"}
+{"cmd":"play_card","index":4}
+{"cmd":"grant","card":"VENERATE"}
+{"cmd":"play_card","index":4}
+{"cmd":"grant","card":"VENERATE"}
+{"cmd":"play_card","index":4}
+{"cmd":"play_card","index":1,"target":1}
+{"cmd":"grant","card":"COMET"}
+{"cmd":"play_card","index":3,"target":1}
+{"cmd":"grant","card":"CLOAK_OF_STARS"}
+{"cmd":"play_card","index":3}
+{"cmd":"grant","card":"ALIGNMENT"}
+{"cmd":"play_card","index":3}
