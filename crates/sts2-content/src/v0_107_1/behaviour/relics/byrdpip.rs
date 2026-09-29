@@ -11,7 +11,7 @@ use super::super::super::generated::monsters::Monster;
 /// its own `Rng`, which no other stream shares.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
     match hook {
-        EventHook::Obtained => asked.push(HookEffect::TransformInDeck {
+        EventHook::Obtained { .. } => asked.push(HookEffect::TransformInDeck {
             from: Cards::Quest(QuestCard::ByrdonisEgg),
             into: Cards::Event(EventCard::ByrdSwoop),
         }),

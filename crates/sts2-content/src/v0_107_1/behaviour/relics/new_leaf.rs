@@ -12,7 +12,7 @@ const CARDS: usize = 1;
 /// `CardCmd.TransformToRandom` off `RunState.Rng.Niche` for each card it
 /// takes.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
-    if let EventHook::Obtained = hook {
+    if let EventHook::Obtained { .. } = hook {
         asked.push(HookEffect::SelectFromDeck {
             act: DeckAct::Transform(Stream::Run(RunRngType::Niche)),
             count: CARDS,

@@ -20,7 +20,7 @@ pub(super) fn modify_hook(hook: ModifyHook<V>) -> Modify<Number> {
 /// It overrides no event but its pickup, which does nothing.
 pub(super) fn event_hook(hook: EventHook<V>) {
     match hook {
-        EventHook::Obtained => {}
+        EventHook::Obtained { .. } => {}
         hook => unimplemented!("what MembershipCard does for {hook:?}"),
     }
 }

@@ -14,7 +14,7 @@ const CARDS: Number = 2;
 /// `AfterObtained`: `CreatureCmd.GainMaxHp` on its owner. Its
 /// `AfterRoomEntered` only scales its owner's sprite.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
-    if let EventHook::Obtained = hook {
+    if let EventHook::Obtained { .. } = hook {
         asked.push(HookEffect::GainMaxHp(MAX_HP));
     }
 }

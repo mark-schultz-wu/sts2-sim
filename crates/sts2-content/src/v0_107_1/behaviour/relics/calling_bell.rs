@@ -16,7 +16,7 @@ const REWARDS: [CustomReward<V>; 3] = [
 /// `AfterObtained`: `AddCurseToDeck<CurseOfTheBell>`, then
 /// `RewardsCmd.OfferCustom` over the three.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
-    if let EventHook::Obtained = hook {
+    if let EventHook::Obtained { .. } = hook {
         asked.push(HookEffect::AddToDeck(Cards::Curse(
             CurseCard::CurseOfTheBell,
         )));

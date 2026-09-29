@@ -22,7 +22,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
             unblockable: false,
             from_owner: true,
         }),
-        EventHook::CardDiscarded { .. } | EventHook::Obtained => {}
+        EventHook::CardDiscarded { .. } | EventHook::Obtained { .. } => {}
         hook => unimplemented!("what Tingsha does for {hook:?}"),
     }
 }

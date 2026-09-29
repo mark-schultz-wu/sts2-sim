@@ -16,7 +16,7 @@ const CARDS: usize = 2;
 /// upgradable cards stably shuffled off `RunState.Rng.Niche`, and the first
 /// two upgraded.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
-    if let EventHook::Obtained = hook {
+    if let EventHook::Obtained { .. } = hook {
         asked.extend([
             HookEffect::DamageOwner(DAMAGE),
             HookEffect::UpgradeRandomDeckCards {

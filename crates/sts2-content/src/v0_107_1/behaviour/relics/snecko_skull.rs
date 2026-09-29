@@ -25,7 +25,7 @@ pub(super) fn modify_hook(hook: ModifyHook<V>) -> Modify<Number> {
 /// `AfterModifyingPowerAmountGiven` only flashes.
 pub(super) fn event_hook(hook: EventHook<V>, _asked: &mut sts2_core::HookEffects<V>) {
     match hook {
-        EventHook::Obtained | EventHook::PowerAmountGivenModified { .. } => {}
+        EventHook::Obtained { .. } | EventHook::PowerAmountGivenModified { .. } => {}
         hook => unimplemented!("what SneckoSkull does for {hook:?}"),
     }
 }

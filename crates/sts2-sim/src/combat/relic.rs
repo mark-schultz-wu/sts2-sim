@@ -9,8 +9,15 @@ use crate::run::HeldRelic;
 
 /// `AfterObtained`, which `RelicCmd.Obtain` gives the relic it just handed
 /// over and to no other.
-pub(crate) fn obtained<V: Rules>(held: &mut HeldRelic<V>) -> sts2_core::HookEffects<V> {
+pub(crate) fn obtained<V: Rules>(
+    held: &mut HeldRelic<V>,
+    character: V::Character,
+) -> sts2_core::HookEffects<V> {
     let mut asked = sts2_core::HookEffects::new();
-    V::relic_event_hook(&mut held.state, EventHook::Obtained, &mut asked);
+    V::relic_event_hook(
+        &mut held.state,
+        EventHook::Obtained { character },
+        &mut asked,
+    );
     asked
 }

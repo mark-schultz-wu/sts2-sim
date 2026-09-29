@@ -23,7 +23,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
             key: CardVar::Damage,
             amount: FORGE,
         }),
-        EventHook::SideTurnStart { .. } | EventHook::Obtained => {}
+        EventHook::SideTurnStart { .. } | EventHook::Obtained { .. } => {}
         hook => unimplemented!("what FencingManual does for {hook:?}"),
     }
 }

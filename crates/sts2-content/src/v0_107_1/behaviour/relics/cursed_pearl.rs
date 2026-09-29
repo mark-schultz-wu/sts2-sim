@@ -11,7 +11,7 @@ const GOLD: Number = 333;
 
 /// `AfterObtained`: `CardPileCmd.AddCurseToDeck<Greed>`, then the gold.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
-    if let EventHook::Obtained = hook {
+    if let EventHook::Obtained { .. } = hook {
         asked.extend([
             HookEffect::AddToDeck(Cards::Curse(CurseCard::Greed)),
             HookEffect::GainGold(GOLD),

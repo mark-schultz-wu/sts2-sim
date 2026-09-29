@@ -11,7 +11,7 @@ const CARDS: usize = 3;
 /// `AfterObtained`: three rares at `Uniform` odds, and a choice of one that
 /// can be skipped. The chosen card goes into the deck, then an Injury.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
-    if let EventHook::Obtained = hook {
+    if let EventHook::Obtained { .. } = hook {
         asked.extend([
             HookEffect::ChooseCards {
                 draw: CardDraw::Uniform(RewardRarity::Rare),

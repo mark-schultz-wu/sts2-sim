@@ -19,7 +19,7 @@ const REFINEMENTS: [(Relic, Relic); 5] = [
 /// it. So the starter is looked up as the relic is picked up, the same one
 /// `SetupForPlayer` reads.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
-    if let EventHook::Obtained = hook {
+    if let EventHook::Obtained { .. } = hook {
         asked.push(HookEffect::ReplaceStarterRelic {
             upgrades: &REFINEMENTS,
             fallback: Relic::Circlet,

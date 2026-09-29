@@ -1,0 +1,5 @@
+# Small Capsule offers a relic reward as it is picked up, at a rarity rolled
+# as the reward fills in. Taking it obtains the relic.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"SMALL_CAPSULE"}
+{"cmd":"answer","take":[{"index":0}]}

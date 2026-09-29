@@ -16,7 +16,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
         EventHook::CardDiscarded {
             side: CombatSide::Player,
         } => asked.push(HookEffect::GainBlock(BLOCK)),
-        EventHook::CardDiscarded { .. } | EventHook::Obtained => {}
+        EventHook::CardDiscarded { .. } | EventHook::Obtained { .. } => {}
         hook => unimplemented!("what ToughBandages does for {hook:?}"),
     }
 }

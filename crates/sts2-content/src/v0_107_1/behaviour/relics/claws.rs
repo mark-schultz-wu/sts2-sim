@@ -11,7 +11,7 @@ const CARDS: usize = 6;
 /// `AfterObtained`: `CardSelectCmd.FromDeckForTransformation` for none to
 /// six, confirmed by hand, then each transformed into a Maul.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
-    if let EventHook::Obtained = hook {
+    if let EventHook::Obtained { .. } = hook {
         asked.push(HookEffect::SelectFromDeckConfirmed {
             act: DeckAct::TransformInto(Cards::Event(EventCard::Maul)),
             min: 0,

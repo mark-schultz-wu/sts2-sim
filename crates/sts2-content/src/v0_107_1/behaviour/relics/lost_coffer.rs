@@ -16,7 +16,7 @@ const REWARDS: &[CustomReward<V>] = &[
 /// `AfterObtained`: `RewardsCmd.OfferCustom` with a `CardReward` of three
 /// over its owner's pool at `RegularEncounter` odds, and a `PotionReward`.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
-    if let EventHook::Obtained = hook {
+    if let EventHook::Obtained { .. } = hook {
         asked.push(HookEffect::OfferRewards(REWARDS));
     }
 }

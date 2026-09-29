@@ -13,7 +13,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
                 kind: CardKind::Power,
             })
         }
-        EventHook::BeforeHandDraw { .. } | EventHook::Obtained => {}
+        EventHook::BeforeHandDraw { .. } | EventHook::Obtained { .. } => {}
         hook => unimplemented!("what JeweledMask does for {hook:?}"),
     }
 }

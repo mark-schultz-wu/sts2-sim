@@ -20,7 +20,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
         EventHook::CardPlaying { spent, .. } if spent >= ENERGY => {
             asked.push(HookEffect::GainBlock(BLOCK));
         }
-        EventHook::CardPlaying { .. } | EventHook::Obtained => {}
+        EventHook::CardPlaying { .. } | EventHook::Obtained { .. } => {}
         hook => unimplemented!("what IntimidatingHelmet does for {hook:?}"),
     }
 }

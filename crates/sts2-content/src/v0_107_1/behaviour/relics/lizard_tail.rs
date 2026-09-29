@@ -41,7 +41,7 @@ pub(super) fn event_hook(
             state.was_used = true;
             asked.push(HookEffect::Heal((max_hp * HEAL / 100).max(1)));
         }
-        EventHook::Obtained => {}
+        EventHook::Obtained { .. } => {}
         hook => unimplemented!("what LizardTail does for {hook:?}"),
     }
 }

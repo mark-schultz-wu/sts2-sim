@@ -20,7 +20,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
                 count: CARDS,
             });
         }
-        EventHook::BeforeHandDraw { .. } | EventHook::Obtained => {}
+        EventHook::BeforeHandDraw { .. } | EventHook::Obtained { .. } => {}
         hook => unimplemented!("what RadiantPearl does for {hook:?}"),
     }
 }

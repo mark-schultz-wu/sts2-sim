@@ -11,7 +11,7 @@ const CARDS: usize = 3;
 /// `AfterObtained`: `CardSelectCmd.FromDeckForEnchantment` for three, each
 /// then `CardCmd.Enchant<Swift>` by three.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
-    if let EventHook::Obtained = hook {
+    if let EventHook::Obtained { .. } = hook {
         asked.push(HookEffect::SelectFromDeck {
             act: DeckAct::Enchant {
                 enchantment: Enchantment::Swift,

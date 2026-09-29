@@ -3298,8 +3298,11 @@ pub enum EventHook<V: ContentVersion> {
         /// The player's `Block`, which a relic reads off its owner.
         block: V::Number,
     },
-    /// `AfterObtained`, as the run picks the model up.
-    Obtained,
+    /// `AfterObtained`, as the run picks the model up. `character` is its
+    /// owner's, which a relic reads off `Owner.Character`.
+    Obtained {
+        character: V::Character,
+    },
     /// `AfterOstyRevived`, once a dead Osty stands back up.
     OstyRevived,
     /// `AfterCreatureAddedToCombat`, once `creature` stands in the fight on
@@ -3785,7 +3788,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::ResultPileModified { .. } => {
                 ModelHook::AfterModifyingCardPlayResultPileOrPosition
             }
-            EventHook::Obtained
+            EventHook::Obtained { .. }
             | EventHook::Removed
             | EventHook::Applied
             | EventHook::BlockClearPrevented { .. }
@@ -4390,6 +4393,14 @@ pub enum HookEffect<V: ContentVersion> {
     /// which [`Rules::event_rewards`] names. Each draws off the event's own
     /// stream.
     OfferEventRewards,
+    /// A relic reward for each of the first `count` relics Neow can offer.
+    /// They are shuffled off the player's rewards stream first, and the
+    /// screen disallows skipping. The list is [`Rules::neow_options`] where
+    /// `IsAllowedAtNeow` holds, less `except`.
+    OfferNeowRelics {
+        count: usize,
+        except: V::Relic,
+    },
     /// The event parks on a question of its own, which
     /// [`Rules::event_question`] asks.
     AskEvent,
@@ -6494,6 +6505,10 @@ pub trait Rules: Hooks {
 
     /// The curses that take a blessing off the table with them.
     fn neow_pairs() -> &'static [(Self::Relic, Self::Relic)];
+
+    /// `Neow.AllPossibleOptions`, as the relics its options offer, in its
+    /// order.
+    fn neow_options() -> impl Iterator<Item = Self::Relic>;
 
     /// The curse that suppresses the first of [`Rules::neow_flips`].
     fn neow_suppresses_flip() -> Self::Relic;

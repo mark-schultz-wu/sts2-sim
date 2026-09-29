@@ -18,7 +18,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
             unblockable: false,
             from_owner: true,
         }),
-        EventHook::Obtained => {}
+        EventHook::Obtained { .. } => {}
         hook => unimplemented!("what ForgottenSoul does for {hook:?}"),
     }
 }

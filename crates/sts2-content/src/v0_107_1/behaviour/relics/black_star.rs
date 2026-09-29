@@ -13,7 +13,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
             room: Some(RoomType::Elite),
             ..
         } => asked.push(HookEffect::AddRelicRewards(1)),
-        EventHook::ModifyRewards { .. } | EventHook::Obtained => {}
+        EventHook::ModifyRewards { .. } | EventHook::Obtained { .. } => {}
         hook => unimplemented!("what BlackStar does for {hook:?}"),
     }
 }

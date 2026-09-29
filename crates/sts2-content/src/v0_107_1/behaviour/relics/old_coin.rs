@@ -10,7 +10,7 @@ const GOLD: Number = 300;
 
 /// `AfterObtained`, which is `PlayerCmd.GainGold`.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
-    if let EventHook::Obtained = hook {
+    if let EventHook::Obtained { .. } = hook {
         asked.push(HookEffect::GainGold(GOLD));
     }
 }

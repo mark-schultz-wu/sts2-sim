@@ -14,7 +14,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
         EventHook::AddedToDeck { cloned: false, .. } => asked.push(HookEffect::CloneIntoDeck),
         EventHook::AddedToDeck { cloned: true, .. }
         | EventHook::CardChangedPiles { .. }
-        | EventHook::Obtained => {}
+        | EventHook::Obtained { .. } => {}
         hook => unimplemented!("what BingBong does for {hook:?}"),
     }
 }

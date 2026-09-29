@@ -28,7 +28,7 @@ pub(super) fn modify_hook(hook: ModifyHook<V>) -> Modify<Number> {
 /// nothing.
 pub(super) fn event_hook(hook: EventHook<V>) {
     match hook {
-        EventHook::Obtained => {}
+        EventHook::Obtained { .. } => {}
         hook => unimplemented!("what FakeStrikeDummy does for {hook:?}"),
     }
 }

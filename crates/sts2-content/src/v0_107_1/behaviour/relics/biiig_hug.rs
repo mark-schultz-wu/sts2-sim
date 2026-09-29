@@ -15,7 +15,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
     match hook {
         // `AfterObtained`: `FromDeckForRemoval` of four, then
         // `CardPileCmd.RemoveFromDeck`.
-        EventHook::Obtained => asked.push(HookEffect::SelectFromDeck {
+        EventHook::Obtained { .. } => asked.push(HookEffect::SelectFromDeck {
             act: DeckAct::Remove,
             count: CARDS,
         }),

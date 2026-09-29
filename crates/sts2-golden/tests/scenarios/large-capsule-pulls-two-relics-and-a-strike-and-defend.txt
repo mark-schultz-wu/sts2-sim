@@ -1,0 +1,5 @@
+# Large Capsule pulls two relics from the front of the bag, each at a rarity
+# rolled off the rewards stream, then puts the Silent's basic Strike and
+# Defend into the deck.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","relic":"LARGE_CAPSULE"}

@@ -15,7 +15,7 @@ const DAMAGE: Number = 16;
 /// `AfterObtained`: `CardSelectCmd.FromDeckForRemoval`, each card it takes
 /// out of the deck, then `CreatureCmd.Damage` on its owner.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
-    if let EventHook::Obtained = hook {
+    if let EventHook::Obtained { .. } = hook {
         asked.extend([
             HookEffect::SelectFromDeck {
                 act: DeckAct::Remove,

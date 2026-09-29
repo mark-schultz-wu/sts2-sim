@@ -15,7 +15,7 @@ pub(super) fn decide_hook(hook: DecisionHook<V>) -> HookResponse<bool> {
 
 pub(super) fn event_hook(hook: EventHook<V>, _asked: &mut sts2_core::HookEffects<V>) {
     match hook {
-        EventHook::Obtained => {}
+        EventHook::Obtained { .. } => {}
         hook => unimplemented!("what IceCream does for {hook:?}"),
     }
 }
