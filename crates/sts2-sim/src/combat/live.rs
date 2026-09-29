@@ -46,7 +46,11 @@ pub(super) type CardVarList = Option<[NonMaxI16; VARS]>;
 /// The powers one creature holds.
 pub(crate) type PowerList<V> = Bounded<HeldPower<V>, POWERS>;
 
-/// How many powers one creature holds.
+/// The most powers one creature holds.
+///
+/// The game's list has no bound, and an instanced power takes a place per
+/// instance. This one is fixed so a fight copies as flat memory, and a
+/// creature gaining one more panics by name.
 const POWERS: usize = 24;
 
 /// How many creatures a fight holds, summons included.
