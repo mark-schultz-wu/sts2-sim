@@ -689,10 +689,12 @@ pub enum ModelHook {
     ShouldRefillMerchantEntry,
     AfterModifyingCardRewardOptions,
     ShouldGenerateTreasure,
+    ModifyEnergyGain,
+    AfterModifyingEnergyGain,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 121] = [
+    pub const ALL: [ModelHook; 123] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -814,6 +816,8 @@ impl ModelHook {
         ModelHook::ShouldRefillMerchantEntry,
         ModelHook::AfterModifyingCardRewardOptions,
         ModelHook::ShouldGenerateTreasure,
+        ModelHook::ModifyEnergyGain,
+        ModelHook::AfterModifyingEnergyGain,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -952,6 +956,8 @@ impl ModelHook {
             ModelHook::ShouldRefillMerchantEntry => "ShouldRefillMerchantEntry",
             ModelHook::AfterModifyingCardRewardOptions => "AfterModifyingCardRewardOptions",
             ModelHook::ShouldGenerateTreasure => "ShouldGenerateTreasure",
+            ModelHook::ModifyEnergyGain => "ModifyEnergyGain",
+            ModelHook::AfterModifyingEnergyGain => "AfterModifyingEnergyGain",
         }
     }
 }
@@ -2995,6 +3001,10 @@ pub enum ModifyHook<V: ContentVersion> {
     /// `ModifyMerchantPrice`: what a merchant's shelf costs, which
     /// `MerchantEntry.Cost` asks every time it is read in a merchant's room.
     MerchantPrice,
+    /// `ModifyEnergyGain`: the energy `PlayerCmd.GainEnergy` gives `player`.
+    EnergyGain {
+        player: crate::CombatId,
+    },
     /// `ModifyMaxEnergy`: the energy `player`'s turn resets to, which
     /// `PlayerCombatState.MaxEnergy` asks every time it is read.
     MaxEnergy {
@@ -3058,6 +3068,7 @@ impl<V: ContentVersion> ModifyHook<V> {
             ModifyHook::GoldGained => ModelHook::ModifyGoldGained,
             ModifyHook::RestSiteHealAmount => ModelHook::ModifyRestSiteHealAmount,
             ModifyHook::MaxEnergy { .. } => ModelHook::ModifyMaxEnergy,
+            ModifyHook::EnergyGain { .. } => ModelHook::ModifyEnergyGain,
             ModifyHook::MerchantPrice => ModelHook::ModifyMerchantPrice,
             ModifyHook::EnergyCost { .. } => ModelHook::TryModifyEnergyCostInCombat,
             ModifyHook::EnergyCostLate { .. } => ModelHook::TryModifyEnergyCostInCombatLate,
@@ -3254,6 +3265,10 @@ pub enum EventHook<V: ContentVersion> {
     /// changed the turn's hand, before it is drawn. The listener reads for
     /// itself whether it did.
     HandDrawModified,
+    /// `AfterModifyingEnergyGain`, to each listener whose `ModifyEnergyGain`
+    /// changed a gain, before the energy lands. The listener reads for itself
+    /// whether it did.
+    EnergyGainModified,
     /// `AfterPreventingDraw`, once a listener answered no to `ShouldDraw`.
     DrawPrevented,
     /// `AfterShuffle`, once the discard pile is shuffled into the draw pile.
@@ -3781,6 +3796,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::Shuffled => ModelHook::AfterShuffle,
             EventHook::DrawPrevented => ModelHook::AfterPreventingDraw,
             EventHook::HandDrawModified => ModelHook::AfterModifyingHandDraw,
+            EventHook::EnergyGainModified => ModelHook::AfterModifyingEnergyGain,
             EventHook::PotionUsing { .. } => ModelHook::BeforePotionUsed,
             EventHook::PotionUsed { .. } => ModelHook::AfterPotionUsed,
             EventHook::CardRewardOption { .. } => ModelHook::TryModifyCardRewardOptionsLate,

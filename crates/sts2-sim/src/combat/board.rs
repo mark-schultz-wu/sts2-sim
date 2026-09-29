@@ -3383,8 +3383,30 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         // `PlayerCmd.GainEnergy` gains nothing once the fight is ending.
         match amount < V::Number::zero() {
             true => self.live.energy = self.live.energy.saturating_sub(size(-amount)),
-            false if self.over() => {}
-            false => self.live.energy = self.live.energy + size(amount),
+            false if self.over() || amount.is_zero() => {}
+            false => {
+                // `Hook.ModifyEnergyGain`, then `AfterModifyingEnergyGain`.
+                let player = self.live.player().id;
+                let modifying = sts2_core::ModelHook::ModifyEnergyGain;
+                let gained = match super::listen::heard::<V>(self.live, self.relics, modifying) {
+                    false => amount,
+                    true => {
+                        let hook = sts2_core::ModifyHook::EnergyGain { player };
+                        let gained = modified_by::<V>(self.walk(), amount, &[hook]);
+                        let after = sts2_core::EventHook::EnergyGainModified;
+                        let asked = super::listen::notify::<V>(self.live, self.relics, after);
+                        if let Some((listener, effect)) = asked.first() {
+                            unimplemented!(
+                                "{listener:?} asking for {effect:?} once an energy gain is worked out"
+                            )
+                        }
+                        gained
+                    }
+                };
+                if gained > V::Number::zero() {
+                    self.live.energy = self.live.energy + size(gained);
+                }
+            }
         }
     }
 

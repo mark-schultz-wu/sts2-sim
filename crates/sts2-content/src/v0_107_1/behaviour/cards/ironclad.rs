@@ -336,6 +336,13 @@ pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<
             Played::Done
         }
         IroncladCard::Armaments => armaments(fight),
+        // `ExpectAFight`: its calculated energy, then No Energy Gain on its
+        // owner.
+        IroncladCard::ExpectAFight => {
+            fight.modify_energy(fight.var(CardVar::CalculatedEnergy));
+            fight.apply_to_actor(Power::NoEnergyGainPower, PowerAmount::Counted(1));
+            Played::Done
+        }
         // `Cascade`: the top cards of the draw pile auto-played, as many as
         // its X spent and one more once upgraded.
         IroncladCard::Cascade => {

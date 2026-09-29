@@ -1137,6 +1137,11 @@ pub(crate) fn modify_hook(
             PowerAmount::Endless,
             ModifyHook::MaxEnergy { player, .. },
         ) if player == holder => unimplemented!("an endless {power:?}"),
+        // `NoEnergyGainPower.ModifyEnergyGain`: nothing gained, by its owner.
+        (Power::NoEnergyGainPower, _, ModifyHook::EnergyGain { player }) if player == holder => {
+            Modify::Replaced(0)
+        }
+        (Power::NoEnergyGainPower, _, ModifyHook::EnergyGain { .. }) => Modify::Nothing,
         (
             Power::DemesnePower | Power::PyrePower | Power::FriendshipPower | Power::WasteAwayPower,
             _,
@@ -1935,6 +1940,14 @@ pub(crate) fn event_hook(
     let effect = match (power, amount, hook) {
         // Their `AfterModifyingHandDraw` only flashes.
         (Power::PaleBlueDotPower | Power::MindRotPower, _, EventHook::HandDrawModified) => return,
+        // Its `AfterModifyingEnergyGain` only flashes.
+        (Power::NoEnergyGainPower, _, EventHook::EnergyGainModified) => return,
+        // `NoEnergyGainPower.AfterSideTurnEnd`: gone once its owner's turn
+        // ends.
+        (Power::NoEnergyGainPower, _, EventHook::SideTurnEnd { side, .. }) if side == owner => {
+            Some(HookEffect::Remove)
+        }
+        (Power::NoEnergyGainPower, _, EventHook::SideTurnEnd { .. }) => None,
         (
             Power::ImbalancedPower,
             _,

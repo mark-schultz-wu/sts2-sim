@@ -378,6 +378,20 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
             printed.face(CardVar::CalculationBase)
                 + printed.face(CardVar::CalculationExtra) * energy
         }
+        // `ExpectAFight`: a base, and one more energy for each Attack in its
+        // owner's hand.
+        (Cards::Ironclad(IroncladCard::ExpectAFight), CardVar::CalculatedEnergy) => {
+            let attacks = owner
+                .hand
+                .iter()
+                .filter(|&&card| {
+                    <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Attack)
+                })
+                .count();
+            let attacks = Number::try_from(attacks).expect("a hand fits the game's numbers");
+            printed.face(CardVar::CalculationBase)
+                + printed.face(CardVar::CalculationExtra) * attacks
+        }
         // `Voltaic`: a base, and one more for each Lightning its owner
         // channelled this fight.
         (Cards::Defect(DefectCard::Voltaic), CardVar::CalculatedChannels) => {
