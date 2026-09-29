@@ -682,10 +682,12 @@ pub enum ModelHook {
     ShouldForcePotionReward,
     AfterFlush,
     AfterModifyingBlockAmount,
+    ModifyMerchantPrice,
+    ShouldRefillMerchantEntry,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 117] = [
+    pub const ALL: [ModelHook; 119] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -803,6 +805,8 @@ impl ModelHook {
         ModelHook::ShouldForcePotionReward,
         ModelHook::AfterFlush,
         ModelHook::AfterModifyingBlockAmount,
+        ModelHook::ModifyMerchantPrice,
+        ModelHook::ShouldRefillMerchantEntry,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -937,6 +941,8 @@ impl ModelHook {
             ModelHook::ShouldForcePotionReward => "ShouldForcePotionReward",
             ModelHook::AfterFlush => "AfterFlush",
             ModelHook::AfterModifyingBlockAmount => "AfterModifyingBlockAmount",
+            ModelHook::ModifyMerchantPrice => "ModifyMerchantPrice",
+            ModelHook::ShouldRefillMerchantEntry => "ShouldRefillMerchantEntry",
         }
     }
 }
@@ -2050,6 +2056,13 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("reading the fight's history")
     }
 
+    /// Whether a card this effect auto-played stopped on a question, which
+    /// the rest of the effect waits behind. `CardCmd.AutoPlay` is awaited,
+    /// so the game's own loop stands still there.
+    fn waiting(&self) -> bool {
+        unimplemented!("reading whether a question waits")
+    }
+
     /// The copy of the card whose play is running, which is `this` to it.
     fn playing(&self) -> crate::CardId<V> {
         unimplemented!("naming the card being played")
@@ -2233,6 +2246,18 @@ pub trait Fight<V: ContentVersion> {
     /// land.
     fn note_on_power(&mut self, _creature: crate::CombatId, _power: V::Power, _note: V::Number) {
         unimplemented!("a card writing on a power it applied")
+    }
+
+    /// A clone of `card` as it stands, its affliction cleared, kept on the
+    /// instance of `power` that `creature` carries last, as Nightmare's
+    /// `SetSelectedCard` keeps it. `Hooks::power_kept_card` says where.
+    fn keep_card_on_power(
+        &mut self,
+        _creature: crate::CombatId,
+        _power: V::Power,
+        _card: crate::CardAt<V>,
+    ) {
+        unimplemented!("a power keeping a card")
     }
 
     /// `CreatureCmd.GainMaxHp`: the maximum grows by `amount`, then a heal
@@ -2596,6 +2621,10 @@ pub enum Played<V: ContentVersion> {
         skippable: bool,
         at: V::Resume,
     },
+    /// A card the play auto-played stopped on a question, which
+    /// [`Fight::waiting`] says. The play carries on from `at`, with
+    /// [`Taken::Waited`], once that card's play is over.
+    Waiting { at: V::Resume },
 }
 
 /// What a stopped effect resumes with.
@@ -2603,6 +2632,8 @@ pub enum Played<V: ContentVersion> {
 pub enum Taken<V: ContentVersion> {
     Selected(SelectedCards<V>),
     Chosen(Option<crate::CardIdent<V>>),
+    /// Nothing asked: the play waited on a card it auto-played.
+    Waited,
 }
 
 /// The choose-a-card screen's fixed capacity.
@@ -2912,6 +2943,9 @@ pub enum ModifyHook<V: ContentVersion> {
         turn: V::Count,
         room: V::RoomType,
     },
+    /// `ModifyMerchantPrice`: what a merchant's shelf costs, which
+    /// `MerchantEntry.Cost` asks every time it is read in a merchant's room.
+    MerchantPrice,
     /// `ModifyMaxEnergy`: the energy `player`'s turn resets to, which
     /// `PlayerCombatState.MaxEnergy` asks every time it is read.
     MaxEnergy {
@@ -2975,6 +3009,7 @@ impl<V: ContentVersion> ModifyHook<V> {
             ModifyHook::GoldGained => ModelHook::ModifyGoldGained,
             ModifyHook::RestSiteHealAmount => ModelHook::ModifyRestSiteHealAmount,
             ModifyHook::MaxEnergy { .. } => ModelHook::ModifyMaxEnergy,
+            ModifyHook::MerchantPrice => ModelHook::ModifyMerchantPrice,
             ModifyHook::EnergyCost { .. } => ModelHook::TryModifyEnergyCostInCombat,
             ModifyHook::EnergyCostLate { .. } => ModelHook::TryModifyEnergyCostInCombatLate,
             ModifyHook::CardPlayCount { .. } => ModelHook::ModifyCardPlayCount,
@@ -3025,6 +3060,9 @@ pub enum DecisionHook<V: ContentVersion> {
     /// `ShouldForcePotionReward`, as a won fight's rewards roll for a potion
     /// in a room of this type. One listener answering yes gives the potion.
     ShouldForcePotionReward { room: V::RoomType },
+    /// `ShouldRefillMerchantEntry`, once a shelf's purchase went through. One
+    /// listener answering yes restocks the shelf rather than emptying it.
+    ShouldRefillMerchantEntry,
     /// `ShouldPlayerResetEnergy`, as `player` sets up their turn `turn`. A
     /// player no listener lets reset adds their maximum to what they have.
     ShouldPlayerResetEnergy {
@@ -3105,6 +3143,7 @@ impl<V: ContentVersion> DecisionHook<V> {
             DecisionHook::ShouldDieLate { .. } => ModelHook::ShouldDieLate,
             DecisionHook::ShouldPlayerResetEnergy { .. } => ModelHook::ShouldPlayerResetEnergy,
             DecisionHook::ShouldForcePotionReward { .. } => ModelHook::ShouldForcePotionReward,
+            DecisionHook::ShouldRefillMerchantEntry => ModelHook::ShouldRefillMerchantEntry,
             DecisionHook::ShouldCountForCombatEnd
             | DecisionHook::ShouldRemoveSelfAfterOwnerDeath
             | DecisionHook::ShouldOwnerDeathTriggerFatal => return None,
@@ -3504,6 +3543,11 @@ pub enum EventHook<V: ContentVersion> {
     Flushed,
     /// `AfterOrbChanneled`, once an orb is in the player's queue.
     OrbChanneled,
+    /// `AfterCardDiscarded`, once a card of the player's is in the discard
+    /// pile. `side` is the side whose turn it is.
+    CardDiscarded {
+        side: V::CombatSide,
+    },
     /// `BeforePowerAmountChanged`, as `amount` of `power` is about to land on
     /// `target`, or to change what it carries.
     PowerAmountChanging {
@@ -3684,6 +3728,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::RestSiteOptions => ModelHook::TryModifyRestSiteOptions,
             EventHook::Flushed => ModelHook::AfterFlush,
             EventHook::OrbChanneled => ModelHook::AfterOrbChanneled,
+            EventHook::CardDiscarded { .. } => ModelHook::AfterCardDiscarded,
             EventHook::PowerAmountChanging { .. } => ModelHook::BeforePowerAmountChanged,
             EventHook::BlockAmountModified { .. } => ModelHook::AfterModifyingBlockAmount,
             EventHook::DiedToDoom { .. } => ModelHook::AfterDiedToDoom,
@@ -4510,6 +4555,13 @@ pub enum HookEffect<V: ContentVersion> {
     },
     /// `OstyCmd.Summon` for the listener's owner.
     Summon(V::Number),
+    /// `CardPileCmd.AddGeneratedCardToCombat` of `count` clones of the card a
+    /// power keeps, which [`Fight::keep_card_on_power`] put there, each into
+    /// hand.
+    CloneKeptIntoHand {
+        kept: crate::CardId<V>,
+        count: V::Number,
+    },
     /// `CardPileCmd.AddGeneratedCardToCombat` of `count` clones of the copy
     /// `card`, each into hand.
     CloneIntoHand {
@@ -5195,6 +5247,10 @@ pub trait Hooks: ContentVersion {
     /// What a card's note does to the model of a power it just applied,
     /// which [`Fight::note_on_power`] hands it.
     fn power_noted(state: &mut Self::PowerState, note: Self::Number);
+
+    /// Where a power's model keeps the clone `kept` of a card, which
+    /// [`Fight::keep_card_on_power`] hands it.
+    fn power_kept_card(state: &mut Self::PowerState, kept: crate::CardId<Self>);
 
     fn modify_hook<P: Printed<Self> + ?Sized>(
         listener: Listener<'_, Self, P>,
@@ -6312,6 +6368,17 @@ pub trait Rules: Hooks {
     fn perform_move<F: Fight<Self>>(
         monster: Self::Monster,
         move_id: Self::MoveId,
+        state: &mut Self::MonsterState,
+        fight: &mut F,
+    ) -> Played<Self>;
+
+    /// The rest of a move that handed back [`Played::Waiting`], from `at`,
+    /// once what it waited on is over. `state` is the monster's model, as
+    /// [`Rules::perform_move`] has it.
+    fn resume_move<F: Fight<Self>>(
+        monster: Self::Monster,
+        move_id: Self::MoveId,
+        at: Self::Resume,
         state: &mut Self::MonsterState,
         fight: &mut F,
     ) -> Played<Self>;

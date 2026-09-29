@@ -1,0 +1,11 @@
+# Automation is instanced, so a second one lands beside the first rather
+# than stacking. Each counts its own ten draws, and each gives its energy on
+# the tenth.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"AUTOMATION"}
+{"cmd":"grant","card":"AUTOMATION"}
+{"cmd":"play_card","index":5}
+{"cmd":"play_card","index":5}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

@@ -1,0 +1,13 @@
+# The Courier takes a fifth off every price the merchant shows, and a shelf
+# bought from restocks. A card, a relic and a potion each restock, and the
+# removal costs a fifth less.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"OLD_COIN"}
+{"cmd":"grant","relic":"THE_COURIER"}
+{"cmd":"enter_room","type":"Shop"}
+{"cmd":"buy","index":0}
+{"cmd":"buy","index":5}
+{"cmd":"buy","index":8}
+{"cmd":"buy","index":10}
+{"cmd":"buy","index":13}
+{"cmd":"answer","cards":[0]}

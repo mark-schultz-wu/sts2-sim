@@ -12,10 +12,9 @@ use super::{Number, V};
 
 /// The powers an Overgrowth monster applies to itself as it spawns.
 ///
-/// Seven monsters of this act have an `AfterAddedToRoom` that applies one:
-/// Byrdonis, the Phrog Parasite, the Bygone Effigy, the Vantom, each Inklet,
-/// the Cubex Construct and a Kin Follower. The Cubex gains block first, which
-/// `CreatureCmd.GainBlock` refuses while the fight is not yet in progress.
+/// Six monsters of this act have an `AfterAddedToRoom` that applies one:
+/// Byrdonis, the Phrog Parasite, the Bygone Effigy, the Vantom, each Inklet
+/// and a Kin Follower.
 ///
 /// Nothing for a monster this act does not port.
 pub(super) fn starting_powers(
@@ -26,7 +25,6 @@ pub(super) fn starting_powers(
         Monster::Byrdonis => vec![(Power::TerritorialPower, PowerAmount::Counted(1))],
         Monster::PhrogParasite => vec![(Power::InfestedPower, PowerAmount::Counted(4))],
         Monster::BygoneEffigy => vec![(Power::SlowPower, PowerAmount::Counted(1))],
-        Monster::CubexConstruct => vec![(Power::ArtifactPower, PowerAmount::Counted(1))],
         Monster::KinFollower => vec![(Power::MinionPower, PowerAmount::Counted(1))],
         Monster::Inklet => vec![(Power::SlipperyPower, PowerAmount::Counted(1))],
         Monster::Vantom => vec![(
@@ -64,7 +62,12 @@ fn wriggler_opens(at: u8, spawn: MonsterSpawn<Encounter>) -> Result<u8, ContentE
 
 /// Perform one of an Overgrowth monster's moves, where the generator left
 /// it to a hand port.
-pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
+pub(super) fn perform<F: Fight<V>>(
+    monster: Monster,
+    move_id: MoveId,
+    step: u8,
+    fight: &mut F,
+) -> Option<u8> {
     match (monster, move_id) {
         (Monster::ShrinkerBeetle, MoveId::ShrinkerMove) => {
             fight.apply_to_opponents(Power::ShrinkPower, PowerAmount::Endless)
@@ -79,18 +82,12 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         // The `TestMode.IsOff` block these open with only finds the creature
         // node.
         (Monster::SnappingJaxfruit, MoveId::EnergyOrbMove) => {
-            fight.attack_opponents();
+            if super::attack_first(fight, step) {
+                return Some(1);
+            }
             fight.apply_to_actor(
                 Power::StrengthPower,
                 PowerAmount::Counted(ENERGY_ORB_STRENGTH),
-            );
-        }
-        // `IsBurrowed` and `IsCharging`, which it sets first, pick its
-        // animation.
-        (Monster::CubexConstruct, MoveId::ChargeUpMove) => {
-            fight.apply_to_actor(
-                Power::StrengthPower,
-                PowerAmount::Counted(CHARGE_UP_STRENGTH),
             );
         }
         // `IsCrossbowReloaded`, which each of these two sets last, picks its
@@ -106,12 +103,16 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         }
         // The Ceremonial Beast's moves set flags that pick its animation.
         (Monster::CeremonialBeast, MoveId::PlowMove) => {
-            fight.attack_opponents();
+            if super::attack_first(fight, step) {
+                return Some(1);
+            }
             fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(PLOW_STRENGTH));
         }
         (Monster::CeremonialBeast, MoveId::StompMove) => fight.attack_opponents(),
         (Monster::CeremonialBeast, MoveId::CrushMove) => {
-            fight.attack_opponents();
+            if super::attack_first(fight, step) {
+                return Some(1);
+            }
             let strength = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
                 true => CRUSH_STRENGTH_DEADLY,
                 false => CRUSH_STRENGTH,
@@ -133,11 +134,16 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
             fight.apply_to_opponents(Power::VulnerablePower, PowerAmount::Counted(SPORES));
         }
         (Monster::Flyconid, MoveId::FrailSporesMove) => {
-            fight.attack_opponents();
+            if super::attack_first(fight, step) {
+                return Some(1);
+            }
             fight.apply_to_opponents(Power::FrailPower, PowerAmount::Counted(SPORES));
         }
-        (monster, move_id) => monster_moves::perform(monster, move_id, fight),
+        (monster, move_id) => {
+            return monster_moves::overgrowth::perform(monster, move_id, step, fight);
+        }
     }
+    None
 }
 
 /// The block the Crossbow Ruby Raider's Reload gives it, a constant in the
@@ -154,9 +160,6 @@ const PLOW_STRENGTH: Number = 2;
 /// `CeremonialBeast.CrushStrength`, either side of `DeadlyEnemies`.
 const CRUSH_STRENGTH: Number = 3;
 const CRUSH_STRENGTH_DEADLY: Number = 4;
-
-/// What the Cubex Construct's Charge Up adds to it, a constant in the move.
-const CHARGE_UP_STRENGTH: Number = 2;
 
 /// What the Snapping Jaxfruit's Energy Orb adds to it, a constant in the move.
 const ENERGY_ORB_STRENGTH: Number = 2;

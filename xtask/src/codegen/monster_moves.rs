@@ -6,6 +6,13 @@
 //! and the build's `behaviour/` ports it by hand.
 //!
 //! Filed the way the monster table is: one file per act a monster is met in.
+//!
+//! A move's attack can make the player answer something, as a relic's draw
+//! that shuffles on a hit does. The game's move stands still on its `await`
+//! until the answer comes. So a move with more to do after an attack stops
+//! there, names the step it goes on from, and is called again with it. Every
+//! other command takes a `ThrowingPlayerChoiceContext`, which throws on a
+//! question, so none of them is a place to stop.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -224,8 +231,15 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
             "/// A move of a monster in this file, for every move whose statements\n\
              /// the dump matched.\n\
              ///\n\
-             /// Any other move panics, and `behaviour/` ports it by hand.\n\
-             pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {{\n\
+             /// Any other move panics, and `behaviour/` ports it by hand. It\n\
+             /// starts at `step`, and hands back the step to go on from where a\n\
+             /// command made the player answer something.\n\
+             pub fn perform<F: Fight<V>>(\n\
+             monster: Monster,\n\
+             move_id: MoveId,\n\
+             step: u8,\n\
+             fight: &mut F,\n\
+             ) -> Option<u8> {{\n\
              match (monster, move_id) {{"
         )
         .unwrap();
@@ -246,18 +260,35 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
                     continue;
                 }
                 writeln!(out, "{arm} => {{").unwrap();
-                for row in &held.rows {
+                let last = held.rows.len().saturating_sub(1);
+                let stops = held.rows[..last].iter().any(|row| row == &["attack"]);
+                if stops {
+                    writeln!(out, "if step == 0 {{").unwrap();
+                }
+                let mut steps = 0;
+                for (at, row) in held.rows.iter().enumerate() {
                     command(out, row, &cards).map_err(|source| Error::In {
                         at: format!("{id} {}", held.id),
                         source: Box::new(source),
                     })?;
+                    if row == &["attack"] && at < last {
+                        steps += 1;
+                        writeln!(
+                            out,
+                            "if fight.waiting() {{ return Some({steps}); }}\n}}\nif step <= {steps} {{"
+                        )
+                        .unwrap();
+                    }
+                }
+                if stops {
+                    writeln!(out, "}}").unwrap();
                 }
                 writeln!(out, "}}").unwrap();
             }
         }
         writeln!(
             out,
-            "(monster, move_id) => unimplemented!(\"{{monster:?}} has no {{move_id:?}} in the table\"),\n}}\n}}"
+            "(monster, move_id) => unimplemented!(\"{{monster:?}} has no {{move_id:?}} in the table\"),\n}}\nNone\n}}"
         )
         .unwrap();
     }
@@ -269,17 +300,26 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
     );
     shape.push('\n');
     for bucket in buckets.keys() {
-        writeln!(shape, "mod {bucket};").unwrap();
+        writeln!(shape, "pub mod {bucket};").unwrap();
     }
     writeln!(
         shape,
-        "\ntype V = super::super::{version};\n\n\
-         /// One of a monster's moves, from the file its table row is filed in.\n\
-         pub fn perform<F: sts2_core::Fight<V>>(\n\
-         monster: super::monsters::Monster,\n\
-         move_id: super::monsters::MoveId,\n\
-         fight: &mut F,\n\
-         ) {{\n\
+        "\n/// The file a monster's moves are filed in, one per act it is met in.\n\
+         ///\n\
+         /// `behaviour/` files its hand ports the same way, and routes a move by\n\
+         /// this.\n\
+         #[derive(Debug, Clone, Copy, PartialEq, Eq)]\n\
+         pub enum Filed {{"
+    )
+    .unwrap();
+    for bucket in buckets.keys() {
+        writeln!(shape, "{},", camel(bucket)).unwrap();
+    }
+    writeln!(
+        shape,
+        "}}\n\n\
+         /// Where `monster`'s moves are filed.\n\
+         pub fn filed(monster: super::monsters::Monster) -> Filed {{\n\
          use super::monsters::Monster;\n\
          match monster {{"
     )
@@ -289,12 +329,7 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
             .iter()
             .map(|id| format!("Monster::{}", camel(id)))
             .collect();
-        writeln!(
-            shape,
-            "{} => {bucket}::perform(monster, move_id, fight),",
-            arms.join(" | ")
-        )
-        .unwrap();
+        writeln!(shape, "{} => Filed::{},", arms.join(" | "), camel(bucket)).unwrap();
     }
     writeln!(shape, "}}\n}}").unwrap();
     split.finish(

@@ -398,18 +398,23 @@ fn raise<V: Rules>(
         }
     }
 
-    // `PowerCmd.Decrement`, which takes the instance off at zero the way a
-    // duration tick does.
+    // `PowerCmd.Decrement` on the instance that asked, by its place, which
+    // nothing moves until every one has ticked. Then each instance is taken
+    // off at zero, the way a duration tick does.
     for &listener in &decremented {
-        let Listener::Power { owner, power, .. } = listener else {
+        let Listener::Power { owner, at, .. } = listener else {
             continue;
         };
-        for held in live.powers.of_mut(owner) {
-            if held.power() == power && held.amount.count().is_some() {
-                held.amount = held.amount.ticked();
-            }
+        if let Some(held) = live.powers.of_mut(owner).nth(usize::from(at))
+            && held.amount.count().is_some()
+        {
+            held.amount = held.amount.ticked();
         }
-        live.powers.retain(owner, |held| !held.amount.spent());
+    }
+    for &listener in &decremented {
+        if let Listener::Power { owner, .. } = listener {
+            live.powers.retain(owner, |held| !held.amount.spent());
+        }
     }
     asked
 }

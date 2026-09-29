@@ -25,6 +25,8 @@ pub enum Resume {
     Acrobatics,
     /// `HandTrick`, after its owner picked the skill to make Sly.
     HandTrick,
+    /// `Nightmare`, after its owner picked the card to copy.
+    Nightmare,
 }
 
 pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
@@ -42,6 +44,13 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
         SilentCard::PiercingWail => piercing_wail(fight),
         SilentCard::EchoingSlash => echoing_slash(fight),
         SilentCard::HandTrick => hand_trick(fight),
+        // `Nightmare`: one card of the hand picked, to copy into hand before
+        // the next hand is drawn.
+        SilentCard::Nightmare => Played::Asking {
+            pile: Pile::Hand,
+            selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
+            at: super::super::Resume::Card(super::Resume::Silent(Resume::Nightmare)),
+        },
         // `BladeOfInk`: its `Cards` of Shivs into hand, each enchanted with
         // one Inky. `CardCmd.Enchant` raises no hook, so the Shivs arrive
         // enchanted.
@@ -293,6 +302,10 @@ fn haze<F: Fight<V>>(fight: &mut F) -> Played<V> {
     Played::Done
 }
 
+/// `Nightmare`'s `PowerCmd.Apply<NightmarePower>(…, 3m, …)`, which it prints
+/// nowhere.
+const NIGHTMARE: i32 = 3;
+
 /// `HandTrick`: its block, then one skill of the hand that is not Sly this
 /// turn picked, to be Sly until the turn ends.
 fn hand_trick<F: Fight<V>>(fight: &mut F) -> Played<V> {
@@ -326,6 +339,16 @@ pub(super) fn resume_play<F: Fight<V>>(
         // `CardCmd.Discard` of the one taken.
         Resume::Survivor | Resume::Prepared | Resume::DaggerThrow | Resume::Acrobatics => {
             fight.act_on(sts2_core::PileAct::Discard, chosen.as_slice());
+            Played::Done
+        }
+        // Three of `NightmarePower` on its owner, which keeps a clone of the
+        // card taken, where a card was taken.
+        Resume::Nightmare => {
+            if let Some(card) = chosen.one_or_none() {
+                let owner = fight.actor();
+                fight.apply_to_actor(Power::NightmarePower, PowerAmount::Counted(NIGHTMARE));
+                fight.keep_card_on_power(owner, Power::NightmarePower, card);
+            }
             Played::Done
         }
         // `CardCmd.ApplySingleTurnSly` on the one taken.

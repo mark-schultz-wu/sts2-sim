@@ -141,7 +141,12 @@ pub(super) struct Asking<V: Rules> {
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum Then<V: Rules> {
     /// A card's or a potion's own effect, which `V::resume_play` picks up.
-    Play { effect: Resuming<V>, at: V::Resume },
+    /// `outermost` is a play no other is running inside.
+    Play {
+        effect: Resuming<V>,
+        at: V::Resume,
+        outermost: bool,
+    },
     /// `SetupPlayerTurn`, which a hook parked on its selection. `act` is what
     /// happens to the cards picked, and `stage` is the rest of the setup.
     Setup {
@@ -150,6 +155,60 @@ pub(super) enum Then<V: Rules> {
     },
     /// The enemy turn, which a monster's move parked on a choice.
     EnemyTurn(EnemyTurn<V>),
+    /// A selection a shuffle asked for inside an effect's draw. `act` is
+    /// what happens to the cards picked, and the rest of the draw waits in
+    /// [`Live::deferred`].
+    Pick { act: sts2_core::PileAct },
+}
+
+/// What waits behind a question that a card, auto-played inside another
+/// effect, asked. The game's commands are coroutines, so the effect around the
+/// card stands still until the card's play is over. These run once it is.
+///
+/// An effect that does not wait runs on to its end first. So one whose code
+/// goes on past the auto-play does that part early.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) enum Deferred<V: Rules> {
+    /// The rest of an effect, from where its own code handed back `played`.
+    Resume {
+        effect: Resuming<V>,
+        played: sts2_core::Played<V>,
+        outermost: bool,
+    },
+    /// The end of an effect whose last play is over, which puts the card
+    /// where its play sends it.
+    Finish {
+        effect: Resuming<V>,
+        outermost: bool,
+    },
+    /// `CardCmd.AutoPlay` of a copy, which came up while the question
+    /// waited. `named` is the target it was given.
+    AutoPlay {
+        id: CardId<V>,
+        named: Option<CombatId>,
+    },
+    /// The move `move_id` of `actor`, which stood still on a command the
+    /// player had to answer. It goes on from `at`, where it handed a resume
+    /// point back, and is over otherwise. Then `OnMovePerformed`, the enemies
+    /// in `acting`, and the end of the turn. `damage` and `repeats` are what
+    /// the move advertised, which its attacks read.
+    Move {
+        actor: CombatId,
+        monster: V::Monster,
+        move_id: V::MoveId,
+        at: Option<V::Resume>,
+        damage: V::Number,
+        repeats: V::Count,
+        acting: smallvec::SmallVec<[CombatId; CREATURES]>,
+        max_energy: V::Count,
+    },
+    /// `CardPileCmd.Draw` of `count` cards. `resumed` for the rest of a draw
+    /// a shuffle's question stopped, which asked `ShouldDraw` already.
+    Draw {
+        count: usize,
+        hand_draw: bool,
+        resumed: bool,
+    },
 }
 
 /// Where the enemy turn stands while a monster's move waits on the player.
@@ -1731,6 +1790,9 @@ pub(crate) struct Live<V: Rules> {
     pub(super) skip_tick: Skips<V>,
     /// The ids this fight has given out, and the next one it will.
     pub(super) card_ids: CardIds<V>,
+    /// Clones of cards the fight keeps outside every pile, by the id they
+    /// were minted under, which a power's model names.
+    pub(super) kept_faces: Vec<(CardId<V>, Face<V>)>,
     /// How many attack commands this fight has started, which is what the
     /// next one is told apart by.
     pub(super) attacks: u32,
@@ -1740,6 +1802,12 @@ pub(crate) struct Live<V: Rules> {
     /// A card play waiting on an answer, which is the only thing the fight
     /// will take while it is set.
     pub(super) asking: Option<Asking<V>>,
+    /// What waits behind that answer, the next to run last.
+    pub(super) deferred: Vec<Deferred<V>>,
+    /// Where what an effect defers goes in [`Live::deferred`], once the
+    /// question it waits behind is asked. Each one goes under the last, so
+    /// the first deferred runs first.
+    pub(super) deferring_at: Option<usize>,
 }
 
 /// How many history entries one turn holds before its list reaches the heap:
@@ -1912,8 +1980,11 @@ impl<V: Rules> Clone for Live<V> {
             powers: self.powers.clone(),
             orbs: self.orbs.clone(),
             card_ids: self.card_ids.clone(),
+            kept_faces: self.kept_faces.clone(),
             notes: self.notes.clone(),
             asking: self.asking.clone(),
+            deferred: self.deferred.clone(),
+            deferring_at: self.deferring_at,
             ..*self
         }
     }
@@ -1947,9 +2018,12 @@ impl<V: Rules> Clone for Live<V> {
             machines,
             skip_tick,
             card_ids,
+            kept_faces,
             attacks,
             notes,
             asking,
+            deferred,
+            deferring_at,
         } = self;
         *character = source.character;
         *ascension = source.ascension;
@@ -1976,9 +2050,12 @@ impl<V: Rules> Clone for Live<V> {
         machines.copy_from(&source.machines);
         skip_tick.copy_from(&source.skip_tick);
         card_ids.clone_from(&source.card_ids);
+        kept_faces.clone_from(&source.kept_faces);
         *attacks = source.attacks;
         notes.clone_from(&source.notes);
         asking.clone_from(&source.asking);
+        deferred.clone_from(&source.deferred);
+        *deferring_at = source.deferring_at;
     }
 }
 
@@ -2098,6 +2175,13 @@ impl<V: Rules> Live<V> {
     /// What the fight's end asked of the run, in the order it asked.
     pub(crate) fn leaving(&self) -> &[sts2_core::HookEffect<V>] {
         &self.leaving
+    }
+
+    /// Put `deferred` behind the question asked, under what else waits
+    /// behind it.
+    pub(super) fn defer(&mut self, deferred: Deferred<V>) {
+        let at = *self.deferring_at.get_or_insert(self.deferred.len());
+        self.deferred.insert(at, deferred);
     }
 
     /// Whether the fight asked anything of the run since the last decision
@@ -2713,9 +2797,12 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             machines: Bounded::new(),
             skip_tick: Bounded::new(),
             card_ids: CardIds::new(),
+            kept_faces: Vec::new(),
             attacks: 0,
             notes: smallvec::SmallVec::new(),
             asking: None,
+            deferred: Vec::new(),
+            deferring_at: None,
         }
     }
 }

@@ -1,0 +1,18 @@
+# Two Survivors made Sly go down in one Gambler's Brew discard. The first
+# plays and asks, the second waits behind its answer, then plays and asks
+# in turn, and the brew's draw comes before either.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","potion":"GAMBLERS_BREW"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"HAND_TRICK"}
+{"cmd":"grant","card":"SURVIVOR"}
+{"cmd":"grant","card":"SURVIVOR"}
+{"cmd":"play_card","index":7}
+{"cmd":"answer","cards":[3]}
+{"cmd":"grant","card":"HAND_TRICK"}
+{"cmd":"play_card","index":9}
+{"cmd":"answer","cards":[3]}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"answer","cards":[7,8]}
+{"cmd":"answer","cards":[0]}
+{"cmd":"answer","cards":[0]}

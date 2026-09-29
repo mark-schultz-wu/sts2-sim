@@ -1,10 +1,11 @@
 //! The monsters no act fields, which an event or another monster brings.
 
-use sts2_core::PowerAmount;
+use sts2_core::{Fight, PowerAmount};
 
-use super::super::super::generated::monsters::Monster;
+use super::super::super::generated::monster_moves;
+use super::super::super::generated::monsters::{Monster, MoveId};
 use super::super::super::generated::powers::Power;
-use super::Number;
+use super::{Number, V};
 
 /// The Mysterious Knight's `AfterAddedToRoom`: `PowerCmd.Apply<StrengthPower>`
 /// then `PowerCmd.Apply<PlatingPower>`, six of each, on itself.
@@ -26,4 +27,22 @@ pub(super) fn starting_powers(monster: Monster) -> Option<Vec<(Power, PowerAmoun
         }
         _ => return None,
     })
+}
+
+/// Perform one of these monsters' moves, where the generator left it to a
+/// hand port.
+pub(super) fn perform<F: Fight<V>>(
+    monster: Monster,
+    move_id: MoveId,
+    step: u8,
+    fight: &mut F,
+) -> Option<u8> {
+    match (monster, move_id) {
+        // `NOTHING_MOVE`, whose lambda is `Task.CompletedTask`.
+        (
+            Monster::BattleFriendV1 | Monster::BattleFriendV2 | Monster::BattleFriendV3,
+            MoveId::NothingMove,
+        ) => None,
+        (monster, move_id) => monster_moves::summoned::perform(monster, move_id, step, fight),
+    }
 }

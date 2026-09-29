@@ -1,0 +1,6 @@
+# Membership Card halves every price the merchant shows, and a shelf bought
+# from empties as it would without it.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"MEMBERSHIP_CARD"}
+{"cmd":"enter_room","type":"Shop"}
+{"cmd":"buy","index":0}

@@ -12,8 +12,15 @@ type V = super::super::super::V0_111_0;
 /// A move of a monster in this file, for every move whose statements
 /// the dump matched.
 ///
-/// Any other move panics, and `behaviour/` ports it by hand.
-pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
+/// Any other move panics, and `behaviour/` ports it by hand. It
+/// starts at `step`, and hands back the step to go on from where a
+/// command made the player answer something.
+pub fn perform<F: Fight<V>>(
+    monster: Monster,
+    move_id: MoveId,
+    step: u8,
+    fight: &mut F,
+) -> Option<u8> {
     match (monster, move_id) {
         // `its MoveState performs a lambda`
         (Monster::Architect, MoveId::Nothing) => {
@@ -101,8 +108,15 @@ pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
         }
         (Monster::TenHpMonster, MoveId::Nothing) => {}
         (Monster::TheAdversaryMkOne, MoveId::BarrageMove) => {
-            fight.attack_opponents();
-            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(2));
+            if step == 0 {
+                fight.attack_opponents();
+                if fight.waiting() {
+                    return Some(1);
+                }
+            }
+            if step <= 1 {
+                fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(2));
+            }
         }
         (Monster::TheAdversaryMkOne, MoveId::BeamMove) => {
             fight.attack_opponents();
@@ -111,8 +125,15 @@ pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
             fight.attack_opponents();
         }
         (Monster::TheAdversaryMkThree, MoveId::BarrageMove) => {
-            fight.attack_opponents();
-            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(4));
+            if step == 0 {
+                fight.attack_opponents();
+                if fight.waiting() {
+                    return Some(1);
+                }
+            }
+            if step <= 1 {
+                fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(4));
+            }
         }
         (Monster::TheAdversaryMkThree, MoveId::CrashMove) => {
             fight.attack_opponents();
@@ -121,8 +142,15 @@ pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
             fight.attack_opponents();
         }
         (Monster::TheAdversaryMkTwo, MoveId::BarrageMove) => {
-            fight.attack_opponents();
-            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(3));
+            if step == 0 {
+                fight.attack_opponents();
+                if fight.waiting() {
+                    return Some(1);
+                }
+            }
+            if step <= 1 {
+                fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(3));
+            }
         }
         (Monster::TheAdversaryMkTwo, MoveId::BashMove) => {
             fight.attack_opponents();
@@ -132,4 +160,5 @@ pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
         }
         (monster, move_id) => unimplemented!("{monster:?} has no {move_id:?} in the table"),
     }
+    None
 }

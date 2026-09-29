@@ -1,0 +1,13 @@
+# Hand Trick makes a Survivor Sly. A second Survivor discards it, so it plays
+# itself inside that discard, and asks for its own discard before the second
+# Survivor's play ends.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"HAND_TRICK"}
+{"cmd":"grant","card":"SURVIVOR"}
+{"cmd":"grant","card":"SURVIVOR"}
+{"cmd":"play_card","index":7}
+{"cmd":"answer","cards":[3]}
+{"cmd":"play_card","index":8}
+{"cmd":"answer","cards":[7]}
+{"cmd":"answer","cards":[0]}

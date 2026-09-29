@@ -12,7 +12,7 @@
 //! encounter fields. What any of it *does* is code, and gets ported by hand.
 //!
 //! Where a value is code, the dump says so rather than guessing, and it
-//! generates as [`Field::Computed`](sts2_core::Field). That is the simulator's
+//! generates as [`Field::Computed`](crate::Field::Computed). That is the simulator's
 //! cue to ask rather than look up. Each domain decides it differently, because
 //! each had to. A card is marked from its overrides, a power from its IL, and
 //! an encounter by running it and reading the `Rng` counter afterwards. All of
@@ -110,6 +110,10 @@ impl sts2_core::Hooks for V0_107_1 {
 
     fn power_noted(state: &mut Self::PowerState, note: Self::Number) {
         behaviour::powers::noted(state, note);
+    }
+
+    fn power_kept_card(state: &mut Self::PowerState, kept: sts2_core::CardId<Self>) {
+        behaviour::powers::kept_card(state, kept);
     }
 
     fn modify_hook<P: sts2_core::Printed<Self> + ?Sized>(
@@ -776,6 +780,19 @@ impl sts2_core::Rules for V0_107_1 {
         fight: &mut F,
     ) -> sts2_core::Played<Self> {
         behaviour::monsters::perform(monster, move_id, state, fight)
+    }
+
+    fn resume_move<F: sts2_core::Fight<Self>>(
+        monster: Self::Monster,
+        move_id: Self::MoveId,
+        at: Self::Resume,
+        state: &mut Self::MonsterState,
+        fight: &mut F,
+    ) -> sts2_core::Played<Self> {
+        let behaviour::Resume::Monster(at) = at else {
+            unreachable!("{at:?} resumes no move")
+        };
+        behaviour::monsters::resume_move(monster, move_id, at, state, fight)
     }
 
     fn random_encounter_monsters<R: sts2_core::rng::GameRng>(

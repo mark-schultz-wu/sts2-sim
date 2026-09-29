@@ -1,0 +1,17 @@
+# Calculated Gamble discards the hand, two Sly Survivors in it, and draws as
+# many. The first Survivor plays and asks, the second waits behind it, and
+# the Gamble's own play ends only once both have.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"HAND_TRICK"}
+{"cmd":"grant","card":"SURVIVOR"}
+{"cmd":"grant","card":"SURVIVOR"}
+{"cmd":"play_card","index":7}
+{"cmd":"answer","cards":[3]}
+{"cmd":"grant","card":"HAND_TRICK"}
+{"cmd":"play_card","index":9}
+{"cmd":"answer","cards":[3]}
+{"cmd":"grant","card":"CALCULATED_GAMBLE"}
+{"cmd":"play_card","index":9}
+{"cmd":"answer","cards":[0]}
+{"cmd":"answer","cards":[0]}

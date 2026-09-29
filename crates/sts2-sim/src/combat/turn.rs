@@ -153,7 +153,110 @@ pub(super) fn resume_enemy_turn<V: Rules>(
     if played != sts2_core::Played::Done {
         unimplemented!("a monster's move asking a second question");
     }
-    move_performed::<V>(live, parked.actor, parked.move_id);
+    live.skip_tick = skipping;
+    after_move(
+        Fighting {
+            live,
+            streams,
+            relics,
+        },
+        parked.actor,
+        parked.move_id,
+        &parked.acting,
+        parked.max_energy,
+        ended,
+    )
+}
+
+/// The rest of a move that stood still on a command the player had to
+/// answer. It goes on from `at`, on a board built as the move's was. `None`
+/// where the move stood still again, which [`Live::deferred`] now holds.
+pub(super) fn resume_move<V: Rules>(
+    fighting: Fighting<'_, V>,
+    parked: &super::live::Deferred<V>,
+) -> Option<Option<super::Ended>> {
+    let super::live::Deferred::Move {
+        actor,
+        monster,
+        move_id,
+        at,
+        damage,
+        repeats,
+        ref acting,
+        max_energy,
+    } = *parked
+    else {
+        unreachable!("only a move resumes as one")
+    };
+    let Fighting {
+        live,
+        streams,
+        relics,
+    } = fighting;
+    let Some(at) = at else {
+        return Some(None);
+    };
+    // A monster the fight took out took its model and its move with it.
+    let Some(mut state) = live
+        .machines
+        .iter()
+        .find(|held| held.creature == actor)
+        .map(|held| held.state)
+    else {
+        return Some(None);
+    };
+    let ascension = live.ascension;
+    let mut board = Board::for_move(
+        live,
+        streams.combat(),
+        relics,
+        ascension,
+        (actor, damage, repeats),
+    );
+    let played = V::resume_move(monster, move_id, at, &mut state, &mut board);
+    let ended = board.ended;
+    let skipped = std::mem::take(&mut board.skipped);
+    super::play::merge::<V>(&mut live.skip_tick, skipped);
+    if let Some(held) = live.machines.iter_mut().find(|held| held.creature == actor) {
+        held.state = state;
+    }
+    let again = match played {
+        sts2_core::Played::Done if live.asking.is_none() => return Some(ended),
+        sts2_core::Played::Done => None,
+        sts2_core::Played::Waiting { at } if live.asking.is_some() => Some(at),
+        played => unimplemented!("a resumed move handing back {played:?}"),
+    };
+    live.defer(super::live::Deferred::Move {
+        actor,
+        monster,
+        move_id,
+        at: again,
+        damage,
+        repeats,
+        acting: acting.clone(),
+        max_energy,
+    });
+    None
+}
+
+/// The enemy turn once the move `move_id` of `actor` is over:
+/// `OnMovePerformed`, then the enemies in `acting` unless the fight ended.
+pub(super) fn after_move<V: Rules>(
+    fighting: Fighting<'_, V>,
+    actor: CombatId,
+    move_id: V::MoveId,
+    acting: &[CombatId],
+    max_energy: V::Count,
+    ended: Option<super::Ended>,
+) -> Result<Option<super::Ended>, Error> {
+    let Fighting {
+        live,
+        streams,
+        relics,
+    } = fighting;
+    let skipping = std::mem::take(&mut live.skip_tick);
+    let ascension = live.ascension;
+    move_performed::<V>(live, actor, move_id);
     if let Some(ended) = ended {
         live.skip_tick = skipping;
         if ended == super::Ended::Won {
@@ -168,9 +271,9 @@ pub(super) fn resume_enemy_turn<V: Rules>(
             relics,
         },
         ascension,
-        parked.max_energy,
+        max_energy,
         skipping,
-        &parked.acting,
+        acting,
     )
 }
 
@@ -200,6 +303,10 @@ fn enemies_act<V: Rules>(
         // The turn waits on the player's answer.
         Acted::Parked(asking) => {
             next.asking = Some(asking);
+            next.skip_tick = skipping;
+            return Ok(None);
+        }
+        Acted::Deferred => {
             next.skip_tick = skipping;
             return Ok(None);
         }
@@ -957,6 +1064,23 @@ pub(super) fn carry_setup<V: Rules>(
                             };
                             live.remove_power(owner, power);
                         }
+                        // Clones of the card a power keeps, one at a time, each
+                        // past a full hand to the discard pile.
+                        sts2_core::HookEffect::CloneKeptIntoHand { kept, count } => {
+                            let count: usize = num_traits::cast(count)
+                                .unwrap_or_else(|| unimplemented!("{count:?} clones"));
+                            let mut board = Board::for_card(
+                                live,
+                                rngs.reborrow(),
+                                relics,
+                                ascension,
+                                None,
+                                None,
+                            );
+                            for _ in 0..count {
+                                board.clone_kept(kept, Pile::Hand);
+                            }
+                        }
                         // `CardPileCmd.Add(this, PileType.Hand)`, which sends a
                         // card past a full hand to the discard pile.
                         sts2_core::HookEffect::ToHand => {
@@ -1391,7 +1515,7 @@ fn generate_from_pool<V: Rules>(
 ///
 /// A discard that took Sly cards plays them, and whatever that ended comes
 /// back.
-fn select<V: Rules>(
+pub(super) fn select<V: Rules>(
     live: &mut Live<V>,
     rngs: CombatRngs<'_>,
     relics: &mut crate::run::Belt<V>,
@@ -1410,7 +1534,7 @@ fn select<V: Rules>(
             if ended.is_some() {
                 return Ok(ended);
             }
-            Ok(play_sly::<V>(live, rngs, relics, sly))
+            Ok(play_sly::<V>(live, rngs, relics, sly, false))
         }
         None => Err(super::live::Asked::Pile { pile, selection }),
     }
@@ -1459,9 +1583,12 @@ pub(super) fn act_on<V: Rules>(
                     sly.push(held.id);
                 }
                 let card = held.face.ident.card;
+                live.cards.move_to(from, at, Pile::Discard);
                 live.history.discarded(card);
-                unheard::<V>(live, relics, sts2_core::ModelHook::AfterCardDiscarded);
-                Pile::Discard
+                if let Some(ended) = card_discarded::<V>(live, rngs.reborrow(), relics) {
+                    return (sly, Some(ended));
+                }
+                continue;
             }
             // `CardCmd.TransformToRandom`, one card at a time, each drawn off
             // `CombatCardSelection` before it replaces the original where it
@@ -1503,6 +1630,35 @@ pub(super) fn act_on<V: Rules>(
     (sly, None)
 }
 
+/// `Hook.AfterCardDiscarded`, once a card of the player's is down. A relic
+/// acts for the player, and how the fight ended comes back where it did.
+///
+/// # Panics
+///
+/// A listener other than a relic answering.
+pub(super) fn card_discarded<V: Rules>(
+    live: &mut Live<V>,
+    rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+) -> Option<super::Ended> {
+    let hook = sts2_core::EventHook::CardDiscarded { side: live.side };
+    let asked = listen::notify::<V>(live, relics, hook);
+    if asked.is_empty() {
+        return None;
+    }
+    let mut effects: SmallVec<[sts2_core::HookEffect<V>; 2]> = SmallVec::new();
+    for (listener, effect) in asked {
+        match listener {
+            Listener::Relic { .. } => effects.push(effect),
+            listener => unimplemented!("{listener:?} asking for {effect:?} after a discard"),
+        }
+    }
+    let ascension = live.ascension;
+    let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
+    super::hook::apply::<V, _>(&mut board, effects);
+    board.ended
+}
+
 /// `CardCmd.AutoPlay` with `SlyDiscard` for each Sly card a discard took, in
 /// the order they went down, and whatever that ended.
 pub(super) fn play_sly<V: Rules>(
@@ -1510,6 +1666,7 @@ pub(super) fn play_sly<V: Rules>(
     mut rngs: CombatRngs<'_>,
     relics: &mut crate::run::Belt<V>,
     sly: SmallVec<[sts2_core::CardId<V>; 2]>,
+    pausable: bool,
 ) -> Option<super::Ended> {
     for id in sly {
         // `CardPileCmd.Add` to the play pile from wherever the card stands
@@ -1520,7 +1677,8 @@ pub(super) fn play_sly<V: Rules>(
         else {
             unimplemented!("a Sly card that left every pile before it played");
         };
-        let ended = super::play::auto_play::<V>(live, rngs.reborrow(), relics, id, from, None);
+        let ended =
+            super::play::auto_play::<V>(live, rngs.reborrow(), relics, id, from, None, pausable);
         if ended.is_some() {
             return ended;
         }
@@ -1589,7 +1747,8 @@ pub(super) fn resume_setup<V: Rules>(
     } = fighting;
     let (sly, ended) = act_on::<V>(live, streams.combat(), relics, act, picked.as_slice());
     let ascension = live.ascension;
-    let carried = match ended.or_else(|| play_sly::<V>(live, streams.combat(), relics, sly)) {
+    let carried = match ended.or_else(|| play_sly::<V>(live, streams.combat(), relics, sly, false))
+    {
         Some(ended) => Carried::Done(Some(ended)),
         None => carry_setup(live, streams.combat(), relics, ascension, stage),
     };
@@ -2084,13 +2243,6 @@ fn clear_block<V: Rules>(
                     });
                     board.apply(block);
                 }
-                // `PowerCmd.Decrement(this)`.
-                (Listener::Power { owner, power, .. }, sts2_core::HookEffect::Decrement) => {
-                    let ascension = live.ascension;
-                    let mut board =
-                        Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
-                    board.modify_amount(owner, power, -num_traits::one::<V::Number>());
-                }
                 (_, effect) => {
                     unimplemented!("a listener asking for {effect:?} as block clears")
                 }
@@ -2314,6 +2466,9 @@ enum Acted<V: Rules> {
     Over(Option<super::Ended>),
     /// A move stopped on the player's answer.
     Parked(super::live::Asking<V>),
+    /// A command inside a move asked, and the rest of the turn waits in
+    /// [`Live::deferred`].
+    Deferred,
 }
 
 /// `ExecuteEnemyTurn`: each enemy in `acting` performs what it advertised.
@@ -2395,6 +2550,39 @@ fn enemy_turn<V: Rules>(
             sts2_core::Played::Asking { .. } | sts2_core::Played::AskingAmong { .. } => {
                 unimplemented!("a monster's move selecting from a pile")
             }
+            // Its attack asked, and the move stands still on it with the
+            // rest of the turn behind it.
+            sts2_core::Played::Waiting { at: resume } => {
+                if live.asking.is_none() {
+                    unimplemented!("a move waiting on nothing asked");
+                }
+                live.defer(super::live::Deferred::Move {
+                    actor: id,
+                    monster,
+                    move_id: next_move.id,
+                    at: Some(resume),
+                    damage,
+                    repeats,
+                    acting: acting[at + 1..].iter().copied().collect(),
+                    max_energy,
+                });
+                return Acted::Deferred;
+            }
+        }
+        // Its last command, an attack, asked: the move is over, and the turn
+        // waits.
+        if live.asking.is_some() {
+            live.defer(super::live::Deferred::Move {
+                actor: id,
+                monster,
+                move_id: next_move.id,
+                at: None,
+                damage,
+                repeats,
+                acting: acting[at + 1..].iter().copied().collect(),
+                max_energy,
+            });
+            return Acted::Deferred;
         }
         move_performed::<V>(live, id, next_move.id);
         // `CheckWinCondition` after each enemy's turn: an ended fight gives

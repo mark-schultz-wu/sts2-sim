@@ -14,8 +14,15 @@ type V = super::super::super::V0_111_0;
 /// A move of a monster in this file, for every move whose statements
 /// the dump matched.
 ///
-/// Any other move panics, and `behaviour/` ports it by hand.
-pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
+/// Any other move panics, and `behaviour/` ports it by hand. It
+/// starts at `step`, and hands back the step to go on from where a
+/// command made the player answer something.
+pub fn perform<F: Fight<V>>(
+    monster: Monster,
+    move_id: MoveId,
+    step: u8,
+    fight: &mut F,
+) -> Option<u8> {
     match (monster, move_id) {
         // `call DamageCmd.Attack`
         (Monster::CalcifiedCultist, MoveId::DarkStrikeMove) => {
@@ -61,8 +68,15 @@ pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
             fight.attack_opponents();
         }
         (Monster::FossilStalker, MoveId::TackleMove) => {
-            fight.attack_opponents();
-            fight.apply_to_opponents(Power::FrailPower, PowerAmount::Counted(1));
+            if step == 0 {
+                fight.attack_opponents();
+                if fight.waiting() {
+                    return Some(1);
+                }
+            }
+            if step <= 1 {
+                fight.apply_to_opponents(Power::FrailPower, PowerAmount::Counted(1));
+            }
         }
         // `statement`
         (Monster::GasBomb, MoveId::ExplodeMove) => {
@@ -108,8 +122,15 @@ pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
             unimplemented!("what {move_id:?} does when {monster:?} performs it")
         }
         (Monster::LivingFog, MoveId::AdvancedGasMove) => {
-            fight.attack_opponents();
-            fight.apply_to_opponents(Power::SmoggyPower, PowerAmount::Counted(1));
+            if step == 0 {
+                fight.attack_opponents();
+                if fight.waiting() {
+                    return Some(1);
+                }
+            }
+            if step <= 1 {
+                fight.apply_to_opponents(Power::SmoggyPower, PowerAmount::Counted(1));
+            }
         }
         // `for`
         (Monster::LivingFog, MoveId::BloatMove) => {
@@ -163,14 +184,23 @@ pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
             fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(4));
         }
         (Monster::SkulkingColony, MoveId::InertiaMove) => {
-            fight.attack_opponents();
-            fight.apply_to_actor(
-                Power::StrengthPower,
-                PowerAmount::Counted(match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
-                    true => 4,
-                    false => 2,
-                }),
-            );
+            if step == 0 {
+                fight.attack_opponents();
+                if fight.waiting() {
+                    return Some(1);
+                }
+            }
+            if step <= 1 {
+                fight.apply_to_actor(
+                    Power::StrengthPower,
+                    PowerAmount::Counted(
+                        match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
+                            true => 4,
+                            false => 2,
+                        },
+                    ),
+                );
+            }
         }
         (Monster::SkulkingColony, MoveId::PiercingStabsMove) => {
             fight.attack_opponents();
@@ -182,12 +212,26 @@ pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
             fight.attack_opponents();
         }
         (Monster::SludgeSpinner, MoveId::OilSprayMove) => {
-            fight.attack_opponents();
-            fight.apply_to_opponents(Power::WeakPower, PowerAmount::Counted(1));
+            if step == 0 {
+                fight.attack_opponents();
+                if fight.waiting() {
+                    return Some(1);
+                }
+            }
+            if step <= 1 {
+                fight.apply_to_opponents(Power::WeakPower, PowerAmount::Counted(1));
+            }
         }
         (Monster::SludgeSpinner, MoveId::RageMove) => {
-            fight.attack_opponents();
-            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(3));
+            if step == 0 {
+                fight.attack_opponents();
+                if fight.waiting() {
+                    return Some(1);
+                }
+            }
+            if step <= 1 {
+                fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(3));
+            }
         }
         (Monster::SludgeSpinner, MoveId::SlamMove) => {
             fight.attack_opponents();
@@ -226,8 +270,15 @@ pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
             fight.apply_to_opponents(Power::VulnerablePower, PowerAmount::Counted(99));
         }
         (Monster::TerrorEel, MoveId::ThrashMove) => {
-            fight.attack_opponents();
-            fight.apply_to_actor(Power::VigorPower, PowerAmount::Counted(6));
+            if step == 0 {
+                fight.attack_opponents();
+                if fight.waiting() {
+                    return Some(1);
+                }
+            }
+            if step <= 1 {
+                fight.apply_to_actor(Power::VigorPower, PowerAmount::Counted(6));
+            }
         }
         (Monster::Toadpole, MoveId::SpikenMove) => {
             fight.apply_to_actor(Power::ThornsPower, PowerAmount::Counted(2));
@@ -289,4 +340,5 @@ pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
         }
         (monster, move_id) => unimplemented!("{monster:?} has no {move_id:?} in the table"),
     }
+    None
 }

@@ -1,8 +1,10 @@
 //! What a monster's move does, ported.
 //!
 //! `MoveState`'s `onPerform`, one function per move. One module per act, the
-//! way `generated/monsters/` is filed, so a monster's moves sit under the same
-//! name as its graph. An act gets a module when its first monster is ported.
+//! way `generated/monster_moves/` is filed, so a monster's moves sit under the
+//! same name as its generated ones. A move routes by
+//! [`monster_moves::filed`], and an act gets a module when its first monster
+//! is ported.
 //!
 //! A monster nobody has ported panics naming itself, so this tree is also the
 //! list of fights the simulator can take a turn in.
@@ -11,7 +13,7 @@ use sts2_core::{ContentError, EventHook, Fight, MonsterSpawn, Played};
 
 use super::super::V0_107_1;
 use super::super::generated::encounters::Encounter;
-use super::super::generated::monster_moves;
+use super::super::generated::monster_moves::{self, Filed};
 use super::super::generated::monsters::{Monster, MoveId, State};
 use super::super::generated::powers::Power;
 
@@ -21,9 +23,18 @@ pub(crate) type Number = <V0_107_1 as sts2_core::ContentVersion>::Number;
 mod glory;
 mod hive;
 mod overgrowth;
+mod shared;
 mod summoned;
 
-pub use hive::Resume;
+/// Where a monster's move stopped on the player's answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Resume {
+    /// The Knowledge Demon's `ChooseCurse`, for the set at this index.
+    CurseOfKnowledge { set: u8 },
+    /// A move whose attack stood still on a question the player had to
+    /// answer, from this step once the answer is in.
+    Step(u8),
+}
 
 /// Carry a monster's move on with the player's answer.
 pub(crate) fn resume<F: Fight<V>>(
@@ -78,6 +89,7 @@ pub(crate) fn starting_powers(
     match overgrowth::starting_powers(monster, ascension)
         .or_else(|| hive::starting_powers(monster, ascension, side))
         .or_else(|| glory::starting_powers(monster, ascension, model))
+        .or_else(|| shared::starting_powers(monster))
         .or_else(|| summoned::starting_powers(monster))
     {
         Some(applied) => applied,
@@ -279,6 +291,33 @@ pub(crate) fn perform<F: Fight<V>>(
     model: &mut Model,
     fight: &mut F,
 ) -> Played<V> {
+    perform_from(monster, move_id, 0, model, fight)
+}
+
+/// A move whose attack stood still on a question the player had to answer,
+/// carried on from where it stopped.
+pub(crate) fn resume_move<F: Fight<V>>(
+    monster: Monster,
+    move_id: MoveId,
+    at: Resume,
+    model: &mut Model,
+    fight: &mut F,
+) -> Played<V> {
+    let Resume::Step(step) = at else {
+        unreachable!("{at:?} resumes a choice, not a move")
+    };
+    perform_from(monster, move_id, step, model, fight)
+}
+
+/// A move from `step`, which stands still, naming the step it goes on from,
+/// where its attack made the player answer something.
+fn perform_from<F: Fight<V>>(
+    monster: Monster,
+    move_id: MoveId,
+    step: u8,
+    model: &mut Model,
+    fight: &mut F,
+) -> Played<V> {
     // Two states no table names. `Creature.Stun` builds one and
     // `IllusionPower` builds the other, and what each does belongs to
     // whoever built it rather than to the monster standing on it.
@@ -291,56 +330,37 @@ pub(crate) fn perform<F: Fight<V>>(
         _ => {}
     }
     if monster == Monster::KnowledgeDemon {
-        return hive::knowledge_demon(move_id, model, fight);
+        return hive::knowledge_demon(move_id, step, model, fight);
     }
-    match monster {
-        Monster::ThievingHopper
-        | Monster::LouseProgenitor
-        | Monster::SpinyToad
-        | Monster::Myte
-        | Monster::Ovicopter
-        | Monster::ToughEgg
-        | Monster::TheObscura
-        | Monster::Entomancer
-        | Monster::Crusher
-        | Monster::Rocket
-        | Monster::TheInsatiable
-        | Monster::BowlbugRock
-        | Monster::SlumberingBeetle
-        | Monster::DecimillipedeSegmentFront
-        | Monster::DecimillipedeSegmentMiddle
-        | Monster::DecimillipedeSegmentBack => hive::perform(monster, move_id, fight),
-        Monster::ShrinkerBeetle
-        | Monster::FuzzyWurmCrawler
-        | Monster::Fogmog
-        | Monster::SnappingJaxfruit
-        | Monster::Flyconid
-        | Monster::CubexConstruct
-        | Monster::CrossbowRubyRaider
-        | Monster::CeremonialBeast
-        | Monster::KinPriest => overgrowth::perform(monster, move_id, fight),
-        Monster::DevotedSculptor
-        | Monster::FrogKnight
-        | Monster::Axebot
-        | Monster::SlimedBerserker
-        | Monster::OwlMagistrate
-        | Monster::Fabricator
-        | Monster::SpectralKnight
-        | Monster::MagiKnight
-        | Monster::MechaKnight
-        | Monster::Guardbot
-        | Monster::Noisebot
-        | Monster::TheLost
-        | Monster::TheForgotten
-        | Monster::TestSubject
-        | Monster::Aeonglass
-        | Monster::Queen
-        | Monster::TorchHeadAmalgam => glory::perform(monster, move_id, model, fight),
-        // `NOTHING_MOVE`, whose lambda is `Task.CompletedTask`.
-        Monster::BattleFriendV1 | Monster::BattleFriendV2 | Monster::BattleFriendV3 => {}
-        _ => monster_moves::perform(monster, move_id, fight),
+    let next = match monster_moves::filed(monster) {
+        Filed::Glory => glory::perform(monster, move_id, step, model, fight),
+        Filed::Hive => hive::perform(monster, move_id, step, fight),
+        Filed::Overgrowth => overgrowth::perform(monster, move_id, step, fight),
+        Filed::Shared => shared::perform(monster, move_id, step, fight),
+        Filed::Summoned => summoned::perform(monster, move_id, step, fight),
+        Filed::Underdocks => monster_moves::underdocks::perform(monster, move_id, step, fight),
+    };
+    match next {
+        Some(step) => Played::Waiting {
+            at: super::Resume::Monster(Resume::Step(step)),
+        },
+        None => Played::Done,
     }
-    Played::Done
+}
+
+/// A move's opening attack, at step 0. True where the attack made the player
+/// answer something, and the move stands still until step 1.
+///
+/// The attack is the one command a move can stand still on. Every other
+/// command takes a `ThrowingPlayerChoiceContext`, which throws on a question.
+/// Each move ported by hand attacks first or last, so none needs a step past
+/// 1.
+fn attack_first<F: Fight<V>>(fight: &mut F, step: u8) -> bool {
+    if step == 0 {
+        fight.attack_opponents();
+        return fight.waiting();
+    }
+    false
 }
 
 /// What a monster's own model saves between its moves.

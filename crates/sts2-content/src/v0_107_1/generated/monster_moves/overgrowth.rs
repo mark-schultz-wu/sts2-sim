@@ -14,8 +14,15 @@ type V = super::super::super::V0_107_1;
 /// A move of a monster in this file, for every move whose statements
 /// the dump matched.
 ///
-/// Any other move panics, and `behaviour/` ports it by hand.
-pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
+/// Any other move panics, and `behaviour/` ports it by hand. It
+/// starts at `step`, and hands back the step to go on from where a
+/// command made the player answer something.
+pub fn perform<F: Fight<V>>(
+    monster: Monster,
+    move_id: MoveId,
+    step: u8,
+    fight: &mut F,
+) -> Option<u8> {
     match (monster, move_id) {
         (Monster::AssassinRubyRaider, MoveId::KillshotMove) => {
             fight.attack_opponents();
@@ -24,30 +31,44 @@ pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
             fight.attack_opponents();
         }
         (Monster::AxeRubyRaider, MoveId::Swing1) => {
-            fight.attack_opponents();
-            let amount = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
-                true => 6,
-                false => 5,
-            };
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Number(amount),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
+            if step == 0 {
+                fight.attack_opponents();
+                if fight.waiting() {
+                    return Some(1);
+                }
+            }
+            if step <= 1 {
+                let amount = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
+                    true => 6,
+                    false => 5,
+                };
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Number(amount),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
         }
         (Monster::AxeRubyRaider, MoveId::Swing2) => {
-            fight.attack_opponents();
-            let amount = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
-                true => 6,
-                false => 5,
-            };
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Number(amount),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
+            if step == 0 {
+                fight.attack_opponents();
+                if fight.waiting() {
+                    return Some(1);
+                }
+            }
+            if step <= 1 {
+                let amount = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
+                    true => 6,
+                    false => 5,
+                };
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Number(amount),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
         }
         (Monster::BruteRubyRaider, MoveId::BeatMove) => {
             fight.attack_opponents();
@@ -127,12 +148,26 @@ pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
             unimplemented!("what {move_id:?} does when {monster:?} performs it")
         }
         (Monster::Fogmog, MoveId::SwipeMove) => {
-            fight.attack_opponents();
-            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(1));
+            if step == 0 {
+                fight.attack_opponents();
+                if fight.waiting() {
+                    return Some(1);
+                }
+            }
+            if step <= 1 {
+                fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(1));
+            }
         }
         (Monster::Fogmog, MoveId::SwipeRandomMove) => {
-            fight.attack_opponents();
-            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(1));
+            if step == 0 {
+                fight.attack_opponents();
+                if fight.waiting() {
+                    return Some(1);
+                }
+            }
+            if step <= 1 {
+                fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(1));
+            }
         }
         // `if`
         (Monster::FuzzyWurmCrawler, MoveId::AcidGoop) => {
@@ -175,12 +210,26 @@ pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
             unimplemented!("what {move_id:?} does when {monster:?} performs it")
         }
         (Monster::KinPriest, MoveId::OrbOfFrailtyMove) => {
-            fight.attack_opponents();
-            fight.apply_to_opponents(Power::FrailPower, PowerAmount::Counted(1));
+            if step == 0 {
+                fight.attack_opponents();
+                if fight.waiting() {
+                    return Some(1);
+                }
+            }
+            if step <= 1 {
+                fight.apply_to_opponents(Power::FrailPower, PowerAmount::Counted(1));
+            }
         }
         (Monster::KinPriest, MoveId::OrbOfWeaknessMove) => {
-            fight.attack_opponents();
-            fight.apply_to_opponents(Power::WeakPower, PowerAmount::Counted(1));
+            if step == 0 {
+                fight.attack_opponents();
+                if fight.waiting() {
+                    return Some(1);
+                }
+            }
+            if step <= 1 {
+                fight.apply_to_opponents(Power::WeakPower, PowerAmount::Counted(1));
+            }
         }
         // `if`
         (Monster::KinPriest, MoveId::RitualMove) => {
@@ -220,17 +269,24 @@ pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
             );
         }
         (Monster::Nibbit, MoveId::SliceMove) => {
-            fight.attack_opponents();
-            let amount = match fight.ascension().has(AscensionLevel::ToughEnemies) {
-                true => 6,
-                false => 5,
-            };
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Number(amount),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
+            if step == 0 {
+                fight.attack_opponents();
+                if fight.waiting() {
+                    return Some(1);
+                }
+            }
+            if step <= 1 {
+                let amount = match fight.ascension().has(AscensionLevel::ToughEnemies) {
+                    true => 6,
+                    false => 5,
+                };
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Number(amount),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
         }
         (Monster::PhrogParasite, MoveId::InfectMove) => {
             fight.give_cards(Cards::Status(StatusCard::Infection), 3);
@@ -255,14 +311,21 @@ pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
             fight.attack_opponents();
         }
         (Monster::SlitheringStrangler, MoveId::Thwack) => {
-            fight.attack_opponents();
-            let amount = 5;
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Number(amount),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
+            if step == 0 {
+                fight.attack_opponents();
+                if fight.waiting() {
+                    return Some(1);
+                }
+            }
+            if step <= 1 {
+                let amount = 5;
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Number(amount),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
         }
         // `if`
         (Monster::SnappingJaxfruit, MoveId::EnergyOrbMove) => {
@@ -284,8 +347,15 @@ pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
             fight.attack_opponents();
         }
         (Monster::Vantom, MoveId::DismemberMove) => {
-            fight.attack_opponents();
-            fight.give_cards(Cards::Status(StatusCard::Wound), 3);
+            if step == 0 {
+                fight.attack_opponents();
+                if fight.waiting() {
+                    return Some(1);
+                }
+            }
+            if step <= 1 {
+                fight.give_cards(Cards::Status(StatusCard::Wound), 3);
+            }
         }
         (Monster::Vantom, MoveId::InkyLanceMove) => {
             fight.attack_opponents();
@@ -300,8 +370,15 @@ pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
             fight.attack_opponents();
         }
         (Monster::VineShambler, MoveId::GraspingVinesMove) => {
-            fight.attack_opponents();
-            fight.apply_to_opponents(Power::TangledPower, PowerAmount::Counted(1));
+            if step == 0 {
+                fight.attack_opponents();
+                if fight.waiting() {
+                    return Some(1);
+                }
+            }
+            if step <= 1 {
+                fight.apply_to_opponents(Power::TangledPower, PowerAmount::Counted(1));
+            }
         }
         (Monster::VineShambler, MoveId::SwipeMove) => {
             fight.attack_opponents();
@@ -316,4 +393,5 @@ pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
         }
         (monster, move_id) => unimplemented!("{monster:?} has no {move_id:?} in the table"),
     }
+    None
 }

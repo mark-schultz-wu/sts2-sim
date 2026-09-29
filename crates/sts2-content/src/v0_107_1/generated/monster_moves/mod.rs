@@ -3,21 +3,29 @@
 //! What each monster's moves do, one module per act it is met in.
 //! Source: `dumps/monster_moves.txt`, build v0.107.1 (59260271), assembly 1692500715.
 
-mod glory;
-mod hive;
-mod overgrowth;
-mod shared;
-mod summoned;
-mod underdocks;
+pub mod glory;
+pub mod hive;
+pub mod overgrowth;
+pub mod shared;
+pub mod summoned;
+pub mod underdocks;
 
-type V = super::super::V0_107_1;
+/// The file a monster's moves are filed in, one per act it is met in.
+///
+/// `behaviour/` files its hand ports the same way, and routes a move by
+/// this.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Filed {
+    Glory,
+    Hive,
+    Overgrowth,
+    Shared,
+    Summoned,
+    Underdocks,
+}
 
-/// One of a monster's moves, from the file its table row is filed in.
-pub fn perform<F: sts2_core::Fight<V>>(
-    monster: super::monsters::Monster,
-    move_id: super::monsters::MoveId,
-    fight: &mut F,
-) {
+/// Where `monster`'s moves are filed.
+pub fn filed(monster: super::monsters::Monster) -> Filed {
     use super::monsters::Monster;
     match monster {
         Monster::Aeonglass
@@ -44,7 +52,7 @@ pub fn perform<F: sts2_core::Fight<V>>(
         | Monster::TheLost
         | Monster::TorchHeadAmalgam
         | Monster::TurretOperator
-        | Monster::Zapbot => glory::perform(monster, move_id, fight),
+        | Monster::Zapbot => Filed::Glory,
         Monster::BowlbugEgg
         | Monster::BowlbugNectar
         | Monster::BowlbugRock
@@ -70,7 +78,7 @@ pub fn perform<F: sts2_core::Fight<V>>(
         | Monster::TheObscura
         | Monster::ThievingHopper
         | Monster::ToughEgg
-        | Monster::Tunneler => hive::perform(monster, move_id, fight),
+        | Monster::Tunneler => Filed::Hive,
         Monster::AssassinRubyRaider
         | Monster::AxeRubyRaider
         | Monster::BruteRubyRaider
@@ -98,10 +106,8 @@ pub fn perform<F: sts2_core::Fight<V>>(
         | Monster::TwigSlimeS
         | Monster::Vantom
         | Monster::VineShambler
-        | Monster::Wriggler => overgrowth::perform(monster, move_id, fight),
-        Monster::CubexConstruct | Monster::PunchConstruct => {
-            shared::perform(monster, move_id, fight)
-        }
+        | Monster::Wriggler => Filed::Overgrowth,
+        Monster::CubexConstruct | Monster::PunchConstruct => Filed::Shared,
         Monster::Architect
         | Monster::BattleFriendV1
         | Monster::BattleFriendV2
@@ -125,7 +131,7 @@ pub fn perform<F: sts2_core::Fight<V>>(
         | Monster::TenHpMonster
         | Monster::TheAdversaryMkOne
         | Monster::TheAdversaryMkThree
-        | Monster::TheAdversaryMkTwo => summoned::perform(monster, move_id, fight),
+        | Monster::TheAdversaryMkTwo => Filed::Summoned,
         Monster::CalcifiedCultist
         | Monster::CorpseSlug
         | Monster::DampCultist
@@ -146,6 +152,6 @@ pub fn perform<F: sts2_core::Fight<V>>(
         | Monster::TerrorEel
         | Monster::Toadpole
         | Monster::TwoTailedRat
-        | Monster::WaterfallGiant => underdocks::perform(monster, move_id, fight),
+        | Monster::WaterfallGiant => Filed::Underdocks,
     }
 }

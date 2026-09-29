@@ -58,6 +58,16 @@ pub(super) struct Board<'a, V: Rules> {
     /// `CheckWinCondition` runs after the command that killed it, so this is
     /// read once the effect is over rather than acted on where it is set.
     pub(super) ended: Option<super::Ended>,
+    /// A card's or a potion's own effect, whose play can stand still while a
+    /// card it auto-plays asks a question. [`super::live::Deferred`] holds
+    /// what waits.
+    pausable: bool,
+    /// A monster's move, which is pausable only inside its attack.
+    ///
+    /// A move's attack is `Execute(null)`, which blocks on a question. Every
+    /// other command it runs takes a `ThrowingPlayerChoiceContext`, which
+    /// throws on one.
+    moving: bool,
     /// The results of the attack command whose hits are landing, which
     /// `AttackCommand.Results` gathers.
     landed: Option<sts2_core::AttackResults<V>>,
@@ -152,8 +162,17 @@ impl<'a, V: Rules> Board<'a, V> {
             ascension,
             skipped: Vec::new(),
             ended: None,
+            pausable: false,
+            moving: false,
             landed: None,
         }
+    }
+
+    /// This board for a card's or a potion's own effect, which a card it
+    /// auto-plays can pause.
+    pub(super) fn pausable(mut self) -> Self {
+        self.pausable = true;
+        self
     }
 
     /// A board for one move, made by a monster.
@@ -177,6 +196,8 @@ impl<'a, V: Rules> Board<'a, V> {
             ascension,
             skipped: Vec::new(),
             ended: None,
+            pausable: false,
+            moving: true,
             landed: None,
         }
     }
@@ -262,12 +283,14 @@ impl<'a, V: Rules> Board<'a, V> {
         // power takes the amount through `ModifyAmount`, which is the whole of
         // what happens. Everything below to the stacking itself is the other
         // branch, the one that builds an instance.
-        let fresh = !self.live.powers.of(id).any(|held| held.power() == power);
-        // An instanced power builds another instance beside the one there,
-        // which a creature here holds only one of.
-        if !fresh && sts2_core::PowerTable::instanced(power) {
-            unimplemented!("a second instance of {power:?}")
-        }
+        // An instanced power builds another instance beside any there.
+        let held = self
+            .live
+            .powers
+            .of(id)
+            .filter(|held| held.power() == power)
+            .count();
+        let fresh = held == 0 || sts2_core::PowerTable::instanced(power);
         // `FindExistingInstanceForStacking`: a counter stacks into the one
         // already there through `ModifyAmount`. An endless instance is one
         // instance however many times it lands.
@@ -300,7 +323,14 @@ impl<'a, V: Rules> Board<'a, V> {
             return;
         };
         debug_assert_eq!(found, at, "a power landing does not reorder the fight");
-        if self.live.powers.of(id).any(|held| held.power() == power) {
+        if self
+            .live
+            .powers
+            .of(id)
+            .filter(|held| held.power() == power)
+            .count()
+            != held
+        {
             unimplemented!("{power:?} landing during its own `BeforeApplied`")
         }
         // `ApplyInternal`, which puts nothing on for an amount of zero.
@@ -483,11 +513,15 @@ impl<'a, V: Rules> Board<'a, V> {
     }
 
     fn applied(&mut self, id: CombatId, power: V::Power) {
+        // The instance that just landed, which is the last of its kind.
         let Some(at) = self
             .live
             .powers
             .of(id)
-            .position(|held| held.power() == power)
+            .enumerate()
+            .filter(|(_, held)| held.power() == power)
+            .map(|(at, _)| at)
+            .last()
         else {
             return;
         };
@@ -2713,6 +2747,28 @@ impl<V: Rules> Board<'_, V> {
             .named(id)
             .unwrap_or_else(|| unimplemented!("a card cloned from outside the fight"))
             .face;
+        self.clone_face(face, pile)
+    }
+
+    /// `CardPileCmd.AddGeneratedCardToCombat` of a clone of the card the fight
+    /// keeps as `kept`.
+    pub(super) fn clone_kept(
+        &mut self,
+        kept: sts2_core::CardId<V>,
+        pile: Pile,
+    ) -> Option<CardAt<V>> {
+        let face = self
+            .live
+            .kept_faces
+            .iter()
+            .find(|(id, _)| *id == kept)
+            .map(|&(_, face)| face)
+            .unwrap_or_else(|| unimplemented!("cloning a kept card the fight lost"));
+        self.clone_face(face, pile)
+    }
+
+    /// A clone of `face` into `pile`, marked a clone and generated.
+    fn clone_face(&mut self, face: Face<V>, pile: Pile) -> Option<CardAt<V>> {
         let id = self.live.card_ids.mint();
         // A full hand sends the card to the discard pile instead.
         let full =
@@ -2907,93 +2963,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         scaling: Scaling,
         hits: impl FnOnce(&mut Self),
     ) -> sts2_core::AttackResults<V> {
-        let attacking = self
-            .at(attacker)
-            .is_some_and(|at| self.live.creatures[at].alive);
-        if self.ended.is_some() || self.ending() || !attacking {
-            return sts2_core::AttackResults::new();
-        }
-        let monster = self
-            .at(attacker)
-            .and_then(|at| match self.live.creatures[at].model {
-                Some(sts2_core::ModelId::Monster(monster)) => Some(monster),
-                _ => None,
-            });
-        let command = sts2_core::AttackId(self.live.attacks);
-        self.live.attacks += 1;
-        let asked = super::listen::notify::<V>(
-            self.live,
-            self.relics,
-            sts2_core::EventHook::BeforeAttack {
-                command,
-                attacker,
-                source: self.playing.map(|id| {
-                    let card = self
-                        .live
-                        .cards
-                        .named(id)
-                        .expect("the card making an attack is in the fight");
-                    (id, card.face.ident.card)
-                }),
-                powered: scaling == Scaling::Dynamic,
-            },
-        );
-        if let Some((listener, effect)) = asked.first() {
-            unimplemented!("{listener:?} asking for {effect:?} before an attack")
-        }
-        // A command inside another's hits keeps its own results.
-        let outer = self.landed.replace(sts2_core::AttackResults::new());
-        hits(self);
-        let results = std::mem::replace(&mut self.landed, outer).unwrap_or_default();
-        // `History.CreatureAttacked`, before `AfterAttack` and whether or not
-        // the fight is ending.
-        self.live.history.attacked(monster);
-        // `IterateCombatHookListeners` hands a fight that is ending no
-        // listeners.
-        if self.ended.is_some() || self.ending() {
-            return results;
-        }
-        let asked = super::listen::notify::<V>(
-            self.live,
-            self.relics,
-            sts2_core::EventHook::AfterAttack {
-                command,
-                attacker,
-                monster,
-                powered: scaling == Scaling::Dynamic,
-            },
-        );
-        for (listener, effect) in asked {
-            match (listener, effect) {
-                (Listener::Power { owner, power, .. }, HookEffect::ModifyAmount(offset)) => {
-                    self.modify_amount(owner, power, offset)
-                }
-                // Written on the card that asked, wherever it stands.
-                (Listener::Card { id }, HookEffect::ModifySelf { change, lasting }) => {
-                    self.live.modify_self(id, change, lasting)
-                }
-                // `CreatureCmd.GainBlock`, unpowered, on the relic's owner.
-                (Listener::Relic { .. }, HookEffect::GainBlock(amount)) => {
-                    let player = self.live.player().id;
-                    self.live.gain_unpowered_block(player, amount);
-                }
-                // A fight here has one player, whose piles take them all.
-                (Listener::Power { .. }, HookEffect::GiveCardsPerUnblockedHit { card, per }) => {
-                    let player = self.live.player().id;
-                    let hits = results
-                        .iter()
-                        .filter(|hit| hit.receiver == player && hit.unblocked > V::Number::zero())
-                        .count();
-                    let count = num_traits::cast::<_, usize>(per)
-                        .unwrap_or_else(|| unimplemented!("{per:?} cards for each hit"))
-                        * hits;
-                    self.add_generated_cards(CardIdent::new(card), Pile::Discard, count);
-                }
-                (listener, effect) => {
-                    unimplemented!("{listener:?} asking for {effect:?} after an attack")
-                }
-            }
-        }
+        let pausable = self.pausable;
+        self.pausable |= self.moving;
+        let results = self.attack_landing(attacker, scaling, hits);
+        self.pausable = pausable;
         results
     }
 
@@ -3189,13 +3162,39 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn note_on_power(&mut self, creature: CombatId, power: V::Power, note: V::Number) {
+        // The instance `PowerCmd.Apply` handed back, which is the last of its
+        // kind.
         if let Some(held) = self
             .live
             .powers
             .of_mut(creature)
-            .find(|held| held.power() == power)
+            .filter(|held| held.power() == power)
+            .last()
         {
             <V as sts2_core::Hooks>::power_noted(&mut held.state, note);
+        }
+    }
+
+    fn keep_card_on_power(&mut self, creature: CombatId, power: V::Power, card: CardAt<V>) {
+        let at = self.standing(card);
+        let mut face = self
+            .live
+            .cards
+            .get(card.pile(), at)
+            .expect("a card stands where it was found")
+            .face;
+        // `CardCmd.ClearAffliction` on the clone.
+        face.ident.affliction = None;
+        let kept = self.live.card_ids.mint();
+        self.live.kept_faces.push((kept, face));
+        if let Some(held) = self
+            .live
+            .powers
+            .of_mut(creature)
+            .filter(|held| held.power() == power)
+            .last()
+        {
+            <V as sts2_core::Hooks>::power_kept_card(&mut held.state, kept);
         }
     }
 
@@ -3295,12 +3294,34 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         }
         // A negative count draws nothing: the game's own loop runs no times.
         let count = num_traits::NumCast::from(count).unwrap_or(0usize);
-        self.ended = draw(
+        if !self.pausable {
+            self.ended = draw(
+                self.live,
+                self.rngs.reborrow(),
+                self.relics,
+                self.ascension,
+                count,
+                false,
+            );
+            return;
+        }
+        // A question a card this effect auto-played asked stands the draw
+        // still, before it starts.
+        if self.live.asking.is_some() {
+            self.live.defer(super::live::Deferred::Draw {
+                count,
+                hand_draw: false,
+                resumed: false,
+            });
+            return;
+        }
+        self.ended = draw_in_effect(
             self.live,
             self.rngs.reborrow(),
             self.relics,
             self.ascension,
             count,
+            false,
             false,
         );
     }
@@ -3338,6 +3359,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     fn playing(&self) -> CardId<V> {
         self.playing
             .unwrap_or_else(|| unimplemented!("naming the card being played with none played"))
+    }
+
+    fn waiting(&self) -> bool {
+        self.live.asking.is_some()
     }
 
     fn playing_ident(&self) -> CardIdent<V> {
@@ -3592,8 +3617,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             sts2_core::Fight::draw(self, draw);
         }
         if self.ended.is_none() {
-            self.ended =
-                super::turn::play_sly::<V>(self.live, self.rngs.reborrow(), self.relics, sly);
+            self.ended = super::turn::play_sly::<V>(
+                self.live,
+                self.rngs.reborrow(),
+                self.relics,
+                sly,
+                self.pausable,
+            );
         }
     }
 
@@ -3685,6 +3715,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 self.relics,
                 card,
                 None,
+                false,
             );
             if ended.is_some() {
                 self.ended = ended;
@@ -3787,6 +3818,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             card.id(),
             card.pile(),
             None,
+            self.pausable,
         );
     }
 
@@ -3802,6 +3834,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             card.id(),
             card.pile(),
             Some(target),
+            self.pausable,
         );
     }
 
@@ -4099,8 +4132,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             super::turn::act_on::<V>(self.live, self.rngs.reborrow(), self.relics, act, cards);
         self.ended = self.ended.or(ended);
         if self.ended.is_none() {
-            self.ended =
-                super::turn::play_sly::<V>(self.live, self.rngs.reborrow(), self.relics, sly);
+            self.ended = super::turn::play_sly::<V>(
+                self.live,
+                self.rngs.reborrow(),
+                self.relics,
+                sly,
+                self.pausable,
+            );
         }
     }
 
@@ -4157,10 +4195,11 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .face
             .ident
             .card;
-        // `CardCmd.Discard`, whose hook nothing ported answers.
+        // `CardCmd.Discard`.
         self.live.cards.move_to(Pile::Hand, at, Pile::Discard);
         self.live.history.discarded(card);
-        self.unheard(sts2_core::ModelHook::AfterCardDiscarded);
+        let ended = super::turn::card_discarded::<V>(self.live, self.rngs.reborrow(), self.relics);
+        self.ended = self.ended.or(ended);
     }
 
     fn summon(&mut self, monster: V::Monster, position: usize) -> CombatId {
@@ -4323,6 +4362,103 @@ pub(super) fn shuffle_asking<V: Rules>(
 }
 
 impl<V: Rules> Board<'_, V> {
+    /// `AttackCommand.Execute`: the hooks either side of `hits`.
+    fn attack_landing(
+        &mut self,
+        attacker: CombatId,
+        scaling: Scaling,
+        hits: impl FnOnce(&mut Self),
+    ) -> sts2_core::AttackResults<V> {
+        let attacking = self
+            .at(attacker)
+            .is_some_and(|at| self.live.creatures[at].alive);
+        if self.ended.is_some() || self.ending() || !attacking {
+            return sts2_core::AttackResults::new();
+        }
+        let monster = self
+            .at(attacker)
+            .and_then(|at| match self.live.creatures[at].model {
+                Some(sts2_core::ModelId::Monster(monster)) => Some(monster),
+                _ => None,
+            });
+        let command = sts2_core::AttackId(self.live.attacks);
+        self.live.attacks += 1;
+        let asked = super::listen::notify::<V>(
+            self.live,
+            self.relics,
+            sts2_core::EventHook::BeforeAttack {
+                command,
+                attacker,
+                source: self.playing.map(|id| {
+                    let card = self
+                        .live
+                        .cards
+                        .named(id)
+                        .expect("the card making an attack is in the fight");
+                    (id, card.face.ident.card)
+                }),
+                powered: scaling == Scaling::Dynamic,
+            },
+        );
+        if let Some((listener, effect)) = asked.first() {
+            unimplemented!("{listener:?} asking for {effect:?} before an attack")
+        }
+        // A command inside another's hits keeps its own results.
+        let outer = self.landed.replace(sts2_core::AttackResults::new());
+        hits(self);
+        let results = std::mem::replace(&mut self.landed, outer).unwrap_or_default();
+        // `History.CreatureAttacked`, before `AfterAttack` and whether or not
+        // the fight is ending.
+        self.live.history.attacked(monster);
+        // `IterateCombatHookListeners` hands a fight that is ending no
+        // listeners.
+        if self.ended.is_some() || self.ending() {
+            return results;
+        }
+        let asked = super::listen::notify::<V>(
+            self.live,
+            self.relics,
+            sts2_core::EventHook::AfterAttack {
+                command,
+                attacker,
+                monster,
+                powered: scaling == Scaling::Dynamic,
+            },
+        );
+        for (listener, effect) in asked {
+            match (listener, effect) {
+                (Listener::Power { owner, power, .. }, HookEffect::ModifyAmount(offset)) => {
+                    self.modify_amount(owner, power, offset)
+                }
+                // Written on the card that asked, wherever it stands.
+                (Listener::Card { id }, HookEffect::ModifySelf { change, lasting }) => {
+                    self.live.modify_self(id, change, lasting)
+                }
+                // `CreatureCmd.GainBlock`, unpowered, on the relic's owner.
+                (Listener::Relic { .. }, HookEffect::GainBlock(amount)) => {
+                    let player = self.live.player().id;
+                    self.live.gain_unpowered_block(player, amount);
+                }
+                // A fight here has one player, whose piles take them all.
+                (Listener::Power { .. }, HookEffect::GiveCardsPerUnblockedHit { card, per }) => {
+                    let player = self.live.player().id;
+                    let hits = results
+                        .iter()
+                        .filter(|hit| hit.receiver == player && hit.unblocked > V::Number::zero())
+                        .count();
+                    let count = num_traits::cast::<_, usize>(per)
+                        .unwrap_or_else(|| unimplemented!("{per:?} cards for each hit"))
+                        * hits;
+                    self.add_generated_cards(CardIdent::new(card), Pile::Discard, count);
+                }
+                (listener, effect) => {
+                    unimplemented!("{listener:?} asking for {effect:?} after an attack")
+                }
+            }
+        }
+        results
+    }
+
     /// What an `AfterShuffle` listener asked for, carried out.
     fn after_shuffle(&mut self, effect: HookEffect<V>) {
         match effect {
@@ -4359,6 +4495,56 @@ pub(super) fn draw<V: Rules>(
         Drawn::Done(ended) => ended,
         Drawn::Paused { asks, .. } => {
             unimplemented!("a shuffle asking for {asks:?} inside a draw that cannot pause")
+        }
+    }
+}
+
+/// [`draw`] inside a card's or a potion's effect, which a shuffle's question
+/// can stand still. The question parks, and the rest of the draw waits in
+/// [`Live::deferred`] with the effect behind it.
+pub(super) fn draw_in_effect<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: CombatRngs<'_>,
+    relics: &mut Belt<V>,
+    ascension: V::AscensionLevel,
+    count: usize,
+    hand_draw: bool,
+    resumed: bool,
+) -> Option<super::Ended> {
+    let (mut count, mut resumed) = (count, resumed);
+    loop {
+        match draw_pausing::<V>(
+            live,
+            rngs.reborrow(),
+            relics,
+            ascension,
+            count,
+            hand_draw,
+            resumed,
+        ) {
+            Drawn::Done(ended) => return ended,
+            Drawn::Paused {
+                left,
+                asks: (pile, picks, act),
+            } => {
+                match super::turn::select::<V>(live, rngs.reborrow(), relics, pile, picks, act) {
+                    Ok(Some(ended)) => return Some(ended),
+                    Ok(None) => {}
+                    Err(question) => {
+                        live.asking = Some(super::live::Asking {
+                            then: super::live::Then::Pick { act },
+                            question,
+                        });
+                        live.defer(super::live::Deferred::Draw {
+                            count: left,
+                            hand_draw,
+                            resumed: true,
+                        });
+                        return None;
+                    }
+                }
+                (count, resumed) = (left, true);
+            }
         }
     }
 }
@@ -4451,6 +4637,7 @@ pub(super) fn draw_pausing<V: Rules>(
                             card,
                             Pile::Hand,
                             None,
+                            false,
                         );
                     }
                 }

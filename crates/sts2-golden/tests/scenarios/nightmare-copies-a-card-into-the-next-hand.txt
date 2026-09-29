@@ -1,0 +1,8 @@
+# Nightmare keeps a clone of a picked card, and puts three copies of it into
+# hand before the next hand is drawn. Neutralize is picked.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"NIGHTMARE"}
+{"cmd":"play_card","index":7}
+{"cmd":"answer","cards":[4]}
+{"cmd":"end_turn"}

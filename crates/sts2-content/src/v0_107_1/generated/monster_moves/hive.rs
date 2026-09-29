@@ -14,21 +14,35 @@ type V = super::super::super::V0_107_1;
 /// A move of a monster in this file, for every move whose statements
 /// the dump matched.
 ///
-/// Any other move panics, and `behaviour/` ports it by hand.
-pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
+/// Any other move panics, and `behaviour/` ports it by hand. It
+/// starts at `step`, and hands back the step to go on from where a
+/// command made the player answer something.
+pub fn perform<F: Fight<V>>(
+    monster: Monster,
+    move_id: MoveId,
+    step: u8,
+    fight: &mut F,
+) -> Option<u8> {
     match (monster, move_id) {
         (Monster::BowlbugEgg, MoveId::BiteMove) => {
-            fight.attack_opponents();
-            let amount = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
-                true => 8,
-                false => 7,
-            };
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Number(amount),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
+            if step == 0 {
+                fight.attack_opponents();
+                if fight.waiting() {
+                    return Some(1);
+                }
+            }
+            if step <= 1 {
+                let amount = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
+                    true => 8,
+                    false => 7,
+                };
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Number(amount),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
         }
         (Monster::BowlbugNectar, MoveId::BuffMove) => {
             fight.apply_to_actor(
@@ -168,37 +182,53 @@ pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
             fight.attack_opponents();
         }
         (Monster::InfestedPrism, MoveId::PulsateMove) => {
-            fight.attack_opponents();
-            let amount = match fight.ascension().has(AscensionLevel::ToughEnemies) {
-                true => 22,
-                false => 20,
-            };
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Number(amount),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            fight.apply_to_actor(
-                Power::VitalSparkPower,
-                PowerAmount::Counted(match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
-                    true => 3,
-                    false => 2,
-                }),
-            );
+            if step == 0 {
+                fight.attack_opponents();
+                if fight.waiting() {
+                    return Some(1);
+                }
+            }
+            if step <= 1 {
+                let amount = match fight.ascension().has(AscensionLevel::ToughEnemies) {
+                    true => 22,
+                    false => 20,
+                };
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Number(amount),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+                fight.apply_to_actor(
+                    Power::VitalSparkPower,
+                    PowerAmount::Counted(
+                        match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
+                            true => 3,
+                            false => 2,
+                        },
+                    ),
+                );
+            }
         }
         (Monster::InfestedPrism, MoveId::RadiateMove) => {
-            fight.attack_opponents();
-            let amount = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
-                true => 13,
-                false => 11,
-            };
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Number(amount),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
+            if step == 0 {
+                fight.attack_opponents();
+                if fight.waiting() {
+                    return Some(1);
+                }
+            }
+            if step <= 1 {
+                let amount = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
+                    true => 13,
+                    false => 11,
+                };
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Number(amount),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
         }
         (Monster::InfestedPrism, MoveId::WhirlwindMove) => {
             fight.attack_opponents();
@@ -234,14 +264,23 @@ pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
             fight.attack_opponents();
         }
         (Monster::Myte, MoveId::SuckMove) => {
-            fight.attack_opponents();
-            fight.apply_to_actor(
-                Power::StrengthPower,
-                PowerAmount::Counted(match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
-                    true => 3,
-                    false => 2,
-                }),
-            );
+            if step == 0 {
+                fight.attack_opponents();
+                if fight.waiting() {
+                    return Some(1);
+                }
+            }
+            if step <= 1 {
+                fight.apply_to_actor(
+                    Power::StrengthPower,
+                    PowerAmount::Counted(
+                        match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
+                            true => 3,
+                            false => 2,
+                        },
+                    ),
+                );
+            }
         }
         // `if`
         (Monster::Myte, MoveId::ToxicMove) => {
@@ -264,8 +303,15 @@ pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
             fight.attack_opponents();
         }
         (Monster::Ovicopter, MoveId::TenderizerMove) => {
-            fight.attack_opponents();
-            fight.apply_to_opponents(Power::VulnerablePower, PowerAmount::Counted(2));
+            if step == 0 {
+                fight.attack_opponents();
+                if fight.waiting() {
+                    return Some(1);
+                }
+            }
+            if step <= 1 {
+                fight.apply_to_opponents(Power::VulnerablePower, PowerAmount::Counted(2));
+            }
         }
         (Monster::Parafright, MoveId::SlamMove) => {
             fight.attack_opponents();
@@ -329,17 +375,24 @@ pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
             fight.attack_opponents();
         }
         (Monster::TheObscura, MoveId::HardeningStrikeMove) => {
-            fight.attack_opponents();
-            let amount = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
-                true => 7,
-                false => 6,
-            };
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Number(amount),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
+            if step == 0 {
+                fight.attack_opponents();
+                if fight.waiting() {
+                    return Some(1);
+                }
+            }
+            if step <= 1 {
+                let amount = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
+                    true => 7,
+                    false => 6,
+                };
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Number(amount),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
         }
         // `if`
         (Monster::TheObscura, MoveId::IllusionMove) => {
@@ -402,4 +455,5 @@ pub fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
         }
         (monster, move_id) => unimplemented!("{monster:?} has no {move_id:?} in the table"),
     }
+    None
 }

@@ -656,6 +656,15 @@ pub(crate) fn resume_play<F: Fight<V>>(
     }
 }
 
+/// The rest of a play that waited on a card it auto-played, whose play is
+/// over.
+pub(crate) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
+    match at {
+        Resume::Colorless(at) => colorless::resume_waited(fight, at),
+        at => unimplemented!("{at:?} resumed after waiting"),
+    }
+}
+
 /// The rest of a play that stopped on a choose-a-card screen, once the
 /// player took one or skipped it.
 pub(crate) fn resume_chosen<F: Fight<V>>(

@@ -109,9 +109,12 @@ pub(crate) fn enter<V: Rules>(
         // Nothing has been applied to anyone yet.
         skip_tick: Bounded::new(),
         card_ids: CardIds::new(),
+        kept_faces: Vec::new(),
         attacks: 0,
         notes: smallvec::SmallVec::new(),
         asking: None,
+        deferred: Vec::new(),
+        deferring_at: None,
     });
 
     // Id zero, and the enemies from one. `CombatId` counts from the player.

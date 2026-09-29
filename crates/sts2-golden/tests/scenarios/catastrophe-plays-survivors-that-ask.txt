@@ -1,0 +1,21 @@
+# Catastrophe auto-plays two cards of the draw pile, which a deck of
+# Survivors makes likely Survivors. The first asks for its discard, and the
+# second waits behind that answer. Here it is a Strike, which plays once
+# the Survivor has its discard.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","card":"SURVIVOR"}
+{"cmd":"grant","card":"SURVIVOR"}
+{"cmd":"grant","card":"SURVIVOR"}
+{"cmd":"grant","card":"SURVIVOR"}
+{"cmd":"grant","card":"SURVIVOR"}
+{"cmd":"grant","card":"SURVIVOR"}
+{"cmd":"grant","card":"SURVIVOR"}
+{"cmd":"grant","card":"SURVIVOR"}
+{"cmd":"grant","card":"SURVIVOR"}
+{"cmd":"grant","card":"SURVIVOR"}
+{"cmd":"grant","card":"SURVIVOR"}
+{"cmd":"grant","card":"SURVIVOR"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"CATASTROPHE"}
+{"cmd":"play_card","index":7}
+{"cmd":"answer","cards":[6]}

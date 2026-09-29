@@ -7,7 +7,7 @@
 //! generated from the game's own dumps, so that nobody types a number the game
 //! already knows.
 //!
-//! A version is identified by [`Version::content_hash`], not by its name.
+//! A version is identified by [`Version::content_hash`](sts2_core::Version::content_hash), not by its name.
 //! Names repeat across builds and say nothing about whether ids still line up.
 //! The hash is XxHash32 over the game's own model-id namespace, and it moves
 //! when and only when content moves. The game uses the same value to refuse a
