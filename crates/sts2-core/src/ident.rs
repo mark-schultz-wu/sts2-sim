@@ -95,6 +95,34 @@ pub struct Enchanted<V: ContentVersion> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct CardId<V: ContentVersion>(V::CardSerial);
 
+/// Which card of the run's deck a card is, for as long as it stays there.
+///
+/// The run mints one as each card joins the deck, and never reuses one. A
+/// fight's copy of a deck card reaches it through this, as the game's copy
+/// reaches `CardModel.DeckVersion`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct DeckCardId(u32);
+
+impl DeckCardId {
+    /// The card this number names.
+    pub const fn new(serial: u32) -> Self {
+        Self(serial)
+    }
+
+    /// The id minted after this one.
+    ///
+    /// # Panics
+    ///
+    /// A run that has minted every id.
+    pub fn next(self) -> Self {
+        Self(
+            self.0
+                .checked_add(1)
+                .unwrap_or_else(|| unimplemented!("a run adding more cards than it can name")),
+        )
+    }
+}
+
 /// One of the piles a fight keeps its cards in, which is `PileType`.
 ///
 /// The four a combat has. `Deck` is the run's, and no fight moves a card into

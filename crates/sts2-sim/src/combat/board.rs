@@ -1429,7 +1429,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 HookEffect::ReturnCard(card) => self
                     .live
                     .extra_rewards
-                    .push(super::live::ExtraReward::SpecialCard(card)),
+                    .push(super::live::ExtraReward::Returned(card)),
                 effect => unimplemented!("{listener:?} asking for {effect:?} before a death"),
             }
         }
@@ -4236,8 +4236,26 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.ran_on();
         let at = self.standing(card);
         let ident = self.live.cards.remove(card.pile(), at).face.ident;
-        self.live.removed_from_deck.push(ident);
+        if let Some(deck) = self.live.deck_versions.of(card.id()) {
+            self.live.removed_from_deck.push(deck);
+        }
         ident
+    }
+
+    fn deck_version(&self, card: sts2_core::CardId<V>) -> Option<sts2_core::DeckCardId> {
+        self.live.deck_versions.of(card)
+    }
+
+    fn write_deck_version(&mut self, write: V::DeckWrite) {
+        self.ran_on();
+        let playing = self
+            .playing
+            .unwrap_or_else(|| unimplemented!("a deck version written with no card being played"));
+        if let Some(card) = self.live.deck_versions.of(playing) {
+            self.live
+                .for_run
+                .push(HookEffect::WriteDeckCard { card, write });
+        }
     }
 
     fn modify_card(

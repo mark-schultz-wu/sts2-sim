@@ -88,6 +88,8 @@ pub(crate) fn enter<V: Rules>(
         encounter,
         cards: Cards::with_cards(0),
         removed_from_deck: Vec::new(),
+        deck_versions: super::live::DeckVersions::none(),
+        taken_from_deck: Vec::new(),
         extra_rewards: Vec::new(),
         exhaust_next: smallvec::SmallVec::new(),
         leaving: Vec::new(),
@@ -160,6 +162,11 @@ pub(crate) fn enter<V: Rules>(
     // The deck's own cards, each becoming a copy the fight can write on, in
     // the order `PopulateCombatState` shuffles them into the draw pile as the
     // fight is set up. They are dealt once the first energy is in.
+    // `DeckVersion`, set on each of them.
+    if !entering.deck.is_empty() {
+        let ids = entering.deck.iter().map(|card| card.id).collect();
+        live.deck_versions = super::live::DeckVersions::new(live.card_ids.peek(), ids);
+    }
     let deck: Vec<CardInstance<V>> = entering
         .deck
         .iter()

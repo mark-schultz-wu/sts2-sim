@@ -14,6 +14,7 @@
 use bitfield_struct::bitfield;
 use nonmax::{NonMaxI16, NonMaxU8};
 use num_traits::CheckedAdd;
+use std::sync::Arc;
 use sts2_core::{
     CardId, CardIdent, CardNumber, CardTable, CardVars, Combat, CombatId, Creature, Orbs, Pile,
     Rules, SideKinds,
@@ -330,6 +331,11 @@ pub(super) struct CardIds<V: Rules>(V::CardSerial);
 impl<V: Rules> CardIds<V> {
     pub(super) fn new() -> Self {
         Self(num_traits::zero())
+    }
+
+    /// The id the next [`CardIds::mint`] hands out.
+    pub(super) fn peek(&self) -> CardId<V> {
+        CardId::new(self.0)
     }
 
     pub(super) fn mint(&mut self) -> CardId<V> {
@@ -1806,11 +1812,51 @@ impl<V: Rules> Creatures<V> {
     }
 }
 
+/// `CardModel.DeckVersion` for each copy the fight opened with.
+///
+/// The opening copies are minted one after another in deck order, so the
+/// first one's id and the deck's own ids say which is which. Every copy made
+/// later has none, as the game's clone clears it.
+#[derive(Debug, Clone)]
+pub(crate) struct DeckVersions<V: Rules> {
+    first: Option<CardId<V>>,
+    deck: Arc<[sts2_core::DeckCardId]>,
+}
+
+impl<V: Rules> DeckVersions<V> {
+    /// A fight whose copies came from no deck.
+    pub(super) fn none() -> Self {
+        Self {
+            first: None,
+            deck: Arc::from([]),
+        }
+    }
+
+    /// Copies minted from `first` on, one for each of `deck` in order.
+    pub(super) fn new(first: CardId<V>, deck: Arc<[sts2_core::DeckCardId]>) -> Self {
+        Self {
+            first: Some(first),
+            deck,
+        }
+    }
+
+    /// The deck card `card` is a copy of.
+    pub(super) fn of(&self, card: CardId<V>) -> Option<sts2_core::DeckCardId> {
+        use num_traits::ToPrimitive as _;
+
+        let first = self.first?.get().to_usize()?;
+        let offset = card.get().to_usize()?.checked_sub(first)?;
+        self.deck.get(offset).copied()
+    }
+}
+
 /// One of `CombatRoom.ExtraRewards`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ExtraReward<V: Rules> {
     /// A `SpecialCardReward` of this card.
     SpecialCard(CardIdent<V>),
+    /// A `SpecialCardReward` of a deck card the fight took, handed back.
+    Returned(sts2_core::DeckCardId),
     /// A `CardReward` at `CardCreationOptions.ForRoom` of the fight's room.
     Card,
 }
@@ -1841,7 +1887,12 @@ pub(crate) struct Live<V: Rules> {
     pub(super) encounter: V::Encounter,
     pub(super) cards: super::cards::Cards<V>,
     /// Deck cards a combat command removed permanently while this fight ran.
-    pub(super) removed_from_deck: Vec<CardIdent<V>>,
+    pub(super) removed_from_deck: Vec<sts2_core::DeckCardId>,
+    /// Which deck card each of the fight's opening copies came from.
+    pub(super) deck_versions: DeckVersions<V>,
+    /// The deck cards the run took out of the deck for this fight's
+    /// removals, with what their models saved, for a thief to hand back.
+    pub(super) taken_from_deck: Vec<sts2_core::DeckCard<V>>,
     /// `CombatRoom.ExtraRewards`, in the order they were added. An event
     /// adds its own as the fight opens. A listener hands a card back as it
     /// dies, and a card's play adds a card reward.
@@ -2073,6 +2124,8 @@ impl<V: Rules> Clone for Live<V> {
         Self {
             cards: self.cards.clone(),
             removed_from_deck: self.removed_from_deck.clone(),
+            deck_versions: self.deck_versions.clone(),
+            taken_from_deck: self.taken_from_deck.clone(),
             extra_rewards: self.extra_rewards.clone(),
             exhaust_next: self.exhaust_next.clone(),
             history: self.history.clone(),
@@ -2109,6 +2162,8 @@ impl<V: Rules> Clone for Live<V> {
             encounter,
             cards,
             removed_from_deck,
+            deck_versions,
+            taken_from_deck,
             extra_rewards,
             exhaust_next,
             leaving,
@@ -2141,6 +2196,8 @@ impl<V: Rules> Clone for Live<V> {
         *encounter = source.encounter;
         cards.clone_from(&source.cards);
         removed_from_deck.clone_from(&source.removed_from_deck);
+        deck_versions.clone_from(&source.deck_versions);
+        taken_from_deck.clone_from(&source.taken_from_deck);
         extra_rewards.clone_from(&source.extra_rewards);
         exhaust_next.clone_from(&source.exhaust_next);
         leaving.clone_from(&source.leaving);
@@ -2258,8 +2315,18 @@ impl<V: Rules> Live<V> {
         self.creatures.any_escaped()
     }
 
-    pub(crate) fn removed_from_deck(&self) -> &[CardIdent<V>] {
+    pub(crate) fn removed_from_deck(&self) -> &[sts2_core::DeckCardId] {
         &self.removed_from_deck
+    }
+
+    /// Keep a deck card the run took out for one of this fight's removals.
+    pub(crate) fn take_from_deck(&mut self, card: sts2_core::DeckCard<V>) {
+        self.taken_from_deck.push(card);
+    }
+
+    /// The deck cards this fight took, as the run took them out.
+    pub(crate) fn taken_from_deck(&self) -> &[sts2_core::DeckCard<V>] {
+        &self.taken_from_deck
     }
 
     /// `CombatRoom.AddExtraReward` of a special card, which an event does as
@@ -2892,6 +2959,8 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             encounter: Encounter::SlimesWeak,
             cards: super::cards::Cards::with_cards(0),
             removed_from_deck: Vec::new(),
+            deck_versions: DeckVersions::none(),
+            taken_from_deck: Vec::new(),
             extra_rewards: Vec::new(),
             exhaust_next: smallvec::SmallVec::new(),
             leaving: Vec::new(),

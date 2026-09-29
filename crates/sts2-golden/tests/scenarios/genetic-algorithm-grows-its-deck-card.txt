@@ -1,0 +1,11 @@
+# Genetic Algorithm gains its block, then raises its deck card's by three.
+# The next fight's copy gains four.
+{"cmd":"start","seed":"S33D1","character":"DEFECT","ascension":"None"}
+{"cmd":"grant","card":"GENETIC_ALGORITHM"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":2}
+{"cmd":"power","power":"DEMISE_POWER","amount":99,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"answer","skip":true}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":3}

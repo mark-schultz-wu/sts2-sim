@@ -1,0 +1,12 @@
+# The hopper steals only a copy of a deck card. The Bully granted into this
+# fight is uncommon, which the hopper looks for first, but it has no deck
+# version, so the hopper takes a deck card instead. Killing the hopper hands
+# that one back.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"THIEVING_HOPPER_WEAK"}
+{"cmd":"grant","card":"BULLY"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":200,"target":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"answer","take":[{"index":1}]}

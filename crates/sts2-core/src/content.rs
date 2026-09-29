@@ -1991,7 +1991,8 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("taking cards at random from the fight")
     }
 
-    /// `CardPileCmd.RemoveFromCombat` for one named card.
+    /// `CardPileCmd.RemoveFromCombat` for one named card, and
+    /// `RemoveFromDeck` of its deck version where it has one.
     fn remove_card(&mut self, _card: crate::CardAt<V>) -> crate::CardIdent<V> {
         unimplemented!("removing a card from combat")
     }
@@ -2238,6 +2239,18 @@ pub trait Fight<V: ContentVersion> {
     /// room's own.
     fn add_card_reward(&mut self) {
         unimplemented!("an extra card reward")
+    }
+
+    /// The deck card `card` is a copy of, which is `CardModel.DeckVersion`.
+    /// Nothing for a copy made in the fight.
+    fn deck_version(&self, _card: crate::CardId<V>) -> Option<crate::DeckCardId> {
+        unimplemented!("a card's deck version")
+    }
+
+    /// `write` on the deck version of the card being played, where it has
+    /// one.
+    fn write_deck_version(&mut self, _write: V::DeckWrite) {
+        unimplemented!("a write on a deck version")
     }
 
     /// `DoomPower.DoomKill` of `creatures`: each killed outright, then
@@ -5049,7 +5062,13 @@ pub enum HookEffect<V: ContentVersion> {
     LoseSomeBlock(V::Number),
     /// A card the fight took from the deck, handed back as a reward once the
     /// fight is won. `SwipePower.BeforeDeath`'s `SpecialCardReward`.
-    ReturnCard(crate::CardIdent<V>),
+    ReturnCard(crate::DeckCardId),
+    /// [`Hooks::write_deck_card`] on this card of the deck, which the run
+    /// carries out as the decision settles.
+    WriteDeckCard {
+        card: crate::DeckCardId,
+        write: V::DeckWrite,
+    },
     /// Remove another power from the same owner.
     RemoveFromOwner(V::Power),
     /// `CreatureCmd.Add<M>` once per count, in the dead owner's place.
@@ -5106,17 +5125,20 @@ pub trait CardModel<V: ContentVersion>:
     fn written(&self) -> Option<Change<V>>;
 }
 
-/// A card in the run's deck: what it is, and what its own model saves.
+/// A card in the run's deck: which one, what it is, and what its own model
+/// saves.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DeckCard<V: Hooks> {
+    pub id: crate::DeckCardId,
     pub ident: crate::CardIdent<V>,
     pub state: V::CardState,
 }
 
 impl<V: Hooks> DeckCard<V> {
-    /// `ident` as it joins the deck.
-    pub fn new(ident: crate::CardIdent<V>) -> Self {
+    /// `ident` as it joins the deck as `id`, with nothing saved yet.
+    pub fn new(id: crate::DeckCardId, ident: crate::CardIdent<V>) -> Self {
         Self {
+            id,
             ident,
             state: <V::CardState as CardModel<V>>::new(ident.card),
         }
@@ -5384,6 +5406,9 @@ pub trait Hooks: ContentVersion {
         card: Self::Card,
         base: Option<crate::Pile>,
     ) -> crate::HookResponse<Option<crate::Pile>>;
+
+    /// `write` carried out on the deck card a fight's copy came from.
+    fn write_deck_card(card: &mut DeckCard<Self>, write: Self::DeckWrite);
 
     /// `CardModel.IsPlayable`, for a card whose class overrides it: whether
     /// its own logic lets it be played in the fight `fight` shows.
@@ -5754,6 +5779,11 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + std::fmt::Debug
         + std::fmt::Display
         + std::hash::Hash;
+
+    /// What a fight's card writes on its deck version, `CardModel.DeckVersion`.
+    ///
+    /// One per kind of write, and nothing for a build whose cards write none.
+    type DeckWrite: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'static;
 
     /// Where a card's own play stopped to ask something.
     ///

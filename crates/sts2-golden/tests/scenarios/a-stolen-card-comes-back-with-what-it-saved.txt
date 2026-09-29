@@ -1,0 +1,18 @@
+# A stolen card comes back with what its model saved. The Scythe grows by
+# four in the first fight, the hopper steals its deck card in the second and
+# hands it back as it dies, and the third fight's copy deals seventeen.
+{"cmd":"start","seed":"S33D1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"grant","card":"THE_SCYTHE"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":2,"target":1}
+{"cmd":"power","power":"DEMISE_POWER","amount":99,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"answer","skip":true}
+{"cmd":"fight","encounter":"THIEVING_HOPPER_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":200,"target":0}
+{"cmd":"play_card","index":1,"target":1}
+{"cmd":"answer","take":[{"index":1}]}
+{"cmd":"answer","skip":true}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":0,"target":1}

@@ -355,6 +355,27 @@ fn sculpting_strike<F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
     match card {
+        // `TheScythe`: its damage to the target, then `BuffFromPlay` of its
+        // `Increase` on this copy and on its deck version.
+        NecrobinderCard::TheScythe => {
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                let hit = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(hit);
+            });
+            let increase = fight.var(CardVar::Increase);
+            fight.modify_this(
+                sts2_core::Change::Raise(CardVar::Damage, increase),
+                sts2_core::Lasting::ThisFight,
+            );
+            fight.write_deck_version(super::DeckWrite::BuffFromPlay(increase));
+            Played::Done
+        }
         // `Cleanse`: its `Summon` of Osty, then one card of the draw pile
         // picked, to exhaust.
         NecrobinderCard::Cleanse => {

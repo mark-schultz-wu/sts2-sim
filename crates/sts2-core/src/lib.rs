@@ -56,7 +56,9 @@ pub use content::{
 };
 pub use event::{CarriedRelic, EventBehavior, EventView};
 pub use hook_response::HookResponse;
-pub use ident::{CardAt, CardId, CardIdent, Coord, Enchanted, ModelId, OutOfRange, Pile};
+pub use ident::{
+    CardAt, CardId, CardIdent, Coord, DeckCardId, Enchanted, ModelId, OutOfRange, Pile,
+};
 pub use seed::Seed;
 
 pub use report::digest::{Digest, Digested, Section};
