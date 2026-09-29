@@ -755,6 +755,19 @@ impl<'a, V: Rules> Board<'a, V> {
                 (Listener::Power { owner, .. }, HookEffect::Damage { target, amount }) => {
                     self.hit_unpowered(Some(owner), target, amount, false)
                 }
+                // `CreatureCmd.GainBlock`, unpowered, on the power's owner.
+                (Listener::Power { owner, .. }, HookEffect::GainBlock(amount)) => {
+                    let block = resolve::<V>(
+                        self.walk(),
+                        None,
+                        Effect::GainBlock {
+                            recipient: owner,
+                            amount: Amount::Number(amount),
+                            scaling: Scaling::Static,
+                        },
+                    );
+                    self.apply(block);
+                }
                 (_, effect) => cards.push(effect),
             }
         }
@@ -2750,9 +2763,12 @@ pub(crate) fn effect_of<V: Rules>(
         CardNumberModifier::Block => Some(Effect::GainBlock {
             recipient: dealer,
             amount: Amount::Var(key),
-            // Every block a card prints on this build is a `BlockVar` with
-            // `ValueProp.Move`.
             scaling: Scaling::Dynamic,
+        }),
+        CardNumberModifier::UnpoweredBlock => Some(Effect::GainBlock {
+            recipient: dealer,
+            amount: Amount::Var(key),
+            scaling: Scaling::Static,
         }),
         // Not an effect a card resolves: the fight asks the hook itself.
         CardNumberModifier::PowerGiven => None,
@@ -2779,6 +2795,7 @@ pub(crate) fn dealer_of<V: Rules>(
         CardNumberModifier::Damage
         | CardNumberModifier::UnpoweredDamage
         | CardNumberModifier::Block
+        | CardNumberModifier::UnpoweredBlock
         | CardNumberModifier::PowerGiven => player::<V>(creatures),
     }
 }
@@ -3444,6 +3461,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 key.name()
             );
         }
+        var::<V>(&held, key, self.live, self.target)
+    }
+
+    fn power_var(&self, key: V::CardVar) -> V::Number {
+        let held = self
+            .acting()
+            .unwrap_or_else(|| unimplemented!("a number printed by no card being played"));
         var::<V>(&held, key, self.live, self.target)
     }
 

@@ -2951,7 +2951,7 @@ var PIERCING_WAIL StrengthLoss 6 0 DynamicVar
 card PILLAGE IRONCLAD_CARD_POOL Attack Uncommon AnyEnemy 1 0 -1 0 1 - - 0 0
 var PILLAGE Damage 6 0 DamageVar
 card PILLAR_OF_CREATION REGENT_CARD_POOL Power Uncommon Self 1 0 -1 0 1 - - 0 0
-var PILLAR_OF_CREATION Block 3 0 BlockVar
+var PILLAR_OF_CREATION Block 3 0 BlockVar+Unpowered
 card PINPOINT SILENT_CARD_POOL Attack Uncommon AnyEnemy 3 0 -1 0 1 - - 0 0
 var PINPOINT Damage 15 0 DamageVar
 card POISONED_STAB SILENT_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 - - 0 0
@@ -3142,7 +3142,7 @@ var SHIV Damage 4 0 DamageVar
 card SHOCKWAVE COLORLESS_CARD_POOL Skill Uncommon AllEnemies 2 0 -1 0 1 Exhaust - 0 1
 var SHOCKWAVE Power 3 0 DynamicVar
 card SHROUD NECROBINDER_CARD_POOL Power Uncommon Self 1 0 -1 0 1 - - 0 0
-var SHROUD Block 2 0 BlockVar
+var SHROUD Block 2 0 BlockVar+Unpowered
 card SHRUG_IT_OFF IRONCLAD_CARD_POOL Skill Common Self 1 0 -1 0 1 - - 1 0
 var SHRUG_IT_OFF Block 8 0 BlockVar
 var SHRUG_IT_OFF Cards 1 0 CardsVar

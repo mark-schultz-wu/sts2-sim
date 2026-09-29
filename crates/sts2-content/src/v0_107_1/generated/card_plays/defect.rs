@@ -49,18 +49,18 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::VulnerablePower,
-                PowerAmount::Counted(fight.var(CardVar::VulnerablePower)),
+                PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
             );
             Played::Done
         }
         DefectCard::BiasedCognition => {
             fight.apply_to_actor(
                 Power::FocusPower,
-                PowerAmount::Counted(fight.var(CardVar::FocusPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::FocusPower)),
             );
             fight.apply_to_actor(
                 Power::BiasedCognitionPower,
-                PowerAmount::Counted(fight.var(CardVar::BiasedCognitionPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::BiasedCognitionPower)),
             );
             Played::Done
         }
@@ -78,7 +78,7 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::Buffer => {
             fight.apply_to_actor(
                 Power::BufferPower,
-                PowerAmount::Counted(fight.var(CardVar::BufferPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::BufferPower)),
             );
             Played::Done
         }
@@ -97,7 +97,7 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
             fight.apply(block);
             fight.apply_to_actor(
                 Power::EnergyNextTurnPower,
-                PowerAmount::Counted(fight.var(CardVar::Energy)),
+                PowerAmount::Counted(fight.power_var(CardVar::Energy)),
             );
             Played::Done
         }
@@ -128,7 +128,7 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::Coolant => {
             fight.apply_to_actor(
                 Power::CoolantPower,
-                PowerAmount::Counted(fight.var(CardVar::CoolantPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::CoolantPower)),
             );
             Played::Done
         }
@@ -140,7 +140,7 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::CreativeAi => {
             fight.apply_to_actor(
                 Power::CreativeAiPower,
-                PowerAmount::Counted(fight.var(CardVar::CreativeAi)),
+                PowerAmount::Counted(fight.power_var(CardVar::CreativeAi)),
             );
             Played::Done
         }
@@ -158,7 +158,7 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::Defragment => {
             fight.apply_to_actor(
                 Power::FocusPower,
-                PowerAmount::Counted(fight.var(CardVar::FocusPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::FocusPower)),
             );
             Played::Done
         }
@@ -169,7 +169,7 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::EchoForm => {
             fight.apply_to_actor(
                 Power::EchoFormPower,
-                PowerAmount::Counted(fight.var(CardVar::EchoForm)),
+                PowerAmount::Counted(fight.power_var(CardVar::EchoForm)),
             );
             Played::Done
         }
@@ -178,7 +178,7 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::Feral => {
             fight.apply_to_actor(
                 Power::FeralPower,
-                PowerAmount::Counted(fight.var(CardVar::FeralPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::FeralPower)),
             );
             Played::Done
         }
@@ -199,7 +199,7 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
             });
             fight.apply_to_actor(
                 Power::FocusedStrikePower,
-                PowerAmount::Counted(fight.var(CardVar::FocusPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::FocusPower)),
             );
             Played::Done
         }
@@ -230,7 +230,7 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::Hailstorm => {
             fight.apply_to_actor(
                 Power::HailstormPower,
-                PowerAmount::Counted(fight.var(CardVar::HailstormPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::HailstormPower)),
             );
             Played::Done
         }
@@ -241,7 +241,7 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::Hotfix => {
             fight.apply_to_actor(
                 Power::HotfixPower,
-                PowerAmount::Counted(fight.var(CardVar::FocusPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::FocusPower)),
             );
             Played::Done
         }
@@ -254,7 +254,7 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::Iteration => {
             fight.apply_to_actor(
                 Power::IterationPower,
-                PowerAmount::Counted(fight.var(CardVar::IterationPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::IterationPower)),
             );
             Played::Done
         }
@@ -276,21 +276,21 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
             fight.apply(block);
             fight.apply_to_actor(
                 Power::LightningRodPower,
-                PowerAmount::Counted(fight.var(CardVar::LightningRodPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::LightningRodPower)),
             );
             Played::Done
         }
         DefectCard::Loop => {
             fight.apply_to_actor(
                 Power::LoopPower,
-                PowerAmount::Counted(fight.var(CardVar::Loop)),
+                PowerAmount::Counted(fight.power_var(CardVar::Loop)),
             );
             Played::Done
         }
         DefectCard::MachineLearning => {
             fight.apply_to_actor(
                 Power::MachineLearningPower,
-                PowerAmount::Counted(fight.var(CardVar::Cards)),
+                PowerAmount::Counted(fight.power_var(CardVar::Cards)),
             );
             Played::Done
         }
@@ -316,7 +316,7 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::WeakPower,
-                PowerAmount::Counted(fight.var(CardVar::WeakPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
             );
             fight.channel(Orb::DarkOrb);
             Played::Done
@@ -368,7 +368,7 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::SignalBoost => {
             fight.apply_to_actor(
                 Power::SignalBoostPower,
-                PowerAmount::Counted(fight.var(CardVar::SignalBoostPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::SignalBoostPower)),
             );
             Played::Done
         }
@@ -379,7 +379,7 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::Smokestack => {
             fight.apply_to_actor(
                 Power::SmokestackPower,
-                PowerAmount::Counted(fight.var(CardVar::SmokestackPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::SmokestackPower)),
             );
             Played::Done
         }
@@ -388,7 +388,7 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::Storm => {
             fight.apply_to_actor(
                 Power::StormPower,
-                PowerAmount::Counted(fight.var(CardVar::StormPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::StormPower)),
             );
             Played::Done
         }
@@ -440,7 +440,7 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::Thunder => {
             fight.apply_to_actor(
                 Power::ThunderPower,
-                PowerAmount::Counted(fight.var(CardVar::ThunderPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::ThunderPower)),
             );
             Played::Done
         }

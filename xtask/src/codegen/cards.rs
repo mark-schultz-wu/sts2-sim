@@ -189,6 +189,7 @@ fn previewed(class: &str) -> Option<&'static str> {
         "OstyDamageVar" | "CalculatedDamageVar+FromOsty" => "Some(CardNumberModifier::OstyDamage)",
         "DamageVar+Unpowered" => "Some(CardNumberModifier::UnpoweredDamage)",
         "BlockVar" | "CalculatedBlockVar" => "Some(CardNumberModifier::Block)",
+        "BlockVar+Unpowered" => "Some(CardNumberModifier::UnpoweredBlock)",
         class if class.starts_with("PowerVar+") => "Some(CardNumberModifier::PowerGiven)",
         "CalculationBaseVar"
         | "CalculationExtraVar"

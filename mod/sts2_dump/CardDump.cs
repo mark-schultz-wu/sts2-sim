@@ -239,9 +239,10 @@ public static class CardDump
     /// <c>CalculatedDamageVar+FromOsty</c>. Its preview runs the damage hooks
     /// with the owner's Osty dealing, as an <c>OstyDamageVar</c>'s does.
     ///
-    /// A <c>DamageVar</c> whose <c>Props</c> carry <c>Unpowered</c> is dumped
-    /// with <c>+Unpowered</c> on its class. Its preview hands those props to
-    /// the damage hooks, and a hook that reads a powered attack skips it.
+    /// A <c>DamageVar</c> or <c>BlockVar</c> whose <c>Props</c> carry
+    /// <c>Unpowered</c> is dumped with <c>+Unpowered</c> on its class. Its
+    /// preview hands those props to the hooks, and a hook that reads a
+    /// powered attack or block skips it.
     ///
     /// A <c>PowerVar</c> is dumped with the power it applies on its class, as
     /// <c>PowerVar+STRANGLE_POWER</c>. Its preview asks
@@ -259,6 +260,10 @@ public static class CardDump
             name += "+FromOsty";
         }
         if (var is DamageVar damage && damage.Props.HasFlag(ValueProp.Unpowered))
+        {
+            name += "+Unpowered";
+        }
+        if (var is BlockVar block && block.Props.HasFlag(ValueProp.Unpowered))
         {
             name += "+Unpowered";
         }

@@ -292,6 +292,7 @@ fn every_printed_number_matches_the_dump() {
                 }
                 "DamageVar+Unpowered" => Some(CardNumberModifier::UnpoweredDamage),
                 "BlockVar" | "CalculatedBlockVar" => Some(CardNumberModifier::Block),
+                "BlockVar+Unpowered" => Some(CardNumberModifier::UnpoweredBlock),
                 class if class.starts_with("PowerVar+") => Some(CardNumberModifier::PowerGiven),
                 _ => None,
             },

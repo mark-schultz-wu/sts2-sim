@@ -21,7 +21,7 @@ pub fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
         ColorlessCard::Automation => {
             fight.apply_to_actor(
                 Power::AutomationPower,
-                PowerAmount::Counted(fight.var(CardVar::Energy)),
+                PowerAmount::Counted(fight.power_var(CardVar::Energy)),
             );
             Played::Done
         }
@@ -59,7 +59,7 @@ pub fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::DarkShacklesPower,
-                PowerAmount::Counted(fight.var(CardVar::StrengthLoss)),
+                PowerAmount::Counted(fight.power_var(CardVar::StrengthLoss)),
             );
             Played::Done
         }
@@ -82,7 +82,7 @@ pub fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
         ColorlessCard::Entropy => {
             fight.apply_to_actor(
                 Power::EntropyPower,
-                PowerAmount::Counted(fight.var(CardVar::Cards)),
+                PowerAmount::Counted(fight.power_var(CardVar::Cards)),
             );
             Played::Done
         }
@@ -95,21 +95,21 @@ pub fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
             fight.apply(block);
             fight.apply_to_actor(
                 Power::RetainHandPower,
-                PowerAmount::Counted(fight.var(CardVar::Equilibrium)),
+                PowerAmount::Counted(fight.power_var(CardVar::Equilibrium)),
             );
             Played::Done
         }
         ColorlessCard::EternalArmor => {
             fight.apply_to_actor(
                 Power::PlatingPower,
-                PowerAmount::Counted(fight.var(CardVar::PlatingPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::PlatingPower)),
             );
             Played::Done
         }
         ColorlessCard::Fasten => {
             fight.apply_to_actor(
                 Power::FastenPower,
-                PowerAmount::Counted(fight.var(CardVar::ExtraBlock)),
+                PowerAmount::Counted(fight.power_var(CardVar::ExtraBlock)),
             );
             Played::Done
         }
@@ -202,7 +202,7 @@ pub fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::KnockdownPower,
-                PowerAmount::Counted(fight.var(CardVar::KnockdownPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::KnockdownPower)),
             );
             Played::Done
         }
@@ -240,7 +240,7 @@ pub fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
         ColorlessCard::Panache => {
             fight.apply_to_actor(
                 Power::PanachePower,
-                PowerAmount::Counted(fight.var(CardVar::PanacheDamage)),
+                PowerAmount::Counted(fight.power_var(CardVar::PanacheDamage)),
             );
             Played::Done
         }
@@ -253,14 +253,14 @@ pub fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
             fight.apply(block);
             fight.apply_to_actor(
                 Power::NoBlockPower,
-                PowerAmount::Counted(fight.var(CardVar::Turns)),
+                PowerAmount::Counted(fight.power_var(CardVar::Turns)),
             );
             Played::Done
         }
         ColorlessCard::PrepTime => {
             fight.apply_to_actor(
                 Power::PrepTimePower,
-                PowerAmount::Counted(fight.var(CardVar::PrepTimePower)),
+                PowerAmount::Counted(fight.power_var(CardVar::PrepTimePower)),
             );
             Played::Done
         }
@@ -273,11 +273,11 @@ pub fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
         ColorlessCard::Prowess => {
             fight.apply_to_actor(
                 Power::StrengthPower,
-                PowerAmount::Counted(fight.var(CardVar::StrengthPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::StrengthPower)),
             );
             fight.apply_to_actor(
                 Power::DexterityPower,
-                PowerAmount::Counted(fight.var(CardVar::DexterityPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::DexterityPower)),
             );
             Played::Done
         }
@@ -303,7 +303,7 @@ pub fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
         ColorlessCard::RollingBoulder => {
             fight.apply_to_actor(
                 Power::RollingBoulderPower,
-                PowerAmount::Counted(fight.var(CardVar::RollingBoulderPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::RollingBoulderPower)),
             );
             Played::Done
         }
