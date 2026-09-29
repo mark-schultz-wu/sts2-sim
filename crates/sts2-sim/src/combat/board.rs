@@ -53,11 +53,14 @@ pub(super) struct Board<'a, V: Rules> {
     /// reports it, so the run keeps it beside the fight.
     pub(super) skipped: Vec<(CombatId, V::Power)>,
 
-    /// The last enemy left the fight while this effect was resolving.
+    /// The player died, or the last primary enemy left, while this effect
+    /// was resolving.
     ///
-    /// `CheckWinCondition` runs after the command that killed it, so this is
-    /// read once the effect is over rather than acted on where it is set.
-    pub(super) ended: Option<super::Ended>,
+    /// `CheckWinCondition` runs after the command, so this is read once the
+    /// effect is over, through [`Board::ended`]. A loss is `_pendingLoss`,
+    /// which stands. A win is `IsEnding` as the kill saw it, which a primary
+    /// enemy arriving after it undoes.
+    ended: Option<super::Ended>,
     /// A card's or a potion's own effect, whose play can stand still while a
     /// card it auto-plays asks a question. [`super::live::Deferred`] holds
     /// what waits.
@@ -275,7 +278,7 @@ impl<'a, V: Rules> Board<'a, V> {
         }
         // `IsEnding`, and `CanReceivePowers`, which a creature no listener
         // lets be hit fails.
-        if self.ended.is_some() || self.ending() {
+        if self.over() {
             return;
         }
         let alive = self
@@ -658,7 +661,7 @@ impl<'a, V: Rules> Board<'a, V> {
             .filter(|held| held.face.ident.upgrade > 0)
             .map(|held| (held.id, held.face.ident.upgrade))
             .collect();
-        if !(self.ended.is_some() || self.ending()) {
+        if !(self.over()) {
             for &(card, _) in &upgraded {
                 self.live.cards.write_named(card, |face| {
                     face.downgrade();
@@ -869,7 +872,7 @@ impl<'a, V: Rules> Board<'a, V> {
             // `History.DamageReceived`, while the fight is in progress. One
             // that is ending plays no card after it, so nothing reads what it
             // records then, and it is not asked.
-            if self.ended.is_none() {
+            if !self.stopped() {
                 self.live
                     .history
                     .damage_received(sts2_core::DamageReceived {
@@ -1070,7 +1073,7 @@ impl<'a, V: Rules> Board<'a, V> {
     fn add_at_random_here(&mut self, card: V::Card, pile: Pile) -> Option<CardAt<V>> {
         use sts2_core::rng::GameRng as _;
 
-        if self.ended.is_some() {
+        if self.stopped() {
             return None;
         }
         let places: i32 = num_traits::cast(self.live.cards.len(pile) + 1)
@@ -1154,7 +1157,7 @@ impl<'a, V: Rules> Board<'a, V> {
         creator: Option<CombatId>,
     ) -> Vec<CardAt<V>> {
         // `IsInProgress`, which a fight already over fails.
-        if self.ended.is_some() {
+        if self.stopped() {
             return Vec::new();
         }
         let mut added = Vec::with_capacity(count);
@@ -1205,7 +1208,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 // that is ending. `Hook.ShouldAfflict` has no model answering
                 // it in this build.
                 sts2_core::HookEffect::Afflict { to, affliction } => {
-                    if self.ended.is_some() || self.ending() {
+                    if self.over() {
                         continue;
                     }
                     let afflicted = std::cell::Cell::new(0);
@@ -1314,6 +1317,30 @@ impl<'a, V: Rules> Board<'a, V> {
             }
         }
         self.ended = Some(super::Ended::Won);
+    }
+
+    /// How this effect ended the fight, as `CheckWinCondition` finds it once
+    /// the effect is over.
+    pub(super) fn ended(&self) -> Option<super::Ended> {
+        match self.ended {
+            Some(super::Ended::Won) if !self.ending() => None,
+            ended => ended,
+        }
+    }
+
+    /// `IsOverOrEnding`: a loss waits, or no primary enemy stands.
+    fn over(&self) -> bool {
+        self.ended == Some(super::Ended::Lost) || self.ending()
+    }
+
+    /// A command stops on: a loss waits, or the win this effect saw still
+    /// holds. Cheaper than [`Board::over`] where nothing has ended.
+    fn stopped(&self) -> bool {
+        match self.ended {
+            None => false,
+            Some(super::Ended::Lost) => true,
+            Some(super::Ended::Won) => self.ending(),
+        }
     }
 
     /// `CombatManager.IsEnding`: no enemy stands that is both alive and
@@ -2808,7 +2835,7 @@ impl<V: Rules> Board<'_, V> {
     /// `OrbCmd.Evoke` on the first orb in the queue, or the last, leaving
     /// when `dequeue` says so.
     fn evoke(&mut self, last: bool, dequeue: bool) {
-        if self.ended.is_some() || self.ending() {
+        if self.over() {
             return;
         }
         let Some(orb) = self.live.orbs.as_mut().and_then(|orbs| {
@@ -3275,7 +3302,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         // `PlayerCmd.GainEnergy` gains nothing once the fight is ending.
         match amount < V::Number::zero() {
             true => self.live.energy = self.live.energy.saturating_sub(size(-amount)),
-            false if self.ended.is_some() || self.ending() => {}
+            false if self.over() => {}
             false => self.live.energy = self.live.energy + size(amount),
         }
     }
@@ -3311,7 +3338,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn draw(&mut self, count: V::Number) {
         // `IsOverOrEnding` draws nothing.
-        if self.ended.is_some() {
+        if self.stopped() {
             return;
         }
         // A negative count draws nothing: the game's own loop runs no times.
@@ -3479,7 +3506,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     /// A listener to `AfterOrbChanneled` asking for anything but damage on
     /// every enemy.
     fn channel(&mut self, orb: V::Orb) {
-        if self.ended.is_some() || self.ending() {
+        if self.over() {
             return;
         }
         let base = V::orb_slots(self.live.character);
@@ -3624,7 +3651,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn discard_and_draw(&mut self, cards: &[CardAt<V>], draw: V::Number) {
-        if cards.is_empty() || self.ended.is_some() || self.ending() {
+        if cards.is_empty() || self.over() {
             return;
         }
         let (sly, ended) = super::turn::act_on::<V>(
@@ -3635,10 +3662,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             cards,
         );
         self.ended = self.ended.or(ended);
-        if self.ended.is_none() && draw > V::Number::zero() {
+        if !self.stopped() && draw > V::Number::zero() {
             sts2_core::Fight::draw(self, draw);
         }
-        if self.ended.is_none() {
+        if !self.stopped() {
             self.ended = super::turn::play_sly::<V>(
                 self.live,
                 self.rngs.reborrow(),
@@ -3707,7 +3734,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn auto_play_from_draw(&mut self, count: usize, force_exhaust: bool) {
-        if self.ended.is_some() || self.ending() {
+        if self.over() {
             return;
         }
         let mut taken: SmallVec<[CardInstance<V>; 4]> = SmallVec::new();
@@ -3747,7 +3774,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn add_orb_slots(&mut self, amount: V::Number) {
-        if self.ended.is_some() || self.ending() {
+        if self.over() {
             return;
         }
         let orbs = self.live.orbs.get_or_insert_with(|| sts2_core::Orbs {
@@ -3762,7 +3789,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn remove_orb_slots(&mut self, amount: V::Number) {
-        if self.ended.is_some() || self.ending() {
+        if self.over() {
             return;
         }
         let Some(orbs) = self.live.orbs.as_mut() else {
@@ -3782,7 +3809,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn lose_block(&mut self, creature: CombatId, amount: V::Number) {
         let zero = V::Number::zero();
-        if self.ended.is_some() || self.ending() || amount <= zero {
+        if self.over() || amount <= zero {
             return;
         }
         let Some(at) = self.at(creature) else { return };
@@ -3829,7 +3856,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn auto_play_card(&mut self, card: CardAt<V>) {
-        if self.ended.is_some() || self.ending() || !self.live.player().alive {
+        if self.over() || !self.live.player().alive {
             return;
         }
         self.standing(card);
@@ -3845,7 +3872,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn auto_play_card_at(&mut self, card: CardAt<V>, target: CombatId) {
-        if self.ended.is_some() || self.ending() || !self.live.player().alive {
+        if self.over() || !self.live.player().alive {
             return;
         }
         self.standing(card);
@@ -3930,7 +3957,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     /// of them dead.
     fn heal(&mut self, at: CombatId, amount: V::Number) {
         self.ran_on();
-        if self.ended.is_some() {
+        if self.stopped() {
             return;
         }
         let Some(creature) = self.live.creatures.iter_mut().find(|c| c.id == at) else {
@@ -4016,7 +4043,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn shuffle(&mut self) {
         // `IsOverOrEnding`, which a fight already over is.
-        if self.ended.is_some() {
+        if self.stopped() {
             return;
         }
         let ascension = self.ascension;
@@ -4025,7 +4052,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn clone_this(&mut self, pile: Pile) -> Option<CardAt<V>> {
         // `IsInProgress`, which a fight already over fails.
-        if self.ended.is_some() {
+        if self.stopped() {
             return None;
         }
         let playing = self
@@ -4035,7 +4062,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn clone_card(&mut self, card: CardAt<V>, pile: Pile) -> Option<CardAt<V>> {
-        if self.ended.is_some() {
+        if self.stopped() {
             return None;
         }
         self.clone_named(card.id(), pile)
@@ -4048,7 +4075,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn orb_passive_at(&mut self, place: usize) {
-        if self.ended.is_some() || self.ending() {
+        if self.over() {
             return;
         }
         let Some(mut orb) = self
@@ -4073,7 +4100,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn add_card(&mut self, card: CardIdent<V>, pile: Pile) -> Option<CardAt<V>> {
         // `IsInProgress`, which a fight already over fails.
-        if self.ended.is_some() {
+        if self.stopped() {
             return None;
         }
         Some(self.put(card, pile))
@@ -4164,7 +4191,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         let (sly, ended) =
             super::turn::act_on::<V>(self.live, self.rngs.reborrow(), self.relics, act, cards);
         self.ended = self.ended.or(ended);
-        if self.ended.is_none() {
+        if !self.stopped() {
             self.ended = super::turn::play_sly::<V>(
                 self.live,
                 self.rngs.reborrow(),
@@ -4419,7 +4446,7 @@ impl<V: Rules> Board<'_, V> {
         let attacking = self
             .at(attacker)
             .is_some_and(|at| self.live.creatures[at].alive);
-        if self.ended.is_some() || self.ending() || !attacking {
+        if self.over() || !attacking {
             return sts2_core::AttackResults::new();
         }
         let monster = self
@@ -4496,7 +4523,7 @@ impl<V: Rules> Board<'_, V> {
         self.live.history.attacked(monster);
         // `IterateCombatHookListeners` hands a fight that is ending no
         // listeners.
-        if self.ended.is_some() || self.ending() {
+        if self.over() {
             return results;
         }
         let asked = super::listen::notify::<V>(
@@ -4694,7 +4721,7 @@ pub(super) fn land_held<V: Rules>(
             landed: results,
         });
     }
-    let ended = board.ended;
+    let ended = board.ended();
     let skipped = std::mem::take(&mut board.skipped);
     super::play::merge::<V>(&mut live.skip_tick, skipped);
     ended
@@ -4902,7 +4929,7 @@ pub(super) fn draw_pausing<V: Rules>(
             Some(drawn.id),
         );
         super::hook::apply::<V, _>(&mut board, rest);
-        ended = ended.or(board.ended);
+        ended = ended.or(board.ended());
     }
     Drawn::Done(ended)
 }

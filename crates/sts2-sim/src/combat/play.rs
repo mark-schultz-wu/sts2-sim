@@ -139,7 +139,7 @@ pub(crate) fn apply_power<V: Rules>(
     let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
     // `ApplyPowerConsoleCmd` hands `PowerCmd.Apply` no applier.
     board.land(at, power, amount, None);
-    let ended = board.ended;
+    let ended = board.ended();
     let skipped = std::mem::take(&mut board.skipped);
 
     merge::<V>(&mut live.skip_tick, skipped);
@@ -253,7 +253,7 @@ pub(crate) fn play<V: Rules>(
     )
     .pausable();
     let played = V::on_play(card.face.ident.card, &mut board);
-    let ended = board.ended;
+    let ended = board.ended();
     let skipped = std::mem::take(&mut board.skipped);
     merge::<V>(&mut live.skip_tick, skipped);
 
@@ -391,7 +391,7 @@ pub(super) fn auto_play_in_play<V: Rules>(
         board = board.pausable();
     }
     let played = V::on_play(card.face.ident.card, &mut board);
-    let ended = board.ended;
+    let ended = board.ended();
     let skipped = std::mem::take(&mut board.skipped);
     merge::<V>(&mut live.skip_tick, skipped);
 
@@ -867,7 +867,7 @@ pub(crate) fn answer<V: Rules>(
     )
     .pausable();
     let played = V::resume_play(&mut board, at, taken);
-    effect.ended = effect.ended.or(board.ended);
+    effect.ended = effect.ended.or(board.ended());
     let skipped = std::mem::take(&mut board.skipped);
     merge::<V>(&mut live.skip_tick, skipped);
     let ended = carry_on(
@@ -1065,7 +1065,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
             )
             .pausable();
             played = V::resume_play(&mut board, at, sts2_core::Taken::Waited);
-            effect.ended = effect.ended.or(board.ended);
+            effect.ended = effect.ended.or(board.ended());
             let skipped = std::mem::take(&mut board.skipped);
             merge::<V>(&mut next.skip_tick, skipped);
             continue;
@@ -1102,7 +1102,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                     )
                     .pausable();
                     V::enchantment_on_play(enchanted, &mut status, &mut board);
-                    effect.ended = effect.ended.or(board.ended);
+                    effect.ended = effect.ended.or(board.ended());
                     let skipped = std::mem::take(&mut board.skipped);
                     merge::<V>(&mut next.skip_tick, skipped);
                     next.cards
@@ -1149,7 +1149,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                 )
                 .pausable();
                 played = V::on_play(played_card, &mut board);
-                effect.ended = effect.ended.or(board.ended);
+                effect.ended = effect.ended.or(board.ended());
                 let skipped = std::mem::take(&mut board.skipped);
                 merge::<V>(&mut next.skip_tick, skipped);
                 continue;
@@ -1209,7 +1209,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
         )
         .pausable();
         played = V::resume_play(&mut board, at, answer);
-        effect.ended = effect.ended.or(board.ended);
+        effect.ended = effect.ended.or(board.ended());
         let skipped = std::mem::take(&mut board.skipped);
         merge::<V>(&mut next.skip_tick, skipped);
     }
@@ -1259,7 +1259,7 @@ fn finish_effect<V: Rules, S: LendsCombat>(
                 let mut board =
                     Board::for_card(next, streams.combat(), relics, ascension, None, None);
                 hook::apply::<V, _>(&mut board, asked.into_iter().map(|(_, effect)| effect));
-                ended = board.ended;
+                ended = board.ended();
             }
         }
         if outermost && ended == Some(super::Ended::Won) {
@@ -1391,7 +1391,7 @@ fn finished<V: Rules, S: LendsCombat>(
                     let mut board =
                         Board::for_card(next, streams.combat(), relics, ascension, None, None);
                     board.hit_unpowered(self_dealt.then_some(owner), owner, amount, unblockable);
-                    ended = ended.or(board.ended);
+                    ended = ended.or(board.ended());
                 }
                 // Made by the power's owner, which for a monster's power is
                 // nobody.
@@ -1410,7 +1410,7 @@ fn finished<V: Rules, S: LendsCombat>(
                         count,
                         (owner == player).then_some(player),
                     );
-                    ended = ended.or(board.ended);
+                    ended = ended.or(board.ended());
                 }
                 // `PowerCmd.Apply` on the power's owner, from its owner, which
                 // for a monster's power is not the player playing the card.
@@ -1421,7 +1421,7 @@ fn finished<V: Rules, S: LendsCombat>(
                     let mut board =
                         Board::for_card(next, streams.combat(), relics, ascension, None, None);
                     board.land(owner, power, amount, Some(owner));
-                    ended = ended.or(board.ended);
+                    ended = ended.or(board.ended());
                 }
                 // Clones of the card just played, which is still in the
                 // play pile, into hand.
@@ -1436,7 +1436,7 @@ fn finished<V: Rules, S: LendsCombat>(
                     for _ in 0..count {
                         board.clone_named(card, sts2_core::Pile::Hand);
                     }
-                    ended = ended.or(board.ended);
+                    ended = ended.or(board.ended());
                 }
                 // `PowerCmd.Apply` from nobody.
                 (
@@ -1450,14 +1450,14 @@ fn finished<V: Rules, S: LendsCombat>(
                     let mut board =
                         Board::for_card(next, streams.combat(), relics, ascension, None, None);
                     board.land(target, power, amount, None);
-                    ended = ended.or(board.ended);
+                    ended = ended.or(board.ended());
                 }
                 (_, effect) => rest.push(effect),
             }
         }
         let mut board = Board::for_card(next, streams.combat(), relics, ascension, None, None);
         hook::apply::<V, _>(&mut board, rest);
-        ended = ended.or(board.ended);
+        ended = ended.or(board.ended());
         let skipped = std::mem::take(&mut board.skipped);
         merge::<V>(&mut next.skip_tick, skipped);
     }

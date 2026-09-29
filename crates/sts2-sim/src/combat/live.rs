@@ -2356,7 +2356,13 @@ impl<V: Rules> Live<V> {
         relics: &crate::run::Belt<V>,
         fighter: &Fighter<V>,
     ) -> Option<sts2_core::NextMove<V>> {
-        let mut next = fighter.next_move.as_ref()?.telegraph();
+        let Some(rolled) = fighter.next_move.as_ref() else {
+            // `new MoveState()`: a monster that has not rolled yet shows
+            // `UNSET_MOVE`.
+            return matches!(fighter.model, Some(sts2_core::ModelId::Monster(_)))
+                .then(|| Telegraphed::<V>::unset().telegraph());
+        };
+        let mut next = rolled.telegraph();
         let player = self
             .creatures
             .iter()
