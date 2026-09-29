@@ -244,6 +244,10 @@ impl sts2_core::Hooks for V0_107_1 {
         }
     }
 
+    fn card_eternal(card: &sts2_core::CardIdent<Self>) -> bool {
+        behaviour::enchantments::card_eternal(card)
+    }
+
     fn enchanted_changes(enchantment: Self::Enchantment) -> &'static [sts2_core::Change<Self>] {
         behaviour::enchantments::enchanted_changes(enchantment)
     }

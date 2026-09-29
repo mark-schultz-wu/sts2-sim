@@ -22,9 +22,10 @@ impl EventBehavior<V> for WoodCarvings {
     type State = State;
 
     fn allowed(&self, run: &impl EventView<V>) -> bool {
-        run.deck()
-            .iter()
-            .any(|card| card.card.rarity() == CardRarity::Basic && !card.card.eternal())
+        run.deck().iter().any(|card| {
+            card.card.rarity() == CardRarity::Basic
+                && !super::super::enchantments::card_eternal(card)
+        })
     }
 
     fn enter<R: sts2_core::rng::GameRng>(&self, _run: &impl EventView<V>, _rng: &mut R) -> State {

@@ -31,7 +31,8 @@ pub(crate) fn can_enchant(enchantment: Enchantment, card: &CardIdent<V>) -> bool
         | Enchantment::Sown
         | Enchantment::Swift
         | Enchantment::Adroit
-        | Enchantment::Inky => base,
+        | Enchantment::Inky
+        | Enchantment::TezcatarasEmber => base,
         // Exhaust among the card's own keywords, which its upgrade can take
         // off.
         Enchantment::SoulsPower => base && card_exhausts(card),
@@ -68,8 +69,26 @@ fn card_exhausts(card: &CardIdent<V>) -> bool {
 pub(crate) fn enchanted_changes(enchantment: Enchantment) -> &'static [Change<V>] {
     match enchantment {
         Enchantment::SoulsPower => &[Change::RemoveKeyword(CardKeyword::Exhaust)],
+        // `EnergyCost.UpgradeBy(-cost)` takes the cost to nothing, which
+        // later modifiers write over, then `AddKeyword(Eternal)`.
+        Enchantment::TezcatarasEmber => &[
+            Change::SetCost(sts2_core::CostPool::Energy, 0),
+            Change::AddKeyword(CardKeyword::Eternal),
+        ],
         _ => &[],
     }
+}
+
+/// Whether `card` carries `Eternal`: its table prints it, or its
+/// enchantment's `OnEnchant` adds it.
+pub(crate) fn card_eternal(card: &CardIdent<V>) -> bool {
+    use sts2_core::CardTable as _;
+
+    card.card.eternal()
+        || card.enchantment.is_some_and(|enchanted| {
+            enchanted_changes(enchanted.enchantment)
+                .contains(&Change::AddKeyword(CardKeyword::Eternal))
+        })
 }
 
 /// `CardCmd.Enchant` by `amount`, and the enchantment's `OnEnchant`.
@@ -94,7 +113,8 @@ pub(crate) fn enchant(enchantment: Enchantment, amount: u8, card: &mut CardIdent
         | Enchantment::SoulsPower
         | Enchantment::Sown
         | Enchantment::Spiral
-        | Enchantment::Swift => {
+        | Enchantment::Swift
+        | Enchantment::TezcatarasEmber => {
             card.enchantment = Some(Enchanted {
                 enchantment,
                 amount,
@@ -106,6 +126,9 @@ pub(crate) fn enchant(enchantment: Enchantment, amount: u8, card: &mut CardIdent
 
 /// `Inky`'s `DamageVar(1, ValueProp.Move)`.
 const INKY_DAMAGE: i32 = 1;
+
+/// `TezcatarasEmber`'s `DamageVar(3)`.
+const EMBER_DAMAGE: i32 = 3;
 
 /// `Inky`'s `PowerVar<WeakPower>(1)`.
 const INKY_WEAK: i32 = 1;
@@ -183,6 +206,10 @@ pub(crate) fn modify(enchanted: Enchanted<V>, state: &State, hook: EnchantHook) 
         }
         // Its `Times`, which it prints as one.
         (Enchantment::Spiral, EnchantHook::PlayCount) => Modify::Added(1),
+        // `TezcatarasEmber`: its `DamageVar(3)` on a powered hit.
+        (Enchantment::TezcatarasEmber, EnchantHook::DamageAdditive { powered: true }) => {
+            Modify::Added(EMBER_DAMAGE)
+        }
         // Its `Times`, one, until its card is first played in the fight.
         (Enchantment::Glam, EnchantHook::PlayCount) if status == EnchantmentStatus::Normal => {
             Modify::Added(1)
@@ -202,7 +229,8 @@ pub(crate) fn modify(enchanted: Enchanted<V>, state: &State, hook: EnchantHook) 
             | Enchantment::SoulsPower
             | Enchantment::Sown
             | Enchantment::Spiral
-            | Enchantment::Swift,
+            | Enchantment::Swift
+            | Enchantment::TezcatarasEmber,
             _,
         ) => Modify::Nothing,
         (enchantment, hook) => unimplemented!("what {enchantment:?} does for {hook:?}"),
@@ -308,6 +336,7 @@ pub(crate) fn on_play<F: Fight<V>>(enchanted: Enchanted<V>, state: &mut State, f
         | Enchantment::Slither
         | Enchantment::SoulsPower
         | Enchantment::Spiral
+        | Enchantment::TezcatarasEmber
         | Enchantment::Vigorous => {}
         enchantment => unimplemented!("what {enchantment:?} does when its card is played"),
     }

@@ -167,6 +167,7 @@ mod neows_torment;
 mod new_leaf;
 mod nunchaku;
 mod nutritious_oyster;
+mod nutritious_soup;
 mod oddly_smooth_stone;
 mod old_coin;
 mod orange_dough;
@@ -198,6 +199,7 @@ mod prayer_wheel;
 mod precarious_shears;
 mod precise_scissors;
 mod preserved_fog;
+mod pumpkin_candle;
 mod punch_dagger;
 mod radiant_pearl;
 mod rainbow_ring;
@@ -558,6 +560,8 @@ pub enum State {
     WingCharm,
     Toolbox,
     MiniatureTent,
+    NutritiousSoup,
+    PumpkinCandle(pumpkin_candle::State),
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -801,6 +805,8 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::PumpkinCandle(state) => pumpkin_candle::event_hook(state, hook, asked),
+        State::NutritiousSoup => nutritious_soup::event_hook(hook, asked),
         State::MiniatureTent => miniature_tent::event_hook(hook, asked),
         State::Toolbox => toolbox::event_hook(hook, asked),
         State::WingCharm => wing_charm::event_hook(hook, asked),
@@ -938,6 +944,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
     match state {
         State::Pocketwatch(state) => pocketwatch::modify_hook(state, hook),
         State::Vambrace(state) => vambrace::modify_hook(state, hook),
+        State::PumpkinCandle(state) => pumpkin_candle::modify_hook(state, hook),
         State::TheCourier => the_courier::modify_hook(hook),
         State::MembershipCard => membership_card::modify_hook(hook),
         State::UnsettlingLamp(state) => unsettling_lamp::modify_hook(state, hook),
@@ -1182,7 +1189,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::LunarPastry
         | State::WingCharm
         | State::Toolbox
-        | State::MiniatureTent => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::MiniatureTent
+        | State::NutritiousSoup => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1361,6 +1369,8 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::PumpkinCandle => State::PumpkinCandle(pumpkin_candle::State::default()),
+            Relic::NutritiousSoup => State::NutritiousSoup,
             Relic::MiniatureTent => State::MiniatureTent,
             Relic::Toolbox => State::Toolbox,
             Relic::WingCharm => State::WingCharm,
@@ -1495,6 +1505,7 @@ impl sts2_core::RelicModel<V> for State {
                 State::Kusarigama(state) => kusarigama::display_amount(state),
                 State::HappyFlower(state) => happy_flower::display_amount(state),
                 State::Kunai(state) => kunai::display_amount(state),
+                State::PumpkinCandle(state) => pumpkin_candle::display_amount(state),
                 State::GalacticDust(state) => galactic_dust::display_amount(state),
                 State::EmberTea(state) => ember_tea::display_amount(state),
                 State::SilverCrucible(state) => silver_crucible::display_amount(state),

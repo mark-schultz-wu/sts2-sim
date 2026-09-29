@@ -1,0 +1,9 @@
+# Pumpkin Candle gives an energy each turn while it burns. A rest site offers
+# Kindle beside its own options, and taking it rekindles the candle, from
+# five fights to ten.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"PUMPKIN_CANDLE"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"choose_option","index":2}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}

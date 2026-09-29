@@ -1,9 +1,7 @@
 //! Morphic Grove: every coin for two transforms, or Max HP.
 
 use nonmax::NonMaxU8;
-use sts2_core::{
-    CardTable as _, DeckAct, EventBehavior, EventView, HookEffect, HookEffects, Room, Stream,
-};
+use sts2_core::{DeckAct, EventBehavior, EventView, HookEffect, HookEffects, Room, Stream};
 
 use super::super::super::V0_107_1 as V;
 use super::super::super::generated::events::{Event, EventOption as Said};
@@ -27,7 +25,7 @@ impl EventBehavior<V> for MorphicGrove {
             && run
                 .deck()
                 .iter()
-                .filter(|card| !card.card.eternal())
+                .filter(|card| !super::super::enchantments::card_eternal(card))
                 .count()
                 >= 2
     }
