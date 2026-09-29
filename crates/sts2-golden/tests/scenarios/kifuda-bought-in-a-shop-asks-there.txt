@@ -1,0 +1,7 @@
+# Kifuda bought from a merchant asks for its cards there, and the shelf
+# clears once they are picked.
+{"cmd":"start","seed":"S33D15","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"MEMBERSHIP_CARD"}
+{"cmd":"enter_room","type":"Shop"}
+{"cmd":"buy","index":9}
+{"cmd":"answer","cards":[0,1,2]}

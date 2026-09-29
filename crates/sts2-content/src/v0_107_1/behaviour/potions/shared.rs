@@ -440,6 +440,12 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
             }
             Played::Done
         }
+        // `CreatureCmd.GainMaxHp` on its target by its `MaxHpVar(5)`. A fight
+        // here has one player, who drinks it.
+        Potion::FruitJuice => {
+            fight.gain_max_hp(fight.actor(), super::FRUIT_JUICE);
+            Played::Done
+        }
         potion => unimplemented!("what {potion:?} does when it is drunk"),
     }
 }

@@ -27,7 +27,7 @@ pub(crate) fn can_enchant(enchantment: Enchantment, card: &CardIdent<V>) -> bool
         }
         // Its own check adds an X cost to the base's refusals.
         Enchantment::Slither => base && card.card.cost() != Cost::X,
-        Enchantment::Glam | Enchantment::Sown | Enchantment::Swift => base,
+        Enchantment::Glam | Enchantment::Sown | Enchantment::Swift | Enchantment::Adroit => base,
         // Exhaust among the card's own keywords, which its upgrade can take
         // off.
         Enchantment::SoulsPower => base && card_exhausts(card),
@@ -35,7 +35,8 @@ pub(crate) fn can_enchant(enchantment: Enchantment, card: &CardIdent<V>) -> bool
         Enchantment::Corrupted
         | Enchantment::Instinct
         | Enchantment::Sharp
-        | Enchantment::Vigorous => base && V::card_kind(card.card) == Some(CardKind::Attack),
+        | Enchantment::Vigorous
+        | Enchantment::Momentum => base && V::card_kind(card.card) == Some(CardKind::Attack),
         Enchantment::Nimble => base && card.card.gains_block(),
         Enchantment::Goopy => base && card.card.tagged(CardTag::Defend),
         _ => unimplemented!("which cards {enchantment:?} can enchant"),
@@ -75,7 +76,9 @@ pub(crate) fn enchanted_changes(enchantment: Enchantment) -> &'static [Change<V>
 /// not reached.
 pub(crate) fn enchant(enchantment: Enchantment, amount: u8, card: &mut CardIdent<V>) {
     match enchantment {
-        Enchantment::Corrupted
+        Enchantment::Adroit
+        | Enchantment::Momentum
+        | Enchantment::Corrupted
         | Enchantment::Glam
         | Enchantment::Inky
         | Enchantment::Instinct
@@ -141,7 +144,8 @@ pub(crate) fn modify(
             Modify::Added(1)
         }
         (
-            Enchantment::Corrupted
+            Enchantment::Adroit
+            | Enchantment::Corrupted
             | Enchantment::Glam
             | Enchantment::Inky
             | Enchantment::Instinct
@@ -233,6 +237,17 @@ pub(crate) fn on_play<F: Fight<V>>(
             for target in targets {
                 fight.apply_power(target, Power::WeakPower, weak);
             }
+        }
+        // Its block, which `RecalculateValues` sets to its amount, powered.
+        Enchantment::Adroit => {
+            use sts2_core::{Amount, Effect, Scaling};
+
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Number(amount),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
         }
         Enchantment::Glam
         | Enchantment::Instinct
