@@ -300,18 +300,26 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
     );
     shape.push('\n');
     for bucket in buckets.keys() {
-        writeln!(shape, "mod {bucket};").unwrap();
+        writeln!(shape, "pub mod {bucket};").unwrap();
     }
     writeln!(
         shape,
-        "\ntype V = super::super::{version};\n\n\
-         /// One of a monster's moves, from the file its table row is filed in.\n\
-         pub fn perform<F: sts2_core::Fight<V>>(\n\
-         monster: super::monsters::Monster,\n\
-         move_id: super::monsters::MoveId,\n\
-         step: u8,\n\
-         fight: &mut F,\n\
-         ) -> Option<u8> {{\n\
+        "\n/// The file a monster's moves are filed in, one per act it is met in.\n\
+         ///\n\
+         /// `behaviour/` files its hand ports the same way, and routes a move by\n\
+         /// this.\n\
+         #[derive(Debug, Clone, Copy, PartialEq, Eq)]\n\
+         pub enum Filed {{"
+    )
+    .unwrap();
+    for bucket in buckets.keys() {
+        writeln!(shape, "{},", camel(bucket)).unwrap();
+    }
+    writeln!(
+        shape,
+        "}}\n\n\
+         /// Where `monster`'s moves are filed.\n\
+         pub fn filed(monster: super::monsters::Monster) -> Filed {{\n\
          use super::monsters::Monster;\n\
          match monster {{"
     )
@@ -321,12 +329,7 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
             .iter()
             .map(|id| format!("Monster::{}", camel(id)))
             .collect();
-        writeln!(
-            shape,
-            "{} => {bucket}::perform(monster, move_id, step, fight),",
-            arms.join(" | ")
-        )
-        .unwrap();
+        writeln!(shape, "{} => Filed::{},", arms.join(" | "), camel(bucket)).unwrap();
     }
     writeln!(shape, "}}\n}}").unwrap();
     split.finish(

@@ -547,7 +547,7 @@ pub(super) fn perform<F: Fight<V>>(
                 _ => {}
             }
         }
-        _ => return monster_moves::perform(monster, move_id, step, fight),
+        _ => return monster_moves::glory::perform(monster, move_id, step, fight),
     }
     None
 }
