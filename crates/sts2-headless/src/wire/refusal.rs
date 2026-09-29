@@ -184,6 +184,7 @@ impl WireReason {
                     "select_cards" => QuestionKind::SelectCards,
                     "rewards" => QuestionKind::Rewards,
                     "divine" => QuestionKind::Divine,
+                    "choose_bundle" => QuestionKind::ChooseBundle,
                     other => return Err(unknown(&p("asking"), "kind of question", other)),
                 },
             },

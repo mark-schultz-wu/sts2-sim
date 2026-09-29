@@ -68,7 +68,8 @@ pub use report::observation::{
 };
 pub use report::observed::{Observed, ObservedCreature, ObservedFight, ObservedPlayable};
 pub use report::question::{
-    CardOption, Cell, FoundItem, Question, QuestionKind, RewardCard, RewardDetail, RewardKind,
+    BundleOption, CardOption, Cell, FoundItem, Question, QuestionKind, RewardCard, RewardDetail,
+    RewardKind,
 };
 
 #[cfg(feature = "fixture")]

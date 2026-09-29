@@ -46,6 +46,7 @@ fn answering<V: sts2_content_wire::WireContentVersion>(question: &Question<V>) -
                 (_, false) => format!("sts2 act choose {}", example.join(" ")),
             }
         }
+        Question::ChooseBundle { .. } => "sts2 act choose 0".into(),
         Question::Rewards { skippable, rewards } => {
             // A card reward is refused without a card index, so the example has
             // to be the dotted pair rather than the reward on its own.

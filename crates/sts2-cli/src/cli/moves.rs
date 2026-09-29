@@ -82,6 +82,11 @@ fn answers<V: sts2_content_wire::WireContentVersion>(question: &Question<V>) -> 
                 .collect()
         }
 
+        // Each bundle, as a one-card selection names it.
+        Question::ChooseBundle { bundles } => (0..bundles.len())
+            .map(|at| Decision::Answer(Answer::Cards([at].into_iter().collect())))
+            .collect(),
+
         Question::Rewards { skippable, .. } => {
             let mut moves: Vec<Decision<V>> = takeable(question)
                 .into_iter()

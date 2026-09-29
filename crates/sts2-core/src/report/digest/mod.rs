@@ -894,6 +894,16 @@ impl Sink {
                 self.list(cleared, |sink, cell| sink.id(cell));
                 self.list(revealed, |sink, found| sink.id(found));
             }
+            Question::ChooseBundle { bundles } => {
+                self.u8(3);
+                self.list(bundles, |sink, bundle| {
+                    sink.len(bundle.index);
+                    sink.list(&bundle.cards, |sink, card| {
+                        sink.card(&card.card);
+                        sink.prose_option(&card.text);
+                    });
+                });
+            }
         }
     }
 

@@ -57,10 +57,15 @@ pub enum Question<V: ContentVersion> {
         /// What the divinations have turned up.
         revealed: Vec<FoundItem>,
     },
+    /// Answer with [`crate::Answer::Cards`] naming one bundle.
+    ///
+    /// Scroll Boxes' choose-a-bundle screen, whose chosen bundle all goes into
+    /// the deck.
+    ChooseBundle { bundles: Vec<BundleOption<V>> },
 }
 
 impl<V: ContentVersion> Question<V> {
-    /// Which of the three this is.
+    /// Which of the four this is.
     ///
     /// For saying what a parked game is waiting for without holding the
     /// question itself. A refusal names it, and a front end routes on it.
@@ -69,11 +74,12 @@ impl<V: ContentVersion> Question<V> {
             Question::SelectCards { .. } => QuestionKind::SelectCards,
             Question::Rewards { .. } => QuestionKind::Rewards,
             Question::Divine { .. } => QuestionKind::Divine,
+            Question::ChooseBundle { .. } => QuestionKind::ChooseBundle,
         }
     }
 }
 
-/// Which of the three questions a parked game is asking.
+/// Which of the four questions a parked game is asking.
 ///
 /// [`Question`] with its payload removed, for the places that need to say what
 /// is pending rather than answer it.
@@ -82,6 +88,7 @@ pub enum QuestionKind {
     SelectCards,
     Rewards,
     Divine,
+    ChooseBundle,
 }
 
 impl std::fmt::Display for QuestionKind {
@@ -92,6 +99,7 @@ impl std::fmt::Display for QuestionKind {
             QuestionKind::SelectCards => "select_cards",
             QuestionKind::Rewards => "rewards",
             QuestionKind::Divine => "divine",
+            QuestionKind::ChooseBundle => "choose_bundle",
         })
     }
 }
@@ -122,6 +130,13 @@ pub struct RewardCard<V: ContentVersion> {
     pub card: CardIdent<V>,
     /// See [`CardOption::text`].
     pub text: Option<String>,
+}
+
+/// One bundle a choose-a-bundle screen offers, with its cards in order.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BundleOption<V: ContentVersion> {
+    pub index: usize,
+    pub cards: Vec<RewardCard<V>>,
 }
 
 /// One square of the Crystal Sphere's grid.

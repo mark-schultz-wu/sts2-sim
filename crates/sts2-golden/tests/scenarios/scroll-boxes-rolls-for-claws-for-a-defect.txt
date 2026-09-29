@@ -1,0 +1,6 @@
+# For a Defect, Scroll Boxes rolls out of a hundred before each bundle, and
+# a roll under one makes that bundle three Claws. Neither roll here comes in,
+# so both are ordinary bundles, drawn after their rolls.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"grant","relic":"SCROLL_BOXES"}
+{"cmd":"answer","cards":[0]}

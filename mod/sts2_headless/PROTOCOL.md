@@ -452,6 +452,23 @@ When the last divination is spent the event resumes on its own, and pays out
 what was uncovered. That arrives as an ordinary `rewards` pending, through
 `DoLocalCrystalSphereRewards`.
 
+### choose_bundle
+
+```json
+{"type":"pending","seq":3,"cmd":"grant","kind":"choose_bundle",
+ "bundles":[{"index":0,"cards":[{"card":"POMMEL_STRIKE","text":"Deal 9 damage.\nDraw 1 card."},
+                                {"card":"TWIN_STRIKE","text":"Deal 5 damage twice."},
+                                {"card":"UPPERCUT","text":"Deal 13 damage.\nApply 1 Weak.\nApply 1 Vulnerable."}]},
+            {"index":1,"cards":[…]}]}
+```
+
+Scroll Boxes' choose-a-bundle screen, which `CardSelectCmd.FromChooseABundleScreen`
+shows. It asks no selector, and in `TestMode` it takes the first bundle unasked.
+So the mod stands in for the screen, and asks here.
+
+`text` is as `select_cards` gives it. Answer with one bundle's index, as
+`{"cmd":"answer","cards":[1]}`. The bundle's cards all go into the deck.
+
 ### rewards
 
 ```json

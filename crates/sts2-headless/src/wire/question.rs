@@ -15,7 +15,8 @@
 
 use serde::Deserialize;
 use sts2_core::{
-    CardOption, Cell, FoundItem, Question, RelicTable, RewardCard, RewardDetail, RewardKind,
+    BundleOption, CardOption, Cell, FoundItem, Question, RelicTable, RewardCard, RewardDetail,
+    RewardKind,
 };
 
 use super::command::WireReportedTool;
@@ -43,6 +44,16 @@ pub(crate) enum WireQuestion {
         cleared: Vec<WireCell>,
         revealed: Vec<WireFoundItem>,
     },
+    ChooseBundle {
+        bundles: Vec<WireBundle>,
+    },
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct WireBundle {
+    index: usize,
+    cards: Vec<WireRewardCard>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -176,6 +187,19 @@ impl WireQuestion {
                         height: f.height,
                     })
                     .collect(),
+            },
+
+            WireQuestion::ChooseBundle { bundles } => Question::ChooseBundle {
+                bundles: bundles
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, b)| {
+                        Ok(BundleOption {
+                            index: b.index,
+                            cards: read_cards(&format!("question.bundles[{i}]"), b.cards)?,
+                        })
+                    })
+                    .collect::<Result<_, Error>>()?,
             },
         })
     }
@@ -589,6 +613,28 @@ mod tests {
     /// `CrystalSphereToolType` has three members and a sphere starts at `None`.
     /// [`Tool`] has two, because `CellClicked` tests only for `Big`. So a
     /// reported `None` reads back as the move it is.
+    #[test]
+    fn a_bundle_choice_names_each_bundles_cards() {
+        let question = asked(serde_json::json!({
+            "kind": "choose_bundle",
+            "bundles": [
+                {"index": 0, "cards": [{"card": "TWIN_STRIKE", "text": "Deal 5 damage twice."},
+                                       {"card": "POMMEL_STRIKE+1"}]},
+                {"index": 1, "cards": []}
+            ]
+        }))
+        .unwrap();
+        let Question::ChooseBundle { bundles } = question else {
+            panic!("a bundle choice read as {question:?}");
+        };
+        assert_eq!(bundles.len(), 2);
+        assert_eq!(bundles[0].index, 0);
+        assert_eq!(bundles[0].cards.len(), 2);
+        assert_eq!(bundles[0].cards[1].card.upgrade, 1);
+        assert_eq!(bundles[0].cards[1].text, None);
+        assert!(bundles[1].cards.is_empty());
+    }
+
     #[test]
     fn the_tool_a_sphere_starts_with_is_the_small_one() {
         let divine = |tool: &str| {

@@ -153,6 +153,12 @@ impl Coverage {
             // minigame pays out arrive later, as an ordinary reward screen,
             // and are counted there.
             Question::Divine { .. } => {}
+            Question::ChooseBundle { bundles } => {
+                for bundle in bundles {
+                    self.cards_seen
+                        .extend(cards(bundle.cards.iter().map(|c| &c.card)));
+                }
+            }
             Question::Rewards { rewards, .. } => {
                 for detail in rewards {
                     match &detail.reward {

@@ -573,6 +573,9 @@ pub(super) enum Pickup<V: Rules> {
         min: usize,
         max: usize,
     },
+    /// `CardSelectCmd.FromChooseABundleScreen`: one bundle of these, whose
+    /// cards all go into the deck.
+    Bundles { bundles: Vec<Vec<V::Card>> },
     /// `RewardsCmd.OfferCustom`: a screen to take rewards from until every
     /// one is taken or, where `skippable`, the rest are skipped.
     Rewards {
@@ -712,6 +715,7 @@ impl<V: Rules> State<V> {
             Phase::Neow { .. } | Phase::Event { .. } => {
                 self.phase.asking().map(|asked| match asked.pickup {
                     Pickup::Rewards { .. } => sts2_core::QuestionKind::Rewards,
+                    Pickup::Bundles { .. } => sts2_core::QuestionKind::ChooseBundle,
                     Pickup::Event => self.event_question().kind(),
                     _ => sts2_core::QuestionKind::SelectCards,
                 })
@@ -1477,6 +1481,14 @@ impl<V: Rules> State<V> {
                     self.player.gold = num_traits::zero();
                     continue;
                 }
+                HookEffect::OfferBundles {
+                    count,
+                    commons,
+                    uncommons,
+                    same_card,
+                } => Pickup::Bundles {
+                    bundles: self.bundles(count, commons, uncommons, same_card),
+                },
                 // The relic's own pickup asks first, and the effects after
                 // it wait behind what it asked.
                 HookEffect::ObtainRelic(_) | HookEffect::ObtainNextRelic(_) => {
@@ -2597,6 +2609,56 @@ impl<V: Rules> State<V> {
             drawn.push(card);
         }
         drawn
+    }
+
+    /// `ScrollBoxes.GenerateRandomBundles`: each bundle `commons` commons then
+    /// `uncommons` uncommons, `NextItem` off the rewards stream over the
+    /// cards no bundle holds yet. See [`sts2_core::HookEffect::OfferBundles`].
+    fn bundles(
+        &mut self,
+        count: usize,
+        commons: usize,
+        uncommons: usize,
+        same_card: Option<(V::Card, u32)>,
+    ) -> Vec<Vec<V::Card>> {
+        use sts2_core::rng::{Bound, GameRng as _};
+
+        let pool = V::reward_cards(self.character());
+        let rng = self.streams.player(V::PlayerRngType::REWARDS);
+        let mut used: Vec<V::Card> = Vec::new();
+        let mut bundles = Vec::with_capacity(count);
+        for _ in 0..count {
+            if let Some((card, percent)) = same_card {
+                let hundred = Bound::try_new(100).expect("a hundred is a bound");
+                let under = i32::try_from(percent).expect("a chance out of a hundred fits");
+                if rng.next_int(hundred) < under {
+                    bundles.push(vec![card; commons + uncommons]);
+                    continue;
+                }
+            }
+            let mut bundle = Vec::with_capacity(commons + uncommons);
+            for (rarity, take) in [
+                (sts2_core::RewardRarity::Common, commons),
+                (sts2_core::RewardRarity::Uncommon, uncommons),
+            ] {
+                let mut left: Vec<V::Card> = pool
+                    .at(rarity)
+                    .iter()
+                    .copied()
+                    .filter(|card| !used.contains(card))
+                    .collect();
+                for _ in 0..take {
+                    let Ok(&card) = rng.choose(&left) else {
+                        unimplemented!("a reward pool with no {rarity:?} card left for a bundle");
+                    };
+                    left.retain(|&held| held != card);
+                    used.push(card);
+                    bundle.push(card);
+                }
+            }
+            bundles.push(bundle);
+        }
+        bundles
     }
 
     /// One `NextItem` over the character's reward pool at `rarity`, less
@@ -3807,6 +3869,19 @@ impl<V: Rules> State<V> {
             .take()
             .unwrap_or_else(|| unimplemented!("an answer to a question nobody asked"));
         match asked.pickup {
+            // `CardPileCmd.Add` of each card of the bundle chosen.
+            Pickup::Bundles { bundles } => {
+                let chosen = match picks.iter().collect::<Vec<_>>()[..] {
+                    [one] => bundles.get(one),
+                    _ => None,
+                };
+                let Some(chosen) = chosen else {
+                    unimplemented!("a bundle choice naming other than one bundle offered");
+                };
+                for &card in chosen {
+                    self.add_to_deck(sts2_core::DeckCard::new(CardIdent::new(card)));
+                }
+            }
             Pickup::Cards { offered, min, max } => {
                 if picks.len() < min || picks.len() > max {
                     unimplemented!("a card selection of other than {min} to {max} cards");
@@ -4152,6 +4227,10 @@ impl<V: Rules> State<V> {
                     unreachable!("the guard found it parked")
                 };
                 match &asked.pickup {
+                    Pickup::Bundles { bundles } => moves.extend(
+                        (0..bundles.len())
+                            .map(|at| Decision::Answer(Answer::Cards([at].into_iter().collect()))),
+                    ),
                     Pickup::Cards { offered, min, max } => {
                         selections(*min, *max, offered.len(), moves)
                     }
@@ -4578,6 +4657,24 @@ impl<V: Rules> State<V> {
                         return asked::<V>(offered, *skippable);
                     }
                     Pickup::Event => return self.event_question(),
+                    Pickup::Bundles { bundles } => {
+                        return Question::ChooseBundle {
+                            bundles: bundles
+                                .iter()
+                                .enumerate()
+                                .map(|(index, bundle)| sts2_core::BundleOption {
+                                    index,
+                                    cards: bundle
+                                        .iter()
+                                        .map(|&card| sts2_core::RewardCard {
+                                            card: CardIdent::new(card),
+                                            text: None,
+                                        })
+                                        .collect(),
+                                })
+                                .collect(),
+                        };
+                    }
                     Pickup::Cards { offered, min, max } => (
                         u32::try_from(*min).expect("a selection counts in a few cards"),
                         u32::try_from(*max).expect("a selection counts in a few cards"),
