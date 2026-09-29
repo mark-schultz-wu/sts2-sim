@@ -1146,6 +1146,20 @@ impl<V: Rules> Face<V> {
         self.set_enchantment_state(state)
     }
 
+    /// `Amount += by` on this copy's enchantment, and say whether that
+    /// changed it.
+    ///
+    /// # Panics
+    ///
+    /// A copy with no enchantment, or an amount past what a byte holds.
+    pub(super) fn raise_enchantment(&mut self, by: u8) -> bool {
+        let enchanted = (self.ident.enchantment.as_mut())
+            .unwrap_or_else(|| unreachable!("an enchantment raised on a card without one"));
+        enchanted.amount = (enchanted.amount.checked_add(by))
+            .unwrap_or_else(|| unimplemented!("an enchantment past what a byte holds"));
+        by != 0
+    }
+
     /// `CardCmd.Enchant`: this copy as `ident` names it, with a fresh
     /// instance of its enchantment.
     pub(super) fn enchant(&mut self, ident: CardIdent<V>) {

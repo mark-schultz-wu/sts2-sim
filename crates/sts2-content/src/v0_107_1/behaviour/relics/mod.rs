@@ -175,7 +175,9 @@ mod orichalcum;
 mod ornamental_fan;
 mod orrery;
 mod paels_blood;
+mod paels_claw;
 mod paels_flesh;
+mod paels_growth;
 mod paels_horn;
 mod paels_tears;
 mod pandoras_box;
@@ -562,6 +564,8 @@ pub enum State {
     MiniatureTent,
     NutritiousSoup,
     PumpkinCandle(pumpkin_candle::State),
+    PaelsClaw,
+    PaelsGrowth,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -805,6 +809,8 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::PaelsGrowth => paels_growth::event_hook(hook, asked),
+        State::PaelsClaw => paels_claw::event_hook(hook, asked),
         State::PumpkinCandle(state) => pumpkin_candle::event_hook(state, hook, asked),
         State::NutritiousSoup => nutritious_soup::event_hook(hook, asked),
         State::MiniatureTent => miniature_tent::event_hook(hook, asked),
@@ -1190,7 +1196,9 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::WingCharm
         | State::Toolbox
         | State::MiniatureTent
-        | State::NutritiousSoup => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::NutritiousSoup
+        | State::PaelsClaw
+        | State::PaelsGrowth => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1369,6 +1377,8 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::PaelsGrowth => State::PaelsGrowth,
+            Relic::PaelsClaw => State::PaelsClaw,
             Relic::PumpkinCandle => State::PumpkinCandle(pumpkin_candle::State::default()),
             Relic::NutritiousSoup => State::NutritiousSoup,
             Relic::MiniatureTent => State::MiniatureTent,

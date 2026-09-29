@@ -32,7 +32,8 @@ pub(crate) fn can_enchant(enchantment: Enchantment, card: &CardIdent<V>) -> bool
         | Enchantment::Swift
         | Enchantment::Adroit
         | Enchantment::Inky
-        | Enchantment::TezcatarasEmber => base,
+        | Enchantment::TezcatarasEmber
+        | Enchantment::Clone => base,
         // Exhaust among the card's own keywords, which its upgrade can take
         // off.
         Enchantment::SoulsPower => base && card_exhausts(card),
@@ -75,6 +76,7 @@ pub(crate) fn enchanted_changes(enchantment: Enchantment) -> &'static [Change<V>
             Change::SetCost(sts2_core::CostPool::Energy, 0),
             Change::AddKeyword(CardKeyword::Eternal),
         ],
+        Enchantment::Goopy => &[Change::AddKeyword(CardKeyword::Exhaust)],
         _ => &[],
     }
 }
@@ -114,7 +116,9 @@ pub(crate) fn enchant(enchantment: Enchantment, amount: u8, card: &mut CardIdent
         | Enchantment::Sown
         | Enchantment::Spiral
         | Enchantment::Swift
-        | Enchantment::TezcatarasEmber => {
+        | Enchantment::TezcatarasEmber
+        | Enchantment::Goopy
+        | Enchantment::Clone => {
             card.enchantment = Some(Enchanted {
                 enchantment,
                 amount,
@@ -198,6 +202,8 @@ pub(crate) fn modify(enchanted: Enchanted<V>, state: &State, hook: EnchantHook) 
             Modify::Added(INKY_DAMAGE)
         }
         (Enchantment::Nimble, EnchantHook::BlockAdditive) => Modify::Added(amount),
+        // `Goopy`: one less than its amount, which each play raises.
+        (Enchantment::Goopy, EnchantHook::BlockAdditive) => Modify::Added(amount - 1),
         // Its amount on a powered hit, until its card is first played.
         (Enchantment::Vigorous, EnchantHook::DamageAdditive { powered: true })
             if status == EnchantmentStatus::Normal =>
@@ -216,8 +222,10 @@ pub(crate) fn modify(enchanted: Enchanted<V>, state: &State, hook: EnchantHook) 
         }
         (
             Enchantment::Adroit
+            | Enchantment::Clone
             | Enchantment::Corrupted
             | Enchantment::Glam
+            | Enchantment::Goopy
             | Enchantment::Inky
             | Enchantment::Instinct
             | Enchantment::Momentum
@@ -257,6 +265,16 @@ pub(crate) fn event_hook(
         (Enchantment::Vigorous | Enchantment::Glam, EventHook::CardPlayed { id: played, .. }) => {
             if played == id {
                 asked.push(HookEffect::DisableOwnEnchantment);
+            }
+        }
+        // `AfterCardPlayed` for its own card: `Amount++`, on the copy and on
+        // its deck version.
+        (Enchantment::Goopy, EventHook::CardPlayed { id: played, .. }) => {
+            if played == id {
+                asked.push(HookEffect::RaiseOwnEnchantment {
+                    by: 1,
+                    write: super::cards::DeckWrite::RaiseEnchantment(1),
+                });
             }
         }
         // To the top of a shuffle, but not the one a fight opens on.
@@ -328,7 +346,9 @@ pub(crate) fn on_play<F: Fight<V>>(enchanted: Enchanted<V>, state: &mut State, f
             });
             fight.apply(block);
         }
-        Enchantment::Glam
+        Enchantment::Clone
+        | Enchantment::Glam
+        | Enchantment::Goopy
         | Enchantment::Instinct
         | Enchantment::Nimble
         | Enchantment::PerfectFit

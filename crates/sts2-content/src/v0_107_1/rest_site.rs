@@ -48,6 +48,8 @@ impl RestKinds<V0_107_1> for RestSiteOption {
     /// `DigRestSiteOption.OnSelect`: `RelicCmd.Obtain` of the next relic off
     /// the front of the bag.
     /// `LiftRestSiteOption.OnSelect`: Girya's `TimesLifted` one higher.
+    /// `CloneRestSiteOption.OnSelect`: a clone of each deck card enchanted
+    /// with Clone, added to the deck.
     /// `CookRestSiteOption.OnSelect`: two cards removed from the deck, asked
     /// for with `RequireManualConfirmation`, then nine more maximum health.
     fn selected(self) -> Vec<sts2_core::HookEffect<V0_107_1>> {
@@ -62,6 +64,9 @@ impl RestKinds<V0_107_1> for RestSiteOption {
                     Relic::PumpkinCandle,
                 )]
             }
+            RestSiteOption::Clone => vec![sts2_core::HookEffect::CloneEnchantedIntoDeck(
+                super::generated::enchantments::Enchantment::Clone,
+            )],
             RestSiteOption::Cook => vec![
                 sts2_core::HookEffect::SelectFromDeckConfirmed {
                     act: sts2_core::DeckAct::Remove,

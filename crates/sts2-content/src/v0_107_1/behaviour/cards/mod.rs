@@ -774,6 +774,8 @@ impl sts2_core::CardModel<V> for State {
 pub enum DeckWrite {
     /// `BuffFromPlay(n)` of `GeneticAlgorithm` or `TheScythe`.
     BuffFromPlay(Number),
+    /// `DeckVersion.Enchantment.Amount += n`, Goopy's.
+    RaiseEnchantment(u8),
 }
 
 /// `write` on the deck card `card`.
@@ -796,6 +798,12 @@ pub(crate) fn write_deck_card(card: &mut sts2_core::DeckCard<V>, write: DeckWrit
             DeckWrite::BuffFromPlay(n),
         ) => {
             *gained += n;
+        }
+        (_, DeckWrite::RaiseEnchantment(n)) => {
+            let enchanted = (card.ident.enchantment.as_mut())
+                .unwrap_or_else(|| unreachable!("an enchantment raised on a card without one"));
+            enchanted.amount = (enchanted.amount.checked_add(n))
+                .unwrap_or_else(|| unimplemented!("an enchantment past what a byte holds"));
         }
         (state, write) => unimplemented!("{write:?} on a deck card saving {state:?}"),
     }

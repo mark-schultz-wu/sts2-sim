@@ -1860,6 +1860,37 @@ impl<V: Rules> State<V> {
                     self.act_on_deck(act, &taken);
                     continue;
                 }
+                HookEffect::CloneEnchantedIntoDeck(enchantment) => {
+                    let cloned: Vec<sts2_core::DeckCard<V>> = (self.player.deck.iter())
+                        .filter(|held| {
+                            held.ident
+                                .enchantment
+                                .is_some_and(|enchanted| enchanted.enchantment == enchantment)
+                        })
+                        .copied()
+                        .collect();
+                    for card in cloned {
+                        let id = self.player.mint();
+                        self.add_deck_card(sts2_core::DeckCard { id, ..card });
+                    }
+                    continue;
+                }
+                HookEffect::EnchantDeck {
+                    enchantment,
+                    amount,
+                } => {
+                    let taken: Vec<usize> = (self.player.deck.iter().enumerate())
+                        .filter(|(_, held)| V::can_enchant(enchantment, &held.ident))
+                        .map(|(at, _)| at)
+                        .collect();
+                    let act = sts2_core::DeckAct::Enchant {
+                        enchantment,
+                        amount,
+                        kind: None,
+                    };
+                    self.act_on_deck(act, &taken);
+                    continue;
+                }
                 HookEffect::UpgradeDeck => {
                     let upgradable: Vec<usize> = self.upgradable().map(|(at, _)| at).collect();
                     self.act_on_deck(sts2_core::DeckAct::Upgrade, &upgradable);
@@ -3858,6 +3889,7 @@ impl<V: Rules> State<V> {
                 || option == <V::RestSiteOption as sts2_core::RestKinds<V>>::DIG
                 || option == <V::RestSiteOption as sts2_core::RestKinds<V>>::LIFT
                 || option == <V::RestSiteOption as sts2_core::RestKinds<V>>::KINDLE
+                || option == <V::RestSiteOption as sts2_core::RestKinds<V>>::CLONE
             {
                 if !self.rest_option_enabled(option) {
                     unimplemented!("a rest site option the run cannot take");
