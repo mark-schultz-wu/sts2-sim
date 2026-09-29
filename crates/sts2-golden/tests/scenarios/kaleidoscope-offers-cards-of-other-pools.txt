@@ -1,0 +1,8 @@
+# Kaleidoscope offers two card rewards. Each shuffles the four other
+# characters' pools off the niche stream and makes one card from each of the
+# first three, with a rarity roll and an upgrade roll off the rewards stream.
+# The run takes a card from the first and skips the rest.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"KALEIDOSCOPE"}
+{"cmd":"answer","take":[{"index":0,"card":1}]}
+{"cmd":"answer","skip":true}

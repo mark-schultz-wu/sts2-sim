@@ -3186,8 +3186,12 @@ pub enum EventHook<V: ContentVersion> {
     CardRewardOptionsModified,
     /// `TryModifyCardRewardOptionsLate`, for one card `CardFactory` made for
     /// a reward. A listener answers with what it does to the card.
+    ///
+    /// `card_reward` is `CardCreationFlags.IsCardReward`, which a
+    /// `CardReward` sets and a card made for another use does not.
     CardRewardOption {
         card: crate::CardIdent<V>,
+        card_reward: bool,
     },
     /// `TryModifyCardBeingAddedToDeck`, for a card about to join the deck.
     CardBeingAddedToDeck {
@@ -4777,6 +4781,16 @@ pub enum HookEffect<V: ContentVersion> {
     LoseGold(V::Number),
     /// `PlayerCmd.LoseGold(Owner.Gold)`: every coin its owner holds.
     LoseAllGold,
+    /// `RewardsCmd.OfferCustom` over `rewards` card rewards, each holding one
+    /// card from each of `pools` other characters' pools. The pools are a
+    /// `StableShuffle` off `RunState.Rng.Niche` for each reward. Each card is
+    /// its own `CardFactory.CreateForReward` at regular odds, whose pass is
+    /// not a `CardReward`'s. Each reward then has the pass a `CardReward`
+    /// holding cards set by hand has.
+    OfferOtherPoolCards {
+        rewards: usize,
+        pools: usize,
+    },
     /// `CardSelectCmd.FromChooseABundleScreen`, over `count` bundles drawn off
     /// the player's rewards stream. Each is `commons` commons of the
     /// character's reward pool, then `uncommons` uncommons, none already in a

@@ -31,9 +31,10 @@ pub(super) fn event_hook(
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     match hook {
-        EventHook::CardRewardOption { card }
-            if state.times_used < CARDS && card.upgrade < card.card.max_upgrade() =>
-        {
+        EventHook::CardRewardOption {
+            card,
+            card_reward: true,
+        } if state.times_used < CARDS && card.upgrade < card.card.max_upgrade() => {
             asked.push(HookEffect::UpgradeCard);
         }
         EventHook::CardRewardOption { .. } => {}

@@ -10,7 +10,7 @@ use super::super::enchantments::can_enchant;
 /// replaced by a clone enchanted with it at one. A run here has one player.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
     match hook {
-        EventHook::CardRewardOption { card } => {
+        EventHook::CardRewardOption { card, .. } => {
             if can_enchant(Enchantment::Glam, &card) {
                 asked.push(HookEffect::EnchantCard {
                     enchantment: Enchantment::Glam,

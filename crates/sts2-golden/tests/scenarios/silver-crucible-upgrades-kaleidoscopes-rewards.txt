@@ -1,0 +1,8 @@
+# Kaleidoscope makes its cards one at a time, which carry no `IsCardReward`
+# as they are made. Each reward then has the pass a `CardReward` with its
+# cards set by hand has, which does. So Silver Crucible upgrades every card of
+# both rewards, and counts two uses.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"SILVER_CRUCIBLE"}
+{"cmd":"grant","relic":"KALEIDOSCOPE"}
+{"cmd":"answer","skip":true}
