@@ -206,6 +206,15 @@ fn add_noted(state: &mut State, id: sts2_core::CardId<V>, amount: Number) -> boo
 
 /// `amountsForPlayedCards.Remove`: the stack noted as `id`'s play began, if
 /// it was noted.
+/// `CardSelectorPrefs(prompt, count)`: exactly `count` cards picked.
+fn exactly(count: Number) -> sts2_core::Selection {
+    usize::try_from(count)
+        .ok()
+        .and_then(nonmax::NonMaxUsize::new)
+        .map(sts2_core::Selection::Exactly)
+        .unwrap_or_else(|| unimplemented!("a selection of {count} cards"))
+}
+
 fn take_noted(state: &mut State, id: sts2_core::CardId<V>) -> Option<Number> {
     let (State::Noted { playing, .. } | State::Monologue { playing, .. }) = state else {
         unreachable!("plays noted for {:?}", state.power())
@@ -4258,7 +4267,7 @@ pub(crate) fn event_hook(
         (Power::StratagemPower, PowerAmount::Counted(amount), EventHook::Shuffled) => {
             Some(HookEffect::SelectFromPile {
                 pile: sts2_core::Pile::Draw,
-                count: amount,
+                selection: exactly(amount),
                 act: sts2_core::PileAct::IntoHand,
             })
         }
@@ -4801,7 +4810,7 @@ pub(crate) fn event_hook(
             EventHook::PlayerTurnStart { player, .. },
         ) if player == holder => Some(HookEffect::SelectFromPile {
             pile: sts2_core::Pile::Hand,
-            count: amount,
+            selection: exactly(amount),
             act: sts2_core::PileAct::Exhaust,
         }),
         // `NecroMasteryPower.AfterCurrentHpChanged`: the hit points its
@@ -4842,7 +4851,7 @@ pub(crate) fn event_hook(
             EventHook::PlayerTurnStart { player, .. },
         ) if player == holder => Some(HookEffect::SelectFromPile {
             pile: sts2_core::Pile::Hand,
-            count: amount,
+            selection: exactly(amount),
             act: sts2_core::PileAct::TransformToRandom,
         }),
         (Power::EntropyPower, PowerAmount::Endless, EventHook::PlayerTurnStart { player, .. })
@@ -4878,7 +4887,7 @@ pub(crate) fn event_hook(
             EventHook::PlayerTurnStart { player, .. },
         ) if player == holder => Some(HookEffect::SelectFromPile {
             pile: sts2_core::Pile::Hand,
-            count: amount,
+            selection: exactly(amount),
             act: sts2_core::PileAct::Discard,
         }),
         (
@@ -4902,7 +4911,7 @@ pub(crate) fn event_hook(
                 HookEffect::ShuffleIfNecessary,
                 HookEffect::SelectFromPile {
                     pile: sts2_core::Pile::Draw,
-                    count: amount,
+                    selection: exactly(amount),
                     act: sts2_core::PileAct::IntoHand,
                 },
                 HookEffect::Remove,

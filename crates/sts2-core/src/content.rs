@@ -4563,6 +4563,9 @@ pub enum PileAct {
     /// `CardCmd.TransformToRandom` off `CombatCardSelection`, one card at a
     /// time.
     TransformToRandom,
+    /// `CardCmd.DiscardAndDraw(cards, cards.Count)`: every card discarded,
+    /// then as many drawn, and only then the Sly ones among them played.
+    DiscardAndDraw,
 }
 
 /// How [`HookEffect::ChooseCards`] draws each card.
@@ -5102,11 +5105,11 @@ pub enum HookEffect<V: ContentVersion> {
     LoseEnergy(V::Number),
     /// `CardPileCmd.Draw` for the player.
     Draw(V::Number),
-    /// `CardSelectCmd.FromHand` or `FromCombatPile`: the player picks `count`
-    /// cards of the pile, and `act` is what happens to them.
+    /// `CardSelectCmd.FromHand` or `FromCombatPile`: the player picks cards
+    /// of the pile as `selection` allows, and `act` is what happens to them.
     SelectFromPile {
         pile: crate::Pile,
-        count: V::Number,
+        selection: Selection,
         act: PileAct,
     },
     /// `CardPileCmd.ShuffleIfNecessary`: the discard pile shuffled into an

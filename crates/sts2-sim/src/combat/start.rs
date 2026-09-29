@@ -409,8 +409,12 @@ pub(crate) fn enter<V: Rules>(
         super::live::Setup::BeforeHandDraw(asked),
     ) {
         super::turn::Carried::Done(ended) => ended,
+        // A setup that stops on a question lets the fight open around it, as
+        // any turn's does. `RunAutoPrePlayPhase` waits for the answer, so the
+        // turn stays in its start until then.
         super::turn::Carried::Parked => {
-            unimplemented!("a choice as the fight opens")
+            live.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::START;
+            None
         }
     };
     if let Some(ended) = ended {

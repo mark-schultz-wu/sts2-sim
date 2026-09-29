@@ -99,6 +99,7 @@ mod fishing_rod;
 mod forgotten_soul;
 mod fragrant_mushroom;
 mod frozen_egg;
+mod gambling_chip;
 mod game_piece;
 mod ghost_seed;
 mod girya;
@@ -518,6 +519,7 @@ pub enum State {
     PunchDagger,
     TeaOfDiscourtesy(tea_of_discourtesy::State),
     HelicalDart,
+    GamblingChip,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -761,6 +763,7 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::GamblingChip => gambling_chip::event_hook(hook, asked),
         State::HelicalDart => helical_dart::event_hook(hook, asked),
         State::TeaOfDiscourtesy(state) => tea_of_discourtesy::event_hook(state, hook, asked),
         State::PunchDagger => punch_dagger::event_hook(hook, asked),
@@ -1101,7 +1104,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::Kifuda
         | State::PunchDagger
         | State::TeaOfDiscourtesy(_)
-        | State::HelicalDart => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::HelicalDart
+        | State::GamblingChip => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1280,6 +1284,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::GamblingChip => State::GamblingChip,
             Relic::HelicalDart => State::HelicalDart,
             Relic::TeaOfDiscourtesy => {
                 State::TeaOfDiscourtesy(tea_of_discourtesy::State::default())
