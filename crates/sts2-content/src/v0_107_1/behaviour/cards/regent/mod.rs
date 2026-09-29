@@ -123,6 +123,31 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
             }
             Played::Done
         }
+        // `DyingStar`: its damage to every enemy, as one attack, then its
+        // `StrengthLoss` of Dying Star on each enemy that could be hit as the
+        // play began.
+        RegentCard::DyingStar => {
+            use super::super::super::generated::powers::Power;
+            use sts2_core::{Amount, Effect, PowerAmount, Scaling};
+
+            let enemies = fight.hittable_opponents();
+            fight.attack(Scaling::Dynamic, |fight| {
+                for target in fight.opponents() {
+                    let hit = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(hit);
+                }
+            });
+            let loss = PowerAmount::Counted(fight.var(CardVar::StrengthLoss));
+            for target in enemies {
+                fight.apply_power(target, Power::DyingStarPower, loss);
+            }
+            Played::Done
+        }
         // `VoidForm`: its Void Form on its owner, then `PlayerCmd.EndTurn`.
         RegentCard::VoidForm => {
             use super::super::super::generated::powers::Power;

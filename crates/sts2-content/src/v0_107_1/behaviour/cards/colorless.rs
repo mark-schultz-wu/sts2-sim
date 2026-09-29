@@ -111,6 +111,47 @@ pub(super) fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played
                 at: super::super::Resume::Card(super::Resume::Colorless(Resume::SeekerStrikeTakes)),
             }
         }
+        // `Scrawl`: cards drawn until the hand is full.
+        ColorlessCard::Scrawl => {
+            let room =
+                sts2_core::MAX_CARDS_IN_HAND.saturating_sub(fight.cards_in(Pile::Hand).len());
+            fight.draw(Number::try_from(room).expect("a hand's room fits a game number"));
+            Played::Done
+        }
+        // `Jackpot`: its damage to the target, then its `Cards` of the
+        // character's pool that cost nothing, each `NextItem` off
+        // `CombatCardGeneration` and upgraded where Jackpot is, into hand.
+        ColorlessCard::Jackpot => {
+            use sts2_core::{Amount, CardTable as _, Cost, Effect, Scaling};
+
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                let hit = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(hit);
+            });
+            let free: Vec<_> = <V as sts2_core::Rules>::combat_cards(fight.character())
+                .iter()
+                .copied()
+                .filter(|card| card.cost() == Cost::fixed(0))
+                .collect();
+            let upgrade = u8::from(fight.upgraded());
+            let made: Vec<_> = (0..cards(fight))
+                .filter_map(|_| fight.generate_card(&free))
+                .collect();
+            for card in made {
+                let card = sts2_core::CardIdent {
+                    upgrade,
+                    ..sts2_core::CardIdent::new(card)
+                };
+                fight.add_generated_cards(card, Pile::Hand, 1);
+            }
+            Played::Done
+        }
         // `TheBomb`: its `Turns` of The Bomb on its owner, then its
         // `BombDamage` written on the instance.
         ColorlessCard::TheBomb => {

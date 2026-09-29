@@ -1,0 +1,6 @@
+# Tea of Discourtesy shuffles two Dazed into the draw pile as its one fight
+# begins.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"TEA_OF_DISCOURTESY"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
