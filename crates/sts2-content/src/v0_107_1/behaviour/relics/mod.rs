@@ -196,6 +196,8 @@ mod sere_talon;
 mod shovel;
 mod shuriken;
 mod signet_ring;
+mod silken_tress;
+mod silver_crucible;
 mod small_capsule;
 mod snecko_skull;
 mod sozu;
@@ -492,6 +494,8 @@ pub enum State {
     SmallCapsule,
     LargeCapsule,
     NeowsBones,
+    SilverCrucible(silver_crucible::State),
+    SilkenTress(silken_tress::State),
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -735,6 +739,8 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::SilkenTress(state) => silken_tress::event_hook(state, hook, asked),
+        State::SilverCrucible(state) => silver_crucible::event_hook(state, hook, asked),
         State::NeowsBones => neows_bones::event_hook(hook, asked),
         State::LargeCapsule => large_capsule::event_hook(hook, asked),
         State::SmallCapsule => small_capsule::event_hook(hook, asked),
@@ -825,6 +831,7 @@ pub(crate) fn decide_hook(
         State::WhiteBeastStatue => white_beast_statue::decide_hook(hook),
         State::LizardTail(state) => lizard_tail::decide_hook(state, hook),
         State::TheCourier => the_courier::decide_hook(hook),
+        State::SilverCrucible(state) => silver_crucible::decide_hook(state, hook),
         _ => match hook.model_hook() {
             Some(_) => unimplemented!("what {state:?} decides for {hook:?}"),
             None => sts2_core::HookResponse::DoesNotImplement,
@@ -1048,7 +1055,9 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::FencingManual
         | State::SmallCapsule
         | State::LargeCapsule
-        | State::NeowsBones => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::NeowsBones
+        | State::SilverCrucible(_)
+        | State::SilkenTress(_) => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1227,6 +1236,8 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::SilkenTress => State::SilkenTress(silken_tress::State::default()),
+            Relic::SilverCrucible => State::SilverCrucible(silver_crucible::State::default()),
             Relic::NeowsBones => State::NeowsBones,
             Relic::LargeCapsule => State::LargeCapsule,
             Relic::SmallCapsule => State::SmallCapsule,
@@ -1296,6 +1307,8 @@ impl sts2_core::RelicModel<V> for State {
             (State::BoneTea(state), _) => bone_tea::used_up(state),
             (State::WingedBoots(state), _) => state.used_up(),
             (State::WongosMysteryTicket(state), _) => wongos_mystery_ticket::used_up(state),
+            (State::SilverCrucible(state), _) => silver_crucible::used_up(state),
+            (State::SilkenTress(state), _) => silken_tress::used_up(state),
             (_, Field::Constant(used_up)) => used_up,
             (_, Field::Computed) => unimplemented!("whether {relic:?} is used up"),
         }
@@ -1322,6 +1335,7 @@ impl sts2_core::RelicModel<V> for State {
                 State::Kusarigama(state) => kusarigama::display_amount(state),
                 State::HappyFlower(state) => happy_flower::display_amount(state),
                 State::Kunai(state) => kunai::display_amount(state),
+                State::SilverCrucible(state) => silver_crucible::display_amount(state),
                 State::Metronome(state) => metronome::display_amount(state),
                 State::JossPaper(state) => joss_paper::display_amount(state),
                 State::LastingCandy(state) => lasting_candy::display_amount(state),

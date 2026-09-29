@@ -1,0 +1,20 @@
+# Silver Crucible upgrades every card of the first three card rewards
+# that can be upgraded, and counts down as each reward is made. The fourth
+# reward is as it rolled.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"SILVER_CRUCIBLE"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":100,"target":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"answer","skip":true}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":100,"target":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"answer","skip":true}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":100,"target":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"answer","skip":true}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":100,"target":0}
+{"cmd":"play_card","index":1,"target":1}

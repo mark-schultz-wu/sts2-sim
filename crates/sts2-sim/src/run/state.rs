@@ -506,8 +506,10 @@ pub(super) enum Phase<V: Rules> {
         /// opened. Empty for any other event.
         layout: Layout<V>,
     },
+    /// A treasure room, and the relic in its chest. An empty chest leaves the
+    /// room finished as it opens.
     Treasure {
-        relic: V::Relic,
+        relic: Option<V::Relic>,
         finished: bool,
     },
     /// A rest site, and how far through its one option the run is.
@@ -528,9 +530,7 @@ pub(super) enum Phase<V: Rules> {
     /// `ProcessPendingLoss` ends the combat and the run with it. The room is
     /// still the one it was fought in, so the fight is still reported. Nothing
     /// is offered, because a dead run takes nothing.
-    Lost {
-        combat: Combat<V>,
-    },
+    Lost { combat: Combat<V> },
     /// The last act's boss beaten, which `RunManager.WinRun` ends the run on.
     ///
     /// The game enters The Architect's room first. It is dialogue, and its
@@ -1471,6 +1471,10 @@ impl<V: Rules> State<V> {
                 HookEffect::LoseGold(amount) => {
                     let left = self.player.gold - amount;
                     self.player.gold = left.max(num_traits::zero());
+                    continue;
+                }
+                HookEffect::LoseAllGold => {
+                    self.player.gold = num_traits::zero();
                     continue;
                 }
                 // The relic's own pickup asks first, and the effects after
@@ -2643,12 +2647,21 @@ impl<V: Rules> State<V> {
             .collect()
     }
 
-    /// `TryModifyCardRewardOptionsLate` over each card a reward offers.
+    /// `TryModifyCardRewardOptionsLate` over each card a reward offers, then
+    /// `AfterModifyingCardRewardOptions`.
+    ///
+    /// The game asks the second only of a listener that answered the first.
+    /// Each listener here answers it where its own first answer was yes, for
+    /// every reward that comes here is a `CardReward`'s.
     pub(super) fn reward_options(&mut self, cards: &mut [CardIdent<V>]) {
         for card in cards {
             *card = self.rewritten(*card, |card| sts2_core::EventHook::CardRewardOption {
                 card,
             });
+        }
+        let asked = self.notify_belt(sts2_core::EventHook::CardRewardOptionsModified);
+        if let Some(effect) = asked.first() {
+            unimplemented!("a relic asking for {effect:?} once a card reward was modified");
         }
     }
 
@@ -2846,17 +2859,50 @@ impl<V: Rules> State<V> {
         );
     }
 
-    /// Enter a treasure room after resolving its relic and stream counter.
-    pub(super) fn enter_treasure(&mut self, to: Coord, relic: V::Relic, streams: Streams<V>) {
+    /// Enter a treasure room: `AfterRoomEntered`, then `BeginRelicPicking`.
+    /// That rolls the chest's relic off its own stream with `RollRarity`,
+    /// where `ShouldGenerateTreasure` lets it.
+    pub(super) fn enter_treasure(&mut self, at: Location, streams: Streams<V>) {
         self.streams = streams;
-        Arc::make_mut(&mut self.dealt_relics).push(relic);
         self.enter(
-            Location::MapPoint(to),
+            at,
             Phase::Treasure {
-                relic,
+                relic: None,
                 finished: false,
             },
         );
+        let relic = self.generates_treasure().then(|| {
+            let rarity = crate::reward::relic_rarity::<V, _>(
+                self.streams.run(V::RunRngType::TREASURE_ROOM_RELICS),
+            );
+            let relic = self.next_shared_relic(rarity);
+            Arc::make_mut(&mut self.dealt_relics).push(relic);
+            relic
+        });
+        if let Phase::Treasure {
+            relic: chest,
+            finished,
+        } = &mut self.phase
+        {
+            *chest = relic;
+            *finished = relic.is_none();
+        }
+    }
+
+    /// `Hook.ShouldGenerateTreasure`, which any relic on the belt can answer
+    /// no to.
+    fn generates_treasure(&self) -> bool {
+        let hook = sts2_core::DecisionHook::ShouldGenerateTreasure;
+        let hooks = sts2_core::Overrides::of(sts2_core::ModelHook::ShouldGenerateTreasure);
+        let mut left = self.player.relics.hearing(hooks);
+        let mut generates = true;
+        while left != 0 {
+            let held = &self.player.relics[left.trailing_zeros() as usize];
+            left &= left - 1;
+            generates &= !V::decide_hook(crate::combat::Heard::<V>::Relic(&held.state), hook)
+                .is_decision_and(|generate| !generate);
+        }
+        generates
     }
 
     /// `MerchantEntry.OnTryPurchaseWrapper`: buy the entry at an index.
@@ -3053,6 +3099,10 @@ impl<V: Rules> State<V> {
     pub(crate) fn enter_room(&mut self, room: V::RoomType) -> Result<Decided, Error> {
         if room == <V::RoomType as sts2_core::RoomKinds>::REST_SITE {
             self.enter_rest_site(Location::NoLocation);
+            return Ok(Decided::Resolved);
+        }
+        if room == <V::RoomType as sts2_core::RoomKinds>::TREASURE {
+            self.enter_treasure(Location::NoLocation, self.streams);
             return Ok(Decided::Resolved);
         }
         if room != <V::RoomType as sts2_core::RoomKinds>::SHOP {
@@ -3508,7 +3558,9 @@ impl<V: Rules> State<V> {
             if *finished {
                 unimplemented!("choosing from a finished treasure room");
             }
-            let relic = *relic;
+            let Some(relic) = *relic else {
+                unreachable!("an empty chest finishes its room as it opens");
+            };
             *finished = true;
             match index {
                 0 => self.obtain_here(relic),
@@ -4697,13 +4749,12 @@ impl<V: Rules> State<V> {
             }
             Phase::Event { .. } => self.event_room(),
             Phase::Treasure { relic, finished } => {
-                let options = if *finished {
-                    Vec::new()
-                } else {
-                    vec![
+                let options = match (*finished, *relic) {
+                    (true, _) | (false, None) => Vec::new(),
+                    (false, Some(relic)) => vec![
                         sts2_core::ChestOption {
                             index: 0,
-                            take: sts2_core::Take::Relic(*relic),
+                            take: sts2_core::Take::Relic(relic),
                             chosen: false,
                         },
                         sts2_core::ChestOption {
@@ -4711,7 +4762,7 @@ impl<V: Rules> State<V> {
                             take: sts2_core::Take::Skip,
                             chosen: false,
                         },
-                    ]
+                    ],
                 };
                 Some(Room::Treasure {
                     finished: *finished,

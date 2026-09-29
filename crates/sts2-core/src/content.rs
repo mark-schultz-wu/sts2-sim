@@ -684,10 +684,12 @@ pub enum ModelHook {
     AfterModifyingBlockAmount,
     ModifyMerchantPrice,
     ShouldRefillMerchantEntry,
+    AfterModifyingCardRewardOptions,
+    ShouldGenerateTreasure,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 119] = [
+    pub const ALL: [ModelHook; 121] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -807,6 +809,8 @@ impl ModelHook {
         ModelHook::AfterModifyingBlockAmount,
         ModelHook::ModifyMerchantPrice,
         ModelHook::ShouldRefillMerchantEntry,
+        ModelHook::AfterModifyingCardRewardOptions,
+        ModelHook::ShouldGenerateTreasure,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -943,6 +947,8 @@ impl ModelHook {
             ModelHook::AfterModifyingBlockAmount => "AfterModifyingBlockAmount",
             ModelHook::ModifyMerchantPrice => "ModifyMerchantPrice",
             ModelHook::ShouldRefillMerchantEntry => "ShouldRefillMerchantEntry",
+            ModelHook::AfterModifyingCardRewardOptions => "AfterModifyingCardRewardOptions",
+            ModelHook::ShouldGenerateTreasure => "ShouldGenerateTreasure",
         }
     }
 }
@@ -3064,6 +3070,9 @@ pub enum DecisionHook<V: ContentVersion> {
     /// `ShouldRefillMerchantEntry`, once a shelf's purchase went through. One
     /// listener answering yes restocks the shelf rather than emptying it.
     ShouldRefillMerchantEntry,
+    /// `ShouldGenerateTreasure`, as a treasure room begins its relic picking.
+    /// One listener answering no leaves the chest empty.
+    ShouldGenerateTreasure,
     /// `ShouldPlayerResetEnergy`, as `player` sets up their turn `turn`. A
     /// player no listener lets reset adds their maximum to what they have.
     ShouldPlayerResetEnergy {
@@ -3145,6 +3154,7 @@ impl<V: ContentVersion> DecisionHook<V> {
             DecisionHook::ShouldPlayerResetEnergy { .. } => ModelHook::ShouldPlayerResetEnergy,
             DecisionHook::ShouldForcePotionReward { .. } => ModelHook::ShouldForcePotionReward,
             DecisionHook::ShouldRefillMerchantEntry => ModelHook::ShouldRefillMerchantEntry,
+            DecisionHook::ShouldGenerateTreasure => ModelHook::ShouldGenerateTreasure,
             DecisionHook::ShouldCountForCombatEnd
             | DecisionHook::ShouldRemoveSelfAfterOwnerDeath
             | DecisionHook::ShouldOwnerDeathTriggerFatal => return None,
@@ -3171,6 +3181,9 @@ pub enum EventHook<V: ContentVersion> {
     PotionUsed {
         in_fight: bool,
     },
+    /// `AfterModifyingCardRewardOptions`, once a card reward's cards have
+    /// had their late pass.
+    CardRewardOptionsModified,
     /// `TryModifyCardRewardOptionsLate`, for one card `CardFactory` made for
     /// a reward. A listener answers with what it does to the card.
     CardRewardOption {
@@ -3720,6 +3733,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::PotionUsing { .. } => ModelHook::BeforePotionUsed,
             EventHook::PotionUsed { .. } => ModelHook::AfterPotionUsed,
             EventHook::CardRewardOption { .. } => ModelHook::TryModifyCardRewardOptionsLate,
+            EventHook::CardRewardOptionsModified => ModelHook::AfterModifyingCardRewardOptions,
             EventHook::CardBeingAddedToDeck { .. } => ModelHook::TryModifyCardBeingAddedToDeck,
             EventHook::MerchantCardCreated { .. } => ModelHook::ModifyMerchantCardCreationResults,
             EventHook::CardPlayedLate { .. } => ModelHook::AfterCardPlayedLate,
@@ -4761,6 +4775,8 @@ pub enum HookEffect<V: ContentVersion> {
     AddCardRemovalReward,
     /// `PlayerCmd.LoseGold`, which stops at none.
     LoseGold(V::Number),
+    /// `PlayerCmd.LoseGold(Owner.Gold)`: every coin its owner holds.
+    LoseAllGold,
     /// `SealOfGold.AfterSideTurnStart`: while the player holds at least
     /// `gold`, `PlayerCmd.GainEnergy` by `energy` and then
     /// `PlayerCmd.LoseGold` by `gold`.

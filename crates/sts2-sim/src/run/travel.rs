@@ -1,6 +1,6 @@
 //! Moving to a map point, and entering what waits there.
 
-use sts2_core::{AscensionKinds, Coord, Decided, MapPointKinds, Reason, Rules, RunStreamKinds};
+use sts2_core::{AscensionKinds, Coord, Decided, MapPointKinds, Reason, Rules};
 
 use super::State;
 use super::state::{EncounterQueue, Location, UnknownRoom};
@@ -25,13 +25,9 @@ pub(crate) struct Move<V: Rules> {
 }
 
 impl<V: Rules> State<V> {
-    /// A treasure room at `to`: `TreasureRoomRelicSynchronizer` rolls
-    /// `RollRarity` off its own stream.
-    fn treasure(&mut self, to: Coord, mut streams: crate::stream::Streams<V>) {
-        let rarity =
-            crate::reward::relic_rarity::<V, _>(streams.run(V::RunRngType::TREASURE_ROOM_RELICS));
-        let relic = self.next_shared_relic(rarity);
-        self.enter_treasure(to, relic, streams);
+    /// A treasure room at `to`, entered on the streams the move resolved.
+    fn treasure(&mut self, to: Coord, streams: crate::stream::Streams<V>) {
+        self.enter_treasure(Location::MapPoint(to), streams);
     }
 
     /// Validate a move and resolve what it will enter, without changing state.

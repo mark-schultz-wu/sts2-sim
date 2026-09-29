@@ -1,0 +1,12 @@
+# Silken Tress takes every coin as it is picked up. It enchants the first
+# card reward's cards with Glam, where Glam can take them, and is then used
+# up, so the second reward is as it rolled.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"SILKEN_TRESS"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":100,"target":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"answer","skip":true}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":100,"target":0}
+{"cmd":"play_card","index":0,"target":1}
