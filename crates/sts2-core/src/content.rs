@@ -3499,6 +3499,8 @@ pub enum EventHook<V: ContentVersion> {
         resolved: V::Number,
         /// `CardPlay.Resources.EnergyValue`: the energy this play spent.
         spent: V::Number,
+        /// `CombatState.CurrentSide`: whose turn the play starts in.
+        side: V::CombatSide,
     },
     /// `AfterCardDrawnEarly`, the pass `Hook.AfterCardDrawn` makes over every
     /// listener before the one [`EventHook::CardDrawn`] names.
@@ -4099,6 +4101,23 @@ impl<V: ContentVersion> History<'_, V> {
             HistoryEntry::Drawn { card, .. } => Some(*card),
             _ => None,
         })
+    }
+
+    /// `EnergySpentEntry` where `HappenedThisTurn`, summed, and the energy
+    /// the latest play started this turn spent. A play spends as it begins,
+    /// and a replay spends nothing of its own.
+    pub fn energy_spent_this_turn(&self) -> (V::Count, V::Count) {
+        let mut spent = num_traits::zero::<V::Count>();
+        let mut latest = num_traits::zero::<V::Count>();
+        for entry in self.this_turn {
+            if let HistoryEntry::Started(started) = entry {
+                if started.first {
+                    spent = spent + started.energy;
+                }
+                latest = started.energy;
+            }
+        }
+        (spent, latest)
     }
 
     /// How many `CardDrawnEntry` the fight holds.
@@ -5214,6 +5233,9 @@ pub struct CardOwner<'a, V: ContentVersion> {
     pub history: History<'a, V>,
     /// `Owner.Creature.Block`.
     pub block: V::Number,
+    /// Whether the card stands in the play pile, which it does while it is
+    /// played.
+    pub playing: bool,
     /// `PlayerCombatState.OrbQueue.Orbs`, in queue order.
     pub orbs: &'a [crate::Channelled<V>],
     /// The cards in the owner's hand, in hand order.

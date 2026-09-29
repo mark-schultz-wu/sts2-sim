@@ -523,6 +523,7 @@ fn before_played<V: Rules, S: LendsCombat>(
         ethereal: card.face.ethereal(),
         resolved,
         spent: num_traits::cast(energy).expect("an energy fits a game number"),
+        side: live.side,
     };
     let mut rest: SmallVec<[sts2_core::HookEffect<V>; 4]> = SmallVec::new();
     for (listener, effect) in super::listen::notify::<V>(live, relics, hook) {

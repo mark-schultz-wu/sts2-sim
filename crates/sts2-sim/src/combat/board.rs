@@ -2684,6 +2684,7 @@ pub(crate) fn var<V: Rules>(
                     .iter()
                     .find(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER)
                     .map_or_else(num_traits::zero, |player| player.block),
+                playing: live.cards.in_play(held.id),
                 orbs: live.orbs.as_ref().map_or(&[], |orbs| orbs.queue.as_slice()),
                 hand: &hand,
                 star_cards: live.cards.count_all(|face| {
@@ -3862,7 +3863,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn damage_unblockable(&mut self, target: CombatId, amount: V::Number) {
         self.ran_on();
-        self.hit_unpowered(Some(self.actor), target, amount, true);
+        let dealer = Some(self.actor);
+        let damage = modified::<V>(self.walk(), dealer, Some(target), None, amount, false);
+        let card = self
+            .playing
+            .and_then(|id| self.live.cards.named(id))
+            .map(|held| held.face.ident.card);
+        self.hit(dealer, target, damage, false, true, card);
     }
 
     fn lose_block(&mut self, creature: CombatId, amount: V::Number) {
