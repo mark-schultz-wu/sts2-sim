@@ -1420,7 +1420,9 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
     // BIASED_COGNITION_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
     // BLACK_HOLE_POWER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardPlayed)
+        .with(sts2_core::ModelHook::AfterStarsGained),
     // BLOCK_NEXT_TURN_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterBlockCleared),
     // BLUR_POWER

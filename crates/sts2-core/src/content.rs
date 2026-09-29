@@ -692,10 +692,11 @@ pub enum ModelHook {
     ModifyEnergyGain,
     AfterModifyingEnergyGain,
     TryModifyStarCost,
+    AfterStarsGained,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 124] = [
+    pub const ALL: [ModelHook; 125] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -820,6 +821,7 @@ impl ModelHook {
         ModelHook::ModifyEnergyGain,
         ModelHook::AfterModifyingEnergyGain,
         ModelHook::TryModifyStarCost,
+        ModelHook::AfterStarsGained,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -961,6 +963,7 @@ impl ModelHook {
             ModelHook::ModifyEnergyGain => "ModifyEnergyGain",
             ModelHook::AfterModifyingEnergyGain => "AfterModifyingEnergyGain",
             ModelHook::TryModifyStarCost => "TryModifyStarCost",
+            ModelHook::AfterStarsGained => "AfterStarsGained",
         }
     }
 }
@@ -3286,6 +3289,11 @@ pub enum EventHook<V: ContentVersion> {
     /// changed a gain, before the energy lands. The listener reads for itself
     /// whether it did.
     EnergyGainModified,
+    /// `AfterStarsGained`, once `PlayerCmd.GainStars` has added `amount` to
+    /// the player's stars.
+    StarsGained {
+        amount: V::Number,
+    },
     /// `AfterPreventingDraw`, once a listener answered no to `ShouldDraw`.
     DrawPrevented,
     /// `AfterShuffle`, once the discard pile is shuffled into the draw pile.
@@ -3820,6 +3828,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::DrawPrevented => ModelHook::AfterPreventingDraw,
             EventHook::HandDrawModified => ModelHook::AfterModifyingHandDraw,
             EventHook::EnergyGainModified => ModelHook::AfterModifyingEnergyGain,
+            EventHook::StarsGained { .. } => ModelHook::AfterStarsGained,
             EventHook::PotionUsing { .. } => ModelHook::BeforePotionUsed,
             EventHook::PotionUsed { .. } => ModelHook::AfterPotionUsed,
             EventHook::CardRewardOption { .. } => ModelHook::TryModifyCardRewardOptionsLate,
