@@ -227,11 +227,14 @@ pub(crate) fn play<V: Rules>(
     live.energy = live.energy - play.energy;
     let spent: V::Number = num_traits::cast(play.stars).expect("a star cost fits a game number");
     live.modify_stars(-spent);
+    let ascension = live.ascension;
+    if spent > num_traits::zero() {
+        stars_spent::<V>(live, streams, relics, ascension, spent);
+    }
 
     // `AddDuringManualCardPlay`: the card is in the play pile, and so out of
     // the hand, while its own effect runs.
     let card = live.cards.play(sts2_core::Pile::Hand, play.index);
-    let ascension = live.ascension;
     let (pile, position) = result_pile::<V>(live, relics, &card, play.energy);
     let count = play_count::<V, _>(live, streams, relics, &card);
     // `SpendEnergy` captures what an X cost spent, and `SpendStars` what the
@@ -1341,6 +1344,10 @@ fn finish_effect<V: Rules, S: LendsCombat>(
                 ended = board.ended();
             }
         }
+        let ended = match outermost {
+            true => check_for_empty_hand::<V, _>(next, streams, relics, ascension, ended),
+            false => ended,
+        };
         if outermost && ended == Some(super::Ended::Won) {
             super::listen::combat_ended::<V>(next, relics);
         }
@@ -1354,6 +1361,10 @@ fn finish_effect<V: Rules, S: LendsCombat>(
     // `Pile.Type == PileType.Play`: a card that put itself elsewhere while it
     // ran stays there.
     if !next.cards.in_play(play.id) {
+        let ended = match outermost {
+            true => check_for_empty_hand::<V, _>(next, streams, relics, ascension, ended),
+            false => ended,
+        };
         if outermost && ended == Some(super::Ended::Won) {
             super::listen::combat_ended::<V>(next, relics);
         }
@@ -1383,11 +1394,79 @@ fn finish_effect<V: Rules, S: LendsCombat>(
         }
         (ended, _) => ended,
     };
+    let ended = match outermost {
+        true => check_for_empty_hand::<V, _>(next, streams, relics, ascension, ended),
+        false => ended,
+    };
 
     if outermost && ended == Some(super::Ended::Won) {
         super::listen::combat_ended::<V>(next, relics);
     }
     Ok(ended)
+}
+
+/// `SpendStars`' `AfterStarsSpent`, for the stars a play took.
+///
+/// Apart from [`play`], which most plays run without it.
+#[inline(never)]
+fn stars_spent<V: Rules>(
+    live: &mut Live<V>,
+    streams: &mut crate::stream::Streams<V>,
+    relics: &mut crate::run::Belt<V>,
+    ascension: V::AscensionLevel,
+    spent: V::Number,
+) {
+    let hook = sts2_core::EventHook::StarsSpent {
+        player: live.player().id,
+        amount: spent,
+    };
+    let asked = super::listen::notify::<V>(live, relics, hook);
+    if !asked.is_empty() {
+        let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
+        hook::apply::<V, _>(&mut board, asked.into_iter().map(|(_, effect)| effect));
+        if let Some(ended) = board.ended() {
+            unimplemented!("a fight {ended:?} as its stars were spent");
+        }
+    }
+}
+
+/// `CombatManager.CheckForEmptyHand`, once an outermost play or drink is
+/// over. No other effect runs around it. `AfterHandEmptied` is raised
+/// where the player's hand holds nothing and the fight goes on.
+#[inline]
+fn check_for_empty_hand<V: Rules, S: LendsCombat>(
+    next: &mut Live<V>,
+    streams: &mut S,
+    relics: &mut crate::run::Belt<V>,
+    ascension: V::AscensionLevel,
+    ended: Option<super::Ended>,
+) -> Option<super::Ended> {
+    if ended.is_some() || next.cards.len(sts2_core::Pile::Hand) != 0 {
+        return ended;
+    }
+    hand_emptied::<V, S>(next, streams, relics, ascension)
+}
+
+/// [`check_for_empty_hand`] on an empty hand.
+#[cold]
+#[inline(never)]
+fn hand_emptied<V: Rules, S: LendsCombat>(
+    next: &mut Live<V>,
+    streams: &mut S,
+    relics: &mut crate::run::Belt<V>,
+    ascension: V::AscensionLevel,
+) -> Option<super::Ended> {
+    let hook = sts2_core::EventHook::HandEmptied {
+        player: next.player().id,
+        phase: next.phase,
+    };
+    let asked = super::listen::notify::<V>(next, relics, hook);
+    if asked.is_empty() {
+        return None;
+    }
+    let mut board = Board::for_card(next, streams.combat(), relics, ascension, None, None);
+    hook::apply::<V, _>(&mut board, asked.into_iter().map(|(_, effect)| effect));
+    board.ended()
 }
 
 /// The end of one play of `card`: `History.CardPlayFinished`, then

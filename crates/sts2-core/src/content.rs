@@ -607,6 +607,8 @@ pub enum ModelHook {
     AfterSideTurnEnd,
     AfterSideTurnEndLate,
     AfterEnergyReset,
+    AfterStarsSpent,
+    AfterHandEmptied,
     AfterBlockCleared,
     AfterDeath,
     AfterPowerAmountChanged,
@@ -722,7 +724,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 125] = [
+    pub const ALL: [ModelHook; 127] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -736,6 +738,8 @@ impl ModelHook {
         ModelHook::AfterSideTurnEnd,
         ModelHook::AfterSideTurnEndLate,
         ModelHook::AfterEnergyReset,
+        ModelHook::AfterStarsSpent,
+        ModelHook::AfterHandEmptied,
         ModelHook::AfterBlockCleared,
         ModelHook::AfterDeath,
         ModelHook::AfterPowerAmountChanged,
@@ -866,6 +870,8 @@ impl ModelHook {
             ModelHook::AfterSideTurnEnd => "AfterSideTurnEnd",
             ModelHook::AfterSideTurnEndLate => "AfterSideTurnEndLate",
             ModelHook::AfterEnergyReset => "AfterEnergyReset",
+            ModelHook::AfterStarsSpent => "AfterStarsSpent",
+            ModelHook::AfterHandEmptied => "AfterHandEmptied",
             ModelHook::AfterBlockCleared => "AfterBlockCleared",
             ModelHook::AfterDeath => "AfterDeath",
             ModelHook::AfterPowerAmountChanged => "AfterPowerAmountChanged",
@@ -3674,6 +3680,19 @@ pub enum EventHook<V: ContentVersion> {
     SideTurnEndLate {
         side: V::CombatSide,
     },
+    /// `AfterStarsSpent`: `SpendStars` took `amount` from `player`, which is
+    /// more than none.
+    StarsSpent {
+        player: crate::CombatId,
+        amount: V::Number,
+    },
+    /// `AfterHandEmptied`: `CheckForEmptyHand` found the player's hand
+    /// empty once a play or a drink was over. `phase` is the player's
+    /// `PlayerTurnPhase` then.
+    HandEmptied {
+        player: crate::CombatId,
+        phase: V::PlayerTurnPhase,
+    },
     /// `AfterEnergyReset`, carrying the player's creature.
     EnergyReset {
         player: crate::CombatId,
@@ -3930,6 +3949,8 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::SideTurnEnd { .. } => ModelHook::AfterSideTurnEnd,
             EventHook::SideTurnEndLate { .. } => ModelHook::AfterSideTurnEndLate,
             EventHook::EnergyReset { .. } => ModelHook::AfterEnergyReset,
+            EventHook::StarsSpent { .. } => ModelHook::AfterStarsSpent,
+            EventHook::HandEmptied { .. } => ModelHook::AfterHandEmptied,
             EventHook::BlockCleared { .. } => ModelHook::AfterBlockCleared,
             EventHook::GoldGainModified => ModelHook::AfterModifyingGoldGained,
             EventHook::AfterDeath { .. } => ModelHook::AfterDeath,
