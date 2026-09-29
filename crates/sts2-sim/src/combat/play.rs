@@ -321,6 +321,30 @@ pub(super) fn auto_play<V: Rules>(
     auto_play_in_play::<V>(live, rngs, relics, card, named, pausable)
 }
 
+/// `AutoPlayFromDrawPile`'s play of one card it took into the play pile:
+/// `ExhaustOnNextPlay = forceExhaust`, then `CardCmd.AutoPlay`. A card whose
+/// owner has died stays where it is, unplayed.
+pub(super) fn auto_play_taken<V: Rules>(
+    live: &mut Live<V>,
+    rngs: crate::stream::CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    id: sts2_core::CardId<V>,
+    force_exhaust: bool,
+    pausable: bool,
+) -> Option<super::Ended> {
+    if !live.player().alive {
+        return None;
+    }
+    live.exhaust_next.retain(|held| *held != id);
+    if force_exhaust {
+        live.exhaust_next.push(id);
+    }
+    let Some(card) = live.cards.named(id) else {
+        unimplemented!("auto-playing {id:?}, which left the fight first");
+    };
+    auto_play_in_play::<V>(live, rngs, relics, card, None, pausable)
+}
+
 /// `CardCmd.AutoPlay` for a card already in the play pile. `named` is the
 /// target the caller names, which an enemy-targeting card plays at in place of
 /// one drawn off `CombatTargets`.
@@ -949,6 +973,17 @@ fn run_deferred<V: Rules>(
                     (ended, _) => ended,
                 }
             }
+            super::live::Deferred::AutoPlayTaken { id, force_exhaust } => match ended {
+                None => auto_play_taken::<V>(
+                    fighting.live,
+                    fighting.streams.combat(),
+                    fighting.relics,
+                    id,
+                    force_exhaust,
+                    true,
+                ),
+                ended => ended,
+            },
             super::live::Deferred::Resume {
                 mut effect,
                 played,
@@ -1137,6 +1172,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                     played_card,
                     card,
                     ethereal,
+                    play.energy,
                 );
                 effect.ended = effect.ended.or(ended);
                 if effect.plays.done >= effect.plays.count {
@@ -1331,7 +1367,8 @@ fn finish_effect<V: Rules, S: LendsCombat>(
 }
 
 /// The end of one play of `card`: `History.CardPlayFinished`, then
-/// `AfterCardPlayed`, with the card still in the play pile.
+/// `AfterCardPlayed`, with the card still in the play pile. `spent` is the
+/// energy the play's started entry records.
 ///
 /// Once for each play, so a card with replays finishes more than once. A
 /// relic that answers acts through the board a card acts through, and draws
@@ -1342,6 +1379,7 @@ fn finished<V: Rules, S: LendsCombat>(
     card: V::Card,
     id: sts2_core::CardId<V>,
     ethereal: bool,
+    spent: V::Count,
 ) -> Option<super::Ended> {
     let Fighting {
         live: next,
@@ -1355,13 +1393,6 @@ fn finished<V: Rules, S: LendsCombat>(
         .cards
         .named(id)
         .and_then(|held| held.face.ident.affliction);
-    // What the play's started entry spent, which both `AfterCardPlayed` and
-    // its late pass read.
-    let spent = next
-        .history()
-        .last_started(id)
-        .expect("a play that finished started this turn")
-        .energy;
     let asked = super::listen::notify::<V>(
         next,
         relics,

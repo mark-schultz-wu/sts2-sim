@@ -3788,22 +3788,26 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             }
             taken.push(self.live.cards.play(Pile::Draw, 0));
         }
-        for card in taken {
-            if !self.live.player().alive {
-                continue;
+        for (at, card) in taken.iter().enumerate() {
+            // A question an earlier card's play asked stands the rest still in
+            // the play pile until it is answered.
+            if self.pausable() && self.live.asking.is_some() {
+                for card in &taken[at..] {
+                    self.live.defer(super::live::Deferred::AutoPlayTaken {
+                        id: card.id,
+                        force_exhaust,
+                    });
+                }
+                return;
             }
-            // `ExhaustOnNextPlay = forceExhaust`, which clears it as well.
-            self.live.exhaust_next.retain(|id| *id != card.id);
-            if force_exhaust {
-                self.live.exhaust_next.push(card.id);
-            }
-            let ended = super::play::auto_play_in_play::<V>(
+            let pausable = self.pausable();
+            let ended = super::play::auto_play_taken::<V>(
                 self.live,
                 self.rngs.reborrow(),
                 self.relics,
-                card,
-                None,
-                false,
+                card.id,
+                force_exhaust,
+                pausable,
             );
             if ended.is_some() {
                 self.ended = ended;
