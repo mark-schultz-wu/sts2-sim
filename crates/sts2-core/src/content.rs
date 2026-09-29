@@ -2233,6 +2233,13 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("the player's energy")
     }
 
+    /// `CombatRoom.AddExtraReward` of a `CardReward` at
+    /// `CardCreationOptions.ForRoom`, which a won fight offers after the
+    /// room's own.
+    fn add_card_reward(&mut self) {
+        unimplemented!("an extra card reward")
+    }
+
     /// `creature.Powers.All(p => p.ShouldOwnerDeathTriggerFatal())`.
     fn death_triggers_fatal(&self, _creature: crate::CombatId) -> bool {
         unimplemented!("whether a death triggers Fatal")
@@ -3854,6 +3861,13 @@ pub struct HeldInstance<V: ContentVersion> {
     pub fresh: bool,
 }
 
+/// What a card's own `IsPlayable` reads of the fight it is in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CardLogic {
+    /// How many cards its owner's draw pile holds.
+    pub draw_pile: usize,
+}
+
 /// Which cards a hook writes on, for [`HookEffect::AddReplays`] and
 /// [`HookEffect::AddKeyword`].
 ///
@@ -4064,6 +4078,17 @@ impl<V: ContentVersion> History<'_, V> {
             HistoryEntry::Drawn { card, .. } => Some(*card),
             _ => None,
         })
+    }
+
+    /// How many `CardDrawnEntry` the fight holds.
+    pub fn drawn_this_fight(&self) -> usize {
+        let before = std::iter::successors(self.before, |before| before.before.as_deref())
+            .flat_map(|before| before.entries.iter());
+        self.this_turn
+            .iter()
+            .chain(before)
+            .filter(|entry| matches!(entry, HistoryEntry::Drawn { .. }))
+            .count()
     }
 
     /// How many `CardDrawnEntry` where `HappenedThisTurn` are not
@@ -5351,6 +5376,10 @@ pub trait Hooks: ContentVersion {
         card: Self::Card,
         base: Option<crate::Pile>,
     ) -> crate::HookResponse<Option<crate::Pile>>;
+
+    /// `CardModel.IsPlayable`, for a card whose class overrides it: whether
+    /// its own logic lets it be played in the fight `fight` shows.
+    fn card_is_playable(card: Self::Card, fight: CardLogic) -> crate::HookResponse<bool>;
 
     /// `ModifyCardPlayResultPileTypeAndPosition`: where a played card goes
     /// once its play is over, given where it goes so far.

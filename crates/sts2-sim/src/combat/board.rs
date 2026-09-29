@@ -1426,7 +1426,10 @@ impl<'a, V: Rules> Board<'a, V> {
         );
         for (listener, effect) in asked {
             match effect {
-                HookEffect::ReturnCard(card) => self.live.extra_cards.push(card),
+                HookEffect::ReturnCard(card) => self
+                    .live
+                    .extra_rewards
+                    .push(super::live::ExtraReward::SpecialCard(card)),
                 effect => unimplemented!("{listener:?} asking for {effect:?} before a death"),
             }
         }
@@ -3211,6 +3214,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn energy(&self) -> V::Number {
         num_traits::cast(self.live.energy).expect("energy fits a game number")
+    }
+
+    fn add_card_reward(&mut self) {
+        self.live.extra_rewards.push(super::live::ExtraReward::Card);
     }
 
     fn death_triggers_fatal(&self, creature: CombatId) -> bool {

@@ -1,0 +1,10 @@
+# Shadow Step discards the hand. As the next turn starts it becomes one
+# Double Damage, which doubles a Strike and is gone once the turn ends.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"SHADOW_STEP"}
+{"cmd":"play_card","index":7}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"STRIKE_SILENT"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"end_turn"}

@@ -1,0 +1,8 @@
+# Grand Finale cannot be played while the draw pile holds a card. The
+# second turn's hand draws the last five, and it then hits every enemy.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"GRAND_FINALE"}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"GRAND_FINALE"}
+{"cmd":"play_card","index":5}

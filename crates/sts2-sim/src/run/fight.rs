@@ -164,7 +164,7 @@ impl<V: Rules> State<V> {
             }
             Some(combat::Ended::Won) => {
                 let (live, relics) = self.left_fight();
-                let extra_cards = live.extra_cards().to_vec();
+                let extra_rewards = live.extra_rewards().to_vec();
                 // `AddExtraReward`, which the room's own rewards come before.
                 let (extra, leaving): (Vec<_>, Vec<_>) =
                     live.leaving().iter().partition(|effect| {
@@ -190,12 +190,7 @@ impl<V: Rules> State<V> {
                     let pickup = asked.pickup;
                     unimplemented!("a fight's end asking for {pickup:?}");
                 }
-                let mut offered = self.combat_rewards(&combat, proportion);
-                offered.extend(
-                    extra_cards
-                        .into_iter()
-                        .map(|card| crate::reward::Offer::SpecialCard { card, taken: false }),
-                );
+                let mut offered = self.combat_rewards(&combat, proportion, &extra_rewards);
                 // `GoldReward.Populate` draws `NextInt(min, max + 1)` off the
                 // rewards stream, after the room's own, even for a gold
                 // reward whose two bounds are the one amount.
@@ -232,6 +227,7 @@ impl<V: Rules> State<V> {
         &mut self,
         combat: &sts2_core::Combat<V>,
         proportion: f32,
+        extra_rewards: &[combat::ExtraReward<V>],
     ) -> Vec<crate::reward::Offer<V>> {
         let encounter = combat
             .encounter
@@ -279,6 +275,22 @@ impl<V: Rules> State<V> {
                 relic,
                 rarity: <_ as sts2_core::RarityKinds>::UNDRAFTED,
                 taken: false,
+            });
+        }
+        // `CombatRoom.ExtraRewards`, which `Populate` reaches after the
+        // room's own.
+        for extra in extra_rewards {
+            offered.push(match *extra {
+                combat::ExtraReward::SpecialCard(card) => {
+                    crate::reward::Offer::SpecialCard { card, taken: false }
+                }
+                combat::ExtraReward::Card => {
+                    let added = self.card_reward_added();
+                    let (rng, odds) = self.rewarding();
+                    crate::reward::combat::card_reward::<V, _>(
+                        rng, odds, ascension, character, act, room, &added,
+                    )
+                }
             });
         }
         self.reward_offers(&mut offered);

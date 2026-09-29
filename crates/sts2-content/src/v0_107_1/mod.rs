@@ -253,6 +253,13 @@ impl sts2_core::Hooks for V0_107_1 {
         behaviour::cards::result_pile(card, base)
     }
 
+    fn card_is_playable(
+        card: Self::Card,
+        fight: sts2_core::CardLogic,
+    ) -> sts2_core::HookResponse<bool> {
+        behaviour::cards::is_playable(card, fight)
+    }
+
     fn result_pile<P: sts2_core::Printed<Self> + ?Sized>(
         listener: sts2_core::Listener<'_, Self, P>,
         hook: sts2_core::ResultPile<Self>,

@@ -37,7 +37,7 @@ pub use play::recording;
 
 pub use content::{
     ActTable, AfflictionTable, Amount, AscensionKinds, AttackId, AttackResults, BlockGained,
-    CHOICES, CardDraw, CardKind, CardModel, CardNumber, CardNumberModifier, CardOwner,
+    CHOICES, CardDraw, CardKind, CardLogic, CardModel, CardNumber, CardNumberModifier, CardOwner,
     CardRarityKinds, CardSource, CardTable, CardTagKinds, CardVars, Change, CharacterTable,
     ContentError, ContentVersion, Cost, CostPool, CreatureView, CustomReward, DamageReceived,
     DamageResult, DecisionHook, DeckAct, DeckCard, DeckPick, Drafted, Effect, EffectResolution,

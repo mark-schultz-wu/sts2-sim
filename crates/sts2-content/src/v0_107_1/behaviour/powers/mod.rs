@@ -866,6 +866,19 @@ pub(crate) fn modify_hook(
             _,
             ModifyHook::EnergyCostLate { .. },
         ) => Modify::Nothing,
+        // `DoubleDamagePower.ModifyDamageMultiplicative`: double a powered
+        // hit from a card, by its owner or one of its pets.
+        (
+            Power::DoubleDamagePower,
+            _,
+            ModifyHook::DamageMultiplicative {
+                dealer: Some(dealer),
+                card: Some(_),
+                powered: true,
+                ..
+            },
+        ) if dealer == holder || fight.pet_owner(dealer) == Some(holder) => Modify::Scaled(2.0),
+        (Power::DoubleDamagePower, _, ModifyHook::DamageMultiplicative { .. }) => Modify::Nothing,
         // `TrackingPower.ModifyDamageMultiplicative`: its stack as a
         // multiplier on a powered hit from a card, by its owner or one of its
         // pets, on a target carrying Weak.
@@ -1952,6 +1965,32 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Consuming Shadow")
         }
         (Power::ConsumingShadowPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `MasterPlannerPower.AfterCardPlayed`: Sly written on each Skill its
+        // owner plays, for as long as the copy lasts. A fight here has one
+        // player, whose cards are all its holder's.
+        (Power::MasterPlannerPower, _, EventHook::CardPlayed { card, id, .. })
+            if <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Skill) =>
+        {
+            Some(HookEffect::AddKeyword {
+                to: sts2_core::Writing::Named(id),
+                keyword: CardKeyword::Sly,
+            })
+        }
+        (Power::MasterPlannerPower, _, EventHook::CardPlayed { .. }) => None,
+        // `ShadowStepPower.AfterSideTurnStart`: its stack as Double Damage on
+        // its owner as its owner's side begins a turn, then it goes.
+        (Power::ShadowStepPower, amount, EventHook::SideTurnStart { side, .. }) if side == owner => {
+            asked.push(HookEffect::ApplyToOwner(Power::DoubleDamagePower, amount));
+            asked.push(HookEffect::Remove);
+            return;
+        }
+        (Power::ShadowStepPower, _, EventHook::SideTurnStart { .. }) => None,
+        // `DoubleDamagePower.AfterSideTurnEnd`: one off its stack as its
+        // owner's turn ends.
+        (Power::DoubleDamagePower, _, EventHook::SideTurnEnd { side, .. }) if side == owner => {
+            Some(HookEffect::Decrement)
+        }
+        (Power::DoubleDamagePower, _, EventHook::SideTurnEnd { .. }) => None,
         // `RagePower.AfterCardPlayed`: its stack of block, unpowered, for
         // each Attack its owner plays.
         (Power::RagePower, PowerAmount::Counted(amount), EventHook::CardPlayed { card, .. })
