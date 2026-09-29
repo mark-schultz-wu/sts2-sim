@@ -1745,7 +1745,22 @@ pub(super) fn exhausted<V: Rules>(
     }
     let ascension = live.ascension;
     let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
-    super::hook::apply::<V, _>(&mut board, asked.into_iter().map(|(_, effect)| effect));
+    let mut rest: SmallVec<[sts2_core::HookEffect<V>; 4]> = SmallVec::new();
+    for (_, effect) in asked {
+        match effect {
+            // Clones of the card just exhausted, which the exhaust pile still
+            // holds.
+            sts2_core::HookEffect::CloneIntoHand { card, count } => {
+                let count: usize =
+                    num_traits::cast(count).unwrap_or_else(|| unimplemented!("{count:?} clones"));
+                for _ in 0..count {
+                    board.clone_named(card, Pile::Hand);
+                }
+            }
+            effect => rest.push(effect),
+        }
+    }
+    super::hook::apply::<V, _>(&mut board, rest);
     let skipped = std::mem::take(&mut board.skipped);
     let ended = board.ended();
     super::play::merge::<V>(&mut live.skip_tick, skipped);
@@ -2088,7 +2103,10 @@ pub(super) fn energy_reset<V: Rules>(
     ascension: V::AscensionLevel,
 ) -> Option<super::Ended> {
     let player = live.player().id;
-    let hook = sts2_core::EventHook::EnergyReset { player };
+    let hook = sts2_core::EventHook::EnergyReset {
+        player,
+        turn: live.turn,
+    };
     let mut ended = None;
     for (listener, effect) in listen::notify::<V>(live, relics, hook) {
         match (listener, effect) {
