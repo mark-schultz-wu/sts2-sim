@@ -354,7 +354,7 @@ fn perform_from<F: Fight<V>>(
 /// The attack is the one command a move can stand still on. Every other
 /// command takes a `ThrowingPlayerChoiceContext`, which throws on a question.
 /// Each move ported by hand attacks first or last, so none needs a step past
-/// 1.
+/// 1. The board panics on a command that runs on past an attack that asked.
 fn attack_first<F: Fight<V>>(fight: &mut F, step: u8) -> bool {
     if step == 0 {
         fight.attack_opponents();
