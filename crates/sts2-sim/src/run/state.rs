@@ -2103,9 +2103,12 @@ impl<V: Rules> State<V> {
     /// `CreatureCmd.Damage` on the player outside a fight: unblockable,
     /// unpowered and from nobody.
     ///
+    /// Damage that takes the last hit point kills the player, which ends the
+    /// run where it stands.
+    ///
     /// # Panics
     ///
-    /// A relic listening to a hook the damage raises, or damage that kills.
+    /// A relic listening to a hook the damage or the death raises.
     fn damage_owner(&mut self, amount: V::Health) {
         use sts2_core::ModelHook;
 
@@ -2139,10 +2142,10 @@ impl<V: Rules> State<V> {
         ] {
             self.unheard(hook);
         }
-        let amount = self.hp_lost_after_osty(amount);
-        if amount >= self.player.hp {
-            unimplemented!("a run whose player dies outside a fight");
-        }
+        // `LoseHpInternal`: no more than the player holds, and a hit that
+        // takes the last of it kills.
+        let amount = self.hp_lost_after_osty(amount).min(self.player.hp);
+        let killed = amount == self.player.hp && amount > num_traits::zero();
         self.player.hp = self.player.hp - amount;
         // `Hook.AfterCurrentHpChanged`, for damage that took hit points.
         if amount > num_traits::zero() {
@@ -2157,6 +2160,18 @@ impl<V: Rules> State<V> {
             };
             if let Some(effect) = self.notify_belt(hook).first() {
                 unimplemented!("a relic asking for {effect:?} as damage lands outside a fight");
+            }
+        }
+        // `CreatureCmd.Kill`: `BeforeDeath`, `ShouldDie`, then `AfterDeath`.
+        // With every player dead, the run is over, which the player's hit
+        // points at nothing now say.
+        if killed {
+            for hook in [
+                ModelHook::BeforeDeath,
+                ModelHook::ShouldDieLate,
+                ModelHook::AfterDeath,
+            ] {
+                self.unheard(hook);
             }
         }
     }
@@ -4331,7 +4346,8 @@ impl<V: Rules> State<V> {
             | Phase::Shop { .. } => Standing {
                 hp: self.player.hp,
                 max_hp: self.player.max_hp,
-                alive: true,
+                // Only a death outside a fight leaves the run with none.
+                alive: self.player.hp > num_traits::zero(),
             },
         }
     }
@@ -4369,7 +4385,11 @@ impl<V: Rules> State<V> {
             );
         }
 
+        // `IsGameOver`: a run whose player is dead takes nothing more.
         let mut moves = Legal::new();
+        if !alive {
+            return moves;
+        }
         if self.answers(&mut moves) {
             return moves;
         }
@@ -5389,6 +5409,23 @@ mod tests {
             [Some(Undrinkable::Dead)],
             "a dead run drinks nothing"
         );
+    }
+
+    /// Damage outside a fight that takes the last hit point ends the run
+    /// where it stands, as an event's does. Nothing more is taken, which is
+    /// `IsGameOver` refusing every command.
+    #[test]
+    fn a_run_whose_player_dies_outside_a_fight_is_over_and_takes_nothing() {
+        let mut run = opened();
+        run.player.hp = 3;
+        run.damage_owner(13);
+
+        let seen = run.report().observation;
+        assert!(!seen.alive, "the player is dead");
+        assert_eq!(seen.hp, 0, "with no hit points left");
+        assert!(seen.run_over, "so the run is over");
+        assert_eq!(seen.victory, Some(false), "and it was not a victory");
+        assert!(run.legal().is_empty(), "and it takes nothing more");
     }
 
     /// Past the last act's boss the run is won: `WinRun` kills every player,
