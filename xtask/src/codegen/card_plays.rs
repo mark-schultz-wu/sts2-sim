@@ -154,7 +154,14 @@ fn command(out: &mut String, words: &[String]) -> Result<(), Error> {
         ["power", target, power, rest @ ..] => {
             let rest: Vec<String> = rest.iter().map(|w| w.to_string()).collect();
             let power = format!("Power::{}", camel(power));
-            let amount = format!("PowerAmount::Counted({})", amount(&rest)?);
+            // A power's amount is the number as printed. The power runs its
+            // own hooks where it lands, so none of the number's class runs.
+            let amount = match rest.as_slice() {
+                [kind, key] if kind == "var" => {
+                    format!("PowerAmount::Counted(fight.power_var(CardVar::{}))", sanitize(key))
+                }
+                _ => format!("PowerAmount::Counted({})", amount(&rest)?),
+            };
             match *target {
                 "chosen" => writeln!(out, "fight.apply_power(target, {power}, {amount});"),
                 "self" => writeln!(out, "fight.apply_to_actor({power}, {amount});"),

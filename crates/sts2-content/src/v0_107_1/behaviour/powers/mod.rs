@@ -2129,6 +2129,21 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Vicious")
         }
         (Power::ViciousPower, _, EventHook::PowerAmountChanged { .. }) => None,
+        // `ShroudPower.AfterPowerAmountChanged`: its stack as block,
+        // unpowered, whenever its owner applies Doom.
+        (
+            Power::ShroudPower,
+            PowerAmount::Counted(amount),
+            EventHook::PowerAmountChanged {
+                power: Power::DoomPower,
+                applier: Some(applier),
+                ..
+            },
+        ) if applier == holder => Some(HookEffect::GainBlock(amount)),
+        (Power::ShroudPower, PowerAmount::Endless, EventHook::PowerAmountChanged { .. }) => {
+            unimplemented!("an endless Shroud")
+        }
+        (Power::ShroudPower, _, EventHook::PowerAmountChanged { .. }) => None,
         // `SleightOfFleshPower.AfterPowerAmountChanged`: its stack as damage,
         // unpowered, on an enemy its owner just debuffed, but not through a
         // temporary power. The player's side is the player and its pets.

@@ -17,25 +17,25 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         SilentCard::Abrasive => {
             fight.apply_to_actor(
                 Power::DexterityPower,
-                PowerAmount::Counted(fight.var(CardVar::DexterityPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::DexterityPower)),
             );
             fight.apply_to_actor(
                 Power::ThornsPower,
-                PowerAmount::Counted(fight.var(CardVar::ThornsPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::ThornsPower)),
             );
             Played::Done
         }
         SilentCard::Accelerant => {
             fight.apply_to_actor(
                 Power::AccelerantPower,
-                PowerAmount::Counted(fight.var(CardVar::Accelerant)),
+                PowerAmount::Counted(fight.power_var(CardVar::Accelerant)),
             );
             Played::Done
         }
         SilentCard::Accuracy => {
             fight.apply_to_actor(
                 Power::AccuracyPower,
-                PowerAmount::Counted(fight.var(CardVar::AccuracyPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::AccuracyPower)),
             );
             Played::Done
         }
@@ -46,14 +46,14 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         SilentCard::Afterimage => {
             fight.apply_to_actor(
                 Power::AfterimagePower,
-                PowerAmount::Counted(fight.var(CardVar::AfterimagePower)),
+                PowerAmount::Counted(fight.power_var(CardVar::AfterimagePower)),
             );
             Played::Done
         }
         SilentCard::Anticipate => {
             fight.apply_to_actor(
                 Power::AnticipatePower,
-                PowerAmount::Counted(fight.var(CardVar::DexterityPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::DexterityPower)),
             );
             Played::Done
         }
@@ -71,7 +71,7 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::VulnerablePower,
-                PowerAmount::Counted(fight.var(CardVar::VulnerablePower)),
+                PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
             );
             Played::Done
         }
@@ -113,7 +113,7 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
             fight.apply(block);
             fight.apply_to_actor(
                 Power::BlurPower,
-                PowerAmount::Counted(fight.var(CardVar::Blur)),
+                PowerAmount::Counted(fight.power_var(CardVar::Blur)),
             );
             Played::Done
         }
@@ -126,7 +126,7 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         SilentCard::Burst => {
             fight.apply_to_actor(
                 Power::BurstPower,
-                PowerAmount::Counted(fight.var(CardVar::Skills)),
+                PowerAmount::Counted(fight.power_var(CardVar::Skills)),
             );
             Played::Done
         }
@@ -139,14 +139,14 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::ConcoctPower,
-                PowerAmount::Counted(fight.var(CardVar::ConcoctPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::ConcoctPower)),
             );
             Played::Done
         }
         SilentCard::CorrosiveWave => {
             fight.apply_to_actor(
                 Power::CorrosiveWavePower,
-                PowerAmount::Counted(fight.var(CardVar::CorrosiveWave)),
+                PowerAmount::Counted(fight.power_var(CardVar::CorrosiveWave)),
             );
             Played::Done
         }
@@ -178,7 +178,7 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::PoisonPower,
-                PowerAmount::Counted(fight.var(CardVar::PoisonPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::PoisonPower)),
             );
             Played::Done
         }
@@ -207,7 +207,7 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         SilentCard::Envenom => {
             fight.apply_to_actor(
                 Power::EnvenomPower,
-                PowerAmount::Counted(fight.var(CardVar::EnvenomPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::EnvenomPower)),
             );
             Played::Done
         }
@@ -222,7 +222,7 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::FadePower,
-                PowerAmount::Counted(fight.var(CardVar::DexterityPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::DexterityPower)),
             );
             Played::Done
         }
@@ -254,7 +254,7 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         SilentCard::Footwork => {
             fight.apply_to_actor(
                 Power::DexterityPower,
-                PowerAmount::Counted(fight.var(CardVar::DexterityPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::DexterityPower)),
             );
             Played::Done
         }
@@ -285,7 +285,7 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::WeakPower,
-                PowerAmount::Counted(fight.var(CardVar::WeakPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
             );
             Played::Done
         }
@@ -337,7 +337,7 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::WeakPower,
-                PowerAmount::Counted(fight.var(CardVar::WeakPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
             );
             Played::Done
         }
@@ -346,7 +346,7 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         SilentCard::NoxiousFumes => {
             fight.apply_to_actor(
                 Power::NoxiousFumesPower,
-                PowerAmount::Counted(fight.var(CardVar::PoisonPerTurn)),
+                PowerAmount::Counted(fight.power_var(CardVar::PoisonPerTurn)),
             );
             Played::Done
         }
@@ -355,7 +355,7 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         SilentCard::PhantomBlades => {
             fight.apply_to_actor(
                 Power::PhantomBladesPower,
-                PowerAmount::Counted(fight.var(CardVar::PhantomBladesPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::PhantomBladesPower)),
             );
             Played::Done
         }
@@ -388,7 +388,7 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::PoisonPower,
-                PowerAmount::Counted(fight.var(CardVar::PoisonPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::PoisonPower)),
             );
             Played::Done
         }
@@ -444,14 +444,14 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         SilentCard::SerpentForm => {
             fight.apply_to_actor(
                 Power::SerpentFormPower,
-                PowerAmount::Counted(fight.var(CardVar::SerpentFormPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::SerpentFormPower)),
             );
             Played::Done
         }
         SilentCard::Shadowmeld => {
             fight.apply_to_actor(
                 Power::ShadowmeldPower,
-                PowerAmount::Counted(fight.var(CardVar::Power)),
+                PowerAmount::Counted(fight.power_var(CardVar::Power)),
             );
             Played::Done
         }
@@ -460,7 +460,7 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         SilentCard::Sidestep => {
             fight.apply_to_actor(
                 Power::EnergyNextTurnPower,
-                PowerAmount::Counted(fight.var(CardVar::Energy)),
+                PowerAmount::Counted(fight.power_var(CardVar::Energy)),
             );
             Played::Done
         }
@@ -484,21 +484,21 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::PoisonPower,
-                PowerAmount::Counted(fight.var(CardVar::PoisonPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::PoisonPower)),
             );
             Played::Done
         }
         SilentCard::Sneaky => {
             fight.apply_to_actor(
                 Power::SneakyPower,
-                PowerAmount::Counted(fight.var(CardVar::SneakyPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::SneakyPower)),
             );
             Played::Done
         }
         SilentCard::Speedster => {
             fight.apply_to_actor(
                 Power::SpeedsterPower,
-                PowerAmount::Counted(fight.var(CardVar::SpeedsterPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::SpeedsterPower)),
             );
             Played::Done
         }
@@ -518,7 +518,7 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::StranglePower,
-                PowerAmount::Counted(fight.var(CardVar::StranglePower)),
+                PowerAmount::Counted(fight.power_var(CardVar::StranglePower)),
             );
             Played::Done
         }
@@ -549,7 +549,7 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::WeakPower,
-                PowerAmount::Counted(fight.var(CardVar::WeakPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
             );
             Played::Done
         }
@@ -567,7 +567,7 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::WeakPower,
-                PowerAmount::Counted(fight.var(CardVar::WeakPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
             );
             Played::Done
         }
@@ -605,11 +605,11 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         SilentCard::WraithForm => {
             fight.apply_to_actor(
                 Power::IntangiblePower,
-                PowerAmount::Counted(fight.var(CardVar::IntangiblePower)),
+                PowerAmount::Counted(fight.power_var(CardVar::IntangiblePower)),
             );
             fight.apply_to_actor(
                 Power::WraithFormPower,
-                PowerAmount::Counted(fight.var(CardVar::WraithFormPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::WraithFormPower)),
             );
             Played::Done
         }

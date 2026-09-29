@@ -21,7 +21,7 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         RegentCard::Arsenal => {
             fight.apply_to_actor(
                 Power::ArsenalPower,
-                PowerAmount::Counted(fight.var(CardVar::ArsenalPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::ArsenalPower)),
             );
             Played::Done
         }
@@ -59,7 +59,7 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         RegentCard::BlackHole => {
             fight.apply_to_actor(
                 Power::BlackHolePower,
-                PowerAmount::Counted(fight.var(CardVar::BlackHolePower)),
+                PowerAmount::Counted(fight.power_var(CardVar::BlackHolePower)),
             );
             Played::Done
         }
@@ -112,7 +112,7 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         RegentCard::ChildOfTheStars => {
             fight.apply_to_actor(
                 Power::ChildOfTheStarsPower,
-                PowerAmount::Counted(fight.var(CardVar::BlockForStars)),
+                PowerAmount::Counted(fight.power_var(CardVar::BlockForStars)),
             );
             Played::Done
         }
@@ -141,12 +141,12 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::WeakPower,
-                PowerAmount::Counted(fight.var(CardVar::WeakPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
             );
             fight.apply_power(
                 target,
                 Power::VulnerablePower,
-                PowerAmount::Counted(fight.var(CardVar::VulnerablePower)),
+                PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
             );
             Played::Done
         }
@@ -166,11 +166,11 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
             fight.apply_to_actor(Power::RetainHandPower, PowerAmount::Counted(1));
             fight.apply_to_actor(
                 Power::EnergyNextTurnPower,
-                PowerAmount::Counted(fight.var(CardVar::Energy)),
+                PowerAmount::Counted(fight.power_var(CardVar::Energy)),
             );
             fight.apply_to_actor(
                 Power::StarNextTurnPower,
-                PowerAmount::Counted(fight.var(CardVar::Stars)),
+                PowerAmount::Counted(fight.power_var(CardVar::Stars)),
             );
             Played::Done
         }
@@ -204,7 +204,7 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
                     fight.apply(attack);
                 }
             });
-            let amount = PowerAmount::Counted(fight.var(CardVar::StrengthLoss));
+            let amount = PowerAmount::Counted(fight.power_var(CardVar::StrengthLoss));
             for &target in &held {
                 fight.apply_power(target, Power::CrushUnderPower, amount);
             }
@@ -250,26 +250,26 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::WeakPower,
-                PowerAmount::Counted(fight.var(CardVar::WeakPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
             );
             fight.apply_power(
                 target,
                 Power::VulnerablePower,
-                PowerAmount::Counted(fight.var(CardVar::VulnerablePower)),
+                PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
             );
             Played::Done
         }
         RegentCard::ForegoneConclusion => {
             fight.apply_to_actor(
                 Power::ForegoneConclusionPower,
-                PowerAmount::Counted(fight.var(CardVar::Cards)),
+                PowerAmount::Counted(fight.power_var(CardVar::Cards)),
             );
             Played::Done
         }
         RegentCard::Furnace => {
             fight.apply_to_actor(
                 Power::FurnacePower,
-                PowerAmount::Counted(fight.var(CardVar::Forge)),
+                PowerAmount::Counted(fight.power_var(CardVar::Forge)),
             );
             Played::Done
         }
@@ -287,12 +287,12 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::WeakPower,
-                PowerAmount::Counted(fight.var(CardVar::WeakPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
             );
             fight.apply_power(
                 target,
                 Power::VulnerablePower,
-                PowerAmount::Counted(fight.var(CardVar::VulnerablePower)),
+                PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
             );
             Played::Done
         }
@@ -309,7 +309,7 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         RegentCard::Genesis => {
             fight.apply_to_actor(
                 Power::GenesisPower,
-                PowerAmount::Counted(fight.var(CardVar::StarsPerTurn)),
+                PowerAmount::Counted(fight.power_var(CardVar::StarsPerTurn)),
             );
             Played::Done
         }
@@ -322,7 +322,7 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
             fight.draw(fight.var(CardVar::Cards));
             fight.apply_to_actor(
                 Power::DrawCardsNextTurnPower,
-                PowerAmount::Counted(fight.var(CardVar::Cards)),
+                PowerAmount::Counted(fight.power_var(CardVar::Cards)),
             );
             Played::Done
         }
@@ -341,7 +341,7 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
             });
             fight.apply_to_actor(
                 Power::DrawCardsNextTurnPower,
-                PowerAmount::Counted(fight.var(CardVar::Cards)),
+                PowerAmount::Counted(fight.power_var(CardVar::Cards)),
             );
             Played::Done
         }
@@ -364,7 +364,7 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
             });
             fight.apply_to_actor(
                 Power::EnergyNextTurnPower,
-                PowerAmount::Counted(fight.var(CardVar::Energy)),
+                PowerAmount::Counted(fight.power_var(CardVar::Energy)),
             );
             Played::Done
         }
@@ -374,7 +374,7 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
             fight.gain_stars(fight.var(CardVar::Stars));
             fight.apply_to_actor(
                 Power::StarNextTurnPower,
-                PowerAmount::Counted(fight.var(CardVar::StarNextTurnPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::StarNextTurnPower)),
             );
             Played::Done
         }
@@ -420,12 +420,12 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::WeakPower,
-                PowerAmount::Counted(fight.var(CardVar::WeakPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
             );
             fight.apply_power(
                 target,
                 Power::VulnerablePower,
-                PowerAmount::Counted(fight.var(CardVar::VulnerablePower)),
+                PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
             );
             Played::Done
         }
@@ -453,7 +453,7 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         RegentCard::MonarchsGaze => {
             fight.apply_to_actor(
                 Power::MonarchsGazePower,
-                PowerAmount::Counted(fight.var(CardVar::StrengthLoss)),
+                PowerAmount::Counted(fight.power_var(CardVar::StrengthLoss)),
             );
             Played::Done
         }
@@ -462,28 +462,28 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         RegentCard::NeutronAegis => {
             fight.apply_to_actor(
                 Power::PlatingPower,
-                PowerAmount::Counted(fight.var(CardVar::PlatingPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::PlatingPower)),
             );
             Played::Done
         }
         RegentCard::Orbit => {
             fight.apply_to_actor(
                 Power::OrbitPower,
-                PowerAmount::Counted(fight.var(CardVar::Energy)),
+                PowerAmount::Counted(fight.power_var(CardVar::Energy)),
             );
             Played::Done
         }
         RegentCard::PaleBlueDot => {
             fight.apply_to_actor(
                 Power::PaleBlueDotPower,
-                PowerAmount::Counted(fight.var(CardVar::Cards)),
+                PowerAmount::Counted(fight.power_var(CardVar::Cards)),
             );
             Played::Done
         }
         RegentCard::Parry => {
             fight.apply_to_actor(
                 Power::ParryPower,
-                PowerAmount::Counted(fight.var(CardVar::ParryPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::ParryPower)),
             );
             Played::Done
         }
@@ -505,7 +505,7 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
             fight.apply(block);
             fight.apply_to_actor(
                 Power::VigorPower,
-                PowerAmount::Counted(fight.var(CardVar::VigorPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::VigorPower)),
             );
             Played::Done
         }
@@ -514,7 +514,7 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         RegentCard::PillarOfCreation => {
             fight.apply_to_actor(
                 Power::PillarOfCreationPower,
-                PowerAmount::Counted(fight.var(CardVar::Block)),
+                PowerAmount::Counted(fight.power_var(CardVar::Block)),
             );
             Played::Done
         }
@@ -536,7 +536,7 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
             );
             fight.apply_to_actor(
                 Power::EnergyNextTurnPower,
-                PowerAmount::Counted(fight.var(CardVar::Energy)),
+                PowerAmount::Counted(fight.power_var(CardVar::Energy)),
             );
             Played::Done
         }
@@ -555,7 +555,7 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         RegentCard::Royalties => {
             fight.apply_to_actor(
                 Power::RoyaltiesPower,
-                PowerAmount::Counted(fight.var(CardVar::Gold)),
+                PowerAmount::Counted(fight.power_var(CardVar::Gold)),
             );
             Played::Done
         }
@@ -619,7 +619,7 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         RegentCard::SpectrumShift => {
             fight.apply_to_actor(
                 Power::SpectrumShiftPower,
-                PowerAmount::Counted(fight.var(CardVar::Cards)),
+                PowerAmount::Counted(fight.power_var(CardVar::Cards)),
             );
             Played::Done
         }
@@ -665,14 +665,14 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         RegentCard::SwordSage => {
             fight.apply_to_actor(
                 Power::SwordSagePower,
-                PowerAmount::Counted(fight.var(CardVar::SwordSagePower)),
+                PowerAmount::Counted(fight.power_var(CardVar::SwordSagePower)),
             );
             Played::Done
         }
         RegentCard::Terraforming => {
             fight.apply_to_actor(
                 Power::VigorPower,
-                PowerAmount::Counted(fight.var(CardVar::VigorPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::VigorPower)),
             );
             Played::Done
         }

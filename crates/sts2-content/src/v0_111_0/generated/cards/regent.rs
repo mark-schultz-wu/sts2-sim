@@ -1654,7 +1654,7 @@ pub(super) static ROWS: [CardData; 91] = [
             id: CardVar::Block,
             base: super::CardNumber::new(2, 0),
             calculated: false,
-            modifier: Some(CardNumberModifier::Block),
+            modifier: Some(CardNumberModifier::UnpoweredBlock),
         }],
         max_upgrade: 1,
         keywords: KeywordSet::new(&[]),

@@ -53,7 +53,7 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::VulnerablePower,
-                PowerAmount::Counted(fight.var(CardVar::VulnerablePower)),
+                PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
             );
             Played::Done
         }
@@ -67,7 +67,7 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::StrengthPower,
-                PowerAmount::Counted(fight.var(CardVar::StrengthPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::StrengthPower)),
             );
             Played::Done
         }
@@ -117,7 +117,7 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::VulnerablePower,
-                PowerAmount::Counted(fight.var(CardVar::VulnerablePower)),
+                PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
             );
             Played::Done
         }
@@ -151,7 +151,7 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
             fight.apply(block);
             fight.apply_to_actor(
                 Power::ColossusPower,
-                PowerAmount::Counted(fight.var(CardVar::Colossus)),
+                PowerAmount::Counted(fight.power_var(CardVar::Colossus)),
             );
             Played::Done
         }
@@ -174,7 +174,7 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
         IroncladCard::Corruption => {
             fight.apply_to_actor(
                 Power::CorruptionPower,
-                PowerAmount::Counted(fight.var(CardVar::Power)),
+                PowerAmount::Counted(fight.power_var(CardVar::Power)),
             );
             Played::Done
         }
@@ -183,7 +183,7 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
         IroncladCard::Cruelty => {
             fight.apply_to_actor(
                 Power::CrueltyPower,
-                PowerAmount::Counted(fight.var(CardVar::CrueltyPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::CrueltyPower)),
             );
             Played::Done
         }
@@ -205,7 +205,7 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
         IroncladCard::DemonForm => {
             fight.apply_to_actor(
                 Power::DemonFormPower,
-                PowerAmount::Counted(fight.var(CardVar::StrengthPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::StrengthPower)),
             );
             Played::Done
         }
@@ -226,7 +226,7 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
         IroncladCard::FeelNoPain => {
             fight.apply_to_actor(
                 Power::FeelNoPainPower,
-                PowerAmount::Counted(fight.var(CardVar::Power)),
+                PowerAmount::Counted(fight.power_var(CardVar::Power)),
             );
             Played::Done
         }
@@ -247,12 +247,12 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
             });
             fight.apply_to_actor(
                 Power::StrengthPower,
-                PowerAmount::Counted(fight.var(CardVar::StrengthPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::StrengthPower)),
             );
             fight.apply_power(
                 target,
                 Power::StrengthPower,
-                PowerAmount::Counted(fight.var(CardVar::EnemyStrength)),
+                PowerAmount::Counted(fight.power_var(CardVar::EnemyStrength)),
             );
             Played::Done
         }
@@ -265,7 +265,7 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
             fight.apply(block);
             fight.apply_to_actor(
                 Power::FlameBarrierPower,
-                PowerAmount::Counted(fight.var(CardVar::DamageBack)),
+                PowerAmount::Counted(fight.power_var(CardVar::DamageBack)),
             );
             Played::Done
         }
@@ -313,7 +313,7 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
         IroncladCard::Inflame => {
             fight.apply_to_actor(
                 Power::StrengthPower,
-                PowerAmount::Counted(fight.var(CardVar::StrengthPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::StrengthPower)),
             );
             Played::Done
         }
@@ -339,7 +339,7 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
         IroncladCard::Juggernaut => {
             fight.apply_to_actor(
                 Power::JuggernautPower,
-                PowerAmount::Counted(fight.var(CardVar::JuggernautPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::JuggernautPower)),
             );
             Played::Done
         }
@@ -361,7 +361,7 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::ManglePower,
-                PowerAmount::Counted(fight.var(CardVar::StrengthLoss)),
+                PowerAmount::Counted(fight.power_var(CardVar::StrengthLoss)),
             );
             Played::Done
         }
@@ -387,7 +387,7 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
         IroncladCard::OneTwoPunch => {
             fight.apply_to_actor(
                 Power::OneTwoPunchPower,
-                PowerAmount::Counted(fight.var(CardVar::Attacks)),
+                PowerAmount::Counted(fight.power_var(CardVar::Attacks)),
             );
             Played::Done
         }
@@ -418,14 +418,14 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
         IroncladCard::Pyre => {
             fight.apply_to_actor(
                 Power::PyrePower,
-                PowerAmount::Counted(fight.var(CardVar::Energy)),
+                PowerAmount::Counted(fight.power_var(CardVar::Energy)),
             );
             Played::Done
         }
         IroncladCard::Rage => {
             fight.apply_to_actor(
                 Power::RagePower,
-                PowerAmount::Counted(fight.var(CardVar::Power)),
+                PowerAmount::Counted(fight.power_var(CardVar::Power)),
             );
             Played::Done
         }
@@ -434,7 +434,7 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
         IroncladCard::Rupture => {
             fight.apply_to_actor(
                 Power::RupturePower,
-                PowerAmount::Counted(fight.var(CardVar::StrengthPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::StrengthPower)),
             );
             Played::Done
         }
@@ -453,7 +453,7 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
             });
             fight.apply_to_actor(
                 Power::SetupStrikePower,
-                PowerAmount::Counted(fight.var(CardVar::StrengthPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::StrengthPower)),
             );
             Played::Done
         }
@@ -472,7 +472,7 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
         IroncladCard::Stampede => {
             fight.apply_to_actor(
                 Power::StampedePower,
-                PowerAmount::Counted(fight.var(CardVar::Power)),
+                PowerAmount::Counted(fight.power_var(CardVar::Power)),
             );
             Played::Done
         }
@@ -495,7 +495,7 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
         IroncladCard::StoneArmor => {
             fight.apply_to_actor(
                 Power::PlatingPower,
-                PowerAmount::Counted(fight.var(CardVar::PlatingPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::PlatingPower)),
             );
             Played::Done
         }
@@ -529,7 +529,7 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::VulnerablePower,
-                PowerAmount::Counted(fight.var(CardVar::VulnerablePower)),
+                PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
             );
             Played::Done
         }
@@ -544,7 +544,7 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::VulnerablePower,
-                PowerAmount::Counted(fight.var(CardVar::VulnerablePower)),
+                PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
             );
             Played::Done
         }
@@ -588,7 +588,7 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
         IroncladCard::Vicious => {
             fight.apply_to_actor(
                 Power::ViciousPower,
-                PowerAmount::Counted(fight.var(CardVar::Cards)),
+                PowerAmount::Counted(fight.power_var(CardVar::Cards)),
             );
             Played::Done
         }

@@ -44,7 +44,7 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
             fight.modify_energy(fight.var(CardVar::Energy));
             fight.apply_to_actor(
                 Power::BorrowedTimePower,
-                PowerAmount::Counted(fight.var(CardVar::ExtraCost)),
+                PowerAmount::Counted(fight.power_var(CardVar::ExtraCost)),
             );
             Played::Done
         }
@@ -64,14 +64,14 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
         NecrobinderCard::Calcify => {
             fight.apply_to_actor(
                 Power::CalcifyPower,
-                PowerAmount::Counted(fight.var(CardVar::CalcifyPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::CalcifyPower)),
             );
             Played::Done
         }
         NecrobinderCard::CallOfTheVoid => {
             fight.apply_to_actor(
                 Power::CallOfTheVoidPower,
-                PowerAmount::Counted(fight.var(CardVar::Cards)),
+                PowerAmount::Counted(fight.power_var(CardVar::Cards)),
             );
             Played::Done
         }
@@ -82,25 +82,25 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
         NecrobinderCard::Countdown => {
             fight.apply_to_actor(
                 Power::CountdownPower,
-                PowerAmount::Counted(fight.var(CardVar::CountdownPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::CountdownPower)),
             );
             Played::Done
         }
         NecrobinderCard::DanseMacabre => {
             fight.apply_to_actor(
                 Power::DanseMacabrePower,
-                PowerAmount::Counted(fight.var(CardVar::DanseMacabrePower)),
+                PowerAmount::Counted(fight.power_var(CardVar::DanseMacabrePower)),
             );
             Played::Done
         }
         NecrobinderCard::Deathbringer => {
             fight.apply_to_opponents(
                 Power::DoomPower,
-                PowerAmount::Counted(fight.var(CardVar::DoomPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::DoomPower)),
             );
             fight.apply_to_opponents(
                 Power::WeakPower,
-                PowerAmount::Counted(fight.var(CardVar::WeakPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
             );
             Played::Done
         }
@@ -133,7 +133,7 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::DebilitatePower,
-                PowerAmount::Counted(fight.var(CardVar::DebilitatePower)),
+                PowerAmount::Counted(fight.power_var(CardVar::DebilitatePower)),
             );
             Played::Done
         }
@@ -170,7 +170,7 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::WeakPower,
-                PowerAmount::Counted(fight.var(CardVar::WeakPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
             );
             Played::Done
         }
@@ -183,21 +183,21 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
             fight.apply(block);
             fight.apply_to_actor(
                 Power::EnergyNextTurnPower,
-                PowerAmount::Counted(fight.var(CardVar::Energy)),
+                PowerAmount::Counted(fight.power_var(CardVar::Energy)),
             );
             Played::Done
         }
         NecrobinderCard::Demesne => {
             fight.apply_to_actor(
                 Power::DemesnePower,
-                PowerAmount::Counted(fight.var(CardVar::Cards)),
+                PowerAmount::Counted(fight.power_var(CardVar::Cards)),
             );
             Played::Done
         }
         NecrobinderCard::DevourLife => {
             fight.apply_to_actor(
                 Power::DevourLifePower,
-                PowerAmount::Counted(fight.var(CardVar::DevourLifePower)),
+                PowerAmount::Counted(fight.power_var(CardVar::DevourLifePower)),
             );
             Played::Done
         }
@@ -216,7 +216,7 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::EnfeeblingTouchPower,
-                PowerAmount::Counted(fight.var(CardVar::StrengthLoss)),
+                PowerAmount::Counted(fight.power_var(CardVar::StrengthLoss)),
             );
             Played::Done
         }
@@ -236,7 +236,7 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::VulnerablePower,
-                PowerAmount::Counted(fight.var(CardVar::VulnerablePower)),
+                PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
             );
             Played::Done
         }
@@ -261,7 +261,7 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
         NecrobinderCard::Haunt => {
             fight.apply_to_actor(
                 Power::HauntPower,
-                PowerAmount::Counted(fight.var(CardVar::HpLoss)),
+                PowerAmount::Counted(fight.power_var(CardVar::HpLoss)),
             );
             Played::Done
         }
@@ -270,11 +270,11 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
         NecrobinderCard::Invoke => {
             fight.apply_to_actor(
                 Power::SummonNextTurnPower,
-                PowerAmount::Counted(fight.var(CardVar::Summon)),
+                PowerAmount::Counted(fight.power_var(CardVar::Summon)),
             );
             fight.apply_to_actor(
                 Power::EnergyNextTurnPower,
-                PowerAmount::Counted(fight.var(CardVar::Energy)),
+                PowerAmount::Counted(fight.power_var(CardVar::Energy)),
             );
             Played::Done
         }
@@ -283,7 +283,7 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
         NecrobinderCard::Lethality => {
             fight.apply_to_actor(
                 Power::LethalityPower,
-                PowerAmount::Counted(fight.var(CardVar::LethalityPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::LethalityPower)),
             );
             Played::Done
         }
@@ -310,7 +310,7 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
             fight.draw(fight.var(CardVar::Cards));
             fight.apply_to_actor(
                 Power::NeurosurgePower,
-                PowerAmount::Counted(fight.var(CardVar::NeurosurgePower)),
+                PowerAmount::Counted(fight.power_var(CardVar::NeurosurgePower)),
             );
             Played::Done
         }
@@ -321,14 +321,14 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::OblivionPower,
-                PowerAmount::Counted(fight.var(CardVar::DoomPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::DoomPower)),
             );
             Played::Done
         }
         NecrobinderCard::Pagestorm => {
             fight.apply_to_actor(
                 Power::PagestormPower,
-                PowerAmount::Counted(fight.var(CardVar::Cards)),
+                PowerAmount::Counted(fight.power_var(CardVar::Cards)),
             );
             Played::Done
         }
@@ -388,7 +388,7 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::DoomPower,
-                PowerAmount::Counted(fight.var(CardVar::DoomPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::DoomPower)),
             );
             fight.draw(fight.var(CardVar::Cards));
             Played::Done
@@ -400,7 +400,7 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
         NecrobinderCard::SentryMode => {
             fight.apply_to_actor(
                 Power::SentryModePower,
-                PowerAmount::Counted(fight.var(CardVar::SentryModePower)),
+                PowerAmount::Counted(fight.power_var(CardVar::SentryModePower)),
             );
             Played::Done
         }
@@ -411,7 +411,7 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
         NecrobinderCard::Shroud => {
             fight.apply_to_actor(
                 Power::ShroudPower,
-                PowerAmount::Counted(fight.var(CardVar::Block)),
+                PowerAmount::Counted(fight.power_var(CardVar::Block)),
             );
             Played::Done
         }
@@ -420,7 +420,7 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
         NecrobinderCard::SleightOfFlesh => {
             fight.apply_to_actor(
                 Power::SleightOfFleshPower,
-                PowerAmount::Counted(fight.var(CardVar::SleightOfFleshPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::SleightOfFleshPower)),
             );
             Played::Done
         }
@@ -456,7 +456,7 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
         NecrobinderCard::SpiritOfAsh => {
             fight.apply_to_actor(
                 Power::SpiritOfAshPower,
-                PowerAmount::Counted(fight.var(CardVar::BlockOnExhaust)),
+                PowerAmount::Counted(fight.power_var(CardVar::BlockOnExhaust)),
             );
             Played::Done
         }

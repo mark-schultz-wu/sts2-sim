@@ -484,6 +484,9 @@ pub enum CardNumberModifier {
     OstyDamage,
     /// `Hook.ModifyBlock`, for the creature about to gain it.
     Block,
+    /// The same, for a `BlockVar` whose props carry `Unpowered`, which a hook
+    /// reading powered block passes over.
+    UnpoweredBlock,
     /// `Hook.ModifyPowerAmountGiven`, for the power a `PowerVar` applies,
     /// from the card's owner to the creature the card is pointed at.
     PowerGiven,
@@ -2050,6 +2053,13 @@ pub trait Fight<V: ContentVersion> {
     /// [`CardNumberModifier`]. Those name creatures to run against, and
     /// [`Fight::resolve`] is where a number and its creatures arrive together.
     fn var(&self, key: V::CardVar) -> V::Number;
+
+    /// `DynamicVars[key].BaseValue` handed on as a power's amount: what the
+    /// copy prints, with no hook of the number's class run. The power runs
+    /// its own hooks where it lands.
+    fn power_var(&self, _key: V::CardVar) -> V::Number {
+        unimplemented!("a card's number handed to a power")
+    }
 
     /// `IsUpgraded` for the card being played.
     ///

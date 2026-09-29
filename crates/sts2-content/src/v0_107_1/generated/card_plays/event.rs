@@ -19,7 +19,7 @@ pub fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
         EventCard::Apparition => {
             fight.apply_to_actor(
                 Power::IntangiblePower,
-                PowerAmount::Counted(fight.var(CardVar::IntangiblePower)),
+                PowerAmount::Counted(fight.power_var(CardVar::IntangiblePower)),
             );
             Played::Done
         }
@@ -30,7 +30,7 @@ pub fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
         EventCard::Caltrops => {
             fight.apply_to_actor(
                 Power::ThornsPower,
-                PowerAmount::Counted(fight.var(CardVar::ThornsPower)),
+                PowerAmount::Counted(fight.power_var(CardVar::ThornsPower)),
             );
             Played::Done
         }
@@ -93,7 +93,7 @@ pub fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
         EventCard::Outmaneuver => {
             fight.apply_to_actor(
                 Power::EnergyNextTurnPower,
-                PowerAmount::Counted(fight.var(CardVar::Energy)),
+                PowerAmount::Counted(fight.power_var(CardVar::Energy)),
             );
             Played::Done
         }
@@ -135,11 +135,11 @@ pub fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
             fight.apply(block);
             fight.apply_to_actor(
                 Power::DrawCardsNextTurnPower,
-                PowerAmount::Counted(fight.var(CardVar::Cards)),
+                PowerAmount::Counted(fight.power_var(CardVar::Cards)),
             );
             fight.apply_to_actor(
                 Power::EnergyNextTurnPower,
-                PowerAmount::Counted(fight.var(CardVar::Energy)),
+                PowerAmount::Counted(fight.power_var(CardVar::Energy)),
             );
             Played::Done
         }
@@ -174,7 +174,7 @@ pub fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
             fight.apply_power(
                 target,
                 Power::VulnerablePower,
-                PowerAmount::Counted(fight.var(CardVar::VulnerablePower)),
+                PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
             );
             Played::Done
         }
