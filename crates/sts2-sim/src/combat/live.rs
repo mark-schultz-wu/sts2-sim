@@ -191,6 +191,9 @@ pub(super) enum Deferred<V: Rules> {
         id: CardId<V>,
         named: Option<CombatId>,
     },
+    /// `CardCmd.AutoPlay` of a card `AutoPlayFromDrawPile` already took into
+    /// the play pile, with `ExhaustOnNextPlay` set to `force_exhaust` first.
+    AutoPlayTaken { id: CardId<V>, force_exhaust: bool },
     /// The move `move_id` of `actor`, which stood still on a command the
     /// player had to answer. It goes on from `at`, where it handed a resume
     /// point back, and is over otherwise. Then `OnMovePerformed`, the enemies

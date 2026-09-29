@@ -321,6 +321,30 @@ pub(super) fn auto_play<V: Rules>(
     auto_play_in_play::<V>(live, rngs, relics, card, named, pausable)
 }
 
+/// `AutoPlayFromDrawPile`'s play of one card it took into the play pile:
+/// `ExhaustOnNextPlay = forceExhaust`, then `CardCmd.AutoPlay`. A card whose
+/// owner has died stays where it is, unplayed.
+pub(super) fn auto_play_taken<V: Rules>(
+    live: &mut Live<V>,
+    rngs: crate::stream::CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    id: sts2_core::CardId<V>,
+    force_exhaust: bool,
+    pausable: bool,
+) -> Option<super::Ended> {
+    if !live.player().alive {
+        return None;
+    }
+    live.exhaust_next.retain(|held| *held != id);
+    if force_exhaust {
+        live.exhaust_next.push(id);
+    }
+    let Some(card) = live.cards.named(id) else {
+        unimplemented!("auto-playing {id:?}, which left the fight first");
+    };
+    auto_play_in_play::<V>(live, rngs, relics, card, None, pausable)
+}
+
 /// `CardCmd.AutoPlay` for a card already in the play pile. `named` is the
 /// target the caller names, which an enemy-targeting card plays at in place of
 /// one drawn off `CombatTargets`.
@@ -949,6 +973,17 @@ fn run_deferred<V: Rules>(
                     (ended, _) => ended,
                 }
             }
+            super::live::Deferred::AutoPlayTaken { id, force_exhaust } => match ended {
+                None => auto_play_taken::<V>(
+                    fighting.live,
+                    fighting.streams.combat(),
+                    fighting.relics,
+                    id,
+                    force_exhaust,
+                    true,
+                ),
+                ended => ended,
+            },
             super::live::Deferred::Resume {
                 mut effect,
                 played,

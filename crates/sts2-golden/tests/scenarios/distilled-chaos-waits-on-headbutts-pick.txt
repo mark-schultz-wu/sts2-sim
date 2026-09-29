@@ -1,0 +1,33 @@
+# Distilled Chaos takes the top three cards of a draw pile stacked with
+# Headbutts, then plays them in turn. With a Strike and a Defend in the
+# discard pile, each Headbutt asks which card goes back on top, and the next
+# waits in the play pile for the answer.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","card":"HEADBUTT"}
+{"cmd":"grant","card":"HEADBUTT"}
+{"cmd":"grant","card":"HEADBUTT"}
+{"cmd":"grant","card":"HEADBUTT"}
+{"cmd":"grant","card":"HEADBUTT"}
+{"cmd":"grant","card":"HEADBUTT"}
+{"cmd":"grant","card":"HEADBUTT"}
+{"cmd":"grant","card":"HEADBUTT"}
+{"cmd":"grant","card":"HEADBUTT"}
+{"cmd":"grant","card":"HEADBUTT"}
+{"cmd":"grant","card":"HEADBUTT"}
+{"cmd":"grant","card":"HEADBUTT"}
+{"cmd":"grant","card":"HEADBUTT"}
+{"cmd":"grant","card":"HEADBUTT"}
+{"cmd":"grant","card":"HEADBUTT"}
+{"cmd":"grant","card":"HEADBUTT"}
+{"cmd":"grant","card":"HEADBUTT"}
+{"cmd":"grant","card":"HEADBUTT"}
+{"cmd":"grant","card":"HEADBUTT"}
+{"cmd":"grant","card":"HEADBUTT"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","potion":"DISTILLED_CHAOS"}
+{"cmd":"play_card","index":2,"target":1}
+{"cmd":"play_card","index":2}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"answer","cards":[0]}
+{"cmd":"answer","cards":[0]}
+{"cmd":"answer","cards":[0]}
