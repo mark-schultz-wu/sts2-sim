@@ -1,0 +1,7 @@
+# Fan of Knives puts four Shivs in hand, and a Shiv played under it hits
+# every enemy.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_NORMAL"}
+{"cmd":"grant","card":"FAN_OF_KNIVES"}
+{"cmd":"play_card","index":7}
+{"cmd":"play_card","index":7}

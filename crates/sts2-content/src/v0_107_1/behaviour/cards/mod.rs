@@ -119,6 +119,25 @@ pub(crate) fn decide_hook(
     }
 }
 
+/// `CardModel.IsPlayable`, which this build's `GrandFinale`, `Clash` and
+/// `HighFive` override.
+pub(crate) fn is_playable(
+    card: Cards,
+    fight: sts2_core::CardLogic,
+) -> sts2_core::HookResponse<bool> {
+    match card {
+        // `GrandFinale`: only once its owner's draw pile is empty.
+        Cards::Silent(SilentCard::GrandFinale) => {
+            sts2_core::HookResponse::Decision(fight.draw_pile == 0)
+        }
+        Cards::Event(super::super::generated::cards::EventCard::Clash)
+        | Cards::Necrobinder(NecrobinderCard::HighFive) => {
+            unimplemented!("whether {card:?} is playable")
+        }
+        _ => sts2_core::HookResponse::DoesNotImplement,
+    }
+}
+
 /// `GetResultPileTypeForCardPlay`, which this build's `ParticleWall` alone
 /// overrides.
 pub(crate) fn result_pile(
@@ -208,6 +227,13 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
         (Cards::Necrobinder(NecrobinderCard::Protector), CardVar::CalculatedDamage) => {
             printed.face(CardVar::CalculationBase)
                 + printed.face(CardVar::ExtraDamage) * owner.osty_max_hp.map_or(0, Number::from)
+        }
+        // `Murder`: a base, and more for each card its owner drew this fight.
+        // A fight here has one player, who draws every card drawn.
+        (Cards::Silent(SilentCard::Murder), CardVar::CalculatedDamage) => {
+            let drawn = Number::try_from(owner.history.drawn_this_fight())
+                .expect("a fight's draws fit the game's numbers");
+            printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * drawn
         }
         // `PreciseCut`: a base, and less for each other card in its owner's
         // hand.

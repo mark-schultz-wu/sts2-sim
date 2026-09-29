@@ -1521,6 +1521,11 @@ fn finished<V: Rules, S: LendsCombat>(
                     board.land(target, power, amount, None);
                     ended = ended.or(board.ended());
                 }
+                // `CardCmd.ApplyKeyword`, on cards wherever they stand.
+                (_, effect @ sts2_core::HookEffect::AddKeyword { .. }) => {
+                    Board::for_card(next, streams.combat(), relics, ascension, None, None)
+                        .write_cards([effect]);
+                }
                 (_, effect) => rest.push(effect),
             }
         }

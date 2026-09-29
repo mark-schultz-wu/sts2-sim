@@ -1,0 +1,13 @@
+# Bullet Time sets the hand free this turn and puts No Draw on its owner.
+# The Strike and the Acrobatics then cost nothing, and the Acrobatics draws
+# nothing. The next turn draws its hand, at its costs again.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"BULLET_TIME"}
+{"cmd":"grant","card":"ACROBATICS"}
+{"cmd":"grant","card":"STRIKE_SILENT"}
+{"cmd":"play_card","index":7}
+{"cmd":"play_card","index":8,"target":1}
+{"cmd":"play_card","index":7}
+{"cmd":"answer","cards":[0]}
+{"cmd":"end_turn"}

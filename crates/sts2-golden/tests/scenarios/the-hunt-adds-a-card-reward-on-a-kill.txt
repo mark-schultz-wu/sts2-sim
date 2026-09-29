@@ -1,0 +1,7 @@
+# The Hunt kills a Nibbit its owner's Strength made it strong enough for.
+# Its owner takes The Hunt, and the won fight offers a second card reward.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":50,"target":0}
+{"cmd":"grant","card":"THE_HUNT"}
+{"cmd":"play_card","index":7,"target":1}

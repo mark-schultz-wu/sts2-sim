@@ -1806,6 +1806,15 @@ impl<V: Rules> Creatures<V> {
     }
 }
 
+/// One of `CombatRoom.ExtraRewards`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ExtraReward<V: Rules> {
+    /// A `SpecialCardReward` of this card.
+    SpecialCard(CardIdent<V>),
+    /// A `CardReward` at `CardCreationOptions.ForRoom` of the fight's room.
+    Card,
+}
+
 /// A fight in progress.
 #[derive(Debug)]
 pub(crate) struct Live<V: Rules> {
@@ -1833,10 +1842,10 @@ pub(crate) struct Live<V: Rules> {
     pub(super) cards: super::cards::Cards<V>,
     /// Deck cards a combat command removed permanently while this fight ran.
     pub(super) removed_from_deck: Vec<CardIdent<V>>,
-    /// `CombatRoom.ExtraRewards`' cards, which a won fight offers as
-    /// `SpecialCardReward`s. An event adds its own as the fight opens, and a
-    /// listener hands one back as it dies.
-    pub(super) extra_cards: Vec<CardIdent<V>>,
+    /// `CombatRoom.ExtraRewards`, in the order they were added. An event
+    /// adds its own as the fight opens. A listener hands a card back as it
+    /// dies, and a card's play adds a card reward.
+    pub(super) extra_rewards: Vec<ExtraReward<V>>,
     /// The copies whose `ExhaustOnNextPlay` is set, which their next play
     /// clears and so does the end of the turn.
     pub(super) exhaust_next: smallvec::SmallVec<[CardId<V>; 2]>,
@@ -2064,7 +2073,7 @@ impl<V: Rules> Clone for Live<V> {
         Self {
             cards: self.cards.clone(),
             removed_from_deck: self.removed_from_deck.clone(),
-            extra_cards: self.extra_cards.clone(),
+            extra_rewards: self.extra_rewards.clone(),
             exhaust_next: self.exhaust_next.clone(),
             history: self.history.clone(),
             kept: self.kept.clone(),
@@ -2100,7 +2109,7 @@ impl<V: Rules> Clone for Live<V> {
             encounter,
             cards,
             removed_from_deck,
-            extra_cards,
+            extra_rewards,
             exhaust_next,
             leaving,
             for_run,
@@ -2132,7 +2141,7 @@ impl<V: Rules> Clone for Live<V> {
         *encounter = source.encounter;
         cards.clone_from(&source.cards);
         removed_from_deck.clone_from(&source.removed_from_deck);
-        extra_cards.clone_from(&source.extra_cards);
+        extra_rewards.clone_from(&source.extra_rewards);
         exhaust_next.clone_from(&source.exhaust_next);
         leaving.clone_from(&source.leaving);
         for_run.clone_from(&source.for_run);
@@ -2256,13 +2265,13 @@ impl<V: Rules> Live<V> {
     /// `CombatRoom.AddExtraReward` of a special card, which an event does as
     /// it builds its fight's room.
     pub(crate) fn add_extra_card(&mut self, card: CardIdent<V>) {
-        self.extra_cards.push(card);
+        self.extra_rewards.push(ExtraReward::SpecialCard(card));
     }
 
-    /// The special cards this fight offers once it is won, in the order they
-    /// were added.
-    pub(crate) fn extra_cards(&self) -> &[CardIdent<V>] {
-        &self.extra_cards
+    /// The rewards this fight offers beside the room's own once it is won,
+    /// in the order they were added.
+    pub(crate) fn extra_rewards(&self) -> &[ExtraReward<V>] {
+        &self.extra_rewards
     }
 
     /// What the fight's end asked of the run, in the order it asked.
@@ -2883,7 +2892,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             encounter: Encounter::SlimesWeak,
             cards: super::cards::Cards::with_cards(0),
             removed_from_deck: Vec::new(),
-            extra_cards: Vec::new(),
+            extra_rewards: Vec::new(),
             exhaust_next: smallvec::SmallVec::new(),
             leaving: Vec::new(),
             for_run: Vec::new(),

@@ -276,6 +276,71 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
             fight.apply(block);
             Played::Done
         }
+        // `BulletTime`: each card of the hand that does not cost X free this
+        // turn, then one No Draw on its owner.
+        SilentCard::BulletTime => {
+            for at in fight.cards_in(Pile::Hand) {
+                if sts2_core::CardTable::cost(fight.card_ident(at).card) != sts2_core::Cost::X {
+                    super::super::free_this_turn(fight, at);
+                }
+            }
+            fight.apply_to_actor(Power::NoDrawPower, PowerAmount::Counted(1));
+            Played::Done
+        }
+        // `FanOfKnives`: one Fan of Knives on its owner, then its `Shivs`
+        // into hand one at a time.
+        SilentCard::FanOfKnives => {
+            fight.apply_to_actor(Power::FanOfKnivesPower, PowerAmount::Counted(1));
+            let count: usize =
+                num_traits::cast(fight.var(CardVar::Shivs)).expect("a count of Shivs");
+            for _ in 0..count {
+                fight.add_generated_cards(
+                    CardIdent::new(Cards::Token(TokenCard::Shiv)),
+                    Pile::Hand,
+                    1,
+                );
+            }
+            Played::Done
+        }
+        // `GrandFinale`: its damage to every enemy, as one attack.
+        SilentCard::GrandFinale => {
+            fight.attack(Scaling::Dynamic, |fight| {
+                for target in fight.opponents() {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
+                }
+            });
+            Played::Done
+        }
+        // `ShadowStep`: the whole hand discarded, then one Shadow Step on its
+        // owner.
+        SilentCard::ShadowStep => {
+            let hand = fight.cards_in(Pile::Hand);
+            fight.act_on(sts2_core::PileAct::Discard, &hand);
+            fight.apply_to_actor(Power::ShadowStepPower, PowerAmount::Counted(1));
+            Played::Done
+        }
+        // `TheHunt`: its damage to the target. Where the hit killed a target
+        // whose death, read before the hit, triggers Fatal, the room offers
+        // one more card reward, and its owner takes one The Hunt.
+        SilentCard::TheHunt => {
+            let target = fight.target();
+            let fatal = fight.death_triggers_fatal(target);
+            hit_target(fight, 1);
+            let standing = fight
+                .creatures()
+                .any(|creature| creature.id() == target && creature.alive());
+            if fatal && !standing {
+                fight.add_card_reward();
+                fight.apply_to_actor(Power::TheHuntPower, PowerAmount::Counted(1));
+            }
+            Played::Done
+        }
         card => card_plays::silent::on_play(card, fight),
     }
 }

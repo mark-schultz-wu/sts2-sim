@@ -2,9 +2,6 @@
 //!
 //! `CardModel.CanPlay` starts at no reasons and adds one per rule it fails.
 //! So this reports a set, rather than the first refusal.
-//!
-//! One of the game's six rules is not decided here. `BlockedByCardLogic` is
-//! the card's own `IsPlayable` override, which no ported card has.
 
 use crate::legal::{Legal, aimed, belt_index, hand_index, selections};
 use smallvec::{SmallVec, smallvec};
@@ -144,6 +141,16 @@ pub(super) fn reasons<V: Rules>(
         why = refused::<V>(
             why,
             <V::UnplayableReason as UnplayableReasonKinds>::BLOCKED_BY_HOOK,
+        );
+    }
+    // `IsPlayable`, the card's own logic.
+    let logic = sts2_core::CardLogic {
+        draw_pile: live.cards.len(Pile::Draw),
+    };
+    if let sts2_core::HookResponse::Decision(false) = V::card_is_playable(card.card, logic) {
+        why = refused::<V>(
+            why,
+            <V::UnplayableReason as UnplayableReasonKinds>::BLOCKED_BY_CARD_LOGIC,
         );
     }
     (why, preventer)

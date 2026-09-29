@@ -1,0 +1,12 @@
+# Under Master Planner a Defend played turns Sly. Headbutt puts it back on
+# the draw pile, Acrobatics draws it and discards it, and it plays itself.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"MASTER_PLANNER_POWER","amount":1,"target":0}
+{"cmd":"grant","card":"HEADBUTT"}
+{"cmd":"grant","card":"ACROBATICS"}
+{"cmd":"grant","card":"DEFEND_SILENT"}
+{"cmd":"play_card","index":9}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"play_card","index":7}
+{"cmd":"answer","cards":[7]}

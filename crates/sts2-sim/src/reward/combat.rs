@@ -77,6 +77,33 @@ pub(crate) fn won<V: Rules, R: GameRng>(
             taken: false,
         });
     }
+    offered.push(card_reward::<V, R>(
+        rng,
+        odds,
+        ascension,
+        character,
+        act,
+        room,
+        modifiers.added,
+    ));
+    // The rarity is rolled here and the relic is pulled by the caller, which
+    // is the half that holds the run's bags.
+    let rarity = elite.then(|| super::relic_rarity::<V, R>(rng));
+    (offered, rarity)
+}
+
+/// `CardReward.Populate` for `CardCreationOptions.ForRoom`: three cards at
+/// the room's odds, then an option of each kind in `added`.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn card_reward<V: Rules, R: GameRng>(
+    rng: &mut R,
+    odds: &mut Odds,
+    ascension: V::AscensionLevel,
+    character: V::Character,
+    act: usize,
+    room: Room,
+    added: &[sts2_core::CardKind],
+) -> Offer<V> {
     let mut cards = card::encounter::<V, R>(
         rng,
         odds,
@@ -86,7 +113,7 @@ pub(crate) fn won<V: Rules, R: GameRng>(
         act,
         room.card_odds(),
     );
-    for &kind in modifiers.added {
+    for &kind in added {
         // The pool the reward drew, of the kind, less what it offers. Every
         // card of the kind when it offers them all, and nothing with none.
         let pool = V::reward_cards(character);
@@ -110,14 +137,10 @@ pub(crate) fn won<V: Rules, R: GameRng>(
             cards.push(card::added::<V, R>(rng, &drawn, room.card_odds(), act));
         }
     }
-    offered.push(Offer::Card {
+    Offer::Card {
         cards,
         taken: false,
-    });
-    // The rarity is rolled here and the relic is pulled by the caller, which
-    // is the half that holds the run's bags.
-    let rarity = elite.then(|| super::relic_rarity::<V, R>(rng));
-    (offered, rarity)
+    }
 }
 
 /// `GoldReward.Populate`, which is one draw over the encounter's own range.
