@@ -1,0 +1,7 @@
+# Kaleidoscope's cards carry no `IsCardReward` as they are made, so Silken
+# Tress leaves them. The first reward's own pass enchants its cards with
+# Glam and uses the relic up, so the second reward's cards stay as made.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"SILKEN_TRESS"}
+{"cmd":"grant","relic":"KALEIDOSCOPE"}
+{"cmd":"answer","skip":true}

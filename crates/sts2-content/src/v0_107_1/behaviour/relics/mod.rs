@@ -117,6 +117,7 @@ mod jeweled_mask;
 mod jewelry_box;
 mod joss_paper;
 mod juzu_bracelet;
+mod kaleidoscope;
 mod kunai;
 mod kusarigama;
 mod lantern;
@@ -266,7 +267,7 @@ fn combat_room(room: super::super::generated::encounters::RoomType) -> bool {
 fn egg(kind: sts2_core::CardKind, hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
     use sts2_core::CardTable as _;
 
-    if let EventHook::CardRewardOption { card }
+    if let EventHook::CardRewardOption { card, .. }
     | EventHook::MerchantCardCreated { card }
     | EventHook::CardBeingAddedToDeck { card } = hook
         && <V as sts2_core::Rules>::card_kind(card.card) == Some(kind)
@@ -498,6 +499,7 @@ pub enum State {
     SilverCrucible(silver_crucible::State),
     SilkenTress(silken_tress::State),
     ScrollBoxes,
+    Kaleidoscope,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -741,6 +743,7 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::Kaleidoscope => kaleidoscope::event_hook(hook, asked),
         State::ScrollBoxes => scroll_boxes::event_hook(hook, asked),
         State::SilkenTress(state) => silken_tress::event_hook(state, hook, asked),
         State::SilverCrucible(state) => silver_crucible::event_hook(state, hook, asked),
@@ -1061,7 +1064,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::NeowsBones
         | State::SilverCrucible(_)
         | State::SilkenTress(_)
-        | State::ScrollBoxes => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::ScrollBoxes
+        | State::Kaleidoscope => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1240,6 +1244,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::Kaleidoscope => State::Kaleidoscope,
             Relic::ScrollBoxes => State::ScrollBoxes,
             Relic::SilkenTress => State::SilkenTress(silken_tress::State::default()),
             Relic::SilverCrucible => State::SilverCrucible(silver_crucible::State::default()),

@@ -25,7 +25,10 @@ pub(super) fn event_hook(
 ) {
     match hook {
         EventHook::Obtained { .. } => asked.push(HookEffect::LoseAllGold),
-        EventHook::CardRewardOption { card } if !state.used => {
+        EventHook::CardRewardOption {
+            card,
+            card_reward: true,
+        } if !state.used => {
             if can_enchant(Enchantment::Glam, &card) {
                 asked.push(HookEffect::EnchantCard {
                     enchantment: Enchantment::Glam,

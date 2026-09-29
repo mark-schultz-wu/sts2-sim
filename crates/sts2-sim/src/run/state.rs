@@ -1481,6 +1481,23 @@ impl<V: Rules> State<V> {
                     self.player.gold = num_traits::zero();
                     continue;
                 }
+                HookEffect::OfferOtherPoolCards { rewards, pools } => {
+                    let mut offered: Vec<Offer<V>> = (0..rewards)
+                        .map(|_| Offer::Card {
+                            cards: self.other_pool_cards(pools),
+                            taken: false,
+                        })
+                        .collect();
+                    // `CardReward.Populate` over cards set by hand, which
+                    // raises the reward's own pass with `IsCardReward`.
+                    self.reward_offers(&mut offered);
+                    self.modify_rewards(&mut offered, None);
+                    crate::reward::sort(&mut offered);
+                    Pickup::Rewards {
+                        offered,
+                        skippable: true,
+                    }
+                }
                 HookEffect::OfferBundles {
                     count,
                     commons,
@@ -2611,6 +2628,47 @@ impl<V: Rules> State<V> {
         drawn
     }
 
+    /// One card from each of `pools` other characters' pools, for
+    /// [`sts2_core::HookEffect::OfferOtherPoolCards`].
+    ///
+    /// `Character::ALL` lists the characters in id order, which is the order
+    /// `StableShuffle` sorts their pools into first.
+    fn other_pool_cards(&mut self, pools: usize) -> Vec<CardIdent<V>> {
+        use sts2_core::rng::GameRng as _;
+        use sts2_core::{CharacterTable as _, Table as _};
+
+        let own = self.character();
+        let mut others: Vec<V::Character> = V::Character::ALL
+            .iter()
+            .copied()
+            .filter(|&character| character.playable() && character != own)
+            .collect();
+        self.streams
+            .run(V::RunRngType::NICHE)
+            .unstable_shuffle(&mut others);
+        others
+            .into_iter()
+            .take(pools)
+            .map(|character| {
+                // `CardFactory.CreateForReward` of one card, with its hooks.
+                self.card_reward_unheard();
+                let rng = self.streams.player(V::PlayerRngType::REWARDS);
+                let [card] =
+                    crate::reward::card::regular::<V, _>(rng, V::reward_cards(character), 1, true)
+                        [..]
+                else {
+                    unreachable!("one card drawn is one card");
+                };
+                self.rewritten(CardIdent::new(card), |card| {
+                    sts2_core::EventHook::CardRewardOption {
+                        card,
+                        card_reward: false,
+                    }
+                })
+            })
+            .collect()
+    }
+
     /// `ScrollBoxes.GenerateRandomBundles`: each bundle `commons` commons then
     /// `uncommons` uncommons, `NextItem` off the rewards stream over the
     /// cards no bundle holds yet. See [`sts2_core::HookEffect::OfferBundles`].
@@ -2719,6 +2777,7 @@ impl<V: Rules> State<V> {
         for card in cards {
             *card = self.rewritten(*card, |card| sts2_core::EventHook::CardRewardOption {
                 card,
+                card_reward: true,
             });
         }
         let asked = self.notify_belt(sts2_core::EventHook::CardRewardOptionsModified);
