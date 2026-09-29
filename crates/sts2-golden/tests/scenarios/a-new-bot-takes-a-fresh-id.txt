@@ -1,0 +1,10 @@
+# The Fabricator's strike spawns a Stabbot as creature 2, and a Strike
+# carrying 30 Strength kills it. The Fabricator then fabricates two bots.
+# A fight never gives a removed creature's id out again, so they are 3 and
+# 4, not 2 and 3.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"FABRICATOR_NORMAL"}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":30,"target":0}
+{"cmd":"play_card","index":0,"target":2}
+{"cmd":"end_turn"}

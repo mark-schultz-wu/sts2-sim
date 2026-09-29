@@ -2458,17 +2458,18 @@ pub trait Fight<V: ContentVersion> {
     /// healed above zero is alive again.
     fn heal(&mut self, at: crate::CombatId, amount: V::Number);
 
-    /// The acting monster's model as its move has written it so far.
+    /// Read or write the acting monster's own model, where the fight holds
+    /// it. So a hook the move raises reads what the move has written, as the
+    /// game's one model object does.
     ///
-    /// A move works on its own copy of the model, which the fight takes back
-    /// once the move is over. In the game the model is one object, so a hook
-    /// the move raises reads what the move has written. A move stores its copy
-    /// before raising a hook its own model answers.
-    fn store_model(&mut self, _model: &V::MonsterState)
+    /// A monster that leaves the fight during its own move keeps its model
+    /// until the move is over.
+    fn model<R>(&mut self, _with: impl FnOnce(&mut V::MonsterState) -> R) -> R
     where
+        Self: Sized,
         V: Hooks,
     {
-        unimplemented!("a monster's model stored mid-move")
+        unimplemented!("a monster's model read from a move")
     }
 
     /// Write the fields `power` saves on the creature `at`, from inside one
@@ -6357,8 +6358,8 @@ pub trait Rules: Hooks {
         owner: CardOwner<'_, Self>,
     ) -> Self::Number;
 
-    /// What one of a monster's moves does, which is its `onPerform`. `state`
-    /// is the monster's own model, which the move reads and writes. A move
+    /// What one of a monster's moves does, which is its `onPerform`. The move
+    /// reads and writes its monster's model through [`Fight::model`]. A move
     /// that asks the player something hands the question back, and the rest
     /// of its move resumes through [`Rules::resume_play`].
     ///
@@ -6368,18 +6369,15 @@ pub trait Rules: Hooks {
     fn perform_move<F: Fight<Self>>(
         monster: Self::Monster,
         move_id: Self::MoveId,
-        state: &mut Self::MonsterState,
         fight: &mut F,
     ) -> Played<Self>;
 
     /// The rest of a move that handed back [`Played::Waiting`], from `at`,
-    /// once what it waited on is over. `state` is the monster's model, as
-    /// [`Rules::perform_move`] has it.
+    /// once what it waited on is over.
     fn resume_move<F: Fight<Self>>(
         monster: Self::Monster,
         move_id: Self::MoveId,
         at: Self::Resume,
-        state: &mut Self::MonsterState,
         fight: &mut F,
     ) -> Played<Self>;
 

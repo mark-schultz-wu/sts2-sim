@@ -776,23 +776,21 @@ impl sts2_core::Rules for V0_107_1 {
     fn perform_move<F: sts2_core::Fight<Self>>(
         monster: Self::Monster,
         move_id: Self::MoveId,
-        state: &mut Self::MonsterState,
         fight: &mut F,
     ) -> sts2_core::Played<Self> {
-        behaviour::monsters::perform(monster, move_id, state, fight)
+        behaviour::monsters::perform(monster, move_id, fight)
     }
 
     fn resume_move<F: sts2_core::Fight<Self>>(
         monster: Self::Monster,
         move_id: Self::MoveId,
         at: Self::Resume,
-        state: &mut Self::MonsterState,
         fight: &mut F,
     ) -> sts2_core::Played<Self> {
         let behaviour::Resume::Monster(at) = at else {
             unreachable!("{at:?} resumes no move")
         };
-        behaviour::monsters::resume_move(monster, move_id, at, state, fight)
+        behaviour::monsters::resume_move(monster, move_id, at, fight)
     }
 
     fn random_encounter_monsters<R: sts2_core::rng::GameRng>(

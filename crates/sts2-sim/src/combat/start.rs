@@ -111,6 +111,7 @@ pub(crate) fn enter<V: Rules>(
         card_ids: CardIds::new(),
         kept_faces: Vec::new(),
         attacks: 0,
+        last_creature: CombatId::new(nonmax::NonMaxU8::ZERO),
         notes: smallvec::SmallVec::new(),
         asking: None,
         deferred: Vec::new(),
@@ -148,6 +149,12 @@ pub(crate) fn enter<V: Rules>(
         powers,
         machines,
     )?;
+    live.last_creature = live
+        .creatures
+        .iter()
+        .map(|creature| creature.id)
+        .max_by_key(|id| id.get())
+        .unwrap_or(live.last_creature);
 
     // The deck's own cards, each becoming a copy the fight can write on, in
     // the order `PopulateCombatState` shuffles them into the draw pile as the

@@ -236,19 +236,22 @@ const GUARD_BLOCK: Number = 15;
 /// `SpawnBot`: one of `options` other than the last it spawned, drawn off
 /// `MonsterAi`, into the encounter's next slot, with Minion from the
 /// Fabricator.
-fn spawn_bot<F: Fight<V>>(fight: &mut F, model: &mut super::Model, options: &[Monster]) {
-    let super::Model::Fabricator { last } = model else {
-        unreachable!("a Fabricator holding {model:?}")
-    };
+fn spawn_bot<F: Fight<V>>(fight: &mut F, options: &[Monster]) {
+    let last = fight.model(|model| {
+        let super::Model::Fabricator { last } = *model else {
+            unreachable!("a Fabricator holding {model:?}")
+        };
+        last
+    });
     let items: Vec<Monster> = options
         .iter()
         .copied()
-        .filter(|&option| Some(option) != *last)
+        .filter(|&option| Some(option) != last)
         .collect();
     let Some(bot) = fight.monster_ai_choose(&items) else {
         return;
     };
-    *last = Some(bot);
+    fight.model(|model| *model = super::Model::Fabricator { last: Some(bot) });
     if let Some(spawned) = fight.summon_into_first_free_slot(bot) {
         fight.apply_power(spawned, Power::MinionPower, PowerAmount::Counted(1));
     }
@@ -263,7 +266,6 @@ pub(super) fn perform<F: Fight<V>>(
     monster: Monster,
     move_id: MoveId,
     step: u8,
-    model: &mut super::Model,
     fight: &mut F,
 ) -> Option<u8> {
     match (monster, move_id) {
@@ -278,15 +280,18 @@ pub(super) fn perform<F: Fight<V>>(
                 scaling: Scaling::Dynamic,
             });
             fight.apply(block);
-            let strength = if deadly { 4 } else { 3 } * (2 - Number::from(axebot_stock(model)));
+            let stock = fight.model(|model| axebot_stock(model));
+            let strength = if deadly { 4 } else { 3 } * (2 - Number::from(stock));
             fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(strength));
         }
         // `BeetleChargeMove`: it marks the charge, then hits.
         (Monster::FrogKnight, MoveId::BeetleCharge) => {
-            let super::Model::FrogKnight { beetle_charged } = model else {
-                unreachable!("a Frog Knight holding {model:?}")
-            };
-            *beetle_charged = true;
+            fight.model(|model| {
+                let super::Model::FrogKnight { beetle_charged } = model else {
+                    unreachable!("a Frog Knight holding {model:?}")
+                };
+                *beetle_charged = true;
+            });
             fight.attack_opponents();
         }
         // `ForbiddenIncantationMove`: Ritual on itself, from nobody.
@@ -322,15 +327,15 @@ pub(super) fn perform<F: Fight<V>>(
         (Monster::TheForgotten, MoveId::Dread) => fight.attack_opponents(),
         // `FabricateMove`: a defensive bot, then an aggressive one.
         (Monster::Fabricator, MoveId::FabricateMove) => {
-            spawn_bot(fight, model, &DEFENSE_SPAWNS);
-            spawn_bot(fight, model, &AGGRO_SPAWNS);
+            spawn_bot(fight, &DEFENSE_SPAWNS);
+            spawn_bot(fight, &AGGRO_SPAWNS);
         }
         // `FabricatingStrikeMove`: its hit, then an aggressive bot.
         (Monster::Fabricator, MoveId::FabricatingStrikeMove) => {
             if super::attack_first(fight, step) {
                 return Some(1);
             }
-            spawn_bot(fight, model, &AGGRO_SPAWNS);
+            spawn_bot(fight, &AGGRO_SPAWNS);
         }
         // `GuardMove`: fifteen block, unpowered, on each Fabricator.
         (Monster::Guardbot, MoveId::GuardMove) => {
@@ -449,25 +454,28 @@ pub(super) fn perform<F: Fight<V>>(
                 sts2_core::Writing::EveryCopyOf(wither),
                 sts2_core::Change::Raise(CardVar::Damage, WITHER_RAISE),
             );
-            let super::Model::Aeonglass {
-                strength,
-                wither_upgrades,
-            } = model
-            else {
-                unreachable!("an Aeonglass holding {model:?}")
-            };
-            *wither_upgrades += 1;
-            let bonus = Number::from(*strength);
-            // The Withers it gives read the count it has just raised.
-            fight.store_model(model);
+            // The Withers it gives read the count this raises.
+            let bonus = fight.model(|model| {
+                let super::Model::Aeonglass {
+                    strength,
+                    wither_upgrades,
+                } = model
+                else {
+                    unreachable!("an Aeonglass holding {model:?}")
+                };
+                *wither_upgrades += 1;
+                Number::from(*strength)
+            });
             let deadly = fight.ascension().has(AscensionLevel::DeadlyEnemies);
             let (withers, base) = if deadly { (2, 4) } else { (1, 3) };
             fight.give_cards(wither, withers);
             fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(base + bonus));
-            let super::Model::Aeonglass { strength, .. } = model else {
-                unreachable!("an Aeonglass holding {model:?}")
-            };
-            *strength += 1;
+            fight.model(|model| {
+                let super::Model::Aeonglass { strength, .. } = model else {
+                    unreachable!("an Aeonglass holding {model:?}")
+                };
+                *strength += 1;
+            });
         }
         // `BurnBrightForMeMove`: Strength on each of its teammates, then its
         // block.
@@ -505,10 +513,12 @@ pub(super) fn perform<F: Fight<V>>(
             if super::attack_first(fight, step) {
                 return Some(1);
             }
-            let super::Model::TestSubject { extra_claws, .. } = model else {
-                unreachable!("a Test Subject holding {model:?}")
-            };
-            *extra_claws += 1;
+            fight.model(|model| {
+                let super::Model::TestSubject { extra_claws, .. } = model else {
+                    unreachable!("a Test Subject holding {model:?}")
+                };
+                *extra_claws += 1;
+            });
         }
         // `BurningGrowlMove`: Burns into the discard pile, then Strength.
         (Monster::TestSubject, MoveId::BurningGrowlMove) => {
@@ -523,11 +533,13 @@ pub(super) fn perform<F: Fight<V>>(
         // health and what it gains. The second respawn is the last, and
         // takes Adaptable and Painful Stabs off.
         (Monster::TestSubject, MoveId::RespawnMove) => {
-            let super::Model::TestSubject { respawns, .. } = model else {
-                unreachable!("a Test Subject holding {model:?}")
-            };
-            *respawns += 1;
-            let respawns = *respawns;
+            let respawns = fight.model(|model| {
+                let super::Model::TestSubject { respawns, .. } = model else {
+                    unreachable!("a Test Subject holding {model:?}")
+                };
+                *respawns += 1;
+                *respawns
+            });
             let actor = fight.actor();
             fight.write_power(actor, Power::AdaptablePower, |state| {
                 state.set_reviving(false)

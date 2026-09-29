@@ -1820,6 +1820,9 @@ pub(crate) struct Live<V: Rules> {
     /// How many attack commands this fight has started, which is what the
     /// next one is told apart by.
     pub(super) attacks: u32,
+    /// The last creature id this fight gave out. A creature that leaves keeps
+    /// its id, and the next one to arrive takes the id after this.
+    pub(super) last_creature: CombatId,
     /// Numbers a card keeps on its own model and prints nowhere, by copy,
     /// such as Regret's `CardsInHand`.
     pub(super) notes: smallvec::SmallVec<[(CardId<V>, V::Number); 2]>,
@@ -1989,6 +1992,27 @@ impl<V: Rules> Clone for CombatHistory<V> {
     }
 }
 
+impl<V: Rules> Live<V> {
+    /// The id the next creature to arrive takes.
+    ///
+    /// # Panics
+    ///
+    /// A fight that has given out every id a creature can hold.
+    pub(super) fn next_creature(&mut self) -> CombatId {
+        let Some(next) = self
+            .last_creature
+            .get()
+            .checked_add(1)
+            .and_then(nonmax::NonMaxU8::new)
+            .map(CombatId::new)
+        else {
+            panic!("combat has too many creatures to assign an id");
+        };
+        self.last_creature = next;
+        next
+    }
+}
+
 impl<V: Rules> Clone for Live<V> {
     fn clone(&self) -> Self {
         Self {
@@ -2044,6 +2068,7 @@ impl<V: Rules> Clone for Live<V> {
             card_ids,
             kept_faces,
             attacks,
+            last_creature,
             notes,
             asking,
             deferred,
@@ -2076,6 +2101,7 @@ impl<V: Rules> Clone for Live<V> {
         card_ids.clone_from(&source.card_ids);
         kept_faces.clone_from(&source.kept_faces);
         *attacks = source.attacks;
+        *last_creature = source.last_creature;
         notes.clone_from(&source.notes);
         asking.clone_from(&source.asking);
         deferred.clone_from(&source.deferred);
@@ -2823,6 +2849,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             card_ids: CardIds::new(),
             kept_faces: Vec::new(),
             attacks: 0,
+            last_creature: CombatId::new(nonmax::NonMaxU8::ZERO),
             notes: smallvec::SmallVec::new(),
             asking: None,
             deferred: Vec::new(),

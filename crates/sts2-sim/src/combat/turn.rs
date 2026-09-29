@@ -197,14 +197,9 @@ pub(super) fn resume_move<V: Rules>(
         return Some(None);
     };
     // A monster the fight took out took its model and its move with it.
-    let Some(mut state) = live
-        .machines
-        .iter()
-        .find(|held| held.creature == actor)
-        .map(|held| held.state)
-    else {
+    if !live.machines.iter().any(|held| held.creature == actor) {
         return Some(None);
-    };
+    }
     let ascension = live.ascension;
     let mut board = Board::for_move(
         live,
@@ -213,13 +208,10 @@ pub(super) fn resume_move<V: Rules>(
         ascension,
         (actor, damage, repeats),
     );
-    let played = V::resume_move(monster, move_id, at, &mut state, &mut board);
+    let played = V::resume_move(monster, move_id, at, &mut board);
     let ended = board.ended;
     let skipped = std::mem::take(&mut board.skipped);
     super::play::merge::<V>(&mut live.skip_tick, skipped);
-    if let Some(held) = live.machines.iter_mut().find(|held| held.creature == actor) {
-        held.state = state;
-    }
     let again = match played {
         sts2_core::Played::Done if live.asking.is_none() => return Some(ended),
         sts2_core::Played::Done => None,
@@ -2502,7 +2494,6 @@ fn enemy_turn<V: Rules>(
             continue;
         };
         let monster = held.monster;
-        let mut state = held.state;
         // `OnMovePerformed`, which is what lets the graph leave this move. It
         // happens beside `PerformMove` rather than after what the move does.
         held.machine.performed();
@@ -2519,13 +2510,9 @@ fn enemy_turn<V: Rules>(
             ascension,
             (id, damage, repeats),
         );
-        let played = V::perform_move(monster, next_move.id, &mut state, &mut board);
+        let played = V::perform_move(monster, next_move.id, &mut board);
         ended = ended.or(board.ended);
         super::play::merge::<V>(skipping, std::mem::take(&mut board.skipped));
-        // A monster whose move took it out of the fight took its model too.
-        if let Some(held) = live.machines.iter_mut().find(|held| held.creature == id) {
-            held.state = state;
-        }
         match played {
             sts2_core::Played::Done => {}
             sts2_core::Played::Choosing {
