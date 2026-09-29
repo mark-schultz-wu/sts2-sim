@@ -1,0 +1,6 @@
+# Storm of Steel discards the other seven cards of the hand, then makes
+# seven Shivs.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"STORM_OF_STEEL"}
+{"cmd":"play_card","index":7}

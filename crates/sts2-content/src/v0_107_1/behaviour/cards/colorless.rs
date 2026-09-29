@@ -111,6 +111,19 @@ pub(super) fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played
                 at: super::super::Resume::Card(super::Resume::Colorless(Resume::SeekerStrikeTakes)),
             }
         }
+        // `SecretWeapon`: one Attack of the draw pile picked, into hand.
+        ColorlessCard::SecretWeapon => {
+            let attacks = fight
+                .cards_in(Pile::Draw)
+                .into_iter()
+                .filter(|&at| V::card_kind(fight.card_ident(at).card) == Some(CardKind::Attack))
+                .collect();
+            Played::AskingAmong {
+                cards: attacks,
+                selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
+                at: super::super::Resume::Card(super::Resume::Colorless(Resume::SecretWeaponTakes)),
+            }
+        }
         ColorlessCard::SecretTechnique => {
             let skills = fight
                 .cards_in(Pile::Draw)
@@ -266,6 +279,8 @@ pub enum Resume {
     SecretTechniqueTakes,
     /// `SeekerStrike`, after the card picked from the three it offered.
     SeekerStrikeTakes,
+    /// `SecretWeapon`, after the Attack picked from the draw pile.
+    SecretWeaponTakes,
     /// `Catastrophe`, once a card it played has its answer, with this many
     /// cards still to play.
     CatastropheLeft(u8),
@@ -291,7 +306,7 @@ pub(super) fn resume_play<F: Fight<V>>(
         }
         Resume::CatastropheLeft(_) => unreachable!("Catastrophe waits, and picks nothing"),
         // `CardPileCmd.Add` of the one taken, into hand.
-        Resume::SecretTechniqueTakes | Resume::SeekerStrikeTakes => {
+        Resume::SecretTechniqueTakes | Resume::SeekerStrikeTakes | Resume::SecretWeaponTakes => {
             fight.act_on(PileAct::IntoHand, chosen.as_slice());
             Played::Done
         }

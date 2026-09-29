@@ -124,6 +124,45 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
         // `HelixDrill`: its damage to the target, once for each hit it works
         // out, as `Barrage` does.
         DefectCard::Barrage | DefectCard::HelixDrill => barrage(fight),
+        // `Voltaic`: a Lightning orb channelled for each its owner channelled
+        // this fight before.
+        DefectCard::Voltaic => {
+            for _ in 0..fight.var(CardVar::CalculatedChannels) {
+                fight.channel(Orb::LightningOrb);
+            }
+            Played::Done
+        }
+        // `FlakCannon`: every status its owner holds outside the exhaust pile
+        // exhausted, then its damage once for each, each hit at an enemy
+        // drawn at random. The hits are counted before the statuses go.
+        DefectCard::FlakCannon => {
+            let hits = fight.var(CardVar::CalculatedHits);
+            // `AllCards`: the hand, then the draw and discard piles.
+            let statuses: Vec<_> = [Pile::Hand, Pile::Draw, Pile::Discard]
+                .into_iter()
+                .flat_map(|pile| fight.cards_in(pile))
+                .filter(|&at| {
+                    <V as sts2_core::Rules>::card_kind(fight.card_ident(at).card)
+                        == Some(sts2_core::CardKind::Status)
+                })
+                .collect();
+            fight.act_on(PileAct::Exhaust, &statuses);
+            fight.attack(Scaling::Dynamic, |fight| {
+                for _ in 0..hits {
+                    let Some(target) = fight.random_target() else {
+                        break;
+                    };
+                    let hit = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(hit);
+                }
+            });
+            Played::Done
+        }
         // `Spinner`: a Glass orb channelled once upgraded, then its Spinner.
         DefectCard::Spinner => {
             if fight.upgraded() {

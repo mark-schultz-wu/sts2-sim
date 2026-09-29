@@ -110,6 +110,19 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
             });
             Played::Done
         }
+        // `Resonance`: its Strength on its owner, then one Strength off each
+        // enemy that can be hit.
+        RegentCard::Resonance => {
+            use super::super::super::generated::powers::Power;
+            use sts2_core::PowerAmount;
+
+            let strength = fight.var(CardVar::StrengthPower);
+            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(strength));
+            for target in fight.hittable_opponents() {
+                fight.apply_power(target, Power::StrengthPower, PowerAmount::Counted(-1));
+            }
+            Played::Done
+        }
         RegentCard::Glitterstream => common::glitterstream(fight),
         // `Glow`: its stars, its draw, then Draw Cards Next Turn at as many.
         RegentCard::Glow => {

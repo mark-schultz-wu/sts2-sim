@@ -276,6 +276,20 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
             fight.apply(block);
             Played::Done
         }
+        // `StormOfSteel`: the whole hand discarded, then as many Shivs into
+        // hand, each upgraded once Storm of Steel is.
+        SilentCard::StormOfSteel => {
+            let hand = fight.cards_in(Pile::Hand);
+            fight.act_on(sts2_core::PileAct::Discard, &hand);
+            let shiv = CardIdent::new(Cards::Token(TokenCard::Shiv));
+            let upgraded = fight.upgraded();
+            for at in fight.add_generated_cards(shiv, Pile::Hand, hand.len()) {
+                if upgraded {
+                    fight.modify_card(at, Change::Upgrade, Lasting::ThisFight);
+                }
+            }
+            Played::Done
+        }
         // `BulletTime`: each card of the hand that does not cost X free this
         // turn, then one No Draw on its owner.
         SilentCard::BulletTime => {
