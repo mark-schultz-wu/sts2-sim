@@ -274,6 +274,7 @@ pub(super) fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played
         ColorlessCard::JackOfAllTrades => jack_of_all_trades(fight),
         ColorlessCard::BeatDown => beat_down(fight),
         ColorlessCard::Splash => splash(fight),
+        ColorlessCard::HiddenGem => hidden_gem(fight),
         ColorlessCard::Omnislice => omnislice(fight),
         card => card_plays::colorless::on_play(card, fight),
     }
@@ -368,6 +369,50 @@ fn beat_down<F: Fight<V>>(fight: &mut F) -> Played<V> {
                 at: super::super::Resume::Card(super::Resume::Colorless(Resume::BeatDownPlayed)),
             };
         }
+    }
+    Played::Done
+}
+
+/// `HiddenGem`: its `Replay` added to one card of the draw pile, drawn off
+/// `CombatCardSelection`. The card can be played, is no Curse or Quest, and
+/// has no replays yet. Attacks, Skills and Powers go first, and any other
+/// card only where none is left.
+///
+/// # Panics
+///
+/// A card whose type the fight works out.
+fn hidden_gem<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use sts2_core::{RunStreamKinds as _, Writing};
+
+    let kind = |fight: &F, at| {
+        V::card_kind(fight.card_ident(at).card)
+            .unwrap_or_else(|| unimplemented!("Hidden Gem reading a card whose type is computed"))
+    };
+    let eligible: Vec<_> = fight
+        .cards_in(Pile::Draw)
+        .into_iter()
+        .filter(|&at| !fight.card_keyword(at, CardKeyword::Unplayable))
+        .filter(|&at| !matches!(kind(fight, at), CardKind::Curse | CardKind::Quest))
+        .filter(|&at| fight.card_replays(at) < 1)
+        .collect();
+    let preferred: Vec<_> = eligible
+        .iter()
+        .copied()
+        .filter(|&at| {
+            matches!(
+                kind(fight, at),
+                CardKind::Attack | CardKind::Skill | CardKind::Power
+            )
+        })
+        .collect();
+    let items = if preferred.is_empty() {
+        eligible
+    } else {
+        preferred
+    };
+    let stream = <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_SELECTION;
+    if let Some(card) = fight.random_card(&items, stream) {
+        fight.add_replays(Writing::One(card), fight.var(CardVar::Replay));
     }
     Played::Done
 }

@@ -1,0 +1,11 @@
+# Calamity notes each Attack its owner plays. Once that play is over, it makes
+# as many Attacks of the character's pool as its stack, into hand. A Skill
+# makes nothing. An Energy Potion pays for the two plays after it.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"CALAMITY"}
+{"cmd":"play_card","index":5}
+{"cmd":"grant","potion":"ENERGY_POTION"}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":1}

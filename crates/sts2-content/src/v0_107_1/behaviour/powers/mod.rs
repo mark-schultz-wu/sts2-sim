@@ -313,6 +313,7 @@ impl sts2_core::PowerModel<V> for State {
             | Power::AfterimagePower
             | Power::SubroutinePower
             | Power::StormPower
+            | Power::CalamityPower
             | Power::RupturePower
             | Power::SerpentFormPower => Self::Noted {
                 power,
@@ -2135,6 +2136,28 @@ pub(crate) fn event_hook(
                 }
             }
             return;
+        }
+        // `CalamityPower.BeforeCardPlayed`: an Attack its owner plays noted.
+        // A fight here has one player, whose cards are all its holder's.
+        (Power::CalamityPower, PowerAmount::Counted(amount), EventHook::CardPlaying { card, id, .. }) => {
+            if <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Attack) {
+                note(state, id, amount);
+            }
+            None
+        }
+        (Power::CalamityPower, PowerAmount::Endless, EventHook::CardPlaying { .. }) => {
+            unimplemented!("an endless Calamity")
+        }
+        // `CalamityPower.AfterCardPlayed`: for a play it noted, `GetForCombat`
+        // of its stack as it stands now in Attacks of the character's pool.
+        (Power::CalamityPower, amount, EventHook::CardPlayed { id, .. }) => {
+            take_noted(state, id).map(|_| match amount {
+                PowerAmount::Counted(count) => HookEffect::GenerateForCombat {
+                    kind: sts2_core::CardKind::Attack,
+                    count,
+                },
+                PowerAmount::Endless => unimplemented!("an endless Calamity"),
+            })
         }
         // `SerpentFormPower.BeforeCardPlayed`: a play of its owner's noted
         // with the stack as it begins. A fight here has one player, whose

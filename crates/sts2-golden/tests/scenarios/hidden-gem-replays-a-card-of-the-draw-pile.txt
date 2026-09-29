@@ -1,0 +1,15 @@
+# Hidden Gem adds two replays to a card of the draw pile, drawn off the card
+# selection stream. The next turn draws it, and an Energy Potion pays for
+# playing the whole hand. The card with the replays plays three times.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"HIDDEN_GEM"}
+{"cmd":"play_card","index":5}
+{"cmd":"end_turn"}
+{"cmd":"grant","potion":"ENERGY_POTION"}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":0,"target":1}
