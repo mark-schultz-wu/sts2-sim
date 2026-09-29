@@ -755,6 +755,13 @@ impl<'a, V: Rules> Board<'a, V> {
                 (Listener::Power { owner, .. }, HookEffect::Damage { target, amount }) => {
                     self.hit_unpowered(Some(owner), target, amount, false)
                 }
+                // `CreatureCmd.Damage` over `HittableEnemies`, unpowered, from
+                // the power's owner.
+                (Listener::Power { owner, .. }, HookEffect::DamageOpponents(amount)) => {
+                    for target in self.hittable_opponents_of(owner) {
+                        self.hit_unpowered(Some(owner), target, amount, false);
+                    }
+                }
                 // `CreatureCmd.GainBlock`, unpowered, on the power's owner.
                 (Listener::Power { owner, .. }, HookEffect::GainBlock(amount)) => {
                     let block = resolve::<V>(

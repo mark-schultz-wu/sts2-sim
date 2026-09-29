@@ -234,6 +234,19 @@ pub(crate) fn enter<V: Rules>(
                     Board::for_card(&mut live, streams.combat(), relics, ascension, None, None);
                 sts2_core::Fight::heal(&mut board, player, amount);
             }
+            // `CardCmd.ApplyKeyword` over `AllCards`, which is the deck the
+            // piles hold by now.
+            HookEffect::AddKeyword {
+                to: sts2_core::Writing::EveryCopyOf(card),
+                keyword,
+            } => {
+                for held in order.iter_mut().filter(|held| held.face.ident.card == card) {
+                    held.face.modify(
+                        sts2_core::Change::AddKeyword(keyword),
+                        sts2_core::Lasting::ThisFight,
+                    );
+                }
+            }
             other => unimplemented!("a listener asking for {other:?} as a room opens"),
         }
     }

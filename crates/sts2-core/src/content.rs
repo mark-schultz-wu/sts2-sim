@@ -4671,6 +4671,9 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CreatureCmd.Heal` on the listener's owner for this many hundredths of
     /// its maximum health. The health keeps the whole part.
     HealPercent(V::Number),
+    /// `CreatureCmd.Heal` on the listener's owner for what its health lacks
+    /// of its maximum, as it stands when the heal is carried out.
+    HealMissing,
     /// `OrbCmd.Channel` for the listener's owner.
     Channel(V::Orb),
     /// `OrbModel.GetRandomOrb` off `CombatOrbGeneration`, over `orbs`, then

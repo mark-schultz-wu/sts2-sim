@@ -102,6 +102,10 @@ pub enum State {
     Vigor {
         bound: Option<Bound>,
     },
+    /// `OutbreakPower`'s `timesPoisoned`.
+    Outbreak {
+        poisoned: u8,
+    },
     /// `FeralPower`'s `zeroCostAttacksPlayed`.
     Feral {
         played: Number,
@@ -148,6 +152,9 @@ pub enum State {
         playing: [Option<(sts2_core::CardId<V>, Number)>; NOTED_AT_ONCE],
     },
 }
+
+/// `OutbreakPower.poisonThreshold`: every third Poison deals its damage.
+const OUTBREAK_EVERY: u8 = 3;
 
 /// How many plays `amountsForPlayedCards` keeps at once: one, and one played
 /// inside it.
@@ -266,6 +273,7 @@ impl sts2_core::PowerModel<V> for State {
             Power::SwipePower => Self::Swipe { stolen: None },
             Power::VigorPower => Self::Vigor { bound: None },
             Power::FeralPower => Self::Feral { played: 0 },
+            Power::OutbreakPower => Self::Outbreak { poisoned: 0 },
             Power::GigantificationPower => Self::Gigantification { bound: None },
             Power::PanachePower => Self::Panache {
                 cards_left: PANACHE_CARDS,
@@ -314,6 +322,7 @@ impl sts2_core::PowerModel<V> for State {
             Self::WitheringPresence { .. } => Power::WitheringPresencePower,
             Self::ChainsOfBinding { .. } => Power::ChainsOfBindingPower,
             Self::Swipe { .. } => Power::SwipePower,
+            Self::Outbreak { .. } => Power::OutbreakPower,
             Self::Vigor { .. } => Power::VigorPower,
             Self::Feral { .. } => Power::FeralPower,
             Self::Gigantification { .. } => Power::GigantificationPower,
@@ -2129,6 +2138,34 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Vicious")
         }
         (Power::ViciousPower, _, EventHook::PowerAmountChanged { .. }) => None,
+        // `OutbreakPower.AfterPowerAmountChanged`: each Poison its owner adds
+        // counts, and every third deals its stack, unpowered, to each enemy
+        // that can be hit.
+        (
+            Power::OutbreakPower,
+            PowerAmount::Counted(amount),
+            EventHook::PowerAmountChanged {
+                power: Power::PoisonPower,
+                delta,
+                applier: Some(applier),
+                ..
+            },
+        ) if applier == holder && delta > 0 => {
+            let State::Outbreak { poisoned } = state else {
+                unreachable!("Outbreak counts its poisonings")
+            };
+            *poisoned += 1;
+            if *poisoned >= OUTBREAK_EVERY {
+                *poisoned %= OUTBREAK_EVERY;
+                Some(HookEffect::DamageOpponents(amount))
+            } else {
+                None
+            }
+        }
+        (Power::OutbreakPower, PowerAmount::Endless, EventHook::PowerAmountChanged { .. }) => {
+            unimplemented!("an endless Outbreak")
+        }
+        (Power::OutbreakPower, _, EventHook::PowerAmountChanged { .. }) => None,
         // `ShroudPower.AfterPowerAmountChanged`: its stack as block,
         // unpowered, whenever its owner applies Doom.
         (
