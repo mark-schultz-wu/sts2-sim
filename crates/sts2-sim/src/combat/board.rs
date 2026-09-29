@@ -3940,6 +3940,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
         let rng = match stream {
             stream if stream == V::RunRngType::SHUFFLE => &mut self.rngs.shuffle,
+            stream if stream == V::RunRngType::COMBAT_CARD_SELECTION => &mut self.rngs.selection,
             stream => unimplemented!("cards in the fight shuffled off {stream:?}"),
         };
         let cards_held = &self.live.cards;

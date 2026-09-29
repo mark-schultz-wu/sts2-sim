@@ -137,6 +137,39 @@ pub(crate) fn result_pile(
     }
 }
 
+/// `PowerModel.TypeForCurrentAmount == PowerType.Debuff`.
+///
+/// A counter that allows negatives is a debuff below zero, and a debuff
+/// that does not allow them is a buff there.
+pub(super) fn debuff_for_amount(
+    power: super::super::generated::powers::Power,
+    amount: sts2_core::PowerAmount<i32>,
+) -> bool {
+    use super::super::generated::powers::{Power, PowerFlag, PowerStackType, PowerType};
+    use crate::Field;
+    use sts2_core::{PowerAmount, Table as _};
+
+    let data = Power::data(power);
+    let Field::Constant(kind) = data.kind else {
+        unimplemented!("the type {power:?} works out at the time");
+    };
+    let Field::Constant(stack) = data.stack else {
+        unimplemented!("the stacking {power:?} works out at the time");
+    };
+    let Field::Constant(negative) = data.flags.get(PowerFlag::AllowNegative) else {
+        unimplemented!("whether {power:?} allows negatives, which it works out at the time");
+    };
+    let below_zero = match amount {
+        PowerAmount::Counted(amount) => amount < 0,
+        PowerAmount::Endless => false,
+    };
+    match kind {
+        _ if stack == Some(PowerStackType::Counter) && negative && below_zero => true,
+        PowerType::Debuff if !negative && below_zero => false,
+        kind => kind == PowerType::Debuff,
+    }
+}
+
 /// What a card works out from the fight for a number it prints.
 pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
     card: Cards,
@@ -146,6 +179,24 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
 ) -> Number {
     match (card, key) {
         (Cards::Token(card), key) => token::calculated(card, key, printed, owner.powers),
+        // `Rend`: a base, and more for each debuff on its target that is not
+        // temporary.
+        (Cards::Colorless(ColorlessCard::Rend), CardVar::CalculatedDamage) => {
+            let debuffs = owner.target.map_or(0, |powers| {
+                powers
+                    .iter()
+                    // A temporary power's type is worked out as it stands, and
+                    // Rend leaves it out whatever it is.
+                    .filter(|held| {
+                        super::powers::lends(held.power).is_none()
+                            && debuff_for_amount(held.power, held.amount)
+                    })
+                    .count()
+            });
+            let debuffs =
+                Number::try_from(debuffs).expect("a creature's powers fit the game's numbers");
+            printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * debuffs
+        }
         // `Unleash`: a base, and one more for each point of health a living
         // Osty has.
         (Cards::Necrobinder(NecrobinderCard::Unleash), CardVar::CalculatedDamage) => {

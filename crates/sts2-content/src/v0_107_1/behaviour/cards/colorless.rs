@@ -80,6 +80,37 @@ pub(super) fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played
             Played::Done
         }
         // `SecretTechnique`: one skill of the draw pile picked, into hand.
+        // `SeekerStrike`: its damage to the target, then one of three cards of
+        // the draw pile, `StableShuffle`d off `CombatCardSelection`, into hand.
+        ColorlessCard::SeekerStrike => {
+            use sts2_core::{Amount, Effect, RunStreamKinds as _, Scaling};
+
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            let stream = <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_SELECTION;
+            let mut shuffled = fight.cards_in(Pile::Draw);
+            fight.stable_shuffle_cards(&mut shuffled, stream);
+            let options = usize::try_from(fight.var(CardVar::Cards)).expect("a few cards");
+            shuffled.truncate(options);
+            let cards = fight
+                .cards_in(Pile::Draw)
+                .into_iter()
+                .filter(|card| shuffled.contains(card))
+                .collect();
+            Played::AskingAmong {
+                cards,
+                selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
+                at: super::super::Resume::Card(super::Resume::Colorless(Resume::SeekerStrikeTakes)),
+            }
+        }
         ColorlessCard::SecretTechnique => {
             let skills = fight
                 .cards_in(Pile::Draw)
@@ -233,6 +264,8 @@ pub enum Resume {
     ThinkingAheadPutBack,
     /// `SecretTechnique`, after the skill picked from the draw pile.
     SecretTechniqueTakes,
+    /// `SeekerStrike`, after the card picked from the three it offered.
+    SeekerStrikeTakes,
     /// `Catastrophe`, once a card it played has its answer, with this many
     /// cards still to play.
     CatastropheLeft(u8),
@@ -258,7 +291,7 @@ pub(super) fn resume_play<F: Fight<V>>(
         }
         Resume::CatastropheLeft(_) => unreachable!("Catastrophe waits, and picks nothing"),
         // `CardPileCmd.Add` of the one taken, into hand.
-        Resume::SecretTechniqueTakes => {
+        Resume::SecretTechniqueTakes | Resume::SeekerStrikeTakes => {
             fight.act_on(PileAct::IntoHand, chosen.as_slice());
             Played::Done
         }
