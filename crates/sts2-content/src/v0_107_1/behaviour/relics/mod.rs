@@ -193,6 +193,7 @@ mod preserved_fog;
 mod punch_dagger;
 mod radiant_pearl;
 mod rainbow_ring;
+mod razor_tooth;
 mod red_mask;
 mod red_skull;
 mod regal_pillow;
@@ -534,6 +535,7 @@ pub enum State {
     UnceasingTop,
     GalacticDust(galactic_dust::State),
     MiniRegent(mini_regent::State),
+    RazorTooth,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -777,6 +779,7 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::RazorTooth => razor_tooth::event_hook(hook, asked),
         State::MiniRegent(state) => mini_regent::event_hook(state, hook, asked),
         State::GalacticDust(state) => galactic_dust::event_hook(state, hook, asked),
         State::UnceasingTop => unceasing_top::event_hook(hook, asked),
@@ -1133,7 +1136,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::FuneraryMask
         | State::UnceasingTop
         | State::GalacticDust(_)
-        | State::MiniRegent(_) => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::MiniRegent(_)
+        | State::RazorTooth => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1312,6 +1316,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::RazorTooth => State::RazorTooth,
             Relic::MiniRegent => State::MiniRegent(mini_regent::State::default()),
             Relic::GalacticDust => State::GalacticDust(galactic_dust::State::default()),
             Relic::UnceasingTop => State::UnceasingTop,
