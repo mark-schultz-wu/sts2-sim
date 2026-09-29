@@ -1,0 +1,8 @@
+# Neow's Bones offers Precarious Shears, which asks for cards to remove as
+# it is picked up, from inside the reward screen. The screen stands still
+# under the question and comes back once it is answered.
+{"cmd":"start","seed":"S33D3","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"NEOWS_BONES"}
+{"cmd":"answer","take":[{"index":0}]}
+{"cmd":"answer","cards":[0,1]}
+{"cmd":"answer","take":[{"index":1}]}

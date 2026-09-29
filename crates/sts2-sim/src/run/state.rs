@@ -592,6 +592,10 @@ pub(super) enum Pickup<V: Rules> {
 pub(super) struct Asked<V: Rules> {
     pub(super) pickup: Pickup<V>,
     pub(super) rest: SmallVec<[sts2_core::HookEffect<V>; 4]>,
+    /// The question this one interrupted, taken up again once this one and
+    /// its rest are done. A relic taken off a reward screen asks from inside
+    /// it, as `RewardsSet` awaits the relic's pickup.
+    pub(super) under: Option<Box<Asked<V>>>,
 }
 
 /// What an unknown room rolls besides an event, in the order
@@ -1977,6 +1981,7 @@ impl<V: Rules> State<V> {
             return Some(Asked {
                 pickup,
                 rest: effects.collect(),
+                under: None,
             });
         }
         None
@@ -3835,6 +3840,7 @@ impl<V: Rules> State<V> {
                 max: 1,
             },
             rest: SmallVec::new(),
+            under: None,
         }))
     }
 
@@ -3852,27 +3858,65 @@ impl<V: Rules> State<V> {
                     skippable,
                 },
             rest,
+            under,
         }) = asking.take()
         else {
             unreachable!("the room was parked on a reward screen");
         };
-        self.take_reward(&mut offered, answer);
-        if offered.iter().any(|offer| !offer.taken()) {
+        let screen = |offered| Asked {
+            pickup: Pickup::Rewards { offered, skippable },
+            rest,
+            under,
+        };
+        // A relic whose pickup asks stands the screen still under its question.
+        if let Some(mut asked) = self.take_reward(&mut offered, answer) {
+            asked.under = Some(Box::new(screen(offered)));
+            return self.park(asked);
+        }
+        let screen = screen(offered);
+        self.taken_up(screen)
+    }
+
+    /// A question whose answer is in, taken up again where it left off: a
+    /// reward screen with rewards left is asked again. Anything else, and a
+    /// screen with none left, carries out its rest and then takes up what it
+    /// interrupted.
+    fn taken_up(&mut self, asked: Asked<V>) -> Decided {
+        let Asked {
+            pickup,
+            rest,
+            under,
+        } = asked;
+        if let Pickup::Rewards { offered, skippable } = pickup
+            && offered.iter().any(|offer| !offer.taken())
+        {
             return self.park(Asked {
                 pickup: Pickup::Rewards { offered, skippable },
                 rest,
+                under,
             });
         }
-        match self.carry_out(rest) {
-            Some(next) => self.park(next),
-            None => {
-                // A rest site's option is done once its heal's rewards are.
-                if let Phase::RestSite { options, .. } = &mut self.phase {
-                    options.clear();
-                }
-                Decided::Resolved
-            }
+        self.done_asking(rest, under)
+    }
+
+    /// The rest of a question once it is answered, then what it interrupted.
+    fn done_asking(
+        &mut self,
+        rest: impl IntoIterator<Item = sts2_core::HookEffect<V>>,
+        under: Option<Box<Asked<V>>>,
+    ) -> Decided {
+        if let Some(mut next) = self.carry_out(rest) {
+            next.under = under;
+            return self.park(next);
         }
+        if let Some(under) = under {
+            return self.taken_up(*under);
+        }
+        // A rest site's option is done once its pickup is.
+        if let Phase::RestSite { options, .. } = &mut self.phase {
+            options.clear();
+        }
+        Decided::Resolved
     }
 
     /// Park the room on what a pickup or an event option asks.
@@ -3980,14 +4024,7 @@ impl<V: Rules> State<V> {
             Pickup::Event => unreachable!("an event's own question is answered above"),
         }
         // The rest of the pickup, which can ask again.
-        if let Some(next) = self.carry_out(asked.rest) {
-            return Ok(self.park(next));
-        }
-        // A rest site's option is done once its pickup is.
-        if let Phase::RestSite { options, .. } = &mut self.phase {
-            options.clear();
-        }
-        Ok(Decided::Resolved)
+        Ok(self.done_asking(asked.rest, asked.under))
     }
 
     /// The question the event the run stands in parks on.
@@ -4086,7 +4123,10 @@ impl<V: Rules> State<V> {
             return Ok(self.decided());
         }
         let mut offered = std::mem::take(offered);
-        self.take_reward(&mut offered, answer);
+        if let Some(asked) = self.take_reward(&mut offered, answer) {
+            let pickup = asked.pickup;
+            unimplemented!("a relic asking for {pickup:?} on a fight's reward screen");
+        }
         let Phase::Rewards { offered: back, .. } = &mut self.phase else {
             unreachable!("taking a fight's reward leaves its screen up");
         };
@@ -4099,7 +4139,8 @@ impl<V: Rules> State<V> {
     /// # Panics
     ///
     /// An answer the screen does not accept, or a potion for a full belt.
-    fn take_reward(&mut self, offered: &mut [Offer<V>], answer: &Answer) {
+    #[must_use]
+    fn take_reward(&mut self, offered: &mut [Offer<V>], answer: &Answer) -> Option<Asked<V>> {
         if let Answer::Skip = answer {
             for offer in offered {
                 match offer {
@@ -4111,7 +4152,7 @@ impl<V: Rules> State<V> {
                     | Offer::CardRemoval { taken } => *taken = true,
                 }
             }
-            return;
+            return None;
         }
         let Answer::Take(take) = *answer else {
             unimplemented!("an answer the reward screen does not accept");
@@ -4156,10 +4197,11 @@ impl<V: Rules> State<V> {
             (Offer::Relic { relic, taken, .. }, TakeReward::NonCard { .. }) => {
                 let relic = *relic;
                 *taken = true;
-                self.obtain_here(relic);
+                return self.obtain(relic);
             }
             _ => unimplemented!("a reward taken as the wrong kind"),
         }
+        None
     }
 
     /// Where the player stands.
