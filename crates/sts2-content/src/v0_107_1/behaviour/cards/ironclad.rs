@@ -336,6 +336,54 @@ pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<
             Played::Done
         }
         IroncladCard::Armaments => armaments(fight),
+        // `Cascade`: the top cards of the draw pile auto-played, as many as
+        // its X spent and one more once upgraded.
+        IroncladCard::Cascade => {
+            let count = fight.x_value() + super::Number::from(fight.upgraded());
+            let count = usize::try_from(count).expect("an X is not negative");
+            fight.auto_play_from_draw(count, false);
+            Played::Done
+        }
+        // `EvilEye`: its block, and again where its owner exhausted a card
+        // this turn. A fight here has one player, whose cards are all its
+        // owner's.
+        IroncladCard::EvilEye => {
+            let gains = if fight.history().exhausted_this_turn() {
+                2
+            } else {
+                1
+            };
+            for _ in 0..gains {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
+            Played::Done
+        }
+        // `Stoke`: the whole hand exhausted, one card at a time. Then as many
+        // cards of the character's pool, each `NextItem` off
+        // `CombatCardGeneration`, upgraded once Stoke is, into hand.
+        IroncladCard::Stoke => {
+            let hand = fight.cards_in(Pile::Hand);
+            let count = hand.len();
+            fight.act_on(sts2_core::PileAct::Exhaust, &hand);
+            let pool = <V as sts2_core::Rules>::combat_cards(fight.character());
+            let upgrade = u8::from(fight.upgraded());
+            let made: Vec<_> = (0..count)
+                .filter_map(|_| fight.generate_card(pool))
+                .map(|card| sts2_core::CardIdent {
+                    upgrade,
+                    ..sts2_core::CardIdent::new(card)
+                })
+                .collect();
+            for card in made {
+                fight.add_generated_cards(card, Pile::Hand, 1);
+            }
+            Played::Done
+        }
         // `Havoc`: the top card of the draw pile auto-played, and exhausted.
         IroncladCard::Havoc => {
             fight.auto_play_from_draw(1, true);
