@@ -378,6 +378,25 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
             printed.face(CardVar::CalculationBase)
                 + printed.face(CardVar::CalculationExtra) * energy
         }
+        // `Voltaic`: a base, and one more for each Lightning its owner
+        // channelled this fight.
+        (Cards::Defect(DefectCard::Voltaic), CardVar::CalculatedChannels) => {
+            use super::super::generated::orbs::Orb;
+
+            let lightning =
+                Number::try_from(owner.history.channelled_this_fight(Orb::LightningOrb))
+                    .expect("a fight's orbs fit the game's numbers");
+            printed.face(CardVar::CalculationBase)
+                + printed.face(CardVar::CalculationExtra) * lightning
+        }
+        // `FlakCannon`: a base, and one more hit for each status its owner
+        // holds outside the exhaust pile.
+        (Cards::Defect(DefectCard::FlakCannon), CardVar::CalculatedHits) => {
+            let statuses =
+                Number::try_from(owner.statuses).expect("a fight's cards fit the game's numbers");
+            printed.face(CardVar::CalculationBase)
+                + printed.face(CardVar::CalculationExtra) * statuses
+        }
         (Cards::Defect(DefectCard::Barrage), CardVar::CalculatedHits) => {
             let orbs =
                 Number::try_from(owner.orbs.len()).expect("an orb queue fits the game's numbers");

@@ -2698,6 +2698,17 @@ pub(crate) fn var<V: Rules>(
                     .find(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER)
                     .map_or_else(num_traits::zero, |player| player.block),
                 playing: live.cards.in_play(held.id),
+                statuses: {
+                    let status = |face: &Face<V>| {
+                        V::card_kind(face.ident.card) == Some(sts2_core::CardKind::Status)
+                    };
+                    live.cards.count_all(status)
+                        - live
+                            .cards
+                            .iter(Pile::Exhaust)
+                            .filter(|held| status(&held.face))
+                            .count()
+                },
                 orbs: live.orbs.as_ref().map_or(&[], |orbs| orbs.queue.as_slice()),
                 hand: &hand,
                 star_cards: live.cards.count_all(|face| {
@@ -3607,6 +3618,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             return;
         };
         orbs.queue.push(V::channelled(orb));
+        self.live.history.channelled(orb);
         let asked =
             super::listen::notify::<V>(self.live, self.relics, sts2_core::EventHook::OrbChanneled);
         let player = self.live.player().id;

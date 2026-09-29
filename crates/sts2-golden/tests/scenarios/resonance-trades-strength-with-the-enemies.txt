@@ -1,0 +1,5 @@
+# Resonance gives its owner a Strength and takes one from each enemy.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_NORMAL"}
+{"cmd":"grant","card":"RESONANCE"}
+{"cmd":"play_card","index":5}

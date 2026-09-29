@@ -1,0 +1,7 @@
+# Voltaic channels a Lightning orb for each its owner channelled this fight.
+# Cracked Core channelled one as the fight opened, a turn before Voltaic.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"VOLTAIC"}
+{"cmd":"play_card","index":5}

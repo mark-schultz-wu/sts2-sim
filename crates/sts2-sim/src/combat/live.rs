@@ -2028,6 +2028,12 @@ impl<V: Rules> CombatHistory<V> {
             .push(sts2_core::HistoryEntry::Generated { by_player });
     }
 
+    /// `History.OrbChanneled`, in the turn the fight stands in.
+    pub(super) fn channelled(&mut self, orb: V::Orb) {
+        self.this_turn
+            .push(sts2_core::HistoryEntry::Channelled(orb));
+    }
+
     /// `History.DamageReceived`, in the turn the fight stands in.
     pub(super) fn damage_received(&mut self, received: sts2_core::DamageReceived<V>) {
         self.this_turn

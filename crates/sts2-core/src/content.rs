@@ -3995,6 +3995,8 @@ pub enum HistoryEntry<V: ContentVersion> {
     },
     /// A `DamageReceivedEntry`.
     DamageReceived(DamageReceived<V>),
+    /// An `OrbChanneledEntry`, by the orb, which is the player's.
+    Channelled(V::Orb),
 }
 
 /// One `DamageReceivedEntry` in `CombatManager.History`, as far as a
@@ -4140,6 +4142,19 @@ impl<V: ContentVersion> History<'_, V> {
             }
         }
         (spent, latest)
+    }
+
+    /// How many `OrbChanneledEntry` of `orb` the fight holds.
+    pub fn channelled_this_fight(&self, orb: V::Orb) -> usize {
+        let before = std::iter::successors(self.before, |before| before.before.as_deref())
+            .flat_map(|before| before.entries.iter());
+        self.this_turn
+            .iter()
+            .chain(before)
+            .filter(
+                |entry| matches!(entry, HistoryEntry::Channelled(channelled) if *channelled == orb),
+            )
+            .count()
     }
 
     /// How many `CardDrawnEntry` the fight holds.
@@ -5258,6 +5273,9 @@ pub struct CardOwner<'a, V: ContentVersion> {
     /// Whether the card stands in the play pile, which it does while it is
     /// played.
     pub playing: bool,
+    /// How many of the owner's cards in the fight are statuses, the exhaust
+    /// pile left out.
+    pub statuses: usize,
     /// `PlayerCombatState.OrbQueue.Orbs`, in queue order.
     pub orbs: &'a [crate::Channelled<V>],
     /// The cards in the owner's hand, in hand order.
