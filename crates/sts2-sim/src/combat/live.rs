@@ -153,8 +153,10 @@ pub(super) enum Then<V: Rules> {
         act: sts2_core::PileAct,
         stage: Setup<V>,
     },
-    /// The enemy turn, which a monster's move parked on a choice.
-    EnemyTurn(EnemyTurn<V>),
+    /// A choice a monster's move offered, which `V::resume_play` picks up.
+    /// The rest of the move and of the enemy turn waits in
+    /// [`Live::deferred`].
+    Chosen { at: V::Resume },
     /// A selection a shuffle asked for inside an effect's draw. `act` is
     /// what happens to the cards picked, and the rest of the draw waits in
     /// [`Live::deferred`].
@@ -233,20 +235,6 @@ pub(super) struct HeldAttack<V: Rules> {
     pub(super) monster: Option<V::Monster>,
     /// `IsPoweredAttack`.
     pub(super) powered: bool,
-}
-
-/// Where the enemy turn stands while a monster's move waits on the player.
-#[derive(Debug, Clone, PartialEq)]
-pub(super) struct EnemyTurn<V: Rules> {
-    /// The monster whose move asked.
-    pub(super) actor: CombatId,
-    pub(super) move_id: V::MoveId,
-    /// Where the move goes on from, which `V::resume_play` picks up.
-    pub(super) at: V::Resume,
-    /// The enemies still to act after it, in turn order.
-    pub(super) acting: smallvec::SmallVec<[CombatId; CREATURES]>,
-    /// The energy the player's next turn resets to.
-    pub(super) max_energy: V::Count,
 }
 
 /// Where `SetupPlayerTurn` stands, with what the hook it stopped in has still

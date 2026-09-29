@@ -840,15 +840,26 @@ pub(crate) fn answer<V: Rules>(
                 ended,
             );
         }
-        Then::EnemyTurn(parked) => {
-            return super::turn::resume_enemy_turn::<V>(
+        // The choice a monster's move offered, then the rest of the turn.
+        Then::Chosen { at } => {
+            let ascension = live.ascension;
+            let ended = super::turn::resume_chosen::<V>(
+                Fighting {
+                    live: &mut *live,
+                    streams: &mut *streams,
+                    relics: &mut *relics,
+                },
+                at,
+                taken,
+            );
+            return run_deferred(
                 Fighting {
                     live,
                     streams,
                     relics,
                 },
-                parked,
-                taken,
+                ascension,
+                ended,
             );
         }
     };
