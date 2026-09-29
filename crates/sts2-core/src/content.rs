@@ -3508,6 +3508,8 @@ pub enum EventHook<V: ContentVersion> {
         /// `DamageResult.WasFullyBlocked`, which only the creature the hit was
         /// aimed at can be.
         fully_blocked: bool,
+        /// Whether its props carry `Unblockable`.
+        unblockable: bool,
         /// The player's `TurnNumber` as the hit lands, which its history entry
         /// keeps.
         turn: V::Count,
@@ -4033,6 +4035,11 @@ pub enum HistoryEntry<V: ContentVersion> {
     DamageReceived(DamageReceived<V>),
     /// An `OrbChanneledEntry`, by the orb, which is the player's.
     Channelled(V::Orb),
+    /// A `PowerReceivedEntry`, by the power and who applied it.
+    PowerReceived {
+        power: V::Power,
+        applier: Option<crate::CombatId>,
+    },
 }
 
 /// One `DamageReceivedEntry` in `CombatManager.History`, as far as a
@@ -4178,6 +4185,17 @@ impl<V: ContentVersion> History<'_, V> {
             }
         }
         (spent, latest)
+    }
+
+    /// Each `PowerReceivedEntry` where `HappenedThisTurn`, by the power and
+    /// who applied it.
+    pub fn received_this_turn(
+        &self,
+    ) -> impl Iterator<Item = (V::Power, Option<crate::CombatId>)> + '_ {
+        self.this_turn.iter().filter_map(|entry| match entry {
+            HistoryEntry::PowerReceived { power, applier } => Some((*power, *applier)),
+            _ => None,
+        })
     }
 
     /// How many `OrbChanneledEntry` of `orb` the fight holds.

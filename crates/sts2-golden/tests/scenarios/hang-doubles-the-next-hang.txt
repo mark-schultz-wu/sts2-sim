@@ -1,0 +1,8 @@
+# Hang deals ten and puts two Hang on its target. The second Hang then
+# deals twice as much, and doubles the Hang to four.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"HANG"}
+{"cmd":"grant","card":"HANG"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"play_card","index":5,"target":1}

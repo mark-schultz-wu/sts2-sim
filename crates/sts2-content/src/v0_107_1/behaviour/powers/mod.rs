@@ -17,7 +17,7 @@ use sts2_core::{
 use super::super::V0_107_1 as V;
 use super::super::generated::afflictions::Affliction;
 use super::super::generated::cards::{
-    CardKeyword, CardTag, Cards, ColorlessCard, StatusCard, TokenCard,
+    CardKeyword, CardTag, Cards, ColorlessCard, NecrobinderCard, StatusCard, TokenCard,
 };
 use super::super::generated::monsters::{IntentKind, Monster, MoveId};
 use super::super::generated::orbs::Orb;
@@ -303,7 +303,8 @@ impl sts2_core::PowerModel<V> for State {
             | Power::AfterimagePower
             | Power::SubroutinePower
             | Power::StormPower
-            | Power::RupturePower => Self::Noted {
+            | Power::RupturePower
+            | Power::SerpentFormPower => Self::Noted {
                 power,
                 playing: [None; NOTED_AT_ONCE],
             },
@@ -903,6 +904,25 @@ pub(crate) fn modify_hook(
             _,
             ModifyHook::EnergyCostLate { .. },
         ) => Modify::Nothing,
+        // `HangPower.ModifyDamageMultiplicative`: its stack as a multiplier on
+        // a hit on its owner from a Hang.
+        (
+            Power::HangPower,
+            PowerAmount::Counted(amount),
+            ModifyHook::DamageMultiplicative {
+                target: Some(target),
+                card:
+                    Some(sts2_core::CardSource {
+                        card: Cards::Necrobinder(NecrobinderCard::Hang),
+                        ..
+                    }),
+                ..
+            },
+        ) if target == holder => Modify::Scaled(f64::from(amount)),
+        (Power::HangPower, PowerAmount::Endless, ModifyHook::DamageMultiplicative { .. }) => {
+            unimplemented!("an endless Hang")
+        }
+        (Power::HangPower, _, ModifyHook::DamageMultiplicative { .. }) => Modify::Nothing,
         // `DoubleDamagePower.ModifyDamageMultiplicative`: double a powered
         // hit from a card, by its owner or one of its pets.
         (
@@ -2093,6 +2113,25 @@ pub(crate) fn event_hook(
             }
             return;
         }
+        // `SerpentFormPower.BeforeCardPlayed`: a play of its owner's noted
+        // with the stack as it begins. A fight here has one player, whose
+        // cards are all its holder's.
+        (Power::SerpentFormPower, PowerAmount::Counted(amount), EventHook::CardPlaying { id, .. }) => {
+            note(state, id, amount);
+            None
+        }
+        (Power::SerpentFormPower, PowerAmount::Endless, EventHook::CardPlaying { .. }) => {
+            unimplemented!("an endless Serpent Form")
+        }
+        // `SerpentFormPower.AfterCardPlayed`: the stack it noted, unpowered
+        // and from its owner, on an enemy drawn off `CombatTargets`.
+        (Power::SerpentFormPower, _, EventHook::CardPlayed { id, .. }) => take_noted(state, id)
+            .filter(|&damage| damage > 0)
+            .map(|amount| HookEffect::DamageRandomOpponent {
+                amount,
+                unblockable: false,
+                from_owner: true,
+            }),
         // `RupturePower.BeforeCardPlayed`: a play of its owner's, in its
         // owner's own turn, noted as owing nothing yet.
         (Power::RupturePower, _, EventHook::CardPlaying { id, side, .. }) => {

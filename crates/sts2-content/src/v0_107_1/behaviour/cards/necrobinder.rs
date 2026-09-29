@@ -355,6 +355,75 @@ fn sculpting_strike<F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
     match card {
+        // `Seance`: its `Cards` of the draw pile picked, to turn into Souls.
+        NecrobinderCard::Seance => {
+            let count = usize::try_from(fight.var(CardVar::Cards))
+                .ok()
+                .and_then(nonmax::NonMaxUsize::new)
+                .expect("a count of cards is not negative");
+            Played::Asking {
+                pile: Pile::Draw,
+                selection: Selection::Exactly(count),
+                at: super::super::Resume::Card(super::Resume::Necrobinder(
+                    Resume::SeanceTransforms,
+                )),
+            }
+        }
+        // `DeathsDoor`: its block, and its `Repeat` times more where its owner
+        // applied Doom this turn.
+        NecrobinderCard::DeathsDoor => {
+            let owner = fight.actor();
+            let doomed = fight
+                .history()
+                .received_this_turn()
+                .any(|(power, applier)| power == Power::DoomPower && applier == Some(owner));
+            let gains = 1 + if doomed {
+                fight.var(CardVar::Repeat)
+            } else {
+                0
+            };
+            for _ in 0..gains {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: owner,
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
+            Played::Done
+        }
+        // `Hang`: its damage to the target, then Hang on it: as much as it
+        // already carries, and at least two.
+        NecrobinderCard::Hang => {
+            use sts2_core::CreatureView as _;
+
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                let hit = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(hit);
+            });
+            let carried = fight
+                .creatures()
+                .find(|creature| creature.id() == target)
+                .and_then(|creature| creature.power(Power::HangPower));
+            let carried = match carried {
+                Some(sts2_core::PowerAmount::Counted(amount)) => amount,
+                Some(sts2_core::PowerAmount::Endless) => unimplemented!("an endless Hang"),
+                None => 0,
+            };
+            let added = carried.max(HANG_AT_LEAST).min((HANG_MOST - carried).max(0));
+            fight.apply_power(
+                target,
+                Power::HangPower,
+                sts2_core::PowerAmount::Counted(added),
+            );
+            Played::Done
+        }
         // `TheScythe`: its damage to the target, then `BuffFromPlay` of its
         // `Increase` on this copy and on its deck version.
         NecrobinderCard::TheScythe => {
@@ -619,6 +688,9 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
 /// Where a Necrobinder card stopped inside its own play.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Resume {
+    /// `Seance`, after its owner picked the cards of the draw pile to turn
+    /// into Souls.
+    SeanceTransforms,
     /// `Cleanse`, after its owner picked the card of the draw pile to
     /// exhaust.
     CleanseExhausts,
@@ -640,6 +712,16 @@ pub(super) fn resume_play<F: Fight<V>>(
     chosen: sts2_core::SelectedCards<V>,
 ) -> Played<V> {
     match at {
+        // `CardCmd.TransformTo<Soul>` of each one taken.
+        Resume::SeanceTransforms => {
+            use super::super::super::generated::cards::{Cards, TokenCard};
+
+            let soul = sts2_core::CardIdent::new(Cards::Token(TokenCard::Soul));
+            for &card in chosen.as_slice() {
+                fight.transform(card, soul);
+            }
+            Played::Done
+        }
         // `CardCmd.Exhaust` of the one taken.
         Resume::CleanseExhausts => {
             fight.act_on(PileAct::Exhaust, chosen.as_slice());
@@ -750,6 +832,12 @@ fn osty_hit<F: Fight<V>>(fight: &mut F, damage: CardVar) {
         fight.apply(hit);
     });
 }
+
+/// `Hang`'s `Math.Max(2, powerAmount)`: the least Hang it adds.
+const HANG_AT_LEAST: super::Number = 2;
+
+/// The stack Hang keeps under, `999999999`.
+const HANG_MOST: super::Number = 999_999_999;
 
 /// Deliver a notification to one Necrobinder card in the fight.
 pub(super) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(

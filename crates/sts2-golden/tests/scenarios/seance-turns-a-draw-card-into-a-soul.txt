@@ -1,0 +1,6 @@
+# Seance turns the card of the draw pile its owner picks into a Soul.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"SEANCE"}
+{"cmd":"play_card","index":5}
+{"cmd":"answer","cards":[0]}

@@ -381,6 +381,7 @@ impl<'a, V: Rules> Board<'a, V> {
             self.live
                 .powers
                 .push(id, HeldPower::new(power, amount.into(), applier));
+            self.live.history.power_received(power, applier);
         }
         self.power_received(modifiers, power);
         if landed {
@@ -630,6 +631,7 @@ impl<'a, V: Rules> Board<'a, V> {
             .unwrap_or_else(|| unimplemented!("a power stacked by {offset:?}"));
         held.amount = super::live::Stacked::counted(had + more);
         let spent = held.amount.spent();
+        self.live.history.power_received(power, applier);
         self.power_received(modifiers, power);
         self.amount_changed(id, power, offset, applier);
         // `ShouldRemoveDueToAmount`, and `PowerCmd.Remove` for a power it
@@ -959,6 +961,7 @@ impl<'a, V: Rules> Board<'a, V> {
                             player: self.live.player().id,
                             side: self.live.side,
                             fully_blocked: aimed && fully_blocked,
+                            unblockable,
                             turn: self.live.turn,
                         },
                     );
