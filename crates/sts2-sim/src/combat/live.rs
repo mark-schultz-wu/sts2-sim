@@ -582,9 +582,10 @@ pub(crate) struct Face<V: Rules> {
     /// A byte, because a card played more times than that is a fight nobody
     /// finishes. [`Face::replay`] says so rather than wrapping.
     replays: i8,
-    /// `EnchantmentModel.Status`, which the enchantment's own `OnPlay` reads
-    /// and sets. A fight starts every copy's at `Normal`.
-    enchantment_status: sts2_core::EnchantmentStatus,
+    /// The enchantment on this copy: its `EnchantmentModel.Status`, which its
+    /// own `OnPlay` reads and sets, and the fields its class keeps. A fight
+    /// starts every copy's fresh.
+    enchantment_state: V::EnchantmentState,
 }
 
 impl<V: Rules> Clone for Face<V> {
@@ -813,7 +814,9 @@ impl<V: Rules> Face<V> {
             removed_keywords: sts2_core::FlagSet::from_members(&[]),
             turn_keywords: sts2_core::FlagSet::from_members(&[]),
             replays: 0,
-            enchantment_status: sts2_core::EnchantmentStatus::Normal,
+            enchantment_state: sts2_core::EnchantmentModel::new(
+                ident.enchantment.map(|enchanted| enchanted.enchantment),
+            ),
         };
         if card.ident.upgrade != 0 {
             assert_eq!(card.ident.upgrade, 1, "only first upgrades are ported");
@@ -1116,7 +1119,7 @@ impl<V: Rules> Face<V> {
         let replays = match self.ident.enchantment {
             Some(enchanted) => super::board::enchanted_by::<V>(
                 enchanted,
-                self.enchantment_status,
+                &self.enchantment_state,
                 sts2_core::EnchantHook::PlayCount,
                 replays,
             ),
@@ -1125,15 +1128,31 @@ impl<V: Rules> Face<V> {
         replays + num_traits::one()
     }
 
-    /// This copy's `EnchantmentModel.Status`.
-    pub(super) fn enchantment_status(&self) -> sts2_core::EnchantmentStatus {
-        self.enchantment_status
+    /// The enchantment on this copy, as its model stands.
+    pub(super) fn enchantment_state(&self) -> V::EnchantmentState {
+        self.enchantment_state
+    }
+
+    /// Set the enchantment on this copy, and say whether that changed it.
+    pub(super) fn set_enchantment_state(&mut self, state: V::EnchantmentState) -> bool {
+        std::mem::replace(&mut self.enchantment_state, state) != state
     }
 
     /// Set this copy's `EnchantmentModel.Status`, and say whether that changed
     /// it.
     pub(super) fn set_enchantment_status(&mut self, status: sts2_core::EnchantmentStatus) -> bool {
-        std::mem::replace(&mut self.enchantment_status, status) != status
+        let mut state = self.enchantment_state;
+        sts2_core::EnchantmentModel::set_status(&mut state, status);
+        self.set_enchantment_state(state)
+    }
+
+    /// `CardCmd.Enchant`: this copy as `ident` names it, with a fresh
+    /// instance of its enchantment.
+    pub(super) fn enchant(&mut self, ident: CardIdent<V>) {
+        self.ident = ident;
+        self.enchantment_state = sts2_core::EnchantmentModel::new(
+            ident.enchantment.map(|enchanted| enchanted.enchantment),
+        );
     }
 
     /// Drop the cost modifiers that do not outlive being played, and say
@@ -1248,7 +1267,7 @@ impl<V: Rules> Face<V> {
         fresh.cost_modifiers = self.cost_modifiers;
         fresh.modifiers = self.modifiers;
         fresh.replays = self.replays;
-        fresh.enchantment_status = self.enchantment_status;
+        fresh.enchantment_state = self.enchantment_state;
         *self = fresh;
     }
 

@@ -110,15 +110,55 @@ const INKY_DAMAGE: i32 = 1;
 /// `Inky`'s `PowerVar<WeakPower>(1)`.
 const INKY_WEAK: i32 = 1;
 
+/// One enchantment on one copy: its `Status`, and the fields its own class
+/// keeps.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct State {
+    status: EnchantmentStatus,
+    own: Own,
+}
+
+/// The fields an enchantment's class adds to `EnchantmentModel`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum Own {
+    /// A class that adds none.
+    Nothing,
+    /// `Momentum.ExtraDamage`, which each play raises by its amount.
+    Momentum { extra_damage: i16 },
+}
+
+impl sts2_core::EnchantmentModel<V> for State {
+    fn new(enchantment: Option<Enchantment>) -> Self {
+        let own = match enchantment {
+            Some(Enchantment::Momentum) => Own::Momentum { extra_damage: 0 },
+            _ => Own::Nothing,
+        };
+        State {
+            status: EnchantmentStatus::Normal,
+            own,
+        }
+    }
+
+    fn status(&self) -> EnchantmentStatus {
+        self.status
+    }
+
+    fn set_status(&mut self, status: EnchantmentStatus) {
+        self.status = status;
+    }
+}
+
 /// An enchantment's `EnchantDamageAdditive`, `EnchantDamageMultiplicative`,
 /// `EnchantBlockAdditive` or `EnchantPlayCount`, over the card it is on.
-pub(crate) fn modify(
-    enchanted: Enchanted<V>,
-    status: EnchantmentStatus,
-    hook: EnchantHook,
-) -> Modify<i32> {
+pub(crate) fn modify(enchanted: Enchanted<V>, state: &State, hook: EnchantHook) -> Modify<i32> {
     let amount = i32::from(enchanted.amount);
+    let status = state.status;
     match (enchanted.enchantment, hook) {
+        // `Momentum`: what its plays have added, on a powered hit.
+        (Enchantment::Momentum, EnchantHook::DamageAdditive { powered: true }) => match state.own {
+            Own::Momentum { extra_damage } => Modify::Added(i32::from(extra_damage)),
+            Own::Nothing => unreachable!("a Momentum keeps its extra damage"),
+        },
         // Sharp's own check: a powered attack, and nothing for any other hit.
         (Enchantment::Sharp, EnchantHook::DamageAdditive { powered: true }) => {
             Modify::Added(amount)
@@ -153,6 +193,7 @@ pub(crate) fn modify(
             | Enchantment::Glam
             | Enchantment::Inky
             | Enchantment::Instinct
+            | Enchantment::Momentum
             | Enchantment::Vigorous
             | Enchantment::Nimble
             | Enchantment::PerfectFit
@@ -201,13 +242,19 @@ pub(crate) fn event_hook(
 }
 
 /// `EnchantmentModel.OnPlay`, after each play of the card it is on.
-pub(crate) fn on_play<F: Fight<V>>(
-    enchanted: Enchanted<V>,
-    status: &mut EnchantmentStatus,
-    fight: &mut F,
-) {
+pub(crate) fn on_play<F: Fight<V>>(enchanted: Enchanted<V>, state: &mut State, fight: &mut F) {
     let amount = i32::from(enchanted.amount);
+    let status = &mut state.status;
     match enchanted.enchantment {
+        // `ExtraDamage += Amount`.
+        Enchantment::Momentum => match &mut state.own {
+            Own::Momentum { extra_damage } => {
+                *extra_damage = extra_damage
+                    .checked_add(i16::from(enchanted.amount))
+                    .unwrap_or_else(|| unimplemented!("a Momentum past what a copy holds"));
+            }
+            Own::Nothing => unreachable!("a Momentum keeps its extra damage"),
+        },
         Enchantment::Sown => {
             if *status == EnchantmentStatus::Normal {
                 fight.modify_energy(amount);

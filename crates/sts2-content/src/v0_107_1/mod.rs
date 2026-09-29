@@ -75,6 +75,7 @@ impl sts2_core::ContentVersion for V0_107_1 {
     type CardVar = generated::cards::CardVar;
     type CardTag = generated::cards::CardTag;
     type Character = generated::characters::Character;
+    type EnchantmentState = behaviour::enchantments::State;
     type Enchantment = generated::enchantments::Enchantment;
     type Encounter = generated::encounters::Encounter;
     type Event = generated::events::Event;
@@ -313,10 +314,10 @@ impl sts2_core::Hooks for V0_107_1 {
 
     fn enchant_modify(
         enchanted: sts2_core::Enchanted<Self>,
-        status: sts2_core::EnchantmentStatus,
+        state: &Self::EnchantmentState,
         hook: sts2_core::EnchantHook,
     ) -> sts2_core::Modify<Self::Number> {
-        behaviour::enchantments::modify(enchanted, status, hook)
+        behaviour::enchantments::modify(enchanted, state, hook)
     }
 
     fn enchantment_event_hook(
@@ -398,10 +399,10 @@ impl sts2_core::Rules for V0_107_1 {
 
     fn enchantment_on_play<F: sts2_core::Fight<Self>>(
         enchanted: sts2_core::Enchanted<Self>,
-        status: &mut sts2_core::EnchantmentStatus,
+        state: &mut Self::EnchantmentState,
         fight: &mut F,
     ) {
-        behaviour::enchantments::on_play(enchanted, status, fight);
+        behaviour::enchantments::on_play(enchanted, state, fight);
     }
 
     fn orb_evoke<F: sts2_core::Fight<Self>>(
