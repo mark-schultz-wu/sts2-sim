@@ -1,0 +1,9 @@
+# Shatter hits every enemy, then evokes each orb its owner held as it began
+# twice, first in line, and the second evoke takes the orb. The Lightning
+# Cracked Core channels and the one Zap channels are both evoked twice.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_NORMAL"}
+{"cmd":"grant","card":"ZAP"}
+{"cmd":"grant","card":"SHATTER"}
+{"cmd":"play_card","index":5}
+{"cmd":"play_card","index":5}
