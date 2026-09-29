@@ -146,6 +146,7 @@ pub(super) fn reasons<V: Rules>(
     // `IsPlayable`, the card's own logic.
     let logic = sts2_core::CardLogic {
         draw_pile: live.cards.len(Pile::Draw),
+        osty: super::board::osty::<V>(creatures).is_some_and(|osty| osty.alive),
     };
     if let sts2_core::HookResponse::Decision(false) = V::card_is_playable(card.card, logic) {
         why = refused::<V>(

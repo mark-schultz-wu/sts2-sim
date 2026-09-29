@@ -130,8 +130,11 @@ pub(crate) fn is_playable(
         Cards::Silent(SilentCard::GrandFinale) => {
             sts2_core::HookResponse::Decision(fight.draw_pile == 0)
         }
-        Cards::Event(super::super::generated::cards::EventCard::Clash)
-        | Cards::Necrobinder(NecrobinderCard::HighFive) => {
+        // `HighFive`: only while its owner's Osty stands.
+        Cards::Necrobinder(NecrobinderCard::HighFive) => {
+            sts2_core::HookResponse::Decision(fight.osty)
+        }
+        Cards::Event(super::super::generated::cards::EventCard::Clash) => {
             unimplemented!("whether {card:?} is playable")
         }
         _ => sts2_core::HookResponse::DoesNotImplement,
