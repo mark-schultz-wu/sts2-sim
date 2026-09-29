@@ -148,11 +148,9 @@ pub(super) enum Then<V: Rules> {
         outermost: bool,
     },
     /// `SetupPlayerTurn`, which a hook parked on its selection. `act` is what
-    /// happens to the cards picked, and `stage` is the rest of the setup.
-    Setup {
-        act: sts2_core::PileAct,
-        stage: Setup<V>,
-    },
+    /// happens to the cards picked, and the rest of the setup waits in
+    /// [`Live::deferred`].
+    Setup { act: sts2_core::PileAct },
     /// A choice a monster's move offered, which `V::resume_play` picks up.
     /// The rest of the move and of the enemy turn waits in
     /// [`Live::deferred`].
@@ -217,6 +215,8 @@ pub(super) enum Deferred<V: Rules> {
     ///
     /// `AttackCommand`'s hit loop awaits each hit, so the later ones stand
     /// still until the answer comes.
+    /// `SetupPlayerTurn` from `stage`, which a hook stopped on its selection.
+    Setup(Setup<V>),
     Hits {
         frame: super::board::Frame<V>,
         attack: HeldAttack<V>,

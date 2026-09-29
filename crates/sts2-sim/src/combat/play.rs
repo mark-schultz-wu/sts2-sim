@@ -804,19 +804,20 @@ pub(crate) fn answer<V: Rules>(
             at,
             outermost,
         } => (effect, at, outermost),
-        Then::Setup { act, stage } => {
+        Then::Setup { act } => {
             let sts2_core::Taken::Selected(picked) = taken else {
                 unreachable!("a turn's setup asks for cards of a pile")
             };
-            return super::turn::resume_setup::<V>(
+            let ascension = live.ascension;
+            let ended = super::turn::answer_setup::<V>(live, streams.combat(), relics, act, picked);
+            return run_deferred(
                 Fighting {
                     live,
                     streams,
                     relics,
                 },
-                act,
-                picked,
-                stage,
+                ascension,
+                ended,
             );
         }
         // A shuffle's pick inside an effect's draw: the cards picked, then
@@ -996,6 +997,14 @@ fn run_deferred<V: Rules>(
                     }
                 }
             }
+            super::live::Deferred::Setup(stage) => super::turn::finish_setup::<V>(
+                fighting.live,
+                fighting.streams.combat(),
+                fighting.relics,
+                ascension,
+                stage,
+                ended,
+            ),
             held @ super::live::Deferred::Hits { .. } => match ended {
                 None => super::board::land_held::<V>(
                     fighting.live,

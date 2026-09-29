@@ -350,7 +350,7 @@ pub(crate) fn enter<V: Rules>(
         super::live::Setup::BeforeHandDraw(asked),
     ) {
         super::turn::Carried::Done(ended) => ended,
-        super::turn::Carried::Parked(_) => {
+        super::turn::Carried::Parked => {
             unimplemented!("a choice as the fight opens")
         }
     };
