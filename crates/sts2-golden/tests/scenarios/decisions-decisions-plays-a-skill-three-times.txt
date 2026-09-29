@@ -1,0 +1,10 @@
+# Two Venerates raise the stars past Decisions, Decisions' six. It draws
+# three, then plays a Skill picked from the hand three times over.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":1}
+{"cmd":"grant","card":"VENERATE"}
+{"cmd":"play_card","index":4}
+{"cmd":"grant","card":"DECISIONS_DECISIONS"}
+{"cmd":"play_card","index":4}
+{"cmd":"answer","cards":[0]}

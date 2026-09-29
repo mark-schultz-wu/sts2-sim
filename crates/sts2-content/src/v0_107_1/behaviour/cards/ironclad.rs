@@ -67,6 +67,11 @@ pub(super) fn resume_play<F: Fight<V>>(
 pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
     match card {
         IroncladCard::Thrash => thrash(fight),
+        // `NotYet`: its `Heal` on its owner.
+        IroncladCard::NotYet => {
+            fight.heal(fight.actor(), fight.var(CardVar::Heal));
+            Played::Done
+        }
         // `TearAsunder`: its damage to the target, as many times as its
         // calculated hits, counted before the first, as one attack.
         IroncladCard::TearAsunder => {

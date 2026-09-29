@@ -67,6 +67,25 @@ pub(crate) fn upgrade(card: Cards) -> &'static [Change] {
 /// One thing an effect writes on a copy of a card, as this build spells it.
 pub(crate) type Change = sts2_core::Change<V>;
 
+/// Where `card` stands now, found again by its id, or nothing where no pile
+/// holds it. A card auto-played more than once moves between its plays, and
+/// `CardCmd.AutoPlay` plays it wherever it is.
+pub(super) fn standing<F: Fight<V>>(
+    fight: &F,
+    card: sts2_core::CardAt<V>,
+) -> Option<sts2_core::CardAt<V>> {
+    use sts2_core::Pile;
+
+    [Pile::Discard, Pile::Hand, Pile::Draw, Pile::Exhaust]
+        .into_iter()
+        .find_map(|pile| {
+            fight
+                .cards_in(pile)
+                .into_iter()
+                .find(|at| at.id() == card.id())
+        })
+}
+
 /// What a card that works its own target out from the fight names.
 pub(crate) fn computed_target(
     card: Cards,
