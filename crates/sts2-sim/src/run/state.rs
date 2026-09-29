@@ -2866,7 +2866,7 @@ impl<V: Rules> State<V> {
     /// The room is built first. Building one can fail, and a room that cannot
     /// be built leaves the run where it stood.
     pub(super) fn enter(&mut self, at: Location, phase: Phase<V>) {
-        let strayed = self.strays(at);
+        let (strayed, point) = (self.strays(at), self.point_type(at));
         self.floor = self.floor + num_traits::one();
         if let Location::MapPoint(to) = at {
             self.visited.push(to);
@@ -2886,7 +2886,7 @@ impl<V: Rules> State<V> {
         };
         self.phase = phase;
         if let Some(room) = room {
-            self.room_entered(room, strayed);
+            self.room_entered(room, strayed, point);
         }
     }
 
@@ -2895,10 +2895,11 @@ impl<V: Rules> State<V> {
     /// # Panics
     ///
     /// A relic asking for something the run cannot carry out as it enters.
-    fn room_entered(&mut self, room: V::RoomType, strayed: bool) {
+    fn room_entered(&mut self, room: V::RoomType, strayed: bool, point: Option<V::MapPointType>) {
         let asked = self.notify_belt(sts2_core::EventHook::RoomEntered {
             room,
             strayed,
+            point,
             deck: self.player.deck.len(),
             player: self.player_health(),
         });
@@ -2906,6 +2907,16 @@ impl<V: Rules> State<V> {
             let pickup = asked.pickup;
             unimplemented!("entering a room asking for {pickup:?}");
         }
+    }
+
+    /// The type of the map point at `at`. None off the map.
+    fn point_type(&self, at: Location) -> Option<V::MapPointType> {
+        use sts2_core::ActMap as _;
+
+        let Location::MapPoint(to) = at else {
+            return None;
+        };
+        self.map.at(to).ok().map(|node| node.kind)
     }
 
     /// Whether going to `at` leaves the map's lines: a point the one the run
@@ -3458,6 +3469,7 @@ impl<V: Rules> State<V> {
             alive: standing.alive,
             deck: &self.player.deck,
             strayed: self.strays(at),
+            point: self.point_type(at),
             rolled,
             roster,
         };
