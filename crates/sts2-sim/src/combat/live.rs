@@ -2693,6 +2693,20 @@ impl<V: Rules> Live<V> {
         owner: CombatId,
         power: V::Power,
     ) -> sts2_core::HookEffects<V> {
+        let at = self.powers.of(owner).position(|held| held.power() == power);
+        match at {
+            Some(at) => self.remove_power_at_asking(owner, at),
+            None => sts2_core::HookEffects::new(),
+        }
+    }
+
+    /// [`Live::remove_power_asking`] for the instance at `at` of `owner`'s
+    /// powers, which is how an instanced power takes itself off.
+    pub(super) fn remove_power_at_asking(
+        &mut self,
+        owner: CombatId,
+        at: usize,
+    ) -> sts2_core::HookEffects<V> {
         let mut left = sts2_core::HookEffects::new();
         let Some(carrier) = self
             .creatures
@@ -2702,10 +2716,11 @@ impl<V: Rules> Live<V> {
         else {
             return left;
         };
-        let Some(at) = self.powers.of(owner).position(|held| held.power() == power) else {
+        if at >= self.powers.of(owner).count() {
             return left;
-        };
+        }
         let held = self.powers.remove(owner, at);
+        let power = held.power();
         let mut asked = sts2_core::HookEffects::new();
         // Taken off already, as `AfterRemoved` finds it. No belt is lent here.
         let mut state = held.state;

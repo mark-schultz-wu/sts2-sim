@@ -111,6 +111,35 @@ pub(super) fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played
                 at: super::super::Resume::Card(super::Resume::Colorless(Resume::SeekerStrikeTakes)),
             }
         }
+        // `TheBomb`: its `Turns` of The Bomb on its owner, then its
+        // `BombDamage` written on the instance.
+        ColorlessCard::TheBomb => {
+            use super::super::super::generated::powers::Power;
+
+            let actor = fight.actor();
+            let turns = fight.power_var(CardVar::Turns);
+            let damage = fight.var(CardVar::BombDamage);
+            fight.apply_to_actor(Power::TheBombPower, sts2_core::PowerAmount::Counted(turns));
+            fight.write_power(actor, Power::TheBombPower, |state| {
+                state.set_bomb_damage(damage)
+            });
+            Played::Done
+        }
+        // `Discovery`: three distinct cards of the character's pool, off
+        // `CombatCardGeneration`, of which its owner takes one into hand,
+        // free this turn, or none.
+        ColorlessCard::Discovery => {
+            let mut pool = <V as sts2_core::Rules>::combat_cards(fight.character()).to_vec();
+            let stream = <<V as sts2_core::ContentVersion>::RunRngType as sts2_core::RunStreamKinds>::COMBAT_CARD_GENERATION;
+            let offered: [sts2_core::CardIdent<V>; sts2_core::CHOICES] = fight
+                .generate_cards(&mut pool, stream)
+                .unwrap_or_else(|_| unimplemented!("a pool offering fewer than three"));
+            Played::Choosing {
+                offered: offered.into_iter().collect(),
+                skippable: true,
+                at: super::super::Resume::Card(super::Resume::Colorless(Resume::DiscoveryChoice)),
+            }
+        }
         // `SecretWeapon`: one Attack of the draw pile picked, into hand.
         ColorlessCard::SecretWeapon => {
             let attacks = fight
@@ -281,9 +310,32 @@ pub enum Resume {
     SeekerStrikeTakes,
     /// `SecretWeapon`, after the Attack picked from the draw pile.
     SecretWeaponTakes,
+    /// `Discovery`, after the card chosen from the three it offered.
+    DiscoveryChoice,
     /// `Catastrophe`, once a card it played has its answer, with this many
     /// cards still to play.
     CatastropheLeft(u8),
+}
+
+/// The rest of a play that stopped on a choice, once the player chose.
+pub(super) fn resume_chosen<F: Fight<V>>(
+    fight: &mut F,
+    at: Resume,
+    chosen: Option<sts2_core::CardIdent<V>>,
+) -> Played<V> {
+    match at {
+        // `SetToFreeThisTurn`, then `CardPileCmd.AddGeneratedCardToCombat`
+        // into hand.
+        Resume::DiscoveryChoice => {
+            if let Some(card) = chosen {
+                for at in fight.add_generated_cards(card, Pile::Hand, 1) {
+                    super::super::free_this_turn(fight, at);
+                }
+            }
+            Played::Done
+        }
+        at => unreachable!("{at:?} stops on a pick of a pile"),
+    }
 }
 
 /// The rest of a play that waited on a card it auto-played.
@@ -305,6 +357,7 @@ pub(super) fn resume_play<F: Fight<V>>(
             Played::Done
         }
         Resume::CatastropheLeft(_) => unreachable!("Catastrophe waits, and picks nothing"),
+        Resume::DiscoveryChoice => unreachable!("Discovery chooses, and picks nothing"),
         // `CardPileCmd.Add` of the one taken, into hand.
         Resume::SecretTechniqueTakes | Resume::SeekerStrikeTakes | Resume::SecretWeaponTakes => {
             fight.act_on(PileAct::IntoHand, chosen.as_slice());

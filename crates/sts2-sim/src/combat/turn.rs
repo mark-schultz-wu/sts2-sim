@@ -704,8 +704,36 @@ fn before_turn_end<V: Rules>(
         hand: live.cards.len(Pile::Hand),
     };
     let mut ended = None;
+    // The instances taken off so far, which moves the place of each one
+    // after them on the same creature.
+    let mut removed: SmallVec<[(CombatId, u8); 2]> = SmallVec::new();
     for (listener, effect) in listen::notify::<V>(live, relics, hook) {
         match (listener, effect) {
+            // `CreatureCmd.Damage` over `HittableEnemies`, unpowered, from the
+            // power's owner.
+            (Listener::Power { owner, .. }, sts2_core::HookEffect::DamageOpponents(amount)) => {
+                if ended.is_some() {
+                    continue;
+                }
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                for target in board.hittable_opponents_of(owner) {
+                    board.hit_unpowered(Some(owner), target, amount, false);
+                }
+                ended = board.ended();
+            }
+            // `PowerCmd.Remove(this)`, on the instance that asked.
+            (Listener::Power { owner, at, power }, sts2_core::HookEffect::Remove) => {
+                let before = removed
+                    .iter()
+                    .filter(|&&(creature, gone)| creature == owner && gone < at)
+                    .count();
+                let place = usize::from(at) - before;
+                if let Some(effect) = live.remove_power_at_asking(owner, place).first() {
+                    unimplemented!("{power:?} asking for {effect:?} as it comes off")
+                }
+                removed.push((owner, at));
+            }
             (Listener::Card { id }, sts2_core::HookEffect::NoteOnSelf(note)) => {
                 live.note(id, note);
             }

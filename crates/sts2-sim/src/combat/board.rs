@@ -997,7 +997,7 @@ impl<'a, V: Rules> Board<'a, V> {
     }
 
     /// `HittableEnemies` for the side `of` fights on, whoever is acting.
-    fn hittable_opponents_of(&self, of: CombatId) -> SmallVec<[CombatId; 8]> {
+    pub(super) fn hittable_opponents_of(&self, of: CombatId) -> SmallVec<[CombatId; 8]> {
         let Some(at) = self.at(of) else {
             return SmallVec::new();
         };
@@ -4150,11 +4150,14 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         power: V::Power,
         write: impl FnOnce(&mut V::PowerState),
     ) {
+        // The instance applied last, which for an instanced power is the one
+        // just built.
         let held = self
             .live
             .powers
             .of_mut(at)
-            .find(|held| held.power() == power);
+            .filter(|held| held.power() == power)
+            .last();
         if let Some(held) = held {
             write(&mut held.state);
         }
