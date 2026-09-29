@@ -1,0 +1,9 @@
+# High Five has Osty hit both Nibbits and puts Vulnerable on each. Once
+# Bone Shards kills Osty, the second High Five cannot be played.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_NORMAL"}
+{"cmd":"grant","card":"HIGH_FIVE"}
+{"cmd":"grant","card":"HIGH_FIVE"}
+{"cmd":"grant","card":"BONE_SHARDS"}
+{"cmd":"play_card","index":5}
+{"cmd":"play_card","index":6}

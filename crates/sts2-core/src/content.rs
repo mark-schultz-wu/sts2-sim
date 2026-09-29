@@ -2240,6 +2240,12 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("an extra card reward")
     }
 
+    /// `DoomPower.DoomKill` of `creatures`: each killed outright, then
+    /// `AfterDiedToDoom`. Nothing at all for none.
+    fn doom_kill(&mut self, _creatures: &[crate::CombatId]) {
+        unimplemented!("a Doom kill")
+    }
+
     /// `creature.Powers.All(p => p.ShouldOwnerDeathTriggerFatal())`.
     fn death_triggers_fatal(&self, _creature: crate::CombatId) -> bool {
         unimplemented!("whether a death triggers Fatal")
@@ -3866,6 +3872,8 @@ pub struct HeldInstance<V: ContentVersion> {
 pub struct CardLogic {
     /// How many cards its owner's draw pile holds.
     pub draw_pile: usize,
+    /// Whether its owner's Osty stands, which `IsOstyMissing` negates.
+    pub osty: bool,
 }
 
 /// Which cards a hook writes on, for [`HookEffect::AddReplays`] and

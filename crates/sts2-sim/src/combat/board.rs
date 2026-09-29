@@ -3216,6 +3216,12 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         num_traits::cast(self.live.energy).expect("energy fits a game number")
     }
 
+    fn doom_kill(&mut self, creatures: &[CombatId]) {
+        if !creatures.is_empty() {
+            Board::doom_kill(self, creatures);
+        }
+    }
+
     fn add_card_reward(&mut self) {
         self.live.extra_rewards.push(super::live::ExtraReward::Card);
     }

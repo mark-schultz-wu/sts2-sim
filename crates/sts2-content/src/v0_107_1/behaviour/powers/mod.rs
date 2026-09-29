@@ -1965,6 +1965,21 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Consuming Shadow")
         }
         (Power::ConsumingShadowPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `DevourLifePower.AfterCardPlayed`: its stack as a summon of Osty for
+        // each Soul its owner plays. A fight here has one player, whose cards
+        // are all its holder's.
+        (
+            Power::DevourLifePower,
+            PowerAmount::Counted(amount),
+            EventHook::CardPlayed {
+                card: Cards::Token(TokenCard::Soul),
+                ..
+            },
+        ) => Some(HookEffect::Summon(amount)),
+        (Power::DevourLifePower, PowerAmount::Endless, EventHook::CardPlayed { .. }) => {
+            unimplemented!("an endless Devour Life")
+        }
+        (Power::DevourLifePower, _, EventHook::CardPlayed { .. }) => None,
         // `MasterPlannerPower.AfterCardPlayed`: Sly written on each Skill its
         // owner plays, for as long as the copy lasts. A fight here has one
         // player, whose cards are all its holder's.

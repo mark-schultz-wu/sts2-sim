@@ -355,6 +355,69 @@ fn sculpting_strike<F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
     match card {
+        // `Cleanse`: its `Summon` of Osty, then one card of the draw pile
+        // picked, to exhaust.
+        NecrobinderCard::Cleanse => {
+            fight.summon_osty(fight.var(CardVar::Summon));
+            Played::Asking {
+                pile: Pile::Draw,
+                selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
+                at: super::super::Resume::Card(super::Resume::Necrobinder(Resume::CleanseExhausts)),
+            }
+        }
+        // `EndOfDays`: its Doom on each enemy that can be hit, then
+        // `DoomKill` of those it leaves doomed.
+        NecrobinderCard::EndOfDays => {
+            use sts2_core::CreatureView as _;
+
+            let doom = sts2_core::PowerAmount::Counted(fight.var(CardVar::DoomPower));
+            for target in fight.hittable_opponents() {
+                fight.apply_power(target, Power::DoomPower, doom);
+            }
+            let doomed: Vec<_> = fight
+                .hittable_opponents()
+                .into_iter()
+                .filter(|&target| {
+                    fight.creatures().any(|creature| {
+                        creature.id() == target
+                            && match creature.power(Power::DoomPower) {
+                                Some(sts2_core::PowerAmount::Counted(doom)) => {
+                                    super::Number::from(creature.hp()) <= doom
+                                }
+                                Some(sts2_core::PowerAmount::Endless) => {
+                                    unimplemented!("an endless Doom")
+                                }
+                                None => false,
+                            }
+                    })
+                })
+                .collect();
+            fight.doom_kill(&doomed);
+            Played::Done
+        }
+        // `HighFive`: where Osty stands, its damage from Osty to every enemy,
+        // then its Vulnerable on each enemy that can be hit.
+        NecrobinderCard::HighFive => {
+            let Some(osty) = fight.osty() else {
+                return Played::Done;
+            };
+            fight.attack_from(osty, Scaling::Dynamic, |fight| {
+                for target in fight.opponents() {
+                    let hit = fight.resolve(Effect::Attack {
+                        dealer: osty,
+                        target,
+                        damage: Amount::Var(CardVar::OstyDamage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(hit);
+                }
+            });
+            let vulnerable = sts2_core::PowerAmount::Counted(fight.var(CardVar::VulnerablePower));
+            for target in fight.hittable_opponents() {
+                fight.apply_power(target, Power::VulnerablePower, vulnerable);
+            }
+            Played::Done
+        }
         NecrobinderCard::Unleash | NecrobinderCard::Protector => {
             osty_attack(fight, CardVar::CalculatedDamage)
         }
@@ -535,6 +598,9 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
 /// Where a Necrobinder card stopped inside its own play.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Resume {
+    /// `Cleanse`, after its owner picked the card of the draw pile to
+    /// exhaust.
+    CleanseExhausts,
     /// `Dredge`, after its owner picked the cards to take back.
     DredgeTakeBack,
     /// `Graveblast`, after its owner picked the card to take back.
@@ -553,6 +619,11 @@ pub(super) fn resume_play<F: Fight<V>>(
     chosen: sts2_core::SelectedCards<V>,
 ) -> Played<V> {
     match at {
+        // `CardCmd.Exhaust` of the one taken.
+        Resume::CleanseExhausts => {
+            fight.act_on(PileAct::Exhaust, chosen.as_slice());
+            Played::Done
+        }
         // `CardPileCmd.Add` of those taken, into hand.
         Resume::GraveblastTakeBack | Resume::DredgeTakeBack => {
             fight.act_on(PileAct::IntoHand, chosen.as_slice());

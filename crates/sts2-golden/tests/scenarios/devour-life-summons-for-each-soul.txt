@@ -1,0 +1,7 @@
+# Under Devour Life, a Soul played summons Osty for its stack.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"DEVOUR_LIFE"}
+{"cmd":"grant","card":"SOUL"}
+{"cmd":"play_card","index":5}
+{"cmd":"play_card","index":5}
