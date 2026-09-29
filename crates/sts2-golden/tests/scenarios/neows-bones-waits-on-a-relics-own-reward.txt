@@ -1,0 +1,8 @@
+# Neow's Bones offers Small Capsule, which offers a relic reward of its own
+# as it is picked up. That screen stands on top of Neow's Bones's, which
+# comes back once the capsule's relic is taken.
+{"cmd":"start","seed":"S33D28","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"NEOWS_BONES"}
+{"cmd":"answer","take":[{"index":1}]}
+{"cmd":"answer","take":[{"index":0}]}
+{"cmd":"answer","take":[{"index":0}]}
