@@ -1,0 +1,7 @@
+# Punch Dagger bought from a merchant asks for its card there, and the
+# shelf clears once it is picked.
+{"cmd":"start","seed":"S33D12","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"MEMBERSHIP_CARD"}
+{"cmd":"enter_room","type":"Shop"}
+{"cmd":"buy","index":9}
+{"cmd":"answer","cards":[0]}

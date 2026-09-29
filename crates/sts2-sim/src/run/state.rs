@@ -557,6 +557,8 @@ pub(super) enum Phase<V: Rules> {
         entries: Vec<sts2_core::Entry<V>>,
         /// The purchase this merchant has not finished.
         unfinished: Option<Unfinished>,
+        /// What a relic bought here asks as it is picked up.
+        asking: Option<Asked<V>>,
     },
 }
 
@@ -670,6 +672,9 @@ pub(super) enum Unfinished {
         shelf: u8,
         excluding: sts2_core::CardKind,
     },
+    /// A relic's pickup the shop parks on as any room does. The shelf it
+    /// came off clears once that pickup is done.
+    Relic { shelf: u8 },
 }
 
 impl<V: Rules> Phase<V> {
@@ -703,7 +708,8 @@ impl<V: Rules> Phase<V> {
         match self {
             Phase::Neow { asking, .. }
             | Phase::Event { asking, .. }
-            | Phase::RestSite { asking, .. } => asking.as_ref(),
+            | Phase::RestSite { asking, .. }
+            | Phase::Shop { asking, .. } => asking.as_ref(),
             _ => None,
         }
     }
@@ -713,7 +719,8 @@ impl<V: Rules> Phase<V> {
         match self {
             Phase::Neow { asking, .. }
             | Phase::Event { asking, .. }
-            | Phase::RestSite { asking, .. } => Some(asking),
+            | Phase::RestSite { asking, .. }
+            | Phase::Shop { asking, .. } => Some(asking),
             _ => None,
         }
     }
@@ -727,14 +734,16 @@ impl<V: Rules> State<V> {
             Phase::Combat(live) => live
                 .selecting()
                 .map(|_| sts2_core::QuestionKind::SelectCards),
-            Phase::Neow { .. } | Phase::Event { .. } => {
-                self.phase.asking().map(|asked| match asked.pickup {
-                    Pickup::Rewards { .. } => sts2_core::QuestionKind::Rewards,
-                    Pickup::Bundles { .. } => sts2_core::QuestionKind::ChooseBundle,
-                    Pickup::Event => self.event_question().kind(),
-                    _ => sts2_core::QuestionKind::SelectCards,
-                })
-            }
+            Phase::Neow { .. }
+            | Phase::Event { .. }
+            | Phase::Shop {
+                asking: Some(_), ..
+            } => self.phase.asking().map(|asked| match asked.pickup {
+                Pickup::Rewards { .. } => sts2_core::QuestionKind::Rewards,
+                Pickup::Bundles { .. } => sts2_core::QuestionKind::ChooseBundle,
+                Pickup::Event => self.event_question().kind(),
+                _ => sts2_core::QuestionKind::SelectCards,
+            }),
             Phase::Rewards {
                 removing: Some(_), ..
             } => Some(sts2_core::QuestionKind::SelectCards),
@@ -3122,7 +3131,17 @@ impl<V: Rules> State<V> {
                             excluding,
                         }
                     }
-                    pickup => unimplemented!("{pickup:?} asked for where a shop sells it"),
+                    Pickup::CloneDeckCard { .. } => {
+                        unimplemented!("a clone asked for with more behind it in a shop")
+                    }
+                    // `AfterObtained` awaits the pickup, as any room's does.
+                    _ => {
+                        let Phase::Shop { asking, .. } = &mut self.phase else {
+                            unreachable!("the phase was a shop when this began");
+                        };
+                        *asking = Some(asked);
+                        Unfinished::Relic { shelf: index }
+                    }
                 })
             }
             // `TryToProcure` refuses where a relic's `ShouldProcurePotion`
@@ -3209,6 +3228,9 @@ impl<V: Rules> State<V> {
         match unfinished {
             Unfinished::Removal => self.removed(index),
             Unfinished::Pickup { shelf, excluding } => self.cloned(index, shelf, excluding),
+            Unfinished::Relic { .. } => {
+                unreachable!("a pickup the shop parks on answers as a room's")
+            }
         }
         let Phase::Shop { unfinished, .. } = &mut self.phase else {
             unreachable!("the phase was a shop when this began");
@@ -3322,6 +3344,7 @@ impl<V: Rules> State<V> {
         Phase::Shop {
             entries,
             unfinished: None,
+            asking: None,
         }
     }
 
@@ -3961,6 +3984,13 @@ impl<V: Rules> State<V> {
         if let Some(under) = under {
             return self.taken_up(*under);
         }
+        // `ClearAfterPurchase`, once the relic bought has finished its pickup.
+        if let Phase::Shop { unfinished, .. } = &mut self.phase
+            && let Some(Unfinished::Relic { shelf }) = *unfinished
+        {
+            *unfinished = None;
+            self.purchased(shelf);
+        }
         // A rest site's option is done once its pickup is.
         if let Phase::RestSite { options, .. } = &mut self.phase {
             options.clear();
@@ -3994,7 +4024,13 @@ impl<V: Rules> State<V> {
         if matches!(&self.phase, Phase::RestSite { upgrading, .. } if *upgrading) {
             return self.smith(answer);
         }
-        if matches!(&self.phase, Phase::Shop { unfinished, .. } if unfinished.is_some()) {
+        if matches!(
+            &self.phase,
+            Phase::Shop {
+                unfinished: Some(Unfinished::Removal | Unfinished::Pickup { .. }),
+                ..
+            }
+        ) {
             return self.finish_purchase(answer);
         }
         if let Some(Asked {
@@ -4371,7 +4407,10 @@ impl<V: Rules> State<V> {
     /// sizes and its rewards alone.
     fn answers(&self, moves: &mut Legal<V>) -> bool {
         match &self.phase {
-            Phase::Neow { .. } | Phase::Event { .. } | Phase::RestSite { .. }
+            Phase::Neow { .. }
+            | Phase::Event { .. }
+            | Phase::RestSite { .. }
+            | Phase::Shop { .. }
                 if self.phase.asking().is_some() =>
             {
                 let Some(asked) = self.phase.asking() else {
@@ -4405,6 +4444,7 @@ impl<V: Rules> State<V> {
                 let offered = match unfinished {
                     Unfinished::Removal => self.offered(sts2_core::DeckAct::Remove).len(),
                     Unfinished::Pickup { excluding, .. } => self.clonable(*excluding).len(),
+                    Unfinished::Relic { .. } => unreachable!("the parked pickup answers first"),
                 };
                 selections(1, 1, offered, moves);
             }
@@ -4802,6 +4842,9 @@ impl<V: Rules> State<V> {
             | Phase::Event { .. }
             | Phase::RestSite {
                 asking: Some(_), ..
+            }
+            | Phase::Shop {
+                asking: Some(_), ..
             } => self.phase.asking().map(|asking| {
                 let (min, max, cards): (u32, u32, Vec<CardIdent<V>>) = match &asking.pickup {
                     Pickup::Rewards { offered, skippable } => {
@@ -4912,6 +4955,9 @@ impl<V: Rules> State<V> {
                             .collect(),
                     ),
                     Some(Unfinished::Pickup { excluding, .. }) => Some(self.clonable(*excluding)),
+                    Some(Unfinished::Relic { .. }) => {
+                        unreachable!("the parked pickup is asked first")
+                    }
                 };
                 offered.map(|offered| Question::SelectCards {
                     min: 1,

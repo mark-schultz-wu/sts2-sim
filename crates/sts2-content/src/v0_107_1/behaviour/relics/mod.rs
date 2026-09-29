@@ -79,6 +79,7 @@ mod distinguished_cape;
 mod divine_destiny;
 mod divine_right;
 mod dollys_mirror;
+mod ember_tea;
 mod emotion_chip;
 mod empty_cage;
 mod eternal_feather;
@@ -119,6 +120,7 @@ mod jewelry_box;
 mod joss_paper;
 mod juzu_bracelet;
 mod kaleidoscope;
+mod kifuda;
 mod kunai;
 mod kusarigama;
 mod lantern;
@@ -180,6 +182,7 @@ mod prayer_wheel;
 mod precarious_shears;
 mod precise_scissors;
 mod preserved_fog;
+mod punch_dagger;
 mod radiant_pearl;
 mod rainbow_ring;
 mod red_mask;
@@ -508,6 +511,9 @@ pub enum State {
     GhostSeed,
     LeesWaffle,
     LavaLamp(lava_lamp::State),
+    EmberTea(ember_tea::State),
+    Kifuda,
+    PunchDagger,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -751,6 +757,9 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::PunchDagger => punch_dagger::event_hook(hook, asked),
+        State::Kifuda => kifuda::event_hook(hook, asked),
+        State::EmberTea(state) => ember_tea::event_hook(state, hook, asked),
         State::LavaLamp(state) => lava_lamp::event_hook(state, hook, asked),
         State::LeesWaffle => lees_waffle::event_hook(hook, asked),
         State::GhostSeed => ghost_seed::event_hook(hook, asked),
@@ -1081,7 +1090,10 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::Planisphere
         | State::GhostSeed
         | State::LeesWaffle
-        | State::LavaLamp(_) => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::LavaLamp(_)
+        | State::EmberTea(_)
+        | State::Kifuda
+        | State::PunchDagger => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1260,6 +1272,9 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::PunchDagger => State::PunchDagger,
+            Relic::Kifuda => State::Kifuda,
+            Relic::EmberTea => State::EmberTea(ember_tea::State::default()),
             Relic::LavaLamp => State::LavaLamp(lava_lamp::State::default()),
             Relic::LeesWaffle => State::LeesWaffle,
             Relic::GhostSeed => State::GhostSeed,
@@ -1339,6 +1354,7 @@ impl sts2_core::RelicModel<V> for State {
             (State::WongosMysteryTicket(state), _) => wongos_mystery_ticket::used_up(state),
             (State::SilverCrucible(state), _) => silver_crucible::used_up(state),
             (State::SilkenTress(state), _) => silken_tress::used_up(state),
+            (State::EmberTea(state), _) => state.used_up(),
             (_, Field::Constant(used_up)) => used_up,
             (_, Field::Computed) => unimplemented!("whether {relic:?} is used up"),
         }
@@ -1365,6 +1381,7 @@ impl sts2_core::RelicModel<V> for State {
                 State::Kusarigama(state) => kusarigama::display_amount(state),
                 State::HappyFlower(state) => happy_flower::display_amount(state),
                 State::Kunai(state) => kunai::display_amount(state),
+                State::EmberTea(state) => ember_tea::display_amount(state),
                 State::SilverCrucible(state) => silver_crucible::display_amount(state),
                 State::Metronome(state) => metronome::display_amount(state),
                 State::JossPaper(state) => joss_paper::display_amount(state),
