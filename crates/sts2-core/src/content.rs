@@ -691,10 +691,11 @@ pub enum ModelHook {
     ShouldGenerateTreasure,
     ModifyEnergyGain,
     AfterModifyingEnergyGain,
+    TryModifyStarCost,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 123] = [
+    pub const ALL: [ModelHook; 124] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -818,6 +819,7 @@ impl ModelHook {
         ModelHook::ShouldGenerateTreasure,
         ModelHook::ModifyEnergyGain,
         ModelHook::AfterModifyingEnergyGain,
+        ModelHook::TryModifyStarCost,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -958,6 +960,7 @@ impl ModelHook {
             ModelHook::ShouldGenerateTreasure => "ShouldGenerateTreasure",
             ModelHook::ModifyEnergyGain => "ModifyEnergyGain",
             ModelHook::AfterModifyingEnergyGain => "AfterModifyingEnergyGain",
+            ModelHook::TryModifyStarCost => "TryModifyStarCost",
         }
     }
 }
@@ -2269,6 +2272,12 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("a write on a deck version")
     }
 
+    /// `PlayerCmd.EndTurn`: the player's turn ends once the play in
+    /// progress is over.
+    fn end_turn(&mut self) {
+        unimplemented!("ending the turn from inside a play")
+    }
+
     /// `DoomPower.DoomKill` of `creatures`: each killed outright, then
     /// `AfterDiedToDoom`. Nothing at all for none.
     fn doom_kill(&mut self, _creatures: &[crate::CombatId]) {
@@ -3001,6 +3010,12 @@ pub enum ModifyHook<V: ContentVersion> {
     /// `ModifyMerchantPrice`: what a merchant's shelf costs, which
     /// `MerchantEntry.Cost` asks every time it is read in a merchant's room.
     MerchantPrice,
+    /// `TryModifyStarCost`, over a card's star cost once its own modifiers
+    /// are folded in. Every cost the fight reads is of a card in hand or in
+    /// play.
+    StarCost {
+        card: (crate::CardId<V>, V::Card),
+    },
     /// `ModifyEnergyGain`: the energy `PlayerCmd.GainEnergy` gives `player`.
     EnergyGain {
         player: crate::CombatId,
@@ -3069,6 +3084,7 @@ impl<V: ContentVersion> ModifyHook<V> {
             ModifyHook::RestSiteHealAmount => ModelHook::ModifyRestSiteHealAmount,
             ModifyHook::MaxEnergy { .. } => ModelHook::ModifyMaxEnergy,
             ModifyHook::EnergyGain { .. } => ModelHook::ModifyEnergyGain,
+            ModifyHook::StarCost { .. } => ModelHook::TryModifyStarCost,
             ModifyHook::MerchantPrice => ModelHook::ModifyMerchantPrice,
             ModifyHook::EnergyCost { .. } => ModelHook::TryModifyEnergyCostInCombat,
             ModifyHook::EnergyCostLate { .. } => ModelHook::TryModifyEnergyCostInCombatLate,
@@ -3439,6 +3455,10 @@ pub enum EventHook<V: ContentVersion> {
         ethereal: bool,
         /// `CardPlay.Resources.EnergyValue`: the energy this play spent.
         spent: V::Count,
+        /// `CardPlay.IsAutoPlay`.
+        auto: bool,
+        /// `CardPlay.IsLastInSeries`: the last of the card's replays.
+        last: bool,
     },
     /// `BeforeDamageReceived`, once the damage hooks worked the hit out and
     /// before it meets block.

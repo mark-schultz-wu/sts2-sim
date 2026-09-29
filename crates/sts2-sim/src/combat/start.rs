@@ -88,6 +88,7 @@ pub(crate) fn enter<V: Rules>(
         encounter,
         cards: Cards::with_cards(0),
         removed_from_deck: Vec::new(),
+        ending_turn: false,
         deck_versions: super::live::DeckVersions::none(),
         taken_from_deck: Vec::new(),
         extra_rewards: Vec::new(),

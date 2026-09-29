@@ -93,6 +93,8 @@ pub(super) struct CardPlay<V: Rules> {
     pub(super) id: CardId<V>,
     /// `CardPlay.Resources.EnergyValue`.
     pub(super) energy: V::Count,
+    /// `CardPlay.IsAutoPlay`.
+    pub(super) auto: bool,
     /// `EnergyCost.CapturedXValue` and `LastStarsSpent`, which every play
     /// of the series reads.
     pub(super) x: V::Count,
@@ -722,22 +724,24 @@ impl<V: Rules> Face<V> {
     /// reads.
     ///
     /// The modifiers fold over the printed cost in the order they were
-    /// written, and a cost that is not a number folds nothing. `global` is
-    /// `Hook.ModifyEnergyCostInCombat`, run over the energy cost after those
-    /// and before the clamp. It leaves a cost below zero alone, so this does
-    /// not ask it one.
+    /// written, and a cost that is not a number folds nothing. `energy` is
+    /// `Hook.ModifyEnergyCostInCombat` and `stars` is `Hook.ModifyStarCost`,
+    /// each run over its pool's cost after those and before the clamp. Each
+    /// leaves a cost below zero alone, so this does not ask it one.
     pub(super) fn costs(
         &self,
-        global: impl FnOnce(V::Number) -> V::Number,
+        energy: impl FnOnce(V::Number) -> V::Number,
+        stars: impl FnOnce(V::Number) -> V::Number,
     ) -> (sts2_core::Cost, sts2_core::Cost) {
-        let mut global = Some(global);
-        let mut fold = |pool, printed| {
+        // The cost with its own modifiers folded in, or the cost itself where
+        // it is not a number.
+        let fold = |pool, printed| {
             let sts2_core::Cost::Fixed(printed) = printed else {
-                return printed;
+                return Err(printed);
             };
             let printed: V::Number =
                 num_traits::NumCast::from(printed.get()).expect("a fixed cost fits a game number");
-            let folded = self
+            Ok(self
                 .cost_modifiers
                 .iter()
                 .take(usize::from(self.modifiers))
@@ -751,14 +755,10 @@ impl<V: Rules> Face<V> {
                         CostChange::Absolute(amount) => number(amount),
                         CostChange::Lower(amount) => cost.min(number(amount)),
                     }
-                });
-            let folded = match (pool, global.take()) {
-                (sts2_core::CostPool::Energy, Some(global)) if folded >= num_traits::zero() => {
-                    global(folded)
-                }
-                _ => folded,
-            };
-            // `Math.Max(0, num)`, which every read clamps at.
+                }))
+        };
+        // `Math.Max(0, num)`, which every read clamps at.
+        let clamp = |folded: V::Number| {
             let largest: V::Number =
                 num_traits::NumCast::from(u8::MAX - 1).expect("a fixed cost fits a game number");
             let folded = folded.clamp(num_traits::zero(), largest);
@@ -766,10 +766,17 @@ impl<V: Rules> Face<V> {
                 .expect("a clamped fixed cost fits its representation");
             sts2_core::Cost::fixed(folded)
         };
-        (
-            fold(sts2_core::CostPool::Energy, self.cost),
-            fold(sts2_core::CostPool::Star, self.star_cost),
-        )
+        let energy_cost = match fold(sts2_core::CostPool::Energy, self.cost) {
+            Err(cost) => cost,
+            Ok(folded) if folded >= num_traits::zero() => clamp(energy(folded)),
+            Ok(folded) => clamp(folded),
+        };
+        let star_cost = match fold(sts2_core::CostPool::Star, self.star_cost) {
+            Err(cost) => cost,
+            Ok(folded) if folded >= num_traits::zero() => clamp(stars(folded)),
+            Ok(folded) => clamp(folded),
+        };
+        (energy_cost, star_cost)
     }
 
     /// Write one change on this copy.
@@ -1892,6 +1899,9 @@ pub(crate) struct Live<V: Rules> {
     pub(super) cards: super::cards::Cards<V>,
     /// Deck cards a combat command removed permanently while this fight ran.
     pub(super) removed_from_deck: Vec<sts2_core::DeckCardId>,
+    /// `SetReadyToEndTurn`: the player's turn ends once the play in progress
+    /// is over.
+    pub(super) ending_turn: bool,
     /// Which deck card each of the fight's opening copies came from.
     pub(super) deck_versions: DeckVersions<V>,
     /// The deck cards the run took out of the deck for this fight's
@@ -2136,6 +2146,7 @@ impl<V: Rules> Clone for Live<V> {
         Self {
             cards: self.cards.clone(),
             removed_from_deck: self.removed_from_deck.clone(),
+            ending_turn: self.ending_turn,
             deck_versions: self.deck_versions.clone(),
             taken_from_deck: self.taken_from_deck.clone(),
             extra_rewards: self.extra_rewards.clone(),
@@ -2174,6 +2185,7 @@ impl<V: Rules> Clone for Live<V> {
             encounter,
             cards,
             removed_from_deck,
+            ending_turn,
             deck_versions,
             taken_from_deck,
             extra_rewards,
@@ -2208,6 +2220,7 @@ impl<V: Rules> Clone for Live<V> {
         *encounter = source.encounter;
         cards.clone_from(&source.cards);
         removed_from_deck.clone_from(&source.removed_from_deck);
+        *ending_turn = source.ending_turn;
         deck_versions.clone_from(&source.deck_versions);
         taken_from_deck.clone_from(&source.taken_from_deck);
         extra_rewards.clone_from(&source.extra_rewards);
@@ -2325,6 +2338,16 @@ impl<V: Rules> Live<V> {
     /// `RanOutOfTime` records.
     pub(crate) fn any_escaped(&self) -> bool {
         self.creatures.any_escaped()
+    }
+
+    /// Whether a play asked for the turn to end.
+    pub(crate) fn ending_turn(&self) -> bool {
+        self.ending_turn
+    }
+
+    /// Clear a play's ask for the turn to end, as the turn ends.
+    pub(crate) fn take_ending_turn(&mut self) {
+        self.ending_turn = false;
     }
 
     pub(crate) fn removed_from_deck(&self) -> &[sts2_core::DeckCardId] {
@@ -2971,6 +2994,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             encounter: Encounter::SlimesWeak,
             cards: super::cards::Cards::with_cards(0),
             removed_from_deck: Vec::new(),
+            ending_turn: false,
             deck_versions: DeckVersions::none(),
             taken_from_deck: Vec::new(),
             extra_rewards: Vec::new(),

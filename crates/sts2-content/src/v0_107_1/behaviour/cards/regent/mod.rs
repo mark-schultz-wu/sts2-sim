@@ -123,6 +123,16 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
             }
             Played::Done
         }
+        // `VoidForm`: its Void Form on its owner, then `PlayerCmd.EndTurn`.
+        RegentCard::VoidForm => {
+            use super::super::super::generated::powers::Power;
+            use sts2_core::PowerAmount;
+
+            let amount = fight.power_var(CardVar::VoidFormPower);
+            fight.apply_to_actor(Power::VoidFormPower, PowerAmount::Counted(amount));
+            fight.end_turn();
+            Played::Done
+        }
         RegentCard::Glitterstream => common::glitterstream(fight),
         // `Glow`: its stars, its draw, then Draw Cards Next Turn at as many.
         RegentCard::Glow => {

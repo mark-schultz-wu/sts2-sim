@@ -106,6 +106,10 @@ pub enum State {
     Outbreak {
         poisoned: u8,
     },
+    /// `VoidFormPower`'s `cardsPlayedThisTurn`.
+    VoidForm {
+        played: u32,
+    },
     /// `FeralPower`'s `zeroCostAttacksPlayed`.
     Feral {
         played: Number,
@@ -152,6 +156,10 @@ pub enum State {
         playing: [Option<(sts2_core::CardId<V>, Number)>; NOTED_AT_ONCE],
     },
 }
+
+/// `VoidFormPower.HideTemporaryZeroCostVisual`'s count, which leaves no
+/// card free for the rest of the turn.
+const VOID_FORM_SPENT: u32 = 999_999_999;
 
 /// `OutbreakPower.poisonThreshold`: every third Poison deals its damage.
 const OUTBREAK_EVERY: u8 = 3;
@@ -274,6 +282,7 @@ impl sts2_core::PowerModel<V> for State {
             Power::VigorPower => Self::Vigor { bound: None },
             Power::FeralPower => Self::Feral { played: 0 },
             Power::OutbreakPower => Self::Outbreak { poisoned: 0 },
+            Power::VoidFormPower => Self::VoidForm { played: 0 },
             Power::GigantificationPower => Self::Gigantification { bound: None },
             Power::PanachePower => Self::Panache {
                 cards_left: PANACHE_CARDS,
@@ -323,6 +332,7 @@ impl sts2_core::PowerModel<V> for State {
             Self::ChainsOfBinding { .. } => Power::ChainsOfBindingPower,
             Self::Swipe { .. } => Power::SwipePower,
             Self::Outbreak { .. } => Power::OutbreakPower,
+            Self::VoidForm { .. } => Power::VoidFormPower,
             Self::Vigor { .. } => Power::VigorPower,
             Self::Feral { .. } => Power::FeralPower,
             Self::Gigantification { .. } => Power::GigantificationPower,
@@ -1137,6 +1147,33 @@ pub(crate) fn modify_hook(
             PowerAmount::Endless,
             ModifyHook::MaxEnergy { player, .. },
         ) if player == holder => unimplemented!("an endless {power:?}"),
+        // `VoidFormPower.TryModifyEnergyCostInCombatLate` and
+        // `TryModifyStarCost`: nothing for its owner's cards while fewer than
+        // its stack have been played this turn. A fight here has one player,
+        // whose cards are all its holder's, and every cost read is of a card
+        // in hand or in play.
+        (
+            Power::VoidFormPower,
+            PowerAmount::Counted(amount),
+            ModifyHook::EnergyCostLate { .. } | ModifyHook::StarCost { .. },
+        ) if owner == CombatSide::Player => {
+            let State::VoidForm { played } = *state else {
+                unreachable!("Void Form counts its plays")
+            };
+            match i64::from(played) < i64::from(amount) {
+                true => Modify::Replaced(0),
+                false => Modify::Nothing,
+            }
+        }
+        (Power::VoidFormPower, PowerAmount::Endless, ModifyHook::EnergyCostLate { .. })
+        | (Power::VoidFormPower, PowerAmount::Endless, ModifyHook::StarCost { .. }) => {
+            unimplemented!("an endless Void Form")
+        }
+        (
+            Power::VoidFormPower,
+            _,
+            ModifyHook::EnergyCostLate { .. } | ModifyHook::StarCost { .. },
+        ) => Modify::Nothing,
         // `NoEnergyGainPower.ModifyEnergyGain`: nothing gained, by its owner.
         (Power::NoEnergyGainPower, _, ModifyHook::EnergyGain { player }) if player == holder => {
             Modify::Replaced(0)
@@ -2647,6 +2684,52 @@ pub(crate) fn event_hook(
             *played += one;
             None
         }
+        // `VoidFormPower.AfterCardPlayed`: one more play of its owner's, where
+        // it is not auto-played and is the last of its replays.
+        (Power::VoidFormPower, _, EventHook::CardPlayed { auto, last, .. }) => {
+            if owner == CombatSide::Player && !auto && last {
+                let State::VoidForm { played } = state else {
+                    unreachable!("Void Form counts its plays")
+                };
+                *played = played.saturating_add(1);
+            }
+            None
+        }
+        // `VoidFormPower.BeforeSideTurnStart`: the count starts again as its
+        // owner's side's turn begins.
+        (Power::VoidFormPower, _, EventHook::BeforeSideTurnStart { side, .. }) => {
+            if side == owner {
+                let State::VoidForm { played } = state else {
+                    unreachable!("Void Form counts its plays")
+                };
+                *played = 0;
+            }
+            None
+        }
+        // `VoidFormPower.BeforeApplied` and `BeforePowerAmountChanged` on
+        // itself: `HideTemporaryZeroCostVisual`, which frees nothing more this
+        // turn.
+        (Power::VoidFormPower, _, EventHook::BeforeApplied { .. }) => {
+            *state = State::VoidForm {
+                played: VOID_FORM_SPENT,
+            };
+            None
+        }
+        (
+            Power::VoidFormPower,
+            _,
+            EventHook::PowerAmountChanging {
+                power: Power::VoidFormPower,
+                target,
+                ..
+            },
+        ) if target == holder => {
+            *state = State::VoidForm {
+                played: VOID_FORM_SPENT,
+            };
+            None
+        }
+        (Power::VoidFormPower, _, EventHook::PowerAmountChanging { .. }) => None,
         // `SlothPower.BeforeSideTurnStart`: the count starts again as its
         // owner's side's turn begins.
         (Power::SlothPower, _, EventHook::BeforeSideTurnStart { side, .. }) => {

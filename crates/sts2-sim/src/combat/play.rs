@@ -239,6 +239,7 @@ pub(crate) fn play<V: Rules>(
     let begun = CardPlay {
         id: card.id,
         energy: play.energy,
+        auto: false,
         x: play.energy,
         stars: play.stars,
         pile,
@@ -407,6 +408,7 @@ pub(super) fn auto_play_in_play<V: Rules>(
     let begun = CardPlay {
         id: card.id,
         energy,
+        auto: true,
         x,
         stars,
         pile,
@@ -1181,7 +1183,8 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                     played_card,
                     card,
                     ethereal,
-                    play.energy,
+                    play,
+                    effect.plays.done >= effect.plays.count,
                 );
                 effect.ended = effect.ended.or(ended);
                 if effect.plays.done >= effect.plays.count {
@@ -1388,8 +1391,9 @@ fn finish_effect<V: Rules, S: LendsCombat>(
 }
 
 /// The end of one play of `card`: `History.CardPlayFinished`, then
-/// `AfterCardPlayed`, with the card still in the play pile. `spent` is the
-/// energy the play's started entry records.
+/// `AfterCardPlayed`, with the card still in the play pile. `play` holds
+/// what the play spent and whether it was auto-played. `last` is whether it
+/// ends the card's replays.
 ///
 /// Once for each play, so a card with replays finishes more than once. A
 /// relic that answers acts through the board a card acts through, and draws
@@ -1400,13 +1404,15 @@ fn finished<V: Rules, S: LendsCombat>(
     card: V::Card,
     id: sts2_core::CardId<V>,
     ethereal: bool,
-    spent: V::Count,
+    play: CardPlay<V>,
+    last: bool,
 ) -> Option<super::Ended> {
     let Fighting {
         live: next,
         streams,
         relics,
     } = fighting;
+    let spent = play.energy;
     next.history.finish(card, id, ethereal);
     let mut ended = None;
     // The copy stays in the play pile until its play is over.
@@ -1423,6 +1429,8 @@ fn finished<V: Rules, S: LendsCombat>(
             affliction,
             ethereal,
             spent,
+            auto: play.auto,
+            last,
         },
     );
     if !asked.is_empty() {

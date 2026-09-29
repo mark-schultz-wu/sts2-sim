@@ -1865,7 +1865,7 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
     // MOCK_MODIFY_ENERGY_COST_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyEnergyCostInCombat),
     // MOCK_MODIFY_STAR_COST_POWER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyStarCost),
     // MOCK_PHASE_OBSERVER_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterPlayerTurnStart)
@@ -2273,7 +2273,8 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
         .with(sts2_core::ModelHook::AfterCardPlayed)
         .with(sts2_core::ModelHook::BeforePowerAmountChanged)
         .with(sts2_core::ModelHook::BeforeSideTurnStart)
-        .with(sts2_core::ModelHook::TryModifyEnergyCostInCombatLate),
+        .with(sts2_core::ModelHook::TryModifyEnergyCostInCombatLate)
+        .with(sts2_core::ModelHook::TryModifyStarCost),
     // VULNERABLE_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterSideTurnEnd)
