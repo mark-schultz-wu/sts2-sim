@@ -4777,6 +4777,19 @@ pub enum HookEffect<V: ContentVersion> {
     LoseGold(V::Number),
     /// `PlayerCmd.LoseGold(Owner.Gold)`: every coin its owner holds.
     LoseAllGold,
+    /// `CardSelectCmd.FromChooseABundleScreen`, over `count` bundles drawn off
+    /// the player's rewards stream. Each is `commons` commons of the
+    /// character's reward pool, then `uncommons` uncommons, none already in a
+    /// bundle. The cards of the one chosen go into the deck.
+    ///
+    /// `same_card` is `Some((card, percent))` where a `NextInt(100)` under
+    /// `percent`, rolled before each bundle, makes it all `card` instead.
+    OfferBundles {
+        count: usize,
+        commons: usize,
+        uncommons: usize,
+        same_card: Option<(V::Card, u32)>,
+    },
     /// `SealOfGold.AfterSideTurnStart`: while the player holds at least
     /// `gold`, `PlayerCmd.GainEnergy` by `energy` and then
     /// `PlayerCmd.LoseGold` by `gold`.

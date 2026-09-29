@@ -161,6 +161,13 @@ fn question_of<V: sts2_content_wire::WireContentVersion>(
                 )?;
             }
         }
+        Question::ChooseBundle { bundles } => {
+            writeln!(f, "asks    pick a bundle:")?;
+            for bundle in bundles {
+                let cards: Vec<String> = bundle.cards.iter().map(|c| ident(&c.card)).collect();
+                writeln!(f, "          {:<3} {}", bundle.index, cards.join(", "))?;
+            }
+        }
         Question::Divine {
             left,
             width,

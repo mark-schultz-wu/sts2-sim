@@ -363,6 +363,31 @@ where
                 super::centred(area, 52, 8),
             );
         }
+        Question::ChooseBundle { bundles } => {
+            let mut lines = vec![
+                Line::styled("choose a bundle", theme::heading()),
+                Line::raw(""),
+            ];
+            for bundle in bundles {
+                let cards: Vec<String> = bundle
+                    .cards
+                    .iter()
+                    .map(|c| names::pretty(&spelling(&c.card.card)))
+                    .collect();
+                lines.push(Line::from(format!(
+                    "{}  {}",
+                    bundle.index,
+                    cards.join(", ")
+                )));
+            }
+            lines.push(Line::raw(""));
+            lines.push(Line::styled("`sts2 act choose <bundle>`", theme::gold()));
+            let height = u16::try_from(lines.len()).unwrap_or(u16::MAX);
+            frame.render_widget(
+                Paragraph::new(lines).centered(),
+                super::centred(area, 72, height),
+            );
+        }
     }
 }
 

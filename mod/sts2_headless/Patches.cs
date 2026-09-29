@@ -333,6 +333,44 @@ internal static class SilenceKaiserCrabAnimation
 /// (<c>CrystalSphereMinigame.PlayMinigame</c>), which awaits the minigame's own
 /// completion source rather than the screen.
 /// </remarks>
+/// <summary>
+/// <c>CardSelectCmd.FromChooseABundleScreen</c> with a question where its
+/// screen would be.
+/// </summary>
+/// <remarks>
+/// The game's own early returns, choice id, sync and log, around a
+/// <see cref="BundleChoice"/>. Left alone, <c>TestMode</c> takes the first
+/// bundle without asking, which a player at the screen never does.
+/// </remarks>
+[HarmonyPatch(typeof(CardSelectCmd), nameof(CardSelectCmd.FromChooseABundleScreen))]
+internal static class BundleWithoutAScreen
+{
+    private static bool Prefix(
+        Player player,
+        IReadOnlyList<IReadOnlyList<CardModel>> bundles,
+        ref Task<IEnumerable<CardModel>> __result)
+    {
+        __result = Asked(player, bundles);
+        return false;
+    }
+
+    private static async Task<IEnumerable<CardModel>> Asked(
+        Player player, IReadOnlyList<IReadOnlyList<CardModel>> bundles)
+    {
+        if (CombatManager.Instance.IsEnding || bundles.Count == 0)
+        {
+            return Array.Empty<CardModel>();
+        }
+        uint choiceId = RunManager.Instance.PlayerChoiceSynchronizer.ReserveChoiceId(player);
+        int index = await BundleChoice.Ask(bundles);
+        IReadOnlyList<CardModel> chosen = bundles[index];
+        RunManager.Instance.PlayerChoiceSynchronizer.SyncLocalChoice(
+            player, choiceId, PlayerChoiceResult.FromIndex(index));
+        Log.Info($"Player {player.NetId} chose cards [{string.Join(",", chosen.Select(c => c.Id.Entry))}]");
+        return chosen;
+    }
+}
+
 [HarmonyPatch(typeof(NCrystalSphereScreen), nameof(NCrystalSphereScreen.ShowScreen))]
 internal static class DivineWithoutAScreen
 {

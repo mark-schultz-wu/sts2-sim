@@ -245,6 +245,79 @@ internal sealed class CardSelection : Pending
     protected override void Fail(Exception e) => _answer.SetException(e);
 }
 
+/// <summary>Which bundle of cards to take, from Scroll Boxes' choose-a-bundle screen.</summary>
+/// <remarks>
+/// <c>CardSelectCmd.FromChooseABundleScreen</c> asks no selector. Outside
+/// <c>TestMode</c> it shows its screen, and inside it takes the first bundle
+/// unasked. So the patch that stands in for the screen asks this, and the
+/// answer names one bundle, as a one-card <c>cards</c> array does.
+/// </remarks>
+internal sealed class BundleChoice : Pending
+{
+    private readonly TaskCompletionSource<int> _answer =
+        new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private readonly IReadOnlyList<IReadOnlyList<CardModel>> _bundles;
+
+    private BundleChoice(IReadOnlyList<IReadOnlyList<CardModel>> bundles)
+    {
+        _bundles = bundles;
+    }
+
+    public override string Kind => "choose_bundle";
+
+    public static Task<int> Ask(IReadOnlyList<IReadOnlyList<CardModel>> bundles)
+    {
+        var pending = new BundleChoice(bundles);
+        Park(pending);
+        return pending._answer.Task;
+    }
+
+    public override Dictionary<string, object?> Describe() => new Dictionary<string, object?>
+    {
+        ["kind"] = Kind,
+        ["bundles"] = _bundles.Select((bundle, i) => new Dictionary<string, object?>
+        {
+            ["index"] = i,
+            ["cards"] = bundle.Select(c => new Dictionary<string, object?>
+            {
+                ["card"] = Observation.Ident(c),
+                ["text"] = Observation.Text(c),
+            }).ToList(),
+        }).ToList(),
+    };
+
+    public override Dictionary<string, object?>? Accept(JsonElement req)
+    {
+        if (!req.TryGetProperty("cards", out JsonElement el) || el.ValueKind != JsonValueKind.Array)
+        {
+            return Refusals.Malformed($"'{Kind}' expects a 'cards' array holding one bundle index");
+        }
+
+        List<JsonElement> picked = el.EnumerateArray().ToList();
+        if (picked.Count != 1)
+        {
+            return Refusals.WrongCount(picked.Count, 1, 1);
+        }
+
+        if (!picked[0].TryGetInt32(out int i))
+        {
+            return Refusals.Malformed($"'{Kind}' expects a whole number in its 'cards' array");
+        }
+
+        if (i < 0 || i >= _bundles.Count)
+        {
+            return Refusals.OutOfRange(i, _bundles.Count);
+        }
+
+        Release();
+        _answer.SetResult(i);
+        return null;
+    }
+
+    protected override void Fail(Exception e) => _answer.SetException(e);
+}
+
 /// <summary>What to take from a set of rewards, and which card within a card reward.</summary>
 /// <remarks>
 /// Asked once per decision, not once per set. The client takes what it wants

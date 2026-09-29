@@ -80,6 +80,8 @@ pub fn awaiting<V: sts2_content_wire::WireContentVersion>(
             Question::SelectCards { .. } => Awaiting::Cards,
             Question::Rewards { .. } => Awaiting::Rewards,
             Question::Divine { .. } => Awaiting::Divine,
+            // One bundle, named as a one-card selection names its card.
+            Question::ChooseBundle { .. } => Awaiting::Cards,
         });
     }
 

@@ -312,6 +312,12 @@ where
                 "not drawn here yet — use `sts2 act answer divine`",
             ));
         }
+        (Some(Question::ChooseBundle { .. }), ..) => {
+            spans.extend(widget::hint(
+                "!",
+                "not picked here yet — use `sts2 act choose <bundle>`",
+            ));
+        }
         (None, true, true) => {
             spans.extend(widget::hint("←→", "aim"));
             // What confirming sends, which is the whole difference between the

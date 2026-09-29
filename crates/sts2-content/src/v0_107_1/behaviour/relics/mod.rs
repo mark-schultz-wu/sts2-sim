@@ -190,6 +190,7 @@ mod ruined_helmet;
 mod runic_pyramid;
 mod sai;
 mod sand_castle;
+mod scroll_boxes;
 mod seal_of_gold;
 mod self_forming_clay;
 mod sere_talon;
@@ -496,6 +497,7 @@ pub enum State {
     NeowsBones,
     SilverCrucible(silver_crucible::State),
     SilkenTress(silken_tress::State),
+    ScrollBoxes,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -739,6 +741,7 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::ScrollBoxes => scroll_boxes::event_hook(hook, asked),
         State::SilkenTress(state) => silken_tress::event_hook(state, hook, asked),
         State::SilverCrucible(state) => silver_crucible::event_hook(state, hook, asked),
         State::NeowsBones => neows_bones::event_hook(hook, asked),
@@ -1057,7 +1060,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::LargeCapsule
         | State::NeowsBones
         | State::SilverCrucible(_)
-        | State::SilkenTress(_) => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::SilkenTress(_)
+        | State::ScrollBoxes => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1236,6 +1240,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::ScrollBoxes => State::ScrollBoxes,
             Relic::SilkenTress => State::SilkenTress(silken_tress::State::default()),
             Relic::SilverCrucible => State::SilverCrucible(silver_crucible::State::default()),
             Relic::NeowsBones => State::NeowsBones,
