@@ -4270,10 +4270,11 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .face
             .ident
             .card;
-        // `CardCmd.Discard`, whose hook nothing ported answers.
+        // `CardCmd.Discard`.
         self.live.cards.move_to(Pile::Hand, at, Pile::Discard);
         self.live.history.discarded(card);
-        self.unheard(sts2_core::ModelHook::AfterCardDiscarded);
+        let ended = super::turn::card_discarded::<V>(self.live, self.rngs.reborrow(), self.relics);
+        self.ended = self.ended.or(ended);
     }
 
     fn summon(&mut self, monster: V::Monster, position: usize) -> CombatId {

@@ -73,6 +73,7 @@ mod fake_orichalcum;
 mod fake_snecko_eye;
 mod fake_strike_dummy;
 mod fake_venerable_tea_set;
+mod fencing_manual;
 mod festive_popper;
 mod fiddle;
 mod fishing_rod;
@@ -192,9 +193,11 @@ mod symbiotic_virus;
 mod tanxs_whistle;
 mod the_courier;
 mod throwing_axe;
+mod tingsha;
 mod tiny_mailbox;
 mod toasty_mittens;
 mod touch_of_orobas;
+mod tough_bandages;
 mod toxic_egg;
 mod tri_boomerang;
 mod tungsten_rod;
@@ -462,6 +465,9 @@ pub enum State {
     EmotionChip(emotion_chip::State),
     TheCourier,
     MembershipCard,
+    Tingsha,
+    ToughBandages,
+    FencingManual,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -705,6 +711,9 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::FencingManual => fencing_manual::event_hook(hook, asked),
+        State::ToughBandages => tough_bandages::event_hook(hook, asked),
+        State::Tingsha => tingsha::event_hook(hook, asked),
         State::MembershipCard => membership_card::event_hook(hook),
         State::TheCourier => the_courier::event_hook(hook),
         State::EmotionChip(state) => emotion_chip::event_hook(state, hook, asked),
@@ -1006,7 +1015,10 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::ParryingShield
         | State::Metronome(_)
         | State::BookRepairKnife
-        | State::EmotionChip(_) => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::EmotionChip(_)
+        | State::Tingsha
+        | State::ToughBandages
+        | State::FencingManual => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1185,6 +1197,9 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::FencingManual => State::FencingManual,
+            Relic::ToughBandages => State::ToughBandages,
+            Relic::Tingsha => State::Tingsha,
             Relic::MembershipCard => State::MembershipCard,
             Relic::TheCourier => State::TheCourier,
             Relic::EmotionChip => State::EmotionChip(emotion_chip::State::default()),

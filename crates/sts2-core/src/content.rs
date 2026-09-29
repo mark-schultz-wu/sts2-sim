@@ -3543,6 +3543,11 @@ pub enum EventHook<V: ContentVersion> {
     Flushed,
     /// `AfterOrbChanneled`, once an orb is in the player's queue.
     OrbChanneled,
+    /// `AfterCardDiscarded`, once a card of the player's is in the discard
+    /// pile. `side` is the side whose turn it is.
+    CardDiscarded {
+        side: V::CombatSide,
+    },
     /// `BeforePowerAmountChanged`, as `amount` of `power` is about to land on
     /// `target`, or to change what it carries.
     PowerAmountChanging {
@@ -3723,6 +3728,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::RestSiteOptions => ModelHook::TryModifyRestSiteOptions,
             EventHook::Flushed => ModelHook::AfterFlush,
             EventHook::OrbChanneled => ModelHook::AfterOrbChanneled,
+            EventHook::CardDiscarded { .. } => ModelHook::AfterCardDiscarded,
             EventHook::PowerAmountChanging { .. } => ModelHook::BeforePowerAmountChanged,
             EventHook::BlockAmountModified { .. } => ModelHook::AfterModifyingBlockAmount,
             EventHook::DiedToDoom { .. } => ModelHook::AfterDiedToDoom,

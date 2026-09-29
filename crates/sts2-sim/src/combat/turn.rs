@@ -1476,9 +1476,12 @@ pub(super) fn act_on<V: Rules>(
                     sly.push(held.id);
                 }
                 let card = held.face.ident.card;
+                live.cards.move_to(from, at, Pile::Discard);
                 live.history.discarded(card);
-                unheard::<V>(live, relics, sts2_core::ModelHook::AfterCardDiscarded);
-                Pile::Discard
+                if let Some(ended) = card_discarded::<V>(live, rngs.reborrow(), relics) {
+                    return (sly, Some(ended));
+                }
+                continue;
             }
             // `CardCmd.TransformToRandom`, one card at a time, each drawn off
             // `CombatCardSelection` before it replaces the original where it
@@ -1518,6 +1521,35 @@ pub(super) fn act_on<V: Rules>(
         live.cards.move_to(from, at, to);
     }
     (sly, None)
+}
+
+/// `Hook.AfterCardDiscarded`, once a card of the player's is down. A relic
+/// acts for the player, and how the fight ended comes back where it did.
+///
+/// # Panics
+///
+/// A listener other than a relic answering.
+pub(super) fn card_discarded<V: Rules>(
+    live: &mut Live<V>,
+    rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+) -> Option<super::Ended> {
+    let hook = sts2_core::EventHook::CardDiscarded { side: live.side };
+    let asked = listen::notify::<V>(live, relics, hook);
+    if asked.is_empty() {
+        return None;
+    }
+    let mut effects: SmallVec<[sts2_core::HookEffect<V>; 2]> = SmallVec::new();
+    for (listener, effect) in asked {
+        match listener {
+            Listener::Relic { .. } => effects.push(effect),
+            listener => unimplemented!("{listener:?} asking for {effect:?} after a discard"),
+        }
+    }
+    let ascension = live.ascension;
+    let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
+    super::hook::apply::<V, _>(&mut board, effects);
+    board.ended
 }
 
 /// `CardCmd.AutoPlay` with `SlyDiscard` for each Sly card a discard took, in
