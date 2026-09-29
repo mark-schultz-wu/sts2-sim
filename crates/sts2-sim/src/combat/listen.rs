@@ -77,7 +77,7 @@ impl Default for HookCounts {
 impl HookCounts {
     /// A listener that overrides `hooks` arrives.
     pub(crate) fn add(&mut self, hooks: Overrides) {
-        for at in bits(hooks) {
+        for at in hooks.places() {
             self.counts[at] += 1;
         }
         self.heard = self.heard.union(hooks);
@@ -85,10 +85,10 @@ impl HookCounts {
 
     /// A listener that overrides `hooks` leaves.
     pub(crate) fn remove(&mut self, hooks: Overrides) {
-        for at in bits(hooks) {
+        for at in hooks.places() {
             self.counts[at] -= 1;
             if self.counts[at] == 0 {
-                self.heard = Overrides::from_bits(self.heard.bits() & !(1 << at));
+                self.heard = self.heard.without(ModelHook::ALL[at]);
             }
         }
     }
@@ -97,19 +97,6 @@ impl HookCounts {
     pub(crate) fn hears(&self, hooks: Overrides) -> bool {
         self.heard.intersects(hooks)
     }
-}
-
-/// Each hook in `hooks`, by its place in [`ModelHook`], and nothing for a
-/// hook the set does not hold.
-fn bits(hooks: Overrides) -> impl Iterator<Item = usize> {
-    let mut left = hooks.bits();
-    std::iter::from_fn(move || {
-        (left != 0).then(|| {
-            let at = left.trailing_zeros() as usize;
-            left &= left - 1;
-            at
-        })
-    })
 }
 
 /// What a walk reads without writing: the fight, and the belt its player
@@ -347,7 +334,7 @@ fn raise<V: Rules>(
         };
         if belt {
             // The listening slots alone, in slot order.
-            let mut left = relics.hearing(hooks);
+            let mut left = relics.hearing_hook(model_hook);
             while left != 0 {
                 let slot = left.trailing_zeros() as usize;
                 left &= left - 1;

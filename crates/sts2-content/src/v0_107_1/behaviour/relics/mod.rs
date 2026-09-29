@@ -156,6 +156,7 @@ mod mercury_hourglass;
 mod metronome;
 mod mini_regent;
 mod miniature_cannon;
+mod miniature_tent;
 mod molten_egg;
 mod mr_struggles;
 mod mummified_hand;
@@ -556,6 +557,7 @@ pub enum State {
     LunarPastry,
     WingCharm,
     Toolbox,
+    MiniatureTent,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -799,6 +801,7 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::MiniatureTent => miniature_tent::event_hook(hook, asked),
         State::Toolbox => toolbox::event_hook(hook, asked),
         State::WingCharm => wing_charm::event_hook(hook, asked),
         State::LunarPastry => lunar_pastry::event_hook(hook, asked),
@@ -921,6 +924,7 @@ pub(crate) fn decide_hook(
         State::WhiteBeastStatue => white_beast_statue::decide_hook(hook),
         State::LizardTail(state) => lizard_tail::decide_hook(state, hook),
         State::TheCourier => the_courier::decide_hook(hook),
+        State::MiniatureTent => miniature_tent::decide_hook(hook),
         State::SilverCrucible(state) => silver_crucible::decide_hook(state, hook),
         _ => match hook.model_hook() {
             Some(_) => unimplemented!("what {state:?} decides for {hook:?}"),
@@ -1177,7 +1181,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::Cauldron
         | State::LunarPastry
         | State::WingCharm
-        | State::Toolbox => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::Toolbox
+        | State::MiniatureTent => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1356,6 +1361,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::MiniatureTent => State::MiniatureTent,
             Relic::Toolbox => State::Toolbox,
             Relic::WingCharm => State::WingCharm,
             Relic::LunarPastry => State::LunarPastry,

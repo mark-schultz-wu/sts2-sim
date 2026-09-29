@@ -1602,7 +1602,7 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     );
     // Every hook some card's class overrides, so a question no card can hear
     // skips the walk over the deck.
-    let mut heard = String::from("sts2_core::Overrides::from_bits(0)");
+    let mut heard = String::from("sts2_core::Overrides::NONE");
     let mut seen: Vec<sts2_core::ModelHook> = Vec::new();
     for id in &ranked {
         for hook in overrides.get(*id).into_iter().flatten() {
