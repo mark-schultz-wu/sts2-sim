@@ -27,9 +27,7 @@ pub fn perform<F: Fight<V>>(
             unimplemented!("what {move_id:?} does when {monster:?} performs it")
         }
         (Monster::CubexConstruct, MoveId::ExpelMove) => {
-            if step == 0 {
-                fight.attack_opponents();
-            }
+            fight.attack_opponents();
         }
         (Monster::CubexConstruct, MoveId::RepeaterBlastMove) => {
             if step == 0 {
@@ -65,20 +63,16 @@ pub fn perform<F: Fight<V>>(
             }
         }
         (Monster::PunchConstruct, MoveId::ReadyMove) => {
-            if step == 0 {
-                let amount = 10;
-                let block = fight.resolve(Effect::GainBlock {
-                    recipient: fight.actor(),
-                    amount: Amount::Number(amount),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(block);
-            }
+            let amount = 10;
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Number(amount),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
         }
         (Monster::PunchConstruct, MoveId::StrongPunchMove) => {
-            if step == 0 {
-                fight.attack_opponents();
-            }
+            fight.attack_opponents();
         }
         (monster, move_id) => unimplemented!("{monster:?} has no {move_id:?} in the table"),
     }

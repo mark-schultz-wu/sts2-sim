@@ -62,6 +62,12 @@ pub(super) struct Board<'a, V: Rules> {
     /// card it auto-plays asks a question. [`super::live::Deferred`] holds
     /// what waits.
     pausable: bool,
+    /// A monster's move, which is pausable only inside its attack.
+    ///
+    /// A move's attack is `Execute(null)`, which blocks on a question. Every
+    /// other command it runs takes a `ThrowingPlayerChoiceContext`, which
+    /// throws on one.
+    moving: bool,
     /// The results of the attack command whose hits are landing, which
     /// `AttackCommand.Results` gathers.
     landed: Option<sts2_core::AttackResults<V>>,
@@ -157,6 +163,7 @@ impl<'a, V: Rules> Board<'a, V> {
             skipped: Vec::new(),
             ended: None,
             pausable: false,
+            moving: false,
             landed: None,
         }
     }
@@ -190,6 +197,7 @@ impl<'a, V: Rules> Board<'a, V> {
             skipped: Vec::new(),
             ended: None,
             pausable: false,
+            moving: true,
             landed: None,
         }
     }
@@ -2955,93 +2963,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         scaling: Scaling,
         hits: impl FnOnce(&mut Self),
     ) -> sts2_core::AttackResults<V> {
-        let attacking = self
-            .at(attacker)
-            .is_some_and(|at| self.live.creatures[at].alive);
-        if self.ended.is_some() || self.ending() || !attacking {
-            return sts2_core::AttackResults::new();
-        }
-        let monster = self
-            .at(attacker)
-            .and_then(|at| match self.live.creatures[at].model {
-                Some(sts2_core::ModelId::Monster(monster)) => Some(monster),
-                _ => None,
-            });
-        let command = sts2_core::AttackId(self.live.attacks);
-        self.live.attacks += 1;
-        let asked = super::listen::notify::<V>(
-            self.live,
-            self.relics,
-            sts2_core::EventHook::BeforeAttack {
-                command,
-                attacker,
-                source: self.playing.map(|id| {
-                    let card = self
-                        .live
-                        .cards
-                        .named(id)
-                        .expect("the card making an attack is in the fight");
-                    (id, card.face.ident.card)
-                }),
-                powered: scaling == Scaling::Dynamic,
-            },
-        );
-        if let Some((listener, effect)) = asked.first() {
-            unimplemented!("{listener:?} asking for {effect:?} before an attack")
-        }
-        // A command inside another's hits keeps its own results.
-        let outer = self.landed.replace(sts2_core::AttackResults::new());
-        hits(self);
-        let results = std::mem::replace(&mut self.landed, outer).unwrap_or_default();
-        // `History.CreatureAttacked`, before `AfterAttack` and whether or not
-        // the fight is ending.
-        self.live.history.attacked(monster);
-        // `IterateCombatHookListeners` hands a fight that is ending no
-        // listeners.
-        if self.ended.is_some() || self.ending() {
-            return results;
-        }
-        let asked = super::listen::notify::<V>(
-            self.live,
-            self.relics,
-            sts2_core::EventHook::AfterAttack {
-                command,
-                attacker,
-                monster,
-                powered: scaling == Scaling::Dynamic,
-            },
-        );
-        for (listener, effect) in asked {
-            match (listener, effect) {
-                (Listener::Power { owner, power, .. }, HookEffect::ModifyAmount(offset)) => {
-                    self.modify_amount(owner, power, offset)
-                }
-                // Written on the card that asked, wherever it stands.
-                (Listener::Card { id }, HookEffect::ModifySelf { change, lasting }) => {
-                    self.live.modify_self(id, change, lasting)
-                }
-                // `CreatureCmd.GainBlock`, unpowered, on the relic's owner.
-                (Listener::Relic { .. }, HookEffect::GainBlock(amount)) => {
-                    let player = self.live.player().id;
-                    self.live.gain_unpowered_block(player, amount);
-                }
-                // A fight here has one player, whose piles take them all.
-                (Listener::Power { .. }, HookEffect::GiveCardsPerUnblockedHit { card, per }) => {
-                    let player = self.live.player().id;
-                    let hits = results
-                        .iter()
-                        .filter(|hit| hit.receiver == player && hit.unblocked > V::Number::zero())
-                        .count();
-                    let count = num_traits::cast::<_, usize>(per)
-                        .unwrap_or_else(|| unimplemented!("{per:?} cards for each hit"))
-                        * hits;
-                    self.add_generated_cards(CardIdent::new(card), Pile::Discard, count);
-                }
-                (listener, effect) => {
-                    unimplemented!("{listener:?} asking for {effect:?} after an attack")
-                }
-            }
-        }
+        let pausable = self.pausable;
+        self.pausable |= self.moving;
+        let results = self.attack_landing(attacker, scaling, hits);
+        self.pausable = pausable;
         results
     }
 
@@ -4437,6 +4362,103 @@ pub(super) fn shuffle_asking<V: Rules>(
 }
 
 impl<V: Rules> Board<'_, V> {
+    /// `AttackCommand.Execute`: the hooks either side of `hits`.
+    fn attack_landing(
+        &mut self,
+        attacker: CombatId,
+        scaling: Scaling,
+        hits: impl FnOnce(&mut Self),
+    ) -> sts2_core::AttackResults<V> {
+        let attacking = self
+            .at(attacker)
+            .is_some_and(|at| self.live.creatures[at].alive);
+        if self.ended.is_some() || self.ending() || !attacking {
+            return sts2_core::AttackResults::new();
+        }
+        let monster = self
+            .at(attacker)
+            .and_then(|at| match self.live.creatures[at].model {
+                Some(sts2_core::ModelId::Monster(monster)) => Some(monster),
+                _ => None,
+            });
+        let command = sts2_core::AttackId(self.live.attacks);
+        self.live.attacks += 1;
+        let asked = super::listen::notify::<V>(
+            self.live,
+            self.relics,
+            sts2_core::EventHook::BeforeAttack {
+                command,
+                attacker,
+                source: self.playing.map(|id| {
+                    let card = self
+                        .live
+                        .cards
+                        .named(id)
+                        .expect("the card making an attack is in the fight");
+                    (id, card.face.ident.card)
+                }),
+                powered: scaling == Scaling::Dynamic,
+            },
+        );
+        if let Some((listener, effect)) = asked.first() {
+            unimplemented!("{listener:?} asking for {effect:?} before an attack")
+        }
+        // A command inside another's hits keeps its own results.
+        let outer = self.landed.replace(sts2_core::AttackResults::new());
+        hits(self);
+        let results = std::mem::replace(&mut self.landed, outer).unwrap_or_default();
+        // `History.CreatureAttacked`, before `AfterAttack` and whether or not
+        // the fight is ending.
+        self.live.history.attacked(monster);
+        // `IterateCombatHookListeners` hands a fight that is ending no
+        // listeners.
+        if self.ended.is_some() || self.ending() {
+            return results;
+        }
+        let asked = super::listen::notify::<V>(
+            self.live,
+            self.relics,
+            sts2_core::EventHook::AfterAttack {
+                command,
+                attacker,
+                monster,
+                powered: scaling == Scaling::Dynamic,
+            },
+        );
+        for (listener, effect) in asked {
+            match (listener, effect) {
+                (Listener::Power { owner, power, .. }, HookEffect::ModifyAmount(offset)) => {
+                    self.modify_amount(owner, power, offset)
+                }
+                // Written on the card that asked, wherever it stands.
+                (Listener::Card { id }, HookEffect::ModifySelf { change, lasting }) => {
+                    self.live.modify_self(id, change, lasting)
+                }
+                // `CreatureCmd.GainBlock`, unpowered, on the relic's owner.
+                (Listener::Relic { .. }, HookEffect::GainBlock(amount)) => {
+                    let player = self.live.player().id;
+                    self.live.gain_unpowered_block(player, amount);
+                }
+                // A fight here has one player, whose piles take them all.
+                (Listener::Power { .. }, HookEffect::GiveCardsPerUnblockedHit { card, per }) => {
+                    let player = self.live.player().id;
+                    let hits = results
+                        .iter()
+                        .filter(|hit| hit.receiver == player && hit.unblocked > V::Number::zero())
+                        .count();
+                    let count = num_traits::cast::<_, usize>(per)
+                        .unwrap_or_else(|| unimplemented!("{per:?} cards for each hit"))
+                        * hits;
+                    self.add_generated_cards(CardIdent::new(card), Pile::Discard, count);
+                }
+                (listener, effect) => {
+                    unimplemented!("{listener:?} asking for {effect:?} after an attack")
+                }
+            }
+        }
+        results
+    }
+
     /// What an `AfterShuffle` listener asked for, carried out.
     fn after_shuffle(&mut self, effect: HookEffect<V>) {
         match effect {

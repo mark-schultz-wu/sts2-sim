@@ -7,10 +7,12 @@
 //!
 //! Filed the way the monster table is: one file per act a monster is met in.
 //!
-//! Each command is a step. A command can make the player answer something,
-//! as a relic's draw that shuffles on a hit does. The game's move stands
-//! still on its `await` until the answer comes. So a move with more to do
-//! stops there, names the step it goes on from, and is called again with it.
+//! A move's attack can make the player answer something, as a relic's draw
+//! that shuffles on a hit does. The game's move stands still on its `await`
+//! until the answer comes. So a move with more to do after an attack stops
+//! there, names the step it goes on from, and is called again with it. Every
+//! other command takes a `ThrowingPlayerChoiceContext`, which throws on a
+//! question, so none of them is a place to stop.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -259,18 +261,26 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
                 }
                 writeln!(out, "{arm} => {{").unwrap();
                 let last = held.rows.len().saturating_sub(1);
+                let stops = held.rows[..last].iter().any(|row| row == &["attack"]);
+                if stops {
+                    writeln!(out, "if step == 0 {{").unwrap();
+                }
+                let mut steps = 0;
                 for (at, row) in held.rows.iter().enumerate() {
-                    match at {
-                        0 => writeln!(out, "if step == 0 {{").unwrap(),
-                        at => writeln!(out, "if step <= {at} {{").unwrap(),
-                    }
                     command(out, row, &cards).map_err(|source| Error::In {
                         at: format!("{id} {}", held.id),
                         source: Box::new(source),
                     })?;
-                    if at < last {
-                        writeln!(out, "if fight.waiting() {{ return Some({}); }}", at + 1).unwrap();
+                    if row == &["attack"] && at < last {
+                        steps += 1;
+                        writeln!(
+                            out,
+                            "if fight.waiting() {{ return Some({steps}); }}\n}}\nif step <= {steps} {{"
+                        )
+                        .unwrap();
                     }
+                }
+                if stops {
                     writeln!(out, "}}").unwrap();
                 }
                 writeln!(out, "}}").unwrap();

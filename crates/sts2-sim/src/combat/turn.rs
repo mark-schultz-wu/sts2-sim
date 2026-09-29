@@ -212,8 +212,7 @@ pub(super) fn resume_move<V: Rules>(
         relics,
         ascension,
         (actor, damage, repeats),
-    )
-    .pausable();
+    );
     let played = V::resume_move(monster, move_id, at, &mut state, &mut board);
     let ended = board.ended;
     let skipped = std::mem::take(&mut board.skipped);
@@ -2519,8 +2518,7 @@ fn enemy_turn<V: Rules>(
             relics,
             ascension,
             (id, damage, repeats),
-        )
-        .pausable();
+        );
         let played = V::perform_move(monster, next_move.id, &mut state, &mut board);
         ended = ended.or(board.ended);
         super::play::merge::<V>(skipping, std::mem::take(&mut board.skipped));
@@ -2552,8 +2550,8 @@ fn enemy_turn<V: Rules>(
             sts2_core::Played::Asking { .. } | sts2_core::Played::AskingAmong { .. } => {
                 unimplemented!("a monster's move selecting from a pile")
             }
-            // A command inside the move asked, and the move stands still on
-            // it with the rest of the turn behind it.
+            // Its attack asked, and the move stands still on it with the
+            // rest of the turn behind it.
             sts2_core::Played::Waiting { at: resume } => {
                 if live.asking.is_none() {
                     unimplemented!("a move waiting on nothing asked");
@@ -2571,7 +2569,8 @@ fn enemy_turn<V: Rules>(
                 return Acted::Deferred;
             }
         }
-        // Its last command asked: the move is over, and the turn waits.
+        // Its last command, an attack, asked: the move is over, and the turn
+        // waits.
         if live.asking.is_some() {
             live.defer(super::live::Deferred::Move {
                 actor: id,

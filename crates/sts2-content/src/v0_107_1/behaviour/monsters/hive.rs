@@ -630,8 +630,8 @@ pub(super) fn knowledge_demon<F: Fight<V>>(
 pub enum Resume {
     /// `ChooseCurse`, for the set at this index.
     CurseOfKnowledge { set: u8 },
-    /// A move that stood still on a command the player had to answer, from
-    /// this step once the answer is in.
+    /// A move whose attack stood still on a question the player had to
+    /// answer, from this step once the answer is in.
     Step(u8),
 }
 

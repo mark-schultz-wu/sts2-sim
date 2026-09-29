@@ -69,14 +69,10 @@ pub fn perform<F: Fight<V>>(
             unimplemented!("what {move_id:?} does when {monster:?} performs it")
         }
         (Monster::MockAttackMonster, MoveId::Attack) => {
-            if step == 0 {
-                fight.attack_opponents();
-            }
+            fight.attack_opponents();
         }
         (Monster::MockIntangibleMonster, MoveId::Intangible) => {
-            if step == 0 {
-                fight.apply_to_actor(Power::IntangiblePower, PowerAmount::Counted(2));
-            }
+            fight.apply_to_actor(Power::IntangiblePower, PowerAmount::Counted(2));
         }
         (Monster::MockIntangibleMonster, MoveId::Nothing) => {}
         (Monster::MockPlatingMonster, MoveId::Nothing) => {}
@@ -87,24 +83,16 @@ pub fn perform<F: Fight<V>>(
             unimplemented!("what {move_id:?} does when {monster:?} performs it")
         }
         (Monster::MultiAttackMoveMonster, MoveId::Poke) => {
-            if step == 0 {
-                fight.attack_opponents();
-            }
+            fight.attack_opponents();
         }
         (Monster::MysteriousKnight, MoveId::FlailMove) => {
-            if step == 0 {
-                fight.attack_opponents();
-            }
+            fight.attack_opponents();
         }
         (Monster::MysteriousKnight, MoveId::RamMove) => {
-            if step == 0 {
-                fight.attack_opponents();
-            }
+            fight.attack_opponents();
         }
         (Monster::MysteriousKnight, MoveId::WarChant) => {
-            if step == 0 {
-                fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(3));
-            }
+            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(3));
         }
         (Monster::OneHpMonster, MoveId::Nothing) => {}
         // `its MoveState performs a lambda`
@@ -116,9 +104,7 @@ pub fn perform<F: Fight<V>>(
             unimplemented!("what {move_id:?} does when {monster:?} performs it")
         }
         (Monster::SingleAttackMoveMonster, MoveId::Poke) => {
-            if step == 0 {
-                fight.attack_opponents();
-            }
+            fight.attack_opponents();
         }
         (Monster::TenHpMonster, MoveId::Nothing) => {}
         (Monster::TheAdversaryMkOne, MoveId::BarrageMove) => {
@@ -133,14 +119,10 @@ pub fn perform<F: Fight<V>>(
             }
         }
         (Monster::TheAdversaryMkOne, MoveId::BeamMove) => {
-            if step == 0 {
-                fight.attack_opponents();
-            }
+            fight.attack_opponents();
         }
         (Monster::TheAdversaryMkOne, MoveId::SmashMove) => {
-            if step == 0 {
-                fight.attack_opponents();
-            }
+            fight.attack_opponents();
         }
         (Monster::TheAdversaryMkThree, MoveId::BarrageMove) => {
             if step == 0 {
@@ -154,14 +136,10 @@ pub fn perform<F: Fight<V>>(
             }
         }
         (Monster::TheAdversaryMkThree, MoveId::CrashMove) => {
-            if step == 0 {
-                fight.attack_opponents();
-            }
+            fight.attack_opponents();
         }
         (Monster::TheAdversaryMkThree, MoveId::FlameBeamMove) => {
-            if step == 0 {
-                fight.attack_opponents();
-            }
+            fight.attack_opponents();
         }
         (Monster::TheAdversaryMkTwo, MoveId::BarrageMove) => {
             if step == 0 {
@@ -175,14 +153,10 @@ pub fn perform<F: Fight<V>>(
             }
         }
         (Monster::TheAdversaryMkTwo, MoveId::BashMove) => {
-            if step == 0 {
-                fight.attack_opponents();
-            }
+            fight.attack_opponents();
         }
         (Monster::TheAdversaryMkTwo, MoveId::FlameBeamMove) => {
-            if step == 0 {
-                fight.attack_opponents();
-            }
+            fight.attack_opponents();
         }
         (monster, move_id) => unimplemented!("{monster:?} has no {move_id:?} in the table"),
     }

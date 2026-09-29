@@ -282,8 +282,8 @@ pub(crate) fn perform<F: Fight<V>>(
     perform_from(monster, move_id, 0, model, fight)
 }
 
-/// A move that stood still on a command the player had to answer, carried
-/// on from where it stopped.
+/// A move whose attack stood still on a question the player had to answer,
+/// carried on from where it stopped.
 pub(crate) fn resume_move<F: Fight<V>>(
     monster: Monster,
     move_id: MoveId,
@@ -298,7 +298,7 @@ pub(crate) fn resume_move<F: Fight<V>>(
 }
 
 /// A move from `step`, which stands still, naming the step it goes on from,
-/// where a command made the player answer something.
+/// where its attack made the player answer something.
 fn perform_from<F: Fight<V>>(
     monster: Monster,
     move_id: MoveId,
@@ -375,8 +375,13 @@ fn perform_from<F: Fight<V>>(
     }
 }
 
-/// A move's opening attack, at step 0. True where a command inside it made
-/// the player answer something, and the move stands still until step 1.
+/// A move's opening attack, at step 0. True where the attack made the player
+/// answer something, and the move stands still until step 1.
+///
+/// The attack is the one command a move can stand still on. Every other
+/// command takes a `ThrowingPlayerChoiceContext`, which throws on a question.
+/// Each move ported by hand attacks first or last, so none needs a step past
+/// 1.
 fn attack_first<F: Fight<V>>(fight: &mut F, step: u8) -> bool {
     if step == 0 {
         fight.attack_opponents();
