@@ -216,6 +216,7 @@ mod shuriken;
 mod signet_ring;
 mod silken_tress;
 mod silver_crucible;
+mod sling_of_courage;
 mod small_capsule;
 mod snecko_skull;
 mod sozu;
@@ -536,6 +537,7 @@ pub enum State {
     GalacticDust(galactic_dust::State),
     MiniRegent(mini_regent::State),
     RazorTooth,
+    SlingOfCourage,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -779,6 +781,7 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::SlingOfCourage => sling_of_courage::event_hook(hook, asked),
         State::RazorTooth => razor_tooth::event_hook(hook, asked),
         State::MiniRegent(state) => mini_regent::event_hook(state, hook, asked),
         State::GalacticDust(state) => galactic_dust::event_hook(state, hook, asked),
@@ -1137,7 +1140,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::UnceasingTop
         | State::GalacticDust(_)
         | State::MiniRegent(_)
-        | State::RazorTooth => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::RazorTooth
+        | State::SlingOfCourage => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1316,6 +1320,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::SlingOfCourage => State::SlingOfCourage,
             Relic::RazorTooth => State::RazorTooth,
             Relic::MiniRegent => State::MiniRegent(mini_regent::State::default()),
             Relic::GalacticDust => State::GalacticDust(galactic_dust::State::default()),

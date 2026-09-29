@@ -1,0 +1,4 @@
+# Sling of Courage gives two Strength as an elite fight's room is entered.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"SLING_OF_COURAGE"}
+{"cmd":"fight","encounter":"BYRDONIS_ELITE"}

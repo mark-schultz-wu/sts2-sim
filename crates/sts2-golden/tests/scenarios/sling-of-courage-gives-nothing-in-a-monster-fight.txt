@@ -1,0 +1,4 @@
+# Sling of Courage gives nothing as a monster fight's room is entered.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"SLING_OF_COURAGE"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
