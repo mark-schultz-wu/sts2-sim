@@ -353,8 +353,8 @@ fn beat_down<F: Fight<V>>(fight: &mut F) -> Played<V> {
                     .find(|at| at.id() == card.id())
             })
             .unwrap_or_else(|| unimplemented!("Beat Down playing a card no pile holds"));
-        let aimed =
-            fight.card_target_type(card) == <V as sts2_core::ContentVersion>::TargetType::ANY_ENEMY;
+        let aimed = fight.card_target_type(fight.card_ident(card))
+            == <V as sts2_core::ContentVersion>::TargetType::ANY_ENEMY;
         match aimed.then(|| fight.random_opponent()).flatten() {
             Some(target) => fight.auto_play_card_at(card, target),
             None => fight.auto_play_card(card),

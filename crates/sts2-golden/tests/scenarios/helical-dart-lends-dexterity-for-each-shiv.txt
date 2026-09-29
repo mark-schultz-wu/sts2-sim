@@ -1,0 +1,12 @@
+# Helical Dart lends a point of Dexterity for the turn after each Shiv, and
+# nothing after a Strike. The Defend played after two Shivs shows both.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","relic":"HELICAL_DART"}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"play_card","index":6,"target":1}
+{"cmd":"play_card","index":6,"target":1}
+{"cmd":"play_card","index":6,"target":1}
+{"cmd":"play_card","index":0}
+{"cmd":"end_turn"}

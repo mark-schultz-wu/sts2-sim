@@ -27,7 +27,11 @@ pub(crate) fn can_enchant(enchantment: Enchantment, card: &CardIdent<V>) -> bool
         }
         // Its own check adds an X cost to the base's refusals.
         Enchantment::Slither => base && card.card.cost() != Cost::X,
-        Enchantment::Glam | Enchantment::Sown | Enchantment::Swift | Enchantment::Adroit => base,
+        Enchantment::Glam
+        | Enchantment::Sown
+        | Enchantment::Swift
+        | Enchantment::Adroit
+        | Enchantment::Inky => base,
         // Exhaust among the card's own keywords, which its upgrade can take
         // off.
         Enchantment::SoulsPower => base && card_exhausts(card),
@@ -228,8 +232,8 @@ pub(crate) fn on_play<F: Fight<V>>(
             use sts2_core::{PowerAmount, TargetKinds as _};
 
             let weak = PowerAmount::Counted(INKY_WEAK);
-            let every = fight.playing_ident().card.target()
-                == Some(<V as sts2_core::ContentVersion>::TargetType::ALL_ENEMIES);
+            let every = fight.card_target_type(fight.playing_ident())
+                == <V as sts2_core::ContentVersion>::TargetType::ALL_ENEMIES;
             let targets = match every {
                 true => fight.hittable_opponents(),
                 false => smallvec::smallvec![fight.target()],
