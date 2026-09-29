@@ -251,7 +251,7 @@ pub(crate) fn play<V: Rules>(
         play.target,
         Some(card.id),
     )
-    .pausable();
+    .blocking();
     let played = V::on_play(card.face.ident.card, &mut board);
     let ended = board.ended();
     let skipped = std::mem::take(&mut board.skipped);
@@ -388,7 +388,7 @@ pub(super) fn auto_play_in_play<V: Rules>(
         Some(card.id),
     );
     if pausable {
-        board = board.pausable();
+        board = board.blocking();
     }
     let played = V::on_play(card.face.ident.card, &mut board);
     let ended = board.ended();
@@ -865,7 +865,7 @@ pub(crate) fn answer<V: Rules>(
         effect.target,
         playing,
     )
-    .pausable();
+    .blocking();
     let played = V::resume_play(&mut board, at, taken);
     effect.ended = effect.ended.or(board.ended());
     let skipped = std::mem::take(&mut board.skipped);
@@ -1063,7 +1063,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                 effect.target,
                 playing,
             )
-            .pausable();
+            .blocking();
             played = V::resume_play(&mut board, at, sts2_core::Taken::Waited);
             effect.ended = effect.ended.or(board.ended());
             let skipped = std::mem::take(&mut board.skipped);
@@ -1100,7 +1100,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                         effect.target,
                         Some(card),
                     )
-                    .pausable();
+                    .blocking();
                     V::enchantment_on_play(enchanted, &mut status, &mut board);
                     effect.ended = effect.ended.or(board.ended());
                     let skipped = std::mem::take(&mut board.skipped);
@@ -1147,7 +1147,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                     effect.target,
                     Some(card),
                 )
-                .pausable();
+                .blocking();
                 played = V::on_play(played_card, &mut board);
                 effect.ended = effect.ended.or(board.ended());
                 let skipped = std::mem::take(&mut board.skipped);
@@ -1207,7 +1207,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
             effect.target,
             playing,
         )
-        .pausable();
+        .blocking();
         played = V::resume_play(&mut board, at, answer);
         effect.ended = effect.ended.or(board.ended());
         let skipped = std::mem::take(&mut board.skipped);

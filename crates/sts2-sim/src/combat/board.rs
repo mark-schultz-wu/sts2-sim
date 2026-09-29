@@ -61,16 +61,9 @@ pub(super) struct Board<'a, V: Rules> {
     /// which stands. A win is `IsEnding` as the kill saw it, which a primary
     /// enemy arriving after it undoes.
     ended: Option<super::Ended>,
-    /// A card's or a potion's own effect, whose play can stand still while a
-    /// card it auto-plays asks a question. [`super::live::Deferred`] holds
-    /// what waits.
-    pausable: bool,
-    /// A monster's move, which is pausable only inside its attack.
-    ///
-    /// A move's attack is `Execute(null)`, which blocks on a question. Every
-    /// other command it runs takes a `ThrowingPlayerChoiceContext`, which
-    /// throws on one.
-    moving: bool,
+    /// The `PlayerChoiceContext` this board's commands run in, which says
+    /// what a question raised inside them does.
+    choice: Choice,
     /// The hits of the attack under way that wait on a question, in order.
     held: Vec<Effect<V>>,
     /// The model of a monster that left the fight during its own move. The
@@ -80,6 +73,21 @@ pub(super) struct Board<'a, V: Rules> {
     /// The results of the attack command whose hits are landing, which
     /// `AttackCommand.Results` gathers.
     landed: Option<sts2_core::AttackResults<V>>,
+}
+
+/// The game's `PlayerChoiceContext`, as far as it decides what a question
+/// raised inside a command does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Choice {
+    /// `ThrowingPlayerChoiceContext`, which throws on a question. A hook's
+    /// commands take it.
+    Throwing,
+    /// A card's or a potion's play, whose context blocks. The effect stands
+    /// still on the question, and [`super::live::Deferred`] holds what waits.
+    Blocking,
+    /// A monster's move. Its attack is `Execute(null)`, which blocks, and
+    /// every other command it runs takes a `ThrowingPlayerChoiceContext`.
+    Move { attacking: bool },
 }
 
 /// What one hit took off one creature's hit points, before its block is
@@ -177,19 +185,34 @@ impl<'a, V: Rules> Board<'a, V> {
             ascension,
             skipped: Vec::new(),
             ended: None,
-            pausable: false,
-            moving: false,
+            choice: Choice::Throwing,
             held: Vec::new(),
             left: None,
             landed: None,
         }
     }
 
-    /// This board for a card's or a potion's own effect, which a card it
-    /// auto-plays can pause.
-    pub(super) fn pausable(mut self) -> Self {
-        self.pausable = true;
+    /// This board for a card's or a potion's own effect, which a question
+    /// inside it stands still.
+    pub(super) fn blocking(mut self) -> Self {
+        self.choice = Choice::Blocking;
         self
+    }
+
+    /// Whether a question raised now stands this board still rather than
+    /// throwing.
+    #[inline]
+    fn pausable(&self) -> bool {
+        matches!(
+            self.choice,
+            Choice::Blocking | Choice::Move { attacking: true }
+        )
+    }
+
+    /// Whether this board is a monster's move.
+    #[inline]
+    fn moving(&self) -> bool {
+        matches!(self.choice, Choice::Move { .. })
     }
 
     /// A board for one move, made by a monster.
@@ -213,8 +236,7 @@ impl<'a, V: Rules> Board<'a, V> {
             ascension,
             skipped: Vec::new(),
             ended: None,
-            pausable: false,
-            moving: true,
+            choice: Choice::Move { attacking: false },
             held: Vec::new(),
             left: None,
             landed: None,
@@ -3001,10 +3023,12 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         hits: impl FnOnce(&mut Self),
     ) -> sts2_core::AttackResults<V> {
         self.ran_on();
-        let pausable = self.pausable;
-        self.pausable |= self.moving;
+        let choice = self.choice;
+        if let Choice::Move { .. } = choice {
+            self.choice = Choice::Move { attacking: true };
+        }
         let results = self.attack_landing(attacker, scaling, hits);
-        self.pausable = pausable;
+        self.choice = choice;
         results
     }
 
@@ -3351,7 +3375,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         }
         // A negative count draws nothing: the game's own loop runs no times.
         let count = num_traits::NumCast::from(count).unwrap_or(0usize);
-        if !self.pausable {
+        if !self.pausable() {
             self.ended = draw(
                 self.live,
                 self.rngs.reborrow(),
@@ -3680,12 +3704,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             sts2_core::Fight::draw(self, draw);
         }
         if !self.stopped() {
+            let pausable = self.pausable();
             self.ended = super::turn::play_sly::<V>(
                 self.live,
                 self.rngs.reborrow(),
                 self.relics,
                 sly,
-                self.pausable,
+                pausable,
             );
         }
     }
@@ -3877,6 +3902,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             return;
         }
         self.standing(card);
+        let pausable = self.pausable();
         self.ended = super::play::auto_play::<V>(
             self.live,
             self.rngs.reborrow(),
@@ -3884,7 +3910,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             card.id(),
             card.pile(),
             None,
-            self.pausable,
+            pausable,
         );
     }
 
@@ -3893,6 +3919,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             return;
         }
         self.standing(card);
+        let pausable = self.pausable();
         self.ended = super::play::auto_play::<V>(
             self.live,
             self.rngs.reborrow(),
@@ -3900,7 +3927,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             card.id(),
             card.pile(),
             Some(target),
-            self.pausable,
+            pausable,
         );
     }
 
@@ -4214,12 +4241,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             super::turn::act_on::<V>(self.live, self.rngs.reborrow(), self.relics, act, cards);
         self.ended = self.ended.or(ended);
         if !self.stopped() {
+            let pausable = self.pausable();
             self.ended = super::turn::play_sly::<V>(
                 self.live,
                 self.rngs.reborrow(),
                 self.relics,
                 sly,
-                self.pausable,
+                pausable,
             );
         }
     }
@@ -4457,14 +4485,20 @@ impl<V: Rules> Board<'_, V> {
     /// past the attack. An effect stands still where its code hands back
     /// [`sts2_core::Played::Waiting`], so its command here needs a step cut.
     /// A draw or an auto-play waits behind the question on its own.
+    #[inline]
     fn ran_on(&self) {
-        if self.live.asking.is_none() {
-            return;
+        if self.live.asking.is_some() {
+            self.ran_on_asking();
         }
-        if self.moving && !self.pausable {
+    }
+
+    /// [`Board::ran_on`] once a question waits.
+    #[cold]
+    fn ran_on_asking(&self) {
+        if matches!(self.choice, Choice::Move { attacking: false }) {
             panic!("a move ran on past its attack while the player's answer waits");
         }
-        if !self.moving && self.pausable && self.landed.is_none() {
+        if matches!(self.choice, Choice::Blocking) && self.landed.is_none() {
             let card = self
                 .playing
                 .and_then(|id| self.live.cards.named(id))
@@ -4539,7 +4573,7 @@ impl<V: Rules> Board<'_, V> {
     /// Whether a hit resolved now waits: inside an attack whose earlier hit
     /// raised a question, on a board that can stand still for it.
     fn hits_wait(&self) -> bool {
-        self.live.asking.is_some() && self.pausable && self.landed.is_some()
+        self.live.asking.is_some() && self.pausable() && self.landed.is_some()
     }
 
     /// The end of an attack once all its hits have landed: `History
@@ -4655,14 +4689,14 @@ pub(super) struct Frame<V: Rules> {
     playing: Option<CardId<V>>,
     intent_damage: V::Number,
     intent_repeats: V::Count,
-    moving: bool,
+    choice: Choice,
 }
 
 impl<'a, V: Rules> Board<'a, V> {
     /// Take `id`'s move graph out of the fight. The model of the monster
     /// whose move this is stays on the board until the move is over.
     fn leave_machine(&mut self, id: CombatId) {
-        if self.moving && id == self.actor {
+        if self.moving() && id == self.actor {
             self.left = self
                 .live
                 .machines
@@ -4681,7 +4715,7 @@ impl<'a, V: Rules> Board<'a, V> {
             playing: self.playing,
             intent_damage: self.intent_damage,
             intent_repeats: self.intent_repeats,
-            moving: self.moving,
+            choice: self.choice,
         }
     }
 
@@ -4699,7 +4733,7 @@ impl<'a, V: Rules> Board<'a, V> {
             playing,
             intent_damage,
             intent_repeats,
-            moving,
+            choice,
         } = frame;
         Board {
             live,
@@ -4713,8 +4747,7 @@ impl<'a, V: Rules> Board<'a, V> {
             ascension,
             skipped: Vec::new(),
             ended: None,
-            pausable: true,
-            moving,
+            choice,
             held: Vec::new(),
             left: None,
             landed: None,
