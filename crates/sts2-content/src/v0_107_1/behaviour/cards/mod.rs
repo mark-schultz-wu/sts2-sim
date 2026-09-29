@@ -661,6 +661,8 @@ pub(crate) fn resume_play<F: Fight<V>>(
 pub(crate) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
     match at {
         Resume::Colorless(at) => colorless::resume_waited(fight, at),
+        Resume::Event(at) => event::resume_waited(fight, at),
+        Resume::Regent(at) => regent::resume_waited(fight, at),
         at => unimplemented!("{at:?} resumed after waiting"),
     }
 }

@@ -15,6 +15,8 @@ pub enum Resume {
     NeowsFuryPicks,
     /// `Wish`, after its owner picked the card to take.
     WishPick,
+    /// `BrightestFlame`, after a question inside its draw was answered.
+    BrightestFlameDrew,
 }
 
 pub(super) fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
@@ -74,6 +76,14 @@ pub(super) fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> 
         EventCard::BrightestFlame => {
             fight.modify_energy(fight.var(CardVar::Energy));
             fight.draw(fight.var(CardVar::Cards));
+            // A shuffle inside the draw can ask, and the rest waits for it.
+            if fight.waiting() {
+                return Played::Waiting {
+                    at: super::super::Resume::Card(super::Resume::Event(
+                        Resume::BrightestFlameDrew,
+                    )),
+                };
+            }
             fight.lose_max_hp(fight.actor(), fight.var(CardVar::MaxHp));
             Played::Done
         }
@@ -106,6 +116,7 @@ pub(super) fn resume_play<F: Fight<V>>(
             fight.act_on(PileAct::IntoHand, chosen.as_slice());
             Played::Done
         }
+        Resume::BrightestFlameDrew => unreachable!("{at:?} waits on a question, not a pick"),
     }
 }
 
@@ -292,4 +303,16 @@ fn apotheosis<F: Fight<V>>(fight: &mut F) -> Played<V> {
         }
     }
     Played::Done
+}
+
+/// The rest of an event card's play that stood still on a question its own
+/// command raised.
+pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
+    match at {
+        Resume::BrightestFlameDrew => {
+            fight.lose_max_hp(fight.actor(), fight.var(CardVar::MaxHp));
+            Played::Done
+        }
+        at => unreachable!("{at:?} stops on a pick, not on a question it waited for"),
+    }
 }

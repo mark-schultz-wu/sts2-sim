@@ -3167,6 +3167,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn afflict(&mut self, to: sts2_core::Writing<V>, affliction: V::Affliction) {
+        self.ran_on();
         self.write_cards([HookEffect::Afflict { to, affliction }]);
     }
 
@@ -3180,6 +3181,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn add_replays(&mut self, to: sts2_core::Writing<V>, amount: V::Number) {
+        self.ran_on();
         self.write_cards([HookEffect::AddReplays { to, amount }]);
     }
 
@@ -3248,6 +3250,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn procure_random_potion(&mut self, stream: V::RunRngType) {
+        self.ran_on();
         self.live
             .for_run
             .push(sts2_core::HookEffect::ProcureRandomPotions {
@@ -3259,6 +3262,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn gain_max_hp(&mut self, creature: CombatId, amount: V::Number) {
+        self.ran_on();
         let Some(at) = self.at(creature) else { return };
         let gained: V::Health =
             num_traits::cast(amount).expect("a maximum health gain fits the build's health");
@@ -3268,6 +3272,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn lose_max_hp(&mut self, creature: CombatId, amount: V::Number) {
+        self.ran_on();
         let Some(at) = self.at(creature) else { return };
         let held = &self.live.creatures[at];
         let max_hp = V::Number::from(held.max_hp) - amount;
@@ -3281,10 +3286,12 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn lose_gold(&mut self, amount: V::Number) {
+        self.ran_on();
         self.live.gold = (self.live.gold - amount).max(V::Number::zero());
     }
 
     fn gain_stars(&mut self, amount: V::Number) {
+        self.ran_on();
         // The pool is a count, so a card printing a negative one is spending
         // rather than gaining. No card on this build does.
         if amount < V::Number::zero() {
@@ -3294,6 +3301,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn modify_energy(&mut self, amount: V::Number) {
+        self.ran_on();
         let size = |amount: V::Number| {
             num_traits::NumCast::from(amount)
                 .unwrap_or_else(|| unimplemented!("an energy change of {amount:?}"))
@@ -3431,6 +3439,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn transform(&mut self, card: CardAt<V>, into: CardIdent<V>) {
+        self.ran_on();
         // A new model for the replacement, so a new id. The original's own is
         // gone with it.
         let id = self.live.card_ids.mint();
@@ -3464,6 +3473,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn forge(&mut self, card: V::Card, key: V::CardVar, amount: V::Number) {
+        self.ran_on();
         // `ForgeCmd.Forge` creates one when the fight holds none it can reach.
         // The exhaust pile is not one it can reach, and is forged all the same.
         let held = self
@@ -3506,6 +3516,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     /// A listener to `AfterOrbChanneled` asking for anything but damage on
     /// every enemy.
     fn channel(&mut self, orb: V::Orb) {
+        self.ran_on();
         if self.over() {
             return;
         }
@@ -3559,6 +3570,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     ///
     /// A listener to `AfterOrbEvoked`.
     fn evoke_next(&mut self, dequeue: bool) {
+        self.ran_on();
         self.evoke(false, dequeue);
     }
 
@@ -3572,6 +3584,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     /// A listener to any hook the summon raises, or a summon for more health
     /// than a creature holds.
     fn summon_osty(&mut self, amount: V::Number) {
+        self.ran_on();
         use sts2_core::ModelHook;
 
         self.unheard(ModelHook::ModifySummonAmount);
@@ -3651,6 +3664,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn discard_and_draw(&mut self, cards: &[CardAt<V>], draw: V::Number) {
+        self.ran_on();
         if cards.is_empty() || self.over() {
             return;
         }
@@ -3774,6 +3788,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn add_orb_slots(&mut self, amount: V::Number) {
+        self.ran_on();
         if self.over() {
             return;
         }
@@ -3804,10 +3819,12 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn damage_unblockable(&mut self, target: CombatId, amount: V::Number) {
+        self.ran_on();
         self.hit_unpowered(Some(self.actor), target, amount, true);
     }
 
     fn lose_block(&mut self, creature: CombatId, amount: V::Number) {
+        self.ran_on();
         let zero = V::Number::zero();
         if self.over() || amount <= zero {
             return;
@@ -4022,6 +4039,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn generate_card(&mut self, cards: &[V::Card]) -> Option<V::Card> {
+        self.ran_on();
         use sts2_core::rng::GameRng as _;
 
         self.rngs.generation.choose(cards).ok().copied()
@@ -4062,6 +4080,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn clone_card(&mut self, card: CardAt<V>, pile: Pile) -> Option<CardAt<V>> {
+        self.ran_on();
         if self.stopped() {
             return None;
         }
@@ -4099,6 +4118,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn add_card(&mut self, card: CardIdent<V>, pile: Pile) -> Option<CardAt<V>> {
+        self.ran_on();
         // `IsInProgress`, which a fight already over fails.
         if self.stopped() {
             return None;
@@ -4160,6 +4180,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn take_random_cards(&mut self, cards: &mut [CardAt<V>], count: usize) -> Vec<CardAt<V>> {
+        self.ran_on();
         use sts2_core::rng::GameRng as _;
 
         self.rngs.selection.unstable_shuffle(cards);
@@ -4188,6 +4209,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn act_on(&mut self, act: sts2_core::PileAct, cards: &[CardAt<V>]) {
+        self.ran_on();
         let (sly, ended) =
             super::turn::act_on::<V>(self.live, self.rngs.reborrow(), self.relics, act, cards);
         self.ended = self.ended.or(ended);
@@ -4203,6 +4225,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn modify_this(&mut self, change: sts2_core::Change<V>, lasting: sts2_core::Lasting) {
+        self.ran_on();
         let playing = self
             .playing
             .unwrap_or_else(|| unimplemented!("a card writing on itself with none being played"));
@@ -4214,6 +4237,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn add_this(&mut self, pile: Pile, position: sts2_core::PilePosition) {
+        self.ran_on();
         let playing = self
             .playing
             .unwrap_or_else(|| unimplemented!("a card moving itself with none being played"));
@@ -4243,6 +4267,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn discard_this(&mut self) {
+        self.ran_on();
         let playing = self.playing.expect("a card behavior has a card");
         let Some(at) = self.live.cards.find(Pile::Hand, playing) else {
             return;
@@ -4425,14 +4450,26 @@ pub(super) fn shuffle_asking<V: Rules>(
 }
 
 impl<V: Rules> Board<'_, V> {
-    /// Stop a move's command that starts while its attack's question waits.
+    /// Stop a command that starts while a question waits, where nothing
+    /// holds it for the answer.
     ///
-    /// Only a move's attack can ask, and a move returns on an attack that
-    /// asked. So a command here is a hand port that ran on past its attack,
-    /// where the game's move stands still until the answer comes.
+    /// A move returns on an attack that asked, so its command here ran on
+    /// past the attack. An effect stands still where its code hands back
+    /// [`sts2_core::Played::Waiting`], so its command here needs a step cut.
+    /// A draw or an auto-play waits behind the question on its own.
     fn ran_on(&self) {
-        if self.moving && !self.pausable && self.live.asking.is_some() {
+        if self.live.asking.is_none() {
+            return;
+        }
+        if self.moving && !self.pausable {
             panic!("a move ran on past its attack while the player's answer waits");
+        }
+        if !self.moving && self.pausable && self.landed.is_none() {
+            let card = self
+                .playing
+                .and_then(|id| self.live.cards.named(id))
+                .map(|card| card.face.ident.card);
+            unimplemented!("an effect of {card:?} running on past a question");
         }
     }
 
