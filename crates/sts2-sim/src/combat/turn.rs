@@ -10,7 +10,7 @@ use sts2_core::{CombatId, Pile, PowerAmount, Rules, SideKinds, TurnPhaseKinds};
 
 use super::board::Board;
 use super::listen::{self, Listener};
-use super::live::{CREATURES, EnemyTurn, Face, Landing, Live, Setup, Skips, Then};
+use super::live::{CREATURES, Face, Landing, Live, Setup, Skips, Then};
 use super::pile::MAX_CARDS_IN_HAND;
 use super::powers::Powers as _;
 use super::start::hand_size;
@@ -129,43 +129,29 @@ pub(crate) fn end<V: Rules>(
     )
 }
 
-/// Answer the question a monster's move stopped the enemy turn on, then carry
-/// the turn on from the enemy after it.
+/// Answer the choice a monster's move offered, `IChoosable.OnChosen`. What
+/// the player chose acts from the player.
 #[tracing::instrument(level = "trace", skip_all)]
-pub(super) fn resume_enemy_turn<V: Rules>(
+pub(super) fn resume_chosen<V: Rules>(
     fighting: Fighting<'_, V>,
-    parked: EnemyTurn<V>,
+    at: V::Resume,
     taken: sts2_core::Taken<V>,
-) -> Result<Option<super::Ended>, Error> {
+) -> Option<super::Ended> {
     let Fighting {
         live,
         streams,
         relics,
     } = fighting;
-    let mut skipping = std::mem::take(&mut live.skip_tick);
     let ascension = live.ascension;
-    // What the player chose acts from the player, as `IChoosable.OnChosen`
-    // does.
     let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
-    let played = V::resume_play(&mut board, parked.at, taken);
+    let played = V::resume_play(&mut board, at, taken);
     let ended = board.ended();
-    super::play::merge::<V>(&mut skipping, std::mem::take(&mut board.skipped));
+    let skipped = std::mem::take(&mut board.skipped);
+    super::play::merge::<V>(&mut live.skip_tick, skipped);
     if played != sts2_core::Played::Done {
         unimplemented!("a monster's move asking a second question");
     }
-    live.skip_tick = skipping;
-    after_move(
-        Fighting {
-            live,
-            streams,
-            relics,
-        },
-        parked.actor,
-        parked.move_id,
-        &parked.acting,
-        parked.max_energy,
-        ended,
-    )
+    ended
 }
 
 /// The rest of a move that stood still on a command the player had to
@@ -292,12 +278,6 @@ fn enemies_act<V: Rules>(
         max_energy,
     ) {
         Acted::Over(ended) => ended,
-        // The turn waits on the player's answer.
-        Acted::Parked(asking) => {
-            next.asking = Some(asking);
-            next.skip_tick = skipping;
-            return Ok(None);
-        }
         Acted::Deferred => {
             next.skip_tick = skipping;
             return Ok(None);
@@ -2453,13 +2433,11 @@ fn applied<V: Rules>(
 }
 
 /// How far an enemy turn got.
-enum Acted<V: Rules> {
+enum Acted {
     /// Every enemy acted, or one ended the fight.
     Over(Option<super::Ended>),
-    /// A move stopped on the player's answer.
-    Parked(super::live::Asking<V>),
-    /// A command inside a move asked, and the rest of the turn waits in
-    /// [`Live::deferred`].
+    /// A move asked, or a command inside it did, and the rest of the turn
+    /// waits in [`Live::deferred`].
     Deferred,
 }
 
@@ -2475,7 +2453,7 @@ fn enemy_turn<V: Rules>(
     skipping: &mut Skips<V>,
     acting: &[CombatId],
     max_energy: V::Count,
-) -> Acted<V> {
+) -> Acted {
     let mut ended = None;
     for (at, &id) in acting.iter().enumerate() {
         let Some(creature) = live.creatures.iter().find(|c| c.id == id) else {
@@ -2523,16 +2501,23 @@ fn enemy_turn<V: Rules>(
                 if ended.is_some() {
                     unimplemented!("a move asking in a fight it ended");
                 }
-                return Acted::Parked(super::live::Asking {
-                    then: Then::EnemyTurn(EnemyTurn {
-                        actor: id,
-                        move_id: next_move.id,
-                        at: resume,
-                        acting: acting[at + 1..].iter().copied().collect(),
-                        max_energy,
-                    }),
+                // The choice is the move's last command, so the move is over
+                // once it is answered.
+                live.asking = Some(super::live::Asking {
+                    then: Then::Chosen { at: resume },
                     question: super::live::Asked::Offered { offered, skippable },
                 });
+                live.defer(super::live::Deferred::Move {
+                    actor: id,
+                    monster,
+                    move_id: next_move.id,
+                    at: None,
+                    damage,
+                    repeats,
+                    acting: acting[at + 1..].iter().copied().collect(),
+                    max_energy,
+                });
+                return Acted::Deferred;
             }
             sts2_core::Played::Asking { .. } | sts2_core::Played::AskingAmong { .. } => {
                 unimplemented!("a monster's move selecting from a pile")
