@@ -445,8 +445,12 @@ impl<V: Rules> Player<V> {
 /// How many relics a run carries.
 const RELICS: usize = 64;
 
-/// How many potion slots a belt has.
-const BELT: usize = 8;
+/// The most potion slots a belt can have.
+///
+/// `Player.MaxPotionCount` is a list with no bound. It starts at three, and
+/// only Potion Belt (two), Alchemical Coffer (four) and Phial Holster (one)
+/// add to it. A run holds each relic once.
+const BELT: usize = 10;
 
 /// How many map points one act's run stands on. An act is shorter than this.
 const VISITED: usize = 32;

@@ -1,0 +1,11 @@
+# Potion Belt, Alchemical Coffer and Phial Holster take the belt from three
+# slots to ten. The Coffer fills its four, the Holster brings two, and four
+# more fill the belt.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"POTION_BELT"}
+{"cmd":"grant","relic":"ALCHEMICAL_COFFER"}
+{"cmd":"grant","relic":"PHIAL_HOLSTER"}
+{"cmd":"grant","potion":"FIRE_POTION"}
+{"cmd":"grant","potion":"FIRE_POTION"}
+{"cmd":"grant","potion":"FIRE_POTION"}
+{"cmd":"grant","potion":"FIRE_POTION"}
