@@ -1,0 +1,7 @@
+# Dying Star hits every enemy, then takes nine Strength from each until its
+# turn ends.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_NORMAL"}
+{"cmd":"grant","card":"DYING_STAR"}
+{"cmd":"play_card","index":5}
+{"cmd":"end_turn"}

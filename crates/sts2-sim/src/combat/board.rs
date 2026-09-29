@@ -1108,7 +1108,7 @@ impl<'a, V: Rules> Board<'a, V> {
     /// come here.
     /// `AddGeneratedCardToCombat` of one new copy into the draw pile at
     /// `CardPilePosition.Random`. Nothing once the fight is over.
-    fn add_to_draw_at_random(&mut self, card: V::Card) {
+    pub(super) fn add_to_draw_at_random(&mut self, card: V::Card) {
         self.add_at_random_here(card, Pile::Draw);
     }
 

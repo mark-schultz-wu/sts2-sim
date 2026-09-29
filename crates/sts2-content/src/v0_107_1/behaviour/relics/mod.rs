@@ -223,6 +223,7 @@ mod sword_of_jade;
 mod sword_of_stone;
 mod symbiotic_virus;
 mod tanxs_whistle;
+mod tea_of_discourtesy;
 mod the_courier;
 mod throwing_axe;
 mod tingsha;
@@ -514,6 +515,7 @@ pub enum State {
     EmberTea(ember_tea::State),
     Kifuda,
     PunchDagger,
+    TeaOfDiscourtesy(tea_of_discourtesy::State),
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -757,6 +759,7 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::TeaOfDiscourtesy(state) => tea_of_discourtesy::event_hook(state, hook, asked),
         State::PunchDagger => punch_dagger::event_hook(hook, asked),
         State::Kifuda => kifuda::event_hook(hook, asked),
         State::EmberTea(state) => ember_tea::event_hook(state, hook, asked),
@@ -1093,7 +1096,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::LavaLamp(_)
         | State::EmberTea(_)
         | State::Kifuda
-        | State::PunchDagger => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::PunchDagger
+        | State::TeaOfDiscourtesy(_) => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1272,6 +1276,9 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::TeaOfDiscourtesy => {
+                State::TeaOfDiscourtesy(tea_of_discourtesy::State::default())
+            }
             Relic::PunchDagger => State::PunchDagger,
             Relic::Kifuda => State::Kifuda,
             Relic::EmberTea => State::EmberTea(ember_tea::State::default()),
@@ -1355,6 +1362,7 @@ impl sts2_core::RelicModel<V> for State {
             (State::SilverCrucible(state), _) => silver_crucible::used_up(state),
             (State::SilkenTress(state), _) => silken_tress::used_up(state),
             (State::EmberTea(state), _) => state.used_up(),
+            (State::TeaOfDiscourtesy(state), _) => state.used_up(),
             (_, Field::Constant(used_up)) => used_up,
             (_, Field::Computed) => unimplemented!("whether {relic:?} is used up"),
         }

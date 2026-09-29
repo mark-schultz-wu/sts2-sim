@@ -264,6 +264,7 @@ pub(crate) fn enter<V: Rules>(
     // below. So an affliction asked for here lands once they are, before
     // anything draws.
     let mut afflicting: Vec<HookEffect<V>> = Vec::new();
+    let mut shuffled_in: Vec<V::Card> = Vec::new();
     let mut arriving: Vec<HookEffect<V>> = Vec::new();
     let starting = EventHook::CombatStarting { room: live.room() };
     for (listener, effect) in super::listen::notify::<V>(&mut live, relics, starting) {
@@ -299,6 +300,16 @@ pub(crate) fn enter<V: Rules>(
                 );
             }
             (_, afflict @ HookEffect::Afflict { .. }) => afflicting.push(afflict),
+            // `CardPileCmd.AddToCombatAndPreview` into the draw pile at random,
+            // which the deck is in by now. It lands once the piles are dealt.
+            (
+                super::listen::Listener::Relic { .. },
+                HookEffect::AddToDrawAtRandom { card, count },
+            ) => {
+                let count: usize = num_traits::cast(count)
+                    .unwrap_or_else(|| unimplemented!("{count:?} cards into the draw pile"));
+                shuffled_in.extend(std::iter::repeat_n(card, count));
+            }
             // The belt is the run's.
             (super::listen::Listener::Relic { .. }, fill @ HookEffect::FillPotionSlots { .. }) => {
                 arriving.push(fill)
@@ -361,6 +372,19 @@ pub(crate) fn enter<V: Rules>(
     if !afflicting.is_empty() {
         super::board::Board::for_card(&mut live, streams.combat(), relics, ascension, None, None)
             .write_cards(afflicting);
+    }
+    if !shuffled_in.is_empty() {
+        let mut board = super::board::Board::for_card(
+            &mut live,
+            streams.combat(),
+            relics,
+            ascension,
+            None,
+            None,
+        );
+        for card in shuffled_in {
+            board.add_to_draw_at_random(card);
+        }
     }
     // `RandomizeOrderInternal` raises `ModifyShuffleOrder` before the innate
     // cards move. No listener answers it.
