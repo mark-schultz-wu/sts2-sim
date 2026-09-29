@@ -166,6 +166,7 @@ mod old_coin;
 mod orange_dough;
 mod orichalcum;
 mod ornamental_fan;
+mod orrery;
 mod paels_blood;
 mod paels_flesh;
 mod paels_horn;
@@ -540,6 +541,7 @@ pub enum State {
     RazorTooth,
     SlingOfCourage,
     PowerCell,
+    Orrery,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -783,6 +785,7 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::Orrery => orrery::event_hook(hook, asked),
         State::PowerCell => power_cell::event_hook(hook, asked),
         State::SlingOfCourage => sling_of_courage::event_hook(hook, asked),
         State::RazorTooth => razor_tooth::event_hook(hook, asked),
@@ -1145,7 +1148,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::MiniRegent(_)
         | State::RazorTooth
         | State::SlingOfCourage
-        | State::PowerCell => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::PowerCell
+        | State::Orrery => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1324,6 +1328,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::Orrery => State::Orrery,
             Relic::PowerCell => State::PowerCell,
             Relic::SlingOfCourage => State::SlingOfCourage,
             Relic::RazorTooth => State::RazorTooth,
