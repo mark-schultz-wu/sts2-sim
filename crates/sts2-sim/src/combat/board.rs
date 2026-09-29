@@ -250,6 +250,7 @@ impl<'a, V: Rules> Board<'a, V> {
         amount: PowerAmount<V::Number>,
         applier: Option<CombatId>,
     ) {
+        self.ran_on();
         // The command returns on a zero amount, and on a creature that cannot
         // hold powers. A monster the fight has taken out is one, because its
         // combat state is gone with it.
@@ -2963,6 +2964,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         scaling: Scaling,
         hits: impl FnOnce(&mut Self),
     ) -> sts2_core::AttackResults<V> {
+        self.ran_on();
         let pausable = self.pausable;
         self.pausable |= self.moving;
         let results = self.attack_landing(attacker, scaling, hits);
@@ -2972,6 +2974,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     #[tracing::instrument(level = "trace", skip_all)]
     fn apply(&mut self, effect: Self::ResolvedEffect) {
+        self.ran_on();
         match effect.effect {
             Resolved::Attack {
                 dealer,
@@ -3011,10 +3014,12 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn remove_power(&mut self, creature: CombatId, power: V::Power) {
+        self.ran_on();
         self.remove_power_carried(creature, power);
     }
 
     fn add_at_random(&mut self, card: V::Card, pile: Pile) -> Option<CardAt<V>> {
+        self.ran_on();
         self.add_at_random_here(card, pile)
     }
 
@@ -3044,6 +3049,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn set_max_hp(&mut self, creature: CombatId, hp: V::Health) {
+        self.ran_on();
         // `SetMaxHp` kills a creature it sets to nothing, which no caller
         // asks.
         if hp <= num_traits::zero() {
@@ -3056,6 +3062,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn set_max_and_current_hp(&mut self, creature: CombatId, hp: V::Health) {
+        self.ran_on();
         let Some(at) = self.at(creature) else { return };
         self.live.creatures[at].max_hp = hp;
         self.live.creatures[at].hp = hp;
@@ -3074,6 +3081,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn escape(&mut self) {
+        self.ran_on();
         self.escape_creature(self.actor);
     }
 
@@ -3127,6 +3135,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn modify_cards(&mut self, to: sts2_core::Writing<V>, change: sts2_core::Change<V>) {
+        self.ran_on();
         self.write_cards([HookEffect::ModifyCards { to, change }]);
     }
 
@@ -3904,6 +3913,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     /// heals no monster, which is what leaves a segment killed with the last
     /// of them dead.
     fn heal(&mut self, at: CombatId, amount: V::Number) {
+        self.ran_on();
         if self.ended.is_some() {
             return;
         }
@@ -3950,6 +3960,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn give_cards(&mut self, card: V::Card, count: usize) {
+        self.ran_on();
         // Every opponent takes its own copies, into its own discard pile. A
         // fight here has one set of piles, so a second player would need the
         // observation to grow one.
@@ -4054,6 +4065,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         pile: Pile,
         count: usize,
     ) -> Vec<CardAt<V>> {
+        self.ran_on();
         let creator = self.creator();
         self.generate(card, pile, count, creator)
     }
@@ -4108,6 +4120,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn remove_card(&mut self, card: CardAt<V>) -> CardIdent<V> {
+        self.ran_on();
         let at = self.standing(card);
         let ident = self.live.cards.remove(card.pile(), at).face.ident;
         self.live.removed_from_deck.push(ident);
@@ -4216,6 +4229,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn summon_into_last_free_slot(&mut self, monster: V::Monster) -> Option<CombatId> {
+        self.ran_on();
         use sts2_core::EncounterTable as _;
 
         // A slot counts as held by an enemy still in the fight, and only the
@@ -4239,6 +4253,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn summon_into_first_free_slot(&mut self, monster: V::Monster) -> Option<CombatId> {
+        self.ran_on();
         use sts2_core::EncounterTable as _;
 
         let held: SmallVec<[u8; 8]> = self
@@ -4264,6 +4279,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn summon_into_slot(&mut self, monster: V::Monster, slot: u8) -> CombatId {
+        self.ran_on();
         // `SortEnemiesBySlotName`: after every enemy in an earlier slot.
         let position = self
             .live
@@ -4362,6 +4378,17 @@ pub(super) fn shuffle_asking<V: Rules>(
 }
 
 impl<V: Rules> Board<'_, V> {
+    /// Stop a move's command that starts while its attack's question waits.
+    ///
+    /// Only a move's attack can ask, and a move returns on an attack that
+    /// asked. So a command here is a hand port that ran on past its attack,
+    /// where the game's move stands still until the answer comes.
+    fn ran_on(&self) {
+        if self.moving && !self.pausable && self.live.asking.is_some() {
+            panic!("a move ran on past its attack while the player's answer waits");
+        }
+    }
+
     /// `AttackCommand.Execute`: the hooks either side of `hits`.
     fn attack_landing(
         &mut self,

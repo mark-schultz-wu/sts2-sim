@@ -2570,7 +2570,8 @@ fn enemy_turn<V: Rules>(
             }
         }
         // Its last command, an attack, asked: the move is over, and the turn
-        // waits.
+        // waits. Only an attack can ask, and the board stops any command that
+        // runs on past one that did.
         if live.asking.is_some() {
             live.defer(super::live::Deferred::Move {
                 actor: id,
