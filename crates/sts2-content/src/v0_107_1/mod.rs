@@ -63,6 +63,7 @@ impl sts2_core::ContentVersion for V0_107_1 {
     type Count = u32;
     type Index = u16;
     type Resume = behaviour::Resume;
+    type DeckWrite = behaviour::cards::DeckWrite;
     type CardSerial = u16;
 
     type AscensionLevel = generated::ascension::AscensionLevel;
@@ -251,6 +252,10 @@ impl sts2_core::Hooks for V0_107_1 {
         base: Option<sts2_core::Pile>,
     ) -> sts2_core::HookResponse<Option<sts2_core::Pile>> {
         behaviour::cards::result_pile(card, base)
+    }
+
+    fn write_deck_card(card: &mut sts2_core::DeckCard<Self>, write: Self::DeckWrite) {
+        behaviour::cards::write_deck_card(card, write);
     }
 
     fn card_is_playable(

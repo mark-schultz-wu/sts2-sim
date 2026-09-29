@@ -47,6 +47,12 @@ pub struct V0_111_0;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Resume {}
 
+/// What a card of this build writes on its deck version.
+///
+/// Uninhabited, for the reason [`Resume`] is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DeckWrite {}
+
 impl sts2_core::ContentVersion for V0_111_0 {
     const VERSION: Version = VERSION;
 
@@ -71,6 +77,7 @@ impl sts2_core::ContentVersion for V0_111_0 {
     type Index = u16;
     type CardSerial = u16;
     type Resume = Resume;
+    type DeckWrite = DeckWrite;
 
     type AscensionLevel = generated::ascension::AscensionLevel;
     type Act = generated::acts::Act;

@@ -93,9 +93,9 @@ pub enum State {
     ChainsOfBinding {
         bound_played: bool,
     },
-    /// `SwipePower.StolenCard`.
+    /// `SwipePower.StolenCard`'s deck version.
     Swipe {
-        stolen: Option<sts2_core::CardIdent<V>>,
+        stolen: Option<sts2_core::DeckCardId>,
     },
     /// `VigorPower`'s `commandToModify`, which stays bound once the command
     /// is over.
@@ -509,8 +509,8 @@ impl State {
         }
     }
 
-    /// `SwipePower.Steal`, which remembers the card taken.
-    pub(crate) fn steal(&mut self, card: sts2_core::CardIdent<V>) {
+    /// `SwipePower.Steal`, which remembers the deck card taken.
+    pub(crate) fn steal(&mut self, card: sts2_core::DeckCardId) {
         let Self::Swipe { stolen } = self else {
             unreachable!("stolen state for {:?}", self.power())
         };

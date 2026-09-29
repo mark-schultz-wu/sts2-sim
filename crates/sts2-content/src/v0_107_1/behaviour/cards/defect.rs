@@ -104,6 +104,23 @@ fn compact<F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
     match card {
+        // `GeneticAlgorithm`: its block, then `BuffFromPlay` of its
+        // `Increase` on this copy and on its deck version.
+        DefectCard::GeneticAlgorithm => {
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Var(CardVar::Block),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+            let increase = fight.var(CardVar::Increase);
+            fight.modify_this(
+                sts2_core::Change::Raise(CardVar::Block, increase),
+                sts2_core::Lasting::ThisFight,
+            );
+            fight.write_deck_version(super::DeckWrite::BuffFromPlay(increase));
+            Played::Done
+        }
         DefectCard::Barrage => barrage(fight),
         DefectCard::Uproar => uproar(fight),
         // `DoubleEnergy`: as much energy again as its owner has left.

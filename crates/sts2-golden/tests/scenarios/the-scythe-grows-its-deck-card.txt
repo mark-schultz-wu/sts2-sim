@@ -1,0 +1,11 @@
+# The Scythe deals thirteen, then raises its deck card's damage by four.
+# The next fight's copy deals seventeen.
+{"cmd":"start","seed":"S33D1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"grant","card":"THE_SCYTHE"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":2,"target":1}
+{"cmd":"power","power":"DEMISE_POWER","amount":99,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"answer","skip":true}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":3,"target":1}

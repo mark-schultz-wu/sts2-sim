@@ -45,9 +45,12 @@ pub(crate) enum Offer<V: Rules> {
         cards: Vec<sts2_core::CardIdent<V>>,
         taken: bool,
     },
-    /// One stolen deck card returned by the creature that took it.
+    /// `SpecialCardReward`: one card, and what its model saved. An event's
+    /// has nothing saved. A card a thief hands back has what it saved in the
+    /// deck.
     SpecialCard {
         card: sts2_core::CardIdent<V>,
+        state: V::CardState,
         taken: bool,
     },
     Potion {

@@ -165,6 +165,7 @@ impl<V: Rules> State<V> {
             Some(combat::Ended::Won) => {
                 let (live, relics) = self.left_fight();
                 let extra_rewards = live.extra_rewards().to_vec();
+                let taken = live.taken_from_deck().to_vec();
                 // `AddExtraReward`, which the room's own rewards come before.
                 let (extra, leaving): (Vec<_>, Vec<_>) =
                     live.leaving().iter().partition(|effect| {
@@ -190,7 +191,7 @@ impl<V: Rules> State<V> {
                     let pickup = asked.pickup;
                     unimplemented!("a fight's end asking for {pickup:?}");
                 }
-                let mut offered = self.combat_rewards(&combat, proportion, &extra_rewards);
+                let mut offered = self.combat_rewards(&combat, proportion, &extra_rewards, &taken);
                 // `GoldReward.Populate` draws `NextInt(min, max + 1)` off the
                 // rewards stream, after the room's own, even for a gold
                 // reward whose two bounds are the one amount.
@@ -228,6 +229,7 @@ impl<V: Rules> State<V> {
         combat: &sts2_core::Combat<V>,
         proportion: f32,
         extra_rewards: &[combat::ExtraReward<V>],
+        taken: &[sts2_core::DeckCard<V>],
     ) -> Vec<crate::reward::Offer<V>> {
         let encounter = combat
             .encounter
@@ -281,8 +283,21 @@ impl<V: Rules> State<V> {
         // room's own.
         for extra in extra_rewards {
             offered.push(match *extra {
-                combat::ExtraReward::SpecialCard(card) => {
-                    crate::reward::Offer::SpecialCard { card, taken: false }
+                combat::ExtraReward::SpecialCard(card) => crate::reward::Offer::SpecialCard {
+                    card,
+                    state: <V::CardState as sts2_core::CardModel<V>>::new(card.card),
+                    taken: false,
+                },
+                combat::ExtraReward::Returned(id) => {
+                    let returned = taken
+                        .iter()
+                        .find(|card| card.id == id)
+                        .unwrap_or_else(|| unreachable!("a card handed back was taken"));
+                    crate::reward::Offer::SpecialCard {
+                        card: returned.ident,
+                        state: returned.state,
+                        taken: false,
+                    }
                 }
                 combat::ExtraReward::Card => {
                     let added = self.card_reward_added();

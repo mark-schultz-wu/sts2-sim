@@ -495,6 +495,7 @@ fn thievery<F: Fight<V>>(fight: &mut F) {
     let cards: Vec<CardAt<V>> = [Pile::Draw, Pile::Discard]
         .into_iter()
         .flat_map(|pile| fight.cards_in(pile))
+        .filter(|card| fight.deck_version(card.id()).is_some())
         .collect();
     let priorities = [
         &[CardRarity::Uncommon][..],
@@ -526,7 +527,10 @@ fn thievery<F: Fight<V>>(fight: &mut F) {
     ) {
         // `SwipePower.Steal`, then `PowerCmd.Apply`. A Swipe the fight refuses
         // takes the card with nobody to give it back.
-        let stolen = fight.remove_card(card);
+        let stolen = fight
+            .deck_version(card.id())
+            .unwrap_or_else(|| unreachable!("the candidates are deck copies"));
+        fight.remove_card(card);
         fight.apply_to_actor(Power::SwipePower, PowerAmount::Counted(1));
         let actor = fight.actor();
         fight.write_power(actor, Power::SwipePower, |state| state.steal(stolen));

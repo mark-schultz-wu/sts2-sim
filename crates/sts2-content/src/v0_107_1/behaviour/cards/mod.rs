@@ -664,25 +664,78 @@ pub enum State {
     Guilty {
         combats_seen: u8,
     },
+    /// `GeneticAlgorithm.IncreasedBlock`.
+    GeneticAlgorithm {
+        increased_block: Number,
+    },
+    /// `TheScythe.IncreasedDamage`.
+    TheScythe {
+        increased_damage: Number,
+    },
 }
 
 impl sts2_core::CardModel<V> for State {
     fn new(card: Cards) -> Self {
         match card {
             Cards::Curse(CurseCard::Guilty) => Self::Guilty { combats_seen: 0 },
+            Cards::Defect(DefectCard::GeneticAlgorithm) => {
+                Self::GeneticAlgorithm { increased_block: 0 }
+            }
+            Cards::Necrobinder(NecrobinderCard::TheScythe) => Self::TheScythe {
+                increased_damage: 0,
+            },
             _ => Self::Stateless,
         }
     }
 
     /// `Guilty.CombatsSeen`'s setter prints `Combats` as the fights it has
-    /// left.
+    /// left. `CurrentBlock` and `CurrentDamage` print the base and what the
+    /// card gained.
     fn written(&self) -> Option<Change> {
         match *self {
             Self::Guilty { combats_seen } if combats_seen > 0 => {
                 Some(Change::Raise(CardVar::Combats, -Number::from(combats_seen)))
             }
+            Self::GeneticAlgorithm { increased_block } if increased_block != 0 => {
+                Some(Change::Raise(CardVar::Block, increased_block))
+            }
+            Self::TheScythe { increased_damage } if increased_damage != 0 => {
+                Some(Change::Raise(CardVar::Damage, increased_damage))
+            }
             _ => None,
         }
+    }
+}
+
+/// What a fight's card writes on its deck version.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DeckWrite {
+    /// `BuffFromPlay(n)` of `GeneticAlgorithm` or `TheScythe`.
+    BuffFromPlay(Number),
+}
+
+/// `write` on the deck card `card`.
+///
+/// # Panics
+///
+/// A write the card's model has no field for.
+pub(crate) fn write_deck_card(card: &mut sts2_core::DeckCard<V>, write: DeckWrite) {
+    match (&mut card.state, write) {
+        (
+            State::GeneticAlgorithm {
+                increased_block: gained,
+            },
+            DeckWrite::BuffFromPlay(n),
+        )
+        | (
+            State::TheScythe {
+                increased_damage: gained,
+            },
+            DeckWrite::BuffFromPlay(n),
+        ) => {
+            *gained += n;
+        }
+        (state, write) => unimplemented!("{write:?} on a deck card saving {state:?}"),
     }
 }
 
