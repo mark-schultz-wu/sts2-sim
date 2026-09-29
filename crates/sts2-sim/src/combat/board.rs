@@ -3252,6 +3252,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         num_traits::cast(self.live.energy).expect("energy fits a game number")
     }
 
+    fn end_turn(&mut self) {
+        self.live.ending_turn = true;
+    }
+
     fn doom_kill(&mut self, creatures: &[CombatId]) {
         if !creatures.is_empty() {
             Board::doom_kill(self, creatures);
@@ -3802,7 +3806,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .get(card.pile(), at)
             .expect("a card stands where it was found");
         match global {
-            false => held.face.costs(|cost| cost),
+            false => held.face.costs(|cost| cost, |cost| cost),
             true => super::legal::costs::<V>(
                 &held,
                 super::listen::Walk {
@@ -3840,7 +3844,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .get(card.pile(), at)
             .expect("a card stands where it was found")
             .face
-            .costs(|cost| cost)
+            .costs(|cost| cost, |cost| cost)
             .0
     }
 

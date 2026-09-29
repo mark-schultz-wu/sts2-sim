@@ -1570,7 +1570,8 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
         .with(sts2_core::ModelHook::AfterCardPlayed)
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::BeforeSideTurnStart)
-        .with(sts2_core::ModelHook::TryModifyEnergyCostInCombatLate),
+        .with(sts2_core::ModelHook::TryModifyEnergyCostInCombatLate)
+        .with(sts2_core::ModelHook::TryModifyStarCost),
     // BRIMSTONE
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
     // BRONZE_SCALES

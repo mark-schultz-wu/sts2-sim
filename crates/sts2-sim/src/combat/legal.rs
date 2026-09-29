@@ -51,24 +51,39 @@ pub(super) fn costs<V: Rules>(
     let card = (held.id, held.face.ident.card);
     let ethereal = held.face.ethereal();
     let affliction = held.face.ident.affliction;
-    held.face.costs(|cost| {
-        super::board::modified_by::<V>(
-            fight,
-            cost,
-            &[
-                sts2_core::ModifyHook::EnergyCost {
-                    card,
-                    ethereal,
-                    affliction,
-                },
-                sts2_core::ModifyHook::EnergyCostLate {
-                    card,
-                    ethereal,
-                    affliction,
-                },
-            ],
-        )
-    })
+    held.face.costs(
+        |cost| {
+            super::board::modified_by::<V>(
+                fight,
+                cost,
+                &[
+                    sts2_core::ModifyHook::EnergyCost {
+                        card,
+                        ethereal,
+                        affliction,
+                    },
+                    sts2_core::ModifyHook::EnergyCostLate {
+                        card,
+                        ethereal,
+                        affliction,
+                    },
+                ],
+            )
+        },
+        // `Hook.ModifyStarCost`, which few listen to and a Regent's hand asks
+        // on every read.
+        |cost| {
+            let hook = sts2_core::ModelHook::TryModifyStarCost;
+            match super::listen::heard::<V>(fight.live, fight.relics, hook) {
+                true => super::board::modified_by::<V>(
+                    fight,
+                    cost,
+                    &[sts2_core::ModifyHook::StarCost { card }],
+                ),
+                false => cost,
+            }
+        },
+    )
 }
 
 /// Why this card cannot be played, or nothing for one that can.

@@ -1,0 +1,13 @@
+# Void Form ends the turn it is played in. The next turn, the first two
+# cards played cost nothing, stars included: Falling Star keeps the stars,
+# and the Strike after it keeps the energy. The third play pays.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"VOID_FORM"}
+{"cmd":"play_card","index":5}
+{"cmd":"grant","card":"FALLING_STAR"}
+{"cmd":"grant","card":"STRIKE_REGENT"}
+{"cmd":"grant","card":"STRIKE_REGENT"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"play_card","index":5,"target":1}
