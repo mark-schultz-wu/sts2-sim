@@ -1,0 +1,15 @@
+# Belt Buckle gives two Dexterity as a fight opens on an empty belt. A potion
+# procured in the fight takes it back, and drinking the last potion gives it
+# again. A fight that opens with a potion held gives none.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","relic":"BELT_BUCKLE"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","potion":"BLOCK_POTION"}
+{"cmd":"grant","potion":"FRUIT_JUICE"}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"power","power":"DEMISE_POWER","amount":99,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"answer","skip":true}
+{"cmd":"grant","potion":"BLOCK_POTION"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}

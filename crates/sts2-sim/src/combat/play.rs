@@ -143,6 +143,32 @@ pub(crate) fn apply_power<V: Rules>(
     ended
 }
 
+/// `hook` raised in a fight for a change the run made to its belt, and what
+/// its listeners ask for carried out there.
+///
+/// # Panics
+///
+/// A listener that ends the fight.
+pub(crate) fn belt_changed<V: Rules>(fighting: Fighting<'_, V>, hook: sts2_core::EventHook<V>) {
+    let Fighting {
+        live,
+        streams,
+        relics,
+    } = fighting;
+    let asked = super::listen::notify::<V>(live, relics, hook);
+    if asked.is_empty() {
+        return;
+    }
+    let ascension = live.ascension;
+    let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
+    super::hook::apply::<V, _>(&mut board, asked.into_iter().map(|(_, effect)| effect));
+    if let Some(ended) = board.ended() {
+        unimplemented!("a fight that ends {ended:?} as the belt changes");
+    }
+    let skipped = std::mem::take(&mut board.skipped);
+    merge::<V>(&mut live.skip_tick, skipped);
+}
+
 /// `Driver.GrantCard` in a fight: `CombatState.AddCard`, then
 /// `CardPileCmd.Add` into hand, which raises `AfterCardEnteredCombat`. The
 /// card is not generated, so nothing records it or hears it made.
@@ -1372,7 +1398,10 @@ fn finish_effect<V: Rules, S: LendsCombat>(
             let asked = super::listen::notify::<V>(
                 next,
                 relics,
-                sts2_core::EventHook::PotionUsed { in_fight: true },
+                sts2_core::EventHook::PotionUsed {
+                    in_fight: true,
+                    holding_potions: next.potions > 0,
+                },
             );
             if !asked.is_empty() {
                 let mut board =

@@ -670,6 +670,8 @@ pub enum ModelHook {
     AfterModifyingHandDraw,
     BeforePotionUsed,
     AfterPotionUsed,
+    AfterPotionProcured,
+    AfterPotionDiscarded,
     AfterCardPlayedLate,
     AfterSideTurnStartLate,
     AfterPreventingDraw,
@@ -783,7 +785,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 138] = [
+    pub const ALL: [ModelHook; 140] = [
         ModelHook::AfterRoomEntered,
         ModelHook::AfterMapGenerated,
         ModelHook::BeforeCombatStart,
@@ -812,6 +814,8 @@ impl ModelHook {
         ModelHook::AfterModifyingHandDraw,
         ModelHook::BeforePotionUsed,
         ModelHook::AfterPotionUsed,
+        ModelHook::AfterPotionProcured,
+        ModelHook::AfterPotionDiscarded,
         ModelHook::AfterCardPlayedLate,
         ModelHook::AfterSideTurnStartLate,
         ModelHook::AfterPreventingDraw,
@@ -970,6 +974,8 @@ impl ModelHook {
             ModelHook::ModifyNextEvent => "ModifyNextEvent",
             ModelHook::BeforePotionUsed => "BeforePotionUsed",
             ModelHook::AfterPotionUsed => "AfterPotionUsed",
+            ModelHook::AfterPotionProcured => "AfterPotionProcured",
+            ModelHook::AfterPotionDiscarded => "AfterPotionDiscarded",
             ModelHook::TryModifyCardBeingAddedToDeck => "TryModifyCardBeingAddedToDeck",
             ModelHook::TryModifyCardBeingAddedToDeckLate => "TryModifyCardBeingAddedToDeckLate",
             ModelHook::ModifyMerchantCardCreationResults => "ModifyMerchantCardCreationResults",
@@ -1978,6 +1984,21 @@ pub trait Fight<V: ContentVersion> {
         _applier: Option<crate::CombatId>,
     ) {
         unimplemented!("a power applied on another creature's behalf")
+    }
+
+    /// `PowerCmd.Apply(power, at, amount, applier, this)` of `copy`, a clone
+    /// the caller built and wrote on, as Misery's `IgnoreNextInstance`. The
+    /// copy is what hears `BeforeApplied`.
+    fn apply_power_copy(
+        &mut self,
+        _at: crate::CombatId,
+        _copy: V::PowerState,
+        _amount: PowerAmount<V::Number>,
+        _applier: Option<crate::CombatId>,
+    ) where
+        V: Hooks,
+    {
+        unimplemented!("a power applied from a copy")
     }
 
     /// What the acting monster's move advertises it will hit for.
@@ -3487,8 +3508,22 @@ pub enum EventHook<V: ContentVersion> {
         target: Option<crate::CombatId>,
     },
     /// `AfterPotionUsed`, once a potion's use is done. `in_fight` is
+    /// `CombatManager.IsInProgress`, and `holding_potions` is
+    /// `Owner.Potions.Any()`.
+    PotionUsed {
+        in_fight: bool,
+        holding_potions: bool,
+    },
+    /// `AfterPotionProcured`, once a potion is in a belt slot. `in_fight` is
     /// `CombatManager.IsInProgress`.
-    PotionUsed { in_fight: bool },
+    PotionProcured { in_fight: bool },
+    /// `AfterPotionDiscarded`, once a potion leaves the belt unused.
+    /// `in_fight` is `CombatManager.IsInProgress`, and `holding_potions` is
+    /// `Owner.Potions.Any()`.
+    PotionDiscarded {
+        in_fight: bool,
+        holding_potions: bool,
+    },
     /// `AfterModifyingCardRewardOptions`, once a card reward's cards have
     /// had their late pass.
     CardRewardOptionsModified,
@@ -3577,8 +3612,11 @@ pub enum EventHook<V: ContentVersion> {
     /// model that added it hears it.
     CardRewardAlternativeChosen(crate::RewardAlternative),
     /// `BeforeCombatStart`, once the fight is built and before it opens, in
-    /// a room of this type.
-    CombatStarting { room: V::RoomType },
+    /// a room of this type. `holding_potions` is `Owner.Potions.Any()`.
+    CombatStarting {
+        room: V::RoomType,
+        holding_potions: bool,
+    },
     /// `BeforeCombatStartLate`, once every listener has heard
     /// `BeforeCombatStart`.
     CombatStartingLate { room: V::RoomType },
@@ -4065,6 +4103,8 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::StarsGained { .. } => ModelHook::AfterStarsGained,
             EventHook::PotionUsing { .. } => ModelHook::BeforePotionUsed,
             EventHook::PotionUsed { .. } => ModelHook::AfterPotionUsed,
+            EventHook::PotionProcured { .. } => ModelHook::AfterPotionProcured,
+            EventHook::PotionDiscarded { .. } => ModelHook::AfterPotionDiscarded,
             EventHook::CardRewardOption { .. } => ModelHook::TryModifyCardRewardOptionsLate,
             EventHook::CardRewardPick { .. } => ModelHook::TryModifyCardRewardOptionsLate,
             EventHook::CardRewardOptionsModified => ModelHook::AfterModifyingCardRewardOptions,

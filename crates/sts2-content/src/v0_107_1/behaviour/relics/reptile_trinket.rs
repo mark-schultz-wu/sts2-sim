@@ -12,7 +12,7 @@ const STRENGTH: PowerAmount<super::Number> = PowerAmount::Counted(3);
 /// potion drunk while a fight is in progress. A run here has one player,
 /// whose potions are all its owner's.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
-    if let EventHook::PotionUsed { in_fight: true } = hook {
+    if let EventHook::PotionUsed { in_fight: true, .. } = hook {
         asked.push(HookEffect::ApplyToOwner(
             Power::ReptileTrinketPower,
             STRENGTH,

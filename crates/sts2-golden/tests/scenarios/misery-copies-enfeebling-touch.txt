@@ -1,0 +1,15 @@
+# Enfeebling Touch lends its target minus eight Strength for the turn. The
+# power is not positive, so it counts as a debuff, and Misery copies it and
+# the Strength onto the other Nibbit. The copy ignores its next instance, so
+# the Strength is not taken twice. A second Misery stacks each onto the one
+# there, and the copy's instance again takes no Strength. Both wear off as
+# the turn ends.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_NORMAL"}
+{"cmd":"grant","card":"ENFEEBLING_TOUCH"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"grant","card":"MISERY"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"grant","card":"MISERY"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"end_turn"}

@@ -14,6 +14,7 @@ const HEAL: Number = 25;
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
     if let EventHook::CombatStarting {
         room: RoomType::Boss,
+        ..
     } = hook
     {
         asked.push(HookEffect::Heal(HEAL));

@@ -1515,6 +1515,8 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterCombatVictory)
+        .with(sts2_core::ModelHook::AfterPotionDiscarded)
+        .with(sts2_core::ModelHook::AfterPotionProcured)
         .with(sts2_core::ModelHook::AfterPotionUsed)
         .with(sts2_core::ModelHook::BeforeCombatStart),
     // BIG_HAT

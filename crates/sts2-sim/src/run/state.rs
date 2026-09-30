@@ -1256,6 +1256,49 @@ impl<V: Rules> State<V> {
     pub(super) fn drank(&mut self, at: usize) {
         self.player.potions.remove(at);
         self.player.potion_positions.remove(at);
+        self.belt_to_fight();
+    }
+
+    /// `Owner.Potions.Any()`.
+    pub(super) fn holding_potions(&self) -> bool {
+        !self.player.potions.is_empty()
+    }
+
+    /// The belt's count, onto the fight the run stands in.
+    fn belt_to_fight(&mut self) {
+        let held = u8::try_from(self.player.potions.len()).expect("a belt's potions fit a byte");
+        if let Phase::Combat(live) = &mut self.phase {
+            live.hold_potions(held);
+        }
+    }
+
+    /// `PotionCmd.TryToProcure` once the potion is in: `AfterPotionProcured`.
+    ///
+    /// # Panics
+    ///
+    /// A relic asking for anything outside a fight.
+    fn procured(&mut self) {
+        self.belt_to_fight();
+        let hook = sts2_core::EventHook::PotionProcured {
+            in_fight: matches!(self.phase, Phase::Combat(_)),
+        };
+        self.belt_changed(hook);
+    }
+
+    /// `hook`, for a change to the belt, raised on the fight the run stands
+    /// in or else on the belt.
+    ///
+    /// # Panics
+    ///
+    /// A relic asking for anything outside a fight.
+    fn belt_changed(&mut self, hook: sts2_core::EventHook<V>) {
+        if let Some(fighting) = self.fighting() {
+            crate::combat::belt_changed(fighting, hook);
+            return;
+        }
+        if let Some(effect) = self.notify_belt(hook).first() {
+            unimplemented!("a relic asking for {effect:?} on {hook:?} outside a fight");
+        }
     }
 
     /// `PotionCmd.TryToProcure` into the slot at `slot`, which lands while
@@ -1271,6 +1314,7 @@ impl<V: Rules> State<V> {
             .partition_point(|held| *held < slot);
         self.player.potion_positions.insert(at, slot);
         self.player.potions.insert(at, potion);
+        self.procured();
         true
     }
 
@@ -1294,6 +1338,7 @@ impl<V: Rules> State<V> {
             .partition_point(|held| *held < slot);
         self.player.potion_positions.insert(at, slot);
         self.player.potions.insert(at, potion);
+        self.procured();
         true
     }
 
@@ -1617,8 +1662,13 @@ impl<V: Rules> State<V> {
                     self.gain_gold(amount);
                     continue;
                 }
+                // `PotionCmd.Discard`.
                 HookEffect::DiscardPotion(at) => {
                     self.drank(at);
+                    self.belt_changed(sts2_core::EventHook::PotionDiscarded {
+                        in_fight: matches!(self.phase, Phase::Combat(_)),
+                        holding_potions: self.holding_potions(),
+                    });
                     continue;
                 }
                 HookEffect::MimicRestSiteHeal => {
@@ -3954,6 +4004,7 @@ impl<V: Rules> State<V> {
             hp: standing.hp,
             max_hp: standing.max_hp,
             gold: self.player.gold,
+            potions: u8::try_from(self.player.potions.len()).expect("a belt's potions fit a byte"),
             alive: standing.alive,
             deck: &self.player.deck,
             strayed: self.strays(at),

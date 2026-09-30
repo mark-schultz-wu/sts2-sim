@@ -42,6 +42,7 @@ mod bag_of_preparation;
 mod beating_remnant;
 mod beautiful_bracelet;
 mod bellows;
+mod belt_buckle;
 mod big_mushroom;
 mod biiig_hug;
 mod bing_bong;
@@ -602,6 +603,7 @@ pub enum State {
     ScreamingFlagon,
     TheAbacus,
     DingyRug,
+    BeltBuckle(belt_buckle::State),
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -845,6 +847,7 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::BeltBuckle(state) => belt_buckle::event_hook(state, hook, asked),
         State::DingyRug => dingy_rug::event_hook(hook, asked),
         State::TheAbacus => the_abacus::event_hook(hook, asked),
         State::ScreamingFlagon => screaming_flagon::event_hook(hook, asked),
@@ -1271,7 +1274,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::Brimstone
         | State::ScreamingFlagon
         | State::TheAbacus
-        | State::DingyRug => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::DingyRug
+        | State::BeltBuckle(_) => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1450,6 +1454,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::BeltBuckle => State::BeltBuckle(belt_buckle::State::default()),
             Relic::DingyRug => State::DingyRug,
             Relic::TheAbacus => State::TheAbacus,
             Relic::ScreamingFlagon => State::ScreamingFlagon,
@@ -1579,6 +1584,7 @@ impl sts2_core::RelicModel<V> for State {
             (State::SilverCrucible(state), _) => silver_crucible::used_up(state),
             (State::SilkenTress(state), _) => silken_tress::used_up(state),
             (State::EmberTea(state), _) => state.used_up(),
+            (State::ToyBox(state), _) => toy_box::used_up(state),
             (State::TeaOfDiscourtesy(state), _) => state.used_up(),
             (_, Field::Constant(used_up)) => used_up,
             (_, Field::Computed) => unimplemented!("whether {relic:?} is used up"),

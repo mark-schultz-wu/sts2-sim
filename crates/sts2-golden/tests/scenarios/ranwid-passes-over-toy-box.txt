@@ -1,0 +1,10 @@
+# Ranwid reads whether each relic is used up. Toy Box works that out from
+# the fights it has seen, but it has an upon-pickup effect, so it is never
+# tradable. Ranwid asks for the Anchor.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"TOY_BOX"}
+{"cmd":"answer","skip":true}
+{"cmd":"grant","relic":"ANCHOR"}
+{"cmd":"grant","potion":"FIRE_POTION"}
+{"cmd":"event","event":"RANWID_THE_ELDER"}
+{"cmd":"choose_option","index":2}
