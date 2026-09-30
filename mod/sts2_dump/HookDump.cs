@@ -33,6 +33,10 @@ namespace Sts2Dump;
 /// means every card answers X and Strike's own code does not, while
 /// <c>implements STRIKE X Strike</c> means Strike itself does something.
 ///
+/// <c>category</c> is the id's own, which tells apart two models that share an
+/// entry. The relic <c>PAELS_LEGION</c> answers six hooks, and the pet monster
+/// of the same entry answers none.
+///
 /// <c>dispatchers</c> is which classes fire the hook, and it is measured by
 /// metadata token rather than by name. Name-matching against <c>Hook</c>'s
 /// public methods was the obvious approach and it under-reports badly: it misses
@@ -67,7 +71,7 @@ public static class HookDump
 
         output.Append(Stamp.Header("hook"));
         output.Append("# hook <name> <returns> <params> <dispatchers>\n");
-        output.Append("# implements <model> <hook> <declaredBy>\n");
+        output.Append("# implements <model> <hook> <declaredBy> <category>\n");
         output.Append("# unregistered <type> <hook>\n");
 
         List<MethodInfo> hooks = Hooks();
@@ -112,7 +116,8 @@ public static class HookDump
             // merely shares a name, and handles overloads without ambiguity.
             foreach (MethodInfo m in Overrides(model.GetType(), names))
             {
-                output.Append($"implements {model.Id.Entry} {m.Name} {m.DeclaringType!.Name}\n");
+                output.Append(
+                    $"implements {model.Id.Entry} {m.Name} {m.DeclaringType!.Name} {model.Id.Category}\n");
                 answered++;
             }
         }

@@ -238,7 +238,7 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
 
     emit_flags(&mut out)?;
     emit_shape(&mut out);
-    let overrides = super::overrides(&build)?;
+    let overrides = super::overrides(&build, "RELIC")?;
     emit_relics(&mut out, &relics, &pools_of, &overrides)?;
     emit_bridges(&mut out, &pools, &enums)?;
 

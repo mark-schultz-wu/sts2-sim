@@ -1592,7 +1592,7 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     // Indexed by rank, which `order` is, so one flat table serves every pool.
     let mut ranked: Vec<(&u16, &&str)> = ranks.iter().map(|(id, rank)| (rank, id)).collect();
     ranked.sort_unstable();
-    let overrides = super::overrides(&build)?;
+    let overrides = super::overrides(&build, "CARD")?;
     let ranked: Vec<&str> = ranked.into_iter().map(|(_, id)| *id).collect();
     super::emit_overrides(
         &mut out,

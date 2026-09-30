@@ -260,7 +260,7 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     }
 
     // The hooks each power's class overrides.
-    let overrides = super::overrides(&build)?;
+    let overrides = super::overrides(&build, "POWER")?;
 
     // The `PowerModel` virtuals each power's class overrides, for the ones a
     // fight asks a power about itself. The dump lists every virtual, and the
