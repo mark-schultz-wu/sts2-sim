@@ -139,6 +139,9 @@ pub(crate) fn card_reward<V: Rules, R: GameRng>(
     }
     Offer::Card {
         cards,
+        rolled: Some(room),
+        reroll: false,
+        sacrifice: false,
         taken: false,
     }
 }

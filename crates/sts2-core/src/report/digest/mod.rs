@@ -854,9 +854,19 @@ impl Sink {
                             sink.u8(0);
                             sink.number(amount);
                         }
-                        RewardKind::Card { cards } => {
+                        // A reward with no alternatives hashes as its cards
+                        // alone.
+                        RewardKind::Card {
+                            cards,
+                            alternatives,
+                        } => {
                             sink.u8(1);
                             sink.list(cards, reward_card);
+                            if !alternatives.is_empty() {
+                                sink.list(alternatives, |sink, alternative| {
+                                    sink.u8(*alternative as u8);
+                                });
+                            }
                         }
                         RewardKind::Relic { relic, rarity } => {
                             sink.u8(2);

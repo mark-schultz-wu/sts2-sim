@@ -1979,7 +1979,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // PAELS_TOOTH
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCombatEnd),
     // PAELS_WING
-    sts2_core::Overrides::NONE,
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::TryModifyCardRewardAlternatives),
     // PANDORAS_BOX
     sts2_core::Overrides::NONE,
     // PANTOGRAPH

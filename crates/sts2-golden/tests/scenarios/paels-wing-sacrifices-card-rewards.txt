@@ -1,0 +1,13 @@
+# Pael's Wing offers to sacrifice a card reward, which takes it with no card.
+# The second sacrifice obtains the next relic off the front of the bag.
+{"cmd":"start","seed":"S33D1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"PAELS_WING"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"DEMISE_POWER","amount":99,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"answer","take":[{"index":2,"alternative":"SACRIFICE"}]}
+{"cmd":"answer","skip":true}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"DEMISE_POWER","amount":99,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"answer","take":[{"index":1,"alternative":"SACRIFICE"}]}

@@ -206,11 +206,13 @@ fn free_name(dir: &Path, seed: &str, character: &str) -> Result<PathBuf, Error> 
 ///
 /// Spelled `N` or `N.M`. The dot is doing real work. A card reward holds
 /// several cards and the game will not pick one for you. So `0` and `0.1` are
-/// different requests, rather than one with a default.
+/// different requests, rather than one with a default. `N.reroll` and
+/// `N.sacrifice` name a card reward's alternative.
 #[derive(Debug, Clone, Copy)]
 pub struct Taking {
     reward: usize,
     card: Option<usize>,
+    alternative: Option<sts2_core::RewardAlternative>,
 }
 
 impl Taking {
@@ -225,6 +227,12 @@ impl Taking {
     /// The reward this names, or why no reward screen offers it.
     pub(crate) fn take(&self) -> Result<TakeReward, Error> {
         let position = |at: usize| u8::try_from(at).map_err(|_| Error::NoReward(at));
+        if let Some(alternative) = self.alternative {
+            return Ok(TakeReward::Alternative {
+                index: position(self.reward)?,
+                alternative,
+            });
+        }
         Ok(match self.card {
             Some(card) => TakeReward::Card {
                 index: position(self.reward)?,
@@ -246,14 +254,26 @@ impl std::str::FromStr for Taking {
                 .map_err(|_| format!("{part:?} is not {what}, in {s:?}"))
         };
 
+        let alternative = |part: &str| match part {
+            "reroll" => Some(sts2_core::RewardAlternative::Reroll),
+            "sacrifice" => Some(sts2_core::RewardAlternative::Sacrifice),
+            _ => None,
+        };
         Ok(match s.split_once('.') {
+            Some((reward, part)) if alternative(part).is_some() => Taking {
+                reward: number(reward, "a reward index")?,
+                card: None,
+                alternative: alternative(part),
+            },
             Some((reward, card)) => Taking {
                 reward: number(reward, "a reward index")?,
                 card: Some(number(card, "a card index")?),
+                alternative: None,
             },
             None => Taking {
                 reward: number(s, "a reward index")?,
                 card: None,
+                alternative: None,
             },
         })
     }

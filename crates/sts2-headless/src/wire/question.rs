@@ -107,6 +107,10 @@ pub(crate) struct WireRewardDetail {
     amount: Option<i64>,
     #[serde(default)]
     cards: Option<Vec<WireRewardCard>>,
+    /// A card reward's alternatives other than `Skip`, by `OptionId`. Absent
+    /// where it has none.
+    #[serde(default)]
+    alternatives: Vec<String>,
     #[serde(default)]
     relic: Option<String>,
     #[serde(default)]
@@ -231,6 +235,21 @@ impl WireRewardDetail {
 
             "CardReward" => RewardKind::Card {
                 cards: read_cards(path, self.cards.ok_or_else(|| missing("cards"))?)?,
+                alternatives: self
+                    .alternatives
+                    .iter()
+                    .map(|id| {
+                        sts2_core::RewardAlternative::from_option_id(id).ok_or_else(|| {
+                            at(
+                                &format!("{path}.alternatives"),
+                                Why::Unknown {
+                                    what: "card reward alternative",
+                                    value: id.clone(),
+                                },
+                            )
+                        })
+                    })
+                    .collect::<Result<_, Error>>()?,
             },
 
             // The one card the game hands back, sent through the card
@@ -449,7 +468,7 @@ mod tests {
         assert!(skippable);
         assert_eq!(rewards[0].reward, RewardKind::Gold { amount: 25 });
 
-        let RewardKind::Card { cards } = &rewards[1].reward else {
+        let RewardKind::Card { cards, .. } = &rewards[1].reward else {
             panic!("expected a card reward");
         };
         assert_eq!(cards[0].text.as_deref(), Some("Deal 6 damage."));
@@ -591,7 +610,13 @@ mod tests {
         let Question::Rewards { rewards, .. } = q else {
             panic!("expected rewards");
         };
-        assert_eq!(rewards[0].reward, RewardKind::Card { cards: vec![] });
+        assert_eq!(
+            rewards[0].reward,
+            RewardKind::Card {
+                cards: vec![],
+                alternatives: vec![]
+            }
+        );
     }
 
     /// An id the build does not have is a failure that names the path.

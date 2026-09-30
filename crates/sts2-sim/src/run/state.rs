@@ -1524,6 +1524,9 @@ impl<V: Rules> State<V> {
                     let mut offered: Vec<Offer<V>> = (0..rewards)
                         .map(|_| Offer::Card {
                             cards: self.other_pool_cards(pools),
+                            rolled: None,
+                            reroll: false,
+                            sacrifice: false,
                             taken: false,
                         })
                         .collect();
@@ -2406,6 +2409,9 @@ impl<V: Rules> State<V> {
                     .into_iter()
                     .map(CardIdent::new)
                     .collect(),
+                    rolled: None,
+                    reroll: false,
+                    sacrifice: false,
                     taken: false,
                 },
                 CustomReward::SpecificPotion(potion) => Offer::Potion {
@@ -2430,6 +2436,9 @@ impl<V: Rules> State<V> {
                     .into_iter()
                     .map(CardIdent::new)
                     .collect(),
+                    rolled: None,
+                    reroll: false,
+                    sacrifice: false,
                     taken: false,
                 },
                 CustomReward::CardsOf {
@@ -2444,6 +2453,9 @@ impl<V: Rules> State<V> {
                         count,
                         upgrade_roll.then_some(act),
                     ),
+                    rolled: None,
+                    reroll: false,
+                    sacrifice: false,
                     taken: false,
                 },
                 CustomReward::UpgradedCardsOf {
@@ -2456,6 +2468,9 @@ impl<V: Rules> State<V> {
                         &V::merchant_cards(character, kind, rarity),
                         count,
                     ),
+                    rolled: None,
+                    reroll: false,
+                    sacrifice: false,
                     taken: false,
                 },
             });
@@ -2524,6 +2539,9 @@ impl<V: Rules> State<V> {
                     self.reward_options(&mut cards);
                     offered.push(Offer::Card {
                         cards,
+                        rolled: Some(room),
+                        reroll: false,
+                        sacrifice: false,
                         taken: false,
                     });
                 }
@@ -2536,7 +2554,37 @@ impl<V: Rules> State<V> {
                 effect => unimplemented!("a relic modifying rewards with {effect:?}"),
             }
         }
-        self.unheard(sts2_core::ModelHook::TryModifyRewardsLate);
+        let late = self.notify_belt(sts2_core::EventHook::ModifyRewardsLate);
+        for effect in late {
+            match effect {
+                sts2_core::HookEffect::RerollableCardRewards => {
+                    for offer in offered.iter_mut() {
+                        if let Offer::Card { reroll, .. } = offer {
+                            *reroll = true;
+                        }
+                    }
+                }
+                effect => unimplemented!("a relic modifying rewards late with {effect:?}"),
+            }
+        }
+        self.card_reward_alternatives(offered);
+    }
+
+    /// `Hook.ModifyCardRewardAlternatives` over each card reward of a set.
+    fn card_reward_alternatives(&mut self, offered: &mut [Offer<V>]) {
+        for offer in offered {
+            let Offer::Card { sacrifice, .. } = offer else {
+                continue;
+            };
+            for effect in self.notify_belt(sts2_core::EventHook::CardRewardAlternatives) {
+                match effect {
+                    sts2_core::HookEffect::OfferRewardAlternative(
+                        sts2_core::RewardAlternative::Sacrifice,
+                    ) => *sacrifice = true,
+                    effect => unimplemented!("a relic adding {effect:?} to a card reward"),
+                }
+            }
+        }
     }
 
     /// `CardPileCmd.Add` into the deck, at its bottom, and then
@@ -4355,7 +4403,7 @@ impl<V: Rules> State<V> {
             }
             // The chosen card leaves the reward, which goes on listing the
             // cards not chosen.
-            (Offer::Card { cards, taken }, TakeReward::Card { card, .. }) => {
+            (Offer::Card { cards, taken, .. }, TakeReward::Card { card, .. }) => {
                 let at = usize::from(card);
                 if at >= cards.len() {
                     unimplemented!("a card the reward does not offer");
@@ -4374,6 +4422,55 @@ impl<V: Rules> State<V> {
                 let relic = *relic;
                 *taken = true;
                 return self.obtain(relic);
+            }
+            // `CardReward.Reroll`: `CanReroll` goes, and the pack is rolled
+            // again as it was. The reward stays on offer.
+            (
+                Offer::Card {
+                    cards,
+                    rolled,
+                    reroll,
+                    ..
+                },
+                TakeReward::Alternative {
+                    alternative: sts2_core::RewardAlternative::Reroll,
+                    ..
+                },
+            ) => {
+                if !*reroll {
+                    unimplemented!("a reroll of a card reward that cannot reroll");
+                }
+                let room = rolled
+                    .unwrap_or_else(|| unimplemented!("a reroll of a pack rolled some other way"));
+                *reroll = false;
+                let (ascension, character, act) = (self.ascension(), self.character(), self.act());
+                let added = self.card_reward_added();
+                let (rng, odds) = self.rewarding();
+                let Offer::Card { cards: rolled, .. } = crate::reward::combat::card_reward::<V, _>(
+                    rng, odds, ascension, character, act, room, &added,
+                ) else {
+                    unreachable!("a card reward rolls a card offer");
+                };
+                *cards = rolled;
+                self.reward_options(cards);
+            }
+            // The alternative's `OnSelect`, which completes the reward.
+            (
+                Offer::Card {
+                    sacrifice, taken, ..
+                },
+                TakeReward::Alternative {
+                    alternative: alternative @ sts2_core::RewardAlternative::Sacrifice,
+                    ..
+                },
+            ) => {
+                if !*sacrifice {
+                    unimplemented!("a sacrifice of a card reward that offers none");
+                }
+                *taken = true;
+                let chosen = sts2_core::EventHook::CardRewardAlternativeChosen(alternative);
+                let effects = self.notify_belt(chosen);
+                return self.carry_out(effects);
             }
             _ => unimplemented!("a reward taken as the wrong kind"),
         }
@@ -5347,10 +5444,15 @@ fn reward_moves<V: Rules>(offered: &[Offer<V>], skippable: bool, moves: &mut Leg
             continue;
         }
         match offer {
-            Offer::Card { cards, .. } => moves.extend(
-                (0..cards.len())
-                    .map(|card| Decision::Answer(Answer::Take(TakeReward::card(index, card)))),
-            ),
+            Offer::Card { cards, .. } => {
+                moves.extend(
+                    (0..cards.len())
+                        .map(|card| Decision::Answer(Answer::Take(TakeReward::card(index, card)))),
+                );
+                moves.extend(offer.alternatives().map(|alternative| {
+                    Decision::Answer(Answer::Take(TakeReward::alternative(index, alternative)))
+                }));
+            }
             _ => moves.push(Decision::Answer(Answer::Take(TakeReward::non_card(index)))),
         }
     }
@@ -5420,6 +5522,7 @@ fn asked<V: Rules>(offered: &[Offer<V>], skippable: bool) -> Question<V> {
                                 text: None,
                             })
                             .collect(),
+                        alternatives: offer.alternatives().collect(),
                     },
                     Offer::SpecialCard { .. } => RewardKind::SpecialCard { card: None },
                     Offer::CardRemoval { .. } => RewardKind::Other {

@@ -442,24 +442,49 @@ fn picks<E: serde::de::Error>(options: Vec<usize>) -> Result<Picks, E> {
 
 /// A [`TakeReward`] on the wire.
 ///
-/// Untagged, so each variant serializes flat and a card reward is the only one
-/// that carries a `card`. That is exactly what the protocol reads. `Pending`
-/// refuses a card reward with no `card` index, and ignores the field on every
-/// other kind of reward.
+/// Untagged, so each variant serializes flat, as the protocol reads it. Only
+/// a card reward carries a `card` or an `alternative`. `Pending` refuses a
+/// card reward with neither, and ignores both on any other reward.
 ///
-/// `Card` comes first because untagged tries the variants in order, and a
-/// `NonCard` also accepts an object that carries a card.
+/// `NonCard` comes last because untagged tries the variants in order, and it
+/// accepts an object that carries either.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(untagged)]
 enum WireTake {
-    Card { index: u8, card: u8 },
-    NonCard { index: u8 },
+    Card {
+        index: u8,
+        card: u8,
+    },
+    Alternative {
+        index: u8,
+        alternative: WireAlternative,
+    },
+    NonCard {
+        index: u8,
+    },
+}
+
+/// A [`RewardAlternative`](sts2_core::RewardAlternative) on the wire, by its
+/// `OptionId`.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+enum WireAlternative {
+    #[serde(rename = "REROLL")]
+    Reroll,
+    #[serde(rename = "SACRIFICE")]
+    Sacrifice,
 }
 
 impl From<TakeReward> for WireTake {
     fn from(t: TakeReward) -> Self {
         match t {
             TakeReward::Card { index, card } => Self::Card { index, card },
+            TakeReward::Alternative { index, alternative } => Self::Alternative {
+                index,
+                alternative: match alternative {
+                    sts2_core::RewardAlternative::Reroll => WireAlternative::Reroll,
+                    sts2_core::RewardAlternative::Sacrifice => WireAlternative::Sacrifice,
+                },
+            },
             TakeReward::NonCard { index } => Self::NonCard { index },
         }
     }
@@ -469,6 +494,13 @@ impl WireTake {
     fn into_domain(self) -> TakeReward {
         match self {
             Self::Card { index, card } => TakeReward::Card { index, card },
+            Self::Alternative { index, alternative } => TakeReward::Alternative {
+                index,
+                alternative: match alternative {
+                    WireAlternative::Reroll => sts2_core::RewardAlternative::Reroll,
+                    WireAlternative::Sacrifice => sts2_core::RewardAlternative::Sacrifice,
+                },
+            },
             Self::NonCard { index } => TakeReward::NonCard { index },
         }
     }
@@ -682,6 +714,16 @@ mod tests {
             Decision::Answer(Answer::Skip).into(),
             Decision::Answer(Answer::Take(TakeReward::Card { index: 1, card: 0 })).into(),
             Decision::Answer(Answer::Take(TakeReward::NonCard { index: 2 })).into(),
+            Decision::Answer(Answer::Take(TakeReward::Alternative {
+                index: 1,
+                alternative: sts2_core::RewardAlternative::Reroll,
+            }))
+            .into(),
+            Decision::Answer(Answer::Take(TakeReward::Alternative {
+                index: 3,
+                alternative: sts2_core::RewardAlternative::Sacrifice,
+            }))
+            .into(),
             Setup::Fight {
                 encounter: Encounter::ShrinkerBeetleWeak,
             }
@@ -714,6 +756,18 @@ mod tests {
             });
             assert_eq!(back.into_step(), Some(step), "{sent}");
         }
+    }
+
+    /// A card reward's alternative goes out by the `OptionId` the mod reads.
+    #[test]
+    fn a_reward_alternative_is_sent_by_its_option_id() {
+        assert_eq!(
+            wire(Decision::Answer(Answer::Take(TakeReward::Alternative {
+                index: 2,
+                alternative: sts2_core::RewardAlternative::Reroll,
+            }))),
+            json!({"cmd": "answer", "take": [{"index": 2, "alternative": "REROLL"}]})
+        );
     }
 
     /// Both parse, and neither is a step in a run.

@@ -187,6 +187,40 @@ pub enum TakeReward {
     NonCard { index: u8 },
     /// A card reward, which is not taken until you name a card in its pack.
     Card { index: u8, card: u8 },
+    /// One of a card reward's `CardRewardAlternative`s in place of a card.
+    Alternative {
+        index: u8,
+        alternative: RewardAlternative,
+    },
+}
+
+/// A `CardRewardAlternative` other than `Skip`, by its `OptionId`. Skipping a
+/// card reward is leaving it untaken.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum RewardAlternative {
+    /// `REROLL`: the reward draws a fresh pack, and stays on offer.
+    Reroll,
+    /// `SACRIFICE`: the reward is taken with no card.
+    Sacrifice,
+}
+
+impl RewardAlternative {
+    /// Its `OptionId`, which is how the game names it.
+    pub fn option_id(self) -> &'static str {
+        match self {
+            Self::Reroll => "REROLL",
+            Self::Sacrifice => "SACRIFICE",
+        }
+    }
+
+    /// The alternative an `OptionId` names, if this crate knows it.
+    pub fn from_option_id(id: &str) -> Option<Self> {
+        match id {
+            "REROLL" => Some(Self::Reroll),
+            "SACRIFICE" => Some(Self::Sacrifice),
+            _ => None,
+        }
+    }
 }
 
 impl TakeReward {
@@ -214,10 +248,24 @@ impl TakeReward {
         }
     }
 
+    /// A card reward's alternative, by the reward's position in the set.
+    ///
+    /// # Panics
+    ///
+    /// A position past what a reward set can hold.
+    pub fn alternative(index: usize, alternative: RewardAlternative) -> Self {
+        Self::Alternative {
+            index: position(index),
+            alternative,
+        }
+    }
+
     /// Which reward in the offered set this takes.
     pub fn index(&self) -> usize {
         match self {
-            Self::NonCard { index } | Self::Card { index, .. } => usize::from(*index),
+            Self::NonCard { index }
+            | Self::Card { index, .. }
+            | Self::Alternative { index, .. } => usize::from(*index),
         }
     }
 }

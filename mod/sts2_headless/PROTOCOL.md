@@ -276,7 +276,7 @@ first.
 | wrong moment | `no_run` `run_over` `not_in_combat` `in_combat` `wrong_room` `nothing_to_choose` `pending` `nothing_pending` |
 | no such thing | `out_of_range` `no_such_creature` |
 | the rules say no | `unplayable` `undrinkable` `wrong_target` `wrong_potion_target` `not_travelable` `cannot_proceed` `option_disabled` `option_locked` `already_answered` `unpurchasable` |
-| answering a question | `duplicate` `wrong_count` `not_skippable` `already_taken` `needs_card_choice` `empty_take` `off_grid` `already_uncovered` |
+| answering a question | `duplicate` `wrong_count` `not_skippable` `already_taken` `needs_card_choice` `no_such_alternative` `empty_take` `off_grid` `already_uncovered` |
 | prose, deliberately | `console` `malformed` |
 
 The last two carry a `message` inside the reason, because there is nothing to
@@ -488,6 +488,14 @@ Answer with either `{"cmd":"answer","skip":true}`, which is refused if
 `CardReward` **must** carry a `card` index. It is refused rather than defaulted
 to the first card, because choosing for the client is the one thing the oracle
 must not do.
+
+A `CardReward` that offers more than its cards adds `alternatives`, each by
+its `OptionId`. `REROLL` comes first where `CanReroll` is set, then what
+`ModifyCardRewardAlternatives` adds, such as `SACRIFICE`. `Skip` is left out,
+since it leaves the reward untaken. Take one with
+`{"cmd":"answer","take":[{"index":1,"alternative":"REROLL"}]}`, which is refused
+as `no_such_alternative` when the reward does not offer it. `REROLL` keeps the
+reward on the screen, and the next `rewards` pending shows its new cards.
 
 **Taking is not the end of the screen.** A `take` applies what it names and
 nothing else. If the set still has rewards in it, another `rewards` pending

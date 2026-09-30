@@ -84,6 +84,7 @@ mod distinguished_cape;
 mod divine_destiny;
 mod divine_right;
 mod dollys_mirror;
+mod driftwood;
 mod ember_tea;
 mod emotion_chip;
 mod empty_cage;
@@ -180,6 +181,7 @@ mod paels_flesh;
 mod paels_growth;
 mod paels_horn;
 mod paels_tears;
+mod paels_wing;
 mod pandoras_box;
 mod pantograph;
 mod paper_phrog;
@@ -566,6 +568,8 @@ pub enum State {
     PumpkinCandle(pumpkin_candle::State),
     PaelsClaw,
     PaelsGrowth,
+    Driftwood,
+    PaelsWing(paels_wing::State),
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -809,6 +813,8 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::PaelsWing(state) => paels_wing::event_hook(state, hook, asked),
+        State::Driftwood => driftwood::event_hook(hook, asked),
         State::PaelsGrowth => paels_growth::event_hook(hook, asked),
         State::PaelsClaw => paels_claw::event_hook(hook, asked),
         State::PumpkinCandle(state) => pumpkin_candle::event_hook(state, hook, asked),
@@ -1198,7 +1204,9 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::MiniatureTent
         | State::NutritiousSoup
         | State::PaelsClaw
-        | State::PaelsGrowth => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::PaelsGrowth
+        | State::Driftwood
+        | State::PaelsWing(_) => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1377,6 +1385,8 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::PaelsWing => State::PaelsWing(paels_wing::State::default()),
+            Relic::Driftwood => State::Driftwood,
             Relic::PaelsGrowth => State::PaelsGrowth,
             Relic::PaelsClaw => State::PaelsClaw,
             Relic::PumpkinCandle => State::PumpkinCandle(pumpkin_candle::State::default()),
@@ -1515,6 +1525,7 @@ impl sts2_core::RelicModel<V> for State {
                 State::Kusarigama(state) => kusarigama::display_amount(state),
                 State::HappyFlower(state) => happy_flower::display_amount(state),
                 State::Kunai(state) => kunai::display_amount(state),
+                State::PaelsWing(state) => paels_wing::display_amount(state),
                 State::PumpkinCandle(state) => pumpkin_candle::display_amount(state),
                 State::GalacticDust(state) => galactic_dust::display_amount(state),
                 State::EmberTea(state) => ember_tea::display_amount(state),

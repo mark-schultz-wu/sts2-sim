@@ -43,6 +43,13 @@ pub(crate) enum Offer<V: Rules> {
     /// The cards on offer. Taking one takes the whole reward.
     Card {
         cards: Vec<sts2_core::CardIdent<V>>,
+        /// The room whose odds rolled the pack, which a reroll rolls at
+        /// again. Nothing for a pack rolled some other way.
+        rolled: Option<combat::Room>,
+        /// `CanReroll`.
+        reroll: bool,
+        /// Whether `ModifyCardRewardAlternatives` adds `SACRIFICE`.
+        sacrifice: bool,
         taken: bool,
     },
     /// `SpecialCardReward`: one card, and what its model saved. An event's
@@ -75,6 +82,26 @@ pub(crate) enum Offer<V: Rules> {
 }
 
 impl<V: Rules> Offer<V> {
+    /// `CardRewardAlternative.Generate` less `Skip`, in its order: `REROLL`
+    /// where the reward can reroll, then what the hook adds. Nothing for any
+    /// other kind of reward.
+    pub(crate) fn alternatives(&self) -> impl Iterator<Item = sts2_core::RewardAlternative> {
+        use sts2_core::RewardAlternative;
+
+        let (reroll, sacrifice) = match self {
+            Self::Card {
+                reroll, sacrifice, ..
+            } => (*reroll, *sacrifice),
+            _ => (false, false),
+        };
+        [
+            reroll.then_some(RewardAlternative::Reroll),
+            sacrifice.then_some(RewardAlternative::Sacrifice),
+        ]
+        .into_iter()
+        .flatten()
+    }
+
     pub(crate) fn taken(&self) -> bool {
         match self {
             Self::Gold { taken, .. }

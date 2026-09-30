@@ -222,7 +222,10 @@ fn question_of<V: sts2_content_wire::WireContentVersion>(
                     note.push_str("  [taken]");
                 }
                 match &r.reward {
-                    RewardKind::Card { cards } => {
+                    RewardKind::Card {
+                        cards,
+                        alternatives,
+                    } => {
                         writeln!(f, "          {:<5} pick one card:{note}", r.index)?;
                         for (at, card) in cards.iter().enumerate() {
                             writeln!(
@@ -232,6 +235,10 @@ fn question_of<V: sts2_content_wire::WireContentVersion>(
                                 ident(&card.card),
                                 says(&card.text)
                             )?;
+                        }
+                        for alternative in alternatives {
+                            let id = alternative.option_id().to_lowercase();
+                            writeln!(f, "          {:<5} {id}", format!("{}.{id}", r.index))?;
                         }
                     }
                     other => {
@@ -349,7 +356,7 @@ fn plain<V: sts2_content_wire::WireContentVersion>(reward: &RewardKind<V>) -> St
         RewardKind::Other { kind } => format!("{kind} (not modelled here)"),
         // Listed with its cards by the caller, which is the only useful way to
         // show one.
-        RewardKind::Card { cards } => format!("{} cards", cards.len()),
+        RewardKind::Card { cards, .. } => format!("{} cards", cards.len()),
     }
 }
 
