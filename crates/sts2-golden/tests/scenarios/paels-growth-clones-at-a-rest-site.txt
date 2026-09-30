@@ -1,0 +1,8 @@
+# Pael's Growth enchants one deck card with Clone at four as it is picked
+# up. A rest site then offers Clone beside its own options, which adds a copy
+# of each Clone card to the deck.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","relic":"PAELS_GROWTH"}
+{"cmd":"answer","cards":[10]}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"choose_option","index":2}

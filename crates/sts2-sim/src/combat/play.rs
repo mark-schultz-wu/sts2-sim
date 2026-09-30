@@ -1549,6 +1549,17 @@ fn finished<V: Rules, S: LendsCombat>(
                 ) => next.cards.write_in_play(id, |face| {
                     face.set_enchantment_status(sts2_core::EnchantmentStatus::Disabled)
                 }),
+                (
+                    super::listen::Listener::Card { id },
+                    sts2_core::HookEffect::RaiseOwnEnchantment { by, write },
+                ) => {
+                    next.cards
+                        .write_in_play(id, |face| face.raise_enchantment(by));
+                    if let Some(card) = next.deck_versions.of(id) {
+                        next.for_run
+                            .push(sts2_core::HookEffect::WriteDeckCard { card, write });
+                    }
+                }
                 // `CreatureCmd.GainBlock`, unpowered, on the power's owner,
                 // then `PowerCmd.Remove(this)`.
                 (

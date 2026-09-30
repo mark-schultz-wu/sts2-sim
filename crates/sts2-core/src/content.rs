@@ -4912,6 +4912,9 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CardPileCmd.Add` of a clone of the card that just joined the deck, at
     /// the deck's bottom, cloned by the listener.
     CloneIntoDeck,
+    /// `RunState.CloneCard` of each deck card carrying this enchantment, in
+    /// deck order, each then `CardPileCmd.Add` to the deck's bottom.
+    CloneEnchantedIntoDeck(V::Enchantment),
     /// `Rng.NextInt(below)` off a stream, drawn for its place in the stream
     /// alone, which a flavour line makes.
     DrawFromStream {
@@ -5150,6 +5153,12 @@ pub enum HookEffect<V: ContentVersion> {
     /// `EnchantmentModel.Status = Disabled` on the enchantment of the card
     /// that asked.
     DisableOwnEnchantment,
+    /// `Amount += by` on the enchantment of the card that asked, and `write`
+    /// on that card's `DeckVersion` where it has one. Goopy's.
+    RaiseOwnEnchantment {
+        by: u8,
+        write: V::DeckWrite,
+    },
     /// `Card.EnergyCost.SetThisCombat` to a draw of `NextInt(below)` off
     /// `CombatEnergyCosts`, on the card whose enchantment asked. Slither's.
     RandomSelfCost {
@@ -5351,6 +5360,12 @@ pub enum HookEffect<V: ContentVersion> {
     /// carrying `tag` that the enchantment takes, in deck order.
     EnchantBasicTagged {
         tag: V::CardTag,
+        enchantment: V::Enchantment,
+        amount: u8,
+    },
+    /// `CardCmd.Enchant` by `amount` on each deck card the enchantment takes,
+    /// in deck order.
+    EnchantDeck {
         enchantment: V::Enchantment,
         amount: u8,
     },
