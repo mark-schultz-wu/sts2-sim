@@ -1,0 +1,11 @@
+# Misery copies the Bowlbug Rock's Imbalanced onto the other bug after the
+# Rock has gone off balance. The game keeps that on the Rock, not on the
+# power, so the copy is a fresh Imbalanced.
+{"cmd":"start","seed":"S33D1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"BOWLBUGS_WEAK"}
+{"cmd":"power","power":"DEXTERITY_POWER","amount":50,"target":0}
+{"cmd":"play_card","index":0}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"MISERY"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"end_turn"}

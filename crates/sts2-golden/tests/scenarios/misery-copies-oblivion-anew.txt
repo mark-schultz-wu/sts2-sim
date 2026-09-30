@@ -1,0 +1,9 @@
+# Misery copies Oblivion onto the other bug. The copy starts as a new
+# Oblivion, without the Misery play the target's own had noted, so only the
+# target takes Doom as Misery finishes.
+{"cmd":"start","seed":"S33D1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"BOWLBUGS_WEAK"}
+{"cmd":"grant","card":"OBLIVION"}
+{"cmd":"grant","card":"MISERY"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"play_card","index":5,"target":1}

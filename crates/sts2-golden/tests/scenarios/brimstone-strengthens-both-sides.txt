@@ -1,0 +1,6 @@
+# Brimstone gives the player two Strength and every enemy one as each of the
+# player's turns starts.
+{"cmd":"start","seed":"S33D1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"BRIMSTONE"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"end_turn"}

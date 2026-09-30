@@ -1,0 +1,6 @@
+# Ninja Scroll puts three Shivs in the first hand of a fight, before the
+# draw, and none in the second.
+{"cmd":"start","seed":"S33D1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","relic":"NINJA_SCROLL"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}

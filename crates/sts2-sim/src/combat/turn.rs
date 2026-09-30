@@ -2199,6 +2199,24 @@ pub(super) fn side_turn_started<V: Rules>(
                     ended = ended.or(board.ended());
                 }
             }
+            // `PowerCmd.Apply<P>` over `GetOpponentsOf(Owner)` that are
+            // alive, from nobody. A relic's owner is the player.
+            sts2_core::HookEffect::ApplyToLivingOpponents(power, amount)
+                if matches!(listener, Listener::Relic { .. }) =>
+            {
+                let targets: SmallVec<[CombatId; CREATURES]> = (live.creatures.iter())
+                    .filter(|creature| {
+                        creature.side == <V::CombatSide as SideKinds>::ENEMY && creature.alive
+                    })
+                    .map(|creature| creature.id)
+                    .collect();
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                for target in targets {
+                    board.land(target, power, amount, None);
+                }
+                ended = ended.or(board.ended());
+            }
             // `PowerCmd.Apply<P>(HittableEnemies, amount, Owner)`.
             sts2_core::HookEffect::ApplyToOpponents(power, amount) => {
                 let Listener::Power { owner, .. } = listener else {
