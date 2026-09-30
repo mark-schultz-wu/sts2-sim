@@ -139,7 +139,7 @@ pub(crate) fn card_reward<V: Rules, R: GameRng>(
     }
     Offer::Card {
         cards,
-        rolled: Some(room),
+        rolled: Some(super::Rolled::Room(room)),
         reroll: false,
         sacrifice: false,
         taken: false,

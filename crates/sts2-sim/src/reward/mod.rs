@@ -43,9 +43,9 @@ pub(crate) enum Offer<V: Rules> {
     /// The cards on offer. Taking one takes the whole reward.
     Card {
         cards: Vec<sts2_core::CardIdent<V>>,
-        /// The room whose odds rolled the pack, which a reroll rolls at
-        /// again. Nothing for a pack rolled some other way.
-        rolled: Option<combat::Room>,
+        /// How the pack was rolled, which a reroll rolls again. Nothing for
+        /// a pack set by hand.
+        rolled: Option<Rolled<V>>,
         /// `CanReroll`.
         reroll: bool,
         /// Whether `ModifyCardRewardAlternatives` adds `SACRIFICE`.
@@ -80,6 +80,19 @@ pub(crate) enum Offer<V: Rules> {
     /// picks once it is taken.
     CardRemoval {
         taken: bool,
+    },
+}
+
+/// How a card reward's pack was rolled: `CardReward.Options`, which its
+/// `RerollOptions` repeat.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Rolled<V: Rules> {
+    /// At the odds of a room of this kind.
+    Room(combat::Room),
+    /// As a custom reward of this kind, off this stream.
+    Custom {
+        reward: sts2_core::CustomReward<V>,
+        stream: sts2_core::Stream<V>,
     },
 }
 

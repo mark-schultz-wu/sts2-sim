@@ -1066,6 +1066,22 @@ fn run_deferred<V: Rules>(
                     }
                 }
             }
+            super::live::Deferred::PrePlay { rest, next } => match ended {
+                None => {
+                    let ended = super::turn::pre_play_from::<V>(
+                        fighting.live,
+                        fighting.streams.combat(),
+                        fighting.relics,
+                        rest,
+                        next,
+                    );
+                    if ended.is_none() {
+                        fighting.live.phase = super::turn::after_pre_play::<V>(fighting.live);
+                    }
+                    ended
+                }
+                ended => ended,
+            },
             super::live::Deferred::Setup(stage) => super::turn::finish_setup::<V>(
                 fighting.live,
                 fighting.streams.combat(),

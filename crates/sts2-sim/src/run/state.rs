@@ -2555,7 +2555,6 @@ impl<V: Rules> State<V> {
         use sts2_core::rng::GameRng as _;
 
         let character = self.character();
-        let act = self.act();
         if rewards.iter().any(|reward| {
             matches!(
                 reward,
@@ -2625,22 +2624,12 @@ impl<V: Rules> State<V> {
                     amount: crate::reward::fixed_gold::<V, _>(rng, amount),
                     taken: false,
                 },
-                CustomReward::CharacterCards {
-                    count,
-                    upgrade_roll,
-                } => Offer::Card {
-                    cards: crate::reward::card::regular::<V, _>(
-                        rng,
-                        (pool.as_ref())
-                            .expect("a set with a character's card reward has its pools")
-                            .drafted(),
-                        count,
-                        upgrade_roll,
-                    )
-                    .into_iter()
-                    .map(CardIdent::new)
-                    .collect(),
-                    rolled: None,
+                reward @ (CustomReward::CharacterCards { .. }
+                | CustomReward::ColorlessCards(_)
+                | CustomReward::CardsOf { .. }
+                | CustomReward::UpgradedCardsOf { .. }) => Offer::Card {
+                    cards: self.custom_cards(reward, stream, pool.as_ref()),
+                    rolled: Some(crate::reward::Rolled::Custom { reward, stream }),
                     reroll: false,
                     sacrifice: false,
                     taken: false,
@@ -2657,59 +2646,72 @@ impl<V: Rules> State<V> {
                     potion: crate::reward::potion::rolled::<V, _>(rng, character),
                     taken: false,
                 },
-                CustomReward::ColorlessCards(count) => Offer::Card {
-                    cards: crate::reward::card::regular::<V, _>(
-                        rng,
-                        V::colorless_cards(),
-                        count,
-                        false,
-                    )
-                    .into_iter()
-                    .map(CardIdent::new)
-                    .collect(),
-                    rolled: None,
-                    reroll: false,
-                    sacrifice: false,
-                    taken: false,
-                },
-                CustomReward::CardsOf {
-                    pool,
-                    rarity,
-                    count,
-                    upgrade_roll,
-                } => Offer::Card {
-                    cards: crate::reward::card::uniform_rolled::<V, _>(
-                        rng,
-                        V::reward_cards(pool.unwrap_or(character)).at(rarity),
-                        count,
-                        upgrade_roll.then_some(act),
-                    ),
-                    rolled: None,
-                    reroll: false,
-                    sacrifice: false,
-                    taken: false,
-                },
-                CustomReward::UpgradedCardsOf {
-                    rarity,
-                    kind,
-                    count,
-                } => Offer::Card {
-                    cards: crate::reward::card::upgraded_of::<V, _>(
-                        rng,
-                        &V::merchant_cards(character, kind, rarity),
-                        count,
-                    ),
-                    rolled: None,
-                    reroll: false,
-                    sacrifice: false,
-                    taken: false,
-                },
             });
         }
         self.reward_offers(&mut offered);
         self.modify_rewards(&mut offered, None);
         crate::reward::sort(&mut offered);
         offered
+    }
+
+    /// The pack a custom card reward rolls, off `stream`. `pool` is what a
+    /// reward over the character's own pool draws from.
+    ///
+    /// # Panics
+    ///
+    /// A reward that makes no pack, or a character's reward with no pool.
+    fn custom_cards(
+        &mut self,
+        reward: sts2_core::CustomReward<V>,
+        stream: sts2_core::Stream<V>,
+        pool: Option<&crate::reward::card::Pool<V>>,
+    ) -> Vec<CardIdent<V>> {
+        use sts2_core::CustomReward;
+
+        let (character, act) = (self.character(), self.act());
+        let rng = stream_of(&mut self.phase, &mut self.streams, stream);
+        match reward {
+            CustomReward::CharacterCards {
+                count,
+                upgrade_roll,
+            } => crate::reward::card::regular::<V, _>(
+                rng,
+                pool.expect("a character's card reward has its pools")
+                    .drafted(),
+                count,
+                upgrade_roll,
+            )
+            .into_iter()
+            .map(CardIdent::new)
+            .collect(),
+            CustomReward::ColorlessCards(count) => {
+                crate::reward::card::regular::<V, _>(rng, V::colorless_cards(), count, false)
+                    .into_iter()
+                    .map(CardIdent::new)
+                    .collect()
+            }
+            CustomReward::CardsOf {
+                pool,
+                rarity,
+                count,
+                upgrade_roll,
+            } => crate::reward::card::uniform_rolled::<V, _>(
+                rng,
+                V::reward_cards(pool.unwrap_or(character)).at(rarity),
+                count,
+                upgrade_roll.then_some(act),
+            ),
+            CustomReward::UpgradedCardsOf {
+                rarity,
+                kind,
+                count,
+            } => crate::reward::card::upgraded_of::<V, _>(
+                rng,
+                &V::merchant_cards(character, kind, rarity),
+                count,
+            ),
+            reward => unreachable!("{reward:?} makes no pack of cards"),
+        }
     }
 
     /// `Hook.ModifyRewards`, once a set is filled in. A reward it adds is
@@ -2771,7 +2773,7 @@ impl<V: Rules> State<V> {
                     self.reward_options(&mut cards);
                     offered.push(Offer::Card {
                         cards,
-                        rolled: Some(room),
+                        rolled: Some(crate::reward::Rolled::Room(room)),
                         reroll: false,
                         sacrifice: false,
                         taken: false,
@@ -4713,25 +4715,33 @@ impl<V: Rules> State<V> {
                 if !*reroll {
                     unimplemented!("a reroll of a card reward that cannot reroll");
                 }
-                let room = rolled
-                    .unwrap_or_else(|| unimplemented!("a reroll of a pack rolled some other way"));
+                let how =
+                    rolled.unwrap_or_else(|| unimplemented!("a reroll of a pack set by hand"));
                 *reroll = false;
-                let (ascension, act) = (self.ascension(), self.act());
-                let added = self.card_reward_added();
                 let pool = self.reward_pool();
-                let (rng, odds) = self.rewarding();
-                let Offer::Card { cards: rolled, .. } = crate::reward::combat::card_reward::<V, _>(
-                    rng,
-                    odds,
-                    ascension,
-                    pool.drafted(),
-                    act,
-                    room,
-                    &added,
-                ) else {
-                    unreachable!("a card reward rolls a card offer");
+                *cards = match how {
+                    crate::reward::Rolled::Room(room) => {
+                        let (ascension, act) = (self.ascension(), self.act());
+                        let added = self.card_reward_added();
+                        let (rng, odds) = self.rewarding();
+                        let Offer::Card { cards, .. } = crate::reward::combat::card_reward::<V, _>(
+                            rng,
+                            odds,
+                            ascension,
+                            pool.drafted(),
+                            act,
+                            room,
+                            &added,
+                        ) else {
+                            unreachable!("a card reward rolls a card offer");
+                        };
+                        cards
+                    }
+                    crate::reward::Rolled::Custom { reward, stream } => {
+                        self.card_reward_unheard();
+                        self.custom_cards(reward, stream, Some(&pool))
+                    }
                 };
-                *cards = rolled;
                 self.reward_options(cards);
             }
             // The alternative's `OnSelect`, which completes the reward.

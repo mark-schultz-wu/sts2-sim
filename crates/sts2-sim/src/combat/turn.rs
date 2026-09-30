@@ -506,7 +506,7 @@ fn start_player_turn<V: Rules>(
             }
             return Ok(Some(ended));
         }
-        next.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY;
+        next.phase = after_pre_play::<V>(next);
     }
 
     next.skip_tick = skipping;
@@ -1948,7 +1948,9 @@ pub(super) fn answer_setup<V: Rules>(
     picked: sts2_core::SelectedCards<V>,
 ) -> Option<super::Ended> {
     let (sly, ended) = act_on::<V>(live, rngs.reborrow(), relics, act, picked.as_slice());
-    ended.or_else(|| play_sly::<V>(live, rngs, relics, sly, false))
+    // A Sly card that asks stands the setup still behind its own question,
+    // whose deferrals run ahead of the setup's.
+    ended.or_else(|| play_sly::<V>(live, rngs, relics, sly, true))
 }
 
 /// `SetupPlayerTurn` from `stage` to its end, once a question it stopped on
@@ -1975,7 +1977,7 @@ pub(super) fn finish_setup<V: Rules>(
             match ended {
                 Some(super::Ended::Won) => listen::combat_ended::<V>(live, relics),
                 Some(super::Ended::Lost) => {}
-                None => live.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY,
+                None => live.phase = after_pre_play::<V>(live),
             }
             ended
         }
@@ -2012,8 +2014,25 @@ pub(super) fn pre_play_phase<V: Rules>(
 #[tracing::instrument(level = "trace", skip_all)]
 fn pre_play_heard<V: Rules>(
     live: &mut Live<V>,
+    rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+) -> Option<super::Ended> {
+    pre_play_from::<V>(live, rngs, relics, SmallVec::new(), 0)
+}
+
+/// The pre-play phase from `rest`, what a pass still asked for, then from the
+/// pass at `next`. A question an auto-play asks stands the phase still, with
+/// what is left of it deferred behind the answer.
+///
+/// # Panics
+///
+/// A listener asking for anything but an auto-play of a card.
+pub(super) fn pre_play_from<V: Rules>(
+    live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
     relics: &mut crate::run::Belt<V>,
+    rest: PrePlayRest<V>,
+    next: usize,
 ) -> Option<super::Ended> {
     let turn = live.turn;
     let passes = [
@@ -2021,8 +2040,11 @@ fn pre_play_heard<V: Rules>(
         sts2_core::EventHook::AutoPrePlayPhase { turn },
         sts2_core::EventHook::AutoPrePlayPhaseLate { turn },
     ];
-    for hook in passes {
-        for (listener, effect) in listen::notify::<V>(live, relics, hook) {
+    let mut pass = next;
+    let mut asked: PrePlayRest<V> = rest;
+    loop {
+        let mut effects = asked.into_iter();
+        while let Some((listener, effect)) = effects.next() {
             match effect {
                 // `CardCmd.AutoPlay` of the card, from wherever it stands.
                 sts2_core::HookEffect::AutoPlay(card) => {
@@ -2036,7 +2058,7 @@ fn pre_play_heard<V: Rules>(
                         card,
                         from,
                         None,
-                        false,
+                        true,
                     );
                     if ended.is_some() {
                         return ended;
@@ -2053,7 +2075,8 @@ fn pre_play_heard<V: Rules>(
                         ascension,
                         None,
                         None,
-                    );
+                    )
+                    .blocking();
                     sts2_core::Fight::auto_play_from_draw(&mut board, count, false);
                     if let Some(ended) = board.ended() {
                         return Some(ended);
@@ -2063,9 +2086,33 @@ fn pre_play_heard<V: Rules>(
                     unimplemented!("{listener:?} asking for {effect:?} as the play phase opens")
                 }
             }
+            // `RunAutoPrePlayPhase` awaits each hook, so the rest waits on
+            // the answer.
+            if live.asking.is_some() {
+                live.defer(super::live::Deferred::PrePlay {
+                    rest: effects.collect(),
+                    next: pass,
+                });
+                return None;
+            }
         }
+        // Past the last pass, the phase is over and the fight goes on.
+        let &hook = passes.get(pass)?;
+        asked = listen::notify::<V>(live, relics, hook);
+        pass += 1;
     }
-    None
+}
+
+/// What a pre-play pass asked for and has not yet carried out.
+pub(super) type PrePlayRest<V> = SmallVec<[(Listener<V>, sts2_core::HookEffect<V>); 4]>;
+
+/// The phase a player's turn stands in once its pre-play phase has run. That
+/// is the play phase, or still the pre-play one while its question waits.
+pub(super) fn after_pre_play<V: Rules>(live: &Live<V>) -> V::PlayerTurnPhase {
+    match live.asking.is_some() {
+        true => <V::PlayerTurnPhase as TurnPhaseKinds>::AUTO_PRE_PLAY,
+        false => <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY,
+    }
 }
 
 /// `AfterSideTurnStart`, raised on every listener once the side has drawn.
