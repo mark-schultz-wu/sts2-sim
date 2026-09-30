@@ -1468,496 +1468,496 @@ impl sts2_core::RelicTable for Relic {
 /// The hooks each class overrides, from `hooks.txt`, indexed by the relic's discriminant.
 static OVERRIDES: [sts2_core::Overrides; 297] = [
     // AKABEKO
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterSideTurnStart),
     // ALCHEMICAL_COFFER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // AMETHYST_AUBERGINE
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterModifyingRewards)
         .with(sts2_core::ModelHook::TryModifyRewards),
     // ANCHOR
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeCombatStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::BeforeCombatStart),
     // ARCANE_SCROLL
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // ARCHAIC_TOOTH
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // ART_OF_WAR
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCardPlayed)
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterEnergyReset)
         .with(sts2_core::ModelHook::AfterSideTurnEnd),
     // ASTROLABE
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // BAG_OF_MARBLES
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeSideTurnStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::BeforeSideTurnStart),
     // BAG_OF_PREPARATION
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyHandDraw),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ModifyHandDraw),
     // BEATING_REMNANT
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterDamageReceived)
         .with(sts2_core::ModelHook::AfterModifyingHpLostAfterOsty)
         .with(sts2_core::ModelHook::BeforeSideTurnStart)
         .with(sts2_core::ModelHook::ModifyHpLostAfterOsty),
     // BEAUTIFUL_BRACELET
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // BELLOWS
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // BELT_BUCKLE
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterCombatVictory)
         .with(sts2_core::ModelHook::AfterPotionUsed)
         .with(sts2_core::ModelHook::BeforeCombatStart),
     // BIG_HAT
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterSideTurnStart),
     // BIG_MUSHROOM
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterRoomEntered)
         .with(sts2_core::ModelHook::ModifyHandDraw),
     // BIIIG_HUG
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterShuffle),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterShuffle),
     // BING_BONG
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardChangedPiles),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardChangedPiles),
     // BLACK_BLOOD
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCombatVictory),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCombatVictory),
     // BLACK_STAR
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyRewards),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::TryModifyRewards),
     // BLESSED_ANTLER
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::BeforeHandDraw)
         .with(sts2_core::ModelHook::ModifyMaxEnergy),
     // BLOOD_SOAKED_ROSE
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyMaxEnergy),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ModifyMaxEnergy),
     // BLOOD_VIAL
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStartLate),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterPlayerTurnStartLate),
     // BONE_FLUTE
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterAttack),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterAttack),
     // BONE_TEA
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterSideTurnStart),
     // BOOKMARK
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterFlush),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterFlush),
     // BOOK_OF_FIVE_RINGS
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardChangedPiles),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardChangedPiles),
     // BOOK_REPAIR_KNIFE
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDiedToDoom),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterDiedToDoom),
     // BOOMING_CONCH
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterSideTurnStart)
         .with(sts2_core::ModelHook::ModifyHandDraw),
     // BOUND_PHYLACTERY
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterEnergyResetLate)
         .with(sts2_core::ModelHook::BeforeCombatStart),
     // BOWLER_HAT
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterModifyingGoldGained)
         .with(sts2_core::ModelHook::ModifyGoldGained),
     // BREAD
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterSideTurnStart)
         .with(sts2_core::ModelHook::ModifyMaxEnergy),
     // BRILLIANT_SCARF
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCardPlayed)
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::BeforeSideTurnStart)
         .with(sts2_core::ModelHook::TryModifyEnergyCostInCombatLate)
         .with(sts2_core::ModelHook::TryModifyStarCost),
     // BRIMSTONE
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterSideTurnStart),
     // BRONZE_SCALES
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRoomEntered),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterRoomEntered),
     // BURNING_BLOOD
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCombatVictory),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCombatVictory),
     // BURNING_STICKS
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCardExhausted)
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterRoomEntered),
     // BYRDPIP
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeCombatStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::BeforeCombatStart),
     // CALLING_BELL
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // CANDELABRA
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterSideTurnStart),
     // CAPTAINS_WHEEL
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterBlockCleared),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterBlockCleared),
     // CAULDRON
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // CENTENNIAL_PUZZLE
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterDamageReceived),
     // CHANDELIER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterSideTurnStart),
     // CHARONS_ASHES
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardExhausted),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardExhausted),
     // CHEMICAL_X
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::BeforeCardPlayed)
         .with(sts2_core::ModelHook::ModifyXValue),
     // CHOICES_PARADOX
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // CHOSEN_CHEESE
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCombatEnd),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCombatEnd),
     // CIRCLET
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // CLAWS
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // CLOAK_CLASP
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeSideTurnEnd),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::BeforeSideTurnEnd),
     // CRACKED_CORE
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeSideTurnStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::BeforeSideTurnStart),
     // CROSSBOW
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterSideTurnStart),
     // CURSED_PEARL
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // DARKSTONE_PERIAPT
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardChangedPiles),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardChangedPiles),
     // DATA_DISK
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRoomEntered),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterRoomEntered),
     // DAUGHTER_OF_THE_WIND
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardPlayed),
     // DELICATE_FROND
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeCombatStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::BeforeCombatStart),
     // DEMON_TONGUE
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterDamageReceived)
         .with(sts2_core::ModelHook::BeforeSideTurnStart),
     // DEPRECATED_RELIC
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // DIAMOND_DIADEM
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCardPlayed)
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::BeforeSideTurnEnd),
     // DINGY_RUG
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // DISTINGUISHED_CAPE
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // DIVINE_DESTINY
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterSideTurnStart),
     // DIVINE_RIGHT
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRoomEntered),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterRoomEntered),
     // DOLLYS_MIRROR
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // DRAGON_FRUIT
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterGoldGained),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterGoldGained),
     // DREAM_CATCHER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyRestSiteHealRewards),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::TryModifyRestSiteHealRewards),
     // DRIFTWOOD
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyRewardsLate),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::TryModifyRewardsLate),
     // DUSTY_TOME
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // ECTOPLASM
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterModifyingGoldGained)
         .with(sts2_core::ModelHook::ModifyGoldGained)
         .with(sts2_core::ModelHook::ModifyMaxEnergy),
     // ELECTRIC_SHRYMP
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // EMBER_TEA
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRoomEntered),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterRoomEntered),
     // EMOTION_CHIP
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterDamageReceived)
         .with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // EMPTY_CAGE
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // ETERNAL_FEATHER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRoomEntered),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterRoomEntered),
     // FAKE_ANCHOR
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeCombatStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::BeforeCombatStart),
     // FAKE_BLOOD_VIAL
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStartLate),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterPlayerTurnStartLate),
     // FAKE_HAPPY_FLOWER
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterSideTurnStart),
     // FAKE_LEES_WAFFLE
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // FAKE_MANGO
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // FAKE_MERCHANTS_RUG
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // FAKE_ORICHALCUM
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::BeforeSideTurnEnd)
         .with(sts2_core::ModelHook::BeforeSideTurnEndVeryEarly)
         .with(sts2_core::ModelHook::BeforeSideTurnStart),
     // FAKE_SNECKO_EYE
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeCombatStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::BeforeCombatStart),
     // FAKE_STRIKE_DUMMY
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyDamageAdditive),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ModifyDamageAdditive),
     // FAKE_VENERABLE_TEA_SET
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterEnergyReset)
         .with(sts2_core::ModelHook::AfterRoomEntered),
     // FENCING_MANUAL
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterSideTurnStart),
     // FESTIVE_POPPER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // FIDDLE
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterPreventingDraw)
         .with(sts2_core::ModelHook::ModifyHandDrawLate)
         .with(sts2_core::ModelHook::ShouldDraw),
     // FISHING_ROD
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCombatEnd),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCombatEnd),
     // FORGOTTEN_SOUL
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardExhausted),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardExhausted),
     // FRAGRANT_MUSHROOM
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // FRESNEL_LENS
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::ModifyMerchantCardCreationResults)
         .with(sts2_core::ModelHook::TryModifyCardBeingAddedToDeck)
         .with(sts2_core::ModelHook::TryModifyCardRewardOptionsLate),
     // FROZEN_EGG
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::ModifyMerchantCardCreationResults)
         .with(sts2_core::ModelHook::TryModifyCardBeingAddedToDeck)
         .with(sts2_core::ModelHook::TryModifyCardRewardOptionsLate),
     // FUNERARY_MASK
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeHandDraw),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::BeforeHandDraw),
     // FUR_COAT
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCreatureAddedToCombat)
         .with(sts2_core::ModelHook::BeforeCombatStart),
     // GALACTIC_DUST
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterStarsSpent),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterStarsSpent),
     // GAMBLING_CHIP
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // GAME_PIECE
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardPlayed),
     // GHOST_SEED
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCardEnteredCombat)
         .with(sts2_core::ModelHook::AfterRoomEntered),
     // GIRYA
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterRoomEntered)
         .with(sts2_core::ModelHook::TryModifyRestSiteOptions),
     // GLASS_EYE
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // GLITTER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyCardRewardOptionsLate),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::TryModifyCardRewardOptionsLate),
     // GNARLED_HAMMER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // GOLDEN_COMPASS
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyUnknownMapPointRoomTypes),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ModifyUnknownMapPointRoomTypes),
     // GOLDEN_PEARL
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // GOLD_PLATED_CABLES
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterModifyingOrbPassiveTriggerCount)
         .with(sts2_core::ModelHook::ModifyOrbPassiveTriggerCounts),
     // GORGET
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRoomEntered),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterRoomEntered),
     // GREMLIN_HORN
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDeath),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterDeath),
     // HAND_DRILL
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDamageGiven),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterDamageGiven),
     // HAPPY_FLOWER
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterSideTurnStart),
     // HEFTY_TABLET
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // HELICAL_DART
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardPlayed),
     // HISTORY_COURSE
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // HORN_CLEAT
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterBlockCleared),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterBlockCleared),
     // ICE_CREAM
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ShouldPlayerResetEnergy),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ShouldPlayerResetEnergy),
     // INFUSED_CORE
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterSideTurnStart)
         .with(sts2_core::ModelHook::ModifyOrbValue),
     // INTIMIDATING_HELMET
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeCardPlayed),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::BeforeCardPlayed),
     // IRON_CLUB
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardPlayed),
     // IVORY_TILE
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardPlayed),
     // JEWELED_MASK
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeHandDraw),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::BeforeHandDraw),
     // JEWELRY_BOX
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // JOSS_PAPER
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCardExhausted)
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterSideTurnEnd),
     // JUZU_BRACELET
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyUnknownMapPointRoomTypes),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ModifyUnknownMapPointRoomTypes),
     // KALEIDOSCOPE
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // KIFUDA
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // KUNAI
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCardPlayed)
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::BeforeSideTurnStart),
     // KUSARIGAMA
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCardPlayed)
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterSideTurnEnd)
         .with(sts2_core::ModelHook::BeforeCombatStart),
     // LANTERN
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterSideTurnStart),
     // LARGE_CAPSULE
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // LASTING_CANDY
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::TryModifyCardRewardOptions),
     // LAVA_LAMP
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterDamageReceived)
         .with(sts2_core::ModelHook::AfterRoomEntered)
         .with(sts2_core::ModelHook::TryModifyCardRewardOptionsLate),
     // LAVA_ROCK
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyRewards),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::TryModifyRewards),
     // LEAD_PAPERWEIGHT
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // LEAFY_POULTICE
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // LEES_WAFFLE
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // LETTER_OPENER
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCardPlayed)
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterSideTurnStart)
         .with(sts2_core::ModelHook::BeforeCombatStart),
     // LIZARD_TAIL
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ShouldDieLate),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ShouldDieLate),
     // LOOMING_FRUIT
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // LORDS_PARASOL
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRoomEntered),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterRoomEntered),
     // LOST_COFFER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // LOST_WISP
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardPlayed),
     // LUCKY_FYSH
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardChangedPiles),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardChangedPiles),
     // LUNAR_PASTRY
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterSideTurnEnd),
     // MANGO
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // MASSIVE_SCROLL
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // MAW_BANK
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRoomEntered),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterRoomEntered),
     // MEAL_TICKET
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRoomEntered),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterRoomEntered),
     // MEAT_CLEAVER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyRestSiteOptions),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::TryModifyRestSiteOptions),
     // MEAT_ON_THE_BONE
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCombatVictoryEarly)
         .with(sts2_core::ModelHook::AfterCurrentHpChanged)
         .with(sts2_core::ModelHook::BeforeCombatStart),
     // MEMBERSHIP_CARD
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyMerchantPrice),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ModifyMerchantPrice),
     // MERCURY_HOURGLASS
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // METRONOME
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterOrbChanneled)
         .with(sts2_core::ModelHook::AfterRoomEntered),
     // MINIATURE_CANNON
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyDamageAdditive),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ModifyDamageAdditive),
     // MINIATURE_TENT
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ShouldDisableRemainingRestSiteOptions),
     // MINI_REGENT
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterStarsSpent)
         .with(sts2_core::ModelHook::BeforeSideTurnStart),
     // MOLTEN_EGG
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::ModifyMerchantCardCreationResults)
         .with(sts2_core::ModelHook::TryModifyCardBeingAddedToDeck)
         .with(sts2_core::ModelHook::TryModifyCardRewardOptionsLate),
     // MR_STRUGGLES
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // MUMMIFIED_HAND
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardPlayed),
     // MUSIC_BOX
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCardPlayed)
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::BeforeCardPlayed)
         .with(sts2_core::ModelHook::BeforeSideTurnStart),
     // MYSTIC_LIGHTER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyDamageAdditive),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ModifyDamageAdditive),
     // NEOWS_BONES
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // NEOWS_TALISMAN
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // NEOWS_TORMENT
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // NEW_LEAF
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // NINJA_SCROLL
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeHandDraw),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::BeforeHandDraw),
     // NUNCHAKU
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardPlayed),
     // NUTRITIOUS_OYSTER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // NUTRITIOUS_SOUP
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // ODDLY_SMOOTH_STONE
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRoomEntered),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterRoomEntered),
     // OLD_COIN
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // ORANGE_DOUGH
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterSideTurnStart),
     // ORICHALCUM
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::BeforeSideTurnEnd)
         .with(sts2_core::ModelHook::BeforeSideTurnEndVeryEarly)
         .with(sts2_core::ModelHook::BeforeSideTurnStart),
     // ORNAMENTAL_FAN
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCardPlayed)
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::BeforeSideTurnStart),
     // ORRERY
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // PAELS_BLOOD
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyHandDraw),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ModifyHandDraw),
     // PAELS_CLAW
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // PAELS_EYE
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterSideTurnStart)
         .with(sts2_core::ModelHook::BeforeCardPlayed)
         .with(sts2_core::ModelHook::BeforeSideTurnEndEarly),
     // PAELS_FLESH
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterSideTurnStart)
         .with(sts2_core::ModelHook::BeforeCombatStart)
         .with(sts2_core::ModelHook::BeforeSideTurnStart)
         .with(sts2_core::ModelHook::ModifyMaxEnergy),
     // PAELS_GROWTH
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyRestSiteOptions),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::TryModifyRestSiteOptions),
     // PAELS_HORN
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // PAELS_LEGION
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCardPlayed)
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterModifyingBlockAmount)
@@ -1965,58 +1965,58 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
         .with(sts2_core::ModelHook::BeforeCombatStart)
         .with(sts2_core::ModelHook::ModifyBlockMultiplicative),
     // PAELS_TEARS
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterSideTurnStart)
         .with(sts2_core::ModelHook::BeforeSideTurnEnd),
     // PAELS_TOOTH
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCombatEnd),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCombatEnd),
     // PAELS_WING
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // PANDORAS_BOX
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // PANTOGRAPH
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterRoomEntered)
         .with(sts2_core::ModelHook::BeforeCombatStart),
     // PAPER_KRANE
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // PAPER_PHROG
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // PARRYING_SHIELD
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterSideTurnEnd),
     // PEAR
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // PENDULUM
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // PEN_NIB
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCardPlayed)
         .with(sts2_core::ModelHook::BeforeCardPlayed)
         .with(sts2_core::ModelHook::ModifyDamageMultiplicative),
     // PERMAFROST
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCardPlayed)
         .with(sts2_core::ModelHook::AfterRoomEntered),
     // PETRIFIED_TOAD
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeCombatStartLate),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::BeforeCombatStartLate),
     // PHIAL_HOLSTER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // PHILOSOPHERS_STONE
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCreatureAddedToCombat)
         .with(sts2_core::ModelHook::AfterRoomEntered)
         .with(sts2_core::ModelHook::ModifyMaxEnergy),
     // PHYLACTERY_UNBOUND
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterSideTurnStart)
         .with(sts2_core::ModelHook::BeforeCombatStart),
     // PLANISPHERE
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRoomEntered),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterRoomEntered),
     // POCKETWATCH
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCardPlayed)
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterModifyingHandDraw)
@@ -2024,236 +2024,236 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
         .with(sts2_core::ModelHook::BeforeSideTurnStart)
         .with(sts2_core::ModelHook::ModifyHandDraw),
     // POLLINOUS_CORE
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterModifyingHandDraw)
         .with(sts2_core::ModelHook::BeforeSideTurnStart)
         .with(sts2_core::ModelHook::ModifyHandDraw),
     // POMANDER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // POTION_BELT
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // POWER_CELL
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeSideTurnStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::BeforeSideTurnStart),
     // PRAYER_WHEEL
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyRewards),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::TryModifyRewards),
     // PRECARIOUS_SHEARS
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // PRECISE_SCISSORS
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // PRESERVED_FOG
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // PRISMATIC_GEM
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyMaxEnergy),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ModifyMaxEnergy),
     // PUMPKIN_CANDLE
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::ModifyMaxEnergy)
         .with(sts2_core::ModelHook::TryModifyRestSiteOptions),
     // PUNCH_DAGGER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // RADIANT_PEARL
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeHandDraw),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::BeforeHandDraw),
     // RAINBOW_RING
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCardPlayed)
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::BeforeSideTurnStart),
     // RAZOR_TOOTH
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardPlayed),
     // RED_MASK
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeSideTurnStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::BeforeSideTurnStart),
     // RED_SKULL
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterCurrentHpChanged)
         .with(sts2_core::ModelHook::AfterRoomEntered),
     // REGALITE
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardGeneratedForCombat),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardGeneratedForCombat),
     // REGAL_PILLOW
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterRestSiteHeal)
         .with(sts2_core::ModelHook::AfterRoomEntered)
         .with(sts2_core::ModelHook::ModifyRestSiteHealAmount),
     // REPTILE_TRINKET
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPotionUsed),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterPotionUsed),
     // RINGING_TRIANGLE
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ShouldFlush),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ShouldFlush),
     // RING_OF_THE_DRAKE
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyHandDraw),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ModifyHandDraw),
     // RING_OF_THE_SNAKE
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyHandDraw),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ModifyHandDraw),
     // RIPPLE_BASIN
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCardPlayed)
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::BeforeSideTurnEnd)
         .with(sts2_core::ModelHook::BeforeSideTurnStart),
     // ROYAL_POISON
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // ROYAL_STAMP
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // RUINED_HELMET
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterModifyingPowerAmountReceived)
         .with(sts2_core::ModelHook::TryModifyPowerAmountReceived),
     // RUNIC_CAPACITOR
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterSideTurnStart),
     // RUNIC_PYRAMID
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ShouldFlush),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ShouldFlush),
     // SAI
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterSideTurnStart),
     // SAND_CASTLE
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // SCREAMING_FLAGON
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeSideTurnEnd),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::BeforeSideTurnEnd),
     // SCROLL_BOXES
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // SEAL_OF_GOLD
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterSideTurnStart),
     // SEA_GLASS
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // SELF_FORMING_CLAY
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDamageReceived),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterDamageReceived),
     // SERE_TALON
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // SHOVEL
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyRestSiteOptions),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::TryModifyRestSiteOptions),
     // SHURIKEN
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCardPlayed)
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::BeforeSideTurnStart),
     // SIGNET_RING
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // SILKEN_TRESS
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterModifyingCardRewardOptions)
         .with(sts2_core::ModelHook::TryModifyCardRewardOptionsLate),
     // SILVER_CRUCIBLE
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterModifyingCardRewardOptions)
         .with(sts2_core::ModelHook::AfterRoomEntered)
         .with(sts2_core::ModelHook::ShouldGenerateTreasure)
         .with(sts2_core::ModelHook::TryModifyCardRewardOptionsLate),
     // SLING_OF_COURAGE
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRoomEntered),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterRoomEntered),
     // SMALL_CAPSULE
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // SNECKO_EYE
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::BeforeCombatStart)
         .with(sts2_core::ModelHook::ModifyHandDraw),
     // SNECKO_SKULL
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterModifyingPowerAmountGiven)
         .with(sts2_core::ModelHook::ModifyPowerAmountGivenAdditive),
     // SOZU
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::ModifyMaxEnergy)
         .with(sts2_core::ModelHook::ShouldProcurePotion),
     // SPARKLING_ROUGE
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterBlockCleared),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterBlockCleared),
     // SPIKED_GAUNTLETS
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::ModifyMaxEnergy)
         .with(sts2_core::ModelHook::TryModifyEnergyCostInCombat),
     // STONE_CALENDAR
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterRoomEntered)
         .with(sts2_core::ModelHook::AfterSideTurnStart)
         .with(sts2_core::ModelHook::BeforeSideTurnEnd),
     // STONE_CRACKER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRoomEntered),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterRoomEntered),
     // STONE_HUMIDIFIER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRestSiteHeal),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterRestSiteHeal),
     // STORYBOOK
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // STRAWBERRY
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // STRIKE_DUMMY
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyDamageAdditive),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ModifyDamageAdditive),
     // STURDY_CLAMP
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ShouldClearBlock),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ShouldClearBlock),
     // SWORD_OF_JADE
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRoomEntered),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterRoomEntered),
     // SWORD_OF_STONE
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCombatVictory),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCombatVictory),
     // SYMBIOTIC_VIRUS
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterSideTurnStart),
     // TANXS_WHISTLE
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // TEA_OF_DISCOURTESY
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeCombatStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::BeforeCombatStart),
     // THE_ABACUS
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterShuffle),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterShuffle),
     // THE_BOOT
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterModifyingHpLostAfterOsty)
         .with(sts2_core::ModelHook::ModifyHpLostAfterOstyLate),
     // THE_COURIER
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::ModifyMerchantPrice)
         .with(sts2_core::ModelHook::ShouldRefillMerchantEntry),
     // THROWING_AXE
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterModifyingCardPlayCount)
         .with(sts2_core::ModelHook::AfterRoomEntered)
         .with(sts2_core::ModelHook::ModifyCardPlayCount),
     // TINGSHA
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardDiscarded),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardDiscarded),
     // TINY_MAILBOX
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyRestSiteHealRewards),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::TryModifyRestSiteHealRewards),
     // TOASTY_MITTENS
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeHandDraw),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::BeforeHandDraw),
     // TOOLBOX
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeHandDraw),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::BeforeHandDraw),
     // TOUCH_OF_OROBAS
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // TOUGH_BANDAGES
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardDiscarded),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardDiscarded),
     // TOXIC_EGG
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::ModifyMerchantCardCreationResults)
         .with(sts2_core::ModelHook::TryModifyCardBeingAddedToDeck)
         .with(sts2_core::ModelHook::TryModifyCardRewardOptionsLate),
     // TOY_BOX
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCombatEnd),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCombatEnd),
     // TRI_BOOMERANG
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // TUNGSTEN_ROD
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterModifyingHpLostAfterOsty)
         .with(sts2_core::ModelHook::ModifyHpLostAfterOsty),
     // TUNING_FORK
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardPlayed),
     // TWISTED_FUNNEL
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeSideTurnStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::BeforeSideTurnStart),
     // UNCEASING_TOP
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterHandEmptied),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterHandEmptied),
     // UNDYING_SIGIL
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyDamageMultiplicative),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ModifyDamageMultiplicative),
     // UNSETTLING_LAMP
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCardPlayed)
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::BeforeCombatStart)
         .with(sts2_core::ModelHook::BeforePowerAmountChanged)
         .with(sts2_core::ModelHook::ModifyPowerAmountGivenMultiplicative),
     // VAJRA
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRoomEntered),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterRoomEntered),
     // VAMBRACE
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCardPlayed)
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterModifyingBlockAmount)
         .with(sts2_core::ModelHook::BeforeCombatStart)
         .with(sts2_core::ModelHook::ModifyBlockMultiplicative),
     // VELVET_CHOKER
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCardPlayed)
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterRoomEntered)
@@ -2261,44 +2261,44 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
         .with(sts2_core::ModelHook::ModifyMaxEnergy)
         .with(sts2_core::ModelHook::ShouldPlay),
     // VENERABLE_TEA_SET
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterEnergyReset)
         .with(sts2_core::ModelHook::AfterRoomEntered),
     // VERY_HOT_COCOA
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterSideTurnStart),
     // VEXING_PUZZLEBOX
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStart),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // VITRUVIAN_MINION
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::ModifyBlockMultiplicative)
         .with(sts2_core::ModelHook::ModifyDamageMultiplicative),
     // WAR_HAMMER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCombatVictory),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCombatVictory),
     // WAR_PAINT
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // WHETSTONE
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // WHISPERING_EARRING
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyMaxEnergy),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ModifyMaxEnergy),
     // WHITE_BEAST_STATUE
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ShouldForcePotionReward),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ShouldForcePotionReward),
     // WHITE_STAR
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyRewards),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::TryModifyRewards),
     // WINGED_BOOTS
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterRoomEntered)
         .with(sts2_core::ModelHook::ShouldAllowFreeTravel),
     // WING_CHARM
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyCardRewardOptionsLate),
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::TryModifyCardRewardOptionsLate),
     // WONGOS_MYSTERY_TICKET
-    sts2_core::Overrides::from_bits(0)
+    sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterModifyingRewards)
         .with(sts2_core::ModelHook::TryModifyRewards),
     // WONGO_CUSTOMER_APPRECIATION_BADGE
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
     // YUMMY_COOKIE
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::NONE,
 ];
 /// One entry per value, in the order the enum declares its variants.
 static POOLS: [&[RelicPool]; 297] = [

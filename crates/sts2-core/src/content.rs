@@ -450,6 +450,50 @@ impl num_traits::ToPrimitive for Fixed {
 }
 
 #[cfg(test)]
+mod overrides_tests {
+    use super::{ModelHook, Overrides};
+
+    /// A hook's place in `ALL` is its discriminant, and the value hooks are
+    /// the ones from `FIRST_VALUE` on.
+    #[test]
+    fn value_hooks_follow_the_event_hooks() {
+        for (at, &hook) in ModelHook::ALL.iter().enumerate() {
+            assert_eq!(hook as usize, at, "{hook:?} out of place");
+            let value = ["Modify", "TryModify", "Should"]
+                .iter()
+                .any(|prefix| hook.name().starts_with(prefix));
+            assert_eq!(
+                value,
+                hook as u8 >= ModelHook::FIRST_VALUE,
+                "{hook:?} on the wrong side"
+            );
+        }
+    }
+
+    #[test]
+    fn a_set_names_its_hooks_by_place() {
+        let set = Overrides::of(ModelHook::AfterCardPlayed).with(ModelHook::ModifyXValue);
+        let places: Vec<usize> = set.places().collect();
+        assert_eq!(
+            places,
+            [
+                ModelHook::AfterCardPlayed as usize,
+                ModelHook::ModifyXValue as usize
+            ]
+        );
+        assert!(set.contains(ModelHook::ModifyXValue));
+        assert!(
+            !set.without(ModelHook::ModifyXValue)
+                .contains(ModelHook::ModifyXValue)
+        );
+        assert!(
+            !Overrides::of(ModelHook::AfterCardPlayed)
+                .intersects(Overrides::of(ModelHook::ModifyXValue))
+        );
+    }
+}
+
+#[cfg(test)]
 mod card_number_tests {
     use super::Fixed;
 
@@ -613,6 +657,57 @@ pub enum ModelHook {
     AfterDeath,
     AfterPowerAmountChanged,
     AfterCardEnteredCombat,
+    AfterShuffle,
+    AfterModifyingHandDraw,
+    BeforePotionUsed,
+    AfterPotionUsed,
+    AfterCardPlayedLate,
+    AfterSideTurnStartLate,
+    AfterPreventingDraw,
+    AfterCardDrawnEarly,
+    BeforeCardAutoPlayed,
+    BeforeCardPlayed,
+    BeforeDeath,
+    AfterBlockBroken,
+    AfterCombatVictory,
+    AfterPlayerTurnStart,
+    AfterPlayerTurnStartLate,
+    AfterOrbChanneled,
+    AfterOrbEvoked,
+    AfterModifyingOrbPassiveTriggerCount,
+    AfterEnergyResetLate,
+    AfterOstyRevived,
+    AfterCreatureAddedToCombat,
+    AfterSummon,
+    BeforeDamageReceived,
+    AfterCurrentHpChanged,
+    AfterRestSiteHeal,
+    AfterModifyingRewards,
+    AfterModifyingGoldGained,
+    AfterGoldGained,
+    BeforeAttack,
+    AfterAttack,
+    BeforeHandDraw,
+    AfterCardExhausted,
+    AfterCardDiscarded,
+    AfterModifyingCardPlayCount,
+    AfterModifyingHpLostAfterOsty,
+    AfterModifyingCardPlayResultPileOrPosition,
+    BeforeSideTurnEndVeryEarly,
+    BeforeSideTurnEnd,
+    AfterDiedToDoom,
+    BeforePowerAmountChanged,
+    AfterModifyingPowerAmountGiven,
+    AfterModifyingPowerAmountReceived,
+    AfterCardChangedPiles,
+    AfterCardGeneratedForCombat,
+    AfterCombatVictoryEarly,
+    BeforeCombatStartLate,
+    AfterFlush,
+    AfterModifyingBlockAmount,
+    AfterModifyingCardRewardOptions,
+    AfterModifyingEnergyGain,
+    AfterStarsGained,
     ModifyDamageAdditive,
     ModifyDamageMultiplicative,
     ModifyDamageCap,
@@ -625,107 +720,57 @@ pub enum ModelHook {
     ModifyHandDraw,
     ModifyHandDrawLate,
     ModifyShuffleOrder,
-    AfterShuffle,
-    AfterModifyingHandDraw,
     ShouldProcurePotion,
     ModifyNextEvent,
-    BeforePotionUsed,
-    AfterPotionUsed,
     TryModifyCardBeingAddedToDeck,
     TryModifyCardBeingAddedToDeckLate,
     ModifyMerchantCardCreationResults,
-    AfterCardPlayedLate,
-    AfterSideTurnStartLate,
     ShouldDraw,
-    AfterPreventingDraw,
-    AfterCardDrawnEarly,
     ShouldPlay,
-    BeforeCardAutoPlayed,
     ModifyMaxEnergy,
     TryModifyEnergyCostInCombat,
     TryModifyEnergyCostInCombatLate,
-    BeforeCardPlayed,
     ShouldCreatureBeRemovedFromCombatAfterDeath,
     ShouldPowerBeRemovedOnDeath,
     ShouldClearBlock,
     ShouldStopCombatFromEnding,
     ShouldAllowHitting,
-    BeforeDeath,
-    AfterBlockBroken,
-    AfterCombatVictory,
-    AfterPlayerTurnStart,
-    AfterPlayerTurnStartLate,
-    AfterOrbChanneled,
-    AfterOrbEvoked,
     ModifyOrbValue,
-    AfterModifyingOrbPassiveTriggerCount,
     ModifyOrbPassiveTriggerCounts,
-    AfterEnergyResetLate,
     ModifyUnblockedDamageTarget,
-    AfterOstyRevived,
-    AfterCreatureAddedToCombat,
     ModifySummonAmount,
-    AfterSummon,
-    BeforeDamageReceived,
-    AfterCurrentHpChanged,
-    AfterRestSiteHeal,
     ModifyRestSiteHealAmount,
     TryModifyRestSiteHealRewards,
     ShouldAllowFreeTravel,
     TryModifyRewards,
     TryModifyRewardsLate,
-    AfterModifyingRewards,
     ModifyUnknownMapPointRoomTypes,
     ModifyOddsIncreaseForUnrolledRoomType,
     ModifyCardRewardUpgradeOdds,
     TryModifyCardRewardOptions,
     TryModifyCardRewardOptionsLate,
     ModifyGoldGained,
-    AfterModifyingGoldGained,
-    AfterGoldGained,
     ShouldFlush,
-    BeforeAttack,
-    AfterAttack,
-    BeforeHandDraw,
-    AfterCardExhausted,
-    AfterCardDiscarded,
     ModifyCardPlayCount,
-    AfterModifyingCardPlayCount,
-    AfterModifyingHpLostAfterOsty,
     ModifyCardPlayResultPileTypeAndPosition,
-    AfterModifyingCardPlayResultPileOrPosition,
-    BeforeSideTurnEndVeryEarly,
-    BeforeSideTurnEnd,
-    AfterDiedToDoom,
-    BeforePowerAmountChanged,
     ModifyPowerAmountGivenAdditive,
     ModifyPowerAmountGivenMultiplicative,
     TryModifyPowerAmountReceived,
-    AfterModifyingPowerAmountGiven,
-    AfterModifyingPowerAmountReceived,
     ModifyXValue,
-    AfterCardChangedPiles,
-    AfterCardGeneratedForCombat,
     ShouldDieLate,
-    AfterCombatVictoryEarly,
     ShouldPlayerResetEnergy,
-    BeforeCombatStartLate,
     TryModifyRestSiteOptions,
     ShouldForcePotionReward,
-    AfterFlush,
-    AfterModifyingBlockAmount,
     ModifyMerchantPrice,
     ShouldRefillMerchantEntry,
-    AfterModifyingCardRewardOptions,
     ShouldGenerateTreasure,
     ModifyEnergyGain,
-    AfterModifyingEnergyGain,
     TryModifyStarCost,
-    AfterStarsGained,
+    ShouldDisableRemainingRestSiteOptions,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 128] = [
+    pub const ALL: [ModelHook; 129] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -745,6 +790,57 @@ impl ModelHook {
         ModelHook::AfterDeath,
         ModelHook::AfterPowerAmountChanged,
         ModelHook::AfterCardEnteredCombat,
+        ModelHook::AfterShuffle,
+        ModelHook::AfterModifyingHandDraw,
+        ModelHook::BeforePotionUsed,
+        ModelHook::AfterPotionUsed,
+        ModelHook::AfterCardPlayedLate,
+        ModelHook::AfterSideTurnStartLate,
+        ModelHook::AfterPreventingDraw,
+        ModelHook::AfterCardDrawnEarly,
+        ModelHook::BeforeCardAutoPlayed,
+        ModelHook::BeforeCardPlayed,
+        ModelHook::BeforeDeath,
+        ModelHook::AfterBlockBroken,
+        ModelHook::AfterCombatVictory,
+        ModelHook::AfterPlayerTurnStart,
+        ModelHook::AfterPlayerTurnStartLate,
+        ModelHook::AfterOrbChanneled,
+        ModelHook::AfterOrbEvoked,
+        ModelHook::AfterModifyingOrbPassiveTriggerCount,
+        ModelHook::AfterEnergyResetLate,
+        ModelHook::AfterOstyRevived,
+        ModelHook::AfterCreatureAddedToCombat,
+        ModelHook::AfterSummon,
+        ModelHook::BeforeDamageReceived,
+        ModelHook::AfterCurrentHpChanged,
+        ModelHook::AfterRestSiteHeal,
+        ModelHook::AfterModifyingRewards,
+        ModelHook::AfterModifyingGoldGained,
+        ModelHook::AfterGoldGained,
+        ModelHook::BeforeAttack,
+        ModelHook::AfterAttack,
+        ModelHook::BeforeHandDraw,
+        ModelHook::AfterCardExhausted,
+        ModelHook::AfterCardDiscarded,
+        ModelHook::AfterModifyingCardPlayCount,
+        ModelHook::AfterModifyingHpLostAfterOsty,
+        ModelHook::AfterModifyingCardPlayResultPileOrPosition,
+        ModelHook::BeforeSideTurnEndVeryEarly,
+        ModelHook::BeforeSideTurnEnd,
+        ModelHook::AfterDiedToDoom,
+        ModelHook::BeforePowerAmountChanged,
+        ModelHook::AfterModifyingPowerAmountGiven,
+        ModelHook::AfterModifyingPowerAmountReceived,
+        ModelHook::AfterCardChangedPiles,
+        ModelHook::AfterCardGeneratedForCombat,
+        ModelHook::AfterCombatVictoryEarly,
+        ModelHook::BeforeCombatStartLate,
+        ModelHook::AfterFlush,
+        ModelHook::AfterModifyingBlockAmount,
+        ModelHook::AfterModifyingCardRewardOptions,
+        ModelHook::AfterModifyingEnergyGain,
+        ModelHook::AfterStarsGained,
         ModelHook::ModifyDamageAdditive,
         ModelHook::ModifyDamageMultiplicative,
         ModelHook::ModifyDamageCap,
@@ -757,103 +853,53 @@ impl ModelHook {
         ModelHook::ModifyHandDraw,
         ModelHook::ModifyHandDrawLate,
         ModelHook::ModifyShuffleOrder,
-        ModelHook::AfterShuffle,
-        ModelHook::AfterModifyingHandDraw,
         ModelHook::ShouldProcurePotion,
         ModelHook::ModifyNextEvent,
-        ModelHook::BeforePotionUsed,
-        ModelHook::AfterPotionUsed,
         ModelHook::TryModifyCardBeingAddedToDeck,
         ModelHook::TryModifyCardBeingAddedToDeckLate,
         ModelHook::ModifyMerchantCardCreationResults,
-        ModelHook::AfterCardPlayedLate,
-        ModelHook::AfterSideTurnStartLate,
         ModelHook::ShouldDraw,
-        ModelHook::AfterPreventingDraw,
-        ModelHook::AfterCardDrawnEarly,
         ModelHook::ShouldPlay,
-        ModelHook::BeforeCardAutoPlayed,
         ModelHook::ModifyMaxEnergy,
         ModelHook::TryModifyEnergyCostInCombat,
         ModelHook::TryModifyEnergyCostInCombatLate,
-        ModelHook::BeforeCardPlayed,
         ModelHook::ShouldCreatureBeRemovedFromCombatAfterDeath,
         ModelHook::ShouldPowerBeRemovedOnDeath,
         ModelHook::ShouldClearBlock,
         ModelHook::ShouldStopCombatFromEnding,
         ModelHook::ShouldAllowHitting,
-        ModelHook::BeforeDeath,
-        ModelHook::AfterBlockBroken,
-        ModelHook::AfterCombatVictory,
-        ModelHook::AfterPlayerTurnStart,
-        ModelHook::AfterPlayerTurnStartLate,
-        ModelHook::AfterOrbChanneled,
-        ModelHook::AfterOrbEvoked,
         ModelHook::ModifyOrbValue,
-        ModelHook::AfterModifyingOrbPassiveTriggerCount,
         ModelHook::ModifyOrbPassiveTriggerCounts,
-        ModelHook::AfterEnergyResetLate,
         ModelHook::ModifyUnblockedDamageTarget,
-        ModelHook::AfterOstyRevived,
-        ModelHook::AfterCreatureAddedToCombat,
         ModelHook::ModifySummonAmount,
-        ModelHook::AfterSummon,
-        ModelHook::BeforeDamageReceived,
-        ModelHook::AfterCurrentHpChanged,
-        ModelHook::AfterRestSiteHeal,
         ModelHook::ModifyRestSiteHealAmount,
         ModelHook::TryModifyRestSiteHealRewards,
         ModelHook::ShouldAllowFreeTravel,
         ModelHook::TryModifyRewards,
         ModelHook::TryModifyRewardsLate,
-        ModelHook::AfterModifyingRewards,
         ModelHook::ModifyUnknownMapPointRoomTypes,
         ModelHook::ModifyOddsIncreaseForUnrolledRoomType,
         ModelHook::ModifyCardRewardUpgradeOdds,
         ModelHook::TryModifyCardRewardOptions,
         ModelHook::TryModifyCardRewardOptionsLate,
         ModelHook::ModifyGoldGained,
-        ModelHook::AfterModifyingGoldGained,
-        ModelHook::AfterGoldGained,
         ModelHook::ShouldFlush,
-        ModelHook::BeforeAttack,
-        ModelHook::AfterAttack,
-        ModelHook::BeforeHandDraw,
-        ModelHook::AfterCardExhausted,
-        ModelHook::AfterCardDiscarded,
         ModelHook::ModifyCardPlayCount,
-        ModelHook::AfterModifyingCardPlayCount,
-        ModelHook::AfterModifyingHpLostAfterOsty,
         ModelHook::ModifyCardPlayResultPileTypeAndPosition,
-        ModelHook::AfterModifyingCardPlayResultPileOrPosition,
-        ModelHook::BeforeSideTurnEndVeryEarly,
-        ModelHook::BeforeSideTurnEnd,
-        ModelHook::AfterDiedToDoom,
-        ModelHook::BeforePowerAmountChanged,
         ModelHook::ModifyPowerAmountGivenAdditive,
         ModelHook::ModifyPowerAmountGivenMultiplicative,
         ModelHook::TryModifyPowerAmountReceived,
-        ModelHook::AfterModifyingPowerAmountGiven,
-        ModelHook::AfterModifyingPowerAmountReceived,
         ModelHook::ModifyXValue,
-        ModelHook::AfterCardChangedPiles,
-        ModelHook::AfterCardGeneratedForCombat,
         ModelHook::ShouldDieLate,
-        ModelHook::AfterCombatVictoryEarly,
         ModelHook::ShouldPlayerResetEnergy,
-        ModelHook::BeforeCombatStartLate,
         ModelHook::TryModifyRestSiteOptions,
         ModelHook::ShouldForcePotionReward,
-        ModelHook::AfterFlush,
-        ModelHook::AfterModifyingBlockAmount,
         ModelHook::ModifyMerchantPrice,
         ModelHook::ShouldRefillMerchantEntry,
-        ModelHook::AfterModifyingCardRewardOptions,
         ModelHook::ShouldGenerateTreasure,
         ModelHook::ModifyEnergyGain,
-        ModelHook::AfterModifyingEnergyGain,
         ModelHook::TryModifyStarCost,
-        ModelHook::AfterStarsGained,
+        ModelHook::ShouldDisableRemainingRestSiteOptions,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -998,45 +1044,103 @@ impl ModelHook {
             ModelHook::ModifyEnergyGain => "ModifyEnergyGain",
             ModelHook::AfterModifyingEnergyGain => "AfterModifyingEnergyGain",
             ModelHook::TryModifyStarCost => "TryModifyStarCost",
+            ModelHook::ShouldDisableRemainingRestSiteOptions => {
+                "ShouldDisableRemainingRestSiteOptions"
+            }
             ModelHook::AfterStarsGained => "AfterStarsGained",
         }
     }
 }
 
 /// The [`ModelHook`]s one model's class overrides, one bit each.
+///
+/// Two words: the event hooks in one, and the value hooks in the other.
+/// Value hooks are the `Modify`, `TryModify` and `Should` ones. A set built
+/// from one known hook leaves the other word empty, so testing it reads one
+/// word.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct Overrides(u128);
+pub struct Overrides {
+    events: u128,
+    values: u128,
+}
+
+impl ModelHook {
+    /// The first value hook. Every hook declared before it is an event hook.
+    const FIRST_VALUE: u8 = ModelHook::ModifyDamageAdditive as u8;
+}
 
 impl Overrides {
-    /// The set whose bits are `bits`, one per [`ModelHook`] by its position.
-    pub const fn from_bits(bits: u128) -> Self {
-        Overrides(bits)
-    }
-
-    pub const fn bits(self) -> u128 {
-        self.0
-    }
+    /// The set holding no hook.
+    pub const NONE: Self = Overrides {
+        events: 0,
+        values: 0,
+    };
 
     pub const fn with(self, hook: ModelHook) -> Self {
-        Overrides(self.0 | 1 << hook as u8)
+        self.union(Self::of(hook))
+    }
+
+    /// The set without `hook`.
+    pub const fn without(self, hook: ModelHook) -> Self {
+        let one = Self::of(hook);
+        Overrides {
+            events: self.events & !one.events,
+            values: self.values & !one.values,
+        }
     }
 
     /// The set holding `hook` alone.
     pub const fn of(hook: ModelHook) -> Self {
-        Overrides(1 << hook as u8)
+        let at = hook as u8;
+        match at < ModelHook::FIRST_VALUE {
+            true => Overrides {
+                events: 1 << at,
+                values: 0,
+            },
+            false => Overrides {
+                events: 0,
+                values: 1 << (at - ModelHook::FIRST_VALUE),
+            },
+        }
     }
 
     pub const fn contains(self, hook: ModelHook) -> bool {
-        self.0 & 1 << hook as u8 != 0
+        let at = hook as u8;
+        match at < ModelHook::FIRST_VALUE {
+            true => self.events >> at & 1 != 0,
+            false => self.values >> (at - ModelHook::FIRST_VALUE) & 1 != 0,
+        }
     }
 
     /// Whether the two sets share a hook.
     pub const fn intersects(self, other: Self) -> bool {
-        self.0 & other.0 != 0
+        self.events & other.events != 0 || self.values & other.values != 0
     }
 
     pub const fn union(self, other: Self) -> Self {
-        Overrides(self.0 | other.0)
+        Overrides {
+            events: self.events | other.events,
+            values: self.values | other.values,
+        }
+    }
+
+    /// Each hook in the set, by its place in [`ModelHook::ALL`].
+    pub fn places(self) -> impl Iterator<Item = usize> {
+        let first = u32::from(ModelHook::FIRST_VALUE);
+        let (mut events, mut values) = (self.events, self.values);
+        std::iter::from_fn(move || {
+            if events != 0 {
+                let at = events.trailing_zeros();
+                events &= events - 1;
+                Some(at as usize)
+            } else if values != 0 {
+                let at = values.trailing_zeros();
+                values &= values - 1;
+                Some((first + at) as usize)
+            } else {
+                None
+            }
+        })
     }
 }
 
@@ -3207,6 +3311,9 @@ pub enum DecisionHook<V: ContentVersion> {
     /// `ShouldRefillMerchantEntry`, once a shelf's purchase went through. One
     /// listener answering yes restocks the shelf rather than emptying it.
     ShouldRefillMerchantEntry,
+    /// `ShouldDisableRemainingRestSiteOptions`, once a rest site's option
+    /// went through. One listener answering no keeps the other options up.
+    ShouldDisableRemainingRestSiteOptions,
     /// `ShouldGenerateTreasure`, as a treasure room begins its relic picking.
     /// One listener answering no leaves the chest empty.
     ShouldGenerateTreasure,
@@ -3291,6 +3398,9 @@ impl<V: ContentVersion> DecisionHook<V> {
             DecisionHook::ShouldPlayerResetEnergy { .. } => ModelHook::ShouldPlayerResetEnergy,
             DecisionHook::ShouldForcePotionReward { .. } => ModelHook::ShouldForcePotionReward,
             DecisionHook::ShouldRefillMerchantEntry => ModelHook::ShouldRefillMerchantEntry,
+            DecisionHook::ShouldDisableRemainingRestSiteOptions => {
+                ModelHook::ShouldDisableRemainingRestSiteOptions
+            }
             DecisionHook::ShouldGenerateTreasure => ModelHook::ShouldGenerateTreasure,
             DecisionHook::ShouldCountForCombatEnd
             | DecisionHook::ShouldRemoveSelfAfterOwnerDeath

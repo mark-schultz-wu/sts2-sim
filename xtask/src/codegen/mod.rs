@@ -461,7 +461,7 @@ fn emit_overrides<'a>(
     )
     .unwrap();
     for id in ids {
-        let mut entry = String::from("sts2_core::Overrides::from_bits(0)");
+        let mut entry = String::from("sts2_core::Overrides::NONE");
         for hook in overrides.get(id).into_iter().flatten() {
             write!(entry, ".with(sts2_core::ModelHook::{hook:?})").unwrap();
         }

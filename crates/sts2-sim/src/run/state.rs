@@ -259,10 +259,8 @@ impl<V: Rules> Belt<V> {
 
         let overrides = held.relic.overrides();
         let slot = 1 << self.held.len();
-        let mut left = overrides.bits();
-        while left != 0 {
-            self.slots[left.trailing_zeros() as usize] |= slot;
-            left &= left - 1;
+        for at in overrides.places() {
+            self.slots[at] |= slot;
         }
         self.heard = self.heard.union(overrides);
         self.held.push(held);
@@ -304,16 +302,16 @@ impl<V: Rules> Belt<V> {
         self.heard.intersects(hooks)
     }
 
+    /// The slots of the relics that override `hook`, one bit a slot, the
+    /// first slot lowest.
+    pub(crate) fn hearing_hook(&self, hook: sts2_core::ModelHook) -> u64 {
+        self.slots[hook as usize]
+    }
+
     /// The slots of the relics that override a hook in `hooks`, one bit a
     /// slot, the first slot lowest.
     pub(crate) fn hearing(&self, hooks: sts2_core::Overrides) -> u64 {
-        let mut left = hooks.bits();
-        let mut slots = 0;
-        while left != 0 {
-            slots |= self.slots[left.trailing_zeros() as usize];
-            left &= left - 1;
-        }
-        slots
+        hooks.places().fold(0, |slots, at| slots | self.slots[at])
     }
 }
 
@@ -530,6 +528,10 @@ pub(super) enum Phase<V: Rules> {
     /// an observation reports, rather than a flag beside them.
     RestSite {
         options: Vec<V::RestSiteOption>,
+        /// The option being carried out, until it goes through.
+        chosen: Option<V::RestSiteOption>,
+        /// Whether an option went through, which puts the proceed button up.
+        rested: bool,
         /// Waiting for the card the smith upgrades.
         upgrading: bool,
         /// The rewards the heal offered, while they are on screen, or what an
@@ -2556,10 +2558,7 @@ impl<V: Rules> State<V> {
         let Some(model_hook) = hook.model_hook() else {
             return asked;
         };
-        let mut left = self
-            .player
-            .relics
-            .hearing(sts2_core::Overrides::of(model_hook));
+        let mut left = self.player.relics.hearing_hook(model_hook);
         while left != 0 {
             let slot = left.trailing_zeros() as usize;
             left &= left - 1;
@@ -3402,6 +3401,8 @@ impl<V: Rules> State<V> {
             at,
             Phase::RestSite {
                 options,
+                chosen: None,
+                rested: false,
                 upgrading: false,
                 asking: None,
             },
@@ -3811,15 +3812,15 @@ impl<V: Rules> State<V> {
             let option = *options
                 .get(usize::from(index))
                 .unwrap_or_else(|| unimplemented!("an option the rest site does not offer"));
+            if let Phase::RestSite { chosen, .. } = &mut self.phase {
+                *chosen = Some(option);
+            }
             // The option's `OnSelect` awaits the heal's rewards, so the
             // options stay up until the screen is done.
             if option == <V::RestSiteOption as sts2_core::RestKinds<V>>::HEAL {
                 return Ok(match self.rest_site_heal(false) {
                     None => {
-                        let Phase::RestSite { options, .. } = &mut self.phase else {
-                            unreachable!("the phase was a rest site when this began");
-                        };
-                        options.clear();
+                        self.rest_option_through();
                         Decided::Resolved
                     }
                     Some(asked) => self.park(asked),
@@ -3839,10 +3840,7 @@ impl<V: Rules> State<V> {
                 let effects = sts2_core::RestKinds::selected(option);
                 return Ok(match self.carry_out(effects) {
                     None => {
-                        let Phase::RestSite { options, .. } = &mut self.phase else {
-                            unreachable!("the phase was a rest site when this began");
-                        };
-                        options.clear();
+                        self.rest_option_through();
                         Decided::Resolved
                     }
                     Some(asked) => self.park(asked),
@@ -4029,8 +4027,8 @@ impl<V: Rules> State<V> {
             self.purchased(shelf);
         }
         // A rest site's option is done once its pickup is.
-        if let Phase::RestSite { options, .. } = &mut self.phase {
-            options.clear();
+        if let Phase::RestSite { .. } = &self.phase {
+            self.rest_option_through();
         }
         Decided::Resolved
     }
@@ -4195,14 +4193,11 @@ impl<V: Rules> State<V> {
             .unwrap_or_else(|| unimplemented!("upgrading a card the selection did not offer"));
         self.player.deck_mut()[at].ident.upgrade += 1;
 
-        let Phase::RestSite {
-            options, upgrading, ..
-        } = &mut self.phase
-        else {
+        let Phase::RestSite { upgrading, .. } = &mut self.phase else {
             unreachable!("the phase was a rest site when this began");
         };
-        options.clear();
         *upgrading = false;
+        self.rest_option_through();
         Ok(Decided::Resolved)
     }
 
@@ -4427,7 +4422,10 @@ impl<V: Rules> State<V> {
         );
         let before = moves.len();
         self.room_moves(&mut moves);
-        if moves.len() > before {
+        // `NRestSiteRoom` puts its proceed button up once an option went
+        // through, beside any options still left.
+        let rested = matches!(self.phase, Phase::RestSite { rested: true, .. });
+        if moves.len() > before && !rested {
             return moves;
         }
 
@@ -4667,6 +4665,41 @@ impl<V: Rules> State<V> {
             }
         }
         crate::combat::whole::<V>(price)
+    }
+
+    /// `RestSiteSynchronizer.ChooseOption` once the chosen option went
+    /// through. `Hook.ShouldDisableRemainingRestSiteOptions` clears every
+    /// option unless a relic answers no, and then only the chosen one goes.
+    fn rest_option_through(&mut self) {
+        let hook = sts2_core::DecisionHook::ShouldDisableRemainingRestSiteOptions;
+        let mut left = self
+            .player
+            .relics
+            .hearing_hook(sts2_core::ModelHook::ShouldDisableRemainingRestSiteOptions);
+        let mut disable = true;
+        while left != 0 {
+            let held = &self.player.relics[left.trailing_zeros() as usize];
+            left &= left - 1;
+            disable &= !V::decide_hook(crate::combat::Heard::<V>::Relic(&held.state), hook)
+                .is_decision_and(|disable| !disable);
+        }
+        let Phase::RestSite {
+            options,
+            chosen,
+            rested,
+            ..
+        } = &mut self.phase
+        else {
+            unreachable!("an option went through at a rest site");
+        };
+        let chosen = chosen
+            .take()
+            .unwrap_or_else(|| unreachable!("an option went through that was chosen"));
+        *rested = true;
+        match disable {
+            true => options.clear(),
+            false => options.retain(|&option| option != chosen),
+        }
     }
 
     /// `Hook.ShouldRefillMerchantEntry`, which any relic on the belt can
@@ -5493,6 +5526,45 @@ mod tests {
     /// The case that says which is a deck holding two copies of one card, one
     /// of them already upgraded. A selection over the whole deck lands on the
     /// copy before it.
+    /// `NRestSiteRoom` puts its proceed button up once an option went
+    /// through. Under Miniature Tent the other options stay beside it.
+    #[test]
+    fn a_rest_site_under_miniature_tent_offers_its_options_and_travel() {
+        use sts2_content::v0_107_1::relics::Relic;
+        use sts2_core::{Gift, RestKinds};
+
+        let mut run = opened();
+        run.grant(&Gift::Relic(Relic::MiniatureTent))
+            .expect("a relic can be granted");
+        run.phase = Phase::RestSite {
+            options: vec![
+                <V as sts2_core::ContentVersion>::RestSiteOption::HEAL,
+                <V as sts2_core::ContentVersion>::RestSiteOption::SMITH,
+            ],
+            chosen: None,
+            rested: false,
+            upgrading: false,
+            asking: None,
+        };
+        let travels = |run: &State<V>| {
+            run.legal()
+                .iter()
+                .any(|decision| matches!(decision, Decision::Travel { .. }))
+        };
+        assert!(
+            !travels(&run),
+            "nothing leaves before an option goes through"
+        );
+
+        run.choose(0).expect("the heal can be chosen");
+        let legal = run.legal();
+        assert!(
+            legal.contains(&Decision::ChooseOption { index: 0 }),
+            "the smith is still up"
+        );
+        assert!(travels(&run), "and the run can leave beside it");
+    }
+
     #[test]
     fn the_smith_offers_the_cards_it_can_upgrade_and_numbers_those() {
         use sts2_content::v0_107_1::cards::{Cards, RegentCard};
@@ -5515,6 +5587,8 @@ mod tests {
                 <V as sts2_core::ContentVersion>::RestSiteOption::HEAL,
                 <V as sts2_core::ContentVersion>::RestSiteOption::SMITH,
             ],
+            chosen: None,
+            rested: false,
             upgrading: false,
             asking: None,
         };
