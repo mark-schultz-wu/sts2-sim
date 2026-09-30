@@ -171,7 +171,7 @@ pub(super) fn page(event: Event, options: &[(Said, bool)], chosen: Option<NonMax
 pub(crate) fn allowed(event: Event, run: &impl EventView<V>) -> bool {
     let act = run.act();
     let gold = run.gold();
-    let removable = |card: &sts2_core::CardIdent<V>| !card.card.eternal();
+    let removable = |card: &sts2_core::CardIdent<V>| !super::enchantments::card_eternal(card);
     let basic = |card: &sts2_core::CardIdent<V>| card.card.rarity() == CardRarity::Basic;
     match event {
         Event::SelfHelpBook => self_help_book::SelfHelpBook.allowed(run),

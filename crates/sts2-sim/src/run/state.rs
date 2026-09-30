@@ -946,7 +946,7 @@ impl<V: Rules> State<V> {
         let deck = self.player.deck.iter().map(|held| held.ident).enumerate();
         match act {
             sts2_core::DeckAct::Remove => {
-                let mut offered: Vec<_> = deck.filter(|(_, card)| !card.card.eternal()).collect();
+                let mut offered: Vec<_> = deck.filter(|(_, card)| !V::card_eternal(card)).collect();
                 offered.sort_by_key(|(_, card)| {
                     V::card_kind(card.card) != Some(sts2_core::CardKind::Curse)
                 });
@@ -956,7 +956,7 @@ impl<V: Rules> State<V> {
                 .filter(|(_, card)| {
                     card.card.tagged(tag)
                         && card.card.rarity() == sts2_core::CardRarityKinds::BASIC
-                        && !card.card.eternal()
+                        && !V::card_eternal(card)
                 })
                 .collect(),
             sts2_core::DeckAct::Upgrade => self.upgradable().collect(),
@@ -966,13 +966,14 @@ impl<V: Rules> State<V> {
             | sts2_core::DeckAct::TransformUpgraded(_)
             | sts2_core::DeckAct::TransformInto(_) => deck
                 .filter(|(_, card)| {
-                    !card.card.eternal()
+                    !V::card_eternal(card)
                         && V::card_kind(card.card) != Some(sts2_core::CardKind::Quest)
                 })
                 .collect(),
             sts2_core::DeckAct::TransformBasicInto(_) => deck
                 .filter(|(_, card)| {
-                    !card.card.eternal() && card.card.rarity() == sts2_core::CardRarityKinds::BASIC
+                    !V::card_eternal(card)
+                        && card.card.rarity() == sts2_core::CardRarityKinds::BASIC
                 })
                 .collect(),
             sts2_core::DeckAct::Enchant {
@@ -1731,20 +1732,21 @@ impl<V: Rules> State<V> {
                     self.player.relics.remove(slot);
                     continue;
                 }
-                // The relic counts the lift itself.
-                HookEffect::Lift(relic) => {
+                // The relic carries its option out itself.
+                HookEffect::RestOptionOfRelic(relic) => {
                     let Some(held) = self
                         .player
                         .relics
                         .iter_mut()
                         .find(|held| held.relic == relic)
                     else {
-                        unimplemented!("lifting {relic:?}, which the run does not carry");
+                        unimplemented!("an option of {relic:?}, which the run does not carry");
                     };
                     let mut asked = sts2_core::HookEffects::new();
-                    V::relic_event_hook(&mut held.state, sts2_core::EventHook::Lifted, &mut asked);
+                    let taken = sts2_core::EventHook::RestOptionTaken;
+                    V::relic_event_hook(&mut held.state, taken, &mut asked);
                     if let Some(effect) = asked.first() {
-                        unimplemented!("{relic:?} asking for {effect:?} as it is lifted");
+                        unimplemented!("{relic:?} asking for {effect:?} as its option is taken");
                     }
                     continue;
                 }
@@ -1833,6 +1835,29 @@ impl<V: Rules> State<V> {
                     if let Ok(&at) = rng.choose(&upgraded) {
                         self.player.deck_mut()[at].ident.upgrade = 0;
                     }
+                    continue;
+                }
+                HookEffect::EnchantBasicTagged {
+                    tag,
+                    enchantment,
+                    amount,
+                } => {
+                    use sts2_core::{CardRarityKinds as _, CardTable as _};
+
+                    let taken: Vec<usize> = (self.player.deck.iter().enumerate())
+                        .filter(|(_, held)| {
+                            held.ident.card.rarity() == <_>::BASIC
+                                && held.ident.card.tagged(tag)
+                                && V::can_enchant(enchantment, &held.ident)
+                        })
+                        .map(|(at, _)| at)
+                        .collect();
+                    let act = sts2_core::DeckAct::Enchant {
+                        enchantment,
+                        amount,
+                        kind: None,
+                    };
+                    self.act_on_deck(act, &taken);
                     continue;
                 }
                 HookEffect::UpgradeDeck => {
@@ -1961,7 +1986,7 @@ impl<V: Rules> State<V> {
                             card.rarity() == <_ as CardRarityKinds>::BASIC
                                 && (card.tagged(<_ as CardTagKinds>::STRIKE)
                                     || card.tagged(<_ as CardTagKinds>::DEFEND))
-                                && !card.eternal()
+                                && !V::card_eternal(&held.ident)
                         })
                         .map(|(at, _)| at)
                         .collect();
@@ -3832,6 +3857,7 @@ impl<V: Rules> State<V> {
                 || option == <V::RestSiteOption as sts2_core::RestKinds<V>>::COOK
                 || option == <V::RestSiteOption as sts2_core::RestKinds<V>>::DIG
                 || option == <V::RestSiteOption as sts2_core::RestKinds<V>>::LIFT
+                || option == <V::RestSiteOption as sts2_core::RestKinds<V>>::KINDLE
             {
                 if !self.rest_option_enabled(option) {
                     unimplemented!("a rest site option the run cannot take");

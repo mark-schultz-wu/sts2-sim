@@ -3921,8 +3921,9 @@ pub enum EventHook<V: ContentVersion> {
     CardRewardOptions {
         encounter: bool,
     },
-    /// `LiftRestSiteOption.OnSelect`, asked of the relic it lifts.
-    Lifted,
+    /// The rest site option a relic offers, taken: the relic's own method,
+    /// which the option's `OnSelect` calls.
+    RestOptionTaken,
     /// `AfterPreventingDeath`, asked of the one model whose `ShouldDieLate`
     /// kept its owner in the fight, with the owner's maximum hit points.
     DeathPrevented {
@@ -4133,7 +4134,7 @@ impl<V: ContentVersion> EventHook<V> {
             | EventHook::Applied
             | EventHook::BlockClearPrevented { .. }
             | EventHook::DeathPrevented { .. }
-            | EventHook::Lifted
+            | EventHook::RestOptionTaken
             | EventHook::BeforeApplied { .. }
             | EventHook::MonsterMovePerformed { .. } => return None,
         })
@@ -4930,9 +4931,10 @@ pub enum HookEffect<V: ContentVersion> {
     /// the reward drew, by `CreateForReward` from `CardCreationSource.Other`.
     /// It is one the reward does not offer, unless it offers them all.
     AddCardRewardOption(CardKind),
-    /// `LiftRestSiteOption.OnSelect`, which the relic carries out when asked
-    /// [`EventHook::Lifted`].
-    Lift(V::Relic),
+    /// The `OnSelect` of a rest site option a relic offers, which calls a
+    /// method on that relic: `Girya.Lift` or `PumpkinCandle.Rekindle`. The
+    /// relic carries it out when told [`EventHook::RestOptionTaken`].
+    RestOptionOfRelic(V::Relic),
     /// `PotionFactory.CreateRandomPotionsOutOfCombat` off the named stream,
     /// then `PotionCmd.TryToProcure` for each.
     ProcureRandomPotions {
@@ -5345,6 +5347,13 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CardCmd.Upgrade` on a clone of the card the hook names, which takes
     /// its place.
     UpgradeCard,
+    /// `CardCmd.Enchant` by `amount` on each deck card of `Basic` rarity
+    /// carrying `tag` that the enchantment takes, in deck order.
+    EnchantBasicTagged {
+        tag: V::CardTag,
+        enchantment: V::Enchantment,
+        amount: u8,
+    },
     /// `CardCmd.Enchant` by `amount` on a clone of one card of a reward,
     /// which takes its place. The card is `Rng.Niche.NextItem` over those
     /// the enchantment can enchant, and nothing where none can take it.
@@ -5775,6 +5784,11 @@ pub trait Hooks: ContentVersion {
     /// as it goes. So a card carries the keyword exactly while it carries the
     /// affliction.
     fn keyword_while_afflicted(affliction: Self::Affliction) -> Option<Self::CardKeyword>;
+
+    /// Whether `card` carries `Eternal`: its table prints it, or its
+    /// enchantment's `OnEnchant` adds it. No removal takes an eternal card,
+    /// and no transform takes it from the deck.
+    fn card_eternal(card: &crate::CardIdent<Self>) -> bool;
 
     /// What an enchantment's `OnEnchant` writes on the card it goes on, which
     /// every copy of that card carries from then on. Nothing for an

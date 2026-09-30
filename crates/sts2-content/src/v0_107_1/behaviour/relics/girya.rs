@@ -37,7 +37,7 @@ pub(super) fn event_hook(
         EventHook::RestSiteOptions if state.times_lifted < LIFTS => {
             asked.push(HookEffect::OfferRestOption(RestSiteOption::Lift));
         }
-        EventHook::Lifted => state.times_lifted += 1,
+        EventHook::RestOptionTaken => state.times_lifted += 1,
         EventHook::RoomEntered { .. } | EventHook::RestSiteOptions | EventHook::Obtained { .. } => {
         }
         hook => unimplemented!("what Girya does for {hook:?}"),

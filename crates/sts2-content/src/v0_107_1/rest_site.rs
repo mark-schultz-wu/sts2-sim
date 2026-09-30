@@ -56,7 +56,12 @@ impl RestKinds<V0_107_1> for RestSiteOption {
             RestSiteOption::Dig => vec![sts2_core::HookEffect::ObtainNextRelic(
                 sts2_core::RelicPull::Rolled,
             )],
-            RestSiteOption::Lift => vec![sts2_core::HookEffect::Lift(Relic::Girya)],
+            RestSiteOption::Lift => vec![sts2_core::HookEffect::RestOptionOfRelic(Relic::Girya)],
+            RestSiteOption::Kindle => {
+                vec![sts2_core::HookEffect::RestOptionOfRelic(
+                    Relic::PumpkinCandle,
+                )]
+            }
             RestSiteOption::Cook => vec![
                 sts2_core::HookEffect::SelectFromDeckConfirmed {
                     act: sts2_core::DeckAct::Remove,

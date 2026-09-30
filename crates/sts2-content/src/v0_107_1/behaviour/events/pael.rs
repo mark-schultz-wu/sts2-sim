@@ -4,7 +4,7 @@
 //! grow with what the deck and the belt hold.
 
 use sts2_core::rng::GameRng;
-use sts2_core::{CardTable as _, EventBehavior, EventView, HookEffects, Room};
+use sts2_core::{EventBehavior, EventView, HookEffects, Room};
 
 use super::super::super::V0_107_1 as V;
 use super::super::super::generated::enchantments::Enchantment;
@@ -51,7 +51,12 @@ impl EventBehavior<V> for Pael {
         {
             second.push(Relic::PaelsClaw);
         }
-        if deck.iter().filter(|card| !card.card.eternal()).count() >= TOOTH_CARDS {
+        if deck
+            .iter()
+            .filter(|card| !super::super::enchantments::card_eternal(card))
+            .count()
+            >= TOOTH_CARDS
+        {
             second.push(Relic::PaelsTooth);
         }
         second.extend_from_within(..);
