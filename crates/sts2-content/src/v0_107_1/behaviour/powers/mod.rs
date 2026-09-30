@@ -173,9 +173,10 @@ const VOID_FORM_SPENT: u32 = 999_999_999;
 /// `OutbreakPower.poisonThreshold`: every third Poison deals its damage.
 const OUTBREAK_EVERY: u8 = 3;
 
-/// How many plays `amountsForPlayedCards` keeps at once: one, and one played
-/// inside it.
-const NOTED_AT_ONCE: usize = 2;
+/// How many plays `amountsForPlayedCards` keeps at once: one, and those
+/// played inside it. A Havoc that plays a Havoc that plays a card holds
+/// three.
+const NOTED_AT_ONCE: usize = 3;
 
 /// `amountsForPlayedCards.Add`: `id`'s play noted with the stack as it began.
 fn note(state: &mut State, id: sts2_core::CardId<V>, amount: Number) {
