@@ -168,6 +168,10 @@ fn removal_cost<V: Rules>(used: usize) -> V::Number {
 pub(crate) struct HeldRelic<V: Rules> {
     pub(crate) relic: V::Relic,
     pub(crate) state: V::RelicState,
+    /// `IsWax`: Toy Box melts it in time.
+    pub(crate) wax: bool,
+    /// `IsMelted`: still on the belt, and no longer a hook listener.
+    pub(crate) melted: bool,
 }
 
 impl<V: Rules> Clone for HeldRelic<V> {
@@ -184,6 +188,8 @@ impl<V: Rules> HeldRelic<V> {
         Self {
             relic,
             state: <V::RelicState as sts2_core::RelicModel<V>>::new(relic),
+            wax: false,
+            melted: false,
         }
     }
 
@@ -257,7 +263,11 @@ impl<V: Rules> Belt<V> {
     pub(crate) fn push(&mut self, held: HeldRelic<V>) {
         use sts2_core::RelicTable as _;
 
-        let overrides = held.relic.overrides();
+        // `IterateHookListeners` leaves a melted relic out.
+        let overrides = match held.melted {
+            true => sts2_core::Overrides::NONE,
+            false => held.relic.overrides(),
+        };
         let slot = 1 << self.held.len();
         for at in overrides.places() {
             self.slots[at] |= slot;
@@ -289,6 +299,16 @@ impl<V: Rules> Belt<V> {
             .enumerate()
             .map(|(at, &was)| if at == slot { held } else { was })
             .collect();
+    }
+
+    /// `RelicCmd.Melt` of the first wax relic not yet melted, where there is
+    /// one. It stays in its slot, and hears no hook after.
+    pub(crate) fn melt_first_wax(&mut self) {
+        if let Some(slot) = self.held.iter().position(|held| held.wax && !held.melted) {
+            let mut held = self.held[slot];
+            held.melted = true;
+            self.replace(slot, held);
+        }
     }
 
     pub(crate) fn copy_from(&mut self, source: &Self) {
@@ -1431,13 +1451,21 @@ impl<V: Rules> State<V> {
     /// The room the relic was picked up in is what parks on it.
     #[must_use]
     pub(super) fn obtain(&mut self, relic: V::Relic) -> Option<Asked<V>> {
+        self.obtain_as(relic, false)
+    }
+
+    /// `RelicCmd.Obtain` of a relic that is wax where `wax` says so.
+    pub(super) fn obtain_as(&mut self, relic: V::Relic, wax: bool) -> Option<Asked<V>> {
         use sts2_core::RelicTable as _;
 
         // Out of both bags, unless a run can hold more than one.
         if !relic.stackable() && !self.dealt_relics.contains(&relic) {
             Arc::make_mut(&mut self.dealt_relics).push(relic);
         }
-        let mut held = HeldRelic::new(relic);
+        let mut held = HeldRelic {
+            wax,
+            ..HeldRelic::new(relic)
+        };
         let effects = crate::combat::obtained::<V>(&mut held, self.character());
         self.player.relics.push(held);
         self.carry_out(effects)
@@ -1977,6 +2005,7 @@ impl<V: Rules> State<V> {
                             .map(|relic| Offer::Relic {
                                 relic,
                                 rarity: <_ as sts2_core::RarityKinds>::UNDRAFTED,
+                                wax: false,
                                 taken: false,
                             })
                             .collect(),
@@ -2381,14 +2410,16 @@ impl<V: Rules> State<V> {
                     Offer::Relic {
                         relic,
                         rarity,
+                        wax: false,
                         taken: false,
                     }
                 }
-                CustomReward::RolledRelic => {
+                CustomReward::RolledRelic | CustomReward::WaxRelic => {
                     let rarity = crate::reward::relic_rarity::<V, _>(rng);
                     Offer::Relic {
                         relic: self.pull_relic(rarity),
                         rarity: <_ as sts2_core::RarityKinds>::UNDRAFTED,
+                        wax: matches!(reward, CustomReward::WaxRelic),
                         taken: false,
                     }
                 }
@@ -2507,6 +2538,7 @@ impl<V: Rules> State<V> {
                         offered.push(Offer::Relic {
                             relic,
                             rarity: <_ as sts2_core::RarityKinds>::UNDRAFTED,
+                            wax: false,
                             taken: false,
                         });
                     }
@@ -4418,10 +4450,15 @@ impl<V: Rules> State<V> {
                 let id = self.player.mint();
                 self.add_deck_card(sts2_core::DeckCard { id, ident, state });
             }
-            (Offer::Relic { relic, taken, .. }, TakeReward::NonCard { .. }) => {
-                let relic = *relic;
+            (
+                Offer::Relic {
+                    relic, wax, taken, ..
+                },
+                TakeReward::NonCard { .. },
+            ) => {
+                let (relic, wax) = (*relic, *wax);
                 *taken = true;
-                return self.obtain(relic);
+                return self.obtain_as(relic, wax);
             }
             // `CardReward.Reroll`: `CanReroll` goes, and the pack is rolled
             // again as it was. The reward stays on offer.

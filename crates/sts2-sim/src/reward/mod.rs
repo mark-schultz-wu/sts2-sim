@@ -72,6 +72,8 @@ pub(crate) enum Offer<V: Rules> {
         /// `RelicReward.Rarity`: the rarity the reward was asked for, and
         /// `Undrafted` for one that rolled its own.
         rarity: crate::run::Rarity<V>,
+        /// `IsWax`, which Toy Box sets on the relics it offers.
+        wax: bool,
         taken: bool,
     },
     /// `CardRemovalReward`: one card of the deck removed, which the player

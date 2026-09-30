@@ -257,6 +257,7 @@ mod toolbox;
 mod touch_of_orobas;
 mod tough_bandages;
 mod toxic_egg;
+mod toy_box;
 mod tri_boomerang;
 mod tungsten_rod;
 mod tuning_fork;
@@ -570,6 +571,7 @@ pub enum State {
     PaelsGrowth,
     Driftwood,
     PaelsWing(paels_wing::State),
+    ToyBox(toy_box::State),
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -813,6 +815,7 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::ToyBox(state) => toy_box::event_hook(state, hook, asked),
         State::PaelsWing(state) => paels_wing::event_hook(state, hook, asked),
         State::Driftwood => driftwood::event_hook(hook, asked),
         State::PaelsGrowth => paels_growth::event_hook(hook, asked),
@@ -1206,7 +1209,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::PaelsClaw
         | State::PaelsGrowth
         | State::Driftwood
-        | State::PaelsWing(_) => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::PaelsWing(_)
+        | State::ToyBox(_) => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1385,6 +1389,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::ToyBox => State::ToyBox(toy_box::State::default()),
             Relic::PaelsWing => State::PaelsWing(paels_wing::State::default()),
             Relic::Driftwood => State::Driftwood,
             Relic::PaelsGrowth => State::PaelsGrowth,
@@ -1525,6 +1530,7 @@ impl sts2_core::RelicModel<V> for State {
                 State::Kusarigama(state) => kusarigama::display_amount(state),
                 State::HappyFlower(state) => happy_flower::display_amount(state),
                 State::Kunai(state) => kunai::display_amount(state),
+                State::ToyBox(state) => toy_box::display_amount(state),
                 State::PaelsWing(state) => paels_wing::display_amount(state),
                 State::PumpkinCandle(state) => pumpkin_candle::display_amount(state),
                 State::GalacticDust(state) => galactic_dust::display_amount(state),
