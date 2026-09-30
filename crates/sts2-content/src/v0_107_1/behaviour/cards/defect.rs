@@ -185,6 +185,7 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
             Played::Done
         }
         DefectCard::Uproar => uproar(fight),
+        DefectCard::Shatter => shatter(fight),
         // `DoubleEnergy`: as much energy again as its owner has left.
         DefectCard::DoubleEnergy => {
             fight.modify_energy(fight.energy());
@@ -654,6 +655,28 @@ fn tempest<F: Fight<V>>(fight: &mut F) -> Played<V> {
     let orbs = fight.x_value() + super::Number::from(fight.upgraded());
     for _ in 0..orbs {
         fight.channel(Orb::LightningOrb);
+    }
+    Played::Done
+}
+
+/// `Shatter`: its damage to every opponent. Then, once for each orb held as
+/// it began, the first orb is evoked twice: once where it stands, then once
+/// as it leaves.
+fn shatter<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    fight.attack(Scaling::Dynamic, |fight| {
+        for target in fight.opponents() {
+            let attack = fight.resolve(Effect::Attack {
+                dealer: fight.actor(),
+                target,
+                damage: Amount::Var(CardVar::Damage),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(attack);
+        }
+    });
+    for _ in 0..fight.orbs_held() {
+        fight.evoke_next(false);
+        fight.evoke_next(true);
     }
     Played::Done
 }
