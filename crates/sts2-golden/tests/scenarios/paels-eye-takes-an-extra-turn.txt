@@ -1,0 +1,9 @@
+# Pael's Eye: a turn ended with no card played exhausts the hand, and the
+# player takes another turn before the enemies act. It works once a fight,
+# so the turn after that goes to the enemies.
+{"cmd":"start","seed":"S33D1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"PAELS_EYE"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

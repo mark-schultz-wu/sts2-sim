@@ -80,6 +80,38 @@ pub(crate) fn end<V: Rules>(
         return Ok(Some(ended));
     }
 
+    // `SwitchFromPlayerToEnemySide` asks `ShouldTakeExtraTurn` first. A yes
+    // keeps the side with the player, whose turn counts up while the round
+    // does not. `AfterTakingExtraTurn` follows, then the player's turn starts.
+    let extra = listen::heard::<V>(next, relics, sts2_core::ModelHook::ShouldTakeExtraTurn) && {
+        let plays = next.history.unprompted_plays_this_turn();
+        listen::any_decides::<V>(
+            listen::Walk { live: next, relics },
+            sts2_core::DecisionHook::ShouldTakeExtraTurn { plays },
+            true,
+        )
+    };
+    if extra {
+        next.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::NONE;
+        next.switch_side(<V::CombatSide as SideKinds>::PLAYER);
+        next.turn = next.turn + num_traits::one();
+        let taking = sts2_core::EventHook::TakingExtraTurn;
+        if let Some((listener, effect)) = listen::notify::<V>(next, relics, taking).first() {
+            unimplemented!("{listener:?} asking for {effect:?} as an extra turn is taken");
+        }
+        return start_player_turn(
+            Fighting {
+                live: next,
+                streams,
+                relics,
+            },
+            ascension,
+            max_energy,
+            skipping,
+            true,
+        );
+    }
+
     // `SwitchSides` to the enemy, then `StartTurn` for it: block clears, and
     // every enemy still in the fight performs the move it advertised.
     //
@@ -330,6 +362,35 @@ fn enemies_act<V: Rules>(
         return Ok(Some(ended));
     }
 
+    start_player_turn(
+        Fighting {
+            live: next,
+            streams,
+            relics,
+        },
+        ascension,
+        max_energy,
+        skipping,
+        false,
+    )
+}
+
+/// `StartTurn` for the player's side, from `BeforeSideTurnStart` to the play
+/// phase. An `extra` turn is one `ShouldTakeExtraTurn` gave, which rolls no
+/// enemy move.
+#[tracing::instrument(level = "trace", skip_all)]
+fn start_player_turn<V: Rules>(
+    fighting: Fighting<'_, V>,
+    ascension: V::AscensionLevel,
+    max_energy: V::Count,
+    skipping: Skips<V>,
+    extra: bool,
+) -> Result<Option<super::Ended>, Error> {
+    let Fighting {
+        live: next,
+        streams,
+        relics,
+    } = fighting;
     // `StartTurn` opens on `BeforeSideTurnStart`, which is where a relic
     // counting a turn's plays moves the count on for the draw to read.
     before_side_turn_start::<V>(
@@ -343,8 +404,11 @@ fn enemies_act<V: Rules>(
 
     next.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::START;
 
-    // `PrepareForNextTurn`, before the player draws anything.
-    roll_moves(next, relics, ascension, streams.combat().ai)?;
+    // `PrepareForNextTurn`, before the player draws anything. An extra turn
+    // leaves the enemies' moves as they were.
+    if !extra {
+        roll_moves(next, relics, ascension, streams.combat().ai)?;
+    }
 
     // `AfterTurnStart` on the player, then `SetupPlayerTurn`.
     clear_block::<V>(
@@ -716,11 +780,38 @@ fn before_turn_end<V: Rules>(
     if let Some((listener, effect)) = listen::notify::<V>(live, relics, hook).first() {
         unimplemented!("{listener:?} asking for {effect:?} as a turn is about to end");
     }
-    let hook = sts2_core::EventHook::BeforeSideTurnEndEarly { side };
+    // Counted only where something hears the hook, as nothing else reads it.
+    let plays = match listen::heard::<V>(live, relics, sts2_core::ModelHook::BeforeSideTurnEndEarly)
+    {
+        true => live.history.unprompted_plays_this_turn(),
+        false => 0,
+    };
+    let hook = sts2_core::EventHook::BeforeSideTurnEndEarly { side, plays };
     for (listener, effect) in listen::notify::<V>(live, relics, hook) {
         match (listener, effect) {
             (Listener::Power { owner, .. }, sts2_core::HookEffect::GainBlock(amount)) => {
                 live.gain_unpowered_block(owner, amount);
+            }
+            // `CardCmd.Exhaust` of each card the hand holds as it starts.
+            (Listener::Relic { .. }, sts2_core::HookEffect::ExhaustHand) => {
+                let hand: SmallVec<[sts2_core::CardAt<V>; 10]> = (live.cards.iter(Pile::Hand))
+                    .enumerate()
+                    .map(|(at, card)| {
+                        let index = num_traits::NumCast::from(at)
+                            .unwrap_or_else(|| unimplemented!("a hand past what a fight numbers"));
+                        sts2_core::CardAt::new(card.id, Pile::Hand, index)
+                    })
+                    .collect();
+                let (_, ended) = act_on::<V>(
+                    live,
+                    rngs.reborrow(),
+                    relics,
+                    sts2_core::PileAct::Exhaust,
+                    &hand,
+                );
+                if ended.is_some() {
+                    return ended;
+                }
             }
             (_, effect) => unimplemented!("a listener asking for {effect:?} before a turn ends"),
         }

@@ -651,6 +651,7 @@ pub enum ModelHook {
     AfterSideTurnEnd,
     AfterSideTurnEndLate,
     AfterEnergyReset,
+    AfterTakingExtraTurn,
     AfterAutoPrePlayPhaseEnteredEarly,
     AfterAutoPrePlayPhaseEntered,
     AfterAutoPrePlayPhaseEnteredLate,
@@ -762,6 +763,7 @@ pub enum ModelHook {
     TryModifyPowerAmountReceived,
     ModifyXValue,
     ShouldDieLate,
+    ShouldTakeExtraTurn,
     ShouldPlayerResetEnergy,
     TryModifyRestSiteOptions,
     ShouldForcePotionReward,
@@ -774,7 +776,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 133] = [
+    pub const ALL: [ModelHook; 135] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -788,6 +790,7 @@ impl ModelHook {
         ModelHook::AfterSideTurnEnd,
         ModelHook::AfterSideTurnEndLate,
         ModelHook::AfterEnergyReset,
+        ModelHook::AfterTakingExtraTurn,
         ModelHook::AfterAutoPrePlayPhaseEnteredEarly,
         ModelHook::AfterAutoPrePlayPhaseEntered,
         ModelHook::AfterAutoPrePlayPhaseEnteredLate,
@@ -899,6 +902,7 @@ impl ModelHook {
         ModelHook::TryModifyPowerAmountReceived,
         ModelHook::ModifyXValue,
         ModelHook::ShouldDieLate,
+        ModelHook::ShouldTakeExtraTurn,
         ModelHook::ShouldPlayerResetEnergy,
         ModelHook::TryModifyRestSiteOptions,
         ModelHook::ShouldForcePotionReward,
@@ -1042,6 +1046,8 @@ impl ModelHook {
             ModelHook::AfterCardChangedPiles => "AfterCardChangedPiles",
             ModelHook::AfterCardGeneratedForCombat => "AfterCardGeneratedForCombat",
             ModelHook::ShouldDieLate => "ShouldDieLate",
+            ModelHook::ShouldTakeExtraTurn => "ShouldTakeExtraTurn",
+            ModelHook::AfterTakingExtraTurn => "AfterTakingExtraTurn",
             ModelHook::AfterCombatVictoryEarly => "AfterCombatVictoryEarly",
             ModelHook::ShouldPlayerResetEnergy => "ShouldPlayerResetEnergy",
             ModelHook::BeforeCombatStartLate => "BeforeCombatStartLate",
@@ -3349,6 +3355,10 @@ pub enum DecisionHook<V: ContentVersion> {
     /// `ShouldForcePotionReward`, as a won fight's rewards roll for a potion
     /// in a room of this type. One listener answering yes gives the potion.
     ShouldForcePotionReward { room: V::RoomType },
+    /// `ShouldTakeExtraTurn`, once the player's turn is over. `plays` is the
+    /// player's plays finished this turn that no auto-play made. One
+    /// listener answering yes keeps the turn with the player.
+    ShouldTakeExtraTurn { plays: u8 },
     /// `ShouldRefillMerchantEntry`, once a shelf's purchase went through. One
     /// listener answering yes restocks the shelf rather than emptying it.
     ShouldRefillMerchantEntry,
@@ -3438,6 +3448,7 @@ impl<V: ContentVersion> DecisionHook<V> {
             DecisionHook::ShouldDieLate { .. } => ModelHook::ShouldDieLate,
             DecisionHook::ShouldPlayerResetEnergy { .. } => ModelHook::ShouldPlayerResetEnergy,
             DecisionHook::ShouldForcePotionReward { .. } => ModelHook::ShouldForcePotionReward,
+            DecisionHook::ShouldTakeExtraTurn { .. } => ModelHook::ShouldTakeExtraTurn,
             DecisionHook::ShouldRefillMerchantEntry => ModelHook::ShouldRefillMerchantEntry,
             DecisionHook::ShouldDisableRemainingRestSiteOptions => {
                 ModelHook::ShouldDisableRemainingRestSiteOptions
@@ -3455,9 +3466,7 @@ impl<V: ContentVersion> DecisionHook<V> {
 pub enum EventHook<V: ContentVersion> {
     /// `AfterSideTurnStartLate`, once every listener has answered
     /// [`EventHook::SideTurnStart`].
-    SideTurnStartLate {
-        side: V::CombatSide,
-    },
+    SideTurnStartLate { side: V::CombatSide },
     /// `BeforePotionUsed`, as the player drinks a potion in a fight, before
     /// it leaves the belt.
     PotionUsing {
@@ -3466,9 +3475,7 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `AfterPotionUsed`, once a potion's use is done. `in_fight` is
     /// `CombatManager.IsInProgress`.
-    PotionUsed {
-        in_fight: bool,
-    },
+    PotionUsed { in_fight: bool },
     /// `AfterModifyingCardRewardOptions`, once a card reward's cards have
     /// had their late pass.
     CardRewardOptionsModified,
@@ -3484,17 +3491,11 @@ pub enum EventHook<V: ContentVersion> {
     /// `TryModifyCardRewardOptionsLate` over a whole card reward, asked of a
     /// relic once it has answered for each card. A listener that picks among
     /// the cards answers here.
-    CardRewardPick {
-        card_reward: bool,
-    },
+    CardRewardPick { card_reward: bool },
     /// `TryModifyCardBeingAddedToDeck`, for a card about to join the deck.
-    CardBeingAddedToDeck {
-        card: crate::CardIdent<V>,
-    },
+    CardBeingAddedToDeck { card: crate::CardIdent<V> },
     /// `ModifyMerchantCardCreationResults`, for one card a merchant stocks.
-    MerchantCardCreated {
-        card: crate::CardIdent<V>,
-    },
+    MerchantCardCreated { card: crate::CardIdent<V> },
     /// `AfterCardPlayedLate`, once every `AfterCardPlayed` of a play has run.
     CardPlayedLate {
         card: V::Card,
@@ -3512,9 +3513,7 @@ pub enum EventHook<V: ContentVersion> {
     EnergyGainModified,
     /// `AfterStarsGained`, once `PlayerCmd.GainStars` has added `amount` to
     /// the player's stars.
-    StarsGained {
-        amount: V::Number,
-    },
+    StarsGained { amount: V::Number },
     /// `AfterPreventingDraw`, once a listener answered no to `ShouldDraw`.
     DrawPrevented,
     /// `AfterShuffle`, once the discard pile is shuffled into the draw pile.
@@ -3522,9 +3521,7 @@ pub enum EventHook<V: ContentVersion> {
     Shuffled,
     /// `ModifyShuffleOrder`, over the draw pile just shuffled. `initial` is
     /// the shuffle a fight opens on.
-    ShuffleOrder {
-        initial: bool,
-    },
+    ShuffleOrder { initial: bool },
     /// `ModifyUnknownMapPointRoomTypes`, as an unknown map point rolls. A
     /// listener answers with the types it takes out.
     UnknownRoomTypes,
@@ -3559,29 +3556,19 @@ pub enum EventHook<V: ContentVersion> {
     CardRewardAlternativeChosen(crate::RewardAlternative),
     /// `BeforeCombatStart`, once the fight is built and before it opens, in
     /// a room of this type.
-    CombatStarting {
-        room: V::RoomType,
-    },
+    CombatStarting { room: V::RoomType },
     /// `BeforeCombatStartLate`, once every listener has heard
     /// `BeforeCombatStart`.
-    CombatStartingLate {
-        room: V::RoomType,
-    },
+    CombatStartingLate { room: V::RoomType },
     /// `AfterCombatEnd`, for the fight the run has just finished, in a room
     /// of this type.
-    CombatEnd {
-        room: V::RoomType,
-    },
+    CombatEnd { room: V::RoomType },
     /// `AfterRestSiteHeal`, once a rest site's heal has landed. `mimicked`
     /// for a heal an event gives the way a rest site does.
-    RestSiteHeal {
-        mimicked: bool,
-    },
+    RestSiteHeal { mimicked: bool },
     /// `TryModifyRestSiteHealRewards`, once `AfterRestSiteHeal` has run. A
     /// listener answers with the rewards it adds.
-    RestSiteHealRewards {
-        mimicked: bool,
-    },
+    RestSiteHealRewards { mimicked: bool },
     /// `AfterCombatVictoryEarly`, raised on every listener before any hears
     /// `AfterCombatVictory`, with the player's hit points, which a relic reads
     /// off its owner.
@@ -3591,9 +3578,7 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `AfterCombatVictory`, raised after `AfterCombatEnd` for a fight the
     /// run won, in a room of this type.
-    CombatVictory {
-        room: V::RoomType,
-    },
+    CombatVictory { room: V::RoomType },
     /// `AfterEnergyResetLate`, straight after `AfterEnergyReset`.
     EnergyResetLate {
         player: crate::CombatId,
@@ -3630,9 +3615,7 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `AfterObtained`, as the run picks the model up. `character` is its
     /// owner's, which a relic reads off `Owner.Character`.
-    Obtained {
-        character: V::Character,
-    },
+    Obtained { character: V::Character },
     /// `AfterOstyRevived`, once a dead Osty stands back up.
     OstyRevived,
     /// `AfterCreatureAddedToCombat`, once `creature` stands in the fight on
@@ -3643,10 +3626,7 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `AfterCardChangedPiles` for a card that joined the deck, outside a
     /// fight. `cloned` is `clonedBy` being set, for a copy a listener made.
-    AddedToDeck {
-        card: V::Card,
-        cloned: bool,
-    },
+    AddedToDeck { card: V::Card, cloned: bool },
     /// `AfterCardChangedPiles`, once a card lands in the pile it moved to.
     /// The fight raises it where a transform lands the replacement.
     CardChangedPiles {
@@ -3671,9 +3651,7 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `AfterOrbEvoked`, once an orb's evoke has run. The creatures it hit
     /// stay with the fight, which [`HookEffect::DamageTargets`] reaches.
-    OrbEvoked {
-        orb: V::Orb,
-    },
+    OrbEvoked { orb: V::Orb },
     /// `AfterCardExhausted`, once the card lies in the exhaust pile.
     CardExhausted {
         card: V::Card,
@@ -3712,14 +3690,10 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `AfterModifyingPowerAmountReceived`, asked of each listener whose
     /// `TryModifyPowerAmountReceived` changed what `power` landed with.
-    PowerAmountReceivedModified {
-        power: V::Power,
-    },
+    PowerAmountReceivedModified { power: V::Power },
     /// `AfterModifyingPowerAmountGiven`, asked of each listener whose
     /// `ModifyPowerAmountGiven` changed what `power` was applied with.
-    PowerAmountGivenModified {
-        power: V::Power,
-    },
+    PowerAmountGivenModified { power: V::Power },
     /// `AfterDamageReceived`, carrying the creature that has just been hit.
     ///
     /// `unblocked` is the `DamageResult`'s own, which is what came off the hit
@@ -3770,9 +3744,7 @@ pub enum EventHook<V: ContentVersion> {
         fully_blocked: bool,
     },
     /// `MonsterMoveState.OnPerform`, after the move's behavior runs.
-    MonsterMovePerformed {
-        move_id: V::MoveId,
-    },
+    MonsterMovePerformed { move_id: V::MoveId },
     /// `BeforeCardPlayed`, before each play of a card, replays included. The
     /// card stands in the play pile.
     CardPlaying {
@@ -3822,14 +3794,9 @@ pub enum EventHook<V: ContentVersion> {
     /// rather than what the creature carries. A [`HookEffect::ApplyToOwner`]
     /// from here lands on the creature this one is landing on, which is the
     /// owner it is about to have.
-    BeforeApplied {
-        landing: PowerAmount<V::Number>,
-    },
+    BeforeApplied { landing: PowerAmount<V::Number> },
     /// `BeforeSideTurnStart`, which runs before the side draws anything.
-    BeforeSideTurnStart {
-        side: V::CombatSide,
-        turn: V::Count,
-    },
+    BeforeSideTurnStart { side: V::CombatSide, turn: V::Count },
     /// `AfterSideTurnStart`, which runs once the side has drawn, in a room of
     /// this type.
     SideTurnStart {
@@ -3839,7 +3806,12 @@ pub enum EventHook<V: ContentVersion> {
     },
     BeforeSideTurnEndEarly {
         side: V::CombatSide,
+        /// The player's plays finished this turn that no auto-play made,
+        /// which a listener reads off `CardPlaysFinished`, at most 255.
+        plays: u8,
     },
+    /// `AfterTakingExtraTurn`, as the player's side keeps the turn.
+    TakingExtraTurn,
     /// `BeforeSideTurnEnd`, the last of the three before a side's turn ends.
     BeforeSideTurnEnd {
         side: V::CombatSide,
@@ -3855,9 +3827,7 @@ pub enum EventHook<V: ContentVersion> {
         block: V::Number,
     },
     /// `AfterSideTurnEndLate`, once every `AfterSideTurnEnd` has run.
-    SideTurnEndLate {
-        side: V::CombatSide,
-    },
+    SideTurnEndLate { side: V::CombatSide },
     /// `AfterStarsSpent`: `SpendStars` took `amount` from `player`, which is
     /// more than none.
     StarsSpent {
@@ -3873,19 +3843,13 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `AfterAutoPrePlayPhaseEnteredEarly`, once the player's turn is set up,
     /// in the player's `TurnNumber`.
-    AutoPrePlayPhaseEarly {
-        turn: V::Count,
-    },
+    AutoPrePlayPhaseEarly { turn: V::Count },
     /// `AfterAutoPrePlayPhaseEntered`, once every listener heard the early
     /// pass.
-    AutoPrePlayPhase {
-        turn: V::Count,
-    },
+    AutoPrePlayPhase { turn: V::Count },
     /// `AfterAutoPrePlayPhaseEnteredLate`, the last pass before the play
     /// phase.
-    AutoPrePlayPhaseLate {
-        turn: V::Count,
-    },
+    AutoPrePlayPhaseLate { turn: V::Count },
     /// `AfterEnergyReset`, carrying the player's creature.
     EnergyReset {
         player: crate::CombatId,
@@ -3907,9 +3871,7 @@ pub enum EventHook<V: ContentVersion> {
     GoldGainModified,
     /// `AfterPreventingBlockClear`, asked of the one model whose
     /// `ShouldClearBlock` kept its owner's block, with the block kept.
-    BlockClearPrevented {
-        block: V::Number,
-    },
+    BlockClearPrevented { block: V::Number },
     /// `AfterFlush`, once the player's hand is flushed. The cards left in
     /// hand are the ones it retained.
     Flushed,
@@ -3917,9 +3879,7 @@ pub enum EventHook<V: ContentVersion> {
     OrbChanneled,
     /// `AfterCardDiscarded`, once a card of the player's is in the discard
     /// pile. `side` is the side whose turn it is.
-    CardDiscarded {
-        side: V::CombatSide,
-    },
+    CardDiscarded { side: V::CombatSide },
     /// `BeforePowerAmountChanged`, as `amount` of `power` is about to land on
     /// `target`, or to change what it carries.
     PowerAmountChanging {
@@ -3943,26 +3903,20 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `AfterDiedToDoom`, once Doom killed its creatures. `fatal` counts those
     /// besides the player whose powers all let the death trigger Fatal.
-    DiedToDoom {
-        fatal: usize,
-    },
+    DiedToDoom { fatal: usize },
     /// `TryModifyRestSiteOptions`, as a rest site opens. A listener answers
     /// with each option it adds.
     RestSiteOptions,
     /// `TryModifyCardRewardOptions`, once a card reward has drawn its cards.
     /// `encounter` is whether a won fight made it, which is
     /// `CardCreationSource.Encounter`.
-    CardRewardOptions {
-        encounter: bool,
-    },
+    CardRewardOptions { encounter: bool },
     /// The rest site option a relic offers, taken: the relic's own method,
     /// which the option's `OnSelect` calls.
     RestOptionTaken,
     /// `AfterPreventingDeath`, asked of the one model whose `ShouldDieLate`
     /// kept its owner in the fight, with the owner's maximum hit points.
-    DeathPrevented {
-        max_hp: V::Number,
-    },
+    DeathPrevented { max_hp: V::Number },
     /// `PowerModel.AfterRemoved`, asked of a power as it comes off the
     /// creature that carried it.
     Removed,
@@ -3974,14 +3928,10 @@ pub enum EventHook<V: ContentVersion> {
     ///
     /// Raised once its hit points are gone and before anything decides
     /// whether it dies.
-    BeforeDeath {
-        creature: crate::CombatId,
-    },
+    BeforeDeath { creature: crate::CombatId },
     /// `Hook.AfterBlockBroken`, carrying the creature whose block a hit has
     /// just taken the last of.
-    BlockBroken {
-        creature: crate::CombatId,
-    },
+    BlockBroken { creature: crate::CombatId },
     /// `Hook.AfterDeath`, carrying the dead creature and the side it fought
     /// on.
     ///
@@ -4049,17 +3999,13 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `AfterModifyingCardPlayCount`, asked of each listener that changed a
     /// card's play count, once the count is worked out.
-    PlayCountModified {
-        card: V::Card,
-    },
+    PlayCountModified { card: V::Card },
     /// `AfterModifyingHpLostAfterOsty`, asked of each listener that changed
     /// what a hit takes off, once that is worked out.
     HpLostModified,
     /// `AfterModifyingCardPlayResultPileOrPosition`, asked of each listener
     /// that changed where a played card goes, once that is worked out.
-    ResultPileModified {
-        card: V::Card,
-    },
+    ResultPileModified { card: V::Card },
     /// `Hook.AfterAttack`, once the command's last hit has landed.
     AfterAttack {
         command: AttackId,
@@ -4143,6 +4089,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::CardPlaying { .. } => ModelHook::BeforeCardPlayed,
             EventHook::BeforeSideTurnStart { .. } => ModelHook::BeforeSideTurnStart,
             EventHook::SideTurnStart { .. } => ModelHook::AfterSideTurnStart,
+            EventHook::TakingExtraTurn => ModelHook::AfterTakingExtraTurn,
             EventHook::BeforeSideTurnEndEarly { .. } => ModelHook::BeforeSideTurnEndEarly,
             EventHook::BeforeSideTurnEnd { .. } => ModelHook::BeforeSideTurnEnd,
             EventHook::SideTurnEnd { .. } => ModelHook::AfterSideTurnEnd,
@@ -4277,6 +4224,8 @@ pub struct PlayFinished<V: ContentVersion> {
     pub id: crate::CardId<V>,
     /// `WasEthereal`: the copy was Ethereal as it was played.
     pub ethereal: bool,
+    /// `CardPlay.IsAutoPlay`.
+    pub auto: bool,
 }
 
 /// One entry in `CombatManager.History`, of the kinds a listener reads.
@@ -4963,6 +4912,8 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CardPileCmd.AutoPlayFromDrawPile(count, Top, forceExhaust: false)`
     /// for the listener's owner.
     AutoPlayFromDraw(V::Number),
+    /// `CardCmd.Exhaust` of each card in the owner's hand, in hand order.
+    ExhaustHand,
     /// `RelicCmd.Melt` of the owner's first wax relic not yet melted, where
     /// there is one.
     MeltFirstWax,

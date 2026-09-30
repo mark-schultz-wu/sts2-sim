@@ -2124,6 +2124,17 @@ impl<V: Rules> CombatHistory<V> {
         }
     }
 
+    /// `CardPlaysFinished` where `HappenedThisTurn` and not `IsAutoPlay`, at
+    /// most 255.
+    pub(super) fn unprompted_plays_this_turn(&self) -> u8 {
+        let plays = (self.this_turn.iter())
+            .filter(|entry| {
+                matches!(entry, sts2_core::HistoryEntry::Finished(finished) if !finished.auto)
+            })
+            .count();
+        u8::try_from(plays).unwrap_or(u8::MAX)
+    }
+
     /// `History.CardPlayStarted`, in the turn the fight stands in.
     pub(super) fn start(&mut self, card: V::Card, id: CardId<V>, play: CardPlay<V>, first: bool) {
         let started = sts2_core::PlayStarted {
@@ -2139,8 +2150,13 @@ impl<V: Rules> CombatHistory<V> {
     }
 
     /// `History.CardPlayFinished`, in the turn the fight stands in.
-    pub(super) fn finish(&mut self, card: V::Card, id: CardId<V>, ethereal: bool) {
-        let finished = sts2_core::PlayFinished { card, id, ethereal };
+    pub(super) fn finish(&mut self, card: V::Card, id: CardId<V>, ethereal: bool, auto: bool) {
+        let finished = sts2_core::PlayFinished {
+            card,
+            id,
+            ethereal,
+            auto,
+        };
         self.this_turn
             .push(sts2_core::HistoryEntry::Finished(finished));
     }

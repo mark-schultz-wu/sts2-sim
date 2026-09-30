@@ -4051,7 +4051,7 @@ pub(crate) fn event_hook(
         (
             Power::PlatingPower,
             PowerAmount::Counted(amount),
-            EventHook::BeforeSideTurnEndEarly { side },
+            EventHook::BeforeSideTurnEndEarly { side, .. },
         ) if side == owner => Some(HookEffect::GainBlock(amount)),
         // `PlatingPower.AfterSideTurnStart` on a player: one comes off each
         // of its turns but the first, by `PowerCmd.Decrement`.

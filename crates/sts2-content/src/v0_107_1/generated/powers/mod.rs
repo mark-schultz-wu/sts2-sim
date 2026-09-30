@@ -1795,7 +1795,9 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
     // MOCK_DO_NOT_SCALE_IN_MULTIPLAYER_POWER
     sts2_core::Overrides::NONE,
     // MOCK_EXTRA_TURN_POWER
-    sts2_core::Overrides::NONE,
+    sts2_core::Overrides::NONE
+        .with(sts2_core::ModelHook::AfterTakingExtraTurn)
+        .with(sts2_core::ModelHook::ShouldTakeExtraTurn),
     // MOCK_FREE_CARDS_POWER
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::TryModifyEnergyCostInCombatLate),
     // MOCK_GAIN_BLOCK_ON_ATTACK_POWER
