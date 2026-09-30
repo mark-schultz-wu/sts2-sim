@@ -76,8 +76,10 @@ pub enum State {
     ToricToughness {
         block: Number,
     },
-    /// `InfernoPower`'s `SelfDamage`, which `IncrementSelfDamage` raises.
-    Inferno {
+    /// The `SelfDamage` of `InfernoPower` or `CrimsonMantlePower`, which
+    /// `IncrementSelfDamage` raises.
+    SelfDamage {
+        power: Power,
         self_damage: Number,
     },
     /// `NightmarePower`'s `selectedCard`, a clone the fight keeps, which
@@ -261,8 +263,8 @@ pub(crate) fn noted(state: &mut State, note: Number) {
     match state {
         // `ToricToughnessPower.SetBlock`.
         State::ToricToughness { block } => *block = note,
-        // `InfernoPower.IncrementSelfDamage`, once for each note of one.
-        State::Inferno { self_damage } => *self_damage += note,
+        // `IncrementSelfDamage`, once for each note of one.
+        State::SelfDamage { self_damage, .. } => *self_damage += note,
         state => unimplemented!("a card writing {note} on {:?}", state.power()),
     }
 }
@@ -286,7 +288,10 @@ impl sts2_core::PowerModel<V> for State {
             Power::AdaptablePower => Self::Adaptable { reviving: false },
             Power::NemesisPower => Self::Nemesis { intangible: false },
             Power::ToricToughnessPower => Self::ToricToughness { block: 0 },
-            Power::InfernoPower => Self::Inferno { self_damage: 0 },
+            Power::InfernoPower | Power::CrimsonMantlePower => Self::SelfDamage {
+                power,
+                self_damage: 0,
+            },
             Power::NightmarePower => Self::Nightmare { card: None },
             Power::WitheringPresencePower => Self::WitheringPresence {
                 cards_left: WITHERING_CARDS,
@@ -347,7 +352,7 @@ impl sts2_core::PowerModel<V> for State {
             Self::Adaptable { .. } => Power::AdaptablePower,
             Self::Nemesis { .. } => Power::NemesisPower,
             Self::ToricToughness { .. } => Power::ToricToughnessPower,
-            Self::Inferno { .. } => Power::InfernoPower,
+            Self::SelfDamage { power, .. } => *power,
             Self::Nightmare { .. } => Power::NightmarePower,
             Self::WitheringPresence { .. } => Power::WitheringPresencePower,
             Self::ChainsOfBinding { .. } => Power::ChainsOfBindingPower,
@@ -2403,7 +2408,7 @@ pub(crate) fn event_hook(
         // `InfernoPower.AfterPlayerTurnStart`: its self damage on its owner,
         // unblockable and unpowered, from its owner.
         (Power::InfernoPower, _, EventHook::PlayerTurnStart { player, .. }) if player == holder => {
-            let State::Inferno { self_damage } = *state else {
+            let State::SelfDamage { self_damage, .. } = *state else {
                 unreachable!("Inferno keeps its self damage")
             };
             Some(HookEffect::DamageOwnerInFight {
@@ -2413,6 +2418,31 @@ pub(crate) fn event_hook(
             })
         }
         (Power::InfernoPower, _, EventHook::PlayerTurnStart { .. }) => None,
+        // `CrimsonMantlePower.AfterPlayerTurnStart`: its self damage on its
+        // owner, unblockable and unpowered, from its owner, then its stack of
+        // block, unpowered.
+        (
+            Power::CrimsonMantlePower,
+            PowerAmount::Counted(amount),
+            EventHook::PlayerTurnStart { player, .. },
+        ) if player == holder => {
+            let State::SelfDamage { self_damage, .. } = *state else {
+                unreachable!("Crimson Mantle keeps its self damage")
+            };
+            asked.push(HookEffect::DamageOwnerInFight {
+                amount: self_damage,
+                unblockable: true,
+                self_dealt: true,
+            });
+            asked.push(HookEffect::GainBlock(amount));
+            return;
+        }
+        (Power::CrimsonMantlePower, PowerAmount::Endless, EventHook::PlayerTurnStart { player, .. })
+            if player == holder =>
+        {
+            unimplemented!("an endless Crimson Mantle")
+        }
+        (Power::CrimsonMantlePower, _, EventHook::PlayerTurnStart { .. }) => None,
         // `NightmarePower.BeforeHandDraw`: its stack of clones of the card it
         // keeps into its owner's hand, then `PowerCmd.Remove(this)`.
         (Power::NightmarePower, PowerAmount::Counted(amount), EventHook::BeforeHandDraw { player, .. })

@@ -626,6 +626,23 @@ pub(super) fn before_side_turn_start<V: Rules>(
                     board.land(target, power, amount, Some(player));
                 }
             }
+            (Listener::Relic { .. }, sts2_core::HookEffect::ZeroCostFromDraw(count)) => {
+                use sts2_core::Fight as _;
+
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                let mut free: Vec<_> = board
+                    .cards_in(Pile::Draw)
+                    .into_iter()
+                    .filter(|&at| board.card_costs(at, false).0 == sts2_core::Cost::fixed(0))
+                    .collect();
+                board.stable_shuffle_cards(
+                    &mut free,
+                    <V::RunRngType as sts2_core::RunStreamKinds>::COMBAT_CARD_SELECTION,
+                );
+                free.truncate(count);
+                board.act_on(sts2_core::PileAct::IntoHand, &free);
+            }
             (_, effect) => unimplemented!("a listener asking for {effect:?} before a turn starts"),
         }
     }
@@ -1356,6 +1373,26 @@ pub(super) fn carry_setup<V: Rules>(
                                 amount,
                                 unblockable,
                             );
+                            ended = ended.or(board.ended());
+                        }
+                        // `CreatureCmd.GainBlock`, unpowered, on the player,
+                        // whose power or relic asked.
+                        effect @ sts2_core::HookEffect::GainBlock(_)
+                            if match listener {
+                                Listener::Power { owner, .. } => owner == player,
+                                Listener::Relic { .. } => true,
+                                _ => false,
+                            } =>
+                        {
+                            let mut board = Board::for_card(
+                                live,
+                                rngs.reborrow(),
+                                relics,
+                                ascension,
+                                None,
+                                None,
+                            );
+                            super::hook::apply::<V, _>(&mut board, [effect]);
                             ended = ended.or(board.ended());
                         }
                         sts2_core::HookEffect::GenerateFromPool {

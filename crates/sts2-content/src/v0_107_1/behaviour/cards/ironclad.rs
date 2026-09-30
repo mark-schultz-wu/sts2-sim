@@ -92,6 +92,14 @@ pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<
         }
         // `Inferno`: its Inferno on its owner, then one more self damage on
         // the power it landed or stacked into.
+        // `CrimsonMantle`: its Crimson Mantle on its owner, then the power's
+        // self damage raised by one.
+        IroncladCard::CrimsonMantle => {
+            let mantle = PowerAmount::Counted(fight.var(CardVar::CrimsonMantlePower));
+            fight.apply_to_actor(Power::CrimsonMantlePower, mantle);
+            fight.note_on_power(fight.actor(), Power::CrimsonMantlePower, 1);
+            Played::Done
+        }
         IroncladCard::Inferno => {
             let inferno = PowerAmount::Counted(fight.var(CardVar::InfernoPower));
             fight.apply_to_actor(Power::InfernoPower, inferno);

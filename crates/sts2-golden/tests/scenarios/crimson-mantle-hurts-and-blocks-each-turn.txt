@@ -1,0 +1,10 @@
+# Each Crimson Mantle raises the power's self damage by one. At each turn's
+# start the power takes that from its owner, then gives its stack as block.
+# Two Mantles take two and give sixteen.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"CRIMSON_MANTLE"}
+{"cmd":"grant","card":"CRIMSON_MANTLE"}
+{"cmd":"play_card","index":5}
+{"cmd":"play_card","index":5}
+{"cmd":"end_turn"}
