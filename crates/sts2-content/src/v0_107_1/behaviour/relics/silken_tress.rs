@@ -36,7 +36,7 @@ pub(super) fn event_hook(
                 });
             }
         }
-        EventHook::CardRewardOption { .. } => {}
+        EventHook::CardRewardOption { .. } | EventHook::CardRewardPick { .. } => {}
         EventHook::CardRewardOptionsModified => state.used = true,
         hook => unimplemented!("what SilkenTress does for {hook:?}"),
     }

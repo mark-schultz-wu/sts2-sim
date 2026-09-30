@@ -858,6 +858,27 @@ pub(crate) fn answer<V: Rules>(
                 ended,
             );
         }
+        // The card chosen into hand, then the rest of the setup.
+        Then::SetupChosen => {
+            let sts2_core::Taken::Chosen(chosen) = taken else {
+                unreachable!("a setup's choice offers cards")
+            };
+            let ascension = live.ascension;
+            let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
+            if let Some(card) = chosen {
+                sts2_core::Fight::add_generated_cards(&mut board, card, sts2_core::Pile::Hand, 1);
+            }
+            let ended = board.ended();
+            return run_deferred(
+                Fighting {
+                    live,
+                    streams,
+                    relics,
+                },
+                ascension,
+                ended,
+            );
+        }
         // A shuffle's pick inside an effect's draw: the cards picked, then
         // the rest of the draw and the effect behind it.
         Then::Pick { act } => {

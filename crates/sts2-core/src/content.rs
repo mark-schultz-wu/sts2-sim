@@ -3330,6 +3330,12 @@ pub enum EventHook<V: ContentVersion> {
         card: crate::CardIdent<V>,
         card_reward: bool,
     },
+    /// `TryModifyCardRewardOptionsLate` over a whole card reward, asked of a
+    /// relic once it has answered for each card. A listener that picks among
+    /// the cards answers here.
+    CardRewardPick {
+        card_reward: bool,
+    },
     /// `TryModifyCardBeingAddedToDeck`, for a card about to join the deck.
     CardBeingAddedToDeck {
         card: crate::CardIdent<V>,
@@ -3911,6 +3917,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::PotionUsing { .. } => ModelHook::BeforePotionUsed,
             EventHook::PotionUsed { .. } => ModelHook::AfterPotionUsed,
             EventHook::CardRewardOption { .. } => ModelHook::TryModifyCardRewardOptionsLate,
+            EventHook::CardRewardPick { .. } => ModelHook::TryModifyCardRewardOptionsLate,
             EventHook::CardRewardOptionsModified => ModelHook::AfterModifyingCardRewardOptions,
             EventHook::CardBeingAddedToDeck { .. } => ModelHook::TryModifyCardBeingAddedToDeck,
             EventHook::MerchantCardCreated { .. } => ModelHook::ModifyMerchantCardCreationResults,
@@ -5170,6 +5177,10 @@ pub enum HookEffect<V: ContentVersion> {
         kind: CardKind,
         count: V::Number,
     },
+    /// `CardFactory.GetDistinctForCombat` of three colorless cards off
+    /// `CombatCardGeneration`, then `CardSelectCmd.FromChooseACardScreen`.
+    /// The one chosen goes into the hand through `AddGeneratedCardToCombat`.
+    ChooseColorlessIntoHand,
     /// `CardPileCmd.AddGeneratedCardsToCombat`: this many new copies of a
     /// card into the player's hand, the way `Shiv.CreateInHand` makes them.
     GenerateInHand {
@@ -5195,6 +5206,13 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CardCmd.Upgrade` on a clone of the card the hook names, which takes
     /// its place.
     UpgradeCard,
+    /// `CardCmd.Enchant` by `amount` on a clone of one card of a reward,
+    /// which takes its place. The card is `Rng.Niche.NextItem` over those
+    /// the enchantment can enchant, and nothing where none can take it.
+    EnchantOneRewardCard {
+        enchantment: V::Enchantment,
+        amount: u8,
+    },
     /// `CardCmd.Enchant` by `amount` on a clone of the card the hook names,
     /// which takes its place.
     EnchantCard {

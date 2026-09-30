@@ -2838,11 +2838,44 @@ impl<V: Rules> State<V> {
     /// Each listener here answers it where its own first answer was yes, for
     /// every reward that comes here is a `CardReward`'s.
     pub(super) fn reward_options(&mut self, cards: &mut [CardIdent<V>]) {
-        for card in cards {
-            *card = self.rewritten(*card, |card| sts2_core::EventHook::CardRewardOption {
-                card,
-                card_reward: true,
-            });
+        use sts2_core::rng::GameRng as _;
+
+        // Relic by relic, in the belt's order, each over the whole reward:
+        // one relic's card can be another's to enchant or not.
+        let hook = sts2_core::ModelHook::TryModifyCardRewardOptionsLate;
+        let mut left = self.player.relics.hearing(sts2_core::Overrides::of(hook));
+        while left != 0 {
+            let slot = left.trailing_zeros() as usize;
+            left &= left - 1;
+            for card in cards.iter_mut() {
+                let mut asked = sts2_core::HookEffects::new();
+                let option = sts2_core::EventHook::CardRewardOption {
+                    card: *card,
+                    card_reward: true,
+                };
+                V::relic_event_hook(&mut self.player.relics[slot].state, option, &mut asked);
+                *card = rewrite(*card, asked);
+            }
+            let mut asked = sts2_core::HookEffects::new();
+            let pick = sts2_core::EventHook::CardRewardPick { card_reward: true };
+            V::relic_event_hook(&mut self.player.relics[slot].state, pick, &mut asked);
+            for effect in asked {
+                match effect {
+                    sts2_core::HookEffect::EnchantOneRewardCard {
+                        enchantment,
+                        amount,
+                    } => {
+                        let eligible: Vec<usize> = (0..cards.len())
+                            .filter(|&at| V::can_enchant(enchantment, &cards[at]))
+                            .collect();
+                        let rng = self.streams.run(V::RunRngType::NICHE);
+                        if let Ok(&at) = rng.choose(&eligible) {
+                            V::enchant(enchantment, amount, &mut cards[at]);
+                        }
+                    }
+                    effect => unimplemented!("a relic asking for {effect:?} over a card reward"),
+                }
+            }
         }
         let asked = self.notify_belt(sts2_core::EventHook::CardRewardOptionsModified);
         if let Some(effect) = asked.first() {
@@ -2870,16 +2903,7 @@ impl<V: Rules> State<V> {
         mut card: CardIdent<V>,
         hook: impl Fn(CardIdent<V>) -> sts2_core::EventHook<V>,
     ) -> CardIdent<V> {
-        for effect in self.notify_belt(hook(card)) {
-            match effect {
-                sts2_core::HookEffect::UpgradeCard => card.upgrade += 1,
-                sts2_core::HookEffect::EnchantCard {
-                    enchantment,
-                    amount,
-                } => V::enchant(enchantment, amount, &mut card),
-                effect => unimplemented!("a relic asking for {effect:?} of a card it rewrites"),
-            }
-        }
+        card = rewrite(card, self.notify_belt(hook(card)));
         card
     }
 
@@ -5339,6 +5363,26 @@ fn stream_of<'a, V: Rules>(
         (sts2_core::Stream::Event, _) => unreachable!("an event's stream outside its room"),
         (stream, _) => streams.of(stream),
     }
+}
+
+/// `card` after the effects relics asked for it: a clone upgraded or
+/// enchanted, which takes its place.
+///
+/// # Panics
+///
+/// A relic asking for anything else.
+fn rewrite<V: Rules>(mut card: CardIdent<V>, asked: sts2_core::HookEffects<V>) -> CardIdent<V> {
+    for effect in asked {
+        match effect {
+            sts2_core::HookEffect::UpgradeCard => card.upgrade += 1,
+            sts2_core::HookEffect::EnchantCard {
+                enchantment,
+                amount,
+            } => V::enchant(enchantment, amount, &mut card),
+            effect => unimplemented!("a relic asking for {effect:?} of a card it rewrites"),
+        }
+    }
+    card
 }
 
 #[cfg(test)]

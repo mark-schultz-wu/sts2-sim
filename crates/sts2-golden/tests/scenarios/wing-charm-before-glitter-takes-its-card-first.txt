@@ -1,0 +1,9 @@
+# Each relic rewrites a card reward in turn, in the belt's order. Wing Charm
+# comes first and enchants one card with Swift. Glitter then enchants every
+# other card Glam can take, and passes over the one Swift already holds.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"WING_CHARM"}
+{"cmd":"grant","relic":"GLITTER"}
+{"cmd":"grant","relic":"ORRERY"}
+{"cmd":"answer","take":[{"index":0,"card":0}]}
+{"cmd":"answer","skip":true}

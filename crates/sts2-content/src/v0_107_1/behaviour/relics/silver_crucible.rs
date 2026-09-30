@@ -37,7 +37,7 @@ pub(super) fn event_hook(
         } if state.times_used < CARDS && card.upgrade < card.card.max_upgrade() => {
             asked.push(HookEffect::UpgradeCard);
         }
-        EventHook::CardRewardOption { .. } => {}
+        EventHook::CardRewardOption { .. } | EventHook::CardRewardPick { .. } => {}
         EventHook::CardRewardOptionsModified => {
             if state.times_used < CARDS {
                 state.times_used += 1;

@@ -246,6 +246,7 @@ mod throwing_axe;
 mod tingsha;
 mod tiny_mailbox;
 mod toasty_mittens;
+mod toolbox;
 mod touch_of_orobas;
 mod tough_bandages;
 mod toxic_egg;
@@ -265,6 +266,7 @@ mod war_paint;
 mod whetstone;
 mod white_beast_statue;
 mod white_star;
+mod wing_charm;
 mod winged_boots;
 mod wongos_mystery_ticket;
 mod yummy_cookie;
@@ -552,6 +554,8 @@ pub enum State {
     GoldPlatedCables,
     Cauldron,
     LunarPastry,
+    WingCharm,
+    Toolbox,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -795,6 +799,8 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::Toolbox => toolbox::event_hook(hook, asked),
+        State::WingCharm => wing_charm::event_hook(hook, asked),
         State::LunarPastry => lunar_pastry::event_hook(hook, asked),
         State::Cauldron => cauldron::event_hook(hook, asked),
         State::GoldPlatedCables => gold_plated_cables::event_hook(hook, asked),
@@ -1169,7 +1175,9 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::PowerCell
         | State::Orrery
         | State::Cauldron
-        | State::LunarPastry => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::LunarPastry
+        | State::WingCharm
+        | State::Toolbox => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1348,6 +1356,8 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::Toolbox => State::Toolbox,
+            Relic::WingCharm => State::WingCharm,
             Relic::LunarPastry => State::LunarPastry,
             Relic::Cauldron => State::Cauldron,
             Relic::GoldPlatedCables => State::GoldPlatedCables,
