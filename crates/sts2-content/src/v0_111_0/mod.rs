@@ -88,6 +88,9 @@ impl sts2_core::ContentVersion for V0_111_0 {
     type CardVar = generated::cards::CardVar;
     type CardTag = generated::cards::CardTag;
     type Character = generated::characters::Character;
+    /// This build has no behaviour, so no enchantment here keeps a field of
+    /// its own.
+    type EnchantmentState = sts2_core::EnchantmentStatus;
     type Enchantment = generated::enchantments::Enchantment;
     type Encounter = generated::encounters::Encounter;
     type Event = generated::events::Event;

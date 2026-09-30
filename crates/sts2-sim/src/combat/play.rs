@@ -194,7 +194,7 @@ pub(crate) fn enchant<V: Rules>(
     }
     V::enchant(enchantment, amount, &mut ident);
     live.cards.write(sts2_core::Pile::Hand, at, |face| {
-        face.ident = ident;
+        face.enchant(ident);
         true
     });
     Ok(())
@@ -1180,7 +1180,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                 // `EnchantmentModel.OnPlay`, after the card's own and before
                 // the play is finished.
                 if let Some(enchanted) = face.ident.enchantment {
-                    let mut status = face.enchantment_status();
+                    let mut state = face.enchantment_state();
                     let mut board = Board::for_card(
                         next,
                         streams.combat(),
@@ -1190,12 +1190,12 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                         Some(card),
                     )
                     .blocking();
-                    V::enchantment_on_play(enchanted, &mut status, &mut board);
+                    V::enchantment_on_play(enchanted, &mut state, &mut board);
                     effect.ended = effect.ended.or(board.ended());
                     let skipped = std::mem::take(&mut board.skipped);
                     merge::<V>(&mut next.skip_tick, skipped);
                     next.cards
-                        .write_in_play(card, |face| face.set_enchantment_status(status));
+                        .write_in_play(card, |face| face.set_enchantment_state(state));
                 }
                 let ended = finished::<V, _>(
                     Fighting {

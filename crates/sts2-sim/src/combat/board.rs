@@ -2264,23 +2264,23 @@ fn enchanted_hit<V: Rules>(
     card: Option<&CardInstance<V>>,
     powered: bool,
 ) -> (V::Number, Option<Decimal>) {
-    let Some((enchanted, status)) = card.and_then(|held| {
+    let Some((enchanted, state)) = card.and_then(|held| {
         held.face
             .ident
             .enchantment
-            .map(|enchanted| (enchanted, held.face.enchantment_status()))
+            .map(|enchanted| (enchanted, held.face.enchantment_state()))
     }) else {
         return (V::Number::zero(), None);
     };
     let added = enchanted_by::<V>(
         enchanted,
-        status,
+        &state,
         EnchantHook::DamageAdditive { powered },
         V::Number::zero(),
     );
     match <V as sts2_core::Hooks>::enchant_modify(
         enchanted,
-        status,
+        &state,
         EnchantHook::DamageMultiplicative { powered },
     ) {
         Modify::Nothing => (added, None),
@@ -2333,11 +2333,11 @@ fn hit_phases<V: Rules>(
 /// An enchantment that does more to the number than add to it.
 pub(super) fn enchanted_by<V: Rules>(
     enchanted: sts2_core::Enchanted<V>,
-    status: sts2_core::EnchantmentStatus,
+    state: &V::EnchantmentState,
     hook: EnchantHook,
     amount: V::Number,
 ) -> V::Number {
-    match <V as sts2_core::Hooks>::enchant_modify(enchanted, status, hook) {
+    match <V as sts2_core::Hooks>::enchant_modify(enchanted, state, hook) {
         Modify::Nothing => amount,
         Modify::Added(more) => amount + more,
         answer => unimplemented!("an enchantment answering {hook:?} with {answer:?}"),
@@ -2652,10 +2652,10 @@ pub(crate) fn resolve<V: Rules>(
                 held.face
                     .ident
                     .enchantment
-                    .map(|e| (e, held.face.enchantment_status()))
+                    .map(|e| (e, held.face.enchantment_state()))
             }) {
-                Some((enchanted, status)) => {
-                    enchanted_by::<V>(enchanted, status, EnchantHook::BlockAdditive, amount)
+                Some((enchanted, state)) => {
+                    enchanted_by::<V>(enchanted, &state, EnchantHook::BlockAdditive, amount)
                 }
                 None => amount,
             };

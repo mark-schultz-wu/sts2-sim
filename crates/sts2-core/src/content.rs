@@ -1171,6 +1171,35 @@ pub enum EnchantmentStatus {
     Disabled,
 }
 
+/// One enchantment on one card copy, as a build keeps it: its
+/// `EnchantmentModel.Status`, and the fields its own class adds.
+pub trait EnchantmentModel<V: ContentVersion>:
+    std::fmt::Debug + Copy + Eq + std::hash::Hash + 'static
+{
+    /// A fresh instance of `enchantment`, as `CardCmd.Enchant` makes one.
+    /// Nothing is the state a copy holds with no enchantment.
+    fn new(enchantment: Option<V::Enchantment>) -> Self;
+
+    fn status(&self) -> EnchantmentStatus;
+
+    fn set_status(&mut self, status: EnchantmentStatus);
+}
+
+/// The state of a build whose enchantments keep no field beyond `Status`.
+impl<V: ContentVersion> EnchantmentModel<V> for EnchantmentStatus {
+    fn new(_enchantment: Option<V::Enchantment>) -> Self {
+        EnchantmentStatus::Normal
+    }
+
+    fn status(&self) -> EnchantmentStatus {
+        *self
+    }
+
+    fn set_status(&mut self, status: EnchantmentStatus) {
+        *self = status;
+    }
+}
+
 /// One `DamageResult`: what a hit did to one creature it reached.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DamageResult<V: ContentVersion> {
@@ -5720,11 +5749,11 @@ pub trait Hooks: ContentVersion {
     ) -> crate::HookResponse<bool>;
 
     /// `EnchantDamageAdditive` and its kin, answered by the enchantment on a
-    /// card, whose `Status` is `status`. [`Modify::Nothing`] for one whose
-    /// class does not override the hook.
+    /// card, which is in `state`. [`Modify::Nothing`] for one whose class
+    /// does not override the hook.
     fn enchant_modify(
         enchanted: crate::Enchanted<Self>,
-        status: crate::EnchantmentStatus,
+        state: &Self::EnchantmentState,
         hook: EnchantHook,
     ) -> Modify<Self::Number>;
 
@@ -6234,6 +6263,9 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + CharacterTable
         + 'static;
 
+    /// One enchantment on one copy, with the fields its class keeps.
+    type EnchantmentState: EnchantmentModel<Self>;
+
     /// A modifier stuck to a card.
     type Enchantment: std::fmt::Debug
         + Copy
@@ -6494,11 +6526,11 @@ pub trait Rules: Hooks {
     fn orb_evoke<F: Fight<Self>>(orb: &crate::Channelled<Self>, fight: &mut F) -> Opponents;
 
     /// `EnchantmentModel.OnPlay`, after each play of the card it is on.
-    /// `status` is this copy's `EnchantmentModel.Status`, which the
-    /// enchantment reads, and sets when it disables itself.
+    /// `state` is this copy's enchantment, which the play reads and writes:
+    /// its `Status`, set when it disables itself, and its class's own fields.
     fn enchantment_on_play<F: Fight<Self>>(
         enchanted: crate::Enchanted<Self>,
-        status: &mut EnchantmentStatus,
+        state: &mut Self::EnchantmentState,
         fight: &mut F,
     );
 
