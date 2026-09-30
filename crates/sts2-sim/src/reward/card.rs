@@ -5,6 +5,55 @@ use sts2_core::{CardIdent, CardTable as _, Drafted, RewardRarity, Rules};
 
 use super::Odds;
 
+/// The cards one card reward draws from: its options' pools, each rarity in
+/// pool order.
+///
+/// One character's pool is borrowed as the table drafts it. Several are
+/// merged, which only a relic's `ModifyCardRewardCreationOptions` asks for.
+pub(crate) enum Pool<V: Rules> {
+    Own(V::Character),
+    Merged {
+        common: Vec<V::Card>,
+        uncommon: Vec<V::Card>,
+        rare: Vec<V::Card>,
+    },
+}
+
+impl<V: Rules> Pool<V> {
+    /// The pools of `characters`, in that order. One character's is borrowed.
+    pub(crate) fn of(characters: &[V::Character]) -> Self {
+        if let [one] = characters {
+            return Pool::Own(*one);
+        }
+        let merged = |rarity| -> Vec<V::Card> {
+            (characters.iter())
+                .flat_map(|&character| V::reward_cards(character).at(rarity).iter().copied())
+                .collect()
+        };
+        Pool::Merged {
+            common: merged(RewardRarity::Common),
+            uncommon: merged(RewardRarity::Uncommon),
+            rare: merged(RewardRarity::Rare),
+        }
+    }
+
+    /// Each rarity's cards, as a roll reads them.
+    pub(crate) fn drafted(&self) -> Drafted<'_, V::Card> {
+        match self {
+            Pool::Own(character) => V::reward_cards(*character),
+            Pool::Merged {
+                common,
+                uncommon,
+                rare,
+            } => Drafted {
+                common,
+                uncommon,
+                rare,
+            },
+        }
+    }
+}
+
 /// Draw distinct cards with regular-encounter rarity odds.
 ///
 /// Each card costs two draws, rarity and the item in that rarity, and a third
@@ -231,7 +280,7 @@ pub(crate) fn encounter<V: Rules, R: GameRng>(
     rng: &mut R,
     odds: &mut Odds,
     ascension: V::AscensionLevel,
-    character: V::Character,
+    cards: Drafted<'_, V::Card>,
     count: usize,
     act: usize,
     bands: RarityOdds,
@@ -239,7 +288,6 @@ pub(crate) fn encounter<V: Rules, R: GameRng>(
     if super::combat::scarce::<V>(ascension) {
         unimplemented!("the reward odds a scarce run rolls");
     }
-    let cards = V::reward_cards(character);
     let mut drawn: Vec<V::Card> = Vec::with_capacity(count);
     let mut offered = Vec::with_capacity(count);
     for _ in 0..count {

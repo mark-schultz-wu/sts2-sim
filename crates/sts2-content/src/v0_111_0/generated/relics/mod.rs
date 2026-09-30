@@ -1638,7 +1638,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // DIAMOND_DIADEM
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterSideTurnStart),
     // DINGY_RUG
-    sts2_core::Overrides::NONE,
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ModifyCardRewardCreationOptions),
     // DISTINGUISHED_CAPE
     sts2_core::Overrides::NONE,
     // DIVINE_DESTINY
@@ -2056,7 +2056,9 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // PRESERVED_FOG
     sts2_core::Overrides::NONE,
     // PRISMATIC_GEM
-    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ModifyMaxEnergy),
+    sts2_core::Overrides::NONE
+        .with(sts2_core::ModelHook::ModifyCardRewardCreationOptions)
+        .with(sts2_core::ModelHook::ModifyMaxEnergy),
     // PUMPKIN_CANDLE
     sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCombatEnd)

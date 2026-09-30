@@ -1,0 +1,7 @@
+# Prismatic Gem gives an energy each turn, and a fight's card reward draws
+# from every character's pool at once.
+{"cmd":"start","seed":"S33D1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"PRISMATIC_GEM"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"DEMISE_POWER","amount":99,"target":1}
+{"cmd":"end_turn"}
