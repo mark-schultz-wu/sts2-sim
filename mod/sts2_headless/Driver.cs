@@ -644,20 +644,24 @@ public static class Driver
     /// so adding to the hand appears to succeed — and the card then throws
     /// "must be added to a CombatState before playing it" when played, several
     /// commands later.
+    ///
+    /// <c>CreateCard</c> registers it, as the game's own <c>card</c> console
+    /// command does, and then runs <c>AfterCreated</c>. A card built and only
+    /// registered skips that, which leaves Spoils Map's act at -1.
     /// </remarks>
-    public static async Task GrantCard(RunState state, CardModel card)
+    public static async Task GrantCard(RunState state, CardModel canonical)
     {
         Player me = state.Players[0];
         CombatState? combat = (state.CurrentRoom as CombatRoom)?.CombatState;
 
         if (combat != null && CombatManager.Instance.IsInProgress)
         {
-            combat.AddCard(card, me);
+            CardModel card = combat.CreateCard(canonical, me);
             await CardPileCmd.Add(card, PileType.Hand.GetPile(me));
         }
         else
         {
-            state.AddCard(card, me);
+            CardModel card = state.CreateCard(canonical, me);
             await CardPileCmd.Add(card, me.Deck);
         }
     }

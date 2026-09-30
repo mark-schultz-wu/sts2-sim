@@ -125,6 +125,34 @@ impl<V: Rules> ActMapBuilder<V> {
         self.points[self.ancient].kind = V::MapPointType::ANCIENT;
     }
 
+    /// `SpoilsActMap.AssignPointTypes`: the standard deal, but only the last
+    /// row and the first are stamped. The one treasure is set as its path is
+    /// walked.
+    #[tracing::instrument(level = "trace", skip_all)]
+    pub(super) fn assign_spoils_types<R: GameRng>(&mut self, rng: &mut R) {
+        self.stamp(self.rows - 1, V::MapPointType::REST_SITE);
+        self.stamp(1, V::MapPointType::MONSTER);
+
+        let mut queue: VecDeque<V::MapPointType> = VecDeque::new();
+        for (count, kind) in [
+            (self.counts.rests, V::MapPointType::REST_SITE),
+            (self.counts.shops, V::MapPointType::SHOP),
+            (self.counts.elites, V::MapPointType::ELITE),
+            (self.counts.unknowns, V::MapPointType::UNKNOWN),
+        ] {
+            queue.extend(std::iter::repeat_n(kind, count));
+        }
+        self.deal(rng, &mut queue);
+
+        for id in self.live().collect::<Vec<_>>() {
+            if self.points[id].kind == V::MapPointType::UNASSIGNED {
+                self.points[id].kind = V::MapPointType::MONSTER;
+            }
+        }
+        self.points[self.boss].kind = V::MapPointType::BOSS;
+        self.points[self.ancient].kind = V::MapPointType::ANCIENT;
+    }
+
     /// One row given one type, and closed to anything later.
     fn stamp(&mut self, row: usize, kind: V::MapPointType) {
         for id in self.row(row) {

@@ -4664,6 +4664,14 @@ pub enum DeckAct<V: ContentVersion> {
     },
 }
 
+/// A map a hook puts in place of an act's own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReplacedMap {
+    /// `SpoilsActMap`: the paths narrow to one treasure seven rows from the
+    /// top, off the `spoils_map` stream.
+    Spoils,
+}
+
 /// One stream to draw from: one of the run's, one of the player's, or the
 /// event's own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -6882,6 +6890,23 @@ pub trait Rules: Hooks {
     ///
     /// A card whose override nobody has ported.
     fn deck_card_narrows_unknown_rooms(card: Self::Card, act: usize) -> bool;
+
+    /// `ModifyGeneratedMap` for a card in the deck, in the act counted from
+    /// zero. The map it puts in place of the act's own, or nothing where it
+    /// leaves that one.
+    ///
+    /// # Panics
+    ///
+    /// A card whose override nobody has ported.
+    fn deck_card_modify_generated_map(card: Self::Card, act: usize) -> Option<ReplacedMap>;
+
+    /// `AfterMapGenerated` for a card in the deck, in the act counted from
+    /// zero.
+    ///
+    /// # Panics
+    ///
+    /// A card whose override does something nobody has ported.
+    fn deck_card_after_map_generated(card: Self::Card, act: usize);
 
     /// `ModifyNextEvent` for a card in the deck: the event it puts in place
     /// of `event`, which is `event` where it changes nothing.
