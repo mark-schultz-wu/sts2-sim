@@ -453,6 +453,13 @@ pub(crate) fn enter<V: Rules>(
         ascension,
         super::turn::OrbMoment::TurnStart,
     );
+    // `RunAutoPrePlayPhase`, which a setup parked on a question waits out.
+    let ended = match ended {
+        None if live.phase == <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY => {
+            super::turn::pre_play_phase::<V>(&mut live, streams.combat(), relics)
+        }
+        ended => ended,
+    };
     if ended == Some(super::Ended::Won) {
         super::listen::combat_ended::<V>(&mut live, relics);
     }

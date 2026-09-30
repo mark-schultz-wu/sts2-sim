@@ -604,6 +604,12 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::enchantments::enchant(enchantment, amount, card);
     }
 
+    fn should_start_at_bottom_of_draw_pile(
+        enchantment: Self::Enchantment,
+    ) -> sts2_core::HookResponse<bool> {
+        behaviour::enchantments::should_start_at_bottom_of_draw_pile(enchantment)
+    }
+
     fn encounter_gold(
         encounter: Self::Encounter,
         ascension: Self::AscensionLevel,

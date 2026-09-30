@@ -651,6 +651,9 @@ pub enum ModelHook {
     AfterSideTurnEnd,
     AfterSideTurnEndLate,
     AfterEnergyReset,
+    AfterAutoPrePlayPhaseEnteredEarly,
+    AfterAutoPrePlayPhaseEntered,
+    AfterAutoPrePlayPhaseEnteredLate,
     AfterStarsSpent,
     AfterHandEmptied,
     AfterBlockCleared,
@@ -771,7 +774,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 130] = [
+    pub const ALL: [ModelHook; 133] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -785,6 +788,9 @@ impl ModelHook {
         ModelHook::AfterSideTurnEnd,
         ModelHook::AfterSideTurnEndLate,
         ModelHook::AfterEnergyReset,
+        ModelHook::AfterAutoPrePlayPhaseEnteredEarly,
+        ModelHook::AfterAutoPrePlayPhaseEntered,
+        ModelHook::AfterAutoPrePlayPhaseEnteredLate,
         ModelHook::AfterStarsSpent,
         ModelHook::AfterHandEmptied,
         ModelHook::AfterBlockCleared,
@@ -920,6 +926,9 @@ impl ModelHook {
             ModelHook::AfterSideTurnEnd => "AfterSideTurnEnd",
             ModelHook::AfterSideTurnEndLate => "AfterSideTurnEndLate",
             ModelHook::AfterEnergyReset => "AfterEnergyReset",
+            ModelHook::AfterAutoPrePlayPhaseEnteredEarly => "AfterAutoPrePlayPhaseEnteredEarly",
+            ModelHook::AfterAutoPrePlayPhaseEntered => "AfterAutoPrePlayPhaseEntered",
+            ModelHook::AfterAutoPrePlayPhaseEnteredLate => "AfterAutoPrePlayPhaseEnteredLate",
             ModelHook::AfterStarsSpent => "AfterStarsSpent",
             ModelHook::AfterHandEmptied => "AfterHandEmptied",
             ModelHook::AfterBlockCleared => "AfterBlockCleared",
@@ -3862,6 +3871,21 @@ pub enum EventHook<V: ContentVersion> {
         player: crate::CombatId,
         phase: V::PlayerTurnPhase,
     },
+    /// `AfterAutoPrePlayPhaseEnteredEarly`, once the player's turn is set up,
+    /// in the player's `TurnNumber`.
+    AutoPrePlayPhaseEarly {
+        turn: V::Count,
+    },
+    /// `AfterAutoPrePlayPhaseEntered`, once every listener heard the early
+    /// pass.
+    AutoPrePlayPhase {
+        turn: V::Count,
+    },
+    /// `AfterAutoPrePlayPhaseEnteredLate`, the last pass before the play
+    /// phase.
+    AutoPrePlayPhaseLate {
+        turn: V::Count,
+    },
     /// `AfterEnergyReset`, carrying the player's creature.
     EnergyReset {
         player: crate::CombatId,
@@ -4124,6 +4148,9 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::SideTurnEnd { .. } => ModelHook::AfterSideTurnEnd,
             EventHook::SideTurnEndLate { .. } => ModelHook::AfterSideTurnEndLate,
             EventHook::EnergyReset { .. } => ModelHook::AfterEnergyReset,
+            EventHook::AutoPrePlayPhaseEarly { .. } => ModelHook::AfterAutoPrePlayPhaseEnteredEarly,
+            EventHook::AutoPrePlayPhase { .. } => ModelHook::AfterAutoPrePlayPhaseEntered,
+            EventHook::AutoPrePlayPhaseLate { .. } => ModelHook::AfterAutoPrePlayPhaseEnteredLate,
             EventHook::StarsSpent { .. } => ModelHook::AfterStarsSpent,
             EventHook::HandEmptied { .. } => ModelHook::AfterHandEmptied,
             EventHook::BlockCleared { .. } => ModelHook::AfterBlockCleared,
@@ -4933,6 +4960,9 @@ pub enum HookEffect<V: ContentVersion> {
     /// `RunState.CloneCard` of each deck card carrying this enchantment, in
     /// deck order, each then `CardPileCmd.Add` to the deck's bottom.
     CloneEnchantedIntoDeck(V::Enchantment),
+    /// `CardPileCmd.AutoPlayFromDrawPile(count, Top, forceExhaust: false)`
+    /// for the listener's owner.
+    AutoPlayFromDraw(V::Number),
     /// `RelicCmd.Melt` of the owner's first wax relic not yet melted, where
     /// there is one.
     MeltFirstWax,
@@ -6697,6 +6727,12 @@ pub trait Rules: Hooks {
     /// `CardCmd.Enchant` by `amount` on a card that takes it, which is the
     /// enchantment's own `OnEnchant` as well.
     fn enchant(enchantment: Self::Enchantment, amount: u8, card: &mut crate::CardIdent<Self>);
+
+    /// `EnchantmentModel.ShouldStartAtBottomOfDrawPile`, which sinks its card
+    /// as a fight's first hand is drawn.
+    fn should_start_at_bottom_of_draw_pile(
+        enchantment: Self::Enchantment,
+    ) -> crate::HookResponse<bool>;
 
     /// The potions a reward draws from, split by rarity.
     ///

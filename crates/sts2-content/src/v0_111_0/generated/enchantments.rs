@@ -310,7 +310,7 @@ static OVERRIDES: [sts2_core::Overrides; 24] = [
     // GOOPY
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardPlayed),
     // IMBUED
-    sts2_core::Overrides::NONE,
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterAutoPrePlayPhaseEntered),
     // INKY
     sts2_core::Overrides::NONE,
     // INSTINCT

@@ -1,0 +1,8 @@
+# Electric Shrymp enchants one skill of the deck with Imbued. The card sinks
+# to the draw pile's bottom as the fight opens, and plays itself on the
+# first turn before the player can act.
+{"cmd":"start","seed":"S33D1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"ELECTRIC_SHRYMP"}
+{"cmd":"answer","cards":[1]}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}

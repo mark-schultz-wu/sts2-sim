@@ -1,0 +1,6 @@
+# Snecko Eye draws two more cards each turn, and Confused opens each fight,
+# so a card drawn costs a random amount.
+{"cmd":"start","seed":"S33D1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"SNECKO_EYE"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}

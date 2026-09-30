@@ -2152,6 +2152,8 @@ impl<V: Rules> State<V> {
             match V::modify_hook(listener, hook) {
                 sts2_core::Modify::Nothing => {}
                 sts2_core::Modify::Scaled(scale) => gained *= scale.exact(),
+                // The listener's own number in place of what it was handed.
+                sts2_core::Modify::Replaced(amount) => gained = crate::combat::exact::<V>(amount),
                 answer => unimplemented!("a relic answering {hook:?} with {answer:?}"),
             }
         }

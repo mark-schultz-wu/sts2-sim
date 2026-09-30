@@ -2036,6 +2036,12 @@ pub(crate) fn event_hook(
     let effect = match (power, amount, hook) {
         // Their `AfterModifyingHandDraw` only flashes.
         (Power::PaleBlueDotPower | Power::MindRotPower, _, EventHook::HandDrawModified) => return,
+        // `MayhemPower.AfterAutoPrePlayPhaseEntered`: its stack, off the top
+        // of the draw pile, auto-played. A fight here has one player, whose
+        // power it is.
+        (Power::MayhemPower, PowerAmount::Counted(amount), EventHook::AutoPrePlayPhase { .. }) => {
+            Some(HookEffect::AutoPlayFromDraw(amount))
+        }
         // Its `AfterModifyingEnergyGain` only flashes.
         (Power::NoEnergyGainPower, _, EventHook::EnergyGainModified) => return,
         // `NoEnergyGainPower.AfterSideTurnEnd`: gone once its owner's turn

@@ -496,16 +496,29 @@ impl<V: Rules, P: Piles> Cards<V, P> {
         });
     }
 
-    /// `SetupPlayerTurn` on turn one: each innate copy in the draw pile moved
-    /// to its top in pile order. So the last of them ends up first. How many
-    /// there are.
-    pub(crate) fn innate_to_top(&mut self) -> usize {
+    /// `SetupPlayerTurn` on turn one. Each copy `sinks` names goes to the draw
+    /// pile's bottom in pile order, so they keep their order there. Then each
+    /// other innate copy goes to its top in pile order, so the last of them
+    /// ends up first. How many innate copies went up.
+    pub(crate) fn innate_to_top(&mut self, sinks: impl Fn(&Face<V>) -> bool) -> usize {
         let (faces, states) = (&self.faces, &self.states);
+        let face = |card: Card| &faces[usize::from(states[usize::from(card)])];
         let mut innate = 0;
         self.piles.arrange(Place::Draw, |cards| {
+            let mut sunk: SmallVec<[Card; 4]> = SmallVec::new();
+            let mut kept = 0;
             for at in 0..cards.len() {
-                let face = &faces[usize::from(states[usize::from(cards[at])])];
-                if face.innate() {
+                let card = cards[at];
+                if sinks(face(card)) {
+                    sunk.push(card);
+                } else {
+                    cards[kept] = card;
+                    kept += 1;
+                }
+            }
+            cards[kept..].copy_from_slice(&sunk);
+            for at in 0..kept {
+                if face(cards[at]).innate() {
                     cards[..=at].rotate_right(1);
                     innate += 1;
                 }
@@ -629,7 +642,7 @@ mod tests {
         let named: Vec<_> = draw.iter().map(|card| card.id).collect();
         let mut cards = Cards::<V0_107_1>::dealt(&[], &draw);
 
-        assert_eq!(cards.innate_to_top(), 2);
+        assert_eq!(cards.innate_to_top(|_| false), 2);
         let top: Vec<_> = (0..2)
             .map(|at| cards.get(Pile::Draw, at).expect("a card").id)
             .collect();

@@ -1,0 +1,8 @@
+# Bombardment exhausts, and plays itself from the exhaust pile as each
+# later turn opens, before the player can act.
+{"cmd":"start","seed":"S33D1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"BOMBARDMENT"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
