@@ -4666,6 +4666,9 @@ pub enum DeckAct<V: ContentVersion> {
     /// card. The replacement is upgraded where the original was, and carries
     /// the original's enchantment where that enchantment takes it.
     TransformInto(V::Card),
+    /// `FromDeckForRemoval` over the deck's upgradable cards, then each
+    /// removed and kept on the relic, in id order. Pael's Tooth's.
+    RemoveOntoRelic(V::Relic),
     /// `FromDeckForEnchantment` over the cards the enchantment takes, of one
     /// type where `kind` names it, in deck order. Then `CardCmd.Enchant` by
     /// `amount`.
@@ -4973,6 +4976,9 @@ pub enum HookEffect<V: ContentVersion> {
     /// of `rooms` in turn, then the boss. Golden Compass's
     /// `GoldenPathActMap`.
     FixedPathMap(&'static [V::MapPointType]),
+    /// One of the cards the relic keeps, drawn with `NextItem` off the
+    /// rewards stream, back into the deck and upgraded where it can be.
+    ReturnHeldCard(V::Relic),
     /// `CardCmd.Exhaust` of each card in the owner's hand, in hand order.
     ExhaustHand,
     /// `RelicCmd.Melt` of the owner's first wax relic not yet melted, where
@@ -5551,7 +5557,7 @@ pub enum HookEffect<V: ContentVersion> {
 /// `RelicModel` is an instance per relic held, and this is the type of that
 /// instance. The two things a run asks one without giving it a hook: build it,
 /// and read the number it shows.
-pub trait RelicModel<V: ContentVersion>: Copy + std::fmt::Debug + PartialEq + Eq + Sized {
+pub trait RelicModel<V: Hooks>: Clone + std::fmt::Debug + PartialEq + Eq + Sized {
     /// The model as `RelicCmd.Obtain` builds it.
     ///
     /// # Panics
@@ -5573,6 +5579,30 @@ pub trait RelicModel<V: ContentVersion>: Copy + std::fmt::Debug + PartialEq + Eq
     ///
     /// A relic that works it out and nobody has ported.
     fn used_up(&self, relic: V::Relic) -> bool;
+
+    /// The deck cards the relic keeps off the deck, which Pael's Tooth's
+    /// `SerializableCards` are. Nothing for any other relic.
+    fn held_cards(&self) -> &[DeckCard<V>] {
+        &[]
+    }
+
+    /// `cards` added to the ones the relic keeps, in order.
+    ///
+    /// # Panics
+    ///
+    /// A relic that keeps no cards.
+    fn hold_cards(&mut self, _cards: &[DeckCard<V>]) {
+        unimplemented!("a relic keeping deck cards it has no place for");
+    }
+
+    /// The card the relic keeps at `at`, handed back and gone from it.
+    ///
+    /// # Panics
+    ///
+    /// A relic that keeps no cards.
+    fn release_card(&mut self, _at: usize) -> DeckCard<V> {
+        unimplemented!("a relic handing back a card it cannot keep");
+    }
 }
 
 /// One deck card's own model, as the run's deck holds one.
