@@ -116,6 +116,7 @@ mod girya;
 mod glass_eye;
 mod glitter;
 mod gold_plated_cables;
+mod golden_compass;
 mod golden_pearl;
 mod gorget;
 mod gremlin_horn;
@@ -582,6 +583,7 @@ pub enum State {
     Ectoplasm,
     PaelsEye(paels_eye::State),
     PaelsLegion(paels_legion::State),
+    GoldenCompass(golden_compass::State),
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -825,6 +827,7 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::GoldenCompass(state) => golden_compass::event_hook(state, hook, asked),
         State::PaelsLegion(state) => paels_legion::event_hook(state, hook, asked),
         State::PaelsEye(state) => paels_eye::event_hook(state, hook, asked),
         State::Ectoplasm => ectoplasm::event_hook(hook),
@@ -1231,7 +1234,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::PaelsWing(_)
         | State::ToyBox(_)
         | State::ElectricShrymp
-        | State::PaelsEye(_) => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::PaelsEye(_)
+        | State::GoldenCompass(_) => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1410,6 +1414,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::GoldenCompass => State::GoldenCompass(golden_compass::State::default()),
             Relic::PaelsLegion => State::PaelsLegion(paels_legion::State::default()),
             Relic::PaelsEye => State::PaelsEye(paels_eye::State::default()),
             Relic::Ectoplasm => State::Ectoplasm,

@@ -12,11 +12,12 @@ use crate::run::HeldRelic;
 pub(crate) fn obtained<V: Rules>(
     held: &mut HeldRelic<V>,
     character: V::Character,
+    act: usize,
 ) -> sts2_core::HookEffects<V> {
     let mut asked = sts2_core::HookEffects::new();
     V::relic_event_hook(
         &mut held.state,
-        EventHook::Obtained { character },
+        EventHook::Obtained { character, act },
         &mut asked,
     );
     asked

@@ -115,6 +115,37 @@ impl<V: Rules> ActMap<V> {
         Ok(ActMapBuilder::<V>::generate(rng, layout, ascension)?.into())
     }
 
+    /// A map of one column down the grid's middle: the ancient, then `rooms`
+    /// one row each, then the boss. `GoldenPathActMap`'s own layout.
+    pub fn fixed_path(rooms: &[V::MapPointType]) -> Self {
+        use sts2_core::MapPointKinds as _;
+
+        let middle = (COLS / 2) as u8;
+        let at = |row: usize| {
+            Coord::new(
+                middle,
+                u8::try_from(row).unwrap_or_else(|_| unimplemented!("a path {row} rows long")),
+            )
+        };
+        let last = rooms.len() + 1;
+        let nodes: Arc<[Node<V>]> = (0..=last)
+            .map(|row| Node {
+                at: at(row),
+                kind: match row {
+                    0 => V::MapPointType::ANCIENT,
+                    row if row == last => V::MapPointType::BOSS,
+                    row => rooms[row - 1],
+                },
+                to: match row == last {
+                    true => smallvec::SmallVec::new(),
+                    false => smallvec::smallvec![at(row + 1)],
+                },
+            })
+            .collect();
+        let digest = Digest::of_points(&nodes);
+        ActMap { nodes, digest }
+    }
+
     /// The act's nodes, to hand to a report that outlives this borrow.
     pub fn shared(&self) -> Arc<[Node<V>]> {
         Arc::clone(&self.nodes)

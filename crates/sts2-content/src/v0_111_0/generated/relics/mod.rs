@@ -1754,7 +1754,9 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // GNARLED_HAMMER
     sts2_core::Overrides::NONE,
     // GOLDEN_COMPASS
-    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ModifyUnknownMapPointRoomTypes),
+    sts2_core::Overrides::NONE
+        .with(sts2_core::ModelHook::ModifyGeneratedMap)
+        .with(sts2_core::ModelHook::ModifyUnknownMapPointRoomTypes),
     // GOLDEN_PEARL
     sts2_core::Overrides::NONE,
     // GOLD_PLATED_CABLES

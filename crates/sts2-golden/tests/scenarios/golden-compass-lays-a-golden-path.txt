@@ -1,0 +1,12 @@
+# Golden Compass remakes the act it is picked up in as one path down the
+# middle: sixteen fixed rooms from the ancient to the boss. An unknown point
+# on it is always an event.
+{"cmd":"start","seed":"C000000006","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"GOLDEN_COMPASS"}
+{"cmd":"travel","col":3,"row":1}
+{"cmd":"power","power":"DEMISE_POWER","amount":99,"target":1}
+{"cmd":"power","power":"DEMISE_POWER","amount":99,"target":2}
+{"cmd":"power","power":"DEMISE_POWER","amount":99,"target":3}
+{"cmd":"end_turn"}
+{"cmd":"answer","skip":true}
+{"cmd":"travel","col":3,"row":2}
