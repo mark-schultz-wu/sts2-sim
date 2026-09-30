@@ -659,6 +659,7 @@ pub enum ModelHook {
     AfterOrbEvoked,
     ModifyOrbValue,
     AfterModifyingOrbPassiveTriggerCount,
+    ModifyOrbPassiveTriggerCounts,
     AfterEnergyResetLate,
     ModifyUnblockedDamageTarget,
     AfterOstyRevived,
@@ -724,7 +725,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 127] = [
+    pub const ALL: [ModelHook; 128] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -790,6 +791,7 @@ impl ModelHook {
         ModelHook::AfterOrbEvoked,
         ModelHook::ModifyOrbValue,
         ModelHook::AfterModifyingOrbPassiveTriggerCount,
+        ModelHook::ModifyOrbPassiveTriggerCounts,
         ModelHook::AfterEnergyResetLate,
         ModelHook::ModifyUnblockedDamageTarget,
         ModelHook::AfterOstyRevived,
@@ -926,6 +928,7 @@ impl ModelHook {
             ModelHook::AfterModifyingOrbPassiveTriggerCount => {
                 "AfterModifyingOrbPassiveTriggerCount"
             }
+            ModelHook::ModifyOrbPassiveTriggerCounts => "ModifyOrbPassiveTriggerCounts",
             ModelHook::AfterEnergyResetLate => "AfterEnergyResetLate",
             ModelHook::ModifyUnblockedDamageTarget => "ModifyUnblockedDamageTarget",
             ModelHook::AfterOstyRevived => "AfterOstyRevived",
@@ -1099,6 +1102,8 @@ pub struct CardSource<V: ContentVersion> {
     pub playing: bool,
     /// `IsUpgraded`.
     pub upgraded: bool,
+    /// Whether an enchantment sits on it.
+    pub enchanted: bool,
 }
 
 /// A number an enchantment works out for the card it is on.
@@ -3098,6 +3103,13 @@ pub enum ModifyHook<V: ContentVersion> {
         ethereal: bool,
         affliction: Option<V::Affliction>,
     },
+    /// `ModifyOrbPassiveTriggerCounts`: how many times one of the player's
+    /// orbs triggers its passive. `first` is whether it is `Orbs[0]`.
+    OrbPassiveTriggerCount {
+        first: bool,
+    },
+    /// `ModifyXValue`: the X a card of the player's resolves to.
+    XValue,
     /// `ModifyOrbValue`: a number `player`'s orb shows, as its passive or its
     /// evoke reads it.
     OrbValue {
@@ -3144,6 +3156,8 @@ impl<V: ContentVersion> ModifyHook<V> {
             ModifyHook::EnergyCostLate { .. } => ModelHook::TryModifyEnergyCostInCombatLate,
             ModifyHook::CardPlayCount { .. } => ModelHook::ModifyCardPlayCount,
             ModifyHook::OrbValue { .. } => ModelHook::ModifyOrbValue,
+            ModifyHook::OrbPassiveTriggerCount { .. } => ModelHook::ModifyOrbPassiveTriggerCounts,
+            ModifyHook::XValue => ModelHook::ModifyXValue,
         }
     }
 }

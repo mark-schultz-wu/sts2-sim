@@ -2302,6 +2302,7 @@ fn hit_phases<V: Rules>(
         card: held.face.ident.card,
         playing: fight.live.cards.in_play(held.id),
         upgraded: held.face.ident.upgrade > 0,
+        enchanted: held.face.ident.enchantment.is_some(),
     });
     [
         ModifyHook::DamageAdditive {
@@ -4208,27 +4209,27 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     /// `CapturedXValue` is what the play spent, which the history's latest
     /// started play records: the one being resolved.
     fn x_value(&self) -> V::Number {
-        self.unheard(sts2_core::ModelHook::ModifyXValue);
         let started = self
             .live
             .history()
             .started_this_turn()
             .last()
             .expect("an X-cost card resolving its X is a play started this turn");
-        num_traits::cast(started.x).expect("an energy fits a game number")
+        let x = num_traits::cast(started.x).expect("an energy fits a game number");
+        modified_by::<V>(self.walk(), x, &[ModifyHook::XValue])
     }
 
     /// `LastStarsSpent` is what the play spent, which the history's latest
     /// started play records: the one being resolved.
     fn star_x_value(&self) -> V::Number {
-        self.unheard(sts2_core::ModelHook::ModifyXValue);
         let started = self
             .live
             .history()
             .started_this_turn()
             .last()
             .expect("an X star cost resolving its X is a play started this turn");
-        num_traits::cast(started.stars).expect("a star count fits a game number")
+        let x = num_traits::cast(started.stars).expect("a star count fits a game number");
+        modified_by::<V>(self.walk(), x, &[ModifyHook::XValue])
     }
 
     fn random_target(&mut self) -> Option<CombatId> {
