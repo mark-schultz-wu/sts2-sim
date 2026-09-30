@@ -4973,6 +4973,9 @@ pub enum HookEffect<V: ContentVersion> {
     /// `WithCardPools` over these characters' pools and then the reward's
     /// own, as `Union` joins them: in that order, each once.
     AddCharacterPools(&'static [V::Character]),
+    /// `WithCardPools` over the reward's pools with the colorless pool after
+    /// them, where it is not among them already.
+    AddColorlessPool,
     /// `RunManager.GenerateMap` for the act the run stands in, which the
     /// hooks can replace.
     RegenerateMap,

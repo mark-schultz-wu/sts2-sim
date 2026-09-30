@@ -3155,16 +3155,32 @@ impl<V: Rules> State<V> {
     ///
     /// A relic asking for anything but more pools.
     pub(super) fn reward_pool(&mut self) -> crate::reward::card::Pool<V> {
+        use crate::reward::card::Source;
+
         let own = self.character();
-        let mut pools: SmallVec<[V::Character; 5]> = smallvec::smallvec![own];
+        let mut pools: SmallVec<[Source<V>; 6]> = smallvec::smallvec![Source::Character(own)];
         for effect in self.notify_belt(sts2_core::EventHook::CardRewardCreationOptions) {
             match effect {
                 // `Union`: the new pools first, then what was there and is
                 // not among them.
                 sts2_core::HookEffect::AddCharacterPools(added) => {
-                    let mut joined: SmallVec<[V::Character; 5]> = added.iter().copied().collect();
-                    joined.extend(pools.iter().copied().filter(|held| !added.contains(held)));
+                    let mut joined: SmallVec<[Source<V>; 6]> = added
+                        .iter()
+                        .map(|&character| Source::Character(character))
+                        .collect();
+                    let rest: SmallVec<[Source<V>; 6]> = pools
+                        .iter()
+                        .copied()
+                        .filter(|held| !joined.contains(held))
+                        .collect();
+                    joined.extend(rest);
                     pools = joined;
+                }
+                // `Concat` of the colorless pool, where it is not there.
+                sts2_core::HookEffect::AddColorlessPool => {
+                    if !pools.contains(&Source::Colorless) {
+                        pools.push(Source::Colorless);
+                    }
                 }
                 effect => {
                     unimplemented!("a relic asking for {effect:?} over a card reward's pools")

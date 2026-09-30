@@ -355,15 +355,26 @@ impl<'a, V: Rules> Board<'a, V> {
                 let (amount, modifiers) = self.received(id, power, amount, applier);
                 (PowerAmount::Counted(amount), modifiers)
             }
+            // The game's endless amount is -1, which `IsInfinite` reads, and
+            // which the listeners are handed. One that takes it to nothing
+            // stops it landing.
             PowerAmount::Endless => {
                 if super::listen::heard::<V>(
                     self.live,
                     self.relics,
                     sts2_core::ModelHook::TryModifyPowerAmountReceived,
                 ) {
-                    unimplemented!("an endless {power:?} landing where a listener changes amounts")
+                    let endless = -num_traits::one::<V::Number>();
+                    let (amount, modifiers) = self.received(id, power, endless, applier);
+                    let amount = match amount {
+                        amount if amount == endless => PowerAmount::Endless,
+                        amount if amount == V::Number::zero() => PowerAmount::Counted(amount),
+                        amount => unimplemented!("an endless {power:?} changed to {amount:?}"),
+                    };
+                    (amount, modifiers)
+                } else {
+                    (PowerAmount::Endless, SmallVec::new())
                 }
-                (PowerAmount::Endless, SmallVec::new())
             }
         };
         self.apply_fresh(at, power, amount, applier);
@@ -4755,6 +4766,10 @@ pub(super) fn shuffle_asking<V: Rules>(
                 asks = Some((pile, selection, act));
             }
             effect @ HookEffect::AddToDrawAtRandom { .. } => board.after_shuffle(effect),
+            // `CreatureCmd.GainBlock`, unpowered, on a relic's owner.
+            effect @ HookEffect::GainBlock(_) if matches!(listener, Listener::Relic { .. }) => {
+                super::hook::apply::<V, _>(&mut board, [effect]);
+            }
             effect => unimplemented!("{listener:?} asking for {effect:?} after a shuffle"),
         }
     }
