@@ -100,7 +100,7 @@ pub enum State {
     LostWisp(lost_wisp::State),
     LuminousChoir(luminous_choir::State),
     MorphicGrove(morphic_grove::State),
-    Orobas(ancient::Offered),
+    Orobas(orobas::State),
     Nonupeipe(ancient::Offered),
     Pael(ancient::Offered),
     RoomFullOfCheese(room_full_of_cheese::State),

@@ -1494,8 +1494,24 @@ impl<V: Rules> State<V> {
         self.obtain_as(relic, false)
     }
 
+    /// `RelicCmd.Obtain` of a relic set up for `character` first.
+    fn obtain_named(&mut self, relic: V::Relic, character: V::Character) -> Option<Asked<V>> {
+        self.obtain_held(relic, false, Some(character))
+    }
+
     /// `RelicCmd.Obtain` of a relic that is wax where `wax` says so.
     pub(super) fn obtain_as(&mut self, relic: V::Relic, wax: bool) -> Option<Asked<V>> {
+        self.obtain_held(relic, wax, None)
+    }
+
+    /// `RelicCmd.Obtain`, of a relic set up for `named` first where it names
+    /// a character.
+    fn obtain_held(
+        &mut self,
+        relic: V::Relic,
+        wax: bool,
+        named: Option<V::Character>,
+    ) -> Option<Asked<V>> {
         use sts2_core::RelicTable as _;
 
         // Out of both bags, unless a run can hold more than one.
@@ -1506,6 +1522,17 @@ impl<V: Rules> State<V> {
             wax,
             ..HeldRelic::new(relic)
         };
+        if let Some(character) = named {
+            let mut asked = sts2_core::HookEffects::new();
+            V::relic_event_hook(
+                &mut held.state,
+                sts2_core::EventHook::CharacterNamed(character),
+                &mut asked,
+            );
+            if let Some(effect) = asked.first() {
+                unimplemented!("{relic:?} asking for {effect:?} as it is set up");
+            }
+        }
         let effects = crate::combat::obtained::<V>(&mut held, self.character(), self.act);
         self.player.relics.push(held);
         self.carry_out(effects)
@@ -1618,6 +1645,15 @@ impl<V: Rules> State<V> {
                 },
                 // The relic's own pickup asks first, and the effects after
                 // it wait behind what it asked.
+                HookEffect::ObtainRelicFor { relic, character } => {
+                    match self.obtain_named(relic, character) {
+                        None => continue,
+                        Some(mut asked) => {
+                            asked.rest.extend(effects);
+                            return Some(asked);
+                        }
+                    }
+                }
                 HookEffect::ObtainRelic(_) | HookEffect::ObtainNextRelic(_) => {
                     let relic = match effect {
                         HookEffect::ObtainRelic(relic) => relic,
@@ -2131,6 +2167,34 @@ impl<V: Rules> State<V> {
                         min,
                         count: max,
                     }
+                }
+                HookEffect::ChooseCardsOfPool {
+                    pool,
+                    per_rarity,
+                    min,
+                    max,
+                } => {
+                    use sts2_core::RewardRarity;
+
+                    let mut offered: Vec<CardIdent<V>> = Vec::with_capacity(3 * per_rarity);
+                    for rarity in [
+                        RewardRarity::Common,
+                        RewardRarity::Uncommon,
+                        RewardRarity::Rare,
+                    ] {
+                        // Each its own `CreateForReward`, whose hooks run on
+                        // what that one made.
+                        self.card_reward_unheard();
+                        let mut drawn: Vec<V::Card> = Vec::with_capacity(per_rarity);
+                        for _ in 0..per_rarity {
+                            let card = self.uniform_card_of(pool, rarity, &drawn);
+                            drawn.push(card);
+                        }
+                        let mut made: Vec<_> = drawn.into_iter().map(CardIdent::new).collect();
+                        self.reward_options(&mut made);
+                        offered.extend(made);
+                    }
+                    Pickup::Cards { offered, min, max }
                 }
                 HookEffect::ChooseCards {
                     draw,
@@ -2976,9 +3040,19 @@ impl<V: Rules> State<V> {
     /// One `NextItem` over the character's reward pool at `rarity`, less
     /// what the same call drew already.
     fn uniform_card(&mut self, rarity: sts2_core::RewardRarity, drawn: &[V::Card]) -> V::Card {
+        self.uniform_card_of(self.character(), rarity, drawn)
+    }
+
+    /// [`State::uniform_card`] over another character's pool.
+    fn uniform_card_of(
+        &mut self,
+        character: V::Character,
+        rarity: sts2_core::RewardRarity,
+        drawn: &[V::Card],
+    ) -> V::Card {
         use sts2_core::rng::GameRng as _;
 
-        let pool = V::reward_cards(self.character()).at(rarity);
+        let pool = V::reward_cards(character).at(rarity);
         let left: Vec<V::Card> = pool
             .iter()
             .copied()

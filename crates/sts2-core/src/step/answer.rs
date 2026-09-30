@@ -37,9 +37,9 @@ pub struct Picks {
 /// How many cards one selection can take, held inline so that a
 /// [`crate::Decision`] is `Copy`.
 ///
-/// The hand holds ten, and the widest selection outside it, Sealed Deck's
-/// grid, takes ten. [`Picks::push`] panics past this.
-const PICKS: usize = 10;
+/// The hand holds ten. The widest selection outside it, Sea Glass's grid,
+/// takes fifteen. [`Picks::push`] panics past this.
+const PICKS: usize = 15;
 
 impl Picks {
     /// A selection that takes nothing.

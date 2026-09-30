@@ -1,0 +1,10 @@
+# Demon Tongue heals back the first hit that gets past the block on the
+# player's own turn. Bloodletting's own loss of health is that hit, and the
+# second in the same turn is not healed.
+{"cmd":"start","seed":"S33D1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"DEMON_TONGUE"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"BLOODLETTING"}
+{"cmd":"grant","card":"BLOODLETTING"}
+{"cmd":"play_card","index":5}
+{"cmd":"play_card","index":5}

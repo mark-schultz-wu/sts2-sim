@@ -1997,6 +1997,12 @@ impl<'a, V: Rules> Board<'a, V> {
                 sts2_core::Fight::draw(self, count);
                 continue;
             }
+            // `CreatureCmd.Heal` on the relic's owner, the player.
+            if let (Listener::Relic { .. }, HookEffect::Heal(amount)) = (listener, effect) {
+                let player = self.live.player().id;
+                sts2_core::Fight::heal(self, player, amount);
+                continue;
+            }
             // `PowerCmd.Apply` on the relic's owner, the player.
             if let (Listener::Relic { .. }, HookEffect::ApplyToOwner(power, amount)) =
                 (listener, effect)

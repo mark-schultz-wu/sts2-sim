@@ -29,8 +29,15 @@ const POOL_TWO: [Relic; 3] = [
 
 pub struct Orobas;
 
+/// What Orobas offers, and the character a Sea Glass it offers names.
+#[derive(Debug, Clone)]
+pub struct State {
+    offered: Offered,
+    sea_glass: Character,
+}
+
 impl EventBehavior<V> for Orobas {
-    type State = Offered;
+    type State = State;
 
     /// An ancient is the node its act opens on, and is never rolled as an
     /// unknown room.
@@ -38,15 +45,14 @@ impl EventBehavior<V> for Orobas {
         false
     }
 
-    fn enter<R: GameRng>(&self, run: &impl EventView<V>, rng: &mut R) -> Offered {
-        // One of the other characters, drawn whether or not the sea glass that
-        // would name it is the option taken. The relic offered is the one
-        // relic either way, so which character it was does not show here.
+    fn enter<R: GameRng>(&self, run: &impl EventView<V>, rng: &mut R) -> State {
+        // One of the other characters, drawn whether or not the Sea Glass that
+        // names it is offered. The player's own where there is no other.
         let others: Vec<Character> = super::super::ALL_CHARACTERS
             .into_iter()
             .filter(|&other| other != run.character())
             .collect();
-        let _cut_for = next_item(rng, &others);
+        let sea_glass = next_item(rng, &others).unwrap_or(run.character());
 
         let paired = match (rng.next_double() as f32) < PRISMATIC {
             true => Relic::PrismaticGem,
@@ -54,7 +60,7 @@ impl EventBehavior<V> for Orobas {
         };
         let first: Vec<Relic> = POOL_ONE.into_iter().chain([paired]).collect();
         let third = pool_three(run);
-        Offered::new(
+        let offered = Offered::new(
             [
                 next_item(rng, &first),
                 next_item(rng, &POOL_TWO),
@@ -63,21 +69,30 @@ impl EventBehavior<V> for Orobas {
             .into_iter()
             .flatten()
             .collect(),
-        )
+        );
+        State { offered, sea_glass }
     }
 
-    fn observe(&self, state: &Offered, _run: &impl EventView<V>) -> Room<V> {
-        state.observe(Event::Orobas)
+    fn observe(&self, state: &State, _run: &impl EventView<V>) -> Room<V> {
+        state.offered.observe(Event::Orobas)
     }
 
+    /// `RelicOption`, with the Sea Glass set up for its character first.
     fn choose<R: GameRng>(
         &self,
-        state: &mut Offered,
+        state: &mut State,
         option: u8,
         _run: &impl EventView<V>,
         _rng: &mut R,
     ) -> HookEffects<V> {
-        state.choose(option)
+        let mut effects = state.offered.choose(option);
+        if state.offered.relic(option) == Relic::SeaGlass {
+            effects[0] = sts2_core::HookEffect::ObtainRelicFor {
+                relic: Relic::SeaGlass,
+                character: state.sea_glass,
+            };
+        }
+        effects
     }
 }
 

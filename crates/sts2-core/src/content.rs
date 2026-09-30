@@ -3631,6 +3631,9 @@ pub enum EventHook<V: ContentVersion> {
         /// `RunState.CurrentActIndex`.
         act: usize,
     },
+    /// The character a relic is set up for, before it is obtained, as the
+    /// ancient that offers Sea Glass sets its `CharacterId`.
+    CharacterNamed(V::Character),
     /// `AfterOstyRevived`, once a dead Osty stands back up.
     OstyRevived,
     /// `AfterCreatureAddedToCombat`, once `creature` stands in the fight on
@@ -4134,6 +4137,7 @@ impl<V: ContentVersion> EventHook<V> {
                 ModelHook::AfterModifyingCardPlayResultPileOrPosition
             }
             EventHook::Obtained { .. }
+            | EventHook::CharacterNamed(_)
             | EventHook::Removed
             | EventHook::Applied
             | EventHook::BlockClearPrevented { .. }
@@ -4936,6 +4940,21 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CardPileCmd.AutoPlayFromDrawPile(count, Top, forceExhaust: false)`
     /// for the listener's owner.
     AutoPlayFromDraw(V::Number),
+    /// `RelicCmd.Obtain` of `relic`, set up for `character` first.
+    ObtainRelicFor {
+        relic: V::Relic,
+        character: V::Character,
+    },
+    /// `CardFactory.CreateForReward` three times over `pool`'s own card pool,
+    /// at `Uniform` odds, with no upgrade roll: `per_rarity` commons, then
+    /// uncommons, then rares. A grid then takes between `min` and `max` of
+    /// them into the deck, in the order picked.
+    ChooseCardsOfPool {
+        pool: V::Character,
+        per_rarity: usize,
+        min: usize,
+        max: usize,
+    },
     /// `RunManager.GenerateMap` for the act the run stands in, which the
     /// hooks can replace.
     RegenerateMap,
