@@ -20,7 +20,7 @@ const CLAW_CHANCE: u32 = 1;
 /// `AfterObtained`: `FromChooseABundleScreen` over `GenerateRandomBundles`,
 /// and each card of the bundle chosen into the deck.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
-    if let EventHook::Obtained { character } = hook {
+    if let EventHook::Obtained { character, .. } = hook {
         asked.push(HookEffect::OfferBundles {
             count: BUNDLES,
             commons: COMMONS,

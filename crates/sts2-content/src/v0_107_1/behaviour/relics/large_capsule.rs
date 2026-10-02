@@ -12,7 +12,7 @@ const RELICS: usize = 2;
 /// `AfterObtained`: `RelicFactory.PullNextRelicFromFront` twice, each
 /// obtained, then the character's basic Strike and Defend into the deck.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
-    if let EventHook::Obtained { character } = hook {
+    if let EventHook::Obtained { character, .. } = hook {
         for _ in 0..RELICS {
             asked.push(HookEffect::ObtainNextRelic(RelicPull::Rolled));
         }

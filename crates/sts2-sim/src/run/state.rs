@@ -817,6 +817,33 @@ impl<V: Rules> State<V> {
             .expect("an act's layout fits a packed map path")
     }
 
+    /// `RunManager.GenerateMap` for the act the run stands in: `CreateMap`,
+    /// then `Hook.ModifyGeneratedMap`, then `Hook.AfterMapGenerated`.
+    ///
+    /// # Panics
+    ///
+    /// A deck card that changes the map, or a relic asking for anything but
+    /// a map of its own.
+    fn generate_map(&mut self, act: V::Act) -> ActMap<V> {
+        let mut map = Self::act_map(self.shared.raw_seed, act, self.act, self.ascension());
+        if self
+            .deck_cards_hearing(sts2_core::ModelHook::ModifyGeneratedMap)
+            .next()
+            .is_some()
+        {
+            unimplemented!("a deck card changing a generated map");
+        }
+        let hook = sts2_core::EventHook::GeneratedMap { act: self.act };
+        for effect in self.notify_belt(hook) {
+            match effect {
+                sts2_core::HookEffect::FixedPathMap(rooms) => map = ActMap::fixed_path(rooms),
+                effect => unimplemented!("a relic asking for {effect:?} as a map is generated"),
+            }
+        }
+        self.unheard(sts2_core::ModelHook::AfterMapGenerated);
+        map
+    }
+
     pub(crate) fn start(
         seed: &Seed,
         character: V::Character,
@@ -1421,13 +1448,8 @@ impl<V: Rules> State<V> {
             self.phase = Phase::Won;
             return Ok(Decided::Resolved);
         };
-        self.map = Arc::new(Self::act_map(
-            self.shared.raw_seed,
-            act,
-            next,
-            self.ascension(),
-        ));
         self.act = next;
+        self.map = Arc::new(self.generate_map(act));
         self.visited.clear();
         // `Odds.UnknownMapPoint.ResetToBase`, which is the only one of the
         // run's odds an act puts back.
@@ -1466,7 +1488,7 @@ impl<V: Rules> State<V> {
             wax,
             ..HeldRelic::new(relic)
         };
-        let effects = crate::combat::obtained::<V>(&mut held, self.character());
+        let effects = crate::combat::obtained::<V>(&mut held, self.character(), self.act);
         self.player.relics.push(held);
         self.carry_out(effects)
     }
@@ -1707,7 +1729,8 @@ impl<V: Rules> State<V> {
                         unimplemented!("replacing {from:?}, which the run does not carry");
                     };
                     let mut held = HeldRelic::new(to);
-                    let effects = crate::combat::obtained::<V>(&mut held, self.character());
+                    let effects =
+                        crate::combat::obtained::<V>(&mut held, self.character(), self.act);
                     self.player.relics.replace(slot, held);
                     if let Some(effect) = effects.first() {
                         unimplemented!("{to:?} asking for {effect:?} as it replaces {from:?}");
@@ -1731,7 +1754,8 @@ impl<V: Rules> State<V> {
                         .find(|&&(from, _)| from == starter)
                         .map_or(fallback, |&(_, to)| to);
                     let mut held = HeldRelic::new(upgraded);
-                    let effects = crate::combat::obtained::<V>(&mut held, self.character());
+                    let effects =
+                        crate::combat::obtained::<V>(&mut held, self.character(), self.act);
                     self.player.relics.replace(slot, held);
                     if let Some(effect) = effects.first() {
                         unimplemented!(
@@ -1920,6 +1944,17 @@ impl<V: Rules> State<V> {
                         kind: None,
                     };
                     self.act_on_deck(act, &taken);
+                    continue;
+                }
+                // `State.Map` in place, and `RemoveStaleVisitedMapCoords`,
+                // which keeps the points the new map still has.
+                HookEffect::RegenerateMap => {
+                    use sts2_core::ActMap as _;
+
+                    let (act, _) = self.shared.opening.acts[self.act];
+                    let map = self.generate_map(act);
+                    self.visited.retain(|&at| map.at(at).is_ok());
+                    self.map = Arc::new(map);
                     continue;
                 }
                 HookEffect::UpgradeDeck => {
@@ -3601,7 +3636,7 @@ impl<V: Rules> State<V> {
             .any(|card| V::deck_card_narrows_unknown_rooms(card, self.act));
         // The same hook on the belt, where a relic takes a room type out.
         let mut removed: SmallVec<[V::RoomType; 2]> = SmallVec::new();
-        for effect in self.notify_belt(sts2_core::EventHook::UnknownRoomTypes) {
+        for effect in self.notify_belt(sts2_core::EventHook::UnknownRoomTypes { act: self.act }) {
             match effect {
                 sts2_core::HookEffect::RemoveRoomType(room) => removed.push(room),
                 effect => unimplemented!("a relic asking for {effect:?} as an unknown room rolls"),

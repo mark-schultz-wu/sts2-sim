@@ -639,6 +639,7 @@ pub trait PowerTable: Table {
 #[repr(u8)]
 pub enum ModelHook {
     AfterRoomEntered,
+    AfterMapGenerated,
     BeforeCombatStart,
     AfterCombatEnd,
     AfterCardPlayed,
@@ -750,6 +751,7 @@ pub enum ModelHook {
     TryModifyRewardsLate,
     TryModifyCardRewardAlternatives,
     ModifyUnknownMapPointRoomTypes,
+    ModifyGeneratedMap,
     ModifyOddsIncreaseForUnrolledRoomType,
     ModifyCardRewardUpgradeOdds,
     TryModifyCardRewardOptions,
@@ -776,8 +778,9 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 135] = [
+    pub const ALL: [ModelHook; 137] = [
         ModelHook::AfterRoomEntered,
+        ModelHook::AfterMapGenerated,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
         ModelHook::AfterCardPlayed,
@@ -889,6 +892,7 @@ impl ModelHook {
         ModelHook::TryModifyRewardsLate,
         ModelHook::TryModifyCardRewardAlternatives,
         ModelHook::ModifyUnknownMapPointRoomTypes,
+        ModelHook::ModifyGeneratedMap,
         ModelHook::ModifyOddsIncreaseForUnrolledRoomType,
         ModelHook::ModifyCardRewardUpgradeOdds,
         ModelHook::TryModifyCardRewardOptions,
@@ -918,6 +922,8 @@ impl ModelHook {
     pub const fn name(self) -> &'static str {
         match self {
             ModelHook::AfterRoomEntered => "AfterRoomEntered",
+            ModelHook::AfterMapGenerated => "AfterMapGenerated",
+            ModelHook::ModifyGeneratedMap => "ModifyGeneratedMap",
             ModelHook::BeforeCombatStart => "BeforeCombatStart",
             ModelHook::AfterCombatEnd => "AfterCombatEnd",
             ModelHook::AfterCardPlayed => "AfterCardPlayed",
@@ -3524,7 +3530,12 @@ pub enum EventHook<V: ContentVersion> {
     ShuffleOrder { initial: bool },
     /// `ModifyUnknownMapPointRoomTypes`, as an unknown map point rolls. A
     /// listener answers with the types it takes out.
-    UnknownRoomTypes,
+    UnknownRoomTypes {
+        /// `RunState.CurrentActIndex`.
+        act: usize,
+    },
+    /// `ModifyGeneratedMap`, as the act at this index has its map generated.
+    GeneratedMap { act: usize },
     /// `AfterRoomEntered`, for a room of this type.
     RoomEntered {
         room: V::RoomType,
@@ -3615,7 +3626,11 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `AfterObtained`, as the run picks the model up. `character` is its
     /// owner's, which a relic reads off `Owner.Character`.
-    Obtained { character: V::Character },
+    Obtained {
+        character: V::Character,
+        /// `RunState.CurrentActIndex`.
+        act: usize,
+    },
     /// `AfterOstyRevived`, once a dead Osty stands back up.
     OstyRevived,
     /// `AfterCreatureAddedToCombat`, once `creature` stands in the fight on
@@ -4044,7 +4059,8 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::CardPlayedLate { .. } => ModelHook::AfterCardPlayedLate,
             EventHook::SideTurnStartLate { .. } => ModelHook::AfterSideTurnStartLate,
             EventHook::RoomEntered { .. } => ModelHook::AfterRoomEntered,
-            EventHook::UnknownRoomTypes => ModelHook::ModifyUnknownMapPointRoomTypes,
+            EventHook::UnknownRoomTypes { .. } => ModelHook::ModifyUnknownMapPointRoomTypes,
+            EventHook::GeneratedMap { .. } => ModelHook::ModifyGeneratedMap,
             EventHook::ModifyRewards { .. } => ModelHook::TryModifyRewards,
             EventHook::ModifyRewardsLate => ModelHook::TryModifyRewardsLate,
             EventHook::CardRewardAlternatives | EventHook::CardRewardAlternativeChosen(_) => {
@@ -4912,6 +4928,13 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CardPileCmd.AutoPlayFromDrawPile(count, Top, forceExhaust: false)`
     /// for the listener's owner.
     AutoPlayFromDraw(V::Number),
+    /// `RunManager.GenerateMap` for the act the run stands in, which the
+    /// hooks can replace.
+    RegenerateMap,
+    /// A map of one column in place of the one generated: the ancient, each
+    /// of `rooms` in turn, then the boss. Golden Compass's
+    /// `GoldenPathActMap`.
+    FixedPathMap(&'static [V::MapPointType]),
     /// `CardCmd.Exhaust` of each card in the owner's hand, in hand order.
     ExhaustHand,
     /// `RelicCmd.Melt` of the owner's first wax relic not yet melted, where
