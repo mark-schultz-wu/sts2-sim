@@ -280,10 +280,10 @@ fn misery<F: Fight<V>>(fight: &mut F) -> Played<V> {
         }
         for held in &debuffs {
             let power = held.power;
-            // `ITemporaryPower.IgnoreNextInstance`, which the copy is given.
-            if super::super::powers::lends(power).is_some() {
-                unimplemented!("Misery copying {power:?}, which ignores its next instance");
-            }
+            // `DoHackyThingsForSpecificPowers`: an `ITemporaryPower` ignores
+            // its next instance, which is the lent stat the copy would move
+            // again.
+            let temporary = super::super::powers::lends(power).is_some();
             // `ClonePreservingMutability` builds its internal data anew, which
             // is all a noted play is. Imbalanced's off-balance is the Bowlbug
             // Rock's `IsOffBalance`, or a stun, which the port keeps on the
@@ -295,7 +295,13 @@ fn misery<F: Fight<V>>(fight: &mut F) -> Played<V> {
                 unimplemented!("Misery copying an endless {power:?}");
             };
             match Power::data(power).instance {
+                Some(_) if temporary => {
+                    unimplemented!("Misery copying {power:?}, an instanced temporary power")
+                }
                 None if fight.powers_on(enemy).iter().any(|on| on.power == power) => {
+                    if temporary {
+                        fight.write_power(enemy, power, |state| state.ignore_next_instance());
+                    }
                     fight.modify_power_amount(enemy, power, amount, held.applier);
                 }
                 Some(PowerInstanceType::InstancedPerApplier)
@@ -305,6 +311,12 @@ fn misery<F: Fight<V>>(fight: &mut F) -> Played<V> {
                         .any(|on| on.power == power && on.applier == held.applier) =>
                 {
                     fight.modify_power_amount(enemy, power, amount, held.applier);
+                }
+                None if temporary => {
+                    let mut copy =
+                        <super::super::powers::State as sts2_core::PowerModel<V>>::new(power);
+                    copy.ignore_next_instance();
+                    fight.apply_power_copy(enemy, copy, held.amount, held.applier);
                 }
                 None
                 | Some(PowerInstanceType::Instanced | PowerInstanceType::InstancedPerApplier) => {

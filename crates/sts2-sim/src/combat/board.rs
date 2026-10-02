@@ -291,6 +291,20 @@ impl<'a, V: Rules> Board<'a, V> {
         amount: PowerAmount<V::Number>,
         applier: Option<CombatId>,
     ) {
+        self.land_copy(at, power, amount, applier, None);
+    }
+
+    /// [`Board::land`], where `copy` is the instance to build, a clone its
+    /// caller wrote on. One that stacks onto an instance already there is
+    /// dropped, as the game's is.
+    fn land_copy(
+        &mut self,
+        at: CombatId,
+        power: V::Power,
+        amount: PowerAmount<V::Number>,
+        applier: Option<CombatId>,
+        copy: Option<V::PowerState>,
+    ) {
         self.ran_on();
         // The command returns on a zero amount, and on a creature that cannot
         // hold powers. A monster the fight has taken out is one, because its
@@ -377,7 +391,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 }
             }
         };
-        self.apply_fresh(at, power, amount, applier);
+        self.apply_fresh(at, power, amount, applier, copy);
         // The hook can take the creature out of the fight.
         let Some(found) = self.at(id) else {
             return;
@@ -1061,6 +1075,7 @@ impl<'a, V: Rules> Board<'a, V> {
         power: V::Power,
         amount: PowerAmount<V::Number>,
         applier: Option<CombatId>,
+        copy: Option<V::PowerState>,
     ) {
         // `BeforeApplied`, which runs before the power attaches. What it asks
         // for lands first, so a creature carries those powers ahead of this
@@ -1069,7 +1084,8 @@ impl<'a, V: Rules> Board<'a, V> {
         // Not a `Stack`, because nothing carries it yet. The side and the
         // holder are the creature it is landing on, which is the owner it is
         // about to have.
-        let mut state = <V::PowerState as sts2_core::PowerModel<V>>::new(power);
+        let mut state =
+            copy.unwrap_or_else(|| <V::PowerState as sts2_core::PowerModel<V>>::new(power));
         let carrier = self.live.creatures[at].carrier();
         let fight = super::live::Onlookers {
             creatures: &self.live.creatures,
@@ -3580,6 +3596,17 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         applier: Option<CombatId>,
     ) {
         self.land(at, power, amount, applier);
+    }
+
+    fn apply_power_copy(
+        &mut self,
+        at: CombatId,
+        copy: V::PowerState,
+        amount: PowerAmount<V::Number>,
+        applier: Option<CombatId>,
+    ) {
+        let power = sts2_core::PowerModel::<V>::power(&copy);
+        self.land_copy(at, power, amount, applier, Some(copy));
     }
 
     fn apply_to_opponents(&mut self, power: V::Power, amount: PowerAmount<V::Number>) {

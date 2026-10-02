@@ -2038,6 +2038,9 @@ pub(crate) struct Live<V: Rules> {
     /// The player's `Gold`, which the fight holds while it runs. The run
     /// takes it back after each step.
     pub(super) gold: V::Number,
+    /// How many potions the player's belt holds. The belt is the run's, and
+    /// the run keeps this in step with it while the fight lasts.
+    pub(super) potions: u8,
     pub(super) round: V::Count,
     /// `ICombatState.CurrentSide`: whose turn it is.
     pub(super) side: V::CombatSide,
@@ -2352,6 +2355,7 @@ impl<V: Rules> Clone for Live<V> {
             energy,
             stars,
             gold,
+            potions,
             round,
             side,
             history,
@@ -2387,6 +2391,7 @@ impl<V: Rules> Clone for Live<V> {
         *energy = source.energy;
         *stars = source.stars;
         *gold = source.gold;
+        *potions = source.potions;
         *round = source.round;
         *side = source.side;
         history.clone_from(&source.history);
@@ -2495,6 +2500,11 @@ impl<V: Rules> Live<V> {
         if amount != num_traits::zero() {
             self.history.stars_modified(amount);
         }
+    }
+
+    /// The run's belt, which now holds `potions`.
+    pub(crate) fn hold_potions(&mut self, potions: u8) {
+        self.potions = potions;
     }
 
     /// The player's `Gold` as the fight left it.
@@ -3176,6 +3186,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             energy: 3,
             stars: 0,
             gold: 0,
+            potions: 0,
             round: 1,
             side: CombatSide::Player,
             history: CombatHistory::new(),

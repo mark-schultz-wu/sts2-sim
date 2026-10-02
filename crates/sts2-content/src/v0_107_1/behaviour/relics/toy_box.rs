@@ -40,7 +40,26 @@ pub(super) fn event_hook(
     }
 }
 
+/// `IsUsedUp`: every wax relic's fights seen.
+pub(super) fn used_up(state: &State) -> bool {
+    usize::from(state.combats_seen) >= usize::from(COMBATS) * WAX_RELICS.len()
+}
+
 /// `DisplayAmount`: the fights toward the next melt.
 pub(super) fn display_amount(state: &State) -> Number {
     Number::from(state.combats_seen % COMBATS)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Twelve fights, three for each wax relic, use the box up, and eleven
+    /// do not.
+    #[test]
+    fn twelve_fights_use_the_box_up() {
+        let seen = |combats_seen| State { combats_seen };
+        assert!(!used_up(&seen(11)));
+        assert!(used_up(&seen(12)));
+    }
 }

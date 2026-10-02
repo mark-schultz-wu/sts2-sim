@@ -178,37 +178,18 @@ pub(crate) fn result_pile(
     }
 }
 
-/// `PowerModel.TypeForCurrentAmount == PowerType.Debuff`.
-///
-/// A counter that allows negatives is a debuff below zero, and a debuff
-/// that does not allow them is a buff there.
+/// `PowerModel.TypeForCurrentAmount == PowerType.Debuff`, which
+/// [`super::powers::debuff_at`] answers. An endless power's amount is the
+/// game's -1.
 pub(super) fn debuff_for_amount(
     power: super::super::generated::powers::Power,
     amount: sts2_core::PowerAmount<i32>,
 ) -> bool {
-    use super::super::generated::powers::{Power, PowerFlag, PowerStackType, PowerType};
-    use crate::Field;
-    use sts2_core::{PowerAmount, Table as _};
-
-    let data = Power::data(power);
-    let Field::Constant(kind) = data.kind else {
-        unimplemented!("the type {power:?} works out at the time");
+    let amount = match amount {
+        sts2_core::PowerAmount::Counted(amount) => amount,
+        sts2_core::PowerAmount::Endless => -1,
     };
-    let Field::Constant(stack) = data.stack else {
-        unimplemented!("the stacking {power:?} works out at the time");
-    };
-    let Field::Constant(negative) = data.flags.get(PowerFlag::AllowNegative) else {
-        unimplemented!("whether {power:?} allows negatives, which it works out at the time");
-    };
-    let below_zero = match amount {
-        PowerAmount::Counted(amount) => amount < 0,
-        PowerAmount::Endless => false,
-    };
-    match kind {
-        _ if stack == Some(PowerStackType::Counter) && negative && below_zero => true,
-        PowerType::Debuff if !negative && below_zero => false,
-        kind => kind == PowerType::Debuff,
-    }
+    super::powers::debuff_at(power, amount)
 }
 
 /// What a card works out from the fight for a number it prints.

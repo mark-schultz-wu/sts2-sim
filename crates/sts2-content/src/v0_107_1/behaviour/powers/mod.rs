@@ -161,6 +161,26 @@ pub enum State {
         power: Power,
         playing: [Option<(sts2_core::CardId<V>, Number)>; NOTED_AT_ONCE],
     },
+    /// A power that [`lends`] a stat, with `_shouldIgnoreNextInstance`,
+    /// which `IgnoreNextInstance` sets.
+    Temporary {
+        power: Power,
+        ignore_next: bool,
+    },
+}
+
+impl State {
+    /// `ITemporaryPower.IgnoreNextInstance`, on a power that lends a stat.
+    ///
+    /// # Panics
+    ///
+    /// Any other power, which is no `ITemporaryPower`.
+    pub(crate) fn ignore_next_instance(&mut self) {
+        let Self::Temporary { ignore_next, .. } = self else {
+            unimplemented!("{:?} ignoring its next instance", self.power());
+        };
+        *ignore_next = true;
+    }
 }
 
 /// Whether a clone of `power`, as `ClonePreservingMutability` makes one,
@@ -355,6 +375,10 @@ impl sts2_core::PowerModel<V> for State {
                 power,
                 playing: [None; NOTED_AT_ONCE],
             },
+            power if lends(power).is_some() => Self::Temporary {
+                power,
+                ignore_next: false,
+            },
             power => Self::Stateless(power),
         }
     }
@@ -392,6 +416,7 @@ impl sts2_core::PowerModel<V> for State {
             Self::Sloth { .. } => Power::SlothPower,
             Self::Noted { power, .. } => *power,
             Self::Monologue { .. } => Power::MonologuePower,
+            Self::Temporary { power, .. } => *power,
         }
     }
 
@@ -787,22 +812,28 @@ fn weak(
 /// `positive` is `IsPositive`. Crush Under's is false, so it lands negative
 /// Strength and returns it.
 fn temporary(
-    power: Power,
     lent: Power,
     positive: bool,
     amount: PowerAmount<Number>,
     held: Held<'_>,
+    state: &mut State,
     hook: sts2_core::EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     use sts2_core::{EventHook, HookEffect};
 
+    let State::Temporary { power, ignore_next } = state else {
+        unreachable!("a power that lends is built as `State::Temporary`")
+    };
+    let power = *power;
     // `Sign`, which every amount this power moves is multiplied by.
     let signed = |amount: Number| match positive {
         true => amount,
         false => -amount,
     };
     match (amount, hook) {
+        // Each skips once where Misery's copy asked it to.
+        (_, EventHook::BeforeApplied { .. }) if *ignore_next => *ignore_next = false,
         (_, EventHook::BeforeApplied { landing }) => {
             let PowerAmount::Counted(landing) = landing else {
                 unimplemented!("an endless temporary {lent:?} landing")
@@ -837,9 +868,13 @@ fn temporary(
                 delta,
                 ..
             },
-        ) if creature == held.holder && changed == power && delta != total => asked.push(
-            HookEffect::ApplyToOwner(lent, PowerAmount::Counted(signed(delta))),
-        ),
+        ) if creature == held.holder && changed == power && delta != total => match *ignore_next {
+            true => *ignore_next = false,
+            false => asked.push(HookEffect::ApplyToOwner(
+                lent,
+                PowerAmount::Counted(signed(delta)),
+            )),
+        },
         (_, EventHook::PowerAmountChanged { .. }) => {}
         // Asked of every power, and not ones this class overrides.
         (_, EventHook::MonsterMovePerformed { .. }) => {}
@@ -2052,7 +2087,7 @@ pub(crate) fn event_hook(
     // A temporary power asks for two things when a turn ends, and the match
     // below spells one. Its subclasses answer there instead.
     if let Some((lent, positive)) = lends(power) {
-        return temporary(power, lent, positive, amount, held, hook, asked);
+        return temporary(lent, positive, amount, held, state, hook, asked);
     }
 
     let one: Number = num_traits::one();
