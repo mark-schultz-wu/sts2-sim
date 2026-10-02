@@ -4708,6 +4708,10 @@ pub enum CustomReward<V: ContentVersion> {
     /// `RelicReward(player)`: the next relic from the front of the player's
     /// bag, at a rarity it rolls as it fills in.
     RolledRelic,
+    /// `RelicReward(relic, player)` for `PullNextRelicFromFront(player)`,
+    /// made wax. Toy Box pulls each before the set fills in, which draws as a
+    /// set of [`CustomReward::RolledRelic`] alone does.
+    WaxRelic,
     /// `PotionReward(potion, player)` for one `Rng.NextItem` over
     /// [`Rules::unlocked_potions`] off the rewards stream.
     UnlockedPotion,
@@ -4929,6 +4933,9 @@ pub enum HookEffect<V: ContentVersion> {
     /// `RunState.CloneCard` of each deck card carrying this enchantment, in
     /// deck order, each then `CardPileCmd.Add` to the deck's bottom.
     CloneEnchantedIntoDeck(V::Enchantment),
+    /// `RelicCmd.Melt` of the owner's first wax relic not yet melted, where
+    /// there is one.
+    MeltFirstWax,
     /// `CanReroll = true` on each card reward of the set.
     RerollableCardRewards,
     /// A `CardRewardAlternative` added to the card reward's list.

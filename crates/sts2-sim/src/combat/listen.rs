@@ -243,7 +243,7 @@ pub(crate) fn listeners_to<V: Rules>(
         }
     }
     for held in relics.iter() {
-        if held.relic.overrides().intersects(hooks) {
+        if !held.melted && held.relic.overrides().intersects(hooks) {
             named.push(Overrider::Relic(held.relic));
         }
     }
@@ -654,6 +654,9 @@ pub(crate) fn combat_ended<V: Rules>(live: &mut Live<V>, relics: &mut Belt<V>) {
                 player.max_hp = player.max_hp + gained;
                 player.hp = player.hp + gained;
             }
+            // `RelicCmd.Melt`, at once: the relic it melts hears no hook the
+            // fight raises after this one.
+            HookEffect::MeltFirstWax => relics.melt_first_wax(),
             effect => live.leaving.push(effect),
         }
     }

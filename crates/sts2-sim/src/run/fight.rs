@@ -298,6 +298,7 @@ impl<V: Rules> State<V> {
             offered.push(crate::reward::Offer::Relic {
                 relic,
                 rarity: <_ as sts2_core::RarityKinds>::UNDRAFTED,
+                wax: false,
                 taken: false,
             });
         }
