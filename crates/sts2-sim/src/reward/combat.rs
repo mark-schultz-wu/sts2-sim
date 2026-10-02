@@ -5,7 +5,7 @@
 //! order is what puts the stream where the next screen finds it.
 
 use sts2_core::rng::{GameRng, Interval, RngInteger, Span};
-use sts2_core::{AscensionKinds, Rules};
+use sts2_core::{AscensionKinds, Drafted, Rules};
 
 use crate::run::Rarity;
 
@@ -61,6 +61,7 @@ pub(crate) fn won<V: Rules, R: GameRng>(
     act: usize,
     room: Room,
     modifiers: Modifiers<'_>,
+    pool: Drafted<'_, V::Card>,
 ) -> (Vec<Offer<V>>, Option<Rarity<V>>) {
     let elite = room == Room::Elite;
     let pays_potion = potion(rng, odds, elite, modifiers.forced);
@@ -81,7 +82,7 @@ pub(crate) fn won<V: Rules, R: GameRng>(
         rng,
         odds,
         ascension,
-        character,
+        pool,
         act,
         room,
         modifiers.added,
@@ -99,7 +100,7 @@ pub(crate) fn card_reward<V: Rules, R: GameRng>(
     rng: &mut R,
     odds: &mut Odds,
     ascension: V::AscensionLevel,
-    character: V::Character,
+    pool: Drafted<'_, V::Card>,
     act: usize,
     room: Room,
     added: &[sts2_core::CardKind],
@@ -108,7 +109,7 @@ pub(crate) fn card_reward<V: Rules, R: GameRng>(
         rng,
         odds,
         ascension,
-        character,
+        pool,
         CARDS_OFFERED,
         act,
         room.card_odds(),
@@ -116,7 +117,6 @@ pub(crate) fn card_reward<V: Rules, R: GameRng>(
     for &kind in added {
         // The pool the reward drew, of the kind, less what it offers. Every
         // card of the kind when it offers them all, and nothing with none.
-        let pool = V::reward_cards(character);
         let of_kind: Vec<V::Card> = [pool.common, pool.uncommon, pool.rare]
             .into_iter()
             .flatten()

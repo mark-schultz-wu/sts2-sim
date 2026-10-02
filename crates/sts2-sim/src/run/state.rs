@@ -2520,6 +2520,11 @@ impl<V: Rules> State<V> {
             .map(|rarity| (self.pull_relic(rarity), rarity))
             .collect::<SmallVec<[(V::Relic, Rarity<V>); 4]>>()
             .into_iter();
+        // The pools a character's card reward draws from, which no draw
+        // moves, so worked out before the set fills in.
+        let pool = (rewards.iter())
+            .any(|reward| matches!(reward, CustomReward::CharacterCards { .. }))
+            .then(|| self.reward_pool());
         let mut offered: Vec<Offer<V>> = Vec::with_capacity(rewards.len());
         for reward in rewards {
             let rng = stream_of(&mut self.phase, &mut self.streams, stream);
@@ -2552,7 +2557,9 @@ impl<V: Rules> State<V> {
                 } => Offer::Card {
                     cards: crate::reward::card::regular::<V, _>(
                         rng,
-                        V::reward_cards(character),
+                        (pool.as_ref())
+                            .expect("a set with a character's card reward has its pools")
+                            .drafted(),
                         count,
                         upgrade_roll,
                     )
@@ -2674,15 +2681,15 @@ impl<V: Rules> State<V> {
                         _ => Room::Monster,
                     };
                     let ascension = self.ascension();
-                    let character = self.character();
                     let act = self.act();
                     self.card_reward_unheard();
+                    let pool = self.reward_pool();
                     let (rng, odds) = self.rewarding();
                     let mut cards = crate::reward::card::encounter::<V, _>(
                         rng,
                         odds,
                         ascension,
-                        character,
+                        pool.drafted(),
                         CARDS_OFFERED,
                         act,
                         room.card_odds(),
@@ -3063,6 +3070,32 @@ impl<V: Rules> State<V> {
             .player(V::PlayerRngType::REWARDS)
             .choose(&left)
             .unwrap_or_else(|_| unimplemented!("a reward pool with no {rarity:?} card left"))
+    }
+
+    /// The pools a `CardReward` over the character's own draws from, once
+    /// `Hook.ModifyCardRewardCreationOptions` has had its say.
+    ///
+    /// # Panics
+    ///
+    /// A relic asking for anything but more pools.
+    pub(super) fn reward_pool(&mut self) -> crate::reward::card::Pool<V> {
+        let own = self.character();
+        let mut pools: SmallVec<[V::Character; 5]> = smallvec::smallvec![own];
+        for effect in self.notify_belt(sts2_core::EventHook::CardRewardCreationOptions) {
+            match effect {
+                // `Union`: the new pools first, then what was there and is
+                // not among them.
+                sts2_core::HookEffect::AddCharacterPools(added) => {
+                    let mut joined: SmallVec<[V::Character; 5]> = added.iter().copied().collect();
+                    joined.extend(pools.iter().copied().filter(|held| !added.contains(held)));
+                    pools = joined;
+                }
+                effect => {
+                    unimplemented!("a relic asking for {effect:?} over a card reward's pools")
+                }
+            }
+        }
+        crate::reward::card::Pool::of(&pools)
     }
 
     /// `CardFactory.CreateForReward`'s hooks that no relic here answers: the
@@ -4609,11 +4642,18 @@ impl<V: Rules> State<V> {
                 let room = rolled
                     .unwrap_or_else(|| unimplemented!("a reroll of a pack rolled some other way"));
                 *reroll = false;
-                let (ascension, character, act) = (self.ascension(), self.character(), self.act());
+                let (ascension, act) = (self.ascension(), self.act());
                 let added = self.card_reward_added();
+                let pool = self.reward_pool();
                 let (rng, odds) = self.rewarding();
                 let Offer::Card { cards: rolled, .. } = crate::reward::combat::card_reward::<V, _>(
-                    rng, odds, ascension, character, act, room, &added,
+                    rng,
+                    odds,
+                    ascension,
+                    pool.drafted(),
+                    act,
+                    room,
+                    &added,
                 ) else {
                     unreachable!("a card reward rolls a card offer");
                 };

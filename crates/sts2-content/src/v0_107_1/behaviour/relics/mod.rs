@@ -209,6 +209,7 @@ mod prayer_wheel;
 mod precarious_shears;
 mod precise_scissors;
 mod preserved_fog;
+mod prismatic_gem;
 mod pumpkin_candle;
 mod punch_dagger;
 mod radiant_pearl;
@@ -588,6 +589,7 @@ pub enum State {
     GoldenCompass(golden_compass::State),
     SeaGlass(sea_glass::State),
     DemonTongue(demon_tongue::State),
+    PrismaticGem,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -831,6 +833,7 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::PrismaticGem => prismatic_gem::event_hook(hook, asked),
         State::DemonTongue(state) => demon_tongue::event_hook(state, hook, asked),
         State::SeaGlass(state) => sea_glass::event_hook(state, hook, asked),
         State::GoldenCompass(state) => golden_compass::event_hook(state, hook, asked),
@@ -997,6 +1000,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         State::StrikeDummy => strike_dummy::modify_hook(hook),
         State::BowlerHat => bowler_hat::modify_hook(hook),
         State::Ectoplasm => ectoplasm::modify_hook(hook),
+        State::PrismaticGem => prismatic_gem::modify_hook(hook),
         State::SneckoEye => snecko_eye::modify_hook(hook),
         State::FakeStrikeDummy => fake_strike_dummy::modify_hook(hook),
         State::ChemicalX => chemical_x::modify_hook(hook),
@@ -1422,6 +1426,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::PrismaticGem => State::PrismaticGem,
             Relic::DemonTongue => State::DemonTongue(demon_tongue::State::default()),
             Relic::SeaGlass => State::SeaGlass(sea_glass::State::default()),
             Relic::GoldenCompass => State::GoldenCompass(golden_compass::State::default()),

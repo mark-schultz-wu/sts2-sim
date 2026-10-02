@@ -752,6 +752,7 @@ pub enum ModelHook {
     TryModifyCardRewardAlternatives,
     ModifyUnknownMapPointRoomTypes,
     ModifyGeneratedMap,
+    ModifyCardRewardCreationOptions,
     ModifyOddsIncreaseForUnrolledRoomType,
     ModifyCardRewardUpgradeOdds,
     TryModifyCardRewardOptions,
@@ -778,7 +779,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 137] = [
+    pub const ALL: [ModelHook; 138] = [
         ModelHook::AfterRoomEntered,
         ModelHook::AfterMapGenerated,
         ModelHook::BeforeCombatStart,
@@ -893,6 +894,7 @@ impl ModelHook {
         ModelHook::TryModifyCardRewardAlternatives,
         ModelHook::ModifyUnknownMapPointRoomTypes,
         ModelHook::ModifyGeneratedMap,
+        ModelHook::ModifyCardRewardCreationOptions,
         ModelHook::ModifyOddsIncreaseForUnrolledRoomType,
         ModelHook::ModifyCardRewardUpgradeOdds,
         ModelHook::TryModifyCardRewardOptions,
@@ -924,6 +926,7 @@ impl ModelHook {
             ModelHook::AfterRoomEntered => "AfterRoomEntered",
             ModelHook::AfterMapGenerated => "AfterMapGenerated",
             ModelHook::ModifyGeneratedMap => "ModifyGeneratedMap",
+            ModelHook::ModifyCardRewardCreationOptions => "ModifyCardRewardCreationOptions",
             ModelHook::BeforeCombatStart => "BeforeCombatStart",
             ModelHook::AfterCombatEnd => "AfterCombatEnd",
             ModelHook::AfterCardPlayed => "AfterCardPlayed",
@@ -3536,6 +3539,10 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `ModifyGeneratedMap`, as the act at this index has its map generated.
     GeneratedMap { act: usize },
+    /// `ModifyCardRewardCreationOptions`, as a `CardReward` over the
+    /// character's pool makes its cards. The run raises it only for one whose
+    /// options take a change to their pools.
+    CardRewardCreationOptions,
     /// `AfterRoomEntered`, for a room of this type.
     RoomEntered {
         room: V::RoomType,
@@ -4064,6 +4071,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::RoomEntered { .. } => ModelHook::AfterRoomEntered,
             EventHook::UnknownRoomTypes { .. } => ModelHook::ModifyUnknownMapPointRoomTypes,
             EventHook::GeneratedMap { .. } => ModelHook::ModifyGeneratedMap,
+            EventHook::CardRewardCreationOptions => ModelHook::ModifyCardRewardCreationOptions,
             EventHook::ModifyRewards { .. } => ModelHook::TryModifyRewards,
             EventHook::ModifyRewardsLate => ModelHook::TryModifyRewardsLate,
             EventHook::CardRewardAlternatives | EventHook::CardRewardAlternativeChosen(_) => {
@@ -4955,6 +4963,9 @@ pub enum HookEffect<V: ContentVersion> {
         min: usize,
         max: usize,
     },
+    /// `WithCardPools` over these characters' pools and then the reward's
+    /// own, as `Union` joins them: in that order, each once.
+    AddCharacterPools(&'static [V::Character]),
     /// `RunManager.GenerateMap` for the act the run stands in, which the
     /// hooks can replace.
     RegenerateMap,
