@@ -5,6 +5,25 @@ use sts2_core::{CardIdent, CardTable as _, Drafted, RewardRarity, Rules};
 
 use super::Odds;
 
+/// One pool a card reward draws from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Source<V: Rules> {
+    /// A character's own pool.
+    Character(V::Character),
+    /// `ColorlessCardPool`.
+    Colorless,
+}
+
+impl<V: Rules> Source<V> {
+    /// Its cards, a rarity at a time.
+    fn drafted(self) -> Drafted<'static, V::Card> {
+        match self {
+            Source::Character(character) => V::reward_cards(character),
+            Source::Colorless => V::colorless_cards(),
+        }
+    }
+}
+
 /// The cards one card reward draws from: its options' pools, each rarity in
 /// pool order.
 ///
@@ -20,14 +39,14 @@ pub(crate) enum Pool<V: Rules> {
 }
 
 impl<V: Rules> Pool<V> {
-    /// The pools of `characters`, in that order. One character's is borrowed.
-    pub(crate) fn of(characters: &[V::Character]) -> Self {
-        if let [one] = characters {
+    /// The pools of `sources`, in that order. One character's is borrowed.
+    pub(crate) fn of(sources: &[Source<V>]) -> Self {
+        if let [Source::Character(one)] = sources {
             return Pool::Own(*one);
         }
         let merged = |rarity| -> Vec<V::Card> {
-            (characters.iter())
-                .flat_map(|&character| V::reward_cards(character).at(rarity).iter().copied())
+            (sources.iter())
+                .flat_map(|&source| source.drafted().at(rarity).iter().copied())
                 .collect()
         };
         Pool::Merged {

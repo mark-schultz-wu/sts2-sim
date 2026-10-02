@@ -1,0 +1,7 @@
+# The Abacus gives six block each time the draw pile is shuffled back in,
+# which the third turn's draw does here.
+{"cmd":"start","seed":"S33D1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"THE_ABACUS"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

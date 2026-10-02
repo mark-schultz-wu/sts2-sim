@@ -82,6 +82,7 @@ mod daughter_of_the_wind;
 mod delicate_frond;
 mod demon_tongue;
 mod diamond_diadem;
+mod dingy_rug;
 mod distinguished_cape;
 mod divine_destiny;
 mod divine_right;
@@ -231,6 +232,7 @@ mod ruined_helmet;
 mod runic_pyramid;
 mod sai;
 mod sand_castle;
+mod screaming_flagon;
 mod scroll_boxes;
 mod sea_glass;
 mod seal_of_gold;
@@ -260,6 +262,7 @@ mod sword_of_stone;
 mod symbiotic_virus;
 mod tanxs_whistle;
 mod tea_of_discourtesy;
+mod the_abacus;
 mod the_courier;
 mod throwing_axe;
 mod tingsha;
@@ -596,6 +599,9 @@ pub enum State {
     PaelsTooth(paels_tooth::State),
     NinjaScroll,
     Brimstone,
+    ScreamingFlagon,
+    TheAbacus,
+    DingyRug,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -839,6 +845,9 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::DingyRug => dingy_rug::event_hook(hook, asked),
+        State::TheAbacus => the_abacus::event_hook(hook, asked),
+        State::ScreamingFlagon => screaming_flagon::event_hook(hook, asked),
         State::Brimstone => brimstone::event_hook(hook, asked),
         State::NinjaScroll => ninja_scroll::event_hook(hook, asked),
         State::PaelsTooth(state) => paels_tooth::event_hook(state, hook, asked),
@@ -1259,7 +1268,10 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::DemonTongue(_)
         | State::PaelsTooth(_)
         | State::NinjaScroll
-        | State::Brimstone => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::Brimstone
+        | State::ScreamingFlagon
+        | State::TheAbacus
+        | State::DingyRug => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1438,6 +1450,9 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::DingyRug => State::DingyRug,
+            Relic::TheAbacus => State::TheAbacus,
+            Relic::ScreamingFlagon => State::ScreamingFlagon,
             Relic::Brimstone => State::Brimstone,
             Relic::NinjaScroll => State::NinjaScroll,
             Relic::PaelsTooth => State::PaelsTooth(paels_tooth::State::default()),

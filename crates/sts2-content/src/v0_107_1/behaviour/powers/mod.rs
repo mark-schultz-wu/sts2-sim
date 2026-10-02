@@ -1757,6 +1757,9 @@ pub(crate) fn debuff_at(power: Power, amount: Number) -> bool {
     };
     let counter = match data.stack {
         crate::Field::Constant(stack) => stack == Some(PowerStackType::Counter),
+        // `ShrinkPower.StackType`: a counter, save a negative one, which is
+        // `IsInfinite` and single.
+        crate::Field::Computed if power == Power::ShrinkPower => amount >= 0,
         crate::Field::Computed => unimplemented!("how {power:?} stacks at {amount}"),
     };
     let crate::Field::Constant(negatives) = data.flags.get(PowerFlag::AllowNegative) else {

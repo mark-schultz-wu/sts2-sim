@@ -1,0 +1,13 @@
+# Screaming Flagon deals twenty to every enemy as a turn ends with nothing
+# in hand. Ectoplasm and Prismatic Gem give the five energy the hand costs.
+{"cmd":"start","seed":"S33D1","character":"DEFECT","ascension":"None"}
+{"cmd":"grant","relic":"ECTOPLASM"}
+{"cmd":"grant","relic":"PRISMATIC_GEM"}
+{"cmd":"grant","relic":"SCREAMING_FLAGON"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":0}
+{"cmd":"end_turn"}

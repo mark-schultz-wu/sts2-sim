@@ -1,0 +1,6 @@
+# Artifact stops the Shrinker Beetle's Shrink, which is a debuff because
+# it stacks as a counter while its amount is not negative.
+{"cmd":"start","seed":"S33D1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"SHRINKER_BEETLE_WEAK"}
+{"cmd":"power","power":"ARTIFACT_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}
