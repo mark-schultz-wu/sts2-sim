@@ -1,0 +1,7 @@
+# Ectoplasm gives an energy each turn, and a gold reward it turns to nothing.
+{"cmd":"start","seed":"S33D1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"ECTOPLASM"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"DEMISE_POWER","amount":99,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"answer","take":[{"index":0}]}

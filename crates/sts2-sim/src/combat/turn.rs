@@ -435,6 +435,13 @@ fn enemies_act<V: Rules>(
     // `RunAutoPrePlayPhase` waits for the setup, so a parked one keeps the
     // turn in its start until the answer.
     if !parked {
+        if let Some(ended) = pre_play_phase::<V>(next, streams.combat(), relics) {
+            next.skip_tick = skipping;
+            if ended == super::Ended::Won {
+                listen::combat_ended::<V>(next, relics);
+            }
+            return Ok(Some(ended));
+        }
         next.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY;
     }
 
@@ -1176,12 +1183,16 @@ pub(super) fn carry_setup<V: Rules>(
                 }
                 let mut drawn = hand_size::<V>(listen::Walk { live, relics }, live.turn);
                 super::start::after_modifying_hand_draw::<V>(live, relics);
-                // On turn one the innate cards go on top and are all drawn, up
-                // to a full hand. The game sinks a card whose enchantment says
-                // `ShouldStartAtBottomOfDrawPile` first, and `Rules::enchant`
-                // puts no such enchantment on a card.
+                // On turn one a card whose enchantment says
+                // `ShouldStartAtBottomOfDrawPile` sinks, then the innate cards
+                // go on top and are all drawn, up to a full hand.
                 if live.turn == num_traits::one() {
-                    let innate = live.cards.innate_to_top();
+                    let innate = live.cards.innate_to_top(|face| {
+                        face.ident.enchantment.is_some_and(|enchanted| {
+                            V::should_start_at_bottom_of_draw_pile(enchanted.enchantment)
+                                .is_decision_and(|sinks| sinks)
+                        })
+                    });
                     drawn = drawn.max(innate).min(MAX_CARDS_IN_HAND);
                 }
                 Setup::Drawing {
@@ -1861,13 +1872,15 @@ pub(super) fn finish_setup<V: Rules>(
     stage: Setup<V>,
     ended: Option<super::Ended>,
 ) -> Option<super::Ended> {
+    let mut rngs = rngs;
     let carried = match ended {
         Some(ended) => Carried::Done(Some(ended)),
-        None => carry_setup(live, rngs, relics, ascension, stage),
+        None => carry_setup(live, rngs.reborrow(), relics, ascension, stage),
     };
     match carried {
         Carried::Parked => None,
         Carried::Done(ended) => {
+            let ended = ended.or_else(|| pre_play_phase::<V>(live, rngs, relics));
             match ended {
                 Some(super::Ended::Won) => listen::combat_ended::<V>(live, relics),
                 Some(super::Ended::Lost) => {}
@@ -1876,6 +1889,92 @@ pub(super) fn finish_setup<V: Rules>(
             ended
         }
     }
+}
+
+/// `RunAutoPrePlayPhase` once the player's turn is set up:
+/// `AfterAutoPrePlayPhaseEntered`'s early pass, its own, then its late one,
+/// each over every listener. How an auto-play there ended the fight.
+///
+/// # Panics
+///
+/// A listener asking for anything but an auto-play of a card.
+pub(super) fn pre_play_phase<V: Rules>(
+    live: &mut Live<V>,
+    rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+) -> Option<super::Ended> {
+    use sts2_core::{ModelHook, Overrides};
+
+    // Most fights hold nothing that hears any of the three passes.
+    let hooks = Overrides::of(ModelHook::AfterAutoPrePlayPhaseEnteredEarly)
+        .with(ModelHook::AfterAutoPrePlayPhaseEntered)
+        .with(ModelHook::AfterAutoPrePlayPhaseEnteredLate);
+    if !listen::heard_any::<V>(live, relics, hooks) {
+        return None;
+    }
+    pre_play_heard::<V>(live, rngs, relics)
+}
+
+/// [`pre_play_phase`] once something hears one of its passes.
+#[cold]
+#[inline(never)]
+#[tracing::instrument(level = "trace", skip_all)]
+fn pre_play_heard<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+) -> Option<super::Ended> {
+    let turn = live.turn;
+    let passes = [
+        sts2_core::EventHook::AutoPrePlayPhaseEarly { turn },
+        sts2_core::EventHook::AutoPrePlayPhase { turn },
+        sts2_core::EventHook::AutoPrePlayPhaseLate { turn },
+    ];
+    for hook in passes {
+        for (listener, effect) in listen::notify::<V>(live, relics, hook) {
+            match effect {
+                // `CardCmd.AutoPlay` of the card, from wherever it stands.
+                sts2_core::HookEffect::AutoPlay(card) => {
+                    let Some(from) = live.cards.pile_of(card) else {
+                        unimplemented!("auto-playing {card:?}, which stands in no pile");
+                    };
+                    let ended = super::play::auto_play::<V>(
+                        live,
+                        rngs.reborrow(),
+                        relics,
+                        card,
+                        from,
+                        None,
+                        false,
+                    );
+                    if ended.is_some() {
+                        return ended;
+                    }
+                }
+                sts2_core::HookEffect::AutoPlayFromDraw(count) => {
+                    let count: usize = num_traits::cast(count)
+                        .unwrap_or_else(|| unimplemented!("auto-playing {count:?} cards"));
+                    let ascension = live.ascension;
+                    let mut board = super::board::Board::for_card(
+                        live,
+                        rngs.reborrow(),
+                        relics,
+                        ascension,
+                        None,
+                        None,
+                    );
+                    sts2_core::Fight::auto_play_from_draw(&mut board, count, false);
+                    if let Some(ended) = board.ended() {
+                        return Some(ended);
+                    }
+                }
+                effect => {
+                    unimplemented!("{listener:?} asking for {effect:?} as the play phase opens")
+                }
+            }
+        }
+    }
+    None
 }
 
 /// `AfterSideTurnStart`, raised on every listener once the side has drawn.

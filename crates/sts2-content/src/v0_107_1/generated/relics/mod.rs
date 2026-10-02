@@ -1769,7 +1769,7 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // HELICAL_DART
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardPlayed),
     // HISTORY_COURSE
-    sts2_core::Overrides::NONE,
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterAutoPrePlayPhaseEntered),
     // HORN_CLEAT
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterBlockCleared),
     // ICE_CREAM
@@ -2279,7 +2279,9 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // WHETSTONE
     sts2_core::Overrides::NONE,
     // WHISPERING_EARRING
-    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ModifyMaxEnergy),
+    sts2_core::Overrides::NONE
+        .with(sts2_core::ModelHook::AfterAutoPrePlayPhaseEnteredLate)
+        .with(sts2_core::ModelHook::ModifyMaxEnergy),
     // WHITE_BEAST_STATUE
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ShouldForcePotionReward),
     // WHITE_STAR

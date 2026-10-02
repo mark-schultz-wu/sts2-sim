@@ -85,6 +85,8 @@ mod divine_destiny;
 mod divine_right;
 mod dollys_mirror;
 mod driftwood;
+mod ectoplasm;
+mod electric_shrymp;
 mod ember_tea;
 mod emotion_chip;
 mod empty_cage;
@@ -232,6 +234,7 @@ mod silken_tress;
 mod silver_crucible;
 mod sling_of_courage;
 mod small_capsule;
+mod snecko_eye;
 mod snecko_skull;
 mod sozu;
 mod sparkling_rouge;
@@ -572,6 +575,9 @@ pub enum State {
     Driftwood,
     PaelsWing(paels_wing::State),
     ToyBox(toy_box::State),
+    ElectricShrymp,
+    SneckoEye,
+    Ectoplasm,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -815,6 +821,9 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::Ectoplasm => ectoplasm::event_hook(hook),
+        State::SneckoEye => snecko_eye::event_hook(hook, asked),
+        State::ElectricShrymp => electric_shrymp::event_hook(hook, asked),
         State::ToyBox(state) => toy_box::event_hook(state, hook, asked),
         State::PaelsWing(state) => paels_wing::event_hook(state, hook, asked),
         State::Driftwood => driftwood::event_hook(hook, asked),
@@ -970,6 +979,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         State::BigMushroom => big_mushroom::modify_hook(hook),
         State::StrikeDummy => strike_dummy::modify_hook(hook),
         State::BowlerHat => bowler_hat::modify_hook(hook),
+        State::Ectoplasm => ectoplasm::modify_hook(hook),
+        State::SneckoEye => snecko_eye::modify_hook(hook),
         State::FakeStrikeDummy => fake_strike_dummy::modify_hook(hook),
         State::ChemicalX => chemical_x::modify_hook(hook),
         State::MysticLighter => mystic_lighter::modify_hook(hook),
@@ -1210,7 +1221,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::PaelsGrowth
         | State::Driftwood
         | State::PaelsWing(_)
-        | State::ToyBox(_) => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::ToyBox(_)
+        | State::ElectricShrymp => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1389,6 +1401,9 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::Ectoplasm => State::Ectoplasm,
+            Relic::SneckoEye => State::SneckoEye,
+            Relic::ElectricShrymp => State::ElectricShrymp,
             Relic::ToyBox => State::ToyBox(toy_box::State::default()),
             Relic::PaelsWing => State::PaelsWing(paels_wing::State::default()),
             Relic::Driftwood => State::Driftwood,

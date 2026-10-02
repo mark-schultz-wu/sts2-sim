@@ -1783,7 +1783,7 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
     // MASTER_PLANNER_POWER
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardPlayed),
     // MAYHEM_POWER
-    sts2_core::Overrides::NONE,
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterAutoPrePlayPhaseEntered),
     // MIND_ROT_POWER
     sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterModifyingHandDraw)
@@ -1811,6 +1811,7 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::TryModifyStarCost),
     // MOCK_PHASE_OBSERVER_POWER
     sts2_core::Overrides::NONE
+        .with(sts2_core::ModelHook::AfterAutoPrePlayPhaseEntered)
         .with(sts2_core::ModelHook::AfterPlayerTurnStart)
         .with(sts2_core::ModelHook::AfterSideTurnEnd)
         .with(sts2_core::ModelHook::BeforeHandDraw)

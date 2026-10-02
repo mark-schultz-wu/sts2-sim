@@ -695,6 +695,15 @@ pub(crate) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
         Cards::Necrobinder(card) => {
             necrobinder::event_hook(card, id, printed, history, hook, asked)
         }
+        // `Bombardment.AfterAutoPrePlayPhaseEnteredEarly`: from the exhaust
+        // pile, it plays itself.
+        Cards::Regent(RegentCard::Bombardment)
+            if matches!(hook, sts2_core::EventHook::AutoPrePlayPhaseEarly { .. }) =>
+        {
+            if pile == Some(sts2_core::Pile::Exhaust) {
+                asked.push(sts2_core::HookEffect::AutoPlay(id));
+            }
+        }
         Cards::Regent(card) => regent::event_hook(card, id, printed, history, hook, asked),
         Cards::Silent(card) => silent::event_hook(card, id, history, hook, asked),
         // `RocketPunch.AfterCardGeneratedForCombat`: free until played once

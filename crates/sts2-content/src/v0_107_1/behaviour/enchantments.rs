@@ -44,6 +44,8 @@ pub(crate) fn can_enchant(enchantment: Enchantment, card: &CardIdent<V>) -> bool
         | Enchantment::Vigorous
         | Enchantment::Momentum => base && V::card_kind(card.card) == Some(CardKind::Attack),
         Enchantment::Nimble => base && card.card.gains_block(),
+        // `CanEnchantCardType`, which takes a skill alone.
+        Enchantment::Imbued => base && V::card_kind(card.card) == Some(CardKind::Skill),
         Enchantment::Goopy => base && card.card.tagged(CardTag::Defend),
         _ => unimplemented!("which cards {enchantment:?} can enchant"),
     }
@@ -118,13 +120,49 @@ pub(crate) fn enchant(enchantment: Enchantment, amount: u8, card: &mut CardIdent
         | Enchantment::Swift
         | Enchantment::TezcatarasEmber
         | Enchantment::Goopy
-        | Enchantment::Clone => {
+        | Enchantment::Clone
+        | Enchantment::Imbued => {
             card.enchantment = Some(Enchanted {
                 enchantment,
                 amount,
             });
         }
         _ => unimplemented!("what enchanting a card with {enchantment:?} does to it"),
+    }
+}
+
+/// `EnchantmentModel.ShouldStartAtBottomOfDrawPile`, which Imbued alone
+/// overrides.
+///
+/// # Panics
+///
+/// An enchantment this port has not read.
+pub(crate) fn should_start_at_bottom_of_draw_pile(
+    enchantment: Enchantment,
+) -> sts2_core::HookResponse<bool> {
+    use sts2_core::HookResponse;
+
+    match enchantment {
+        Enchantment::Imbued => HookResponse::Decision(true),
+        Enchantment::Adroit
+        | Enchantment::Clone
+        | Enchantment::Corrupted
+        | Enchantment::Glam
+        | Enchantment::Goopy
+        | Enchantment::Inky
+        | Enchantment::Instinct
+        | Enchantment::Momentum
+        | Enchantment::Nimble
+        | Enchantment::PerfectFit
+        | Enchantment::Sharp
+        | Enchantment::Slither
+        | Enchantment::SoulsPower
+        | Enchantment::Sown
+        | Enchantment::Spiral
+        | Enchantment::Swift
+        | Enchantment::TezcatarasEmber
+        | Enchantment::Vigorous => HookResponse::DoesNotImplement,
+        enchantment => unimplemented!("whether {enchantment:?} starts at the draw pile's bottom"),
     }
 }
 
@@ -225,6 +263,7 @@ pub(crate) fn modify(enchanted: Enchanted<V>, state: &State, hook: EnchantHook) 
             | Enchantment::Clone
             | Enchantment::Corrupted
             | Enchantment::Glam
+            | Enchantment::Imbued
             | Enchantment::Goopy
             | Enchantment::Inky
             | Enchantment::Instinct
@@ -275,6 +314,13 @@ pub(crate) fn event_hook(
                     by: 1,
                     write: super::cards::DeckWrite::RaiseEnchantment(1),
                 });
+            }
+        }
+        // `AfterAutoPrePlayPhaseEntered` on its owner's first turn: its own
+        // card auto-played, wherever it stands.
+        (Enchantment::Imbued, EventHook::AutoPrePlayPhase { turn }) => {
+            if turn <= 1 {
+                asked.push(HookEffect::AutoPlay(id));
             }
         }
         // To the top of a shuffle, but not the one a fight opens on.
@@ -349,6 +395,7 @@ pub(crate) fn on_play<F: Fight<V>>(enchanted: Enchanted<V>, state: &mut State, f
         Enchantment::Clone
         | Enchantment::Glam
         | Enchantment::Goopy
+        | Enchantment::Imbued
         | Enchantment::Instinct
         | Enchantment::Nimble
         | Enchantment::PerfectFit

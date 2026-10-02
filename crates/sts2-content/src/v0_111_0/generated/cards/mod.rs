@@ -3816,7 +3816,7 @@ static OVERRIDES: [sts2_core::Overrides; 596] = [
     // BOLAS
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::BeforeHandDraw),
     // BOMBARDMENT
-    sts2_core::Overrides::NONE,
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterAutoPrePlayPhaseEnteredEarly),
     // BONE_SHARDS
     sts2_core::Overrides::NONE,
     // BOOST_AWAY
@@ -4912,6 +4912,7 @@ static HEARD_BY_ANY: sts2_core::Overrides = sts2_core::Overrides::NONE
     .with(sts2_core::ModelHook::AfterCardEnteredCombat)
     .with(sts2_core::ModelHook::AfterCardPlayed)
     .with(sts2_core::ModelHook::BeforeHandDraw)
+    .with(sts2_core::ModelHook::AfterAutoPrePlayPhaseEnteredEarly)
     .with(sts2_core::ModelHook::TryModifyRestSiteOptions)
     .with(sts2_core::ModelHook::AfterCardExhausted)
     .with(sts2_core::ModelHook::ShouldPlay)

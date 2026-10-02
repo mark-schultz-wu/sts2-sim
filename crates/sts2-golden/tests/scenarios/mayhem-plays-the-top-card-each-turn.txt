@@ -1,0 +1,8 @@
+# Mayhem's power plays the top card of the draw pile as each later turn
+# opens, before the player can act.
+{"cmd":"start","seed":"S33D1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"MAYHEM"}
+{"cmd":"play_card","index":5}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
