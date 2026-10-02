@@ -371,7 +371,7 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     emit_moves(&mut out, &machines, &installed(&dump))?;
     // The hooks each monster's class overrides. `IterateHookListeners` asks
     // a monster's own model beside the powers on its creature.
-    let overrides = super::overrides(&build)?;
+    let overrides = super::overrides(&build, "MONSTER")?;
     // The monsters whose class overrides `AfterAddedToRoom`, one of the
     // `MonsterModel` virtuals the dump lists. The rest are animation, bestiary
     // and death-by-Doom presentation.

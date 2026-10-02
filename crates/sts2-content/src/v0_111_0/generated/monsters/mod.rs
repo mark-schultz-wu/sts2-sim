@@ -1711,7 +1711,7 @@ static OVERRIDES: [sts2_core::Overrides; 126] = [
     // BYRDONIS
     sts2_core::Overrides::NONE,
     // BYRDPIP
-    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::BeforeCombatStart),
+    sts2_core::Overrides::NONE,
     // CALCIFIED_CULTIST
     sts2_core::Overrides::NONE,
     // CEREMONIAL_BEAST
@@ -1837,13 +1837,7 @@ static OVERRIDES: [sts2_core::Overrides; 126] = [
     // OWL_MAGISTRATE
     sts2_core::Overrides::NONE,
     // PAELS_LEGION
-    sts2_core::Overrides::NONE
-        .with(sts2_core::ModelHook::AfterCardPlayed)
-        .with(sts2_core::ModelHook::AfterCombatEnd)
-        .with(sts2_core::ModelHook::AfterModifyingBlockAmount)
-        .with(sts2_core::ModelHook::AfterSideTurnStart)
-        .with(sts2_core::ModelHook::BeforeCombatStart)
-        .with(sts2_core::ModelHook::ModifyBlockMultiplicative),
+    sts2_core::Overrides::NONE,
     // PARAFRIGHT
     sts2_core::Overrides::NONE,
     // PHANTASMAL_GARDENER

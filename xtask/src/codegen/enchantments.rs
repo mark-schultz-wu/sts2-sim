@@ -101,7 +101,7 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     emit_flags(&mut out)?;
     emit_shape(&mut out);
     emit_enchantments(&mut out, &enchantments, &types)?;
-    let overrides = super::overrides(&build)?;
+    let overrides = super::overrides(&build, "ENCHANTMENT")?;
     super::emit_overrides(
         &mut out,
         "indexed by the enchantment's discriminant.",

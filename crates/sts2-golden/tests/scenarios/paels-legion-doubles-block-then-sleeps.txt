@@ -1,0 +1,11 @@
+# Pael's Legion fights beside the player as a pet. It doubles the block a
+# card gives, then sleeps for two turns, so the next turn's Defend gives
+# its own five and the turn after's gives ten again.
+{"cmd":"start","seed":"S33D1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"PAELS_LEGION"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":0}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":1}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":1}

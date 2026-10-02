@@ -428,14 +428,18 @@ impl Dump {
 }
 
 /// The hooks each model's class overrides, by the model's id, from the hook
-/// dump. Only the hooks some [`sts2_core::EventHook`] is raised as.
-fn overrides(build: &Build) -> Result<BTreeMap<String, Vec<sts2_core::ModelHook>>, DumpError> {
+/// dump. Only the models of `category`, the id's own, since two kinds can
+/// share an entry. Only the hooks some [`sts2_core::EventHook`] is raised as.
+fn overrides(
+    build: &Build,
+    category: &str,
+) -> Result<BTreeMap<String, Vec<sts2_core::ModelHook>>, DumpError> {
     let hooks = Dump::read("hooks.txt")?;
     if hooks.build != *build {
         return Err(DumpError::OtherBuild { dump: "hooks.txt" });
     }
     let mut overrides: BTreeMap<String, Vec<sts2_core::ModelHook>> = BTreeMap::new();
-    for row in hooks.of("implements") {
+    for row in hooks.of("implements").filter(|row| row[4] == category) {
         if let Some(hook) = sts2_core::ModelHook::ALL
             .into_iter()
             .find(|hook| hook.name() == row[2])

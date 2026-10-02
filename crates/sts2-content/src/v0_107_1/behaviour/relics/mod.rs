@@ -183,6 +183,7 @@ mod paels_eye;
 mod paels_flesh;
 mod paels_growth;
 mod paels_horn;
+mod paels_legion;
 mod paels_tears;
 mod paels_wing;
 mod pandoras_box;
@@ -580,6 +581,7 @@ pub enum State {
     SneckoEye,
     Ectoplasm,
     PaelsEye(paels_eye::State),
+    PaelsLegion(paels_legion::State),
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -823,6 +825,7 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::PaelsLegion(state) => paels_legion::event_hook(state, hook, asked),
         State::PaelsEye(state) => paels_eye::event_hook(state, hook, asked),
         State::Ectoplasm => ectoplasm::event_hook(hook),
         State::SneckoEye => snecko_eye::event_hook(hook, asked),
@@ -972,6 +975,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
     match state {
         State::Pocketwatch(state) => pocketwatch::modify_hook(state, hook),
         State::Vambrace(state) => vambrace::modify_hook(state, hook),
+        State::PaelsLegion(state) => paels_legion::modify_hook(state, hook),
         State::PumpkinCandle(state) => pumpkin_candle::modify_hook(state, hook),
         State::TheCourier => the_courier::modify_hook(hook),
         State::MembershipCard => membership_card::modify_hook(hook),
@@ -1406,6 +1410,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::PaelsLegion => State::PaelsLegion(paels_legion::State::default()),
             Relic::PaelsEye => State::PaelsEye(paels_eye::State::default()),
             Relic::Ectoplasm => State::Ectoplasm,
             Relic::SneckoEye => State::SneckoEye,
@@ -1551,6 +1556,7 @@ impl sts2_core::RelicModel<V> for State {
                 State::Kusarigama(state) => kusarigama::display_amount(state),
                 State::HappyFlower(state) => happy_flower::display_amount(state),
                 State::Kunai(state) => kunai::display_amount(state),
+                State::PaelsLegion(state) => paels_legion::display_amount(state),
                 State::ToyBox(state) => toy_box::display_amount(state),
                 State::PaelsWing(state) => paels_wing::display_amount(state),
                 State::PumpkinCandle(state) => pumpkin_candle::display_amount(state),
