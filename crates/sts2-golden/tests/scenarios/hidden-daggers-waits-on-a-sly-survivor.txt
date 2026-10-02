@@ -1,0 +1,13 @@
+# Hidden Daggers discards a Survivor that Hand Trick made Sly. Survivor plays
+# itself and asks for a discard of its own, and Hidden Daggers' Shivs come
+# only once that is answered.
+{"cmd":"start","seed":"S33D1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"HAND_TRICK"}
+{"cmd":"grant","card":"HIDDEN_DAGGERS"}
+{"cmd":"grant","card":"SURVIVOR"}
+{"cmd":"play_card","index":7}
+{"cmd":"answer","cards":[4]}
+{"cmd":"play_card","index":7}
+{"cmd":"answer","cards":[7,0]}
+{"cmd":"answer","cards":[0]}

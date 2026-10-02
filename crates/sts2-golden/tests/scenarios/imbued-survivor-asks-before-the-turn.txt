@@ -1,0 +1,9 @@
+# An Imbued Survivor plays itself in the pre-play phase, and asks which card
+# to discard. The phase stands still on the question, and the play phase
+# opens once it is answered.
+{"cmd":"start","seed":"S33D1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","relic":"ELECTRIC_SHRYMP"}
+{"cmd":"answer","cards":[5]}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"answer","cards":[0]}
+{"cmd":"end_turn"}

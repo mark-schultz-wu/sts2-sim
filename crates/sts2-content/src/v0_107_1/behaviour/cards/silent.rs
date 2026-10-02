@@ -21,6 +21,8 @@ pub enum Resume {
     DaggerThrow,
     /// `HiddenDaggers`, after its owner picked the cards to discard.
     HiddenDaggers,
+    /// `HiddenDaggers`, once a Sly card its discard played has finished.
+    HiddenDaggersShivs,
     /// `Acrobatics`, after its owner picked the card to discard.
     Acrobatics,
     /// `HandTrick`, after its owner picked the skill to make Sly.
@@ -440,20 +442,48 @@ pub(super) fn resume_play<F: Fight<V>>(
         }
         // `CardCmd.Discard` of those taken, then its `Shivs` into hand,
         // each upgraded where Hidden Daggers is.
+        // `CardCmd.Discard`, which awaits a Sly card it plays, then Shivs.
         Resume::HiddenDaggers => {
             fight.act_on(sts2_core::PileAct::Discard, chosen.as_slice());
-            let shivs: usize = num_traits::cast(fight.var(CardVar::Shivs))
-                .expect("a count of Shivs is not negative");
-            let upgraded = fight.upgraded();
-            let shiv = CardIdent::new(Cards::Token(TokenCard::Shiv));
-            for at in fight.add_generated_cards(shiv, Pile::Hand, shivs) {
-                if upgraded {
-                    fight.modify_card(at, Change::Upgrade, Lasting::ThisFight);
-                }
+            if fight.waiting() {
+                return Played::Waiting {
+                    at: super::super::Resume::Card(super::Resume::Silent(
+                        Resume::HiddenDaggersShivs,
+                    )),
+                };
             }
-            Played::Done
+            hidden_daggers_shivs(fight)
+        }
+        Resume::HiddenDaggersShivs => {
+            unreachable!("Hidden Daggers' Shivs wait on a card, not a pick")
         }
     }
+}
+
+/// The rest of a Silent card's play that waited on a card it auto-played.
+///
+/// # Panics
+///
+/// A resume point no play waits at.
+pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
+    match at {
+        Resume::HiddenDaggersShivs => hidden_daggers_shivs(fight),
+        at => unimplemented!("{at:?} resumed after waiting"),
+    }
+}
+
+/// `HiddenDaggers`' Shivs into the hand, upgraded where it is.
+fn hidden_daggers_shivs<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let shivs: usize =
+        num_traits::cast(fight.var(CardVar::Shivs)).expect("a count of Shivs is not negative");
+    let upgraded = fight.upgraded();
+    let shiv = CardIdent::new(Cards::Token(TokenCard::Shiv));
+    for at in fight.add_generated_cards(shiv, Pile::Hand, shivs) {
+        if upgraded {
+            fight.modify_card(at, Change::Upgrade, Lasting::ThisFight);
+        }
+    }
+    Played::Done
 }
 
 /// `DaggerThrow`: its damage to the target, one card drawn, then one card

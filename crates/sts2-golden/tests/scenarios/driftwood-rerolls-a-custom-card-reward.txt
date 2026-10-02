@@ -1,0 +1,8 @@
+# Driftwood also rerolls a card reward a relic offers. Lost Coffer's card
+# reward rolls again the same way, off the same stream, and a card is taken
+# from the new pack.
+{"cmd":"start","seed":"S33D1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"DRIFTWOOD"}
+{"cmd":"grant","relic":"LOST_COFFER"}
+{"cmd":"answer","take":[{"index":1,"alternative":"REROLL"}]}
+{"cmd":"answer","take":[{"index":1,"card":0}]}

@@ -235,6 +235,13 @@ pub(super) enum Deferred<V: Rules> {
     /// still until the answer comes.
     /// `SetupPlayerTurn` from `stage`, which a hook stopped on its selection.
     Setup(Setup<V>),
+    /// `RunAutoPrePlayPhase` from what a pass still asked for, then from the
+    /// pass at `next`, once an auto-play's question is answered. The phase
+    /// turns to the play phase after.
+    PrePlay {
+        rest: super::turn::PrePlayRest<V>,
+        next: usize,
+    },
     Hits {
         frame: super::board::Frame<V>,
         attack: HeldAttack<V>,
