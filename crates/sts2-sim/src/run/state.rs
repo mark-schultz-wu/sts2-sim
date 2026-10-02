@@ -176,11 +176,14 @@ pub(crate) struct HeldRelic<V: Rules> {
 
 impl<V: Rules> Clone for HeldRelic<V> {
     fn clone(&self) -> Self {
-        *self
+        HeldRelic {
+            relic: self.relic,
+            state: self.state.clone(),
+            wax: self.wax,
+            melted: self.melted,
+        }
     }
 }
-
-impl<V: Rules> Copy for HeldRelic<V> {}
 
 impl<V: Rules> HeldRelic<V> {
     /// The relic as a run picks it up, with its model as new as it is.
@@ -211,7 +214,7 @@ const COOK_CARDS: usize = 2;
 /// one away.
 #[derive(Debug)]
 pub(crate) struct Belt<V: Rules> {
-    held: Bounded<HeldRelic<V>, RELICS>,
+    held: SmallVec<[HeldRelic<V>; BELT_INLINE]>,
     /// Every hook some relic on the belt overrides.
     heard: sts2_core::Overrides,
     /// For each hook, the slots of the relics that override it, one bit a
@@ -221,11 +224,13 @@ pub(crate) struct Belt<V: Rules> {
 
 impl<V: Rules> Clone for Belt<V> {
     fn clone(&self) -> Self {
-        *self
+        Belt {
+            held: self.held.clone(),
+            heard: self.heard,
+            slots: self.slots,
+        }
     }
 }
-
-impl<V: Rules> Copy for Belt<V> {}
 
 impl<V: Rules> std::ops::Deref for Belt<V> {
     type Target = [HeldRelic<V>];
@@ -254,7 +259,7 @@ impl<V: Rules> FromIterator<HeldRelic<V>> for Belt<V> {
 impl<V: Rules> Belt<V> {
     pub(crate) fn new() -> Self {
         Self {
-            held: Bounded::new(),
+            held: SmallVec::new(),
             heard: sts2_core::Overrides::default(),
             slots: [0; sts2_core::ModelHook::ALL.len()],
         }
@@ -268,6 +273,10 @@ impl<V: Rules> Belt<V> {
             true => sts2_core::Overrides::NONE,
             false => held.relic.overrides(),
         };
+        // One bit a slot in each hook's word.
+        if self.held.len() == RELICS {
+            unimplemented!("more than {RELICS} relics on a belt");
+        }
         let slot = 1 << self.held.len();
         for at in overrides.places() {
             self.slots[at] |= slot;
@@ -279,40 +288,32 @@ impl<V: Rules> Belt<V> {
     /// Take the relic in `slot` off the belt. The slots after it close up,
     /// so every hook's slots are worked out again.
     pub(crate) fn remove(&mut self, slot: usize) -> HeldRelic<V> {
-        let held = self.held[slot];
-        *self = self
-            .held
-            .iter()
-            .enumerate()
-            .filter(|&(at, _)| at != slot)
-            .map(|(_, &held)| held)
-            .collect();
-        held
+        let mut held = std::mem::take(&mut self.held);
+        let taken = held.remove(slot);
+        *self = held.into_iter().collect();
+        taken
     }
 
     /// Put `held` in `slot` in place of what was there, as `RelicCmd.Replace`
     /// obtains the replacement at the original's index.
     pub(crate) fn replace(&mut self, slot: usize, held: HeldRelic<V>) {
-        *self = self
-            .held
-            .iter()
-            .enumerate()
-            .map(|(at, &was)| if at == slot { held } else { was })
-            .collect();
+        let mut belt = std::mem::take(&mut self.held);
+        belt[slot] = held;
+        *self = belt.into_iter().collect();
     }
 
     /// `RelicCmd.Melt` of the first wax relic not yet melted, where there is
     /// one. It stays in its slot, and hears no hook after.
     pub(crate) fn melt_first_wax(&mut self) {
         if let Some(slot) = self.held.iter().position(|held| held.wax && !held.melted) {
-            let mut held = self.held[slot];
+            let mut held = self.held[slot].clone();
             held.melted = true;
             self.replace(slot, held);
         }
     }
 
     pub(crate) fn copy_from(&mut self, source: &Self) {
-        self.held.copy_from(&source.held);
+        self.held.clone_from(&source.held);
         self.heard = source.heard;
         self.slots = source.slots;
     }
@@ -425,8 +426,15 @@ impl<V: Rules> Clone for State<V> {
 impl<V: Rules> Clone for Player<V> {
     fn clone(&self) -> Self {
         Self {
+            relics: self.relics.clone(),
+            potions: self.potions,
+            potion_positions: self.potion_positions,
             deck: Arc::clone(&self.deck),
-            ..*self
+            minted: self.minted,
+            hp: self.hp,
+            max_hp: self.max_hp,
+            gold: self.gold,
+            potion_slots: self.potion_slots,
         }
     }
 
@@ -471,8 +479,13 @@ impl<V: Rules> Player<V> {
     }
 }
 
-/// How many relics a run carries.
+/// How many relics a run carries, which is the bits in a hook's word of
+/// [`Belt`]'s slots.
 const RELICS: usize = 64;
+
+/// How many relics the belt holds before its list reaches the heap. A run
+/// that has cleared the first act carries about this many.
+const BELT_INLINE: usize = 16;
 
 /// The most potion slots a belt can have.
 ///
@@ -1017,6 +1030,19 @@ impl<V: Rules> State<V> {
                 });
                 offered
             }
+            // `IsRemovable` and `IsUpgradable`, curses first as a removal
+            // sorts them.
+            sts2_core::DeckAct::RemoveOntoRelic(_) => {
+                let mut offered: Vec<_> = deck
+                    .filter(|(_, card)| {
+                        !V::card_eternal(card) && card.upgrade < card.card.max_upgrade()
+                    })
+                    .collect();
+                offered.sort_by_key(|(_, card)| {
+                    V::card_kind(card.card) != Some(sts2_core::CardKind::Curse)
+                });
+                offered
+            }
             sts2_core::DeckAct::RemoveBasicTagged(tag) => deck
                 .filter(|(_, card)| {
                     card.card.tagged(tag)
@@ -1102,6 +1128,25 @@ impl<V: Rules> State<V> {
         use sts2_core::rng::GameRng as _;
 
         match act {
+            // Each taken card, in id order, kept on the relic and then
+            // `CardPileCmd.RemoveFromDeck`. The relic is the last of its kind
+            // on the belt, which is the one just obtained.
+            sts2_core::DeckAct::RemoveOntoRelic(relic) => {
+                use sts2_core::{CardTable as _, RelicModel as _};
+
+                let mut kept: Vec<sts2_core::DeckCard<V>> =
+                    taken.iter().map(|&at| self.player.deck[at]).collect();
+                kept.sort_by_key(|card| card.ident.card.order());
+                let mut taken = taken.to_vec();
+                taken.sort_unstable_by(|a, b| b.cmp(a));
+                for at in taken {
+                    self.player.deck_mut().remove(at);
+                }
+                let slot = (self.player.relics.iter())
+                    .rposition(|held| held.relic == relic)
+                    .unwrap_or_else(|| unimplemented!("{relic:?} keeping cards off the belt"));
+                self.player.relics[slot].state.hold_cards(&kept);
+            }
             sts2_core::DeckAct::Remove | sts2_core::DeckAct::RemoveBasicTagged(_) => {
                 let mut taken = taken.to_vec();
                 taken.sort_unstable_by(|a, b| b.cmp(a));
@@ -1998,6 +2043,35 @@ impl<V: Rules> State<V> {
                         kind: None,
                     };
                     self.act_on_deck(act, &taken);
+                    continue;
+                }
+                // `NextItem` over what the relic keeps, off the rewards
+                // stream. The card is made anew, upgraded where it can be,
+                // then `CardPileCmd.Add` to the deck.
+                HookEffect::ReturnHeldCard(relic) => {
+                    use sts2_core::rng::GameRng as _;
+                    use sts2_core::{CardTable as _, RelicModel as _};
+
+                    let slot = (self.player.relics.iter())
+                        .rposition(|held| held.relic == relic)
+                        .unwrap_or_else(|| {
+                            unimplemented!("{relic:?} handing back a card off the belt")
+                        });
+                    let count = self.player.relics[slot].state.held_cards().len();
+                    let places: Vec<usize> = (0..count).collect();
+                    let Ok(&at) = self
+                        .streams
+                        .player(V::PlayerRngType::REWARDS)
+                        .choose(&places)
+                    else {
+                        continue;
+                    };
+                    let mut card = self.player.relics[slot].state.release_card(at);
+                    if card.ident.upgrade < card.ident.card.max_upgrade() {
+                        card.ident.upgrade += 1;
+                    }
+                    let id = self.player.mint();
+                    self.add_deck_card(sts2_core::DeckCard { id, ..card });
                     continue;
                 }
                 // `State.Map` in place, and `RemoveStaleVisitedMapCoords`,

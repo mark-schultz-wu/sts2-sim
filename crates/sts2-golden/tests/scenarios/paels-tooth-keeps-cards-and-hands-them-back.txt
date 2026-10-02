@@ -1,0 +1,13 @@
+# Pael's Tooth takes five upgradable cards from the deck as it is picked up.
+# After each fight it hands one of them back, drawn off the rewards stream,
+# upgraded.
+{"cmd":"start","seed":"S33D1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"PAELS_TOOTH"}
+{"cmd":"answer","cards":[0,1,5,6,9]}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"DEMISE_POWER","amount":99,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"answer","skip":true}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"DEMISE_POWER","amount":99,"target":1}
+{"cmd":"end_turn"}

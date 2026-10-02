@@ -187,6 +187,7 @@ mod paels_growth;
 mod paels_horn;
 mod paels_legion;
 mod paels_tears;
+mod paels_tooth;
 mod paels_wing;
 mod pandoras_box;
 mod pantograph;
@@ -327,7 +328,7 @@ fn egg(kind: sts2_core::CardKind, hook: EventHook<V>, asked: &mut sts2_core::Hoo
 /// A variant per ported relic, holding what that relic's `[SavedProperty]`
 /// fields hold. A relic that saves nothing still has a variant of its own.
 /// That variant is what says the port has read the relic and found no state.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum State {
     AlchemicalCoffer,
     Anchor,
@@ -590,6 +591,7 @@ pub enum State {
     SeaGlass(sea_glass::State),
     DemonTongue(demon_tongue::State),
     PrismaticGem,
+    PaelsTooth(paels_tooth::State),
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -833,6 +835,7 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::PaelsTooth(state) => paels_tooth::event_hook(state, hook, asked),
         State::PrismaticGem => prismatic_gem::event_hook(hook, asked),
         State::DemonTongue(state) => demon_tongue::event_hook(state, hook, asked),
         State::SeaGlass(state) => sea_glass::event_hook(state, hook, asked),
@@ -1247,7 +1250,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::PaelsEye(_)
         | State::GoldenCompass(_)
         | State::SeaGlass(_)
-        | State::DemonTongue(_) => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::DemonTongue(_)
+        | State::PaelsTooth(_) => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1426,6 +1430,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::PaelsTooth => State::PaelsTooth(paels_tooth::State::default()),
             Relic::PrismaticGem => State::PrismaticGem,
             Relic::DemonTongue => State::DemonTongue(demon_tongue::State::default()),
             Relic::SeaGlass => State::SeaGlass(sea_glass::State::default()),
@@ -1576,6 +1581,7 @@ impl sts2_core::RelicModel<V> for State {
                 State::Kusarigama(state) => kusarigama::display_amount(state),
                 State::HappyFlower(state) => happy_flower::display_amount(state),
                 State::Kunai(state) => kunai::display_amount(state),
+                State::PaelsTooth(state) => paels_tooth::display_amount(state),
                 State::PaelsLegion(state) => paels_legion::display_amount(state),
                 State::ToyBox(state) => toy_box::display_amount(state),
                 State::PaelsWing(state) => paels_wing::display_amount(state),
@@ -1598,6 +1604,27 @@ impl sts2_core::RelicModel<V> for State {
                 State::Pendulum(state) => pendulum::display_amount(state),
                 _ => unimplemented!("the number {relic:?} shows"),
             },
+        }
+    }
+
+    fn held_cards(&self) -> &[sts2_core::DeckCard<V>] {
+        match self {
+            State::PaelsTooth(state) => state.held(),
+            _ => &[],
+        }
+    }
+
+    fn hold_cards(&mut self, cards: &[sts2_core::DeckCard<V>]) {
+        match self {
+            State::PaelsTooth(state) => state.hold(cards),
+            state => unimplemented!("{state:?} keeping deck cards"),
+        }
+    }
+
+    fn release_card(&mut self, at: usize) -> sts2_core::DeckCard<V> {
+        match self {
+            State::PaelsTooth(state) => state.release(at),
+            state => unimplemented!("{state:?} handing back a deck card"),
         }
     }
 }
