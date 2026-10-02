@@ -775,6 +775,17 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::cards::narrows_unknown_rooms(card, act)
     }
 
+    fn deck_card_modify_generated_map(
+        card: Self::Card,
+        act: usize,
+    ) -> Option<sts2_core::ReplacedMap> {
+        behaviour::cards::modify_generated_map(card, act)
+    }
+
+    fn deck_card_after_map_generated(card: Self::Card, act: usize) {
+        behaviour::cards::after_map_generated(card, act);
+    }
+
     fn deck_card_next_event(card: Self::Card, act: usize, event: Self::Event) -> Self::Event {
         behaviour::cards::next_event(card, act, event)
     }

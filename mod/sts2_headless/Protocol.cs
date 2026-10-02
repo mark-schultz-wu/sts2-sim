@@ -522,7 +522,7 @@ internal static class Protocol
 
         if (grantCard != null)
         {
-            BackgroundWork.Track(Driver.GrantCard(_state, grantCard.ToMutable()));
+            BackgroundWork.Track(Driver.GrantCard(_state, grantCard));
         }
 
         if (grantRelic != null)

@@ -826,12 +826,20 @@ impl<V: Rules> State<V> {
     /// a map of its own.
     fn generate_map(&mut self, act: V::Act) -> ActMap<V> {
         let mut map = Self::act_map(self.shared.raw_seed, act, self.act, self.ascension());
-        if self
+        // `IterateHookListeners` walks the deck's cards ahead of the relics.
+        let cards: Vec<V::Card> = self
             .deck_cards_hearing(sts2_core::ModelHook::ModifyGeneratedMap)
-            .next()
-            .is_some()
-        {
-            unimplemented!("a deck card changing a generated map");
+            .collect();
+        for card in cards {
+            match V::deck_card_modify_generated_map(card, self.act) {
+                Some(sts2_core::ReplacedMap::Spoils) => {
+                    let mut rng: MegaRng =
+                        sts2_core::rng::named::<V, _>(self.shared.raw_seed, "spoils_map");
+                    map = ActMap::<V>::spoils(&mut rng, V::act_layout(act), self.ascension())
+                        .expect("a Spoils layout fits a packed map path");
+                }
+                None => {}
+            }
         }
         let hook = sts2_core::EventHook::GeneratedMap { act: self.act };
         for effect in self.notify_belt(hook) {
@@ -840,7 +848,17 @@ impl<V: Rules> State<V> {
                 effect => unimplemented!("a relic asking for {effect:?} as a map is generated"),
             }
         }
-        self.unheard(sts2_core::ModelHook::AfterMapGenerated);
+        let cards: Vec<V::Card> = self
+            .deck_cards_hearing(sts2_core::ModelHook::AfterMapGenerated)
+            .collect();
+        for card in cards {
+            V::deck_card_after_map_generated(card, self.act);
+        }
+        if self.player.relics.hear(sts2_core::Overrides::of(
+            sts2_core::ModelHook::AfterMapGenerated,
+        )) {
+            unimplemented!("a relic listening to AfterMapGenerated");
+        }
         map
     }
 

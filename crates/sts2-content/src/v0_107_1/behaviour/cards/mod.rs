@@ -909,6 +909,38 @@ pub(crate) fn narrows_unknown_rooms(card: Cards, act: usize) -> bool {
     }
 }
 
+/// `SpoilsMap.SpoilsActIndex`, which `AfterCreated` sets.
+const SPOILS_ACT: usize = 1;
+
+/// `ModifyGeneratedMap` for a card in the deck. The Spoils Map puts a
+/// `SpoilsActMap` in place of its act's own.
+///
+/// # Panics
+///
+/// Any other card, which the run asks only when its class overrides the hook.
+pub(crate) fn modify_generated_map(card: Cards, act: usize) -> Option<sts2_core::ReplacedMap> {
+    match card {
+        Cards::Quest(QuestCard::SpoilsMap) => {
+            (act == SPOILS_ACT).then_some(sts2_core::ReplacedMap::Spoils)
+        }
+        card => unimplemented!("what {card:?} does to a generated map"),
+    }
+}
+
+/// `AfterMapGenerated` for a card in the deck. The Spoils Map puts its quest
+/// on `SpoilsCoord`, which only `ModifyGeneratedMapLate` sets. That hook runs
+/// on a map loaded from a save alone, so a map generated here gets none.
+///
+/// # Panics
+///
+/// Any other card, which the run asks only when its class overrides the hook.
+pub(crate) fn after_map_generated(card: Cards, _act: usize) {
+    match card {
+        Cards::Quest(QuestCard::SpoilsMap) => {}
+        card => unimplemented!("what {card:?} does once a map is generated"),
+    }
+}
+
 /// `ModifyNextEvent` for a card in the deck. The Lantern Key sends its act's
 /// next event to War Historian Repy.
 ///

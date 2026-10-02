@@ -1,0 +1,11 @@
+# Spoils Map, taken from The Legends Were True, replaces the second act's map with the Spoils map.
+# Seven paths narrow to one treasure seven rows from the top, off the run's
+# own spoils_map stream.
+{"cmd":"start","seed":"S33D1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"THE_LEGENDS_WERE_TRUE"}
+{"cmd":"choose_option","index":0}
+{"cmd":"fight","encounter":"CEREMONIAL_BEAST_BOSS"}
+{"cmd":"power","power":"DEMISE_POWER","amount":999,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"answer","skip":true}
+{"cmd":"proceed"}

@@ -15,6 +15,7 @@
 
 mod prune;
 mod set;
+mod spoils;
 mod tidy;
 mod types;
 
@@ -113,6 +114,20 @@ impl<V: Rules> ActMap<V> {
         ascension: V::AscensionLevel,
     ) -> Result<Self, Error> {
         Ok(ActMapBuilder::<V>::generate(rng, layout, ascension)?.into())
+    }
+
+    /// Generate the Spoils map, which is `SpoilsActMap`, off the run's
+    /// `spoils_map` stream.
+    ///
+    /// Never inlined, so a profile can name it.
+    #[tracing::instrument(level = "trace", skip_all)]
+    #[inline(never)]
+    pub fn spoils<R: GameRng>(
+        rng: &mut R,
+        layout: Layout,
+        ascension: V::AscensionLevel,
+    ) -> Result<Self, Error> {
+        Ok(ActMapBuilder::<V>::spoils(rng, layout, ascension)?.into())
     }
 
     /// A map of one column down the grid's middle: the ancient, then `rooms`

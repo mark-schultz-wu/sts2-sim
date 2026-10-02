@@ -386,7 +386,7 @@ public static class SelfTest
     private static async Task ACardThatAsksParksAndCanBeAnswered(RunState state)
     {
         await EnterFight(state);
-        await Driver.GrantCard(state, ModelDb.Card<BurningPact>().ToMutable());
+        await Driver.GrantCard(state, ModelDb.Card<BurningPact>());
 
         Check("selector: nothing is pending before the card is played", Pending.Current == null);
         Check("selector: the asking card was played",
@@ -1041,7 +1041,7 @@ public static class SelfTest
         // pile, a position, and a fight in progress.
         await RelicCmd.Obtain(ModelDb.Relic<WingedBoots>().ToMutable(), state.Players[0]);
         await EnterFight(state);
-        await Driver.GrantCard(state, ModelDb.Card<BurningPact>().ToMutable());
+        await Driver.GrantCard(state, ModelDb.Card<BurningPact>());
         await Driver.PlayOneCard(state);
 
         string dirtied = Observation.Digest(state);
