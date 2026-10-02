@@ -625,6 +625,10 @@ pub trait PowerTable: Table {
     /// instance of it, each with its own amount.
     fn instanced(self) -> bool;
 
+    /// Whether it is `InstancedPerApplier`: an instance for each applier, which
+    /// `FindExistingInstanceForStacking` finds by that applier.
+    fn per_applier(self) -> bool;
+
     /// Whether this power's class overrides `method`, as the power dump
     /// measured it.
     fn overrides_virtual(self, method: PowerVirtual) -> bool;
@@ -5220,6 +5224,9 @@ pub enum HookEffect<V: ContentVersion> {
     /// `PowerCmd.Apply` on every hittable opponent of the listener's owner,
     /// from that owner.
     ApplyToOpponents(V::Power, PowerAmount<V::Number>),
+    /// `PowerCmd.Apply` on every living opponent of the listener's owner,
+    /// from nobody. Brimstone's.
+    ApplyToLivingOpponents(V::Power, PowerAmount<V::Number>),
     /// `CardCmd.AutoPlay` of this copy, with no target named: the card plays
     /// for free, and one that targets an enemy picks it off `CombatTargets`.
     AutoPlay(crate::CardId<V>),

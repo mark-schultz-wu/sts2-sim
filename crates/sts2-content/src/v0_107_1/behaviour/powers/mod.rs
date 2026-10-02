@@ -163,6 +163,27 @@ pub enum State {
     },
 }
 
+/// Whether a clone of `power`, as `ClonePreservingMutability` makes one,
+/// starts as a new instance does, whatever this one holds.
+///
+/// A noted play is `amountsForPlayedCards`, the power's internal data, which
+/// `DeepCloneFields` builds anew. Imbalanced's off-balance stands for the
+/// Bowlbug Rock's `IsOffBalance` or a stun, which its model holds nothing of.
+pub(crate) fn clone_starts_anew(power: Power) -> bool {
+    matches!(
+        power,
+        Power::ImbalancedPower
+            | Power::StranglePower
+            | Power::OblivionPower
+            | Power::AfterimagePower
+            | Power::SubroutinePower
+            | Power::StormPower
+            | Power::CalamityPower
+            | Power::RupturePower
+            | Power::SerpentFormPower
+    )
+}
+
 /// `TheBombPower`'s `DamageVar(40)`, before `SetDamage` writes its own.
 const THE_BOMB_DAMAGE: Number = 40;
 

@@ -325,14 +325,21 @@ impl<'a, V: Rules> Board<'a, V> {
         // power takes the amount through `ModifyAmount`, which is the whole of
         // what happens. Everything below to the stacking itself is the other
         // branch, the one that builds an instance.
-        // An instanced power builds another instance beside any there.
+        // An instanced power builds another instance beside any there, save
+        // one kept apart by its applier, which stacks onto that applier's.
         let held = self
             .live
             .powers
             .of(id)
             .filter(|held| held.power() == power)
             .count();
-        let fresh = held == 0 || sts2_core::PowerTable::instanced(power);
+        let per_applier = sts2_core::PowerTable::per_applier(power);
+        let stacks_onto = self
+            .live
+            .powers
+            .of(id)
+            .any(|held| held.power() == power && (!per_applier || held.applier == applier));
+        let fresh = !stacks_onto || (sts2_core::PowerTable::instanced(power) && !per_applier);
         // `FindExistingInstanceForStacking`: a counter stacks into the one
         // already there through `ModifyAmount`. An endless instance is one
         // instance however many times it lands.
@@ -611,16 +618,17 @@ impl<'a, V: Rules> Board<'a, V> {
         offset: V::Number,
         applier: Option<CombatId>,
     ) {
-        if !self.live.powers.of(id).any(|held| held.power() == power) {
+        // `FindExistingInstanceForStacking`: a power kept apart by its applier
+        // stacks onto that applier's instance alone.
+        let per_applier = sts2_core::PowerTable::per_applier(power);
+        let stacks = |held: &super::live::HeldPower<V>| {
+            held.power() == power && (!per_applier || held.applier == applier)
+        };
+        if !self.live.powers.of(id).any(stacks) {
             return;
         }
         let (offset, modifiers) = self.received(id, power, offset, applier);
-        let Some(held) = self
-            .live
-            .powers
-            .of_mut(id)
-            .find(|held| held.power() == power)
-        else {
+        let Some(held) = self.live.powers.of_mut(id).find(|held| stacks(held)) else {
             return;
         };
         let had = held

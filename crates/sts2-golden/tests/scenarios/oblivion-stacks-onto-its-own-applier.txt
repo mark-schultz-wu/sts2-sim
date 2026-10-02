@@ -1,0 +1,9 @@
+# Oblivion is kept apart by its applier. Two played on one enemy by the same
+# player stack into the one instance, and the second play's Doom reads the
+# first's stack.
+{"cmd":"start","seed":"S33D1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"OBLIVION"}
+{"cmd":"grant","card":"OBLIVION"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"play_card","index":5,"target":1}

@@ -58,6 +58,7 @@ mod bookmark;
 mod booming_conch;
 mod bound_phylactery;
 mod bowler_hat;
+mod brimstone;
 mod bronze_scales;
 mod burning_blood;
 mod burning_sticks;
@@ -170,6 +171,7 @@ mod neows_bones;
 mod neows_talisman;
 mod neows_torment;
 mod new_leaf;
+mod ninja_scroll;
 mod nunchaku;
 mod nutritious_oyster;
 mod nutritious_soup;
@@ -592,6 +594,8 @@ pub enum State {
     DemonTongue(demon_tongue::State),
     PrismaticGem,
     PaelsTooth(paels_tooth::State),
+    NinjaScroll,
+    Brimstone,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -835,6 +839,8 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::Brimstone => brimstone::event_hook(hook, asked),
+        State::NinjaScroll => ninja_scroll::event_hook(hook, asked),
         State::PaelsTooth(state) => paels_tooth::event_hook(state, hook, asked),
         State::PrismaticGem => prismatic_gem::event_hook(hook, asked),
         State::DemonTongue(state) => demon_tongue::event_hook(state, hook, asked),
@@ -1251,7 +1257,9 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::GoldenCompass(_)
         | State::SeaGlass(_)
         | State::DemonTongue(_)
-        | State::PaelsTooth(_) => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::PaelsTooth(_)
+        | State::NinjaScroll
+        | State::Brimstone => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1430,6 +1438,8 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::Brimstone => State::Brimstone,
+            Relic::NinjaScroll => State::NinjaScroll,
             Relic::PaelsTooth => State::PaelsTooth(paels_tooth::State::default()),
             Relic::PrismaticGem => State::PrismaticGem,
             Relic::DemonTongue => State::DemonTongue(demon_tongue::State::default()),

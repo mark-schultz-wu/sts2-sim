@@ -284,7 +284,11 @@ fn misery<F: Fight<V>>(fight: &mut F) -> Played<V> {
             if super::super::powers::lends(power).is_some() {
                 unimplemented!("Misery copying {power:?}, which ignores its next instance");
             }
-            if !held.fresh {
+            // `ClonePreservingMutability` builds its internal data anew, which
+            // is all a noted play is. Imbalanced's off-balance is the Bowlbug
+            // Rock's `IsOffBalance`, or a stun, which the port keeps on the
+            // power and the game's model holds nothing of.
+            if !held.fresh && !super::super::powers::clone_starts_anew(power) {
                 unimplemented!("Misery copying {power:?}, whose model carries state");
             }
             let PowerAmount::Counted(amount) = held.amount else {
@@ -294,11 +298,17 @@ fn misery<F: Fight<V>>(fight: &mut F) -> Played<V> {
                 None if fight.powers_on(enemy).iter().any(|on| on.power == power) => {
                     fight.modify_power_amount(enemy, power, amount, held.applier);
                 }
-                None | Some(PowerInstanceType::Instanced) => {
-                    fight.apply_power_from(enemy, power, held.amount, held.applier);
+                Some(PowerInstanceType::InstancedPerApplier)
+                    if fight
+                        .powers_on(enemy)
+                        .iter()
+                        .any(|on| on.power == power && on.applier == held.applier) =>
+                {
+                    fight.modify_power_amount(enemy, power, amount, held.applier);
                 }
-                Some(PowerInstanceType::InstancedPerApplier) => {
-                    unimplemented!("Misery copying {power:?}, kept apart by its applier")
+                None
+                | Some(PowerInstanceType::Instanced | PowerInstanceType::InstancedPerApplier) => {
+                    fight.apply_power_from(enemy, power, held.amount, held.applier);
                 }
             }
         }

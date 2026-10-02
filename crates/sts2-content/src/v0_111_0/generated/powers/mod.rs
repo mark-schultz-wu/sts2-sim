@@ -1382,6 +1382,13 @@ impl sts2_core::PowerTable for Power {
         <Self as sts2_core::Table>::data(self).instance.is_some()
     }
 
+    fn per_applier(self) -> bool {
+        matches!(
+            <Self as sts2_core::Table>::data(self).instance,
+            Some(PowerInstanceType::InstancedPerApplier)
+        )
+    }
+
     fn overrides_virtual(self, method: sts2_core::PowerVirtual) -> bool {
         let bit = match method {
             sts2_core::PowerVirtual::BeforeApplied => 1,

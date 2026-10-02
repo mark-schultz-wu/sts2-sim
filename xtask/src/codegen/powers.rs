@@ -580,6 +580,10 @@ fn emit_powers(
          \x20       <Self as sts2_core::Table>::data(self).instance.is_some()\n\
          \x20   }}\n\
          \n\
+         \x20   fn per_applier(self) -> bool {{\n\
+         \x20       matches!(<Self as sts2_core::Table>::data(self).instance, Some(PowerInstanceType::InstancedPerApplier))\n\
+         \x20   }}\n\
+         \n\
          \x20   fn overrides_virtual(self, method: sts2_core::PowerVirtual) -> bool {{\n\
          \x20       let bit = match method {{\n\
          \x20           sts2_core::PowerVirtual::BeforeApplied => 1,\n\
