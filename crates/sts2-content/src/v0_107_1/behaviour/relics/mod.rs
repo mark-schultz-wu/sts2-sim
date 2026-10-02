@@ -179,6 +179,7 @@ mod ornamental_fan;
 mod orrery;
 mod paels_blood;
 mod paels_claw;
+mod paels_eye;
 mod paels_flesh;
 mod paels_growth;
 mod paels_horn;
@@ -578,6 +579,7 @@ pub enum State {
     ElectricShrymp,
     SneckoEye,
     Ectoplasm,
+    PaelsEye(paels_eye::State),
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -821,6 +823,7 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::PaelsEye(state) => paels_eye::event_hook(state, hook, asked),
         State::Ectoplasm => ectoplasm::event_hook(hook),
         State::SneckoEye => snecko_eye::event_hook(hook, asked),
         State::ElectricShrymp => electric_shrymp::event_hook(hook, asked),
@@ -956,6 +959,7 @@ pub(crate) fn decide_hook(
         State::TheCourier => the_courier::decide_hook(hook),
         State::MiniatureTent => miniature_tent::decide_hook(hook),
         State::SilverCrucible(state) => silver_crucible::decide_hook(state, hook),
+        State::PaelsEye(state) => paels_eye::decide_hook(state, hook),
         _ => match hook.model_hook() {
             Some(_) => unimplemented!("what {state:?} decides for {hook:?}"),
             None => sts2_core::HookResponse::DoesNotImplement,
@@ -1222,7 +1226,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::Driftwood
         | State::PaelsWing(_)
         | State::ToyBox(_)
-        | State::ElectricShrymp => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::ElectricShrymp
+        | State::PaelsEye(_) => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1401,6 +1406,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::PaelsEye => State::PaelsEye(paels_eye::State::default()),
             Relic::Ectoplasm => State::Ectoplasm,
             Relic::SneckoEye => State::SneckoEye,
             Relic::ElectricShrymp => State::ElectricShrymp,

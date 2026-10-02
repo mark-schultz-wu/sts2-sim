@@ -1943,8 +1943,10 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterSideTurnStart)
+        .with(sts2_core::ModelHook::AfterTakingExtraTurn)
         .with(sts2_core::ModelHook::BeforeCardPlayed)
-        .with(sts2_core::ModelHook::BeforeSideTurnEndEarly),
+        .with(sts2_core::ModelHook::BeforeSideTurnEndEarly)
+        .with(sts2_core::ModelHook::ShouldTakeExtraTurn),
     // PAELS_FLESH
     sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCombatEnd)

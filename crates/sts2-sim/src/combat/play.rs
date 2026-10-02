@@ -1513,7 +1513,7 @@ fn finished<V: Rules, S: LendsCombat>(
         relics,
     } = fighting;
     let spent = play.energy;
-    next.history.finish(card, id, ethereal);
+    next.history.finish(card, id, ethereal, play.auto);
     let mut ended = None;
     // The copy stays in the play pile until its play is over.
     let affliction = next
