@@ -12,7 +12,30 @@ on:
     types: [opened, edited, reopened]
 
 jobs:
+  # The image every other job runs in, which `restore.sh` builds when the host
+  # lacks it. This job runs on the host, because it is the one thing that cannot
+  # run inside the image. The host has no `sts2-checkout`, and a build reads
+  # only the files at one commit, so it fetches that commit alone.
+  image:
+    runs-on: sts2-image-builder
+    timeout-minutes: 60
+    steps:
+      - name: Build the runner image if the host lacks it
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+          git init -q .
+          git -c http.extraheader="$auth" fetch -q --no-tags --depth 1 \
+            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "$GITHUB_SHA"
+          git checkout -q --force --detach FETCH_HEAD
+          git clean -qfdx
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          .forgejo/runner/restore.sh
+
   description:
+    needs: image
     runs-on: sts2
     timeout-minutes: 5
     steps:
