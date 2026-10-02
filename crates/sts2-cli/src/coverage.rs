@@ -162,7 +162,7 @@ impl Coverage {
             Question::Rewards { rewards, .. } => {
                 for detail in rewards {
                     match &detail.reward {
-                        RewardKind::Card { cards: offer } => {
+                        RewardKind::Card { cards: offer, .. } => {
                             self.cards_seen.extend(cards(offer.iter().map(|c| &c.card)));
                         }
                         RewardKind::SpecialCard { card: Some(one) } => {

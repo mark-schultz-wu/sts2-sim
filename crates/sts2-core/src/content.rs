@@ -744,6 +744,7 @@ pub enum ModelHook {
     ShouldAllowFreeTravel,
     TryModifyRewards,
     TryModifyRewardsLate,
+    TryModifyCardRewardAlternatives,
     ModifyUnknownMapPointRoomTypes,
     ModifyOddsIncreaseForUnrolledRoomType,
     ModifyCardRewardUpgradeOdds,
@@ -770,7 +771,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 129] = [
+    pub const ALL: [ModelHook; 130] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -877,6 +878,7 @@ impl ModelHook {
         ModelHook::ShouldAllowFreeTravel,
         ModelHook::TryModifyRewards,
         ModelHook::TryModifyRewardsLate,
+        ModelHook::TryModifyCardRewardAlternatives,
         ModelHook::ModifyUnknownMapPointRoomTypes,
         ModelHook::ModifyOddsIncreaseForUnrolledRoomType,
         ModelHook::ModifyCardRewardUpgradeOdds,
@@ -989,6 +991,7 @@ impl ModelHook {
             ModelHook::ShouldAllowFreeTravel => "ShouldAllowFreeTravel",
             ModelHook::TryModifyRewards => "TryModifyRewards",
             ModelHook::TryModifyRewardsLate => "TryModifyRewardsLate",
+            ModelHook::TryModifyCardRewardAlternatives => "TryModifyCardRewardAlternatives",
             ModelHook::AfterModifyingRewards => "AfterModifyingRewards",
             ModelHook::ModifyUnknownMapPointRoomTypes => "ModifyUnknownMapPointRoomTypes",
             ModelHook::ModifyOddsIncreaseForUnrolledRoomType => {
@@ -3538,6 +3541,13 @@ pub enum EventHook<V: ContentVersion> {
         /// `RunState.Acts.Count`.
         acts: usize,
     },
+    /// `TryModifyRewardsLate`, once `TryModifyRewards` is through.
+    ModifyRewardsLate,
+    /// `TryModifyCardRewardAlternatives`, for one card reward.
+    CardRewardAlternatives,
+    /// A card reward's alternative chosen, which is its `OnSelect`. Only the
+    /// model that added it hears it.
+    CardRewardAlternativeChosen(crate::RewardAlternative),
     /// `BeforeCombatStart`, once the fight is built and before it opens, in
     /// a room of this type.
     CombatStarting {
@@ -4066,6 +4076,10 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::RoomEntered { .. } => ModelHook::AfterRoomEntered,
             EventHook::UnknownRoomTypes => ModelHook::ModifyUnknownMapPointRoomTypes,
             EventHook::ModifyRewards { .. } => ModelHook::TryModifyRewards,
+            EventHook::ModifyRewardsLate => ModelHook::TryModifyRewardsLate,
+            EventHook::CardRewardAlternatives | EventHook::CardRewardAlternativeChosen(_) => {
+                ModelHook::TryModifyCardRewardAlternatives
+            }
             EventHook::CombatStarting { .. } => ModelHook::BeforeCombatStart,
             EventHook::CombatStartingLate { .. } => ModelHook::BeforeCombatStartLate,
             EventHook::RestSiteOptions => ModelHook::TryModifyRestSiteOptions,
@@ -4694,6 +4708,10 @@ pub enum CustomReward<V: ContentVersion> {
     /// `RelicReward(player)`: the next relic from the front of the player's
     /// bag, at a rarity it rolls as it fills in.
     RolledRelic,
+    /// `RelicReward(relic, player)` for `PullNextRelicFromFront(player)`,
+    /// made wax. Toy Box pulls each before the set fills in, which draws as a
+    /// set of [`CustomReward::RolledRelic`] alone does.
+    WaxRelic,
     /// `PotionReward(potion, player)` for one `Rng.NextItem` over
     /// [`Rules::unlocked_potions`] off the rewards stream.
     UnlockedPotion,
@@ -4915,6 +4933,13 @@ pub enum HookEffect<V: ContentVersion> {
     /// `RunState.CloneCard` of each deck card carrying this enchantment, in
     /// deck order, each then `CardPileCmd.Add` to the deck's bottom.
     CloneEnchantedIntoDeck(V::Enchantment),
+    /// `RelicCmd.Melt` of the owner's first wax relic not yet melted, where
+    /// there is one.
+    MeltFirstWax,
+    /// `CanReroll = true` on each card reward of the set.
+    RerollableCardRewards,
+    /// A `CardRewardAlternative` added to the card reward's list.
+    OfferRewardAlternative(crate::RewardAlternative),
     /// `Rng.NextInt(below)` off a stream, drawn for its place in the stream
     /// alone, which a flavour line makes.
     DrawFromStream {

@@ -79,7 +79,7 @@ pub use report::question::{
 pub mod fixture;
 
 pub use step::Step;
-pub use step::answer::{Answer, Picks, TakeReward, Tool, Unpickable};
+pub use step::answer::{Answer, Picks, RewardAlternative, TakeReward, Tool, Unpickable};
 pub use step::decision::{BeltIndex, Decision, HandIndex};
 pub use step::setup::{Gift, Setup};
 pub use step::start::Start;

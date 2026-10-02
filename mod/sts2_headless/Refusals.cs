@@ -160,6 +160,9 @@ internal static class Refusals
 
     public static Dictionary<string, object?> EmptyTake() => Kind("empty_take");
 
+    public static Dictionary<string, object?> NoSuchAlternative(int index, string alternative) =>
+        Kind("no_such_alternative", ("index", index), ("alternative", alternative));
+
     public static Dictionary<string, object?> OffGrid(int x, int y, int width, int height) =>
         Kind("off_grid", ("x", x), ("y", y), ("width", width), ("height", height));
 

@@ -408,6 +408,14 @@ internal sealed class RewardChoice : Pending
                     ["card"] = Observation.Ident(c),
                     ["text"] = Observation.Text(c),
                 }).ToList();
+                // What OnSelect offers besides a card, less Skip, which is
+                // leaving the reward untaken. Absent where there is nothing
+                // else, so a plain card reward reads as it always has.
+                List<string> alternatives = Alternatives(card);
+                if (alternatives.Count > 0)
+                {
+                    d["alternatives"] = alternatives;
+                }
                 break;
             case RelicReward relic:
                 d["relic"] = relic.Relic?.Id.Entry;
@@ -420,6 +428,19 @@ internal sealed class RewardChoice : Pending
 
         return d;
     }
+
+    /// <summary>
+    /// A card reward's alternatives other than <c>Skip</c>, by <c>OptionId</c>.
+    /// </summary>
+    /// <remarks>
+    /// <c>Generate</c> is what <c>OnSelect</c> calls, and the hook it raises only
+    /// adds to a list, so asking it here changes nothing.
+    /// </remarks>
+    private static List<string> Alternatives(CardReward card) =>
+        CardRewardAlternative.Generate(card)
+            .Select(a => a.OptionId)
+            .Where(id => id != "Skip")
+            .ToList();
 
     public override Dictionary<string, object?>? Accept(JsonElement req)
     {
@@ -468,8 +489,19 @@ internal sealed class RewardChoice : Pending
             }
 
             int? cardIndex = null;
+            string? alternative = null;
 
-            if (reward is CardReward card)
+            if (reward is CardReward alt
+                && e.TryGetProperty("alternative", out JsonElement aEl)
+                && aEl.ValueKind == JsonValueKind.String)
+            {
+                alternative = aEl.GetString()!;
+                if (!Alternatives(alt).Contains(alternative))
+                {
+                    return Refusals.NoSuchAlternative(i, alternative);
+                }
+            }
+            else if (reward is CardReward card)
             {
                 int count = card.Cards.Count();
                 if (!e.TryGetProperty("card", out JsonElement cEl) || !cEl.TryGetInt32(out int c)
@@ -483,7 +515,7 @@ internal sealed class RewardChoice : Pending
                 cardIndex = c;
             }
 
-            plan.Take.Add((reward, cardIndex));
+            plan.Take.Add((reward, cardIndex, alternative));
         }
 
         if (plan.Take.Count == 0)
@@ -551,12 +583,13 @@ internal sealed class RewardChoice : Pending
                     return;
                 }
 
-                foreach ((Reward reward, int? cardIndex) in plan.Take)
+                foreach ((Reward reward, int? cardIndex, string? alternative) in plan.Take)
                 {
                     // Read back by the synchronous GetSelectedCardReward, which
                     // cannot ask anyone anything. Cleared straight after so a
                     // later reward cannot silently inherit this one's answer.
                     RewardPlan.CardInFlight = cardIndex;
+                    RewardPlan.AlternativeInFlight = alternative;
                     try
                     {
                         await sync.SelectLocalReward(reward);
@@ -564,6 +597,8 @@ internal sealed class RewardChoice : Pending
                     finally
                     {
                         RewardPlan.CardInFlight = null;
+                        RewardPlan.AlternativeInFlight = null;
+                        RewardPlan.AlternativeAnswered = false;
                     }
                 }
             }
@@ -580,13 +615,28 @@ internal sealed class RewardPlan
 {
     public bool Skip { get; set; }
 
-    public List<(Reward Reward, int? CardIndex)> Take { get; } = new List<(Reward, int?)>();
+    public List<(Reward Reward, int? CardIndex, string? Alternative)> Take { get; } =
+        new List<(Reward, int?, string?)>();
 
     /// <summary>
     /// The card index for the reward currently being taken, read by the
     /// synchronous <c>GetSelectedCardReward</c> callback.
     /// </summary>
     public static int? CardInFlight { get; set; }
+
+    /// <summary>
+    /// The alternative for the reward currently being taken, by
+    /// <c>OptionId</c>, read the same way.
+    /// </summary>
+    public static string? AlternativeInFlight { get; set; }
+
+    /// <summary>
+    /// Whether the alternative in flight has been handed over. An alternative
+    /// that keeps the selection open, as <c>REROLL</c> does, asks again, and
+    /// the answer then is nothing: the reward stays on the screen, and the
+    /// client chooses from its new pack as a fresh question.
+    /// </summary>
+    public static bool AlternativeAnswered { get; set; }
 }
 
 /// <summary>
@@ -625,6 +675,21 @@ internal sealed class HeadlessCardSelector : ICardSelector
     public CardRewardSelection GetSelectedCardReward(
         IReadOnlyList<CardCreationResult> options, IReadOnlyList<CardRewardAlternative> alternatives)
     {
+        if (RewardPlan.AlternativeAnswered)
+        {
+            return new CardRewardSelection();
+        }
+
+        if (RewardPlan.AlternativeInFlight is string id)
+        {
+            CardRewardAlternative chosen = alternatives.FirstOrDefault(a => a.OptionId == id)
+                ?? throw new NotSupportedException(
+                    $"the card reward offers no alternative {id}; the oracle will not choose another");
+            RewardPlan.AlternativeInFlight = null;
+            RewardPlan.AlternativeAnswered = true;
+            return new CardRewardSelection { alternative = chosen };
+        }
+
         int? index = RewardPlan.CardInFlight;
         if (index == null || index >= options.Count)
         {

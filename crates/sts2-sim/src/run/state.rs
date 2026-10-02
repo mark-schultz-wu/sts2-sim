@@ -168,6 +168,10 @@ fn removal_cost<V: Rules>(used: usize) -> V::Number {
 pub(crate) struct HeldRelic<V: Rules> {
     pub(crate) relic: V::Relic,
     pub(crate) state: V::RelicState,
+    /// `IsWax`: Toy Box melts it in time.
+    pub(crate) wax: bool,
+    /// `IsMelted`: still on the belt, and no longer a hook listener.
+    pub(crate) melted: bool,
 }
 
 impl<V: Rules> Clone for HeldRelic<V> {
@@ -184,6 +188,8 @@ impl<V: Rules> HeldRelic<V> {
         Self {
             relic,
             state: <V::RelicState as sts2_core::RelicModel<V>>::new(relic),
+            wax: false,
+            melted: false,
         }
     }
 
@@ -257,7 +263,11 @@ impl<V: Rules> Belt<V> {
     pub(crate) fn push(&mut self, held: HeldRelic<V>) {
         use sts2_core::RelicTable as _;
 
-        let overrides = held.relic.overrides();
+        // `IterateHookListeners` leaves a melted relic out.
+        let overrides = match held.melted {
+            true => sts2_core::Overrides::NONE,
+            false => held.relic.overrides(),
+        };
         let slot = 1 << self.held.len();
         for at in overrides.places() {
             self.slots[at] |= slot;
@@ -289,6 +299,16 @@ impl<V: Rules> Belt<V> {
             .enumerate()
             .map(|(at, &was)| if at == slot { held } else { was })
             .collect();
+    }
+
+    /// `RelicCmd.Melt` of the first wax relic not yet melted, where there is
+    /// one. It stays in its slot, and hears no hook after.
+    pub(crate) fn melt_first_wax(&mut self) {
+        if let Some(slot) = self.held.iter().position(|held| held.wax && !held.melted) {
+            let mut held = self.held[slot];
+            held.melted = true;
+            self.replace(slot, held);
+        }
     }
 
     pub(crate) fn copy_from(&mut self, source: &Self) {
@@ -1431,13 +1451,21 @@ impl<V: Rules> State<V> {
     /// The room the relic was picked up in is what parks on it.
     #[must_use]
     pub(super) fn obtain(&mut self, relic: V::Relic) -> Option<Asked<V>> {
+        self.obtain_as(relic, false)
+    }
+
+    /// `RelicCmd.Obtain` of a relic that is wax where `wax` says so.
+    pub(super) fn obtain_as(&mut self, relic: V::Relic, wax: bool) -> Option<Asked<V>> {
         use sts2_core::RelicTable as _;
 
         // Out of both bags, unless a run can hold more than one.
         if !relic.stackable() && !self.dealt_relics.contains(&relic) {
             Arc::make_mut(&mut self.dealt_relics).push(relic);
         }
-        let mut held = HeldRelic::new(relic);
+        let mut held = HeldRelic {
+            wax,
+            ..HeldRelic::new(relic)
+        };
         let effects = crate::combat::obtained::<V>(&mut held, self.character());
         self.player.relics.push(held);
         self.carry_out(effects)
@@ -1524,6 +1552,9 @@ impl<V: Rules> State<V> {
                     let mut offered: Vec<Offer<V>> = (0..rewards)
                         .map(|_| Offer::Card {
                             cards: self.other_pool_cards(pools),
+                            rolled: None,
+                            reroll: false,
+                            sacrifice: false,
                             taken: false,
                         })
                         .collect();
@@ -1974,6 +2005,7 @@ impl<V: Rules> State<V> {
                             .map(|relic| Offer::Relic {
                                 relic,
                                 rarity: <_ as sts2_core::RarityKinds>::UNDRAFTED,
+                                wax: false,
                                 taken: false,
                             })
                             .collect(),
@@ -2378,14 +2410,16 @@ impl<V: Rules> State<V> {
                     Offer::Relic {
                         relic,
                         rarity,
+                        wax: false,
                         taken: false,
                     }
                 }
-                CustomReward::RolledRelic => {
+                CustomReward::RolledRelic | CustomReward::WaxRelic => {
                     let rarity = crate::reward::relic_rarity::<V, _>(rng);
                     Offer::Relic {
                         relic: self.pull_relic(rarity),
                         rarity: <_ as sts2_core::RarityKinds>::UNDRAFTED,
+                        wax: matches!(reward, CustomReward::WaxRelic),
                         taken: false,
                     }
                 }
@@ -2406,6 +2440,9 @@ impl<V: Rules> State<V> {
                     .into_iter()
                     .map(CardIdent::new)
                     .collect(),
+                    rolled: None,
+                    reroll: false,
+                    sacrifice: false,
                     taken: false,
                 },
                 CustomReward::SpecificPotion(potion) => Offer::Potion {
@@ -2430,6 +2467,9 @@ impl<V: Rules> State<V> {
                     .into_iter()
                     .map(CardIdent::new)
                     .collect(),
+                    rolled: None,
+                    reroll: false,
+                    sacrifice: false,
                     taken: false,
                 },
                 CustomReward::CardsOf {
@@ -2444,6 +2484,9 @@ impl<V: Rules> State<V> {
                         count,
                         upgrade_roll.then_some(act),
                     ),
+                    rolled: None,
+                    reroll: false,
+                    sacrifice: false,
                     taken: false,
                 },
                 CustomReward::UpgradedCardsOf {
@@ -2456,6 +2499,9 @@ impl<V: Rules> State<V> {
                         &V::merchant_cards(character, kind, rarity),
                         count,
                     ),
+                    rolled: None,
+                    reroll: false,
+                    sacrifice: false,
                     taken: false,
                 },
             });
@@ -2492,6 +2538,7 @@ impl<V: Rules> State<V> {
                         offered.push(Offer::Relic {
                             relic,
                             rarity: <_ as sts2_core::RarityKinds>::UNDRAFTED,
+                            wax: false,
                             taken: false,
                         });
                     }
@@ -2524,6 +2571,9 @@ impl<V: Rules> State<V> {
                     self.reward_options(&mut cards);
                     offered.push(Offer::Card {
                         cards,
+                        rolled: Some(room),
+                        reroll: false,
+                        sacrifice: false,
                         taken: false,
                     });
                 }
@@ -2536,7 +2586,37 @@ impl<V: Rules> State<V> {
                 effect => unimplemented!("a relic modifying rewards with {effect:?}"),
             }
         }
-        self.unheard(sts2_core::ModelHook::TryModifyRewardsLate);
+        let late = self.notify_belt(sts2_core::EventHook::ModifyRewardsLate);
+        for effect in late {
+            match effect {
+                sts2_core::HookEffect::RerollableCardRewards => {
+                    for offer in offered.iter_mut() {
+                        if let Offer::Card { reroll, .. } = offer {
+                            *reroll = true;
+                        }
+                    }
+                }
+                effect => unimplemented!("a relic modifying rewards late with {effect:?}"),
+            }
+        }
+        self.card_reward_alternatives(offered);
+    }
+
+    /// `Hook.ModifyCardRewardAlternatives` over each card reward of a set.
+    fn card_reward_alternatives(&mut self, offered: &mut [Offer<V>]) {
+        for offer in offered {
+            let Offer::Card { sacrifice, .. } = offer else {
+                continue;
+            };
+            for effect in self.notify_belt(sts2_core::EventHook::CardRewardAlternatives) {
+                match effect {
+                    sts2_core::HookEffect::OfferRewardAlternative(
+                        sts2_core::RewardAlternative::Sacrifice,
+                    ) => *sacrifice = true,
+                    effect => unimplemented!("a relic adding {effect:?} to a card reward"),
+                }
+            }
+        }
     }
 
     /// `CardPileCmd.Add` into the deck, at its bottom, and then
@@ -4355,7 +4435,7 @@ impl<V: Rules> State<V> {
             }
             // The chosen card leaves the reward, which goes on listing the
             // cards not chosen.
-            (Offer::Card { cards, taken }, TakeReward::Card { card, .. }) => {
+            (Offer::Card { cards, taken, .. }, TakeReward::Card { card, .. }) => {
                 let at = usize::from(card);
                 if at >= cards.len() {
                     unimplemented!("a card the reward does not offer");
@@ -4370,10 +4450,64 @@ impl<V: Rules> State<V> {
                 let id = self.player.mint();
                 self.add_deck_card(sts2_core::DeckCard { id, ident, state });
             }
-            (Offer::Relic { relic, taken, .. }, TakeReward::NonCard { .. }) => {
-                let relic = *relic;
+            (
+                Offer::Relic {
+                    relic, wax, taken, ..
+                },
+                TakeReward::NonCard { .. },
+            ) => {
+                let (relic, wax) = (*relic, *wax);
                 *taken = true;
-                return self.obtain(relic);
+                return self.obtain_as(relic, wax);
+            }
+            // `CardReward.Reroll`: `CanReroll` goes, and the pack is rolled
+            // again as it was. The reward stays on offer.
+            (
+                Offer::Card {
+                    cards,
+                    rolled,
+                    reroll,
+                    ..
+                },
+                TakeReward::Alternative {
+                    alternative: sts2_core::RewardAlternative::Reroll,
+                    ..
+                },
+            ) => {
+                if !*reroll {
+                    unimplemented!("a reroll of a card reward that cannot reroll");
+                }
+                let room = rolled
+                    .unwrap_or_else(|| unimplemented!("a reroll of a pack rolled some other way"));
+                *reroll = false;
+                let (ascension, character, act) = (self.ascension(), self.character(), self.act());
+                let added = self.card_reward_added();
+                let (rng, odds) = self.rewarding();
+                let Offer::Card { cards: rolled, .. } = crate::reward::combat::card_reward::<V, _>(
+                    rng, odds, ascension, character, act, room, &added,
+                ) else {
+                    unreachable!("a card reward rolls a card offer");
+                };
+                *cards = rolled;
+                self.reward_options(cards);
+            }
+            // The alternative's `OnSelect`, which completes the reward.
+            (
+                Offer::Card {
+                    sacrifice, taken, ..
+                },
+                TakeReward::Alternative {
+                    alternative: alternative @ sts2_core::RewardAlternative::Sacrifice,
+                    ..
+                },
+            ) => {
+                if !*sacrifice {
+                    unimplemented!("a sacrifice of a card reward that offers none");
+                }
+                *taken = true;
+                let chosen = sts2_core::EventHook::CardRewardAlternativeChosen(alternative);
+                let effects = self.notify_belt(chosen);
+                return self.carry_out(effects);
             }
             _ => unimplemented!("a reward taken as the wrong kind"),
         }
@@ -5347,10 +5481,15 @@ fn reward_moves<V: Rules>(offered: &[Offer<V>], skippable: bool, moves: &mut Leg
             continue;
         }
         match offer {
-            Offer::Card { cards, .. } => moves.extend(
-                (0..cards.len())
-                    .map(|card| Decision::Answer(Answer::Take(TakeReward::card(index, card)))),
-            ),
+            Offer::Card { cards, .. } => {
+                moves.extend(
+                    (0..cards.len())
+                        .map(|card| Decision::Answer(Answer::Take(TakeReward::card(index, card)))),
+                );
+                moves.extend(offer.alternatives().map(|alternative| {
+                    Decision::Answer(Answer::Take(TakeReward::alternative(index, alternative)))
+                }));
+            }
             _ => moves.push(Decision::Answer(Answer::Take(TakeReward::non_card(index)))),
         }
     }
@@ -5420,6 +5559,7 @@ fn asked<V: Rules>(offered: &[Offer<V>], skippable: bool) -> Question<V> {
                                 text: None,
                             })
                             .collect(),
+                        alternatives: offer.alternatives().collect(),
                     },
                     Offer::SpecialCard { .. } => RewardKind::SpecialCard { card: None },
                     Offer::CardRemoval { .. } => RewardKind::Other {

@@ -1,0 +1,9 @@
+# Driftwood lets each card reward reroll once. The reward stays on the screen
+# with a fresh pack, which then offers no reroll, and a card is taken from it.
+{"cmd":"start","seed":"S33D1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"DRIFTWOOD"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"DEMISE_POWER","amount":99,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"answer","take":[{"index":2,"alternative":"REROLL"}]}
+{"cmd":"answer","take":[{"index":2,"card":0}]}

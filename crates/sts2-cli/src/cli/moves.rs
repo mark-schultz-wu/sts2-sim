@@ -58,8 +58,15 @@ pub fn takeable<V: sts2_content_wire::WireContentVersion>(
         .iter()
         .filter(|detail| !detail.taken)
         .flat_map(|detail| match &detail.reward {
-            RewardKind::Card { cards } => (0..cards.len())
+            RewardKind::Card {
+                cards,
+                alternatives,
+            } => (0..cards.len())
                 .map(|card| TakeReward::card(detail.index, card))
+                .chain(
+                    (alternatives.iter())
+                        .map(|&alternative| TakeReward::alternative(detail.index, alternative)),
+                )
                 .collect(),
             _ => vec![TakeReward::non_card(detail.index)],
         })
@@ -286,6 +293,9 @@ pub fn describe<V: sts2_content_wire::WireContentVersion>(decision: &Decision<V>
             format!("took {index}.{card}")
         }
         Decision::Answer(Answer::Take(TakeReward::NonCard { index })) => format!("took {index}"),
+        Decision::Answer(Answer::Take(TakeReward::Alternative { index, alternative })) => {
+            format!("took {index} as {}", alternative.option_id())
+        }
         Decision::Answer(Answer::Divine { x, y, .. }) => format!("divined {x},{y}"),
         Decision::EnterRoom { room } => format!("entered {}", crate::render::spelling(room)),
     }

@@ -198,6 +198,8 @@ pub enum RewardKind<V: ContentVersion> {
     /// because an unpopulated card reward still reports the field.
     Card {
         cards: Vec<RewardCard<V>>,
+        /// What the reward offers in place of a card, other than skipping it.
+        alternatives: Vec<crate::RewardAlternative>,
     },
     Relic {
         /// Absent when the reward exists but `RelicReward.Populate` found

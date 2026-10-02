@@ -1,0 +1,22 @@
+# Toy Box offers four wax relics off the front of the bag as it is picked
+# up. Every third fight melts the first wax relic still whole, which stays on
+# the belt and does nothing after. Vajra melts after the third fight, so the
+# fourth opens with Oddly Smooth Stone's Dexterity and no Strength.
+{"cmd":"start","seed":"S33D1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"TOY_BOX"}
+{"cmd":"answer","take":[{"index":0}]}
+{"cmd":"answer","take":[{"index":2}]}
+{"cmd":"answer","skip":true}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"DEMISE_POWER","amount":99,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"answer","skip":true}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"DEMISE_POWER","amount":99,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"answer","skip":true}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"DEMISE_POWER","amount":99,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"answer","skip":true}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}

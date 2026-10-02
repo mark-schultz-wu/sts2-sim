@@ -296,7 +296,7 @@ where
             let mut faces = Vec::new();
             for (index, detail) in rewards.iter().enumerate() {
                 match &detail.reward {
-                    RewardKind::Card { cards } => {
+                    RewardKind::Card { cards, .. } => {
                         for (card_at, offered) in cards.iter().enumerate() {
                             let mut face = card::Face::printed(&offered.card);
                             face.rules = offered
