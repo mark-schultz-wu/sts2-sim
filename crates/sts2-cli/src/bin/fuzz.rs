@@ -95,7 +95,8 @@ enum Error<V: sts2_content_wire::WireContentVersion> {
     Move {
         path: PathBuf,
         taken: usize,
-        chosen: Decision<V>,
+        /// Boxed, as a selection makes a decision too large to return.
+        chosen: Box<Decision<V>>,
         source: Sent<V>,
     },
 }
@@ -265,7 +266,7 @@ fn fuzz<V: sts2_content_wire::WireContentVersion>(cli: Cli) -> Result<(), Error<
                 return Err(Error::Move {
                     path,
                     taken,
-                    chosen,
+                    chosen: Box::new(chosen),
                     source,
                 });
             }

@@ -1,0 +1,5 @@
+# The Sea Glass grid takes every card it offers, all fifteen, into the deck.
+{"cmd":"start","seed":"C000000013","character":"SILENT","ascension":"None"}
+{"cmd":"event","event":"OROBAS"}
+{"cmd":"choose_option","index":0}
+{"cmd":"answer","cards":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14]}

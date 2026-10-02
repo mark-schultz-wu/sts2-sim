@@ -79,6 +79,7 @@ mod cursed_pearl;
 mod data_disk;
 mod daughter_of_the_wind;
 mod delicate_frond;
+mod demon_tongue;
 mod diamond_diadem;
 mod distinguished_cape;
 mod divine_destiny;
@@ -227,6 +228,7 @@ mod runic_pyramid;
 mod sai;
 mod sand_castle;
 mod scroll_boxes;
+mod sea_glass;
 mod seal_of_gold;
 mod self_forming_clay;
 mod sere_talon;
@@ -584,6 +586,8 @@ pub enum State {
     PaelsEye(paels_eye::State),
     PaelsLegion(paels_legion::State),
     GoldenCompass(golden_compass::State),
+    SeaGlass(sea_glass::State),
+    DemonTongue(demon_tongue::State),
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -827,6 +831,8 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::DemonTongue(state) => demon_tongue::event_hook(state, hook, asked),
+        State::SeaGlass(state) => sea_glass::event_hook(state, hook, asked),
         State::GoldenCompass(state) => golden_compass::event_hook(state, hook, asked),
         State::PaelsLegion(state) => paels_legion::event_hook(state, hook, asked),
         State::PaelsEye(state) => paels_eye::event_hook(state, hook, asked),
@@ -1235,7 +1241,9 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::ToyBox(_)
         | State::ElectricShrymp
         | State::PaelsEye(_)
-        | State::GoldenCompass(_) => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::GoldenCompass(_)
+        | State::SeaGlass(_)
+        | State::DemonTongue(_) => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1414,6 +1422,8 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::DemonTongue => State::DemonTongue(demon_tongue::State::default()),
+            Relic::SeaGlass => State::SeaGlass(sea_glass::State::default()),
             Relic::GoldenCompass => State::GoldenCompass(golden_compass::State::default()),
             Relic::PaelsLegion => State::PaelsLegion(paels_legion::State::default()),
             Relic::PaelsEye => State::PaelsEye(paels_eye::State::default()),

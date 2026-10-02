@@ -1,0 +1,7 @@
+# Orobas offers a Sea Glass for the Defect to the Silent. Taking it makes
+# five commons, five uncommons and five rares of the Defect's pool, and any
+# of them join the deck. One of each is taken here.
+{"cmd":"start","seed":"C000000013","character":"SILENT","ascension":"None"}
+{"cmd":"event","event":"OROBAS"}
+{"cmd":"choose_option","index":0}
+{"cmd":"answer","cards":[0,5,10]}
