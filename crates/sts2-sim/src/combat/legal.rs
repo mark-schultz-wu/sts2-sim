@@ -68,9 +68,11 @@ pub(super) fn asks_should_play<V: Rules>(fight: Walk<'_, V>) -> bool {
 
 /// `EnergyCost.GetWithModifiers` for a copy in hand or being played, which
 /// runs `Hook.ModifyEnergyCostInCombat` over its own modifiers: every
-/// listener's `TryModifyEnergyCostInCombat`, then every one's `Late`.
+/// listener's `TryModifyEnergyCostInCombat`, then every one's `Late`. `pile`
+/// is where the copy stands, or nothing for the play pile.
 pub(super) fn costs<V: Rules>(
     held: &CardInstance<V>,
+    pile: Option<Pile>,
     fight: Walk<'_, V>,
 ) -> (sts2_core::Cost, sts2_core::Cost) {
     let card = (held.id, held.face.ident.card);
@@ -86,11 +88,13 @@ pub(super) fn costs<V: Rules>(
                         card,
                         ethereal,
                         affliction,
+                        pile,
                     },
                     sts2_core::ModifyHook::EnergyCostLate {
                         card,
                         ethereal,
                         affliction,
+                        pile,
                     },
                 ],
             )
@@ -103,7 +107,7 @@ pub(super) fn costs<V: Rules>(
                 true => super::board::modified_by::<V>(
                     fight,
                     cost,
-                    &[sts2_core::ModifyHook::StarCost { card }],
+                    &[sts2_core::ModifyHook::StarCost { card, pile }],
                 ),
                 false => cost,
             }
@@ -252,7 +256,7 @@ impl<'a, V: Rules> InHand<'a, V> {
     ) -> Self {
         let creatures = &fight.live.creatures;
         let target = target_type::<V>(held.face.ident, fight.live);
-        let (cost, star_cost) = costs::<V>(&held, fight);
+        let (cost, star_cost) = costs::<V>(&held, Some(Pile::Hand), fight);
         let (reason, preventer) = reasons::<V>(
             held.face.ident,
             fight,
@@ -362,7 +366,7 @@ pub(crate) fn moves<V: Rules>(
 
     let asks = asks_should_play::<V>(Walk { live, relics });
     for (at, card) in live.cards.iter(Pile::Hand).enumerate() {
-        let costs = costs::<V>(&card, Walk { live, relics });
+        let costs = costs::<V>(&card, Some(Pile::Hand), Walk { live, relics });
         let (refused, _) = reasons::<V>(
             card.face.ident,
             Walk { live, relics },

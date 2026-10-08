@@ -4033,6 +4033,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             false => held.face.costs(|cost| cost, |cost| cost),
             true => super::legal::costs::<V>(
                 &held,
+                Some(card.pile()),
                 super::listen::Walk {
                     live: self.live,
                     relics: self.relics,

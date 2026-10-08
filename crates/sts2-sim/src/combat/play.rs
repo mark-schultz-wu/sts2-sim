@@ -54,7 +54,11 @@ pub(crate) fn resolve<V: Rules>(
             count: live.cards.len(sts2_core::Pile::Hand),
         })?;
     let card = held.face.ident;
-    let (cost, star_cost) = legal::costs::<V>(&held, super::listen::Walk { live, relics });
+    let (cost, star_cost) = legal::costs::<V>(
+        &held,
+        Some(sts2_core::Pile::Hand),
+        super::listen::Walk { live, relics },
+    );
 
     // The creature the play named has to still be in this fight. An id is
     // chosen against an observation, and a fight moves on from one.
@@ -454,7 +458,7 @@ pub(super) fn auto_play_in_play<V: Rules>(
         sts2_core::Cost::X => captured.map_or(live.energy, |(energy, _)| energy),
         _ => num_traits::zero(),
     };
-    let star_cost = super::legal::costs::<V>(&card, super::listen::Walk { live, relics }).1;
+    let star_cost = super::legal::costs::<V>(&card, None, super::listen::Walk { live, relics }).1;
     let stars = match captured {
         Some((_, stars)) => stars,
         None => super::legal::spend(star_cost, live.stars)
@@ -572,7 +576,7 @@ fn before_played<V: Rules, S: LendsCombat>(
         sts2_core::Cost::X => num_traits::cast(play.x).expect("an energy fits a game number"),
         _ => {
             let fight = super::listen::Walk { live, relics };
-            match super::legal::costs::<V>(card, fight).0 {
+            match super::legal::costs::<V>(card, None, fight).0 {
                 sts2_core::Cost::Fixed(cost) => {
                     num_traits::cast(cost.get()).expect("a cost fits a game number")
                 }
