@@ -2366,6 +2366,11 @@ pub(super) fn side_turn_started<V: Rules>(
             sts2_core::HookEffect::GenerateDistinctColorless { count } => {
                 generate_distinct_colorless::<V>(live, rngs.reborrow(), relics, ascension, count)
             }
+            sts2_core::HookEffect::AddOrbSlots(amount) => {
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                sts2_core::Fight::add_orb_slots(&mut board, amount);
+            }
             sts2_core::HookEffect::GenerateDistinctFromPool { filter, count } => {
                 generate_distinct_from_pool::<V>(
                     live,

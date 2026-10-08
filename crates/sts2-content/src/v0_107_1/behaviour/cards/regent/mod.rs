@@ -32,6 +32,8 @@ pub enum Resume {
     ChargeTransform,
     /// `Glow`, after a question inside its draw was answered.
     GlowDrew,
+    /// `BigBang`, after a question inside its draw was answered.
+    BigBangDrew,
     /// `DecisionsDecisions`, after a question inside its draw was answered.
     DecisionsDrew,
     /// `DecisionsDecisions`, after its owner picked the Skill to play.
@@ -165,6 +167,17 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
             Played::Done
         }
         RegentCard::Glitterstream => common::glitterstream(fight),
+        // `BigBang`: its draw, then its stars, energy and Forge. A shuffle
+        // inside the draw can ask, and the rest waits for it.
+        RegentCard::BigBang => {
+            fight.draw(fight.var(CardVar::Cards));
+            if fight.waiting() {
+                return Played::Waiting {
+                    at: super::super::Resume::Card(super::Resume::Regent(Resume::BigBangDrew)),
+                };
+            }
+            big_bang_drew(fight)
+        }
         // `Glow`: its stars, its draw, then Draw Cards Next Turn at as many.
         RegentCard::Glow => {
             fight.gain_stars(fight.var(CardVar::Stars));
@@ -580,7 +593,10 @@ pub(super) fn resume_play<F: Fight<V>>(
             Played::Done
         }
         Resume::QuasarChoice => unreachable!("Quasar stops on a choice, not a pick"),
-        Resume::GlowDrew | Resume::DecisionsDrew | Resume::DecisionsPlayed => {
+        Resume::GlowDrew
+        | Resume::BigBangDrew
+        | Resume::DecisionsDrew
+        | Resume::DecisionsPlayed => {
             unreachable!("{at:?} waits on a question, not a pick")
         }
         Resume::DecisionsPicked => match chosen.as_slice() {
@@ -666,11 +682,27 @@ fn glow_drew<F: Fight<V>>(fight: &mut F) -> Played<V> {
     Played::Done
 }
 
+/// `BigBang` after its draw: its stars, its energy, then a Forge of its
+/// `Forge`.
+fn big_bang_drew<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use super::super::super::generated::cards::{Cards, TokenCard};
+
+    fight.gain_stars(fight.var(CardVar::Stars));
+    fight.modify_energy(fight.var(CardVar::Energy));
+    fight.forge(
+        Cards::Token(TokenCard::SovereignBlade),
+        CardVar::Damage,
+        fight.var(CardVar::Forge),
+    );
+    Played::Done
+}
+
 /// The rest of a Regent card's play that stood still on a question its own
 /// command raised.
 pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
     match at {
         Resume::GlowDrew => glow_drew(fight),
+        Resume::BigBangDrew => big_bang_drew(fight),
         Resume::DecisionsDrew => decisions_ask(fight),
         Resume::DecisionsPlayed => Played::Done,
         at => unreachable!("{at:?} stops on a pick, not on a question it waited for"),
