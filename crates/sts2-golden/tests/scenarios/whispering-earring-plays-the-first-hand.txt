@@ -1,0 +1,8 @@
+# Whispering Earring gives one more energy each turn. On the first turn it
+# plays the hand's first playable card, paid for, until none is left that
+# the energy covers. Strike and Bash go at the Nibbit. The second turn is
+# the player's own.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"WHISPERING_EARRING"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}

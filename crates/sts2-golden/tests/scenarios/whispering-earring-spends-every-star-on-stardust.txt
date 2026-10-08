@@ -1,0 +1,10 @@
+# Stardust's star cost is X. Whispering Earring pays for each card first,
+# so a Stardust spends every star the Regent holds and hits once for each.
+# Venerate's stars go to the next Stardust it plays.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","card":"STARDUST"}
+{"cmd":"grant","card":"STARDUST"}
+{"cmd":"grant","card":"STARDUST"}
+{"cmd":"grant","card":"STARDUST"}
+{"cmd":"grant","relic":"WHISPERING_EARRING"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}

@@ -5133,10 +5133,11 @@ pub enum HookEffect<V: ContentVersion> {
         count: V::Number,
     },
     /// `CardPileCmd.AddGeneratedCardToCombat` of `count` clones of the copy
-    /// `card`, each into hand.
+    /// `card`, each into hand. Each clone takes `writes`.
     CloneIntoHand {
         card: crate::CardId<V>,
         count: V::Number,
+        writes: &'static [(Change<V>, Lasting)],
     },
     /// `CreatureCmd.Damage` on every enemy that can be hit, from the
     /// listener's owner, for a number no power scales.
@@ -5254,6 +5255,13 @@ pub enum HookEffect<V: ContentVersion> {
     },
     /// `OrbCmd.AddSlots` for the player.
     AddOrbSlots(V::Number),
+    /// Up to `left` times, the first card of the hand that `CanPlay`, paid
+    /// for with `SpendResources` and then `CardCmd.AutoPlay`ed. An attack at
+    /// any enemy goes at the leftmost one it can hit. The loop stops once the
+    /// fight ends, the turn moves on, or no card can be played.
+    AutoPlayHand {
+        left: u8,
+    },
     /// `count` distinct cards of the character's combat pool that `filter`
     /// keeps, from one `CardFactory.GetDistinctForCombat` off
     /// `CombatCardGeneration`, as `GenerateDistinctColorless` takes them.
@@ -5486,6 +5494,14 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CombatCardGeneration`, then `CardSelectCmd.FromChooseACardScreen`.
     /// The one chosen goes into the hand through `AddGeneratedCardToCombat`.
     ChooseColorlessIntoHand,
+    /// `CardFactory.GetDistinctForCombat` of `count` cards of the
+    /// character's pool off `CombatCardGeneration`, each taking `writes`,
+    /// then `CardSelectCmd.FromSimpleGrid` for one. The one chosen goes into
+    /// the hand through `AddGeneratedCardToCombat`.
+    ChooseFromPoolIntoHand {
+        count: V::Number,
+        writes: &'static [(Change<V>, Lasting)],
+    },
     /// `CardPileCmd.AddGeneratedCardsToCombat`: this many new copies of a
     /// card into the player's hand, the way `Shiv.CreateInHand` makes them.
     GenerateInHand {

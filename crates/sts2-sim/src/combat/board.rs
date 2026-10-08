@@ -2997,6 +2997,20 @@ pub(super) fn player<V: Rules>(creatures: &[Fighter<V>]) -> CombatId {
 impl<V: Rules> Board<'_, V> {
     /// `CreateClone` of the card `id` into `pile`, as
     /// `AddGeneratedCardToCombat` puts it there.
+    /// [`Board::clone_named`], then `writes` on the clone where one landed.
+    pub(super) fn clone_written(
+        &mut self,
+        id: sts2_core::CardId<V>,
+        pile: Pile,
+        writes: &[(sts2_core::Change<V>, sts2_core::Lasting)],
+    ) {
+        if let Some(at) = self.clone_named(id, pile) {
+            for &(change, lasting) in writes {
+                sts2_core::Fight::modify_card(self, at, change, lasting);
+            }
+        }
+    }
+
     pub(super) fn clone_named(
         &mut self,
         id: sts2_core::CardId<V>,

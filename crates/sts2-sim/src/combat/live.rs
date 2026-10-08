@@ -163,9 +163,11 @@ pub(super) enum Then<V: Rules> {
     /// [`Live::deferred`].
     Setup { act: sts2_core::PileAct },
     /// A choice among cards offered in `SetupPlayerTurn`. The card chosen
-    /// goes into hand, and the rest of the setup waits in
+    /// goes into hand and takes `writes`, and the rest of the setup waits in
     /// [`Live::deferred`].
-    SetupChosen,
+    SetupChosen {
+        writes: &'static [(sts2_core::Change<V>, sts2_core::Lasting)],
+    },
     /// A choice a monster's move offered, which `V::resume_play` picks up.
     /// The rest of the move and of the enemy turn waits in
     /// [`Live::deferred`].
