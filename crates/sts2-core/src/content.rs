@@ -758,6 +758,7 @@ pub enum ModelHook {
     TryModifyCardRewardAlternatives,
     ModifyUnknownMapPointRoomTypes,
     ModifyGeneratedMap,
+    ModifyGeneratedMapLate,
     ModifyCardRewardCreationOptions,
     ModifyOddsIncreaseForUnrolledRoomType,
     ModifyCardRewardUpgradeOdds,
@@ -785,7 +786,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 140] = [
+    pub const ALL: [ModelHook; 141] = [
         ModelHook::AfterRoomEntered,
         ModelHook::AfterMapGenerated,
         ModelHook::BeforeCombatStart,
@@ -902,6 +903,7 @@ impl ModelHook {
         ModelHook::TryModifyCardRewardAlternatives,
         ModelHook::ModifyUnknownMapPointRoomTypes,
         ModelHook::ModifyGeneratedMap,
+        ModelHook::ModifyGeneratedMapLate,
         ModelHook::ModifyCardRewardCreationOptions,
         ModelHook::ModifyOddsIncreaseForUnrolledRoomType,
         ModelHook::ModifyCardRewardUpgradeOdds,
@@ -934,6 +936,7 @@ impl ModelHook {
             ModelHook::AfterRoomEntered => "AfterRoomEntered",
             ModelHook::AfterMapGenerated => "AfterMapGenerated",
             ModelHook::ModifyGeneratedMap => "ModifyGeneratedMap",
+            ModelHook::ModifyGeneratedMapLate => "ModifyGeneratedMapLate",
             ModelHook::ModifyCardRewardCreationOptions => "ModifyCardRewardCreationOptions",
             ModelHook::BeforeCombatStart => "BeforeCombatStart",
             ModelHook::AfterCombatEnd => "AfterCombatEnd",
@@ -3594,6 +3597,9 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `ModifyGeneratedMap`, as the act at this index has its map generated.
     GeneratedMap { act: usize },
+    /// `ModifyGeneratedMapLate`, once every listener has heard
+    /// [`EventHook::GeneratedMap`].
+    GeneratedMapLate { act: usize },
     /// `ModifyCardRewardCreationOptions`, as a `CardReward` over the
     /// character's pool makes its cards. The run raises it only for one whose
     /// options take a change to their pools.
@@ -3632,6 +3638,9 @@ pub enum EventHook<V: ContentVersion> {
     CombatStarting {
         room: V::RoomType,
         holding_potions: bool,
+        /// `RunState.CurrentMapPoint.coord`, where the fight stands on the
+        /// map.
+        point: Option<crate::Coord>,
     },
     /// `BeforeCombatStartLate`, once every listener has heard
     /// `BeforeCombatStart`.
@@ -3706,6 +3715,9 @@ pub enum EventHook<V: ContentVersion> {
     CreatureAdded {
         creature: crate::CombatId,
         side: V::CombatSide,
+        /// `RunState.CurrentMapPoint.coord`, where the fight stands on the
+        /// map.
+        point: Option<crate::Coord>,
     },
     /// `AfterCardChangedPiles` for a card that joined the deck, outside a
     /// fight. `cloned` is `clonedBy` being set, for a copy a listener made.
@@ -4134,6 +4146,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::RoomEntered { .. } => ModelHook::AfterRoomEntered,
             EventHook::UnknownRoomTypes { .. } => ModelHook::ModifyUnknownMapPointRoomTypes,
             EventHook::GeneratedMap { .. } => ModelHook::ModifyGeneratedMap,
+            EventHook::GeneratedMapLate { .. } => ModelHook::ModifyGeneratedMapLate,
             EventHook::CardRewardCreationOptions => ModelHook::ModifyCardRewardCreationOptions,
             EventHook::ModifyRewards { .. } => ModelHook::TryModifyRewards,
             EventHook::ModifyRewardsLate => ModelHook::TryModifyRewardsLate,
@@ -5261,6 +5274,21 @@ pub enum HookEffect<V: ContentVersion> {
     },
     /// `OrbCmd.AddSlots` for the player.
     AddOrbSlots(V::Number),
+    /// `CreatureCmd.SetCurrentHp` to `hp` on each enemy it can hit, or on
+    /// the one `creature` names.
+    SetEnemiesHp {
+        creature: Option<crate::CombatId>,
+        hp: V::Number,
+    },
+    /// `FurCoat.AddMarkedRooms`: `count` of the map's Monster and Elite
+    /// points marked for `relic`, where its marks do not all stand on such
+    /// points already. The points are `GetAllMapPoints` put through
+    /// `UnstableShuffle` off a stream seeded with the relic's own id, `name`.
+    MarkCombatPoints {
+        relic: V::Relic,
+        count: usize,
+        name: &'static str,
+    },
     /// Up to `left` times, the first card of the hand that `CanPlay`, paid
     /// for with `SpendResources` and then `CardCmd.AutoPlay`ed. An attack at
     /// any enemy goes at the leftmost one it can hit. The loop stops once the
@@ -5697,6 +5725,21 @@ pub trait RelicModel<V: Hooks>: Clone + std::fmt::Debug + PartialEq + Eq + Sized
     /// A relic that keeps no cards.
     fn hold_cards(&mut self, _cards: &[DeckCard<V>]) {
         unimplemented!("a relic keeping deck cards it has no place for");
+    }
+
+    /// The map points the relic marked, which Fur Coat's `FurCoatCoordCols`
+    /// and `FurCoatCoordRows` are. Nothing for any other relic.
+    fn marked_points(&self) -> &[crate::Coord] {
+        &[]
+    }
+
+    /// The map points the relic marks, in place of any it marked before.
+    ///
+    /// # Panics
+    ///
+    /// A relic that marks no points.
+    fn mark_points(&mut self, _points: &[crate::Coord]) {
+        unimplemented!("a relic marking map points it has no place for");
     }
 
     /// The card the relic keeps at `at`, handed back and gone from it.
@@ -7063,6 +7106,15 @@ pub trait Rules: Hooks {
     ///
     /// A card whose override nobody has ported.
     fn deck_card_modify_generated_map(card: Self::Card, act: usize) -> Option<ReplacedMap>;
+
+    /// `ModifyGeneratedMapLate` for a card in the deck, in the act counted
+    /// from zero. Whether it sets the Spoils Map's `SpoilsCoord`, which is
+    /// the map's first Treasure point.
+    ///
+    /// # Panics
+    ///
+    /// A card whose override nobody has ported.
+    fn deck_card_modify_generated_map_late(card: Self::Card, act: usize) -> bool;
 
     /// `AfterMapGenerated` for a card in the deck, in the act counted from
     /// zero.

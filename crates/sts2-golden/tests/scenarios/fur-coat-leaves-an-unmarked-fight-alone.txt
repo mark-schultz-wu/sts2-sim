@@ -1,0 +1,6 @@
+# On this seed Fur Coat's marks miss the first-row fight at column three, so
+# its enemy keeps its health.
+{"cmd":"start","seed":"C000000005","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"FUR_COAT"}
+{"cmd":"choose_option","index":0}
+{"cmd":"travel","col":3,"row":1}

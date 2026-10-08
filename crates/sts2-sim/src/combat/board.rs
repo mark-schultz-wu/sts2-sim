@@ -1608,7 +1608,6 @@ impl<'a, V: Rules> Board<'a, V> {
                     for offset in 0..count {
                         let id = super::monster::summon(
                             self.live,
-                            self.relics,
                             monster,
                             position + offset,
                             None,
@@ -1622,6 +1621,7 @@ impl<'a, V: Rules> Board<'a, V> {
                             .find(|creature| creature.id == id)
                             .expect("a summoned monster is in the fight");
                         summoned.next_move = Some(opening.into());
+                        self.enemy_added(id);
                     }
                 }
                 // `CreatureCmd.Add` in the owner's slot, of a model the power
@@ -1633,7 +1633,6 @@ impl<'a, V: Rules> Board<'a, V> {
                 } => {
                     let id = super::monster::summon_built::<V>(
                         self.live,
-                        self.relics,
                         sts2_core::Spawned {
                             monster,
                             opens_on,
@@ -1645,6 +1644,7 @@ impl<'a, V: Rules> Board<'a, V> {
                     );
                     self.arrived(id, monster);
                     self.roll_joined(id);
+                    self.enemy_added(id);
                 }
                 // `PowerCmd.Apply` from nobody, which the Possess powers
                 // hand back with.
@@ -2003,6 +2003,68 @@ impl<'a, V: Rules> Board<'a, V> {
         }
         if let Some(at) = self.at(creature) {
             self.kill(at);
+        }
+    }
+
+    /// `CreatureCmd.SetCurrentHp`: `creature`'s hit points set to `hp`,
+    /// capped at its maximum, with `AfterCurrentHpChanged` where they moved
+    /// and a death where none are left.
+    pub(super) fn set_current_hp(&mut self, creature: CombatId, hp: V::Number) {
+        let Some(at) = self.at(creature) else {
+            return;
+        };
+        let held = &mut self.live.creatures[at];
+        let before = V::Number::from(held.hp);
+        let set: V::Health = num_traits::cast(hp.max(V::Number::zero()))
+            .unwrap_or_else(|| unimplemented!("setting hit points to {hp:?}"));
+        held.hp = set.min(held.max_hp);
+        held.alive = held.hp > V::Health::zero();
+        let after = V::Number::from(held.hp);
+        if after != before {
+            self.current_hp_changed(creature, after - before);
+        }
+        if let Some(at) = self.at(creature)
+            && !self.live.creatures[at].alive
+        {
+            self.kill(at);
+        }
+    }
+
+    /// `HookEffect::SetEnemiesHp`: on the enemy `creature` names, or on each
+    /// one that can be hit.
+    pub(super) fn set_enemies_hp(&mut self, creature: Option<CombatId>, hp: V::Number) {
+        let enemies = match creature {
+            Some(creature) => smallvec::smallvec![creature],
+            None => self.hittable_opponents_of(self.live.player().id),
+        };
+        for enemy in enemies {
+            self.set_current_hp(enemy, hp);
+        }
+    }
+
+    /// `Hook.AfterCreatureAddedToCombat` once the enemy `id` has joined the
+    /// fight mid-way, which `CreatureCmd.Add` raises last.
+    ///
+    /// # Panics
+    ///
+    /// A listener asking for something no enemy's arrival carries out.
+    fn enemy_added(&mut self, id: CombatId) {
+        let hook = sts2_core::EventHook::CreatureAdded {
+            creature: id,
+            side: <V::CombatSide as SideKinds>::ENEMY,
+            point: self.live.point,
+        };
+        for (listener, effect) in super::listen::notify::<V>(self.live, self.relics, hook) {
+            match effect {
+                HookEffect::SetEnemiesHp { creature, hp } => self.set_enemies_hp(creature, hp),
+                // `PowerCmd.Apply` from nobody.
+                HookEffect::ApplyPower {
+                    target,
+                    power,
+                    amount,
+                } => self.land(target, power, amount, None),
+                effect => unimplemented!("{listener:?} asking for {effect:?} as an enemy arrives"),
+            }
         }
     }
 
@@ -3149,6 +3211,7 @@ impl<V: Rules> Board<'_, V> {
         let hook = sts2_core::EventHook::CreatureAdded {
             creature: id,
             side: <V::CombatSide as SideKinds>::PLAYER,
+            point: self.live.point,
         };
         if let Some((listener, effect)) =
             super::listen::notify::<V>(self.live, self.relics, hook).first()
@@ -4682,15 +4745,9 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn summon(&mut self, monster: V::Monster, position: usize) -> CombatId {
-        let id = super::monster::summon(
-            self.live,
-            self.relics,
-            monster,
-            position,
-            None,
-            self.rngs.niche,
-        );
+        let id = super::monster::summon(self.live, monster, position, None, self.rngs.niche);
         self.arrived(id, monster);
+        self.enemy_added(id);
         id
     }
 
@@ -4753,15 +4810,9 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .iter()
             .filter(|held| held.slot.is_some_and(|held| held < slot))
             .count();
-        let id = super::monster::summon(
-            self.live,
-            self.relics,
-            monster,
-            position,
-            Some(slot),
-            self.rngs.niche,
-        );
+        let id = super::monster::summon(self.live, monster, position, Some(slot), self.rngs.niche);
         self.arrived(id, monster);
+        self.enemy_added(id);
         id
     }
 }

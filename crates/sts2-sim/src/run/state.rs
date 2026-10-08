@@ -33,6 +33,9 @@ pub(crate) struct State<V: Rules> {
     shared: Arc<RunData<V>>,
     /// The act's map, which is generated again for every act.
     map: Arc<ActMap<V>>,
+    /// The point the Spoils Map's quest stands on, which its
+    /// `ModifyGeneratedMapLate` sets to the first Treasure point of its act.
+    spoils: Option<Coord>,
     /// Which act the run stands in, counted from zero.
     act: usize,
     floor: V::Count,
@@ -367,6 +370,7 @@ impl<V: Rules> Clone for State<V> {
         Self {
             shared: Arc::clone(&self.shared),
             map: Arc::clone(&self.map),
+            spoils: self.spoils,
             player: self.player.clone(),
             visited_events: Arc::clone(&self.visited_events),
             dealt_relics: Arc::clone(&self.dealt_relics),
@@ -384,6 +388,7 @@ impl<V: Rules> Clone for State<V> {
         let State {
             shared,
             map,
+            spoils,
             act,
             floor,
             visited,
@@ -402,6 +407,7 @@ impl<V: Rules> Clone for State<V> {
         } = self;
         shared.clone_from(&source.shared);
         map.clone_from(&source.map);
+        *spoils = source.spoils;
         *act = source.act;
         *floor = source.floor;
         visited.copy_from(&source.visited);
@@ -861,6 +867,31 @@ impl<V: Rules> State<V> {
                 effect => unimplemented!("a relic asking for {effect:?} as a map is generated"),
             }
         }
+        // `ModifyGeneratedMapLate`, over what the first pass left, which
+        // `Hook.ModifyGeneratedMap` runs as it returns.
+        let cards: Vec<V::Card> = self
+            .deck_cards_hearing(sts2_core::ModelHook::ModifyGeneratedMapLate)
+            .collect();
+        for card in cards {
+            if V::deck_card_modify_generated_map_late(card, self.act) {
+                // `GetAllMapPoints` walks the grid a column at a time.
+                self.spoils = (map.nodes().iter())
+                    .filter(|node| {
+                        node.kind == <V::MapPointType as sts2_core::MapPointKinds>::TREASURE
+                    })
+                    .map(|node| node.at)
+                    .min();
+            }
+        }
+        let hook = sts2_core::EventHook::GeneratedMapLate { act: self.act };
+        for effect in self.notify_belt(hook) {
+            match effect {
+                sts2_core::HookEffect::MarkCombatPoints { relic, count, name } => {
+                    self.mark_combat_points(&map, relic, count, name);
+                }
+                effect => unimplemented!("a relic asking for {effect:?} late in a map's making"),
+            }
+        }
         let cards: Vec<V::Card> = self
             .deck_cards_hearing(sts2_core::ModelHook::AfterMapGenerated)
             .collect();
@@ -873,6 +904,51 @@ impl<V: Rules> State<V> {
             unimplemented!("a relic listening to AfterMapGenerated");
         }
         map
+    }
+
+    /// `FurCoat.AddMarkedRooms` on `map`: the relic's marks kept where every
+    /// one stands on a Monster or Elite point, and `count` new ones otherwise.
+    /// The new ones are the map's Monster and Elite points, column by column.
+    /// `UnstableShuffle` orders them off a stream of the run's seed and the
+    /// relic's id.
+    ///
+    /// # Panics
+    ///
+    /// A relic that is not on the belt.
+    fn mark_combat_points(
+        &mut self,
+        map: &ActMap<V>,
+        relic: V::Relic,
+        count: usize,
+        name: &'static str,
+    ) {
+        use sts2_core::{ActMap as _, RelicModel as _};
+
+        let fights = |kind: V::MapPointType| {
+            kind == <V::MapPointType as sts2_core::MapPointKinds>::MONSTER
+                || kind == <V::MapPointType as sts2_core::MapPointKinds>::ELITE
+        };
+        let held = (self.player.relics.iter_mut())
+            .find(|held| held.relic == relic)
+            .expect("a relic marking points is on the belt");
+        let marked = held.state.marked_points();
+        if !marked.is_empty()
+            && marked
+                .iter()
+                .all(|&at| map.at(at).is_ok_and(|node| fights(node.kind)))
+        {
+            return;
+        }
+        let mut points: Vec<sts2_core::Coord> = (map.nodes().iter())
+            .filter(|node| fights(node.kind))
+            .map(|node| node.at)
+            .collect();
+        // `GetAllMapPoints` walks the grid a column at a time.
+        points.sort_unstable();
+        let mut rng: MegaRng = sts2_core::rng::named::<V, _>(self.shared.raw_seed, name);
+        sts2_core::rng::GameRng::unstable_shuffle(&mut rng, &mut points);
+        points.truncate(count);
+        held.state.mark_points(&points);
     }
 
     pub(crate) fn start(
@@ -927,6 +1003,7 @@ impl<V: Rules> State<V> {
                 ascension,
             }),
             map: Arc::new(map),
+            spoils: None,
             act: 0,
             floor: num_traits::one(),
             visited: [at].into_iter().collect(),
@@ -1660,6 +1737,11 @@ impl<V: Rules> State<V> {
                 }
                 HookEffect::GainGold(amount) => {
                     self.gain_gold(amount);
+                    continue;
+                }
+                HookEffect::MarkCombatPoints { relic, count, name } => {
+                    let map = Arc::clone(&self.map);
+                    self.mark_combat_points(&map, relic, count, name);
                     continue;
                 }
                 // `PotionCmd.Discard`.
@@ -3588,6 +3670,13 @@ impl<V: Rules> State<V> {
     /// That rolls the chest's relic off its own stream with `RollRarity`,
     /// where `ShouldGenerateTreasure` lets it.
     pub(super) fn enter_treasure(&mut self, at: Location, streams: Streams<V>) {
+        // `OneOffSynchronizer.TryHandleSpoilsMap` pays the quest once the
+        // chest opens, and neither the chest's gold nor the payout is ported.
+        if let Location::MapPoint(point) = at
+            && self.spoils == Some(point)
+        {
+            unimplemented!("the Spoils Map paying out its quest at a chest");
+        }
         self.streams = streams;
         self.enter(
             at,
@@ -4075,6 +4164,10 @@ impl<V: Rules> State<V> {
             deck: &self.player.deck,
             strayed: self.strays(at),
             point: self.point_type(at),
+            coord: match at {
+                Location::MapPoint(coord) => Some(coord),
+                _ => None,
+            },
             rolled,
             roster,
         };

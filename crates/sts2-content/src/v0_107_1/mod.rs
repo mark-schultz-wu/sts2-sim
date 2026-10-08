@@ -782,6 +782,10 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::cards::modify_generated_map(card, act)
     }
 
+    fn deck_card_modify_generated_map_late(card: Self::Card, act: usize) -> bool {
+        behaviour::cards::modify_generated_map_late(card, act)
+    }
+
     fn deck_card_after_map_generated(card: Self::Card, act: usize) {
         behaviour::cards::after_map_generated(card, act);
     }

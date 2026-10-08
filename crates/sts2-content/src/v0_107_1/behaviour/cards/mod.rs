@@ -909,9 +909,23 @@ pub(crate) fn modify_generated_map(card: Cards, act: usize) -> Option<sts2_core:
     }
 }
 
+/// `ModifyGeneratedMapLate` for a card in the deck: whether it sets
+/// `SpoilsCoord`. The Spoils Map sets it to its act's first Treasure point,
+/// where `AfterMapGenerated` puts its quest and the chest pays it out.
+///
+/// # Panics
+///
+/// Any other card, which the run asks only when its class overrides the hook.
+pub(crate) fn modify_generated_map_late(card: Cards, act: usize) -> bool {
+    match card {
+        Cards::Quest(QuestCard::SpoilsMap) => act == SPOILS_ACT,
+        card => unimplemented!("what {card:?} does late in a map's making"),
+    }
+}
+
 /// `AfterMapGenerated` for a card in the deck. The Spoils Map puts its quest
-/// on `SpoilsCoord`, which only `ModifyGeneratedMapLate` sets. That hook runs
-/// on a map loaded from a save alone, so a map generated here gets none.
+/// on `SpoilsCoord`, which [`modify_generated_map_late`] sets in its own act
+/// alone. The run keeps that point.
 ///
 /// # Panics
 ///

@@ -36,6 +36,8 @@ pub(crate) struct Entering<'a, V: Rules> {
     pub(crate) strayed: bool,
     /// The type of the map point the fight stands on. None off the map.
     pub(crate) point: Option<V::MapPointType>,
+    /// Where on the map the fight stands. None off the map.
+    pub(crate) coord: Option<sts2_core::Coord>,
     /// The monsters' health, where an event rolled it as it opened. Empty
     /// for a fight that rolls its own.
     pub(crate) rolled: &'a [V::Health],
@@ -92,6 +94,7 @@ pub(crate) fn enter<V: Rules>(
         cards: Cards::with_cards(0),
         removed_from_deck: Vec::new(),
         ending_turn: false,
+        point: entering.coord,
         deck_versions: super::live::DeckVersions::none(),
         taken_from_deck: Vec::new(),
         extra_rewards: Vec::new(),
@@ -140,7 +143,6 @@ pub(crate) fn enter<V: Rules>(
     let monsters = encounter::opening::<V>(raw_seed, entering.floor, encounter, entering.roster)?;
     let Live {
         creatures,
-        powers,
         machines,
         ..
     } = &mut *live;
@@ -153,7 +155,6 @@ pub(crate) fn enter<V: Rules>(
             rolled: entering.rolled,
         },
         creatures,
-        powers,
         machines,
     )?;
     live.last_creature = live
@@ -256,9 +257,32 @@ pub(crate) fn enter<V: Rules>(
                     );
                 }
             }
+            // `PowerCmd.Apply<P>` on every living opponent, from nobody.
+            HookEffect::ApplyToLivingOpponents(power, amount) => {
+                let enemies: Vec<CombatId> = (live.creatures.iter())
+                    .filter(|creature| {
+                        creature.side == <V::CombatSide as SideKinds>::ENEMY && creature.alive
+                    })
+                    .map(|creature| creature.id)
+                    .collect();
+                let mut board =
+                    Board::for_card(&mut live, streams.combat(), relics, ascension, None, None);
+                for enemy in enemies {
+                    board.land(enemy, power, amount, None);
+                }
+            }
             other => unimplemented!("a listener asking for {other:?} as a room opens"),
         }
     }
+    // `StartCombatInternal`'s `AfterCreatureAdded`, which `SetUpCombat`
+    // queues behind `AfterRoomEntered`.
+    let Live {
+        creatures,
+        powers,
+        machines,
+        ..
+    } = &mut *live;
+    monster::added_to_room::<V>(ascension, creatures, powers, machines);
     // `BeforeCombatStart`, after the room and before the fight opens. The
     // player carries no power yet, so block gained here is what was asked for
     // and passes no modifier.
@@ -272,6 +296,7 @@ pub(crate) fn enter<V: Rules>(
     let starting = EventHook::CombatStarting {
         room: live.room(),
         holding_potions: live.potions > 0,
+        point: live.point,
     };
     for (listener, effect) in super::listen::notify::<V>(&mut live, relics, starting) {
         match (listener, effect) {
@@ -332,6 +357,12 @@ pub(crate) fn enter<V: Rules>(
                 let mut board =
                     Board::for_card(&mut live, streams.combat(), relics, ascension, None, None);
                 sts2_core::Fight::apply_to_actor(&mut board, power, amount);
+            }
+            // `CreatureCmd.SetCurrentHp` on the enemies a relic names.
+            (super::listen::Listener::Relic { .. }, HookEffect::SetEnemiesHp { creature, hp }) => {
+                let mut board =
+                    Board::for_card(&mut live, streams.combat(), relics, ascension, None, None);
+                board.set_enemies_hp(creature, hp);
             }
             (_, other) => unimplemented!("a listener asking for {other:?} as a fight starts"),
         }

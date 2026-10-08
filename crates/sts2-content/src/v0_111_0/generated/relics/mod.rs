@@ -1734,7 +1734,8 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // FUR_COAT
     sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterCreatureAddedToCombat)
-        .with(sts2_core::ModelHook::BeforeCombatStart),
+        .with(sts2_core::ModelHook::BeforeCombatStart)
+        .with(sts2_core::ModelHook::ModifyGeneratedMapLate),
     // GALACTIC_DUST
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterStarsSpent),
     // GAMBLING_CHIP

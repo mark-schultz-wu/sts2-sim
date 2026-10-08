@@ -1,0 +1,7 @@
+# Fur Coat marks seven of the act's Monster and Elite points off its own
+# stream. On this seed the marks take in the first-row fight at column one,
+# so its enemy starts at one hit point.
+{"cmd":"start","seed":"C000000005","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"FUR_COAT"}
+{"cmd":"choose_option","index":0}
+{"cmd":"travel","col":1,"row":1}
