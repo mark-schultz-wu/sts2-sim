@@ -3930,7 +3930,11 @@ pub(crate) fn event_hook(
         {
             state.count(one);
             (state.counted() == JUGGLING_ATTACKS)
-                .then_some(HookEffect::CloneIntoHand { card: id, count: amount })
+                .then_some(HookEffect::CloneIntoHand {
+                    card: id,
+                    count: amount,
+                    writes: &[],
+                })
         }
         (Power::JugglingPower, PowerAmount::Endless, EventHook::CardPlayed { .. }) => {
             unimplemented!("an endless Juggling")

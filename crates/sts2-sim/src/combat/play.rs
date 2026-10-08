@@ -333,6 +333,26 @@ pub(super) fn auto_play<V: Rules>(
     named: Option<CombatId>,
     pausable: bool,
 ) -> Option<super::Ended> {
+    auto_play_capturing::<V>(live, rngs, relics, id, from, named, pausable, None)
+}
+
+/// [`auto_play`], with `skipXCapture` where `captured` names what
+/// `SpendResources` already spent: the energy, which an X cost captures, and
+/// the stars, which are `LastStarsSpent`.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "auto_play's own, and the X a payment captured"
+)]
+pub(super) fn auto_play_capturing<V: Rules>(
+    live: &mut Live<V>,
+    rngs: crate::stream::CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    id: sts2_core::CardId<V>,
+    from: sts2_core::Pile,
+    named: Option<CombatId>,
+    pausable: bool,
+    captured: Option<(V::Count, V::Count)>,
+) -> Option<super::Ended> {
     // A question an earlier auto-play asked stands the effect still, and
     // this one waits behind it where it lies.
     if live.asking.is_some() {
@@ -347,7 +367,7 @@ pub(super) fn auto_play<V: Rules>(
     };
     // `CardPileCmd.Add` to the play pile, where it stands while it runs.
     let card = live.cards.play(from, at);
-    auto_play_in_play::<V>(live, rngs, relics, card, named, pausable)
+    auto_play_in_play::<V>(live, rngs, relics, card, named, pausable, captured)
 }
 
 /// `AutoPlayFromDrawPile`'s play of one card it took into the play pile:
@@ -371,12 +391,13 @@ pub(super) fn auto_play_taken<V: Rules>(
     let Some(card) = live.cards.named(id) else {
         unimplemented!("auto-playing {id:?}, which left the fight first");
     };
-    auto_play_in_play::<V>(live, rngs, relics, card, None, pausable)
+    auto_play_in_play::<V>(live, rngs, relics, card, None, pausable, None)
 }
 
 /// `CardCmd.AutoPlay` for a card already in the play pile. `named` is the
 /// target the caller names, which an enemy-targeting card plays at in place of
-/// one drawn off `CombatTargets`.
+/// one drawn off `CombatTargets`. `captured` is the energy and stars a
+/// payment spent, which `skipXCapture` keeps.
 pub(super) fn auto_play_in_play<V: Rules>(
     live: &mut Live<V>,
     mut rngs: crate::stream::CombatRngs<'_>,
@@ -384,6 +405,7 @@ pub(super) fn auto_play_in_play<V: Rules>(
     card: super::live::CardInstance<V>,
     named: Option<CombatId>,
     pausable: bool,
+    captured: Option<(V::Count, V::Count)>,
 ) -> Option<super::Ended> {
     use sts2_core::{CardTable as _, TargetKinds as _};
 
@@ -426,14 +448,18 @@ pub(super) fn auto_play_in_play<V: Rules>(
     let energy = num_traits::zero();
     let (pile, position) = result_pile::<V>(live, relics, &card, energy);
     let count = play_count::<V, _>(live, &mut rngs, relics, &card);
-    // `AutoPlay` spends nothing, and captures an X from what the pools hold.
+    // `AutoPlay` spends nothing, and captures an X from what the pools hold,
+    // unless `skipXCapture` keeps one a payment captured.
     let x = match ident.card.cost() {
-        sts2_core::Cost::X => live.energy,
+        sts2_core::Cost::X => captured.map_or(live.energy, |(energy, _)| energy),
         _ => num_traits::zero(),
     };
     let star_cost = super::legal::costs::<V>(&card, super::listen::Walk { live, relics }).1;
-    let stars = super::legal::spend(star_cost, live.stars)
-        .unwrap_or_else(|| unimplemented!("a star cost the count cannot hold"));
+    let stars = match captured {
+        Some((_, stars)) => stars,
+        None => super::legal::spend(star_cost, live.stars)
+            .unwrap_or_else(|| unimplemented!("a star cost the count cannot hold")),
+    };
     let begun = CardPlay {
         id: card.id,
         energy,
@@ -885,14 +911,24 @@ pub(crate) fn answer<V: Rules>(
             );
         }
         // The card chosen into hand, then the rest of the setup.
-        Then::SetupChosen => {
+        Then::SetupChosen { writes } => {
             let sts2_core::Taken::Chosen(chosen) = taken else {
                 unreachable!("a setup's choice offers cards")
             };
             let ascension = live.ascension;
             let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
             if let Some(card) = chosen {
-                sts2_core::Fight::add_generated_cards(&mut board, card, sts2_core::Pile::Hand, 1);
+                let added = sts2_core::Fight::add_generated_cards(
+                    &mut board,
+                    card,
+                    sts2_core::Pile::Hand,
+                    1,
+                );
+                for at in added {
+                    for &(change, lasting) in writes {
+                        sts2_core::Fight::modify_card(&mut board, at, change, lasting);
+                    }
+                }
             }
             let ended = board.ended();
             return run_deferred(
@@ -1661,15 +1697,19 @@ fn finished<V: Rules, S: LendsCombat>(
                 // Clones of the card just played, which is still in the
                 // play pile, into hand.
                 (
-                    super::listen::Listener::Power { .. },
-                    sts2_core::HookEffect::CloneIntoHand { card, count },
+                    super::listen::Listener::Power { .. } | super::listen::Listener::Relic { .. },
+                    sts2_core::HookEffect::CloneIntoHand {
+                        card,
+                        count,
+                        writes,
+                    },
                 ) => {
                     let count: usize = num_traits::cast(count)
                         .unwrap_or_else(|| unimplemented!("{count:?} clones"));
                     let mut board =
                         Board::for_card(next, streams.combat(), relics, ascension, None, None);
                     for _ in 0..count {
-                        board.clone_named(card, sts2_core::Pile::Hand);
+                        board.clone_written(card, sts2_core::Pile::Hand, writes);
                     }
                     ended = ended.or(board.ended());
                 }

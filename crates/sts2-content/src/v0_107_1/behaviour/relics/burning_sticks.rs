@@ -26,7 +26,11 @@ pub(super) fn event_hook(
         EventHook::CardExhausted { card, id, .. }
             if !state.used && V::card_kind(card) == Some(CardKind::Skill) =>
         {
-            asked.push(HookEffect::CloneIntoHand { card: id, count: 1 });
+            asked.push(HookEffect::CloneIntoHand {
+                card: id,
+                count: 1,
+                writes: &[],
+            });
             state.used = true;
         }
         _ => {}

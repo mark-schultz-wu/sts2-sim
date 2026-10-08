@@ -1,0 +1,11 @@
+# Whispering Earring pays for each card before it plays it. The first
+# Whirlwind spends all four energy and keeps four as its X, so it hits the
+# Nibbit four times. The next two cost X too and spend nothing, so they hit
+# no times. Strike and Bash cost more than the energy left.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","card":"WHIRLWIND"}
+{"cmd":"grant","card":"WHIRLWIND"}
+{"cmd":"grant","card":"WHIRLWIND"}
+{"cmd":"grant","card":"WHIRLWIND"}
+{"cmd":"grant","relic":"WHISPERING_EARRING"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}

@@ -1021,7 +1021,7 @@ pub(super) fn carry_setup<V: Rules>(
                                         unimplemented!("a colorless pool offering fewer than three")
                                     });
                             live.asking = Some(super::live::Asking {
-                                then: Then::SetupChosen,
+                                then: Then::SetupChosen { writes: &[] },
                                 // `FromChooseACardScreen` hands its selector
                                 // a minimum of none, whatever `canSkip` says.
                                 question: super::live::Asked::Offered {
@@ -1363,6 +1363,34 @@ pub(super) fn carry_setup<V: Rules>(
                                 sts2_core::Fight::apply(&mut board, hit);
                             }
                             ended = ended.or(board.ended());
+                        }
+                        sts2_core::HookEffect::ChooseFromPoolIntoHand { count, writes } => {
+                            let count: usize = num_traits::cast(count).unwrap_or_else(|| {
+                                unimplemented!("offering {count:?} cards of the pool")
+                            });
+                            // `TakeRandom` shuffles the pool once and takes the
+                            // first `count`.
+                            let mut pool = V::combat_cards(live.character).to_vec();
+                            sts2_core::rng::GameRng::unstable_shuffle(rngs.generation, &mut pool);
+                            pool.truncate(count);
+                            // An empty pool offers nothing, and the game returns.
+                            if pool.is_empty() {
+                                continue;
+                            }
+                            live.asking = Some(super::live::Asking {
+                                then: Then::SetupChosen { writes },
+                                // `FromSimpleGrid` with one to take, which it
+                                // cannot skip.
+                                question: super::live::Asked::Offered {
+                                    offered: pool
+                                        .into_iter()
+                                        .map(sts2_core::CardIdent::new)
+                                        .collect(),
+                                    skippable: false,
+                                },
+                            });
+                            live.defer(super::live::Deferred::Setup(Setup::PlayerTurnStart(rest)));
+                            return Carried::Parked;
                         }
                         sts2_core::HookEffect::SelectFromPile {
                             pile,
@@ -1953,11 +1981,15 @@ pub(super) fn exhausted<V: Rules>(
         match effect {
             // Clones of the card just exhausted, which the exhaust pile still
             // holds.
-            sts2_core::HookEffect::CloneIntoHand { card, count } => {
+            sts2_core::HookEffect::CloneIntoHand {
+                card,
+                count,
+                writes,
+            } => {
                 let count: usize =
                     num_traits::cast(count).unwrap_or_else(|| unimplemented!("{count:?} clones"));
                 for _ in 0..count {
-                    board.clone_named(card, Pile::Hand);
+                    board.clone_written(card, Pile::Hand, writes);
                 }
             }
             effect => rest.push(effect),
@@ -2097,6 +2129,40 @@ pub(super) fn pre_play_from<V: Rules>(
                         return ended;
                     }
                 }
+                sts2_core::HookEffect::AutoPlayHand { mut left } => {
+                    let start = live.turn;
+                    while left > 0 && !live.ending_turn && live.turn == start {
+                        let Some(first) = first_playable::<V>(live, relics) else {
+                            break;
+                        };
+                        let captured =
+                            spend_resources::<V>(live, rngs.reborrow(), relics, first.costs);
+                        left -= 1;
+                        let ended = super::play::auto_play_capturing::<V>(
+                            live,
+                            rngs.reborrow(),
+                            relics,
+                            first.id,
+                            Pile::Hand,
+                            first.target,
+                            true,
+                            Some(captured),
+                        );
+                        if ended.is_some() {
+                            return ended;
+                        }
+                        // `CardCmd.AutoPlay` is awaited, so the plays left
+                        // wait on the answer, ahead of what the pass still
+                        // asked for.
+                        if live.asking.is_some() {
+                            let mut rest: PrePlayRest<V> = SmallVec::new();
+                            rest.push((listener, sts2_core::HookEffect::AutoPlayHand { left }));
+                            rest.extend(effects);
+                            live.defer(super::live::Deferred::PrePlay { rest, next: pass });
+                            return None;
+                        }
+                    }
+                }
                 sts2_core::HookEffect::AutoPlayFromDraw(count) => {
                     let count: usize = num_traits::cast(count)
                         .unwrap_or_else(|| unimplemented!("auto-playing {count:?} cards"));
@@ -2134,6 +2200,105 @@ pub(super) fn pre_play_from<V: Rules>(
         asked = listen::notify::<V>(live, relics, hook);
         pass += 1;
     }
+}
+
+/// The hand's first card that `CanPlay`, as `WhisperingEarring` plays it.
+struct FirstPlayable<V: Rules> {
+    id: sts2_core::CardId<V>,
+    /// The target the relic names for it.
+    target: Option<CombatId>,
+    /// What it costs now, in energy and in stars.
+    costs: (sts2_core::Cost, sts2_core::Cost),
+}
+
+/// The hand's first card that `CanPlay`.
+///
+/// # Panics
+///
+/// A card that targets an ally, which the game draws off `CombatTargets`.
+fn first_playable<V: Rules>(
+    live: &Live<V>,
+    relics: &crate::run::Belt<V>,
+) -> Option<FirstPlayable<V>> {
+    use sts2_core::TargetKinds;
+
+    let walk = listen::Walk { live, relics };
+    let payable = super::legal::first_playable::<V>(
+        live.cards.iter(Pile::Hand),
+        walk,
+        live.energy,
+        live.stars,
+    )?;
+    let target = match payable.target {
+        // `HittableEnemies.FirstOrDefault()`.
+        t if t == <V::TargetType as TargetKinds>::ANY_ENEMY => {
+            let enemies = live
+                .creatures
+                .iter()
+                .filter(|creature| {
+                    creature.side == <V::CombatSide as SideKinds>::ENEMY && creature.alive
+                })
+                .map(|creature| creature.id)
+                .filter(|&creature| {
+                    !listen::any_decides::<V>(
+                        listen::Walk { live, relics },
+                        sts2_core::DecisionHook::ShouldAllowHitting {
+                            creature,
+                            alive: true,
+                        },
+                        false,
+                    )
+                });
+            enemies.into_iter().next()
+        }
+        t if t == <V::TargetType as TargetKinds>::ANY_PLAYER => Some(live.player().id),
+        t if t == <V::TargetType as TargetKinds>::ANY_ALLY => {
+            unimplemented!("Whispering Earring aiming a card at an ally")
+        }
+        _ => None,
+    };
+    Some(FirstPlayable {
+        id: payable.held.id,
+        target,
+        costs: payable.costs,
+    })
+}
+
+/// `CardModel.SpendResources`: the energy and the stars a card costs now,
+/// taken from the player's pools, with `AfterStarsSpent` for the stars. An
+/// X takes the whole pool. The energy and the stars spent, which are what
+/// `SpendEnergy` captures as an X and `SpendStars` keeps as
+/// `LastStarsSpent`.
+fn spend_resources<V: Rules>(
+    live: &mut Live<V>,
+    rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    (cost, star_cost): (sts2_core::Cost, sts2_core::Cost),
+) -> (V::Count, V::Count) {
+    let energy = super::legal::spend(cost, live.energy)
+        .unwrap_or_else(|| unimplemented!("a cost of {cost:?}"))
+        .min(live.energy);
+    live.energy = live.energy - energy;
+    let stars: V::Count = super::legal::spend(star_cost, live.stars)
+        .unwrap_or_else(|| unimplemented!("a star cost of {star_cost:?}"));
+    if stars > num_traits::zero() {
+        let spent: V::Number = num_traits::cast(stars).expect("a star cost fits a game number");
+        live.modify_stars(-spent);
+        let hook = sts2_core::EventHook::StarsSpent {
+            player: live.player().id,
+            amount: spent,
+        };
+        let asked = listen::notify::<V>(live, relics, hook);
+        if !asked.is_empty() {
+            let ascension = live.ascension;
+            let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
+            super::hook::apply::<V, _>(&mut board, asked.into_iter().map(|(_, effect)| effect));
+            if let Some(ended) = board.ended() {
+                unimplemented!("a fight {ended:?} as its stars were spent");
+            }
+        }
+    }
+    (energy, stars)
 }
 
 /// What a pre-play pass asked for and has not yet carried out.

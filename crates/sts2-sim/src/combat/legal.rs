@@ -26,6 +26,31 @@ pub(super) fn hand<V: Rules>(
         .collect()
 }
 
+/// A card in hand that `CanPlay`, as an auto-play that pays for it reads it.
+pub(super) struct Payable<V: Rules> {
+    pub(super) held: CardInstance<V>,
+    /// What it costs now, in energy and in stars.
+    pub(super) costs: (Cost, Cost),
+    pub(super) target: V::TargetType,
+}
+
+/// The hand's first card that `CanPlay`, with no previews worked out.
+pub(super) fn first_playable<V: Rules>(
+    hand: impl Iterator<Item = CardInstance<V>>,
+    fight: Walk<'_, V>,
+    energy: V::Count,
+    stars: V::Count,
+) -> Option<Payable<V>> {
+    let asks = asks_should_play::<V>(fight);
+    hand.map(|held| InHand::new(held, fight, energy, stars, asks))
+        .find(|card| card.reason.is_none())
+        .map(|card| Payable {
+            held: card.held,
+            costs: (card.cost, card.star_cost),
+            target: card.target,
+        })
+}
+
 /// What a card names as its target.
 pub(super) fn target_type<V: Rules>(card: CardIdent<V>, live: &Live<V>) -> V::TargetType {
     // One of the four cards that work their target out from the fight, which

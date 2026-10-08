@@ -74,6 +74,7 @@ mod centennial_puzzle;
 mod chandelier;
 mod charons_ashes;
 mod chemical_x;
+mod choices_paradox;
 mod chosen_cheese;
 mod claws;
 mod cloak_clasp;
@@ -170,6 +171,7 @@ mod miniature_tent;
 mod molten_egg;
 mod mr_struggles;
 mod mummified_hand;
+mod music_box;
 mod mystic_lighter;
 mod neows_bones;
 mod neows_talisman;
@@ -294,6 +296,7 @@ mod vexing_puzzlebox;
 mod war_hammer;
 mod war_paint;
 mod whetstone;
+mod whispering_earring;
 mod white_beast_statue;
 mod white_star;
 mod wing_charm;
@@ -616,6 +619,9 @@ pub enum State {
     BigHat,
     RoyalStamp,
     RunicCapacitor,
+    MusicBox(music_box::State),
+    ChoicesParadox,
+    WhisperingEarring,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -868,6 +874,9 @@ pub(crate) fn event_hook(
         State::BigHat => big_hat::event_hook(hook, asked),
         State::RoyalStamp => royal_stamp::event_hook(hook, asked),
         State::RunicCapacitor => runic_capacitor::event_hook(hook, asked),
+        State::MusicBox(state) => music_box::event_hook(state, hook, asked),
+        State::ChoicesParadox => choices_paradox::event_hook(hook, asked),
+        State::WhisperingEarring => whispering_earring::event_hook(hook, asked),
         State::BeltBuckle(state) => belt_buckle::event_hook(state, hook, asked),
         State::DingyRug => dingy_rug::event_hook(hook, asked),
         State::TheAbacus => the_abacus::event_hook(hook, asked),
@@ -1045,6 +1054,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         State::BowlerHat => bowler_hat::modify_hook(hook),
         State::Ectoplasm => ectoplasm::modify_hook(hook),
         State::Bread => bread::modify_hook(hook),
+        State::WhisperingEarring => whispering_earring::modify_hook(hook),
         State::PrismaticGem => prismatic_gem::modify_hook(hook),
         State::SneckoEye => snecko_eye::modify_hook(hook),
         State::FakeStrikeDummy => fake_strike_dummy::modify_hook(hook),
@@ -1304,7 +1314,9 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::RingingTriangle
         | State::BigHat
         | State::RoyalStamp
-        | State::RunicCapacitor => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::RunicCapacitor
+        | State::MusicBox(_)
+        | State::ChoicesParadox => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1488,6 +1500,9 @@ impl sts2_core::RelicModel<V> for State {
             Relic::BigHat => State::BigHat,
             Relic::RoyalStamp => State::RoyalStamp,
             Relic::RunicCapacitor => State::RunicCapacitor,
+            Relic::MusicBox => State::MusicBox(music_box::State::default()),
+            Relic::ChoicesParadox => State::ChoicesParadox,
+            Relic::WhisperingEarring => State::WhisperingEarring,
             Relic::BeltBuckle => State::BeltBuckle(belt_buckle::State::default()),
             Relic::DingyRug => State::DingyRug,
             Relic::TheAbacus => State::TheAbacus,

@@ -1,0 +1,10 @@
+# Music Box clones the first Attack played each turn into hand as Ethereal.
+# A second Strike gets no clone. The clone exhausts as the turn ends, and
+# the next turn's first Attack makes a new one.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"MUSIC_BOX"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":0,"target":1}
