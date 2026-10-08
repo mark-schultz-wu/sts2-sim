@@ -5252,6 +5252,8 @@ pub enum HookEffect<V: ContentVersion> {
     GenerateDistinctColorless {
         count: V::Number,
     },
+    /// `OrbCmd.AddSlots` for the player.
+    AddOrbSlots(V::Number),
     /// `count` distinct cards of the character's combat pool that `filter`
     /// keeps, from one `CardFactory.GetDistinctForCombat` off
     /// `CombatCardGeneration`, as `GenerateDistinctColorless` takes them.

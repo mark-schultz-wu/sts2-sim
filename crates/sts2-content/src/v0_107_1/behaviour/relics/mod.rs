@@ -235,6 +235,7 @@ mod ripple_basin;
 mod royal_poison;
 mod royal_stamp;
 mod ruined_helmet;
+mod runic_capacitor;
 mod runic_pyramid;
 mod sai;
 mod sand_castle;
@@ -614,6 +615,7 @@ pub enum State {
     RingingTriangle,
     BigHat,
     RoyalStamp,
+    RunicCapacitor,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -865,6 +867,7 @@ pub(crate) fn event_hook(
         State::Bread => bread::event_hook(hook, asked),
         State::BigHat => big_hat::event_hook(hook, asked),
         State::RoyalStamp => royal_stamp::event_hook(hook, asked),
+        State::RunicCapacitor => runic_capacitor::event_hook(hook, asked),
         State::BeltBuckle(state) => belt_buckle::event_hook(state, hook, asked),
         State::DingyRug => dingy_rug::event_hook(hook, asked),
         State::TheAbacus => the_abacus::event_hook(hook, asked),
@@ -1300,7 +1303,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::BeltBuckle(_)
         | State::RingingTriangle
         | State::BigHat
-        | State::RoyalStamp => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::RoyalStamp
+        | State::RunicCapacitor => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1483,6 +1487,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::Bread => State::Bread,
             Relic::BigHat => State::BigHat,
             Relic::RoyalStamp => State::RoyalStamp,
+            Relic::RunicCapacitor => State::RunicCapacitor,
             Relic::BeltBuckle => State::BeltBuckle(belt_buckle::State::default()),
             Relic::DingyRug => State::DingyRug,
             Relic::TheAbacus => State::TheAbacus,
