@@ -11,13 +11,8 @@ on:
 
 # `runs-on: sts2` is this repository's own runner image, built from
 # `.forgejo/runner/`, which bakes the Rust and .NET toolchains. Nothing here
-# installs one. See that directory for how the image is built and how the
-# runner is told about it.
-#
-# It is a label of its own rather than `docker`, which stays pointed at the
-# stock image. A branch whose workflow still installs its own toolchain cannot
-# run on this image, because rustup refuses to install over one that is there
-# already. So both labels exist until nothing asks for the stock one.
+# installs one. That directory's README says how the image is built, and how
+# the runner is told about it.
 #
 # Each job still asserts that the toolchain it found is the one the repository
 # asked for. An image lives on a machine rather than in a commit, so it can go
