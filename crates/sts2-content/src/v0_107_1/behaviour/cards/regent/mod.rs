@@ -38,8 +38,12 @@ pub enum Resume {
     DecisionsDrew,
     /// `DecisionsDecisions`, after its owner picked the Skill to play.
     DecisionsPicked,
-    /// `DecisionsDecisions`, once the last play of its Skill has its answer.
-    DecisionsPlayed,
+    /// `DecisionsDecisions`, once a play of its Skill has its answer, with
+    /// `left` plays of `card` still to make.
+    DecisionsPlayed {
+        card: sts2_core::CardAt<V>,
+        left: u8,
+    },
 }
 
 /// `BeatIntoShape`: its damage to the target, then a Forge of its calculated
@@ -596,12 +600,12 @@ pub(super) fn resume_play<F: Fight<V>>(
         Resume::GlowDrew
         | Resume::BigBangDrew
         | Resume::DecisionsDrew
-        | Resume::DecisionsPlayed => {
+        | Resume::DecisionsPlayed { .. } => {
             unreachable!("{at:?} waits on a question, not a pick")
         }
         Resume::DecisionsPicked => match chosen.as_slice() {
             [] => Played::Done,
-            &[card] => decisions_play(fight, card),
+            &[card] => decisions_play(fight, card, fight.var(CardVar::Repeat)),
             picked => unreachable!("Decisions, Decisions picked {} cards", picked.len()),
         },
         // Its `Repeat` of clones of the one picked, each into hand.
@@ -651,19 +655,23 @@ fn decisions_ask<F: Fight<V>>(fight: &mut F) -> Played<V> {
 ///
 /// A play that stops on a question with more to come, and a card no pile
 /// holds by its turn.
-fn decisions_play<F: Fight<V>>(fight: &mut F, card: sts2_core::CardAt<V>) -> Played<V> {
-    let repeats = fight.var(CardVar::Repeat);
-    for played in 1..=repeats {
+fn decisions_play<F: Fight<V>>(
+    fight: &mut F,
+    card: sts2_core::CardAt<V>,
+    plays: super::Number,
+) -> Played<V> {
+    for played in 1..=plays {
         let at = super::standing(fight, card)
             .unwrap_or_else(|| unimplemented!("Decisions, Decisions playing a card no pile holds"));
         fight.auto_play_card(at);
+        // `CardCmd.AutoPlay` is awaited, so the plays left wait on the answer.
         if fight.waiting() {
-            assert!(
-                played == repeats,
-                "Decisions, Decisions waiting, with more to play"
-            );
+            let left = u8::try_from(plays - played).expect("a few plays are left");
             return Played::Waiting {
-                at: super::super::Resume::Card(super::Resume::Regent(Resume::DecisionsPlayed)),
+                at: super::super::Resume::Card(super::Resume::Regent(Resume::DecisionsPlayed {
+                    card,
+                    left,
+                })),
             };
         }
     }
@@ -704,7 +712,9 @@ pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V>
         Resume::GlowDrew => glow_drew(fight),
         Resume::BigBangDrew => big_bang_drew(fight),
         Resume::DecisionsDrew => decisions_ask(fight),
-        Resume::DecisionsPlayed => Played::Done,
+        Resume::DecisionsPlayed { card, left } => {
+            decisions_play(fight, card, super::Number::from(left))
+        }
         at => unreachable!("{at:?} stops on a pick, not on a question it waited for"),
     }
 }
