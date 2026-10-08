@@ -1,0 +1,10 @@
+# Undeath granted in the Infested Prism fight enters it as a Skill with no
+# affliction, so Vital Spark taints it. Playing it puts a clone into the
+# discard pile, and the clone keeps Tainted from its original. Vital Spark
+# taints only a card that arrives with no affliction, so it leaves the
+# clone alone.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"INFESTED_PRISMS_ELITE"}
+{"cmd":"grant","card":"UNDEATH"}
+{"cmd":"play_card","index":5}
+{"cmd":"end_turn"}

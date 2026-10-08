@@ -1,0 +1,7 @@
+# Big Hat adds two distinct Ethereal cards of the Necrobinder's pool to the
+# hand as the first turn starts. They exhaust as the turn ends, and the
+# second turn brings no more.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"grant","relic":"BIG_HAT"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}

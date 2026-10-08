@@ -43,6 +43,7 @@ mod beating_remnant;
 mod beautiful_bracelet;
 mod bellows;
 mod belt_buckle;
+mod big_hat;
 mod big_mushroom;
 mod biiig_hug;
 mod bing_bong;
@@ -231,6 +232,7 @@ mod ring_of_the_snake;
 mod ringing_triangle;
 mod ripple_basin;
 mod royal_poison;
+mod royal_stamp;
 mod ruined_helmet;
 mod runic_pyramid;
 mod sai;
@@ -608,6 +610,8 @@ pub enum State {
     BeltBuckle(belt_buckle::State),
     Bread,
     RingingTriangle,
+    BigHat,
+    RoyalStamp,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -857,6 +861,8 @@ pub(crate) fn event_hook(
             hook => unimplemented!("what RingingTriangle does for {hook:?}"),
         },
         State::Bread => bread::event_hook(hook, asked),
+        State::BigHat => big_hat::event_hook(hook, asked),
+        State::RoyalStamp => royal_stamp::event_hook(hook, asked),
         State::BeltBuckle(state) => belt_buckle::event_hook(state, hook, asked),
         State::DingyRug => dingy_rug::event_hook(hook, asked),
         State::TheAbacus => the_abacus::event_hook(hook, asked),
@@ -1288,7 +1294,9 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::TheAbacus
         | State::DingyRug
         | State::BeltBuckle(_)
-        | State::RingingTriangle => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::RingingTriangle
+        | State::BigHat
+        | State::RoyalStamp => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1469,6 +1477,8 @@ impl sts2_core::RelicModel<V> for State {
             Relic::RoyalPoison => State::RoyalPoison,
             Relic::RingingTriangle => State::RingingTriangle,
             Relic::Bread => State::Bread,
+            Relic::BigHat => State::BigHat,
+            Relic::RoyalStamp => State::RoyalStamp,
             Relic::BeltBuckle => State::BeltBuckle(belt_buckle::State::default()),
             Relic::DingyRug => State::DingyRug,
             Relic::TheAbacus => State::TheAbacus,

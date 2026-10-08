@@ -3439,8 +3439,16 @@ pub(crate) fn event_hook(
         }),
         // `VitalSparkPower.AfterCardEnteredCombat`: Tainted on a Skill that
         // arrives with no affliction.
-        (Power::VitalSparkPower, _, EventHook::CardEnteredCombat { at, card, .. })
-            if <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Skill) =>
+        (
+            Power::VitalSparkPower,
+            _,
+            EventHook::CardEnteredCombat {
+                at,
+                card,
+                afflicted: false,
+                ..
+            },
+        ) if <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Skill) =>
         {
             Some(HookEffect::Afflict {
                 to: sts2_core::Writing::One(at),

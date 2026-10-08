@@ -1,0 +1,10 @@
+# Hand of Greed kills the small Twig Slime, whose death triggers Fatal, so
+# the player gains 20 gold. On the next turn a second one hits the Leaf
+# Slime, which survives the hit, so no gold comes.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"grant","card":"HAND_OF_GREED"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"HAND_OF_GREED"}
+{"cmd":"play_card","index":5,"target":2}
