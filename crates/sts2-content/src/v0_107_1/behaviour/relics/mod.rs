@@ -59,6 +59,7 @@ mod bookmark;
 mod booming_conch;
 mod bound_phylactery;
 mod bowler_hat;
+mod bread;
 mod brimstone;
 mod bronze_scales;
 mod burning_blood;
@@ -227,6 +228,7 @@ mod regalite;
 mod reptile_trinket;
 mod ring_of_the_drake;
 mod ring_of_the_snake;
+mod ringing_triangle;
 mod ripple_basin;
 mod royal_poison;
 mod ruined_helmet;
@@ -604,6 +606,8 @@ pub enum State {
     TheAbacus,
     DingyRug,
     BeltBuckle(belt_buckle::State),
+    Bread,
+    RingingTriangle,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -847,6 +851,12 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        // Its one hook is `ShouldFlush`, which the fight asks of it.
+        State::RingingTriangle => match hook {
+            EventHook::Obtained { .. } => {}
+            hook => unimplemented!("what RingingTriangle does for {hook:?}"),
+        },
+        State::Bread => bread::event_hook(hook, asked),
         State::BeltBuckle(state) => belt_buckle::event_hook(state, hook, asked),
         State::DingyRug => dingy_rug::event_hook(hook, asked),
         State::TheAbacus => the_abacus::event_hook(hook, asked),
@@ -986,6 +996,7 @@ pub(crate) fn decide_hook(
     match state {
         State::WingedBoots(state) => winged_boots::decide_hook(state, hook),
         State::RunicPyramid => runic_pyramid::decide_hook(hook),
+        State::RingingTriangle => ringing_triangle::decide_hook(hook),
         State::Sozu => sozu::decide_hook(hook),
         State::Fiddle => fiddle::decide_hook(hook),
         State::SturdyClamp => sturdy_clamp::decide_hook(hook),
@@ -1021,6 +1032,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         State::StrikeDummy => strike_dummy::modify_hook(hook),
         State::BowlerHat => bowler_hat::modify_hook(hook),
         State::Ectoplasm => ectoplasm::modify_hook(hook),
+        State::Bread => bread::modify_hook(hook),
         State::PrismaticGem => prismatic_gem::modify_hook(hook),
         State::SneckoEye => snecko_eye::modify_hook(hook),
         State::FakeStrikeDummy => fake_strike_dummy::modify_hook(hook),
@@ -1275,7 +1287,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::ScreamingFlagon
         | State::TheAbacus
         | State::DingyRug
-        | State::BeltBuckle(_) => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::BeltBuckle(_)
+        | State::RingingTriangle => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1454,6 +1467,8 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::RingingTriangle => State::RingingTriangle,
+            Relic::Bread => State::Bread,
             Relic::BeltBuckle => State::BeltBuckle(belt_buckle::State::default()),
             Relic::DingyRug => State::DingyRug,
             Relic::TheAbacus => State::TheAbacus,

@@ -2303,6 +2303,12 @@ pub(super) fn side_turn_started<V: Rules>(
                 super::hook::apply::<V, _>(&mut board, [effect]);
                 ended = ended.or(board.ended());
             }
+            // `PlayerCmd.LoseEnergy` from the player's pool.
+            effect @ sts2_core::HookEffect::LoseEnergy(_) => {
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                super::hook::apply::<V, _>(&mut board, [effect]);
+            }
             // `CreatureCmd.GainBlock`, unpowered, on a creature the listener
             // names.
             effect @ sts2_core::HookEffect::GainBlockOf { .. } => {
@@ -2365,10 +2371,11 @@ fn flush_hand<V: Rules>(
     ascension: V::AscensionLevel,
 ) {
     let player = live.player().id;
+    let turn = live.turn;
     let fight = listen::Walk { live, relics };
     if !listen::any_decides::<V>(
         fight,
-        sts2_core::DecisionHook::ShouldFlush { player },
+        sts2_core::DecisionHook::ShouldFlush { player, turn },
         false,
     ) {
         live.cards.sift(Pile::Hand, Pile::Discard, Face::retains);
