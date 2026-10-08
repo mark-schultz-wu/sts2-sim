@@ -2516,12 +2516,61 @@ impl<V: Rules> State<V> {
         // With every player dead, the run is over, which the player's hit
         // points at nothing now say.
         if killed {
-            for hook in [
-                ModelHook::BeforeDeath,
-                ModelHook::ShouldDieLate,
-                ModelHook::AfterDeath,
-            ] {
-                self.unheard(hook);
+            self.unheard(ModelHook::BeforeDeath);
+            let preventer = self.death_preventer();
+            self.unheard(ModelHook::AfterDeath);
+            if let Some(slot) = preventer {
+                self.death_prevented(slot);
+            }
+        }
+    }
+
+    /// `Hook.ShouldDieLate` for the player outside a fight: the slot of the
+    /// first relic on the belt that keeps them alive.
+    fn death_preventer(&self) -> Option<usize> {
+        let player = sts2_core::CombatId::new(nonmax::NonMaxU8::ZERO);
+        let hook = sts2_core::DecisionHook::ShouldDieLate {
+            creature: player,
+            player,
+        };
+        let hooks = sts2_core::Overrides::of(sts2_core::ModelHook::ShouldDieLate);
+        let mut left = self.player.relics.hearing(hooks);
+        while left != 0 {
+            let slot = left.trailing_zeros() as usize;
+            left &= left - 1;
+            let held = &self.player.relics[slot].state;
+            if V::decide_hook(crate::combat::Heard::<V>::Relic(held), hook)
+                .is_decision_and(|dies| !dies)
+            {
+                return Some(slot);
+            }
+        }
+        None
+    }
+
+    /// `AfterPreventingDeath`, asked of the relic in `slot` alone, once it
+    /// kept the player alive outside a fight.
+    ///
+    /// # Panics
+    ///
+    /// The relic asking for anything but a heal.
+    fn death_prevented(&mut self, slot: usize) {
+        let max_hp: V::Number =
+            num_traits::cast(self.player.max_hp).expect("maximum health fits a game number");
+        let hook = sts2_core::EventHook::DeathPrevented { max_hp };
+        let held = &mut self.player.relics[slot];
+        let relic = held.relic;
+        let mut asked = sts2_core::HookEffects::new();
+        V::relic_event_hook(&mut held.state, hook, &mut asked);
+        for effect in asked {
+            match effect {
+                sts2_core::HookEffect::Heal(amount) => {
+                    let amount = self.health(amount);
+                    self.heal(amount);
+                }
+                effect => {
+                    unimplemented!("{relic:?} asking for {effect:?} as it keeps the player alive")
+                }
             }
         }
     }

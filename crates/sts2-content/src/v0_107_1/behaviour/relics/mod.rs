@@ -197,6 +197,7 @@ mod paels_tooth;
 mod paels_wing;
 mod pandoras_box;
 mod pantograph;
+mod paper_krane;
 mod paper_phrog;
 mod parrying_shield;
 mod pear;
@@ -516,6 +517,7 @@ pub enum State {
     SturdyClamp,
     LizardTail(lizard_tail::State),
     SneckoSkull,
+    PaperKrane,
     PaperPhrog,
     MeatOnTheBone,
     IceCream,
@@ -954,6 +956,7 @@ pub(crate) fn event_hook(
         State::PetrifiedToad => petrified_toad::event_hook(hook, asked),
         State::IceCream => ice_cream::event_hook(hook, asked),
         State::MeatOnTheBone => meat_on_the_bone::event_hook(hook, asked),
+        State::PaperKrane => paper_krane::event_hook(hook, asked),
         State::PaperPhrog => paper_phrog::event_hook(hook, asked),
         State::SneckoSkull => snecko_skull::event_hook(hook, asked),
         State::LizardTail(state) => lizard_tail::event_hook(state, hook, asked),
@@ -1215,6 +1218,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::RainbowRing(_)
         | State::SturdyClamp
         | State::LizardTail(_)
+        | State::PaperKrane
         | State::PaperPhrog
         | State::MeatOnTheBone
         | State::IceCream
@@ -1572,6 +1576,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PetrifiedToad => State::PetrifiedToad,
             Relic::IceCream => State::IceCream,
             Relic::MeatOnTheBone => State::MeatOnTheBone,
+            Relic::PaperKrane => State::PaperKrane,
             Relic::PaperPhrog => State::PaperPhrog,
             Relic::SneckoSkull => State::SneckoSkull,
             Relic::LizardTail => State::LizardTail(lizard_tail::State::default()),

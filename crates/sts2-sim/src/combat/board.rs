@@ -1114,12 +1114,14 @@ impl<'a, V: Rules> Board<'a, V> {
         for effect in asked {
             match effect {
                 sts2_core::HookEffect::ApplyToOwner(power, amount) => {
-                    self.land(self.live.creatures[at].id, power, amount, applier);
+                    self.land(carrier.id, power, amount, applier);
                 }
                 other => unimplemented!("a power asking for {other:?} as it lands"),
             }
         }
-        let Some(at) = self.at(self.live.creatures[at].id) else {
+        // By id, because what landed can kill the creature, and a death takes
+        // it out of the list.
+        let Some(at) = self.at(carrier.id) else {
             return;
         };
 
