@@ -116,6 +116,7 @@ mod forgotten_soul;
 mod fragrant_mushroom;
 mod frozen_egg;
 mod funerary_mask;
+mod fur_coat;
 mod galactic_dust;
 mod gambling_chip;
 mod game_piece;
@@ -209,6 +210,7 @@ mod pendulum;
 mod permafrost;
 mod petrified_toad;
 mod phial_holster;
+mod philosophers_stone;
 mod phylactery_unbound;
 mod planisphere;
 mod pocketwatch;
@@ -624,6 +626,8 @@ pub enum State {
     ChoicesParadox,
     WhisperingEarring,
     BrilliantScarf(brilliant_scarf::State),
+    FurCoat(fur_coat::State),
+    PhilosophersStone,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -880,6 +884,8 @@ pub(crate) fn event_hook(
         State::ChoicesParadox => choices_paradox::event_hook(hook, asked),
         State::WhisperingEarring => whispering_earring::event_hook(hook, asked),
         State::BrilliantScarf(state) => brilliant_scarf::event_hook(state, hook),
+        State::FurCoat(state) => fur_coat::event_hook(state, hook, asked),
+        State::PhilosophersStone => philosophers_stone::event_hook(hook, asked),
         State::BeltBuckle(state) => belt_buckle::event_hook(state, hook, asked),
         State::DingyRug => dingy_rug::event_hook(hook, asked),
         State::TheAbacus => the_abacus::event_hook(hook, asked),
@@ -1059,6 +1065,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         State::Ectoplasm => ectoplasm::modify_hook(hook),
         State::Bread => bread::modify_hook(hook),
         State::WhisperingEarring => whispering_earring::modify_hook(hook),
+        State::PhilosophersStone => philosophers_stone::modify_hook(hook),
         State::PrismaticGem => prismatic_gem::modify_hook(hook),
         State::SneckoEye => snecko_eye::modify_hook(hook),
         State::FakeStrikeDummy => fake_strike_dummy::modify_hook(hook),
@@ -1320,7 +1327,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::RoyalStamp
         | State::RunicCapacitor
         | State::MusicBox(_)
-        | State::ChoicesParadox => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::ChoicesParadox
+        | State::FurCoat(_) => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1508,6 +1516,8 @@ impl sts2_core::RelicModel<V> for State {
             Relic::ChoicesParadox => State::ChoicesParadox,
             Relic::WhisperingEarring => State::WhisperingEarring,
             Relic::BrilliantScarf => State::BrilliantScarf(brilliant_scarf::State::default()),
+            Relic::FurCoat => State::FurCoat(fur_coat::State::default()),
+            Relic::PhilosophersStone => State::PhilosophersStone,
             Relic::BeltBuckle => State::BeltBuckle(belt_buckle::State::default()),
             Relic::DingyRug => State::DingyRug,
             Relic::TheAbacus => State::TheAbacus,
@@ -1698,6 +1708,20 @@ impl sts2_core::RelicModel<V> for State {
         match self {
             State::PaelsTooth(state) => state.held(),
             _ => &[],
+        }
+    }
+
+    fn marked_points(&self) -> &[sts2_core::Coord] {
+        match self {
+            State::FurCoat(state) => state.marked(),
+            _ => &[],
+        }
+    }
+
+    fn mark_points(&mut self, points: &[sts2_core::Coord]) {
+        match self {
+            State::FurCoat(state) => state.mark(points),
+            state => unimplemented!("{state:?} marking map points"),
         }
     }
 

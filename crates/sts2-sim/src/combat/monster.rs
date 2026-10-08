@@ -105,7 +105,6 @@ pub(crate) fn initialize<V: Rules>(
     streams: &mut Streams<V>,
     roster: Roster<'_, V>,
     creatures: &mut Creatures<V>,
-    powers: &mut PowerStore<V>,
     machines: &mut Bounded<Machine<V>, CREATURES>,
 ) -> Result<(), Error> {
     let Roster { monsters, rolled } = roster;
@@ -191,9 +190,28 @@ pub(crate) fn initialize<V: Rules>(
             next_move: opening.as_ref().map(Into::into),
             owner: None,
         });
+    }
+    Ok(())
+}
+
+/// `CombatManager.StartCombatInternal`'s `AfterCreatureAdded` for the
+/// monsters [`initialize`] built: `AfterAddedToRoom` gives each its starting
+/// powers, and its opponents theirs. `SetUpCombat` only queues it, so it runs
+/// after `AfterRoomEntered`.
+///
+/// Each monster then reads its row's health and writes its own. No power
+/// reads another creature, so the two passes' order cannot be seen.
+pub(crate) fn added_to_room<V: Rules>(
+    ascension: V::AscensionLevel,
+    creatures: &mut Creatures<V>,
+    powers: &mut PowerStore<V>,
+    machines: &Bounded<Machine<V>, CREATURES>,
+) {
+    for held in machines.iter() {
+        let (id, monster) = (held.creature, held.monster);
         // A fight opens on the player's side.
         let side = <V::CombatSide as SideKinds>::PLAYER;
-        for (power, amount) in V::monster_starting_powers(monster, ascension, side, &state) {
+        for (power, amount) in V::monster_starting_powers(monster, ascension, side, &held.state) {
             powers.push(id, HeldPower::new(power, Stacked::from(amount), Some(id)));
         }
         let opponents: SmallVec<[CombatId; 2]> = creatures
@@ -210,13 +228,7 @@ pub(crate) fn initialize<V: Rules>(
             }
         }
     }
-
-    // `AfterCreatureAdded`, which runs once every creature the encounter built
-    // exists: each reads what the rest of its row stands at, and each writes
-    // before the next one reads. The powers above are applied in the same
-    // hook, and none of them reads another creature, so where they sit among
-    // these two passes cannot be seen.
-    for at in first..creatures.len() {
+    for at in 0..creatures.len() {
         let Some(ModelId::Monster(monster)) = creatures[at].model else {
             continue;
         };
@@ -236,18 +248,13 @@ pub(crate) fn initialize<V: Rules>(
         creatures[at].max_hp = health;
         creatures[at].hp = health;
     }
-
-    Ok(())
 }
 
-/// Add a monster during a fight, before the enemy side prepares its next turn.
-///
-/// # Panics
-///
-/// A listener to `AfterCreatureAddedToCombat`, which `CreatureCmd.Add` ends on.
+/// Add a monster during a fight, before the enemy side prepares its next
+/// turn. `CreatureCmd.Add` ends on `AfterCreatureAddedToCombat`, which the
+/// board raises once it has rolled or set the newcomer's move.
 pub(super) fn summon<V: Rules>(
     live: &mut Live<V>,
-    relics: &crate::run::Belt<V>,
     monster: V::Monster,
     position: usize,
     slot: Option<u8>,
@@ -255,7 +262,6 @@ pub(super) fn summon<V: Rules>(
 ) -> CombatId {
     summon_built::<V>(
         live,
-        relics,
         sts2_core::Spawned {
             monster,
             opens_on: None,
@@ -271,7 +277,6 @@ pub(super) fn summon<V: Rules>(
 /// opening where `spawned` says.
 pub(super) fn summon_built<V: Rules>(
     live: &mut Live<V>,
-    relics: &crate::run::Belt<V>,
     spawned: sts2_core::Spawned<V>,
     state: V::MonsterState,
     position: usize,
@@ -347,13 +352,6 @@ pub(super) fn summon_built<V: Rules>(
         held.spawn.position = position;
         held.spawn.roster_size = roster_size;
     }
-    if super::listen::heard::<V>(
-        live,
-        relics,
-        sts2_core::ModelHook::AfterCreatureAddedToCombat,
-    ) {
-        unimplemented!("a listener to a creature added to the fight");
-    }
     id
 }
 
@@ -398,10 +396,10 @@ mod tests {
                 rolled: &[],
             },
             &mut creatures,
-            &mut powers,
             &mut machines,
         )
         .unwrap();
+        added_to_room::<V0_107_1>(AscensionLevel::None, &mut creatures, &mut powers, &machines);
 
         assert_eq!(
             creatures.iter().map(|c| c.max_hp).collect::<Vec<_>>(),
@@ -486,10 +484,10 @@ mod tests {
                 rolled: &[],
             },
             &mut creatures,
-            &mut powers,
             &mut machines,
         )
         .unwrap();
+        added_to_room::<V0_107_1>(AscensionLevel::None, &mut creatures, &mut powers, &machines);
 
         assert_eq!(
             creatures
@@ -522,10 +520,10 @@ mod tests {
                 rolled: &[],
             },
             &mut creatures,
-            &mut powers,
             &mut machines,
         )
         .unwrap();
+        added_to_room::<V0_107_1>(AscensionLevel::None, &mut creatures, &mut powers, &machines);
 
         assert_eq!(
             creatures.iter().map(|c| c.max_hp).collect::<Vec<_>>(),

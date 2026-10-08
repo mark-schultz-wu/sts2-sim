@@ -4636,7 +4636,8 @@ static OVERRIDES: [sts2_core::Overrides; 578] = [
     // SPOILS_MAP
     sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterMapGenerated)
-        .with(sts2_core::ModelHook::ModifyGeneratedMap),
+        .with(sts2_core::ModelHook::ModifyGeneratedMap)
+        .with(sts2_core::ModelHook::ModifyGeneratedMapLate),
     // SPOILS_OF_BATTLE
     sts2_core::Overrides::NONE,
     // SPORE_MIND
@@ -4852,4 +4853,5 @@ static HEARD_BY_ANY: sts2_core::Overrides = sts2_core::Overrides::NONE
     .with(sts2_core::ModelHook::AfterCardChangedPiles)
     .with(sts2_core::ModelHook::AfterMapGenerated)
     .with(sts2_core::ModelHook::ModifyGeneratedMap)
+    .with(sts2_core::ModelHook::ModifyGeneratedMapLate)
     .with(sts2_core::ModelHook::BeforeCardPlayed);

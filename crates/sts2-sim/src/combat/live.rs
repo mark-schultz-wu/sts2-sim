@@ -2059,6 +2059,9 @@ pub(crate) struct Live<V: Rules> {
     /// `SetReadyToEndTurn`: the player's turn ends once the play in progress
     /// is over.
     pub(super) ending_turn: bool,
+    /// `RunState.CurrentMapPoint.coord`: where on the map the fight stands,
+    /// or nothing off the map.
+    pub(super) point: Option<sts2_core::Coord>,
     /// Which deck card each of the fight's opening copies came from.
     pub(super) deck_versions: DeckVersions<V>,
     /// The deck cards the run took out of the deck for this fight's
@@ -2326,6 +2329,7 @@ impl<V: Rules> Clone for Live<V> {
             cards: self.cards.clone(),
             removed_from_deck: self.removed_from_deck.clone(),
             ending_turn: self.ending_turn,
+            point: self.point,
             deck_versions: self.deck_versions.clone(),
             taken_from_deck: self.taken_from_deck.clone(),
             extra_rewards: self.extra_rewards.clone(),
@@ -2366,6 +2370,7 @@ impl<V: Rules> Clone for Live<V> {
             cards,
             removed_from_deck,
             ending_turn,
+            point,
             deck_versions,
             taken_from_deck,
             extra_rewards,
@@ -2402,6 +2407,7 @@ impl<V: Rules> Clone for Live<V> {
         cards.clone_from(&source.cards);
         removed_from_deck.clone_from(&source.removed_from_deck);
         *ending_turn = source.ending_turn;
+        *point = source.point;
         deck_versions.clone_from(&source.deck_versions);
         taken_from_deck.clone_from(&source.taken_from_deck);
         extra_rewards.clone_from(&source.extra_rewards);
@@ -3197,6 +3203,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             cards: super::cards::Cards::with_cards(0),
             removed_from_deck: Vec::new(),
             ending_turn: false,
+            point: None,
             deck_versions: DeckVersions::none(),
             taken_from_deck: Vec::new(),
             extra_rewards: Vec::new(),
