@@ -1,0 +1,14 @@
+//! `RingingTriangle`: the hand stays at the end of the first turn.
+
+use sts2_core::{DecisionHook, HookResponse};
+
+use super::super::super::V0_107_1 as V;
+
+/// `ShouldFlush`: only after its owner's first turn. A relic's owner is the
+/// player, and a fight here has one.
+pub(super) fn decide_hook(hook: DecisionHook<V>) -> HookResponse<bool> {
+    match hook {
+        DecisionHook::ShouldFlush { turn, .. } => HookResponse::Decision(turn > 1),
+        hook => unimplemented!("what RingingTriangle decides for {hook:?}"),
+    }
+}

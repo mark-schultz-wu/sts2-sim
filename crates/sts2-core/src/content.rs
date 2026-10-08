@@ -3364,7 +3364,11 @@ pub enum DecisionHook<V: ContentVersion> {
     },
     /// `ShouldFlush`, as `player`'s turn ends. A hand any listener answers no
     /// for keeps every card.
-    ShouldFlush { player: crate::CombatId },
+    ShouldFlush {
+        player: crate::CombatId,
+        /// The player's `TurnNumber`, which a listener reads off the player.
+        turn: V::Count,
+    },
     /// `ShouldPlay`, asked of a card in hand as `CanPlay` looks it over. The
     /// first listener to answer no is the preventer, and the card is
     /// `BlockedByHook`.

@@ -2005,7 +2005,7 @@ pub(crate) fn decide_hook(
             },
         ) => HookResponse::Decision(hand_draw || player != held.holder),
         // `RetainHandPower.ShouldFlush`, which keeps its own holder's hand.
-        (Power::RetainHandPower, DecisionHook::ShouldFlush { player }) => {
+        (Power::RetainHandPower, DecisionHook::ShouldFlush { player, .. }) => {
             HookResponse::Decision(player != held.holder)
         }
         // `ShouldClearBlock`, which keeps its own holder's. Blur's
