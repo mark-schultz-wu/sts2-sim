@@ -61,6 +61,7 @@ mod booming_conch;
 mod bound_phylactery;
 mod bowler_hat;
 mod bread;
+mod brilliant_scarf;
 mod brimstone;
 mod bronze_scales;
 mod burning_blood;
@@ -622,6 +623,7 @@ pub enum State {
     MusicBox(music_box::State),
     ChoicesParadox,
     WhisperingEarring,
+    BrilliantScarf(brilliant_scarf::State),
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -877,6 +879,7 @@ pub(crate) fn event_hook(
         State::MusicBox(state) => music_box::event_hook(state, hook, asked),
         State::ChoicesParadox => choices_paradox::event_hook(hook, asked),
         State::WhisperingEarring => whispering_earring::event_hook(hook, asked),
+        State::BrilliantScarf(state) => brilliant_scarf::event_hook(state, hook),
         State::BeltBuckle(state) => belt_buckle::event_hook(state, hook, asked),
         State::DingyRug => dingy_rug::event_hook(hook, asked),
         State::TheAbacus => the_abacus::event_hook(hook, asked),
@@ -1039,6 +1042,7 @@ pub(crate) fn decide_hook(
 pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> {
     match state {
         State::Pocketwatch(state) => pocketwatch::modify_hook(state, hook),
+        State::BrilliantScarf(state) => brilliant_scarf::modify_hook(state, hook),
         State::Vambrace(state) => vambrace::modify_hook(state, hook),
         State::PaelsLegion(state) => paels_legion::modify_hook(state, hook),
         State::PumpkinCandle(state) => pumpkin_candle::modify_hook(state, hook),
@@ -1503,6 +1507,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::MusicBox => State::MusicBox(music_box::State::default()),
             Relic::ChoicesParadox => State::ChoicesParadox,
             Relic::WhisperingEarring => State::WhisperingEarring,
+            Relic::BrilliantScarf => State::BrilliantScarf(brilliant_scarf::State::default()),
             Relic::BeltBuckle => State::BeltBuckle(belt_buckle::State::default()),
             Relic::DingyRug => State::DingyRug,
             Relic::TheAbacus => State::TheAbacus,
@@ -1683,6 +1688,7 @@ impl sts2_core::RelicModel<V> for State {
                 State::IronClub(state) => iron_club::display_amount(state),
                 State::DiamondDiadem(state) => diamond_diadem::display_amount(state),
                 State::Pendulum(state) => pendulum::display_amount(state),
+                State::BrilliantScarf(state) => brilliant_scarf::display_amount(state),
                 _ => unimplemented!("the number {relic:?} shows"),
             },
         }

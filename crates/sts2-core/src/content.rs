@@ -3265,6 +3265,8 @@ pub enum ModifyHook<V: ContentVersion> {
     /// play.
     StarCost {
         card: (crate::CardId<V>, V::Card),
+        /// `Pile.Type` for the copy, or nothing for the play pile.
+        pile: Option<crate::Pile>,
     },
     /// `ModifyEnergyGain`: the energy `PlayerCmd.GainEnergy` gives `player`.
     EnergyGain {
@@ -3286,6 +3288,9 @@ pub enum ModifyHook<V: ContentVersion> {
         ethereal: bool,
         /// The copy's `Affliction`.
         affliction: Option<V::Affliction>,
+        /// `Pile.Type` for the copy, or nothing for the play pile, which the
+        /// fight keeps apart from the four.
+        pile: Option<crate::Pile>,
     },
     /// `TryModifyEnergyCostInCombatLate`, over what [`ModifyHook::EnergyCost`]
     /// left.
@@ -3293,6 +3298,7 @@ pub enum ModifyHook<V: ContentVersion> {
         card: (crate::CardId<V>, V::Card),
         ethereal: bool,
         affliction: Option<V::Affliction>,
+        pile: Option<crate::Pile>,
     },
     /// `ModifyOrbPassiveTriggerCounts`: how many times one of the player's
     /// orbs triggers its passive. `first` is whether it is `Orbs[0]`.
