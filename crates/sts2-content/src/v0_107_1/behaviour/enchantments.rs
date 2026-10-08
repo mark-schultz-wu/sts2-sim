@@ -46,6 +46,13 @@ pub(crate) fn can_enchant(enchantment: Enchantment, card: &CardIdent<V>) -> bool
         Enchantment::Nimble => base && card.card.gains_block(),
         // `CanEnchantCardType`, which takes a skill alone.
         Enchantment::Imbued => base && V::card_kind(card.card) == Some(CardKind::Skill),
+        // `CanEnchantCardType`, which takes an attack or a skill.
+        Enchantment::RoyallyApproved => {
+            base && matches!(
+                V::card_kind(card.card),
+                Some(CardKind::Attack | CardKind::Skill)
+            )
+        }
         Enchantment::Goopy => base && card.card.tagged(CardTag::Defend),
         _ => unimplemented!("which cards {enchantment:?} can enchant"),
     }
@@ -79,6 +86,10 @@ pub(crate) fn enchanted_changes(enchantment: Enchantment) -> &'static [Change<V>
             Change::AddKeyword(CardKeyword::Eternal),
         ],
         Enchantment::Goopy => &[Change::AddKeyword(CardKeyword::Exhaust)],
+        Enchantment::RoyallyApproved => &[
+            Change::AddKeyword(CardKeyword::Innate),
+            Change::AddKeyword(CardKeyword::Retain),
+        ],
         _ => &[],
     }
 }
@@ -121,7 +132,8 @@ pub(crate) fn enchant(enchantment: Enchantment, amount: u8, card: &mut CardIdent
         | Enchantment::TezcatarasEmber
         | Enchantment::Goopy
         | Enchantment::Clone
-        | Enchantment::Imbued => {
+        | Enchantment::Imbued
+        | Enchantment::RoyallyApproved => {
             card.enchantment = Some(Enchanted {
                 enchantment,
                 amount,
@@ -161,7 +173,8 @@ pub(crate) fn should_start_at_bottom_of_draw_pile(
         | Enchantment::Spiral
         | Enchantment::Swift
         | Enchantment::TezcatarasEmber
-        | Enchantment::Vigorous => HookResponse::DoesNotImplement,
+        | Enchantment::Vigorous
+        | Enchantment::RoyallyApproved => HookResponse::DoesNotImplement,
         enchantment => unimplemented!("whether {enchantment:?} starts at the draw pile's bottom"),
     }
 }
@@ -277,7 +290,8 @@ pub(crate) fn modify(enchanted: Enchanted<V>, state: &State, hook: EnchantHook) 
             | Enchantment::Sown
             | Enchantment::Spiral
             | Enchantment::Swift
-            | Enchantment::TezcatarasEmber,
+            | Enchantment::TezcatarasEmber
+            | Enchantment::RoyallyApproved,
             _,
         ) => Modify::Nothing,
         (enchantment, hook) => unimplemented!("what {enchantment:?} does for {hook:?}"),
@@ -404,7 +418,8 @@ pub(crate) fn on_play<F: Fight<V>>(enchanted: Enchanted<V>, state: &mut State, f
         | Enchantment::SoulsPower
         | Enchantment::Spiral
         | Enchantment::TezcatarasEmber
-        | Enchantment::Vigorous => {}
+        | Enchantment::Vigorous
+        | Enchantment::RoyallyApproved => {}
         enchantment => unimplemented!("what {enchantment:?} does when its card is played"),
     }
 }

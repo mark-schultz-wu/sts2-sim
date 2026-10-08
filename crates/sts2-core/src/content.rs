@@ -2579,6 +2579,12 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("losing gold in a fight")
     }
 
+    /// `PlayerCmd.GainGold`: `ModifyGoldGained` over `amount`, then the
+    /// player's gold up by what is left, where any is.
+    fn gain_gold(&mut self, _amount: V::Number) {
+        unimplemented!("gaining gold in a fight")
+    }
+
     /// `OrbCmd.Channel`: the orb joins the end of the player's queue.
     ///
     /// A player with no slots of their own gains one first. A full queue
@@ -4047,6 +4053,9 @@ pub enum EventHook<V: ContentVersion> {
         card: V::Card,
         /// `IsClone`: the card is a clone of another, which is `CloneOf`.
         clone: bool,
+        /// The card has an `Affliction`, which a clone keeps from its
+        /// original.
+        afflicted: bool,
     },
     /// `AfterCardGeneratedForCombat`, once a card made in the fight has
     /// landed where `at` says.
@@ -4663,6 +4672,8 @@ pub enum PoolFilter {
     NotBasicOrAncient,
     /// The cards whose canonical cost is nothing, and not X.
     FreeFixedCost,
+    /// The cards whose canonical `Keywords` hold Ethereal.
+    Ethereal,
 }
 
 /// `CardPilePosition`: which end of a pile a card goes to.
@@ -4866,6 +4877,13 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CardSelectCmd.FromDeckFor*`: the player picks `count` cards of the
     /// deck, and `act` is what happens to each one.
     SelectFromDeck {
+        act: DeckAct<V>,
+        count: usize,
+    },
+    /// The same, with the cards on offer put through `UnstableShuffle` off
+    /// `RunState.Rng.Niche` first. The selection shows them in deck order
+    /// all the same.
+    SelectFromShuffledDeck {
         act: DeckAct<V>,
         count: usize,
     },
@@ -5232,6 +5250,14 @@ pub enum HookEffect<V: ContentVersion> {
     /// shuffles the pool once and takes the first `count`, or all of it if it
     /// is shorter. They go into hand.
     GenerateDistinctColorless {
+        count: V::Number,
+    },
+    /// `count` distinct cards of the character's combat pool that `filter`
+    /// keeps, from one `CardFactory.GetDistinctForCombat` off
+    /// `CombatCardGeneration`, as `GenerateDistinctColorless` takes them.
+    /// They go into hand.
+    GenerateDistinctFromPool {
+        filter: PoolFilter,
         count: V::Number,
     },
     /// `CardCmd.Afflict` with `affliction` on each card `to` names.

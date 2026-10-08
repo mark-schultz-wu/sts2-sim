@@ -2269,6 +2269,23 @@ impl<V: Rules> State<V> {
                     self.act_on_deck(sts2_core::DeckAct::Transform(stream), &taken);
                     continue;
                 }
+                // `FromDeckForEnchantment` sorts the cards it is handed back
+                // into deck order, so the shuffle moves the stream alone.
+                HookEffect::SelectFromShuffledDeck { act, count } => {
+                    let mut offered = self.offered(act);
+                    let rng = self.streams.run(V::RunRngType::NICHE);
+                    sts2_core::rng::GameRng::unstable_shuffle(rng, &mut offered);
+                    if offered.len() <= count {
+                        let taken: Vec<usize> = offered.into_iter().map(|(at, _)| at).collect();
+                        self.act_on_deck(act, &taken);
+                        continue;
+                    }
+                    Pickup::FromDeck {
+                        act,
+                        min: count,
+                        count,
+                    }
+                }
                 HookEffect::SelectFromDeck { act, count } => {
                     let offered = self.offered(act);
                     if offered.len() <= count {

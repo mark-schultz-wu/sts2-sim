@@ -131,6 +131,7 @@ pub(crate) fn keeps<V: Rules>(filter: sts2_core::PoolFilter, card: V::Card) -> b
                 && rarity != <<V::Card as sts2_core::CardTable>::Rarity>::ANCIENT
         }
         sts2_core::PoolFilter::FreeFixedCost => card.cost() == sts2_core::Cost::fixed(0),
+        sts2_core::PoolFilter::Ethereal => card.ethereal(),
     }
 }
 

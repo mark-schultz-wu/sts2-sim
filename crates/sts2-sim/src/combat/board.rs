@@ -1174,10 +1174,19 @@ impl<'a, V: Rules> Board<'a, V> {
     }
 
     fn card_entered_combat(&mut self, at: CardAt<V>, card: V::Card, clone: bool) {
+        let index = num_traits::ToPrimitive::to_usize(&at.index())
+            .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
+        let afflicted = (self.live.cards.idents(at.pile()).nth(index))
+            .is_some_and(|ident| ident.affliction.is_some());
         let asked = super::listen::notify::<V>(
             self.live,
             self.relics,
-            sts2_core::EventHook::CardEnteredCombat { at, card, clone },
+            sts2_core::EventHook::CardEnteredCombat {
+                at,
+                card,
+                clone,
+                afflicted,
+            },
         );
         let mut rest: SmallVec<[HookEffect<V>; 4]> = SmallVec::new();
         for (listener, effect) in asked {
@@ -3510,6 +3519,24 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     fn lose_gold(&mut self, amount: V::Number) {
         self.ran_on();
         self.live.gold = (self.live.gold - amount).max(V::Number::zero());
+    }
+
+    fn gain_gold(&mut self, amount: V::Number) {
+        self.ran_on();
+        // `Hook.ModifyGoldGained`, `AfterModifyingGoldGained` and
+        // `AfterGoldGained`, which nothing in a fight answers yet.
+        for hook in [
+            sts2_core::ModelHook::ModifyGoldGained,
+            sts2_core::ModelHook::AfterModifyingGoldGained,
+            sts2_core::ModelHook::AfterGoldGained,
+        ] {
+            if super::listen::heard::<V>(self.live, self.relics, hook) {
+                unimplemented!("a listener hearing {} as a fight gains gold", hook.name());
+            }
+        }
+        if amount > V::Number::zero() {
+            self.live.gold = self.live.gold + amount;
+        }
     }
 
     fn gain_stars(&mut self, amount: V::Number) {

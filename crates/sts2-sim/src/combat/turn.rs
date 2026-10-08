@@ -1637,14 +1637,47 @@ pub(super) fn carry_setup<V: Rules>(
 /// `CombatCardGeneration`, into the hand.
 fn generate_distinct_colorless<V: Rules>(
     live: &mut Live<V>,
-    mut rngs: CombatRngs<'_>,
+    rngs: CombatRngs<'_>,
     relics: &mut crate::run::Belt<V>,
     ascension: V::AscensionLevel,
     count: V::Number,
 ) {
+    let cards = V::combat_colorless_cards().to_vec();
+    generate_distinct::<V>(live, rngs, relics, ascension, cards, count);
+}
+
+/// `count` distinct cards of the character's combat pool that `filter`
+/// keeps, from one `GetDistinctForCombat` off `CombatCardGeneration`, into
+/// the hand.
+fn generate_distinct_from_pool<V: Rules>(
+    live: &mut Live<V>,
+    rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    ascension: V::AscensionLevel,
+    filter: sts2_core::PoolFilter,
+    count: V::Number,
+) {
+    let cards: Vec<V::Card> = V::combat_cards(live.character)
+        .iter()
+        .copied()
+        .filter(|&card| crate::reward::card::keeps::<V>(filter, card))
+        .collect();
+    generate_distinct::<V>(live, rngs, relics, ascension, cards, count);
+}
+
+/// `GetDistinctForCombat` over `cards`: `TakeRandom` shuffles them once off
+/// `CombatCardGeneration` and takes the first `count`, or all of them where
+/// there are fewer. Each goes into the hand.
+fn generate_distinct<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    ascension: V::AscensionLevel,
+    mut cards: Vec<V::Card>,
+    count: V::Number,
+) {
     let count: usize = num_traits::cast(count)
-        .unwrap_or_else(|| unimplemented!("making {count:?} colorless cards"));
-    let mut cards = V::combat_colorless_cards().to_vec();
+        .unwrap_or_else(|| unimplemented!("making {count:?} distinct cards"));
     sts2_core::rng::GameRng::unstable_shuffle(rngs.generation, &mut cards);
     let mut board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
     for card in cards.into_iter().take(count) {
@@ -2332,6 +2365,16 @@ pub(super) fn side_turn_started<V: Rules>(
             ),
             sts2_core::HookEffect::GenerateDistinctColorless { count } => {
                 generate_distinct_colorless::<V>(live, rngs.reborrow(), relics, ascension, count)
+            }
+            sts2_core::HookEffect::GenerateDistinctFromPool { filter, count } => {
+                generate_distinct_from_pool::<V>(
+                    live,
+                    rngs.reborrow(),
+                    relics,
+                    ascension,
+                    filter,
+                    count,
+                )
             }
             effect => unimplemented!("a listener asking for {effect:?} as a side turn starts"),
         }
