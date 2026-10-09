@@ -4,7 +4,7 @@
 # Hourglasses end each fight before the room as it opens.
 #
 # A port that lets every event in enters War Historian Repy.
-{"cmd":"start","seed":"C000000485","character":"IRONCLAD","ascension":"None"}
+{"cmd":"start","seed":"C000001022","character":"IRONCLAD","ascension":"None"}
 {"cmd":"grant","relic":"GOLDEN_PEARL"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
@@ -46,7 +46,8 @@
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
-{"cmd":"choose_option","index":0}
-{"cmd":"travel","col":1,"row":1}
+{"cmd":"choose_option","index":1}
 {"cmd":"answer","skip":true}
-{"cmd":"travel","col":1,"row":2}
+{"cmd":"travel","col":5,"row":1}
+{"cmd":"answer","skip":true}
+{"cmd":"travel","col":6,"row":2}

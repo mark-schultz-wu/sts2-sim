@@ -4,7 +4,7 @@
 # Reading a passage offers the skills that gain block, which leaves the granted
 # Battle Trance out, and enchants the one picked with Nimble at two. A port that
 # offers every skill, or enchants by another amount, leaves another deck.
-{"cmd":"start","seed":"C000000076","character":"IRONCLAD","ascension":"None"}
+{"cmd":"start","seed":"C000000005","character":"IRONCLAD","ascension":"None"}
 {"cmd":"grant","card":"BATTLE_TRANCE"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
@@ -46,9 +46,9 @@
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
-{"cmd":"choose_option","index":1}
-{"cmd":"travel","col":0,"row":1}
+{"cmd":"choose_option","index":0}
+{"cmd":"travel","col":1,"row":1}
 {"cmd":"answer","skip":true}
-{"cmd":"travel","col":0,"row":2}
+{"cmd":"travel","col":2,"row":2}
 {"cmd":"choose_option","index":1}
 {"cmd":"answer","cards":[3]}

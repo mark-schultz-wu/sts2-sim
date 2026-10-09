@@ -1,0 +1,9 @@
+# The Seapunk enters with nothing, kicks, kicks spinning, then burps up block
+# and a point of Strength, and starts over.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"SEAPUNK_WEAK"}
+{"cmd":"power","power":"DEXTERITY_POWER","amount":30,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

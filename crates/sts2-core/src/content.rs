@@ -42,11 +42,9 @@ pub trait ActTable: Table {
     /// How many of those open the act, dealt from the weak fights.
     fn weak_encounters(self) -> u8;
 
-    /// Whether an ordinary run is played through this act.
-    ///
-    /// The table holds an alternative first act and a deprecated one, and
-    /// `ActModel.GetDefaultList` is this filter.
-    fn played(self) -> bool;
+    /// `ActModel.Index`: the place in a run this act can fill. Two acts
+    /// share the first place. The deprecated act has none.
+    fn index(self) -> Option<u8>;
 }
 
 /// How one act rolls the rest sites on its map.

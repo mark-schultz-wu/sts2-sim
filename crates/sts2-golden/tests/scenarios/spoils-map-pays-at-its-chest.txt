@@ -53,6 +53,7 @@
 {"cmd":"proceed"}
 {"cmd":"travel","col":3,"row":0}
 {"cmd":"choose_option","index":0}
+{"cmd":"answer","cards":[1]}
 {"cmd":"travel","col":0,"row":1}
 {"cmd":"answer","skip":true}
 {"cmd":"travel","col":1,"row":2}

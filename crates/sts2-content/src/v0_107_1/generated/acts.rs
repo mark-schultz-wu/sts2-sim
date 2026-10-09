@@ -140,8 +140,8 @@ impl sts2_core::ActTable for Act {
         <Self as sts2_core::Table>::data(self).weak_encounters
     }
 
-    /// Whether an ordinary run is played through this act.
-    fn played(self) -> bool {
-        <Self as sts2_core::Table>::data(self).is_default
+    /// `ActModel.Index`, where it is one a run can fill.
+    fn index(self) -> Option<u8> {
+        u8::try_from(<Self as sts2_core::Table>::data(self).index).ok()
     }
 }

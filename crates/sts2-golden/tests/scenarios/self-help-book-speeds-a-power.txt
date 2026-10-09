@@ -4,7 +4,7 @@
 # The granted Inflame is the deck's one power, so reading the whole book is
 # open, and enchants it with Swift at two without asking. A port that locks the
 # reading, or enchants by another amount, leaves another run.
-{"cmd":"start","seed":"C000000076","character":"IRONCLAD","ascension":"None"}
+{"cmd":"start","seed":"C000000005","character":"IRONCLAD","ascension":"None"}
 {"cmd":"grant","card":"INFLAME"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
@@ -47,7 +47,8 @@
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"choose_option","index":1}
-{"cmd":"travel","col":0,"row":1}
 {"cmd":"answer","skip":true}
-{"cmd":"travel","col":0,"row":2}
+{"cmd":"travel","col":1,"row":1}
+{"cmd":"answer","skip":true}
+{"cmd":"travel","col":2,"row":2}
 {"cmd":"choose_option","index":2}

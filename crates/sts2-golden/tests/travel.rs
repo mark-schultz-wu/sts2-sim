@@ -67,7 +67,7 @@ fn travelling_into_a_monster_room_opens_the_fight() {
     let combat = observation.fight().expect("the run is in a fight");
     assert_eq!(combat.turn, 1);
     assert_eq!(combat.round, 1);
-    assert_eq!(combat.encounter, Some(Encounter::SlimesWeak));
+    assert_eq!(combat.encounter, Some(Encounter::ToadpolesWeak));
     // Three energy from the Regent, three stars from Divine Right.
     assert_eq!((combat.energy, combat.stars), (3, 3));
     assert_eq!(combat.hand.len(), 5);
@@ -87,9 +87,8 @@ fn travelling_into_a_monster_room_opens_the_fight() {
             .collect::<Vec<_>>(),
         [
             (at(0), Some(ModelId::Character(Character::Regent)), 75),
-            (at(1), Some(ModelId::Monster(Monster::TwigSlimeS)), 8),
-            (at(2), Some(ModelId::Monster(Monster::LeafSlimeM)), 35),
-            (at(3), Some(ModelId::Monster(Monster::LeafSlimeS)), 12),
+            (at(1), Some(ModelId::Monster(Monster::Toadpole)), 22),
+            (at(2), Some(ModelId::Monster(Monster::Toadpole)), 25),
         ]
     );
     assert!(combat.legal.iter().all(|play| play.reason.is_none()));
@@ -110,12 +109,7 @@ fn a_cards_targets_are_the_creatures_it_can_be_pointed_at() {
     for play in &combat.legal {
         match play.target {
             TargetType::AnyEnemy => {
-                assert_eq!(
-                    play.targets.as_slice(),
-                    [at(1), at(2), at(3)],
-                    "{:?}",
-                    play.card
-                )
+                assert_eq!(play.targets.as_slice(), [at(1), at(2)], "{:?}", play.card)
             }
             TargetType::SelfTarget => assert!(play.targets.is_empty(), "{:?}", play.card),
             other => panic!("the opening hand has no {other:?} card"),

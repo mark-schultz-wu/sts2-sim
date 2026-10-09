@@ -4,7 +4,7 @@
 # The deck holds no power, so reading the whole book is locked. Reading the
 # back offers the attacks and enchants the one picked with Sharp at two. A port
 # that offers other cards, or enchants by another amount, leaves another deck.
-{"cmd":"start","seed":"C000000076","character":"IRONCLAD","ascension":"None"}
+{"cmd":"start","seed":"C000000005","character":"IRONCLAD","ascension":"None"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
@@ -46,8 +46,9 @@
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"choose_option","index":1}
-{"cmd":"travel","col":0,"row":1}
 {"cmd":"answer","skip":true}
-{"cmd":"travel","col":0,"row":2}
+{"cmd":"travel","col":1,"row":1}
+{"cmd":"answer","skip":true}
+{"cmd":"travel","col":2,"row":2}
 {"cmd":"choose_option","index":0}
 {"cmd":"answer","cards":[5]}

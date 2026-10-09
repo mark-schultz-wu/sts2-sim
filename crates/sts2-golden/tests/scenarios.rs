@@ -95,10 +95,8 @@ fn the_simulator_reaches_the_positions_the_game_reaches() {
             sts2_headless::recording::read::<V>(std::io::Cursor::new(recording.as_bytes()))
                 .unwrap_or_else(|e| panic!("{name}: {e}"));
 
-        let mut sim = sts2_sim::Sim::<V>::begin((), recorded.start())
-            .unwrap_or_else(|e| panic!("{name}: starting: {e}"));
-        let walked = walk(name, &mut sim, recorded.steps());
-
+        // An update asks the game alone, so a simulator that cannot play a
+        // scenario yet leaves its recording to be written all the same.
         if updating() {
             let mut oracle = sts2_golden::oracle_or_explain::<V>(name, recorded.start());
             let answered = walk(name, &mut oracle, recorded.steps());
@@ -116,6 +114,9 @@ fn the_simulator_reaches_the_positions_the_game_reaches() {
             .scenarios
             .get(name)
             .unwrap_or_else(|| panic!("{name} has no recorded answers; run `just scenarios`"));
+        let mut sim = sts2_sim::Sim::<V>::begin((), recorded.start())
+            .unwrap_or_else(|e| panic!("{name}: starting: {e}"));
+        let walked = walk(name, &mut sim, recorded.steps());
         if let Some(why) = compare(steps, &walked) {
             wrong.push(format!("{name}: {why}"));
         }

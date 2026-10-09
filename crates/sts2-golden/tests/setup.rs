@@ -16,7 +16,7 @@ use std::path::Path;
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_content::v0_107_1::characters::Character;
 use sts2_core::rng::{GameRng, stream_seed};
-use sts2_core::{ActTable as _, ContentVersion, Rules, Seed, Table};
+use sts2_core::{ContentVersion, Rules, Seed, Table};
 use sts2_sim::rng::MegaRng;
 use sts2_sim::run::{Opening, RelicBag};
 
@@ -123,18 +123,6 @@ fn the_relic_bags_are_shuffled_the_way_the_game_shuffled_them() {
     check(&fixture, "playerrelics", &player);
 }
 
-/// The acts a run is played through, in order.
-///
-/// `ActModel.GetDefaultList()`, which is the acts flagged default. The
-/// alternative first act is in the table and not in a run.
-fn default_acts() -> Vec<<V as ContentVersion>::Act> {
-    <V as ContentVersion>::Act::ALL
-        .iter()
-        .copied()
-        .filter(|act| act.played())
-        .collect()
-}
-
 /// The whole of a run's setup, phase by phase, against what the game drew.
 ///
 /// The counter is checked at each phase boundary and every choice against the
@@ -146,7 +134,7 @@ fn setting_up_a_run_draws_what_the_game_drew() {
     let seed = Seed::new(SEED).expect("the fixture's seed is a seed");
     let mut rng = sts2_core::rng::named::<V, MegaRng>(stream_seed::<V>(&seed), "up_front");
 
-    let acts = default_acts();
+    let acts = sts2_sim::run::run_acts::<V>(stream_seed::<V>(&seed));
     let opening = Opening::<V>::draw(&mut rng, Character::Regent, &acts);
 
     let mut report = String::new();

@@ -5,7 +5,7 @@
 # Hourglasses end each fight before the room as it opens.
 #
 # A port that reads the potion alone enters Stone of All Time.
-{"cmd":"start","seed":"C000000634","character":"IRONCLAD","ascension":"None"}
+{"cmd":"start","seed":"C000000527","character":"IRONCLAD","ascension":"None"}
 {"cmd":"grant","relic":"GOLDEN_PEARL"}
 {"cmd":"grant","potion":"FIRE_POTION"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
@@ -48,7 +48,8 @@
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
-{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":1}
+{"cmd":"answer","cards":[1]}
 {"cmd":"travel","col":6,"row":1}
 {"cmd":"answer","skip":true}
 {"cmd":"travel","col":6,"row":2}

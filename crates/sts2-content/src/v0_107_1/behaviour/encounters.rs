@@ -31,8 +31,24 @@ pub(crate) fn generate<R: GameRng>(encounter: Encounter, rng: &mut R) -> Vec<Spa
         Encounter::BowlbugsNormal => bowlbugs_normal(rng),
         Encounter::ScrollsOfBitingWeak => scrolls_of_biting(rng, false),
         Encounter::ScrollsOfBitingNormal => scrolls_of_biting(rng, true),
+        Encounter::CorpseSlugsWeak => corpse_slugs_weak(rng),
         encounter => unimplemented!("the roster {encounter:?} rolls"),
     }
+}
+
+/// `CorpseSlugsWeak`. Two Corpse Slugs, which
+/// `EnsureCorpseSlugsStartWithDifferentMoves` sets apart: one draw picks the
+/// first's opening, and the second takes the one after it in the cycle.
+fn corpse_slugs_weak<R: GameRng>(rng: &mut R) -> Vec<Spawned<V>> {
+    // `StarterMoveIdx % 3`, as `GenerateMoveStateMachine` switches on it.
+    const CYCLE: [MoveId; 3] = [MoveId::WhipSlapMove, MoveId::GlompMove, MoveId::GoopMove];
+
+    let first: usize =
+        num_traits::cast(rng.next_int(Bound::try_new(three::<R>()).expect("three starting moves")))
+            .expect("a three-way draw is a valid cycle index");
+    (0..2)
+        .map(|at| Spawned::opening_on(Monster::CorpseSlug, CYCLE[(first + at) % CYCLE.len()]))
+        .collect()
 }
 
 /// `DecimillipedeElite`. Three segments, each opening on its own move.

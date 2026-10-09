@@ -25,6 +25,7 @@ mod hive;
 mod overgrowth;
 mod shared;
 mod summoned;
+mod underdocks;
 
 /// Where a monster's move stopped on the player's answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -91,6 +92,7 @@ pub(crate) fn starting_powers(
         .or_else(|| glory::starting_powers(monster, ascension, model))
         .or_else(|| shared::starting_powers(monster))
         .or_else(|| summoned::starting_powers(monster))
+        .or_else(|| underdocks::starting_powers(monster, ascension))
     {
         Some(applied) => applied,
         None if !monster.overrides_virtual(sts2_core::MonsterVirtual::AfterAddedToRoom) => {
@@ -176,6 +178,7 @@ pub(crate) fn conditional<P: sts2_core::Printed<V> + ?Sized>(
             hive::conditional(monster, at, spawn, powers)
         }
         Monster::Exoskeleton | Monster::Myte => opens_by_slot(monster, at, spawn),
+        Monster::Toadpole => underdocks::conditional(monster, at, spawn),
         Monster::LivingShield
         | Monster::FrogKnight
         | Monster::Fabricator
@@ -331,7 +334,7 @@ fn perform_from<F: Fight<V>>(
         Filed::Overgrowth => overgrowth::perform(monster, move_id, step, fight),
         Filed::Shared => shared::perform(monster, move_id, step, fight),
         Filed::Summoned => summoned::perform(monster, move_id, step, fight),
-        Filed::Underdocks => monster_moves::underdocks::perform(monster, move_id, step, fight),
+        Filed::Underdocks => underdocks::perform(monster, move_id, step, fight),
     };
     match next {
         Some(step) => Played::Waiting {
