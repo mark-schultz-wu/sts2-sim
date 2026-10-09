@@ -2132,8 +2132,9 @@ fn pre_play_heard<V: Rules>(
 ///
 /// # Panics
 ///
-/// A card the fight no longer holds, and an X-cost card, whose dupe keeps the
-/// X its play captured.
+/// A card the fight no longer holds. An X-cost dupe captures the energy on
+/// hand as it plays, as any auto-play does, since `AutoPlay` skips no
+/// capture.
 fn auto_play_dupe_of_last_play<V: Rules>(
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
@@ -2151,9 +2152,6 @@ fn auto_play_dupe_of_last_play<V: Rules>(
     let Some(original) = live.cards.named(last.id) else {
         unimplemented!("a dupe of {:?}, which the fight no longer holds", last.card);
     };
-    if original.face.cost == sts2_core::Cost::X {
-        unimplemented!("a dupe of the X-cost {:?}", last.card);
-    }
     let id = live.card_ids.mint();
     let index = num_traits::NumCast::from(live.cards.len(Pile::Play))
         .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
