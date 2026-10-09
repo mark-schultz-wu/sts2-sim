@@ -1820,6 +1820,7 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::TryModifyStarCost),
     // MOCK_PHASE_OBSERVER_POWER
     sts2_core::Overrides::NONE
+        .with(sts2_core::ModelHook::AfterAutoPostPlayPhaseEntered)
         .with(sts2_core::ModelHook::AfterAutoPrePlayPhaseEntered)
         .with(sts2_core::ModelHook::AfterPlayerTurnStart)
         .with(sts2_core::ModelHook::AfterSideTurnEnd)
@@ -2097,7 +2098,7 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
     // SPIRIT_OF_ASH_POWER
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::BeforeCardPlayed),
     // STAMPEDE_POWER
-    sts2_core::Overrides::NONE,
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterAutoPostPlayPhaseEntered),
     // STAR_NEXT_TURN_POWER
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterEnergyReset),
     // STEAM_ERUPTION_POWER

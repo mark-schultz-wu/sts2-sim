@@ -1,0 +1,10 @@
+# Burning Pact exhausts Howl From Beyond from the hand. As the turn ends, the
+# post-play phase finds it in the exhaust pile, and it plays itself at every
+# enemy.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_NORMAL"}
+{"cmd":"grant","card":"HOWL_FROM_BEYOND"}
+{"cmd":"grant","card":"BURNING_PACT"}
+{"cmd":"play_card","index":6}
+{"cmd":"answer","cards":[5]}
+{"cmd":"end_turn"}

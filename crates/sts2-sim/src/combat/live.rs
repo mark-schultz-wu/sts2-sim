@@ -266,6 +266,12 @@ pub(super) enum Deferred<V: Rules> {
         rest: super::turn::PrePlayRest<V>,
         next: usize,
     },
+    /// The post-play phase from what its listeners still asked for, once an
+    /// auto-play's question is answered. The turn's end follows it.
+    PostPlay {
+        rest: super::turn::PrePlayRest<V>,
+        max_energy: V::Count,
+    },
     Hits {
         frame: super::board::Frame<V>,
         attack: HeldAttack<V>,

@@ -663,6 +663,7 @@ pub enum ModelHook {
     AfterAutoPrePlayPhaseEnteredEarly,
     AfterAutoPrePlayPhaseEntered,
     AfterAutoPrePlayPhaseEnteredLate,
+    AfterAutoPostPlayPhaseEntered,
     AfterStarsSpent,
     AfterHandEmptied,
     AfterBlockCleared,
@@ -790,7 +791,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 142] = [
+    pub const ALL: [ModelHook; 143] = [
         ModelHook::AfterRoomEntered,
         ModelHook::AfterMapGenerated,
         ModelHook::BeforeCombatStart,
@@ -809,6 +810,7 @@ impl ModelHook {
         ModelHook::AfterAutoPrePlayPhaseEnteredEarly,
         ModelHook::AfterAutoPrePlayPhaseEntered,
         ModelHook::AfterAutoPrePlayPhaseEnteredLate,
+        ModelHook::AfterAutoPostPlayPhaseEntered,
         ModelHook::AfterStarsSpent,
         ModelHook::AfterHandEmptied,
         ModelHook::AfterBlockCleared,
@@ -958,6 +960,7 @@ impl ModelHook {
             ModelHook::AfterAutoPrePlayPhaseEnteredEarly => "AfterAutoPrePlayPhaseEnteredEarly",
             ModelHook::AfterAutoPrePlayPhaseEntered => "AfterAutoPrePlayPhaseEntered",
             ModelHook::AfterAutoPrePlayPhaseEnteredLate => "AfterAutoPrePlayPhaseEnteredLate",
+            ModelHook::AfterAutoPostPlayPhaseEntered => "AfterAutoPostPlayPhaseEntered",
             ModelHook::AfterStarsSpent => "AfterStarsSpent",
             ModelHook::AfterHandEmptied => "AfterHandEmptied",
             ModelHook::AfterBlockCleared => "AfterBlockCleared",
@@ -3968,6 +3971,9 @@ pub enum EventHook<V: ContentVersion> {
     /// `AfterAutoPrePlayPhaseEnteredLate`, the last pass before the play
     /// phase.
     AutoPrePlayPhaseLate { turn: V::Count },
+    /// `AfterAutoPostPlayPhaseEntered`, as `EndPlayerTurnPhaseOne` opens and
+    /// before `BeforeTurnEnd`, in the player's `TurnNumber`.
+    AutoPostPlayPhase { turn: V::Count },
     /// `AfterEnergyReset`, carrying the player's creature.
     EnergyReset {
         player: crate::CombatId,
@@ -4227,6 +4233,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::AutoPrePlayPhaseEarly { .. } => ModelHook::AfterAutoPrePlayPhaseEnteredEarly,
             EventHook::AutoPrePlayPhase { .. } => ModelHook::AfterAutoPrePlayPhaseEntered,
             EventHook::AutoPrePlayPhaseLate { .. } => ModelHook::AfterAutoPrePlayPhaseEnteredLate,
+            EventHook::AutoPostPlayPhase { .. } => ModelHook::AfterAutoPostPlayPhaseEntered,
             EventHook::StarsSpent { .. } => ModelHook::AfterStarsSpent,
             EventHook::HandEmptied { .. } => ModelHook::AfterHandEmptied,
             EventHook::BlockCleared { .. } => ModelHook::AfterBlockCleared,
@@ -5079,6 +5086,17 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CardPileCmd.AutoPlayFromDrawPile(count, Top, forceExhaust: false)`
     /// for the listener's owner.
     AutoPlayFromDraw(V::Number),
+    /// `count` times, `CardCmd.AutoPlay` of one card of the hand of `kind`
+    /// that is not Unplayable, with no target named. Each is drawn by
+    /// `NextItem` off `Shuffle` from those standing then, and none is played
+    /// once there is none.
+    AutoPlayRandomFromHand {
+        kind: CardKind,
+        count: V::Number,
+    },
+    /// `CardPileCmd.AutoPlayFromDrawPile(1, Top)`, when `card` stands on top
+    /// of the draw pile. Nothing otherwise.
+    AutoPlayFromDrawIfTop(crate::CardId<V>),
     /// `RelicCmd.Obtain` of `relic`, set up for `character` first.
     ObtainRelicFor {
         relic: V::Relic,

@@ -666,6 +666,15 @@ pub(crate) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
             if matches!(hook, sts2_core::EventHook::CombatEnd { .. }) => {}
         Cards::Status(card) => status::event_hook(card, id, printed, hook, asked),
         Cards::Curse(card) => curse::event_hook(card, pile, hook, asked),
+        // `HowlFromBeyond.AfterAutoPostPlayPhaseEntered`: from the exhaust
+        // pile, it plays itself.
+        Cards::Ironclad(IroncladCard::HowlFromBeyond)
+            if matches!(hook, sts2_core::EventHook::AutoPostPlayPhase { .. }) =>
+        {
+            if pile == Some(sts2_core::Pile::Exhaust) {
+                asked.push(sts2_core::HookEffect::AutoPlay(id));
+            }
+        }
         Cards::Ironclad(card) => ironclad::event_hook(card, id, printed, history, hook, asked),
         Cards::Colorless(card) => colorless::event_hook(card, id, history, hook, asked),
         // `SovereignBlade.AfterCardChangedPiles` plays the forge's effects and
@@ -684,6 +693,13 @@ pub(crate) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
             if pile == Some(sts2_core::Pile::Exhaust) {
                 asked.push(sts2_core::HookEffect::AutoPlay(id));
             }
+        }
+        // `IAmInvincible.AfterAutoPostPlayPhaseEntered`: on top of the draw
+        // pile, it has the top card played, which is itself.
+        Cards::Regent(RegentCard::IAmInvincible)
+            if matches!(hook, sts2_core::EventHook::AutoPostPlayPhase { .. }) =>
+        {
+            asked.push(sts2_core::HookEffect::AutoPlayFromDrawIfTop(id));
         }
         Cards::Regent(card) => regent::event_hook(card, id, printed, history, hook, asked),
         Cards::Silent(card) => silent::event_hook(card, id, history, hook, asked),
