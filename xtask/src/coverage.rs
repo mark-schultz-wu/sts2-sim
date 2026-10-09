@@ -11,8 +11,11 @@
 //! A hand-ported card or move reaches its powers through helpers this does
 //! not follow, so its powers are not checked.
 //!
+//! `--missing` names, under each row, what that row lacks.
+//!
 //! ```text
 //! cargo xtask coverage
+//! cargo xtask coverage --missing
 //! ```
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -166,6 +169,34 @@ fn share(done: usize, total: usize) -> String {
     format!("{done:>3}/{total:<3} {percent:>3}%")
 }
 
+#[derive(clap::Args)]
+pub struct Args {
+    /// Name, under each row, the content it counts as missing.
+    #[arg(long)]
+    missing: bool,
+}
+
+/// Under a row, the names it lacks, when `--missing` asks for them.
+fn lacks(out: &mut String, args: &Args, names: impl IntoIterator<Item = String>) {
+    if !args.missing {
+        return;
+    }
+    let names: Vec<String> = names.into_iter().collect();
+    if names.is_empty() {
+        return;
+    }
+    let mut line = String::from("     ");
+    for name in names {
+        if line.len() + name.len() > 96 {
+            writeln!(out, "{line}").unwrap();
+            line = String::from("     ");
+        }
+        line.push(' ');
+        line.push_str(&name);
+    }
+    writeln!(out, "{line}").unwrap();
+}
+
 /// What one card or move needs: whether it has code, and the powers it names.
 struct Ported {
     code: bool,
@@ -181,9 +212,19 @@ impl Ported {
     fn missing<'a>(&'a self, powers: &'a BTreeSet<String>) -> impl Iterator<Item = &'a String> {
         self.powers.iter().filter(|power| !powers.contains(*power))
     }
+
+    /// `name` when it has no code, or with the powers it waits on when it is
+    /// incomplete. Nothing when it is complete.
+    fn lack(&self, name: String, powers: &BTreeSet<String>) -> Option<String> {
+        if !self.code {
+            return Some(name);
+        }
+        let waits: Vec<&str> = self.missing(powers).map(String::as_str).collect();
+        (!waits.is_empty()).then(|| format!("{name}[{}]", waits.join(",")))
+    }
 }
 
-pub fn run() -> Result<String, Error> {
+pub fn run(args: Args) -> Result<String, Error> {
     let build = Build {
         dir: version_dir()?,
     };
@@ -228,13 +269,16 @@ pub fn run() -> Result<String, Error> {
             .filter(|row| row.get(1).is_some_and(|a| a == act))
             .filter_map(|row| row.get(2).map(|m| camel(m)))
             .collect();
-        let act_moves: Vec<&Ported> = moves
+        let act_moves: Vec<(String, &Ported)> = moves
             .iter()
             .filter(|((monster, _), _)| in_act.contains(monster))
-            .map(|(_, ported)| ported)
+            .map(|((monster, id), ported)| (format!("{monster}.{id}"), ported))
             .collect();
-        let coded = act_moves.iter().filter(|p| p.code).count();
-        let complete = act_moves.iter().filter(|p| p.complete(&powers)).count();
+        let coded = act_moves.iter().filter(|(_, p)| p.code).count();
+        let complete = act_moves
+            .iter()
+            .filter(|(_, p)| p.complete(&powers))
+            .count();
         let done = in_act
             .iter()
             .filter(|m| monsters.get(*m).copied().unwrap_or(false))
@@ -255,6 +299,20 @@ pub fn run() -> Result<String, Error> {
             .iter()
             .filter(|e| ported_events.contains(*e))
             .count();
+        let lacking_moves: Vec<String> = act_moves
+            .iter()
+            .filter_map(|(name, p)| p.lack(name.clone(), &powers))
+            .collect();
+        let lacking_encounters: Vec<String> = encounters
+            .iter()
+            .filter(|e| e.act == act && !e.complete)
+            .map(|e| e.id.clone())
+            .collect();
+        let lacking_events: Vec<String> = act_events
+            .iter()
+            .filter(|e| !ported_events.contains(*e))
+            .cloned()
+            .collect();
         writeln!(
             out,
             "  {act:<11} moves {}  complete {}  monsters {}\n  {:<11} encounters {}  {}  {}  events {}",
@@ -268,6 +326,9 @@ pub fn run() -> Result<String, Error> {
             share(ported, act_events.len()),
         )
         .unwrap();
+        lacks(&mut out, &args, lacking_moves);
+        lacks(&mut out, &args, lacking_encounters);
+        lacks(&mut out, &args, lacking_events);
     }
     let shared: Vec<String> = build
         .rows("events.txt", "sharedpool")?
@@ -284,6 +345,14 @@ pub fn run() -> Result<String, Error> {
         )
     )
     .unwrap();
+    lacks(
+        &mut out,
+        &args,
+        shared
+            .iter()
+            .filter(|e| !ported_events.contains(*e))
+            .cloned(),
+    );
 
     writeln!(out, "\ncards: plays with code, complete plays").unwrap();
     let hand_cards = hand_ported(&build, "behaviour/cards", "on_play")?;
@@ -293,12 +362,12 @@ pub fn run() -> Result<String, Error> {
             file: build.dir.join(format!("generated/card_plays/{module}.rs")),
             what: "fn on_play",
         })?;
-        let plays: Vec<Ported> = arms(body, 8, &format!("{enum_name}::"))
+        let plays: Vec<(String, Ported)> = arms(body, 8, &format!("{enum_name}::"))
             .into_iter()
             .map(|arm| {
                 let card = arm.pattern.trim_start_matches(&format!("{enum_name}::"));
                 let hand = hand_cards.contains(&(enum_name.to_owned(), card.to_owned()));
-                Ported {
+                let ported = Ported {
                     code: hand || !arm.body.contains("does when it is played"),
                     powers: match hand {
                         true => BTreeSet::new(),
@@ -307,10 +376,11 @@ pub fn run() -> Result<String, Error> {
                             .map(str::to_owned)
                             .collect(),
                     },
-                }
+                };
+                (card.to_owned(), ported)
             })
             .collect();
-        for ported in plays.iter().filter(|p| p.code) {
+        for (_, ported) in plays.iter().filter(|(_, p)| p.code) {
             for power in ported.missing(&powers) {
                 *blocking.entry(power.clone()).or_default() += 1;
             }
@@ -318,13 +388,20 @@ pub fn run() -> Result<String, Error> {
         writeln!(
             out,
             "  {module:<12} {}  complete {}",
-            share(plays.iter().filter(|p| p.code).count(), plays.len()),
+            share(plays.iter().filter(|(_, p)| p.code).count(), plays.len()),
             share(
-                plays.iter().filter(|p| p.complete(&powers)).count(),
+                plays.iter().filter(|(_, p)| p.complete(&powers)).count(),
                 plays.len()
             ),
         )
         .unwrap();
+        lacks(
+            &mut out,
+            &args,
+            plays
+                .iter()
+                .filter_map(|(name, p)| p.lack(name.clone(), &powers)),
+        );
     }
 
     writeln!(out, "\nrelics, by pool").unwrap();
@@ -345,19 +422,21 @@ pub fn run() -> Result<String, Error> {
             (!name.is_empty() && name.chars().next()?.is_ascii_uppercase()).then_some(name)
         })
         .collect();
-    let mut pools: BTreeMap<String, (usize, usize)> = BTreeMap::new();
+    let mut pools: BTreeMap<String, (usize, usize, Vec<String>)> = BTreeMap::new();
     for row in build.rows("relics.txt", "pool")? {
         let (Some(pool), Some(relic)) = (row.get(1), row.get(2)) else {
             continue;
         };
         let entry = pools.entry(pool.clone()).or_default();
         entry.1 += 1;
-        if ported_relics.contains(camel(relic).as_str()) {
-            entry.0 += 1;
+        match ported_relics.contains(camel(relic).as_str()) {
+            true => entry.0 += 1,
+            false => entry.2.push(camel(relic)),
         }
     }
-    for (pool, (done, total)) in pools {
+    for (pool, (done, total, lacking)) in pools {
         writeln!(out, "  {pool:<24} {}", share(done, total)).unwrap();
+        lacks(&mut out, &args, lacking);
     }
 
     let potion_arms: BTreeSet<String> = build
@@ -377,6 +456,14 @@ pub fn run() -> Result<String, Error> {
         .filter(|row| row.get(1).is_some_and(|p| potion_arms.contains(&camel(p))))
         .count();
     writeln!(out, "\npotions {}", share(ported_potions, potions.len())).unwrap();
+    lacks(
+        &mut out,
+        &args,
+        potions
+            .iter()
+            .filter_map(|row| row.get(1).map(|p| camel(p)))
+            .filter(|p| !potion_arms.contains(p)),
+    );
 
     let all_powers = build.rows("powers.txt", "power")?;
     let ported = all_powers
@@ -389,6 +476,14 @@ pub fn run() -> Result<String, Error> {
         share(ported, all_powers.len())
     )
     .unwrap();
+    lacks(
+        &mut out,
+        &args,
+        all_powers
+            .iter()
+            .filter_map(|row| row.get(1).map(|p| camel(p)))
+            .filter(|p| !powers.contains(p)),
+    );
 
     let mut blocking: Vec<_> = blocking.into_iter().collect();
     blocking.sort_by_key(|(power, count)| (std::cmp::Reverse(*count), power.clone()));
@@ -509,6 +604,7 @@ fn hand_ported(build: &Build, dir: &str, name: &str) -> Result<BTreeSet<(String,
 
 /// One act's encounter, and whether a run can fight it through.
 struct Encounter {
+    id: String,
     act: String,
     room: String,
     complete: bool,
@@ -543,6 +639,7 @@ fn encounters(build: &Build, monsters: &BTreeMap<String, bool>) -> Result<Vec<En
                 .into_iter()
                 .all(|m| monsters.get(&camel(m)).copied().unwrap_or(false));
         out.push(Encounter {
+            id: camel(id),
             act: act.clone(),
             room,
             complete,

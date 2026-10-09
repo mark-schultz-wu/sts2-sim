@@ -53,7 +53,7 @@ enum Command {
     /// Play runs at random and rank what stops them.
     Census(census::Args),
     /// Count how much of each act's content has code.
-    Coverage,
+    Coverage(coverage::Args),
     /// Find the seeds whose Neow offers a relic.
     Neow(neow::Args),
     /// Show where a replayed step's instructions go, span by span.
@@ -105,7 +105,7 @@ fn run(command: Command) -> Result<String, Error> {
         Command::Instructions(args) => instructions::run(args)?,
         Command::Allocations(args) => allocations::run(args)?,
         Command::Census(args) => census::run(args)?,
-        Command::Coverage => coverage::run()?,
+        Command::Coverage(args) => coverage::run(args)?,
         Command::Neow(args) => neow::run(args)?,
         Command::Trace(args) => trace::run(args)?,
         Command::Unknown(args) => unknown::run(args).map_err(Error::Unknown)?,
