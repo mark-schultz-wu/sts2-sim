@@ -12,7 +12,7 @@
 //! it and nothing else does.
 
 use bitfield_struct::bitfield;
-use nonmax::{NonMaxI16, NonMaxU8};
+use nonmax::{NonMaxI16, NonMaxI32, NonMaxU8};
 use num_traits::CheckedAdd;
 use std::sync::Arc;
 use sts2_core::{
@@ -27,13 +27,17 @@ use crate::bounded::Bounded;
 /// The powers that skip their next tick, by the creature holding each.
 pub(super) type Skips<V> = Bounded<(CombatId, <V as sts2_core::ContentVersion>::Power), SKIPS>;
 
-/// How a copy holds one of the numbers it prints.
-///
-/// Narrower than the build's own game number, which is an `int`. Both ported
-/// builds print inside `-1..=600`, and a fight writes on top of that:
-/// `ForgeCmd` raises `SovereignBlade`'s damage each time a smith is played.
-/// So the width outlasts a run rather than fitting a table.
+/// How a power holds its stack, and an attack its damage.
 pub(super) type Amount = i16;
+
+/// How a copy holds how far one of the numbers it prints has moved.
+///
+/// The build's own game number, an `int`, wide. Both ported builds print
+/// inside `-1..=600`, and a fight writes on top of that without end:
+/// `ForgeCmd` raises `SovereignBlade`'s damage each time a smith is played,
+/// and once a turn under a power that forges. A fight nobody ends ran one
+/// past what a 16-bit difference holds.
+pub(super) type Moved = i32;
 
 /// What one copy of a card prints, as the difference from its own table row.
 ///
@@ -42,7 +46,7 @@ pub(super) type Amount = i16;
 ///
 /// `None` for a card printing more than [`VARS`] numbers. Nothing raises one
 /// of those, and [`CardInstance::raise`] says so if something tries.
-pub(super) type CardVarList = Option<[NonMaxI16; VARS]>;
+pub(super) type CardVarList = Option<[NonMaxI32; VARS]>;
 
 /// The powers one creature holds.
 pub(crate) type PowerList<V> = Bounded<HeldPower<V>, POWERS>;
@@ -673,7 +677,7 @@ impl<V: Rules> Face<V> {
 
     /// How far this copy has moved the number its row holds at `at`, in
     /// units of [`Face::places`].
-    fn moved(&self, at: usize) -> Amount {
+    fn moved(&self, at: usize) -> Moved {
         self.vars.map_or(0, |row| row[at].get())
     }
 
@@ -764,16 +768,16 @@ impl<V: Rules> Face<V> {
     /// card either build prints that wide belongs to an event, and no event
     /// is ported.
     ///
-    /// A number raised past what an [`Amount`] holds. `ForgeCmd` is the only
-    /// thing that raises one repeatedly, and arriving here takes two thousand
-    /// smiths in one fight.
+    /// A number raised past what a [`Moved`] holds. `ForgeCmd` is the only
+    /// thing that raises one repeatedly, and arriving here takes four hundred
+    /// million smiths in one fight.
     pub(super) fn raise(&mut self, key: V::CardVar, by: V::Number) {
         if self.places != 0 {
             let by = num_traits::ToPrimitive::to_i64(&by).expect("a game number fits a long");
             return self.raise_exactly(key, Decimal::from(by));
         }
         let at = Self::at(self.ident.card.vars(), key);
-        let by: Amount = num_traits::NumCast::from(by)
+        let by: Moved = num_traits::NumCast::from(by)
             .unwrap_or_else(|| unimplemented!("the {} raised by {by:?}", key.name()));
         let row = self.vars.as_mut().unwrap_or_else(|| {
             unimplemented!("the {} raised on a card too wide to hold one", key.name())
@@ -781,7 +785,7 @@ impl<V: Rules> Face<V> {
         let moved = row[at]
             .get()
             .checked_add(by)
-            .and_then(NonMaxI16::new)
+            .and_then(NonMaxI32::new)
             .unwrap_or_else(|| unimplemented!("the {} raised past what a card holds", key.name()));
         row[at] = moved;
     }
@@ -795,7 +799,7 @@ impl<V: Rules> Face<V> {
     /// # Panics
     ///
     /// As [`Face::raise`] does, and for a difference too wide for an
-    /// [`Amount`] in the units the row counts in.
+    /// [`Moved`] in the units the row counts in.
     pub(super) fn raise_exactly(&mut self, key: V::CardVar, by: Decimal) {
         let at = Self::at(self.ident.card.vars(), key);
         let past = || -> ! { unimplemented!("the {} raised past what a card holds", key.name()) };
@@ -805,24 +809,24 @@ impl<V: Rules> Face<V> {
         let by = by.normalize();
         let places = u8::try_from(by.scale()).unwrap_or_else(|_| past());
         if places > self.places {
-            let finer = 10_i16
+            let finer = 10_i32
                 .checked_pow(u32::from(places - self.places))
                 .unwrap_or_else(|| past());
             for moved in row.iter_mut() {
                 *moved = moved
                     .get()
                     .checked_mul(finer)
-                    .and_then(NonMaxI16::new)
+                    .and_then(NonMaxI32::new)
                     .unwrap_or_else(|| past());
             }
             self.places = places;
         }
         let by = by.mantissa() * 10_i128.pow(u32::from(self.places) - by.scale());
-        let by = Amount::try_from(by).unwrap_or_else(|_| past());
+        let by = Moved::try_from(by).unwrap_or_else(|_| past());
         row[at] = row[at]
             .get()
             .checked_add(by)
-            .and_then(NonMaxI16::new)
+            .and_then(NonMaxI32::new)
             .unwrap_or_else(|| past());
     }
 
@@ -831,7 +835,7 @@ impl<V: Rules> Face<V> {
         // Zeroes, because a fresh copy prints what its row prints. A card too
         // wide for the row carries no differences at all, which is what its
         // `None` says.
-        let vars = (ident.card.vars().len() <= VARS).then_some([NonMaxI16::ZERO; VARS]);
+        let vars = (ident.card.vars().len() <= VARS).then_some([NonMaxI32::ZERO; VARS]);
         let mut card = Self {
             ident,
             vars,
