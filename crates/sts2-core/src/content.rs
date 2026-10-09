@@ -4976,6 +4976,10 @@ pub enum HookEffect<V: ContentVersion> {
     /// `RunState.CloneCard` of each card the deck held as this began, in deck
     /// order, each then `CardPileCmd.Add` to the deck.
     CloneDeck,
+    /// `LordsParasol.PurchaseEverything`: every shelf of the merchant bought
+    /// for nothing, in the shelves' order, then its card removal, which the
+    /// player cannot cancel.
+    PurchaseEverything,
     /// `CreatureCmd.GainMaxHp` on the owner: the maximum grows, and the
     /// health with it.
     GainMaxHp(V::Number),

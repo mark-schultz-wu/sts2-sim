@@ -159,6 +159,7 @@ mod lees_waffle;
 mod letter_opener;
 mod lizard_tail;
 mod looming_fruit;
+mod lords_parasol;
 mod lost_coffer;
 mod lost_wisp;
 mod lucky_fysh;
@@ -295,6 +296,7 @@ mod unceasing_top;
 mod unsettling_lamp;
 mod vajra;
 mod vambrace;
+mod velvet_choker;
 mod venerable_tea_set;
 mod very_hot_cocoa;
 mod vexing_puzzlebox;
@@ -628,6 +630,8 @@ pub enum State {
     ChoicesParadox,
     WhisperingEarring,
     BrilliantScarf(brilliant_scarf::State),
+    VelvetChoker(velvet_choker::State),
+    LordsParasol,
     FurCoat(fur_coat::State),
     PhilosophersStone,
     GnarledHammer,
@@ -888,6 +892,8 @@ pub(crate) fn event_hook(
         State::ChoicesParadox => choices_paradox::event_hook(hook, asked),
         State::WhisperingEarring => whispering_earring::event_hook(hook, asked),
         State::BrilliantScarf(state) => brilliant_scarf::event_hook(state, hook),
+        State::VelvetChoker(state) => velvet_choker::event_hook(state, hook),
+        State::LordsParasol => lords_parasol::event_hook(hook, asked),
         State::FurCoat(state) => fur_coat::event_hook(state, hook, asked),
         State::PhilosophersStone => philosophers_stone::event_hook(hook, asked),
         State::GnarledHammer => gnarled_hammer::event_hook(hook, asked),
@@ -1031,6 +1037,7 @@ pub(crate) fn decide_hook(
 ) -> sts2_core::HookResponse<bool> {
     match state {
         State::WingedBoots(state) => winged_boots::decide_hook(state, hook),
+        State::VelvetChoker(state) => velvet_choker::decide_hook(state, hook),
         State::RunicPyramid => runic_pyramid::decide_hook(hook),
         State::RingingTriangle => ringing_triangle::decide_hook(hook),
         State::Sozu => sozu::decide_hook(hook),
@@ -1055,6 +1062,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
     match state {
         State::Pocketwatch(state) => pocketwatch::modify_hook(state, hook),
         State::BrilliantScarf(state) => brilliant_scarf::modify_hook(state, hook),
+        State::VelvetChoker(_) => velvet_choker::modify_hook(hook),
         State::Vambrace(state) => vambrace::modify_hook(state, hook),
         State::PaelsLegion(state) => paels_legion::modify_hook(state, hook),
         State::PumpkinCandle(state) => pumpkin_candle::modify_hook(state, hook),
@@ -1336,7 +1344,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::ChoicesParadox
         | State::FurCoat(_)
         | State::GnarledHammer
-        | State::DragonFruit => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::DragonFruit
+        | State::LordsParasol => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1524,6 +1533,8 @@ impl sts2_core::RelicModel<V> for State {
             Relic::ChoicesParadox => State::ChoicesParadox,
             Relic::WhisperingEarring => State::WhisperingEarring,
             Relic::BrilliantScarf => State::BrilliantScarf(brilliant_scarf::State::default()),
+            Relic::VelvetChoker => State::VelvetChoker(velvet_choker::State::default()),
+            Relic::LordsParasol => State::LordsParasol,
             Relic::FurCoat => State::FurCoat(fur_coat::State::default()),
             Relic::PhilosophersStone => State::PhilosophersStone,
             Relic::GnarledHammer => State::GnarledHammer,
@@ -1709,6 +1720,7 @@ impl sts2_core::RelicModel<V> for State {
                 State::DiamondDiadem(state) => diamond_diadem::display_amount(state),
                 State::Pendulum(state) => pendulum::display_amount(state),
                 State::BrilliantScarf(state) => brilliant_scarf::display_amount(state),
+                State::VelvetChoker(state) => velvet_choker::display_amount(state),
                 _ => unimplemented!("the number {relic:?} shows"),
             },
         }

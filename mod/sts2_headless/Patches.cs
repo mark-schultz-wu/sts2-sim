@@ -22,6 +22,7 @@ using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Models.Monsters;
 using MegaCrit.Sts2.Core.Models.Relics;
 using MegaCrit.Sts2.Core.Entities.Relics;
+using MegaCrit.Sts2.Core.Entities.Merchant;
 using MegaCrit.Sts2.Core.Rewards;
 using MegaCrit.Sts2.Core.Saves;
 using MegaCrit.Sts2.Core.Events.Custom.CrystalSphereEvent;
@@ -583,5 +584,65 @@ internal static class FreshWongoPoints
     {
         __result = 0;
         return false;
+    }
+}
+
+/// <summary>
+/// Lord's Parasol buys the whole merchant, as the game does, with no screen.
+/// </summary>
+/// <remarks>
+/// <c>PurchaseEverything</c> skips its first block of screen work while
+/// <c>TestMode</c> is on. Each relic it buys then enables and disables the
+/// map and deck buttons through <c>NRun.Instance</c> with no such guard, and
+/// the removal at the end toggles travel through <c>NMapScreen.Instance</c>.
+/// Headless those are null, so the purchases died at the first relic. This is
+/// the game's own order of purchases without the screen calls and the waits
+/// that pace them. It is tracked, as the <c>buy</c> handler's purchase is,
+/// so the driver waits for it and for the removal's question. The removal is
+/// marked used, as the shop screen's <c>OnCardRemovalUsed</c> marks it.
+/// </remarks>
+[HarmonyPatch(typeof(LordsParasol), "PurchaseEverything")]
+internal static class ParasolWithoutAScreen
+{
+    private static bool Prefix(LordsParasol __instance, MerchantInventory inventory, ref Task __result)
+    {
+        __result = PurchaseEverything(__instance, inventory);
+        BackgroundWork.Track(__result);
+        return false;
+    }
+
+    private static async Task PurchaseEverything(LordsParasol parasol, MerchantInventory inventory)
+    {
+        if (inventory.Player != parasol.Owner)
+        {
+            return;
+        }
+        foreach (MerchantCardEntry entry in inventory.CharacterCardEntries)
+        {
+            if (entry.IsStocked)
+            {
+                await entry.OnTryPurchaseWrapper(inventory, ignoreCost: true);
+            }
+        }
+        foreach (MerchantCardEntry entry in inventory.ColorlessCardEntries)
+        {
+            if (entry.IsStocked)
+            {
+                await entry.OnTryPurchaseWrapper(inventory, ignoreCost: true);
+            }
+        }
+        foreach (MerchantRelicEntry entry in inventory.RelicEntries)
+        {
+            await entry.OnTryPurchaseWrapper(inventory, ignoreCost: true);
+        }
+        foreach (MerchantPotionEntry entry in inventory.PotionEntries)
+        {
+            await entry.OnTryPurchaseWrapper(inventory, ignoreCost: true);
+        }
+        if (inventory.CardRemovalEntry is { } removal
+            && await removal.OnTryPurchaseWrapper(inventory, ignoreCost: true, cancelable: false))
+        {
+            removal.SetUsed();
+        }
     }
 }
