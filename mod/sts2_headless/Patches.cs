@@ -646,3 +646,46 @@ internal static class ParasolWithoutAScreen
         }
     }
 }
+
+/// <summary>
+/// Trial's Double Down asks its abandon-run popup as a question.
+/// </summary>
+/// <remarks>
+/// <c>DoubleDown</c> adds an <c>NAbandonRunConfirmPopup</c> to
+/// <c>NModalContainer.Instance</c>, which is null headless. The popup's yes
+/// calls <c>RunManager.Abandon</c>, which runs <c>AbandonInternal</c> for a
+/// single player, and its no closes it on the Reject page. This parks the two
+/// buttons as a <see cref="Confirmation"/>.
+///
+/// On a yes it runs what <c>AbandonInternal</c> does to the run: it marks the
+/// run abandoned and awaits <c>GuaranteeKillAllPlayers</c>. It leaves out the
+/// screens <c>AbandonInternal</c> closes first, which take the headless
+/// process down with no message.
+/// </remarks>
+[HarmonyPatch(typeof(Trial), "DoubleDown")]
+internal static class DoubleDownWithoutAPopup
+{
+    private static readonly MethodInfo KillAllPlayers =
+        AccessTools.Method(typeof(RunManager), "GuaranteeKillAllPlayers")
+        ?? throw new InvalidOperationException("RunManager no longer has GuaranteeKillAllPlayers");
+
+    private static readonly PropertyInfo Abandoned =
+        AccessTools.Property(typeof(RunManager), nameof(RunManager.IsAbandoned))
+        ?? throw new InvalidOperationException("RunManager no longer has IsAbandoned");
+
+    private static bool Prefix(ref Task __result)
+    {
+        __result = Asked();
+        return false;
+    }
+
+    private static async Task Asked()
+    {
+        if (await Confirmation.Ask())
+        {
+            Log.Info("Abandoning an in-progress run (player-initiated)");
+            Abandoned.SetValue(RunManager.Instance, true);
+            await (Task)KillAllPlayers.Invoke(RunManager.Instance, null)!;
+        }
+    }
+}

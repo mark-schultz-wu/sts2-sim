@@ -185,6 +185,7 @@ impl WireReason {
                     "rewards" => QuestionKind::Rewards,
                     "divine" => QuestionKind::Divine,
                     "choose_bundle" => QuestionKind::ChooseBundle,
+                    "confirm" => QuestionKind::Confirm,
                     other => return Err(unknown(&p("asking"), "kind of question", other)),
                 },
             },

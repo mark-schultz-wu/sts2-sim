@@ -152,7 +152,7 @@ impl Coverage {
             // Cells and tools, and no content id among them. The rewards the
             // minigame pays out arrive later, as an ordinary reward screen,
             // and are counted there.
-            Question::Divine { .. } => {}
+            Question::Divine { .. } | Question::Confirm => {}
             Question::ChooseBundle { bundles } => {
                 for bundle in bundles {
                     self.cards_seen

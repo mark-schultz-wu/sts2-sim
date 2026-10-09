@@ -16,6 +16,8 @@ pub enum Answer {
     Take(TakeReward),
     /// Uncover a cell, in the Crystal Sphere's minigame.
     Divine { x: u8, y: u8, tool: Tool },
+    /// Yes or no, to a popup that asks for confirmation.
+    Confirm(bool),
 }
 
 /// Which of a question's options a card selection takes, in the order it took

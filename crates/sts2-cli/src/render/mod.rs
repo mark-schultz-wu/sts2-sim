@@ -161,6 +161,9 @@ fn question_of<V: sts2_content_wire::WireContentVersion>(
                 )?;
             }
         }
+        Question::Confirm => {
+            writeln!(f, "asks    confirm: 1 for yes, 0 for no")?;
+        }
         Question::ChooseBundle { bundles } => {
             writeln!(f, "asks    pick a bundle:")?;
             for bundle in bundles {

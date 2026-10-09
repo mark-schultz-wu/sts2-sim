@@ -120,7 +120,12 @@ impl EventBehavior<V> for Trial {
                 state.chosen = None;
                 return smallvec::smallvec![];
             }
-            (Page::Reject, _) => unimplemented!("the abandon-run popup of Trial's DoubleDown"),
+            // `DoubleDown`: the abandon-run popup, which the run asks. The
+            // option shows chosen whichever way the popup is answered.
+            (Page::Reject, _) => {
+                state.chosen = NonMaxU8::new(option);
+                return smallvec::smallvec![HookEffect::ConfirmAbandonRun];
+            }
             // Regret, then two relics from the front of the bag.
             (Page::Merchant, 0) => smallvec::smallvec![
                 curse(CurseCard::Regret),

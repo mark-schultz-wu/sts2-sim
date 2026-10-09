@@ -914,6 +914,7 @@ impl Sink {
                     });
                 });
             }
+            Question::Confirm => self.u8(4),
         }
     }
 

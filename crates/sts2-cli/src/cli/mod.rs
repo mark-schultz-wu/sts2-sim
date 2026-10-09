@@ -60,6 +60,8 @@ pub enum Error {
     OneOption(usize),
     #[error("a shop entry is bought one at a time, but {0} were given")]
     OneEntry(usize),
+    #[error("a confirmation takes one answer: 1 for yes, 0 for no")]
+    OneConfirmation,
 }
 
 /// An ascension level by the game's own name for it, such as `None`.

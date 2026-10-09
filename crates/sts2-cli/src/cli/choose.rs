@@ -16,6 +16,8 @@ pub enum Awaiting {
     Cards,
     Rewards,
     Divine,
+    /// A yes or a no, which `choose 1` and `choose 0` give.
+    Confirm,
     RoomOption,
     ShopEntry,
 }
@@ -82,6 +84,7 @@ pub fn awaiting<V: sts2_content_wire::WireContentVersion>(
             Question::Divine { .. } => Awaiting::Divine,
             // One bundle, named as a one-card selection names its card.
             Question::ChooseBundle { .. } => Awaiting::Cards,
+            Question::Confirm => Awaiting::Confirm,
         });
     }
 
@@ -131,6 +134,11 @@ pub fn command<V: sts2_content_wire::WireContentVersion>(
         // rather than guessed: taking the first two numbers as `x` and `y` would
         // make `choose 3 4` a divination with a tool nobody named.
         Awaiting::Divine => return Err(Error::Divination),
+        Awaiting::Confirm => match flat("a confirmation")?.as_slice() {
+            [0] => Decision::Answer(GameAnswer::Confirm(false)),
+            [1] => Decision::Answer(GameAnswer::Confirm(true)),
+            _ => return Err(Error::OneConfirmation),
+        },
         Awaiting::RoomOption => match flat("a room option")?.as_slice() {
             [index] => Decision::ChooseOption {
                 index: u8::try_from(*index).map_err(|_| Error::NoOption(*index))?,
@@ -158,6 +166,7 @@ pub fn describe(awaiting: &Awaiting) -> &'static str {
         Awaiting::Cards => "answer cards",
         Awaiting::Rewards => "answer take",
         Awaiting::Divine => "answer divine",
+        Awaiting::Confirm => "answer confirm",
         Awaiting::RoomOption => "choose-option",
         Awaiting::ShopEntry => "buy",
     }

@@ -469,6 +469,20 @@ So the mod stands in for the screen, and asks here.
 `text` is as `select_cards` gives it. Answer with one bundle's index, as
 `{"cmd":"answer","cards":[1]}`. The bundle's cards all go into the deck.
 
+### confirm
+
+```json
+{"type":"pending","seq":4,"cmd":"choose_option","kind":"confirm"}
+```
+
+The abandon-run popup, which Trial's Double Down opens. `NModalContainer` is null
+headless, so the mod stands in for the popup's two buttons, and asks here.
+
+Answer `{"cmd":"answer","confirm":true}` to abandon the run. The mod marks the run
+abandoned and kills the player, as `AbandonInternal` does, so the run ends lost.
+Answer `{"cmd":"answer","confirm":false}` to close the popup on the Reject page,
+whose options stay.
+
 ### rewards
 
 ```json

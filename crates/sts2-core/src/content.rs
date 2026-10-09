@@ -4980,6 +4980,10 @@ pub enum HookEffect<V: ContentVersion> {
     /// `RunState.CloneCard` of each card the deck held as this began, in deck
     /// order, each then `CardPileCmd.Add` to the deck.
     CloneDeck,
+    /// `NAbandonRunConfirmPopup`, which Trial's Double Down opens. A yes is
+    /// `RunManager.Abandon`, which kills the player and ends the run. A no
+    /// closes it on the page it opened from.
+    ConfirmAbandonRun,
     /// `HistoryCourse.AfterAutoPrePlayPhaseEntered`: a dupe of the last card
     /// its owner finished playing in its last turn, auto-played. The card is
     /// of one of `kinds`, and is no dupe itself.

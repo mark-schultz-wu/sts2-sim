@@ -37,6 +37,7 @@ enum Stage {
     AskingRewards,
     AskingDivine,
     AskingBundle,
+    AskingConfirm,
     Fight,
     RestSite,
     Treasure,
@@ -386,6 +387,14 @@ where
                 self.ui.say(
                     Tone::Cannot,
                     "bundles are not picked here yet — answer with `sts2 act choose <bundle>`",
+                );
+                Intent::Nothing
+            }
+            Stage::AskingConfirm => {
+                self.ui.say(
+                    Tone::Cannot,
+                    "confirmations are not answered here yet — \
+                     answer with `sts2 act choose 1` for yes or `0` for no",
                 );
                 Intent::Nothing
             }
@@ -890,6 +899,7 @@ fn stage_of<V: sts2_content_wire::WireContentVersion>(standing: &Snapshot<V>) ->
             Question::Rewards { .. } => Stage::AskingRewards,
             Question::Divine { .. } => Stage::AskingDivine,
             Question::ChooseBundle { .. } => Stage::AskingBundle,
+            Question::Confirm => Stage::AskingConfirm,
         };
     }
 
