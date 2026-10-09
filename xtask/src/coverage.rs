@@ -596,6 +596,24 @@ fn pairs(text: &str) -> Vec<(String, String)> {
         .collect()
 }
 
+/// Whether what follows a card's name ends its arm's pattern: `=>` at
+/// once, or after more alternatives, as `A | B =>`.
+fn leads_to_arm(rest: &str) -> bool {
+    let rest = rest.trim_start();
+    if rest.starts_with("=>") {
+        return true;
+    }
+    if !rest.starts_with('|') {
+        return false;
+    }
+    let Some(arrow) = rest.find("=>") else {
+        return false;
+    };
+    rest[..arrow]
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c.is_whitespace() || matches!(c, '|' | ':' | '_'))
+}
+
 /// The cards a hand port plays, as `(Enum, Variant)`: the arms of every
 /// function named `name` under `dir`.
 fn hand_ported(build: &Build, dir: &str, name: &str) -> Result<BTreeSet<(String, String)>, Error> {
@@ -613,7 +631,7 @@ fn hand_ported(build: &Build, dir: &str, name: &str) -> Result<BTreeSet<(String,
                 let end = after
                     .find(|c: char| !c.is_ascii_alphanumeric())
                     .unwrap_or(after.len());
-                if after[end..].trim_start().starts_with("=>") {
+                if leads_to_arm(&after[end..]) {
                     ported.insert((enum_name, after[..end].to_owned()));
                 }
             }
