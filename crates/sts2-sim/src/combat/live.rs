@@ -2087,6 +2087,10 @@ pub(crate) struct Live<V: Rules> {
     /// stopped inside another draw. The outermost comes first. The draw that
     /// resumes finishes them before its own.
     pub(super) hook_draws: smallvec::SmallVec<[usize; 2]>,
+    /// The card whose auto-play asked as it was drawn, and whether the draw
+    /// was the hand's. The draw that resumes runs its late `AfterCardDrawn`
+    /// pass first.
+    pub(super) drawn_late: Option<(CardId<V>, bool)>,
     pub(super) creatures: Creatures<V>,
     /// What every creature carries, in the order it gained it.
     pub(super) powers: PowerStore<V>,
@@ -2344,6 +2348,7 @@ impl<V: Rules> Clone for Live<V> {
             for_run: self.for_run.clone(),
             after_pick: self.after_pick.clone(),
             hook_draws: self.hook_draws.clone(),
+            drawn_late: self.drawn_late,
             powers: self.powers.clone(),
             orbs: self.orbs.clone(),
             card_ids: self.card_ids.clone(),
@@ -2384,6 +2389,7 @@ impl<V: Rules> Clone for Live<V> {
             for_run,
             after_pick,
             hook_draws,
+            drawn_late,
             creatures,
             powers,
             orbs,
@@ -2422,6 +2428,7 @@ impl<V: Rules> Clone for Live<V> {
         for_run.clone_from(&source.for_run);
         after_pick.clone_from(&source.after_pick);
         hook_draws.clone_from(&source.hook_draws);
+        *drawn_late = source.drawn_late;
         creatures.copy_from(&source.creatures);
         powers.clone_from(&source.powers);
         orbs.clone_from(&source.orbs);
@@ -3219,6 +3226,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             for_run: Vec::new(),
             after_pick: Vec::new(),
             hook_draws: smallvec::SmallVec::new(),
+            drawn_late: None,
             creatures: creatures.into_iter().collect(),
             powers: PowerStore::new(),
             orbs: None,

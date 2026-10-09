@@ -5145,6 +5145,11 @@ pub(super) fn draw<V: Rules>(
         Drawn::Paused { asks, .. } => {
             unimplemented!("a shuffle asking for {asks:?} inside a draw that cannot pause")
         }
+        Drawn::Asked { .. } => {
+            unimplemented!(
+                "a card auto-played as it was drawn asking inside a draw that cannot pause"
+            )
+        }
     }
 }
 
@@ -5288,6 +5293,15 @@ pub(super) fn draw_in_effect<V: Rules>(
             resumed,
         ) {
             Drawn::Done(ended) => return ended,
+            // The auto-played card's play waits first, then the draw.
+            Drawn::Asked { left } => {
+                live.defer(super::live::Deferred::Draw {
+                    count: left,
+                    hand_draw,
+                    resumed: true,
+                });
+                return None;
+            }
             Drawn::Paused {
                 left,
                 asks: (pile, selection, act),
@@ -5322,6 +5336,20 @@ pub(super) enum Drawn {
     /// A shuffle inside it asked for a selection, with `left` cards still to
     /// draw once it is answered.
     Paused { left: usize, asks: ShuffleAsks },
+    /// A card auto-played as it was drawn asked the player something, with
+    /// `left` cards still to draw once its play is over.
+    Asked { left: usize },
+}
+
+impl Drawn {
+    /// The same stop, with `left` cards still to draw behind it.
+    fn with_left(self, left: usize) -> Drawn {
+        match self {
+            Drawn::Done(ended) => Drawn::Done(ended),
+            Drawn::Paused { asks, .. } => Drawn::Paused { left, asks },
+            Drawn::Asked { .. } => Drawn::Asked { left },
+        }
+    }
 }
 
 /// [`draw`], stopping where a shuffle inside it asks the player something.
@@ -5353,6 +5381,27 @@ pub(super) fn draw_pausing<V: Rules>(
             board.after_shuffle(effect);
         }
     }
+    // The late pass for the card whose auto-play asked, which the draw it
+    // came in by owes first.
+    if resumed && let Some((id, hand_draw)) = live.drawn_late.take() {
+        let drawn = live
+            .cards
+            .named(id)
+            .unwrap_or_else(|| unimplemented!("the late pass for {id:?}, which left the fight"));
+        match card_drawn_late::<V>(
+            live,
+            rngs.reborrow(),
+            relics,
+            ascension,
+            &drawn,
+            hand_draw,
+            None,
+        ) {
+            Drawn::Done(None) => {}
+            Drawn::Done(Some(ended)) => return Drawn::Done(Some(ended)),
+            stopped => return stopped.with_left(count),
+        }
+    }
     // The listeners' draws the question stopped, the innermost first.
     if resumed && !live.hook_draws.is_empty() {
         let waiting = std::mem::take(&mut live.hook_draws);
@@ -5368,12 +5417,12 @@ pub(super) fn draw_pausing<V: Rules>(
             ) {
                 Drawn::Done(None) => {}
                 Drawn::Done(Some(ended)) => return Drawn::Done(Some(ended)),
-                Drawn::Paused { left, asks } => {
+                stopped @ (Drawn::Paused { left, .. } | Drawn::Asked { left }) => {
                     let mut owed: SmallVec<[usize; 2]> = waiting[..at].into();
                     owed.push(left);
                     owed.extend(live.hook_draws.drain(..));
                     live.hook_draws = owed;
-                    return Drawn::Paused { left: count, asks };
+                    return stopped.with_left(count);
                 }
             }
         }
@@ -5428,93 +5477,129 @@ pub(super) fn draw_pausing<V: Rules>(
                             card,
                             Pile::Hand,
                             None,
-                            false,
+                            true,
                         );
                     }
                 }
                 effect => unimplemented!("{listener:?} asking for {effect:?} as a card is drawn"),
             }
         }
-        // `Hook.AfterCardDrawn`, raised for each card inside the loop rather
-        // than once for the whole draw. So a card that spends the pool as it
-        // arrives has spent it before the next card is taken.
-        let asked = super::listen::notify::<V>(
-            live,
-            relics,
-            sts2_core::EventHook::CardDrawn {
-                card: drawn.face.ident.card,
-                id: drawn.id,
-                ethereal: drawn.face.ethereal(),
-                hand_draw,
-                side: live.side,
-            },
-        );
-        if asked.is_empty() {
-            continue;
+        // An auto-play that asks stands the draw still. Its late pass and the
+        // rest of the draw wait for the play to end.
+        if live.asking.is_some() {
+            live.drawn_late = Some((drawn.id, hand_draw));
+            return Drawn::Asked {
+                left: count - drawing - 1,
+            };
         }
-        let mut rest: SmallVec<[HookEffect<V>; 4]> = SmallVec::new();
-        for (listener, effect) in asked {
-            match (listener, effect) {
-                // Written on the card that asked, wherever it stands.
-                (Listener::Card { id }, HookEffect::ModifySelf { change, lasting }) => {
-                    live.modify_self(id, change, lasting)
-                }
-                // Only while the card is still in hand, which the
-                // enchantment checks before it draws.
-                (Listener::Card { id }, HookEffect::RandomSelfCost { below }) => {
-                    if live.cards.find(Pile::Hand, id).is_some() {
-                        let cost = random_cost::<V>(&mut rngs, below);
-                        live.modify_self(
-                            id,
-                            sts2_core::Change::SetCost(sts2_core::CostPool::Energy, cost),
-                            sts2_core::Lasting::ThisFight,
-                        );
-                    }
-                }
-                // Wherever the card stands.
-                (_, HookEffect::RandomCost { card, below }) => {
-                    let cost = random_cost::<V>(&mut rngs, below);
-                    live.modify_self(
-                        card,
-                        sts2_core::Change::SetCost(sts2_core::CostPool::Energy, cost),
-                        sts2_core::Lasting::ThisFight,
-                    );
-                }
-                (_, effect) => rest.push(effect),
-            }
-        }
-        // A listener's `CardPileCmd.Draw` last in line runs inside this draw,
-        // so a shuffle's question in it pauses this one too.
-        let hook_draw = match rest.last() {
-            Some(&HookEffect::Draw(count)) => {
-                rest.pop();
-                Some(num_traits::NumCast::from(count).unwrap_or(0usize))
-            }
-            _ => None,
-        };
-        let mut board = Board::for_card(
+        match card_drawn_late::<V>(
             live,
             rngs.reborrow(),
             relics,
             ascension,
-            None,
-            Some(drawn.id),
-        );
-        super::hook::apply::<V, _>(&mut board, rest);
-        ended = ended.or(board.ended());
-        if let Some(owed) = hook_draw
-            && ended.is_none()
-        {
-            let below = live.hook_draws.len();
-            match draw_pausing::<V>(live, rngs.reborrow(), relics, ascension, owed, false, false) {
-                Drawn::Done(drawn) => ended = drawn,
-                Drawn::Paused { left, asks } => {
-                    live.hook_draws.insert(below, left);
-                    return Drawn::Paused {
-                        left: count - drawing - 1,
-                        asks,
-                    };
+            &drawn,
+            hand_draw,
+            ended,
+        ) {
+            Drawn::Done(now) => ended = now,
+            stopped => return stopped.with_left(count - drawing - 1),
+        }
+    }
+    Drawn::Done(ended)
+}
+
+/// The late pass of `Hook.AfterCardDrawn` for `drawn`, after `ended` from
+/// what came before it. A listener's draw inside it can stop on a question.
+/// That stop carries no count of its own, and the caller names what is left
+/// of its draw.
+///
+/// Inlined into the draw, which runs it once for each card drawn.
+#[inline(always)]
+fn card_drawn_late<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: CombatRngs<'_>,
+    relics: &mut Belt<V>,
+    ascension: V::AscensionLevel,
+    drawn: &super::live::CardInstance<V>,
+    hand_draw: bool,
+    mut ended: Option<super::Ended>,
+) -> Drawn {
+    // `Hook.AfterCardDrawn`, raised for each card inside the loop rather
+    // than once for the whole draw. So a card that spends the pool as it
+    // arrives has spent it before the next card is taken.
+    let asked = super::listen::notify::<V>(
+        live,
+        relics,
+        sts2_core::EventHook::CardDrawn {
+            card: drawn.face.ident.card,
+            id: drawn.id,
+            ethereal: drawn.face.ethereal(),
+            hand_draw,
+            side: live.side,
+        },
+    );
+    if asked.is_empty() {
+        return Drawn::Done(ended);
+    }
+    let mut rest: SmallVec<[HookEffect<V>; 4]> = SmallVec::new();
+    for (listener, effect) in asked {
+        match (listener, effect) {
+            // Written on the card that asked, wherever it stands.
+            (Listener::Card { id }, HookEffect::ModifySelf { change, lasting }) => {
+                live.modify_self(id, change, lasting)
+            }
+            // Only while the card is still in hand, which the
+            // enchantment checks before it draws.
+            (Listener::Card { id }, HookEffect::RandomSelfCost { below }) => {
+                if live.cards.find(Pile::Hand, id).is_some() {
+                    let cost = random_cost::<V>(&mut rngs, below);
+                    live.modify_self(
+                        id,
+                        sts2_core::Change::SetCost(sts2_core::CostPool::Energy, cost),
+                        sts2_core::Lasting::ThisFight,
+                    );
                 }
+            }
+            // Wherever the card stands.
+            (_, HookEffect::RandomCost { card, below }) => {
+                let cost = random_cost::<V>(&mut rngs, below);
+                live.modify_self(
+                    card,
+                    sts2_core::Change::SetCost(sts2_core::CostPool::Energy, cost),
+                    sts2_core::Lasting::ThisFight,
+                );
+            }
+            (_, effect) => rest.push(effect),
+        }
+    }
+    // A listener's `CardPileCmd.Draw` last in line runs inside this draw,
+    // so a shuffle's question in it pauses this one too.
+    let hook_draw = match rest.last() {
+        Some(&HookEffect::Draw(count)) => {
+            rest.pop();
+            Some(num_traits::NumCast::from(count).unwrap_or(0usize))
+        }
+        _ => None,
+    };
+    let mut board = Board::for_card(
+        live,
+        rngs.reborrow(),
+        relics,
+        ascension,
+        None,
+        Some(drawn.id),
+    );
+    super::hook::apply::<V, _>(&mut board, rest);
+    ended = ended.or(board.ended());
+    if let Some(owed) = hook_draw
+        && ended.is_none()
+    {
+        let below = live.hook_draws.len();
+        match draw_pausing::<V>(live, rngs.reborrow(), relics, ascension, owed, false, false) {
+            Drawn::Done(drawn) => ended = drawn,
+            stopped @ (Drawn::Paused { left, .. } | Drawn::Asked { left }) => {
+                live.hook_draws.insert(below, left);
+                return stopped;
             }
         }
     }
