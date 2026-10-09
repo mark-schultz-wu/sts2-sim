@@ -1,0 +1,10 @@
+# Glimmer draws and puts I Am Invincible back on top of the draw pile.
+# As the turn ends, the post-play phase finds it on top, and it has the top
+# card played, which is itself.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"I_AM_INVINCIBLE"}
+{"cmd":"grant","card":"GLIMMER"}
+{"cmd":"play_card","index":6}
+{"cmd":"answer","cards":[5]}
+{"cmd":"end_turn"}

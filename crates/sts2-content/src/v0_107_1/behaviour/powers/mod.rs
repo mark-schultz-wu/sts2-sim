@@ -2337,6 +2337,20 @@ pub(crate) fn event_hook(
         (Power::BlackHolePower, PowerAmount::Endless, EventHook::CardPlayed { .. } | EventHook::StarsGained { .. }) => {
             unimplemented!("an endless Black Hole")
         }
+        // `StampedePower.AfterAutoPostPlayPhaseEntered`: its stack of Attacks
+        // in hand, each drawn off `Shuffle`, auto-played. A fight here has one
+        // player, whose power it is.
+        (
+            Power::StampedePower,
+            PowerAmount::Counted(count),
+            EventHook::AutoPostPlayPhase { .. },
+        ) => Some(HookEffect::AutoPlayRandomFromHand {
+            kind: sts2_core::CardKind::Attack,
+            count,
+        }),
+        (Power::StampedePower, PowerAmount::Endless, EventHook::AutoPostPlayPhase { .. }) => {
+            unimplemented!("an endless Stampede")
+        }
         // `JuggernautPower.AfterBlockGained`: its stack, unpowered, from its
         // owner to one enemy that can be hit, drawn off `CombatTargets`, for
         // each gain of its owner's that left any block.

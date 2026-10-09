@@ -1,0 +1,12 @@
+# Strike and Bash are played, which leaves Headbutt the one Attack in hand.
+# As the turn ends, Stampede plays it, and Headbutt asks which card of the
+# discard pile goes on top of the draw pile. The turn's end waits on the
+# pick, then carries on to the Nibbit's turn.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"STAMPEDE_POWER","amount":1,"target":0}
+{"cmd":"grant","card":"HEADBUTT"}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"answer","cards":[1]}

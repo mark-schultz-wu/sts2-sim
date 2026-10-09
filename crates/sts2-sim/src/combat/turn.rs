@@ -27,6 +27,29 @@ pub(crate) fn end<V: Rules>(
     ascension: V::AscensionLevel,
     max_energy: V::Count,
 ) -> Result<Option<super::Ended>, Error> {
+    // `EndPlayerTurnPhaseOne` opens on the post-play phase, and its win check
+    // waits for the turn-end hooks. An auto-play there that asks stands the
+    // turn's end still behind the answer.
+    let parked = post_play_phase::<V>(
+        fighting.live,
+        fighting.streams.combat(),
+        fighting.relics,
+        max_energy,
+    );
+    if parked {
+        return Ok(None);
+    }
+    end_after_post_play(fighting, ascension, max_energy)
+}
+
+/// The player's turn end once its post-play phase is over. The turn-end
+/// hooks, the orbs and the hand come first, then the enemies' turn and the
+/// player's next.
+pub(super) fn end_after_post_play<V: Rules>(
+    fighting: Fighting<'_, V>,
+    ascension: V::AscensionLevel,
+    max_energy: V::Count,
+) -> Result<Option<super::Ended>, Error> {
     let Fighting {
         live: next,
         streams,
@@ -511,6 +534,132 @@ fn start_player_turn<V: Rules>(
 
     next.skip_tick = skipping;
     Ok(None)
+}
+
+/// `AfterAutoPostPlayPhaseEntered`, with the player in the `AutoPostPlay`
+/// phase, which turns to `End` once every listener is done. True where an
+/// auto-play asked, and what is left waits behind the answer.
+///
+/// # Panics
+///
+/// A listener asking for anything but an auto-play.
+fn post_play_phase<V: Rules>(
+    live: &mut Live<V>,
+    rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    max_energy: V::Count,
+) -> bool {
+    live.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::AUTO_POST_PLAY;
+    let hook = sts2_core::ModelHook::AfterAutoPostPlayPhaseEntered;
+    let asked: PrePlayRest<V> = match listen::heard::<V>(live, relics, hook) {
+        true => {
+            let turn = live.turn;
+            listen::notify::<V>(
+                live,
+                relics,
+                sts2_core::EventHook::AutoPostPlayPhase { turn },
+            )
+            .into_iter()
+            .collect()
+        }
+        false => SmallVec::new(),
+    };
+    post_play_from::<V>(live, rngs, relics, asked, max_energy)
+}
+
+/// The post-play phase from what its listeners asked for. True where an
+/// auto-play asked, with the rest deferred behind the answer.
+pub(super) fn post_play_from<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    asked: PrePlayRest<V>,
+    max_energy: V::Count,
+) -> bool {
+    let mut effects = asked.into_iter();
+    while let Some((listener, effect)) = effects.next() {
+        // A Stampede part-way through puts what it has left back first.
+        let mut left_over = None;
+        match effect {
+            // `CardCmd.AutoPlay` of the card, from wherever it stands.
+            sts2_core::HookEffect::AutoPlay(card) => {
+                let Some(from) = live.cards.pile_of(card) else {
+                    unimplemented!("auto-playing {card:?}, which stands in no pile");
+                };
+                super::play::auto_play::<V>(live, rngs.reborrow(), relics, card, from, None, true);
+            }
+            sts2_core::HookEffect::AutoPlayFromDraw(count) => {
+                let count: usize = num_traits::cast(count)
+                    .unwrap_or_else(|| unimplemented!("auto-playing {count:?} cards"));
+                auto_play_from_draw::<V>(live, rngs.reborrow(), relics, count);
+            }
+            sts2_core::HookEffect::AutoPlayFromDrawIfTop(card) => {
+                if live.cards.get(Pile::Draw, 0).map(|held| held.id) == Some(card) {
+                    auto_play_from_draw::<V>(live, rngs.reborrow(), relics, 1);
+                }
+            }
+            sts2_core::HookEffect::AutoPlayRandomFromHand { kind, count } => {
+                let mut left = count;
+                while left > num_traits::zero() && live.asking.is_none() {
+                    left = left - num_traits::one();
+                    let standing: Vec<sts2_core::CardId<V>> = live
+                        .cards
+                        .iter(Pile::Hand)
+                        .filter(|held| {
+                            let card = held.face.ident.card;
+                            V::card_kind(card) == Some(kind)
+                                && !sts2_core::CardTable::unplayable(card)
+                        })
+                        .map(|held| held.id)
+                        .collect();
+                    let Ok(&card) = sts2_core::rng::GameRng::choose(rngs.shuffle, &standing) else {
+                        continue;
+                    };
+                    super::play::auto_play::<V>(
+                        live,
+                        rngs.reborrow(),
+                        relics,
+                        card,
+                        Pile::Hand,
+                        None,
+                        true,
+                    );
+                }
+                if left > num_traits::zero() {
+                    left_over =
+                        Some(sts2_core::HookEffect::AutoPlayRandomFromHand { kind, count: left });
+                }
+            }
+            effect => {
+                unimplemented!("{listener:?} asking for {effect:?} as the post-play phase opens")
+            }
+        }
+        // `CardCmd.AutoPlay` is awaited, so what is left waits on the answer.
+        if live.asking.is_some() {
+            let mut rest: PrePlayRest<V> = SmallVec::new();
+            if let Some(effect) = left_over {
+                rest.push((listener, effect));
+            }
+            rest.extend(effects);
+            live.defer(super::live::Deferred::PostPlay { rest, max_energy });
+            return true;
+        }
+    }
+    live.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::END;
+    false
+}
+
+/// `AutoPlayFromDrawPile(count, Top)` from outside any effect.
+fn auto_play_from_draw<V: Rules>(
+    live: &mut Live<V>,
+    rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    count: usize,
+) {
+    let ascension = live.ascension;
+    let mut board =
+        super::board::Board::for_card(live, rngs, relics, ascension, None, None).blocking();
+    sts2_core::Fight::auto_play_from_draw(&mut board, count, false);
 }
 
 /// `DoTurnEnd`: the orbs, then the cards in hand that answer to a turn

@@ -4262,7 +4262,7 @@ static OVERRIDES: [sts2_core::Overrides; 596] = [
     // HOTFIX
     sts2_core::Overrides::NONE,
     // HOWL_FROM_BEYOND
-    sts2_core::Overrides::NONE,
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterAutoPostPlayPhaseEntered),
     // HUDDLE_UP
     sts2_core::Overrides::NONE,
     // HYPERBEAM
@@ -4298,7 +4298,7 @@ static OVERRIDES: [sts2_core::Overrides; 596] = [
     // ITERATION
     sts2_core::Overrides::NONE,
     // I_AM_INVINCIBLE
-    sts2_core::Overrides::NONE,
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterAutoPostPlayPhaseEntered),
     // JACKPOT
     sts2_core::Overrides::NONE,
     // JACK_OF_ALL_TRADES
@@ -4921,6 +4921,7 @@ static HEARD_BY_ANY: sts2_core::Overrides = sts2_core::Overrides::NONE
     .with(sts2_core::ModelHook::ShouldPlay)
     .with(sts2_core::ModelHook::AfterAttack)
     .with(sts2_core::ModelHook::AfterCombatEnd)
+    .with(sts2_core::ModelHook::AfterAutoPostPlayPhaseEntered)
     .with(sts2_core::ModelHook::AfterCardDrawn)
     .with(sts2_core::ModelHook::ModifyNextEvent)
     .with(sts2_core::ModelHook::ModifyUnknownMapPointRoomTypes)

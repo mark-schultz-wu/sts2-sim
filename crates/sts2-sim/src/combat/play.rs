@@ -1177,6 +1177,22 @@ fn run_deferred<V: Rules>(
                     }
                 }
             }
+            super::live::Deferred::PostPlay { rest, max_energy } => match ended {
+                None => {
+                    let parked = super::turn::post_play_from::<V>(
+                        fighting.live,
+                        fighting.streams.combat(),
+                        fighting.relics,
+                        rest,
+                        max_energy,
+                    );
+                    match parked {
+                        true => None,
+                        false => super::turn::end_after_post_play(fighting, ascension, max_energy)?,
+                    }
+                }
+                ended => ended,
+            },
             super::live::Deferred::PrePlay { rest, next } => match ended {
                 None => {
                     let ended = super::turn::pre_play_from::<V>(
