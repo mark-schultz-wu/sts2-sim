@@ -1,0 +1,7 @@
+# Tank doubles the damage of each powered attack on its owner, so the lone
+# Nibbit's first hit lands twice as hard. Its Guarded goes to the other
+# players, and this fight has none.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"TANK_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}

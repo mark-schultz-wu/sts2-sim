@@ -1467,7 +1467,7 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
     // BATTLEWORN_DUMMY_TIME_LIMIT_POWER
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterSideTurnEnd),
     // BEACON_OF_HOPE_POWER
-    sts2_core::Overrides::NONE,
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterBlockGained),
     // BIASED_COGNITION_POWER
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterSideTurnStart),
     // BLACK_HOLE_POWER
@@ -1819,7 +1819,7 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
     // ITERATION_POWER
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardDrawn),
     // JUGGERNAUT_POWER
-    sts2_core::Overrides::NONE,
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterBlockGained),
     // JUGGLING_POWER
     sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterSideTurnEnd)

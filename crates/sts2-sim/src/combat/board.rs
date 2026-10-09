@@ -3061,6 +3061,27 @@ pub(super) fn player<V: Rules>(creatures: &[Fighter<V>]) -> CombatId {
 }
 
 impl<V: Rules> Board<'_, V> {
+    /// `Hook.AfterBlockGained`, once `CreatureCmd.GainBlock` gave `creature`
+    /// `amount`. The game raises it for a gain the modifiers left at none.
+    pub(super) fn block_gained(&mut self, creature: CombatId, amount: V::Number) {
+        let gained = sts2_core::ModelHook::AfterBlockGained;
+        if !super::listen::heard::<V>(self.live, self.relics, gained) {
+            return;
+        }
+        let hook = sts2_core::EventHook::BlockGained { creature, amount };
+        let asked = super::listen::notify::<V>(self.live, self.relics, hook);
+        for (listener, effect) in asked {
+            match (listener, effect) {
+                (Listener::Power { .. }, effect @ HookEffect::DamageRandomOpponent { .. }) => {
+                    super::hook::apply::<V, _>(self, [effect])
+                }
+                (listener, effect) => {
+                    unimplemented!("{listener:?} asking for {effect:?} once block is gained")
+                }
+            }
+        }
+    }
+
     /// `CreateClone` of the card `id` into `pile`, as
     /// `AddGeneratedCardToCombat` puts it there.
     /// [`Board::clone_named`], then `writes` on the clone where one landed.
@@ -3346,6 +3367,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                         play,
                     });
                 }
+                self.block_gained(recipient, amount.max(V::Number::zero()));
             }
         }
     }
@@ -4916,6 +4938,25 @@ pub(super) fn shuffle<V: Rules>(
     }
 }
 
+/// `CreatureCmd.GainBlock` of `amount`, unpowered, on `owner` from no play
+/// and outside any effect, then `Hook.AfterBlockGained`.
+pub(super) fn gain_unpowered_block<V: Rules>(
+    live: &mut Live<V>,
+    rngs: CombatRngs<'_>,
+    relics: &mut Belt<V>,
+    ascension: V::AscensionLevel,
+    owner: CombatId,
+    amount: V::Number,
+) {
+    live.gain_unpowered_block(owner, amount);
+    let gained = sts2_core::ModelHook::AfterBlockGained;
+    if !super::listen::heard::<V>(live, relics, gained) {
+        return;
+    }
+    let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
+    board.block_gained(owner, amount.max(V::Number::zero()));
+}
+
 /// [`shuffle`], handing back the selection a listener asks for after it,
 /// which is `CardSelectCmd.FromCombatPile` inside `AfterShuffle`.
 pub(super) fn shuffle_asking<V: Rules>(
@@ -5123,6 +5164,7 @@ impl<V: Rules> Board<'_, V> {
                 (Listener::Relic { .. }, HookEffect::GainBlock(amount)) => {
                     let player = self.live.player().id;
                     self.live.gain_unpowered_block(player, amount);
+                    self.block_gained(player, amount.max(V::Number::zero()));
                 }
                 // A fight here has one player, whose piles take them all.
                 (Listener::Power { .. }, HookEffect::GiveCardsPerUnblockedHit { card, per }) => {

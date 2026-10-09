@@ -679,7 +679,14 @@ pub(super) fn before_side_turn_start<V: Rules>(
     for (listener, effect) in listen::notify::<V>(live, relics, hook) {
         match (listener, effect) {
             (Listener::Power { owner, .. }, sts2_core::HookEffect::GainBlock(amount)) => {
-                live.gain_unpowered_block(owner, amount);
+                super::board::gain_unpowered_block::<V>(
+                    live,
+                    rngs.reborrow(),
+                    relics,
+                    live.ascension,
+                    owner,
+                    amount,
+                );
             }
             (_, sts2_core::HookEffect::AttacksFromDiscard(count)) => {
                 attacks_from_discard::<V>(live, rngs.reborrow(), count)
@@ -790,7 +797,14 @@ fn before_turn_end<V: Rules>(
     for (listener, effect) in listen::notify::<V>(live, relics, hook) {
         match (listener, effect) {
             (Listener::Power { owner, .. }, sts2_core::HookEffect::GainBlock(amount)) => {
-                live.gain_unpowered_block(owner, amount);
+                super::board::gain_unpowered_block::<V>(
+                    live,
+                    rngs.reborrow(),
+                    relics,
+                    live.ascension,
+                    owner,
+                    amount,
+                );
             }
             // `CardCmd.Exhaust` of each card the hand holds as it starts.
             (Listener::Relic { .. }, sts2_core::HookEffect::ExhaustHand) => {
@@ -904,7 +918,14 @@ fn before_turn_end<V: Rules>(
             // the relic.
             (Listener::Relic { .. }, sts2_core::HookEffect::GainBlock(amount)) => {
                 let player = live.player().id;
-                live.gain_unpowered_block(player, amount);
+                super::board::gain_unpowered_block::<V>(
+                    live,
+                    rngs.reborrow(),
+                    relics,
+                    live.ascension,
+                    player,
+                    amount,
+                );
             }
             // `PowerCmd.Apply` on the player who carries the relic.
             (Listener::Relic { .. }, sts2_core::HookEffect::ApplyToOwner(power, amount)) => {
@@ -2522,7 +2543,14 @@ pub(super) fn side_turn_started<V: Rules>(
                 }
                 let count: V::Number = num_traits::cast(kinds.len())
                     .expect("a queue's kinds of orb fit a game number");
-                live.gain_unpowered_block(owner, amount * count);
+                super::board::gain_unpowered_block::<V>(
+                    live,
+                    rngs.reborrow(),
+                    relics,
+                    live.ascension,
+                    owner,
+                    amount * count,
+                );
             }
             // `PoisonPower.AfterSideTurnStart`: each round hits the owner for
             // the stack it holds then, and takes one off while it lives. An
@@ -2914,7 +2942,14 @@ fn clear_block<V: Rules>(
                 // `CreatureCmd.GainBlock`, unpowered, on the player who
                 // carries the relic.
                 (Listener::Relic { .. }, sts2_core::HookEffect::GainBlock(amount)) => {
-                    live.gain_unpowered_block(player, amount);
+                    super::board::gain_unpowered_block::<V>(
+                        live,
+                        rngs.reborrow(),
+                        relics,
+                        live.ascension,
+                        player,
+                        amount,
+                    );
                 }
                 // `PowerCmd.Apply` on the player who carries the relic, from
                 // the player.
@@ -2930,7 +2965,14 @@ fn clear_block<V: Rules>(
                     Listener::Power { owner, power, .. },
                     sts2_core::HookEffect::GainBlockAndRemove(amount),
                 ) => {
-                    live.gain_unpowered_block(owner, amount);
+                    super::board::gain_unpowered_block::<V>(
+                        live,
+                        rngs.reborrow(),
+                        relics,
+                        live.ascension,
+                        owner,
+                        amount,
+                    );
                     live.remove_power(owner, power);
                 }
                 // `CreatureCmd.GainBlock` of a power's unpowered block on its
