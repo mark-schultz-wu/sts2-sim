@@ -2702,6 +2702,13 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("auto-playing a card at a named target")
     }
 
+    /// [`Fight::auto_play_card`] at one of the enemies that can be hit, drawn
+    /// off `CombatTargets` by `NextItem` as the play begins. With none to
+    /// draw, it names no target.
+    fn auto_play_card_at_random(&mut self, _card: crate::CardAt<V>) {
+        unimplemented!("auto-playing a card at a random enemy")
+    }
+
     /// `CardCmd.AutoPlay` of the card at one place, with no target named.
     /// Nothing once the fight is ending or its owner is dead.
     fn auto_play_card(&mut self, _card: crate::CardAt<V>) {

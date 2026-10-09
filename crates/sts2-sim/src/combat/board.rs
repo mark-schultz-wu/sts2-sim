@@ -284,6 +284,30 @@ impl<'a, V: Rules> Board<'a, V> {
     /// `applier` is the creature whose command it is, which the power keeps
     /// as `PowerModel.Applier`. A power the console puts on has none.
     #[tracing::instrument(level = "trace", skip_all)]
+    /// `PowerCmd.Apply` over `targets`, which awaits each in turn. A question
+    /// one of them raises inside an effect stands the rest still behind it.
+    fn land_each(
+        &mut self,
+        targets: &[CombatId],
+        power: V::Power,
+        amount: PowerAmount<V::Number>,
+        applier: Option<CombatId>,
+    ) {
+        for (at, &id) in targets.iter().enumerate() {
+            if self.pausable() && self.live.asking.is_some() {
+                self.live.defer(super::live::Deferred::Land(Lands {
+                    targets: targets[at..].iter().copied().collect(),
+                    power,
+                    amount,
+                    applier,
+                    playing: self.playing,
+                }));
+                return;
+            }
+            self.land(id, power, amount, applier);
+        }
+    }
+
     pub(super) fn land(
         &mut self,
         at: CombatId,
@@ -3732,9 +3756,8 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn apply_to_opponents(&mut self, power: V::Power, amount: PowerAmount<V::Number>) {
         // The list is taken before the first lands, as an attack's is.
-        for id in self.opponents() {
-            self.land(id, power, amount, Some(self.actor));
-        }
+        let targets = self.opponents();
+        self.land_each(&targets, power, amount, Some(self.actor));
     }
 
     fn intent_damage(&self) -> V::Number {
@@ -4162,43 +4185,23 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         if self.over() {
             return;
         }
-        let mut taken: SmallVec<[CardInstance<V>; 4]> = SmallVec::new();
-        for _ in 0..count {
-            // `ShuffleIfNecessary`.
-            if self.live.cards.is_empty(Pile::Draw) {
-                let ascension = self.live.ascension;
-                shuffle::<V>(self.live, self.rngs.reborrow(), self.relics, ascension);
-            }
-            if self.live.cards.is_empty(Pile::Draw) {
-                break;
-            }
-            taken.push(self.live.cards.play(Pile::Draw, 0));
-        }
-        for (at, card) in taken.iter().enumerate() {
-            // A question an earlier card's play asked stands the rest still in
-            // the play pile until it is answered.
-            if self.pausable() && self.live.asking.is_some() {
-                for card in &taken[at..] {
-                    self.live.defer(super::live::Deferred::AutoPlayTaken {
-                        id: card.id,
-                        force_exhaust,
-                    });
-                }
-                return;
-            }
-            let pausable = self.pausable();
-            let ended = super::play::auto_play_taken::<V>(
-                self.live,
-                self.rngs.reborrow(),
-                self.relics,
-                card.id,
+        let pausable = self.pausable();
+        let ascension = self.ascension;
+        let ended = auto_play_from_draw::<V>(
+            self.live,
+            self.rngs.reborrow(),
+            self.relics,
+            ascension,
+            AutoPlayFromDraw {
+                left: count,
+                taken: SmallVec::new(),
                 force_exhaust,
-                pausable,
-            );
-            if ended.is_some() {
-                self.ended = ended;
-                return;
-            }
+            },
+            pausable,
+            false,
+        );
+        if ended.is_some() {
+            self.ended = ended;
         }
     }
 
@@ -4336,6 +4339,34 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             card.id(),
             card.pile(),
             Some(target),
+            pausable,
+        );
+    }
+
+    fn auto_play_card_at_random(&mut self, card: CardAt<V>) {
+        if self.over() || !self.live.player().alive {
+            return;
+        }
+        self.standing(card);
+        // A question an earlier play asked stands this one still, target
+        // and all, until the question is answered.
+        if self.live.asking.is_some() {
+            if !self.pausable() {
+                unimplemented!("auto-playing {card:?} while a question waits outside an effect");
+            }
+            self.live
+                .defer(super::live::Deferred::AutoPlayAtRandom { id: card.id() });
+            return;
+        }
+        let target = sts2_core::Fight::random_opponent(self);
+        let pausable = self.pausable();
+        self.ended = super::play::auto_play::<V>(
+            self.live,
+            self.rngs.reborrow(),
+            self.relics,
+            card.id(),
+            card.pile(),
+            target,
             pausable,
         );
     }
@@ -5330,6 +5361,128 @@ pub(super) fn draw_in_effect<V: Rules>(
             }
         }
     }
+}
+
+/// What a `PowerCmd.Apply` over several targets still has to land. That is
+/// `power` at `amount` from `applier` on each of `targets`, inside the effect
+/// of the card `playing` names.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct Lands<V: Rules> {
+    targets: sts2_core::Opponents,
+    power: V::Power,
+    amount: PowerAmount<V::Number>,
+    applier: Option<CombatId>,
+    playing: Option<CardId<V>>,
+}
+
+/// The rest of a `PowerCmd.Apply` over several targets, which a question
+/// stood still.
+pub(super) fn land_waiting<V: Rules>(
+    live: &mut Live<V>,
+    rngs: CombatRngs<'_>,
+    relics: &mut Belt<V>,
+    ascension: V::AscensionLevel,
+    lands: Lands<V>,
+) -> Option<super::Ended> {
+    let mut board = Board::for_card(live, rngs, relics, ascension, None, lands.playing).blocking();
+    board.land_each(&lands.targets, lands.power, lands.amount, lands.applier);
+    let ended = board.ended();
+    let skipped = std::mem::take(&mut board.skipped);
+    super::play::merge::<V>(&mut live.skip_tick, skipped);
+    ended
+}
+
+/// Where `CardPileCmd.AutoPlayFromDrawPile` from the top stands: `left` cards
+/// still to take, after the cards `taken` into the play pile.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct AutoPlayFromDraw<V: Rules> {
+    pub(super) left: usize,
+    pub(super) taken: SmallVec<[CardId<V>; 4]>,
+    pub(super) force_exhaust: bool,
+}
+
+/// `CardPileCmd.AutoPlayFromDrawPile` from the top, carried on from `from`.
+/// Each card taken first shuffles if the draw pile is empty. A shuffle's
+/// question stands the rest of the taking still, and a played card's
+/// question stands the rest of the plays still. `resumed` carries on from
+/// such a shuffle once its pick is made.
+pub(super) fn auto_play_from_draw<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: CombatRngs<'_>,
+    relics: &mut Belt<V>,
+    ascension: V::AscensionLevel,
+    from: AutoPlayFromDraw<V>,
+    pausable: bool,
+    resumed: bool,
+) -> Option<super::Ended> {
+    let AutoPlayFromDraw {
+        left,
+        mut taken,
+        force_exhaust,
+    } = from;
+    // The `AfterShuffle` listeners that waited for the pick this resumes
+    // from.
+    if resumed && !live.after_pick.is_empty() {
+        let waiting = std::mem::take(&mut live.after_pick);
+        let mut board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+        for effect in waiting {
+            board.after_shuffle(effect);
+        }
+    }
+    for taking in 0..left {
+        // `ShuffleIfNecessary`, which needs a discard pile to shuffle in.
+        if live.cards.is_empty(Pile::Draw)
+            && !live.cards.is_empty(Pile::Discard)
+            && let Some((pile, selection, act)) =
+                shuffle_asking::<V>(live, rngs.reborrow(), relics, ascension)
+        {
+            if !pausable {
+                unimplemented!("a shuffle asking for {pile:?} outside an effect's auto-play");
+            }
+            match super::turn::select::<V>(live, rngs.reborrow(), relics, pile, selection, act) {
+                Ok(Some(ended)) => return Some(ended),
+                Ok(None) => {}
+                Err(question) => {
+                    live.asking = Some(super::live::Asking {
+                        then: super::live::Then::Pick { act },
+                        question,
+                    });
+                    live.defer(super::live::Deferred::AutoPlayFromDraw(AutoPlayFromDraw {
+                        left: left - taking,
+                        taken,
+                        force_exhaust,
+                    }));
+                    return None;
+                }
+            }
+        }
+        if live.cards.is_empty(Pile::Draw) {
+            break;
+        }
+        taken.push(live.cards.play(Pile::Draw, 0).id);
+    }
+    for (at, &id) in taken.iter().enumerate() {
+        // A question an earlier card's play asked stands the rest still in
+        // the play pile until it is answered.
+        if pausable && live.asking.is_some() {
+            for &id in &taken[at..] {
+                live.defer(super::live::Deferred::AutoPlayTaken { id, force_exhaust });
+            }
+            return None;
+        }
+        let ended = super::play::auto_play_taken::<V>(
+            live,
+            rngs.reborrow(),
+            relics,
+            id,
+            force_exhaust,
+            pausable,
+        );
+        if ended.is_some() {
+            return ended;
+        }
+    }
+    None
 }
 
 /// How a draw that can pause stopped.

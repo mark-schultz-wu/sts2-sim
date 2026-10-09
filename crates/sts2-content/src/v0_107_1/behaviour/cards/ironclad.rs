@@ -23,6 +23,23 @@ pub enum Resume {
     BrandExhaust,
     /// `BurningPact`, after its owner picked the card to exhaust.
     BurningPactExhaust,
+    /// `BattleTrance`, after a question inside its draw was answered.
+    BattleTranceDrew,
+}
+
+/// The rest of an Ironclad card's play that stood still on a question its
+/// own command raised.
+pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
+    match at {
+        Resume::BattleTranceDrew => battle_trance_drew(fight),
+        at => unreachable!("{at:?} stops on a pick, not on a question it waited for"),
+    }
+}
+
+/// `BattleTrance`, once its draw is over: No Draw on its owner.
+fn battle_trance_drew<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    fight.apply_to_actor(Power::NoDrawPower, PowerAmount::Counted(1));
+    Played::Done
 }
 
 pub(super) fn resume_play<F: Fight<V>>(
@@ -31,6 +48,7 @@ pub(super) fn resume_play<F: Fight<V>>(
     chosen: sts2_core::SelectedCards<V>,
 ) -> Played<V> {
     match at {
+        Resume::BattleTranceDrew => unreachable!("{at:?} waits on a question, not a pick"),
         // `CardPileCmd.Add(cardModel, PileType.Draw, CardPilePosition.Top)`.
         Resume::HeadbuttOntoDraw => {
             fight.act_on(PileAct::OntoDrawTop, chosen.as_slice());
@@ -67,6 +85,19 @@ pub(super) fn resume_play<F: Fight<V>>(
 pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
     match card {
         IroncladCard::Thrash => thrash(fight),
+        // `BattleTrance`: its `Cards` drawn, then No Draw. A shuffle inside
+        // the draw can ask, and No Draw waits for it.
+        IroncladCard::BattleTrance => {
+            fight.draw(fight.var(CardVar::Cards));
+            if fight.waiting() {
+                return Played::Waiting {
+                    at: super::super::Resume::Card(super::Resume::Ironclad(
+                        Resume::BattleTranceDrew,
+                    )),
+                };
+            }
+            battle_trance_drew(fight)
+        }
         // `NotYet`: its `Heal` on its owner.
         IroncladCard::NotYet => {
             fight.heal(fight.actor(), fight.var(CardVar::Heal));

@@ -338,6 +338,27 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
                 .unwrap();
                 continue;
             }
+            // A draw can stand still on a shuffle's question, and a generated
+            // play has no way to wait. So what comes after one is ported by
+            // hand.
+            let draws = card
+                .play
+                .rows
+                .iter()
+                .position(|row| row.first().is_some_and(|w| w == "draw"));
+            if draws.is_some_and(|at| at + 1 < card.play.rows.len()) {
+                writeln!(
+                    out,
+                    "// A command after a draw, which has to wait on the draw's question."
+                )
+                .unwrap();
+                writeln!(
+                    out,
+                    "{variant} => unimplemented!(\"what {{card:?}} does when it is played\"),"
+                )
+                .unwrap();
+                continue;
+            }
             writeln!(out, "{variant} => {{").unwrap();
             if card
                 .play
