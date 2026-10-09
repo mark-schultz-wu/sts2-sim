@@ -29,6 +29,14 @@ use crate::error::FileError;
 /// first acts.
 const ACTS: [&str; 4] = ["OVERGROWTH", "UNDERDOCKS", "HIVE", "GLORY"];
 
+/// Whether a row names content no run can meet. Only the game's tests build
+/// its `Mock` models, and no pool offers its `Deprecated` ones. The counts
+/// leave them out.
+fn test_only(name: &str) -> bool {
+    let name = camel(name);
+    name.starts_with("Mock") || name.starts_with("Deprecated")
+}
+
 /// How many of the powers holding the most back the report names.
 const BLOCKERS: usize = 15;
 
@@ -422,11 +430,16 @@ pub fn run(args: Args) -> Result<String, Error> {
             (!name.is_empty() && name.chars().next()?.is_ascii_uppercase()).then_some(name)
         })
         .collect();
+    let mut skipped = 0;
     let mut pools: BTreeMap<String, (usize, usize, Vec<String>)> = BTreeMap::new();
     for row in build.rows("relics.txt", "pool")? {
         let (Some(pool), Some(relic)) = (row.get(1), row.get(2)) else {
             continue;
         };
+        if test_only(relic) {
+            skipped += 1;
+            continue;
+        }
         let entry = pools.entry(pool.clone()).or_default();
         entry.1 += 1;
         match ported_relics.contains(camel(relic).as_str()) {
@@ -434,7 +447,8 @@ pub fn run(args: Args) -> Result<String, Error> {
             false => entry.2.push(camel(relic)),
         }
     }
-    for (pool, (done, total, lacking)) in pools {
+    for (pool, (done, total, lacking)) in pools.into_iter().filter(|(_, (_, total, _))| *total > 0)
+    {
         writeln!(out, "  {pool:<24} {}", share(done, total)).unwrap();
         lacks(&mut out, &args, lacking);
     }
@@ -450,7 +464,17 @@ pub fn run(args: Args) -> Result<String, Error> {
                 .collect::<Vec<_>>()
         })
         .collect();
-    let potions = build.rows("potions.txt", "potion")?;
+    let potions: Vec<Vec<String>> = build
+        .rows("potions.txt", "potion")?
+        .into_iter()
+        .filter(|row| match row.get(1) {
+            Some(potion) if test_only(potion) => {
+                skipped += 1;
+                false
+            }
+            _ => true,
+        })
+        .collect();
     let ported_potions = potions
         .iter()
         .filter(|row| row.get(1).is_some_and(|p| potion_arms.contains(&camel(p))))
@@ -465,7 +489,17 @@ pub fn run(args: Args) -> Result<String, Error> {
             .filter(|p| !potion_arms.contains(p)),
     );
 
-    let all_powers = build.rows("powers.txt", "power")?;
+    let all_powers: Vec<Vec<String>> = build
+        .rows("powers.txt", "power")?
+        .into_iter()
+        .filter(|row| match row.get(1) {
+            Some(power) if test_only(power) => {
+                skipped += 1;
+                false
+            }
+            _ => true,
+        })
+        .collect();
     let ported = all_powers
         .iter()
         .filter(|row| row.get(1).is_some_and(|p| powers.contains(&camel(p))))
@@ -484,6 +518,12 @@ pub fn run(args: Args) -> Result<String, Error> {
             .filter_map(|row| row.get(1).map(|p| camel(p)))
             .filter(|p| !powers.contains(p)),
     );
+
+    writeln!(
+        out,
+        "\nleft out of every count: {skipped} test-only relics, potions and powers"
+    )
+    .unwrap();
 
     let mut blocking: Vec<_> = blocking.into_iter().collect();
     blocking.sort_by_key(|(power, count)| (std::cmp::Reverse(*count), power.clone()));

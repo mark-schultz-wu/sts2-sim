@@ -113,8 +113,9 @@ number.
 
 ## Stop and ask Mark instead of porting when
 
-- An item belongs out of the count rather than ported, like the
-  deprecated relic pool, or content the game can never offer.
+- An item belongs out of the count rather than ported, as content the
+  game can never offer. The tool already leaves out the `Mock` and
+  `Deprecated` models.
 - A port needs a design change to core types beyond what it needs.
 - The oracle cannot record the scenario, and the fix to the mod is
   unclear.
