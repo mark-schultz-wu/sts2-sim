@@ -1,0 +1,6 @@
+# Skipping a chest still opens it and gives its gold. The skip leaves the
+# relic showing, answered, until the room is left. Taking it would empty
+# the chest.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"enter_room","type":"Treasure"}
+{"cmd":"choose_option","index":1}

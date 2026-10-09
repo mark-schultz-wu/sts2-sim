@@ -882,10 +882,29 @@ internal static class Protocol
         // never replied and the client timed out at its command deadline. Buying
         // a card, a relic or a potion was unaffected, which is why this looked
         // fine for as long as it did.
-        BackgroundWork.Track(entry.OnTryPurchaseWrapper(inventory));
+        BackgroundWork.Track(Buy(entry, inventory));
 
         bool resolved = await Driver.WaitForDecisionPoint();
         await Observe(req, "buy", resolved);
+    }
+
+    /// <summary>
+    /// A merchant entry's purchase, and what the shop screen does after it.
+    /// </summary>
+    /// <remarks>
+    /// <c>MerchantCardRemovalEntry.OnTryPurchase</c> marks the removal used
+    /// through <c>NRun.Instance?.MerchantRoom</c>, which is null headless. So
+    /// without this a shop sold its card removal again. The screen's
+    /// <c>NMerchantCardRemoval.OnCardRemovalUsed</c> calls <c>SetUsed</c>, and
+    /// so does this.
+    /// </remarks>
+    private static async Task Buy(MerchantEntry entry, MerchantInventory? inventory)
+    {
+        bool bought = await entry.OnTryPurchaseWrapper(inventory);
+        if (bought && entry is MerchantCardRemovalEntry removal)
+        {
+            removal.SetUsed();
+        }
     }
 
     /// <summary>

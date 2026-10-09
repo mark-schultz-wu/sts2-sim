@@ -33,9 +33,10 @@ pub(crate) struct State<V: Rules> {
     shared: Arc<RunData<V>>,
     /// The act's map, which is generated again for every act.
     map: Arc<ActMap<V>>,
-    /// The point the Spoils Map's quest stands on, which its
-    /// `ModifyGeneratedMapLate` sets to the first Treasure point of its act.
-    spoils: Option<Coord>,
+    /// The point the Spoils Map's quest stands on, with the card and the gold
+    /// each copy of it pays there. Its `ModifyGeneratedMapLate` sets the point
+    /// to the first Treasure point of its act.
+    spoils: Option<(Coord, V::Card, V::Number)>,
     /// Which act the run stands in, counted from zero.
     act: usize,
     floor: V::Count,
@@ -126,6 +127,13 @@ const MAP_STREAMS: [&str; 4] = ["act_1_map", "act_2_map", "act_3_map", "act_4_ma
 /// The three are what an unknown room resolves to, and they climb as a run
 /// walks into ones that stay events.
 const UNKNOWN_ODDS: [f32; 3] = [0.1, 0.02, 0.03];
+
+/// `DoTreasureRoomRewards`' `NextInt(42, 53)`: a chest's gold, the top
+/// excluded.
+const CHEST_GOLD: (i32, i32) = (42, 53);
+
+/// `AscensionHelper.PovertyAscensionGoldMultiplier`.
+const POVERTY_GOLD: f64 = 0.75;
 
 /// Every branch and every report reads one copy of it.
 #[derive(Debug)]
@@ -873,14 +881,17 @@ impl<V: Rules> State<V> {
             .deck_cards_hearing(sts2_core::ModelHook::ModifyGeneratedMapLate)
             .collect();
         for card in cards {
-            if V::deck_card_modify_generated_map_late(card, self.act) {
+            if let Some(gold) = V::deck_card_modify_generated_map_late(card, self.act) {
                 // `GetAllMapPoints` walks the grid a column at a time.
-                self.spoils = (map.nodes().iter())
+                let first = (map.nodes().iter())
                     .filter(|node| {
                         node.kind == <V::MapPointType as sts2_core::MapPointKinds>::TREASURE
                     })
                     .map(|node| node.at)
                     .min();
+                if let Some(at) = first {
+                    self.spoils = Some((at, card, gold));
+                }
             }
         }
         let hook = sts2_core::EventHook::GeneratedMapLate { act: self.act };
@@ -3670,13 +3681,6 @@ impl<V: Rules> State<V> {
     /// That rolls the chest's relic off its own stream with `RollRarity`,
     /// where `ShouldGenerateTreasure` lets it.
     pub(super) fn enter_treasure(&mut self, at: Location, streams: Streams<V>) {
-        // `OneOffSynchronizer.TryHandleSpoilsMap` pays the quest once the
-        // chest opens, and neither the chest's gold nor the payout is ported.
-        if let Location::MapPoint(point) = at
-            && self.spoils == Some(point)
-        {
-            unimplemented!("the Spoils Map paying out its quest at a chest");
-        }
         self.streams = streams;
         self.enter(
             at,
@@ -3703,6 +3707,57 @@ impl<V: Rules> State<V> {
         }
     }
 
+    /// `NTreasureRoom.OpenChest`'s `DoNormalRewards`, which runs as the
+    /// player first answers the chest: `OneOffSynchronizer.
+    /// DoTreasureRoomRewards`. Where `ShouldGenerateTreasure` lets it, that is
+    /// `NextInt(42, 53)` gold off the player's Rewards stream, three quarters
+    /// of it under Poverty, then `TryHandleSpoilsMap`.
+    fn open_chest(&mut self) {
+        use sts2_core::rng::GameRng as _;
+        use sts2_core::{AscensionKinds as _, PlayerStreamKinds as _};
+
+        if !self.generates_treasure() {
+            return;
+        }
+        let span = sts2_core::rng::Span::new(CHEST_GOLD.0, CHEST_GOLD.1)
+            .expect("the chest's gold is a span");
+        let rolled = self
+            .streams
+            .player(V::PlayerRngType::REWARDS)
+            .next_int_range(span);
+        let mut gold = f64::from(rolled);
+        if self
+            .ascension()
+            .has(<V::AscensionLevel as sts2_core::AscensionKinds>::POVERTY)
+        {
+            gold *= POVERTY_GOLD;
+        }
+        // `(int)gold`, which truncates.
+        self.gain_gold(num_traits::cast(gold.trunc()).expect("a chest's gold is a game number"));
+        self.spoils_paid();
+    }
+
+    /// `TryHandleSpoilsMap`, where the run stands on the Spoils Map's quest
+    /// point. Each Spoils Map in the deck pays its gold and leaves the deck
+    /// through `OnQuestComplete`, and the quest is done.
+    fn spoils_paid(&mut self) {
+        let (Some(&at), Some((point, card, gold))) = (self.visited.last(), self.spoils) else {
+            return;
+        };
+        if at != point {
+            return;
+        }
+        let paying: Vec<usize> = (self.player.deck.iter().enumerate())
+            .filter(|(_, held)| held.ident.card == card)
+            .map(|(at, _)| at)
+            .collect();
+        for &at in paying.iter().rev() {
+            self.gain_gold(gold);
+            self.player.deck_mut().remove(at);
+        }
+        self.spoils = None;
+    }
+
     /// `Hook.ShouldGenerateTreasure`, which any relic on the belt can answer
     /// no to.
     fn generates_treasure(&self) -> bool {
@@ -3725,8 +3780,8 @@ impl<V: Rules> State<V> {
     /// already reported. A slot it sells clears rather than restocks, because
     /// `ShouldRefillMerchantEntry` is a hook and no ported relic answers it.
     ///
-    /// The card removal is the one entry that does not clear. Its price climbs
-    /// with every removal the run has bought, and it stays on the shelf.
+    /// The card removal is the one entry whose stock does not clear. Once used,
+    /// it shows unstocked, and its price climbs at the next merchant.
     pub(crate) fn buy(&mut self, index: u8) -> Result<Decided, Error> {
         if let Phase::Event { .. } = self.phase {
             return Ok(self.buy_in_event(index));
@@ -3899,10 +3954,17 @@ impl<V: Rules> State<V> {
         let spent = self.merchant_price(removal_cost::<V>(self.removals_used));
         self.player.gold = self.player.gold - spent;
         self.removals_used += 1;
-        // The entry itself is left where it was. `CalcCost` runs in its
-        // constructor and nowhere else, and `ClearAfterPurchase` is empty, so
-        // this merchant still shows it stocked and at the price it opened on.
+        // `NMerchantCardRemoval.OnCardRemovalUsed` calls `SetUsed`, and
+        // `IsStocked` is `!Used`, so this merchant sells no second removal.
         // The next merchant reads the raised count.
+        if let Phase::Shop { entries, .. } = &mut self.phase {
+            for entry in entries
+                .iter_mut()
+                .filter(|entry| entry.stock == sts2_core::Stock::CardRemoval)
+            {
+                entry.stocked = false;
+            }
+        }
     }
 
     /// The deck as a pickup's selection offers it.
@@ -4398,8 +4460,16 @@ impl<V: Rules> State<V> {
                 unreachable!("an empty chest finishes its room as it opens");
             };
             *finished = true;
+            self.open_chest();
             match index {
-                0 => self.obtain_here(relic),
+                // Taking the relic ends the session and clears `CurrentRelics`.
+                // A skip leaves them showing until the room is left.
+                0 => {
+                    if let Phase::Treasure { relic, .. } = &mut self.phase {
+                        *relic = None;
+                    }
+                    self.obtain_here(relic);
+                }
                 1 => {}
                 _ => unimplemented!("an option the treasure room does not offer"),
             }
@@ -5789,18 +5859,20 @@ impl<V: Rules> State<V> {
             }
             Phase::Event { .. } => self.event_room(),
             Phase::Treasure { relic, finished } => {
-                let options = match (*finished, *relic) {
-                    (true, _) | (false, None) => Vec::new(),
-                    (false, Some(relic)) => vec![
+                // A taken relic empties the chest. A skip leaves its relic
+                // showing, answered, until the room is left.
+                let options = match *relic {
+                    None => Vec::new(),
+                    Some(relic) => vec![
                         sts2_core::ChestOption {
                             index: 0,
                             take: sts2_core::Take::Relic(relic),
-                            chosen: false,
+                            chosen: *finished,
                         },
                         sts2_core::ChestOption {
                             index: 1,
                             take: sts2_core::Take::Skip,
-                            chosen: false,
+                            chosen: *finished,
                         },
                     ],
                 };

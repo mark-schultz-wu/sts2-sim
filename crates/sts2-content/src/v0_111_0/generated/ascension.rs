@@ -72,6 +72,7 @@ impl sts2_core::AscensionKinds for AscensionLevel {
     const SCARCITY: AscensionLevel = AscensionLevel::Scarcity;
     const SWARMING_ELITES: AscensionLevel = AscensionLevel::SwarmingElites;
     const WEARY_TRAVELER: AscensionLevel = AscensionLevel::WearyTraveler;
+    const POVERTY: AscensionLevel = AscensionLevel::Poverty;
 
     fn has(self, rung: AscensionLevel) -> bool {
         AscensionLevel::has(self, rung)

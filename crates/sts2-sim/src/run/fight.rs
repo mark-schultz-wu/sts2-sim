@@ -216,6 +216,21 @@ impl<V: Rules> State<V> {
                     let pickup = asked.pickup;
                     unimplemented!("a fight's end asking for {pickup:?}");
                 }
+                // `NCombatUi.OnCombatWon` offers rewards only for an encounter
+                // that gives them. One that gives none goes straight on through
+                // `ProceedFromTerminalRewardsScreen`, rolling nothing.
+                if combat
+                    .encounter
+                    .is_some_and(|encounter| !sts2_core::EncounterTable::gives_rewards(encounter))
+                {
+                    if self.resuming.is_none() {
+                        unimplemented!("a fight that gives no rewards outside an event");
+                    }
+                    self.won(combat, Vec::new());
+                    return self
+                        .proceed()
+                        .unwrap_or_else(|e| unreachable!("an event resumes after its fight: {e}"));
+                }
                 let mut offered = self.combat_rewards(&combat, proportion, &extra_rewards, &taken);
                 // `GoldReward.Populate` draws `NextInt(min, max + 1)` off the
                 // rewards stream, after the room's own, even for a gold
