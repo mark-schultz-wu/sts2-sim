@@ -613,6 +613,9 @@ pub(crate) struct Face<V: Rules> {
     /// own `OnPlay` reads and sets, and the fields its class keeps. A fight
     /// starts every copy's fresh.
     enchantment_state: V::EnchantmentState,
+    /// `IsDupe`: a copy made to be played once, which leaves the fight once
+    /// its play is over.
+    dupe: bool,
 }
 
 impl<V: Rules> Clone for Face<V> {
@@ -844,6 +847,7 @@ impl<V: Rules> Face<V> {
             enchantment_state: sts2_core::EnchantmentModel::new(
                 ident.enchantment.map(|enchanted| enchanted.enchantment),
             ),
+            dupe: false,
         };
         if card.ident.upgrade != 0 {
             assert_eq!(card.ident.upgrade, 1, "only first upgrades are ported");
@@ -999,6 +1003,22 @@ impl<V: Rules> Face<V> {
 
     /// `Keywords.Contains(Exhaust)` for this copy, which an upgrade can take
     /// off.
+    /// `IsDupe` for this copy.
+    pub(super) fn dupe(&self) -> bool {
+        self.dupe
+    }
+
+    /// `CreateDupe`: this copy as a dupe, with its Exhaust taken off.
+    pub(super) fn duped(mut self) -> Self {
+        use sts2_core::KeywordKinds;
+
+        let exhaust = <V::CardKeyword as KeywordKinds<V>>::EXHAUST;
+        self.dupe = true;
+        self.added_keywords = sts2_core::FlagSet::without(self.added_keywords, exhaust);
+        self.removed_keywords = sts2_core::FlagSet::with(self.removed_keywords, exhaust);
+        self
+    }
+
     pub(super) fn exhausts(&self) -> bool {
         use sts2_core::{CardTable as _, KeywordKinds};
 
@@ -2191,12 +2211,20 @@ impl<V: Rules> CombatHistory<V> {
     }
 
     /// `History.CardPlayFinished`, in the turn the fight stands in.
-    pub(super) fn finish(&mut self, card: V::Card, id: CardId<V>, ethereal: bool, auto: bool) {
+    pub(super) fn finish(
+        &mut self,
+        card: V::Card,
+        id: CardId<V>,
+        ethereal: bool,
+        auto: bool,
+        dupe: bool,
+    ) {
         let finished = sts2_core::PlayFinished {
             card,
             id,
             ethereal,
             auto,
+            dupe,
         };
         self.this_turn
             .push(sts2_core::HistoryEntry::Finished(finished));

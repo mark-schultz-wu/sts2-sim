@@ -3872,6 +3872,8 @@ pub enum EventHook<V: ContentVersion> {
         spent: V::Number,
         /// `CombatState.CurrentSide`: whose turn the play starts in.
         side: V::CombatSide,
+        /// `IsDupe`: the copy is a dupe, made to be played once.
+        dupe: bool,
     },
     /// `AfterCardDrawnEarly`, the pass `Hook.AfterCardDrawn` makes over every
     /// listener before the one [`EventHook::CardDrawn`] names.
@@ -4347,6 +4349,8 @@ pub struct PlayFinished<V: ContentVersion> {
     pub ethereal: bool,
     /// `CardPlay.IsAutoPlay`.
     pub auto: bool,
+    /// `IsDupe`: the copy was a dupe, made to be played once.
+    pub dupe: bool,
 }
 
 /// One entry in `CombatManager.History`, of the kinds a listener reads.
@@ -4976,6 +4980,12 @@ pub enum HookEffect<V: ContentVersion> {
     /// `RunState.CloneCard` of each card the deck held as this began, in deck
     /// order, each then `CardPileCmd.Add` to the deck.
     CloneDeck,
+    /// `HistoryCourse.AfterAutoPrePlayPhaseEntered`: a dupe of the last card
+    /// its owner finished playing in its last turn, auto-played. The card is
+    /// of one of `kinds`, and is no dupe itself.
+    AutoPlayDupeOfLastPlay {
+        kinds: &'static [CardKind],
+    },
     /// `LordsParasol.PurchaseEverything`: every shelf of the merchant bought
     /// for nothing, in the shelves' order, then its card removal, which the
     /// player cannot cancel.
