@@ -561,7 +561,7 @@ fn without_playing<V: Rules>(
                 Some(sts2_core::Pile::Exhaust),
                 sts2_core::PilePosition::Bottom,
             );
-            super::turn::exhausted::<V>(live, rngs, relics, card, false)
+            super::turn::exhausted::<V>(live, rngs, relics, card, false, false)
         }
         false => {
             live.cards.leave_play(
@@ -973,8 +973,14 @@ pub(crate) fn answer<V: Rules>(
                 unreachable!("a shuffle asks for cards of a pile")
             };
             let ascension = live.ascension;
-            let (sly, ended) =
-                super::turn::act_on::<V>(live, streams.combat(), relics, act, picked.as_slice());
+            let (sly, ended) = super::turn::act_on::<V>(
+                live,
+                streams.combat(),
+                relics,
+                act,
+                picked.as_slice(),
+                false,
+            );
             let ended = ended
                 .or_else(|| super::turn::play_sly::<V>(live, streams.combat(), relics, sly, true));
             return run_deferred(
@@ -1195,6 +1201,38 @@ fn run_deferred<V: Rules>(
                     ascension,
                     held,
                 ),
+                ended => ended,
+            },
+            super::live::Deferred::PlayOver => {
+                let ended = check_for_empty_hand::<V, _>(
+                    fighting.live,
+                    fighting.streams,
+                    fighting.relics,
+                    ascension,
+                    ended,
+                );
+                if ended == Some(super::Ended::Won) {
+                    super::listen::combat_ended::<V>(fighting.live, fighting.relics);
+                }
+                ended
+            }
+            super::live::Deferred::ActOn { act, cards } => match ended {
+                None => {
+                    let mut board = Board::for_card(
+                        fighting.live,
+                        fighting.streams.combat(),
+                        fighting.relics,
+                        ascension,
+                        None,
+                        None,
+                    )
+                    .blocking();
+                    sts2_core::Fight::act_on(&mut board, act, &cards);
+                    let ended = board.ended();
+                    let skipped = std::mem::take(&mut board.skipped);
+                    merge::<V>(&mut fighting.live.skip_tick, skipped);
+                    ended
+                }
                 ended => ended,
             },
             super::live::Deferred::Land(lands) => match ended {
@@ -1549,10 +1587,18 @@ fn finish_effect<V: Rules, S: LendsCombat>(
     // follows the card into the pile. A fight already over exhausts nothing.
     let ended = match (ended, exhausting) {
         (None, Some(card)) => {
-            super::turn::exhausted::<V>(next, streams.combat(), relics, &card, false)
+            super::turn::exhausted::<V>(next, streams.combat(), relics, &card, false, true)
         }
         (ended, _) => ended,
     };
+    // A question a hook of the exhaust asked stands the end of the play
+    // still: the empty hand's check waits for it.
+    if next.asking.is_some() {
+        if outermost {
+            next.defer(super::live::Deferred::PlayOver);
+        }
+        return Ok(ended);
+    }
     let ended = match outermost {
         true => check_for_empty_hand::<V, _>(next, streams, relics, ascension, ended),
         false => ended,

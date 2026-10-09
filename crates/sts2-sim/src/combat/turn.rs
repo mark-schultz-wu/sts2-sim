@@ -544,7 +544,7 @@ fn turn_end<V: Rules>(
             .get(Pile::Hand, at)
             .expect("an Ethereal card stands where it was found");
         live.cards.move_to(Pile::Hand, at, Pile::Exhaust);
-        if let Some(ended) = exhausted::<V>(live, rngs.reborrow(), relics, &card, true) {
+        if let Some(ended) = exhausted::<V>(live, rngs.reborrow(), relics, &card, true, false) {
             return Some(ended);
         }
     }
@@ -808,6 +808,7 @@ fn before_turn_end<V: Rules>(
                     relics,
                     sts2_core::PileAct::Exhaust,
                     &hand,
+                    false,
                 );
                 if ended.is_some() {
                     return ended;
@@ -1789,7 +1790,8 @@ pub(super) fn select<V: Rules>(
     match super::play::taken(live, pile, selection) {
         Some(picked) => {
             let mut rngs = rngs;
-            let (sly, ended) = act_on::<V>(live, rngs.reborrow(), relics, act, picked.as_slice());
+            let (sly, ended) =
+                act_on::<V>(live, rngs.reborrow(), relics, act, picked.as_slice(), false);
             if ended.is_some() {
                 return Ok(ended);
             }
@@ -1809,9 +1811,16 @@ pub(super) fn act_on<V: Rules>(
     relics: &mut crate::run::Belt<V>,
     act: sts2_core::PileAct,
     picked: &[sts2_core::CardAt<V>],
+    pausable: bool,
 ) -> (SmallVec<[sts2_core::CardId<V>; 2]>, Option<super::Ended>) {
     let mut sly = SmallVec::new();
-    for card in picked {
+    let asked_before = live.asking.is_some();
+    for (taking, card) in picked.iter().enumerate() {
+        // A question a hook asked stands the cards after it still, which
+        // nothing here holds back yet.
+        if !asked_before && live.asking.is_some() && taking > 0 {
+            unimplemented!("{act:?} of more cards behind a question");
+        }
         let from = card.pile();
         let at = live
             .cards
@@ -1826,7 +1835,9 @@ pub(super) fn act_on<V: Rules>(
                     .get(from, at)
                     .expect("a card stands where it was found");
                 live.cards.move_to(from, at, Pile::Exhaust);
-                if let Some(ended) = exhausted::<V>(live, rngs.reborrow(), relics, &held, false) {
+                if let Some(ended) =
+                    exhausted::<V>(live, rngs.reborrow(), relics, &held, false, pausable)
+                {
                     return (sly, Some(ended));
                 }
                 continue;
@@ -1979,6 +1990,7 @@ pub(super) fn exhausted<V: Rules>(
     relics: &mut crate::run::Belt<V>,
     card: &super::live::CardInstance<V>,
     ethereal: bool,
+    pausable: bool,
 ) -> Option<super::Ended> {
     // `History.CardExhausted`, before the hook.
     live.history.exhausted(card.face.ident.card);
@@ -1992,7 +2004,12 @@ pub(super) fn exhausted<V: Rules>(
         return None;
     }
     let ascension = live.ascension;
+    // Inside an effect, a question a listener's command asks stands the
+    // effect still.
     let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
+    if pausable {
+        board = board.blocking();
+    }
     let mut rest: SmallVec<[sts2_core::HookEffect<V>; 4]> = SmallVec::new();
     for (_, effect) in asked {
         match effect {
@@ -2029,7 +2046,7 @@ pub(super) fn answer_setup<V: Rules>(
     act: sts2_core::PileAct,
     picked: sts2_core::SelectedCards<V>,
 ) -> Option<super::Ended> {
-    let (sly, ended) = act_on::<V>(live, rngs.reborrow(), relics, act, picked.as_slice());
+    let (sly, ended) = act_on::<V>(live, rngs.reborrow(), relics, act, picked.as_slice(), false);
     // A Sly card that asks stands the setup still behind its own question,
     // whose deferrals run ahead of the setup's.
     ended.or_else(|| play_sly::<V>(live, rngs, relics, sly, true))
