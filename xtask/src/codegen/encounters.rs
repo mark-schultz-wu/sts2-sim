@@ -838,6 +838,11 @@ fn emit_encounters(
          \x20       self.data().flags.contains(EncounterFlag::Weak)\n\
          \x20   }}\n\
          \n\
+         \x20   /// Whether winning it offers the room's rewards.\n\
+         \x20   fn gives_rewards(self) -> bool {{\n\
+         \x20       self.data().flags.contains(EncounterFlag::GivesRewards)\n\
+         \x20   }}\n\
+         \n\
          \x20   /// Whether the two field a creature family in common.\n\
          \x20   fn shares_family_with(self, other: Encounter) -> bool {{\n\
          \x20       self.data().families.intersects(other.data().families)\n\

@@ -138,6 +138,11 @@ pub trait EncounterTable: Table {
     /// something a starting deck can beat.
     fn weak(self) -> bool;
 
+    /// `ShouldGiveRewards`: whether winning it offers the room's rewards. A
+    /// fight that offers none goes straight on, as
+    /// `NCombatUi.ProceedWithoutRewards` does.
+    fn gives_rewards(self) -> bool;
+
     /// Whether the two field a creature family in common.
     ///
     /// Room generation places no encounter next to one this holds for. So a
@@ -1783,6 +1788,8 @@ pub trait AscensionKinds: std::fmt::Debug + Copy + Eq + 'static {
     const SWARMING_ELITES: Self;
     /// An ancient heals four fifths of what is missing rather than all of it.
     const WEARY_TRAVELER: Self;
+    /// Gold from a chest comes to three quarters.
+    const POVERTY: Self;
 
     /// Whether a run at this level has the rule `rung` names.
     fn has(self, rung: Self) -> bool;
@@ -7108,13 +7115,13 @@ pub trait Rules: Hooks {
     fn deck_card_modify_generated_map(card: Self::Card, act: usize) -> Option<ReplacedMap>;
 
     /// `ModifyGeneratedMapLate` for a card in the deck, in the act counted
-    /// from zero. Whether it sets the Spoils Map's `SpoilsCoord`, which is
-    /// the map's first Treasure point.
+    /// from zero. Where it sets the Spoils Map's `SpoilsCoord`, the map's
+    /// first Treasure point, the gold its `OnQuestComplete` pays there.
     ///
     /// # Panics
     ///
     /// A card whose override nobody has ported.
-    fn deck_card_modify_generated_map_late(card: Self::Card, act: usize) -> bool;
+    fn deck_card_modify_generated_map_late(card: Self::Card, act: usize) -> Option<Self::Number>;
 
     /// `AfterMapGenerated` for a card in the deck, in the act counted from
     /// zero.

@@ -851,6 +851,11 @@ impl sts2_core::EncounterTable for Encounter {
         self.data().flags.contains(EncounterFlag::Weak)
     }
 
+    /// Whether winning it offers the room's rewards.
+    fn gives_rewards(self) -> bool {
+        self.data().flags.contains(EncounterFlag::GivesRewards)
+    }
+
     /// Whether the two field a creature family in common.
     fn shares_family_with(self, other: Encounter) -> bool {
         self.data().families.intersects(other.data().families)

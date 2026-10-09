@@ -5,5 +5,3 @@
 {"cmd":"choose_option","index":2}
 {"cmd":"power","power":"STRENGTH_POWER","amount":400,"target":0}
 {"cmd":"play_card","index":0,"target":1}
-{"cmd":"answer","skip":true}
-{"cmd":"proceed"}

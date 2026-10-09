@@ -894,6 +894,9 @@ pub(crate) fn narrows_unknown_rooms(card: Cards, act: usize) -> bool {
 /// `SpoilsMap.SpoilsActIndex`, which `AfterCreated` sets.
 const SPOILS_ACT: usize = 1;
 
+/// The Spoils Map's `GoldVar(600)`.
+const SPOILS_GOLD: Number = 600;
+
 /// `ModifyGeneratedMap` for a card in the deck. The Spoils Map puts a
 /// `SpoilsActMap` in place of its act's own.
 ///
@@ -909,16 +912,17 @@ pub(crate) fn modify_generated_map(card: Cards, act: usize) -> Option<sts2_core:
     }
 }
 
-/// `ModifyGeneratedMapLate` for a card in the deck: whether it sets
-/// `SpoilsCoord`. The Spoils Map sets it to its act's first Treasure point,
-/// where `AfterMapGenerated` puts its quest and the chest pays it out.
+/// `ModifyGeneratedMapLate` for a card in the deck: the gold its quest pays,
+/// where it sets `SpoilsCoord`. The Spoils Map sets it to its act's first
+/// Treasure point, where `AfterMapGenerated` puts its quest and the chest pays
+/// its `GoldVar(600)`.
 ///
 /// # Panics
 ///
 /// Any other card, which the run asks only when its class overrides the hook.
-pub(crate) fn modify_generated_map_late(card: Cards, act: usize) -> bool {
+pub(crate) fn modify_generated_map_late(card: Cards, act: usize) -> Option<Number> {
     match card {
-        Cards::Quest(QuestCard::SpoilsMap) => act == SPOILS_ACT,
+        Cards::Quest(QuestCard::SpoilsMap) => (act == SPOILS_ACT).then_some(SPOILS_GOLD),
         card => unimplemented!("what {card:?} does late in a map's making"),
     }
 }

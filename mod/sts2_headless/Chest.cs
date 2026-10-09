@@ -4,6 +4,7 @@ using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Entities.TreasureRelicPicking;
 using MegaCrit.Sts2.Core.Multiplayer.Game;
+using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
 
 namespace Sts2Headless;
@@ -41,6 +42,15 @@ public static class Chest
     /// </remarks>
     public static async Task Pick(RunState state, int index)
     {
+        // `NTreasureRoom.OpenChest` gives the chest's gold, and pays the Spoils
+        // Map, before the relics are shown. A pick or a skip opens the chest
+        // first, which is the only way a player gets at either. Its
+        // `DoExtraRewardsIfNeeded` comes next on screen, and is left out: it
+        // shows a rewards screen only for rewards a relic added to the room.
+        if (state.CurrentRoom is TreasureRoom room)
+        {
+            await room.DoNormalRewards();
+        }
         TreasureRoomRelicSynchronizer sync = RunManager.Instance.TreasureRoomRelicSynchronizer;
         List<RelicPickingResult> awarded = new List<RelicPickingResult>();
         void Collect(List<RelicPickingResult> results) => awarded.AddRange(results);

@@ -787,6 +787,17 @@ public static class Driver
             }
 
             _owedRewards = null;
+
+            // `NCombatUi.OnCombatWon` offers rewards only for an encounter that
+            // gives them. Battleworn Dummy's does not, and the screen goes
+            // straight back to the event through
+            // `ProceedFromTerminalRewardsScreen`, rolling nothing.
+            if (!owed.Encounter.ShouldGiveRewards)
+            {
+                Stage = "proceeding without rewards";
+                await RunManager.Instance.ProceedFromTerminalRewardsScreen();
+                continue;
+            }
             Stage = "offering rewards";
 
             // Returns as soon as the offer is *started* — the game fires

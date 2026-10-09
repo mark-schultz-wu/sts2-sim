@@ -140,12 +140,13 @@ fn emit(out: &mut String, levels: &[(u8, String)]) -> Result<(), Error> {
 /// build that renames a rung stops here rather than reading as no ascension.
 fn emit_ladder(out: &mut String, levels: &[(u8, String)]) -> Result<(), Error> {
     // `(const, rung)`, in the trait's own order.
-    const NAMED: [(&str, &str); 5] = [
+    const NAMED: [(&str, &str); 6] = [
         ("INFLATION", "Inflation"),
         ("NONE", "None"),
         ("SCARCITY", "Scarcity"),
         ("SWARMING_ELITES", "SwarmingElites"),
         ("WEARY_TRAVELER", "WearyTraveler"),
+        ("POVERTY", "Poverty"),
     ];
 
     for (_, rung) in &NAMED {
