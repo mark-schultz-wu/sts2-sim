@@ -722,6 +722,7 @@ pub enum ModelHook {
     AfterModifyingCardRewardOptions,
     AfterModifyingEnergyGain,
     AfterStarsGained,
+    AfterBlockGained,
     ModifyDamageAdditive,
     ModifyDamageMultiplicative,
     ModifyDamageCap,
@@ -789,7 +790,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 141] = [
+    pub const ALL: [ModelHook; 142] = [
         ModelHook::AfterRoomEntered,
         ModelHook::AfterMapGenerated,
         ModelHook::BeforeCombatStart,
@@ -867,6 +868,7 @@ impl ModelHook {
         ModelHook::AfterModifyingCardRewardOptions,
         ModelHook::AfterModifyingEnergyGain,
         ModelHook::AfterStarsGained,
+        ModelHook::AfterBlockGained,
         ModelHook::ModifyDamageAdditive,
         ModelHook::ModifyDamageMultiplicative,
         ModelHook::ModifyDamageCap,
@@ -1091,6 +1093,7 @@ impl ModelHook {
                 "ShouldDisableRemainingRestSiteOptions"
             }
             ModelHook::AfterStarsGained => "AfterStarsGained",
+            ModelHook::AfterBlockGained => "AfterBlockGained",
         }
     }
 }
@@ -3593,6 +3596,12 @@ pub enum EventHook<V: ContentVersion> {
     /// `AfterStarsGained`, once `PlayerCmd.GainStars` has added `amount` to
     /// the player's stars.
     StarsGained { amount: V::Number },
+    /// `AfterBlockGained`, once `CreatureCmd.GainBlock` has given `creature`
+    /// `amount`, which is what the modifiers left, and can be none.
+    BlockGained {
+        creature: crate::CombatId,
+        amount: V::Number,
+    },
     /// `AfterPreventingDraw`, once a listener answered no to `ShouldDraw`.
     DrawPrevented,
     /// `AfterShuffle`, once the discard pile is shuffled into the draw pile.
@@ -4148,6 +4157,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::HandDrawModified => ModelHook::AfterModifyingHandDraw,
             EventHook::EnergyGainModified => ModelHook::AfterModifyingEnergyGain,
             EventHook::StarsGained { .. } => ModelHook::AfterStarsGained,
+            EventHook::BlockGained { .. } => ModelHook::AfterBlockGained,
             EventHook::PotionUsing { .. } => ModelHook::BeforePotionUsed,
             EventHook::PotionUsed { .. } => ModelHook::AfterPotionUsed,
             EventHook::PotionProcured { .. } => ModelHook::AfterPotionProcured,

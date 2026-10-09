@@ -1771,7 +1771,14 @@ fn finished<V: Rules, S: LendsCombat>(
                     super::listen::Listener::Power { owner, power, .. },
                     sts2_core::HookEffect::GainBlockAndRemove(amount),
                 ) => {
-                    next.gain_unpowered_block(owner, amount);
+                    super::board::gain_unpowered_block::<V>(
+                        next,
+                        streams.combat(),
+                        relics,
+                        next.ascension,
+                        owner,
+                        amount,
+                    );
                     next.remove_power(owner, power);
                 }
                 // `CreatureCmd.Damage` on the power's owner, unpowered.

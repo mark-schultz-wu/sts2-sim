@@ -718,6 +718,9 @@ const MONOLOGUE_STRENGTH: Number = 1;
 /// `ConfusedPower.NextEnergyCost`'s `NextInt(4)`.
 const CONFUSED_COSTS: u8 = 4;
 
+/// `TankPower.ModifyDamageMultiplicative`'s `2m`.
+const TANKED: Fixed = Fixed::new(2, 0);
+
 /// `GigantificationPower.ModifyDamageMultiplicative`'s `3m`.
 const GIGANTIFIED: Fixed = Fixed::new(3, 0);
 
@@ -946,6 +949,18 @@ pub(crate) fn modify_hook(
                 ..
             },
         ) if dealer == Some(holder) => Modify::Scaled(weak(fight, holder, target)),
+        // `TankPower.ModifyDamageMultiplicative`: double a powered attack's
+        // damage to its owner. Its `AfterApplied` gives Guarded to the other
+        // players, and a fight here has one.
+        (
+            Power::TankPower,
+            _,
+            ModifyHook::DamageMultiplicative {
+                target,
+                powered: true,
+                ..
+            },
+        ) if target == Some(holder) => Modify::Scaled(TANKED),
         (
             Power::ShrinkPower,
             _,
@@ -1744,7 +1759,11 @@ pub(crate) fn modify_hook(
         ) => unimplemented!("an endless {power:?}"),
         // The overrides above, for a number some other creature is party to.
         (
-            Power::SlowPower | Power::VulnerablePower | Power::WeakPower | Power::ShrinkPower,
+            Power::SlowPower
+            | Power::VulnerablePower
+            | Power::WeakPower
+            | Power::ShrinkPower
+            | Power::TankPower,
             _,
             ModifyHook::DamageMultiplicative { .. },
         )
@@ -2318,6 +2337,28 @@ pub(crate) fn event_hook(
         (Power::BlackHolePower, PowerAmount::Endless, EventHook::CardPlayed { .. } | EventHook::StarsGained { .. }) => {
             unimplemented!("an endless Black Hole")
         }
+        // `JuggernautPower.AfterBlockGained`: its stack, unpowered, from its
+        // owner to one enemy that can be hit, drawn off `CombatTargets`, for
+        // each gain of its owner's that left any block.
+        (
+            Power::JuggernautPower,
+            PowerAmount::Counted(amount),
+            EventHook::BlockGained { creature, amount: gained },
+        ) if creature == holder && gained > 0 => Some(HookEffect::DamageRandomOpponent {
+            amount,
+            unblockable: false,
+            from_owner: true,
+        }),
+        (Power::JuggernautPower, PowerAmount::Endless, EventHook::BlockGained { .. }) => {
+            unimplemented!("an endless Juggernaut")
+        }
+        (Power::JuggernautPower, _, EventHook::BlockGained { .. }) => None,
+        // `BeaconOfHopePower.AfterBlockGained` gives half the gain to each of
+        // its owner's teammates. A fight here has one player, who has none.
+        (Power::BeaconOfHopePower, _, EventHook::BlockGained { .. }) => None,
+        // `TankPower.AfterApplied` gives Guarded to its owner's teammates. A
+        // fight here has one player, who has none.
+        (Power::TankPower, _, EventHook::Applied) => None,
         // `MasterPlannerPower.AfterCardPlayed`: Sly written on each Skill its
         // owner plays, for as long as the copy lasts. A fight here has one
         // player, whose cards are all its holder's.

@@ -310,7 +310,14 @@ pub(crate) fn enter<V: Rules>(
                     super::listen::Listener::Power { owner, .. } => owner,
                     _ => live.player().id,
                 };
-                live.gain_unpowered_block(owner, block);
+                super::board::gain_unpowered_block::<V>(
+                    &mut live,
+                    streams.combat(),
+                    relics,
+                    ascension,
+                    owner,
+                    block,
+                );
             }
             // `PlayerCmd.AddPet`.
             (_, HookEffect::AddPet(monster)) => {
