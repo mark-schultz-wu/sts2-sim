@@ -3602,19 +3602,34 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn gain_gold(&mut self, amount: V::Number) {
         self.ran_on();
-        // `Hook.ModifyGoldGained`, `AfterModifyingGoldGained` and
-        // `AfterGoldGained`, which nothing in a fight answers yet.
+        // `Hook.ModifyGoldGained` and `AfterModifyingGoldGained`, which
+        // nothing in a fight answers yet.
         for hook in [
             sts2_core::ModelHook::ModifyGoldGained,
             sts2_core::ModelHook::AfterModifyingGoldGained,
-            sts2_core::ModelHook::AfterGoldGained,
         ] {
             if super::listen::heard::<V>(self.live, self.relics, hook) {
                 unimplemented!("a listener hearing {} as a fight gains gold", hook.name());
             }
         }
-        if amount > V::Number::zero() {
-            self.live.gold = self.live.gold + amount;
+        if amount <= V::Number::zero() {
+            return;
+        }
+        self.live.gold = self.live.gold + amount;
+        // `AfterGoldGained`, once the gold has landed.
+        let player = self.live.player().id;
+        let asked =
+            super::listen::notify::<V>(self.live, self.relics, sts2_core::EventHook::GoldGained);
+        for (listener, effect) in asked {
+            match (listener, effect) {
+                // `CreatureCmd.GainMaxHp` on the relic's owner.
+                (Listener::Relic { .. }, HookEffect::GainMaxHp(amount)) => {
+                    sts2_core::Fight::gain_max_hp(self, player, amount)
+                }
+                (listener, effect) => {
+                    unimplemented!("{listener:?} asking for {effect:?} as a fight gains gold")
+                }
+            }
         }
     }
 

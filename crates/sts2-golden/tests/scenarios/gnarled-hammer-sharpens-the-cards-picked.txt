@@ -1,0 +1,5 @@
+# Gnarled Hammer offers the deck's Attacks, up to three, confirmed by hand.
+# The two Strikes picked take Sharp at three.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"GNARLED_HAMMER"}
+{"cmd":"answer","cards":[0,1]}
