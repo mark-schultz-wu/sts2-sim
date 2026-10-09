@@ -1,0 +1,15 @@
+# Headbutt puts Seeker Strike on top of the draw pile, so the second turn's
+# draw takes it first. Hellraiser auto-plays it, and its pick asks inside the
+# draw. Chains of Binding's Bound on the Seeker Strike, then the rest of the
+# hand's draw, wait on the answer.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"BYGONE_EFFIGY_ELITE"}
+{"cmd":"power","power":"HELLRAISER_POWER","amount":1,"target":0}
+{"cmd":"power","power":"CHAINS_OF_BINDING_POWER","amount":1,"target":0}
+{"cmd":"grant","card":"SEEKER_STRIKE"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"answer","cards":[0]}
+{"cmd":"grant","card":"HEADBUTT"}
+{"cmd":"play_card","index":6,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"answer","cards":[0]}

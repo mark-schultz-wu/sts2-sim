@@ -1313,6 +1313,15 @@ pub(super) fn carry_setup<V: Rules>(
                         };
                         Setup::PlayerTurnStart(listen::notify::<V>(live, relics, hook))
                     }
+                    // A card auto-played as it was drawn asked, and the rest
+                    // of the draw waits for its play.
+                    super::board::Drawn::Asked { left } => {
+                        live.defer(super::live::Deferred::Setup(Setup::Drawing {
+                            left,
+                            resumed: true,
+                        }));
+                        return Carried::Parked;
+                    }
                     super::board::Drawn::Paused {
                         left,
                         asks: (pile, selection, act),
@@ -1639,6 +1648,14 @@ pub(super) fn carry_setup<V: Rules>(
             ) {
                 super::board::Drawn::Done(Some(ended)) => return Carried::Done(Some(ended)),
                 super::board::Drawn::Done(None) => Setup::PlayerTurnStart(rest),
+                super::board::Drawn::Asked { left } => {
+                    live.defer(super::live::Deferred::Setup(Setup::TurnStartDrawing {
+                        left,
+                        resumed: true,
+                        rest,
+                    }));
+                    return Carried::Parked;
+                }
                 super::board::Drawn::Paused {
                     left,
                     asks: (pile, selection, act),
