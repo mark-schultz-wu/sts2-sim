@@ -428,6 +428,7 @@ mod tests {
                 segment,
                 AscensionLevel::None,
                 MoveId::DeadMove,
+                false,
                 &mut machine
             ),
             Err(MovePinned),
@@ -440,6 +441,7 @@ mod tests {
             segment,
             AscensionLevel::None,
             MoveId::DeadMove,
+            false,
             &mut machine,
         )
         .expect("a performed move can be left");

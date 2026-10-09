@@ -58,3 +58,20 @@ pub(crate) enum Ended {
     Won,
     Lost,
 }
+
+/// `CheckWinCondition` once a decision is over: `ActionExecutor` asks it
+/// after each action, and `StartTurn` once the setup is done. It reads the
+/// fight as it stands, so a win that something in the decision did not hand
+/// back still ends it. A decision waiting on a question is not over yet.
+pub(crate) fn check_win_condition<V: Rules, S>(fighting: Fighting<'_, V, S>) -> Option<Ended> {
+    let Fighting { live, relics, .. } = fighting;
+    if !live.won || live.asking.is_some() {
+        return None;
+    }
+    live.won = false;
+    if !board::ending::<V>(listen::Walk { live, relics }) {
+        return None;
+    }
+    listen::combat_ended::<V>(live, relics);
+    Some(Ended::Won)
+}

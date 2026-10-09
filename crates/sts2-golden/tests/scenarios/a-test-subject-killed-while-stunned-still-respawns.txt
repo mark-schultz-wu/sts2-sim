@@ -1,0 +1,12 @@
+# Whistle stuns the Test Subject, and a Shiv under 200 Strength kills it in
+# the same turn. `TriggerDeadState` forces its respawn over the stun, so it
+# comes back on its next turn in its second form.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"TEST_SUBJECT_BOSS"}
+{"cmd":"grant","card":"WHISTLE"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"power","power":"STRENGTH_POWER","amount":200,"target":0}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

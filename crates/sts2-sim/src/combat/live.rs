@@ -2157,6 +2157,10 @@ pub(crate) struct Live<V: Rules> {
     /// The last creature id this fight gave out. A creature that leaves keeps
     /// its id, and the next one to arrive takes the id after this.
     pub(super) last_creature: CombatId,
+    /// A death or an escape left no primary enemy standing, and no decision
+    /// has ended since. Only these two start a win, so the check at the end
+    /// of a decision reads the fight again only once this is set.
+    pub(super) won: bool,
     /// Numbers a card keeps on its own model and prints nowhere, by copy,
     /// such as Regret's `CardsInHand`.
     pub(super) notes: smallvec::SmallVec<[(CardId<V>, V::Number); 2]>,
@@ -2449,6 +2453,7 @@ impl<V: Rules> Clone for Live<V> {
             kept_faces,
             attacks,
             last_creature,
+            won,
             notes,
             asking,
             deferred,
@@ -2488,6 +2493,7 @@ impl<V: Rules> Clone for Live<V> {
         kept_faces.clone_from(&source.kept_faces);
         *attacks = source.attacks;
         *last_creature = source.last_creature;
+        *won = source.won;
         notes.clone_from(&source.notes);
         asking.clone_from(&source.asking);
         deferred.clone_from(&source.deferred);
@@ -3286,6 +3292,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             kept_faces: Vec::new(),
             attacks: 0,
             last_creature: CombatId::new(nonmax::NonMaxU8::ZERO),
+            won: false,
             notes: smallvec::SmallVec::new(),
             asking: None,
             deferred: Deferrals::new(),

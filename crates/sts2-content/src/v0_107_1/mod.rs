@@ -697,11 +697,12 @@ impl sts2_core::Rules for V0_107_1 {
         monster: Self::Monster,
         ascension: Self::AscensionLevel,
         move_id: Self::MoveId,
+        force: bool,
         machine: &mut sts2_core::MoveMachine,
     ) -> Result<sts2_core::NextMove<Self>, sts2_core::MovePinned> {
         use generated::monsters::State;
 
-        if !Self::can_leave_current_move(monster, machine) {
+        if !force && !Self::can_leave_current_move(monster, machine) {
             return Err(sts2_core::MovePinned);
         }
         let data = sts2_core::Table::data(monster);
@@ -709,6 +710,8 @@ impl sts2_core::Rules for V0_107_1 {
             unimplemented!("{monster:?} sent to {move_id:?}, which its graph has no state for")
         });
         // `ForceCurrentState`, which does not write the state into the log.
+        // The named state takes the place of any state a caller built.
+        machine.built = false;
         machine.enter(at);
         let State::Move(held) = data.states[usize::from(at)] else {
             unimplemented!("{monster:?} sent to {move_id:?}, which is not a move")
