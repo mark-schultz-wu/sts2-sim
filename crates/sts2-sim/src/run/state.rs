@@ -646,6 +646,8 @@ pub(super) enum Pickup<V: Rules> {
     },
     /// The event's own question, which [`Rules::event_question`] asks.
     Event,
+    /// The abandon-run popup, whose yes ends the run.
+    ConfirmAbandon,
 }
 
 /// A pickup's question, and the rest of its `AfterObtained`, which runs once
@@ -794,6 +796,7 @@ impl<V: Rules> State<V> {
             } => self.phase.asking().map(|asked| match asked.pickup {
                 Pickup::Rewards { .. } => sts2_core::QuestionKind::Rewards,
                 Pickup::Bundles { .. } => sts2_core::QuestionKind::ChooseBundle,
+                Pickup::ConfirmAbandon => sts2_core::QuestionKind::Confirm,
                 Pickup::Event => self.event_question().kind(),
                 _ => sts2_core::QuestionKind::SelectCards,
             }),
@@ -1831,6 +1834,7 @@ impl<V: Rules> State<V> {
                         skippable: true,
                     }
                 }
+                HookEffect::ConfirmAbandonRun => Pickup::ConfirmAbandon,
                 HookEffect::OfferBundles {
                     count,
                     commons,
@@ -4087,6 +4091,31 @@ impl<V: Rules> State<V> {
         }
     }
 
+    /// The abandon-run popup's answer. A yes is `GuaranteeKillAllPlayers`,
+    /// which leaves the run with a dead player and nothing more to decide. A
+    /// no closes the popup on the page it opened from, whose options stay.
+    ///
+    /// # Panics
+    ///
+    /// An answer other than a yes or a no, or effects queued behind the popup.
+    fn confirmed_abandon(&mut self, answer: &Answer) -> Decided {
+        let Answer::Confirm(yes) = *answer else {
+            unimplemented!("answering the abandon-run popup with {answer:?}");
+        };
+        let asked = self
+            .phase
+            .asking_mut()
+            .and_then(Option::take)
+            .expect("the popup was asking when this began");
+        if !asked.rest.is_empty() || asked.under.is_some() {
+            unimplemented!("effects waiting behind the abandon-run popup");
+        }
+        if yes {
+            self.player.hp = num_traits::zero();
+        }
+        Decided::Resolved
+    }
+
     /// The deck as a pickup's selection offers it.
     fn clonable(&self, excluding: sts2_core::CardKind) -> Vec<CardIdent<V>> {
         self.player
@@ -4877,6 +4906,13 @@ impl<V: Rules> State<V> {
         {
             return Ok(self.answer_event(answer));
         }
+        if let Some(Asked {
+            pickup: Pickup::ConfirmAbandon,
+            ..
+        }) = self.phase.asking()
+        {
+            return Ok(self.confirmed_abandon(answer));
+        }
         let Some(asking) = self.phase.asking_mut() else {
             unimplemented!("answering a question inside a fight");
         };
@@ -4937,6 +4973,7 @@ impl<V: Rules> State<V> {
             Pickup::CloneDeckCard { .. } => unreachable!("a room parks on no clone"),
             Pickup::Rewards { .. } => unreachable!("a reward screen is answered above"),
             Pickup::Event => unreachable!("an event's own question is answered above"),
+            Pickup::ConfirmAbandon => unreachable!("the abandon-run popup is answered above"),
         }
         // The rest of the pickup, which can ask again.
         Ok(self.done_asking(asked.rest, asked.under))
@@ -5325,6 +5362,10 @@ impl<V: Rules> State<V> {
                         (0..bundles.len())
                             .map(|at| Decision::Answer(Answer::Cards([at].into_iter().collect()))),
                     ),
+                    Pickup::ConfirmAbandon => moves.extend([
+                        Decision::Answer(Answer::Confirm(true)),
+                        Decision::Answer(Answer::Confirm(false)),
+                    ]),
                     Pickup::Cards { offered, min, max } => {
                         selections(*min, *max, offered.len(), moves)
                     }
@@ -5790,6 +5831,7 @@ impl<V: Rules> State<V> {
                         return asked::<V>(offered, *skippable);
                     }
                     Pickup::Event => return self.event_question(),
+                    Pickup::ConfirmAbandon => return Question::Confirm,
                     Pickup::Bundles { bundles } => {
                         return Question::ChooseBundle {
                             bundles: bundles

@@ -318,6 +318,46 @@ internal sealed class BundleChoice : Pending
     protected override void Fail(Exception e) => _answer.SetException(e);
 }
 
+/// <summary>A yes or a no, to a popup that asks for confirmation.</summary>
+/// <remarks>
+/// The abandon-run popup is the one: Trial's Double Down opens it. Its two
+/// buttons are the whole question, so the answer carries one bool.
+/// </remarks>
+internal sealed class Confirmation : Pending
+{
+    private readonly TaskCompletionSource<bool> _answer =
+        new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public override string Kind => "confirm";
+
+    public static Task<bool> Ask()
+    {
+        var pending = new Confirmation();
+        Park(pending);
+        return pending._answer.Task;
+    }
+
+    public override Dictionary<string, object?> Describe() => new Dictionary<string, object?>
+    {
+        ["kind"] = Kind,
+    };
+
+    public override Dictionary<string, object?>? Accept(JsonElement req)
+    {
+        if (!req.TryGetProperty("confirm", out JsonElement el)
+            || (el.ValueKind != JsonValueKind.True && el.ValueKind != JsonValueKind.False))
+        {
+            return Refusals.Malformed($"'{Kind}' expects a 'confirm' of true or false");
+        }
+
+        Release();
+        _answer.SetResult(el.GetBoolean());
+        return null;
+    }
+
+    protected override void Fail(Exception e) => _answer.SetException(e);
+}
+
 /// <summary>What to take from a set of rewards, and which card within a card reward.</summary>
 /// <remarks>
 /// Asked once per decision, not once per set. The client takes what it wants

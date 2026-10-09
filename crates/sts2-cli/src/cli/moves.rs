@@ -89,6 +89,12 @@ fn answers<V: sts2_content_wire::WireContentVersion>(question: &Question<V>) -> 
                 .collect()
         }
 
+        // Yes and no.
+        Question::Confirm => vec![
+            Decision::Answer(Answer::Confirm(true)),
+            Decision::Answer(Answer::Confirm(false)),
+        ],
+
         // Each bundle, as a one-card selection names it.
         Question::ChooseBundle { bundles } => (0..bundles.len())
             .map(|at| Decision::Answer(Answer::Cards([at].into_iter().collect())))
@@ -297,6 +303,8 @@ pub fn describe<V: sts2_content_wire::WireContentVersion>(decision: &Decision<V>
             format!("took {index} as {}", alternative.option_id())
         }
         Decision::Answer(Answer::Divine { x, y, .. }) => format!("divined {x},{y}"),
+        Decision::Answer(Answer::Confirm(true)) => "confirmed".into(),
+        Decision::Answer(Answer::Confirm(false)) => "cancelled".into(),
         Decision::EnterRoom { room } => format!("entered {}", crate::render::spelling(room)),
     }
 }

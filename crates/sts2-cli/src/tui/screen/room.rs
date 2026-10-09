@@ -363,6 +363,18 @@ where
                 super::centred(area, 52, 8),
             );
         }
+        Question::Confirm => {
+            let lines = vec![
+                Line::styled("abandon the run?", theme::heading()),
+                Line::raw(""),
+                Line::styled("not answered here yet — answer it with", theme::dim()),
+                Line::styled("`sts2 act choose 1` for yes, `0` for no", theme::gold()),
+            ];
+            frame.render_widget(
+                Paragraph::new(lines).centered(),
+                super::centred(area, 52, 8),
+            );
+        }
         Question::ChooseBundle { bundles } => {
             let mut lines = vec![
                 Line::styled("choose a bundle", theme::heading()),

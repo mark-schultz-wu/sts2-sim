@@ -312,6 +312,12 @@ where
                 "not drawn here yet — use `sts2 act answer divine`",
             ));
         }
+        (Some(Question::Confirm), ..) => {
+            spans.extend(widget::hint(
+                "!",
+                "not answered here yet — use `sts2 act choose 1` or `0`",
+            ));
+        }
         (Some(Question::ChooseBundle { .. }), ..) => {
             spans.extend(widget::hint(
                 "!",

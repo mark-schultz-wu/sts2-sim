@@ -47,6 +47,7 @@ pub(crate) enum WireQuestion {
     ChooseBundle {
         bundles: Vec<WireBundle>,
     },
+    Confirm {},
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -192,6 +193,8 @@ impl WireQuestion {
                     })
                     .collect(),
             },
+
+            WireQuestion::Confirm {} => Question::Confirm,
 
             WireQuestion::ChooseBundle { bundles } => Question::ChooseBundle {
                 bundles: bundles

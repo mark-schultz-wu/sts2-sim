@@ -62,10 +62,15 @@ pub enum Question<V: ContentVersion> {
     /// Scroll Boxes' choose-a-bundle screen, whose chosen bundle all goes into
     /// the deck.
     ChooseBundle { bundles: Vec<BundleOption<V>> },
+    /// Answer with [`crate::Answer::Confirm`].
+    ///
+    /// The abandon-run popup, which Trial's Double Down opens. Yes abandons
+    /// the run, and no closes the popup on the page it opened from.
+    Confirm,
 }
 
 impl<V: ContentVersion> Question<V> {
-    /// Which of the four this is.
+    /// Which of the five this is.
     ///
     /// For saying what a parked game is waiting for without holding the
     /// question itself. A refusal names it, and a front end routes on it.
@@ -75,11 +80,12 @@ impl<V: ContentVersion> Question<V> {
             Question::Rewards { .. } => QuestionKind::Rewards,
             Question::Divine { .. } => QuestionKind::Divine,
             Question::ChooseBundle { .. } => QuestionKind::ChooseBundle,
+            Question::Confirm => QuestionKind::Confirm,
         }
     }
 }
 
-/// Which of the four questions a parked game is asking.
+/// Which of the five questions a parked game is asking.
 ///
 /// [`Question`] with its payload removed, for the places that need to say what
 /// is pending rather than answer it.
@@ -89,6 +95,7 @@ pub enum QuestionKind {
     Rewards,
     Divine,
     ChooseBundle,
+    Confirm,
 }
 
 impl std::fmt::Display for QuestionKind {
@@ -100,6 +107,7 @@ impl std::fmt::Display for QuestionKind {
             QuestionKind::Rewards => "rewards",
             QuestionKind::Divine => "divine",
             QuestionKind::ChooseBundle => "choose_bundle",
+            QuestionKind::Confirm => "confirm",
         })
     }
 }

@@ -287,6 +287,7 @@ impl Serialize for WireAnswer {
                     tool: (*tool).into(),
                 },
             )?,
+            Answer::Confirm(yes) => map.serialize_entry("confirm", yes)?,
         }
         map.end()
     }
@@ -305,7 +306,9 @@ impl<'de> Deserialize<'de> for WireAnswer {
             type Value = WireAnswer;
 
             fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                f.write_str("an answer carrying one of 'cards', 'skip', 'take' or 'divine'")
+                f.write_str(
+                    "an answer carrying one of 'cards', 'skip', 'take', 'divine' or 'confirm'",
+                )
             }
 
             fn visit_map<M: MapAccess<'de>>(self, mut map: M) -> Result<WireAnswer, M::Error> {
@@ -330,6 +333,7 @@ impl<'de> Deserialize<'de> for WireAnswer {
                                 tool: tool.into(),
                             }
                         }
+                        "confirm" => Answer::Confirm(map.next_value()?),
                         "skip" => match map.next_value::<bool>()? {
                             true => Answer::Skip,
                             false => {
@@ -341,14 +345,14 @@ impl<'de> Deserialize<'de> for WireAnswer {
                         other => {
                             return Err(serde::de::Error::unknown_field(
                                 other,
-                                &["cards", "skip", "take", "divine"],
+                                &["cards", "skip", "take", "divine", "confirm"],
                             ));
                         }
                     };
 
                     if answer.is_some() {
                         return Err(serde::de::Error::custom(
-                            "an answer carries exactly one of 'cards', 'skip', 'take' and 'divine'",
+                            "an answer carries exactly one of 'cards', 'skip', 'take', 'divine' and 'confirm'",
                         ));
                     }
                     answer = Some(found);
@@ -356,7 +360,7 @@ impl<'de> Deserialize<'de> for WireAnswer {
 
                 answer.map(WireAnswer).ok_or_else(|| {
                     serde::de::Error::custom(
-                        "an answer needs one of 'cards', 'skip', 'take' or 'divine'",
+                        "an answer needs one of 'cards', 'skip', 'take', 'divine' or 'confirm'",
                     )
                 })
             }
