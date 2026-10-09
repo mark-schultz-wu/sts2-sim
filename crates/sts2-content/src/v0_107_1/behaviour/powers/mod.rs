@@ -949,6 +949,24 @@ pub(crate) fn modify_hook(
                 ..
             },
         ) if dealer == Some(holder) => Modify::Scaled(weak(fight, holder, target)),
+        // `FlankingPower.ModifyDamageMultiplicative`: its stack times a
+        // powered attack's damage to its owner, from anyone but whoever
+        // applied it. With one player that is a pet.
+        (
+            Power::FlankingPower,
+            PowerAmount::Counted(stack),
+            ModifyHook::DamageMultiplicative {
+                target,
+                dealer,
+                powered: true,
+                ..
+            },
+        ) if target == Some(holder) && dealer != held.applier => {
+            Modify::Scaled(Fixed::new(stack, 0))
+        }
+        (Power::FlankingPower, PowerAmount::Endless, ModifyHook::DamageMultiplicative { .. }) => {
+            unimplemented!("an endless Flanking")
+        }
         // `TankPower.ModifyDamageMultiplicative`: double a powered attack's
         // damage to its owner. Its `AfterApplied` gives Guarded to the other
         // players, and a fight here has one.
@@ -1763,7 +1781,8 @@ pub(crate) fn modify_hook(
             | Power::VulnerablePower
             | Power::WeakPower
             | Power::ShrinkPower
-            | Power::TankPower,
+            | Power::TankPower
+            | Power::FlankingPower,
             _,
             ModifyHook::DamageMultiplicative { .. },
         )
@@ -2122,6 +2141,17 @@ pub(crate) fn event_hook(
         }
         // Its `AfterModifyingEnergyGain` only flashes.
         (Power::NoEnergyGainPower, _, EventHook::EnergyGainModified) => return,
+        // `FlankingPower.AfterSideTurnEnd`: gone once its owner's side ends
+        // a turn.
+        (Power::FlankingPower, _, EventHook::SideTurnEnd { side, .. }) if side == owner => {
+            Some(HookEffect::Remove)
+        }
+        (Power::FlankingPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `FlankingPower.AfterApplied` writes its applier's name for the text.
+        (Power::FlankingPower, _, EventHook::Applied) => None,
+        // `SneakyPower.AfterCardPlayed`: block for each Attack another player
+        // plays. A fight here has one player.
+        (Power::SneakyPower, _, EventHook::CardPlayed { .. }) => None,
         // `NoEnergyGainPower.AfterSideTurnEnd`: gone once its owner's turn
         // ends.
         (Power::NoEnergyGainPower, _, EventHook::SideTurnEnd { side, .. }) if side == owner => {

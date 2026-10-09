@@ -1,0 +1,6 @@
+# Sneaky gives block for each Attack another player plays. The Silent's own
+# Strike gains it nothing, and a fight here has no other player.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"SNEAKY_POWER","amount":3,"target":0}
+{"cmd":"play_card","index":1,"target":1}
