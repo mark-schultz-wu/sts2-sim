@@ -4518,7 +4518,38 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             return;
         }
         let ascension = self.ascension;
-        shuffle::<V>(self.live, self.rngs.reborrow(), self.relics, ascension);
+        if !self.pausable() {
+            shuffle::<V>(self.live, self.rngs.reborrow(), self.relics, ascension);
+            return;
+        }
+        if self.live.asking.is_some() {
+            unimplemented!("a shuffle behind a question an effect already asked");
+        }
+        // Inside an effect, a listener's question stands the effect still.
+        let Some((pile, selection, act)) =
+            shuffle_asking::<V>(self.live, self.rngs.reborrow(), self.relics, ascension)
+        else {
+            return;
+        };
+        if !self.live.after_pick.is_empty() {
+            unimplemented!("listeners behind a shuffle's question outside a draw");
+        }
+        match super::turn::select::<V>(
+            self.live,
+            self.rngs.reborrow(),
+            self.relics,
+            pile,
+            selection,
+            act,
+        ) {
+            Ok(ended) => self.ended = self.ended.or(ended),
+            Err(question) => {
+                self.live.asking = Some(super::live::Asking {
+                    then: super::live::Then::Pick { act },
+                    question,
+                });
+            }
+        }
     }
 
     fn clone_this(&mut self, pile: Pile) -> Option<CardAt<V>> {
@@ -5322,6 +5353,31 @@ pub(super) fn draw_pausing<V: Rules>(
             board.after_shuffle(effect);
         }
     }
+    // The listeners' draws the question stopped, the innermost first.
+    if resumed && !live.hook_draws.is_empty() {
+        let waiting = std::mem::take(&mut live.hook_draws);
+        for at in (0..waiting.len()).rev() {
+            match draw_pausing::<V>(
+                live,
+                rngs.reborrow(),
+                relics,
+                ascension,
+                waiting[at],
+                false,
+                true,
+            ) {
+                Drawn::Done(None) => {}
+                Drawn::Done(Some(ended)) => return Drawn::Done(Some(ended)),
+                Drawn::Paused { left, asks } => {
+                    let mut owed: SmallVec<[usize; 2]> = waiting[..at].into();
+                    owed.push(left);
+                    owed.extend(live.hook_draws.drain(..));
+                    live.hook_draws = owed;
+                    return Drawn::Paused { left: count, asks };
+                }
+            }
+        }
+    }
     if !resumed && super::listen::any_decides::<V>(Walk { live, relics }, hook, false) {
         let asked = super::listen::notify::<V>(live, relics, sts2_core::EventHook::DrawPrevented);
         if let Some((listener, effect)) = asked.first() {
@@ -5427,6 +5483,15 @@ pub(super) fn draw_pausing<V: Rules>(
                 (_, effect) => rest.push(effect),
             }
         }
+        // A listener's `CardPileCmd.Draw` last in line runs inside this draw,
+        // so a shuffle's question in it pauses this one too.
+        let hook_draw = match rest.last() {
+            Some(&HookEffect::Draw(count)) => {
+                rest.pop();
+                Some(num_traits::NumCast::from(count).unwrap_or(0usize))
+            }
+            _ => None,
+        };
         let mut board = Board::for_card(
             live,
             rngs.reborrow(),
@@ -5437,6 +5502,21 @@ pub(super) fn draw_pausing<V: Rules>(
         );
         super::hook::apply::<V, _>(&mut board, rest);
         ended = ended.or(board.ended());
+        if let Some(owed) = hook_draw
+            && ended.is_none()
+        {
+            let below = live.hook_draws.len();
+            match draw_pausing::<V>(live, rngs.reborrow(), relics, ascension, owed, false, false) {
+                Drawn::Done(drawn) => ended = drawn,
+                Drawn::Paused { left, asks } => {
+                    live.hook_draws.insert(below, left);
+                    return Drawn::Paused {
+                        left: count - drawing - 1,
+                        asks,
+                    };
+                }
+            }
+        }
     }
     Drawn::Done(ended)
 }

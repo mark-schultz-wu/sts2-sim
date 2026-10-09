@@ -15,6 +15,26 @@ pub enum Resume {
     HologramIntoHand,
     /// `Scavenge`, after its owner picked the card to exhaust.
     ScavengeExhaust,
+    /// `Overclock`, after a question inside its draw was answered.
+    OverclockDrew,
+    /// `Reboot`, after a question after its shuffle was answered.
+    RebootShuffled,
+}
+
+/// The rest of a Defect card's play that stood still on a question its own
+/// command raised.
+pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
+    match at {
+        Resume::OverclockDrew => {
+            add_status(fight, StatusCard::Burn);
+            Played::Done
+        }
+        Resume::RebootShuffled => {
+            fight.draw(fight.var(CardVar::Cards));
+            Played::Done
+        }
+        at => unreachable!("{at:?} stops on a pick, not on a question it waited for"),
+    }
 }
 
 pub(super) fn resume_play<F: Fight<V>>(
@@ -23,6 +43,9 @@ pub(super) fn resume_play<F: Fight<V>>(
     chosen: sts2_core::SelectedCards<V>,
 ) -> Played<V> {
     match at {
+        Resume::OverclockDrew | Resume::RebootShuffled => {
+            unreachable!("{at:?} waits on a question, not a pick")
+        }
         // `CardPileCmd.Add(cardModel, PileType.Hand)`.
         Resume::HologramIntoHand => {
             fight.act_on(PileAct::IntoHand, chosen.as_slice());
@@ -370,11 +393,16 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
         }
         DefectCard::Ftl => ftl(fight),
         // `Reboot`: the whole hand into the draw pile, shuffled, then its
-        // `Cards` drawn.
+        // `Cards` drawn. A question after the shuffle stands the draw still.
         DefectCard::Reboot => {
             let hand = fight.cards_in(Pile::Hand);
             fight.act_on(PileAct::IntoDraw, &hand);
             fight.shuffle();
+            if fight.waiting() {
+                return Played::Waiting {
+                    at: super::super::Resume::Card(super::Resume::Defect(Resume::RebootShuffled)),
+                };
+            }
             fight.draw(fight.var(CardVar::Cards));
             Played::Done
         }
@@ -418,8 +446,14 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
             Played::Done
         }
         // `Overclock`: its `Cards` drawn, then a Burn into the discard pile.
+        // A shuffle inside the draw can ask, and the Burn waits for it.
         DefectCard::Overclock => {
             fight.draw(fight.var(CardVar::Cards));
+            if fight.waiting() {
+                return Played::Waiting {
+                    at: super::super::Resume::Card(super::Resume::Defect(Resume::OverclockDrew)),
+                };
+            }
             add_status(fight, StatusCard::Burn);
             Played::Done
         }
