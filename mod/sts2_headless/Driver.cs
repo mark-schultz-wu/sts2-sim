@@ -260,7 +260,7 @@ public static class Driver
         // not earned the content yet — D1 wants a run that does not depend on
         // which machine's save file it started from.
         var players = new List<Player> { Player.CreateForNewRun(character, UnlockState.all, 1uL) };
-        List<ActModel> acts = ActModel.GetDefaultList().Select(a => a.ToMutable()).ToList();
+        List<ActModel> acts = RunActs(seed);
 
         RunState state = RunState.CreateForNewRun(
             players, acts, modifiers, GameMode.Standard, ascension, seed);
@@ -269,6 +269,35 @@ public static class Driver
             + $"ascension={ascension} deck={players[0].Deck.Cards.Count} acts={acts.Count} "
             + $"modifiers=[{string.Join(",", modifiers.Select(m => m.Id.Entry))}]");
         return state;
+    }
+
+    /// <summary>The acts a run with everything unlocked is played through.</summary>
+    /// <remarks>
+    /// What <c>StartRunLobby.BeginRunLocally</c> draws when no first act is
+    /// picked: <c>ActModel.GetRandomList</c> off a stream named
+    /// <c>act_selection</c>, here over <c>UnlockState.all</c>. So the first act
+    /// is Overgrowth or Underdocks, as the seed has it. Outside TestMode the
+    /// game would first send the player to an act their profile has not met,
+    /// which would make a run depend on the machine's save file.
+    /// </remarks>
+    public static List<ActModel> RunActs(string canonicalSeed)
+    {
+        MegaCrit.Sts2.Core.TestSupport.TestMode.AssertOn();
+        // `Rng(seed, name)` takes the hash at the build's own width: a `uint`
+        // from an `int` hash on v0.107.1, a `ulong` hash on v0.111.0. One
+        // source builds against both, so the constructor is found, not named.
+        object hash = StringHelper.GetDeterministicHashCode(canonicalSeed);
+        object seedArg = hash is int folded ? unchecked((uint)folded) : hash;
+        var named = typeof(MegaCrit.Sts2.Core.Random.Rng).GetConstructors().Single(c =>
+        {
+            ParameterInfo[] p = c.GetParameters();
+            return p.Length == 2 && p[1].ParameterType == typeof(string)
+                && p[0].ParameterType == seedArg.GetType();
+        });
+        var rng = (MegaCrit.Sts2.Core.Random.Rng)named.Invoke(new[] { seedArg, "act_selection" });
+        return ActModel.GetRandomList(rng, UnlockState.all, isMultiplayer: false)
+            .Select(a => a.ToMutable())
+            .ToList();
     }
 
     /// <summary>The character a run starts with, by id, or the default.</summary>

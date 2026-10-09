@@ -1795,6 +1795,10 @@ impl<'a, V: Rules> Board<'a, V> {
                 (Listener::Power { owner, .. }, HookEffect::ApplyToOwner(power, amount)) => {
                     self.land(owner, power, amount, Some(owner));
                 }
+                // `CreatureCmd.Stun` on the power's owner.
+                (Listener::Power { owner, .. }, HookEffect::StunOwner { stun, then }) => {
+                    self.stun_monster(owner, stun, then)
+                }
                 // `CreatureCmd.GainBlock`, unpowered, on the power's owner.
                 (Listener::Power { owner, .. }, HookEffect::GainBlock(amount)) => {
                     let block = self.resolve(sts2_core::Effect::GainBlock {

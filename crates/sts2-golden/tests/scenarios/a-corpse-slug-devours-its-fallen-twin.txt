@@ -1,0 +1,11 @@
+# Corpse Slugs open on two different moves of their three: one draw off the
+# encounter's stream picks the first's, and the second takes the next. Each
+# enters with Ravenous at four. Killing one stuns the other, which gains four
+# Strength, and after its stunned turn it goes back to the move it had.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"CORPSE_SLUGS_WEAK"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":100,"target":0}
+{"cmd":"power","power":"DEXTERITY_POWER","amount":30,"target":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

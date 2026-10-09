@@ -59,10 +59,10 @@ public static class SetupDump
         {
             Player.CreateForNewRun(ModelDb.Character<Regent>(), UnlockState.all, 1uL),
         };
-        List<ActModel> acts = ActModel.GetDefaultList().Select(a => a.ToMutable()).ToList();
+        string seed = SeedHelper.CanonicalizeSeed(Seed);
+        List<ActModel> acts = Driver.RunActs(seed);
         RunState state = RunState.CreateForNewRun(
-            players, acts, Array.Empty<ModifierModel>(), GameMode.Standard, 0,
-            SeedHelper.CanonicalizeSeed(Seed));
+            players, acts, Array.Empty<ModifierModel>(), GameMode.Standard, 0, seed);
 
         // One stream, read after each phase. Cumulative and not per phase: the
         // order is half of what is being measured, and isolated counts cannot

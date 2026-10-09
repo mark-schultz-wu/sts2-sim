@@ -234,9 +234,9 @@ fn emit_acts(
          \x20       <Self as sts2_core::Table>::data(self).weak_encounters\n\
          \x20   }}\n\
          \n\
-         \x20   /// Whether an ordinary run is played through this act.\n\
-         \x20   fn played(self) -> bool {{\n\
-         \x20       <Self as sts2_core::Table>::data(self).is_default\n\
+         \x20   /// `ActModel.Index`, where it is one a run can fill.\n\
+         \x20   fn index(self) -> Option<u8> {{\n\
+         \x20       u8::try_from(<Self as sts2_core::Table>::data(self).index).ok()\n\
          \x20   }}\n\
          }}"
     )

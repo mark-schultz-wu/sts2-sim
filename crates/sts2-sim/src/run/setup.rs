@@ -412,6 +412,29 @@ fn next_item<T: Copy, R: GameRng>(rng: &mut R, items: &[T]) -> Option<T> {
     rng.choose(items).ok().copied()
 }
 
+/// The acts a run is played through, in order: `ActModel.GetRandomList`
+/// over `UnlockState.all`, off the `act_selection` stream
+/// `StartRunLobby.BeginRunLocally` seeds from the run's seed.
+///
+/// Each place takes one of the acts that can fill it, in table order, so the
+/// first is Overgrowth or Underdocks. Outside `TestMode` the game first sends
+/// a player to an act their profile has not met, and an unlocked run has met
+/// them all.
+pub fn run_acts<V: Rules>(raw_seed: u64) -> Vec<V::Act> {
+    let mut rng: crate::rng::MegaRng = sts2_core::rng::named::<V, _>(raw_seed, "act_selection");
+    let mut acts = Vec::new();
+    for place in 0.. {
+        let fill: Vec<V::Act> = (V::Act::ALL.iter().copied())
+            .filter(|act| act.index() == Some(place))
+            .collect();
+        if fill.is_empty() {
+            break;
+        }
+        acts.push(next_item(&mut rng, &fill).expect("a place some act fills"));
+    }
+    acts
+}
+
 /// Everything a run draws before the player does anything.
 ///
 /// The phases in the order `RunManager` runs them. The shared relic bag, each
@@ -430,7 +453,7 @@ impl<V: Rules> Opening<V> {
     /// Draw the whole of a run's setup.
     ///
     /// `rng` is the run's `UpFront` stream at its start. `acts` is the run's
-    /// act list in order, which is the default list for an ordinary run.
+    /// act list in order, which [`run_acts`] draws.
     pub fn draw<R: GameRng>(rng: &mut R, character: V::Character, acts: &[V::Act]) -> Self {
         let shared_relics = RelicBag::shared(rng);
         let player_relics = RelicBag::player(rng, character);

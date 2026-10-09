@@ -4,7 +4,7 @@
 # Gorging offers eight commons, each rolled for an upgrade, and two go into the
 # deck in the order picked. A port that draws other cards, or skips the rolls,
 # offers another eight.
-{"cmd":"start","seed":"C000000057","character":"IRONCLAD","ascension":"None"}
+{"cmd":"start","seed":"C000000127","character":"IRONCLAD","ascension":"None"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
@@ -46,8 +46,8 @@
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"choose_option","index":1}
-{"cmd":"travel","col":1,"row":1}
+{"cmd":"travel","col":5,"row":1}
 {"cmd":"answer","skip":true}
-{"cmd":"travel","col":1,"row":2}
+{"cmd":"travel","col":5,"row":2}
 {"cmd":"choose_option","index":0}
 {"cmd":"answer","cards":[6,2]}

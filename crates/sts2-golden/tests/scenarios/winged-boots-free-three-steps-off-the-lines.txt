@@ -9,7 +9,8 @@
 # A port that never frees travel offers the map's own lines throughout. One
 # that never spends a step, spends one on every room, or frees travel once
 # spent, shows another count or another map.
-{"cmd":"start","seed":"C000000041","character":"IRONCLAD","ascension":"None"}
+{"cmd":"start","seed":"C000000083","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"WINGED_BOOTS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
@@ -53,9 +54,9 @@
 {"cmd":"choose_option","index":0}
 {"cmd":"travel","col":0,"row":1}
 {"cmd":"answer","skip":true}
-{"cmd":"travel","col":5,"row":2}
+{"cmd":"travel","col":3,"row":2}
 {"cmd":"answer","skip":true}
-{"cmd":"travel","col":0,"row":3}
+{"cmd":"travel","col":1,"row":3}
 {"cmd":"answer","skip":true}
 {"cmd":"travel","col":4,"row":4}
 {"cmd":"answer","skip":true}

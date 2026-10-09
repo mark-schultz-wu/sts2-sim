@@ -3185,6 +3185,32 @@ pub(crate) fn event_hook(
         (Power::PossessStrengthPower | Power::PossessSpeedPower, _, EventHook::AfterDeath { .. }) => {
             None
         }
+        // `RavenousPower.AfterDeath`: another creature of its owner's side
+        // dies, and the owner, still standing, is stunned and gains its stack
+        // as Strength. The stun's own move only sets the animation back.
+        (
+            Power::RavenousPower,
+            amount,
+            EventHook::AfterDeath {
+                creature,
+                side,
+                removal_prevented: false,
+                ..
+            },
+        ) if creature != holder
+            && side == owner
+            && fight.current_hp(holder).is_some_and(|hp| hp > 0) =>
+        {
+            let PowerAmount::Counted(amount) = amount else {
+                unimplemented!("an endless Ravenous")
+            };
+            asked.extend([
+                stunned(sts2_core::StunResume::Interrupted),
+                HookEffect::ApplyToOwner(Power::StrengthPower, PowerAmount::Counted(amount)),
+            ]);
+            return;
+        }
+        (Power::RavenousPower, _, EventHook::AfterDeath { .. }) => None,
         // `HighVoltagePower.AfterSideTurnEnd`: its stack of Strength as its
         // owner's side ends a turn.
         (Power::HighVoltagePower, amount, EventHook::SideTurnEnd { side, .. }) if side == owner => {

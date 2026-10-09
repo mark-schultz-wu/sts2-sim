@@ -3,7 +3,7 @@
 #
 # Hugging transforms a card off the event's stream, then costs nine HP. A port
 # that skips either leaves another deck or other HP.
-{"cmd":"start","seed":"C000000060","character":"IRONCLAD","ascension":"None"}
+{"cmd":"start","seed":"C000000103","character":"IRONCLAD","ascension":"None"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
@@ -44,9 +44,10 @@
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
-{"cmd":"choose_option","index":0}
-{"cmd":"travel","col":3,"row":1}
+{"cmd":"choose_option","index":2}
+{"cmd":"answer","cards":[1]}
+{"cmd":"travel","col":1,"row":1}
 {"cmd":"answer","skip":true}
-{"cmd":"travel","col":4,"row":2}
+{"cmd":"travel","col":0,"row":2}
 {"cmd":"choose_option","index":1}
 {"cmd":"answer","cards":[5]}

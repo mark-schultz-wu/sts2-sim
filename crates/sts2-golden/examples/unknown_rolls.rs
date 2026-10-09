@@ -21,7 +21,7 @@ use sts2_content::v0_107_1::V0_107_1;
 use sts2_content::v0_107_1::characters::Character;
 use sts2_content::v0_107_1::runstate::RunRngType;
 use sts2_core::rng::{GameRng as _, stream_seed};
-use sts2_core::{ActTable as _, ContentVersion, Play as _, Seed, Start, Table as _};
+use sts2_core::{ContentVersion, Play as _, Seed, Start};
 use sts2_sim::Sim;
 use sts2_sim::rng::MegaRng;
 use sts2_sim::run::Opening;
@@ -137,11 +137,7 @@ fn run(cli: Cli) -> Result<(), Error> {
         let counter = i32::try_from(position.counter).map_err(|_| Error::Counter(seed.clone()))?;
         let roll = MegaRng::from_words(words, counter).next_double() as f32;
         let unknown = first_unknowns(&seen.observation.map.points, 3);
-        let acts: Vec<<V as ContentVersion>::Act> = <V as ContentVersion>::Act::ALL
-            .iter()
-            .copied()
-            .filter(|act| act.played())
-            .collect();
+        let acts = sts2_sim::run::run_acts::<V>(stream_seed::<V>(&start.seed));
         let mut up_front =
             sts2_core::rng::named::<V, MegaRng>(stream_seed::<V>(&start.seed), "up_front");
         let opening = Opening::<V>::draw(&mut up_front, character, &acts);

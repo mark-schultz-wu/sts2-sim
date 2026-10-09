@@ -9,10 +9,10 @@ use smallvec::SmallVec;
 use sts2_core::ActMap as _;
 use sts2_core::rng::stream_seed;
 use sts2_core::{
-    ActTable, Answer, CardIdent, CardOption, Carried, Combat, Coord, Decided, Decision,
-    EventOption, EventOptionKey, EventOptionKinds, Map, Observation, PlayerStreamKinds, Positions,
-    Question, Reachable, RelicModel as _, RewardCard, RewardDetail, RewardKind, Room, Rules,
-    RunStreamKinds, Seed, Snapshot, Table, TakeReward,
+    Answer, CardIdent, CardOption, Carried, Combat, Coord, Decided, Decision, EventOption,
+    EventOptionKey, EventOptionKinds, Map, Observation, PlayerStreamKinds, Positions, Question,
+    Reachable, RelicModel as _, RewardCard, RewardDetail, RewardKind, Room, Rules, RunStreamKinds,
+    Seed, Snapshot, TakeReward,
 };
 
 use crate::combat::Error;
@@ -975,11 +975,7 @@ impl<V: Rules> State<V> {
         ascension: V::AscensionLevel,
     ) -> Self {
         let raw_seed = stream_seed::<V>(seed);
-        let acts: Vec<V::Act> = V::Act::ALL
-            .iter()
-            .copied()
-            .filter(|act| act.played())
-            .collect();
+        let acts = super::setup::run_acts::<V>(raw_seed);
         let mut streams = Streams::<V>::opening(raw_seed);
         let opening = Opening::draw(streams.run(V::RunRngType::UP_FRONT), character, &acts);
 

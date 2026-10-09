@@ -3,7 +3,7 @@
 #
 # The plain one costs six HP and pays gold drawn off the event's stream as it
 # opens. A port that draws the gold another way leaves another purse.
-{"cmd":"start","seed":"C000000107","character":"IRONCLAD","ascension":"None"}
+{"cmd":"start","seed":"C000000037","character":"IRONCLAD","ascension":"None"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
@@ -44,7 +44,8 @@
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
-{"cmd":"choose_option","index":1}
+{"cmd":"choose_option","index":2}
+{"cmd":"answer","cards":[3,5]}
 {"cmd":"travel","col":0,"row":1}
 {"cmd":"answer","skip":true}
 {"cmd":"travel","col":0,"row":2}

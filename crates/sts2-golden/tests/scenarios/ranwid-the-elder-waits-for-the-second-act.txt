@@ -5,7 +5,7 @@
 # Hourglasses end each fight before the room as it opens.
 #
 # A port that reads past the act stops on the relics Ranwid trades for.
-{"cmd":"start","seed":"C000000833","character":"IRONCLAD","ascension":"None"}
+{"cmd":"start","seed":"C000001443","character":"IRONCLAD","ascension":"None"}
 {"cmd":"grant","relic":"GOLDEN_PEARL"}
 {"cmd":"grant","potion":"FIRE_POTION"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
@@ -49,6 +49,6 @@
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"choose_option","index":1}
-{"cmd":"travel","col":0,"row":1}
+{"cmd":"travel","col":4,"row":1}
 {"cmd":"answer","skip":true}
-{"cmd":"travel","col":0,"row":2}
+{"cmd":"travel","col":5,"row":2}
