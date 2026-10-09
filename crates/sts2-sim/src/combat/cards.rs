@@ -335,6 +335,37 @@ impl<V: Rules, P: Piles> Cards<V, P> {
         }
     }
 
+    /// `CardPileCmd.Add` of the card `id` names, from the pile outside play
+    /// it stands in, for `to` at `position`. A card already in `to` moves
+    /// within it.
+    ///
+    /// # Panics
+    ///
+    /// A card in play, which [`Self::leave_play`] moves, or one the fight
+    /// does not hold.
+    pub(crate) fn move_named(
+        &mut self,
+        id: CardId<V>,
+        to: Pile,
+        position: sts2_core::PilePosition,
+    ) {
+        let card = number(id);
+        let from = match self.piles.place(card) {
+            Some(Place::Play) => unimplemented!("moving {id:?} out of play outside its play"),
+            Some(from) => from,
+            None => unimplemented!("moving {id:?}, which the fight does not hold"),
+        };
+        let at = self
+            .piles
+            .position(from, card)
+            .expect("a card stands where its place says");
+        self.piles.move_to(from, at, to.into());
+        // `CardPilePosition.Top` is the front, where a draw takes from.
+        if position == sts2_core::PilePosition::Top {
+            self.piles.arrange(to.into(), |cards| cards.rotate_right(1));
+        }
+    }
+
     /// The pile the copy `id` stands in, and nothing for the play pile or a
     /// copy the fight does not hold.
     pub(crate) fn pile_of(&self, id: CardId<V>) -> Option<Pile> {
