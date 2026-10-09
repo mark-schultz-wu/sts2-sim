@@ -1,0 +1,8 @@
+# Furnace forges its stack onto the Sovereign Blade as each turn starts. Two
+# turns of twenty thousand carry the blade's damage past what a 16-bit
+# difference holds, which a fight nobody ends reaches one forge at a time.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"BYGONE_EFFIGY_ELITE"}
+{"cmd":"power","power":"FURNACE_POWER","amount":20000,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
