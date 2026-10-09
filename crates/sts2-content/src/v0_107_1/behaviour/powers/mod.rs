@@ -3549,15 +3549,18 @@ pub(crate) fn event_hook(
         // row sets nothing in the game, and the fight ends with it.
         (Power::ReattachPower, _, EventHook::AfterDeath { creature, .. }) if creature == holder => {
             state.set_reviving(true);
-            Some(HookEffect::EnterMove(MoveId::DeadMove))
+            Some(HookEffect::EnterMove {
+                to: MoveId::DeadMove,
+                force: false,
+            })
         }
         (Power::IllusionPower, _, EventHook::AfterDeath { creature, .. }) if creature == holder => {
             state.set_reviving(true);
             Some(HookEffect::InstallMove(&REVIVE))
         }
         // `AdaptablePower.AfterDeath`: a Test Subject that dies is sent to
-        // its respawn. `TriggerDeadState` also counts the kill for the run's
-        // title, which nothing here reads.
+        // its respawn, forced over a stun. `TriggerDeadState` also counts the
+        // kill for the run's title, which nothing here reads.
         (
             Power::AdaptablePower,
             _,
@@ -3568,7 +3571,10 @@ pub(crate) fn event_hook(
             },
         ) if creature == holder && monster == Some(Monster::TestSubject) => {
             state.set_reviving(true);
-            Some(HookEffect::EnterMove(MoveId::RespawnMove))
+            Some(HookEffect::EnterMove {
+                to: MoveId::RespawnMove,
+                force: true,
+            })
         }
         // `EnragePower.AfterCardPlayed`: its stack as Strength on its owner for
         // every Skill played.

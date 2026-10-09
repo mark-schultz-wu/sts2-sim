@@ -1,0 +1,11 @@
+# The Sealed Throne's star, through Black Hole at fifty, kills the lone Nibbit
+# as Dagger Throw is played. Dagger Throw still plays out. Its draw does
+# nothing once the fight is ending, and `FromHandForDiscard` goes through
+# `FromHand`, which takes nothing then. So it asks for no discard, and the
+# fight ends with the play.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"THE_SEALED_THRONE_POWER","amount":1,"target":0}
+{"cmd":"power","power":"BLACK_HOLE_POWER","amount":50,"target":0}
+{"cmd":"grant","card":"DAGGER_THROW"}
+{"cmd":"play_card","index":5,"target":1}

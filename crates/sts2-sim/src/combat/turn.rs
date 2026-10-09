@@ -1384,7 +1384,11 @@ pub(super) fn carry_setup<V: Rules>(
                             sts2_core::rng::GameRng::unstable_shuffle(rngs.generation, &mut pool);
                             pool.truncate(count);
                             // An empty pool offers nothing, and the game returns.
-                            if pool.is_empty() {
+                            // `FromSimpleGrid` takes nothing once the fight is
+                            // ending, after the shuffle.
+                            if pool.is_empty()
+                                || super::board::ending::<V>(listen::Walk { live, relics })
+                            {
                                 continue;
                             }
                             live.asking = Some(super::live::Asking {
@@ -1779,6 +1783,10 @@ fn generate_from_pool<V: Rules>(
 ///
 /// A discard that took Sly cards plays them, and whatever that ended comes
 /// back.
+///
+/// Both commands take nothing once the fight is ending, and so ask nothing.
+/// `FromHandForDiscard` and `FromHandForUpgrade` go through `FromHand`'s
+/// check or one of their own.
 pub(super) fn select<V: Rules>(
     live: &mut Live<V>,
     rngs: CombatRngs<'_>,
@@ -1787,6 +1795,9 @@ pub(super) fn select<V: Rules>(
     selection: sts2_core::Selection,
     act: sts2_core::PileAct,
 ) -> Result<Option<super::Ended>, super::live::Asked<V>> {
+    if super::board::ending::<V>(listen::Walk { live, relics }) {
+        return Ok(None);
+    }
     match super::play::taken(live, pile, selection) {
         Some(picked) => {
             let mut rngs = rngs;

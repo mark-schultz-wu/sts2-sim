@@ -428,11 +428,12 @@ fn ported_powers(build: &Build) -> Result<BTreeSet<String>, Error> {
 
 /// Every monster's move, by monster and move, with what it needs.
 fn moves(build: &Build) -> Result<BTreeMap<(String, String), Ported>, Error> {
-    let hand: BTreeSet<(String, String)> = {
-        let source = build.read("behaviour/monsters/mod.rs")?;
-        let body = function(&source, "perform").unwrap_or("");
-        pairs(body).into_iter().collect()
-    };
+    let hand: BTreeSet<(String, String)> = build
+        .sources("behaviour/monsters")?
+        .iter()
+        .filter_map(|(_, source)| function(source, "perform"))
+        .flat_map(pairs)
+        .collect();
     let mut moves = BTreeMap::new();
     for (_, source) in build.sources("generated/monster_moves")? {
         let Some(body) = function(&source, "perform") else {
@@ -459,14 +460,21 @@ fn moves(build: &Build) -> Result<BTreeMap<(String, String), Ported>, Error> {
     Ok(moves)
 }
 
-/// The `(Monster::A, MoveId::B)` pairs in `text`.
+/// The `(Monster::A, MoveId::B)` pairs in `text`, one for each move of a
+/// `(Monster::A, MoveId::B | MoveId::C)` pattern.
 fn pairs(text: &str) -> Vec<(String, String)> {
     text.match_indices("(Monster::")
         .filter_map(|(at, _)| {
             let rest = &text[at + "(Monster::".len()..];
             let (monster, rest) = rest.split_once(", MoveId::")?;
             let end = rest.find(')')?;
-            Some((monster.to_owned(), rest[..end].to_owned()))
+            Some((monster, &rest[..end]))
+        })
+        .flat_map(|(monster, moves)| {
+            moves.split('|').map(move |id| {
+                let id = id.trim().trim_start_matches("MoveId::");
+                (monster.to_owned(), id.to_owned())
+            })
         })
         .collect()
 }

@@ -1,0 +1,12 @@
+# The Sealed Throne gives a star as the Defend is played, and Black Hole at
+# fifty kills the lone Nibbit with it, before the Defend's own effect. The
+# Defend still plays out, and the fight ends after it, where `ActionExecutor`
+# checks the win.
+#
+# A port that hands the win back through the play loses it, and leaves the run
+# in a fight with no enemy in it.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"THE_SEALED_THRONE_POWER","amount":1,"target":0}
+{"cmd":"power","power":"BLACK_HOLE_POWER","amount":50,"target":0}
+{"cmd":"play_card","index":3}

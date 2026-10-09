@@ -1419,15 +1419,24 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                 merge::<V>(&mut next.skip_tick, skipped);
                 continue;
             }
+            // Every `CardSelectCmd` a card plays through takes nothing once
+            // the fight is ending, and the card carries on with none.
             sts2_core::Played::Asking {
                 pile,
                 selection,
                 at,
-            } => (
-                at,
-                Asked::Pile { pile, selection },
-                taken::<V>(next, pile, selection).map(sts2_core::Taken::Selected),
-            ),
+            } => {
+                let taken =
+                    match super::board::ending::<V>(super::listen::Walk { live: next, relics }) {
+                        true => selection.validate_automatic(sts2_core::Picked::new()),
+                        false => taken::<V>(next, pile, selection),
+                    };
+                (
+                    at,
+                    Asked::Pile { pile, selection },
+                    taken.map(sts2_core::Taken::Selected),
+                )
+            }
             // `FromHand` over what its filter lets through, which takes them
             // all unasked the way an unfiltered selection does.
             sts2_core::Played::AskingAmong {
@@ -1437,6 +1446,9 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
             } => {
                 use sts2_core::CardTable as _;
 
+                if super::board::ending::<V>(super::listen::Walk { live: next, relics }) {
+                    cards.clear();
+                }
                 // `FromCombatPile` hands a draw pile's cards over sorted by
                 // rarity and then by id, a stable sort.
                 if cards

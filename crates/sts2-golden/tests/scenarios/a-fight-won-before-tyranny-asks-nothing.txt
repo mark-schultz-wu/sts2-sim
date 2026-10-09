@@ -1,0 +1,13 @@
+# Rolling Boulder at fifty kills the lone Nibbit as turn two starts. Tyranny,
+# applied after it, still hears the turn start, since `SetupPlayerTurn` runs
+# each of its listeners. Its `FromHand` takes nothing once the fight is
+# ending, so it asks nothing, and `StartTurn` ends the fight once the setup is
+# over.
+#
+# A port that asks the pick loses the win to the question, and leaves the run
+# in a fight with no enemy in it.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"ROLLING_BOULDER_POWER","amount":50,"target":0}
+{"cmd":"power","power":"TYRANNY_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}

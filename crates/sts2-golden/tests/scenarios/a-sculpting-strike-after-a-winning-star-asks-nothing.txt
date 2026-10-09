@@ -1,0 +1,10 @@
+# The Sealed Throne's star, through Black Hole at fifty, kills the lone Nibbit
+# as Sculpting Strike is played. Sculpting Strike still plays out, and its
+# filtered `FromHand` takes nothing once the fight is ending. So it asks for
+# no card to make Ethereal, and the fight ends with the play.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"THE_SEALED_THRONE_POWER","amount":1,"target":0}
+{"cmd":"power","power":"BLACK_HOLE_POWER","amount":50,"target":0}
+{"cmd":"grant","card":"SCULPTING_STRIKE"}
+{"cmd":"play_card","index":5,"target":1}

@@ -1432,6 +1432,7 @@ impl<'a, V: Rules> Board<'a, V> {
             }
         }
         self.ended = Some(super::Ended::Won);
+        self.live.won = true;
     }
 
     /// How this effect ended the fight, as `CheckWinCondition` finds it once
@@ -1458,36 +1459,9 @@ impl<'a, V: Rules> Board<'a, V> {
         }
     }
 
-    /// `CombatManager.IsEnding`: no enemy stands that is both alive and
-    /// primary, and no listener holds the fight open.
-    #[tracing::instrument(level = "trace", skip_all)]
+    /// `CombatManager.IsEnding` over this board.
     fn ending(&self) -> bool {
-        let primary_enemy_remains = self.live.creatures.iter().any(|creature| {
-            creature.side == <V::CombatSide as SideKinds>::ENEMY
-                && creature.alive
-                && !self.live.powers.of(creature.id).any(|held| {
-                    <V as sts2_core::Hooks>::decide_hook(
-                        held.listener(
-                            creature.carrier(),
-                            self.live.history(),
-                            &super::live::Onlookers {
-                                creatures: &self.live.creatures,
-                                powers: &self.live.powers,
-                                kept: &self.live.kept,
-                                relics: Some(&*self.relics),
-                            },
-                        ),
-                        sts2_core::DecisionHook::ShouldCountForCombatEnd,
-                    )
-                    .is_decision_and(|counts| !counts)
-                })
-        });
-        !primary_enemy_remains
-            && !super::listen::any_decides::<V>(
-                self.walk(),
-                sts2_core::DecisionHook::ShouldStopCombatFromEnding,
-                true,
-            )
+        ending::<V>(self.walk())
     }
 
     /// The fight and the belt, as a walk reads them.
@@ -1587,13 +1561,13 @@ impl<'a, V: Rules> Board<'a, V> {
                     }
                     // A state the graph already holds, which walks on by
                     // itself and so has nothing to come back to.
-                    sts2_core::HookEffect::EnterMove(move_id) => {
+                    sts2_core::HookEffect::EnterMove { to, force } => {
                         let monster = held.monster;
-                        // A move the graph cannot leave yet is left standing.
-                        // That is the command's own guard, and not a failure
-                        // this has to answer for.
+                        // A move the graph cannot leave yet is left standing,
+                        // unless the command is forced. That is its own guard,
+                        // and not a failure this has to answer for.
                         if let Ok(next) =
-                            V::set_move_immediate(monster, ascension, move_id, &mut held.machine)
+                            V::set_move_immediate(monster, ascension, to, force, &mut held.machine)
                         {
                             self.live.creatures[at].next_move = Some((&next).into());
                         }
@@ -1884,7 +1858,9 @@ impl<'a, V: Rules> Board<'a, V> {
         else {
             unreachable!("a monster in the fight has its graph")
         };
-        if let Ok(next) = V::set_move_immediate(held.monster, ascension, to, &mut held.machine) {
+        if let Ok(next) =
+            V::set_move_immediate(held.monster, ascension, to, false, &mut held.machine)
+        {
             self.live.creatures[at].next_move = Some((&next).into());
         }
     }
@@ -5851,6 +5827,38 @@ fn random_cost<V: Rules>(rngs: &mut CombatRngs<'_>, below: u8) -> V::Number {
     .expect("a random cost has somewhere to land");
     let cost = rngs.energy_costs.next_int(bound);
     num_traits::NumCast::from(cost).expect("an energy cost fits a game number")
+}
+
+/// `CombatManager.IsEnding`: no enemy stands that is both alive and
+/// primary, and no listener holds the fight open.
+#[tracing::instrument(level = "trace", skip_all)]
+pub(super) fn ending<V: Rules>(walk: Walk<'_, V>) -> bool {
+    let primary_enemy_remains = walk.live.creatures.iter().any(|creature| {
+        creature.side == <V::CombatSide as SideKinds>::ENEMY
+            && creature.alive
+            && !walk.live.powers.of(creature.id).any(|held| {
+                <V as sts2_core::Hooks>::decide_hook(
+                    held.listener(
+                        creature.carrier(),
+                        walk.live.history(),
+                        &super::live::Onlookers {
+                            creatures: &walk.live.creatures,
+                            powers: &walk.live.powers,
+                            kept: &walk.live.kept,
+                            relics: Some(walk.relics),
+                        },
+                    ),
+                    sts2_core::DecisionHook::ShouldCountForCombatEnd,
+                )
+                .is_decision_and(|counts| !counts)
+            })
+    });
+    !primary_enemy_remains
+        && !super::listen::any_decides::<V>(
+            walk,
+            sts2_core::DecisionHook::ShouldStopCombatFromEnding,
+            true,
+        )
 }
 
 #[cfg(test)]

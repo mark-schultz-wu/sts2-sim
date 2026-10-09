@@ -5672,7 +5672,13 @@ pub enum HookEffect<V: ContentVersion> {
     /// segment sent to its dead move reaches the reattach that follows.
     /// [`HookEffect::InstallMove`] is the other half of the same command, for
     /// the states a power builds rather than names.
-    EnterMove(V::MoveId),
+    ///
+    /// `force` is `forceTransition`, which skips the guard
+    /// [`Rules::can_leave_current_move`] stands for.
+    EnterMove {
+        to: V::MoveId,
+        force: bool,
+    },
     /// [`HookEffect::EnterMove`] of `to` for the listener's own monster, where
     /// the move it advertises is `from`.
     EnterMoveFrom {
@@ -7028,7 +7034,7 @@ pub trait Rules: Hooks {
     ///
     /// The guard `SetMoveImmediate` carries. A move that has to be performed
     /// first is not replaced, whether by a state the graph holds or by one a
-    /// power built. Three callers force the transition and skip it.
+    /// power built. A forced [`Rules::set_move_immediate`] skips it.
     ///
     /// The machine-wide pin a fresh graph carries is not part of this. That
     /// one holds `RollMove`, and this command is not one.
@@ -7040,10 +7046,13 @@ pub trait Rules: Hooks {
     /// advertises becomes that state's move, and the graph walks on from
     /// there, so the state's own follow-up is what comes next.
     ///
+    /// `force` is `forceTransition`, which replaces even a move that has to
+    /// be performed first, built or named.
+    ///
     /// # Errors
     ///
-    /// [`MovePinned`], which is the guard the command carries. The graph is
-    /// left where it stood.
+    /// [`MovePinned`], which is the guard the command carries when it is not
+    /// forced. The graph is left where it stood.
     ///
     /// # Panics
     ///
@@ -7052,6 +7061,7 @@ pub trait Rules: Hooks {
         monster: Self::Monster,
         ascension: Self::AscensionLevel,
         move_id: Self::MoveId,
+        force: bool,
         machine: &mut MoveMachine,
     ) -> Result<crate::NextMove<Self>, MovePinned>;
 
