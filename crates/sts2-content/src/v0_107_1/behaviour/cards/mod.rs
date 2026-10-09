@@ -856,9 +856,10 @@ pub(crate) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V>
         Resume::Colorless(at) => colorless::resume_waited(fight, at),
         Resume::Defect(at) => defect::resume_waited(fight, at),
         Resume::Event(at) => event::resume_waited(fight, at),
+        Resume::Ironclad(at) => ironclad::resume_waited(fight, at),
+        Resume::Necrobinder(at) => necrobinder::resume_waited(fight, at),
         Resume::Regent(at) => regent::resume_waited(fight, at),
         Resume::Silent(at) => silent::resume_waited(fight, at),
-        at => unimplemented!("{at:?} resumed after waiting"),
     }
 }
 

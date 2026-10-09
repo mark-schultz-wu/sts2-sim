@@ -305,15 +305,8 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
         }
         // `foreach`
         NecrobinderCard::NegativePulse => unimplemented!("what {card:?} does when it is played"),
-        NecrobinderCard::Neurosurge => {
-            fight.modify_energy(fight.var(CardVar::Energy));
-            fight.draw(fight.var(CardVar::Cards));
-            fight.apply_to_actor(
-                Power::NeurosurgePower,
-                PowerAmount::Counted(fight.power_var(CardVar::NeurosurgePower)),
-            );
-            Played::Done
-        }
+        // A command after a draw, which has to wait on the draw's question.
+        NecrobinderCard::Neurosurge => unimplemented!("what {card:?} does when it is played"),
         // `call PowerCmd.Apply`
         NecrobinderCard::NoEscape => unimplemented!("what {card:?} does when it is played"),
         NecrobinderCard::Oblivion => {

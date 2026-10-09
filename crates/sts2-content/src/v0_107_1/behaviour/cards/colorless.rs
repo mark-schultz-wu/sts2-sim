@@ -343,16 +343,15 @@ fn omnislice<F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// `BeatDown`: up to its `Cards` of the discard pile's playable Attacks,
 /// `StableShuffle`d off `Shuffle`, each auto-played. One aimed at one enemy
-/// is played at an enemy drawn off `CombatTargets` before the play begins.
-/// It plays nothing more once the fight is ending.
+/// draws its enemy off `CombatTargets` as its play begins. None plays once
+/// the fight is ending.
 ///
-/// It takes the list before playing any, and plays each wherever it stands
-/// by then: an earlier play can move one.
+/// It takes the list first, and plays each where it stands by its turn. A
+/// question stands the rest still.
 ///
 /// # Panics
 ///
-/// A card it plays that stops on a question with more cards still to play,
-/// and one no pile holds by its turn.
+/// A card no pile holds by its turn.
 fn beat_down<F: Fight<V>>(fight: &mut F) -> Played<V> {
     use sts2_core::{RunStreamKinds as _, TargetKinds as _};
 
@@ -365,8 +364,7 @@ fn beat_down<F: Fight<V>>(fight: &mut F) -> Played<V> {
     let stream = <V as sts2_core::ContentVersion>::RunRngType::SHUFFLE;
     fight.stable_shuffle_cards(&mut attacks, stream);
     attacks.truncate(cards(fight));
-    let last = attacks.len();
-    for (played, card) in (1..).zip(attacks) {
+    for card in attacks {
         if fight.over_or_ending() {
             break;
         }
@@ -374,19 +372,16 @@ fn beat_down<F: Fight<V>>(fight: &mut F) -> Played<V> {
             .unwrap_or_else(|| unimplemented!("Beat Down playing a card no pile holds"));
         let aimed = fight.card_target_type(fight.card_ident(card))
             == <V as sts2_core::ContentVersion>::TargetType::ANY_ENEMY;
-        match aimed.then(|| fight.random_opponent()).flatten() {
-            Some(target) => fight.auto_play_card_at(card, target),
-            None => fight.auto_play_card(card),
+        if aimed {
+            fight.auto_play_card_at_random(card);
+        } else {
+            fight.auto_play_card(card);
         }
-        if fight.waiting() {
-            assert!(
-                played == last,
-                "Beat Down waiting on a card, with more to play"
-            );
-            return Played::Waiting {
-                at: super::super::Resume::Card(super::Resume::Colorless(Resume::BeatDownPlayed)),
-            };
-        }
+    }
+    if fight.waiting() {
+        return Played::Waiting {
+            at: super::super::Resume::Card(super::Resume::Colorless(Resume::BeatDownPlayed)),
+        };
     }
     Played::Done
 }

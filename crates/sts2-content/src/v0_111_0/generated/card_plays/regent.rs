@@ -45,17 +45,8 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         RegentCard::BeatIntoShape => unimplemented!("what {card:?} does when it is played"),
         // `call CardSelectCmd.FromHand`
         RegentCard::Begone => unimplemented!("what {card:?} does when it is played"),
-        RegentCard::BigBang => {
-            fight.draw(fight.var(CardVar::Cards));
-            fight.gain_stars(fight.var(CardVar::Stars));
-            fight.modify_energy(fight.var(CardVar::Energy));
-            fight.forge(
-                Cards::Token(TokenCard::SovereignBlade),
-                CardVar::Damage,
-                fight.var(CardVar::Forge),
-            );
-            Played::Done
-        }
+        // A command after a draw, which has to wait on the draw's question.
+        RegentCard::BigBang => unimplemented!("what {card:?} does when it is played"),
         RegentCard::BlackHole => {
             fight.apply_to_actor(
                 Power::BlackHolePower,
@@ -317,15 +308,8 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         RegentCard::Glimmer => unimplemented!("what {card:?} does when it is played"),
         // `call Hook.ModifyBlock`
         RegentCard::Glitterstream => unimplemented!("what {card:?} does when it is played"),
-        RegentCard::Glow => {
-            fight.gain_stars(fight.var(CardVar::Stars));
-            fight.draw(fight.var(CardVar::Cards));
-            fight.apply_to_actor(
-                Power::DrawCardsNextTurnPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Cards)),
-            );
-            Played::Done
-        }
+        // A command after a draw, which has to wait on the draw's question.
+        RegentCard::Glow => unimplemented!("what {card:?} does when it is played"),
         // `call CardSelectCmd.FromHand`
         RegentCard::Guards => unimplemented!("what {card:?} does when it is played"),
         RegentCard::GuidingStar => {

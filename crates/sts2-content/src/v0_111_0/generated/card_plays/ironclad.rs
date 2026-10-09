@@ -57,11 +57,8 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
             );
             Played::Done
         }
-        IroncladCard::BattleTrance => {
-            fight.draw(fight.var(CardVar::Cards));
-            fight.apply_to_actor(Power::NoDrawPower, PowerAmount::Counted(1));
-            Played::Done
-        }
+        // A command after a draw, which has to wait on the draw's question.
+        IroncladCard::BattleTrance => unimplemented!("what {card:?} does when it is played"),
         IroncladCard::Blaze => {
             let target = fight.target();
             fight.apply_power(

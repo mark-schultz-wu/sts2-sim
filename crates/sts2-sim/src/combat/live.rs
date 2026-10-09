@@ -204,6 +204,9 @@ pub(super) enum Deferred<V: Rules> {
         id: CardId<V>,
         named: Option<CombatId>,
     },
+    /// `CardCmd.AutoPlay` of a copy at an enemy drawn as its play begins,
+    /// which came up while the question waited.
+    AutoPlayAtRandom { id: CardId<V> },
     /// `CardCmd.AutoPlay` of a card `AutoPlayFromDrawPile` already took into
     /// the play pile, with `ExhaustOnNextPlay` set to `force_exhaust` first.
     AutoPlayTaken { id: CardId<V>, force_exhaust: bool },
@@ -222,6 +225,12 @@ pub(super) enum Deferred<V: Rules> {
         acting: smallvec::SmallVec<[CombatId; CREATURES]>,
         max_energy: V::Count,
     },
+    /// `PowerCmd.Apply` over several targets, which a question one of them
+    /// raised stood still.
+    Land(super::board::Lands<V>),
+    /// `CardPileCmd.AutoPlayFromDrawPile`, which a shuffle's question stood
+    /// still while it took its cards.
+    AutoPlayFromDraw(super::board::AutoPlayFromDraw<V>),
     /// `CardPileCmd.Draw` of `count` cards. `resumed` for the rest of a draw
     /// a shuffle's question stopped, which asked `ShouldDraw` already.
     Draw {

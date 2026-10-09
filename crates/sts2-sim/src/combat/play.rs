@@ -374,6 +374,27 @@ pub(super) fn auto_play_capturing<V: Rules>(
     auto_play_in_play::<V>(live, rngs, relics, card, named, pausable, captured)
 }
 
+/// A deferred `CardCmd.AutoPlay` of `id` wherever it stands, at an enemy
+/// drawn off `CombatTargets` as its play begins. Nothing once the fight is
+/// ending or its owner is dead.
+fn auto_play_at_random<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: crate::stream::CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    ascension: V::AscensionLevel,
+    id: sts2_core::CardId<V>,
+) -> Option<super::Ended> {
+    let Some(from) = live.cards.pile_of(id) else {
+        unimplemented!("auto-playing {id:?}, which no pile holds");
+    };
+    let mut board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+    if sts2_core::Fight::over_or_ending(&board) || !board.live.player().alive {
+        return None;
+    }
+    let target = sts2_core::Fight::random_opponent(&mut board);
+    auto_play::<V>(live, rngs, relics, id, from, target, true)
+}
+
 /// `AutoPlayFromDrawPile`'s play of one card it took into the play pile:
 /// `ExhaustOnNextPlay = forceExhaust`, then `CardCmd.AutoPlay`. A card whose
 /// owner has died stays where it is, unplayed.
@@ -1074,6 +1095,16 @@ fn run_deferred<V: Rules>(
                     (ended, _) => ended,
                 }
             }
+            super::live::Deferred::AutoPlayAtRandom { id } => match ended {
+                None => auto_play_at_random::<V>(
+                    fighting.live,
+                    fighting.streams.combat(),
+                    fighting.relics,
+                    ascension,
+                    id,
+                ),
+                ended => ended,
+            },
             super::live::Deferred::AutoPlayTaken { id, force_exhaust } => match ended {
                 None => auto_play_taken::<V>(
                     fighting.live,
@@ -1163,6 +1194,28 @@ fn run_deferred<V: Rules>(
                     fighting.relics,
                     ascension,
                     held,
+                ),
+                ended => ended,
+            },
+            super::live::Deferred::Land(lands) => match ended {
+                None => super::board::land_waiting::<V>(
+                    fighting.live,
+                    fighting.streams.combat(),
+                    fighting.relics,
+                    ascension,
+                    lands,
+                ),
+                ended => ended,
+            },
+            super::live::Deferred::AutoPlayFromDraw(from) => match ended {
+                None => super::board::auto_play_from_draw::<V>(
+                    fighting.live,
+                    fighting.streams.combat(),
+                    fighting.relics,
+                    ascension,
+                    from,
+                    true,
+                    true,
                 ),
                 ended => ended,
             },
