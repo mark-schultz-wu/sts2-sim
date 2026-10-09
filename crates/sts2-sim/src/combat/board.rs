@@ -4106,6 +4106,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             self.relics,
             sts2_core::PileAct::Discard,
             cards,
+            false,
         );
         self.ended = self.ended.or(ended);
         if !self.stopped() && draw > V::Number::zero() {
@@ -4742,9 +4743,25 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn act_on(&mut self, act: sts2_core::PileAct, cards: &[CardAt<V>]) {
+        // A question a hook of an earlier command asked stands this one still
+        // inside an effect, as it does a draw.
+        if self.live.asking.is_some() && self.pausable() {
+            self.live.defer(super::live::Deferred::ActOn {
+                act,
+                cards: cards.iter().copied().collect(),
+            });
+            return;
+        }
         self.ran_on();
-        let (sly, ended) =
-            super::turn::act_on::<V>(self.live, self.rngs.reborrow(), self.relics, act, cards);
+        let pausable = self.pausable();
+        let (sly, ended) = super::turn::act_on::<V>(
+            self.live,
+            self.rngs.reborrow(),
+            self.relics,
+            act,
+            cards,
+            pausable,
+        );
         self.ended = self.ended.or(ended);
         if !self.stopped() {
             let pausable = self.pausable();

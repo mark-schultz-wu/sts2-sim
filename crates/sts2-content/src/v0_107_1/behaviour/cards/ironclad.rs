@@ -25,6 +25,9 @@ pub enum Resume {
     BurningPactExhaust,
     /// `BattleTrance`, after a question inside its draw was answered.
     BattleTranceDrew,
+    /// `FiendFire`, after a question inside its exhausts was answered, with
+    /// this many hits to land.
+    FiendFireExhausted(u8),
 }
 
 /// The rest of an Ironclad card's play that stood still on a question its
@@ -32,8 +35,27 @@ pub enum Resume {
 pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
     match at {
         Resume::BattleTranceDrew => battle_trance_drew(fight),
+        Resume::FiendFireExhausted(hits) => fiend_fire_hits(fight, usize::from(hits)),
         at => unreachable!("{at:?} stops on a pick, not on a question it waited for"),
     }
+}
+
+/// `FiendFire`, once its exhausts are over: its damage to the target, `hits`
+/// times.
+fn fiend_fire_hits<F: Fight<V>>(fight: &mut F, hits: usize) -> Played<V> {
+    let target = fight.target();
+    fight.attack(Scaling::Dynamic, |fight| {
+        for _ in 0..hits {
+            let hit = fight.resolve(Effect::Attack {
+                dealer: fight.actor(),
+                target,
+                damage: Amount::Var(CardVar::Damage),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(hit);
+        }
+    });
+    Played::Done
 }
 
 /// `BattleTrance`, once its draw is over: No Draw on its owner.
@@ -48,7 +70,9 @@ pub(super) fn resume_play<F: Fight<V>>(
     chosen: sts2_core::SelectedCards<V>,
 ) -> Played<V> {
     match at {
-        Resume::BattleTranceDrew => unreachable!("{at:?} waits on a question, not a pick"),
+        Resume::BattleTranceDrew | Resume::FiendFireExhausted(_) => {
+            unreachable!("{at:?} waits on a question, not a pick")
+        }
         // `CardPileCmd.Add(cardModel, PileType.Draw, CardPilePosition.Top)`.
         Resume::HeadbuttOntoDraw => {
             fight.act_on(PileAct::OntoDrawTop, chosen.as_slice());
@@ -246,25 +270,22 @@ pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<
         }
         // `FiendFire`: every card in hand exhausted, then its damage to the
         // target once for each.
+        // A hook's question inside an exhaust stands the rest still.
         IroncladCard::FiendFire => {
             let cards = fight.cards_in(Pile::Hand);
             let hits = cards.len();
             for card in cards {
                 fight.act_on(PileAct::Exhaust, &[card]);
             }
-            let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                for _ in 0..hits {
-                    let hit = fight.resolve(Effect::Attack {
-                        dealer: fight.actor(),
-                        target,
-                        damage: Amount::Var(CardVar::Damage),
-                        scaling: Scaling::Dynamic,
-                    });
-                    fight.apply(hit);
-                }
-            });
-            Played::Done
+            if fight.waiting() {
+                let hits = u8::try_from(hits).expect("a hand's worth of hits fits a u8");
+                return Played::Waiting {
+                    at: super::super::Resume::Card(super::Resume::Ironclad(
+                        Resume::FiendFireExhausted(hits),
+                    )),
+                };
+            }
+            fiend_fire_hits(fight, hits)
         }
         // `BurningPact`: one card of the hand exhausted, then its `Cards`
         // drawn.

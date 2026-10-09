@@ -225,6 +225,15 @@ pub(super) enum Deferred<V: Rules> {
         acting: smallvec::SmallVec<[CombatId; CREATURES]>,
         max_energy: V::Count,
     },
+    /// The end of an outermost play whose exhaust raised a question:
+    /// `CheckForEmptyHand`, and the end of a fight it won.
+    PlayOver,
+    /// A command acting on `cards`, which a question asked before it stood
+    /// still.
+    ActOn {
+        act: sts2_core::PileAct,
+        cards: smallvec::SmallVec<[sts2_core::CardAt<V>; 4]>,
+    },
     /// `PowerCmd.Apply` over several targets, which a question one of them
     /// raised stood still.
     Land(super::board::Lands<V>),
