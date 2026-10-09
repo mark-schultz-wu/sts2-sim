@@ -2083,6 +2083,10 @@ pub(crate) struct Live<V: Rules> {
     /// What `AfterShuffle` listeners asked for behind one that asked the
     /// player to pick, which waits for the pick.
     pub(super) after_pick: Vec<sts2_core::HookEffect<V>>,
+    /// The cards a listener's draw still owes, which a shuffle's question
+    /// stopped inside another draw. The outermost comes first. The draw that
+    /// resumes finishes them before its own.
+    pub(super) hook_draws: smallvec::SmallVec<[usize; 2]>,
     pub(super) creatures: Creatures<V>,
     /// What every creature carries, in the order it gained it.
     pub(super) powers: PowerStore<V>,
@@ -2339,6 +2343,7 @@ impl<V: Rules> Clone for Live<V> {
             leaving: self.leaving.clone(),
             for_run: self.for_run.clone(),
             after_pick: self.after_pick.clone(),
+            hook_draws: self.hook_draws.clone(),
             powers: self.powers.clone(),
             orbs: self.orbs.clone(),
             card_ids: self.card_ids.clone(),
@@ -2378,6 +2383,7 @@ impl<V: Rules> Clone for Live<V> {
             leaving,
             for_run,
             after_pick,
+            hook_draws,
             creatures,
             powers,
             orbs,
@@ -2415,6 +2421,7 @@ impl<V: Rules> Clone for Live<V> {
         leaving.clone_from(&source.leaving);
         for_run.clone_from(&source.for_run);
         after_pick.clone_from(&source.after_pick);
+        hook_draws.clone_from(&source.hook_draws);
         creatures.copy_from(&source.creatures);
         powers.clone_from(&source.powers);
         orbs.clone_from(&source.orbs);
@@ -3211,6 +3218,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             leaving: Vec::new(),
             for_run: Vec::new(),
             after_pick: Vec::new(),
+            hook_draws: smallvec::SmallVec::new(),
             creatures: creatures.into_iter().collect(),
             powers: PowerStore::new(),
             orbs: None,
