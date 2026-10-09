@@ -1,0 +1,11 @@
+# The second turn's draw leaves the draw pile dry. Overclock's draw shuffles,
+# and Stratagem asks for its pick. The Abacus hears the shuffle after
+# Stratagem, so its block waits on the answer.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"grant","relic":"THE_ABACUS"}
+{"cmd":"fight","encounter":"BYGONE_EFFIGY_ELITE"}
+{"cmd":"power","power":"STRATAGEM_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"OVERCLOCK"}
+{"cmd":"play_card","index":5}
+{"cmd":"answer","cards":[0]}

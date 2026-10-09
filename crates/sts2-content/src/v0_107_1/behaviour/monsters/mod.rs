@@ -371,7 +371,7 @@ pub enum Model {
     /// `Fabricator._lastSpawned`.
     Fabricator { last: Option<Monster> },
     /// `TestSubject.Respawns` and `ExtraMultiClawCount`.
-    TestSubject { respawns: u8, extra_claws: u8 },
+    TestSubject { respawns: u8, extra_claws: u16 },
     /// `Aeonglass.AdditionalStrength` and `WitherUpgradeCount`.
     Aeonglass { strength: u8, wither_upgrades: u8 },
     /// `Queen.HasAmalgamDied`.

@@ -130,7 +130,7 @@ pub(super) fn conditional(
 }
 
 /// `TestSubject.Respawns` and `ExtraMultiClawCount`.
-fn test_subject(model: &super::Model) -> (u8, u8) {
+fn test_subject(model: &super::Model) -> (u8, u16) {
     let super::Model::TestSubject {
         respawns,
         extra_claws,
@@ -517,7 +517,9 @@ pub(super) fn perform<F: Fight<V>>(
                 let super::Model::TestSubject { extra_claws, .. } = model else {
                     unreachable!("a Test Subject holding {model:?}")
                 };
-                *extra_claws += 1;
+                *extra_claws = extra_claws
+                    .checked_add(1)
+                    .unwrap_or_else(|| unimplemented!("a Multi Claw past {extra_claws} before it"));
             });
         }
         // `BurningGrowlMove`: Burns into the discard pile, then Strength.
