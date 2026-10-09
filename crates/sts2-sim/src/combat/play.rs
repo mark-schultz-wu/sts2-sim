@@ -542,8 +542,8 @@ pub(super) fn auto_play_in_play<V: Rules>(
 }
 
 /// `CardModel.MoveToResultPileWithoutPlaying` for a card in the play pile:
-/// exhausted once `ExhaustOnNextPlay` or its Exhaust says so, and discarded
-/// otherwise.
+/// out of the fight for a dupe, exhausted once `ExhaustOnNextPlay` or its
+/// Exhaust says so, and discarded otherwise.
 fn without_playing<V: Rules>(
     live: &mut Live<V>,
     rngs: crate::stream::CombatRngs<'_>,
@@ -553,6 +553,12 @@ fn without_playing<V: Rules>(
     let marked = live.exhaust_next.iter().position(|&id| id == card.id);
     if let Some(at) = marked {
         live.exhaust_next.remove(at);
+    }
+    // A dupe leaves the fight, whatever else it carries.
+    if card.face.dupe() {
+        live.cards
+            .leave_play(card.id, None, sts2_core::PilePosition::Bottom);
+        return None;
     }
     match marked.is_some() || card.face.exhausts() {
         true => {
@@ -614,6 +620,7 @@ fn before_played<V: Rules, S: LendsCombat>(
         resolved,
         spent: num_traits::cast(energy).expect("an energy fits a game number"),
         side: live.side,
+        dupe: card.face.dupe(),
     };
     let mut rest: SmallVec<[sts2_core::HookEffect<V>; 4]> = SmallVec::new();
     for (listener, effect) in super::listen::notify::<V>(live, relics, hook) {
@@ -659,9 +666,10 @@ fn result_pile<V: Rules>(
     if let Some(at) = marked {
         live.exhaust_next.remove(at);
     }
-    let pile = match played
-        .power()
-        .unwrap_or_else(|| unimplemented!("a card that works its own type out from the fight"))
+    let pile = match card.face.dupe()
+        || played
+            .power()
+            .unwrap_or_else(|| unimplemented!("a card that works its own type out from the fight"))
     {
         true => None,
         false if marked.is_some() || card.face.exhausts() => Some(sts2_core::Pile::Exhaust),
@@ -1697,7 +1705,8 @@ fn finished<V: Rules, S: LendsCombat>(
         relics,
     } = fighting;
     let spent = play.energy;
-    next.history.finish(card, id, ethereal, play.auto);
+    let dupe = next.cards.named(id).is_some_and(|held| held.face.dupe());
+    next.history.finish(card, id, ethereal, play.auto, dupe);
     let mut ended = None;
     // The copy stays in the play pile until its play is over.
     let affliction = next

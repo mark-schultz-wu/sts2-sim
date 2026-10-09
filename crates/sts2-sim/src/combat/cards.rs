@@ -251,6 +251,14 @@ impl<V: Rules, P: Piles> Cards<V, P> {
         self.counts.add(self.overrides(number(card.id)));
     }
 
+    /// `CardPileCmd.Add` to the play pile of a copy no pile held, which an
+    /// auto-play makes of a dupe.
+    pub(crate) fn enter_play(&mut self, card: CardInstance<V>) {
+        self.store(card);
+        self.piles.push_back(Place::Play, number(card.id));
+        self.counts.add(self.overrides(number(card.id)));
+    }
+
     /// Put `card` into `pile` at `at`, counting from the front.
     pub(crate) fn insert(&mut self, pile: Pile, at: usize, card: CardInstance<V>) {
         self.push(pile, card);

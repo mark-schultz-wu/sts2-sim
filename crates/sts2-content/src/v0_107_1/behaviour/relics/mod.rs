@@ -134,6 +134,7 @@ mod gremlin_horn;
 mod happy_flower;
 mod hefty_tablet;
 mod helical_dart;
+mod history_course;
 mod horn_cleat;
 mod ice_cream;
 mod infused_core;
@@ -632,6 +633,7 @@ pub enum State {
     BrilliantScarf(brilliant_scarf::State),
     VelvetChoker(velvet_choker::State),
     LordsParasol,
+    HistoryCourse,
     FurCoat(fur_coat::State),
     PhilosophersStone,
     GnarledHammer,
@@ -894,6 +896,7 @@ pub(crate) fn event_hook(
         State::BrilliantScarf(state) => brilliant_scarf::event_hook(state, hook),
         State::VelvetChoker(state) => velvet_choker::event_hook(state, hook),
         State::LordsParasol => lords_parasol::event_hook(hook, asked),
+        State::HistoryCourse => history_course::event_hook(hook, asked),
         State::FurCoat(state) => fur_coat::event_hook(state, hook, asked),
         State::PhilosophersStone => philosophers_stone::event_hook(hook, asked),
         State::GnarledHammer => gnarled_hammer::event_hook(hook, asked),
@@ -1345,7 +1348,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::FurCoat(_)
         | State::GnarledHammer
         | State::DragonFruit
-        | State::LordsParasol => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::LordsParasol
+        | State::HistoryCourse => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1535,6 +1539,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::BrilliantScarf => State::BrilliantScarf(brilliant_scarf::State::default()),
             Relic::VelvetChoker => State::VelvetChoker(velvet_choker::State::default()),
             Relic::LordsParasol => State::LordsParasol,
+            Relic::HistoryCourse => State::HistoryCourse,
             Relic::FurCoat => State::FurCoat(fur_coat::State::default()),
             Relic::PhilosophersStone => State::PhilosophersStone,
             Relic::GnarledHammer => State::GnarledHammer,

@@ -3701,12 +3701,14 @@ pub(crate) fn event_hook(
             unimplemented!("endless Chains of Binding")
         }
         (Power::ChainsOfBindingPower, _, EventHook::CardDrawn { .. }) => None,
-        // `BeforeCardPlayed`: a Bound card of its owner's is played.
+        // `BeforeCardPlayed`: a Bound card of its owner's is played, which a
+        // dupe never counts as.
         (
             Power::ChainsOfBindingPower,
             _,
             EventHook::CardPlaying {
                 affliction: Some(Affliction::Bound),
+                dupe: false,
                 ..
             },
         ) => {

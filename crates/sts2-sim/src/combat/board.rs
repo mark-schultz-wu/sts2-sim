@@ -1199,7 +1199,7 @@ impl<'a, V: Rules> Board<'a, V> {
         Some(at)
     }
 
-    fn card_entered_combat(&mut self, at: CardAt<V>, card: V::Card, clone: bool) {
+    pub(super) fn card_entered_combat(&mut self, at: CardAt<V>, card: V::Card, clone: bool) {
         let index = num_traits::ToPrimitive::to_usize(&at.index())
             .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
         let afflicted = (self.live.cards.idents(at.pile()).nth(index))

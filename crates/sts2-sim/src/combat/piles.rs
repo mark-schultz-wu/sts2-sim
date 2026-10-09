@@ -7,10 +7,8 @@
 //! [`Piles`] is the interface a fight uses. What stores the order behind it is
 //! the implementor's business, and each makes different operations cheap.
 
-/// One of a fight's piles, which is `PlayerCombatState.AllPiles`.
-///
-/// [`sts2_core::Pile`] and the play pile, which holds the card being played
-/// and which no decision names.
+/// One of a fight's piles, which is `PlayerCombatState.AllPiles`: the
+/// storage's own name for a [`sts2_core::Pile`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub(crate) enum Place {
@@ -28,6 +26,7 @@ impl From<sts2_core::Pile> for Place {
             sts2_core::Pile::Draw => Place::Draw,
             sts2_core::Pile::Discard => Place::Discard,
             sts2_core::Pile::Exhaust => Place::Exhaust,
+            sts2_core::Pile::Play => Place::Play,
         }
     }
 }

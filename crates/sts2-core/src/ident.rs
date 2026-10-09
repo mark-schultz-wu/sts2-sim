@@ -133,6 +133,8 @@ pub enum Pile {
     Draw,
     Discard,
     Exhaust,
+    /// `PileType.Play`, where a card stands while its play runs.
+    Play,
 }
 
 /// A card the fight named, and where it stood when it named it.

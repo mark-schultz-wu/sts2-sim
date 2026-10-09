@@ -2126,6 +2126,54 @@ fn pre_play_heard<V: Rules>(
 /// # Panics
 ///
 /// A listener asking for anything but an auto-play of a card.
+/// `CardCmd.AutoPlay` of `CreateDupe` on the last card of `kinds` its owner
+/// finished playing in its last turn that was no dupe itself. Nothing when
+/// there is none. The dupe enters the fight in the play pile.
+///
+/// # Panics
+///
+/// A card the fight no longer holds, and an X-cost card, whose dupe keeps the
+/// X its play captured.
+fn auto_play_dupe_of_last_play<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    turn: V::Count,
+    kinds: &[sts2_core::CardKind],
+) -> Option<super::Ended> {
+    let last = live
+        .history()
+        .finished_last_player_turn(turn)
+        .filter(|finished| {
+            !finished.dupe && V::card_kind(finished.card).is_some_and(|kind| kinds.contains(&kind))
+        })
+        .last()?;
+    let Some(original) = live.cards.named(last.id) else {
+        unimplemented!("a dupe of {:?}, which the fight no longer holds", last.card);
+    };
+    if original.face.cost == sts2_core::Cost::X {
+        unimplemented!("a dupe of the X-cost {:?}", last.card);
+    }
+    let id = live.card_ids.mint();
+    let index = num_traits::NumCast::from(live.cards.len(Pile::Play))
+        .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
+    live.cards.enter_play(original.face.duped().named(id));
+    // `CardPileCmd.Add` to the play pile from no pile raises
+    // `AfterCardEnteredCombat`, and a dupe is a clone of its original.
+    let ascension = live.ascension;
+    let mut board =
+        Board::for_card(live, rngs.reborrow(), relics, ascension, None, None).blocking();
+    board.card_entered_combat(
+        sts2_core::CardAt::new(id, Pile::Play, index),
+        original.face.ident.card,
+        true,
+    );
+    if let Some(ended) = board.ended() {
+        return Some(ended);
+    }
+    super::play::auto_play_taken::<V>(live, rngs, relics, id, false, true)
+}
+
 pub(super) fn pre_play_from<V: Rules>(
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
@@ -2161,6 +2209,25 @@ pub(super) fn pre_play_from<V: Rules>(
                     );
                     if ended.is_some() {
                         return ended;
+                    }
+                }
+                sts2_core::HookEffect::AutoPlayDupeOfLastPlay { kinds } => {
+                    let ended = auto_play_dupe_of_last_play::<V>(
+                        live,
+                        rngs.reborrow(),
+                        relics,
+                        turn,
+                        kinds,
+                    );
+                    if ended.is_some() {
+                        return ended;
+                    }
+                    // `CardCmd.AutoPlay` is awaited, so what the pass still
+                    // asked for waits on the answer.
+                    if live.asking.is_some() {
+                        let rest: PrePlayRest<V> = effects.collect();
+                        live.defer(super::live::Deferred::PrePlay { rest, next: pass });
+                        return None;
                     }
                 }
                 sts2_core::HookEffect::AutoPlayHand { mut left } => {
