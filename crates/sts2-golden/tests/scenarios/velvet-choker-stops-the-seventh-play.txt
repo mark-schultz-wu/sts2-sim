@@ -1,0 +1,22 @@
+# Velvet Choker gives one more energy, and allows six plays a turn. Six
+# Neutralizes play, and the seventh card in hand has no legal play. The next
+# turn starts the count over.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","relic":"VELVET_CHOKER"}
+{"cmd":"fight","encounter":"BYGONE_EFFIGY_ELITE"}
+{"cmd":"grant","card":"NEUTRALIZE"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"grant","card":"NEUTRALIZE"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"grant","card":"NEUTRALIZE"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"grant","card":"NEUTRALIZE"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"grant","card":"NEUTRALIZE"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"grant","card":"NEUTRALIZE"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"grant","card":"NEUTRALIZE"}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"NEUTRALIZE"}
+{"cmd":"play_card","index":5,"target":1}

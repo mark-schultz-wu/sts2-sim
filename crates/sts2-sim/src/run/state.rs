@@ -713,17 +713,21 @@ pub(super) enum Location {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Unfinished {
     /// The card removal, waiting for the card it takes out of the deck. It
-    /// clears no shelf, so it names none.
-    Removal,
+    /// clears no shelf, so it names none. `free` for one bought with
+    /// `ignoreCost`, which spends nothing.
+    Removal { free: bool },
     /// A relic's pickup, waiting for the card it copies. The shelf it came off
-    /// clears when the answer lands.
+    /// clears when the answer lands. `parasol` for one Lord's Parasol bought,
+    /// whose purchases go on from the next shelf.
     Pickup {
         shelf: u8,
         excluding: sts2_core::CardKind,
+        parasol: bool,
     },
     /// A relic's pickup the shop parks on as any room does. The shelf it
-    /// came off clears once that pickup is done.
-    Relic { shelf: u8 },
+    /// came off clears once that pickup is done. `parasol` for one Lord's
+    /// Parasol bought, whose purchases go on from the next shelf.
+    Relic { shelf: u8, parasol: bool },
 }
 
 impl<V: Rules> Phase<V> {
@@ -1748,6 +1752,10 @@ impl<V: Rules> State<V> {
                 }
                 HookEffect::GainGold(amount) => {
                     self.gain_gold(amount);
+                    continue;
+                }
+                HookEffect::PurchaseEverything => {
+                    self.purchase_everything(None);
                     continue;
                 }
                 HookEffect::MarkCombatPoints { relic, count, name } => {
@@ -3828,6 +3836,7 @@ impl<V: Rules> State<V> {
                         Unfinished::Pickup {
                             shelf: index,
                             excluding,
+                            parasol: false,
                         }
                     }
                     Pickup::CloneDeckCard { .. } => {
@@ -3839,7 +3848,10 @@ impl<V: Rules> State<V> {
                             unreachable!("the phase was a shop when this began");
                         };
                         *asking = Some(asked);
-                        Unfinished::Relic { shelf: index }
+                        Unfinished::Relic {
+                            shelf: index,
+                            parasol: false,
+                        }
                     }
                 })
             }
@@ -3859,7 +3871,7 @@ impl<V: Rules> State<V> {
             // this one until then.
             sts2_core::Stock::CardRemoval => {
                 self.player.gold = self.player.gold + cost;
-                Some(Unfinished::Removal)
+                Some(Unfinished::Removal { free: false })
             }
             stock => unimplemented!("buying {stock:?}"),
         };
@@ -3925,8 +3937,24 @@ impl<V: Rules> State<V> {
             unimplemented!("a purchase answered with other than one card");
         };
         match unfinished {
-            Unfinished::Removal => self.removed(index),
-            Unfinished::Pickup { shelf, excluding } => self.cloned(index, shelf, excluding),
+            Unfinished::Removal { free } => self.removed(index, free),
+            Unfinished::Pickup {
+                shelf,
+                excluding,
+                parasol,
+            } => {
+                self.cloned(index, shelf, excluding);
+                if parasol {
+                    // The question has its answer, and the purchases go on
+                    // with no pickup waiting.
+                    let Phase::Shop { unfinished, .. } = &mut self.phase else {
+                        unreachable!("the phase was a shop when this began");
+                    };
+                    *unfinished = None;
+                    self.purchase_everything(Some(shelf));
+                    return Ok(Decided::Resolved);
+                }
+            }
             Unfinished::Relic { .. } => {
                 unreachable!("a pickup the shop parks on answers as a room's")
             }
@@ -3954,18 +3982,21 @@ impl<V: Rules> State<V> {
     }
 
     /// Take the card the merchant's removal was pointed at out of the deck.
+    /// A `free` removal spends nothing, and counts among the removals used.
     ///
     /// The index is the removal list's, which is the deck less its `Eternal`
     /// cards, curses first.
-    fn removed(&mut self, index: usize) {
+    fn removed(&mut self, index: usize, free: bool) {
         let Some(&(at, _)) = self.offered(sts2_core::DeckAct::Remove).get(index) else {
             unimplemented!("a removal naming a card the selection did not offer");
         };
         self.player.deck_mut().remove(at);
         // `DoLocalMerchantCardRemoval` spends the gold once the card comes
         // back, and `CardShopRemovalsUsed` climbs over the run.
-        let spent = self.merchant_price(removal_cost::<V>(self.removals_used));
-        self.player.gold = self.player.gold - spent;
+        if !free {
+            let spent = self.merchant_price(removal_cost::<V>(self.removals_used));
+            self.player.gold = self.player.gold - spent;
+        }
         self.removals_used += 1;
         // `NMerchantCardRemoval.OnCardRemovalUsed` calls `SetUsed`, and
         // `IsStocked` is `!Used`, so this merchant sells no second removal.
@@ -3977,6 +4008,82 @@ impl<V: Rules> State<V> {
             {
                 entry.stocked = false;
             }
+        }
+    }
+
+    /// `LordsParasol.PurchaseEverything`, as its owner enters a merchant.
+    /// `OnTryPurchaseWrapper` with `ignoreCost` on each shelf, in order. A
+    /// sold-out shelf or a refused potion buys nothing. The card removal comes
+    /// last, and cannot be cancelled.
+    ///
+    /// A relic's pickup that asks stands the rest still. They go on from the
+    /// shelf `after` it once the pickup is done.
+    ///
+    /// # Panics
+    ///
+    /// A relic whose pickup asks for more behind a copy of a deck card.
+    fn purchase_everything(&mut self, after: Option<u8>) {
+        let Phase::Shop { entries, .. } = &self.phase else {
+            unimplemented!("Lord's Parasol buying outside a merchant's room");
+        };
+        let shelves: Vec<(u8, sts2_core::Stock<V>, bool)> = entries
+            .iter()
+            .filter(|entry| after.is_none_or(|after| entry.index > after))
+            .map(|entry| (entry.index, entry.stock, entry.stocked))
+            .collect();
+        let mut removal = false;
+        for (index, stock, stocked) in shelves {
+            match stock {
+                sts2_core::Stock::CardRemoval => {
+                    removal = stocked;
+                    continue;
+                }
+                _ if !stocked => continue,
+                sts2_core::Stock::Card(Some(on_sale)) => self.add_to_deck(on_sale.card),
+                sts2_core::Stock::Relic(Some(relic)) => {
+                    if let Some(asked) = self.obtain(relic) {
+                        let Phase::Shop {
+                            asking, unfinished, ..
+                        } = &mut self.phase
+                        else {
+                            unreachable!("the phase was a shop when this began");
+                        };
+                        *unfinished = Some(match asked.pickup {
+                            Pickup::CloneDeckCard { excluding } if asked.rest.is_empty() => {
+                                Unfinished::Pickup {
+                                    shelf: index,
+                                    excluding,
+                                    parasol: true,
+                                }
+                            }
+                            Pickup::CloneDeckCard { .. } => {
+                                unimplemented!("a clone asked for with more behind it in a shop")
+                            }
+                            _ => {
+                                *asking = Some(asked);
+                                Unfinished::Relic {
+                                    shelf: index,
+                                    parasol: true,
+                                }
+                            }
+                        });
+                        return;
+                    }
+                }
+                sts2_core::Stock::Potion(Some(potion)) => {
+                    if !self.procure(potion) {
+                        continue;
+                    }
+                }
+                stock => unimplemented!("Lord's Parasol buying {stock:?}"),
+            }
+            self.purchased(index);
+        }
+        if removal {
+            let Phase::Shop { unfinished, .. } = &mut self.phase else {
+                unreachable!("the phase was a shop when this began");
+            };
+            *unfinished = Some(Unfinished::Removal { free: true });
         }
     }
 
@@ -4706,10 +4813,13 @@ impl<V: Rules> State<V> {
         }
         // `ClearAfterPurchase`, once the relic bought has finished its pickup.
         if let Phase::Shop { unfinished, .. } = &mut self.phase
-            && let Some(Unfinished::Relic { shelf }) = *unfinished
+            && let Some(Unfinished::Relic { shelf, parasol }) = *unfinished
         {
             *unfinished = None;
             self.purchased(shelf);
+            if parasol {
+                self.purchase_everything(Some(shelf));
+            }
         }
         // A rest site's option is done once its pickup is.
         if let Phase::RestSite { .. } = &self.phase {
@@ -4747,7 +4857,7 @@ impl<V: Rules> State<V> {
         if matches!(
             &self.phase,
             Phase::Shop {
-                unfinished: Some(Unfinished::Removal | Unfinished::Pickup { .. }),
+                unfinished: Some(Unfinished::Removal { .. } | Unfinished::Pickup { .. }),
                 ..
             }
         ) {
@@ -5236,7 +5346,7 @@ impl<V: Rules> State<V> {
                 ..
             } => {
                 let offered = match unfinished {
-                    Unfinished::Removal => self.offered(sts2_core::DeckAct::Remove).len(),
+                    Unfinished::Removal { .. } => self.offered(sts2_core::DeckAct::Remove).len(),
                     Unfinished::Pickup { excluding, .. } => self.clonable(*excluding).len(),
                     Unfinished::Relic { .. } => unreachable!("the parked pickup answers first"),
                 };
@@ -5777,7 +5887,7 @@ impl<V: Rules> State<V> {
             Phase::Shop { unfinished, .. } => {
                 let offered = match unfinished {
                     None => None,
-                    Some(Unfinished::Removal) => Some(
+                    Some(Unfinished::Removal { .. }) => Some(
                         self.offered(sts2_core::DeckAct::Remove)
                             .into_iter()
                             .map(|(_, card)| card)
