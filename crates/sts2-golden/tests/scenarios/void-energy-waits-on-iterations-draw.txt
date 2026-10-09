@@ -1,0 +1,20 @@
+# Two Overclocks leave one card in the draw pile, Turbo puts a Void into the
+# discard pile, and Headbutt puts the Void on top. The second turn's draw
+# takes the Void first. Iteration draws two inside it, which shuffles, and
+# Stratagem asks for its pick. The Void's lost energy, asked after
+# Iteration's draw, waits on the answer.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"BYGONE_EFFIGY_ELITE"}
+{"cmd":"power","power":"STRATAGEM_POWER","amount":1,"target":0}
+{"cmd":"power","power":"ITERATION_POWER","amount":2,"target":0}
+{"cmd":"grant","card":"OVERCLOCK"}
+{"cmd":"play_card","index":5}
+{"cmd":"grant","card":"OVERCLOCK"}
+{"cmd":"play_card","index":7}
+{"cmd":"grant","card":"TURBO"}
+{"cmd":"play_card","index":9}
+{"cmd":"grant","card":"HEADBUTT"}
+{"cmd":"play_card","index":9,"target":1}
+{"cmd":"answer","cards":[4]}
+{"cmd":"end_turn"}
+{"cmd":"answer","cards":[0]}

@@ -4974,6 +4974,11 @@ pub(super) fn shuffle_asking<V: Rules>(
             effect @ HookEffect::AddToDrawAtRandom { .. } if asks.is_some() => {
                 board.live.after_pick.push(effect)
             }
+            effect @ HookEffect::GainBlock(_)
+                if asks.is_some() && matches!(listener, Listener::Relic { .. }) =>
+            {
+                board.live.after_pick.push(effect)
+            }
             effect if asks.is_some() => {
                 unimplemented!("{listener:?} asking for {effect:?} after a shuffle's selection")
             }
@@ -5169,6 +5174,9 @@ impl<V: Rules> Board<'_, V> {
                     self.add_to_draw_at_random(card);
                 }
             }
+            // `CreatureCmd.GainBlock`, unpowered, on a relic's owner, which
+            // is the only listener that waits with one.
+            effect @ HookEffect::GainBlock(_) => super::hook::apply::<V, _>(self, [effect]),
             effect => unimplemented!("{effect:?} after a shuffle"),
         }
     }
@@ -5575,29 +5583,44 @@ pub(super) fn draw_pausing<V: Rules>(
             stopped => return stopped.with_left(count),
         }
     }
-    // The listeners' draws the question stopped, the innermost first.
+    // The listeners' draws the question stopped, the innermost first, each
+    // with what the listeners after it asked.
     if resumed && !live.hook_draws.is_empty() {
         let waiting = std::mem::take(&mut live.hook_draws);
         for at in (0..waiting.len()).rev() {
-            match draw_pausing::<V>(
+            let HookDraw { left, drawn, then } = waiting[at].clone();
+            let stopped = match draw_pausing::<V>(
                 live,
                 rngs.reborrow(),
                 relics,
                 ascension,
-                waiting[at],
+                left,
                 false,
                 true,
             ) {
-                Drawn::Done(None) => {}
                 Drawn::Done(Some(ended)) => return Drawn::Done(Some(ended)),
+                Drawn::Done(None) => match carry_out_drawn::<V>(
+                    live,
+                    rngs.reborrow(),
+                    relics,
+                    ascension,
+                    drawn,
+                    then.into_iter().collect(),
+                    None,
+                ) {
+                    Drawn::Done(None) => continue,
+                    Drawn::Done(Some(ended)) => return Drawn::Done(Some(ended)),
+                    stopped => stopped,
+                },
                 stopped @ (Drawn::Paused { left, .. } | Drawn::Asked { left }) => {
-                    let mut owed: SmallVec<[usize; 2]> = waiting[..at].into();
-                    owed.push(left);
-                    owed.extend(live.hook_draws.drain(..));
-                    live.hook_draws = owed;
-                    return stopped.with_left(count);
+                    live.hook_draws.insert(0, HookDraw { left, drawn, then });
+                    stopped
                 }
-            }
+            };
+            let mut owed: SmallVec<[HookDraw<V>; 2]> = waiting[..at].iter().cloned().collect();
+            owed.extend(live.hook_draws.drain(..));
+            live.hook_draws = owed;
+            return stopped.with_left(count);
         }
     }
     if !resumed && super::listen::any_decides::<V>(Walk { live, relics }, hook, false) {
@@ -5695,7 +5718,7 @@ fn card_drawn_late<V: Rules>(
     ascension: V::AscensionLevel,
     drawn: &super::live::CardInstance<V>,
     hand_draw: bool,
-    mut ended: Option<super::Ended>,
+    ended: Option<super::Ended>,
 ) -> Drawn {
     // `Hook.AfterCardDrawn`, raised for each card inside the loop rather
     // than once for the whole draw. So a card that spends the pool as it
@@ -5745,38 +5768,79 @@ fn card_drawn_late<V: Rules>(
             (_, effect) => rest.push(effect),
         }
     }
-    // A listener's `CardPileCmd.Draw` last in line runs inside this draw,
-    // so a shuffle's question in it pauses this one too.
-    let hook_draw = match rest.last() {
-        Some(&HookEffect::Draw(count)) => {
-            rest.pop();
-            Some(num_traits::NumCast::from(count).unwrap_or(0usize))
+    carry_out_drawn::<V>(live, rngs, relics, ascension, drawn.id, rest, ended)
+}
+
+/// A listener's draw that a question stopped inside another draw. It still
+/// owes `left` cards, and `then` is what the listeners after it asked for the
+/// card `drawn`, which waits for it.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct HookDraw<V: Rules> {
+    left: usize,
+    drawn: CardId<V>,
+    then: SmallVec<[HookEffect<V>; 2]>,
+}
+
+/// What the late `AfterCardDrawn` listeners asked for the card `drawn`,
+/// carried out in order after `ended`. A listener's `CardPileCmd.Draw` runs
+/// inside the draw that took the card. A shuffle's question in it pauses that
+/// draw too, and the listeners after it wait.
+fn carry_out_drawn<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: CombatRngs<'_>,
+    relics: &mut Belt<V>,
+    ascension: V::AscensionLevel,
+    drawn: CardId<V>,
+    mut queue: SmallVec<[HookEffect<V>; 4]>,
+    mut ended: Option<super::Ended>,
+) -> Drawn {
+    loop {
+        let draws = queue
+            .iter()
+            .position(|effect| matches!(effect, HookEffect::Draw(_)));
+        let (owed, after) = match draws {
+            Some(at) => {
+                let after: SmallVec<[HookEffect<V>; 2]> = queue.drain(at + 1..).collect();
+                let Some(HookEffect::Draw(count)) = queue.pop() else {
+                    unreachable!("the draw found stands last")
+                };
+                // A negative count draws nothing: the game's loop runs no times.
+                (
+                    Some(num_traits::NumCast::from(count).unwrap_or(0usize)),
+                    after,
+                )
+            }
+            None => (None, SmallVec::new()),
+        };
+        let mut board =
+            Board::for_card(live, rngs.reborrow(), relics, ascension, None, Some(drawn));
+        super::hook::apply::<V, _>(&mut board, queue);
+        ended = ended.or(board.ended());
+        let Some(owed) = owed else {
+            return Drawn::Done(ended);
+        };
+        if ended.is_some() {
+            return Drawn::Done(ended);
         }
-        _ => None,
-    };
-    let mut board = Board::for_card(
-        live,
-        rngs.reborrow(),
-        relics,
-        ascension,
-        None,
-        Some(drawn.id),
-    );
-    super::hook::apply::<V, _>(&mut board, rest);
-    ended = ended.or(board.ended());
-    if let Some(owed) = hook_draw
-        && ended.is_none()
-    {
         let below = live.hook_draws.len();
         match draw_pausing::<V>(live, rngs.reborrow(), relics, ascension, owed, false, false) {
-            Drawn::Done(drawn) => ended = drawn,
+            Drawn::Done(now) => {
+                ended = now;
+                queue = after.into_iter().collect();
+            }
             stopped @ (Drawn::Paused { left, .. } | Drawn::Asked { left }) => {
-                live.hook_draws.insert(below, left);
+                live.hook_draws.insert(
+                    below,
+                    HookDraw {
+                        left,
+                        drawn,
+                        then: after,
+                    },
+                );
                 return stopped;
             }
         }
     }
-    Drawn::Done(ended)
 }
 
 /// `CombatEnergyCosts.NextInt(below)`, as a cost.

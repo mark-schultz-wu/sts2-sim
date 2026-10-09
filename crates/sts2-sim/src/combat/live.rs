@@ -12,7 +12,7 @@
 //! it and nothing else does.
 
 use bitfield_struct::bitfield;
-use nonmax::{NonMaxI16, NonMaxI32, NonMaxU8};
+use nonmax::{NonMaxI16, NonMaxI32, NonMaxU16};
 use num_traits::CheckedAdd;
 use std::sync::Arc;
 use sts2_core::{
@@ -1673,15 +1673,15 @@ impl<V: Rules> From<sts2_core::Intent<V>> for Intended<V> {
 
 /// What an attack will land, as the fight holds one.
 ///
-/// [`sts2_core::Attack`] narrowed. The content types the damage a
-/// `Scaled<u16>` and the hit count a `Scaled<u8>`, and the report widens both
-/// to a game number. The damage keeps a width that survives `ModifyDamage`,
-/// which adds Strength with no ceiling. The hit count keeps the width the
-/// content gave it. Both are `NonMax`, so `Option<Landing>` costs no tag.
+/// [`sts2_core::Attack`] narrowed, which the report widens to a game number.
+/// The damage keeps a width that survives `ModifyDamage`, which adds Strength
+/// with no ceiling. The hit count outgrows the content's `u8`, as a move whose
+/// hits grow each turn passes 255 in a fight nobody ends. Both are `NonMax`,
+/// so `Option<Landing>` costs no tag.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Landing {
     damage: NonMaxI16,
-    repeats: NonMaxU8,
+    repeats: NonMaxU16,
 }
 
 impl Landing {
@@ -1706,7 +1706,7 @@ impl<V: Rules> From<sts2_core::Attack<V>> for Landing {
                 .and_then(NonMaxI16::new)
                 .unwrap_or_else(|| unimplemented!("an attack landing {:?}", attack.damage)),
             repeats: num_traits::NumCast::from(attack.repeats)
-                .and_then(NonMaxU8::new)
+                .and_then(NonMaxU16::new)
                 .unwrap_or_else(|| unimplemented!("an attack landing {:?} times", attack.repeats)),
         }
     }
@@ -2125,10 +2125,10 @@ pub(crate) struct Live<V: Rules> {
     /// What `AfterShuffle` listeners asked for behind one that asked the
     /// player to pick, which waits for the pick.
     pub(super) after_pick: Vec<sts2_core::HookEffect<V>>,
-    /// The cards a listener's draw still owes, which a shuffle's question
-    /// stopped inside another draw. The outermost comes first. The draw that
-    /// resumes finishes them before its own.
-    pub(super) hook_draws: smallvec::SmallVec<[usize; 2]>,
+    /// The draws a listener ran inside another draw, which a question
+    /// stopped, with what the listeners after each asked. The outermost comes
+    /// first. The draw that resumes finishes them before its own.
+    pub(super) hook_draws: smallvec::SmallVec<[super::board::HookDraw<V>; 2]>,
     /// The card whose auto-play asked as it was drawn, and whether the draw
     /// was the hand's. The draw that resumes runs its late `AfterCardDrawn`
     /// pass first.
