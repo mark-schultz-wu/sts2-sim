@@ -3971,6 +3971,8 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `AfterModifyingGoldGained`, asked of the models that changed a gain.
     GoldGainModified,
+    /// `AfterGoldGained`, once gold the player gained has landed.
+    GoldGained,
     /// `AfterPreventingBlockClear`, asked of the one model whose
     /// `ShouldClearBlock` kept its owner's block, with the block kept.
     BlockClearPrevented { block: V::Number },
@@ -4212,6 +4214,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::HandEmptied { .. } => ModelHook::AfterHandEmptied,
             EventHook::BlockCleared { .. } => ModelHook::AfterBlockCleared,
             EventHook::GoldGainModified => ModelHook::AfterModifyingGoldGained,
+            EventHook::GoldGained => ModelHook::AfterGoldGained,
             EventHook::AfterDeath { .. } => ModelHook::AfterDeath,
             EventHook::BeforeDeath { .. } => ModelHook::BeforeDeath,
             EventHook::BlockBroken { .. } => ModelHook::AfterBlockBroken,

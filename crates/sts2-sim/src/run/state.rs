@@ -2514,9 +2514,22 @@ impl<V: Rules> State<V> {
         {
             unimplemented!("a relic asking for {effect:?} as a gold gain is modified");
         }
-        self.unheard(sts2_core::ModelHook::AfterGoldGained);
+        // `PlayerCmd.GainGold` returns before the gold lands where nothing is
+        // left to gain, so `AfterGoldGained` runs only after a gain.
         if gained > sts2_core::Decimal::ZERO {
             self.player.gold = self.player.gold + crate::combat::whole::<V>(gained);
+            if self
+                .deck_cards_hearing(sts2_core::ModelHook::AfterGoldGained)
+                .next()
+                .is_some()
+            {
+                unimplemented!("a deck card listening to AfterGoldGained");
+            }
+            let asked = self.notify_belt(sts2_core::EventHook::GoldGained);
+            if let Some(asked) = self.carry_out(asked) {
+                let pickup = asked.pickup;
+                unimplemented!("a relic asking for {pickup:?} as gold is gained");
+            }
         }
     }
 

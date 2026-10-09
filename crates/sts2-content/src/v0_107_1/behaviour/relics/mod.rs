@@ -92,6 +92,7 @@ mod distinguished_cape;
 mod divine_destiny;
 mod divine_right;
 mod dollys_mirror;
+mod dragon_fruit;
 mod driftwood;
 mod ectoplasm;
 mod electric_shrymp;
@@ -124,6 +125,7 @@ mod ghost_seed;
 mod girya;
 mod glass_eye;
 mod glitter;
+mod gnarled_hammer;
 mod gold_plated_cables;
 mod golden_compass;
 mod golden_pearl;
@@ -628,6 +630,8 @@ pub enum State {
     BrilliantScarf(brilliant_scarf::State),
     FurCoat(fur_coat::State),
     PhilosophersStone,
+    GnarledHammer,
+    DragonFruit,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -886,6 +890,8 @@ pub(crate) fn event_hook(
         State::BrilliantScarf(state) => brilliant_scarf::event_hook(state, hook),
         State::FurCoat(state) => fur_coat::event_hook(state, hook, asked),
         State::PhilosophersStone => philosophers_stone::event_hook(hook, asked),
+        State::GnarledHammer => gnarled_hammer::event_hook(hook, asked),
+        State::DragonFruit => dragon_fruit::event_hook(hook, asked),
         State::BeltBuckle(state) => belt_buckle::event_hook(state, hook, asked),
         State::DingyRug => dingy_rug::event_hook(hook, asked),
         State::TheAbacus => the_abacus::event_hook(hook, asked),
@@ -1328,7 +1334,9 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::RunicCapacitor
         | State::MusicBox(_)
         | State::ChoicesParadox
-        | State::FurCoat(_) => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::FurCoat(_)
+        | State::GnarledHammer
+        | State::DragonFruit => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1518,6 +1526,8 @@ impl sts2_core::RelicModel<V> for State {
             Relic::BrilliantScarf => State::BrilliantScarf(brilliant_scarf::State::default()),
             Relic::FurCoat => State::FurCoat(fur_coat::State::default()),
             Relic::PhilosophersStone => State::PhilosophersStone,
+            Relic::GnarledHammer => State::GnarledHammer,
+            Relic::DragonFruit => State::DragonFruit,
             Relic::BeltBuckle => State::BeltBuckle(belt_buckle::State::default()),
             Relic::DingyRug => State::DingyRug,
             Relic::TheAbacus => State::TheAbacus,
