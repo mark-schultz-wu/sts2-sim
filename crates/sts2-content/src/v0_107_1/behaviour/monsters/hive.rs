@@ -177,12 +177,6 @@ pub(super) fn perform<F: Fight<V>>(
     step: u8,
     fight: &mut F,
 ) -> Option<u8> {
-    let segment = matches!(
-        monster,
-        Monster::DecimillipedeSegmentFront
-            | Monster::DecimillipedeSegmentMiddle
-            | Monster::DecimillipedeSegmentBack
-    );
     match (monster, move_id) {
         (Monster::ThievingHopper, MoveId::ThieveryMove) => thievery(fight),
         // `WebMove`: its hit, then Frail at two on each target. `Curled`
@@ -374,10 +368,30 @@ pub(super) fn perform<F: Fight<V>>(
         (Monster::BowlbugRock, MoveId::HeadbuttMove) => fight.attack_opponents(),
         (Monster::SlumberingBeetle, MoveId::RollOutMove) => return roll_out(fight, step),
         // `WritheMove`, whose two hits are the intent's own repeat count.
-        (_, MoveId::WritheMove) if segment => fight.attack_opponents(),
-        (_, MoveId::BulkMove) if segment => return bulk(fight, step),
-        (_, MoveId::ConstrictMove) if segment => return constrict(fight, step),
-        (_, MoveId::ReattachMove) if segment => reattach(fight),
+        (
+            Monster::DecimillipedeSegmentFront
+            | Monster::DecimillipedeSegmentMiddle
+            | Monster::DecimillipedeSegmentBack,
+            MoveId::WritheMove,
+        ) => fight.attack_opponents(),
+        (
+            Monster::DecimillipedeSegmentFront
+            | Monster::DecimillipedeSegmentMiddle
+            | Monster::DecimillipedeSegmentBack,
+            MoveId::BulkMove,
+        ) => return bulk(fight, step),
+        (
+            Monster::DecimillipedeSegmentFront
+            | Monster::DecimillipedeSegmentMiddle
+            | Monster::DecimillipedeSegmentBack,
+            MoveId::ConstrictMove,
+        ) => return constrict(fight, step),
+        (
+            Monster::DecimillipedeSegmentFront
+            | Monster::DecimillipedeSegmentMiddle
+            | Monster::DecimillipedeSegmentBack,
+            MoveId::ReattachMove,
+        ) => reattach(fight),
         (monster, move_id) => return monster_moves::hive::perform(monster, move_id, step, fight),
     }
     None

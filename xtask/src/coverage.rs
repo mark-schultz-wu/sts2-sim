@@ -523,11 +523,18 @@ fn ported_powers(build: &Build) -> Result<BTreeSet<String>, Error> {
 
 /// Every monster's move, by monster and move, with what it needs.
 fn moves(build: &Build) -> Result<BTreeMap<(String, String), Ported>, Error> {
+    // Every function a hand port performs through: `perform`, and the
+    // `perform_from` it hands a resumed move to.
     let hand: BTreeSet<(String, String)> = build
         .sources("behaviour/monsters")?
         .iter()
-        .filter_map(|(_, source)| function(source, "perform"))
-        .flat_map(pairs)
+        .flat_map(|(_, source)| {
+            source
+                .match_indices("fn perform")
+                .filter_map(|(at, _)| function(&source[at..], "perform"))
+                .flat_map(pairs)
+                .collect::<Vec<_>>()
+        })
         .collect();
     let mut moves = BTreeMap::new();
     for (_, source) in build.sources("generated/monster_moves")? {
@@ -555,21 +562,36 @@ fn moves(build: &Build) -> Result<BTreeMap<(String, String), Ported>, Error> {
     Ok(moves)
 }
 
-/// The `(Monster::A, MoveId::B)` pairs in `text`, one for each move of a
-/// `(Monster::A, MoveId::B | MoveId::C)` pattern.
+/// The `(Monster::A, MoveId::B)` pairs in `text`. A pattern can name
+/// alternatives on either side, as `(Monster::A | Monster::B, MoveId::C |
+/// MoveId::D)`, and spread over lines, and each pair it covers counts.
 fn pairs(text: &str) -> Vec<(String, String)> {
+    let text: String = text.split_whitespace().collect();
     text.match_indices("(Monster::")
         .filter_map(|(at, _)| {
-            let rest = &text[at + "(Monster::".len()..];
-            let (monster, rest) = rest.split_once(", MoveId::")?;
+            let rest = &text[at + 1..];
+            let (monsters, rest) = rest.split_once(",MoveId::")?;
             let end = rest.find(')')?;
-            Some((monster, &rest[..end]))
+            Some((monsters.to_owned(), format!("MoveId::{}", &rest[..end])))
         })
-        .flat_map(|(monster, moves)| {
-            moves.split('|').map(move |id| {
-                let id = id.trim().trim_start_matches("MoveId::");
-                (monster.to_owned(), id.to_owned())
-            })
+        .flat_map(|(monsters, moves)| {
+            let names = |side: &str, prefix: &str| -> Vec<String> {
+                side.split('|')
+                    .map(|name| {
+                        name.trim_end_matches(',')
+                            .trim_start_matches(prefix)
+                            .to_owned()
+                    })
+                    .collect()
+            };
+            let moves = names(&moves, "MoveId::");
+            names(&monsters, "Monster::")
+                .into_iter()
+                .flat_map(move |monster| {
+                    let moves = moves.clone();
+                    moves.into_iter().map(move |id| (monster.clone(), id))
+                })
+                .collect::<Vec<_>>()
         })
         .collect()
 }

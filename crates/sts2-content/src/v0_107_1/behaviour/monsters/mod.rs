@@ -325,7 +325,14 @@ fn perform_from<F: Fight<V>>(
         }
         _ => {}
     }
-    if monster == Monster::KnowledgeDemon {
+    if let (
+        Monster::KnowledgeDemon,
+        MoveId::CurseOfKnowledgeMove
+        | MoveId::KnowledgeOverwhelmingMove
+        | MoveId::SlapMove
+        | MoveId::PonderMove,
+    ) = (monster, move_id)
+    {
         return hive::knowledge_demon(move_id, step, fight);
     }
     let next = match monster_moves::filed(monster) {
