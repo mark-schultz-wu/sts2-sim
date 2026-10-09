@@ -1,0 +1,9 @@
+# One-Two Punch plays the next attack twice. Shining Strike's first play puts
+# it on top of the draw pile, so its second play finds it there and moves it
+# to the top again. It never returns to the play pile between the plays.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"BYGONE_EFFIGY_ELITE"}
+{"cmd":"grant","card":"ONE_TWO_PUNCH"}
+{"cmd":"play_card","index":5}
+{"cmd":"grant","card":"SHINING_STRIKE"}
+{"cmd":"play_card","index":5,"target":1}

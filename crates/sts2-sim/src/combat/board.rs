@@ -4744,13 +4744,16 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         let playing = self
             .playing
             .unwrap_or_else(|| unimplemented!("a card moving itself with none being played"));
-        if !self.live.cards.in_play(playing) {
-            unimplemented!("a card moving itself from outside the play pile");
-        }
         if pile == Pile::Hand {
             unimplemented!("a card putting itself into the hand");
         }
-        self.live.cards.leave_play(playing, Some(pile), position);
+        // A replay of a card its first play already moved finds it outside
+        // the play pile, and moves it from there.
+        if self.live.cards.in_play(playing) {
+            self.live.cards.leave_play(playing, Some(pile), position);
+        } else {
+            self.live.cards.move_named(playing, pile, position);
+        }
     }
 
     fn stun(
