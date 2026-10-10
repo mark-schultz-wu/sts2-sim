@@ -78,6 +78,10 @@ pub(super) fn perform<F: Fight<V>>(
     fight: &mut F,
 ) -> Option<u8> {
     match (monster, move_id) {
+        // `DarkStrikeMove`: its hit. `BeforeDamage` plays its sound alone.
+        (Monster::CalcifiedCultist | Monster::DampCultist, MoveId::DarkStrikeMove) => {
+            fight.attack_opponents()
+        }
         // `SpikeSpitMove`: the Thorns Spiken gave, taken back, then its hits.
         (Monster::Toadpole, MoveId::SpikeSpitMove) => {
             fight.apply_to_actor(Power::ThornsPower, PowerAmount::Counted(-SPIKEN));
