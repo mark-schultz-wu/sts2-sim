@@ -1,0 +1,16 @@
+# Four Phantasmal Gardeners open by slot on Flail, Bite, Lash and Enlarge,
+# and enter Skittish at six. The first of a turn's card attacks that takes
+# health off one gives it six block. A Bash through that block gives none.
+# The next turn a strike gives the block again. One that deals nothing,
+# at -20 Strength, gives none. Enlarge is two Strength.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"PHANTASMAL_GARDENERS_ELITE"}
+{"cmd":"power","power":"PLATING_POWER","amount":99,"target":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":-20,"target":0}
+{"cmd":"play_card","index":0,"target":2}
+{"cmd":"end_turn"}

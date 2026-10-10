@@ -1116,6 +1116,7 @@ impl<'a, V: Rules> Board<'a, V> {
             powers: &self.live.powers,
             kept: &self.live.kept,
             relics: Some(&*self.relics),
+            attack: &self.live.attack_results,
         };
         let listener = sts2_core::EventPower {
             power,
@@ -1684,6 +1685,7 @@ impl<'a, V: Rules> Board<'a, V> {
                             powers: &self.live.powers,
                             kept: &self.live.kept,
                             relics: Some(&*self.relics),
+                            attack: &self.live.attack_results,
                         },
                     ),
                     sts2_core::DecisionHook::ShouldRemoveSelfAfterOwnerDeath,
@@ -3541,6 +3543,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                         powers: &self.live.powers,
                         kept: &self.live.kept,
                         relics: Some(&*self.relics),
+                        attack: &self.live.attack_results,
                     },
                 ),
                 sts2_core::DecisionHook::ShouldOwnerDeathTriggerFatal,
@@ -5112,20 +5115,21 @@ impl<V: Rules> Board<'_, V> {
             });
         let command = sts2_core::AttackId(self.live.attacks);
         self.live.attacks += 1;
+        let source = self.playing.map(|id| {
+            let card = self
+                .live
+                .cards
+                .named(id)
+                .expect("the card making an attack is in the fight");
+            (id, card.face.ident.card)
+        });
         let asked = super::listen::notify::<V>(
             self.live,
             self.relics,
             sts2_core::EventHook::BeforeAttack {
                 command,
                 attacker,
-                source: self.playing.map(|id| {
-                    let card = self
-                        .live
-                        .cards
-                        .named(id)
-                        .expect("the card making an attack is in the fight");
-                    (id, card.face.ident.card)
-                }),
+                source,
                 powered: scaling == Scaling::Dynamic,
             },
         );
@@ -5141,6 +5145,7 @@ impl<V: Rules> Board<'_, V> {
             attacker,
             monster,
             powered: scaling == Scaling::Dynamic,
+            source,
         };
         if !self.held.is_empty() {
             self.live.defer(super::live::Deferred::Hits {
@@ -5172,6 +5177,7 @@ impl<V: Rules> Board<'_, V> {
             attacker,
             monster,
             powered,
+            source,
         } = attack;
         // `History.CreatureAttacked`, before `AfterAttack` and whether or not
         // the fight is ending.
@@ -5181,16 +5187,23 @@ impl<V: Rules> Board<'_, V> {
         if self.over() {
             return results;
         }
+        if !super::listen::heard::<V>(self.live, self.relics, sts2_core::ModelHook::AfterAttack) {
+            return results;
+        }
+        // The results stand on the fight while its listeners read them.
+        self.live.attack_results.extend_from_slice(&results);
         let asked = super::listen::notify::<V>(
             self.live,
             self.relics,
             sts2_core::EventHook::AfterAttack {
                 command,
                 attacker,
+                source,
                 monster,
                 powered,
             },
         );
+        self.live.attack_results.clear();
         for (listener, effect) in asked {
             match (listener, effect) {
                 (Listener::Power { owner, power, .. }, HookEffect::ModifyAmount(offset)) => {
@@ -5205,6 +5218,11 @@ impl<V: Rules> Board<'_, V> {
                     let player = self.live.player().id;
                     self.live.gain_unpowered_block(player, amount);
                     self.block_gained(player, amount.max(V::Number::zero()));
+                }
+                // The same, on the power's owner.
+                (Listener::Power { owner, .. }, HookEffect::GainBlock(amount)) => {
+                    self.live.gain_unpowered_block(owner, amount);
+                    self.block_gained(owner, amount.max(V::Number::zero()));
                 }
                 // A fight here has one player, whose piles take them all.
                 (Listener::Power { .. }, HookEffect::GiveCardsPerUnblockedHit { card, per }) => {
@@ -5956,6 +5974,7 @@ pub(super) fn ending<V: Rules>(walk: Walk<'_, V>) -> bool {
                             powers: &walk.live.powers,
                             kept: &walk.live.kept,
                             relics: Some(walk.relics),
+                            attack: &walk.live.attack_results,
                         },
                     ),
                     sts2_core::DecisionHook::ShouldCountForCombatEnd,

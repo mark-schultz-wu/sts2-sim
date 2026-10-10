@@ -1888,6 +1888,10 @@ pub trait FightView<V: ContentVersion> {
     /// here has one player.
     fn player(&self) -> crate::CombatId;
 
+    /// The first of `AttackCommand.Results` whose receiver is `creature`, for
+    /// the attack whose `AfterAttack` is being raised. Nothing outside one.
+    fn attack_result(&self, creature: crate::CombatId) -> Option<DamageResult<V>>;
+
     /// `Creature.CurrentHp`, or nothing for a creature not in the fight.
     fn current_hp(&self, creature: crate::CombatId) -> Option<V::Health>;
 
@@ -4168,6 +4172,8 @@ pub enum EventHook<V: ContentVersion> {
         command: AttackId,
         /// `Attacker`.
         attacker: crate::CombatId,
+        /// `ModelSource` where it is a card: which copy, and which card.
+        source: Option<(crate::CardId<V>, V::Card)>,
         /// `Attacker.Monster`, which is nothing for the player.
         monster: Option<V::Monster>,
         /// `DamageProps.IsPoweredAttack()`.
