@@ -95,6 +95,10 @@ pub enum State {
     ChainsOfBinding {
         bound_played: bool,
     },
+    /// `HardenedShellPower`'s `damageReceivedThisTurn`.
+    HardenedShell {
+        received: Number,
+    },
     /// `SwipePower.StolenCard`'s deck version.
     Swipe {
         stolen: Option<sts2_core::DeckCardId>,
@@ -347,6 +351,7 @@ impl sts2_core::PowerModel<V> for State {
                 bound_played: false,
             },
             Power::SwipePower => Self::Swipe { stolen: None },
+            Power::HardenedShellPower => Self::HardenedShell { received: 0 },
             Power::OrbitPower => Self::Orbit {
                 spent: 0,
                 triggers: 0,
@@ -412,6 +417,7 @@ impl sts2_core::PowerModel<V> for State {
             Self::WitheringPresence { .. } => Power::WitheringPresencePower,
             Self::ChainsOfBinding { .. } => Power::ChainsOfBindingPower,
             Self::Swipe { .. } => Power::SwipePower,
+            Self::HardenedShell { .. } => Power::HardenedShellPower,
             Self::Orbit { .. } => Power::OrbitPower,
             Self::Outbreak { .. } => Power::OutbreakPower,
             Self::VoidForm { .. } => Power::VoidFormPower,
@@ -1680,6 +1686,24 @@ pub(crate) fn modify_hook(
             Modify::AtMost(num_traits::zero())
         }
         (Power::BufferPower, _, ModifyHook::HpLostAfterOstyLate { .. }) => Modify::Nothing,
+        // `HardenedShellPower.ModifyHpLostBeforeOstyLate`: its owner loses no
+        // more in a turn than its amount, less what it has lost this turn.
+        (
+            Power::HardenedShellPower,
+            PowerAmount::Counted(amount),
+            ModifyHook::HpLostBeforeOstyLate { target },
+        ) if target == holder => {
+            let State::HardenedShell { received } = state else {
+                unreachable!("Hardened Shell holding {state:?}")
+            };
+            Modify::AtMost(amount - received)
+        }
+        (
+            Power::HardenedShellPower,
+            PowerAmount::Endless,
+            ModifyHook::HpLostBeforeOstyLate { target },
+        ) if target == holder => unimplemented!("an endless Hardened Shell"),
+        (Power::HardenedShellPower, _, ModifyHook::HpLostBeforeOstyLate { .. }) => Modify::Nothing,
         // `FocusPower.ModifyOrbValue`: its stack onto each number its owner's
         // orbs show, and no lower than nothing.
         (Power::FocusPower, PowerAmount::Counted(amount), ModifyHook::OrbValue { player, .. })
@@ -4482,6 +4506,31 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Shriek")
         }
         (Power::ShriekPower, _, EventHook::DamageReceived { .. }) => None,
+        // `HardenedShellPower.AfterDamageReceived`: what a hit took off its
+        // owner counts toward the turn's cap.
+        (
+            Power::HardenedShellPower,
+            _,
+            EventHook::DamageReceived {
+                target, unblocked, ..
+            },
+        ) if target == holder => {
+            let State::HardenedShell { received } = state else {
+                unreachable!("Hardened Shell holding {state:?}")
+            };
+            *received += unblocked;
+            None
+        }
+        (Power::HardenedShellPower, _, EventHook::DamageReceived { .. }) => None,
+        // `HardenedShellPower.BeforeSideTurnStart`, for either side: the cap
+        // starts again.
+        (Power::HardenedShellPower, _, EventHook::BeforeSideTurnStart { .. }) => {
+            let State::HardenedShell { received } = state else {
+                unreachable!("Hardened Shell holding {state:?}")
+            };
+            *received = 0;
+            None
+        }
         // `BurrowedPower.AfterBlockBroken`: a Tunneler whose block breaks is
         // stunned, comes back with a bite, and stops burrowing.
         (Power::BurrowedPower, _, EventHook::BlockBroken { creature })
