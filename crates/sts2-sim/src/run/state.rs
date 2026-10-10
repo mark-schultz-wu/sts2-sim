@@ -2539,8 +2539,10 @@ impl<V: Rules> State<V> {
         while left != 0 {
             let slot = left.trailing_zeros() as usize;
             left &= left - 1;
-            let listener: crate::combat::Heard<'_, V> =
-                sts2_core::Listener::Relic(&self.player.relics[slot].state);
+            let listener: crate::combat::Heard<'_, V> = sts2_core::Listener::Relic {
+                state: &self.player.relics[slot].state,
+                fight: None,
+            };
             match V::modify_hook(listener, hook) {
                 sts2_core::Modify::Nothing => {}
                 sts2_core::Modify::Scaled(scale) => gained *= scale.exact(),
@@ -2686,8 +2688,14 @@ impl<V: Rules> State<V> {
             let slot = left.trailing_zeros() as usize;
             left &= left - 1;
             let held = &self.player.relics[slot].state;
-            if V::decide_hook(crate::combat::Heard::<V>::Relic(held), hook)
-                .is_decision_and(|dies| !dies)
+            if V::decide_hook(
+                crate::combat::Heard::<V>::Relic {
+                    state: held,
+                    fight: None,
+                },
+                hook,
+            )
+            .is_decision_and(|dies| !dies)
             {
                 return Some(slot);
             }
@@ -2753,8 +2761,10 @@ impl<V: Rules> State<V> {
             while left != 0 {
                 let slot = left.trailing_zeros() as usize;
                 left &= left - 1;
-                let listener: crate::combat::Heard<'_, V> =
-                    sts2_core::Listener::Relic(&self.player.relics[slot].state);
+                let listener: crate::combat::Heard<'_, V> = sts2_core::Listener::Relic {
+                    state: &self.player.relics[slot].state,
+                    fight: None,
+                };
                 match V::modify_hook(listener, hook) {
                     sts2_core::Modify::Nothing => {}
                     sts2_core::Modify::Added(more) => lost = lost + more,
@@ -2789,8 +2799,10 @@ impl<V: Rules> State<V> {
         while left != 0 {
             let slot = left.trailing_zeros() as usize;
             left &= left - 1;
-            let listener: crate::combat::Heard<'_, V> =
-                sts2_core::Listener::Relic(&self.player.relics[slot].state);
+            let listener: crate::combat::Heard<'_, V> = sts2_core::Listener::Relic {
+                state: &self.player.relics[slot].state,
+                fight: None,
+            };
             match V::modify_hook(listener, hook) {
                 sts2_core::Modify::Nothing => {}
                 sts2_core::Modify::Added(more) => healed = healed + more,
@@ -3217,8 +3229,10 @@ impl<V: Rules> State<V> {
         while left != 0 {
             let slot = left.trailing_zeros() as usize;
             left &= left - 1;
-            let listener: crate::combat::Heard<'_, V> =
-                sts2_core::Listener::Relic(&self.player.relics[slot].state);
+            let listener: crate::combat::Heard<'_, V> = sts2_core::Listener::Relic {
+                state: &self.player.relics[slot].state,
+                fight: None,
+            };
             match V::modify_hook(listener, hook) {
                 sts2_core::Modify::Nothing => {}
                 answer => {
@@ -3859,8 +3873,14 @@ impl<V: Rules> State<V> {
         while left != 0 {
             let held = &self.player.relics[left.trailing_zeros() as usize];
             left &= left - 1;
-            generates &= !V::decide_hook(crate::combat::Heard::<V>::Relic(&held.state), hook)
-                .is_decision_and(|generate| !generate);
+            generates &= !V::decide_hook(
+                crate::combat::Heard::<V>::Relic {
+                    state: &held.state,
+                    fight: None,
+                },
+                hook,
+            )
+            .is_decision_and(|generate| !generate);
         }
         generates
     }
@@ -5626,8 +5646,14 @@ impl<V: Rules> State<V> {
         while left != 0 {
             let held = &self.player.relics[left.trailing_zeros() as usize];
             left &= left - 1;
-            if V::decide_hook(crate::combat::Heard::<V>::Relic(&held.state), hook)
-                .is_decision_and(|allowed| !allowed)
+            if V::decide_hook(
+                crate::combat::Heard::<V>::Relic {
+                    state: &held.state,
+                    fight: None,
+                },
+                hook,
+            )
+            .is_decision_and(|allowed| !allowed)
             {
                 return true;
             }
@@ -5650,7 +5676,13 @@ impl<V: Rules> State<V> {
         while left != 0 {
             let held = &self.player.relics[left.trailing_zeros() as usize];
             left &= left - 1;
-            match V::modify_hook(crate::combat::Heard::<V>::Relic(&held.state), hook) {
+            match V::modify_hook(
+                crate::combat::Heard::<V>::Relic {
+                    state: &held.state,
+                    fight: None,
+                },
+                hook,
+            ) {
                 sts2_core::Modify::Nothing => {}
                 sts2_core::Modify::Scaled(share) => price *= share.exact(),
                 answer => unimplemented!("a relic answering {answer:?} for a merchant's price"),
@@ -5672,8 +5704,14 @@ impl<V: Rules> State<V> {
         while left != 0 {
             let held = &self.player.relics[left.trailing_zeros() as usize];
             left &= left - 1;
-            disable &= !V::decide_hook(crate::combat::Heard::<V>::Relic(&held.state), hook)
-                .is_decision_and(|disable| !disable);
+            disable &= !V::decide_hook(
+                crate::combat::Heard::<V>::Relic {
+                    state: &held.state,
+                    fight: None,
+                },
+                hook,
+            )
+            .is_decision_and(|disable| !disable);
         }
         let Phase::RestSite {
             options,
@@ -5704,8 +5742,14 @@ impl<V: Rules> State<V> {
         while left != 0 {
             let held = &self.player.relics[left.trailing_zeros() as usize];
             left &= left - 1;
-            refills |= V::decide_hook(crate::combat::Heard::<V>::Relic(&held.state), hook)
-                .is_decision_and(|refill| refill);
+            refills |= V::decide_hook(
+                crate::combat::Heard::<V>::Relic {
+                    state: &held.state,
+                    fight: None,
+                },
+                hook,
+            )
+            .is_decision_and(|refill| refill);
         }
         refills
     }
@@ -5803,8 +5847,14 @@ impl<V: Rules> State<V> {
         while left != 0 {
             let held = &self.player.relics[left.trailing_zeros() as usize];
             left &= left - 1;
-            forced |= V::decide_hook(crate::combat::Heard::<V>::Relic(&held.state), hook)
-                .is_decision_and(|force| force);
+            forced |= V::decide_hook(
+                crate::combat::Heard::<V>::Relic {
+                    state: &held.state,
+                    fight: None,
+                },
+                hook,
+            )
+            .is_decision_and(|force| force);
         }
         forced
     }
@@ -5819,8 +5869,14 @@ impl<V: Rules> State<V> {
         while left != 0 {
             let held = &self.player.relics[left.trailing_zeros() as usize];
             left &= left - 1;
-            free |= V::decide_hook(crate::combat::Heard::<V>::Relic(&held.state), hook)
-                .is_decision_and(|allowed| allowed);
+            free |= V::decide_hook(
+                crate::combat::Heard::<V>::Relic {
+                    state: &held.state,
+                    fight: None,
+                },
+                hook,
+            )
+            .is_decision_and(|allowed| allowed);
         }
         free
     }

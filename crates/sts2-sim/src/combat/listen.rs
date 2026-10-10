@@ -490,7 +490,13 @@ pub(crate) fn each<V: Rules>(
             while left != 0 {
                 let held = &relics[left.trailing_zeros() as usize];
                 left &= left - 1;
-                ask(Heard::<V>::Relic(&held.state), held.relic.overrides());
+                ask(
+                    Heard::<V>::Relic {
+                        state: &held.state,
+                        fight: Some(&onlookers),
+                    },
+                    held.relic.overrides(),
+                );
             }
         }
         if cards {
@@ -580,7 +586,7 @@ fn first_of<V: Rules>(
                 sts2_core::Listener::Card { card, .. } => sts2_core::ModelId::Card(card),
                 // The relic whose model this is, which only its place on the
                 // belt names.
-                sts2_core::Listener::Relic(state) => sts2_core::ModelId::Relic(
+                sts2_core::Listener::Relic { state, .. } => sts2_core::ModelId::Relic(
                     fight
                         .relics
                         .iter()

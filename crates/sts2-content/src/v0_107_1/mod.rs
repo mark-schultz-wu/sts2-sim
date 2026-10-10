@@ -146,7 +146,9 @@ impl sts2_core::Hooks for V0_107_1 {
                 };
                 behaviour::powers::modify_hook(power, amount, held, state, hook)
             }
-            sts2_core::Listener::Relic(state) => behaviour::relics::modify_hook(state, hook),
+            sts2_core::Listener::Relic { state, fight } => {
+                behaviour::relics::modify_hook(state, fight, hook)
+            }
             // The fight asks only a monster whose class overrides the hook,
             // and no monster this build ports overrides one of these.
             sts2_core::Listener::Monster { monster, .. } => {
@@ -189,7 +191,7 @@ impl sts2_core::Hooks for V0_107_1 {
                 };
                 behaviour::powers::decide_hook(power, amount, held, state, hook)
             }
-            sts2_core::Listener::Relic(state) => behaviour::relics::decide_hook(state, hook),
+            sts2_core::Listener::Relic { state, .. } => behaviour::relics::decide_hook(state, hook),
             sts2_core::Listener::Card {
                 card,
                 pile,

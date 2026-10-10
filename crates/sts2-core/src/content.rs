@@ -6081,7 +6081,12 @@ pub enum Listener<'a, V: Hooks, P: Printed<V> + ?Sized> {
         /// its own.
         fight: &'a dyn FightView<V>,
     },
-    Relic(&'a V::RelicState),
+    Relic {
+        state: &'a V::RelicState,
+        /// The fight's creatures, for a relic that asks about one. Nothing
+        /// outside a fight.
+        fight: Option<&'a dyn FightView<V>>,
+    },
     /// A monster's own model, which the fight asks after the powers on its
     /// creature.
     Monster {

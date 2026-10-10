@@ -796,7 +796,7 @@ pub(super) fn play_count<V: Rules, S: LendsCombat>(
                     sts2_core::Listener::Power { holder, power, .. } => {
                         modifiers.push((holder, power))
                     }
-                    sts2_core::Listener::Relic(state) => relic_modifiers.push(state),
+                    sts2_core::Listener::Relic { state, .. } => relic_modifiers.push(state),
                     _ => unimplemented!(
                         "a listener other than a power or a relic changing a card's play count"
                     ),
