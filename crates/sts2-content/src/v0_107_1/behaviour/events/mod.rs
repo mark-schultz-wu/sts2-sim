@@ -30,6 +30,7 @@ mod nonupeipe;
 mod orobas;
 mod pael;
 mod potion_courier;
+mod punch_off;
 mod ranwid_the_elder;
 mod reflections;
 mod relic_trader;
@@ -103,6 +104,7 @@ pub enum State {
     ByrdonisNest(byrdonis_nest::State),
     Darv(darv::State),
     DenseVegetation(dense_vegetation::State),
+    PunchOff(punch_off::State),
     FieldOfManSizedHoles(field_of_man_sized_holes::State),
     JungleMazeAdventure(jungle_maze_adventure::State),
     LostWisp(lost_wisp::State),
@@ -241,7 +243,7 @@ pub(crate) fn allowed(event: Event, run: &impl EventView<V>) -> bool {
         // `CurrentHp <= MaxHp * 0.70m`, in whole numbers.
         Event::UnrestSite => run.hp() * 100 <= run.max_hp() * 70,
 
-        Event::PunchOff => run.floor() >= 6,
+        Event::PunchOff => punch_off::PunchOff.allowed(run),
         Event::SlipperyBridge => run.floor() > 6 && run.deck().iter().any(removable),
         Event::TheFutureOfPotions => run.potions().count() >= 2,
         // A run has every character's card pool unlocked.
@@ -324,6 +326,7 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
         Event::BrainLeech => State::BrainLeech(brain_leech::BrainLeech.enter(run, rng)),
         Event::ByrdonisNest => State::ByrdonisNest(byrdonis_nest::ByrdonisNest.enter(run, rng)),
         Event::Darv => State::Darv(darv::Darv.enter(run, rng)),
+        Event::PunchOff => State::PunchOff(punch_off::PunchOff.enter(run, rng)),
         Event::DenseVegetation => {
             State::DenseVegetation(dense_vegetation::DenseVegetation.enter(run, rng))
         }
@@ -486,6 +489,7 @@ pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
         State::ByrdonisNest(state) => byrdonis_nest::ByrdonisNest.observe(state, run),
         State::Darv(state) => darv::Darv.observe(state, run),
         State::DenseVegetation(state) => dense_vegetation::DenseVegetation.observe(state, run),
+        State::PunchOff(state) => punch_off::PunchOff.observe(state, run),
         State::JungleMazeAdventure(state) => {
             jungle_maze_adventure::JungleMazeAdventure.observe(state, run)
         }
@@ -594,6 +598,7 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
         State::BrainLeech(state) => brain_leech::BrainLeech.choose(state, option, run, rng),
         State::ByrdonisNest(state) => byrdonis_nest::ByrdonisNest.choose(state, option, run, rng),
         State::Darv(state) => darv::Darv.choose(state, option, run, rng),
+        State::PunchOff(state) => punch_off::PunchOff.choose(state, option, run, rng),
         State::DenseVegetation(state) => {
             dense_vegetation::DenseVegetation.choose(state, option, run, rng)
         }

@@ -69,7 +69,7 @@ impl EventBehavior<V> for BattlewornDummy {
         };
         smallvec::smallvec![HookEffect::FightInEvent {
             encounter: Encounter::BattlewornDummyEventEncounter,
-            reward: None,
+            rewards: &[],
             roster,
             resume: true,
         }]

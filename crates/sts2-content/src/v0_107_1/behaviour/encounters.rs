@@ -8,7 +8,7 @@
 //! itself.
 
 use sts2_core::Spawned;
-use sts2_core::rng::{Bound, GameRng, RngInteger};
+use sts2_core::rng::{Bound, GameRng, RngInteger, Span};
 
 use super::super::V0_107_1 as V;
 use super::super::generated::encounters::Encounter;
@@ -34,6 +34,7 @@ pub(crate) fn generate<R: GameRng>(encounter: Encounter, rng: &mut R) -> Vec<Spa
         Encounter::CorpseSlugsWeak => corpse_slugs(rng, 2),
         Encounter::CorpseSlugsNormal => corpse_slugs(rng, 3),
         Encounter::TwoTailedRatsNormal => two_tailed_rats_normal(rng),
+        Encounter::PunchOffEventEncounter => punch_off(rng),
         encounter => unimplemented!("the roster {encounter:?} rolls"),
     }
 }
@@ -269,4 +270,26 @@ fn slithering_strangler_normal<R: GameRng>(rng: &mut R) -> Vec<Spawned<V>> {
     };
     roster.push(Monster::SlitheringStrangler);
     roster.into_iter().map(Spawned::new).collect()
+}
+
+/// `PunchOffEventEncounter`: two Punch Constructs, the first opening on its
+/// fast punch. Each draws `NextInt(2, 10)` for the hit points it starts
+/// without.
+fn punch_off<R: GameRng>(rng: &mut R) -> Vec<Spawned<V>> {
+    let bound = |n: i32| num_traits::cast(n).expect("a small number fits the RNG integer");
+    let span = Span::new(bound(2), bound(10)).expect("the span is ordered");
+    let mut reduction = || {
+        let drawn: i32 =
+            num_traits::cast(rng.next_int_range(span)).expect("the draw is inside the span");
+        Some(drawn)
+    };
+    let first = Spawned {
+        written: reduction(),
+        ..Spawned::opening_on(Monster::PunchConstruct, MoveId::FastPunchMove)
+    };
+    let second = Spawned {
+        written: reduction(),
+        ..Spawned::new(Monster::PunchConstruct)
+    };
+    vec![first, second]
 }

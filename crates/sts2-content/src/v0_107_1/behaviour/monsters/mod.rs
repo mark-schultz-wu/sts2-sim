@@ -119,6 +119,16 @@ pub(crate) fn starting_opponent_powers(
     }
 }
 
+/// What `AfterAddedToRoom`'s `SetCurrentHpInternal` leaves a monster at, for
+/// one that lowers its own.
+pub(crate) fn hp_after_added(
+    monster: Monster,
+    model: &Model,
+    hp: <V0_107_1 as sts2_core::ContentVersion>::Health,
+) -> Option<<V0_107_1 as sts2_core::ContentVersion>::Health> {
+    glory::hp_after_added(monster, model, hp)
+}
+
 /// What `AfterAddedToRoom` writes over the health a monster was built with.
 ///
 /// Filed by act beside the moves, the way the starting powers are.
@@ -438,6 +448,9 @@ pub enum Model {
     /// `TwoTailedRat.TurnsUntilSummonable`, held no lower than zero since
     /// only above zero bars a summon, and `CallForBackupCount`.
     TwoTailedRat { summonable_in: u8, backups: u8 },
+    /// `PunchConstruct.StartingHpReduction`, which the Punch-Off event's
+    /// encounter writes.
+    PunchConstruct { hp_reduction: u8 },
 }
 
 impl sts2_core::MonsterModel<V> for Model {
@@ -468,6 +481,7 @@ impl sts2_core::MonsterModel<V> for Model {
                 summonable_in: underdocks::RAT_SUMMONABLE_IN,
                 backups: 0,
             },
+            Monster::PunchConstruct => Self::PunchConstruct { hp_reduction: 0 },
             _ => Self::Stateless,
         }
     }
@@ -476,6 +490,9 @@ impl sts2_core::MonsterModel<V> for Model {
         match monster {
             Monster::Axebot => Self::Axebot {
                 stock: Some(u8::try_from(written).expect("a stock fits a byte")),
+            },
+            Monster::PunchConstruct => Self::PunchConstruct {
+                hp_reduction: u8::try_from(written).expect("a reduction fits a byte"),
             },
             monster => unimplemented!("a power writing {written} onto a new {monster:?}"),
         }

@@ -4895,6 +4895,8 @@ pub enum Stream<V: ContentVersion> {
 /// handed it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CustomReward<V: ContentVersion> {
+    /// `SpecialCardReward` of this card.
+    SpecialCard(V::Card),
     /// `RelicReward(rarity)`: the next relic of that rarity from the front
     /// of the player's bag, pulled as the reward fills in.
     Relic(<V::Relic as crate::RelicTable>::Rarity),
@@ -5591,8 +5593,8 @@ pub enum HookEffect<V: ContentVersion> {
     /// `PlayerCmd.MimicRestSiteHeal`: a rest site's heal, given by an event.
     MimicRestSiteHeal,
     /// `EventModel.EnterCombatWithoutExitingEvent`, which fights inside the
-    /// event's room. It is the whole of the option that starts it. `reward`
-    /// is a card its extra rewards offer as a `SpecialCardReward`.
+    /// event's room. It is the whole of the option that starts it. `rewards`
+    /// is its extra rewards, in the order the fight's room adds them.
     ///
     /// `roster` is the monsters an encounter whose roster is configured opens
     /// on, and nothing for any other. `resume` is `shouldResumeAfterCombat`:
@@ -5600,7 +5602,7 @@ pub enum HookEffect<V: ContentVersion> {
     /// [`crate::EventBehavior::resume_from_fight`] carries on.
     FightInEvent {
         encounter: V::Encounter,
-        reward: Option<V::Card>,
+        rewards: &'static [CustomReward<V>],
         roster: &'static [V::Monster],
         resume: bool,
     },
@@ -6382,6 +6384,9 @@ pub struct Spawned<V: ContentVersion> {
     /// `SlotName`, as its place in `Encounter.Slots`, where the roster names
     /// one.
     pub slot: Option<u8>,
+    /// The number the roster writes onto the monster's model, which
+    /// [`MonsterModel::written`] builds the model with.
+    pub written: Option<V::Number>,
 }
 
 impl<V: ContentVersion> Spawned<V> {
@@ -6391,6 +6396,7 @@ impl<V: ContentVersion> Spawned<V> {
             monster,
             opens_on: None,
             slot: None,
+            written: None,
         }
     }
 
@@ -6400,6 +6406,7 @@ impl<V: ContentVersion> Spawned<V> {
             monster,
             opens_on: Some(opens_on),
             slot: None,
+            written: None,
         }
     }
 }
@@ -7149,6 +7156,16 @@ pub trait Rules: Hooks {
         ascension: Self::AscensionLevel,
         rolled: Self::Health,
         teammates: &[Self::Health],
+    ) -> Option<Self::Health>;
+
+    /// `AfterAddedToRoom`'s `SetCurrentHpInternal`, which leaves the maximum
+    /// where it stands. `hp` is what the monster stands at as it enters.
+    ///
+    /// `None` is a monster that does not override it.
+    fn monster_hp_after_added(
+        monster: Self::Monster,
+        model: &Self::MonsterState,
+        hp: Self::Health,
     ) -> Option<Self::Health>;
 
     /// Walk a monster's state graph to the move it makes next, which is

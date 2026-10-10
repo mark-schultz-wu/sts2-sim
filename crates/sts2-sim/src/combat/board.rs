@@ -593,6 +593,11 @@ impl<'a, V: Rules> Board<'a, V> {
                 self.land(opponent, power, amount, Some(id));
             }
         }
+        if let Some(at) = self.at(id)
+            && let Some(hp) = V::monster_hp_after_added(monster, &model, self.live.creatures[at].hp)
+        {
+            self.live.creatures[at].hp = hp;
+        }
     }
 
     /// `CombatManager.AfterCreatureAdded`: an enemy that joins on the
@@ -1656,6 +1661,7 @@ impl<'a, V: Rules> Board<'a, V> {
                             monster,
                             opens_on,
                             slot,
+                            written: Some(written),
                         },
                         sts2_core::MonsterModel::written(monster, written),
                         position,

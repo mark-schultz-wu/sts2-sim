@@ -642,6 +642,14 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::monsters::health_after_added(monster, ascension, rolled, teammates)
     }
 
+    fn monster_hp_after_added(
+        monster: Self::Monster,
+        model: &Self::MonsterState,
+        hp: Self::Health,
+    ) -> Option<Self::Health> {
+        behaviour::monsters::hp_after_added(monster, model, hp)
+    }
+
     fn monster_hp_bounds(
         monster: Self::Monster,
         ascension: Self::AscensionLevel,

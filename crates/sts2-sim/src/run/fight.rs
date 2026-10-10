@@ -346,6 +346,25 @@ impl<V: Rules> State<V> {
                         taken: false,
                     }
                 }
+                // `RelicFactory.PullNextRelicFromFront`, which rolls the
+                // rarity off the rewards stream.
+                combat::ExtraReward::Relic => {
+                    let (rng, _) = self.rewarding();
+                    let rarity = crate::reward::relic_rarity::<V, _>(rng);
+                    crate::reward::Offer::Relic {
+                        relic: self.pull_relic(rarity),
+                        rarity: <_ as sts2_core::RarityKinds>::UNDRAFTED,
+                        wax: false,
+                        taken: false,
+                    }
+                }
+                combat::ExtraReward::Potion => {
+                    let (rng, _) = self.rewarding();
+                    crate::reward::Offer::Potion {
+                        potion: crate::reward::potion::rolled::<V, _>(rng, character),
+                        taken: false,
+                    }
+                }
                 combat::ExtraReward::Card => {
                     let added = self.card_reward_added();
                     let pool = self.reward_pool();

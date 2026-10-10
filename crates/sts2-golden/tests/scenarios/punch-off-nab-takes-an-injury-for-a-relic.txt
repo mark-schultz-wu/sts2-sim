@@ -1,0 +1,5 @@
+# Nabbing the prize puts an Injury into the deck, then offers a relic.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"PUNCH_OFF"}
+{"cmd":"choose_option","index":0}
+{"cmd":"answer","take":[{"index":0}]}
