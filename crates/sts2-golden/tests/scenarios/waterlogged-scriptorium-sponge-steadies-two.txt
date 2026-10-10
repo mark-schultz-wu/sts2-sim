@@ -1,0 +1,9 @@
+# The Prickly Sponge spends 99 gold and puts Steady on two deck cards the
+# player picks. Steady gives each Retain, so a Defend and the Bash stay in
+# hand through the turn's end.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"WATERLOGGED_SCRIPTORIUM"}
+{"cmd":"choose_option","index":2}
+{"cmd":"answer","cards":[5,9]}
+{"cmd":"fight","encounter":"SHRINKER_BEETLE_WEAK"}
+{"cmd":"end_turn"}

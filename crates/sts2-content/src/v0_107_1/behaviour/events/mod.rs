@@ -14,6 +14,7 @@ mod crystal_sphere;
 mod darv;
 mod dense_vegetation;
 mod doll_room;
+mod doors_of_light_and_dark;
 mod fake_merchant;
 mod field_of_man_sized_holes;
 mod grave_of_the_forgotten;
@@ -54,6 +55,7 @@ mod trial;
 mod unrest_site;
 mod vakuu;
 mod war_historian_repy;
+mod waterlogged_scriptorium;
 mod welcome_to_wongos;
 mod wellspring;
 mod whispering_hollow;
@@ -120,6 +122,8 @@ pub enum State {
     SlipperyBridge(slippery_bridge::State),
     SunkenStatue(sunken_statue::State),
     TrashHeap(trash_heap::State),
+    DoorsOfLightAndDark(doors_of_light_and_dark::State),
+    WaterloggedScriptorium(waterlogged_scriptorium::State),
     AbyssalBaths(abyssal_baths::State),
     SunkenTreasury(sunken_treasury::State),
     UnrestSite(unrest_site::State),
@@ -354,6 +358,12 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
         }
         Event::SunkenStatue => State::SunkenStatue(sunken_statue::SunkenStatue.enter(run, rng)),
         Event::TrashHeap => State::TrashHeap(trash_heap::TrashHeap.enter(run, rng)),
+        Event::DoorsOfLightAndDark => {
+            State::DoorsOfLightAndDark(doors_of_light_and_dark::DoorsOfLightAndDark.enter(run, rng))
+        }
+        Event::WaterloggedScriptorium => State::WaterloggedScriptorium(
+            waterlogged_scriptorium::WaterloggedScriptorium.enter(run, rng),
+        ),
         Event::AbyssalBaths => State::AbyssalBaths(abyssal_baths::AbyssalBaths.enter(run, rng)),
         Event::SunkenTreasury => {
             State::SunkenTreasury(sunken_treasury::SunkenTreasury.enter(run, rng))
@@ -488,6 +498,12 @@ pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
         State::SlipperyBridge(state) => slippery_bridge::SlipperyBridge.observe(state, run),
         State::SunkenStatue(state) => sunken_statue::SunkenStatue.observe(state, run),
         State::TrashHeap(state) => trash_heap::TrashHeap.observe(state, run),
+        State::DoorsOfLightAndDark(state) => {
+            doors_of_light_and_dark::DoorsOfLightAndDark.observe(state, run)
+        }
+        State::WaterloggedScriptorium(state) => {
+            waterlogged_scriptorium::WaterloggedScriptorium.observe(state, run)
+        }
         State::AbyssalBaths(state) => abyssal_baths::AbyssalBaths.observe(state, run),
         State::SunkenTreasury(state) => sunken_treasury::SunkenTreasury.observe(state, run),
         State::UnrestSite(state) => unrest_site::UnrestSite.observe(state, run),
@@ -600,6 +616,12 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
         }
         State::SunkenStatue(state) => sunken_statue::SunkenStatue.choose(state, option, run, rng),
         State::TrashHeap(state) => trash_heap::TrashHeap.choose(state, option, run, rng),
+        State::DoorsOfLightAndDark(state) => {
+            doors_of_light_and_dark::DoorsOfLightAndDark.choose(state, option, run, rng)
+        }
+        State::WaterloggedScriptorium(state) => {
+            waterlogged_scriptorium::WaterloggedScriptorium.choose(state, option, run, rng)
+        }
         State::AbyssalBaths(state) => abyssal_baths::AbyssalBaths.choose(state, option, run, rng),
         State::SunkenTreasury(state) => {
             sunken_treasury::SunkenTreasury.choose(state, option, run, rng)
