@@ -21,6 +21,9 @@ pub trait EventView<V: ContentVersion> {
     fn hp(&self) -> V::Health;
     fn max_hp(&self) -> V::Health;
     /// The potions in the belt, in slot order.
+    /// `Player.HasOpenPotionSlots`: a slot of the belt that holds no potion.
+    fn open_potion_slot(&self) -> bool;
+
     fn potions(&self) -> impl Iterator<Item = V::Potion> + '_;
     /// Who the run is being played as.
     ///
@@ -108,7 +111,12 @@ pub trait EventBehavior<V: ContentVersion> {
     /// which [`HookEffect::ResumeEvent`](crate::HookEffect::ResumeEvent)
     /// asks for. What it does to the run comes back, in the order the game
     /// does it.
-    fn resume(&self, _state: &mut Self::State) -> crate::HookEffects<V> {
+    fn resume<R: GameRng>(
+        &self,
+        _state: &mut Self::State,
+        _run: &impl EventView<V>,
+        _rng: &mut R,
+    ) -> crate::HookEffects<V> {
         unimplemented!("an event resumed after its pickup")
     }
 

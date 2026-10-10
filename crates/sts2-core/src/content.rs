@@ -5789,6 +5789,9 @@ pub enum HookEffect<V: ContentVersion> {
     InstallMove(&'static crate::NextMove<V>),
     /// `CreatureCmd.SetMaxAndCurrentHp` on the listener's owner.
     SetMaxAndCurrentHp(V::Number),
+    /// `CardFactory.CreateForReward` as a custom card reward rolls its cards,
+    /// each then added to the deck rather than offered.
+    AddRolledToDeck(CustomReward<V>),
     /// `CreatureCmd.Stun` on the owner: a stunned turn in place of the move
     /// it advertised.
     ///
@@ -7432,7 +7435,11 @@ pub trait Rules: Hooks {
     }
 
     /// [`crate::EventBehavior::resume`] for the event entered.
-    fn resume_event(_state: &mut Self::EventState) -> crate::HookEffects<Self> {
+    fn resume_event<R: crate::rng::GameRng>(
+        _state: &mut Self::EventState,
+        _run: &impl crate::EventView<Self>,
+        _rng: &mut R,
+    ) -> crate::HookEffects<Self> {
         unimplemented!("an event resumed after its pickup")
     }
 

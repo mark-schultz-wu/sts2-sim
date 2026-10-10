@@ -940,8 +940,12 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::events::answer(state, answer)
     }
 
-    fn resume_event(state: &mut Self::EventState) -> sts2_core::HookEffects<Self> {
-        behaviour::events::resume(state)
+    fn resume_event<R: sts2_core::rng::GameRng>(
+        state: &mut Self::EventState,
+        run: &impl sts2_core::EventView<Self>,
+        rng: &mut R,
+    ) -> sts2_core::HookEffects<Self> {
+        behaviour::events::resume(state, run, rng)
     }
 
     fn resume_event_from_fight(

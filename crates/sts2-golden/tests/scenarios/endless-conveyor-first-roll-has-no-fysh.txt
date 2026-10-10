@@ -1,0 +1,5 @@
+# The Endless Conveyor's first roll leaves out the Golden Fysh, which only a
+# later roll can offer. On this seed the first draw lands on the Fried Eel.
+# With the Fysh's weight in the first roll's total, it lands elsewhere.
+{"cmd":"start","seed":"C000000005","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"ENDLESS_CONVEYOR"}

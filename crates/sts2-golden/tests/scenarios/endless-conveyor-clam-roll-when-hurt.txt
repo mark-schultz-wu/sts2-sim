@@ -1,0 +1,36 @@
+# On a hurt run the Endless Conveyor's roll adds the Clam Roll, which heals
+# ten. Four immersions in the Abyssal Baths leave the hurt. From the second
+# roll on the Golden Fysh can come, which costs nothing and pays 75. The
+# Jelly Liver transforms a card the run picks.
+{"cmd":"start","seed":"C000000003","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"ABYSSAL_BATHS"}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":1}
+{"cmd":"event","event":"SUNKEN_TREASURY"}
+{"cmd":"choose_option","index":1}
+{"cmd":"event","event":"ENDLESS_CONVEYOR"}
+{"cmd":"choose_option","index":0}
+{"cmd":"answer","take":[{"index":0}]}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}
+{"cmd":"answer","take":[{"index":0}]}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}
+{"cmd":"answer","take":[{"index":0}]}
+{"cmd":"choose_option","index":0}
+{"cmd":"answer","cards":[0]}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":1}

@@ -131,7 +131,12 @@ impl EventBehavior<V> for WarHistorianRepy {
 
     /// `SetEventState` of the page for the other unlock, once the first is
     /// over.
-    fn resume(&self, state: &mut State) -> HookEffects<V> {
+    fn resume<R: sts2_core::rng::GameRng>(
+        &self,
+        state: &mut State,
+        _run: &impl EventView<V>,
+        _rng: &mut R,
+    ) -> HookEffects<V> {
         state.page = state
             .next
             .take()

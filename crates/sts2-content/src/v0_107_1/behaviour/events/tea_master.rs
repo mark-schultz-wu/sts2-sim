@@ -100,6 +100,9 @@ mod tests {
         fn potions(&self) -> impl Iterator<Item = <V as sts2_core::ContentVersion>::Potion> + '_ {
             std::iter::empty()
         }
+        fn open_potion_slot(&self) -> bool {
+            true
+        }
         fn character(&self) -> <V as sts2_core::ContentVersion>::Character {
             unreachable!("Tea Master does not inspect the character")
         }
