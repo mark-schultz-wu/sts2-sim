@@ -143,7 +143,10 @@ pub(crate) fn computed_damage<P: sts2_core::Printed<V> + ?Sized>(
     ascension: u8,
     powers: &[sts2_core::Listener<'_, V, P>],
 ) -> i32 {
-    glory::computed_damage(monster, move_id, ascension, powers)
+    match monster {
+        Monster::GasBomb => underdocks::computed_damage(monster, move_id, ascension),
+        _ => glory::computed_damage(monster, move_id, ascension, powers),
+    }
 }
 
 /// A move's hit count that the monster works out from what its own model

@@ -3342,6 +3342,9 @@ fn tick_powers<V: Rules>(
             sts2_core::HookEffect::Decrement => applying.push(TurnEndAsk::Decrement(owner, power)),
             sts2_core::HookEffect::Escape => applying.push(TurnEndAsk::Escape(owner)),
             sts2_core::HookEffect::EvokeLast(count) => applying.push(TurnEndAsk::EvokeLast(count)),
+            sts2_core::HookEffect::ClearAffliction(to) => {
+                applying.push(TurnEndAsk::ClearAffliction(to));
+            }
             other => unimplemented!("a power asking for {other:?} as a turn ends"),
         }
     }
@@ -3445,6 +3448,8 @@ enum TurnEndAsk<V: Rules> {
     Escape(CombatId),
     /// `OrbCmd.EvokeLast`, this many times.
     EvokeLast(V::Number),
+    /// `CardCmd.ClearAffliction` on the fight's cards.
+    ClearAffliction(sts2_core::Writing<V>),
     /// What a relic asked for, carried out for the player.
     Relic(sts2_core::HookEffect<V>),
 }
@@ -3485,6 +3490,9 @@ fn applied<V: Rules>(
                 for _ in 0..num_traits::cast::<_, usize>(count).unwrap_or(0) {
                     board.evoke_last();
                 }
+            }
+            TurnEndAsk::ClearAffliction(to) => {
+                board.write_cards([sts2_core::HookEffect::ClearAffliction(to)]);
             }
         }
         if let Some(ended) = board.ended() {
