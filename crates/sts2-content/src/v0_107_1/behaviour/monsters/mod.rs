@@ -300,9 +300,14 @@ pub(crate) fn event_hook(
         ) => glory::amalgam_died(model, asked),
         // The Insatiable's own death does nothing but return. The Test
         // Subject's sets its colour and the music, and the Aeonglass's
-        // returns. The Queen's own sets the music and the portrait.
+        // returns. The Queen's own sets the music and the portrait. The Soul
+        // Fysh's sets the music.
         (
-            Monster::TheInsatiable | Monster::TestSubject | Monster::Aeonglass | Monster::Queen,
+            Monster::TheInsatiable
+            | Monster::TestSubject
+            | Monster::Aeonglass
+            | Monster::Queen
+            | Monster::SoulFysh,
             EventHook::AfterDeath { .. },
         ) => {}
         // The Lagavulin Matriarch opens its shell's eyes once a hit leaves it
