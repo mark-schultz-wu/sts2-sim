@@ -1,0 +1,8 @@
+# Fresnel Lens gives Nimble 2 to every card that gains block, where it joins
+# the deck and where a merchant stocks it. Shrug It Off joins with it and
+# Anger without. The shop's block cards carry it, and its others do not.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"FRESNEL_LENS"}
+{"cmd":"grant","card":"SHRUG_IT_OFF"}
+{"cmd":"grant","card":"ANGER"}
+{"cmd":"enter_room","type":"Shop"}

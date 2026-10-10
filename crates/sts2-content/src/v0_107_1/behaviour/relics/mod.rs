@@ -117,6 +117,7 @@ mod fiddle;
 mod fishing_rod;
 mod forgotten_soul;
 mod fragrant_mushroom;
+mod fresnel_lens;
 mod frozen_egg;
 mod funerary_mask;
 mod fur_coat;
@@ -497,6 +498,7 @@ pub enum State {
     TinyMailbox,
     FrozenEgg,
     MoltenEgg,
+    FresnelLens,
     ToxicEgg,
     SelfFormingClay,
     OldCoin,
@@ -874,6 +876,7 @@ pub(crate) fn event_hook(
         State::TinyMailbox => tiny_mailbox::event_hook(hook, asked),
         State::FrozenEgg => frozen_egg::event_hook(hook, asked),
         State::MoltenEgg => molten_egg::event_hook(hook, asked),
+        State::FresnelLens => fresnel_lens::event_hook(hook, asked),
         State::ToxicEgg => toxic_egg::event_hook(hook, asked),
         State::SelfFormingClay => self_forming_clay::event_hook(hook, asked),
         State::OldCoin => old_coin::event_hook(hook, asked),
@@ -1249,6 +1252,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::TinyMailbox
         | State::FrozenEgg
         | State::MoltenEgg
+        | State::FresnelLens
         | State::ToxicEgg
         | State::SelfFormingClay
         | State::OldCoin
@@ -1530,6 +1534,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::TinyMailbox => State::TinyMailbox,
             Relic::FrozenEgg => State::FrozenEgg,
             Relic::MoltenEgg => State::MoltenEgg,
+            Relic::FresnelLens => State::FresnelLens,
             Relic::ToxicEgg => State::ToxicEgg,
             Relic::SelfFormingClay => State::SelfFormingClay,
             Relic::OldCoin => State::OldCoin,
