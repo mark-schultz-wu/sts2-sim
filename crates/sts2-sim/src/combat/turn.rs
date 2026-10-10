@@ -1357,6 +1357,16 @@ pub(super) fn carry_setup<V: Rules>(
                                 count,
                             );
                         }
+                        sts2_core::HookEffect::GenerateDistinctFromPool { filter, count } => {
+                            generate_distinct_from_pool::<V>(
+                                live,
+                                rngs.reborrow(),
+                                relics,
+                                ascension,
+                                filter,
+                                count,
+                            );
+                        }
                         sts2_core::HookEffect::ExhaustFromDrawTop { passing_innate } => {
                             let passed = passing_innate
                                 .then(|| {

@@ -1938,6 +1938,16 @@ pub(crate) fn result_pile(
             }
         }
         (Power::FeralPower, PowerAmount::Endless) => unimplemented!("an endless Feral"),
+        // `ReboundPower`: a card of its owner's bound for the discard pile
+        // goes to the top of the draw pile instead.
+        (Power::ReboundPower, _) => match hook.player == holder
+            && hook.pile == Some(sts2_core::Pile::Discard)
+        {
+            true => {
+                HookResponse::Decision((Some(sts2_core::Pile::Draw), sts2_core::PilePosition::Top))
+            }
+            false => unchanged,
+        },
         // `CorruptionPower`: a Skill its owner plays goes to the exhaust pile,
         // where it was bound.
         (Power::CorruptionPower, _) => {
@@ -5043,6 +5053,34 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Loop")
         }
         (Power::LoopPower, _, EventHook::PlayerTurnStart { .. }) => None,
+        // `HelloWorldPower.BeforeHandDraw`: as many distinct Common cards of
+        // the character's pool as its stack stood at as the turn began, into
+        // hand.
+        (Power::HelloWorldPower, _, EventHook::BeforeHandDraw { player, .. })
+            if player == holder =>
+        {
+            match held.on_turn_start {
+                PowerAmount::Counted(count) if count >= 1 => {
+                    Some(HookEffect::GenerateDistinctFromPool {
+                        filter: sts2_core::PoolFilter::Common,
+                        count,
+                    })
+                }
+                PowerAmount::Counted(_) => None,
+                PowerAmount::Endless => unimplemented!("an endless Hello World"),
+            }
+        }
+        (Power::HelloWorldPower, _, EventHook::BeforeHandDraw { .. }) => None,
+        // `ReboundPower.AfterModifyingCardPlayResultPileOrPosition`: one off
+        // its stack for each card it moved. It goes once its owner's side
+        // ends a turn.
+        (Power::ReboundPower, _, EventHook::ResultPileModified { .. }) => {
+            Some(HookEffect::Decrement)
+        }
+        (Power::ReboundPower, _, EventHook::SideTurnEnd { side, .. }) if side == owner => {
+            Some(HookEffect::Remove)
+        }
+        (Power::ReboundPower, _, EventHook::SideTurnEnd { .. }) => None,
         // `CreativeAiPower.BeforeHandDraw`: its stack of Power cards from the
         // character's pool, one at a time.
         (
