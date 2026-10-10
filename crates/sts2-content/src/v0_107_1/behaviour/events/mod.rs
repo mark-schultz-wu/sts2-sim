@@ -16,6 +16,7 @@ mod dense_vegetation;
 mod doll_room;
 mod doors_of_light_and_dark;
 mod drowning_beacon;
+mod endless_conveyor;
 mod fake_merchant;
 mod field_of_man_sized_holes;
 mod grave_of_the_forgotten;
@@ -124,6 +125,7 @@ pub enum State {
     SlipperyBridge(slippery_bridge::State),
     SunkenStatue(sunken_statue::State),
     TrashHeap(trash_heap::State),
+    EndlessConveyor(endless_conveyor::State),
     DrowningBeacon(drowning_beacon::State),
     SpiralingWhirlpool(spiraling_whirlpool::State),
     DoorsOfLightAndDark(doors_of_light_and_dark::State),
@@ -362,6 +364,9 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
         }
         Event::SunkenStatue => State::SunkenStatue(sunken_statue::SunkenStatue.enter(run, rng)),
         Event::TrashHeap => State::TrashHeap(trash_heap::TrashHeap.enter(run, rng)),
+        Event::EndlessConveyor => {
+            State::EndlessConveyor(endless_conveyor::EndlessConveyor.enter(run, rng))
+        }
         Event::DrowningBeacon => {
             State::DrowningBeacon(drowning_beacon::DrowningBeacon.enter(run, rng))
         }
@@ -508,6 +513,7 @@ pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
         State::SlipperyBridge(state) => slippery_bridge::SlipperyBridge.observe(state, run),
         State::SunkenStatue(state) => sunken_statue::SunkenStatue.observe(state, run),
         State::TrashHeap(state) => trash_heap::TrashHeap.observe(state, run),
+        State::EndlessConveyor(state) => endless_conveyor::EndlessConveyor.observe(state, run),
         State::DrowningBeacon(state) => drowning_beacon::DrowningBeacon.observe(state, run),
         State::SpiralingWhirlpool(state) => {
             spiraling_whirlpool::SpiralingWhirlpool.observe(state, run)
@@ -630,6 +636,9 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
         }
         State::SunkenStatue(state) => sunken_statue::SunkenStatue.choose(state, option, run, rng),
         State::TrashHeap(state) => trash_heap::TrashHeap.choose(state, option, run, rng),
+        State::EndlessConveyor(state) => {
+            endless_conveyor::EndlessConveyor.choose(state, option, run, rng)
+        }
         State::DrowningBeacon(state) => {
             drowning_beacon::DrowningBeacon.choose(state, option, run, rng)
         }
@@ -689,9 +698,16 @@ pub(crate) fn answer(state: &mut State, answer: &sts2_core::Answer) -> HookEffec
 }
 
 /// [`EventBehavior::resume`] for the event entered.
-pub(crate) fn resume(state: &mut State) -> HookEffects<V> {
+pub(crate) fn resume<R: sts2_core::rng::GameRng>(
+    state: &mut State,
+    run: &impl EventView<V>,
+    rng: &mut R,
+) -> HookEffects<V> {
     match state {
-        State::WarHistorianRepy(state) => war_historian_repy::WarHistorianRepy.resume(state),
+        State::WarHistorianRepy(state) => {
+            war_historian_repy::WarHistorianRepy.resume(state, run, rng)
+        }
+        State::EndlessConveyor(state) => endless_conveyor::EndlessConveyor.resume(state, run, rng),
         state => unimplemented!("{state:?} resumed after its pickup"),
     }
 }

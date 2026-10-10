@@ -1759,6 +1759,17 @@ impl<V: Rules> State<V> {
                     self.gain_gold(amount);
                     continue;
                 }
+                // `CardFactory.CreateForReward`, then `CardPileCmd.Add` of
+                // each card to the deck.
+                HookEffect::AddRolledToDeck(reward) => {
+                    let pool = matches!(reward, sts2_core::CustomReward::CharacterCards { .. })
+                        .then(|| self.reward_pool());
+                    let stream = sts2_core::Stream::Player(V::PlayerRngType::REWARDS);
+                    for card in self.custom_cards(reward, stream, pool.as_ref()) {
+                        self.add_to_deck(card);
+                    }
+                    continue;
+                }
                 HookEffect::PurchaseEverything => {
                     self.purchase_everything(None);
                     continue;
@@ -1795,10 +1806,26 @@ impl<V: Rules> State<V> {
                     continue;
                 }
                 HookEffect::ResumeEvent => {
-                    let Phase::Event { state, .. } = &mut self.phase else {
+                    // Lent out of the run for as long as it reads it, as a
+                    // choice is.
+                    let Phase::Event {
+                        mut state,
+                        mut rng,
+                        asking,
+                        finished,
+                        layout,
+                    } = std::mem::replace(&mut self.phase, Phase::Map)
+                    else {
                         unreachable!("only an event's option resumes it")
                     };
-                    let resumed = V::resume_event(state);
+                    let resumed = V::resume_event(&mut state, self, &mut rng);
+                    self.phase = Phase::Event {
+                        state,
+                        rng,
+                        asking,
+                        finished,
+                        layout,
+                    };
                     match self.carry_out(resumed) {
                         None => continue,
                         Some(mut asked) => {
@@ -6225,6 +6252,12 @@ impl<V: Rules> sts2_core::EventView<V> for State<V> {
 
     fn potions(&self) -> impl Iterator<Item = V::Potion> + '_ {
         self.player.potions.iter().copied()
+    }
+
+    fn open_potion_slot(&self) -> bool {
+        let slots: usize =
+            num_traits::cast(self.player.potion_slots).expect("a belt's slots fit a usize");
+        self.player.potions.len() < slots
     }
 
     fn character(&self) -> V::Character {
