@@ -1044,8 +1044,17 @@ fn before_turn_end<V: Rules>(
 ) -> Option<super::Ended> {
     let block = live.player().block;
     let hook = sts2_core::EventHook::BeforeSideTurnEndVeryEarly { side, block };
-    if let Some((listener, effect)) = listen::notify::<V>(live, relics, hook).first() {
-        unimplemented!("{listener:?} asking for {effect:?} as a turn is about to end");
+    let asked = listen::notify::<V>(live, relics, hook);
+    for &(listener, effect) in asked.iter() {
+        match (listener, effect) {
+            // `PowerCmd.Remove` of another power on the listener's owner.
+            (Listener::Power { owner, .. }, sts2_core::HookEffect::RemoveFromOwner(power)) => {
+                live.remove_power(owner, power);
+            }
+            (listener, effect) => {
+                unimplemented!("{listener:?} asking for {effect:?} as a turn is about to end")
+            }
+        }
     }
     // Counted only where something hears the hook, as nothing else reads it.
     let plays = match listen::heard::<V>(live, relics, sts2_core::ModelHook::BeforeSideTurnEndEarly)

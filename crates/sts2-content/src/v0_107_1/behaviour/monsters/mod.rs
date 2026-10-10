@@ -184,6 +184,7 @@ pub(crate) fn conditional<P: sts2_core::Printed<V> + ?Sized>(
             opens_by_slot(monster, at, spawn)
         }
         Monster::Toadpole => underdocks::conditional(monster, at, spawn),
+        Monster::LagavulinMatriarch => underdocks::matriarch_branch(at, powers),
         Monster::LivingShield
         | Monster::FrogKnight
         | Monster::Fabricator
@@ -303,6 +304,13 @@ pub(crate) fn event_hook(
         (
             Monster::TheInsatiable | Monster::TestSubject | Monster::Aeonglass | Monster::Queen,
             EventHook::AfterDeath { .. },
+        ) => {}
+        // The Lagavulin Matriarch opens its shell's eyes once a hit leaves it
+        // at half health or below, and closes them as it dies. Both are on
+        // screen alone.
+        (
+            Monster::LagavulinMatriarch,
+            EventHook::DamageReceived { .. } | EventHook::AfterDeath { .. },
         ) => {}
         (Monster::Aeonglass, EventHook::CardGeneratedForCombat { at, card, .. }) => {
             glory::wither_generated(model, at, card, asked)

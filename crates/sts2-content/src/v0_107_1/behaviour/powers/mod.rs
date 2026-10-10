@@ -4243,6 +4243,43 @@ pub(crate) fn event_hook(
             Some(HookEffect::Decrement)
         }
         (Power::SlumberPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `AsleepPower.AfterSideTurnEnd` for its owner's side: one off. The
+        // `WakeUpMove` it then calls at nothing left only plays the waking.
+        (Power::AsleepPower, _, EventHook::SideTurnEnd { side, .. }) if side == owner => {
+            Some(HookEffect::Decrement)
+        }
+        (Power::AsleepPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `AsleepPower.BeforeSideTurnEndVeryEarly` for its owner's side: on
+        // its last turn, the Plating goes.
+        (
+            Power::AsleepPower,
+            PowerAmount::Counted(amount),
+            EventHook::BeforeSideTurnEndVeryEarly { side, .. },
+        ) if side == owner && amount <= one => {
+            Some(HookEffect::RemoveFromOwner(Power::PlatingPower))
+        }
+        (Power::AsleepPower, _, EventHook::BeforeSideTurnEndVeryEarly { .. }) => None,
+        // `AsleepPower.AfterDamageReceived`: a hit that takes health wakes the
+        // Matriarch. The Plating goes, a stunned turn comes back on Slash, and
+        // the power goes.
+        (
+            Power::AsleepPower,
+            _,
+            EventHook::DamageReceived {
+                target, unblocked, ..
+            },
+        ) if target == holder && unblocked != 0 => {
+            let slash =
+                super::monsters::state_of(Monster::LagavulinMatriarch, MoveId::SlashMove, 0)
+                    .unwrap_or_else(|_| unreachable!("the Matriarch's graph holds its Slash"));
+            asked.extend([
+                HookEffect::RemoveFromOwner(Power::PlatingPower),
+                stunned(sts2_core::StunResume::At(slash)),
+                HookEffect::Remove,
+            ]);
+            return;
+        }
+        (Power::AsleepPower, _, EventHook::DamageReceived { .. }) => None,
         // `BlurPower.AfterSideTurnStart`: one off, as its owner's side starts
         // a turn.
         (Power::BlurPower, _, EventHook::SideTurnStart { side, .. }) if side == owner => {
