@@ -1,5 +1,6 @@
 //! Event behavior dispatch for this build.
 
+mod abyssal_baths;
 mod amalgamator;
 mod ancient;
 mod aroma_of_chaos;
@@ -37,6 +38,7 @@ mod slippery_bridge;
 mod spirit_grafter;
 mod stone_of_all_time;
 mod sunken_statue;
+mod sunken_treasury;
 mod symbiote;
 mod tablet_of_truth;
 mod tanx;
@@ -118,6 +120,8 @@ pub enum State {
     SlipperyBridge(slippery_bridge::State),
     SunkenStatue(sunken_statue::State),
     TrashHeap(trash_heap::State),
+    AbyssalBaths(abyssal_baths::State),
+    SunkenTreasury(sunken_treasury::State),
     UnrestSite(unrest_site::State),
     TabletOfTruth(tablet_of_truth::State),
     TeaMaster(tea_master::State),
@@ -350,6 +354,10 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
         }
         Event::SunkenStatue => State::SunkenStatue(sunken_statue::SunkenStatue.enter(run, rng)),
         Event::TrashHeap => State::TrashHeap(trash_heap::TrashHeap.enter(run, rng)),
+        Event::AbyssalBaths => State::AbyssalBaths(abyssal_baths::AbyssalBaths.enter(run, rng)),
+        Event::SunkenTreasury => {
+            State::SunkenTreasury(sunken_treasury::SunkenTreasury.enter(run, rng))
+        }
         Event::UnrestSite => State::UnrestSite(unrest_site::UnrestSite.enter(run, rng)),
         Event::TabletOfTruth => {
             State::TabletOfTruth(tablet_of_truth::TabletOfTruth.enter(run, rng))
@@ -480,6 +488,8 @@ pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
         State::SlipperyBridge(state) => slippery_bridge::SlipperyBridge.observe(state, run),
         State::SunkenStatue(state) => sunken_statue::SunkenStatue.observe(state, run),
         State::TrashHeap(state) => trash_heap::TrashHeap.observe(state, run),
+        State::AbyssalBaths(state) => abyssal_baths::AbyssalBaths.observe(state, run),
+        State::SunkenTreasury(state) => sunken_treasury::SunkenTreasury.observe(state, run),
         State::UnrestSite(state) => unrest_site::UnrestSite.observe(state, run),
         State::TabletOfTruth(state) => tablet_of_truth::TabletOfTruth.observe(state, run),
         State::TeaMaster(state) => tea_master::TeaMaster.observe(state, run),
@@ -590,6 +600,10 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
         }
         State::SunkenStatue(state) => sunken_statue::SunkenStatue.choose(state, option, run, rng),
         State::TrashHeap(state) => trash_heap::TrashHeap.choose(state, option, run, rng),
+        State::AbyssalBaths(state) => abyssal_baths::AbyssalBaths.choose(state, option, run, rng),
+        State::SunkenTreasury(state) => {
+            sunken_treasury::SunkenTreasury.choose(state, option, run, rng)
+        }
         State::UnrestSite(state) => unrest_site::UnrestSite.choose(state, option, run, rng),
         State::TabletOfTruth(state) => {
             tablet_of_truth::TabletOfTruth.choose(state, option, run, rng)
