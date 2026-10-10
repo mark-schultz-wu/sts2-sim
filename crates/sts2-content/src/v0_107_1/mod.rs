@@ -1082,7 +1082,7 @@ fn roll_monster_move<
             ascension,
             || {
                 read.extend(powers.take().into_iter().flatten());
-                behaviour::monsters::computed_damage(monster, held.id, ascension, &read)
+                behaviour::monsters::computed_damage(monster, held.id, ascension, &read, model)
             },
             || behaviour::monsters::computed_repeats(monster, held.id, model),
         )
@@ -1121,7 +1121,7 @@ fn roll_monster_move<
         ascension,
         || {
             read.extend(powers.take().into_iter().flatten());
-            behaviour::monsters::computed_damage(monster, held.id, ascension, &read)
+            behaviour::monsters::computed_damage(monster, held.id, ascension, &read, model)
         },
         || behaviour::monsters::computed_repeats(monster, held.id, model),
     )

@@ -142,9 +142,12 @@ pub(crate) fn computed_damage<P: sts2_core::Printed<V> + ?Sized>(
     move_id: MoveId,
     ascension: u8,
     powers: &[sts2_core::Listener<'_, V, P>],
+    model: &Model,
 ) -> i32 {
     match monster {
-        Monster::GasBomb => underdocks::computed_damage(monster, move_id, ascension),
+        Monster::GasBomb | Monster::WaterfallGiant => {
+            underdocks::computed_damage(monster, move_id, ascension, model)
+        }
         _ => glory::computed_damage(monster, move_id, ascension, powers),
     }
 }
@@ -301,13 +304,14 @@ pub(crate) fn event_hook(
         // The Insatiable's own death does nothing but return. The Test
         // Subject's sets its colour and the music, and the Aeonglass's
         // returns. The Queen's own sets the music and the portrait. The Soul
-        // Fysh's sets the music.
+        // Fysh's sets the music, and the Waterfall Giant's stops its sound.
         (
             Monster::TheInsatiable
             | Monster::TestSubject
             | Monster::Aeonglass
             | Monster::Queen
-            | Monster::SoulFysh,
+            | Monster::SoulFysh
+            | Monster::WaterfallGiant,
             EventHook::AfterDeath { .. },
         ) => {}
         // The Lagavulin Matriarch opens its shell's eyes once a hit leaves it
@@ -428,6 +432,9 @@ pub enum Model {
     Aeonglass { strength: u8, wither_upgrades: u8 },
     /// `Queen.HasAmalgamDied`.
     Queen { amalgam_died: bool },
+    /// `WaterfallGiant.CurrentPressureGunDamage`, as the times its Pressure
+    /// Gun has raised it, and `SteamEruptionDamage`.
+    WaterfallGiant { gun_raises: u8, eruption: Number },
     /// `TwoTailedRat.TurnsUntilSummonable`, held no lower than zero since
     /// only above zero bars a summon, and `CallForBackupCount`.
     TwoTailedRat { summonable_in: u8, backups: u8 },
@@ -452,6 +459,10 @@ impl sts2_core::MonsterModel<V> for Model {
             },
             Monster::Queen => Self::Queen {
                 amalgam_died: false,
+            },
+            Monster::WaterfallGiant => Self::WaterfallGiant {
+                gun_raises: 0,
+                eruption: 0,
             },
             Monster::TwoTailedRat => Self::TwoTailedRat {
                 summonable_in: underdocks::RAT_SUMMONABLE_IN,
