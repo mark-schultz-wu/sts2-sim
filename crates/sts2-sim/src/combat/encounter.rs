@@ -119,6 +119,6 @@ mod unported_tests {
     #[test]
     #[should_panic(expected = "the roster")]
     fn an_unported_random_roster_stops_the_run() {
-        let _ = opening::<V0_107_1>(123, 2, Encounter::CorpseSlugsNormal, &[]);
+        let _ = opening::<V0_107_1>(123, 2, Encounter::PunchOffEventEncounter, &[]);
     }
 }
