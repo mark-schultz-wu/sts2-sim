@@ -2300,8 +2300,9 @@ pub trait Fight<V: ContentVersion> {
 
     /// `CreatureCmd.Add<M>(CombatState, position)`.
     ///
-    /// The monster rolls its hit points when it arrives. It does not advertise
-    /// a move until the enemy side next prepares for a turn.
+    /// The monster rolls its hit points when it arrives. One that joins on
+    /// the player's turn rolls its move then too. One that joins on the
+    /// enemies' turn advertises nothing until they next prepare for a turn.
     fn summon(&mut self, monster: V::Monster, position: usize) -> crate::CombatId;
 
     /// What the run is being played at.
@@ -2822,6 +2823,20 @@ pub trait Fight<V: ContentVersion> {
         V: Hooks,
     {
         unimplemented!("a monster's model read from a move")
+    }
+
+    /// Write the encounter's own model, as `CombatState.Encounter` is.
+    fn write_encounter(&mut self, _write: impl FnOnce(&mut V::EncounterState))
+    where
+        Self: Sized,
+        V: Hooks,
+    {
+        unimplemented!("an encounter's model written in a fight")
+    }
+
+    /// `Player.Gold`, which the fight holds while it runs.
+    fn gold(&self) -> V::Number {
+        unimplemented!("the player's gold read in a fight")
     }
 
     /// Read or write the model of every enemy in the fight, in fight order,
@@ -5821,6 +5836,9 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CardFactory.CreateForReward` as a custom card reward rolls its cards,
     /// each then added to the deck rather than offered.
     AddRolledToDeck(CustomReward<V>),
+    /// This power's `AfterDeath` over its own holder, which
+    /// [`Hooks::perform_power_death`] runs against the fight.
+    PerformDeath(V::Power),
     /// `CreatureCmd.Stun` on the owner: a stunned turn in place of the move
     /// it advertised.
     ///
@@ -5963,6 +5981,15 @@ impl<V: Hooks> DeckCard<V> {
 
 /// What one monster's own model saves between its moves.
 ///
+/// `EncounterModel`'s own fields, which the fight writes and the gold
+/// proportion reads.
+pub trait EncounterModel<V: ContentVersion>:
+    Copy + std::fmt::Debug + PartialEq + Eq + Sized
+{
+    /// The model as the fight builds the encounter.
+    fn new(encounter: V::Encounter) -> Self;
+}
+
 /// `MonsterModel`'s fields, which a move writes and a later move or a
 /// conditional state reads. The fight keeps one beside the monster's move
 /// graph.
@@ -6174,6 +6201,9 @@ pub trait Hooks: ContentVersion {
     /// What one monster's own model saves, which the fight carries beside
     /// its move graph.
     type MonsterState: MonsterModel<Self>;
+
+    /// What the encounter's own model saves while the fight lasts.
+    type EncounterState: EncounterModel<Self>;
 
     /// What one deck card's own model saves, its `[SavedProperty]` fields,
     /// which the run carries for it between fights.
@@ -7139,6 +7169,25 @@ pub trait Rules: Hooks {
     ) -> crate::rng::Interval<u16>;
 
     /// Resolve a monster’s unmodified HP range at this ascension.
+    /// `EncounterModel.CalculateGoldProportion`, for an encounter that
+    /// overrides it. `escaped` is `CombatState.EscapedCreatures`' monsters.
+    ///
+    /// `None` is an encounter that does not override it.
+    fn encounter_gold_proportion(
+        encounter: Self::Encounter,
+        state: &Self::EncounterState,
+        escaped: &[Self::Monster],
+    ) -> Option<f32>;
+
+    /// A power's `AfterDeath` on the creature carrying it, which runs its
+    /// commands against the fight the way a monster's move does.
+    /// [`HookEffect::PerformDeath`] asks for it.
+    fn perform_power_death<F: Fight<Self>>(
+        power: Self::Power,
+        holder: crate::CombatId,
+        fight: &mut F,
+    );
+
     fn monster_hp_bounds(
         monster: Self::Monster,
         ascension: Self::AscensionLevel,

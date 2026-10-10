@@ -1505,6 +1505,11 @@ impl<'a, V: Rules> Board<'a, V> {
                     .live
                     .extra_rewards
                     .push(super::live::ExtraReward::Returned(card)),
+                // `CombatRoom.AddExtraReward` of a `GoldReward`.
+                HookEffect::AddGoldReward(amount) => self
+                    .live
+                    .extra_rewards
+                    .push(super::live::ExtraReward::Gold(amount)),
                 effect => unimplemented!("{listener:?} asking for {effect:?} before a death"),
             }
         }
@@ -1678,6 +1683,9 @@ impl<'a, V: Rules> Board<'a, V> {
                     power,
                     amount,
                 } => self.land(target, power, amount, None),
+                sts2_core::HookEffect::PerformDeath(power) => {
+                    V::perform_power_death(power, id, self)
+                }
                 other => unimplemented!("a dead power asking for {other:?}"),
             }
         }
@@ -3787,6 +3795,14 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .expect("a maximum health fits the build's health");
     }
 
+    fn gold(&self) -> V::Number {
+        self.live.gold
+    }
+
+    fn write_encounter(&mut self, write: impl FnOnce(&mut V::EncounterState)) {
+        write(&mut self.live.encounter_state);
+    }
+
     fn lose_gold(&mut self, amount: V::Number) {
         self.ran_on();
         self.live.gold = (self.live.gold - amount).max(V::Number::zero());
@@ -5028,6 +5044,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     fn summon(&mut self, monster: V::Monster, position: usize) -> CombatId {
         let id = super::monster::summon(self.live, monster, position, None, self.rngs.niche);
         self.arrived(id, monster);
+        self.roll_joined(id);
         self.enemy_added(id);
         id
     }

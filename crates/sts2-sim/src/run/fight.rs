@@ -358,6 +358,15 @@ impl<V: Rules> State<V> {
                         taken: false,
                     }
                 }
+                // `GoldReward.Populate`, which draws even between one
+                // amount's two bounds.
+                combat::ExtraReward::Gold(amount) => {
+                    let (rng, _) = self.rewarding();
+                    crate::reward::Offer::Gold {
+                        amount: crate::reward::fixed_gold::<V, _>(rng, amount),
+                        taken: false,
+                    }
+                }
                 combat::ExtraReward::Potion => {
                     let (rng, _) = self.rewarding();
                     crate::reward::Offer::Potion {

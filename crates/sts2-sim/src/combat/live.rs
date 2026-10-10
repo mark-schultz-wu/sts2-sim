@@ -1926,9 +1926,12 @@ pub(crate) struct Creatures<V: Rules> {
     /// `EncounterModel.SpawnedEnemies`, as how many: every enemy that joined
     /// the fight.
     spawned_enemies: u8,
-    /// `CombatState.EscapedCreatures`, as how many.
-    escaped: u8,
+    /// `CombatState.EscapedCreatures`, as the monsters they were.
+    escaped: Bounded<V::Monster, ESCAPED>,
 }
+
+/// The most creatures that escape one fight. A fight here sees at most two.
+const ESCAPED: usize = 4;
 
 impl<V: Rules> Clone for Creatures<V> {
     fn clone(&self) -> Self {
@@ -1968,7 +1971,7 @@ impl<V: Rules> Creatures<V> {
             list: Bounded::new(),
             counts: super::listen::HookCounts::default(),
             spawned_enemies: 0,
-            escaped: 0,
+            escaped: Bounded::new(),
         }
     }
 
@@ -2004,19 +2007,26 @@ impl<V: Rules> Creatures<V> {
     /// `CombatState.CreatureEscaped`: the creature leaves, and counts as
     /// escaped.
     pub(crate) fn escape(&mut self, id: CombatId) {
+        if let Some(sts2_core::ModelId::Monster(monster)) = self
+            .iter()
+            .find(|creature| creature.id == id)
+            .and_then(|creature| creature.model)
+        {
+            self.escaped.push(monster);
+        }
         self.retain(|creature| creature.id != id);
-        self.escaped += 1;
     }
 
-    /// `EncounterModel.CalculateGoldProportion`: the share of the enemies
-    /// that joined the fight and did not escape.
-    pub(crate) fn gold_proportion(&self) -> f32 {
-        1.0 - f32::from(self.escaped) / f32::from(self.spawned_enemies)
+    /// `EncounterModel.CalculateGoldProportion`'s own: the share of the
+    /// enemies that joined the fight and did not escape.
+    fn gold_proportion(&self) -> f32 {
+        let escaped = u8::try_from(self.escaped.len()).expect("a few creatures escape");
+        1.0 - f32::from(escaped) / f32::from(self.spawned_enemies)
     }
 
     /// Whether any enemy escaped the fight.
     pub(crate) fn any_escaped(&self) -> bool {
-        self.escaped > 0
+        !self.escaped.is_empty()
     }
 
     pub(crate) fn retain(&mut self, mut keep: impl FnMut(&Fighter<V>) -> bool) {
@@ -2095,6 +2105,8 @@ pub(crate) enum ExtraReward<V: Rules> {
     Relic,
     /// `PotionReward(player)`: a random potion out of combat.
     Potion,
+    /// `GoldReward(amount)`.
+    Gold(V::Number),
 }
 
 /// The run's potions, in slot order, as the fight reads and spends them.
@@ -2184,6 +2196,8 @@ pub(crate) struct Live<V: Rules> {
     pub(super) kept: Vec<KeptBeside<V>>,
     /// The encounter this active fight belongs to.
     pub(super) encounter: V::Encounter,
+    /// `CombatState.Encounter`'s own fields.
+    pub(super) encounter_state: V::EncounterState,
     pub(super) cards: super::cards::Cards<V>,
     /// Deck cards a combat command removed permanently while this fight ran.
     pub(super) removed_from_deck: Vec<sts2_core::DeckCardId>,
@@ -2524,6 +2538,7 @@ impl<V: Rules> Clone for Live<V> {
             history,
             kept,
             encounter,
+            encounter_state,
             cards,
             removed_from_deck,
             ending_turn,
@@ -2565,6 +2580,7 @@ impl<V: Rules> Clone for Live<V> {
         history.clone_from(&source.history);
         kept.clone_from(&source.kept);
         *encounter = source.encounter;
+        *encounter_state = source.encounter_state;
         cards.clone_from(&source.cards);
         removed_from_deck.clone_from(&source.removed_from_deck);
         *ending_turn = source.ending_turn;
@@ -2694,7 +2710,12 @@ impl<V: Rules> Live<V> {
     /// `CombatRoom.GoldProportion`, which `CalculateGoldProportion` sets as
     /// the fight ends.
     pub(crate) fn gold_proportion(&self) -> f32 {
-        self.creatures.gold_proportion()
+        V::encounter_gold_proportion(
+            self.encounter,
+            &self.encounter_state,
+            &self.creatures.escaped,
+        )
+        .unwrap_or_else(|| self.creatures.gold_proportion())
     }
 
     /// Whether any enemy escaped, which is what the dummy's
@@ -3373,6 +3394,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             history: CombatHistory::new(),
             kept: Vec::new(),
             encounter: Encounter::SlimesWeak,
+            encounter_state: sts2_core::EncounterModel::new(Encounter::SlimesWeak),
             cards: super::cards::Cards::with_cards(0),
             removed_from_deck: Vec::new(),
             ending_turn: false,

@@ -103,6 +103,10 @@ pub enum State {
     HardenedShell {
         received: Number,
     },
+    /// `ThieveryPower`'s `GoldVar`, the gold it has stolen.
+    Thievery {
+        stolen: Number,
+    },
     /// `SwipePower.StolenCard`'s deck version.
     Swipe {
         stolen: Option<sts2_core::DeckCardId>,
@@ -355,6 +359,7 @@ impl sts2_core::PowerModel<V> for State {
                 bound_played: false,
             },
             Power::SwipePower => Self::Swipe { stolen: None },
+            Power::ThieveryPower => Self::Thievery { stolen: 0 },
             Power::HardenedShellPower => Self::HardenedShell { received: 0 },
             Power::SkittishPower => Self::Skittish { gained: false },
             Power::OrbitPower => Self::Orbit {
@@ -422,6 +427,7 @@ impl sts2_core::PowerModel<V> for State {
             Self::WitheringPresence { .. } => Power::WitheringPresencePower,
             Self::ChainsOfBinding { .. } => Power::ChainsOfBindingPower,
             Self::Swipe { .. } => Power::SwipePower,
+            Self::Thievery { .. } => Power::ThieveryPower,
             Self::HardenedShell { .. } => Power::HardenedShellPower,
             Self::Skittish { .. } => Power::SkittishPower,
             Self::Orbit { .. } => Power::OrbitPower,
@@ -648,6 +654,14 @@ impl State {
             unreachable!("bomb damage for {:?}", self.power())
         };
         *damage = to;
+    }
+
+    /// The gold `ThieveryPower.Steal` has taken, which its `GoldVar` adds up.
+    pub(crate) fn stolen_gold(&mut self) -> &mut Number {
+        let Self::Thievery { stolen } = self else {
+            unreachable!("stolen gold for {:?}", self.power())
+        };
+        stolen
     }
 
     /// `SwipePower.Steal`, which remembers the deck card taken.
@@ -2161,7 +2175,8 @@ pub(crate) fn decide_hook(
             Power::InfestedPower
             | Power::StockPower
             | Power::AdaptablePower
-            | Power::SteamEruptionPower,
+            | Power::SteamEruptionPower
+            | Power::SurprisePower,
             DecisionHook::ShouldStopCombatFromEnding,
         ) => HookResponse::Decision(true),
         (power, hook) if hook.model_hook().is_some() => {
@@ -4571,6 +4586,26 @@ pub(crate) fn event_hook(
         {
             Some(HookEffect::Decrement)
         }
+        // `HeistPower.BeforeDeath`: a gold reward of its stack, the gold the
+        // Gremlin Merc stole, as its owner dies.
+        (Power::HeistPower, PowerAmount::Counted(amount), EventHook::BeforeDeath { creature })
+            if creature == holder =>
+        {
+            Some(HookEffect::AddGoldReward(amount))
+        }
+        (Power::HeistPower, _, EventHook::BeforeDeath { .. }) => None,
+        // `SurprisePower.AfterDeath`: the gremlins its owner leaves behind,
+        // which the fight carries out.
+        (
+            Power::SurprisePower,
+            _,
+            EventHook::AfterDeath {
+                creature,
+                removal_prevented: false,
+                ..
+            },
+        ) if creature == holder => Some(HookEffect::PerformDeath(Power::SurprisePower)),
+        (Power::SurprisePower, _, EventHook::AfterDeath { .. }) => None,
         // `SwipePower.BeforeDeath`, which hands the stolen card back as its
         // owner dies.
         (Power::SwipePower, _, EventHook::BeforeDeath { creature }) if creature == holder => {
@@ -5720,6 +5755,45 @@ pub(crate) fn event_hook(
         (power, _, hook) => unimplemented!("what {power:?} does for {hook:?}"),
     };
     asked.extend(effect);
+}
+
+/// A power's `AfterDeath`, run against the fight.
+///
+/// # Panics
+///
+/// A power whose death commands nobody has ported.
+pub(crate) fn perform_death<F: sts2_core::Fight<V>>(
+    power: Power,
+    holder: sts2_core::CombatId,
+    fight: &mut F,
+) {
+    use super::super::generated::monsters::Monster;
+
+    match power {
+        // `SurprisePower.AfterDeath`: a Sneaky Gremlin, then a Fat Gremlin,
+        // which takes a Heist of the gold each Thievery stole. Any gold at all
+        // marks the encounter's gold stolen.
+        Power::SurprisePower => {
+            fight.summon(Monster::SneakyGremlin, usize::MAX);
+            let fat = fight.summon(Monster::FatGremlin, usize::MAX);
+            let mut stolen = None;
+            fight.write_power(holder, Power::ThieveryPower, |state| {
+                stolen = Some(*state.stolen_gold());
+            });
+            if let Some(stolen) = stolen {
+                fight.apply_power_from(
+                    fat,
+                    Power::HeistPower,
+                    PowerAmount::Counted(stolen),
+                    Some(holder),
+                );
+                if stolen > 0 {
+                    fight.write_encounter(super::encounters::State::mark_gold_stolen);
+                }
+            }
+        }
+        power => unimplemented!("what {power:?} does as its owner dies"),
+    }
 }
 
 #[cfg(test)]

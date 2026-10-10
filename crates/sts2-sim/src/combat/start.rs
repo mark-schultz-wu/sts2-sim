@@ -93,6 +93,7 @@ pub(crate) fn enter<V: Rules>(
         history: super::live::CombatHistory::new(),
         kept: Vec::new(),
         encounter,
+        encounter_state: sts2_core::EncounterModel::new(encounter),
         cards: Cards::with_cards(0),
         removed_from_deck: Vec::new(),
         ending_turn: false,

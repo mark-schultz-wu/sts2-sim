@@ -293,3 +293,51 @@ fn punch_off<R: GameRng>(rng: &mut R) -> Vec<Spawned<V>> {
     };
     vec![first, second]
 }
+
+/// `EncounterModel`'s own fields, for the encounters that keep any.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum State {
+    /// An encounter that saves nothing.
+    Stateless,
+    /// `GremlinMercNormal.GoldWasStolen`.
+    GremlinMerc { gold_stolen: bool },
+}
+
+impl State {
+    /// `GremlinMercNormal.MarkGoldStolen`, which another encounter does not
+    /// have.
+    pub(crate) fn mark_gold_stolen(&mut self) {
+        if let Self::GremlinMerc { gold_stolen } = self {
+            *gold_stolen = true;
+        }
+    }
+}
+
+impl sts2_core::EncounterModel<V> for State {
+    fn new(encounter: Encounter) -> Self {
+        match encounter {
+            Encounter::GremlinMercNormal => Self::GremlinMerc { gold_stolen: false },
+            _ => Self::Stateless,
+        }
+    }
+}
+
+/// `CalculateGoldProportion`, which `GremlinMercNormal` alone overrides. The
+/// whole of it stands unless the Fat Gremlin escaped. Then it is half when
+/// nothing was stolen, and none when gold was.
+pub(crate) fn gold_proportion(
+    encounter: Encounter,
+    state: &State,
+    escaped: &[Monster],
+) -> Option<f32> {
+    match (encounter, *state) {
+        (Encounter::GremlinMercNormal, State::GremlinMerc { gold_stolen }) => Some(
+            match (escaped.contains(&Monster::FatGremlin), gold_stolen) {
+                (false, _) => 1.0,
+                (true, false) => 0.5,
+                (true, true) => 0.0,
+            },
+        ),
+        _ => None,
+    }
+}
