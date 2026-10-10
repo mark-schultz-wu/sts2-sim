@@ -159,6 +159,10 @@ impl sts2_core::Hooks for V0_107_1 {
             sts2_core::Listener::Card { card, .. } => {
                 unimplemented!("what {card:?} does for {hook:?}")
             }
+            // No potion in this build overrides a number's hook.
+            sts2_core::Listener::Potion(potion) => {
+                unimplemented!("what {potion:?} does for {hook:?}")
+            }
         }
     }
 
@@ -192,6 +196,7 @@ impl sts2_core::Hooks for V0_107_1 {
                 behaviour::powers::decide_hook(power, amount, held, state, hook)
             }
             sts2_core::Listener::Relic { state, .. } => behaviour::relics::decide_hook(state, hook),
+            sts2_core::Listener::Potion(potion) => behaviour::potions::decide_hook(potion, hook),
             sts2_core::Listener::Card {
                 card,
                 pile,
@@ -306,6 +311,14 @@ impl sts2_core::Hooks for V0_107_1 {
         asked: &mut sts2_core::HookEffects<Self>,
     ) {
         behaviour::relics::event_hook(state, hook, asked)
+    }
+
+    fn potion_event_hook(
+        potion: Self::Potion,
+        hook: sts2_core::EventHook<Self>,
+        asked: &mut sts2_core::HookEffects<Self>,
+    ) {
+        behaviour::potions::event_hook(potion, hook, asked)
     }
 
     fn monster_event_hook(

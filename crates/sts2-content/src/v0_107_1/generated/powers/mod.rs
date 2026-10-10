@@ -1827,7 +1827,7 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
         .with(sts2_core::ModelHook::BeforeHandDraw)
         .with(sts2_core::ModelHook::BeforeSideTurnEnd),
     // MOCK_PREVENT_DEATH_POWER
-    sts2_core::Overrides::NONE,
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ShouldDie),
     // MOCK_REMOVE_DRAWN_CARDS_FROM_COMBAT_POWER
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardDrawn),
     // MOCK_RESET_COMBAT_ON_SHUFFLE_POWER
@@ -1836,6 +1836,7 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
     sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::ModifyDamageMultiplicative)
         .with(sts2_core::ModelHook::ShouldAllowHitting)
+        .with(sts2_core::ModelHook::ShouldDie)
         .with(sts2_core::ModelHook::ShouldStopCombatFromEnding)
         .with(sts2_core::ModelHook::TryModifyPowerAmountReceived),
     // MOCK_SCALE_IN_MULTIPLAYER_POWER

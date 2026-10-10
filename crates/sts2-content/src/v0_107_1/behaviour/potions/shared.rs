@@ -35,6 +35,8 @@ const ENERGY: Number = 2;
 
 /// `ExplosiveAmpoule`'s `DamageVar(10, ValueProp.Unpowered)`.
 const EXPLOSIVE: Number = 10;
+/// `FairyInABottle`'s heal, three tenths of the maximum.
+const FAIRY_PERCENT: Number = 30;
 /// `FirePotion`'s `DamageVar(20, ValueProp.Unpowered)`.
 const FIRE: Number = 20;
 /// `FlexPotion`'s `PowerVar<StrengthPower>(5)`, lent until the turn ends.
@@ -112,6 +114,19 @@ pub enum Resume {
 /// A potion of this pool nobody has ported.
 pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
     match potion {
+        // `CreatureCmd.Heal` on the creature it saved, by
+        // `Math.Max(MaxHp * 0.3m, 1m)`, which `SetCurrentHpInternal`
+        // truncates.
+        Potion::FairyInABottle => {
+            let saved = fight.actor();
+            let max_hp: Number = fight
+                .creatures()
+                .find(|creature| creature.id() == saved)
+                .map(|creature| Number::from(creature.max_hp()))
+                .expect("the creature a fairy saves stands in the fight");
+            fight.heal(saved, (max_hp * FAIRY_PERCENT / 100).max(1));
+            Played::Done
+        }
         // `AnyPlayer`, and `CreatureCmd.GainBlock` with no card play. The
         // block is unpowered, which no block listener this build fields reads.
         Potion::BlockPotion => {

@@ -1594,7 +1594,7 @@ fn finish_effect<V: Rules, S: LendsCombat>(
                 relics,
                 sts2_core::EventHook::PotionUsed {
                     in_fight: true,
-                    holding_potions: next.potions > 0,
+                    holding_potions: !next.potions.is_empty(),
                 },
             );
             if !asked.is_empty() {

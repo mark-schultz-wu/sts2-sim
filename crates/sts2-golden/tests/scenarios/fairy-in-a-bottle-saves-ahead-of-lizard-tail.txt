@@ -1,0 +1,13 @@
+# Fairy in a Bottle keeps its owner alive ahead of Lizard Tail. A Nibbit
+# with 70 more Strength hits for 82, past the Ironclad's 80. The Fairy
+# leaves the belt, the Block Potion before it stays, and its owner stands
+# at three tenths of 80.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"LIZARD_TAIL"}
+{"cmd":"grant","potion":"BLOCK_POTION"}
+{"cmd":"grant","potion":"FAIRY_IN_A_BOTTLE"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":70,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"end_turn"}

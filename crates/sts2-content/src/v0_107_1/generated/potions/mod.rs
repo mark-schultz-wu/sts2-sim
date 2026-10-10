@@ -577,7 +577,145 @@ impl sts2_core::PotionTable for Potion {
             Field::Computed => unimplemented!("whether {self:?} can be made mid-fight"),
         }
     }
+
+    fn overrides(self) -> sts2_core::Overrides {
+        OVERRIDES[self as usize]
+    }
 }
+
+/// The hooks each class overrides, from `hooks.txt`, indexed by the potion's discriminant.
+static OVERRIDES: [sts2_core::Overrides; 65] = [
+    // ASHWATER
+    sts2_core::Overrides::NONE,
+    // ATTACK_POTION
+    sts2_core::Overrides::NONE,
+    // BEETLE_JUICE
+    sts2_core::Overrides::NONE,
+    // BLESSING_OF_THE_FORGE
+    sts2_core::Overrides::NONE,
+    // BLOCK_POTION
+    sts2_core::Overrides::NONE,
+    // BLOOD_POTION
+    sts2_core::Overrides::NONE,
+    // BONE_BREW
+    sts2_core::Overrides::NONE,
+    // BOTTLED_POTENTIAL
+    sts2_core::Overrides::NONE,
+    // CLARITY
+    sts2_core::Overrides::NONE,
+    // COLORLESS_POTION
+    sts2_core::Overrides::NONE,
+    // COSMIC_CONCOCTION
+    sts2_core::Overrides::NONE,
+    // CUNNING_POTION
+    sts2_core::Overrides::NONE,
+    // CURE_ALL
+    sts2_core::Overrides::NONE,
+    // DEPRECATED_POTION
+    sts2_core::Overrides::NONE,
+    // DEXTERITY_POTION
+    sts2_core::Overrides::NONE,
+    // DISTILLED_CHAOS
+    sts2_core::Overrides::NONE,
+    // DROPLET_OF_PRECOGNITION
+    sts2_core::Overrides::NONE,
+    // DUPLICATOR
+    sts2_core::Overrides::NONE,
+    // ENERGY_POTION
+    sts2_core::Overrides::NONE,
+    // ENTROPIC_BREW
+    sts2_core::Overrides::NONE,
+    // ESSENCE_OF_DARKNESS
+    sts2_core::Overrides::NONE,
+    // EXPLOSIVE_AMPOULE
+    sts2_core::Overrides::NONE,
+    // FAIRY_IN_A_BOTTLE
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ShouldDie),
+    // FIRE_POTION
+    sts2_core::Overrides::NONE,
+    // FLEX_POTION
+    sts2_core::Overrides::NONE,
+    // FOCUS_POTION
+    sts2_core::Overrides::NONE,
+    // FORTIFIER
+    sts2_core::Overrides::NONE,
+    // FOUL_POTION
+    sts2_core::Overrides::NONE,
+    // FRUIT_JUICE
+    sts2_core::Overrides::NONE,
+    // FYSH_OIL
+    sts2_core::Overrides::NONE,
+    // GAMBLERS_BREW
+    sts2_core::Overrides::NONE,
+    // GHOST_IN_A_JAR
+    sts2_core::Overrides::NONE,
+    // GIGANTIFICATION_POTION
+    sts2_core::Overrides::NONE,
+    // GLOWWATER_POTION
+    sts2_core::Overrides::NONE,
+    // HEART_OF_IRON
+    sts2_core::Overrides::NONE,
+    // KINGS_COURAGE
+    sts2_core::Overrides::NONE,
+    // LIQUID_BRONZE
+    sts2_core::Overrides::NONE,
+    // LIQUID_MEMORIES
+    sts2_core::Overrides::NONE,
+    // LUCKY_TONIC
+    sts2_core::Overrides::NONE,
+    // MAZALETHS_GIFT
+    sts2_core::Overrides::NONE,
+    // MOCK_DISCARD_AND_ADD_SHIVS_POTION
+    sts2_core::Overrides::NONE,
+    // OROBIC_ACID
+    sts2_core::Overrides::NONE,
+    // POISON_POTION
+    sts2_core::Overrides::NONE,
+    // POTION_OF_BINDING
+    sts2_core::Overrides::NONE,
+    // POTION_OF_CAPACITY
+    sts2_core::Overrides::NONE,
+    // POTION_OF_DOOM
+    sts2_core::Overrides::NONE,
+    // POTION_SHAPED_ROCK
+    sts2_core::Overrides::NONE,
+    // POT_OF_GHOULS
+    sts2_core::Overrides::NONE,
+    // POWDERED_DEMISE
+    sts2_core::Overrides::NONE,
+    // POWER_POTION
+    sts2_core::Overrides::NONE,
+    // RADIANT_TINCTURE
+    sts2_core::Overrides::NONE,
+    // REGEN_POTION
+    sts2_core::Overrides::NONE,
+    // SHACKLING_POTION
+    sts2_core::Overrides::NONE,
+    // SHIP_IN_A_BOTTLE
+    sts2_core::Overrides::NONE,
+    // SKILL_POTION
+    sts2_core::Overrides::NONE,
+    // SNECKO_OIL
+    sts2_core::Overrides::NONE,
+    // SOLDIERS_STEW
+    sts2_core::Overrides::NONE,
+    // SPEED_POTION
+    sts2_core::Overrides::NONE,
+    // STABLE_SERUM
+    sts2_core::Overrides::NONE,
+    // STAR_POTION
+    sts2_core::Overrides::NONE,
+    // STRENGTH_POTION
+    sts2_core::Overrides::NONE,
+    // SWIFT_POTION
+    sts2_core::Overrides::NONE,
+    // TOUCH_OF_INSANITY
+    sts2_core::Overrides::NONE,
+    // VULNERABLE_POTION
+    sts2_core::Overrides::NONE,
+    // WEAK_POTION
+    sts2_core::Overrides::NONE,
+];
 /// The potions a pool stocks, in the order the game enumerates them.
 ///
 /// `PotionPoolModel.AllPotions`, which a reward indexes into after

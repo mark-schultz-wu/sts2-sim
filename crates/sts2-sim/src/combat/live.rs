@@ -23,6 +23,7 @@ use sts2_core::{
 use super::monster::Machine;
 use super::powers::{PowerStore, Powers as _};
 use crate::bounded::Bounded;
+use crate::run::BELT;
 
 /// The powers that skip their next tick, by the creature holding each.
 pub(super) type Skips<V> = Bounded<(CombatId, <V as sts2_core::ContentVersion>::Power), SKIPS>;
@@ -2091,6 +2092,66 @@ pub(crate) enum ExtraReward<V: Rules> {
     Card,
 }
 
+/// The run's potions, in slot order, as the fight reads and spends them.
+#[derive(Debug)]
+pub(crate) struct PotionBelt<V: Rules> {
+    held: Bounded<V::Potion, BELT>,
+    /// Every hook a held potion's class overrides, kept with `held`.
+    hooks: sts2_core::Overrides,
+    /// Where each potion spent since the run last looked stood.
+    spent: Bounded<u8, BELT>,
+}
+
+impl<V: Rules> Clone for PotionBelt<V> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<V: Rules> Copy for PotionBelt<V> {}
+
+impl<V: Rules> PotionBelt<V> {
+    pub(super) fn holding(potions: &[V::Potion]) -> Self {
+        Self {
+            held: potions.iter().copied().collect(),
+            hooks: hooks_of::<V>(potions),
+            spent: Bounded::new(),
+        }
+    }
+
+    pub(super) fn is_empty(&self) -> bool {
+        self.held.is_empty()
+    }
+
+    /// The potions in slot order.
+    pub(super) fn held(&self) -> &[V::Potion] {
+        &self.held
+    }
+
+    /// Whether some potion's class overrides one of `hooks`.
+    pub(super) fn hears(&self, hooks: sts2_core::Overrides) -> bool {
+        self.hooks.intersects(hooks)
+    }
+
+    /// `RemoveBeforeUse` on the potion at `at`.
+    pub(super) fn spend(&mut self, at: usize) -> V::Potion {
+        let potion = self.held.remove(at);
+        self.hooks = hooks_of::<V>(&self.held);
+        self.spent
+            .push(u8::try_from(at).expect("a belt slot fits a byte"));
+        potion
+    }
+}
+
+/// Every hook one of `potions` overrides.
+fn hooks_of<V: Rules>(potions: &[V::Potion]) -> sts2_core::Overrides {
+    potions
+        .iter()
+        .fold(sts2_core::Overrides::NONE, |hooks, potion| {
+            hooks.union(sts2_core::PotionTable::overrides(*potion))
+        })
+}
+
 /// A fight in progress.
 #[derive(Debug)]
 pub(crate) struct Live<V: Rules> {
@@ -2105,9 +2166,9 @@ pub(crate) struct Live<V: Rules> {
     /// The player's `Gold`, which the fight holds while it runs. The run
     /// takes it back after each step.
     pub(super) gold: V::Number,
-    /// How many potions the player's belt holds. The belt is the run's, and
-    /// the run keeps this in step with it while the fight lasts.
-    pub(super) potions: u8,
+    /// The player's potions. The belt is the run's, and the run keeps this
+    /// in step with it while the fight lasts.
+    pub(super) potions: PotionBelt<V>,
     pub(super) round: V::Count,
     /// `ICombatState.CurrentSide`: whose turn it is.
     pub(super) side: V::CombatSide,
@@ -2610,8 +2671,14 @@ impl<V: Rules> Live<V> {
     }
 
     /// The run's belt, which now holds `potions`.
-    pub(crate) fn hold_potions(&mut self, potions: u8) {
-        self.potions = potions;
+    pub(crate) fn hold_potions(&mut self, potions: &[V::Potion]) {
+        self.potions = PotionBelt::holding(potions);
+    }
+
+    /// Where in the belt each potion the fight spent stood, in the order it
+    /// spent them, for the run to take out of its own.
+    pub(crate) fn take_spent_potions(&mut self) -> Bounded<u8, BELT> {
+        std::mem::take(&mut self.potions.spent)
     }
 
     /// The player's `Gold` as the fight left it.
@@ -3295,7 +3362,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             energy: 3,
             stars: 0,
             gold: 0,
-            potions: 0,
+            potions: PotionBelt::holding(&[]),
             round: 1,
             side: CombatSide::Player,
             history: CombatHistory::new(),
