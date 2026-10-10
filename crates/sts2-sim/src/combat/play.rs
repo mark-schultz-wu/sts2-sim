@@ -1418,8 +1418,9 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                     effect.ended = effect.ended.or(board.ended());
                     let skipped = std::mem::take(&mut board.skipped);
                     merge::<V>(&mut next.skip_tick, skipped);
+                    // The model is the card's, wherever its play put it.
                     next.cards
-                        .write_in_play(card, |face| face.set_enchantment_state(state));
+                        .write_named(card, |face| face.set_enchantment_state(state));
                 }
                 let ended = finished::<V, _>(
                     Fighting {
@@ -1790,11 +1791,13 @@ fn finished<V: Rules, S: LendsCombat>(
                     super::listen::Listener::Card { id },
                     sts2_core::HookEffect::ModifySelf { change, lasting },
                 ) => next.modify_self(id, change, lasting),
-                // The card is still in the play pile until its play is over.
+                // Written on the card wherever it stands. A play can move the
+                // card out of the play pile before it is over, as Shining
+                // Strike does.
                 (
                     super::listen::Listener::Card { id },
                     sts2_core::HookEffect::DisableOwnEnchantment,
-                ) => next.cards.write_in_play(id, |face| {
+                ) => next.cards.write_named(id, |face| {
                     face.set_enchantment_status(sts2_core::EnchantmentStatus::Disabled)
                 }),
                 (
@@ -1802,7 +1805,7 @@ fn finished<V: Rules, S: LendsCombat>(
                     sts2_core::HookEffect::RaiseOwnEnchantment { by, write },
                 ) => {
                     next.cards
-                        .write_in_play(id, |face| face.raise_enchantment(by));
+                        .write_named(id, |face| face.raise_enchantment(by));
                     if let Some(card) = next.deck_versions.of(id) {
                         next.for_run
                             .push(sts2_core::HookEffect::WriteDeckCard { card, write });
