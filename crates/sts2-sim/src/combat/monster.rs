@@ -125,6 +125,7 @@ pub(crate) fn initialize<V: Rules>(
             monster,
             opens_on,
             slot,
+            written,
         },
     ) in monsters.iter().enumerate()
     {
@@ -161,7 +162,10 @@ pub(crate) fn initialize<V: Rules>(
                 .any(|free| monsters.iter().all(|spawned| spawned.slot != Some(free))),
         };
         let mut machine = V::opening_move_machine(monster, opens_on);
-        let state = sts2_core::MonsterModel::new(monster);
+        let state = match written {
+            Some(written) => sts2_core::MonsterModel::written(monster, written),
+            None => sts2_core::MonsterModel::new(monster),
+        };
         let opening = V::roll_monster_move(
             monster,
             ascension,
@@ -210,8 +214,9 @@ pub(crate) fn initialize<V: Rules>(
 /// powers, and its opponents theirs. `SetUpCombat` only queues it, so it runs
 /// after `AfterRoomEntered`.
 ///
-/// Each monster then reads its row's health and writes its own. No power
-/// reads another creature, so the two passes' order cannot be seen.
+/// Each monster then reads its row's health and writes its own, and then its
+/// current hit points alone. No power reads another creature, so the passes'
+/// order cannot be seen.
 pub(crate) fn added_to_room<V: Rules>(
     ascension: V::AscensionLevel,
     creatures: &mut Creatures<V>,
@@ -259,6 +264,17 @@ pub(crate) fn added_to_room<V: Rules>(
         creatures[at].max_hp = health;
         creatures[at].hp = health;
     }
+    for held in machines.iter() {
+        let Some(at) = creatures
+            .iter()
+            .position(|creature| creature.id == held.creature)
+        else {
+            continue;
+        };
+        if let Some(hp) = V::monster_hp_after_added(held.monster, &held.state, creatures[at].hp) {
+            creatures[at].hp = hp;
+        }
+    }
 }
 
 /// Add a monster during a fight, before the enemy side prepares its next
@@ -277,6 +293,7 @@ pub(super) fn summon<V: Rules>(
             monster,
             opens_on: None,
             slot,
+            written: None,
         },
         sts2_core::MonsterModel::new(monster),
         position,
@@ -293,10 +310,12 @@ pub(super) fn summon_built<V: Rules>(
     position: usize,
     niche: &mut MegaRng,
 ) -> CombatId {
+    // What the roster wrote is already on `state`.
     let sts2_core::Spawned {
         monster,
         opens_on,
         slot,
+        written: _,
     } = spawned;
     let encounter = live.encounter;
     let Some(roster_size) = live

@@ -91,7 +91,7 @@ impl EventBehavior<V> for DenseVegetation {
                 state.chosen = NonMaxU8::new(option);
                 smallvec::smallvec![HookEffect::FightInEvent {
                     encounter: Encounter::DenseVegetationEventEncounter,
-                    reward: None,
+                    rewards: &[],
                     roster: &[],
                     resume: false,
                 }]

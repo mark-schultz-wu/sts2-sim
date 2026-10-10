@@ -35,8 +35,7 @@ pub(super) fn starting_powers(
         Monster::Stabbot | Monster::Guardbot | Monster::Noisebot => Vec::new(),
         Monster::TheLost => vec![(Power::PossessStrengthPower, PowerAmount::Counted(1))],
         Monster::TheForgotten => vec![(Power::PossessSpeedPower, PowerAmount::Counted(1))],
-        // Its `StartingHpReduction` is nothing outside the Punch-Off event's
-        // encounter, which rolls it.
+        // Artifact, then the hit points `hp_after_added` takes off.
         Monster::PunchConstruct => vec![(Power::ArtifactPower, PowerAmount::Counted(1))],
         // `WitheringPresencePower` on itself for each opponent, which the one
         // player is, then Artifact.
@@ -594,5 +593,18 @@ pub(super) fn computed_damage<P: sts2_core::Printed<V> + ?Sized>(
             (if deadly { 15 } else { 13 }) + held(Power::DexterityPower)
         }
         (monster, move_id) => unimplemented!("the damage {monster:?} works out for {move_id:?}"),
+    }
+}
+
+/// `PunchConstruct.AfterAddedToRoom`: `Math.Max(1, CurrentHp -
+/// StartingHpReduction)` where the roster wrote a reduction.
+pub(super) fn hp_after_added(monster: Monster, model: &super::Model, hp: i32) -> Option<i32> {
+    match (monster, *model) {
+        (Monster::PunchConstruct, super::Model::PunchConstruct { hp_reduction })
+            if hp_reduction > 0 =>
+        {
+            Some((hp - i32::from(hp_reduction)).max(1))
+        }
+        _ => None,
     }
 }

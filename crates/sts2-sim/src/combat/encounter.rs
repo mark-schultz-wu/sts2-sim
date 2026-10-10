@@ -24,6 +24,7 @@ pub(crate) fn opening<V: Rules>(
                 monster: entry.monster,
                 opens_on: entry.opens,
                 slot: entry.slot,
+                written: None,
             })
             .collect()),
         EncounterRoster::Random => {
@@ -113,12 +114,5 @@ mod unported_tests {
     #[should_panic(expected = "an encounter whose caller supplies its roster")]
     fn a_configured_roster_stops_the_run() {
         let _ = opening::<V0_107_1>(123, 2, Encounter::BattlewornDummyEventEncounter, &[]);
-    }
-
-    /// So is a roster this build rolls that the port has not reached.
-    #[test]
-    #[should_panic(expected = "the roster")]
-    fn an_unported_random_roster_stops_the_run() {
-        let _ = opening::<V0_107_1>(123, 2, Encounter::PunchOffEventEncounter, &[]);
     }
 }

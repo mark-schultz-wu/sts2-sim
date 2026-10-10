@@ -1,7 +1,7 @@
 //! The Lantern Key: gold for the key, or a fight for it.
 
 use nonmax::NonMaxU8;
-use sts2_core::{EventBehavior, EventView, HookEffect, HookEffects, Room};
+use sts2_core::{CustomReward, EventBehavior, EventView, HookEffect, HookEffects, Room};
 
 use super::super::super::V0_107_1 as V;
 use super::super::super::generated::cards::{Cards, QuestCard};
@@ -78,7 +78,9 @@ impl EventBehavior<V> for TheLanternKey {
                 state.chosen = NonMaxU8::new(option);
                 smallvec::smallvec![HookEffect::FightInEvent {
                     encounter: Encounter::MysteriousKnightEventEncounter,
-                    reward: Some(Cards::Quest(QuestCard::LanternKey)),
+                    rewards: &[CustomReward::SpecialCard(Cards::Quest(
+                        QuestCard::LanternKey
+                    ))],
                     roster: &[],
                     resume: false,
                 }]

@@ -2090,6 +2090,11 @@ pub(crate) enum ExtraReward<V: Rules> {
     Returned(sts2_core::DeckCardId),
     /// A `CardReward` at `CardCreationOptions.ForRoom` of the fight's room.
     Card,
+    /// `RelicReward(player)`: the next relic from the front of the bag, at a
+    /// rolled rarity.
+    Relic,
+    /// `PotionReward(player)`: a random potion out of combat.
+    Potion,
 }
 
 /// The run's potions, in slot order, as the fight reads and spends them.
@@ -2722,10 +2727,10 @@ impl<V: Rules> Live<V> {
         &self.taken_from_deck
     }
 
-    /// `CombatRoom.AddExtraReward` of a special card, which an event does as
-    /// it builds its fight's room.
-    pub(crate) fn add_extra_card(&mut self, card: CardIdent<V>) {
-        self.extra_rewards.push(ExtraReward::SpecialCard(card));
+    /// `CombatRoom.AddExtraReward`, which an event does as it builds its
+    /// fight's room.
+    pub(crate) fn add_extra_reward(&mut self, reward: ExtraReward<V>) {
+        self.extra_rewards.push(reward);
     }
 
     /// The rewards this fight offers beside the room's own once it is won,

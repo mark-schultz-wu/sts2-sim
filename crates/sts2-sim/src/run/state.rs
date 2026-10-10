@@ -2974,6 +2974,11 @@ impl<V: Rules> State<V> {
                     potion: crate::reward::potion::rolled::<V, _>(rng, character),
                     taken: false,
                 },
+                CustomReward::SpecialCard(card) => Offer::SpecialCard {
+                    card: CardIdent::new(card),
+                    state: <V::CardState as sts2_core::CardModel<V>>::new(card),
+                    taken: false,
+                },
             });
         }
         self.reward_offers(&mut offered);
@@ -4544,7 +4549,7 @@ impl<V: Rules> State<V> {
     fn fight_in_event(
         &mut self,
         encounter: V::Encounter,
-        reward: Option<V::Card>,
+        rewards: &[sts2_core::CustomReward<V>],
         roster: &[V::Monster],
         resume: bool,
     ) -> Result<Decided, Error> {
@@ -4570,8 +4575,15 @@ impl<V: Rules> State<V> {
         };
         let mut live = live;
         // `AddExtraReward`, as the room is built and before the fight opens.
-        if let Some(card) = reward {
-            live.add_extra_card(CardIdent::new(card));
+        for &reward in rewards {
+            live.add_extra_reward(match reward {
+                sts2_core::CustomReward::SpecialCard(card) => {
+                    crate::combat::ExtraReward::SpecialCard(CardIdent::new(card))
+                }
+                sts2_core::CustomReward::RolledRelic => crate::combat::ExtraReward::Relic,
+                sts2_core::CustomReward::Potion => crate::combat::ExtraReward::Potion,
+                reward => unimplemented!("{reward:?} among a fight's extra rewards"),
+            });
         }
         self.drew(streams);
         let event = std::mem::replace(&mut self.phase, Phase::Combat(live));
@@ -4842,13 +4854,13 @@ impl<V: Rules> State<V> {
             if let [
                 sts2_core::HookEffect::FightInEvent {
                     encounter,
-                    reward,
+                    rewards,
                     roster,
                     resume,
                 },
             ] = effects.as_slice()
             {
-                return self.fight_in_event(*encounter, *reward, roster, *resume);
+                return self.fight_in_event(*encounter, rewards, roster, *resume);
             }
             return Ok(match self.carry_out(effects) {
                 None => Decided::Resolved,
