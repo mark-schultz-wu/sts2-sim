@@ -37,6 +37,31 @@ fn test_only(name: &str) -> bool {
     name.starts_with("Mock") || name.starts_with("Deprecated")
 }
 
+/// Content no run with one player can meet, with what keeps it out. The
+/// counts leave each out, the way they leave out the multiplayer-only cards.
+const SINGLE_PLAYER_UNREACHABLE: [(&str, &str); 6] = [
+    ("MassiveScroll", "its IsAllowed needs more than one player"),
+    ("GravityPower", "no model applies it"),
+    ("LeadershipPower", "no model applies it"),
+    ("MagicBombPower", "no model applies it"),
+    (
+        "GuardedPower",
+        "Tank gives it only to a player other than its owner",
+    ),
+    (
+        "InterceptPower",
+        "Covered gives it, from the multiplayer-only Intercept",
+    ),
+];
+
+/// Whether a row names content [`SINGLE_PLAYER_UNREACHABLE`] lists.
+fn unreachable_alone(name: &str) -> bool {
+    let name = camel(name);
+    SINGLE_PLAYER_UNREACHABLE
+        .iter()
+        .any(|(listed, _)| *listed == name)
+}
+
 /// How many of the powers holding the most back the report names.
 const BLOCKERS: usize = 15;
 
@@ -475,6 +500,9 @@ pub fn run(args: Args) -> Result<String, Error> {
             skipped += 1;
             continue;
         }
+        if unreachable_alone(relic) {
+            continue;
+        }
         let entry = pools.entry(pool.clone()).or_default();
         entry.1 += 1;
         match ported_relics.contains(camel(relic).as_str()) {
@@ -532,6 +560,7 @@ pub fn run(args: Args) -> Result<String, Error> {
                 skipped += 1;
                 false
             }
+            Some(power) => !unreachable_alone(power),
             _ => true,
         })
         .collect();
@@ -560,6 +589,9 @@ pub fn run(args: Args) -> Result<String, Error> {
          {multiplayer_skipped} cards only a run with more than one player offers"
     )
     .unwrap();
+    for (name, why) in SINGLE_PLAYER_UNREACHABLE {
+        writeln!(out, "  {name}: {why}").unwrap();
+    }
 
     let mut blocking: Vec<_> = blocking.into_iter().collect();
     blocking.sort_by_key(|(power, count)| (std::cmp::Reverse(*count), power.clone()));

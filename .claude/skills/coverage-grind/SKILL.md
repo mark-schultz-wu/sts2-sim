@@ -119,8 +119,8 @@ number.
 
 - An item belongs out of the count rather than ported, as content the
   game can never offer. The tool already leaves out the `Mock` and
-  `Deprecated` models, and the cards only a run with more than one
-  player offers.
+  `Deprecated` models and the cards only a multiplayer run offers. It
+  also leaves out what `SINGLE_PLAYER_UNREACHABLE` names, each with why.
 - A port needs a design change to core types beyond what it needs.
 - The oracle cannot record the scenario, and the fix to the mod is
   unclear.
