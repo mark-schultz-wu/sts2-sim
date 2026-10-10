@@ -659,6 +659,9 @@ impl State {
     }
 }
 
+/// `TriggerAboutToBlowState`'s `SetMaxAndCurrentHp`.
+const ABOUT_TO_BLOW_HP: Number = 999_999_999;
+
 /// `CreatureCmd.Stun`'s own state, which advertises a stunned turn.
 fn stunned(then: sts2_core::StunResume) -> sts2_core::HookEffect<V> {
     sts2_core::HookEffect::StunOwner {
@@ -2073,7 +2076,8 @@ pub(crate) fn decide_hook(
             | Power::ReattachPower
             | Power::DieForYouPower
             | Power::AdaptablePower
-            | Power::PainfulStabsPower,
+            | Power::PainfulStabsPower
+            | Power::SteamEruptionPower,
             DecisionHook::ShouldRemoveCreatureAfterDeath { creature },
         ) => HookResponse::Decision(creature != held.holder),
         // `OwnerIsSecondaryEnemy`.
@@ -2093,7 +2097,8 @@ pub(crate) fn decide_hook(
             | Power::MinionPower
             | Power::DieForYouPower
             | Power::AdaptablePower
-            | Power::PainfulStabsPower,
+            | Power::PainfulStabsPower
+            | Power::SteamEruptionPower,
             DecisionHook::ShouldRemoveSelfAfterOwnerDeath,
         ) => HookResponse::Decision(false),
         // `IllusionPower.ShouldPowerBeRemovedOnDeath`, which reads the power
@@ -2153,7 +2158,10 @@ pub(crate) fn decide_hook(
         // `InfestedPower.ShouldStopCombatFromEnding` and `StockPower`'s, for as
         // long as it is on a creature in the fight.
         (
-            Power::InfestedPower | Power::StockPower | Power::AdaptablePower,
+            Power::InfestedPower
+            | Power::StockPower
+            | Power::AdaptablePower
+            | Power::SteamEruptionPower,
             DecisionHook::ShouldStopCombatFromEnding,
         ) => HookResponse::Decision(true),
         (power, hook) if hook.model_hook().is_some() => {
@@ -3869,6 +3877,28 @@ pub(crate) fn event_hook(
             state.set_reviving(true);
             Some(HookEffect::InstallMove(&REVIVE))
         }
+        // `SteamEruptionPower.AfterDeath`: the Waterfall Giant's
+        // `TriggerAboutToBlowState`. It comes back at 999999999 health, and is
+        // sent to About to Blow, forced over whatever it advertised.
+        (
+            Power::SteamEruptionPower,
+            _,
+            EventHook::AfterDeath {
+                creature,
+                removal_prevented: false,
+                ..
+            },
+        ) if creature == holder => {
+            asked.extend([
+                HookEffect::SetMaxAndCurrentHp(ABOUT_TO_BLOW_HP),
+                HookEffect::EnterMove {
+                    to: MoveId::AboutToBlowMove,
+                    force: true,
+                },
+            ]);
+            return;
+        }
+        (Power::SteamEruptionPower, _, EventHook::AfterDeath { .. }) => None,
         // `AdaptablePower.AfterDeath`: a Test Subject that dies is sent to
         // its respawn, forced over a stun. `TriggerDeadState` also counts the
         // kill for the run's title, which nothing here reads.

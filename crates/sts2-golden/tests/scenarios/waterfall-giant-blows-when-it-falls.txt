@@ -1,0 +1,26 @@
+# The Waterfall Giant pressurizes, then cycles Stomp, Ram, Siphon,
+# Pressure Gun and Pressure Up, each building three Steam Eruption. Its
+# Siphon heals ten of the eighteen that three strikes took. Its second
+# Pressure Gun hits five harder than its first. Killed, it comes
+# back at 999999999 health about to blow. It turns the Steam Eruption into
+# its Explode's damage, explodes, and dies.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"WATERFALL_GIANT_BOSS"}
+{"cmd":"power","power":"PLATING_POWER","amount":200,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":2,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":500,"target":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

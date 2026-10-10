@@ -1545,6 +1545,12 @@ impl<'a, V: Rules> Board<'a, V> {
         if kept {
             let ascension = self.live.ascension;
             for effect in after_death {
+                if let sts2_core::HookEffect::SetMaxAndCurrentHp(hp) = effect {
+                    let hp = num_traits::cast(hp)
+                        .unwrap_or_else(|| unimplemented!("{hp:?} hit points, which is no health"));
+                    sts2_core::Fight::set_max_and_current_hp(self, id, hp);
+                    continue;
+                }
                 let held = self
                     .live
                     .machines
@@ -3426,8 +3432,17 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     fn set_max_and_current_hp(&mut self, creature: CombatId, hp: V::Health) {
         self.ran_on();
         let Some(at) = self.at(creature) else { return };
+        let before = self.live.creatures[at].hp;
         self.live.creatures[at].max_hp = hp;
+        // `SetCurrentHp`, which brings a dead creature back above zero and
+        // tells its listeners what changed.
         self.live.creatures[at].hp = hp;
+        self.live.creatures[at].alive = hp > V::Health::zero();
+        if hp != before {
+            let delta: V::Number = num_traits::cast(hp - before)
+                .unwrap_or_else(|| unimplemented!("a change of {hp:?} hit points"));
+            self.current_hp_changed(creature, delta);
+        }
     }
 
     fn niche_int(&mut self, min: V::Number, max: V::Number) -> V::Number {

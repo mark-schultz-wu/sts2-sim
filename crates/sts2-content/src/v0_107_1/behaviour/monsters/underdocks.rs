@@ -33,6 +33,12 @@ const CLAM_PLATING_TOUGH: Number = 9;
 /// `FossilStalker.AfterAddedToRoom`'s Suck.
 const STALKER_SUCK: Number = 3;
 
+/// `WaterfallGiant.PressureGunIncrease`.
+const GIANT_GUN_RAISE: i32 = 5;
+
+/// The Steam Eruption each Waterfall Giant attack and its Siphon build.
+const GIANT_STEAM: Number = 3;
+
 /// `SoulFysh.FadeMove`'s Intangible, and `ScreamMoveAmount`'s Vulnerable.
 const FYSH_FADE: Number = 2;
 const FYSH_SCREAM: Number = 3;
@@ -82,8 +88,9 @@ pub(super) fn starting_powers(
                 false => RAVENOUS,
             }),
         )],
-        // Each override calls the base and nothing else.
-        Monster::Seapunk | Monster::TwoTailedRat => Vec::new(),
+        // Each override calls the base and nothing else. The Waterfall Giant's
+        // also sets its Pressure Gun's damage, which its model counts from.
+        Monster::Seapunk | Monster::TwoTailedRat | Monster::WaterfallGiant => Vec::new(),
         Monster::SewerClam => vec![(
             Power::PlatingPower,
             PowerAmount::Counted(match ascension.has(AscensionLevel::ToughEnemies) {
@@ -176,6 +183,85 @@ pub(super) fn perform<F: Fight<V>>(
             fight.apply_to_opponents(Power::FrailPower, PowerAmount::Counted(SCREECH_FRAIL));
         }
         (Monster::TwoTailedRat, MoveId::CallForBackupMove) => call_for_backup(fight),
+        // `PressurizeMove`: Steam Eruption on itself.
+        (Monster::WaterfallGiant, MoveId::PressurizeMove) => {
+            let steam = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
+                true => 20,
+                false => 15,
+            };
+            fight.apply_to_actor(Power::SteamEruptionPower, PowerAmount::Counted(steam));
+        }
+        // `RamMove` and `PressureUpMove`: the hit, then three Steam Eruption.
+        (Monster::WaterfallGiant, MoveId::RamMove | MoveId::PressureUpMove) => {
+            if super::attack_first(fight, step) {
+                return Some(1);
+            }
+            fight.apply_to_actor(Power::SteamEruptionPower, PowerAmount::Counted(GIANT_STEAM));
+        }
+        // `StompMove`: the hit, a Weak on each target, then three Steam
+        // Eruption.
+        (Monster::WaterfallGiant, MoveId::StompMove) => {
+            if super::attack_first(fight, step) {
+                return Some(1);
+            }
+            fight.apply_to_opponents(Power::WeakPower, PowerAmount::Counted(1));
+            fight.apply_to_actor(Power::SteamEruptionPower, PowerAmount::Counted(GIANT_STEAM));
+        }
+        // `SiphonMove`: `SiphonHeal` for each player, of which a fight here
+        // has one, then three Steam Eruption.
+        (Monster::WaterfallGiant, MoveId::SiphonMove) => {
+            let heal = match fight.ascension().has(AscensionLevel::ToughEnemies) {
+                true => 15,
+                false => 10,
+            };
+            let giant = fight.actor();
+            fight.heal(giant, heal);
+            fight.apply_to_actor(Power::SteamEruptionPower, PowerAmount::Counted(GIANT_STEAM));
+        }
+        // `PressureGunMove`: the hit, five more on the next, then three Steam
+        // Eruption.
+        (Monster::WaterfallGiant, MoveId::PressureGunMove) => {
+            if super::attack_first(fight, step) {
+                return Some(1);
+            }
+            fight.model(|model| {
+                let super::Model::WaterfallGiant { gun_raises, .. } = model else {
+                    unreachable!("a Waterfall Giant's model is its own")
+                };
+                *gun_raises += 1;
+            });
+            fight.apply_to_actor(Power::SteamEruptionPower, PowerAmount::Counted(GIANT_STEAM));
+        }
+        // `AboutToBlowMove`: the Steam Eruption it built becomes the damage
+        // its Explode deals, and comes off.
+        (Monster::WaterfallGiant, MoveId::AboutToBlowMove) => {
+            use sts2_core::CreatureView as _;
+
+            let giant = fight.actor();
+            let built = fight
+                .creatures()
+                .find(|creature| creature.id() == giant)
+                .and_then(|creature| creature.power(Power::SteamEruptionPower))
+                .map_or(0, |amount| match amount {
+                    PowerAmount::Counted(amount) => amount,
+                    PowerAmount::Endless => unimplemented!("an endless Steam Eruption"),
+                });
+            fight.model(|model| {
+                let super::Model::WaterfallGiant { eruption, .. } = model else {
+                    unreachable!("a Waterfall Giant's model is its own")
+                };
+                *eruption = built;
+            });
+            fight.remove_power(giant, Power::SteamEruptionPower);
+        }
+        // `ExplodeMove`: the hit, then `CreatureCmd.Kill` on itself.
+        (Monster::WaterfallGiant, MoveId::ExplodeMove) => {
+            if super::attack_first(fight, step) {
+                return Some(1);
+            }
+            let giant = fight.actor();
+            fight.kill(giant);
+        }
         // `BeckonMove`: for the one player, a Beckon into the draw pile at
         // random, then one into the discard pile.
         (Monster::SoulFysh, MoveId::BeckonMove) => {
@@ -339,10 +425,30 @@ pub(super) fn rat_weight(
 /// A move's damage that an Underdocks monster works out as it rolls.
 ///
 /// `GasBomb.ExplodeDamage`, behind its `DeathBlowIntent`'s lambda: eight, or
-/// nine at `DeadlyEnemies`.
-pub(super) fn computed_damage(monster: Monster, move_id: MoveId, ascension: u8) -> i32 {
+/// nine at `DeadlyEnemies`. The Waterfall Giant reads its own model.
+pub(super) fn computed_damage(
+    monster: Monster,
+    move_id: MoveId,
+    ascension: u8,
+    model: &super::Model,
+) -> i32 {
     let deadly = ascension >= AscensionLevel::DeadlyEnemies as u8;
     match (monster, move_id) {
+        // `CurrentPressureGunDamage`: its base, and five for each Pressure
+        // Gun since.
+        (Monster::WaterfallGiant, MoveId::PressureGunMove) => {
+            let super::Model::WaterfallGiant { gun_raises, .. } = *model else {
+                unreachable!("a Waterfall Giant's model is its own")
+            };
+            (if deadly { 23 } else { 20 }) + GIANT_GUN_RAISE * i32::from(gun_raises)
+        }
+        // `SteamEruptionDamage`, which About to Blow saved.
+        (Monster::WaterfallGiant, MoveId::ExplodeMove) => {
+            let super::Model::WaterfallGiant { eruption, .. } = *model else {
+                unreachable!("a Waterfall Giant's model is its own")
+            };
+            eruption
+        }
         (Monster::GasBomb, MoveId::ExplodeMove) => match deadly {
             true => 9,
             false => 8,

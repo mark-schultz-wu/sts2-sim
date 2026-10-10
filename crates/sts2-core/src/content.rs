@@ -5769,6 +5769,8 @@ pub enum HookEffect<V: ContentVersion> {
     /// below point at one the build keeps. A move is the widest thing an
     /// effect names, and an effect stays as narrow as a pointer.
     InstallMove(&'static crate::NextMove<V>),
+    /// `CreatureCmd.SetMaxAndCurrentHp` on the listener's owner.
+    SetMaxAndCurrentHp(V::Number),
     /// `CreatureCmd.Stun` on the owner: a stunned turn in place of the move
     /// it advertised.
     ///
