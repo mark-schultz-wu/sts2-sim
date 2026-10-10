@@ -1,0 +1,14 @@
+# The Terror Eel enters with Shriek at seventy. A strike that leaves it above
+# that does nothing. The one that takes it to seventy or below stuns it, and
+# Shriek goes. After its stunned turn it casts Terror, 99 Vulnerable, then
+# goes back to crashing.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"TERROR_EEL_ELITE"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":30,"target":0}
+{"cmd":"power","power":"PLATING_POWER","amount":99,"target":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

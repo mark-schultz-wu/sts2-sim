@@ -4456,6 +4456,32 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Plow")
         }
         (Power::PlowPower, _, EventHook::DamageReceived { .. }) => None,
+        // `ShriekPower.AfterDamageReceived`: a hit that takes health and
+        // leaves the Terror Eel at its amount or below stuns it. It comes back
+        // on its Terror, and the power goes.
+        (
+            Power::ShriekPower,
+            PowerAmount::Counted(amount),
+            EventHook::DamageReceived {
+                target, unblocked, ..
+            },
+        ) if target == holder
+            && unblocked > 0
+            && fight
+                .current_hp(holder)
+                .is_some_and(|hp| Number::from(hp) <= amount) =>
+        {
+            let terror = super::monsters::state_of(Monster::TerrorEel, MoveId::TerrorMove, 0)
+                .unwrap_or_else(|_| unreachable!("the Terror Eel's graph holds its Terror"));
+            asked.extend([stunned(sts2_core::StunResume::At(terror)), HookEffect::Remove]);
+            return;
+        }
+        (Power::ShriekPower, PowerAmount::Endless, EventHook::DamageReceived { target, .. })
+            if target == holder =>
+        {
+            unimplemented!("an endless Shriek")
+        }
+        (Power::ShriekPower, _, EventHook::DamageReceived { .. }) => None,
         // `BurrowedPower.AfterBlockBroken`: a Tunneler whose block breaks is
         // stunned, comes back with a bite, and stops burrowing.
         (Power::BurrowedPower, _, EventHook::BlockBroken { creature })
