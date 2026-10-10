@@ -362,6 +362,21 @@ pub fn run(args: Args) -> Result<String, Error> {
             .cloned(),
     );
 
+    // `CardMultiplayerConstraint.MultiplayerOnly`: a card a pool holds that
+    // `GetUnlockedCards` for one player leaves out, which the shop pools are.
+    let shop: BTreeSet<String> = build
+        .rows("cards.txt", "shoppool")?
+        .into_iter()
+        .filter_map(|row| row.get(3).map(|c| camel(c)))
+        .collect();
+    let multiplayer_only: BTreeSet<String> = build
+        .rows("cards.txt", "pool")?
+        .into_iter()
+        .filter_map(|row| row.get(3).map(|c| camel(c)))
+        .filter(|card| !shop.contains(card))
+        .collect();
+    let mut multiplayer_skipped = 0;
+
     writeln!(out, "\ncards: plays with code, complete plays").unwrap();
     let hand_cards = hand_ported(&build, "behaviour/cards", "on_play")?;
     for (module, enum_name) in CARD_POOLS {
@@ -372,6 +387,12 @@ pub fn run(args: Args) -> Result<String, Error> {
         })?;
         let plays: Vec<(String, Ported)> = arms(body, 8, &format!("{enum_name}::"))
             .into_iter()
+            .filter(|arm| {
+                let card = arm.pattern.trim_start_matches(&format!("{enum_name}::"));
+                let kept = !multiplayer_only.contains(card);
+                multiplayer_skipped += usize::from(!kept);
+                kept
+            })
             .map(|arm| {
                 let card = arm.pattern.trim_start_matches(&format!("{enum_name}::"));
                 let hand = hand_cards.contains(&(enum_name.to_owned(), card.to_owned()));
@@ -521,7 +542,8 @@ pub fn run(args: Args) -> Result<String, Error> {
 
     writeln!(
         out,
-        "\nleft out of every count: {skipped} test-only relics, potions and powers"
+        "\nleft out of every count: {skipped} test-only relics, potions and powers, and \
+         {multiplayer_skipped} cards only a run with more than one player offers"
     )
     .unwrap();
 
