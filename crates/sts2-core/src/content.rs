@@ -4893,6 +4893,9 @@ pub enum CustomReward<V: ContentVersion> {
     /// `CardReward` over the colourless pool at `RegularEncounter` odds, with
     /// no upgrade roll, offering this many cards.
     ColorlessCards(usize),
+    /// `CardReward` at `CardCreationOptions.ForRoom(player, Monster)`: the
+    /// three cards a monster fight's reward offers, at its odds.
+    MonsterRoomCards,
     /// `CardReward` over a character's pool at uniform odds, of one rarity,
     /// with no rarity or pool modification. `pool` names another character's
     /// pool, and nothing is the character's own. Glass Eye offers five.

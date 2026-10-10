@@ -2826,8 +2826,22 @@ impl<V: Rules> State<V> {
         // The pools a character's card reward draws from, which no draw
         // moves, so worked out before the set fills in.
         let pool = (rewards.iter())
-            .any(|reward| matches!(reward, CustomReward::CharacterCards { .. }))
+            .any(|reward| {
+                matches!(
+                    reward,
+                    CustomReward::CharacterCards { .. } | CustomReward::MonsterRoomCards
+                )
+            })
             .then(|| self.reward_pool());
+        // What a fight's own card reward adds, which the monster room's
+        // reward reads the same way.
+        let added =
+            match (rewards.iter()).any(|reward| matches!(reward, CustomReward::MonsterRoomCards)) {
+                true => self.card_reward_added(),
+                false => Vec::new(),
+            };
+        let ascension = self.ascension();
+        let act = self.act();
         let mut offered: Vec<Offer<V>> = Vec::with_capacity(rewards.len());
         for reward in rewards {
             let rng = stream_of(&mut self.phase, &mut self.streams, stream);
@@ -2864,6 +2878,17 @@ impl<V: Rules> State<V> {
                     sacrifice: false,
                     taken: false,
                 },
+                CustomReward::MonsterRoomCards => crate::reward::combat::card_reward::<V, _>(
+                    rng,
+                    &mut self.odds,
+                    ascension,
+                    pool.as_ref()
+                        .expect("a monster room's reward has its pool")
+                        .drafted(),
+                    act,
+                    crate::reward::combat::Room::Monster,
+                    &added,
+                ),
                 CustomReward::SpecificPotion(potion) => Offer::Potion {
                     potion,
                     taken: false,
