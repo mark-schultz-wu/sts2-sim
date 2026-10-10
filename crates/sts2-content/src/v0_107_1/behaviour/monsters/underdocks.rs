@@ -1,6 +1,6 @@
 //! The alternative first act's monsters.
 
-use sts2_core::{ContentError, Fight, MonsterSpawn, PowerAmount};
+use sts2_core::{Amount, ContentError, Effect, Fight, MonsterSpawn, PowerAmount, Scaling};
 
 use super::super::super::generated::ascension::AscensionLevel;
 use super::super::super::generated::encounters::Encounter;
@@ -32,6 +32,14 @@ const CLAM_PLATING_TOUGH: Number = 9;
 
 /// `FossilStalker.AfterAddedToRoom`'s Suck.
 const STALKER_SUCK: Number = 3;
+
+/// `LagavulinMatriarch.Sleep`'s Plating and Asleep.
+const MATRIARCH_PLATING: Number = 12;
+const MATRIARCH_ASLEEP: Number = 3;
+
+/// `SoulSiphonMove`'s Strength and Dexterity off each target, and the
+/// Strength it takes for itself.
+const MATRIARCH_SIPHON: Number = 2;
 
 /// `PhantasmalGardener.SkittishAmount`, either side of `ToughEnemies`.
 const GARDENER_SKITTISH: Number = 6;
@@ -74,6 +82,11 @@ pub(super) fn starting_powers(
         )],
         Monster::FossilStalker => vec![(Power::SuckPower, PowerAmount::Counted(STALKER_SUCK))],
         Monster::GasBomb => vec![(Power::MinionPower, PowerAmount::Counted(1))],
+        // `Sleep`: Plating, then Asleep.
+        Monster::LagavulinMatriarch => vec![
+            (Power::PlatingPower, PowerAmount::Counted(MATRIARCH_PLATING)),
+            (Power::AsleepPower, PowerAmount::Counted(MATRIARCH_ASLEEP)),
+        ],
         Monster::PhantasmalGardener => vec![(
             Power::SkittishPower,
             PowerAmount::Counted(match ascension.has(AscensionLevel::ToughEnemies) {
@@ -152,6 +165,40 @@ pub(super) fn perform<F: Fight<V>>(
             fight.apply_to_opponents(Power::FrailPower, PowerAmount::Counted(SCREECH_FRAIL));
         }
         (Monster::TwoTailedRat, MoveId::CallForBackupMove) => call_for_backup(fight),
+        // The Matriarch's four waking moves. Each first stops its sleeping
+        // effect, which is all on screen.
+        (Monster::LagavulinMatriarch, MoveId::SlashMove | MoveId::DisembowelMove) => {
+            fight.attack_opponents()
+        }
+        // `Slash2Move`: its hit, then powered block on itself.
+        (Monster::LagavulinMatriarch, MoveId::Slash2Move) => {
+            if super::attack_first(fight, step) {
+                return Some(1);
+            }
+            let amount = match fight.ascension().has(AscensionLevel::ToughEnemies) {
+                true => 14,
+                false => 12,
+            };
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Number(amount),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+        }
+        // `SoulSiphonMove`: Strength and Dexterity off each target, then the
+        // Strength on itself.
+        (Monster::LagavulinMatriarch, MoveId::SoulSiphonMove) => {
+            fight.apply_to_opponents(
+                Power::StrengthPower,
+                PowerAmount::Counted(-MATRIARCH_SIPHON),
+            );
+            fight.apply_to_opponents(
+                Power::DexterityPower,
+                PowerAmount::Counted(-MATRIARCH_SIPHON),
+            );
+            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(MATRIARCH_SIPHON));
+        }
         // `EnlargeMove`: Strength on itself. `EnlargeTriggers` and the scale
         // it sets size it on screen alone.
         (Monster::PhantasmalGardener, MoveId::EnlargeMove) => {
@@ -258,4 +305,26 @@ pub(super) fn computed_damage(monster: Monster, move_id: MoveId, ascension: u8) 
         },
         (monster, move_id) => unimplemented!("the damage {monster:?} works out for {move_id:?}"),
     }
+}
+
+/// The Matriarch's `SLEEP_BRANCH`: asleep while it holds Asleep, and slashing
+/// once it does not.
+pub(super) fn matriarch_branch<P: sts2_core::Printed<V> + ?Sized>(
+    at: u8,
+    powers: &[sts2_core::Listener<'_, V, P>],
+) -> Result<u8, ContentError> {
+    let asleep = powers.iter().any(|listener| {
+        matches!(
+            listener,
+            sts2_core::Listener::Power {
+                power: Power::AsleepPower,
+                ..
+            }
+        )
+    });
+    let wanted = match asleep {
+        true => MoveId::SleepMove,
+        false => MoveId::SlashMove,
+    };
+    super::state_of(Monster::LagavulinMatriarch, wanted, at)
 }

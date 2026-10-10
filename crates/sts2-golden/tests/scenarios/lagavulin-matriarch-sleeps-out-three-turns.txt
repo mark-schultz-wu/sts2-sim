@@ -1,0 +1,15 @@
+# The Lagavulin Matriarch enters asleep, with twelve Plating and three
+# Asleep. Asleep counts down at its turn's ends, and on its last turn the
+# Plating goes before it can block. It wakes on Slash, then Disembowels,
+# Slashes again with twelve block, and Soul Siphons two Strength and two
+# Dexterity off the player for two Strength of its own.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"LAGAVULIN_MATRIARCH_BOSS"}
+{"cmd":"power","power":"PLATING_POWER","amount":99,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

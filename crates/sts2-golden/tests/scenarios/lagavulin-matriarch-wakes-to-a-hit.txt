@@ -1,0 +1,12 @@
+# A hit the Plating's block stops leaves the Matriarch asleep. One that
+# takes health wakes it: the Plating and Asleep go, it spends a turn
+# stunned, and comes back on Slash.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"LAGAVULIN_MATRIARCH_BOSS"}
+{"cmd":"power","power":"PLATING_POWER","amount":99,"target":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"power","power":"STRENGTH_POWER","amount":20,"target":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
