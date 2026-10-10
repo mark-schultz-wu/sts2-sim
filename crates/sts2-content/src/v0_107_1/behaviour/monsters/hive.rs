@@ -366,6 +366,16 @@ pub(super) fn perform<F: Fight<V>>(
         // `EscapeMove`: `CreatureCmd.Escape` on itself.
         (Monster::ThievingHopper, MoveId::EscapeMove) => fight.escape(),
         (Monster::BowlbugRock, MoveId::HeadbuttMove) => fight.attack_opponents(),
+        // `DizzyMove`: `IsOffBalance` cleared, which Imbalanced keeps here.
+        (Monster::BowlbugRock, MoveId::DizzyMove) => {
+            let actor = fight.actor();
+            fight.write_power(actor, Power::ImbalancedPower, |state| {
+                state.set_off_balance(false)
+            });
+        }
+        // `StillDizzyMove`: `IsStunned` cleared, which picks its animations
+        // alone.
+        (Monster::Tunneler, MoveId::DizzyMove) => {}
         (Monster::SlumberingBeetle, MoveId::RollOutMove) => return roll_out(fight, step),
         // `WritheMove`, whose two hits are the intent's own repeat count.
         (

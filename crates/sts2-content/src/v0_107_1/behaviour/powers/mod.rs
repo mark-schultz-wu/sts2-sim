@@ -563,7 +563,7 @@ impl State {
         std::mem::replace(current, just_applied)
     }
 
-    fn set_off_balance(&mut self, off_balance: bool) {
+    pub(crate) fn set_off_balance(&mut self, off_balance: bool) {
         let Self::Imbalanced {
             off_balance: current,
         } = self
