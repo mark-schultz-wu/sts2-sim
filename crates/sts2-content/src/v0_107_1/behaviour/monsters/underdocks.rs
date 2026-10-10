@@ -33,6 +33,9 @@ const CLAM_PLATING_TOUGH: Number = 9;
 /// `FossilStalker.AfterAddedToRoom`'s Suck.
 const STALKER_SUCK: Number = 3;
 
+/// `SkulkingColony.AfterAddedToRoom`'s Hardened Shell.
+const COLONY_SHELL: Number = 20;
+
 /// `TerrorEel.ShriekAmount`, either side of `ToughEnemies`.
 const EEL_SHRIEK: Number = 70;
 const EEL_SHRIEK_TOUGH: Number = 75;
@@ -62,6 +65,10 @@ pub(super) fn starting_powers(
             }),
         )],
         Monster::FossilStalker => vec![(Power::SuckPower, PowerAmount::Counted(STALKER_SUCK))],
+        Monster::SkulkingColony => vec![(
+            Power::HardenedShellPower,
+            PowerAmount::Counted(COLONY_SHELL),
+        )],
         Monster::TerrorEel => vec![(
             Power::ShriekPower,
             PowerAmount::Counted(match ascension.has(AscensionLevel::ToughEnemies) {
