@@ -2675,7 +2675,7 @@ fn first_playable<V: Rules>(
 /// `LastStarsSpent`.
 fn spend_resources<V: Rules>(
     live: &mut Live<V>,
-    rngs: CombatRngs<'_>,
+    mut rngs: CombatRngs<'_>,
     relics: &mut crate::run::Belt<V>,
     (cost, star_cost): (sts2_core::Cost, sts2_core::Cost),
 ) -> (V::Count, V::Count) {
@@ -2683,6 +2683,10 @@ fn spend_resources<V: Rules>(
         .unwrap_or_else(|| unimplemented!("a cost of {cost:?}"))
         .min(live.energy);
     live.energy = live.energy - energy;
+    let spent: V::Number = num_traits::cast(energy).expect("an energy cost fits a game number");
+    if let Some(ended) = super::board::energy_spent::<V>(live, rngs.reborrow(), relics, spent) {
+        unimplemented!("a fight {ended:?} as its energy was spent");
+    }
     let stars: V::Count = super::legal::spend(star_cost, live.stars)
         .unwrap_or_else(|| unimplemented!("a star cost of {star_cost:?}"));
     if stars > num_traits::zero() {

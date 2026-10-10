@@ -253,8 +253,14 @@ pub(crate) fn play<V: Rules>(
         relics,
     } = fighting;
 
-    // `SpendResources`, before the card leaves the hand.
+    // `SpendResources`, before the card leaves the hand: the energy, then
+    // `AfterEnergySpent`, then the stars.
     live.energy = live.energy - play.energy;
+    let energy: V::Number =
+        num_traits::cast(play.energy).expect("an energy cost fits a game number");
+    if let Some(ended) = super::board::energy_spent::<V>(live, streams.combat(), relics, energy) {
+        unimplemented!("a fight {ended:?} as its energy was spent");
+    }
     let spent: V::Number = num_traits::cast(play.stars).expect("a star cost fits a game number");
     live.modify_stars(-spent);
     let ascension = live.ascension;

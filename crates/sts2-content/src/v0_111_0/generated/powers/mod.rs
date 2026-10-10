@@ -1738,7 +1738,7 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
     // HAILSTORM_POWER
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::BeforeSideTurnEnd),
     // HAMMER_TIME_POWER
-    sts2_core::Overrides::NONE,
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterForge),
     // HANG_POWER
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ModifyDamageMultiplicative),
     // HARDENED_SHELL_POWER
@@ -1958,7 +1958,7 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
         .with(sts2_core::ModelHook::AfterSideTurnEnd)
         .with(sts2_core::ModelHook::ModifyCardPlayCount),
     // ORBIT_POWER
-    sts2_core::Overrides::NONE,
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterEnergySpent),
     // PAGESTORM_POWER
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardDrawn),
     // PAINFUL_STABS_POWER
