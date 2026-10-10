@@ -1,0 +1,10 @@
+# Immersing in the Abyssal Baths gives two Max HP, then three damage. Each
+# linger after gives two more and deals one more than the last. Leaving
+# finishes the event.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"ABYSSAL_BATHS"}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":1}
