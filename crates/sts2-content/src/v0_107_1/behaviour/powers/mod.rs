@@ -962,6 +962,45 @@ pub(crate) fn modify_hook(
                 ..
             },
         ) if dealer == Some(holder) => Modify::Scaled(weak(fight, holder, target)),
+        // `KnockdownPower.ModifyDamageMultiplicative`: Flanking's rule. Its
+        // stack times a powered attack's damage to its owner, from anyone but
+        // whoever applied it.
+        (
+            Power::KnockdownPower,
+            PowerAmount::Counted(stack),
+            ModifyHook::DamageMultiplicative {
+                target,
+                dealer,
+                powered: true,
+                ..
+            },
+        ) if target == Some(holder) && dealer != held.applier => {
+            Modify::Scaled(Fixed::new(stack, 0))
+        }
+        (Power::KnockdownPower, PowerAmount::Endless, ModifyHook::DamageMultiplicative { .. }) => {
+            unimplemented!("an endless Knockdown")
+        }
+        // `CoveredPower.ModifyDamageMultiplicative`: no damage from a powered
+        // attack to its owner.
+        (
+            Power::CoveredPower,
+            _,
+            ModifyHook::DamageMultiplicative {
+                target,
+                powered: true,
+                ..
+            },
+        ) if target == Some(holder) => Modify::Scaled(Fixed::new(0, 0)),
+        // `TagTeamPower.ModifyCardPlayCount`: more plays of an Attack another
+        // player aims at its owner. Only its own card applies it, and a fight
+        // here has one player, whose cards are all its applier's.
+        (Power::TagTeamPower, _, ModifyHook::CardPlayCount { player, card })
+            if <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Attack)
+                && Some(player) != held.applier =>
+        {
+            unimplemented!("Tag Team over another player's Attack")
+        }
+        (Power::TagTeamPower, _, ModifyHook::CardPlayCount { .. }) => Modify::Nothing,
         // `FlankingPower.ModifyDamageMultiplicative`: its stack times a
         // powered attack's damage to its owner, from anyone but whoever
         // applied it. With one player that is a pet.
@@ -1795,7 +1834,9 @@ pub(crate) fn modify_hook(
             | Power::WeakPower
             | Power::ShrinkPower
             | Power::TankPower
-            | Power::FlankingPower,
+            | Power::FlankingPower
+            | Power::KnockdownPower
+            | Power::CoveredPower,
             _,
             ModifyHook::DamageMultiplicative { .. },
         )
@@ -2186,6 +2227,42 @@ pub(crate) fn event_hook(
         (Power::WellLaidPlansPower, PowerAmount::Endless, EventHook::FlushingLate) => {
             unimplemented!("an endless Well-Laid Plans")
         }
+        // `KnockdownPower.AfterSideTurnEnd`: gone once its owner's side ends a
+        // turn. Its `AfterApplied` only writes its applier's name.
+        (Power::KnockdownPower, _, EventHook::SideTurnEnd { side, .. }) if side == owner => {
+            Some(HookEffect::Remove)
+        }
+        (Power::KnockdownPower, _, EventHook::SideTurnEnd { .. } | EventHook::Applied) => None,
+        // `CoveredPower.AfterSideTurnEnd`: gone once the enemies end a turn.
+        (
+            Power::CoveredPower,
+            _,
+            EventHook::SideTurnEnd {
+                side: CombatSide::Enemy,
+                ..
+            },
+        ) => Some(HookEffect::Remove),
+        (Power::CoveredPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `CoveredPower.AfterDeath`: gone with whoever applied it.
+        (
+            Power::CoveredPower,
+            _,
+            EventHook::AfterDeath {
+                creature,
+                removal_prevented: false,
+                ..
+            },
+        ) if Some(creature) == applier => Some(HookEffect::Remove),
+        (Power::CoveredPower, _, EventHook::AfterDeath { .. }) => None,
+        // `CoveredPower.AfterApplied` gives its applier Intercept, which takes
+        // the hits meant for whoever it covers. Intercept, the one card that
+        // applies it, aims at another living player, and a fight here has
+        // none.
+        (Power::CoveredPower, _, EventHook::Applied) => {
+            unimplemented!("Covered applied, which takes another player")
+        }
+        // `TagTeamPower.AfterModifyingCardPlayCount`: gone once it added plays.
+        (Power::TagTeamPower, _, EventHook::PlayCountModified { .. }) => Some(HookEffect::Remove),
         // `FlankingPower.AfterSideTurnEnd`: gone once its owner's side ends
         // a turn.
         (Power::FlankingPower, _, EventHook::SideTurnEnd { side, .. }) if side == owner => {

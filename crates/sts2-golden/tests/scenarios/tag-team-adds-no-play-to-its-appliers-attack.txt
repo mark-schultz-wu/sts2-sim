@@ -1,0 +1,8 @@
+# Tag Team adds plays to an Attack another player aims at its owner, then
+# goes. The Silent's own card applies it and her own Strike plays once, so
+# it stays.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"TAG_TEAM"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"play_card","index":1,"target":1}

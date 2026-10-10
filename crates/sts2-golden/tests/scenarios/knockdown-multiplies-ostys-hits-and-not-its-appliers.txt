@@ -1,0 +1,12 @@
+# Knockdown from the player's own card multiplies Osty's hit with Poke by its
+# stack, and leaves the player's Strike as it was, since the player applied
+# it. Free Attack pays for Poke. It goes once the Nibbit's side ends its turn.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"KNOCKDOWN"}
+{"cmd":"grant","card":"POKE"}
+{"cmd":"power","power":"FREE_ATTACK_POWER","amount":1,"target":0}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}
