@@ -3884,6 +3884,11 @@ pub enum EventHook<V: ContentVersion> {
         /// `IsPoweredAttack`.
         powered: bool,
         fully_blocked: bool,
+        /// `DamageResult.WasBlockBroken`, on the creature the hit was aimed
+        /// at.
+        block_broken: bool,
+        /// The fight's player, which a relic's owner is.
+        player: crate::CombatId,
     },
     /// `MonsterMoveState.OnPerform`, after the move's behavior runs.
     MonsterMovePerformed { move_id: V::MoveId },
