@@ -47,6 +47,7 @@ mod the_lantern_key;
 mod the_legends_were_true;
 mod this_or_that;
 mod tinker_time;
+mod trash_heap;
 mod trial;
 mod unrest_site;
 mod vakuu;
@@ -116,6 +117,7 @@ pub enum State {
     SelfHelpBook(self_help_book::State),
     SlipperyBridge(slippery_bridge::State),
     SunkenStatue(sunken_statue::State),
+    TrashHeap(trash_heap::State),
     UnrestSite(unrest_site::State),
     TabletOfTruth(tablet_of_truth::State),
     TeaMaster(tea_master::State),
@@ -347,6 +349,7 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
             State::SlipperyBridge(slippery_bridge::SlipperyBridge.enter(run, rng))
         }
         Event::SunkenStatue => State::SunkenStatue(sunken_statue::SunkenStatue.enter(run, rng)),
+        Event::TrashHeap => State::TrashHeap(trash_heap::TrashHeap.enter(run, rng)),
         Event::UnrestSite => State::UnrestSite(unrest_site::UnrestSite.enter(run, rng)),
         Event::TabletOfTruth => {
             State::TabletOfTruth(tablet_of_truth::TabletOfTruth.enter(run, rng))
@@ -476,6 +479,7 @@ pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
         State::SelfHelpBook(state) => self_help_book::SelfHelpBook.observe(state, run),
         State::SlipperyBridge(state) => slippery_bridge::SlipperyBridge.observe(state, run),
         State::SunkenStatue(state) => sunken_statue::SunkenStatue.observe(state, run),
+        State::TrashHeap(state) => trash_heap::TrashHeap.observe(state, run),
         State::UnrestSite(state) => unrest_site::UnrestSite.observe(state, run),
         State::TabletOfTruth(state) => tablet_of_truth::TabletOfTruth.observe(state, run),
         State::TeaMaster(state) => tea_master::TeaMaster.observe(state, run),
@@ -585,6 +589,7 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
             slippery_bridge::SlipperyBridge.choose(state, option, run, rng)
         }
         State::SunkenStatue(state) => sunken_statue::SunkenStatue.choose(state, option, run, rng),
+        State::TrashHeap(state) => trash_heap::TrashHeap.choose(state, option, run, rng),
         State::UnrestSite(state) => unrest_site::UnrestSite.choose(state, option, run, rng),
         State::TabletOfTruth(state) => {
             tablet_of_truth::TabletOfTruth.choose(state, option, run, rng)
