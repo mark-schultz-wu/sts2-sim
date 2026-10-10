@@ -26,6 +26,13 @@ const RAT_BACKUPS: u8 = 3;
 /// `ScreechMove`'s `PowerCmd.Apply<FrailPower>(…, 1m, …)`.
 const SCREECH_FRAIL: Number = 1;
 
+/// `SewerClam.AfterAddedToRoom`'s Plating, either side of `ToughEnemies`.
+const CLAM_PLATING: Number = 8;
+const CLAM_PLATING_TOUGH: Number = 9;
+
+/// `FossilStalker.AfterAddedToRoom`'s Suck.
+const STALKER_SUCK: Number = 3;
+
 /// The powers an Underdocks monster applies to itself as it spawns.
 ///
 /// Nothing for a monster this act does not port.
@@ -43,6 +50,14 @@ pub(super) fn starting_powers(
         )],
         // Each override calls the base and nothing else.
         Monster::Seapunk | Monster::TwoTailedRat => Vec::new(),
+        Monster::SewerClam => vec![(
+            Power::PlatingPower,
+            PowerAmount::Counted(match ascension.has(AscensionLevel::ToughEnemies) {
+                true => CLAM_PLATING_TOUGH,
+                false => CLAM_PLATING,
+            }),
+        )],
+        Monster::FossilStalker => vec![(Power::SuckPower, PowerAmount::Counted(STALKER_SUCK))],
         _ => return None,
     })
 }

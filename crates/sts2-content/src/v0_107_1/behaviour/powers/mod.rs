@@ -3849,6 +3849,21 @@ pub(crate) fn event_hook(
             unimplemented!("endless Painful Stabs")
         }
         (Power::PainfulStabsPower, _, EventHook::AfterAttack { .. }) => None,
+        // `SuckPower.AfterAttack`: Strength for each hit its owner's powered
+        // attack lands on an opponent's health.
+        (
+            Power::SuckPower,
+            PowerAmount::Counted(amount),
+            EventHook::AfterAttack {
+                attacker,
+                powered: true,
+                ..
+            },
+        ) if attacker == holder => Some(HookEffect::ApplyToOwnerPerUnblockedHit {
+            power: Power::StrengthPower,
+            per: amount,
+        }),
+        (Power::SuckPower, _, EventHook::AfterAttack { .. }) => None,
         // `NemesisPower.AfterSideTurnEnd`, as its owner's side's turn ends:
         // Intangible every other turn, and taken off on the turns between.
         (Power::NemesisPower, _, EventHook::SideTurnEnd { side, .. }) if side == owner => {

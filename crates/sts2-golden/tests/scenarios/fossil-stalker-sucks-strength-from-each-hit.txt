@@ -1,0 +1,12 @@
+# The Fossil Stalker enters with Suck at three. Each of its hits that takes
+# health gives it three Strength, and a hit the block stops gives none. The
+# first Lash lands both its hits. The second meets a Defend that stops one.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"FOSSIL_STALKER_NORMAL"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"DEXTERITY_POWER","amount":30,"target":0}
+{"cmd":"play_card","index":0}
+{"cmd":"end_turn"}
