@@ -1,0 +1,8 @@
+# Hammer Time forges as much again for each other player still alive. The
+# Regent forges with Refine Blade, and a fight here has no other player, so
+# the blade's damage is the forge's alone.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"HAMMER_TIME_POWER","amount":1,"target":0}
+{"cmd":"grant","card":"REFINE_BLADE"}
+{"cmd":"play_card","index":5}

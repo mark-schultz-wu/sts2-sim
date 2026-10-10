@@ -99,6 +99,11 @@ pub enum State {
     Swipe {
         stolen: Option<sts2_core::DeckCardId>,
     },
+    /// `OrbitPower`'s `energySpent` and `triggerCount`.
+    Orbit {
+        spent: Number,
+        triggers: Number,
+    },
     /// `VigorPower`'s `commandToModify`, which stays bound once the command
     /// is over.
     Vigor {
@@ -342,6 +347,10 @@ impl sts2_core::PowerModel<V> for State {
                 bound_played: false,
             },
             Power::SwipePower => Self::Swipe { stolen: None },
+            Power::OrbitPower => Self::Orbit {
+                spent: 0,
+                triggers: 0,
+            },
             Power::VigorPower => Self::Vigor { bound: None },
             Power::FeralPower => Self::Feral { played: 0 },
             Power::OutbreakPower => Self::Outbreak { poisoned: 0 },
@@ -403,6 +412,7 @@ impl sts2_core::PowerModel<V> for State {
             Self::WitheringPresence { .. } => Power::WitheringPresencePower,
             Self::ChainsOfBinding { .. } => Power::ChainsOfBindingPower,
             Self::Swipe { .. } => Power::SwipePower,
+            Self::Orbit { .. } => Power::OrbitPower,
             Self::Outbreak { .. } => Power::OutbreakPower,
             Self::VoidForm { .. } => Power::VoidFormPower,
             Self::TheBomb { .. } => Power::TheBombPower,
@@ -717,6 +727,9 @@ const MONOLOGUE_STRENGTH: Number = 1;
 
 /// `ConfusedPower.NextEnergyCost`'s `NextInt(4)`.
 const CONFUSED_COSTS: u8 = 4;
+
+/// `OrbitPower`'s `EnergyVar(4)`: the energy spent for each payout.
+const ORBIT_ENERGY: Number = 4;
 
 /// `TankPower.ModifyDamageMultiplicative`'s `2m`.
 const TANKED: Fixed = Fixed::new(2, 0);
@@ -2141,6 +2154,29 @@ pub(crate) fn event_hook(
         }
         // Its `AfterModifyingEnergyGain` only flashes.
         (Power::NoEnergyGainPower, _, EventHook::EnergyGainModified) => return,
+        // `OrbitPower.AfterEnergySpent`: the energy its owner spends, counted,
+        // and its stack as energy for each four of it not yet paid out. A
+        // fight here has one player, whose cards are all its owner's.
+        (Power::OrbitPower, PowerAmount::Counted(stack), EventHook::EnergySpent { amount })
+            if amount > 0 =>
+        {
+            let State::Orbit { spent, triggers } = state else {
+                unreachable!("Orbit's state for {:?}", state.power())
+            };
+            *spent += amount;
+            let due = *spent / ORBIT_ENERGY - *triggers;
+            (due > 0).then(|| {
+                *triggers += due;
+                HookEffect::GainEnergy(stack * due)
+            })
+        }
+        (Power::OrbitPower, PowerAmount::Endless, EventHook::EnergySpent { .. }) => {
+            unimplemented!("an endless Orbit")
+        }
+        (Power::OrbitPower, _, EventHook::EnergySpent { .. }) => None,
+        // `HammerTimePower.AfterForge` forges as much for each other player
+        // still alive. A fight here has one player.
+        (Power::HammerTimePower, _, EventHook::Forged { .. }) => None,
         // `WellLaidPlansPower.BeforeFlushLate`: its owner picks up to its
         // stack of cards to retain this turn. A fight here has one player,
         // whose power it is.

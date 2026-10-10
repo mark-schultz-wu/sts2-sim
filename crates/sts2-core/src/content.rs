@@ -725,6 +725,8 @@ pub enum ModelHook {
     AfterStarsGained,
     AfterBlockGained,
     BeforeFlushLate,
+    AfterEnergySpent,
+    AfterForge,
     ModifyDamageAdditive,
     ModifyDamageMultiplicative,
     ModifyDamageCap,
@@ -792,7 +794,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 144] = [
+    pub const ALL: [ModelHook; 146] = [
         ModelHook::AfterRoomEntered,
         ModelHook::AfterMapGenerated,
         ModelHook::BeforeCombatStart,
@@ -873,6 +875,8 @@ impl ModelHook {
         ModelHook::AfterStarsGained,
         ModelHook::AfterBlockGained,
         ModelHook::BeforeFlushLate,
+        ModelHook::AfterEnergySpent,
+        ModelHook::AfterForge,
         ModelHook::ModifyDamageAdditive,
         ModelHook::ModifyDamageMultiplicative,
         ModelHook::ModifyDamageCap,
@@ -1100,6 +1104,8 @@ impl ModelHook {
             ModelHook::AfterStarsGained => "AfterStarsGained",
             ModelHook::AfterBlockGained => "AfterBlockGained",
             ModelHook::BeforeFlushLate => "BeforeFlushLate",
+            ModelHook::AfterEnergySpent => "AfterEnergySpent",
+            ModelHook::AfterForge => "AfterForge",
         }
     }
 }
@@ -3974,6 +3980,12 @@ pub enum EventHook<V: ContentVersion> {
     /// `AfterAutoPrePlayPhaseEnteredLate`, the last pass before the play
     /// phase.
     AutoPrePlayPhaseLate { turn: V::Count },
+    /// `AfterEnergySpent`, once a card's `SpendEnergy` took `amount` off the
+    /// player's pool, which can be none.
+    EnergySpent { amount: V::Number },
+    /// `AfterForge`, once `ForgeCmd.Forge` raised the Sovereign Blades'
+    /// damage by `amount`.
+    Forged { amount: V::Number },
     /// `BeforeFlushLate`, the second pass of `Hook.BeforeFlush`, once
     /// `DoTurnEnd` is over and before the hand is flushed.
     FlushingLate,
@@ -4171,6 +4183,8 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::StarsGained { .. } => ModelHook::AfterStarsGained,
             EventHook::BlockGained { .. } => ModelHook::AfterBlockGained,
             EventHook::FlushingLate => ModelHook::BeforeFlushLate,
+            EventHook::EnergySpent { .. } => ModelHook::AfterEnergySpent,
+            EventHook::Forged { .. } => ModelHook::AfterForge,
             EventHook::PotionUsing { .. } => ModelHook::BeforePotionUsed,
             EventHook::PotionUsed { .. } => ModelHook::AfterPotionUsed,
             EventHook::PotionProcured { .. } => ModelHook::AfterPotionProcured,

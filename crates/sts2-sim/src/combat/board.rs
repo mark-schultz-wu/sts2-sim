@@ -3936,6 +3936,15 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             let player = self.live.player().id;
             self.card_generated(at, card, Some(player));
         }
+        // `Hook.AfterForge`.
+        if super::listen::heard::<V>(self.live, self.relics, sts2_core::ModelHook::AfterForge) {
+            let hook = sts2_core::EventHook::Forged { amount };
+            if let Some((listener, effect)) =
+                super::listen::notify::<V>(self.live, self.relics, hook).first()
+            {
+                unimplemented!("{listener:?} asking for {effect:?} once a blade is forged");
+            }
+        }
     }
 
     fn apply_to_actor(&mut self, power: V::Power, amount: PowerAmount<V::Number>) {
@@ -4936,6 +4945,29 @@ pub(super) fn shuffle<V: Rules>(
     if let Some(asks) = shuffle_asking::<V>(live, rngs, relics, ascension) {
         unimplemented!("a shuffle asking for {asks:?} inside a draw that cannot pause");
     }
+}
+
+/// `Hook.AfterEnergySpent`, once a card's `SpendEnergy` took `amount` off the
+/// player's pool. How what its listeners asked for ended the fight, if it
+/// did.
+pub(super) fn energy_spent<V: Rules>(
+    live: &mut Live<V>,
+    rngs: CombatRngs<'_>,
+    relics: &mut Belt<V>,
+    amount: V::Number,
+) -> Option<super::Ended> {
+    if !super::listen::heard::<V>(live, relics, sts2_core::ModelHook::AfterEnergySpent) {
+        return None;
+    }
+    let asked =
+        super::listen::notify::<V>(live, relics, sts2_core::EventHook::EnergySpent { amount });
+    if asked.is_empty() {
+        return None;
+    }
+    let ascension = live.ascension;
+    let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
+    super::hook::apply::<V, _>(&mut board, asked.into_iter().map(|(_, effect)| effect));
+    board.ended()
 }
 
 /// `CreatureCmd.GainBlock` of `amount`, unpowered, on `owner` from no play
