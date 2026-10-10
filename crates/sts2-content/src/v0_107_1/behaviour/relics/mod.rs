@@ -94,6 +94,7 @@ mod divine_destiny;
 mod divine_right;
 mod dollys_mirror;
 mod dragon_fruit;
+mod dream_catcher;
 mod driftwood;
 mod ectoplasm;
 mod electric_shrymp;
@@ -460,6 +461,9 @@ pub enum State {
     RedMask,
     Lantern,
     LuckyFysh,
+    DreamCatcher,
+    FakeMerchantsRug,
+    WongoCustomerAppreciationBadge,
     DarkstonePeriapt,
     HandDrill,
     AmethystAubergine,
@@ -750,6 +754,12 @@ pub(crate) fn event_hook(
         State::RingOfTheDrake => match hook {
             EventHook::Obtained { .. } => {}
             hook => unimplemented!("what RingOfTheDrake does for {hook:?}"),
+        },
+        State::DreamCatcher => dream_catcher::event_hook(hook, asked),
+        // Each overrides nothing.
+        State::FakeMerchantsRug | State::WongoCustomerAppreciationBadge => match hook {
+            EventHook::Obtained { .. } => {}
+            hook => unimplemented!("what a relic that overrides nothing does for {hook:?}"),
         },
         // It overrides nothing.
         State::Circlet => match hook {
@@ -1204,6 +1214,9 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::RedMask
         | State::Lantern
         | State::LuckyFysh
+        | State::DreamCatcher
+        | State::FakeMerchantsRug
+        | State::WongoCustomerAppreciationBadge
         | State::DarkstonePeriapt
         | State::HandDrill
         | State::AmethystAubergine
@@ -1478,6 +1491,9 @@ impl sts2_core::RelicModel<V> for State {
             Relic::RedMask => State::RedMask,
             Relic::Lantern => State::Lantern,
             Relic::LuckyFysh => State::LuckyFysh,
+            Relic::DreamCatcher => State::DreamCatcher,
+            Relic::FakeMerchantsRug => State::FakeMerchantsRug,
+            Relic::WongoCustomerAppreciationBadge => State::WongoCustomerAppreciationBadge,
             Relic::DarkstonePeriapt => State::DarkstonePeriapt,
             Relic::HandDrill => State::HandDrill,
             Relic::AmethystAubergine => State::AmethystAubergine,

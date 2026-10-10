@@ -1,0 +1,20 @@
+# `DreamCatcher` offers a card reward once a rest site's heal lands, the
+# three cards a monster fight's reward offers, at its odds. Four rests in a
+# row move the rare odds as fights do. The run takes one each time. The Fake
+# Merchant's Rug and Wongo's badge override nothing, and are carried along.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"DREAM_CATCHER"}
+{"cmd":"grant","relic":"FAKE_MERCHANTS_RUG"}
+{"cmd":"grant","relic":"WONGO_CUSTOMER_APPRECIATION_BADGE"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"choose_option","index":0}
+{"cmd":"answer","take":[{"index":0,"card":1}]}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"choose_option","index":0}
+{"cmd":"answer","take":[{"index":0,"card":1}]}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"choose_option","index":0}
+{"cmd":"answer","take":[{"index":0,"card":1}]}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"choose_option","index":0}
+{"cmd":"answer","take":[{"index":0,"card":1}]}
