@@ -725,11 +725,17 @@ pub(super) enum Unfinished {
         shelf: u8,
         excluding: sts2_core::CardKind,
         parasol: bool,
+        /// The gold the purchase spent, which `AfterItemPurchased` hands on.
+        spent: u32,
     },
     /// A relic's pickup the shop parks on as any room does. The shelf it
     /// came off clears once that pickup is done. `parasol` for one Lord's
     /// Parasol bought, whose purchases go on from the next shelf.
-    Relic { shelf: u8, parasol: bool },
+    Relic {
+        shelf: u8,
+        parasol: bool,
+        spent: u32,
+    },
 }
 
 impl<V: Rules> Phase<V> {
@@ -3636,6 +3642,8 @@ impl<V: Rules> State<V> {
             point,
             deck: self.player.deck.len(),
             player: self.player_health(),
+            // A room no fight opens in is never one an event opened.
+            base: true,
         });
         if let Some(asked) = self.carry_out(asked) {
             let pickup = asked.pickup;
@@ -3852,6 +3860,7 @@ impl<V: Rules> State<V> {
         if cost > self.player.gold {
             unimplemented!("buying a shelf this run cannot afford");
         }
+        let spent: u32 = num_traits::cast(cost).expect("a price is no less than nothing");
 
         // `PlayerCmd.LoseGold` runs after the entry's own purchase in the
         // game. Nothing between the two reads the gold, so it is spent here,
@@ -3869,6 +3878,7 @@ impl<V: Rules> State<V> {
                             shelf: index,
                             excluding,
                             parasol: false,
+                            spent,
                         }
                     }
                     Pickup::CloneDeckCard { .. } => {
@@ -3883,6 +3893,7 @@ impl<V: Rules> State<V> {
                         Unfinished::Relic {
                             shelf: index,
                             parasol: false,
+                            spent,
                         }
                     }
                 })
@@ -3917,7 +3928,7 @@ impl<V: Rules> State<V> {
                 };
                 *unfinished = asking;
             }
-            None => self.purchased(index),
+            None => self.purchased(index, cost),
         }
         // A purchase that has not returned leaves the decision unresolved,
         // which is what the game reports.
@@ -3974,8 +3985,9 @@ impl<V: Rules> State<V> {
                 shelf,
                 excluding,
                 parasol,
+                spent,
             } => {
-                self.cloned(index, shelf, excluding);
+                self.cloned(index, shelf, excluding, Self::gold(spent));
                 if parasol {
                     // The question has its answer, and the purchases go on
                     // with no pickup waiting.
@@ -4002,7 +4014,13 @@ impl<V: Rules> State<V> {
     ///
     /// The selection offers the deck less what the relic's filter names, so the
     /// index is into that narrowed list rather than into the deck.
-    fn cloned(&mut self, index: usize, shelf: u8, excluding: sts2_core::CardKind) {
+    fn cloned(
+        &mut self,
+        index: usize,
+        shelf: u8,
+        excluding: sts2_core::CardKind,
+        spent: V::Number,
+    ) {
         let offered = self.clonable(excluding);
         let Some(card) = offered.get(index).copied() else {
             unimplemented!("a clone naming a card that was not offered");
@@ -4010,7 +4028,7 @@ impl<V: Rules> State<V> {
         self.add_to_deck(card);
         // `OnTryPurchaseWrapper` has returned now, so the shelf the relic came
         // off empties or restocks.
-        self.purchased(shelf);
+        self.purchased(shelf, spent);
     }
 
     /// Take the card the merchant's removal was pointed at out of the deck.
@@ -4025,10 +4043,11 @@ impl<V: Rules> State<V> {
         self.player.deck_mut().remove(at);
         // `DoLocalMerchantCardRemoval` spends the gold once the card comes
         // back, and `CardShopRemovalsUsed` climbs over the run.
-        if !free {
-            let spent = self.merchant_price(removal_cost::<V>(self.removals_used));
-            self.player.gold = self.player.gold - spent;
-        }
+        let spent = match free {
+            true => num_traits::zero(),
+            false => self.merchant_price(removal_cost::<V>(self.removals_used)),
+        };
+        self.player.gold = self.player.gold - spent;
         self.removals_used += 1;
         // `NMerchantCardRemoval.OnCardRemovalUsed` calls `SetUsed`, and
         // `IsStocked` is `!Used`, so this merchant sells no second removal.
@@ -4041,6 +4060,7 @@ impl<V: Rules> State<V> {
                 entry.stocked = false;
             }
         }
+        self.item_purchased(spent);
     }
 
     /// `LordsParasol.PurchaseEverything`, as its owner enters a merchant.
@@ -4086,6 +4106,7 @@ impl<V: Rules> State<V> {
                                     shelf: index,
                                     excluding,
                                     parasol: true,
+                                    spent: 0,
                                 }
                             }
                             Pickup::CloneDeckCard { .. } => {
@@ -4096,6 +4117,7 @@ impl<V: Rules> State<V> {
                                 Unfinished::Relic {
                                     shelf: index,
                                     parasol: true,
+                                    spent: 0,
                                 }
                             }
                         });
@@ -4109,7 +4131,8 @@ impl<V: Rules> State<V> {
                 }
                 stock => unimplemented!("Lord's Parasol buying {stock:?}"),
             }
-            self.purchased(index);
+            // `ignoreCost`, which spends nothing.
+            self.purchased(index, num_traits::zero());
         }
         if removal {
             let Phase::Shop { unfinished, .. } = &mut self.phase else {
@@ -4409,6 +4432,8 @@ impl<V: Rules> State<V> {
             },
             rolled,
             roster,
+            // A fight an event opens stands inside the event's room.
+            base: !matches!(self.phase, Phase::Event { .. }),
         };
         let crate::combat::Entered {
             live,
@@ -4870,10 +4895,14 @@ impl<V: Rules> State<V> {
         }
         // `ClearAfterPurchase`, once the relic bought has finished its pickup.
         if let Phase::Shop { unfinished, .. } = &mut self.phase
-            && let Some(Unfinished::Relic { shelf, parasol }) = *unfinished
+            && let Some(Unfinished::Relic {
+                shelf,
+                parasol,
+                spent,
+            }) = *unfinished
         {
             *unfinished = None;
-            self.purchased(shelf);
+            self.purchased(shelf, Self::gold(spent));
             if parasol {
                 self.purchase_everything(Some(shelf));
             }
@@ -5654,7 +5683,32 @@ impl<V: Rules> State<V> {
     /// What a merchant's shelf does once its purchase went through:
     /// `RestockAfterPurchase` where a listener refills it, and
     /// `ClearAfterPurchase` otherwise.
-    fn purchased(&mut self, index: u8) {
+    fn purchased(&mut self, index: u8, spent: V::Number) {
+        self.clear_or_restock(index);
+        self.item_purchased(spent);
+    }
+
+    /// `Hook.AfterItemPurchased`, once an entry's purchase has returned and
+    /// its shelf has cleared or restocked.
+    ///
+    /// # Panics
+    ///
+    /// A relic asking for something as it hears of the purchase.
+    fn item_purchased(&mut self, gold: V::Number) {
+        let asked = self.notify_belt(sts2_core::EventHook::ItemPurchased { gold });
+        if let Some(effect) = asked.first() {
+            unimplemented!("a relic asking for {effect:?} after a purchase");
+        }
+    }
+
+    /// The gold a parked purchase noted, back in the run's own number.
+    fn gold(spent: u32) -> V::Number {
+        num_traits::cast(spent).expect("gold spent fits the run's number")
+    }
+
+    /// `RestockAfterPurchase` where a relic refills the shelf, and
+    /// `ClearAfterPurchase` otherwise.
+    fn clear_or_restock(&mut self, index: u8) {
         if !self.refills() {
             let Phase::Shop { entries, .. } = &mut self.phase else {
                 unreachable!("a purchase is made in a shop");

@@ -727,6 +727,7 @@ pub enum ModelHook {
     BeforeFlushLate,
     AfterEnergySpent,
     AfterForge,
+    AfterItemPurchased,
     ModifyDamageAdditive,
     ModifyDamageMultiplicative,
     ModifyDamageCap,
@@ -794,7 +795,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 146] = [
+    pub const ALL: [ModelHook; 147] = [
         ModelHook::AfterRoomEntered,
         ModelHook::AfterMapGenerated,
         ModelHook::BeforeCombatStart,
@@ -877,6 +878,7 @@ impl ModelHook {
         ModelHook::BeforeFlushLate,
         ModelHook::AfterEnergySpent,
         ModelHook::AfterForge,
+        ModelHook::AfterItemPurchased,
         ModelHook::ModifyDamageAdditive,
         ModelHook::ModifyDamageMultiplicative,
         ModelHook::ModifyDamageCap,
@@ -1106,6 +1108,7 @@ impl ModelHook {
             ModelHook::BeforeFlushLate => "BeforeFlushLate",
             ModelHook::AfterEnergySpent => "AfterEnergySpent",
             ModelHook::AfterForge => "AfterForge",
+            ModelHook::AfterItemPurchased => "AfterItemPurchased",
         }
     }
 }
@@ -3664,7 +3667,13 @@ pub enum EventHook<V: ContentVersion> {
         deck: usize,
         /// The player's hit points, which a relic reads off its owner.
         player: PlayerHealth<V>,
+        /// `room == RunState.BaseRoom`: not a room an event opened inside its
+        /// own.
+        base: bool,
     },
+    /// `AfterItemPurchased`, once a merchant's entry is bought, with the gold
+    /// it cost.
+    ItemPurchased { gold: V::Number },
     /// `TryModifyRewards`, for rewards once they are filled in: a room's of
     /// this type, or a relic's with no room, in the act at this index.
     ModifyRewards {
@@ -4218,6 +4227,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::CardPlayedLate { .. } => ModelHook::AfterCardPlayedLate,
             EventHook::SideTurnStartLate { .. } => ModelHook::AfterSideTurnStartLate,
             EventHook::RoomEntered { .. } => ModelHook::AfterRoomEntered,
+            EventHook::ItemPurchased { .. } => ModelHook::AfterItemPurchased,
             EventHook::UnknownRoomTypes { .. } => ModelHook::ModifyUnknownMapPointRoomTypes,
             EventHook::GeneratedMap { .. } => ModelHook::ModifyGeneratedMap,
             EventHook::GeneratedMapLate { .. } => ModelHook::ModifyGeneratedMapLate,

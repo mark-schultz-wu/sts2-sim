@@ -44,6 +44,8 @@ pub(crate) struct Entering<'a, V: Rules> {
     /// The monsters an encounter whose roster is configured opens on, and
     /// nothing for any other.
     pub(crate) roster: &'a [V::Monster],
+    /// `RunState.BaseRoom` is the fight's room: no event opened it.
+    pub(crate) base: bool,
 }
 
 /// A fight as it opens, with the streams it drew from.
@@ -200,6 +202,7 @@ pub(crate) fn enter<V: Rules>(
             hp: live.player().hp,
             max_hp: live.player().max_hp,
         },
+        base: entering.base,
     };
     for (_, effect) in super::listen::notify::<V>(&mut live, relics, entered) {
         match effect {
@@ -240,6 +243,12 @@ pub(crate) fn enter<V: Rules>(
                 for at in upgradable.into_iter().take(count) {
                     order[at].face.upgrade();
                 }
+            }
+            // `PlayerCmd.GainGold` for the player who carries the relic.
+            HookEffect::GainGold(amount) => {
+                let mut board =
+                    Board::for_card(&mut live, streams.combat(), relics, ascension, None, None);
+                sts2_core::Fight::gain_gold(&mut board, amount);
             }
             // `CreatureCmd.Heal` on the player who carries the relic.
             HookEffect::Heal(amount) => {

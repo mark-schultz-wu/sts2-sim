@@ -170,6 +170,7 @@ mod lost_wisp;
 mod lucky_fysh;
 mod lunar_pastry;
 mod mango;
+mod maw_bank;
 mod meal_ticket;
 mod meat_on_the_bone;
 mod membership_card;
@@ -463,6 +464,7 @@ pub enum State {
     RedMask,
     Lantern,
     LuckyFysh,
+    MawBank(maw_bank::State),
     DreamCatcher,
     FakeMerchantsRug,
     WongoCustomerAppreciationBadge,
@@ -842,6 +844,7 @@ pub(crate) fn event_hook(
         State::RedMask => red_mask::event_hook(hook, asked),
         State::Lantern => lantern::event_hook(hook, asked),
         State::LuckyFysh => lucky_fysh::event_hook(hook, asked),
+        State::MawBank(state) => maw_bank::event_hook(state, hook, asked),
         State::DarkstonePeriapt => darkstone_periapt::event_hook(hook, asked),
         State::HandDrill => hand_drill::event_hook(hook, asked),
         State::AmethystAubergine => amethyst_aubergine::event_hook(hook, asked),
@@ -1221,6 +1224,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::RedMask
         | State::Lantern
         | State::LuckyFysh
+        | State::MawBank(_)
         | State::DreamCatcher
         | State::FakeMerchantsRug
         | State::WongoCustomerAppreciationBadge
@@ -1499,6 +1503,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::RedMask => State::RedMask,
             Relic::Lantern => State::Lantern,
             Relic::LuckyFysh => State::LuckyFysh,
+            Relic::MawBank => State::MawBank(maw_bank::State::default()),
             Relic::DreamCatcher => State::DreamCatcher,
             Relic::FakeMerchantsRug => State::FakeMerchantsRug,
             Relic::WongoCustomerAppreciationBadge => State::WongoCustomerAppreciationBadge,
@@ -1705,6 +1710,7 @@ impl sts2_core::RelicModel<V> for State {
 
         match (self, Table::data(relic).flags.get(RelicFlag::UsedUp)) {
             (State::LizardTail(state), _) => lizard_tail::used_up(state),
+            (State::MawBank(state), _) => maw_bank::used_up(state),
             (State::BoneTea(state), _) => bone_tea::used_up(state),
             (State::WingedBoots(state), _) => state.used_up(),
             (State::WongosMysteryTicket(state), _) => wongos_mystery_ticket::used_up(state),
