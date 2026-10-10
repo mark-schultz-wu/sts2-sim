@@ -47,6 +47,8 @@ pub(crate) fn can_enchant(enchantment: Enchantment, card: &CardIdent<V>) -> bool
         // `CanEnchantCardType`, which takes a skill alone.
         Enchantment::Imbued => base && V::card_kind(card.card) == Some(CardKind::Skill),
         // `CanEnchantCardType`, which takes an attack or a skill.
+        // `Steady` overrides no check, so the base answers.
+        Enchantment::Steady => base,
         Enchantment::RoyallyApproved => {
             base && matches!(
                 V::card_kind(card.card),
@@ -90,6 +92,7 @@ pub(crate) fn enchanted_changes(enchantment: Enchantment) -> &'static [Change<V>
             Change::AddKeyword(CardKeyword::Innate),
             Change::AddKeyword(CardKeyword::Retain),
         ],
+        Enchantment::Steady => &[Change::AddKeyword(CardKeyword::Retain)],
         _ => &[],
     }
 }
@@ -133,7 +136,8 @@ pub(crate) fn enchant(enchantment: Enchantment, amount: u8, card: &mut CardIdent
         | Enchantment::Goopy
         | Enchantment::Clone
         | Enchantment::Imbued
-        | Enchantment::RoyallyApproved => {
+        | Enchantment::RoyallyApproved
+        | Enchantment::Steady => {
             card.enchantment = Some(Enchanted {
                 enchantment,
                 amount,
@@ -174,7 +178,8 @@ pub(crate) fn should_start_at_bottom_of_draw_pile(
         | Enchantment::Swift
         | Enchantment::TezcatarasEmber
         | Enchantment::Vigorous
-        | Enchantment::RoyallyApproved => HookResponse::DoesNotImplement,
+        | Enchantment::RoyallyApproved
+        | Enchantment::Steady => HookResponse::DoesNotImplement,
         enchantment => unimplemented!("whether {enchantment:?} starts at the draw pile's bottom"),
     }
 }
@@ -291,7 +296,8 @@ pub(crate) fn modify(enchanted: Enchanted<V>, state: &State, hook: EnchantHook) 
             | Enchantment::Spiral
             | Enchantment::Swift
             | Enchantment::TezcatarasEmber
-            | Enchantment::RoyallyApproved,
+            | Enchantment::RoyallyApproved
+            | Enchantment::Steady,
             _,
         ) => Modify::Nothing,
         (enchantment, hook) => unimplemented!("what {enchantment:?} does for {hook:?}"),
@@ -419,7 +425,8 @@ pub(crate) fn on_play<F: Fight<V>>(enchanted: Enchanted<V>, state: &mut State, f
         | Enchantment::Spiral
         | Enchantment::TezcatarasEmber
         | Enchantment::Vigorous
-        | Enchantment::RoyallyApproved => {}
+        | Enchantment::RoyallyApproved
+        | Enchantment::Steady => {}
         enchantment => unimplemented!("what {enchantment:?} does when its card is played"),
     }
 }
