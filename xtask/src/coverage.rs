@@ -256,6 +256,14 @@ pub fn run(args: Args) -> Result<String, Error> {
         let done = monsters.entry(monster.clone()).or_insert(true);
         *done &= ported.complete(&powers);
     }
+    // A monster that overrides `AfterAddedToRoom` is complete only once its
+    // entering is ported too.
+    let unentered = unentered(&build)?;
+    for monster in &unentered {
+        if let Some(done) = monsters.get_mut(monster) {
+            *done = false;
+        }
+    }
     let fielded = build.rows("monsters.txt", "act")?;
     let encounters = encounters(&build, &monsters)?;
     let events = build.rows("events.txt", "act")?;
@@ -310,6 +318,12 @@ pub fn run(args: Args) -> Result<String, Error> {
         let lacking_moves: Vec<String> = act_moves
             .iter()
             .filter_map(|(name, p)| p.lack(name.clone(), &powers))
+            .chain(
+                unentered
+                    .iter()
+                    .filter(|m| in_act.contains(*m))
+                    .map(|m| format!("{m}.AfterAddedToRoom")),
+            )
             .collect();
         let lacking_encounters: Vec<String> = encounters
             .iter()
@@ -581,6 +595,32 @@ fn ported_powers(build: &Build) -> Result<BTreeSet<String>, Error> {
         }
     }
     Ok(ported)
+}
+
+/// The monsters that override `AfterAddedToRoom` with no hand port of it.
+///
+/// A port names the monster in an arm of `starting_powers`, for what it
+/// gives itself, or of `starting_opponent_powers`, for what it gives its
+/// opponents.
+fn unentered(build: &Build) -> Result<BTreeSet<String>, Error> {
+    let mut entering = BTreeSet::new();
+    for (_, source) in build.sources("behaviour/monsters")? {
+        for name in ["starting_powers", "starting_opponent_powers"] {
+            if let Some(body) = function(&source, name) {
+                entering.extend(named(body, "Monster").into_iter().map(str::to_owned));
+            }
+        }
+    }
+    Ok(build
+        .rows("monsters.txt", "virtual")?
+        .into_iter()
+        .filter(|row| {
+            row.get(2)
+                .is_some_and(|method| method == "AfterAddedToRoom")
+        })
+        .filter_map(|row| row.get(1).map(|monster| camel(monster)))
+        .filter(|monster| !entering.contains(monster))
+        .collect())
 }
 
 /// Every monster's move, by monster and move, with what it needs.
