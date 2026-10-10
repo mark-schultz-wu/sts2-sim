@@ -85,6 +85,36 @@ pub(super) fn end_after_post_play<V: Rules>(
         }
         return Ok(Some(ended));
     }
+    // `Hook.BeforeFlush`'s late pass, whose pick stands the turn's end still
+    // behind the answer.
+    if before_flush_late::<V>(next, streams.combat(), relics, max_energy, &skipping) {
+        return Ok(None);
+    }
+    end_from_flush(
+        Fighting {
+            live: next,
+            streams,
+            relics,
+        },
+        ascension,
+        max_energy,
+        skipping,
+    )
+}
+
+/// The player's turn end from the hand's flush on: the flush, the cards'
+/// cleanup, `AfterTurnEnd`, then the enemies' turn and the player's next.
+pub(super) fn end_from_flush<V: Rules>(
+    fighting: Fighting<'_, V>,
+    ascension: V::AscensionLevel,
+    max_energy: V::Count,
+    mut skipping: Skips<V>,
+) -> Result<Option<super::Ended>, Error> {
+    let Fighting {
+        live: next,
+        streams,
+        relics,
+    } = fighting;
     flush_hand(next, streams.combat(), relics, ascension);
     end_of_turn_cleanup(next);
     // `AfterTurnEnd` for the side that just ended.
@@ -646,6 +676,87 @@ pub(super) fn post_play_from<V: Rules>(
         }
     }
     live.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::END;
+    false
+}
+
+/// `BeforeFlushLate`, the second pass of `Hook.BeforeFlush`. True where a
+/// listener's pick asked, and the turn's end from the flush on waits behind
+/// the answer.
+///
+/// # Panics
+///
+/// A listener asking for anything but a pick of cards to retain.
+fn before_flush_late<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    max_energy: V::Count,
+    skipping: &Skips<V>,
+) -> bool {
+    if !listen::heard::<V>(live, relics, sts2_core::ModelHook::BeforeFlushLate) {
+        return false;
+    }
+    let player = live.player().id;
+    let turn = live.turn;
+    for (listener, effect) in listen::notify::<V>(live, relics, sts2_core::EventHook::FlushingLate)
+    {
+        match effect {
+            // `CardSelectCmd.FromHand` of up to `count` cards that do not
+            // retain already, then `GiveSingleTurnRetain` on each. Nothing
+            // where the hand is not flushed, or once the fight is ending.
+            sts2_core::HookEffect::PickToRetain(count) => {
+                let flushes = !listen::any_decides::<V>(
+                    listen::Walk { live, relics },
+                    sts2_core::DecisionHook::ShouldFlush { player, turn },
+                    false,
+                );
+                if !flushes || super::board::ending::<V>(listen::Walk { live, relics }) {
+                    continue;
+                }
+                let count = num_traits::cast(count)
+                    .and_then(nonmax::NonMaxUsize::new)
+                    .unwrap_or_else(|| unimplemented!("retaining {count:?} cards"));
+                let selection = sts2_core::Selection::UpTo(count);
+                let cards: SmallVec<[sts2_core::CardAt<V>; sts2_core::MAX_CARDS_IN_HAND]> = live
+                    .cards
+                    .iter(Pile::Hand)
+                    .enumerate()
+                    .filter(|(_, held)| !held.face.retains())
+                    .map(|(at, held)| {
+                        let at = num_traits::NumCast::from(at)
+                            .expect("a hand's place fits a hand index");
+                        sts2_core::CardAt::new(held.id, Pile::Hand, at)
+                    })
+                    .collect();
+                match selection.validate_automatic(cards.iter().copied().collect()) {
+                    Some(picked) => {
+                        act_on::<V>(
+                            live,
+                            rngs.reborrow(),
+                            relics,
+                            sts2_core::PileAct::RetainThisTurn,
+                            picked.as_slice(),
+                            false,
+                        );
+                    }
+                    None => {
+                        live.asking = Some(super::live::Asking {
+                            then: Then::Pick {
+                                act: sts2_core::PileAct::RetainThisTurn,
+                            },
+                            question: super::live::Asked::Among { cards, selection },
+                        });
+                        live.defer(super::live::Deferred::Flush {
+                            max_energy,
+                            skipping: *skipping,
+                        });
+                        return true;
+                    }
+                }
+            }
+            effect => unimplemented!("{listener:?} asking for {effect:?} before the hand flushes"),
+        }
+    }
     false
 }
 
@@ -2068,6 +2179,19 @@ pub(super) fn act_on<V: Rules>(
                 false => Pile::Hand,
             },
             sts2_core::PileAct::IntoDraw => Pile::Draw,
+            // `GiveSingleTurnRetain`, which `EndOfTurnCleanup` clears.
+            sts2_core::PileAct::RetainThisTurn => {
+                live.cards.write(from, at, |face| {
+                    face.modify(
+                        sts2_core::Change::AddKeyword(
+                            <V::CardKeyword as sts2_core::KeywordKinds<V>>::RETAIN,
+                        ),
+                        sts2_core::Lasting::ThisTurn,
+                    );
+                    true
+                });
+                continue;
+            }
             // `CardPilePosition.Top`, the front, where a draw takes from.
             sts2_core::PileAct::OntoDrawTop => {
                 live.cards.move_to(from, at, Pile::Draw);

@@ -1193,6 +1193,13 @@ fn run_deferred<V: Rules>(
                 }
                 ended => ended,
             },
+            super::live::Deferred::Flush {
+                max_energy,
+                skipping,
+            } => match ended {
+                None => super::turn::end_from_flush(fighting, ascension, max_energy, skipping)?,
+                ended => ended,
+            },
             super::live::Deferred::PrePlay { rest, next } => match ended {
                 None => {
                     let ended = super::turn::pre_play_from::<V>(

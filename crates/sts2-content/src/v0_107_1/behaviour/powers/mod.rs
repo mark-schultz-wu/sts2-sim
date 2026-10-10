@@ -2141,6 +2141,15 @@ pub(crate) fn event_hook(
         }
         // Its `AfterModifyingEnergyGain` only flashes.
         (Power::NoEnergyGainPower, _, EventHook::EnergyGainModified) => return,
+        // `WellLaidPlansPower.BeforeFlushLate`: its owner picks up to its
+        // stack of cards to retain this turn. A fight here has one player,
+        // whose power it is.
+        (Power::WellLaidPlansPower, PowerAmount::Counted(count), EventHook::FlushingLate) => {
+            Some(HookEffect::PickToRetain(count))
+        }
+        (Power::WellLaidPlansPower, PowerAmount::Endless, EventHook::FlushingLate) => {
+            unimplemented!("an endless Well-Laid Plans")
+        }
         // `FlankingPower.AfterSideTurnEnd`: gone once its owner's side ends
         // a turn.
         (Power::FlankingPower, _, EventHook::SideTurnEnd { side, .. }) if side == owner => {

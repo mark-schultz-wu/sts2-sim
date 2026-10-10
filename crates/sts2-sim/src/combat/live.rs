@@ -272,6 +272,12 @@ pub(super) enum Deferred<V: Rules> {
         rest: super::turn::PrePlayRest<V>,
         max_energy: V::Count,
     },
+    /// The player's turn end from the hand's flush on, once a pick before
+    /// it is answered. `skipping` is what this turn's tick skips.
+    Flush {
+        max_energy: V::Count,
+        skipping: Skips<V>,
+    },
     Hits {
         frame: super::board::Frame<V>,
         attack: HeldAttack<V>,
