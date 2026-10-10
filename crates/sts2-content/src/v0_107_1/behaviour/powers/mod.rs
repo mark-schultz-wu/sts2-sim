@@ -3526,16 +3526,25 @@ pub(crate) fn event_hook(
         }
         (Power::HighVoltagePower, _, EventHook::SideTurnEnd { .. }) => None,
         // `GalvanicPower.BeforeCombatStart`: Galvanized on every Power the
-        // player holds. `AfterCardEnteredCombat`: on a Power that joins the
-        // fight. The fight leaves a card afflicted already as it is.
+        // player holds. `AfterCardEnteredCombat`: on a Power with no
+        // affliction that joins the fight, which a clone of an afflicted
+        // card is not.
         (Power::GalvanicPower, _, EventHook::CombatStarting { .. }) => {
             Some(HookEffect::Afflict {
                 to: sts2_core::Writing::EveryOfKind(sts2_core::CardKind::Power),
                 affliction: Affliction::Galvanized,
             })
         }
-        (Power::GalvanicPower, _, EventHook::CardEnteredCombat { at, card, .. })
-            if <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Power) =>
+        (
+            Power::GalvanicPower,
+            _,
+            EventHook::CardEnteredCombat {
+                at,
+                card,
+                afflicted: false,
+                ..
+            },
+        ) if <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Power) =>
         {
             Some(HookEffect::Afflict {
                 to: sts2_core::Writing::One(at),
