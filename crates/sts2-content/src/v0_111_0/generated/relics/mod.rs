@@ -1866,7 +1866,9 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // MASSIVE_SCROLL
     sts2_core::Overrides::NONE,
     // MAW_BANK
-    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterRoomEntered),
+    sts2_core::Overrides::NONE
+        .with(sts2_core::ModelHook::AfterItemPurchased)
+        .with(sts2_core::ModelHook::AfterRoomEntered),
     // MEAL_TICKET
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterRoomEntered),
     // MEAT_CLEAVER
