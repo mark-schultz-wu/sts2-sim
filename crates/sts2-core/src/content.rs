@@ -724,6 +724,7 @@ pub enum ModelHook {
     AfterModifyingEnergyGain,
     AfterStarsGained,
     AfterBlockGained,
+    BeforeFlushLate,
     ModifyDamageAdditive,
     ModifyDamageMultiplicative,
     ModifyDamageCap,
@@ -791,7 +792,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 143] = [
+    pub const ALL: [ModelHook; 144] = [
         ModelHook::AfterRoomEntered,
         ModelHook::AfterMapGenerated,
         ModelHook::BeforeCombatStart,
@@ -871,6 +872,7 @@ impl ModelHook {
         ModelHook::AfterModifyingEnergyGain,
         ModelHook::AfterStarsGained,
         ModelHook::AfterBlockGained,
+        ModelHook::BeforeFlushLate,
         ModelHook::ModifyDamageAdditive,
         ModelHook::ModifyDamageMultiplicative,
         ModelHook::ModifyDamageCap,
@@ -1097,6 +1099,7 @@ impl ModelHook {
             }
             ModelHook::AfterStarsGained => "AfterStarsGained",
             ModelHook::AfterBlockGained => "AfterBlockGained",
+            ModelHook::BeforeFlushLate => "BeforeFlushLate",
         }
     }
 }
@@ -3971,6 +3974,9 @@ pub enum EventHook<V: ContentVersion> {
     /// `AfterAutoPrePlayPhaseEnteredLate`, the last pass before the play
     /// phase.
     AutoPrePlayPhaseLate { turn: V::Count },
+    /// `BeforeFlushLate`, the second pass of `Hook.BeforeFlush`, once
+    /// `DoTurnEnd` is over and before the hand is flushed.
+    FlushingLate,
     /// `AfterAutoPostPlayPhaseEntered`, as `EndPlayerTurnPhaseOne` opens and
     /// before `BeforeTurnEnd`, in the player's `TurnNumber`.
     AutoPostPlayPhase { turn: V::Count },
@@ -4164,6 +4170,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::EnergyGainModified => ModelHook::AfterModifyingEnergyGain,
             EventHook::StarsGained { .. } => ModelHook::AfterStarsGained,
             EventHook::BlockGained { .. } => ModelHook::AfterBlockGained,
+            EventHook::FlushingLate => ModelHook::BeforeFlushLate,
             EventHook::PotionUsing { .. } => ModelHook::BeforePotionUsed,
             EventHook::PotionUsed { .. } => ModelHook::AfterPotionUsed,
             EventHook::PotionProcured { .. } => ModelHook::AfterPotionProcured,
@@ -4891,6 +4898,8 @@ pub enum PileAct {
     OntoDrawTop,
     /// `CardPileCmd.Add(cards, PileType.Draw)`, which is its bottom.
     IntoDraw,
+    /// `CardModel.GiveSingleTurnRetain`, which leaves the card where it is.
+    RetainThisTurn,
     /// `CardCmd.TransformToRandom` off `CombatCardSelection`, one card at a
     /// time.
     TransformToRandom,
@@ -5094,6 +5103,9 @@ pub enum HookEffect<V: ContentVersion> {
         kind: CardKind,
         count: V::Number,
     },
+    /// `CardSelectCmd.FromHand` of up to this many of the cards that do not
+    /// retain this turn, each of which `GiveSingleTurnRetain` then retains.
+    PickToRetain(V::Number),
     /// `CardPileCmd.AutoPlayFromDrawPile(1, Top)`, when `card` stands on top
     /// of the draw pile. Nothing otherwise.
     AutoPlayFromDrawIfTop(crate::CardId<V>),

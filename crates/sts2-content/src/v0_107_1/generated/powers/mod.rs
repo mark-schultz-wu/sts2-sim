@@ -2237,7 +2237,7 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
         .with(sts2_core::ModelHook::AfterSideTurnEnd)
         .with(sts2_core::ModelHook::ModifyDamageMultiplicative),
     // WELL_LAID_PLANS_POWER
-    sts2_core::Overrides::NONE,
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::BeforeFlushLate),
     // WITHERING_PRESENCE_POWER
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardPlayed),
     // WRAITH_FORM_POWER
