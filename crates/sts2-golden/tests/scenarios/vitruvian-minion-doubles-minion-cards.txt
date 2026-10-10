@@ -1,0 +1,14 @@
+# Vitruvian Minion doubles the damage and block of a card tagged Minion.
+# Minion Sacrifice shows sixteen block and Minion Strike twelve damage, and
+# each plays for that. A Strike or a Defend shows its own number.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","relic":"VITRUVIAN_MINION"}
+{"cmd":"grant","card":"MINION_STRIKE"}
+{"cmd":"grant","card":"MINION_STRIKE"}
+{"cmd":"grant","card":"MINION_SACRIFICE"}
+{"cmd":"grant","card":"MINION_SACRIFICE"}
+{"cmd":"grant","card":"MINION_DIVE_BOMB"}
+{"cmd":"grant","card":"MINION_DIVE_BOMB"}
+{"cmd":"fight","encounter":"SHRINKER_BEETLE_WEAK"}
+{"cmd":"play_card","index":2,"target":1}
+{"cmd":"play_card","index":0}
