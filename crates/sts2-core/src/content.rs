@@ -5319,6 +5319,13 @@ pub enum HookEffect<V: ContentVersion> {
         card: V::Card,
         per: V::Number,
     },
+    /// `PowerCmd.Apply(power)` on the listener's owner: `per` for each of the
+    /// attack's hits that took health. A hit a pet stood in for counts by the
+    /// pet's result alone.
+    ApplyToOwnerPerUnblockedHit {
+        power: V::Power,
+        per: V::Number,
+    },
     /// `PotionFactory.CreateRandomPotionOutOfCombat` off the named stream and
     /// `PotionCmd.TryToProcure`, one at a time for as long as the belt has an
     /// open slot and the potion lands.

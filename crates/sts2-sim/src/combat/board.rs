@@ -5218,6 +5218,30 @@ impl<V: Rules> Board<'_, V> {
                         * hits;
                     self.add_generated_cards(CardIdent::new(card), Pile::Discard, count);
                 }
+                (
+                    Listener::Power { owner, .. },
+                    HookEffect::ApplyToOwnerPerUnblockedHit { power, per },
+                ) => {
+                    // A hit on a pet carries its owner's result after the
+                    // pet's, which the count leaves out.
+                    let mut hits = 0usize;
+                    let mut stood_in_for = None;
+                    for hit in &results {
+                        if stood_in_for.take() == Some(hit.receiver) {
+                            continue;
+                        }
+                        stood_in_for = self
+                            .at(hit.receiver)
+                            .and_then(|at| self.live.creatures[at].owner);
+                        if hit.unblocked > V::Number::zero() {
+                            hits += 1;
+                        }
+                    }
+                    if hits > 0 {
+                        let hits: V::Number = num_traits::cast(hits).expect("a hit count");
+                        self.land(owner, power, PowerAmount::Counted(per * hits), Some(owner));
+                    }
+                }
                 (listener, effect) => {
                     unimplemented!("{listener:?} asking for {effect:?} after an attack")
                 }
