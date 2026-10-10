@@ -82,6 +82,7 @@ mod cloak_clasp;
 mod cracked_core;
 mod crossbow;
 mod cursed_pearl;
+mod darkstone_periapt;
 mod data_disk;
 mod daughter_of_the_wind;
 mod delicate_frond;
@@ -131,6 +132,7 @@ mod golden_compass;
 mod golden_pearl;
 mod gorget;
 mod gremlin_horn;
+mod hand_drill;
 mod happy_flower;
 mod hefty_tablet;
 mod helical_dart;
@@ -458,6 +460,8 @@ pub enum State {
     RedMask,
     Lantern,
     LuckyFysh,
+    DarkstonePeriapt,
+    HandDrill,
     AmethystAubergine,
     EternalFeather,
     Pantograph,
@@ -824,6 +828,8 @@ pub(crate) fn event_hook(
         State::RedMask => red_mask::event_hook(hook, asked),
         State::Lantern => lantern::event_hook(hook, asked),
         State::LuckyFysh => lucky_fysh::event_hook(hook, asked),
+        State::DarkstonePeriapt => darkstone_periapt::event_hook(hook, asked),
+        State::HandDrill => hand_drill::event_hook(hook, asked),
         State::AmethystAubergine => amethyst_aubergine::event_hook(hook, asked),
         State::EternalFeather => eternal_feather::event_hook(hook, asked),
         State::Pantograph => pantograph::event_hook(hook, asked),
@@ -1198,6 +1204,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::RedMask
         | State::Lantern
         | State::LuckyFysh
+        | State::DarkstonePeriapt
+        | State::HandDrill
         | State::AmethystAubergine
         | State::EternalFeather
         | State::Pantograph
@@ -1470,6 +1478,8 @@ impl sts2_core::RelicModel<V> for State {
             Relic::RedMask => State::RedMask,
             Relic::Lantern => State::Lantern,
             Relic::LuckyFysh => State::LuckyFysh,
+            Relic::DarkstonePeriapt => State::DarkstonePeriapt,
+            Relic::HandDrill => State::HandDrill,
             Relic::AmethystAubergine => State::AmethystAubergine,
             Relic::EternalFeather => State::EternalFeather,
             Relic::Pantograph => State::Pantograph,

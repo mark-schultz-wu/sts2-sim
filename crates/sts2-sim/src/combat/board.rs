@@ -994,6 +994,8 @@ impl<'a, V: Rules> Board<'a, V> {
                     unblocked: lost,
                     powered,
                     fully_blocked: aimed && fully_blocked,
+                    block_broken: aimed && block_broken,
+                    player: self.live.player().id,
                 },
             );
             self.after_hit(asked);
@@ -2129,6 +2131,20 @@ impl<'a, V: Rules> Board<'a, V> {
             {
                 let player = self.live.player().id;
                 self.land(player, power, amount, Some(player));
+                continue;
+            }
+            // `PowerCmd.Apply` from the relic's owner, the player.
+            if let (
+                Listener::Relic { .. },
+                HookEffect::ApplyPower {
+                    target,
+                    power,
+                    amount,
+                },
+            ) = (listener, effect)
+            {
+                let player = self.live.player().id;
+                self.land(target, power, amount, Some(player));
                 continue;
             }
             let Listener::Power {

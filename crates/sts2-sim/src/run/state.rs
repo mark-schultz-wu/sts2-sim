@@ -3101,7 +3101,7 @@ impl<V: Rules> State<V> {
     ///
     /// # Panics
     ///
-    /// Anything but gold or a heal.
+    /// Anything but gold, a heal or more maximum health.
     fn card_joined_deck(&mut self, effect: sts2_core::HookEffect<V>) {
         match effect {
             sts2_core::HookEffect::GainGold(amount) => self.gain_gold(amount),
@@ -3109,6 +3109,13 @@ impl<V: Rules> State<V> {
                 let healed: V::Health =
                     num_traits::cast(amount).expect("a relic's heal fits the build's health");
                 self.heal(healed);
+            }
+            // `CreatureCmd.GainMaxHp`: the maximum grows, then a heal of as
+            // much.
+            sts2_core::HookEffect::GainMaxHp(amount) => {
+                let amount = self.health(amount);
+                self.player.max_hp = self.player.max_hp + amount;
+                self.heal(amount);
             }
             effect => unimplemented!("a relic asking for {effect:?} as a card joins the deck"),
         }
