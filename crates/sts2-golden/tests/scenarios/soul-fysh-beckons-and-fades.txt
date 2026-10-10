@@ -1,0 +1,14 @@
+# The Soul Fysh beckons: a Beckon into the draw pile at random and one into
+# the discard pile. It de-gasses, then gazes, a hit and one more Beckon in
+# the discard pile. It fades, two Intangible, then screams, a hit and three
+# Vulnerable. A strike into its Intangible deals one.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"SOUL_FYSH_BOSS"}
+{"cmd":"power","power":"PLATING_POWER","amount":99,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":3,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

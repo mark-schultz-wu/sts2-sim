@@ -33,6 +33,17 @@ const CLAM_PLATING_TOUGH: Number = 9;
 /// `FossilStalker.AfterAddedToRoom`'s Suck.
 const STALKER_SUCK: Number = 3;
 
+/// `SoulFysh.FadeMove`'s Intangible, and `ScreamMoveAmount`'s Vulnerable.
+const FYSH_FADE: Number = 2;
+const FYSH_SCREAM: Number = 3;
+
+/// The Beckon the Soul Fysh deals the player.
+fn beckon() -> super::super::super::generated::cards::Cards {
+    use super::super::super::generated::cards::{Cards, StatusCard};
+
+    Cards::Status(StatusCard::Beckon)
+}
+
 /// `LagavulinMatriarch.Sleep`'s Plating and Asleep.
 const MATRIARCH_PLATING: Number = 12;
 const MATRIARCH_ASLEEP: Number = 3;
@@ -165,6 +176,39 @@ pub(super) fn perform<F: Fight<V>>(
             fight.apply_to_opponents(Power::FrailPower, PowerAmount::Counted(SCREECH_FRAIL));
         }
         (Monster::TwoTailedRat, MoveId::CallForBackupMove) => call_for_backup(fight),
+        // `BeckonMove`: for the one player, a Beckon into the draw pile at
+        // random, then one into the discard pile.
+        (Monster::SoulFysh, MoveId::BeckonMove) => {
+            fight.add_at_random(beckon(), sts2_core::Pile::Draw);
+            fight.add_generated_cards(
+                sts2_core::CardIdent::new(beckon()),
+                sts2_core::Pile::Discard,
+                1,
+            );
+        }
+        // `GazeMove`: its hit, then a Beckon into the discard pile.
+        (Monster::SoulFysh, MoveId::GazeMove) => {
+            if super::attack_first(fight, step) {
+                return Some(1);
+            }
+            fight.add_generated_cards(
+                sts2_core::CardIdent::new(beckon()),
+                sts2_core::Pile::Discard,
+                1,
+            );
+        }
+        // `FadeMove`: two Intangible. `IsInvisible` and the music are on
+        // screen alone.
+        (Monster::SoulFysh, MoveId::FadeMove) => {
+            fight.apply_to_actor(Power::IntangiblePower, PowerAmount::Counted(FYSH_FADE));
+        }
+        // `ScreamMove`: its hit, then three Vulnerable on each target.
+        (Monster::SoulFysh, MoveId::ScreamMove) => {
+            if super::attack_first(fight, step) {
+                return Some(1);
+            }
+            fight.apply_to_opponents(Power::VulnerablePower, PowerAmount::Counted(FYSH_SCREAM));
+        }
         // The Matriarch's four waking moves. Each first stops its sleeping
         // effect, which is all on screen.
         (Monster::LagavulinMatriarch, MoveId::SlashMove | MoveId::DisembowelMove) => {
