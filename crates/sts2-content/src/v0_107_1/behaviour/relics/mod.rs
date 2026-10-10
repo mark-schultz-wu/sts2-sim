@@ -304,6 +304,7 @@ mod velvet_choker;
 mod venerable_tea_set;
 mod very_hot_cocoa;
 mod vexing_puzzlebox;
+mod vitruvian_minion;
 mod war_hammer;
 mod war_paint;
 mod whetstone;
@@ -567,6 +568,7 @@ pub enum State {
     UnsettlingLamp(unsettling_lamp::State),
     EmotionChip(emotion_chip::State),
     TheCourier,
+    VitruvianMinion,
     MembershipCard,
     Tingsha,
     ToughBandages,
@@ -981,6 +983,7 @@ pub(crate) fn event_hook(
         State::Tingsha => tingsha::event_hook(hook, asked),
         State::MembershipCard => membership_card::event_hook(hook),
         State::TheCourier => the_courier::event_hook(hook),
+        State::VitruvianMinion => vitruvian_minion::event_hook(hook),
         State::EmotionChip(state) => emotion_chip::event_hook(state, hook, asked),
         State::UnsettlingLamp(state) => unsettling_lamp::event_hook(state, hook),
         State::Vambrace(state) => vambrace::event_hook(state, hook),
@@ -1086,6 +1089,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         State::PaelsLegion(state) => paels_legion::modify_hook(state, hook),
         State::PumpkinCandle(state) => pumpkin_candle::modify_hook(state, hook),
         State::TheCourier => the_courier::modify_hook(hook),
+        State::VitruvianMinion => vitruvian_minion::modify_hook(hook),
         State::MembershipCard => membership_card::modify_hook(hook),
         State::UnsettlingLamp(state) => unsettling_lamp::modify_hook(state, hook),
         State::PollinousCore(state) => pollinous_core::modify_hook(state, hook),
@@ -1636,6 +1640,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::Tingsha => State::Tingsha,
             Relic::MembershipCard => State::MembershipCard,
             Relic::TheCourier => State::TheCourier,
+            Relic::VitruvianMinion => State::VitruvianMinion,
             Relic::EmotionChip => State::EmotionChip(emotion_chip::State::default()),
             Relic::UnsettlingLamp => State::UnsettlingLamp(unsettling_lamp::State::default()),
             Relic::Vambrace => State::Vambrace(vambrace::State::default()),
