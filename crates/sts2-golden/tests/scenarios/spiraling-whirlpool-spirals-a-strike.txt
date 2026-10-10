@@ -1,0 +1,6 @@
+# Observing the Spiraling Whirlpool puts Spiral on a deck card the player
+# picks among those it can enchant: a basic Strike.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"SPIRALING_WHIRLPOOL"}
+{"cmd":"choose_option","index":0}
+{"cmd":"answer","cards":[0]}
