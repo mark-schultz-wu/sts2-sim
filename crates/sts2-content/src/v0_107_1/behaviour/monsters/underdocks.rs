@@ -33,6 +33,10 @@ const CLAM_PLATING_TOUGH: Number = 9;
 /// `FossilStalker.AfterAddedToRoom`'s Suck.
 const STALKER_SUCK: Number = 3;
 
+/// `TerrorEel.ShriekAmount`, either side of `ToughEnemies`.
+const EEL_SHRIEK: Number = 70;
+const EEL_SHRIEK_TOUGH: Number = 75;
+
 /// The powers an Underdocks monster applies to itself as it spawns.
 ///
 /// Nothing for a monster this act does not port.
@@ -58,6 +62,13 @@ pub(super) fn starting_powers(
             }),
         )],
         Monster::FossilStalker => vec![(Power::SuckPower, PowerAmount::Counted(STALKER_SUCK))],
+        Monster::TerrorEel => vec![(
+            Power::ShriekPower,
+            PowerAmount::Counted(match ascension.has(AscensionLevel::ToughEnemies) {
+                true => EEL_SHRIEK_TOUGH,
+                false => EEL_SHRIEK,
+            }),
+        )],
         _ => return None,
     })
 }
