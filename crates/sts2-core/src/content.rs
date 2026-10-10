@@ -781,6 +781,7 @@ pub enum ModelHook {
     ModifyPowerAmountGivenMultiplicative,
     TryModifyPowerAmountReceived,
     ModifyXValue,
+    ShouldDie,
     ShouldDieLate,
     ShouldTakeExtraTurn,
     ShouldPlayerResetEnergy,
@@ -795,7 +796,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 147] = [
+    pub const ALL: [ModelHook; 148] = [
         ModelHook::AfterRoomEntered,
         ModelHook::AfterMapGenerated,
         ModelHook::BeforeCombatStart,
@@ -932,6 +933,7 @@ impl ModelHook {
         ModelHook::ModifyPowerAmountGivenMultiplicative,
         ModelHook::TryModifyPowerAmountReceived,
         ModelHook::ModifyXValue,
+        ModelHook::ShouldDie,
         ModelHook::ShouldDieLate,
         ModelHook::ShouldTakeExtraTurn,
         ModelHook::ShouldPlayerResetEnergy,
@@ -1083,6 +1085,7 @@ impl ModelHook {
             ModelHook::ModifyXValue => "ModifyXValue",
             ModelHook::AfterCardChangedPiles => "AfterCardChangedPiles",
             ModelHook::AfterCardGeneratedForCombat => "AfterCardGeneratedForCombat",
+            ModelHook::ShouldDie => "ShouldDie",
             ModelHook::ShouldDieLate => "ShouldDieLate",
             ModelHook::ShouldTakeExtraTurn => "ShouldTakeExtraTurn",
             ModelHook::AfterTakingExtraTurn => "AfterTakingExtraTurn",
@@ -1386,6 +1389,10 @@ pub trait PotionTable: Table {
     /// `PotionModel.CanBeGeneratedInCombat`, which a potion made mid-fight
     /// is drawn among.
     fn generated_in_combat(self) -> bool;
+
+    /// The hooks this potion's class overrides, as the hook dump measured
+    /// them. See [`PowerTable::overrides`].
+    fn overrides(self) -> Overrides;
 }
 
 /// When a potion can be drunk, reduced to what a rule asks.
@@ -3451,6 +3458,12 @@ pub enum DecisionHook<V: ContentVersion> {
     /// `ShouldDraw`, once for each `CardPileCmd.Draw`. A draw any listener
     /// answers no to draws nothing. `hand_draw` is `fromHandDraw`, which the
     /// turn's own draw is.
+    /// `ShouldDie`, as `creature`'s hit points are gone, asked ahead of
+    /// [`DecisionHook::ShouldDieLate`]. `player` is the player's creature.
+    ShouldDie {
+        creature: crate::CombatId,
+        player: crate::CombatId,
+    },
     /// `ShouldDieLate`, as `creature`'s hit points are gone. `player` is the
     /// player's creature, which a relic reads its owner as. A creature no
     /// listener lets die stays in the fight.
@@ -3551,6 +3564,7 @@ impl<V: ContentVersion> DecisionHook<V> {
             DecisionHook::ShouldAllowFreeTravel => ModelHook::ShouldAllowFreeTravel,
             DecisionHook::ShouldProcurePotion { .. } => ModelHook::ShouldProcurePotion,
             DecisionHook::ShouldDraw { .. } => ModelHook::ShouldDraw,
+            DecisionHook::ShouldDie { .. } => ModelHook::ShouldDie,
             DecisionHook::ShouldDieLate { .. } => ModelHook::ShouldDieLate,
             DecisionHook::ShouldPlayerResetEnergy { .. } => ModelHook::ShouldPlayerResetEnergy,
             DecisionHook::ShouldForcePotionReward { .. } => ModelHook::ShouldForcePotionReward,
@@ -4095,8 +4109,9 @@ pub enum EventHook<V: ContentVersion> {
     /// The rest site option a relic offers, taken: the relic's own method,
     /// which the option's `OnSelect` calls.
     RestOptionTaken,
-    /// `AfterPreventingDeath`, asked of the one model whose `ShouldDieLate`
-    /// kept its owner in the fight, with the owner's maximum hit points.
+    /// `AfterPreventingDeath`, asked of the one model whose `ShouldDie` or
+    /// `ShouldDieLate` kept its owner in the fight, with the owner's maximum
+    /// hit points.
     DeathPrevented { max_hp: V::Number },
     /// `PowerModel.AfterRemoved`, asked of a power as it comes off the
     /// creature that carried it.
@@ -5262,6 +5277,9 @@ pub enum HookEffect<V: ContentVersion> {
     GainStars(V::Number),
     /// `CreatureCmd.Heal` on the listener's owner.
     Heal(V::Number),
+    /// `OnUseWrapper` on the creature a potion kept alive: the potion leaves
+    /// the belt, and its effect runs on that creature.
+    UseOnSaved,
     /// `CreatureCmd.Heal` on the listener's owner for this many hundredths of
     /// its maximum health. The health keeps the whole part.
     HealPercent(V::Number),
@@ -6081,6 +6099,8 @@ pub enum Listener<'a, V: Hooks, P: Printed<V> + ?Sized> {
         /// its own.
         fight: &'a dyn FightView<V>,
     },
+    /// A potion in the belt, which the fight asks after the relics.
+    Potion(V::Potion),
     Relic {
         state: &'a V::RelicState,
         /// The fight's creatures, for a relic that asks about one. Nothing
@@ -6260,6 +6280,14 @@ pub trait Hooks: ContentVersion {
     /// [`Hooks::power_event_hook`] for a relic, by what its model saves.
     fn relic_event_hook(
         state: &mut Self::RelicState,
+        hook: EventHook<Self>,
+        asked: &mut HookEffects<Self>,
+    );
+
+    /// [`Hooks::power_event_hook`] for a potion in the belt, which saves
+    /// nothing of its own.
+    fn potion_event_hook(
+        potion: Self::Potion,
         hook: EventHook<Self>,
         asked: &mut HookEffects<Self>,
     );

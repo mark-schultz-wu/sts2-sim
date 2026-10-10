@@ -229,7 +229,8 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     )?;
 
     emit_shape(&mut out);
-    emit_potions(&mut out, &potions, &pool_of)?;
+    let overrides = super::overrides(&build, "POTION")?;
+    emit_potions(&mut out, &potions, &pool_of, &overrides)?;
     emit_stock(&mut out, &pools, &stocked);
     emit_rewards(&mut out, &stocked, &potions)?;
 
@@ -422,6 +423,7 @@ fn emit_potions(
     out: &mut String,
     potions: &[&Vec<String>],
     pool_of: &BTreeMap<String, String>,
+    overrides: &BTreeMap<String, Vec<sts2_core::ModelHook>>,
 ) -> Result<(), Error> {
     writeln!(
         out,
@@ -500,7 +502,20 @@ fn emit_potions(
     writeln!(out, "    type Target = TargetType;\n").unwrap();
     out.push_str(&extras);
     out.push_str(READS_ITS_ROW);
+    writeln!(
+        out,
+        "\n    fn overrides(self) -> sts2_core::Overrides {{\n\
+         \x20       OVERRIDES[self as usize]\n\
+         \x20   }}"
+    )
+    .unwrap();
     writeln!(out, "}}").unwrap();
+    super::emit_overrides(
+        out,
+        "indexed by the potion's discriminant.",
+        potions.iter().map(|row| row[1].as_str()),
+        overrides,
+    );
 
     Ok(())
 }

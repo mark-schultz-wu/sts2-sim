@@ -35,6 +35,38 @@ pub enum Resume {
     Ironclad(ironclad::Resume),
 }
 
+/// `ShouldDie`, which only `FairyInABottle` answers in this build: no for
+/// its owner, which keeps the player in the fight.
+pub(crate) fn decide_hook(
+    potion: Potion,
+    hook: sts2_core::DecisionHook<V>,
+) -> sts2_core::HookResponse<bool> {
+    match (potion, hook) {
+        (Potion::FairyInABottle, sts2_core::DecisionHook::ShouldDie { creature, player }) => {
+            sts2_core::HookResponse::Decision(creature != player)
+        }
+        (potion, hook) => match hook.model_hook() {
+            Some(_) => unimplemented!("what {potion:?} decides for {hook:?}"),
+            None => sts2_core::HookResponse::DoesNotImplement,
+        },
+    }
+}
+
+/// `AfterPreventingDeath`, which `FairyInABottle` answers with
+/// `OnUseWrapper` on the creature it saved.
+pub(crate) fn event_hook(
+    potion: Potion,
+    hook: sts2_core::EventHook<V>,
+    asked: &mut sts2_core::HookEffects<V>,
+) {
+    match (potion, hook) {
+        (Potion::FairyInABottle, sts2_core::EventHook::DeathPrevented { .. }) => {
+            asked.push(sts2_core::HookEffect::UseOnSaved);
+        }
+        (potion, hook) => unimplemented!("what {potion:?} does for {hook:?}"),
+    }
+}
+
 /// What a potion does when it is drunk.
 ///
 /// # Panics

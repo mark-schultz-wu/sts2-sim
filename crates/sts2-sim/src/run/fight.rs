@@ -181,6 +181,7 @@ impl<V: Rules> State<V> {
         self.asked_by_fight();
         self.lose_cards(since);
         self.gold_from_fight();
+        self.potions_from_fight();
         match ended {
             None => {}
             // Not `finish`: the run never left the fight, and the piles and

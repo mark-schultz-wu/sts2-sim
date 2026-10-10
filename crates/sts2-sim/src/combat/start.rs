@@ -28,8 +28,8 @@ pub(crate) struct Entering<'a, V: Rules> {
     pub(crate) hp: V::Health,
     pub(crate) max_hp: V::Health,
     pub(crate) gold: V::Number,
-    /// How many potions the player's belt holds.
-    pub(crate) potions: u8,
+    /// The player's potions, in slot order.
+    pub(crate) potions: &'a [V::Potion],
     pub(crate) alive: bool,
     pub(crate) deck: &'a [sts2_core::DeckCard<V>],
     /// Whether the run reached this room off the map's lines.
@@ -87,7 +87,7 @@ pub(crate) fn enter<V: Rules>(
         energy,
         stars: num_traits::zero(),
         gold: entering.gold,
-        potions: entering.potions,
+        potions: super::live::PotionBelt::holding(entering.potions),
         round: num_traits::one(),
         side: <V::CombatSide as SideKinds>::PLAYER,
         history: super::live::CombatHistory::new(),
@@ -308,7 +308,7 @@ pub(crate) fn enter<V: Rules>(
     let mut arriving: Vec<HookEffect<V>> = Vec::new();
     let starting = EventHook::CombatStarting {
         room: live.room(),
-        holding_potions: live.potions > 0,
+        holding_potions: !live.potions.is_empty(),
         point: live.point,
     };
     for (listener, effect) in super::listen::notify::<V>(&mut live, relics, starting) {

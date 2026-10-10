@@ -506,7 +506,7 @@ const BELT_INLINE: usize = 16;
 /// `Player.MaxPotionCount` is a list with no bound. It starts at three, and
 /// only Potion Belt (two), Alchemical Coffer (four) and Phial Holster (one)
 /// add to it. A run holds each relic once.
-const BELT: usize = 10;
+pub(crate) const BELT: usize = 10;
 
 /// How many map points one act's run stands on. An act is shorter than this.
 const VISITED: usize = 32;
@@ -1363,9 +1363,8 @@ impl<V: Rules> State<V> {
 
     /// The belt's count, onto the fight the run stands in.
     fn belt_to_fight(&mut self) {
-        let held = u8::try_from(self.player.potions.len()).expect("a belt's potions fit a byte");
         if let Phase::Combat(live) = &mut self.phase {
-            live.hold_potions(held);
+            live.hold_potions(&self.player.potions);
         }
     }
 
@@ -1507,6 +1506,18 @@ impl<V: Rules> State<V> {
     pub(super) fn gold_from_fight(&mut self) {
         if let Phase::Combat(live) = &self.phase {
             self.player.gold = live.gold();
+        }
+    }
+
+    /// The potions the fight spent out of the belt, which `RemoveBeforeUse`
+    /// took in the order the fight spent them.
+    pub(super) fn potions_from_fight(&mut self) {
+        let Phase::Combat(live) = &mut self.phase else {
+            return;
+        };
+        for &at in &live.take_spent_potions() {
+            self.player.potions.remove(usize::from(at));
+            self.player.potion_positions.remove(usize::from(at));
         }
     }
 
@@ -2674,9 +2685,23 @@ impl<V: Rules> State<V> {
         }
     }
 
-    /// `Hook.ShouldDieLate` for the player outside a fight: the slot of the
-    /// first relic on the belt that keeps them alive.
+    /// `Hook.ShouldDie`, then `Hook.ShouldDieLate`, for the player outside a
+    /// fight: the slot of the first relic on the belt that keeps them alive.
+    ///
+    /// # Panics
+    ///
+    /// A potion that overrides `ShouldDie`, which outside a fight nothing
+    /// here carries out.
     fn death_preventer(&self) -> Option<usize> {
+        let should_die = sts2_core::Overrides::of(sts2_core::ModelHook::ShouldDie);
+        if let Some(potion) = self
+            .player
+            .potions
+            .iter()
+            .find(|potion| sts2_core::PotionTable::overrides(**potion).intersects(should_die))
+        {
+            unimplemented!("{potion:?} asked whether the player dies outside a fight");
+        }
         let player = sts2_core::CombatId::new(nonmax::NonMaxU8::ZERO);
         let hook = sts2_core::DecisionHook::ShouldDieLate {
             creature: player,
@@ -4471,7 +4496,7 @@ impl<V: Rules> State<V> {
             hp: standing.hp,
             max_hp: standing.max_hp,
             gold: self.player.gold,
-            potions: u8::try_from(self.player.potions.len()).expect("a belt's potions fit a byte"),
+            potions: &self.player.potions,
             alive: standing.alive,
             deck: &self.player.deck,
             strayed: self.strays(at),

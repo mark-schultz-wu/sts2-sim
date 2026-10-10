@@ -1503,16 +1503,28 @@ impl<'a, V: Rules> Board<'a, V> {
                 effect => unimplemented!("{listener:?} asking for {effect:?} before a death"),
             }
         }
-        // `Hook.ShouldDieLate`, and the model that kept the creature alive.
+        // `Hook.ShouldDie`, then `Hook.ShouldDieLate`, and the model that
+        // kept the creature alive.
         let player = self.live.player().id;
-        if let Some(preventer) = super::listen::first_deciding::<V>(
+        let preventer = super::listen::first_deciding::<V>(
             self.walk(),
-            sts2_core::DecisionHook::ShouldDieLate {
+            sts2_core::DecisionHook::ShouldDie {
                 creature: id,
                 player,
             },
             false,
-        ) {
+        )
+        .or_else(|| {
+            super::listen::first_deciding::<V>(
+                self.walk(),
+                sts2_core::DecisionHook::ShouldDieLate {
+                    creature: id,
+                    player,
+                },
+                false,
+            )
+        });
+        if let Some(preventer) = preventer {
             self.death_prevented(at, preventer);
             return;
         }
@@ -1731,8 +1743,10 @@ impl<'a, V: Rules> Board<'a, V> {
     ///
     /// # Panics
     ///
-    /// A model other than a relic keeping a creature alive, or anything
-    /// asked for that nothing here carries out.
+    /// A model other than a relic or a potion keeping a creature alive, or
+    /// anything asked for that nothing here carries out.
+    #[cold]
+    #[inline(never)]
     fn death_prevented(&mut self, at: usize, preventer: sts2_core::ModelId<V>) {
         let creature = &self.live.creatures[at];
         let (id, side) = (creature.id, creature.side);
@@ -1741,18 +1755,82 @@ impl<'a, V: Rules> Board<'a, V> {
         if let Some(effect) = self.after_death(id, side, true).first() {
             unimplemented!("a power asking for {effect:?} over a death kept from happening")
         }
-        let sts2_core::ModelId::Relic(relic) = preventer else {
-            unimplemented!("{preventer:?} keeping a creature alive")
-        };
         let hook = sts2_core::EventHook::DeathPrevented { max_hp };
-        for effect in super::listen::ask_relic(self.relics, relic, hook) {
-            match effect {
-                HookEffect::Heal(amount) => sts2_core::Fight::heal(self, id, amount),
-                effect => {
-                    unimplemented!("{relic:?} asking for {effect:?} as it keeps {id:?} alive")
+        let asked = match preventer {
+            sts2_core::ModelId::Relic(relic) => super::listen::ask_relic(self.relics, relic, hook),
+            sts2_core::ModelId::Potion(potion) => {
+                let mut asked = sts2_core::HookEffects::new();
+                V::potion_event_hook(potion, hook, &mut asked);
+                asked
+            }
+            _ => unimplemented!("{preventer:?} keeping a creature alive"),
+        };
+        for effect in asked {
+            match (preventer, effect) {
+                (sts2_core::ModelId::Relic(_), HookEffect::Heal(amount)) => {
+                    sts2_core::Fight::heal(self, id, amount)
+                }
+                (sts2_core::ModelId::Potion(potion), HookEffect::UseOnSaved) => {
+                    self.use_on_saved(id, potion)
+                }
+                (_, effect) => {
+                    unimplemented!("{preventer:?} asking for {effect:?} as it keeps {id:?} alive")
                 }
             }
         }
+    }
+
+    /// `OnUseWrapper` on `saved`, for the `potion` that kept it alive:
+    /// `RemoveBeforeUse`, `BeforePotionUsed`, the potion's own effect,
+    /// `AfterPotionUsed` and `CheckForEmptyHand`.
+    ///
+    /// # Panics
+    ///
+    /// A listener asking for anything around the potion, or a potion that
+    /// stops to ask a question.
+    #[cold]
+    #[inline(never)]
+    fn use_on_saved(&mut self, saved: CombatId, potion: V::Potion) {
+        let at = self
+            .live
+            .potions
+            .held()
+            .iter()
+            .position(|&held| held == potion)
+            .expect("the potion that kept a creature alive is in the belt");
+        self.live.potions.spend(at);
+        let hook = sts2_core::EventHook::PotionUsing {
+            target: Some(saved),
+        };
+        if let Some((listener, effect)) =
+            super::listen::notify::<V>(self.live, self.relics, hook).first()
+        {
+            unimplemented!("{listener:?} asking for {effect:?} before a potion")
+        }
+        let actor = std::mem::replace(&mut self.actor, saved);
+        let played = V::on_use(potion, self);
+        self.actor = actor;
+        if !matches!(played, sts2_core::Played::Done) {
+            unimplemented!("{potion:?} stopping to ask as it keeps {saved:?} alive");
+        }
+        if self.ended().is_some() {
+            return;
+        }
+        let hook = sts2_core::EventHook::PotionUsed {
+            in_fight: true,
+            holding_potions: !self.live.potions.is_empty(),
+        };
+        let asked = super::listen::notify::<V>(self.live, self.relics, hook);
+        super::hook::apply::<V, _>(self, asked.into_iter().map(|(_, effect)| effect));
+        if self.ended().is_some() || self.live.cards.len(Pile::Hand) != 0 {
+            return;
+        }
+        let hook = sts2_core::EventHook::HandEmptied {
+            player: self.live.player().id,
+            phase: self.live.phase,
+        };
+        let asked = super::listen::notify::<V>(self.live, self.relics, hook);
+        super::hook::apply::<V, _>(self, asked.into_iter().map(|(_, effect)| effect));
     }
 
     /// `Hook.AfterDeath` for `creature`, which fought on `side`.

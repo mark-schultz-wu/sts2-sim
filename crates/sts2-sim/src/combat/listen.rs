@@ -146,6 +146,7 @@ struct Kinds {
     powers: bool,
     monsters: bool,
     belt: bool,
+    potions: bool,
     cards: bool,
 }
 
@@ -218,6 +219,7 @@ pub(crate) enum Overrider<V: Rules> {
     Power(V::Power, CombatId),
     Monster(V::Monster),
     Relic(V::Relic),
+    Potion(V::Potion),
     Card(sts2_core::CardIdent<V>),
 }
 
@@ -248,6 +250,11 @@ pub(crate) fn listeners_to<V: Rules>(
             named.push(Overrider::Relic(held.relic));
         }
     }
+    for &potion in live.potions.held() {
+        if sts2_core::PotionTable::overrides(potion).intersects(hooks) {
+            named.push(Overrider::Potion(potion));
+        }
+    }
     for (id, _) in live.cards.listening(hooks) {
         if let Some(card) = live.cards.named(id) {
             named.push(Overrider::Card(card.face.ident));
@@ -263,9 +270,11 @@ impl Kinds {
             powers: live.powers.hear(hooks),
             monsters: live.creatures.hear(hooks),
             belt: relics.hear(hooks),
+            potions: live.potions.hears(hooks),
             cards: live.cards.hears(hooks),
         };
-        (kinds.powers || kinds.monsters || kinds.belt || kinds.cards).then_some(kinds)
+        (kinds.powers || kinds.monsters || kinds.belt || kinds.potions || kinds.cards)
+            .then_some(kinds)
     }
 }
 
@@ -282,8 +291,13 @@ fn raise<V: Rules>(
         powers,
         monsters,
         belt,
+        potions,
         cards,
     } = kinds;
+    // A potion overrides only hooks the fight asks of it alone.
+    if potions {
+        unimplemented!("a potion hearing {hook:?}");
+    }
     let hooks = Overrides::of(model_hook);
     let mut answer = sts2_core::HookEffects::new();
     // Returned as it is, so it is built where the caller receives it.
@@ -447,6 +461,7 @@ pub(crate) fn each<V: Rules>(
         powers,
         monsters,
         belt,
+        potions,
         cards,
     }) = Kinds::hearing(live, relics, hooks)
     else {
@@ -497,6 +512,14 @@ pub(crate) fn each<V: Rules>(
                     },
                     held.relic.overrides(),
                 );
+            }
+        }
+        if potions {
+            for &potion in live.potions.held() {
+                let overrides = sts2_core::PotionTable::overrides(potion);
+                if overrides.intersects(hooks) {
+                    ask(sts2_core::Listener::Potion(potion), overrides);
+                }
             }
         }
         if cards {
@@ -584,6 +607,7 @@ fn first_of<V: Rules>(
                     sts2_core::ModelId::Monster(monster)
                 }
                 sts2_core::Listener::Card { card, .. } => sts2_core::ModelId::Card(card),
+                sts2_core::Listener::Potion(potion) => sts2_core::ModelId::Potion(potion),
                 // The relic whose model this is, which only its place on the
                 // belt names.
                 sts2_core::Listener::Relic { state, .. } => sts2_core::ModelId::Relic(
