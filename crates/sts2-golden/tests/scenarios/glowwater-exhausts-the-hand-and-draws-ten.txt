@@ -1,0 +1,13 @@
+# Glowwater exhausts every card in hand, one at a time, then draws ten. Six
+# cards granted make a deck of sixteen, so eleven wait in the draw pile and
+# ten of them come.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","potion":"GLOWWATER_POTION"}
+{"cmd":"grant","card":"ANGER"}
+{"cmd":"grant","card":"ANGER"}
+{"cmd":"grant","card":"ANGER"}
+{"cmd":"grant","card":"SHRUG_IT_OFF"}
+{"cmd":"grant","card":"SHRUG_IT_OFF"}
+{"cmd":"grant","card":"SHRUG_IT_OFF"}
+{"cmd":"fight","encounter":"SHRINKER_BEETLE_WEAK"}
+{"cmd":"use_potion","index":0,"target":null}

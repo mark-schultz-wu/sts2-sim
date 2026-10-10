@@ -31,6 +31,7 @@ pub(super) const ANY_NUMBER: usize = 999_999_999;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Resume {
     Shared(shared::Resume),
+    Event(event::Resume),
     Ironclad(ironclad::Resume),
 }
 
@@ -92,6 +93,7 @@ const FRUIT_JUICE: Number = 5;
 pub(crate) fn resume<F: Fight<V>>(fight: &mut F, at: Resume, answer: Taken<V>) -> Played<V> {
     match at {
         Resume::Shared(at) => shared::resume(fight, at, answer),
+        Resume::Event(at) => event::resume(fight, at, answer),
         Resume::Ironclad(at) => {
             let Taken::Selected(picked) = answer else {
                 unreachable!("an Ironclad potion asks for cards of a pile")
