@@ -1240,9 +1240,11 @@ fn doomed<V: Rules>(live: &Live<V>, side: V::CombatSide) -> SmallVec<[CombatId; 
                 .find(|held| held.power() == doom)
                 .and_then(|held| held.amount.count())
                 .is_some_and(|amount| {
-                    let hp: super::live::Amount = num_traits::cast(creature.hp)
-                        .expect("a creature's hit points fit a power's amount");
-                    hp <= amount
+                    // A long, since About to Blow's hit points are past any
+                    // stack a power carries.
+                    let hp: i64 =
+                        num_traits::cast(creature.hp).expect("a creature's hit points fit a long");
+                    hp <= i64::from(amount)
                 })
         })
         .map(|creature| creature.id)
