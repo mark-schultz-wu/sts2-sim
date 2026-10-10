@@ -95,6 +95,10 @@ pub enum State {
     ChainsOfBinding {
         bound_played: bool,
     },
+    /// `SkittishPower`'s `hasGainedBlockThisTurn`.
+    Skittish {
+        gained: bool,
+    },
     /// `HardenedShellPower`'s `damageReceivedThisTurn`.
     HardenedShell {
         received: Number,
@@ -352,6 +356,7 @@ impl sts2_core::PowerModel<V> for State {
             },
             Power::SwipePower => Self::Swipe { stolen: None },
             Power::HardenedShellPower => Self::HardenedShell { received: 0 },
+            Power::SkittishPower => Self::Skittish { gained: false },
             Power::OrbitPower => Self::Orbit {
                 spent: 0,
                 triggers: 0,
@@ -418,6 +423,7 @@ impl sts2_core::PowerModel<V> for State {
             Self::ChainsOfBinding { .. } => Power::ChainsOfBindingPower,
             Self::Swipe { .. } => Power::SwipePower,
             Self::HardenedShell { .. } => Power::HardenedShellPower,
+            Self::Skittish { .. } => Power::SkittishPower,
             Self::Orbit { .. } => Power::OrbitPower,
             Self::Outbreak { .. } => Power::OutbreakPower,
             Self::VoidForm { .. } => Power::VoidFormPower,
@@ -3926,6 +3932,43 @@ pub(crate) fn event_hook(
             per: amount,
         }),
         (Power::SuckPower, _, EventHook::AfterAttack { .. }) => None,
+        // `SkittishPower.AfterAttack`: once a turn, a card's attack that took
+        // health off its owner gives the owner its amount in block.
+        (
+            Power::SkittishPower,
+            PowerAmount::Counted(amount),
+            EventHook::AfterAttack {
+                powered: true,
+                source: Some(_),
+                ..
+            },
+        ) => {
+            let State::Skittish { gained } = state else {
+                unreachable!("Skittish holding {state:?}")
+            };
+            let hit = fight
+                .attack_result(holder)
+                .is_some_and(|result| result.unblocked != 0);
+            (!*gained && hit).then(|| {
+                *gained = true;
+                HookEffect::GainBlock(amount)
+            })
+        }
+        (Power::SkittishPower, PowerAmount::Endless, EventHook::AfterAttack { .. }) => {
+            unimplemented!("an endless Skittish")
+        }
+        (Power::SkittishPower, _, EventHook::AfterAttack { .. }) => None,
+        // `SkittishPower.AfterSideTurnEnd`, as the other side ends its turn:
+        // the block can come again.
+        (Power::SkittishPower, _, EventHook::SideTurnEnd { side, .. }) => {
+            let State::Skittish { gained } = state else {
+                unreachable!("Skittish holding {state:?}")
+            };
+            if side != owner {
+                *gained = false;
+            }
+            None
+        }
         // `NemesisPower.AfterSideTurnEnd`, as its owner's side's turn ends:
         // Intangible every other turn, and taken off on the turns between.
         (Power::NemesisPower, _, EventHook::SideTurnEnd { side, .. }) if side == owner => {

@@ -187,6 +187,7 @@ pub(crate) fn unblocked_damage_target<V: Rules>(
                 powers: &fight.live.powers,
                 kept: &fight.live.kept,
                 relics: Some(fight.relics),
+                attack: &fight.live.attack_results,
             };
             let listener = held.listener(creature.carrier(), fight.live.history(), &onlookers);
             if V::decide_hook(listener, hook).is_decision_and(|takes| takes) {
@@ -456,6 +457,7 @@ pub(crate) fn each<V: Rules>(
         powers: &live.powers,
         kept: &live.kept,
         relics: Some(relics),
+        attack: &live.attack_results,
     };
     for creature in live.creatures.iter() {
         if powers {

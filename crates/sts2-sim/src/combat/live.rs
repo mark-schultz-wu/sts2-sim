@@ -351,6 +351,8 @@ pub(super) struct HeldAttack<V: Rules> {
     pub(super) monster: Option<V::Monster>,
     /// `IsPoweredAttack`.
     pub(super) powered: bool,
+    /// `ModelSource` where it is a card.
+    pub(super) source: Option<(sts2_core::CardId<V>, V::Card)>,
 }
 
 /// Where `SetupPlayerTurn` stands, with what the hook it stopped in has still
@@ -1440,6 +1442,8 @@ pub(crate) struct Onlookers<'a, V: Rules> {
     /// The belt, where the caller has one to lend. A relic asked about with
     /// none lent panics by name.
     pub(crate) relics: Option<&'a crate::run::Belt<V>>,
+    /// The results of the attack whose `AfterAttack` is being raised.
+    pub(crate) attack: &'a [sts2_core::DamageResult<V>],
 }
 
 impl<V: Rules> sts2_core::FightView<V> for Onlookers<'_, V> {
@@ -1473,6 +1477,13 @@ impl<V: Rules> sts2_core::FightView<V> for Onlookers<'_, V> {
             .iter()
             .find(|fighter| fighter.id == creature)
             .and_then(|fighter| fighter.carrier().monster)
+    }
+
+    fn attack_result(&self, creature: CombatId) -> Option<sts2_core::DamageResult<V>> {
+        self.attack
+            .iter()
+            .find(|result| result.receiver == creature)
+            .copied()
     }
 
     fn current_hp(&self, creature: CombatId) -> Option<V::Health> {
@@ -2166,6 +2177,9 @@ pub(crate) struct Live<V: Rules> {
     /// How many attack commands this fight has started, which is what the
     /// next one is told apart by.
     pub(super) attacks: u32,
+    /// `AttackCommand.Results` of the attack whose `AfterAttack` is being
+    /// raised, which a listener reads. Empty at any other time.
+    pub(super) attack_results: Vec<sts2_core::DamageResult<V>>,
     /// The last creature id this fight gave out. A creature that leaves keeps
     /// its id, and the next one to arrive takes the id after this.
     pub(super) last_creature: CombatId,
@@ -2419,6 +2433,7 @@ impl<V: Rules> Clone for Live<V> {
             orbs: self.orbs.clone(),
             card_ids: self.card_ids.clone(),
             kept_faces: self.kept_faces.clone(),
+            attack_results: self.attack_results.clone(),
             notes: self.notes.clone(),
             asking: self.asking.clone(),
             deferred: self.deferred.clone(),
@@ -2464,6 +2479,7 @@ impl<V: Rules> Clone for Live<V> {
             card_ids,
             kept_faces,
             attacks,
+            attack_results,
             last_creature,
             won,
             notes,
@@ -2504,6 +2520,7 @@ impl<V: Rules> Clone for Live<V> {
         card_ids.clone_from(&source.card_ids);
         kept_faces.clone_from(&source.kept_faces);
         *attacks = source.attacks;
+        attack_results.clone_from(&source.attack_results);
         *last_creature = source.last_creature;
         *won = source.won;
         notes.clone_from(&source.notes);
@@ -2928,6 +2945,7 @@ impl<V: Rules> Live<V> {
             powers: &self.powers,
             kept: &self.kept,
             relics,
+            attack: &self.attack_results,
         };
         V::power_event_hook(
             held.event_power(&mut state, carrier, self.history.view(), &fight),
@@ -2997,6 +3015,7 @@ impl<V: Rules> Live<V> {
             powers: &self.powers,
             kept: &self.kept,
             relics: None,
+            attack: &self.attack_results,
         };
         V::power_event_hook(
             held.event_power(&mut state, carrier, self.history.view(), &fight),
@@ -3303,6 +3322,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             card_ids: CardIds::new(),
             kept_faces: Vec::new(),
             attacks: 0,
+            attack_results: Vec::new(),
             last_creature: CombatId::new(nonmax::NonMaxU8::ZERO),
             won: false,
             notes: smallvec::SmallVec::new(),

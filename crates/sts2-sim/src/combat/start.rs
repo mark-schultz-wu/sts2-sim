@@ -124,6 +124,7 @@ pub(crate) fn enter<V: Rules>(
         card_ids: CardIds::new(),
         kept_faces: Vec::new(),
         attacks: 0,
+        attack_results: Vec::new(),
         last_creature: CombatId::new(nonmax::NonMaxU8::ZERO),
         won: false,
         notes: smallvec::SmallVec::new(),

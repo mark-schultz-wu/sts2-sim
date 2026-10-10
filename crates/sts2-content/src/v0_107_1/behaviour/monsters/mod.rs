@@ -180,7 +180,9 @@ pub(crate) fn conditional<P: sts2_core::Printed<V> + ?Sized>(
         Monster::BowlbugRock | Monster::SlumberingBeetle | Monster::Ovicopter => {
             hive::conditional(monster, at, spawn, powers)
         }
-        Monster::Exoskeleton | Monster::Myte => opens_by_slot(monster, at, spawn),
+        Monster::Exoskeleton | Monster::Myte | Monster::PhantasmalGardener => {
+            opens_by_slot(monster, at, spawn)
+        }
         Monster::Toadpole => underdocks::conditional(monster, at, spawn),
         Monster::LivingShield
         | Monster::FrogKnight
@@ -191,8 +193,9 @@ pub(crate) fn conditional<P: sts2_core::Printed<V> + ?Sized>(
     }
 }
 
-/// An `INIT_MOVE` that reads the monster's `SlotName`. The Exoskeleton's and
-/// the Myte's encounters name their slots `first` onwards in roster order.
+/// An `INIT_MOVE` that reads the monster's `SlotName`. The Exoskeleton's, the
+/// Myte's and the Phantasmal Gardener's encounters name their slots `first`
+/// onwards in roster order.
 /// The state adds a branch for each slot in that order.
 fn opens_by_slot(
     monster: Monster,
@@ -205,6 +208,10 @@ fn opens_by_slot(
             Monster::Exoskeleton,
             Encounter::ExoskeletonsWeak | Encounter::ExoskeletonsNormal
         ) | (Monster::Myte, Encounter::MytesNormal)
+            | (
+                Monster::PhantasmalGardener,
+                Encounter::PhantasmalGardenersElite
+            )
     ) {
         unimplemented!("a {monster:?} spawned {spawn:?}");
     }

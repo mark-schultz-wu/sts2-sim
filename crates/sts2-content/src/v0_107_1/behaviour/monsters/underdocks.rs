@@ -33,6 +33,14 @@ const CLAM_PLATING_TOUGH: Number = 9;
 /// `FossilStalker.AfterAddedToRoom`'s Suck.
 const STALKER_SUCK: Number = 3;
 
+/// `PhantasmalGardener.SkittishAmount`, either side of `ToughEnemies`.
+const GARDENER_SKITTISH: Number = 6;
+const GARDENER_SKITTISH_TOUGH: Number = 7;
+
+/// `PhantasmalGardener.EnlargeStr`, either side of `DeadlyEnemies`.
+const GARDENER_ENLARGE: Number = 2;
+const GARDENER_ENLARGE_DEADLY: Number = 3;
+
 /// `SkulkingColony.AfterAddedToRoom`'s Hardened Shell.
 const COLONY_SHELL: Number = 20;
 
@@ -66,6 +74,13 @@ pub(super) fn starting_powers(
         )],
         Monster::FossilStalker => vec![(Power::SuckPower, PowerAmount::Counted(STALKER_SUCK))],
         Monster::GasBomb => vec![(Power::MinionPower, PowerAmount::Counted(1))],
+        Monster::PhantasmalGardener => vec![(
+            Power::SkittishPower,
+            PowerAmount::Counted(match ascension.has(AscensionLevel::ToughEnemies) {
+                true => GARDENER_SKITTISH_TOUGH,
+                false => GARDENER_SKITTISH,
+            }),
+        )],
         Monster::SkulkingColony => vec![(
             Power::HardenedShellPower,
             PowerAmount::Counted(COLONY_SHELL),
@@ -137,6 +152,15 @@ pub(super) fn perform<F: Fight<V>>(
             fight.apply_to_opponents(Power::FrailPower, PowerAmount::Counted(SCREECH_FRAIL));
         }
         (Monster::TwoTailedRat, MoveId::CallForBackupMove) => call_for_backup(fight),
+        // `EnlargeMove`: Strength on itself. `EnlargeTriggers` and the scale
+        // it sets size it on screen alone.
+        (Monster::PhantasmalGardener, MoveId::EnlargeMove) => {
+            let strength = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
+                true => GARDENER_ENLARGE_DEADLY,
+                false => GARDENER_ENLARGE,
+            };
+            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(strength));
+        }
         // `BloatMove`: a Gas Bomb into the first slot no enemy holds, for each
         // of its `BloatAmount`, which stays at one. Then its hit.
         (Monster::LivingFog, MoveId::BloatMove) => {

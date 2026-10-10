@@ -3712,6 +3712,7 @@ pub(super) fn roll_moves_of<V: Rules>(
                 powers: &live.powers,
                 kept: &live.kept,
                 relics: Some(relics),
+                attack: &live.attack_results,
             };
             let creature = live
                 .creatures
