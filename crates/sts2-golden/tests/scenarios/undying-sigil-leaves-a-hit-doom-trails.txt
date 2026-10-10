@@ -1,0 +1,8 @@
+# Undying Sigil leaves alone a hit from an enemy with more hit points than
+# Doom. The Nibbit's Doom of ten is short of its health, and its twelve
+# lands whole.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"grant","relic":"UNDYING_SIGIL"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"DOOM_POWER","amount":10,"target":1}
+{"cmd":"end_turn"}

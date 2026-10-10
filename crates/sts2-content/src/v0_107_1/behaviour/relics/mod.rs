@@ -300,6 +300,7 @@ mod tungsten_rod;
 mod tuning_fork;
 mod twisted_funnel;
 mod unceasing_top;
+mod undying_sigil;
 mod unsettling_lamp;
 mod vajra;
 mod vambrace;
@@ -400,6 +401,7 @@ pub enum State {
     RunicPyramid,
     TungstenRod,
     TheBoot,
+    UndyingSigil,
     TouchOfOrobas,
     BlackBlood,
     RingOfTheDrake,
@@ -752,6 +754,7 @@ pub(crate) fn event_hook(
         },
         State::TungstenRod => tungsten_rod::event_hook(hook),
         State::TheBoot => the_boot::event_hook(hook),
+        State::UndyingSigil => undying_sigil::event_hook(hook),
         State::RadiantPearl => radiant_pearl::event_hook(hook, asked),
         State::ToastyMittens => toasty_mittens::event_hook(hook, asked),
         State::TouchOfOrobas => touch_of_orobas::event_hook(hook, asked),
@@ -1089,8 +1092,13 @@ pub(crate) fn decide_hook(
 }
 
 /// Ask one relic to change a value.
-pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> {
+pub(crate) fn modify_hook(
+    state: &State,
+    fight: Option<&dyn sts2_core::FightView<V>>,
+    hook: ModifyHook<V>,
+) -> Modify<Number> {
     match state {
+        State::UndyingSigil => undying_sigil::modify_hook(fight, hook),
         State::Pocketwatch(state) => pocketwatch::modify_hook(state, hook),
         State::BrilliantScarf(state) => brilliant_scarf::modify_hook(state, hook),
         State::VelvetChoker(_) => velvet_choker::modify_hook(hook),
@@ -1436,6 +1444,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::RunicPyramid => State::RunicPyramid,
             Relic::TungstenRod => State::TungstenRod,
             Relic::TheBoot => State::TheBoot,
+            Relic::UndyingSigil => State::UndyingSigil,
             Relic::TouchOfOrobas => State::TouchOfOrobas,
             Relic::BlackBlood => State::BlackBlood,
             Relic::RingOfTheDrake => State::RingOfTheDrake,

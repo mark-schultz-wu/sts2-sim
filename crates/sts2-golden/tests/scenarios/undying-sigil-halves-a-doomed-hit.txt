@@ -1,0 +1,7 @@
+# Undying Sigil halves a powered hit on its owner from an enemy whose hit
+# points are no more than its Doom. The Nibbit's twelve lands as six.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"grant","relic":"UNDYING_SIGIL"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"DOOM_POWER","amount":50,"target":1}
+{"cmd":"end_turn"}

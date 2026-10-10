@@ -1941,7 +1941,7 @@ impl<'a, V: Rules> Board<'a, V> {
                             }
                             // Every relic's `AfterModifyingHpLostAfterOsty`
                             // only flashes.
-                            sts2_core::Listener::Relic(_) => {}
+                            sts2_core::Listener::Relic { .. } => {}
                             _ => unimplemented!(
                                 "a listener other than a power changing what a hit takes"
                             ),
@@ -2594,7 +2594,7 @@ pub(super) fn blocked<V: Rules>(
         for phase in phases {
             let hook = sts2_core::Overrides::of(phase.model_hook());
             super::listen::each::<V>(fight, hook, |listener, _| {
-                let sts2_core::Listener::Relic(state) = listener else {
+                let sts2_core::Listener::Relic { state, .. } = listener else {
                     return;
                 };
                 let moved = match <V as sts2_core::Hooks>::modify_hook(listener, phase) {
@@ -2689,11 +2689,11 @@ pub(super) fn given_by<V: Rules>(
                 listener,
             ) {
                 (Modify::Nothing, _) => false,
-                (Modify::Added(added), sts2_core::Listener::Relic(_)) => {
+                (Modify::Added(added), sts2_core::Listener::Relic { .. }) => {
                     *amount = *amount + added;
                     added != V::Number::zero()
                 }
-                (Modify::Scaled(share), sts2_core::Listener::Relic(_)) => {
+                (Modify::Scaled(share), sts2_core::Listener::Relic { .. }) => {
                     let scaled = exact::<V>(*amount) * share.exact();
                     *amount = num_traits::ToPrimitive::to_i64(&scaled)
                         .filter(|_| scaled.fract().is_zero())
@@ -2707,7 +2707,7 @@ pub(super) fn given_by<V: Rules>(
                     )
                 }
             };
-            if moved && let sts2_core::Listener::Relic(state) = listener {
+            if moved && let sts2_core::Listener::Relic { state, .. } = listener {
                 let held = fight
                     .relics
                     .iter()
@@ -2774,7 +2774,7 @@ pub(super) fn received_by<V: Rules>(
                 amount = with;
                 modifiers.push(Receiver::Power(holder, power));
             }
-            (Modify::Replaced(with), sts2_core::Listener::Relic(state)) => {
+            (Modify::Replaced(with), sts2_core::Listener::Relic { state, .. }) => {
                 amount = with;
                 let held = fight
                     .relics
