@@ -1,0 +1,5 @@
+# Diving into the Trash Heap costs eight HP, then hands over one of its five
+# relics, drawn off the event's stream. This seed draws Maw Bank.
+{"cmd":"start","seed":"C000000003","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"TRASH_HEAP"}
+{"cmd":"choose_option","index":0}
