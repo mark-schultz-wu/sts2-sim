@@ -59,8 +59,12 @@ For each stop in the batch:
 ## 4. Check
 
 - `cargo fmt`, `./tools/prose-lint.py <files>`, then `just check-repo`.
-- `cargo xtask instructions <label> --vs <last label>`, with the replay still
-  at 100200 steps. Explain any cost over 0.3%, or cut it.
+- `cargo test -p sts2-golden`, which is CI's golden job and needs the
+  game. Its divergence test fails when the long run reaches past its
+  `BASELINE` as well as short of it. A port that takes the run further
+  raises `tests/golden/<run>/BASELINE` in the same PR.
+- `cargo xtask instructions <label> --vs <last label>`. Explain any cost
+  over 0.3%, or cut it.
 - Census again. Every character's lowest stop holds or rises, and every act
   count holds or rises. A drop is the next thing fixed, unless it is a silent
   gap made loud, which the PR says.
