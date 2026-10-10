@@ -65,6 +65,7 @@ pub(super) fn starting_powers(
             }),
         )],
         Monster::FossilStalker => vec![(Power::SuckPower, PowerAmount::Counted(STALKER_SUCK))],
+        Monster::GasBomb => vec![(Power::MinionPower, PowerAmount::Counted(1))],
         Monster::SkulkingColony => vec![(
             Power::HardenedShellPower,
             PowerAmount::Counted(COLONY_SHELL),
@@ -136,6 +137,21 @@ pub(super) fn perform<F: Fight<V>>(
             fight.apply_to_opponents(Power::FrailPower, PowerAmount::Counted(SCREECH_FRAIL));
         }
         (Monster::TwoTailedRat, MoveId::CallForBackupMove) => call_for_backup(fight),
+        // `BloatMove`: a Gas Bomb into the first slot no enemy holds, for each
+        // of its `BloatAmount`, which stays at one. Then its hit.
+        (Monster::LivingFog, MoveId::BloatMove) => {
+            fight.summon_into_first_free_slot(Monster::GasBomb);
+            fight.attack_opponents();
+        }
+        // `ExplodeMove`: its hit, then `CreatureCmd.Kill` on itself.
+        // `HasExploded` picks how it dies on screen alone.
+        (Monster::GasBomb, MoveId::ExplodeMove) => {
+            if super::attack_first(fight, step) {
+                return Some(1);
+            }
+            let bomb = fight.actor();
+            fight.kill(bomb);
+        }
         // `SpikeSpitMove`: the Thorns Spiken gave, taken back, then its hits.
         (Monster::Toadpole, MoveId::SpikeSpitMove) => {
             fight.apply_to_actor(Power::ThornsPower, PowerAmount::Counted(-SPIKEN));
@@ -202,5 +218,20 @@ pub(super) fn rat_weight(
         (3, true) => 0.75,
         (3, false) => 0.0,
         (at, _) => unreachable!("a Two-Tailed Rat has four branches, not {at}"),
+    }
+}
+
+/// A move's damage that an Underdocks monster works out as it rolls.
+///
+/// `GasBomb.ExplodeDamage`, behind its `DeathBlowIntent`'s lambda: eight, or
+/// nine at `DeadlyEnemies`.
+pub(super) fn computed_damage(monster: Monster, move_id: MoveId, ascension: u8) -> i32 {
+    let deadly = ascension >= AscensionLevel::DeadlyEnemies as u8;
+    match (monster, move_id) {
+        (Monster::GasBomb, MoveId::ExplodeMove) => match deadly {
+            true => 9,
+            false => 8,
+        },
+        (monster, move_id) => unimplemented!("the damage {monster:?} works out for {move_id:?}"),
     }
 }

@@ -2050,6 +2050,10 @@ pub(crate) fn decide_hook(
             };
             HookResponse::Decision(affliction != Some(Affliction::Bound) || !*bound_played)
         }
+        // `SmoggyPower.ShouldPlay`: no card with Smog.
+        (Power::SmoggyPower, DecisionHook::ShouldPlay { affliction, .. }) => {
+            HookResponse::Decision(affliction != Some(Affliction::Smog))
+        }
         (Power::RingingPower, DecisionHook::ShouldPlay { affliction, .. }) => {
             HookResponse::Decision(
                 affliction != Some(Affliction::Ringing)
@@ -2857,6 +2861,40 @@ pub(crate) fn event_hook(
             Some(HookEffect::Remove)
         }
         (Power::RingingPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `SmoggyPower.AfterCardPlayed`: a Skill its owner plays puts Smog on
+        // every Skill its owner has with no affliction.
+        (Power::SmoggyPower, _, EventHook::CardPlayed { card, .. })
+            if <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Skill) =>
+        {
+            Some(HookEffect::Afflict {
+                to: sts2_core::Writing::EveryOfKind(sts2_core::CardKind::Skill),
+                affliction: Affliction::Smog,
+            })
+        }
+        (Power::SmoggyPower, _, EventHook::CardPlayed { .. }) => None,
+        // `SmoggyPower.AfterCardEnteredCombat`: Smog on a Skill that arrives
+        // after its owner started a Skill's play this turn.
+        (Power::SmoggyPower, _, EventHook::CardEnteredCombat { at, card, .. })
+            if <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Skill)
+                && history.started_this_turn().any(|started| {
+                    <V as sts2_core::Rules>::card_kind(started.card)
+                        == Some(sts2_core::CardKind::Skill)
+                }) =>
+        {
+            Some(HookEffect::Afflict {
+                to: sts2_core::Writing::One(at),
+                affliction: Affliction::Smog,
+            })
+        }
+        (Power::SmoggyPower, _, EventHook::CardEnteredCombat { .. }) => None,
+        // `SmoggyPower.AfterSideTurnEnd`, as its owner's side ends a turn: Smog
+        // off every card that has it. The power stays.
+        (Power::SmoggyPower, _, EventHook::SideTurnEnd { side, .. }) if side == owner => {
+            Some(HookEffect::ClearAffliction(
+                sts2_core::Writing::EveryAfflictedWith(Affliction::Smog),
+            ))
+        }
+        (Power::SmoggyPower, _, EventHook::SideTurnEnd { .. }) => None,
         // `RingingPower.AfterRemoved`: Ringing off every card that has it.
         (Power::RingingPower, _, EventHook::Removed) => Some(HookEffect::ClearAffliction(
             sts2_core::Writing::EveryAfflictedWith(Affliction::Ringing),
