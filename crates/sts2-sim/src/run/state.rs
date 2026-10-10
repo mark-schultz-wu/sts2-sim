@@ -2741,6 +2741,9 @@ impl<V: Rules> State<V> {
             sts2_core::ModifyHook::HpLostAfterOstyLate {
                 target: player,
                 player,
+                dealer: None,
+                osty: None,
+                powered: false,
             },
         ] {
             let mut left = self
