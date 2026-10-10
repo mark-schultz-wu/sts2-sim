@@ -1,0 +1,10 @@
+# Clash plays only while every card in hand is an Attack. With the Defends
+# in hand it stands unplayable, and once all three are played it hits the
+# Nibbit for its fourteen.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"CLASH"}
+{"cmd":"play_card","index":2}
+{"cmd":"play_card","index":2}
+{"cmd":"play_card","index":2}
+{"cmd":"play_card","index":2,"target":1}

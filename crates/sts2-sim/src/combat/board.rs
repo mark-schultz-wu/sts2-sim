@@ -2907,6 +2907,7 @@ pub(crate) fn var<V: Rules>(
                 osty,
                 osty_max_hp,
                 draw: live.cards.len(Pile::Draw),
+                discard: live.cards.len(Pile::Discard),
                 exhaust: &exhausted,
                 hand_besides: live.cards.len(Pile::Hand)
                     - usize::from(live.cards.find(Pile::Hand, held.id).is_some()),

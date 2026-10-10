@@ -191,6 +191,10 @@ pub(super) fn reasons<V: Rules>(
     let logic = sts2_core::CardLogic {
         draw_pile: live.cards.len(Pile::Draw),
         osty: super::board::osty::<V>(creatures).is_some_and(|osty| osty.alive),
+        hand_all_attacks: live
+            .cards
+            .iter(Pile::Hand)
+            .all(|held| V::card_kind(held.face.ident.card) == Some(sts2_core::CardKind::Attack)),
     };
     if let sts2_core::HookResponse::Decision(false) = V::card_is_playable(card.card, logic) {
         why = refused::<V>(

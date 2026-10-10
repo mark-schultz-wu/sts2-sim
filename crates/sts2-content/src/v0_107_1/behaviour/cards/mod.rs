@@ -153,8 +153,9 @@ pub(crate) fn is_playable(
         Cards::Necrobinder(NecrobinderCard::HighFive) => {
             sts2_core::HookResponse::Decision(fight.osty)
         }
+        // `Clash`: only while every card in its owner's hand is an Attack.
         Cards::Event(super::super::generated::cards::EventCard::Clash) => {
-            unimplemented!("whether {card:?} is playable")
+            sts2_core::HookResponse::Decision(fight.hand_all_attacks)
         }
         _ => sts2_core::HookResponse::DoesNotImplement,
     }
@@ -275,6 +276,16 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
         (Cards::Necrobinder(NecrobinderCard::Sacrifice), CardVar::CalculatedBlock) => {
             let twice = owner.osty_max_hp.map_or(0, |hp| Number::from(hp) * 2);
             printed.face(CardVar::CalculationBase) + printed.face(CardVar::CalculationExtra) * twice
+        }
+        // `Stack`: a base, and more for each card in its owner's discard pile.
+        (
+            Cards::Event(super::super::generated::cards::EventCard::Stack),
+            CardVar::CalculatedBlock,
+        ) => {
+            let discard =
+                Number::try_from(owner.discard).expect("a discard pile fits the game's numbers");
+            printed.face(CardVar::CalculationBase)
+                + printed.face(CardVar::CalculationExtra) * discard
         }
         // `AshenStrike`: a base, and more for each card in its owner's
         // exhaust pile.

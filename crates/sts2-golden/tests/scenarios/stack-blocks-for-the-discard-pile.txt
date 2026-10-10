@@ -1,0 +1,8 @@
+# Stack's block is one for each card in the discard pile. A Strike and a
+# Defend lie there, so it gives two.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"STACK"}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":1}
+{"cmd":"play_card","index":3}
