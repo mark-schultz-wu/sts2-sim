@@ -429,7 +429,7 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
                     &mut cards,
                     <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_GENERATION,
                 ) else {
-                    unimplemented!("a character pool with no {kind:?}");
+                    unreachable!("every character's pool holds a card of each kind, {kind:?} too");
                 };
                 made.push(card);
             }

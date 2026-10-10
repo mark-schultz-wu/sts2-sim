@@ -49,7 +49,7 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
                     &mut cards,
                     <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_GENERATION,
                 )
-                .unwrap_or_else(|_| unimplemented!("a colorless pool short of three"));
+                .unwrap_or_else(|_| unreachable!("the colorless pool holds far more than three"));
             for card in made {
                 for at in fight.add_generated_cards(card, Pile::Hand, 1) {
                     fight.modify_card(at, Change::Upgrade, Lasting::ThisFight);

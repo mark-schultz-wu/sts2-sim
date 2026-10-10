@@ -10,6 +10,32 @@ use super::Number;
 /// `FoulPotion`'s `DamageVar(12, ValueProp.Unpowered)`.
 const FOUL: Number = 12;
 
+/// `GlowwaterPotion`'s `CardsVar(10)`.
+const GLOWWATER: Number = 10;
+
+/// Where an event potion stopped on the player's answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Resume {
+    /// `GlowwaterPotion`, after a question inside its exhausts was answered.
+    GlowwaterExhausted,
+}
+
+/// The rest of an event potion's use, once the question it stopped on is
+/// answered.
+pub(super) fn resume<F: Fight<V>>(
+    fight: &mut F,
+    at: Resume,
+    answer: sts2_core::Taken<V>,
+) -> Played<V> {
+    match (at, answer) {
+        (Resume::GlowwaterExhausted, sts2_core::Taken::Waited) => {
+            fight.draw(GLOWWATER);
+            Played::Done
+        }
+        (at, answer) => unreachable!("{at:?} resumed with {answer:?}"),
+    }
+}
+
 /// What a potion does when it is drunk in a fight.
 ///
 /// # Panics
@@ -34,6 +60,23 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
                 });
                 fight.apply(hit);
             }
+            Played::Done
+        }
+        // `CardCmd.Exhaust` of each card in hand, one at a time, then its
+        // `Cards` drawn.
+        Potion::GlowwaterPotion => {
+            let hand = fight.cards_in(sts2_core::Pile::Hand);
+            for card in hand {
+                fight.act_on(sts2_core::PileAct::Exhaust, &[card]);
+            }
+            if fight.waiting() {
+                return Played::Waiting {
+                    at: super::super::Resume::Potion(super::Resume::Event(
+                        Resume::GlowwaterExhausted,
+                    )),
+                };
+            }
+            fight.draw(GLOWWATER);
             Played::Done
         }
         potion => unimplemented!("what {potion:?} does when it is drunk"),
