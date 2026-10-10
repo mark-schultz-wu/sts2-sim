@@ -647,11 +647,21 @@ impl sts2_core::Rules for V0_107_1 {
         ascension: Self::AscensionLevel,
         spawn: sts2_core::MonsterSpawn<Self::Encounter>,
         powers: impl IntoIterator<Item = sts2_core::Listener<'a, Self, P>>,
+        advertised: impl Fn(Self::MoveId) -> bool,
         state: &Self::MonsterState,
         machine: &mut sts2_core::MoveMachine,
         rng: &mut R,
     ) -> Result<Option<sts2_core::NextMove<Self>>, sts2_core::ContentError> {
-        roll_monster_move(monster, ascension as u8, spawn, powers, state, machine, rng)
+        roll_monster_move(
+            monster,
+            ascension as u8,
+            spawn,
+            powers,
+            advertised,
+            state,
+            machine,
+            rng,
+        )
     }
 
     fn follow_up(monster: Self::Monster, machine: &sts2_core::MoveMachine) -> u8 {
@@ -1027,6 +1037,7 @@ impl sts2_core::Rules for V0_107_1 {
 /// The other is a move the graph holds it on until that move has been.
 ///
 /// Otherwise it steps until it lands on a move, and logs the move it lands on.
+#[allow(clippy::too_many_arguments)]
 fn roll_monster_move<
     'a,
     R: sts2_core::rng::GameRng,
@@ -1036,6 +1047,7 @@ fn roll_monster_move<
     ascension: u8,
     spawn: sts2_core::MonsterSpawn<generated::encounters::Encounter>,
     powers: impl IntoIterator<Item = sts2_core::Listener<'a, V0_107_1, P>>,
+    advertised: impl Fn(generated::monsters::MoveId) -> bool,
     model: &behaviour::monsters::Model,
     machine: &mut sts2_core::MoveMachine,
     rng: &mut R,
@@ -1085,7 +1097,9 @@ fn roll_monster_move<
                     // `MoveState.GetNextState` throws on a missing follow-up.
                     FollowUp::Never => unimplemented!("a move with no follow-up"),
                 },
-                State::Random(branches) => branch(branches, machine, rng)?,
+                State::Random(branches) => branch(branches, machine, rng, |at| {
+                    behaviour::monsters::weight(monster, at, spawn, model, &advertised)
+                })?,
                 State::Conditional(_) => {
                     read.extend(powers.take().into_iter().flatten());
                     behaviour::monsters::conditional(monster, machine.at, spawn, &read, model)?
@@ -1130,28 +1144,32 @@ fn pinned(state: generated::monsters::State, machine: &sts2_core::MoveMachine) -
 ///
 /// One draw, scaled by the total weight, walking the branches in order. A
 /// branch its own history bars weighs nothing, which is `GetStateWeight`.
+/// `computed` is the weight of the branch at a position whose `weightLambda`
+/// reads the fight.
 fn branch<R: sts2_core::rng::GameRng>(
     branches: &'static [generated::monsters::Branch],
     machine: &sts2_core::MoveMachine,
     rng: &mut R,
+    computed: impl Fn(usize) -> f32,
 ) -> Result<u8, sts2_core::ContentError> {
     use crate::Field;
     use sts2_core::rng::Interval;
 
-    let weight = |branch: &generated::monsters::Branch| match branch.weight {
-        Field::Constant(weight) if allowed(branch, machine) => weight,
-        Field::Constant(_) => 0.0,
-        Field::Computed => unimplemented!("a branch whose weight the fight decides"),
+    let weight = |(at, branch): (usize, &generated::monsters::Branch)| match branch.weight {
+        _ if !allowed(branch, machine) => 0.0,
+        Field::Constant(weight) => weight,
+        Field::Computed => computed(at),
     };
 
-    let total: f32 = branches.iter().map(weight).sum();
+    let total: f32 = branches.iter().enumerate().map(weight).sum();
     let range = Interval::try_new(0.0, total)
         .map_err(|_| sts2_core::ContentError::InvalidMonsterWeights)?;
     let mut draw = rng.next_f32_range(range);
-    for branch in branches {
+    for branch in branches.iter().enumerate() {
+        let target = branch.1.target;
         draw -= weight(branch);
         if draw <= 0.0 {
-            return Ok(branch.target);
+            return Ok(target);
         }
     }
     Err(sts2_core::ContentError::InvalidMonsterWeights)

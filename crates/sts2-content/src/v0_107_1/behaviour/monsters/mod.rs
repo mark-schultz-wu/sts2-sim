@@ -215,6 +215,25 @@ fn opens_by_slot(
     }
 }
 
+/// The weight of the branch at `at` in a random state, where its
+/// `weightLambda` reads the fight.
+///
+/// # Panics
+///
+/// A weight nobody has ported.
+pub(crate) fn weight(
+    monster: Monster,
+    at: usize,
+    spawn: MonsterSpawn<Encounter>,
+    model: &Model,
+    advertised: impl Fn(MoveId) -> bool,
+) -> f32 {
+    match monster {
+        Monster::TwoTailedRat => underdocks::rat_weight(at, spawn, model, advertised),
+        monster => unimplemented!("the weight of {monster:?}'s branch {at}"),
+    }
+}
+
 /// Where a named move sits in a monster's own state list.
 ///
 /// A conditional's branch is named by the move it leads to rather than by a
@@ -386,6 +405,9 @@ pub enum Model {
     Aeonglass { strength: u8, wither_upgrades: u8 },
     /// `Queen.HasAmalgamDied`.
     Queen { amalgam_died: bool },
+    /// `TwoTailedRat.TurnsUntilSummonable`, held no lower than zero since
+    /// only above zero bars a summon, and `CallForBackupCount`.
+    TwoTailedRat { summonable_in: u8, backups: u8 },
 }
 
 impl sts2_core::MonsterModel<V> for Model {
@@ -407,6 +429,10 @@ impl sts2_core::MonsterModel<V> for Model {
             },
             Monster::Queen => Self::Queen {
                 amalgam_died: false,
+            },
+            Monster::TwoTailedRat => Self::TwoTailedRat {
+                summonable_in: underdocks::RAT_SUMMONABLE_IN,
+                backups: 0,
             },
             _ => Self::Stateless,
         }

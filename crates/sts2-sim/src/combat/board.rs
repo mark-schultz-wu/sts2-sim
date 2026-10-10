@@ -4501,6 +4501,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         }
     }
 
+    fn enemy_models(&mut self, mut with: impl FnMut(&mut V::MonsterState)) {
+        // Every creature with a move graph is an enemy.
+        for held in self.live.machines.iter_mut() {
+            with(&mut held.state);
+        }
+    }
+
     fn write_power(
         &mut self,
         at: CombatId,

@@ -3663,6 +3663,18 @@ fn roll_moves<V: Rules>(
     roll_moves_of::<V>(live, relics, ascension, ai, |_| true)
 }
 
+/// `Encounter.GetNextSlot` names a slot: one of `Encounter.Slots` no enemy in
+/// the fight holds.
+pub(super) fn next_slot<V: Rules>(live: &Live<V>) -> bool {
+    use sts2_core::EncounterTable as _;
+
+    (0..live.encounter.slots()).any(|slot| {
+        !live.machines.iter().any(|held| {
+            held.slot == Some(slot) && live.creatures.iter().any(|c| c.id == held.creature)
+        })
+    })
+}
+
 /// `MonsterModel.RollMove` for each enemy `which` picks, in fight order.
 pub(super) fn roll_moves_of<V: Rules>(
     live: &mut Live<V>,
@@ -3680,6 +3692,7 @@ pub(super) fn roll_moves_of<V: Rules>(
         .count()
         .try_into()
         .expect("a side's creatures fit a byte");
+    let next_slot = next_slot(live);
     for held in live.machines.iter_mut() {
         if !which(held.creature) {
             continue;
@@ -3709,9 +3722,22 @@ pub(super) fn roll_moves_of<V: Rules>(
                     hp: num_traits::cast(creature.hp).expect("a monster's health fits a u32"),
                     max_hp: num_traits::cast(creature.max_hp)
                         .expect("a monster's health fits a u32"),
+                    next_slot,
                     ..held.spawn
                 },
                 powers,
+                // `GetTeammatesOf(Creature)` less itself. Every creature with
+                // a move graph is an enemy.
+                |wanted| {
+                    live.creatures.iter().any(|other| {
+                        other.id != creature.id
+                            && other.side == <V::CombatSide as SideKinds>::ENEMY
+                            && other
+                                .next_move
+                                .as_ref()
+                                .is_some_and(|next| next.id == wanted)
+                    })
+                },
                 &held.state,
                 &mut held.machine,
                 ai,

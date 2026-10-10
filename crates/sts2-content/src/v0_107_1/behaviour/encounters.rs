@@ -32,6 +32,7 @@ pub(crate) fn generate<R: GameRng>(encounter: Encounter, rng: &mut R) -> Vec<Spa
         Encounter::ScrollsOfBitingWeak => scrolls_of_biting(rng, false),
         Encounter::ScrollsOfBitingNormal => scrolls_of_biting(rng, true),
         Encounter::CorpseSlugsWeak => corpse_slugs_weak(rng),
+        Encounter::TwoTailedRatsNormal => two_tailed_rats_normal(rng),
         encounter => unimplemented!("the roster {encounter:?} rolls"),
     }
 }
@@ -48,6 +49,31 @@ fn corpse_slugs_weak<R: GameRng>(rng: &mut R) -> Vec<Spawned<V>> {
             .expect("a three-way draw is a valid cycle index");
     (0..2)
         .map(|at| Spawned::opening_on(Monster::CorpseSlug, CYCLE[(first + at) % CYCLE.len()]))
+        .collect()
+}
+
+/// `TwoTailedRatsNormal`. Three rats in the last three of its five slots, the
+/// first two left for those they call. One draw picks the first's opening,
+/// and the other two follow it round the cycle.
+fn two_tailed_rats_normal<R: GameRng>(rng: &mut R) -> Vec<Spawned<V>> {
+    // `StarterMoveIndex % 3`, as `GenerateMoveStateMachine` switches on it.
+    const CYCLE: [MoveId; 3] = [
+        MoveId::ScratchMove,
+        MoveId::DiseaseBiteMove,
+        MoveId::ScreechMove,
+    ];
+
+    let first: usize =
+        num_traits::cast(rng.next_int(Bound::try_new(three::<R>()).expect("three starting moves")))
+            .expect("a three-way draw is a valid cycle index");
+    (0..3u8)
+        .map(|at| Spawned {
+            slot: Some(2 + at),
+            ..Spawned::opening_on(
+                Monster::TwoTailedRat,
+                CYCLE[(first + usize::from(at)) % CYCLE.len()],
+            )
+        })
         .collect()
 }
 
