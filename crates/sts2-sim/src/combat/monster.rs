@@ -3,7 +3,7 @@
 use crate::rng::MegaRng;
 use smallvec::SmallVec;
 use sts2_core::rng::{Choices, GameRng};
-use sts2_core::{CombatId, ModelId, MoveMachine, Rules, SideKinds};
+use sts2_core::{CombatId, EncounterTable as _, ModelId, MoveMachine, Rules, SideKinds};
 
 use super::Error;
 use super::live::{CREATURES, Creatures, Fighter, HeldPower, Live, Stacked};
@@ -157,6 +157,8 @@ pub(crate) fn initialize<V: Rules>(
             standing: roster_size.get(),
             hp: whole,
             max_hp: whole,
+            next_slot: (0..encounter.slots())
+                .any(|free| monsters.iter().all(|spawned| spawned.slot != Some(free))),
         };
         let mut machine = V::opening_move_machine(monster, opens_on);
         let state = sts2_core::MonsterModel::new(monster);
@@ -165,6 +167,15 @@ pub(crate) fn initialize<V: Rules>(
             ascension,
             spawn,
             std::iter::empty::<super::live::Heard<'_, V>>(),
+            // Those ahead of it in the roster rolled theirs already.
+            |wanted| {
+                creatures[first..].iter().any(|other| {
+                    other
+                        .next_move
+                        .as_ref()
+                        .is_some_and(|next| next.id == wanted)
+                })
+            },
             &state,
             &mut machine,
             rngs.ai,
@@ -339,6 +350,8 @@ pub(super) fn summon_built<V: Rules>(
                 standing: roster_size.get(),
                 hp: num_traits::cast(hp).expect("a monster's health fits a u32"),
                 max_hp: num_traits::cast(hp).expect("a monster's health fits a u32"),
+                // Each roll reads it afresh.
+                next_slot: false,
             },
             slot,
             machine: V::opening_move_machine(monster, opens_on),

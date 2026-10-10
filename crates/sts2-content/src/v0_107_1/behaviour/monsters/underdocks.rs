@@ -16,6 +16,16 @@ const SPIKEN: Number = 2;
 const RAVENOUS: Number = 4;
 const RAVENOUS_DEADLY: Number = 5;
 
+/// `TwoTailedRat._turnsUntilSummonable`, which each of its other moves takes
+/// one off.
+pub(super) const RAT_SUMMONABLE_IN: u8 = 2;
+
+/// `_callForBackupLimit`: the summons a rat makes in a fight.
+const RAT_BACKUPS: u8 = 3;
+
+/// `ScreechMove`'s `PowerCmd.Apply<FrailPower>(…, 1m, …)`.
+const SCREECH_FRAIL: Number = 1;
+
 /// The powers an Underdocks monster applies to itself as it spawns.
 ///
 /// Nothing for a monster this act does not port.
@@ -31,8 +41,8 @@ pub(super) fn starting_powers(
                 false => RAVENOUS,
             }),
         )],
-        // Its override calls the base and nothing else.
-        Monster::Seapunk => Vec::new(),
+        // Each override calls the base and nothing else.
+        Monster::Seapunk | Monster::TwoTailedRat => Vec::new(),
         _ => return None,
     })
 }
@@ -82,6 +92,17 @@ pub(super) fn perform<F: Fight<V>>(
         (Monster::CalcifiedCultist | Monster::DampCultist, MoveId::DarkStrikeMove) => {
             fight.attack_opponents()
         }
+        // `ScratchMove` and `DiseaseBiteMove`: a turn off the wait for a
+        // summon, then the hit.
+        (Monster::TwoTailedRat, MoveId::ScratchMove | MoveId::DiseaseBiteMove) => {
+            rat_waits(fight);
+            fight.attack_opponents();
+        }
+        (Monster::TwoTailedRat, MoveId::ScreechMove) => {
+            rat_waits(fight);
+            fight.apply_to_opponents(Power::FrailPower, PowerAmount::Counted(SCREECH_FRAIL));
+        }
+        (Monster::TwoTailedRat, MoveId::CallForBackupMove) => call_for_backup(fight),
         // `SpikeSpitMove`: the Thorns Spiken gave, taken back, then its hits.
         (Monster::Toadpole, MoveId::SpikeSpitMove) => {
             fight.apply_to_actor(Power::ThornsPower, PowerAmount::Counted(-SPIKEN));
@@ -92,4 +113,61 @@ pub(super) fn perform<F: Fight<V>>(
         }
     }
     None
+}
+
+/// `TurnsUntilSummonable--`.
+fn rat_waits<F: Fight<V>>(fight: &mut F) {
+    fight.model(|model| {
+        let super::Model::TwoTailedRat { summonable_in, .. } = model else {
+            unreachable!("a Two-Tailed Rat's model is its own")
+        };
+        *summonable_in = summonable_in.saturating_sub(1);
+    });
+}
+
+/// `CallForBackup`: a rat into the last slot no enemy holds. Then every rat,
+/// the new one included, counts one past the highest count any of them held.
+fn call_for_backup<F: Fight<V>>(fight: &mut F) {
+    fight.summon_into_last_free_slot(Monster::TwoTailedRat);
+    let mut highest = 0;
+    fight.enemy_models(|model| {
+        if let super::Model::TwoTailedRat { backups, .. } = *model {
+            highest = highest.max(backups + 1);
+        }
+    });
+    fight.enemy_models(|model| {
+        if let super::Model::TwoTailedRat { backups, .. } = model {
+            *backups = highest;
+        }
+    });
+}
+
+/// A Two-Tailed Rat's `RAND` branches, in the order it adds them. Scratch,
+/// Disease Bite and Screech weigh 1 while it cannot summon and 1/12 while it
+/// can. Call for Backup weighs 0.75 while it can, and nothing otherwise.
+pub(super) fn rat_weight(
+    at: usize,
+    spawn: MonsterSpawn<Encounter>,
+    model: &super::Model,
+    advertised: impl Fn(MoveId) -> bool,
+) -> f32 {
+    let super::Model::TwoTailedRat {
+        summonable_in,
+        backups,
+    } = *model
+    else {
+        unreachable!("a Two-Tailed Rat's model is its own")
+    };
+    // `CanSummon`, in its own order.
+    let can_summon = summonable_in == 0
+        && backups < RAT_BACKUPS
+        && spawn.next_slot
+        && !advertised(MoveId::CallForBackupMove);
+    match (at, can_summon) {
+        (0..=2, false) => 1.0,
+        (0..=2, true) => 1.0 / 12.0,
+        (3, true) => 0.75,
+        (3, false) => 0.0,
+        (at, _) => unreachable!("a Two-Tailed Rat has four branches, not {at}"),
+    }
 }

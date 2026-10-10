@@ -2810,6 +2810,16 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("a monster's model read from a move")
     }
 
+    /// Read or write the model of every enemy in the fight, in fight order,
+    /// as a move walks `CombatState.Enemies`.
+    fn enemy_models(&mut self, _with: impl FnMut(&mut V::MonsterState))
+    where
+        Self: Sized,
+        V: Hooks,
+    {
+        unimplemented!("the enemies' models read from a move")
+    }
+
     /// Write the fields `power` saves on the creature `at`, from inside one
     /// of that power's own methods.
     ///
@@ -6271,6 +6281,9 @@ pub struct MonsterSpawn<E> {
     pub hp: u32,
     /// `Creature.MaxHp` as it rolls.
     pub max_hp: u32,
+    /// Whether `Encounter.GetNextSlot` names a slot as it rolls: one of
+    /// `Encounter.Slots` that no enemy in the fight holds.
+    pub next_slot: bool,
 }
 
 /// One creature an encounter's roster names, as `GenerateMonsters` returns it.
@@ -7063,17 +7076,20 @@ pub trait Rules: Hooks {
     /// Walk a monster's state graph to the move it makes next, which is
     /// `MonsterMoveStateMachine.RollMove`.
     ///
-    /// `machine` is where the graph stands, and this leaves it where the walk
-    /// ended. A machine on its own initial state has not walked, so the first
-    /// call answers the opening intent.
+    /// `machine` is where the graph stands, and the walk leaves it where it
+    /// ended. The first call answers the opening intent.
     ///
-    /// `None` is a machine on a built state it has yet to perform. Nothing
-    /// here names that state, so the monster keeps advertising it.
+    /// `None` is a machine on a built state it has yet to perform, so the
+    /// monster keeps advertising that.
+    ///
+    /// `advertised` is whether another on its side has a move as `NextMove`.
+    #[allow(clippy::too_many_arguments)]
     fn roll_monster_move<'a, R: crate::rng::GameRng, P: Printed<Self> + ?Sized + 'a>(
         monster: Self::Monster,
         ascension: Self::AscensionLevel,
         spawn: MonsterSpawn<Self::Encounter>,
         powers: impl IntoIterator<Item = crate::Listener<'a, Self, P>>,
+        advertised: impl Fn(Self::MoveId) -> bool,
         state: &Self::MonsterState,
         machine: &mut MoveMachine,
         rng: &mut R,
