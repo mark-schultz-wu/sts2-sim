@@ -898,7 +898,7 @@ impl<'a, V: Rules> Board<'a, V> {
             ],
         );
         let taker = super::listen::unblocked_damage_target::<V>(self.walk(), target, powered);
-        let unblocked = self.hp_lost_after_osty(taker, before);
+        let unblocked = self.hp_lost_after_osty(taker, before, LossFrom { dealer, powered });
         // `WasBlockBroken` and `WasFullyBlocked`, as the command works
         // them out, on the creature the hit was aimed at. A hit a hook
         // takes to nothing is fully blocked by whatever block it met.
@@ -917,7 +917,7 @@ impl<'a, V: Rules> Board<'a, V> {
             killed,
         });
         if taker != target {
-            let rest = self.hp_lost_after_osty(target, overkill);
+            let rest = self.hp_lost_after_osty(target, overkill, LossFrom { dealer, powered });
             let (lost, overkill, killed) = match rest > zero {
                 true => self.lose_hp(target, rest),
                 false => (zero, zero, false),
@@ -1886,8 +1886,13 @@ impl<'a, V: Rules> Board<'a, V> {
     /// the phases are asked again one listener at a time, and only when one
     /// listens. `Hook.ModifyHpLost` counts a listener as changing the number
     /// when its whole part moves.
-    fn hp_lost_after_osty(&mut self, target: CombatId, amount: V::Number) -> V::Number {
-        let lost = after_osty::<V>(self.walk(), target, amount);
+    fn hp_lost_after_osty(
+        &mut self,
+        target: CombatId,
+        amount: V::Number,
+        from: LossFrom,
+    ) -> V::Number {
+        let lost = after_osty::<V>(self.walk(), target, amount, from);
         if !super::listen::heard::<V>(
             self.live,
             self.relics,
@@ -1899,13 +1904,20 @@ impl<'a, V: Rules> Board<'a, V> {
         let mut number = exact(amount);
         let mut modifiers: SmallVec<[(CombatId, V::Power); 2]> = SmallVec::new();
         let player = self.live.player().id;
+        let osty = osty::<V>(&self.live.creatures).map(|osty| osty.id);
         for phase in [
             ModifyHook::HpLostAfterOsty {
                 target,
                 player,
                 in_fight: true,
             },
-            ModifyHook::HpLostAfterOstyLate { target, player },
+            ModifyHook::HpLostAfterOstyLate {
+                target,
+                player,
+                dealer: from.dealer,
+                osty,
+                powered: from.powered,
+            },
         ] {
             super::listen::each::<V>(
                 self.walk(),
@@ -1918,6 +1930,9 @@ impl<'a, V: Rules> Board<'a, V> {
                         Modify::Scaled(by) => number * by.exact(),
                         Modify::AtMost(most) => number.min(exact(most)),
                         Modify::Replaced(with) => exact(with),
+                        Modify::RaisedTo { floor, from } => {
+                            raised(number, exact(floor), exact(from))
+                        }
                     };
                     if before.trunc() != number.trunc() {
                         match listener {
@@ -2266,6 +2281,10 @@ fn scaled_by<V: Rules>(
                 Modify::Added(more) => number + more,
                 Modify::AtMost(most) => number.min(most),
                 Modify::Replaced(with) => with,
+                Modify::RaisedTo { floor, from } => match number >= from && number < floor {
+                    true => floor,
+                    false => number,
+                },
                 Modify::Scaled(_) => break,
             };
             at += 1;
@@ -2338,6 +2357,7 @@ fn worked_out<V: Rules>(mut number: Decimal, answers: &[(u8, Modify<V::Number>)]
             Modify::Added(more) => number + exact(more),
             Modify::AtMost(most) => number.min(exact(most)),
             Modify::Replaced(with) => exact(with),
+            Modify::RaisedTo { floor, from } => raised(number, exact(floor), exact(from)),
         };
     }
     number.max(Decimal::ZERO)
@@ -2346,9 +2366,30 @@ fn worked_out<V: Rules>(mut number: Decimal, answers: &[(u8, Modify<V::Number>)]
 /// The most orb slots `OrbCmd.AddSlots` gives a player.
 const MAX_ORB_SLOTS: u8 = 10;
 
+/// `RaisedTo`: `floor` where `number` is at least `from` and below it.
+fn raised(number: Decimal, floor: Decimal, from: Decimal) -> Decimal {
+    match number >= from && number < floor {
+        true => floor,
+        false => number,
+    }
+}
+
+/// The hit an hp loss comes from, as the late `ModifyHpLost` reads it.
+#[derive(Clone, Copy)]
+pub(super) struct LossFrom {
+    pub(super) dealer: Option<CombatId>,
+    pub(super) powered: bool,
+}
+
 /// `ModifyHpLost` in the phases after a hit found who takes it.
-fn after_osty<V: Rules>(fight: Walk<'_, V>, target: CombatId, amount: V::Number) -> V::Number {
+fn after_osty<V: Rules>(
+    fight: Walk<'_, V>,
+    target: CombatId,
+    amount: V::Number,
+    from: LossFrom,
+) -> V::Number {
     let player = fight.live.player().id;
+    let osty = osty::<V>(&fight.live.creatures).map(|osty| osty.id);
     modified_by::<V>(
         fight,
         amount,
@@ -2358,7 +2399,13 @@ fn after_osty<V: Rules>(fight: Walk<'_, V>, target: CombatId, amount: V::Number)
                 player,
                 in_fight: true,
             },
-            ModifyHook::HpLostAfterOstyLate { target, player },
+            ModifyHook::HpLostAfterOstyLate {
+                target,
+                player,
+                dealer: from.dealer,
+                osty,
+                powered: from.powered,
+            },
         ],
     )
 }

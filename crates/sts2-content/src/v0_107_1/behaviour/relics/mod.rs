@@ -284,6 +284,7 @@ mod symbiotic_virus;
 mod tanxs_whistle;
 mod tea_of_discourtesy;
 mod the_abacus;
+mod the_boot;
 mod the_courier;
 mod throwing_axe;
 mod tingsha;
@@ -398,6 +399,7 @@ pub enum State {
     IntimidatingHelmet,
     RunicPyramid,
     TungstenRod,
+    TheBoot,
     TouchOfOrobas,
     BlackBlood,
     RingOfTheDrake,
@@ -749,6 +751,7 @@ pub(crate) fn event_hook(
             hook => unimplemented!("what Sozu does for {hook:?}"),
         },
         State::TungstenRod => tungsten_rod::event_hook(hook),
+        State::TheBoot => the_boot::event_hook(hook),
         State::RadiantPearl => radiant_pearl::event_hook(hook, asked),
         State::ToastyMittens => toasty_mittens::event_hook(hook, asked),
         State::TouchOfOrobas => touch_of_orobas::event_hook(hook, asked),
@@ -1119,6 +1122,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         State::PaelsFlesh(_) => paels_flesh::modify_hook(hook),
         State::Sozu => sozu::modify_hook(hook),
         State::TungstenRod => tungsten_rod::modify_hook(hook),
+        State::TheBoot => the_boot::modify_hook(hook),
         State::RingOfTheDrake => ring_of_the_drake::modify_hook(hook),
         State::InfusedCore => infused_core::modify_hook(hook),
         State::PenNib(state) => pen_nib::modify_hook(state, hook),
@@ -1431,6 +1435,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::IntimidatingHelmet => State::IntimidatingHelmet,
             Relic::RunicPyramid => State::RunicPyramid,
             Relic::TungstenRod => State::TungstenRod,
+            Relic::TheBoot => State::TheBoot,
             Relic::TouchOfOrobas => State::TouchOfOrobas,
             Relic::BlackBlood => State::BlackBlood,
             Relic::RingOfTheDrake => State::RingOfTheDrake,

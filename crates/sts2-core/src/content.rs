@@ -3177,6 +3177,9 @@ pub enum Modify<N> {
     /// The whole number, which a `TryModify` hook that returns true hands
     /// back in place of the one it was handed.
     Replaced(N),
+    /// A floor under what is left, once it is at least `from`. The Boot
+    /// raises a loss of one to four to five, and leaves nothing at nothing.
+    RaisedTo { floor: N, from: N },
 }
 
 /// A value-producing hook the simulator asks one content model to apply.
@@ -3260,6 +3263,12 @@ pub enum ModifyHook<V: ContentVersion> {
     HpLostAfterOstyLate {
         target: crate::CombatId,
         player: crate::CombatId,
+        /// `dealer`, nothing for a loss no creature deals.
+        dealer: Option<crate::CombatId>,
+        /// `player.Osty`, once one is summoned.
+        osty: Option<crate::CombatId>,
+        /// `props.IsPoweredAttack()`.
+        powered: bool,
     },
     /// `ModifyPowerAmountGivenAdditive`: what `giver` adds to `power` it
     /// applies to `target`. `player` is the player's creature, which a relic
