@@ -40,6 +40,12 @@ const GIANT_GUN_RAISE: i32 = 5;
 const GIANT_STEAM: Number = 3;
 
 /// `SoulFysh.FadeMove`'s Intangible, and `ScreamMoveAmount`'s Vulnerable.
+/// `ThieveryPower`'s stack as the Gremlin Merc applies it.
+const THIEVERY: Number = 20;
+/// `DoubleSmashMove`'s Weak, and `HeheMove`'s Strength.
+const MERC_WEAK: Number = 2;
+const MERC_STRENGTH: Number = 2;
+
 const FYSH_FADE: Number = 2;
 const FYSH_SCREAM: Number = 3;
 
@@ -91,6 +97,12 @@ pub(super) fn starting_powers(
         // Each override calls the base and nothing else. The Waterfall Giant's
         // also sets its Pressure Gun's damage, which its model counts from.
         Monster::Seapunk | Monster::TwoTailedRat | Monster::WaterfallGiant => Vec::new(),
+        // `SurprisePower`, then a Thievery aimed at each player, of which a
+        // fight here has one.
+        Monster::GremlinMerc => vec![
+            (Power::SurprisePower, PowerAmount::Counted(1)),
+            (Power::ThieveryPower, PowerAmount::Counted(THIEVERY)),
+        ],
         Monster::SewerClam => vec![(
             Power::PlatingPower,
             PowerAmount::Counted(match ascension.has(AscensionLevel::ToughEnemies) {
@@ -168,6 +180,34 @@ pub(super) fn perform<F: Fight<V>>(
     fight: &mut F,
 ) -> Option<u8> {
     match (monster, move_id) {
+        // `GimmeMove`: the hits, then each Thievery steals.
+        (Monster::GremlinMerc, MoveId::GimmeMove) => {
+            if super::attack_first(fight, step) {
+                return Some(1);
+            }
+            steal(fight);
+        }
+        // `DoubleSmashMove`: the hits, the steal, then Weak on each target.
+        (Monster::GremlinMerc, MoveId::DoubleSmashMove) => {
+            if super::attack_first(fight, step) {
+                return Some(1);
+            }
+            steal(fight);
+            fight.apply_to_opponents(Power::WeakPower, PowerAmount::Counted(MERC_WEAK));
+        }
+        // `HeheMove`: the hit, the steal, then Strength on itself.
+        (Monster::GremlinMerc, MoveId::HeheMove) => {
+            if super::attack_first(fight, step) {
+                return Some(1);
+            }
+            steal(fight);
+            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(MERC_STRENGTH));
+        }
+        // `SpawnedMove`: it wakes, which is an animation and `IsAwake`, which
+        // nothing reads.
+        (Monster::FatGremlin | Monster::SneakyGremlin, MoveId::SpawnedMove) => {}
+        // `FleeMove`: `CreatureCmd.Escape` on itself.
+        (Monster::FatGremlin, MoveId::FleeMove) => fight.escape(),
         // `DarkStrikeMove`: its hit. `BeforeDamage` plays its sound alone.
         (Monster::CalcifiedCultist | Monster::DampCultist, MoveId::DarkStrikeMove) => {
             fight.attack_opponents()
@@ -366,6 +406,33 @@ pub(super) fn perform<F: Fight<V>>(
 }
 
 /// `TurnsUntilSummonable--`.
+/// `ThieveryPower.Steal` for the Gremlin Merc's one instance: the lesser of
+/// its stack and the player's gold, where the player stands and holds any.
+fn steal<F: Fight<V>>(fight: &mut F) {
+    use sts2_core::CreatureView as _;
+
+    if fight.opponents().is_empty() {
+        return;
+    }
+    let merc = fight.actor();
+    let Some(PowerAmount::Counted(amount)) = fight
+        .creatures()
+        .find(|creature| creature.id() == merc)
+        .and_then(|creature| creature.power(Power::ThieveryPower))
+    else {
+        return;
+    };
+    let gold = fight.gold();
+    if gold <= 0 {
+        return;
+    }
+    let taken = amount.min(gold);
+    fight.lose_gold(taken);
+    fight.write_power(merc, Power::ThieveryPower, |state| {
+        *state.stolen_gold() += taken
+    });
+}
+
 fn rat_waits<F: Fight<V>>(fight: &mut F) {
     fight.model(|model| {
         let super::Model::TwoTailedRat { summonable_in, .. } = model else {

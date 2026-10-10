@@ -108,6 +108,7 @@ impl sts2_core::Hooks for V0_107_1 {
     type RelicState = behaviour::relics::State;
     type PowerState = behaviour::powers::State;
     type MonsterState = behaviour::monsters::Model;
+    type EncounterState = behaviour::encounters::State;
     type CardState = behaviour::cards::State;
 
     fn power_noted(state: &mut Self::PowerState, note: Self::Number) {
@@ -640,6 +641,22 @@ impl sts2_core::Rules for V0_107_1 {
         teammates: &[Self::Health],
     ) -> Option<Self::Health> {
         behaviour::monsters::health_after_added(monster, ascension, rolled, teammates)
+    }
+
+    fn encounter_gold_proportion(
+        encounter: Self::Encounter,
+        state: &Self::EncounterState,
+        escaped: &[Self::Monster],
+    ) -> Option<f32> {
+        behaviour::encounters::gold_proportion(encounter, state, escaped)
+    }
+
+    fn perform_power_death<F: sts2_core::Fight<Self>>(
+        power: Self::Power,
+        holder: sts2_core::CombatId,
+        fight: &mut F,
+    ) {
+        behaviour::powers::perform_death(power, holder, fight)
     }
 
     fn monster_hp_after_added(
