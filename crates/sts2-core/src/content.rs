@@ -4328,6 +4328,8 @@ pub struct CardLogic {
     pub draw_pile: usize,
     /// Whether its owner's Osty stands, which `IsOstyMissing` negates.
     pub osty: bool,
+    /// Whether every card in its owner's hand is an Attack.
+    pub hand_all_attacks: bool,
 }
 
 /// Which cards a hook writes on, for [`HookEffect::AddReplays`] and
@@ -5933,6 +5935,8 @@ pub struct CardOwner<'a, V: ContentVersion> {
     pub osty_max_hp: Option<V::Health>,
     /// How many cards the owner's draw pile holds.
     pub draw: usize,
+    /// How many cards the owner's discard pile holds.
+    pub discard: usize,
     /// The cards in the owner's exhaust pile.
     pub exhaust: &'a [V::Card],
     /// How many cards the owner's hand holds besides this one.

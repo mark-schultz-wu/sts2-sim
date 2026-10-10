@@ -1,11 +1,13 @@
 //! The event cards the generator leaves to a hand port.
 
 use sts2_core::{
-    Amount, Change, CostPool, Effect, Fight, Lasting, Pile, PileAct, Played, Scaling, Selection,
+    Amount, Change, CostPool, CreatureView as _, Effect, Fight, Lasting, Pile, PileAct, Played,
+    PowerAmount, Rules as _, Scaling, Selection,
 };
 
 use super::super::super::generated::card_plays;
 use super::super::super::generated::cards::{CardType, CardVar, EventCard};
+use super::super::super::generated::powers::Power;
 use super::V;
 
 /// Where an event card stopped inside its own play.
@@ -17,6 +19,8 @@ pub enum Resume {
     WishPick,
     /// `BrightestFlame`, after a question inside its draw was answered.
     BrightestFlameDrew,
+    /// `DualWield`, after its owner picked the card to copy.
+    DualWieldPick,
 }
 
 pub(super) fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
@@ -101,6 +105,82 @@ pub(super) fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> 
             });
             Played::Done
         }
+        // `Clash`: its damage to the target. Its `IsPlayable` asks for a
+        // hand of Attacks alone.
+        EventCard::Clash => {
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            Played::Done
+        }
+        // `Distraction`: a Skill of the character's pool, free this turn,
+        // into the hand.
+        EventCard::Distraction => {
+            super::super::free_card_into_hand(
+                fight,
+                |card| V::card_kind(card) == Some(sts2_core::CardKind::Skill),
+                true,
+            );
+            Played::Done
+        }
+        // `DualWield`: one Attack or Power of the hand, then its `Cards` of
+        // clones of it into the hand.
+        EventCard::DualWield => {
+            let cards = fight
+                .cards_in(Pile::Hand)
+                .into_iter()
+                .filter(|&at| {
+                    matches!(
+                        V::card_kind(fight.card_ident(at).card),
+                        Some(sts2_core::CardKind::Attack | sts2_core::CardKind::Power)
+                    )
+                })
+                .collect();
+            Played::AskingAmong {
+                cards,
+                selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
+                at: super::super::Resume::Card(super::Resume::Event(Resume::DualWieldPick)),
+            }
+        }
+        // `Entrench`: as much block again as its owner holds, unpowered.
+        EventCard::Entrench => {
+            let actor = fight.actor();
+            let held = fight
+                .creatures()
+                .find(|creature| creature.id() == actor)
+                .map_or(0, |creature| creature.block());
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: actor,
+                amount: Amount::Number(held),
+                scaling: Scaling::Static,
+            });
+            fight.apply(block);
+            Played::Done
+        }
+        // `FeedingFrenzy`: its `StrengthPower` as Feeding Frenzy on its owner.
+        EventCard::FeedingFrenzy => {
+            let amount = fight.var(CardVar::StrengthPower);
+            fight.apply_to_actor(Power::FeedingFrenzyPower, PowerAmount::Counted(amount));
+            Played::Done
+        }
+        // `Stack`: as much block as its `CalculatedBlock`, one more for each
+        // card in the discard pile.
+        EventCard::Stack => {
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Var(CardVar::CalculatedBlock),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+            Played::Done
+        }
         card => card_plays::event::on_play(card, fight),
     }
 }
@@ -117,6 +197,16 @@ pub(super) fn resume_play<F: Fight<V>>(
             Played::Done
         }
         Resume::BrightestFlameDrew => unreachable!("{at:?} waits on a question, not a pick"),
+        // `CreateClone` of the card picked, its `Cards` times, each through
+        // `AddGeneratedCardToCombat` into the hand.
+        Resume::DualWieldPick => {
+            if let Some(picked) = chosen.one_or_none() {
+                for _ in 0..fight.var(CardVar::Cards) {
+                    fight.clone_card(picked, Pile::Hand);
+                }
+            }
+            Played::Done
+        }
     }
 }
 
