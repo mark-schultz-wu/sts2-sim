@@ -271,7 +271,7 @@ pub(crate) fn play<V: Rules>(
     // `AddDuringManualCardPlay`: the card is in the play pile, and so out of
     // the hand, while its own effect runs.
     let card = live.cards.play(sts2_core::Pile::Hand, play.index);
-    let (pile, position) = result_pile::<V>(live, relics, &card, play.energy);
+    let (pile, position) = result_pile::<V, _>(live, streams, relics, &card, play.energy);
     let count = play_count::<V, _>(live, streams, relics, &card);
     // `SpendEnergy` captures what an X cost spent, and `SpendStars` what the
     // stars cost.
@@ -477,7 +477,7 @@ pub(super) fn auto_play_in_play<V: Rules>(
     super::turn::unheard::<V>(live, relics, sts2_core::ModelHook::BeforeCardAutoPlayed);
 
     let energy = num_traits::zero();
-    let (pile, position) = result_pile::<V>(live, relics, &card, energy);
+    let (pile, position) = result_pile::<V, _>(live, &mut rngs, relics, &card, energy);
     let count = play_count::<V, _>(live, &mut rngs, relics, &card);
     // `AutoPlay` spends nothing, and captures an X from what the pools hold,
     // unless `skipXCapture` keeps one a payment captured.
@@ -660,8 +660,9 @@ fn before_played<V: Rules, S: LendsCombat>(
 ///
 /// A card whose type the fight works out, or a listener other than a power
 /// changing the pile.
-fn result_pile<V: Rules>(
+fn result_pile<V: Rules, S: LendsCombat>(
     live: &mut Live<V>,
+    streams: &mut S,
     relics: &mut crate::run::Belt<V>,
     card: &super::live::CardInstance<V>,
     energy: V::Count,
@@ -736,8 +737,21 @@ fn result_pile<V: Rules>(
             sts2_core::EventHook::ResultPileModified { card: played },
             &mut asked,
         );
-        if let Some(effect) = asked.first() {
-            unimplemented!("a power asking for {effect:?} after moving a played card")
+        if asked.is_empty() {
+            continue;
+        }
+        let ascension = live.ascension;
+        let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
+        for effect in asked {
+            match effect {
+                // `PowerCmd.Decrement` on the power that moved it.
+                sts2_core::HookEffect::Decrement => {
+                    board.modify_amount(holder, power, -num_traits::one::<V::Number>())
+                }
+                effect => {
+                    unimplemented!("a power asking for {effect:?} after moving a played card")
+                }
+            }
         }
     }
     result

@@ -4750,6 +4750,8 @@ pub enum PoolFilter {
     FreeFixedCost,
     /// The cards whose canonical `Keywords` hold Ethereal.
     Ethereal,
+    /// The `Common` cards.
+    Common,
 }
 
 /// `CardPilePosition`: which end of a pile a card goes to.
