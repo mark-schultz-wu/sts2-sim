@@ -15,6 +15,7 @@ mod darv;
 mod dense_vegetation;
 mod doll_room;
 mod doors_of_light_and_dark;
+mod drowning_beacon;
 mod fake_merchant;
 mod field_of_man_sized_holes;
 mod grave_of_the_forgotten;
@@ -36,6 +37,7 @@ mod round_tea_party;
 mod sapphire_seed;
 mod self_help_book;
 mod slippery_bridge;
+mod spiraling_whirlpool;
 mod spirit_grafter;
 mod stone_of_all_time;
 mod sunken_statue;
@@ -122,6 +124,8 @@ pub enum State {
     SlipperyBridge(slippery_bridge::State),
     SunkenStatue(sunken_statue::State),
     TrashHeap(trash_heap::State),
+    DrowningBeacon(drowning_beacon::State),
+    SpiralingWhirlpool(spiraling_whirlpool::State),
     DoorsOfLightAndDark(doors_of_light_and_dark::State),
     WaterloggedScriptorium(waterlogged_scriptorium::State),
     AbyssalBaths(abyssal_baths::State),
@@ -358,6 +362,12 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
         }
         Event::SunkenStatue => State::SunkenStatue(sunken_statue::SunkenStatue.enter(run, rng)),
         Event::TrashHeap => State::TrashHeap(trash_heap::TrashHeap.enter(run, rng)),
+        Event::DrowningBeacon => {
+            State::DrowningBeacon(drowning_beacon::DrowningBeacon.enter(run, rng))
+        }
+        Event::SpiralingWhirlpool => {
+            State::SpiralingWhirlpool(spiraling_whirlpool::SpiralingWhirlpool.enter(run, rng))
+        }
         Event::DoorsOfLightAndDark => {
             State::DoorsOfLightAndDark(doors_of_light_and_dark::DoorsOfLightAndDark.enter(run, rng))
         }
@@ -498,6 +508,10 @@ pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
         State::SlipperyBridge(state) => slippery_bridge::SlipperyBridge.observe(state, run),
         State::SunkenStatue(state) => sunken_statue::SunkenStatue.observe(state, run),
         State::TrashHeap(state) => trash_heap::TrashHeap.observe(state, run),
+        State::DrowningBeacon(state) => drowning_beacon::DrowningBeacon.observe(state, run),
+        State::SpiralingWhirlpool(state) => {
+            spiraling_whirlpool::SpiralingWhirlpool.observe(state, run)
+        }
         State::DoorsOfLightAndDark(state) => {
             doors_of_light_and_dark::DoorsOfLightAndDark.observe(state, run)
         }
@@ -616,6 +630,12 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
         }
         State::SunkenStatue(state) => sunken_statue::SunkenStatue.choose(state, option, run, rng),
         State::TrashHeap(state) => trash_heap::TrashHeap.choose(state, option, run, rng),
+        State::DrowningBeacon(state) => {
+            drowning_beacon::DrowningBeacon.choose(state, option, run, rng)
+        }
+        State::SpiralingWhirlpool(state) => {
+            spiraling_whirlpool::SpiralingWhirlpool.choose(state, option, run, rng)
+        }
         State::DoorsOfLightAndDark(state) => {
             doors_of_light_and_dark::DoorsOfLightAndDark.choose(state, option, run, rng)
         }
