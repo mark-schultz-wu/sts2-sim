@@ -848,7 +848,8 @@ mod tests {
                     {"index": 3, "key": "WELCOME_TO_WONGOS.pages.INITIAL.options.LEAVE",
                      "title": "Leave", "proceed": true},
                 ]
-            }
+            },
+            "moves": [{"cmd": "choose_option", "index": 0}, {"cmd": "choose_option", "index": 1}, {"cmd": "choose_option", "index": 2}, {"cmd": "choose_option", "index": 3}]
         }))
     }
 
@@ -869,7 +870,11 @@ mod tests {
                     {"at": "2,3", "type": "RestSite", "to": []},
                 ],
                 "proceed": false
-            }
+            },
+            "moves": [
+                {"cmd": "travel", "col": 0, "row": 3},
+                {"cmd": "travel", "col": 2, "row": 3}
+            ]
         }))
     }
 

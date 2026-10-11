@@ -419,7 +419,11 @@ mod tests {
                     {"at": "1,4", "type": "Elite", "to": []},
                 ],
                 "proceed": false
-            }
+            },
+            "moves": [
+                {"cmd": "travel", "col": 0, "row": 3},
+                {"cmd": "travel", "col": 2, "row": 3}
+            ]
         }))
     }
 
@@ -457,7 +461,8 @@ mod tests {
                     {"index": 2, "key": "WELCOME_TO_WONGOS.pages.INITIAL.options.LEAVE",
                      "title": "Leave", "proceed": true},
                 ]
-            }
+            },
+            "moves": [{"cmd": "choose_option", "index": 0}, {"cmd": "choose_option", "index": 1}, {"cmd": "choose_option", "index": 2}]
         }))
     }
 
@@ -492,7 +497,8 @@ mod tests {
                     {"index": 1, "kind": "MerchantRelicEntry", "id": "AKABEKO",
                      "cost": 30, "stocked": true, "affordable": true},
                 ]
-            }
+            },
+            "moves": [{"cmd": "buy", "index": 1}]
         }));
         let out = shot(applied, 90, 24, |_| {});
         println!("\n{out}\n");
