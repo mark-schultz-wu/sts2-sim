@@ -16,12 +16,14 @@ using MegaCrit.Sts2.Core.GameActions;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Multiplayer.Game;
 using MegaCrit.Sts2.Core.Models.Events;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Models.Monsters;
 using MegaCrit.Sts2.Core.Models.Relics;
 using MegaCrit.Sts2.Core.Entities.Relics;
+using MegaCrit.Sts2.Core.Entities.RestSite;
 using MegaCrit.Sts2.Core.Entities.Merchant;
 using MegaCrit.Sts2.Core.Rewards;
 using MegaCrit.Sts2.Core.Saves;
@@ -369,6 +371,34 @@ internal static class BundleWithoutAScreen
             player, choiceId, PlayerChoiceResult.FromIndex(index));
         Log.Info($"Player {player.NetId} chose cards [{string.Join(",", chosen.Select(c => c.Id.Entry))}]");
         return chosen;
+    }
+}
+
+/// <summary>
+/// Whether an option at this rest site went through, which is when
+/// <c>NRestSiteRoom</c> puts its proceed button up.
+/// </summary>
+/// <remarks>
+/// The room hears it from <c>NRestSiteButton.SelectOption</c>, which calls
+/// <c>AfterSelectingOption</c> on success alone. The synchronizer's
+/// <c>AfterPlayerOptionChosen</c> carries the same success, so this listens
+/// there. <c>BeginRestSite</c> opens each rest site and resets it.
+/// </remarks>
+[HarmonyPatch(typeof(RestSiteSynchronizer), nameof(RestSiteSynchronizer.BeginRestSite))]
+internal static class RestSiteProgress
+{
+    public static bool Rested { get; private set; }
+
+    private static void Postfix(RestSiteSynchronizer __instance)
+    {
+        Rested = false;
+        __instance.AfterPlayerOptionChosen -= Chosen;
+        __instance.AfterPlayerOptionChosen += Chosen;
+    }
+
+    private static void Chosen(RestSiteOption option, bool success, ulong playerId)
+    {
+        Rested |= success;
     }
 }
 

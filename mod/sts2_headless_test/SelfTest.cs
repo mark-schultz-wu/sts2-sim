@@ -170,11 +170,13 @@ public static class SelfTest
         // Before anything grants free travel, since this case needs both halves.
         // It leaves the relic behind and stands on the last row, so the rest of
         // the suite gets a clean run rather than inheriting either.
+        await OnTheMap();
         await BossSurvivesFreeTravel(state);
         state = await Driver.Restart();
 
         // Out of combat first: map legality needs a map position, not a fight.
         covered.Add("WingedBoots");
+        await OnTheMap();
         TheMapGraphCoversTheWholeAct(state);
         await FreeTravelWidensTheMap(state, "WingedBoots", async () =>
             await RelicCmd.Obtain(ModelDb.Relic<WingedBoots>().ToMutable(), state.Players[0]));
@@ -444,6 +446,10 @@ public static class SelfTest
     /// </remarks>
     private static async Task TravellingMovesAndRecordsWhereYouWent(RunState state)
     {
+        Check("travel: the map stays shut while the opening ancient is unfinished",
+            Travelable(state).Count == 0);
+        await OnTheMap();
+
         List<string> before = Travelable(state);
         Check($"travel: somewhere to go from the start ({before.Count} point(s))", before.Count > 0);
 
@@ -467,6 +473,9 @@ public static class SelfTest
         Check("travel: where we came from is still recorded", visited.Contains(from));
 
         // The point of a map is that arriving somewhere changes where you can go.
+        // The room the run arrived in keeps the map shut until it is done.
+        Check("travel: the room arrived in keeps the map shut", Travelable(state).Count == 0);
+        await OnTheMap();
         List<string> next = Travelable(state);
         Check($"travel: the legal set moved with us ({string.Join(" ", before)} -> {string.Join(" ", next)})",
             next.Count > 0 && !next.SequenceEqual(before));
@@ -1291,6 +1300,7 @@ public static class SelfTest
     private static async Task<bool> FlightWidensTheMap()
     {
         RunState plain = await Driver.Restart();
+        await OnTheMap();
         MapPoint? spot = Discriminating(plain);
         if (spot == null)
         {
@@ -1303,6 +1313,7 @@ public static class SelfTest
         List<string> before = Travelable(plain);
 
         RunState flying = await Driver.Restart(ModelDb.Modifier<Flight>().ToMutable());
+        await OnTheMap();
 
         // Without this the case could "prove" that Flight widens the map when
         // all it did was generate a different one.
@@ -1623,6 +1634,20 @@ public static class SelfTest
         return doc.RootElement.TryGetProperty("combat", out JsonElement c)
             ? c.GetProperty("legal").EnumerateArray().ToList()
             : new List<JsonElement>();
+    }
+
+    /// <summary>
+    /// Stand in the map room an act opens on, whose screen lets the run travel.
+    /// </summary>
+    /// <remarks>
+    /// A new run stands in its ancient, and the map stays shut until the
+    /// ancient is done. The map cases are about where a move may go, so they
+    /// start where the game lets a move be made at all.
+    /// </remarks>
+    private static async Task OnTheMap()
+    {
+        await RunManager.Instance.EnterRoomDebug(RoomType.Map, showTransition: false);
+        await Driver.WaitForDecisionPoint();
     }
 
     private static List<string> Travelable(RunState state)
