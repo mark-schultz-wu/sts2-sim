@@ -206,3 +206,86 @@ fn a_card_the_pools_cannot_pay_for_is_unplayable_before_it_is_refused() {
         );
     }
 }
+
+#[test]
+fn a_selection_refuses_the_clicks_its_screen_would() {
+    use sts2_content::v0_107_1::cards::IroncladCard;
+    use sts2_core::{Construct as _, Gift, Setup};
+
+    // Burning Pact asks for exactly one card from the hand.
+    let mut sim = fighting();
+    sim.setup(&Setup::Grant(Gift::Card(Cards::Ironclad(
+        IroncladCard::BurningPact,
+    ))))
+    .expect("the grant is implemented")
+    .expect("the grant is accepted");
+    let seen = sim.observe().expect("the run reports");
+    let fight = seen.observation.fight().expect("the run is in a fight");
+    let pact = fight
+        .legal
+        .iter()
+        .position(|play| play.card.card == Cards::Ironclad(IroncladCard::BurningPact))
+        .expect("the granted card is in hand");
+    sim.play(&Decision::PlayCard {
+        index: hand(u8::try_from(pact).expect("a hand index fits a byte")),
+        target: None,
+    })
+    .expect("the play is implemented")
+    .expect("the play is legal");
+    let asked = sim.observe().expect("the run reports");
+    let Some(sts2_core::Question::SelectCards { options, .. }) = &asked.asking else {
+        panic!("Burning Pact asks for a card, not {:?}", asked.asking);
+    };
+    let offered = options.len();
+
+    let refuse = |sim: &mut Sim<V>, answer: Answer, want: Reason<V>| {
+        let before = sim.observe().expect("the run reports");
+        let refusal = sim
+            .play(&Decision::Answer(answer))
+            .expect("the selection answered")
+            .expect_err("the click is refused");
+        assert_eq!(refusal.reason, want, "{answer:?}");
+        assert_eq!(
+            sim.observe().expect("the run still reports"),
+            before,
+            "a refused {answer:?} moved the selection"
+        );
+    };
+    let click = |sim: &mut Sim<V>, answer: Answer| {
+        sim.play(&Decision::Answer(answer))
+            .expect("the selection answered")
+            .expect("the click is accepted");
+    };
+    let wrong = |chosen| Reason::WrongCount {
+        chosen,
+        min: 1,
+        max: 1,
+    };
+
+    refuse(&mut sim, Answer::Undo, Reason::NothingPicked);
+    refuse(&mut sim, Answer::Done, wrong(0));
+    refuse(
+        &mut sim,
+        Answer::Pick(99),
+        Reason::OutOfRange {
+            index: 99,
+            count: offered,
+        },
+    );
+    click(&mut sim, Answer::Pick(0));
+    refuse(&mut sim, Answer::Pick(0), Reason::Duplicate { index: 0 });
+    refuse(&mut sim, Answer::Pick(1), wrong(2));
+    click(&mut sim, Answer::Undo);
+    click(&mut sim, Answer::Pick(1));
+    let picked = sim.observe().expect("the run reports");
+    let Some(sts2_core::Question::SelectCards { picked, .. }) = picked.asking else {
+        panic!("a pick leaves the selection parked");
+    };
+    assert_eq!(picked, [1].into());
+    click(&mut sim, Answer::Done);
+    assert_eq!(
+        sim.observe().expect("the run reports").asking,
+        None,
+        "done hands the pick over"
+    );
+}

@@ -31,6 +31,8 @@ pub(crate) enum WireQuestion {
         max: u32,
         asker: Option<String>,
         options: Vec<WireCardOption>,
+        /// The options picked so far, in the order they were picked.
+        picked: Vec<usize>,
     },
     Rewards {
         skippable: bool,
@@ -135,10 +137,20 @@ impl WireQuestion {
                 max,
                 asker,
                 options,
+                picked,
             } => Question::SelectCards {
                 min,
                 max,
                 asker,
+                picked: sts2_core::Picks::try_from(&picked[..]).map_err(|why| {
+                    at(
+                        "question.picked",
+                        Why::OutOfRange {
+                            what: "a selection's picks",
+                            value: why.to_string(),
+                        },
+                    )
+                })?,
                 options: options
                     .into_iter()
                     .enumerate()
@@ -395,7 +407,7 @@ mod tests {
     #[test]
     fn a_card_selection_names_its_cards() {
         let q = asked(serde_json::json!({
-            "kind": "select_cards", "min": 1, "max": 2, "asker": "DiscardAction",
+            "kind": "select_cards", "min": 1, "max": 2, "asker": "DiscardAction", "picked": [],
             // Indices that are not positions, because the game's are the game's:
             // the wire number is what an answer names, and a reader deriving it
             // from the list order would agree with the game right up until the
@@ -412,6 +424,7 @@ mod tests {
             max,
             asker,
             options,
+            ..
         } = q
         else {
             panic!("expected select_cards");
@@ -435,7 +448,8 @@ mod tests {
     #[test]
     fn a_selector_with_no_attribution_is_allowed() {
         let q = asked(serde_json::json!({
-            "kind": "select_cards", "min": 0, "max": 1, "asker": null, "options": []
+            "kind": "select_cards", "min": 0, "max": 1, "asker": null, "options": [],
+            "picked": []
         }))
         .expect("should parse");
 

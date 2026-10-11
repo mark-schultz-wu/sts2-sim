@@ -1,0 +1,8 @@
+# Astrolabe transforms three cards of the deck, each on its own draw of the
+# RNG, and appends what each became in the order the cards were picked. Two
+# picks, then a `cards` answer that adds the third and hands them over.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"ASTROLABE"}
+{"cmd":"answer","pick":9}
+{"cmd":"answer","pick":2}
+{"cmd":"answer","cards":[6]}

@@ -219,7 +219,7 @@ mod tests {
         let r = parse(
             r#"{"type":"pending","seq":7,"cmd":"play_card","kind":"select_cards",
                 "digest":"DEADBEEF","state":{"gold":99},
-                "min":1,"max":1,"asker":null,"options":[]}"#,
+                "min":1,"max":1,"asker":null,"options":[],"picked":[]}"#,
         );
         let Response::Pending { digest, state, .. } = r else {
             panic!("expected pending");
@@ -238,7 +238,8 @@ mod tests {
         let r = parse(
             r#"{"type":"pending","seq":7,"cmd":"play_card","kind":"select_cards",
                 "digest":"D1","state":{},"min":1,"max":2,"asker":"DiscardAction",
-                "options":[{"index":0,"card":"STRIKE"},{"index":1,"card":"BASH+1"}]}"#,
+                "options":[{"index":0,"card":"STRIKE"},{"index":1,"card":"BASH+1"}],
+                "picked":[1]}"#,
         );
         let Response::Pending { seq, cmd, .. } = r else {
             panic!("expected pending");

@@ -256,6 +256,7 @@ where
             max,
             asker,
             options,
+            ..
         } => {
             let asked = match (min, max) {
                 (0, 1) => "choose a card, or none".to_string(),

@@ -276,6 +276,9 @@ impl Serialize for WireAnswer {
             Answer::Cards(picks) => {
                 map.serialize_entry("cards", &picks.iter().collect::<Vec<_>>())?;
             }
+            Answer::Pick(at) => map.serialize_entry("pick", at)?,
+            Answer::Undo => map.serialize_entry("undo", &true)?,
+            Answer::Done => map.serialize_entry("done", &true)?,
             Answer::Skip => map.serialize_entry("skip", &true)?,
             // The protocol's list, holding the one reward an answer takes.
             Answer::Take(take) => map.serialize_entry("take", &[WireTake::from(*take)])?,
@@ -307,7 +310,7 @@ impl<'de> Deserialize<'de> for WireAnswer {
 
             fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.write_str(
-                    "an answer carrying one of 'cards', 'skip', 'take', 'divine' or 'confirm'",
+                    "an answer carrying one of 'cards', 'pick', 'undo', 'done', 'skip', 'take', 'divine' or 'confirm'",
                 )
             }
 
@@ -334,6 +337,23 @@ impl<'de> Deserialize<'de> for WireAnswer {
                             }
                         }
                         "confirm" => Answer::Confirm(map.next_value()?),
+                        "pick" => Answer::Pick(map.next_value()?),
+                        "undo" => match map.next_value::<bool>()? {
+                            true => Answer::Undo,
+                            false => {
+                                return Err(serde::de::Error::custom(
+                                    "'undo' is only an answer when it is true",
+                                ));
+                            }
+                        },
+                        "done" => match map.next_value::<bool>()? {
+                            true => Answer::Done,
+                            false => {
+                                return Err(serde::de::Error::custom(
+                                    "'done' is only an answer when it is true",
+                                ));
+                            }
+                        },
                         "skip" => match map.next_value::<bool>()? {
                             true => Answer::Skip,
                             false => {
@@ -345,14 +365,17 @@ impl<'de> Deserialize<'de> for WireAnswer {
                         other => {
                             return Err(serde::de::Error::unknown_field(
                                 other,
-                                &["cards", "skip", "take", "divine", "confirm"],
+                                &[
+                                    "cards", "pick", "undo", "done", "skip", "take", "divine",
+                                    "confirm",
+                                ],
                             ));
                         }
                     };
 
                     if answer.is_some() {
                         return Err(serde::de::Error::custom(
-                            "an answer carries exactly one of 'cards', 'skip', 'take', 'divine' and 'confirm'",
+                            "an answer carries exactly one of 'cards', 'pick', 'undo', 'done', 'skip', 'take', 'divine' and 'confirm'",
                         ));
                     }
                     answer = Some(found);
@@ -360,7 +383,7 @@ impl<'de> Deserialize<'de> for WireAnswer {
 
                 answer.map(WireAnswer).ok_or_else(|| {
                     serde::de::Error::custom(
-                        "an answer needs one of 'cards', 'skip', 'take', 'divine' or 'confirm'",
+                        "an answer needs one of 'cards', 'pick', 'undo', 'done', 'skip', 'take', 'divine' or 'confirm'",
                     )
                 })
             }
@@ -646,6 +669,18 @@ mod tests {
             json!({"cmd": "answer", "cards": [0, 2]})
         );
         assert_eq!(
+            wire(Decision::Answer(Answer::Pick(3))),
+            json!({"cmd": "answer", "pick": 3})
+        );
+        assert_eq!(
+            wire(Decision::Answer(Answer::Undo)),
+            json!({"cmd": "answer", "undo": true})
+        );
+        assert_eq!(
+            wire(Decision::Answer(Answer::Done)),
+            json!({"cmd": "answer", "done": true})
+        );
+        assert_eq!(
             wire(Decision::Answer(Answer::Skip)),
             json!({"cmd": "answer", "skip": true})
         );
@@ -715,6 +750,9 @@ mod tests {
             Decision::ChooseOption { index: 2 }.into(),
             Decision::Buy { index: 0 }.into(),
             Decision::Answer(Answer::Cards([0, 2].into())).into(),
+            Decision::Answer(Answer::Pick(3)).into(),
+            Decision::Answer(Answer::Undo).into(),
+            Decision::Answer(Answer::Done).into(),
             Decision::Answer(Answer::Skip).into(),
             Decision::Answer(Answer::Take(TakeReward::Card { index: 1, card: 0 })).into(),
             Decision::Answer(Answer::Take(TakeReward::NonCard { index: 2 })).into(),

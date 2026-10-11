@@ -10,7 +10,7 @@
 //! belt comes first, then a room's options, then the fight or the map.
 
 use smallvec::SmallVec;
-use sts2_core::{Answer, BeltIndex, CombatId, ContentVersion, Decision, HandIndex};
+use sts2_core::{Answer, BeltIndex, CombatId, ContentVersion, Decision, HandIndex, Picks};
 
 /// The decisions a run accepts, in the order a driver picks from.
 ///
@@ -36,20 +36,42 @@ pub(crate) fn aimed<V: ContentVersion, I: Copy>(
     }
 }
 
-/// Every size a card selection allows, each as its first `n` options.
+/// The next clicks a card selection allows. Each card not yet picked, while
+/// the selection takes more. Taking back the last pick. Handing the picks
+/// over, once there are enough.
 ///
-/// Every size rather than every combination, which is exponential and mostly
-/// the same question asked again. Which cards the first `n` are is the
-/// shuffle's business, and a driver picking differently picks between equals.
-pub(crate) fn selections<V: ContentVersion>(
+/// A click at a time, because the order of the picks is part of the answer.
+/// Purity exhausts its picks in that order, and Astrolabe transforms them in
+/// it, one draw of the RNG each.
+pub(crate) fn picks<V: ContentVersion>(
     min: usize,
     max: usize,
     offered: usize,
+    picked: &Picks,
     moves: &mut Legal<V>,
 ) {
-    moves.extend(
-        (min..=max.min(offered)).map(|n| Decision::Answer(Answer::Cards((0..n).collect()))),
-    );
+    if picked.len() < max {
+        moves.extend(
+            (0..offered)
+                .filter(|&at| !picked.iter().any(|taken| taken == at))
+                .map(|at| Decision::Answer(Answer::Pick(pick_index(at)))),
+        );
+    }
+    if !picked.is_empty() {
+        moves.push(Decision::Answer(Answer::Undo));
+    }
+    if picked.len() >= min {
+        moves.push(Decision::Answer(Answer::Done));
+    }
+}
+
+/// An option's position, as a pick names it.
+///
+/// # Panics
+///
+/// A selection offering more cards than a pick can name.
+fn pick_index(at: usize) -> u8 {
+    u8::try_from(at).unwrap_or_else(|_| unimplemented!("a pick of option {at}"))
 }
 
 /// A hand position, as a play names it.

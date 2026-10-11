@@ -1,0 +1,16 @@
+# Purity's selection is taken a click at a time, and exhausts its cards in
+# the order they were picked. An undo takes back the last pick alone.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","card":"PURITY"}
+{"cmd":"grant","card":"PURITY"}
+{"cmd":"grant","card":"PURITY"}
+{"cmd":"grant","card":"PURITY"}
+{"cmd":"grant","card":"PURITY"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":0}
+{"cmd":"answer","pick":3}
+{"cmd":"answer","pick":1}
+{"cmd":"answer","undo":true}
+{"cmd":"answer","pick":0}
+{"cmd":"answer","pick":2}
+{"cmd":"answer","done":true}

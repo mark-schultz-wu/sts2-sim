@@ -17,12 +17,13 @@ use sts2_core::{
 
 use crate::combat::Error;
 use crate::event::Blessing;
-use crate::legal::{Legal, selections};
+use crate::legal::Legal;
 use crate::map::ActMap;
 use crate::reward::{Odds, Offer};
-use crate::run::{Opening, Rarity};
+use crate::run::{Opening, Rarity, Settled};
 use crate::stream::Streams;
 use sts2_core::Gift;
+use sts2_core::{Reason, Refusal};
 
 /// The authoritative state of the run slice implemented so far.
 ///
@@ -63,6 +64,9 @@ pub(crate) struct State<V: Rules> {
     /// Elite encounters have their own dealt list and position. Entering one
     /// must not consume the next normal encounter.
     elite_fights: usize,
+    /// The cards a select-cards question has been handed so far, in the order
+    /// they were picked. Empty whenever no selection is under way.
+    picked: sts2_core::Picks,
     /// `RoomSet.eventsVisited`: where this act's event queue stands.
     ///
     /// Every event room the run enters marks one, an ancient's included, and
@@ -404,6 +408,7 @@ impl<V: Rules> Clone for State<V> {
             streams,
             normal_fights,
             elite_fights,
+            picked,
             events_used,
             visited_events,
             unknown_odds,
@@ -423,6 +428,7 @@ impl<V: Rules> Clone for State<V> {
         *streams = source.streams;
         *normal_fights = source.normal_fights;
         *elite_fights = source.elite_fights;
+        *picked = source.picked;
         *events_used = source.events_used;
         visited_events.clone_from(&source.visited_events);
         *unknown_odds = source.unknown_odds;
@@ -1030,6 +1036,7 @@ impl<V: Rules> State<V> {
             player,
             normal_fights: 0,
             elite_fights: 0,
+            picked: sts2_core::Picks::none(),
             // A run opens in Neow's room, which is an event room.
             events_used: 1,
             visited_events: Arc::new(Vec::new()),
@@ -1152,6 +1159,7 @@ impl<V: Rules> State<V> {
             // card is never offered.
             sts2_core::DeckAct::Transform(_)
             | sts2_core::DeckAct::TransformUpgraded(_)
+            | sts2_core::DeckAct::TransformTogether(_)
             | sts2_core::DeckAct::TransformInto(_) => deck
                 .filter(|(_, card)| {
                     !V::card_eternal(card)
@@ -1262,12 +1270,15 @@ impl<V: Rules> State<V> {
                     }
                 }
             }
-            // `CardCmd.Transform`: every replacement is drawn first, in the
-            // order the cards were taken. The originals leave the deck, and
-            // the replacements join its end in the originals' deck order.
+            // A replacement drawn for each card in the order the cards were
+            // taken. `CardCmd.TransformToRandom` a card at a time lands each at
+            // the deck's end in that order. `CardCmd.Transform` over the list
+            // sorts them back into their originals' deck order first.
             sts2_core::DeckAct::Transform(stream)
-            | sts2_core::DeckAct::TransformUpgraded(stream) => {
+            | sts2_core::DeckAct::TransformUpgraded(stream)
+            | sts2_core::DeckAct::TransformTogether(stream) => {
                 let upgrade = matches!(act, sts2_core::DeckAct::TransformUpgraded(_));
+                let together = matches!(act, sts2_core::DeckAct::TransformTogether(_));
                 let rng = stream_of(&mut self.phase, &mut self.streams, stream);
                 let mut replaced: Vec<(usize, CardIdent<V>)> = taken
                     .iter()
@@ -1283,7 +1294,9 @@ impl<V: Rules> State<V> {
                         (at, ident)
                     })
                     .collect();
-                replaced.sort_by_key(|(at, _)| *at);
+                if together {
+                    replaced.sort_by_key(|(at, _)| *at);
+                }
                 let mut gone: Vec<usize> = replaced.iter().map(|(at, _)| *at).collect();
                 gone.sort_unstable_by(|a, b| b.cmp(a));
                 for at in gone {
@@ -5017,6 +5030,73 @@ impl<V: Rules> State<V> {
         Decided::Abandoned
     }
 
+    /// Answers the question the run is parked on, a click at a time for a
+    /// card selection.
+    ///
+    /// `CardSelection.Accept` in the mod, which checks a pick as the game's
+    /// screen does. It takes a card offered and not picked already, while
+    /// the selection takes more. The picks go to the question once it is
+    /// done.
+    pub(crate) fn respond(&mut self, answer: &Answer) -> Result<Settled<V>, Error> {
+        let Some((min, max, offered)) = self.selecting() else {
+            if let Answer::Pick(_) | Answer::Undo | Answer::Done = answer {
+                unimplemented!("{answer:?} to a question that selects no cards");
+            }
+            return self.answer(answer).map(Ok);
+        };
+        let refused = |reason| {
+            Ok(Err(Refusal {
+                what: "answer".into(),
+                reason,
+            }))
+        };
+        let wrong_count = |chosen: usize| Reason::WrongCount {
+            chosen,
+            min: u32::try_from(min).expect("a selection counts in a few cards"),
+            max: u32::try_from(max).expect("a selection counts in a few cards"),
+        };
+        // Each card checked as a pick would be, after the ones already held.
+        let mut picked = self.picked;
+        let more: &[usize] = match answer {
+            Answer::Pick(at) => &[usize::from(*at)],
+            Answer::Cards(cards) => &cards.iter().collect::<Vec<_>>(),
+            _ => &[],
+        };
+        for &at in more {
+            if at >= offered {
+                return refused(Reason::OutOfRange {
+                    index: i64::try_from(at).expect("an option index fits"),
+                    count: offered,
+                });
+            }
+            if picked.iter().any(|taken| taken == at) {
+                return refused(Reason::Duplicate { index: at });
+            }
+            if picked.len() >= max {
+                return refused(wrong_count(picked.len() + 1));
+            }
+            picked.push(at);
+        }
+        match answer {
+            Answer::Pick(_) => {
+                self.picked = picked;
+                Ok(Ok(Decided::Resolved))
+            }
+            Answer::Undo => match self.picked.pop() {
+                Some(_) => Ok(Ok(Decided::Resolved)),
+                None => refused(Reason::NothingPicked),
+            },
+            Answer::Done | Answer::Cards(_) => {
+                if picked.len() < min {
+                    return refused(wrong_count(picked.len()));
+                }
+                self.picked = sts2_core::Picks::none();
+                self.answer(&Answer::Cards(picked)).map(Ok)
+            }
+            _ => unimplemented!("{answer:?} to a select-cards question"),
+        }
+    }
+
     pub(crate) fn answer(&mut self, answer: &Answer) -> Result<Decided, Error> {
         if let Phase::Rewards { .. } = self.phase {
             return self.take(answer);
@@ -5440,6 +5520,13 @@ impl<V: Rules> State<V> {
     /// a pending question alone, or the belt, then the room, then the map.
     pub(crate) fn legal(&self) -> Legal<V> {
         let alive = self.standing().alive;
+        if let Some((min, max, offered)) = self.selecting()
+            && (alive || self.in_combat())
+        {
+            let mut moves = Legal::new();
+            crate::legal::picks(min, max, offered, &self.picked, &mut moves);
+            return moves;
+        }
         if let Phase::Combat(live) = &self.phase {
             return crate::combat::legal_moves::<V>(
                 live,
@@ -5518,6 +5605,7 @@ impl<V: Rules> State<V> {
     /// Each is the question [`State::report`] asks in that phase, read for its
     /// sizes and its rewards alone.
     fn answers(&self, moves: &mut Legal<V>) -> bool {
+        // `legal` answered a selection already, with its picks.
         match &self.phase {
             Phase::Neow { .. }
             | Phase::Event { .. }
@@ -5537,11 +5625,8 @@ impl<V: Rules> State<V> {
                         Decision::Answer(Answer::Confirm(true)),
                         Decision::Answer(Answer::Confirm(false)),
                     ]),
-                    Pickup::Cards { offered, min, max } => {
-                        selections(*min, *max, offered.len(), moves)
-                    }
-                    Pickup::FromDeck { act, min, count } => {
-                        selections(*min, *count, self.offered(*act).len(), moves)
+                    Pickup::Cards { .. } | Pickup::FromDeck { .. } => {
+                        unreachable!("a selection's moves are its picks")
                     }
                     Pickup::CloneDeckCard { .. } => unreachable!("a room parks on no clone"),
                     Pickup::Rewards { offered, skippable } => {
@@ -5550,29 +5635,59 @@ impl<V: Rules> State<V> {
                     Pickup::Event => event_moves(self.event_question(), moves),
                 }
             }
-            Phase::RestSite {
-                upgrading: true, ..
-            } => selections(1, 1, self.upgradable().count(), moves),
-            Phase::Shop {
-                unfinished: Some(unfinished),
-                ..
-            } => {
-                let offered = match unfinished {
-                    Unfinished::Removal { .. } => self.offered(sts2_core::DeckAct::Remove).len(),
-                    Unfinished::Pickup { excluding, .. } => self.clonable(*excluding).len(),
-                    Unfinished::Relic { .. } => unreachable!("the parked pickup answers first"),
-                };
-                selections(1, 1, offered, moves);
-            }
-            Phase::Rewards {
-                removing: Some(_), ..
-            } => selections(1, 1, self.offered(sts2_core::DeckAct::Remove).len(), moves),
             Phase::Rewards { offered, .. } if offered.iter().any(|offer| !offer.taken()) => {
                 reward_moves(offered, true, moves)
             }
             _ => return false,
         }
         true
+    }
+
+    /// The bounds of the select-cards question the run is parked on, and how
+    /// many cards it offers: `(min, max, offered)`.
+    ///
+    /// The one place a selection's size is read, for its moves and for
+    /// refusing a pick alike.
+    fn selecting(&self) -> Option<(usize, usize, usize)> {
+        match &self.phase {
+            Phase::Combat(live) => live
+                .selecting()
+                .map(|(min, max, offered)| (min as usize, max as usize, offered)),
+            Phase::Neow { .. }
+            | Phase::Event { .. }
+            | Phase::RestSite { .. }
+            | Phase::Shop { .. }
+                if self.phase.asking().is_some() =>
+            {
+                match &self.phase.asking()?.pickup {
+                    Pickup::Cards { offered, min, max } => Some((*min, *max, offered.len())),
+                    Pickup::FromDeck { act, min, count } => {
+                        Some((*min, *count, self.offered(*act).len()))
+                    }
+                    _ => None,
+                }
+            }
+            // `CardSelectCmd.FromDeckForUpgrade`: one card, never none.
+            Phase::RestSite {
+                upgrading: true, ..
+            } => Some((1, 1, self.upgradable().count())),
+            Phase::Shop {
+                unfinished: Some(unfinished),
+                ..
+            } => match unfinished {
+                Unfinished::Removal { .. } => {
+                    Some((1, 1, self.offered(sts2_core::DeckAct::Remove).len()))
+                }
+                Unfinished::Pickup { excluding, .. } => {
+                    Some((1, 1, self.clonable(*excluding).len()))
+                }
+                Unfinished::Relic { .. } => None,
+            },
+            Phase::Rewards {
+                removing: Some(_), ..
+            } => Some((1, 1, self.offered(sts2_core::DeckAct::Remove).len())),
+            _ => None,
+        }
     }
 
     /// The options a room lets the run take, and the stock it lets it buy.
@@ -5978,7 +6093,12 @@ impl<V: Rules> State<V> {
                 room: self.room(),
                 combat: self.fight_report(),
             },
-            asking: self.asking(),
+            asking: self.asking().map(|mut question| {
+                if let Question::SelectCards { picked, .. } = &mut question {
+                    *picked = self.picked;
+                }
+                question
+            }),
         }
     }
 
@@ -6109,6 +6229,7 @@ impl<V: Rules> State<V> {
                             text: None,
                         })
                         .collect(),
+                    picked: sts2_core::Picks::none(),
                 }
             }),
             Phase::Combat(live) => live.question(),
@@ -6130,6 +6251,7 @@ impl<V: Rules> State<V> {
                         text: None,
                     })
                     .collect(),
+                picked: sts2_core::Picks::none(),
             }),
             Phase::Rewards { offered, .. } => offered
                 .iter()
@@ -6152,6 +6274,7 @@ impl<V: Rules> State<V> {
                         text: None,
                     })
                     .collect(),
+                picked: sts2_core::Picks::none(),
             }),
             // Each selection offers a different list. The removal reads the
             // deck less its `Eternal` cards, curses first, and a pickup reads
@@ -6184,6 +6307,7 @@ impl<V: Rules> State<V> {
                             text: None,
                         })
                         .collect(),
+                    picked: sts2_core::Picks::none(),
                 })
             }
             // An act opens on its map, which is no room and asks nothing.

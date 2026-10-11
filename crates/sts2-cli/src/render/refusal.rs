@@ -139,6 +139,7 @@ impl<V: sts2_content_wire::WireContentVersion> fmt::Display for Prose<'_, V> {
             Reason::WrongCount { chosen, min, max } => {
                 write!(f, "chose {chosen}, but this decision takes {min}..{max}")
             }
+            Reason::NothingPicked => f.write_str("no card is picked to take back"),
             Reason::NotSkippable => f.write_str("this reward set cannot be skipped"),
             Reason::AlreadyTaken { index } => {
                 write!(f, "reward {index} has already been taken")

@@ -5,7 +5,23 @@
 pub enum Answer {
     /// The options a select-cards question takes, in the order they were
     /// picked.
+    ///
+    /// Each one picked in turn and then [`Answer::Done`], after whatever the
+    /// question already holds. A script's shorthand: the moves a run offers
+    /// are the three below.
     Cards(Picks),
+    /// One more card, after the ones a select-cards question already holds.
+    ///
+    /// The game's own screens take a selection a click at a time. The cards
+    /// are handed back in the order of the clicks.
+    Pick(u8),
+    /// Take back the last card picked.
+    ///
+    /// The hand's list drops its last entry. A grid's set hands the freed
+    /// slot to the next pick. Either screen ends where the pick began.
+    Undo,
+    /// Hand the cards picked so far to the game.
+    Done,
     /// Decline a reward set. Refused if it is not skippable.
     Skip,
     /// Take one reward from a reward set.
@@ -95,6 +111,14 @@ impl Picks {
             1 => Some(usize::from(self.at[0])),
             _ => None,
         }
+    }
+
+    /// Gives back the option taken last.
+    pub fn pop(&mut self) -> Option<usize> {
+        let last = usize::from(self.len.checked_sub(1)?);
+        let at = std::mem::take(&mut self.at[last]);
+        self.len -= 1;
+        Some(usize::from(at))
     }
 
     pub fn len(&self) -> usize {
