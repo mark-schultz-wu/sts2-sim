@@ -233,8 +233,9 @@ const OUTBREAK_EVERY: u8 = 3;
 
 /// How many plays `amountsForPlayedCards` keeps at once: one, and those
 /// played inside it. A Havoc that plays a Havoc that plays a card holds
-/// three.
-const NOTED_AT_ONCE: usize = 3;
+/// three, and a replay that auto-plays a card that auto-plays another holds
+/// four. The game's dictionary has no bound, so a deeper nest stops here.
+const NOTED_AT_ONCE: usize = 6;
 
 /// `amountsForPlayedCards.Add`: `id`'s play noted with the stack as it began.
 fn note(state: &mut State, id: sts2_core::CardId<V>, amount: Number) {
