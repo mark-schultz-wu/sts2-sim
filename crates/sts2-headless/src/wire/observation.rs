@@ -109,7 +109,10 @@ fn option_key<V: sts2_content_wire::WireContentVersion>(
     let shape = || {
         at(
             path,
-            Why::Disagree("an option key is not `<event>.pages.<page>.options.<option>`"),
+            Why::Unknown {
+                what: "option key of the shape `<event>.pages.<page>.options.<option>`",
+                value: text.to_string(),
+            },
         )
     };
     let (page, rest) = text
@@ -1499,7 +1502,10 @@ mod tests {
         // is the observation saying two things at once.
         let other = event("OROBAS.pages.INITIAL.options.DRIFTWOOD").unwrap_err();
         assert_eq!(other.at, "room.options[0].key");
-        assert!(matches!(other.why, Why::Disagree(_)), "{other}");
+        assert!(
+            matches!(&other.why, Why::Unknown { value, .. } if value == "OROBAS.pages.INITIAL.options.DRIFTWOOD"),
+            "{other}"
+        );
 
         // And a key that is not built the way every recorded key is built.
         for bad in [
@@ -1510,7 +1516,10 @@ mod tests {
             "NEOW.pages.INITIAL.options.A.B",
         ] {
             let err = event(bad).unwrap_err();
-            assert!(matches!(err.why, Why::Disagree(_)), "{bad}: {err}");
+            assert!(
+                matches!(&err.why, Why::Unknown { value, .. } if value == bad),
+                "{bad}: {err}"
+            );
         }
     }
 

@@ -27,28 +27,12 @@ use sts2_sim::Sim;
 
 type V = V0_107_1;
 
-/// The relics every run is granted before it starts, and how many of each.
-const CARRIED: [(Relic, usize); 2] = [(Relic::Gorget, 25), (Relic::MercuryHourglass, 1)];
+#[path = "carried/mod.rs"]
+mod carried;
+use carried::CARRIED;
 
 /// Decisions a run takes before this gives up on it.
 const STEPS: usize = 20_000;
-
-/// SplitMix64, which is enough for picking among a handful of moves.
-struct Pick(u64);
-
-impl Pick {
-    fn next(&mut self) -> u64 {
-        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
-        let mut z = self.0;
-        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-        z ^ (z >> 31)
-    }
-
-    fn below(&mut self, n: usize) -> usize {
-        (self.next() % n as u64) as usize
-    }
-}
 
 /// Play one run at random.
 #[derive(Parser)]
@@ -121,13 +105,7 @@ fn run(cli: Cli) -> Result<(), Error> {
         ascension: sts2_content::v0_107_1::ascension::AscensionLevel::None,
         modifiers: Vec::new(),
     };
-    let mut pick = Pick(
-        start
-            .seed
-            .as_str()
-            .bytes()
-            .fold(0, |at, b| at.wrapping_mul(31) ^ u64::from(b)),
-    );
+    let mut pick = sts2_golden::random::Pick::for_seed(start.seed.as_str());
     let mut sim = Sim::<V>::begin((), &start).map_err(Error::Begin)?;
     for (relic, count) in CARRIED {
         for _ in 0..count {
@@ -158,16 +136,7 @@ fn run(cli: Cli) -> Result<(), Error> {
         if legal.is_empty() {
             return Err(Error::NothingLegal);
         }
-        let others: Vec<usize> = (0..legal.len())
-            .filter(|&at| !matches!(legal[at], Decision::EndTurn))
-            .collect();
-        let end = legal
-            .iter()
-            .position(|decision| matches!(decision, Decision::EndTurn));
-        let at = match end {
-            Some(end) if others.is_empty() || pick.below(10) == 0 => end,
-            _ => others[pick.below(others.len())],
-        };
+        let at = pick.choose(&legal);
         writeln!(out, "step {step} {at} {}", legal.len())?;
         out.flush()?;
         let decision = legal[at];

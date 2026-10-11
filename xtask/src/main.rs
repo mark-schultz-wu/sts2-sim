@@ -20,6 +20,7 @@ mod error;
 mod instructions;
 mod neow;
 mod plays;
+mod record;
 mod scenario_diff;
 mod trace;
 mod unknown;
@@ -52,6 +53,8 @@ enum Command {
     Allocations(allocations::Args),
     /// Play runs at random and rank what stops them.
     Census(census::Args),
+    /// Have the game play the census's runs, and keep them.
+    Record(record::Args),
     /// Count how much of each act's content has code.
     Coverage(coverage::Args),
     /// Find the seeds whose Neow offers a relic.
@@ -85,6 +88,8 @@ enum Error {
     Allocations(#[from] allocations::Error),
     #[error("census failed: {0}")]
     Census(#[from] error::ProcessError),
+    #[error("record failed: {0}")]
+    Record(error::ProcessError),
     #[error("coverage failed: {0}")]
     Coverage(#[from] coverage::Error),
     #[error("neow failed: {0}")]
@@ -105,6 +110,7 @@ fn run(command: Command) -> Result<String, Error> {
         Command::Instructions(args) => instructions::run(args)?,
         Command::Allocations(args) => allocations::run(args)?,
         Command::Census(args) => census::run(args)?,
+        Command::Record(args) => record::run(args).map_err(Error::Record)?,
         Command::Coverage(args) => coverage::run(args)?,
         Command::Neow(args) => neow::run(args)?,
         Command::Trace(args) => trace::run(args)?,
