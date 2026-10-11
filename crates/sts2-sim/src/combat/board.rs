@@ -2910,7 +2910,7 @@ pub(crate) fn resolve<V: Rules>(
                 let powered = scaling == Scaling::Dynamic;
                 match (damage, playing) {
                     (Amount::Var(key), Some(held)) => {
-                        card_hit::<V>(fight, dealer, Some(target), held, key, powered)
+                        card_hit::<V>(fight, Some(dealer), Some(target), held, key, powered)
                     }
                     (damage, _) => {
                         let damage = carried::<V>(playing, fight.live, damage, Some(target));
@@ -2972,7 +2972,7 @@ pub(crate) fn resolve<V: Rules>(
 /// hook whole, the way the game's decimal does.
 pub(crate) fn card_hit<V: Rules>(
     fight: Walk<'_, V>,
-    dealer: CombatId,
+    dealer: Option<CombatId>,
     target: Option<CombatId>,
     held: &CardInstance<V>,
     key: V::CardVar,
@@ -2980,12 +2980,12 @@ pub(crate) fn card_hit<V: Rules>(
 ) -> V::Number {
     if !held.face.fractional() {
         let damage = var::<V>(held, key, fight.live, target);
-        return modified::<V>(fight, Some(dealer), target, Some(held), damage, powered);
+        return modified::<V>(fight, dealer, target, Some(held), damage, powered);
     }
     let damage = exact_var::<V>(held, key, fight.live, target);
     whole::<V>(modified_exactly::<V>(
         fight,
-        Some(dealer),
+        dealer,
         target,
         Some(held),
         damage,
@@ -3180,27 +3180,20 @@ pub(crate) fn effect_of<V: Rules>(
 }
 
 /// Who deals or gains a card's number: the player, or for an Osty's damage
-/// `Owner.Osty`, which is Osty dead or alive.
-///
-/// # Panics
-///
-/// Osty's damage on a player who never summoned one, where the game hands the
-/// hooks no dealer at all.
+/// `Owner.Osty`, which is Osty dead or alive. Nobody for Osty's damage on a
+/// player who never summoned one, where the game hands the hooks a null
+/// dealer.
 pub(crate) fn dealer_of<V: Rules>(
     modifier: CardNumberModifier,
     creatures: &[Fighter<V>],
-) -> CombatId {
+) -> Option<CombatId> {
     match modifier {
-        CardNumberModifier::OstyDamage => {
-            osty::<V>(creatures)
-                .unwrap_or_else(|| unimplemented!("Osty's damage with no Osty"))
-                .id
-        }
+        CardNumberModifier::OstyDamage => osty::<V>(creatures).map(|osty| osty.id),
         CardNumberModifier::Damage
         | CardNumberModifier::UnpoweredDamage
         | CardNumberModifier::Block
         | CardNumberModifier::UnpoweredBlock
-        | CardNumberModifier::PowerGiven => player::<V>(creatures),
+        | CardNumberModifier::PowerGiven => Some(player::<V>(creatures)),
     }
 }
 
