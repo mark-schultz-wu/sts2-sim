@@ -29,37 +29,26 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ## Open
 
-### 1. Two census stops
-
-Picking selections a click at a time (#473) changed what random play
-reaches.
-
-- A Silent card carrying a fifth cost modifier, on floor 45
-  (`crates/sts2-sim/src/combat/live.rs`, seed C000000266).
-- A shuffle asking for a card inside a draw that cannot pause, on floor
-  48 for the Necrobinder (`crates/sts2-sim/src/combat/board.rs`, seed
-  C000000041).
-
-### 2. The game reports its legal moves
+### 1. The game reports its legal moves
 
 The mod reports the full ordered move list in each observation, and a
 digest section holds `Sim::legal` to it at every step of every
 scenario. The order is the sim's: a pending question's answers alone,
 or the belt, then the room's options, then the fight or the map.
 
-### 3. The CLI and the fuzzer read the reported moves
+### 2. The CLI and the fuzzer read the reported moves
 
 `crates/sts2-cli/src/cli/moves.rs` builds its own list, and missed the
 travel gate (#468). It goes, and both read the observation's list.
 
-### 4. Games side by side
+### 3. Games side by side
 
 Several games at once share one profile and race on
 `progress.save.tmp`, which throws `SaveException`. Each game gets its
 own `XDG_DATA_HOME`. Then measure how many run at once: wall time held
 at about 25 seconds for 400 moves from one game to eight.
 
-### 5. The recorder
+### 4. The recorder
 
 The game plays census seeds, picking at random from its own legal
 moves, with the census's Gorgets and Mercury Hourglass. Each run is
@@ -68,47 +57,47 @@ legal list and a rules digest for each step. All the runs share one
 binary file. Recording is run on purpose, never by CI. CI replays the file in the
 sim alone.
 
-### 6. Coverage reports the recorded runs
+### 5. Coverage reports the recorded runs
 
 `cargo xtask coverage` reports how far the sim follows each recorded
 run and 0RACLE1-REGENT-2, by character. It counts steps matched and runs
 matched to the end, and lists the commonest first splits. The check
 ratchets the total of matched steps so it cannot fall.
 
-### 7. 0RACLE1-REGENT-2 parts at step 537
+### 6. 0RACLE1-REGENT-2 parts at step 537
 
 Sovereign Blade previews 29 damage in the game and 24 in the sim.
 
-### 8. Every split the recorded runs find
+### 7. Every split the recorded runs find
 
 Each first split becomes its own item, here, as the recorded runs
 reach it. The live `unimplemented!()` branches surface this way.
 
-### 9. A listener walk that can pause
+### 8. A listener walk that can pause
 
 The game walks `AfterCardPlayed` listeners one at a time, and a draw
 can pause the walk. The sim raises them all first, so Bygone Effigy's
 Slow counts a card early in the preview while Stratagem's question
 waits. Needs a design, for Mark.
 
-### 10. Ascension
+### 9. Ascension
 
 The sim threads the ascension level through, but every scenario and
 census run plays at `None`. Record runs at each level, and each split
 they find becomes an item.
 
-### 11. Run modifiers
+### 10. Run modifiers
 
 A run started with any modifier panics (`crates/sts2-sim/src/engine/sim.rs`).
 Hoarder's removal ban is one rule known to need one. Port the custom
 mode's modifiers, and record runs with each.
 
-### 12. A speed target
+### 11. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.
 
-### 13. v0.111.0
+### 12. v0.111.0
 
 Only the generated tables exist. Its behaviour layer has to be written,
 and its runs recorded.

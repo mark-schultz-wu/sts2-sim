@@ -78,11 +78,11 @@ const VARS: usize = 5;
 
 /// How many local price changes one copy of a card carries.
 ///
-/// Four, from how they arrive rather than from a guess. A card collects one
-/// from its own upgrade, and two from a power potion, which sets both pools at
-/// once. So three is what the ported content reaches. A second potion
-/// generates a second card, which starts empty.
-const MODIFIERS: usize = 4;
+/// The game's list has no bound. A card collects one from its own upgrade,
+/// and two from a power potion, which sets both pools at once. A turn of
+/// cheapening plays writes a pair each time, a shift and a set, which never
+/// merge. Random play has stacked five on one Silent card.
+const MODIFIERS: usize = 8;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Asker<V: Rules> {
