@@ -2,6 +2,8 @@
 # middle: sixteen fixed rooms from the ancient to the boss. An unknown point
 # on it is always an event.
 # Forty Mercury Hourglasses end the fight on the way as it opens.
+# The ancient's option is drawn at random, since the map stays shut until
+# the ancient is done.
 {"cmd":"start","seed":"C000000005","character":"IRONCLAD","ascension":"None"}
 {"cmd":"grant","relic":"GOLDEN_COMPASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
@@ -44,6 +46,8 @@
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
 {"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"choose_option","index":1}
+{"cmd":"answer","skip":true}
 {"cmd":"travel","col":3,"row":1}
 {"cmd":"answer","skip":true}
 {"cmd":"travel","col":3,"row":2}

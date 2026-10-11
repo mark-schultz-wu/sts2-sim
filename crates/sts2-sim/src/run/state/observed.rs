@@ -81,7 +81,7 @@ impl<V: Rules> Observed<V> for State<V> {
     }
 
     fn travelable(&self) -> impl ExactSizeIterator<Item = Reachable<V>> + '_ {
-        self.reachable().into_iter()
+        State::travelable(self).into_iter()
     }
 
     fn points(&self) -> &[Node<V>] {

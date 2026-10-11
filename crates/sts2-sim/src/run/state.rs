@@ -5465,25 +5465,52 @@ impl<V: Rules> State<V> {
             self.potions_held(),
             &mut moves,
         );
-        let before = moves.len();
         self.room_moves(&mut moves);
-        // `NRestSiteRoom` puts its proceed button up once an option went
-        // through, beside any options still left.
-        let rested = matches!(self.phase, Phase::RestSite { rested: true, .. });
-        if moves.len() > before && !rested {
-            return moves;
-        }
-
         if self.can_proceed() {
             moves.push(Decision::Proceed);
         } else {
             moves.extend(
-                self.reachable()
+                self.travelable()
                     .into_iter()
                     .map(|point| Decision::Travel { to: point.at }),
             );
         }
         moves
+    }
+
+    /// Whether the room the run stands in lets it go to the map.
+    ///
+    /// `NMapScreen.IsTravelEnabled`, which each room's screen turns on when
+    /// it is done with the run. The map room and a merchant's do so as they
+    /// open, and a rest site once an option went through. A chest waits for
+    /// its relic, an event until it finishes, and a fight for its rewards.
+    fn travel_enabled(&self) -> bool {
+        // The map stays shut until the event under the fight is resumed.
+        if self.resuming.is_some() || !self.standing().alive || self.phase.asking().is_some() {
+            return false;
+        }
+        match &self.phase {
+            Phase::Map => true,
+            Phase::Shop { unfinished, .. } => unfinished.is_none(),
+            Phase::Neow { .. } | Phase::Treasure { .. } => self.phase.finished(),
+            // `NFakeMerchant` turns it on as it opens, like a merchant's room.
+            Phase::Event { finished, .. } => {
+                *finished || matches!(self.event_room(), Some(Room::Shop { .. }))
+            }
+            // `OnActiveScreenUpdated` puts the proceed button up for a rest
+            // site that offers nothing at all.
+            Phase::RestSite {
+                options,
+                rested,
+                chosen,
+                upgrading,
+                ..
+            } => (*rested || options.is_empty()) && chosen.is_none() && !*upgrading,
+            Phase::Rewards {
+                offered, removing, ..
+            } => removing.is_none() && offered.iter().all(Offer::taken),
+            Phase::Combat(_) | Phase::Lost { .. } | Phase::Won => false,
+        }
     }
 
     /// The answers to the question the run is parked on, if it is parked.
@@ -5627,12 +5654,11 @@ impl<V: Rules> State<V> {
     ///
     /// Beside the report rather than inside it, because deciding whether a
     /// move is legal reads this list and nothing else around it.
-    pub(crate) fn travelable(&self) -> Vec<Reachable<V>> {
-        // The map stays shut until the event under the fight is resumed.
-        if self.resuming.is_some() {
-            return Vec::new();
+    pub(crate) fn travelable(&self) -> SmallVec<[Reachable<V>; 7]> {
+        if !self.travel_enabled() {
+            return SmallVec::new();
         }
-        self.reachable().into_vec()
+        self.reachable()
     }
 
     /// [`State::travelable`], lent rather than collected.
@@ -5944,7 +5970,7 @@ impl<V: Rules> State<V> {
                 map: Map {
                     at: self.visited.last().copied(),
                     visited: self.visited.to_vec(),
-                    travelable: self.travelable(),
+                    travelable: self.travelable().into_vec(),
                     points: self.map.shared(),
                     proceed: self.can_proceed(),
                 },

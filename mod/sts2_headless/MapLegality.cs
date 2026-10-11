@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using System.Linq;
+using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Map;
+using MegaCrit.Sts2.Core.Models.Events;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
 
@@ -36,8 +38,7 @@ public static class MapLegality
 {
     public static IReadOnlyList<MapPoint> TravelableFrom(RunState state)
     {
-        // The map stays shut until the event the fight belongs to is resumed.
-        if (ResumesEvent(state))
+        if (!TravelEnabled(state))
         {
             return new List<MapPoint>();
         }
@@ -76,6 +77,44 @@ public static class MapLegality
         }
 
         return Sorted(MapTravel.GetTravelablePointsFrom(state, current));
+    }
+
+    /// <summary>
+    /// Whether the room the run stands in lets it go to the map.
+    /// </summary>
+    /// <remarks>
+    /// A mirror of <c>NMapScreen.IsTravelEnabled</c>, which only screens set.
+    /// <c>EnterMapCoord</c> enters any coordinate it is handed, whatever the
+    /// flag says, so without this the oracle would leave a room the game
+    /// keeps the player in.
+    ///
+    /// Each room's screen turns it on when it is done with the run.
+    /// <c>NMapRoom</c> and <c>NMerchantRoom</c> do as they open, and so does
+    /// <c>NFakeMerchant</c>. <c>NRestSiteRoom</c> does once an option went
+    /// through, or at once when it offers none. <c>NTreasureRoom</c> does once
+    /// the relic is taken or skipped, and <c>NEventRoom.Proceed</c> once the
+    /// event is finished. A fight's turns it on when its rewards screen
+    /// proceeds, which is once no reward is left to answer.
+    /// </remarks>
+    public static bool TravelEnabled(RunState state)
+    {
+        // The map stays shut until the event the fight belongs to is resumed.
+        if (ResumesEvent(state)
+            || Pending.Current != null
+            || CombatManager.Instance.IsInProgress
+            || state.Players[0].Creature.IsDead)
+        {
+            return false;
+        }
+        return state.CurrentRoom switch
+        {
+            EventRoom => RunManager.Instance.EventSynchronizer.GetLocalEvent() is var model
+                && (model.IsFinished || model is FakeMerchant),
+            RestSiteRoom => RestSiteProgress.Rested
+                || RunManager.Instance.RestSiteSynchronizer.GetLocalOptions().Count == 0,
+            TreasureRoom => !Chest.Open(state.Players[0]),
+            _ => true,
+        };
     }
 
     /// <summary>
