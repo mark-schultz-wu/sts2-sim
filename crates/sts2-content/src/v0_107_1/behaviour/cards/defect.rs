@@ -19,6 +19,8 @@ pub enum Resume {
     OverclockDrew,
     /// `Reboot`, after a question after its shuffle was answered.
     RebootShuffled,
+    /// `Modded`, after a question inside its draw was answered.
+    ModdedDrew,
 }
 
 /// The rest of a Defect card's play that stood still on a question its own
@@ -33,6 +35,7 @@ pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V>
             fight.draw(fight.var(CardVar::Cards));
             Played::Done
         }
+        Resume::ModdedDrew => modded_drew(fight),
         at => unreachable!("{at:?} stops on a pick, not on a question it waited for"),
     }
 }
@@ -43,7 +46,7 @@ pub(super) fn resume_play<F: Fight<V>>(
     chosen: sts2_core::SelectedCards<V>,
 ) -> Played<V> {
     match at {
-        Resume::OverclockDrew | Resume::RebootShuffled => {
+        Resume::OverclockDrew | Resume::RebootShuffled | Resume::ModdedDrew => {
             unreachable!("{at:?} waits on a question, not a pick")
         }
         // `CardPileCmd.Add(cardModel, PileType.Hand)`.
@@ -224,15 +227,17 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
         }
         DefectCard::Compact => compact(fight),
         // `Modded`: its `Repeat` orb slots, its `Cards` drawn, then one more
-        // energy on its own cost for the fight.
+        // energy on its own cost for the fight. A shuffle inside the draw can
+        // ask, and the cost waits for it.
         DefectCard::Modded => {
             fight.add_orb_slots(fight.var(CardVar::Repeat));
             fight.draw(fight.var(CardVar::Cards));
-            fight.modify_this(
-                sts2_core::Change::ChangeCost(sts2_core::CostPool::Energy, 1),
-                sts2_core::Lasting::ThisFight,
-            );
-            Played::Done
+            if fight.waiting() {
+                return Played::Waiting {
+                    at: super::super::Resume::Card(super::Resume::Defect(Resume::ModdedDrew)),
+                };
+            }
+            modded_drew(fight)
         }
         // `MeteorStrike`: its damage to the target, then three Plasma orbs.
         DefectCard::MeteorStrike => {
@@ -796,5 +801,15 @@ fn uproar<F: Fight<V>>(fight: &mut F) -> Played<V> {
     if let Some(card) = chosen {
         fight.auto_play_card(card);
     }
+    Played::Done
+}
+
+/// `Modded`, once its draw is over: its own energy cost one higher for the
+/// rest of the fight.
+fn modded_drew<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    fight.modify_this(
+        sts2_core::Change::ChangeCost(sts2_core::CostPool::Energy, 1),
+        sts2_core::Lasting::ThisFight,
+    );
     Played::Done
 }
