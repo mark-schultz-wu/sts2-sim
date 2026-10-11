@@ -401,6 +401,11 @@ internal static class DivineWithoutAScreen
 /// So these take the screen's branch, with our parked question where the
 /// screen would be. Everything before it is the game's own code: the early
 /// returns, the filter, and the sort a draw pile gets.
+///
+/// The branch also sets what may be skipped. The selector is handed a
+/// minimum of none for <c>FromChooseACardScreen</c>, whatever its
+/// <c>canSkip</c> says, and <c>NChooseACardSelectionScreen</c> hides its skip
+/// button unless <c>canSkip</c> is set.
 /// </remarks>
 [HarmonyPatch(typeof(CardSelectCmd))]
 internal static class ScreenPathSelections
@@ -435,6 +440,169 @@ internal static class ScreenPathSelections
     {
         __result = FromCombatPileAsked(context, pile, player, prefs, filter);
         return false;
+    }
+
+    [HarmonyPrefix]
+    [HarmonyPatch(nameof(CardSelectCmd.FromChooseACardScreen))]
+    private static bool FromChooseACardScreen(
+        PlayerChoiceContext context,
+        IReadOnlyList<CardModel> cards,
+        Player player,
+        bool canSkip,
+        ref Task<CardModel?> __result)
+    {
+        __result = FromChooseACardScreenAsked(context, cards, player, canSkip);
+        return false;
+    }
+
+    [HarmonyPrefix]
+    [HarmonyPatch(nameof(CardSelectCmd.FromSimpleGridForRewards))]
+    private static bool FromSimpleGridForRewards(
+        PlayerChoiceContext context,
+        List<CardCreationResult> cards,
+        Player player,
+        CardSelectorPrefs prefs,
+        ref Task<IEnumerable<CardModel>> __result)
+    {
+        __result = FromSimpleGridForRewardsAsked(context, cards, player, prefs);
+        return false;
+    }
+
+    [HarmonyPrefix]
+    [HarmonyPatch(nameof(CardSelectCmd.FromSimpleGrid))]
+    private static bool FromSimpleGrid(
+        PlayerChoiceContext context,
+        IReadOnlyList<CardModel> cardsIn,
+        Player player,
+        CardSelectorPrefs prefs,
+        ref Task<IEnumerable<CardModel>> __result)
+    {
+        __result = FromSimpleGridAsked(context, cardsIn, player, prefs);
+        return false;
+    }
+
+    [HarmonyPrefix]
+    [HarmonyPatch(nameof(CardSelectCmd.FromHandForUpgrade))]
+    private static bool FromHandForUpgrade(
+        PlayerChoiceContext context,
+        Player player,
+        ref Task<CardModel?> __result)
+    {
+        __result = FromHandForUpgradeAsked(context, player);
+        return false;
+    }
+
+    private static async Task<CardModel?> FromChooseACardScreenAsked(
+        PlayerChoiceContext context, IReadOnlyList<CardModel> cards, Player player, bool canSkip)
+    {
+        if (cards.Count > 3)
+        {
+            throw new ArgumentException("Only works with less than 3 cards", nameof(cards));
+        }
+        if (cards.Count == 0)
+        {
+            ReportSoftlock();
+            return null;
+        }
+        uint choiceId = RunManager.Instance.PlayerChoiceSynchronizer.ReserveChoiceId(player);
+        await GameApi.SignalChoiceBegun(context, player, PlayerChoiceOptions.None);
+        CardModel? result = (await CardSelection.Ask(cards, canSkip ? 0 : 1, 1,
+            RunManager.Instance.ActionExecutor.CurrentlyRunningAction?.ToString())).FirstOrDefault();
+        RunManager.Instance.PlayerChoiceSynchronizer.SyncLocalChoice(
+            player, choiceId, PlayerChoiceResult.FromIndex(result == null ? -1 : cards.ToList().IndexOf(result)));
+        await context.SignalPlayerChoiceEnded();
+        LogChoice(player, new[] { result });
+        return result;
+    }
+
+    private static async Task<IEnumerable<CardModel>> FromSimpleGridForRewardsAsked(
+        PlayerChoiceContext context, List<CardCreationResult> cards, Player player, CardSelectorPrefs prefs)
+    {
+        if (CombatManager.Instance.IsEnding)
+        {
+            return Array.Empty<CardModel>();
+        }
+        if (cards.Count == 0)
+        {
+            ReportSoftlock();
+            return Array.Empty<CardModel>();
+        }
+        List<CardModel> result;
+        if (!prefs.RequireManualConfirmation && cards.Count <= prefs.MinSelect)
+        {
+            result = cards.Select(c => c.Card).ToList();
+        }
+        else
+        {
+            uint choiceId = RunManager.Instance.PlayerChoiceSynchronizer.ReserveChoiceId(player);
+            await GameApi.SignalChoiceBegun(context, player, PlayerChoiceOptions.None);
+            result = (await CardSelection.Ask(cards.Select(c => c.Card).ToList(), prefs.MinSelect, prefs.MaxSelect,
+                RunManager.Instance.ActionExecutor.CurrentlyRunningAction?.ToString())).ToList();
+            List<int> indexes = result.Select(c => cards.FindIndex(r => r.Card == c)).ToList();
+            RunManager.Instance.PlayerChoiceSynchronizer.SyncLocalChoice(
+                player, choiceId, PlayerChoiceResult.FromIndexes(indexes));
+            await context.SignalPlayerChoiceEnded();
+        }
+        LogChoice(player, result);
+        return result;
+    }
+
+    private static async Task<IEnumerable<CardModel>> FromSimpleGridAsked(
+        PlayerChoiceContext context, IReadOnlyList<CardModel> cardsIn, Player player, CardSelectorPrefs prefs)
+    {
+        if (CombatManager.Instance.IsEnding)
+        {
+            return Array.Empty<CardModel>();
+        }
+        List<CardModel> cards = cardsIn.ToList();
+        if (cards.Count == 0)
+        {
+            return Array.Empty<CardModel>();
+        }
+        List<CardModel> result;
+        if (!prefs.RequireManualConfirmation && cards.Count <= prefs.MinSelect)
+        {
+            result = cards.ToList();
+        }
+        else
+        {
+            uint choiceId = RunManager.Instance.PlayerChoiceSynchronizer.ReserveChoiceId(player);
+            await GameApi.SignalChoiceBegun(context, player, PlayerChoiceOptions.None);
+            result = (await CardSelection.Ask(cards, prefs.MinSelect, prefs.MaxSelect,
+                RunManager.Instance.ActionExecutor.CurrentlyRunningAction?.ToString())).ToList();
+            List<int> indexes = result.Select(c => cards.IndexOf(c)).ToList();
+            RunManager.Instance.PlayerChoiceSynchronizer.SyncLocalChoice(
+                player, choiceId, PlayerChoiceResult.FromIndexes(indexes));
+            await context.SignalPlayerChoiceEnded();
+        }
+        LogChoice(player, result);
+        return result;
+    }
+
+    private static async Task<CardModel?> FromHandForUpgradeAsked(PlayerChoiceContext context, Player player)
+    {
+        if (CombatManager.Instance.IsOverOrEnding)
+        {
+            return null;
+        }
+        List<CardModel> list = PileType.Hand.GetPile(player).Cards.Where(c => c.IsUpgradable).ToList();
+        CardModel? result;
+        if (list.Count <= 1)
+        {
+            result = list.FirstOrDefault();
+        }
+        else
+        {
+            uint choiceId = RunManager.Instance.PlayerChoiceSynchronizer.ReserveChoiceId(player);
+            await GameApi.SignalChoiceBegun(context, player, PlayerChoiceOptions.CancelPlayCardActions);
+            result = (await CardSelection.Ask(list, 1, 1,
+                RunManager.Instance.ActionExecutor.CurrentlyRunningAction?.ToString())).FirstOrDefault();
+            RunManager.Instance.PlayerChoiceSynchronizer.SyncLocalChoice(
+                player, choiceId, PlayerChoiceResult.FromMutableCombatCard(result));
+            await context.SignalPlayerChoiceEnded();
+        }
+        LogChoice(player, new[] { result });
+        return result;
     }
 
     private static async Task<IEnumerable<CardModel>> FromHandAsked(
@@ -509,6 +677,10 @@ internal static class ScreenPathSelections
         await context.SignalPlayerChoiceEnded();
         return result;
     }
+
+    /// <summary><c>CardSelectCmd.ReportSoftlock</c>, which is private.</summary>
+    private static void ReportSoftlock() =>
+        AccessTools.Method(typeof(CardSelectCmd), "ReportSoftlock").Invoke(null, null);
 
     /// <summary><c>CardSelectCmd.LogChoice</c>, which is private.</summary>
     private static void LogChoice(Player player, IEnumerable<CardModel?> cards)
