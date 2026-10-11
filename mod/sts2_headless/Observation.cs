@@ -118,6 +118,9 @@ public static class Observation
             ["inCombat"] = CombatManager.Instance.IsInProgress,
             ["map"] = MapPosition(state),
             ["rng"] = Positions(state, me),
+
+            // Every move the run accepts, in the order a driver picks from.
+            ["moves"] = Moves.Legal(state),
         };
 
         Dictionary<string, object?>? room = Room(state, me);
@@ -478,7 +481,7 @@ public static class Observation
     ///
     /// Empty outside combat too, where there are no combat ids to name.
     /// </remarks>
-    private static List<uint> Targets(PotionModel potion, RunState state)
+    internal static List<uint> Targets(PotionModel potion, RunState state)
     {
         CombatState? combat = (state.CurrentRoom as CombatRoom)?.CombatState;
         if (combat == null || !CombatManager.Instance.IsInProgress)

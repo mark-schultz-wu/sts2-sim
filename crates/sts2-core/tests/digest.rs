@@ -191,6 +191,14 @@ fn full() -> Observation<V> {
                 }],
             }),
         }),
+        moves: vec![
+            sts2_core::Decision::PlayCard {
+                index: sts2_core::fixture::hand(0),
+                target: Some(at(1)),
+            },
+            sts2_core::Decision::Answer(sts2_core::Answer::Pick(2)),
+            sts2_core::Decision::EndTurn,
+        ],
     }
 }
 
@@ -709,6 +717,18 @@ fn mutations() -> Vec<Nudge> {
         }),
         ("orbs.queue: evoke", |o| {
             combat(o).orbs.as_mut().expect("orbs").queue[0].evoke += 1;
+        }),
+        ("moves: one fewer", |o| {
+            o.moves.pop();
+        }),
+        ("moves: another target", |o| {
+            o.moves[0] = sts2_core::Decision::PlayCard {
+                index: sts2_core::fixture::hand(0),
+                target: Some(at(2)),
+            };
+        }),
+        ("moves: another pick", |o| {
+            o.moves[1] = sts2_core::Decision::Answer(sts2_core::Answer::Pick(3));
         }),
         ("orbs.queue: another", |o| {
             combat(o)

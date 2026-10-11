@@ -39,11 +39,13 @@ pub enum Section {
     Piles = 10,
     /// What each card in hand can do, and why the rest cannot.
     Legal = 11,
+    /// Every decision the run accepts, in order.
+    Moves = 12,
 }
 
 impl Section {
     /// Every section, in the order a report lists them.
-    pub const ALL: [Section; 12] = [
+    pub const ALL: [Section; 13] = [
         Section::Run,
         Section::Relics,
         Section::Potions,
@@ -56,6 +58,7 @@ impl Section {
         Section::Hand,
         Section::Piles,
         Section::Legal,
+        Section::Moves,
     ];
 
     /// The number this section is written down as.
@@ -78,6 +81,7 @@ impl Section {
             Section::Hand => "hand",
             Section::Piles => "piles",
             Section::Legal => "legal",
+            Section::Moves => "moves",
         }
     }
 }
@@ -144,6 +148,7 @@ pub(super) fn sections<V: ContentVersion>(
             Section::Legal => sink.maybe(fight.as_ref(), |sink, fight| {
                 sink.seq(fight.legal(), |sink, playable| sink.playable(&playable));
             }),
+            Section::Moves => sink.seq(observed.moves(), |sink, decision| sink.decision(&decision)),
         }
         (section, Digest(sink.finish()))
     })

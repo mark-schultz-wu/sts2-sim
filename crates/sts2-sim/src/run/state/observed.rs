@@ -124,4 +124,8 @@ impl<V: Rules> Observed<V> for State<V> {
             | Phase::Shop { .. } => None,
         }
     }
+
+    fn moves(&self) -> impl ExactSizeIterator<Item = sts2_core::Decision<V>> + '_ {
+        self.legal().into_iter()
+    }
 }

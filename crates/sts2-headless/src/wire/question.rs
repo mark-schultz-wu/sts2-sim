@@ -388,7 +388,8 @@ mod tests {
                     "at": null, "visited": [], "travelable": [], "points": [],
                     "proceed": false
                 },
-                "rng": {}
+                "rng": {},
+                "moves": []
             }
         });
 

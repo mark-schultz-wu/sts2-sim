@@ -590,6 +590,96 @@ impl Sink {
         self.counters_of(observed);
         self.maybe(observed.room(), |sink, room| sink.room(room.borrow()));
         self.maybe(observed.combat(), |sink, combat| sink.combat(&combat));
+        self.seq(observed.moves(), |sink, decision| sink.decision(&decision));
+    }
+
+    /// One decision, a tag for its kind and then what it names.
+    fn decision<V: ContentVersion>(&mut self, decision: &crate::Decision<V>) {
+        use crate::{Answer, Decision, RewardAlternative, TakeReward, Tool};
+
+        let aimed = |sink: &mut Sink, index: u8, target: Option<crate::CombatId>| {
+            sink.u8(index);
+            sink.maybe(target, |sink, target| sink.u8(target.get()));
+        };
+        match decision {
+            Decision::EnterRoom { room } => {
+                self.u8(0);
+                self.id(room);
+            }
+            Decision::Travel { to } => {
+                self.u8(1);
+                self.coord(to);
+            }
+            Decision::Proceed => self.u8(2),
+            Decision::PlayCard { index, target } => {
+                self.u8(3);
+                aimed(self, index.get(), *target);
+            }
+            Decision::EndTurn => self.u8(4),
+            Decision::UsePotion { index, target } => {
+                self.u8(5);
+                aimed(self, index.get(), *target);
+            }
+            Decision::ChooseOption { index } => {
+                self.u8(6);
+                self.u8(*index);
+            }
+            Decision::Buy { index } => {
+                self.u8(7);
+                self.u8(*index);
+            }
+            Decision::Answer(answer) => {
+                self.u8(8);
+                match answer {
+                    Answer::Cards(picks) => {
+                        self.u8(0);
+                        self.len(picks.len());
+                        for at in picks.iter() {
+                            self.len(at);
+                        }
+                    }
+                    Answer::Pick(at) => {
+                        self.u8(1);
+                        self.u8(*at);
+                    }
+                    Answer::Undo => self.u8(2),
+                    Answer::Done => self.u8(3),
+                    Answer::Skip => self.u8(4),
+                    Answer::Take(take) => {
+                        self.u8(5);
+                        match take {
+                            TakeReward::NonCard { index } => {
+                                self.u8(0);
+                                self.u8(*index);
+                            }
+                            TakeReward::Card { index, card } => {
+                                self.u8(1);
+                                self.u8(*index);
+                                self.u8(*card);
+                            }
+                            TakeReward::Alternative { index, alternative } => {
+                                self.u8(2);
+                                self.u8(*index);
+                                self.u8(match alternative {
+                                    RewardAlternative::Reroll => 0,
+                                    RewardAlternative::Sacrifice => 1,
+                                });
+                            }
+                        }
+                    }
+                    Answer::Divine { x, y, tool } => {
+                        self.u8(6);
+                        self.u8(*x);
+                        self.u8(*y);
+                        self.bool(matches!(tool, Tool::Big));
+                    }
+                    Answer::Confirm(yes) => {
+                        self.u8(7);
+                        self.bool(*yes);
+                    }
+                }
+            }
+        }
     }
 
     fn map<V: ContentVersion>(&mut self, observed: &impl Observed<V>) {

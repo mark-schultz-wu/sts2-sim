@@ -62,6 +62,16 @@ public abstract class Pending
     /// </remarks>
     public abstract Dictionary<string, object?>? Accept(JsonElement req);
 
+    /// <summary>Every answer this question accepts, as the commands that give them.</summary>
+    /// <remarks>
+    /// In the order <see cref="Moves"/> lists them, which is the simulator's.
+    /// </remarks>
+    public abstract List<Dictionary<string, object?>> Answers();
+
+    /// <summary>One <c>answer</c> command, carrying the one field that tells it apart.</summary>
+    protected static Dictionary<string, object?> Answering(string field, object? value) =>
+        new Dictionary<string, object?> { ["cmd"] = "answer", [field] = value };
+
     protected abstract void Fail(Exception e);
 
     protected static void Park(Pending pending)
@@ -210,6 +220,37 @@ internal sealed class CardSelection : Pending
         }).ToList(),
         ["picked"] = _picked.ToList(),
     };
+
+    /// <summary>
+    /// Each card not yet picked while the selection takes more, then taking
+    /// back the last pick, then handing the picks over once there are enough.
+    /// </summary>
+    public override List<Dictionary<string, object?>> Answers()
+    {
+        var answers = new List<Dictionary<string, object?>>();
+        if (_picked.Count < _max)
+        {
+            for (int i = 0; i < _options.Count; i++)
+            {
+                if (!_picked.Contains(i))
+                {
+                    answers.Add(Answering("pick", i));
+                }
+            }
+        }
+
+        if (_picked.Count > 0)
+        {
+            answers.Add(Answering("undo", true));
+        }
+
+        if (_picked.Count >= _min)
+        {
+            answers.Add(Answering("done", true));
+        }
+
+        return answers;
+    }
 
     /// <remarks>
     /// <c>pick</c> adds one card, <c>undo</c> takes back the last, and
@@ -363,6 +404,12 @@ internal sealed class BundleChoice : Pending
         }).ToList(),
     };
 
+    /// <summary>Each bundle, as a one-card selection names it.</summary>
+    public override List<Dictionary<string, object?>> Answers() =>
+        Enumerable.Range(0, _bundles.Count)
+            .Select(i => Answering("cards", new List<int> { i }))
+            .ToList();
+
     public override Dictionary<string, object?>? Accept(JsonElement req)
     {
         if (!req.TryGetProperty("cards", out JsonElement el) || el.ValueKind != JsonValueKind.Array)
@@ -416,6 +463,13 @@ internal sealed class Confirmation : Pending
     public override Dictionary<string, object?> Describe() => new Dictionary<string, object?>
     {
         ["kind"] = Kind,
+    };
+
+    /// <summary>Yes, then no.</summary>
+    public override List<Dictionary<string, object?>> Answers() => new List<Dictionary<string, object?>>
+    {
+        Answering("confirm", true),
+        Answering("confirm", false),
     };
 
     public override Dictionary<string, object?>? Accept(JsonElement req)
@@ -552,6 +606,57 @@ internal sealed class RewardChoice : Pending
     /// <c>Generate</c> is what <c>OnSelect</c> calls, and the hook it raises only
     /// adds to a list, so asking it here changes nothing.
     /// </remarks>
+    /// <summary>
+    /// Each reward not yet taken: a card reward's cards, then its
+    /// alternatives, and anything else whole. Then the skip, where the set
+    /// allows one.
+    /// </summary>
+    public override List<Dictionary<string, object?>> Answers()
+    {
+        var answers = new List<Dictionary<string, object?>>();
+        IReadOnlyList<Reward> rewards = _set.Rewards.ToList();
+        for (int i = 0; i < rewards.Count; i++)
+        {
+            Reward reward = rewards[i];
+            if (reward.SuccessfullySelected)
+            {
+                continue;
+            }
+
+            if (reward is CardReward card)
+            {
+                for (int c = 0; c < card.Cards.Count(); c++)
+                {
+                    answers.Add(Taking(new Dictionary<string, object?> { ["index"] = i, ["card"] = c }));
+                }
+
+                foreach (string alternative in Alternatives(card))
+                {
+                    answers.Add(Taking(new Dictionary<string, object?>
+                    {
+                        ["index"] = i,
+                        ["alternative"] = alternative,
+                    }));
+                }
+            }
+            else
+            {
+                answers.Add(Taking(new Dictionary<string, object?> { ["index"] = i }));
+            }
+        }
+
+        if (!_set.DisallowSkipping)
+        {
+            answers.Add(Answering("skip", true));
+        }
+
+        return answers;
+    }
+
+    /// <summary>A <c>take</c> answer, which carries a list holding the one reward.</summary>
+    private static Dictionary<string, object?> Taking(Dictionary<string, object?> reward) =>
+        Answering("take", new List<Dictionary<string, object?>> { reward });
+
     private static List<string> Alternatives(CardReward card) =>
         CardRewardAlternative.Generate(card)
             .Select(a => a.OptionId)
@@ -907,6 +1012,34 @@ internal sealed class Divination : Pending
     /// <c>AreAllOccupiedCellsClear</c> is the same test this makes: an item is
     /// found once nothing covers it.
     /// </remarks>
+    /// <summary>Every hidden cell, column by column, with the small tool and then the big.</summary>
+    public override List<Dictionary<string, object?>> Answers()
+    {
+        var answers = new List<Dictionary<string, object?>>();
+        for (int x = 0; x < _game.GridSize.X; x++)
+        {
+            for (int y = 0; y < _game.GridSize.Y; y++)
+            {
+                if (!_game.cells[x, y].IsHidden)
+                {
+                    continue;
+                }
+
+                foreach (string tool in new[] { "Small", "Big" })
+                {
+                    answers.Add(Answering("divine", new Dictionary<string, object?>
+                    {
+                        ["x"] = x,
+                        ["y"] = y,
+                        ["tool"] = tool,
+                    }));
+                }
+            }
+        }
+
+        return answers;
+    }
+
     private bool Uncovered(CrystalSphereItem item)
     {
         for (int x = item.Position.X; x < item.Position.X + item.Size.X; x++)

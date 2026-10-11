@@ -44,6 +44,13 @@ pub struct Observation<V: ContentVersion> {
     pub room: Option<Room<V>>,
     /// The fight, while there is one.
     pub combat: Option<Combat<V>>,
+    /// Every decision the run accepts, in the order a driver picks from.
+    ///
+    /// The game's own list, which the simulator's `legal` is held to. A
+    /// pending question's answers come alone. Otherwise the belt comes first,
+    /// then the room's options, then the fight's plays and its end, or the
+    /// map.
+    pub moves: Vec<crate::Decision<V>>,
 }
 
 impl<V: ContentVersion> Observation<V> {

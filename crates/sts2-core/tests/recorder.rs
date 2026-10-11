@@ -49,6 +49,7 @@ fn nowhere() -> Applied<V> {
             },
             room: None,
             combat: None,
+            moves: Vec::new(),
         },
         asking: None,
         resolved: true,

@@ -6092,6 +6092,7 @@ impl<V: Rules> State<V> {
                 rng: self.positions(),
                 room: self.room(),
                 combat: self.fight_report(),
+                moves: self.legal().into_vec(),
             },
             asking: self.asking().map(|mut question| {
                 if let Question::SelectCards { picked, .. } = &mut question {

@@ -31,7 +31,8 @@ pub fn state(overlay: Value) -> Value {
             "points": [{"at": "3,11", "type": "Ancient", "to": []}],
             "proceed": false
         },
-        "rng": {}
+        "rng": {},
+        "moves": []
     });
     merge(&mut base, overlay);
     fill(&mut base);
