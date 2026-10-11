@@ -230,6 +230,13 @@ pub(super) enum Deferred<V: Rules> {
         acting: smallvec::SmallVec<[CombatId; CREATURES]>,
         max_energy: V::Count,
     },
+    /// `AfterCardPlayedLate` of a play whose `AfterCardPlayed` listener
+    /// asked a question.
+    PlayedLate {
+        card: V::Card,
+        id: CardId<V>,
+        energy: V::Count,
+    },
     /// The end of an outermost play whose exhaust raised a question:
     /// `CheckForEmptyHand`, and the end of a fight it won.
     PlayOver,

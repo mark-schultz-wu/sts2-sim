@@ -1254,6 +1254,12 @@ fn run_deferred<V: Rules>(
                 ),
                 ended => ended,
             },
+            super::live::Deferred::PlayedLate { card, id, energy } => {
+                if ended.is_none() {
+                    played_late::<V>(fighting.live, fighting.relics, card, id, energy);
+                }
+                ended
+            }
             super::live::Deferred::PlayOver => {
                 let ended = check_for_empty_hand::<V, _>(
                     fighting.live,
@@ -1924,44 +1930,66 @@ fn finished<V: Rules, S: LendsCombat>(
                 (_, effect) => rest.push(effect),
             }
         }
-        let mut board = Board::for_card(next, streams.combat(), relics, ascension, None, None);
-        hook::apply::<V, _>(&mut board, rest);
+        // The play's own choice context, so a shuffle's question inside a
+        // listener's `CardPileCmd.Draw` stands the play still.
+        let mut board =
+            Board::for_card(next, streams.combat(), relics, ascension, None, None).blocking();
+        for effect in rest {
+            if board.live.asking.is_some() {
+                unimplemented!("{effect:?} after a play, behind a question a listener asked");
+            }
+            hook::apply::<V, _>(&mut board, [effect]);
+        }
         ended = ended.or(board.ended());
         let skipped = std::mem::take(&mut board.skipped);
         merge::<V>(&mut next.skip_tick, skipped);
     }
-    // `AfterCardPlayedLate`, with the energy the play's started entry spent.
     if ended.is_none() {
-        let late = sts2_core::EventHook::CardPlayedLate {
-            card,
-            id,
-            energy: spent,
-        };
-        for (listener, effect) in super::listen::notify::<V>(next, relics, late) {
-            match (listener, effect) {
-                // `CardPileCmd.Add(this, PileType.Hand)`, which a full hand
-                // turns away.
-                (
-                    super::listen::Listener::Card { id },
-                    sts2_core::HookEffect::AddSelfToHand { only_from },
-                ) => {
-                    let from = next.cards.pile_of(id).filter(|&pile| {
-                        pile != sts2_core::Pile::Hand && only_from.is_none_or(|only| only == pile)
-                    });
-                    if let Some(from) = from
-                        && next.cards.len(sts2_core::Pile::Hand) < super::pile::MAX_CARDS_IN_HAND
-                        && let Some(at) = next.cards.find(from, id)
-                    {
-                        next.cards.move_to(from, at, sts2_core::Pile::Hand);
-                    }
-                }
-                (listener, effect) => {
-                    unimplemented!("{listener:?} asking for {effect:?} late after a play")
-                }
-            }
+        if next.asking.is_some() {
+            next.defer(super::live::Deferred::PlayedLate {
+                card,
+                id,
+                energy: spent,
+            });
+        } else {
+            played_late::<V>(next, relics, card, id, spent);
         }
     }
     ended
+}
+
+/// `AfterCardPlayedLate`, with the energy the play's started entry spent.
+fn played_late<V: Rules>(
+    next: &mut Live<V>,
+    relics: &mut crate::run::Belt<V>,
+    card: V::Card,
+    id: sts2_core::CardId<V>,
+    energy: V::Count,
+) {
+    let late = sts2_core::EventHook::CardPlayedLate { card, id, energy };
+    for (listener, effect) in super::listen::notify::<V>(next, relics, late) {
+        match (listener, effect) {
+            // `CardPileCmd.Add(this, PileType.Hand)`, which a full hand
+            // turns away.
+            (
+                super::listen::Listener::Card { id },
+                sts2_core::HookEffect::AddSelfToHand { only_from },
+            ) => {
+                let from = next.cards.pile_of(id).filter(|&pile| {
+                    pile != sts2_core::Pile::Hand && only_from.is_none_or(|only| only == pile)
+                });
+                if let Some(from) = from
+                    && next.cards.len(sts2_core::Pile::Hand) < super::pile::MAX_CARDS_IN_HAND
+                    && let Some(at) = next.cards.find(from, id)
+                {
+                    next.cards.move_to(from, at, sts2_core::Pile::Hand);
+                }
+            }
+            (listener, effect) => {
+                unimplemented!("{listener:?} asking for {effect:?} late after a play")
+            }
+        }
+    }
 }
 
 /// What a selection takes without asking, or nothing for one that is a
