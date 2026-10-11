@@ -642,10 +642,10 @@ fn previewed<V: Rules>(
                 }
                 // `PowerVar<T>.UpdateCardPreview`: `Hook.ModifyPowerAmountGiven`
                 // on `T`, from the card's owner.
-                (Some(modifier @ sts2_core::CardNumberModifier::PowerGiven), _) => {
+                (Some(sts2_core::CardNumberModifier::PowerGiven), _) => {
                     let power = sts2_core::CardVars::power(var.id)
                         .unwrap_or_else(|| unreachable!("{:?} is a PowerVar of no power", var.id));
-                    let giver = super::board::dealer_of::<V>(modifier, creatures);
+                    let giver = super::board::player::<V>(creatures);
                     let (given, _) = super::board::given_by::<V>(
                         fight,
                         giver,
@@ -656,12 +656,17 @@ fn previewed<V: Rules>(
                     );
                     Some(given)
                 }
-                (Some(modifier), _) => {
-                    let dealer = super::board::dealer_of::<V>(modifier, creatures);
-                    super::board::effect_of::<V>(modifier, var.id, dealer, target).map(|effect| {
-                        super::board::resolve::<V>(fight, Some(held), effect).amount()
-                    })
-                }
+                (Some(modifier), _) => match super::board::dealer_of::<V>(modifier, creatures) {
+                    Some(dealer) => super::board::effect_of::<V>(modifier, var.id, dealer, target)
+                        .map(|effect| {
+                            super::board::resolve::<V>(fight, Some(held), effect).amount()
+                        }),
+                    // `OstyDamageVar` with `Owner.Osty` null: `Hook.ModifyDamage`
+                    // with no dealer.
+                    None => Some(super::board::card_hit::<V>(
+                        fight, None, target, held, var.id, true,
+                    )),
+                },
                 (None, _) => None,
             };
             // A number no hook reaches reads what the card reads.
