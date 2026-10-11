@@ -627,7 +627,8 @@ pub(super) fn knowledge_demon<F: Fight<V>>(
                 ]
                 .into_iter()
                 .collect(),
-                skippable: true,
+                // `FromChooseACardScreen` without `canSkip`.
+                skippable: false,
                 at: super::super::Resume::Monster(Resume::CurseOfKnowledge { set }),
             }
         }

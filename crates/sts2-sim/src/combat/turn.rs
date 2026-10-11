@@ -1315,11 +1315,11 @@ pub(super) fn carry_setup<V: Rules>(
                                     });
                             live.asking = Some(super::live::Asking {
                                 then: Then::SetupChosen { writes: &[] },
-                                // `FromChooseACardScreen` hands its selector
-                                // a minimum of none, whatever `canSkip` says.
+                                // `FromChooseACardScreen` without `canSkip`,
+                                // so its screen has no skip button.
                                 question: super::live::Asked::Offered {
                                     offered: offered.into_iter().collect(),
-                                    skippable: true,
+                                    skippable: false,
                                 },
                             });
                             live.defer(super::live::Deferred::Setup(Setup::BeforeHandDraw(rest)));
