@@ -3650,9 +3650,12 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     /// A fight whose actor has left it answers for the player, which is the
     /// side every effect with no creature behind it belongs to.
     fn side(&self) -> V::CombatSide {
+        // A monster that left the fight during its own move is still the
+        // enemy, and its move still reaches the player. The player never
+        // leaves.
         self.at(self.actor)
             .map(|at| self.live.creatures[at].side)
-            .unwrap_or(<V::CombatSide as SideKinds>::PLAYER)
+            .unwrap_or(<V::CombatSide as SideKinds>::ENEMY)
     }
 
     fn resolve(&self, effect: Effect<V>) -> Self::ResolvedEffect {
