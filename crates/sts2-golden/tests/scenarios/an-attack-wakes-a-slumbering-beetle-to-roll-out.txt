@@ -1,0 +1,13 @@
+# Each hit that reaches a Slumbering Beetle's hit points spends a Slumber. The
+# last stuns it with `WakeUpMove`, which takes its Plating off once the stun
+# turn comes, and then it rolls out rather than snoring again.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"SLUMBERING_BEETLE_NORMAL"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":15,"target":0}
+{"cmd":"grant","card":"STRIKE_IRONCLAD"}
+{"cmd":"grant","card":"STRIKE_IRONCLAD"}
+{"cmd":"grant","card":"STRIKE_IRONCLAD"}
+{"cmd":"play_card","index":5,"target":3}
+{"cmd":"play_card","index":5,"target":3}
+{"cmd":"play_card","index":5,"target":3}
+{"cmd":"end_turn"}

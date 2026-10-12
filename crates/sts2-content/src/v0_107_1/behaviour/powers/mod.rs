@@ -4475,11 +4475,16 @@ pub(crate) fn event_hook(
             PowerAmount::Counted(amount),
             EventHook::DamageReceived { target, unblocked, .. },
         ) if target == holder && unblocked >= one => {
+            // The last one: `CreatureCmd.Stun(owner, WakeUpMove,
+            // "ROLL_OUT_MOVE")`. The stunned turn wakes it, which takes its
+            // Plating off, and it goes on to Roll Out.
             if amount == one {
+                let roll_out =
+                    super::monsters::state_of(Monster::SlumberingBeetle, MoveId::RollOutMove, 0)
+                        .unwrap_or_else(|_| unreachable!("the beetle's graph holds its Roll Out"));
                 asked.extend([
                     HookEffect::Decrement,
-                    HookEffect::RemoveFromOwner(Power::PlatingPower),
-                    stunned(sts2_core::StunResume::Interrupted),
+                    stunned(sts2_core::StunResume::At(roll_out)),
                 ]);
                 return;
             }
