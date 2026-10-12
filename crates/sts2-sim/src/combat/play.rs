@@ -1739,8 +1739,16 @@ fn hand_emptied<V: Rules, S: LendsCombat>(
     if asked.is_empty() {
         return None;
     }
-    let mut board = Board::for_card(next, streams.combat(), relics, ascension, None, None);
-    hook::apply::<V, _>(&mut board, asked.into_iter().map(|(_, effect)| effect));
+    // The play's own choice context, so a shuffle's question inside Unceasing
+    // Top's `CardPileCmd.Draw` stands the play still.
+    let mut board =
+        Board::for_card(next, streams.combat(), relics, ascension, None, None).blocking();
+    for (_, effect) in asked {
+        if board.live.asking.is_some() {
+            unimplemented!("{effect:?} after the hand emptied, behind a question");
+        }
+        hook::apply::<V, _>(&mut board, [effect]);
+    }
     board.ended()
 }
 

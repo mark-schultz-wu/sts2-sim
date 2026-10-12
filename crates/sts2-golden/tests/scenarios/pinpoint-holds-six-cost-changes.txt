@@ -1,0 +1,18 @@
+# Each Enlightenment caps Pinpoint's cost at one until it is played, and
+# Pinpoint takes one off itself for the turn for each Skill played.
+# Enlightenment is a Skill, so three of them write six changes on
+# Pinpoint, a cap and a shift each time, which never merge. Pinpoint is
+# played after them, at the cost the six come to. Neutralize and a Strike
+# go first, to make room in the hand.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":4,"target":1}
+{"cmd":"play_card","index":1,"target":1}
+{"cmd":"grant","card":"PINPOINT"}
+{"cmd":"grant","card":"ENLIGHTENMENT"}
+{"cmd":"grant","card":"ENLIGHTENMENT"}
+{"cmd":"grant","card":"ENLIGHTENMENT"}
+{"cmd":"play_card","index":6}
+{"cmd":"play_card","index":6}
+{"cmd":"play_card","index":6}
+{"cmd":"play_card","index":5,"target":1}
