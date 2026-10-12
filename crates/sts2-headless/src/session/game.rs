@@ -367,6 +367,8 @@ fn read_line(reader: &mut BufReader<TcpStream>) -> Result<String, Error> {
         // never something the caller asked for.
         Ok(0) => Err(Error::GameGone),
         Ok(_) => Ok(line.trim_end().to_string()),
+        // A reset is the same, from a game that died with a command unread.
+        Err(e) if e.kind() == std::io::ErrorKind::ConnectionReset => Err(Error::GameGone),
         Err(e)
             if matches!(
                 e.kind(),
