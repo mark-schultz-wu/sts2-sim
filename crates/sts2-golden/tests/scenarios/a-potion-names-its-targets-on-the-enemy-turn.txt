@@ -1,0 +1,11 @@
+# A potion that cannot be drunk while the enemy's turn runs still names
+# the creatures it could be thrown at. The Knowledge Demon's Curse of
+# Knowledge asks the Ironclad to pick a curse during that turn, and Fire
+# Potion names the demon, though it says why it cannot be drunk.
+#
+# A port that names nobody for a potion with a reason against it lists no
+# targets.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","potion":"FIRE_POTION"}
+{"cmd":"fight","encounter":"KNOWLEDGE_DEMON_BOSS"}
+{"cmd":"end_turn"}

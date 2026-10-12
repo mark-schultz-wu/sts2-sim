@@ -435,10 +435,12 @@ pub(crate) fn belt<'a, V: Rules>(
             // the simulator does not have.
             title: None,
             text: None,
-            targets: match (reason, fight) {
-                (None, Some(fight)) => aimable::<V>(potion, &fight.creatures),
-                // A potion nobody can drink names nobody, and one drunk
-                // outside a fight has no creature to name.
+            // The creatures it could be pointed at whether or not it can be
+            // drunk now, as a potion waiting out the enemy's turn still
+            // names them. Outside a fight, and once the player has died and
+            // the fight is no longer in progress, there are none.
+            targets: match fight {
+                Some(fight) if alive => aimable::<V>(potion, &fight.creatures),
                 _ => Targets::new(),
             },
             reason,

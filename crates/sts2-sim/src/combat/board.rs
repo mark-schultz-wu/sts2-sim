@@ -5413,13 +5413,7 @@ pub(super) fn gain_unpowered_block<V: Rules>(
     owner: CombatId,
     amount: V::Number,
 ) {
-    live.gain_unpowered_block(owner, amount);
-    let gained = sts2_core::ModelHook::AfterBlockGained;
-    if !super::listen::heard::<V>(live, relics, gained) {
-        return;
-    }
-    let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
-    board.block_gained(owner, amount.max(V::Number::zero()));
+    Board::for_card(live, rngs, relics, ascension, None, None).gain_unpowered(owner, amount);
 }
 
 /// [`shuffle`], handing back the selection a listener asks for after it,
@@ -5487,6 +5481,22 @@ pub(super) fn shuffle_asking<V: Rules>(
 }
 
 impl<V: Rules> Board<'_, V> {
+    /// `CreatureCmd.GainBlock` of `amount`, unpowered, on `owner` from no
+    /// play: `Hook.ModifyBlock`, which Shadowmeld answers whatever the props,
+    /// then the block, then `Hook.AfterBlockGained`. Nothing once the fight
+    /// is over.
+    pub(super) fn gain_unpowered(&mut self, owner: CombatId, amount: V::Number) {
+        let block = Fight::resolve(
+            self,
+            Effect::GainBlock {
+                recipient: owner,
+                amount: Amount::Number(amount),
+                scaling: Scaling::Static,
+            },
+        );
+        Fight::apply(self, block);
+    }
+
     /// Stop a command that starts while a question waits, where nothing
     /// holds it for the answer.
     ///
@@ -5638,13 +5648,11 @@ impl<V: Rules> Board<'_, V> {
                 // `CreatureCmd.GainBlock`, unpowered, on the relic's owner.
                 (Listener::Relic { .. }, HookEffect::GainBlock(amount)) => {
                     let player = self.live.player().id;
-                    self.live.gain_unpowered_block(player, amount);
-                    self.block_gained(player, amount.max(V::Number::zero()));
+                    self.gain_unpowered(player, amount);
                 }
                 // The same, on the power's owner.
                 (Listener::Power { owner, .. }, HookEffect::GainBlock(amount)) => {
-                    self.live.gain_unpowered_block(owner, amount);
-                    self.block_gained(owner, amount.max(V::Number::zero()));
+                    self.gain_unpowered(owner, amount);
                 }
                 // A fight here has one player, whose piles take them all.
                 (Listener::Power { .. }, HookEffect::GiveCardsPerUnblockedHit { card, per }) => {

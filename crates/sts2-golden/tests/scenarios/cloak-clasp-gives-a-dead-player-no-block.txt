@@ -1,0 +1,11 @@
+# `CreatureCmd.GainBlock` gives nothing once the fight is over. Doom
+# kills the Ironclad as its turn ends, and Cloak Clasp's block for the
+# cards in hand comes after, so the player ends on none.
+#
+# A port that adds a relic's block without asking whether the fight is
+# over gives the dead player Cloak Clasp's block.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"CLOAK_CLASP"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"DOOM_POWER","amount":100,"target":0}
+{"cmd":"end_turn"}

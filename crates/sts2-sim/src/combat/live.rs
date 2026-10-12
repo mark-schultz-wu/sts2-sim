@@ -2777,23 +2777,6 @@ impl<V: Rules> Live<V> {
 }
 
 impl<V: Rules> Live<V> {
-    /// `GainBlockInternal` and `History.BlockGained` for `amount` of
-    /// unpowered block on `owner`, which no play gives. Nothing for a
-    /// creature gone from the fight, or for no block.
-    pub(super) fn gain_unpowered_block(&mut self, owner: CombatId, amount: V::Number) {
-        let Some(creature) = self.creatures.iter_mut().find(|c| c.id == owner) else {
-            return;
-        };
-        if amount > num_traits::zero() {
-            creature.block = creature.block + amount;
-            self.history.block_gained(sts2_core::BlockGained {
-                receiver: owner,
-                powered: false,
-                play: None,
-            });
-        }
-    }
-
     /// `PlayerCombatState.Stars` moved by `amount`. The setter writes a
     /// `StarsModifiedEntry` for any change.
     pub(super) fn modify_stars(&mut self, amount: V::Number) {
