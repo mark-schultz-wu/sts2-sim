@@ -470,15 +470,30 @@ fn undrinkable<V: Rules>(
     match fight {
         None if potion.usage() == PotionUsage::CombatOnly => return Some(Undrinkable::OutOfCombat),
         None => {}
-        Some(fight) if fight.phase != <V::PlayerTurnPhase as sts2_core::TurnPhaseKinds>::PLAY => {
-            return Some(Undrinkable::NotYourTurn);
-        }
+        // `CurrentSide` not the player's, or `PlayerActionsDisabled`, which
+        // ending the turn sets and the next player turn's start clears. So a
+        // question asked as the turn starts leaves potions drinkable.
+        Some(fight) if !drinking_turn::<V>(fight) => return Some(Undrinkable::NotYourTurn),
         Some(_) => {}
     }
     let passes = potion
         .passes_own_check()
         .unwrap_or_else(|| V::computed_potion_check(potion, fight.is_some()));
     (!passes).then_some(Undrinkable::ItsOwnCheck)
+}
+
+/// Whether the player's side holds the turn, with actions not disabled:
+/// from the turn's start until the player ends it.
+fn drinking_turn<V: Rules>(fight: &Live<V>) -> bool {
+    use sts2_core::TurnPhaseKinds as _;
+    type Phase<V> = <V as sts2_core::ContentVersion>::PlayerTurnPhase;
+    fight.side == <V::CombatSide as SideKinds>::PLAYER
+        && [
+            Phase::<V>::START,
+            Phase::<V>::AUTO_PRE_PLAY,
+            Phase::<V>::PLAY,
+        ]
+        .contains(&fight.phase)
 }
 
 /// The creatures a potion can be pointed at.

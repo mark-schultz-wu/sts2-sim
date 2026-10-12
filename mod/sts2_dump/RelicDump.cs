@@ -67,13 +67,16 @@ public static class RelicDump
 
         // Which pool drafts a relic. A relic in none is one only an event or a
         // character's starting kit ever hands out.
+        //
+        // In the pool's own order, `GenerateAllRelics`. `RelicGrabBag.Populate`
+        // fills each rarity's deque in it before the shuffle, so the order is
+        // part of what a bag deals. The Defect's lists Power Cell before
+        // Metronome.
         foreach (RelicPoolModel pool in ModelDb.AllRelicPools)
         {
-            foreach (string relic in pool.AllRelicIds
-                .Select(id => id.Entry)
-                .OrderBy(id => id, StringComparer.Ordinal))
+            foreach (RelicModel relic in pool.AllRelics)
             {
-                output.Append($"pool {pool.Id.Entry} {relic}\n");
+                output.Append($"pool {pool.Id.Entry} {relic.Id.Entry}\n");
             }
         }
 

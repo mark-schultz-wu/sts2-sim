@@ -1,0 +1,5 @@
+# The Defect's relic pool lists Power Cell before Metronome, which is not the
+# order of their names. A bag is filled in the pool's order before its
+# shuffle, so on this seed the first shop stocks by it.
+{"cmd":"start","seed":"0RACLE7","character":"DEFECT","ascension":"None"}
+{"cmd":"enter_room","type":"Shop"}

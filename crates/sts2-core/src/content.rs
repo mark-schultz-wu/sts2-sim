@@ -1327,6 +1327,12 @@ pub trait RelicTable: Table {
     /// See [`PowerTable::overrides`].
     fn overrides(self) -> Overrides;
 
+    /// The relics `pool` drafts, in the pool's own order, which is
+    /// `GenerateAllRelics`. A relic bag is filled in it before the shuffle.
+    fn members(pool: Self::Pool) -> &'static [Self]
+    where
+        Self: Sized;
+
     /// How often it turns up.
     ///
     /// The one key on these traits carrying a shared vocabulary's bounds rather

@@ -170,13 +170,9 @@ impl<V: Rules> RelicBag<V> {
         }
     }
 
-    /// Every relic a pool holds, in the game's own order.
+    /// Every relic a pool holds, in the pool's own order.
     fn pool(pool: Pool<V>) -> Vec<V::Relic> {
-        V::Relic::ALL
-            .iter()
-            .copied()
-            .filter(|relic| relic.pools().contains(&pool))
-            .collect()
+        V::Relic::members(pool).to_vec()
     }
 
     /// Group by rarity and shuffle each group, which is the body both

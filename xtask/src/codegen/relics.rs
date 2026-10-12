@@ -179,10 +179,18 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
 
     let mut pools: Vec<String> = Vec::new();
     let mut pools_of: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    // Each pool's relics in the dump's order, which is the pool's own.
+    let mut members: Vec<Vec<String>> = Vec::new();
     for row in dump.of("pool") {
-        if !pools.contains(&row[1]) {
-            pools.push(row[1].clone());
-        }
+        let at = match pools.iter().position(|pool| *pool == row[1]) {
+            Some(at) => at,
+            None => {
+                pools.push(row[1].clone());
+                members.push(Vec::new());
+                pools.len() - 1
+            }
+        };
+        members[at].push(row[2].clone());
         pools_of
             .entry(row[2].clone())
             .or_default()
@@ -239,7 +247,7 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     emit_flags(&mut out)?;
     emit_shape(&mut out);
     let overrides = super::overrides(&build, "RELIC")?;
-    emit_relics(&mut out, &relics, &pools_of, &overrides)?;
+    emit_relics(&mut out, &relics, &pools_of, &members, &overrides)?;
     emit_bridges(&mut out, &pools, &enums)?;
 
     let mut split = Split::new(root, "relics", "relics.txt", &build)?;
@@ -416,6 +424,7 @@ fn emit_relics(
     out: &mut String,
     relics: &[&Vec<String>],
     pools_of: &BTreeMap<String, Vec<String>>,
+    members: &[Vec<String>],
     overrides: &BTreeMap<String, Vec<sts2_core::ModelHook>>,
 ) -> Result<(), Error> {
     writeln!(
@@ -449,6 +458,18 @@ fn emit_relics(
     .unwrap();
     writeln!(extras, "    fn pools(self) -> &'static [RelicPool] {{").unwrap();
     writeln!(extras, "        POOLS[self as usize]").unwrap();
+    writeln!(extras, "    }}\n").unwrap();
+    writeln!(
+        extras,
+        "    /// The relics `pool` drafts, in the pool's own order."
+    )
+    .unwrap();
+    writeln!(
+        extras,
+        "    fn members(pool: RelicPool) -> &'static [Relic] {{"
+    )
+    .unwrap();
+    writeln!(extras, "        MEMBERS[pool as usize]").unwrap();
     writeln!(extras, "    }}\n").unwrap();
 
     let mut pool_lists: Vec<String> = Vec::new();
@@ -565,6 +586,17 @@ fn emit_relics(
         overrides,
     );
     super::lists(out, "POOLS", "RelicPool", &pool_lists);
+    let member_lists: Vec<String> = members
+        .iter()
+        .map(|relics| {
+            relics
+                .iter()
+                .map(|relic| format!("Relic::{}", camel(relic)))
+                .collect::<Vec<_>>()
+                .join(", ")
+        })
+        .collect();
+    super::lists(out, "MEMBERS", "Relic", &member_lists);
 
     Ok(())
 }
