@@ -29,70 +29,73 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ## Open
 
-### 1. Travel
+### 1. A relic's `IsAllowed`
 
-118 runs first part after a move on the map. Maw Bank and a skipped
-chest relic are fixed. A later sample of eight runs found the second in
-three of them. The other five:
+Each pull from a relic bag first takes out, for good, every relic whose
+`IsAllowed` is false then: `RemoveDisallowedRelicsFromDeques`. 23 relics
+override it. Shovel and Book of Five Rings stop at the act 3 chest, and
+others read the deck, the gold or the relics held. The sim reads none of
+it, so after one goes the bags part. Shovel, Book of Five Rings and Meal
+Ticket stand in the sim's chest or shop where the game has another.
+`setup.rs`'s `RelicBag` needs the rule, and each relic its override.
 
-- Three stock another relic in a chest or a shop. Each follows an act
-  change or an ancient's relic. The bags part somewhere the observation
-  does not show.
-- Two show another card preview as the next fight opens. One is a
-  `CalculatedDamage` of 13 against 16. The other is 6 against 9 on a
-  Necrobinder's Osty card.
+### 2. Travel
+
+97 runs first part after a move on the map. Maw Bank, a skipped chest
+relic and an upgraded card's calculated base are fixed. Of a sample of
+eight, the other three were the relic bags of item 1.
 
 `cargo xtask split <index> <name>` writes a run, up to its first split,
 as a scenario.
 
-### 2. Decimillipede's turn
+### 3. Decimillipede's turn
 
 89 runs first part after a turn ends against the Decimillipede elite.
 
-### 3. Soul Fysh's turn
+### 4. Soul Fysh's turn
 
-51 runs first part after a turn ends against the Soul Fysh boss.
+53 runs first part after a turn ends against the Soul Fysh boss.
 
-### 4. Pael's Flesh
+### 5. Pael's Flesh
 
-46 runs first part after Pael offers its Flesh.
+47 runs first part after Pael offers its Flesh.
 
-### 5. Sovereign Blade
+### 6. Sovereign Blade
 
 46 runs first part after Sovereign Blade is played.
 
-### 6. Every other split the recorded runs find
+### 7. Every other split the recorded runs find
 
 `cargo xtask coverage` lists the commonest first splits, by the move
 that led to each. Each one with more than a handful of runs becomes its
 own item, above this one. The live `unimplemented!()` branches surface
 this way.
 
-### 7. A listener walk that can pause
+### 8. A listener walk that can pause
 
 The game walks `AfterCardPlayed` listeners one at a time, and a draw
 can pause the walk. The sim raises them all first, so Bygone Effigy's
 Slow counts a card early in the preview while Stratagem's question
 waits. Needs a design, for Mark.
 
-### 8. Ascension
+### 9. Ascension
 
 The sim threads the ascension level through, but every scenario and
 census run plays at `None`. Record runs at each level, and each split
 they find becomes an item.
 
-### 9. Run modifiers
+### 10. Run modifiers
 
 A run started with any modifier panics (`crates/sts2-sim/src/engine/sim.rs`).
 Hoarder's removal ban is one rule known to need one. Port the custom
 mode's modifiers, and record runs with each.
 
-### 10. A speed target
+### 11. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.
 
-### 11. v0.111.0
+### 12. v0.111.0
 
 Only the generated tables exist. Its behaviour layer has to be written,
 and its runs recorded.

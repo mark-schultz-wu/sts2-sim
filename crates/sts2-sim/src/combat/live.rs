@@ -882,6 +882,7 @@ impl<V: Rules> Face<V> {
             for &change in V::card_upgrade(card.ident.card) {
                 card.upgrade_change(change);
             }
+            card.recalculate();
         }
         if let Some(enchanted) = card.ident.enchantment {
             for &change in V::enchanted_changes(enchanted.enchantment) {
@@ -1367,8 +1368,13 @@ impl<V: Rules> Face<V> {
         for &change in V::card_upgrade(self.ident.card) {
             self.upgrade_change(change);
         }
-        // `RecalculateForUpgradeOrEnchant`, which gives a calculated number
-        // the base its `CalculationBase` now prints.
+        self.recalculate();
+        self.ident.upgrade += 1;
+    }
+
+    /// `RecalculateForUpgradeOrEnchant`, which gives a calculated number the
+    /// base its `CalculationBase` now prints.
+    fn recalculate(&mut self) {
         let base = <V::CardVar as sts2_core::CardVars>::CALCULATION_BASE;
         let calculated: smallvec::SmallVec<[_; 2]> =
             self.numbers().filter(|n| n.calculated).collect();
@@ -1378,7 +1384,6 @@ impl<V: Rules> Face<V> {
                 self.raise(number.id, by);
             }
         }
-        self.ident.upgrade += 1;
     }
 }
 
