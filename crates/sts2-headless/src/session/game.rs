@@ -61,7 +61,15 @@ impl<V: sts2_content_wire::WireContentVersion> Oracle<V> {
             }
         };
 
+        if let Some(home) = &config.data_home {
+            super::config::seed_profile(home)
+                .map_err(|e| Error::Io("copying the profile into the game's own home", e))?;
+        }
+
         let mut proc = Proc::new(&binary);
+        if let Some(home) = &config.data_home {
+            proc.env("XDG_DATA_HOME", home);
+        }
         proc.current_dir(&config.game_dir)
             .args(["--headless", "--force-steam=off"])
             .env("STS2_HEADLESS_MODE", "serve")

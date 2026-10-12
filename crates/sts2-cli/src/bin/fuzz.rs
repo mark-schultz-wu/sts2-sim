@@ -64,6 +64,10 @@ struct Cli {
     /// it printed on the way out does, and without this it goes to /dev/null.
     #[arg(long)]
     game_output: bool,
+    /// A directory for the game to keep its profile in, apart from the
+    /// user's, so several fuzzers can run at once without racing on saves.
+    #[arg(long, value_name = "DIR")]
+    data_home: Option<PathBuf>,
 }
 
 /// Why a fuzz run stopped short of an ending.
@@ -186,6 +190,7 @@ fn fuzz<V: sts2_content_wire::WireContentVersion>(cli: Cli) -> Result<(), Error<
     let dir = sts2_headless::game_dir_from_env().ok_or(Error::NoGameDir)?;
     let mut config = Config::new(dir);
     config.inherit_game_output = cli.game_output;
+    config.data_home = cli.data_home.clone();
     let start = Start {
         seed: seed.clone(),
         character,
