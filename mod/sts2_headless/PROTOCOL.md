@@ -103,6 +103,28 @@ valid, and a `game` string can repeat across builds.
   command. The mod never suppresses it. The command can half-happen, and only
   the client can decide whether to trust the state.
 
+#### Every move the run accepts
+
+`state.moves` lists every move the run accepts, each as the request that makes
+it, such as `{"cmd":"play_card","index":2,"target":1}`. A driver can send any
+entry back as it is.
+
+The list is what the game's screens offer. A card is on it where `CanPlay` says
+it can be played, at each creature `CanPlayTargeting` accepts, or at nobody
+where that is accepted. A potion is on it where the belt's button is enabled. A
+room offers the options and stock its screen leaves enabled. The map offers the
+points `MapLegality` allows, or `proceed`.
+
+The order is part of the answer. A driver that picks by index plays the same
+run only when the list comes back the same way:
+
+- A pending question's answers come alone, as `answer` requests.
+- In a fight, the belt comes first, then each card in hand at each target, then
+  `end_turn`.
+- Otherwise, the belt comes first, then the room's options or stock, then
+  `proceed` or each point to travel to.
+- A dead player outside a fight has no moves.
+
 #### What a card in hand will do
 
 Each entry in `combat.legal` carries an `effect`: what playing that card does,

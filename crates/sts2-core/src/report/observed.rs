@@ -61,6 +61,7 @@ pub trait Observed<V: ContentVersion> {
 
     fn room(&self) -> Option<impl Borrow<Room<V>> + '_>;
     fn combat(&self) -> Option<impl ObservedFight<V> + '_>;
+    fn moves(&self) -> impl ExactSizeIterator<Item = crate::Decision<V>> + '_;
 }
 
 /// A fight, as a digest reads it. What [`Combat`] holds.
@@ -198,6 +199,10 @@ impl<V: ContentVersion> Observed<V> for Observation<V> {
 
     fn combat(&self) -> Option<impl ObservedFight<V> + '_> {
         self.combat.as_ref()
+    }
+
+    fn moves(&self) -> impl ExactSizeIterator<Item = crate::Decision<V>> + '_ {
+        self.moves.iter().copied()
     }
 }
 
@@ -368,6 +373,7 @@ fn every_field_is_lent<V: ContentVersion>(
             },
         room: _,
         combat: _,
+        moves: _,
     } = observation;
     let Combat {
         turn: _,

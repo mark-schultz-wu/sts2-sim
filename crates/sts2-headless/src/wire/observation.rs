@@ -263,6 +263,8 @@ struct WireObservation<V: sts2_content_wire::WireContentVersion> {
     room: Option<WireRoom<V>>,
     #[serde(default)]
     combat: Option<WireCombat<V>>,
+    /// Every move the game accepts, as the commands that make them.
+    moves: Vec<super::command::Command<V>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -520,6 +522,18 @@ impl<V: sts2_content_wire::WireContentVersion> WireObservation<V> {
             rng: counters(&self.rng)?,
             room: self.room.map(WireRoom::into_domain).transpose()?,
             combat: self.combat.map(WireCombat::into_domain).transpose()?,
+            moves: self
+                .moves
+                .into_iter()
+                .enumerate()
+                .map(|(i, command)| match command.into_step() {
+                    Some(sts2_core::Step::Decision(decision)) => Ok(decision),
+                    _ => Err(at(
+                        &format!("moves[{i}]"),
+                        Why::Disagree("a move that is not a decision"),
+                    )),
+                })
+                .collect::<Result<_, Error>>()?,
         })
     }
 }
@@ -1148,7 +1162,11 @@ mod tests {
                 "points": [{"at": "3,11", "type": "Ancient", "to": ["2,10"]}],
                 "proceed": false
             },
-            "rng": {"Shuffle": 4, "MonsterAi": 0, "player.Rewards": 2}
+            "rng": {"Shuffle": 4, "MonsterAi": 0, "player.Rewards": 2},
+            "moves": [
+                {"cmd": "travel", "col": 2, "row": 10},
+                {"cmd": "answer", "pick": 1}
+            ]
         })
     }
 
@@ -1160,6 +1178,29 @@ mod tests {
         let mut state = base();
         state[key] = value;
         state
+    }
+
+    #[test]
+    fn the_moves_read_as_the_decisions_they_make() {
+        let obs = parse(&base()).expect("the base should parse");
+
+        assert_eq!(
+            obs.moves,
+            [
+                sts2_core::Decision::Travel {
+                    to: sts2_core::Coord::new(2, 10),
+                },
+                sts2_core::Decision::Answer(sts2_core::Answer::Pick(1)),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_move_that_is_not_a_decision_is_refused() {
+        let start = with("moves", json!([{"cmd": "observe"}]));
+
+        let err = parse(&start).expect_err("observing is not a move");
+        assert_eq!(err.at, "moves[0]");
     }
 
     #[test]
