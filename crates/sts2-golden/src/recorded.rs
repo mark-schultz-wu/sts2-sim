@@ -44,6 +44,8 @@ pub struct Run {
     pub seed: String,
     /// The ascension level, as the game names it.
     pub ascension: String,
+    /// See [`sts2_core::Start::wins`].
+    pub wins: u32,
     pub ending: Ending,
     /// Where the run stood before each move, and after the last: one more
     /// than [`Run::moves`].
@@ -124,6 +126,7 @@ impl Recorded {
                 out.push(len);
                 out.extend_from_slice(text.as_bytes());
             }
+            out.extend_from_slice(&run.wins.to_le_bytes());
             out.push(match run.ending {
                 Ending::Won => 0,
                 Ending::Lost => 1,
@@ -173,6 +176,7 @@ impl Recorded {
             let character = read.text()?;
             let seed = read.text()?;
             let ascension = read.text()?;
+            let wins = read.u32()?;
             let ending = match read.u8()? {
                 0 => Ending::Won,
                 1 => Ending::Lost,
@@ -190,6 +194,7 @@ impl Recorded {
                 character,
                 seed,
                 ascension,
+                wins,
                 ending,
                 digests,
                 moves,
@@ -261,6 +266,7 @@ mod tests {
             character: "SILENT".into(),
             seed: seed.into(),
             ascension: "None".into(),
+            wins: 4,
             ending: Ending::Lost,
             digests: (0..=moves.len() as u32)
                 .map(|n| n.wrapping_mul(0x9E37_79B9))

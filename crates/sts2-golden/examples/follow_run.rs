@@ -42,6 +42,7 @@ fn main() -> ExitCode {
         character: from_id(&run.character),
         ascension: from_id(&run.ascension),
         modifiers: Vec::new(),
+        wins: run.wins,
     };
     let mut sim = Sim::<V>::begin((), &start).expect("the run starts");
     for (relic, count) in CARRIED {

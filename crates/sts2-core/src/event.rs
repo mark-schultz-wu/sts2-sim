@@ -30,6 +30,9 @@ pub trait EventView<V: ContentVersion> {
     /// Not in an observation, which reports what a run holds rather than who
     /// is holding it. The run itself is what answers an event's questions.
     fn character(&self) -> V::Character;
+    /// The runs the profile had won with the character as this one started.
+    /// See [`Start::wins`](crate::Start::wins).
+    fn wins(&self) -> u32;
     /// The relics the run carries, in panel order.
     fn relics(&self) -> impl Iterator<Item = CarriedRelic<V>> + '_;
     /// The deck as it stands, in deck order, by what each card is.

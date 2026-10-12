@@ -104,6 +104,10 @@ pub struct StartArgs {
     /// Modifier ids, such as `DRAFT`.
     #[arg(long, value_delimiter = ',')]
     pub modifiers: Vec<String>,
+    /// The runs the profile has won with the character, which picks the
+    /// dialogue a won run ends on.
+    #[arg(long, default_value_t = 0)]
+    pub wins: u32,
     /// Write the run to this file as it is played, for `sts2 run replay`.
     ///
     /// On `start` rather than on every command, because the daemon does the
@@ -152,6 +156,7 @@ impl StartArgs {
                 .iter()
                 .map(|modifier| id("modifier", modifier))
                 .collect::<Result<_, _>>()?,
+            wins: self.wins,
         })
     }
 

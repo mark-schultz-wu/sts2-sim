@@ -18,6 +18,7 @@ using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models.Encounters;
+using MegaCrit.Sts2.Core.Models.Events;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.GameActions;
@@ -567,6 +568,14 @@ public static class Driver
     public static async Task<string?> EnterEvent(RunState state, string entry)
     {
         Stage = "entering event";
+        if (entry == ModelDb.Event<TheArchitect>().Id.Entry)
+        {
+            // The console's list leaves out the run's last event, which the
+            // game enters from EnterNextAct with no map point of its own.
+            await RunManager.Instance.EnterRoom(new EventRoom(ModelDb.Event<TheArchitect>()));
+            return null;
+        }
+
         CmdResult result = new EventConsoleCmd().Process(state.Players[0], new[] { entry });
         if (!result.success)
         {

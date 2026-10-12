@@ -196,6 +196,7 @@ fn fuzz<V: sts2_content_wire::WireContentVersion>(cli: Cli) -> Result<(), Error<
         character,
         ascension,
         modifiers: vec![],
+        wins: 0,
     };
     // The run is begun with the game, because a simulator or an oracle without
     // one is not something to fuzz.

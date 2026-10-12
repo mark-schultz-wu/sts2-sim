@@ -170,6 +170,16 @@ choice without saying anything about it. Either can be `null`. A page with no
 description is ordinary, and the game's own tables are the authority on whether
 there is one.
 
+Two kinds of key name no page. The Architect's lines are
+`THE_ARCHITECT.dialogue.<line>`, and the option that closes it is a bare
+`PROCEED`.
+
+#### A start pins the character's wins
+
+The Architect ends a won run on a dialogue picked by the profile's wins with
+the character. The profile keeps every run the game wins, so `start` sets the
+count to its `wins`, none unless it says. Nothing else in a run reads it.
+
 #### The map is a graph, not just a position
 
 `state.map` carries three things, and none is derivable from the others.
@@ -326,6 +336,7 @@ game.
 | cmd | arguments |
 |---|---|
 | `start` | `seed`, `character`, `ascension` — a level name such as `DeadlyEnemies` or a number, default `0`, matched case-insensitively; `modifiers` — an array of modifier entry names, matched case-insensitively |
+| `start` | `wins` — the character's wins on the profile, default `0` |
 | `fight` | `encounter` — a model entry name such as `BOWLBUGS_WEAK` |
 | `event` | `event` — a model entry name such as `CRYSTAL_SPHERE` |
 | `power` | `power` — a model entry name such as `WEAK_POWER`; `amount` — an integer; `target` — a creature's `CombatId` |
@@ -407,6 +418,10 @@ of play away. The alternative is a recording of a run that reaches one.
 The same shape as `fight`, through the game's own `EventConsoleCmd`. It appends a
 map point and enters an `EventRoom`, so map and room disagree exactly as they do
 after a `fight`. An unknown name comes back as `Event 'X' not found`.
+
+The console lists no `THE_ARCHITECT`. That one is entered the way the run
+enters it past the last act's boss, with no map point and no floor. Off the
+last act its `PROCEED` goes on to the next act, as the game's does.
 
 It exists because `enter_room` takes a room *type*. An `Event` room gives
 whatever event the seed offers, so reaching one particular event meant playing

@@ -38,7 +38,7 @@ impl<V: Rules> Play<V> for Sim<V> {
             unimplemented!("a run started with modifiers");
         }
         Ok(Self {
-            state: State::start(&start.seed, start.character, start.ascension),
+            state: State::start(&start.seed, start.character, start.ascension, start.wins),
         })
     }
 

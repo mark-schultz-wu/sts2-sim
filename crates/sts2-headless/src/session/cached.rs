@@ -316,6 +316,7 @@ mod tests {
             character: sts2_content::v0_107_1::characters::Character::Regent,
             ascension: sts2_content::v0_107_1::ascension::AscensionLevel::None,
             modifiers: Vec::new(),
+            wins: 0,
         };
 
         let absent = Cached::<Counting>::begin(

@@ -13,8 +13,17 @@ pub trait WireContentVersion: ContentVersion {
         name: &str,
         relic: Option<Self::Relic>,
     ) -> Option<Self::EventOptionId>;
-    /// The page and the name a key spells for an option its page names, and
-    /// `None` for a relic.
+    /// The option a key that names no page names: The Architect's
+    /// `<event>.dialogue.<line>`, or a bare `PROCEED`.
+    fn event_option_unpaged(event: Self::Event, key: &str) -> Option<Self::EventOptionId>;
+    /// The whole key for an option that names no page, and `None` for any
+    /// other.
+    fn event_option_unpaged_spelled(
+        event: Self::Event,
+        option: Self::EventOptionId,
+    ) -> Option<String>;
+    /// The page and the name a key spells for an option its page names.
+    /// `None` for a relic, and for an option that names no page.
     fn event_option_spelled(
         option: Self::EventOptionId,
         locked: bool,
@@ -27,6 +36,9 @@ pub trait WireContentVersion: ContentVersion {
 ///
 /// An id no key spells, which the generated ids and the relics cover.
 pub fn option_key<V: WireContentVersion>(option: &sts2_core::EventOption<V>) -> String {
+    if let Some(key) = V::event_option_unpaged_spelled(option.key.event, option.key.option) {
+        return key;
+    }
     let (page, name) = V::event_option_spelled(option.key.option, option.locked)
         .map(|(page, name)| (page, name.to_owned()))
         .or_else(|| {
@@ -36,6 +48,9 @@ pub fn option_key<V: WireContentVersion>(option: &sts2_core::EventOption<V>) -> 
         .expect("every option has a key the game spells");
     format!("{}.pages.{page}.options.{name}", spelled(&option.key.event))
 }
+
+/// The key of an option that leaves an event, where no page names it.
+const PROCEED: &str = "PROCEED";
 
 /// A generated id, by the serde rename the game spells it with.
 fn spelled<T: serde::Serialize>(id: &T) -> String {
@@ -61,6 +76,30 @@ macro_rules! wire_options {
                     .or(relic.map(Id::Relic))
             }
 
+            fn event_option_unpaged(event: Self::Event, key: &str) -> Option<Self::EventOptionId> {
+                use sts2_content::$module::EventOptionId as Id;
+                if key == PROCEED {
+                    return Some(Id::Proceed);
+                }
+                key.strip_prefix(&spelled(&event))?
+                    .strip_prefix(".dialogue.")?
+                    .parse()
+                    .ok()
+                    .map(Id::Dialogue)
+            }
+
+            fn event_option_unpaged_spelled(
+                event: Self::Event,
+                option: Self::EventOptionId,
+            ) -> Option<String> {
+                use sts2_content::$module::EventOptionId as Id;
+                match option {
+                    Id::Dialogue(line) => Some(format!("{}.dialogue.{line}", spelled(&event))),
+                    Id::Proceed => Some(PROCEED.to_owned()),
+                    Id::Said(_) | Id::Relic(_) => None,
+                }
+            }
+
             fn event_option_spelled(
                 option: Self::EventOptionId,
                 locked: bool,
@@ -68,7 +107,7 @@ macro_rules! wire_options {
                 use sts2_content::$module::EventOptionId as Id;
                 match option {
                     Id::Said(option) => Some(option.spelled(locked)),
-                    Id::Relic(_) => None,
+                    Id::Relic(_) | Id::Dialogue(_) | Id::Proceed => None,
                 }
             }
         }

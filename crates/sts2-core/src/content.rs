@@ -5610,6 +5610,9 @@ pub enum HookEffect<V: ContentVersion> {
     /// `EventModel.SetEventFinished`, the last thing an option that ends its
     /// event does. The room then offers nothing, and the run goes on.
     FinishEvent,
+    /// `RunManager.EnterNextAct`, from the option that closes The Architect.
+    /// It is the whole of that option.
+    EnterNextAct,
     /// `PlayerCmd.MimicRestSiteHeal`: a rest site's heal, given by an event.
     MimicRestSiteHeal,
     /// `EventModel.EnterCombatWithoutExitingEvent`, which fights inside the
@@ -7483,6 +7486,10 @@ pub trait Rules: Hooks {
 
     /// The ancients the run deals out to the acts after the first.
     fn shared_ancients() -> &'static [Self::Event];
+
+    /// The Architect, which the run enters past its last act's boss. Its
+    /// room is the run's victory room.
+    fn the_architect() -> Self::Event;
 
     type EventState: Clone + std::fmt::Debug;
 

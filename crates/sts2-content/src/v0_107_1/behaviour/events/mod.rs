@@ -49,6 +49,7 @@ mod tablet_of_truth;
 mod tanx;
 mod tea_master;
 mod tezcatara;
+mod the_architect;
 mod the_future_of_potions;
 mod the_lantern_key;
 mod the_legends_were_true;
@@ -86,6 +87,7 @@ pub enum State {
     InfestedAutomaton(infested_automaton::State),
     Symbiote(symbiote::State),
     StoneOfAllTime(stone_of_all_time::State),
+    TheArchitect(the_architect::State),
     TheLanternKey(the_lantern_key::State),
     ZenWeaver(zen_weaver::State),
     RanwidTheElder(ranwid_the_elder::State),
@@ -305,6 +307,7 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
         Event::StoneOfAllTime => {
             State::StoneOfAllTime(stone_of_all_time::StoneOfAllTime.enter(run, rng))
         }
+        Event::TheArchitect => State::TheArchitect(the_architect::TheArchitect.enter(run, rng)),
         Event::TheLanternKey => {
             State::TheLanternKey(the_lantern_key::TheLanternKey.enter(run, rng))
         }
@@ -471,6 +474,7 @@ pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
         }
         State::Symbiote(state) => symbiote::Symbiote.observe(state, run),
         State::StoneOfAllTime(state) => stone_of_all_time::StoneOfAllTime.observe(state, run),
+        State::TheArchitect(state) => the_architect::TheArchitect.observe(state, run),
         State::TheLanternKey(state) => the_lantern_key::TheLanternKey.observe(state, run),
         State::ZenWeaver(state) => zen_weaver::ZenWeaver.observe(state, run),
         State::RanwidTheElder(state) => ranwid_the_elder::RanwidTheElder.observe(state, run),
@@ -571,6 +575,7 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
         State::StoneOfAllTime(state) => {
             stone_of_all_time::StoneOfAllTime.choose(state, option, run, rng)
         }
+        State::TheArchitect(state) => the_architect::TheArchitect.choose(state, option, run, rng),
         State::TheLanternKey(state) => {
             the_lantern_key::TheLanternKey.choose(state, option, run, rng)
         }

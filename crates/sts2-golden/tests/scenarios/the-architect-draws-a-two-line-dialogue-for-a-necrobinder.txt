@@ -1,0 +1,6 @@
+# Past its fourth win, a Necrobinder draws from the three repeating
+# dialogues, two of two lines and one of three. The draw is the event's own.
+{"cmd":"start","seed":"0RACLE4","character":"NECROBINDER","ascension":"None","wins":4}
+{"cmd":"event","event":"THE_ARCHITECT"}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}

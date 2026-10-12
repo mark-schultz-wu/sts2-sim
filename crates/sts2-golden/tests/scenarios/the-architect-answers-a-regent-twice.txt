@@ -1,0 +1,7 @@
+# A Regent on its first win hears its three-line dialogue, which no later
+# win repeats.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"event","event":"THE_ARCHITECT"}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}

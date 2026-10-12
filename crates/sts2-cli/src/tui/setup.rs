@@ -143,6 +143,7 @@ impl<V: sts2_content_wire::WireContentVersion> Screen<V> {
             character,
             ascension,
             modifiers: Vec::new(),
+            wins: 0,
         })
     }
 }

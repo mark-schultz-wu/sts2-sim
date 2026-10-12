@@ -146,6 +146,8 @@ struct RunData<V: Rules> {
     raw_seed: u64,
     character: V::Character,
     ascension: V::AscensionLevel,
+    /// See [`sts2_core::Start::wins`].
+    wins: u32,
 }
 
 /// `ClearAfterPurchase`, which empties one shelf.
@@ -985,6 +987,7 @@ impl<V: Rules> State<V> {
         seed: &Seed,
         character: V::Character,
         ascension: V::AscensionLevel,
+        wins: u32,
     ) -> Self {
         let raw_seed = stream_seed::<V>(seed);
         let acts = super::setup::run_acts::<V>(raw_seed);
@@ -1027,6 +1030,7 @@ impl<V: Rules> State<V> {
                 raw_seed,
                 character,
                 ascension,
+                wins,
             }),
             map: Arc::new(map),
             spoils: None,
@@ -1652,7 +1656,8 @@ impl<V: Rules> State<V> {
     }
 
     /// `RunManager.EnterNextAct`, which the finished act's boss room offers.
-    /// A run that has beaten the last act's boss wins.
+    /// Past the last act, a run in its victory room wins, and a run anywhere
+    /// else enters The Architect, whose room that is.
     ///
     /// `SetActInternal` moves the index on, forgets the last act's points,
     /// resets the question mark odds and generates the new map.
@@ -1674,8 +1679,11 @@ impl<V: Rules> State<V> {
         }
         let next = self.act + 1;
         let Some(&(act, _)) = self.shared.opening.acts.get(next) else {
-            self.phase = Phase::Won;
-            return Ok(Decided::Resolved);
+            if self.in_victory_room() {
+                self.phase = Phase::Won;
+                return Ok(Decided::Resolved);
+            }
+            return self.enter_architect();
         };
         self.act = next;
         self.map = Arc::new(self.generate_map(act));
@@ -1821,6 +1829,9 @@ impl<V: Rules> State<V> {
                 }
                 HookEffect::FightInEvent { .. } => {
                     unreachable!("a fight in an event is the whole of its option")
+                }
+                HookEffect::EnterNextAct => {
+                    unreachable!("entering the next act is the whole of its option")
                 }
                 HookEffect::FinishEvent => {
                     let Phase::Event { finished, .. } = &mut self.phase else {
@@ -3762,10 +3773,12 @@ impl<V: Rules> State<V> {
 
     /// The fight a `Combat`-layout event builds, then `GenerateInitialOptions`:
     /// the event's own draws, what its options set up off the player's
-    /// rewards stream, and the relics it pulls.
+    /// rewards stream, and the relics it pulls. `floor` is the floor its room
+    /// stands on.
     pub(super) fn open_event(
         &mut self,
         event: V::Event,
+        floor: V::Count,
         rng: &mut crate::rng::MegaRng,
         streams: &mut Streams<V>,
     ) -> Result<(V::EventState, Layout<V>), Error> {
@@ -3776,7 +3789,7 @@ impl<V: Rules> State<V> {
         let layout = match event.combat_layout() {
             Some(encounter) => crate::combat::roll_layout::<V>(
                 self.raw_seed(),
-                self.floor + num_traits::one(),
+                floor,
                 self.ascension(),
                 encounter,
                 streams,
@@ -3797,6 +3810,41 @@ impl<V: Rules> State<V> {
         }
         V::stock_event(&mut state, streams.player(V::PlayerRngType::SHOPS));
         Ok((state, layout))
+    }
+
+    /// `AbstractRoom.IsVictoryRoom`: The Architect's room.
+    fn in_victory_room(&self) -> bool {
+        matches!(
+            self.event_room(),
+            Some(Room::Event { event, .. }) if event == V::the_architect()
+        )
+    }
+
+    /// `EnterRoom` of The Architect's room, which `EnterNextAct` does past the
+    /// last act. The room has no map point, so the run gains no floor and
+    /// stands where it stood. `AfterRoomEntered` hears the point it stands on.
+    fn enter_architect(&mut self) -> Result<Decided, Error> {
+        let event = V::the_architect();
+        let mut rng = crate::event::stream::<V, crate::rng::MegaRng>(self.raw_seed(), 0, event);
+        let mut streams = *self.streams();
+        let (state, layout) = self.open_event(event, self.floor, &mut rng, &mut streams)?;
+        self.streams = streams;
+        Arc::make_mut(&mut self.visited_events).push(event);
+        // `ActModel.MarkRoomVisited`.
+        self.events_used += 1;
+        self.phase = Phase::Event {
+            state,
+            rng,
+            asking: None,
+            finished: false,
+            layout,
+        };
+        let point = self
+            .visited
+            .last()
+            .and_then(|&at| self.point_type(Location::MapPoint(at)));
+        self.room_entered(<V::RoomType as sts2_core::RoomKinds>::EVENT, false, point);
+        Ok(Decided::Resolved)
     }
 
     pub(super) fn enter_event(&mut self, to: Coord, entered: EnteredEvent<V>) {
@@ -4637,9 +4685,15 @@ impl<V: Rules> State<V> {
     /// `RunManager.EnterRoom` with the event's room. That seeds the event's
     /// own stream, and counts it against the act the way travelling does.
     pub(crate) fn event_here(&mut self, event: V::Event) -> Result<Decided, Error> {
+        // The console lists no Architect, and the mod enters its room the way
+        // the run does.
+        if event == V::the_architect() {
+            return self.enter_architect();
+        }
         let mut rng = crate::event::stream::<V, crate::rng::MegaRng>(self.raw_seed(), 0, event);
         let mut streams = *self.streams();
-        let (state, layout) = self.open_event(event, &mut rng, &mut streams)?;
+        let floor = self.floor + num_traits::one();
+        let (state, layout) = self.open_event(event, floor, &mut rng, &mut streams)?;
         self.streams = streams;
         Arc::make_mut(&mut self.visited_events).push(event);
         self.enter(
@@ -4864,6 +4918,9 @@ impl<V: Rules> State<V> {
                 finished: false,
                 layout,
             };
+            if let [sts2_core::HookEffect::EnterNextAct] = effects.as_slice() {
+                return self.proceed();
+            }
             if let [
                 sts2_core::HookEffect::FightInEvent {
                     encounter,
@@ -6511,6 +6568,10 @@ impl<V: Rules> sts2_core::EventView<V> for State<V> {
         self.shared.character
     }
 
+    fn wins(&self) -> u32 {
+        self.shared.wins
+    }
+
     fn relics(&self) -> impl Iterator<Item = sts2_core::CarriedRelic<V>> + '_ {
         use sts2_core::RelicModel as _;
 
@@ -6710,6 +6771,7 @@ mod tests {
             &Seed::new("0RACLE1").expect("the fixture's seed is a seed"),
             Character::Regent,
             AscensionLevel::None,
+            0,
         )
     }
 
@@ -6781,14 +6843,31 @@ mod tests {
         assert!(run.legal().is_empty(), "and it takes nothing more");
     }
 
-    /// Past the last act's boss the run is won: `WinRun` kills every player,
-    /// and the room it ends in is the victory room.
+    /// Past the last act's boss the run enters The Architect, on the floor it
+    /// stood on. Its last option wins: `WinRun` kills every player, and the
+    /// room it ends in is the victory room.
     #[test]
-    fn a_run_past_its_last_act_is_over_and_won() {
+    fn a_run_past_its_last_act_meets_the_architect_and_wins() {
         let mut run = opened();
         run.act = run.shared.opening.acts.len() - 1;
+        let floor = run.floor;
         run.proceed()
             .expect("the last act's boss room is left by proceeding");
+        assert!(
+            run.in_victory_room(),
+            "the run stands in The Architect's room"
+        );
+        assert_eq!(run.floor, floor, "which stands on no floor of its own");
+
+        // A Regent with no wins hears three lines: two to answer, then
+        // `PROCEED`.
+        for _ in 0..3 {
+            assert!(
+                !run.report().observation.run_over,
+                "the run is not over yet"
+            );
+            run.choose(0).expect("its one option is taken");
+        }
 
         let seen = run.report().observation;
         assert!(seen.run_over, "so the run is over");
