@@ -17,6 +17,7 @@ mod codegen;
 mod coverage;
 mod dump;
 mod error;
+mod followed;
 mod instructions;
 mod neow;
 mod plays;

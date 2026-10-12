@@ -11,7 +11,8 @@
 //! A hand-ported card or move reaches its powers through helpers this does
 //! not follow, so its powers are not checked.
 //!
-//! `--missing` names, under each row, what that row lacks.
+//! `--missing` names, under each row, what that row lacks. Last comes how
+//! far the simulator follows the runs the game played.
 //!
 //! ```text
 //! cargo xtask coverage
@@ -88,6 +89,8 @@ pub enum Error {
     File(#[from] FileError),
     #[error("{file} has no `{what}`")]
     Missing { file: PathBuf, what: &'static str },
+    #[error(transparent)]
+    Process(#[from] crate::error::ProcessError),
 }
 
 /// Every file this reads, by its path under the build's directory.
@@ -603,6 +606,8 @@ pub fn run(args: Args) -> Result<String, Error> {
     for (power, count) in blocking.iter().take(BLOCKERS) {
         writeln!(out, "  {count:>3}  {power}").unwrap();
     }
+
+    crate::followed::report(&crate::workspace(), &mut out)?;
     Ok(out)
 }
 

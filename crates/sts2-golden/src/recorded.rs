@@ -12,7 +12,7 @@
 //! half folded into the high. Four find the first step two runs part at as
 //! surely as eight do here.
 
-use sts2_core::{Digest, Digested as _, Snapshot};
+use sts2_core::{Decision, Digest, Digested as _, Room, Snapshot, Start};
 
 /// What the file starts with, so a wrong one is refused rather than read.
 const MAGIC: &[u8; 8] = b"STS2REC\x00";
@@ -64,13 +64,90 @@ pub fn position<V: sts2_core::ContentVersion>(snapshot: &Snapshot<V>) -> u32 {
 }
 
 /// How far the simulator followed a recorded run.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Followed {
     /// Every position agreed, to the run's end.
     Whole,
-    /// The positions agreed up to this step and not at it. Step `n` is the
-    /// position before the run's `n`th move.
-    PartedAt(usize),
+    /// The positions agreed up to `step` and not at it. Step `n` is the
+    /// position before the run's `n`th move. `after` names the move that led
+    /// there, as [`named`] does.
+    PartedAt { step: usize, after: String },
+}
+
+impl Run {
+    /// What the run was begun with.
+    ///
+    /// # Panics
+    ///
+    /// On an id this build does not have, which a file this build recorded
+    /// never holds.
+    pub fn start<V: sts2_core::ContentVersion>(&self) -> Start<V> {
+        Start {
+            seed: sts2_core::Seed::new(&self.seed).expect("a recorded seed is a seed"),
+            character: from_id(&self.character),
+            ascension: from_id(&self.ascension),
+            modifiers: Vec::new(),
+            wins: self.wins,
+        }
+    }
+}
+
+/// A value by the id the game spells it with.
+fn from_id<T: serde::de::DeserializeOwned>(id: &str) -> T {
+    serde_json::from_value(serde_json::Value::String(id.to_owned()))
+        .unwrap_or_else(|e| panic!("{id:?}: {e}"))
+}
+
+/// A move by what it plays rather than where it sits, so the splits after
+/// one move can be counted together across runs. The card, the potion, the
+/// fight a turn ends in, the option an event or a rest site offers, or the
+/// question answered.
+pub fn named<V: sts2_core::ContentVersion>(seen: &Snapshot<V>, decision: &Decision<V>) -> String {
+    let observation = &seen.observation;
+    match decision {
+        Decision::PlayCard { index, .. } => match observation
+            .combat
+            .as_ref()
+            .and_then(|combat| combat.hand.get(usize::from(index.get())))
+        {
+            Some(card) => format!("play {:?}", card.card),
+            None => "play".into(),
+        },
+        Decision::UsePotion { index, .. } => {
+            match observation.potions.get(usize::from(index.get())) {
+                Some(held) => format!("drink {:?}", held.potion),
+                None => "drink".into(),
+            }
+        }
+        Decision::EndTurn => match observation.combat.as_ref().and_then(|c| c.encounter) {
+            Some(encounter) => format!("end turn in {encounter:?}"),
+            None => "end turn".into(),
+        },
+        Decision::ChooseOption { index } => match &observation.room {
+            Some(Room::Event { event, options, .. }) => {
+                match options.iter().find(|option| option.index == *index) {
+                    Some(option) => format!("{event:?} {:?}", option.key.option),
+                    None => format!("{event:?}"),
+                }
+            }
+            Some(Room::RestSite { options }) => {
+                match options.iter().find(|option| option.index == *index) {
+                    Some(option) => format!("rest {:?}", option.id),
+                    None => "rest".into(),
+                }
+            }
+            Some(Room::Treasure { .. }) => "treasure".into(),
+            _ => "option".into(),
+        },
+        Decision::Answer(_) => match &seen.asking {
+            Some(question) => format!("answer {}", question.kind()),
+            None => "answer".into(),
+        },
+        Decision::Buy { .. } => "buy".into(),
+        Decision::Travel { .. } => "travel".into(),
+        Decision::EnterRoom { room } => format!("enter {room:?}"),
+        Decision::Proceed => "proceed".into(),
+    }
 }
 
 /// Replays `run` on the simulator `driven`, begun on its start and carrying
@@ -90,17 +167,19 @@ where
     P: sts2_core::Play<V>,
     P::Error: std::fmt::Display,
 {
+    let mut after = String::from("the start");
     for (step, &want) in run.digests.iter().enumerate() {
         let seen = driven
             .observe()
             .unwrap_or_else(|e| panic!("observing step {step}: {e}"));
         if position(&seen) != want {
-            return Followed::PartedAt(step);
+            return Followed::PartedAt { step, after };
         }
         let Some(&at) = run.moves.get(step) else {
             break;
         };
         let decision = seen.observation.moves[usize::from(at)];
+        after = named(&seen, &decision);
         driven
             .play(&decision)
             .unwrap_or_else(|e| panic!("playing {decision:?} at step {step}: {e}"))
