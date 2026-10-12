@@ -1065,6 +1065,37 @@ impl sts2_core::Rules for V0_107_1 {
         }
     }
 
+    fn relic_allowed(relic: Self::Relic, floor: usize, players: usize) -> bool {
+        use generated::relics::Relic;
+        // `IsBeforeAct3TreasureChest`.
+        let before_act_3_chest = floor < if players > 1 { 38 } else { 41 };
+        match relic {
+            Relic::SilverCrucible | Relic::WingedBoots => players == 1,
+            Relic::MassiveScroll => players > 1,
+            // `LastingCandy` also refuses an Ironclad on a profile's first
+            // run, and a run here has every unlock, which counts runs past
+            // any first.
+            Relic::AmethystAubergine
+            | Relic::BookOfFiveRings
+            | Relic::BowlerHat
+            | Relic::DragonFruit
+            | Relic::FrozenEgg
+            | Relic::Girya
+            | Relic::JuzuBracelet
+            | Relic::LastingCandy
+            | Relic::LuckyFysh
+            | Relic::MealTicket
+            | Relic::MoltenEgg
+            | Relic::OldCoin
+            | Relic::Planisphere
+            | Relic::Shovel
+            | Relic::ToxicEgg
+            | Relic::WhiteBeastStatue
+            | Relic::WhiteStar => before_act_3_chest,
+            _ => true,
+        }
+    }
+
     fn run_rng_types() -> &'static [Self::RunRngType] {
         &generated::runstate::RunRngType::ALL
     }

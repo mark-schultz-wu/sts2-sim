@@ -1,0 +1,45 @@
+# A relic bag drops each relic whose IsAllowed fails as it is pulled from. Past
+# the act 3 chest's floor, Shovel, Meal Ticket and fifteen more are out, so a
+# shop on floor forty-two stocks past them.
+{"cmd":"start","seed":"0RACLE4","character":"IRONCLAD","ascension":"None"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"enter_room","type":"Shop"}
