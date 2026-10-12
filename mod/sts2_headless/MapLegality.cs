@@ -135,9 +135,18 @@ public static class MapLegality
     /// is no <c>IsFinished</c> on a room, and a boss room with its combat still
     /// running is an ordinary fight. Refusing during combat is what stops this
     /// from being a way to skip one.
+    ///
+    /// A fight the player died in is over too, and shows the game over screen
+    /// rather than rewards. So a dead player proceeds nowhere, which is the
+    /// game's <c>IsGameOver</c>.
     /// </remarks>
     public static bool CanProceed(RunState state)
     {
+        if (!state.Players[0].Creature.IsAlive)
+        {
+            return false;
+        }
+
         AbstractRoom? room = state.CurrentRoom;
         return room is { RoomType: RoomType.Boss } || ResumesEvent(state);
     }

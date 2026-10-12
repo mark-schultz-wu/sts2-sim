@@ -32,9 +32,6 @@ pub(crate) trait Powers<V: Rules>: Clone + std::fmt::Debug {
     /// Take the power at `at` in `creature`'s order off it.
     fn remove(&mut self, creature: CombatId, at: usize) -> HeldPower<V>;
 
-    /// Keep the powers on `creature` that `keep` keeps, in order.
-    fn retain(&mut self, creature: CombatId, keep: impl FnMut(&HeldPower<V>) -> bool);
-
     /// Take every power off `creature`.
     fn clear(&mut self, creature: CombatId);
 
@@ -97,12 +94,6 @@ impl<V: Rules> Powers<V> for PerCreature<V> {
 
     fn remove(&mut self, creature: CombatId, at: usize) -> HeldPower<V> {
         self.lists[slot(creature)].remove(at)
-    }
-
-    fn retain(&mut self, creature: CombatId, keep: impl FnMut(&HeldPower<V>) -> bool) {
-        if let Some(list) = self.lists.get_mut(slot(creature)) {
-            list.retain(keep);
-        }
     }
 
     fn clear(&mut self, creature: CombatId) {
@@ -171,17 +162,6 @@ impl<V: Rules, P: Powers<V>> Powers<V> for Counted<V, P> {
         let held = self.inner.remove(creature, at);
         self.counts.remove(held.power().overrides());
         held
-    }
-
-    fn retain(&mut self, creature: CombatId, mut keep: impl FnMut(&HeldPower<V>) -> bool) {
-        let counts = &mut self.counts;
-        self.inner.retain(creature, |held| {
-            let kept = keep(held);
-            if !kept {
-                counts.remove(held.power().overrides());
-            }
-            kept
-        });
     }
 
     fn clear(&mut self, creature: CombatId) {

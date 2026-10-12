@@ -918,21 +918,44 @@ public static class Driver
         return turnMustAdvancePast == null || pcs.TurnNumber > turnMustAdvancePast;
     }
 
+    /// <summary>
+    /// Counts the run's actions and checksums, and logs its rooms and acts.
+    /// </summary>
+    /// <remarks>
+    /// Each handler is taken off before it goes on. <c>RunManager</c> is a
+    /// singleton whose events outlive <c>CleanUp</c>, so a restart that only
+    /// added them would add one more copy per run.
+    /// </remarks>
     private static void Subscribe(RunManager run)
     {
-        run.ActionExecutor.AfterActionExecuted += _ => _actions++;
-        run.ChecksumTracker.ChecksumGenerated += (_, context, _) =>
-        {
-            _checksums++;
-            if (_checksums <= 5)
-            {
-                Log.Info($"[headless] checksum: {context}");
-            }
-        };
-        run.RoomEntered += () => Log.Info("[headless] room entered");
-        run.RoomExited += () => Log.Info("[headless] room exited");
-        run.ActEntered += () => Log.Info("[headless] act entered");
+        run.ActionExecutor.AfterActionExecuted -= CountAction;
+        run.ActionExecutor.AfterActionExecuted += CountAction;
+        run.ChecksumTracker.ChecksumGenerated -= CountChecksum;
+        run.ChecksumTracker.ChecksumGenerated += CountChecksum;
+        run.RoomEntered -= LogRoomEntered;
+        run.RoomEntered += LogRoomEntered;
+        run.RoomExited -= LogRoomExited;
+        run.RoomExited += LogRoomExited;
+        run.ActEntered -= LogActEntered;
+        run.ActEntered += LogActEntered;
     }
+
+    private static void CountAction(GameAction _) => _actions++;
+
+    private static void CountChecksum(NetChecksumData _, string context, NetFullCombatState __)
+    {
+        _checksums++;
+        if (_checksums <= 5)
+        {
+            Log.Info($"[headless] checksum: {context}");
+        }
+    }
+
+    private static void LogRoomEntered() => Log.Info("[headless] room entered");
+
+    private static void LogRoomExited() => Log.Info("[headless] room exited");
+
+    private static void LogActEntered() => Log.Info("[headless] act entered");
 
     /// <summary>
     /// Dumps enough of the reached state to tell a real run from a hollow one.

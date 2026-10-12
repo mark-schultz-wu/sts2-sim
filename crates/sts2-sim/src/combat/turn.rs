@@ -2988,15 +2988,16 @@ pub(super) fn side_turn_started<V: Rules>(
     if ended.is_some() {
         return ended;
     }
-    // `Hook.AfterSideTurnStartLate`.
+    // `Hook.AfterSideTurnStartLate`. A power's `PowerCmd.Decrement(this)`
+    // has ticked by the time this hears it.
     let hook = sts2_core::EventHook::SideTurnStartLate { side };
     for (listener, effect) in listen::notify::<V>(live, relics, hook) {
         match (listener, effect) {
-            // `PowerCmd.Decrement(this)`.
-            (Listener::Power { owner, power, .. }, sts2_core::HookEffect::Decrement) => {
+            // `CreatureCmd.Kill`, from a power the decrement took off.
+            (Listener::Power { .. }, sts2_core::HookEffect::KillCreature(creature)) => {
                 let mut board =
                     Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
-                board.modify_amount(owner, power, -num_traits::one::<V::Number>());
+                board.kill_outright(creature, true);
                 ended = ended.or(board.ended());
             }
             (listener, effect) => {
