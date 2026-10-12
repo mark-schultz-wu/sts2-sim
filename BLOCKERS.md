@@ -29,19 +29,23 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ## Open
 
-### 1. Aeonglass's turn
-
-28 runs first part after a turn ends against the Aeonglass boss.
-
-### 2. The Insatiable's turn
+### 1. The Insatiable's turn
 
 25 runs first part after a turn ends against The Insatiable.
 
-### 3. Ovicopter's turn
+### 2. Ovicopter's turn
 
 24 runs first part after a turn ends against an Ovicopter.
 
-### 4. Every other split the recorded runs find
+### 3. Fabricator's turn
+
+21 runs first part after a turn ends against a Fabricator.
+
+### 4. The Knights' turn
+
+21 runs first part after a turn ends against the Knights elite.
+
+### 5. Every other split the recorded runs find
 
 `cargo xtask coverage` lists the commonest first splits, by the move
 that led to each. Each one with more than a handful of runs becomes its
@@ -49,31 +53,31 @@ own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
 
-### 5. A listener walk that can pause
+### 6. A listener walk that can pause
 
 The game walks `AfterCardPlayed` listeners one at a time, and a draw
 can pause the walk. The sim raises them all first, so Bygone Effigy's
 Slow counts a card early in the preview while Stratagem's question
 waits. Needs a design, for Mark.
 
-### 6. Ascension
+### 7. Ascension
 
 The sim threads the ascension level through, but every scenario and
 census run plays at `None`. Record runs at each level, and each split
 they find becomes an item.
 
-### 7. Run modifiers
+### 8. Run modifiers
 
 A run started with any modifier panics (`crates/sts2-sim/src/engine/sim.rs`).
 Hoarder's removal ban is one rule known to need one. Port the custom
 mode's modifiers, and record runs with each.
 
-### 8. A speed target
+### 9. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.
 
-### 9. v0.111.0
+### 10. v0.111.0
 
 Only the generated tables exist. Its behaviour layer has to be written,
 and its runs recorded.
