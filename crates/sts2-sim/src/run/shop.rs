@@ -94,8 +94,8 @@ impl<V: Rules> Merchant<'_, V> {
             entries.push(self.entry(
                 Stock::Card(Some(ShopCard {
                     card,
-                    // A merchant's card is never upgraded, so what it costs to
-                    // play is what its row prints.
+                    // What its row prints. A relic that upgrades the card
+                    // reprices it once the shop is stocked.
                     cost: card.card.cost(),
                     star_cost: card.card.star_cost(),
                 })),

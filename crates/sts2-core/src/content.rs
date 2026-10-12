@@ -5993,13 +5993,14 @@ pub trait RelicModel<V: Hooks>: Clone + std::fmt::Debug + PartialEq + Eq + Sized
     fn new(relic: V::Relic) -> Self;
 
     /// `RelicModel.DisplayAmount`, which is the number the relic shows.
-    /// `fighting` is `CombatManager.IsInProgress`, which a fight's end and a
-    /// player's death both clear.
+    /// `turn` is its owner's `PlayerCombatState.TurnNumber` while
+    /// `CombatManager.IsInProgress`, which a fight's end and a player's
+    /// death both clear, and nothing otherwise.
     ///
     /// # Panics
     ///
     /// A relic that works its number out and nobody has ported.
-    fn display_amount(&self, relic: V::Relic, fighting: bool) -> V::Number;
+    fn display_amount(&self, relic: V::Relic, turn: Option<V::Count>) -> V::Number;
 
     /// `RelicModel.IsUsedUp`.
     ///

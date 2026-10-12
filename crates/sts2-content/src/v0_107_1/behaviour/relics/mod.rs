@@ -1738,7 +1738,8 @@ impl sts2_core::RelicModel<V> for State {
         }
     }
 
-    fn display_amount(&self, relic: Relic, fighting: bool) -> Number {
+    fn display_amount(&self, relic: Relic, turn: Option<u32>) -> Number {
+        let fighting = turn.is_some();
         match Table::data(relic).display_amount {
             // The table holds the column's own width, and a relic counts in
             // the build's game number. Widening here is the only place the two
@@ -1775,7 +1776,7 @@ impl sts2_core::RelicModel<V> for State {
                 State::LetterOpener(state) => letter_opener::display_amount(state),
                 State::OrnamentalFan(state) => ornamental_fan::display_amount(state),
                 State::Shuriken(state) => shuriken::display_amount(state),
-                State::StoneCalendar(state) => stone_calendar::display_amount(state, fighting),
+                State::StoneCalendar(_) => stone_calendar::display_amount(turn),
                 State::Nunchaku(state) => nunchaku::display_amount(state),
                 State::IronClub(state) => iron_club::display_amount(state),
                 State::DiamondDiadem(state) => diamond_diadem::display_amount(state),

@@ -220,10 +220,10 @@ impl<V: Rules> HeldRelic<V> {
         }
     }
 
-    /// The number it shows, which is `RelicModel.DisplayAmount`, while a
-    /// fight is `fighting` or not.
-    pub(crate) fn amount(&self, fighting: bool) -> V::Number {
-        self.state.display_amount(self.relic, fighting)
+    /// The number it shows, which is `RelicModel.DisplayAmount`, on the
+    /// fight's `turn` or outside a fight.
+    pub(crate) fn amount(&self, turn: Option<V::Count>) -> V::Number {
+        self.state.display_amount(self.relic, turn)
     }
 }
 
@@ -4442,6 +4442,8 @@ impl<V: Rules> State<V> {
                     on_sale.card = self.rewritten(on_sale.card, |card| {
                         sts2_core::EventHook::MerchantCardCreated { card }
                     });
+                    // What it costs to play, once the hook upgraded it.
+                    (on_sale.cost, on_sale.star_cost) = crate::combat::printed_costs(on_sale.card);
                 }
                 entry
             })
@@ -4456,7 +4458,7 @@ impl<V: Rules> State<V> {
     /// Enter a rest site, with the options this run's belt and deck open it on.
     pub(super) fn enter_rest_site(&mut self, at: Location) {
         let deck: Vec<CardIdent<V>> = self.player.deck.iter().map(|held| held.ident).collect();
-        // `TryModifyRestSiteOptions`, asked of the belt ahead of the deck.
+        // `TryModifyRestSiteOptions`, which the belt answers after the deck.
         let from_belt: Vec<V::RestSiteOption> = self
             .notify_belt(sts2_core::EventHook::RestSiteOptions)
             .into_iter()
@@ -6135,6 +6137,7 @@ impl<V: Rules> State<V> {
                 on_sale.card = self.rewritten(on_sale.card, |card| {
                     sts2_core::EventHook::MerchantCardCreated { card }
                 });
+                (on_sale.cost, on_sale.star_cost) = crate::combat::printed_costs(on_sale.card);
                 sts2_core::Stock::Card(Some(on_sale))
             }
             stock => stock,
@@ -6264,7 +6267,10 @@ impl<V: Rules> State<V> {
     fn carried(&self) -> impl ExactSizeIterator<Item = Carried<V>> + '_ {
         self.player.relics.iter().map(|held| Carried {
             relic: held.relic,
-            amount: held.amount(matches!(self.phase, Phase::Combat(_))),
+            amount: held.amount(match &self.phase {
+                Phase::Combat(live) => Some(live.turn),
+                _ => None,
+            }),
             title: None,
             text: None,
         })
