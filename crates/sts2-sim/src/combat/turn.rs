@@ -181,6 +181,17 @@ pub(super) fn end_from_flush<V: Rules>(
     // here reports is the one the enemy turn ran under.
     next.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::NONE;
     next.switch_side(<V::CombatSide as SideKinds>::ENEMY);
+    // `Creature.BeforeTurnStart` for each enemy, then `BeforeSideTurnStart`
+    // for their side. Hardened Shell's cap starts again here.
+    let turn = next.turn;
+    before_side_turn_start::<V>(
+        next,
+        streams.combat(),
+        relics,
+        ascension,
+        <V::CombatSide as SideKinds>::ENEMY,
+        turn,
+    );
     clear_block::<V>(
         next,
         streams.combat(),
@@ -970,14 +981,12 @@ pub(super) fn before_side_turn_start<V: Rules>(
 ) {
     // `Creature.BeforeTurnStart`, which writes every power's stack as its
     // side begins.
-    let starting: Vec<CombatId> = live
+    for creature in live
         .creatures
         .iter()
         .filter(|creature| creature.side == side)
-        .map(|creature| creature.id)
-        .collect();
-    for creature in starting {
-        for held in live.powers.of_mut(creature) {
+    {
+        for held in live.powers.of_mut(creature.id) {
             held.on_turn_start = held.amount;
         }
     }

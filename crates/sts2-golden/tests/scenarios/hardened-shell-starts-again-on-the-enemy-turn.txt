@@ -1,0 +1,13 @@
+# `StartTurn` raises `BeforeSideTurnStart` for the enemy side as well as
+# the player's. Hardened Shell at five starts its cap again there. A Strike
+# takes five off the Nibbit, the most the shell lets through. Demise then
+# hits it as its own turn ends, and the fresh cap lets five more through.
+#
+# A port that raises the hook only for the player's side leaves the cap
+# spent, and Demise takes nothing.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"HARDENED_SHELL_POWER","amount":5,"target":1}
+{"cmd":"power","power":"DEMISE_POWER","amount":9,"target":1}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}
