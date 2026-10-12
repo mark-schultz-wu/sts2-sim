@@ -2606,6 +2606,21 @@ fn enchanted_hit<V: Rules>(
     }
 }
 
+/// `amount` times what the card's enchantment scales a powered hit by, cut
+/// to a whole number the way an observation casts a preview. Nothing for a
+/// card whose enchantment scales nothing.
+pub(crate) fn enchant_scaled<V: Rules>(
+    held: &CardInstance<V>,
+    amount: V::Number,
+) -> Option<V::Number> {
+    let (_, scale) = enchanted_hit::<V>(Some(held), true);
+    let scaled = exact::<V>(amount) * scale?;
+    Some(
+        num_traits::NumCast::from(scaled.trunc())
+            .unwrap_or_else(|| unimplemented!("an extra damage of {scaled}")),
+    )
+}
+
 /// `Hook.ModifyDamage`'s three phases for one hit.
 fn hit_phases<V: Rules>(
     fight: Walk<'_, V>,
@@ -3211,7 +3226,7 @@ pub(crate) fn effect_of<V: Rules>(
             scaling: Scaling::Static,
         }),
         // Not an effect a card resolves: the fight asks the hook itself.
-        CardNumberModifier::PowerGiven => None,
+        CardNumberModifier::PowerGiven | CardNumberModifier::ExtraDamage => None,
     }
 }
 
@@ -3229,7 +3244,8 @@ pub(crate) fn dealer_of<V: Rules>(
         | CardNumberModifier::UnpoweredDamage
         | CardNumberModifier::Block
         | CardNumberModifier::UnpoweredBlock
-        | CardNumberModifier::PowerGiven => Some(player::<V>(creatures)),
+        | CardNumberModifier::PowerGiven
+        | CardNumberModifier::ExtraDamage => Some(player::<V>(creatures)),
     }
 }
 
@@ -3526,6 +3542,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     fn apply(&mut self, effect: Self::ResolvedEffect) {
         self.ran_on();
         match effect.effect {
+            // `AttackCommand.Execute` stops before any hit whose attacker is
+            // dead. A Spectral Knight that Thorns kills on its second hit
+            // lands no third.
+            Resolved::Attack { dealer, .. }
+                if self
+                    .at(dealer)
+                    .is_none_or(|at| !self.live.creatures[at].alive) => {}
             Resolved::Attack {
                 dealer,
                 target,
@@ -4035,12 +4058,12 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .unwrap_or_else(|| unimplemented!("a number printed by no card being played"));
         // A power's number runs its hook where the power lands, which knows
         // the applier and the target.
-        if held
-            .face
-            .number(key)
-            .modifier
-            .is_some_and(|modifier| modifier != CardNumberModifier::PowerGiven)
-        {
+        if held.face.number(key).modifier.is_some_and(|modifier| {
+            !matches!(
+                modifier,
+                CardNumberModifier::PowerGiven | CardNumberModifier::ExtraDamage
+            )
+        }) {
             // The hooks it runs through name creatures to run against, and a
             // bare read has none. `Fight::resolve` is where both arrive.
             unimplemented!(
@@ -4389,6 +4412,16 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .expect("a card stands where it was found")
             .face
             .has_keyword(keyword)
+    }
+
+    fn card_local_keyword(&self, card: CardAt<V>, keyword: V::CardKeyword) -> bool {
+        let at = self.standing(card);
+        self.live
+            .cards
+            .get(card.pile(), at)
+            .expect("a card stands where it was found")
+            .face
+            .has_local_keyword(keyword)
     }
 
     fn local_cost(&self, card: CardAt<V>) -> sts2_core::Cost {

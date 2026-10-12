@@ -1,0 +1,14 @@
+# `AttackCommand.Execute` checks its attacker before every hit, and stops
+# once it is dead. The Flail Knight opens its second turn on a two-hit
+# Flail. Thorns at 150 kills it on the first hit, so the second never
+# lands. The Magi Knight casts Dampen that turn and attacks nobody, so it
+# keeps every point of its health.
+#
+# A port that runs the remaining hits after the attacker dies points them
+# at the dead knight's own side, and the Magi Knight loses health.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"KNIGHTS_ELITE"}
+{"cmd":"power","power":"INTANGIBLE_POWER","amount":9,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"THORNS_POWER","amount":150,"target":0}
+{"cmd":"end_turn"}
