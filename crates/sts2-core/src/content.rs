@@ -2006,6 +2006,12 @@ pub trait Fight<V: ContentVersion> {
     /// Apply an effect whose listeners have already had their say.
     fn apply(&mut self, effect: Self::ResolvedEffect);
 
+    /// A resolved hit, landed as `CreatureCmd.Damage` with
+    /// `ValueProp.Unblockable`: what it worked out to meets no block.
+    fn apply_unblockable(&mut self, _effect: Self::ResolvedEffect) {
+        unimplemented!("an unblockable hit")
+    }
+
     /// `PlayerCmd.GainStars(amount, Owner)`.
     ///
     /// A printed number, so signed. The pool it lands in is not.
@@ -4480,8 +4486,11 @@ pub struct PlayStarted<V: ContentVersion> {
     pub card: V::Card,
     /// Which copy it is, which `CardPlay.Card` is.
     pub id: crate::CardId<V>,
-    /// `CardPlay.Resources.EnergyValue`.
+    /// `CardPlay.Resources.EnergyValue`: what the card costs, which an
+    /// auto-play counts though it spends none of it.
     pub energy: V::Count,
+    /// `CardPlay.IsAutoPlay`, whose `Resources.EnergySpent` is nothing.
+    pub auto: bool,
     /// `EnergyCost.CapturedXValue`, for a card that costs X energy: what
     /// its play spent, or the energy in hand where it was auto-played.
     pub x: V::Count,
@@ -4685,10 +4694,14 @@ impl<V: ContentVersion> History<'_, V> {
         let mut latest = num_traits::zero::<V::Count>();
         for entry in self.this_turn {
             if let HistoryEntry::Started(started) = entry {
+                let paid = match started.auto {
+                    true => num_traits::zero(),
+                    false => started.energy,
+                };
                 if started.first {
-                    spent = spent + started.energy;
+                    spent = spent + paid;
                 }
-                latest = started.energy;
+                latest = paid;
             }
         }
         (spent, latest)

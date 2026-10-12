@@ -3675,6 +3675,28 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         Board::damage_command(self, hits);
     }
 
+    fn apply_unblockable(&mut self, effect: Self::ResolvedEffect) {
+        self.ran_on();
+        match effect.effect {
+            Resolved::Attack {
+                dealer,
+                target,
+                damage,
+                powered,
+                card,
+            } => {
+                // `CreatureCmd.Damage` lands nothing from a dead dealer.
+                if self
+                    .at(dealer)
+                    .is_some_and(|at| self.live.creatures[at].alive)
+                {
+                    self.hit(Some(dealer), target, damage, powered, true, card, false);
+                }
+            }
+            _ => unreachable!("an effect other than a hit landed as an unblockable hit"),
+        }
+    }
+
     #[tracing::instrument(level = "trace", skip_all)]
     fn apply(&mut self, effect: Self::ResolvedEffect) {
         self.ran_on();
