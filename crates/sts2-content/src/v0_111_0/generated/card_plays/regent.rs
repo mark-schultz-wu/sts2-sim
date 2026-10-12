@@ -76,7 +76,6 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
             fight.apply(block);
             fight.forge(
                 Cards::Token(TokenCard::SovereignBlade),
-                CardVar::Damage,
                 fight.var(CardVar::Forge),
             );
             Played::Done
@@ -145,7 +144,6 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
             let target = fight.target();
             fight.forge(
                 Cards::Token(TokenCard::SovereignBlade),
-                CardVar::Damage,
                 fight.var(CardVar::Forge),
             );
             fight.apply_power(target, Power::ConquerorPower, PowerAmount::Counted(1));
@@ -515,7 +513,6 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         RegentCard::RefineBlade => {
             fight.forge(
                 Cards::Token(TokenCard::SovereignBlade),
-                CardVar::Damage,
                 fight.var(CardVar::Forge),
             );
             fight.apply_to_actor(
@@ -551,7 +548,6 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
             fight.apply_to_actor(Power::SeekingEdgePower, PowerAmount::Counted(1));
             fight.forge(
                 Cards::Token(TokenCard::SovereignBlade),
-                CardVar::Damage,
                 fight.var(CardVar::Forge),
             );
             Played::Done
@@ -610,7 +606,6 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         RegentCard::SpoilsOfBattle => {
             fight.forge(
                 Cards::Token(TokenCard::SovereignBlade),
-                CardVar::Damage,
                 fight.var(CardVar::Forge),
             );
             fight.draw(fight.var(CardVar::Cards));
@@ -667,7 +662,6 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         RegentCard::TheSmith => {
             fight.forge(
                 Cards::Token(TokenCard::SovereignBlade),
-                CardVar::Damage,
                 fight.var(CardVar::Forge),
             );
             Played::Done
@@ -697,7 +691,6 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
             });
             fight.forge(
                 Cards::Token(TokenCard::SovereignBlade),
-                CardVar::Damage,
                 fight.var(CardVar::Forge),
             );
             Played::Done

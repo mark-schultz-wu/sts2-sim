@@ -194,10 +194,10 @@ fn command(out: &mut String, words: &[String]) -> Result<(), Error> {
                 "draw" => writeln!(out, "fight.draw({amount});"),
                 "energy" => writeln!(out, "fight.modify_energy({amount});"),
                 "stars" => writeln!(out, "fight.gain_stars({amount});"),
-                // `ForgeCmd.Forge` raises the damage on every Sovereign Blade.
+                // `ForgeCmd.Forge` adds to the damage of every Sovereign Blade.
                 _ => writeln!(
                     out,
-                    "fight.forge({}, CardVar::Damage, {amount});",
+                    "fight.forge({}, {amount});",
                     card_path("TOKEN_CARD_POOL", "SOVEREIGN_BLADE")?
                 ),
             }

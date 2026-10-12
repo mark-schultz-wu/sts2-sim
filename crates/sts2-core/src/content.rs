@@ -2391,11 +2391,11 @@ pub trait Fight<V: ContentVersion> {
     /// where it says rather than read the piles through.
     fn transform(&mut self, card: crate::CardAt<V>, into: crate::CardIdent<V>);
 
-    /// `ForgeCmd.Forge`: raise a number on every copy of one card.
+    /// `ForgeCmd.Forge`: `AddDamage(amount)` on every copy of one card.
     ///
     /// Every pile, the exhaust pile included, and one copy is created in hand
     /// when the fight holds none outside exhaust.
-    fn forge(&mut self, card: V::Card, key: V::CardVar, amount: V::Number);
+    fn forge(&mut self, card: V::Card, amount: V::Number);
 
     /// `OstyCmd.Summon`: the player's Osty gains `amount` maximum health, or
     /// stands up at that much, alive or anew.
@@ -2942,6 +2942,9 @@ pub enum Change<V: ContentVersion> {
     /// `CardModel.RemoveKeyword`: the copy no longer carries a word, whether
     /// its table prints it or something wrote it on.
     RemoveKeyword(V::CardKeyword),
+    /// A method of the copy's own class, which writes a field the class adds
+    /// as well as a number the copy prints. `Claw.BuffFromClawPlay` is one.
+    Own(V::CardWrite),
 }
 
 /// How long a [`Change`] lasts.
@@ -5740,7 +5743,6 @@ pub enum HookEffect<V: ContentVersion> {
     /// `ForgeCmd.Forge` from a power hook.
     Forge {
         card: V::Card,
-        key: V::CardVar,
         amount: V::Number,
     },
     /// `CreatureCmd.GainBlock` on the listener's owner.
@@ -5978,6 +5980,35 @@ pub trait CardModel<V: ContentVersion>:
     /// they write something. A copy carries its saved fields, and their
     /// setters write numbers the card prints.
     fn written(&self) -> Option<Change<V>>;
+}
+
+/// The fields one fight copy's own class adds to `CardModel`, where its
+/// `AfterDowngraded` reads them.
+///
+/// A copy carries them through a downgrade, which prints its numbers afresh
+/// and then has the class write back what they say.
+pub trait CardFields<V: Hooks>:
+    Copy + std::fmt::Debug + PartialEq + Eq + std::hash::Hash + 'static
+{
+    /// The fields of a fresh copy of `card`.
+    fn new(card: V::Card) -> Self;
+
+    /// `write` on these fields, and what it writes on the numbers the copy
+    /// prints, which `printed` holds as they stand.
+    ///
+    /// # Panics
+    ///
+    /// A write the class has no method for.
+    fn write<P: Printed<V> + ?Sized>(&mut self, write: V::CardWrite, printed: &P) -> Change<V>;
+
+    /// `SovereignBlade.AddDamage`, which `ForgeCmd.Forge` calls on every
+    /// blade.
+    fn add_damage<P: Printed<V> + ?Sized>(&mut self, amount: V::Number, printed: &P) -> Change<V>;
+
+    /// `CardModel.AfterDowngraded`: what the class writes back on a copy
+    /// whose downgrade printed its numbers afresh, which `printed` holds. No
+    /// write is a class that does not override it.
+    fn after_downgraded<P: Printed<V> + ?Sized>(&self, printed: &P) -> Option<Change<V>>;
 }
 
 /// A card in the run's deck: which one, what it is, and what its own model
@@ -6229,6 +6260,9 @@ pub trait Hooks: ContentVersion {
     /// What one deck card's own model saves, its `[SavedProperty]` fields,
     /// which the run carries for it between fights.
     type CardState: CardModel<Self>;
+
+    /// The fields one fight copy's own class adds to `CardModel`.
+    type CardFields: CardFields<Self>;
 
     /// What a card's note does to the model of a power it just applied,
     /// which [`Fight::note_on_power`] hands it.
@@ -6682,6 +6716,11 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + std::fmt::Debug
         + std::fmt::Display
         + std::hash::Hash;
+
+    /// A method of a card's own class, which writes the fields the class adds.
+    ///
+    /// One per method, and nothing for a build whose cards keep no field.
+    type CardWrite: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'static;
 
     /// What a fight's card writes on its deck version, `CardModel.DeckVersion`.
     ///

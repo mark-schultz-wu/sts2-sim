@@ -4349,7 +4349,6 @@ pub(crate) fn event_hook(
         {
             Some(HookEffect::Forge {
                 card: Cards::Token(TokenCard::SovereignBlade),
-                key: super::super::generated::cards::CardVar::Damage,
                 amount,
             })
         }

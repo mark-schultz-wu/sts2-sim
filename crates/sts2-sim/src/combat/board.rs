@@ -4121,7 +4121,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         );
     }
 
-    fn forge(&mut self, card: V::Card, key: V::CardVar, amount: V::Number) {
+    fn forge(&mut self, card: V::Card, amount: V::Number) {
         self.ran_on();
         // `ForgeCmd.Forge` creates one when the fight holds none it can reach.
         // The exhaust pile is not one it can reach, and is forged all the same.
@@ -4142,7 +4142,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         // every pile, the one being played among them.
         self.live.cards.write_all_cards(
             |held| held.ident.card == card,
-            |held| held.raise(key, amount),
+            |held| held.add_damage(amount),
         );
         // The blade goes through `AddGeneratedCardToCombat`, so it enters the
         // fight the way a generated card does. It is raised after the raise,

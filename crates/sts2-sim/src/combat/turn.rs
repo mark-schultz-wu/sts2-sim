@@ -2855,10 +2855,10 @@ pub(super) fn side_turn_started<V: Rules>(
                 |_| true,
                 |card| card.modify(sts2_core::Change::Upgrade, sts2_core::Lasting::ThisFight),
             ),
-            sts2_core::HookEffect::Forge { card, key, amount } => {
+            sts2_core::HookEffect::Forge { card, amount } => {
                 let mut board =
                     Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
-                sts2_core::Fight::forge(&mut board, card, key, amount);
+                sts2_core::Fight::forge(&mut board, card, amount);
             }
             // `PlayerCmd.GainEnergy`.
             sts2_core::HookEffect::GainEnergy(amount) => {

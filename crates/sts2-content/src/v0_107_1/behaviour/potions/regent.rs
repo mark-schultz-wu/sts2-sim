@@ -29,13 +29,9 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
         }
         // `AnyPlayer`: `ForgeCmd.Forge` for its `Forge`.
         Potion::KingsCourage => {
-            use super::super::super::generated::cards::{CardVar, Cards, TokenCard};
+            use super::super::super::generated::cards::{Cards, TokenCard};
 
-            fight.forge(
-                Cards::Token(TokenCard::SovereignBlade),
-                CardVar::Damage,
-                KINGS_COURAGE,
-            );
+            fight.forge(Cards::Token(TokenCard::SovereignBlade), KINGS_COURAGE);
             Played::Done
         }
         // `Self`: `GetDistinctForCombat` of three colorless cards off

@@ -300,7 +300,10 @@ pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<
             let target = fight.target();
             strike(fight, target);
             let increase = fight.var(CardVar::Increase);
-            fight.modify_this(Change::Raise(CardVar::Damage, increase), Lasting::ThisFight);
+            fight.modify_this(
+                Change::Own(super::CardWrite::BuffFromPlay(increase)),
+                Lasting::ThisFight,
+            );
             Played::Done
         }
         // `InfernalBlade`: an Attack of the character's pool, free this turn,
@@ -632,7 +635,7 @@ fn thrash<F: Fight<V>>(fight: &mut F) -> Played<V> {
     let damage = sts2_core::Fixed::from_exact(damage)
         .unwrap_or_else(|| unimplemented!("Thrash taking in {damage}"));
     fight.modify_this(
-        Change::RaiseExactly(CardVar::Damage, damage),
+        Change::Own(super::CardWrite::ExtraDamage(damage)),
         Lasting::ThisFight,
     );
     fight.act_on(PileAct::Exhaust, &[chosen]);

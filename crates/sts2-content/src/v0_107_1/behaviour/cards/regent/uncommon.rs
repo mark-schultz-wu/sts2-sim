@@ -36,7 +36,9 @@ pub(super) fn kingly_punch<P: sts2_core::Printed<V> + ?Sized>(
     match hook {
         EventHook::CardDrawn { id: drawn, .. } if drawn == id => {
             asked.push(HookEffect::ModifySelf {
-                change: Change::Raise(CardVar::Damage, printed.face(CardVar::Increase)),
+                change: Change::Own(super::super::CardWrite::BuffFromPlay(
+                    printed.face(CardVar::Increase),
+                )),
                 lasting: Lasting::ThisFight,
             })
         }

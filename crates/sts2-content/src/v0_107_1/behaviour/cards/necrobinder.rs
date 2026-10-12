@@ -475,7 +475,7 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
             });
             let increase = fight.var(CardVar::Increase);
             fight.modify_this(
-                sts2_core::Change::Raise(CardVar::Damage, increase),
+                sts2_core::Change::Own(super::CardWrite::BuffFromPlay(increase)),
                 sts2_core::Lasting::ThisFight,
             );
             fight.write_deck_version(super::DeckWrite::BuffFromPlay(increase));

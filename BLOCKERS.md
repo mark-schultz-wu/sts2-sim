@@ -31,7 +31,9 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ### 1. The Knights' turn
 
-23 runs first part after a turn ends against the Knights elite.
+13 runs first part after a turn ends against the Knights elite. Run 715
+parts on Supermassive's extra damage, 3 where the game has 4. Run 1149
+parts on a knight's health.
 
 ### 2. Deaths wait for every hit of one damage command
 

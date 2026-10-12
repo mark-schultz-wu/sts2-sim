@@ -63,6 +63,7 @@ impl sts2_core::ContentVersion for V0_107_1 {
     type Count = u32;
     type Index = u16;
     type Resume = behaviour::Resume;
+    type CardWrite = behaviour::cards::CardWrite;
     type DeckWrite = behaviour::cards::DeckWrite;
     type CardSerial = u16;
 
@@ -110,6 +111,7 @@ impl sts2_core::Hooks for V0_107_1 {
     type MonsterState = behaviour::monsters::Model;
     type EncounterState = behaviour::encounters::State;
     type CardState = behaviour::cards::State;
+    type CardFields = behaviour::cards::Fields;
 
     fn power_noted(state: &mut Self::PowerState, note: Self::Number) {
         behaviour::powers::noted(state, note);

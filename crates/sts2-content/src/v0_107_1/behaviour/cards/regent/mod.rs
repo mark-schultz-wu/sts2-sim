@@ -64,11 +64,7 @@ fn beat_into_shape<F: Fight<V>>(fight: &mut F) -> Played<V> {
     let count = |n: usize| super::Number::try_from(n).expect("an attack's hits fit a number");
     let amount = fight.var(CardVar::CalculatedForge)
         - count(results.len()) * fight.var(CardVar::CalculationExtra);
-    fight.forge(
-        Cards::Token(TokenCard::SovereignBlade),
-        CardVar::Damage,
-        amount,
-    );
+    fight.forge(Cards::Token(TokenCard::SovereignBlade), amount);
     Played::Done
 }
 
@@ -378,7 +374,7 @@ fn summon_forth<F: Fight<V>>(fight: &mut F) -> Played<V> {
         .filter(|&card| fight.card_ident(card).card == blade)
         .collect();
     fight.act_on(sts2_core::PileAct::IntoHand, &blades);
-    fight.forge(blade, CardVar::Damage, fight.var(CardVar::Forge));
+    fight.forge(blade, fight.var(CardVar::Forge));
     Played::Done
 }
 
@@ -699,7 +695,6 @@ fn big_bang_drew<F: Fight<V>>(fight: &mut F) -> Played<V> {
     fight.modify_energy(fight.var(CardVar::Energy));
     fight.forge(
         Cards::Token(TokenCard::SovereignBlade),
-        CardVar::Damage,
         fight.var(CardVar::Forge),
     );
     Played::Done

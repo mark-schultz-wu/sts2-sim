@@ -141,7 +141,7 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
             fight.apply(block);
             let increase = fight.var(CardVar::Increase);
             fight.modify_this(
-                sts2_core::Change::Raise(CardVar::Block, increase),
+                sts2_core::Change::Own(super::CardWrite::BuffFromPlay(increase)),
                 sts2_core::Lasting::ThisFight,
             );
             fight.write_deck_version(super::DeckWrite::BuffFromPlay(increase));
@@ -563,7 +563,8 @@ fn claw<F: Fight<V>>(fight: &mut F) -> Played<V> {
 
     let target = fight.target();
     hit(fight, target, 1);
-    let raise = sts2_core::Change::Raise(CardVar::Damage, fight.var(CardVar::Increase));
+    let raise =
+        sts2_core::Change::Own(super::CardWrite::BuffFromPlay(fight.var(CardVar::Increase)));
     // `AllCards`: the hand, the draw, discard and exhaust piles, then the
     // play pile, which holds the Claw being played.
     for pile in [Pile::Hand, Pile::Draw, Pile::Discard, Pile::Exhaust] {
