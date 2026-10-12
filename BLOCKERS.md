@@ -29,15 +29,16 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ## Open
 
-### 1. Deaths wait for every hit of one damage command
+### 1. An attack's hit over many targets is one damage command
 
-`CreatureCmd.Damage` over many targets lands every hit before it kills
-anyone. A creature on zero is dead to `IsEnding` already. The sim kills
-each target as its hit lands, and its `alive` flag stays set until
-then. Run 1326 parts on it, where Mercury Hourglass kills an egg and the
-Ovicopter together. The sim's Gremlin Horn then grants energy for the
-egg, with the Ovicopter already on zero. Every
-multi-target damage site needs it: hook effects, orbs, potions and cards.
+`AttackCommand` calls `CreatureCmd.Damage` once per hit over every
+target still standing, so each hit lands on all of them before any
+dies. Hook effects, orb evokes and the start of a turn now group their
+hits through `Fight::damage_command`. Card plays that hit every enemy,
+the generated ones and the hand ports, still kill each target as its
+hit lands. So do potions like Explosive Ampoule and the Glory monsters.
+Each needs the inner loop of one hit wrapped in a command, and the
+code generator needs to write it.
 
 ### 2. Every other split the recorded runs find
 

@@ -2096,6 +2096,16 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("reading an attack's results as it lands")
     }
 
+    /// `CreatureCmd.Damage` over many targets. Every hit `hits` makes lands
+    /// before any of their hooks run. The creatures they kill die together
+    /// once those are done.
+    fn damage_command(&mut self, _hits: impl FnOnce(&mut Self))
+    where
+        Self: Sized,
+    {
+        unimplemented!("one damage command over many targets")
+    }
+
     /// Perform the acting monster's advertised attack against every opponent.
     ///
     /// Each hit resolves immediately before it lands, so an earlier hit can

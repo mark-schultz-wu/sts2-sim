@@ -73,6 +73,9 @@ pub(super) struct Board<'a, V: Rules> {
     /// The results of the attack command whose hits are landing, which
     /// `AttackCommand.Results` gathers.
     landed: Option<sts2_core::AttackResults<V>>,
+    /// The hits of the damage command under way that have landed, which
+    /// wait for the command's last before their hooks run.
+    command: Option<SmallVec<[Landed<V>; 4]>>,
 }
 
 /// The game's `PlayerChoiceContext`, as far as it decides what a question
@@ -97,6 +100,21 @@ struct Lost<V: Rules> {
     lost: V::Number,
     overkill: V::Number,
     killed: bool,
+}
+
+/// One hit of a `CreatureCmd.Damage` that has landed, and waits for its
+/// hooks.
+pub(super) struct Landed<V: Rules> {
+    dealer: Option<CombatId>,
+    target: CombatId,
+    powered: bool,
+    unblockable: bool,
+    card: Option<V::Card>,
+    attack: bool,
+    blocked: V::Number,
+    block_broken: bool,
+    fully_blocked: bool,
+    results: SmallVec<[Lost<V>; 2]>,
 }
 
 /// An effect after a simulator fight's listeners have modified it.
@@ -189,6 +207,7 @@ impl<'a, V: Rules> Board<'a, V> {
             held: Vec::new(),
             left: None,
             landed: None,
+            command: None,
         }
     }
 
@@ -240,6 +259,7 @@ impl<'a, V: Rules> Board<'a, V> {
             held: Vec::new(),
             left: None,
             landed: None,
+            command: None,
         }
     }
 
@@ -822,9 +842,13 @@ impl<'a, V: Rules> Board<'a, V> {
                 // `CreatureCmd.Damage` over `HittableEnemies`, unpowered, from
                 // the power's owner.
                 (Listener::Power { owner, .. }, HookEffect::DamageOpponents(amount)) => {
-                    for target in self.hittable_opponents_of(owner) {
-                        self.hit_unpowered(Some(owner), target, amount, false);
-                    }
+                    // One `CreatureCmd.Damage` over them all.
+                    let targets = self.hittable_opponents_of(owner);
+                    self.damage_command(|board| {
+                        for target in targets {
+                            board.hit_unpowered(Some(owner), target, amount, false);
+                        }
+                    });
                 }
                 // `CreatureCmd.GainBlock`, unpowered, on the power's owner.
                 (Listener::Power { owner, .. }, HookEffect::GainBlock(amount)) => {
@@ -854,6 +878,11 @@ impl<'a, V: Rules> Board<'a, V> {
     /// `attack`'s hits add their results to the attack's. Thorns deals its
     /// damage as a command of its own, whose results are not among them.
     #[allow(clippy::too_many_arguments)]
+    /// `CreatureCmd.Damage` on one target: the hit lands, its hooks run,
+    /// and a creature it killed dies.
+    ///
+    /// Inside a [`Board::damage_command`], the hit lands now and the rest
+    /// waits for the command's other hits.
     pub(super) fn hit(
         &mut self,
         dealer: Option<CombatId>,
@@ -864,9 +893,74 @@ impl<'a, V: Rules> Board<'a, V> {
         card: Option<V::Card>,
         attack: bool,
     ) {
-        let Some(at) = self.at(target) else { return };
-        if !self.live.creatures[at].alive {
+        if self.command.is_none() {
+            let mut dying = SmallVec::<[CombatId; 2]>::new();
+            if let Some(landed) =
+                self.land_hit(dealer, target, damage, powered, unblockable, card, attack)
+            {
+                self.settle_hit(landed, &mut dying);
+            }
+            self.kill_together(&dying);
             return;
+        }
+        // A command a listener runs while this hit lands is a command of its
+        // own, and settles before this one goes on.
+        let mut pending = self.command.take();
+        let landed = self.land_hit(dealer, target, damage, powered, unblockable, card, attack);
+        if let Some(pending) = pending.as_mut() {
+            pending.extend(landed);
+        }
+        self.command = pending;
+    }
+
+    /// `CreatureCmd.Damage` over many targets: every hit `hits` makes lands
+    /// first, then each one's hooks run in order, and then the creatures
+    /// they killed die together. Until then a creature the hits took to
+    /// nothing still stands, though `IsEnding` counts it dead.
+    pub(super) fn damage_command(&mut self, hits: impl FnOnce(&mut Self)) {
+        let outer = self.command.replace(SmallVec::new());
+        hits(self);
+        let pending = std::mem::replace(&mut self.command, outer).unwrap_or_default();
+        let mut dying = SmallVec::<[CombatId; 2]>::new();
+        for landed in pending {
+            self.settle_hit(landed, &mut dying);
+        }
+        self.kill_together(&dying);
+    }
+
+    /// `CreatureCmd.Kill` over `dying`, in order, then `CheckWinCondition`
+    /// once.
+    fn kill_together(&mut self, dying: &[CombatId]) {
+        let mut died = false;
+        for &creature in dying {
+            if let Some(at) = self.at(creature) {
+                self.die(at, false);
+                died = true;
+            }
+        }
+        if died {
+            self.end_if_ending();
+        }
+    }
+
+    /// The first half of `CreatureCmd.Damage` for one target: the hooks
+    /// before it lands, the block it meets, and the hit points it takes.
+    /// Nothing for a target already dead.
+    #[inline(always)]
+    #[allow(clippy::too_many_arguments)]
+    fn land_hit(
+        &mut self,
+        dealer: Option<CombatId>,
+        target: CombatId,
+        damage: V::Number,
+        powered: bool,
+        unblockable: bool,
+        card: Option<V::Card>,
+        attack: bool,
+    ) -> Option<Landed<V>> {
+        let at = self.at(target)?;
+        if !self.live.creatures[at].alive {
+            return None;
         }
         let asked = super::listen::notify::<V>(
             self.live,
@@ -881,14 +975,12 @@ impl<'a, V: Rules> Board<'a, V> {
         );
         self.after_hit(asked);
         // What answered can have moved the creatures.
-        let Some(at) = self.at(target) else { return };
+        let at = self.at(target)?;
         let zero = V::Number::zero();
         // `PetOwner?.Creature ?? originalTarget`: a pet's hit meets its
         // owner's block.
         let shield = self.live.creatures[at].owner.unwrap_or(target);
-        let Some(shield_at) = self.at(shield) else {
-            return;
-        };
+        let shield_at = self.at(shield)?;
         // `ValueProp.Unblockable` meets no block at all.
         let blocked = match unblockable {
             true => zero,
@@ -938,10 +1030,39 @@ impl<'a, V: Rules> Board<'a, V> {
                 killed,
             });
         }
-        // Each result's hooks, in the command's order. A creature the
-        // hit killed is not told it was hit: it dies once they are
-        // done.
-        let mut dying: SmallVec<[CombatId; 2]> = SmallVec::new();
+        Some(Landed {
+            dealer,
+            target,
+            powered,
+            unblockable,
+            card,
+            attack,
+            blocked,
+            block_broken,
+            fully_blocked,
+            results,
+        })
+    }
+
+    /// The second half of `CreatureCmd.Damage` for one landed hit: each
+    /// result's hooks, in the command's order. A creature the hit killed is
+    /// not told it was hit. It joins `dying`, to die once the command's hooks
+    /// are done.
+    #[inline(always)]
+    fn settle_hit(&mut self, landed: Landed<V>, dying: &mut SmallVec<[CombatId; 2]>) {
+        let Landed {
+            dealer,
+            target,
+            powered,
+            unblockable,
+            card,
+            attack,
+            blocked,
+            block_broken,
+            fully_blocked,
+            results,
+        } = landed;
+        let zero = V::Number::zero();
         let pet_of = dealer
             .and_then(|dealer| self.at(dealer))
             .and_then(|at| self.live.creatures[at].owner);
@@ -1036,11 +1157,6 @@ impl<'a, V: Rules> Board<'a, V> {
                     self.after_hit(asked);
                 }
                 true => dying.push(receiver),
-            }
-        }
-        for creature in dying {
-            if let Some(at) = self.at(creature) {
-                self.kill(at);
             }
         }
     }
@@ -2303,15 +2419,23 @@ impl<'a, V: Rules> Board<'a, V> {
                 // `CreatureCmd.Damage` over `HittableEnemies`, from the
                 // power's owner, unblockable and unpowered.
                 HookEffect::DamageOpponentsUnblockable(amount) => {
-                    for target in self.hittable_opponents_of(owner) {
-                        self.hit_unpowered(Some(owner), target, amount, true);
-                    }
+                    // One `CreatureCmd.Damage` over them all.
+                    let targets = self.hittable_opponents_of(owner);
+                    self.damage_command(|board| {
+                        for target in targets {
+                            board.hit_unpowered(Some(owner), target, amount, true);
+                        }
+                    });
                 }
                 // The same, and blockable.
                 HookEffect::DamageOpponents(amount) => {
-                    for target in self.hittable_opponents_of(owner) {
-                        self.hit_unpowered(Some(owner), target, amount, false);
-                    }
+                    // One `CreatureCmd.Damage` over them all.
+                    let targets = self.hittable_opponents_of(owner);
+                    self.damage_command(|board| {
+                        for target in targets {
+                            board.hit_unpowered(Some(owner), target, amount, false);
+                        }
+                    });
                 }
                 HookEffect::ApplyPower {
                     target,
@@ -3383,25 +3507,29 @@ impl<V: Rules> Board<'_, V> {
             match (listener, effect) {
                 // `CreatureCmd.Damage` on the evoke's targets still alive.
                 (Listener::Power { owner, .. }, HookEffect::DamageTargets(amount)) => {
-                    for &target in &targets {
-                        if !self
-                            .at(target)
-                            .is_some_and(|at| self.live.creatures[at].alive)
-                        {
-                            continue;
+                    let alive: SmallVec<[CombatId; 8]> = targets
+                        .iter()
+                        .copied()
+                        .filter(|&target| {
+                            self.at(target)
+                                .is_some_and(|at| self.live.creatures[at].alive)
+                        })
+                        .collect();
+                    self.damage_command(|board| {
+                        for target in alive {
+                            let hit = resolve::<V>(
+                                board.walk(),
+                                None,
+                                Effect::Attack {
+                                    dealer: owner,
+                                    target,
+                                    damage: Amount::Number(amount),
+                                    scaling: Scaling::Static,
+                                },
+                            );
+                            board.apply(hit);
                         }
-                        let hit = resolve::<V>(
-                            self.walk(),
-                            None,
-                            Effect::Attack {
-                                dealer: owner,
-                                target,
-                                damage: Amount::Number(amount),
-                                scaling: Scaling::Static,
-                            },
-                        );
-                        self.apply(hit);
-                    }
+                    });
                 }
                 (listener, effect) => {
                     unimplemented!("{listener:?} asking for {effect:?} as an orb is evoked")
@@ -3536,6 +3664,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         let results = self.attack_landing(attacker, scaling, hits);
         self.choice = choice;
         results
+    }
+
+    fn damage_command(&mut self, hits: impl FnOnce(&mut Self)) {
+        Board::damage_command(self, hits);
     }
 
     #[tracing::instrument(level = "trace", skip_all)]
@@ -3922,9 +4054,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 // `CreatureCmd.Damage` over `HittableEnemies`, unpowered, from
                 // the power's owner.
                 (Listener::Power { owner, .. }, HookEffect::DamageOpponents(amount)) => {
-                    for target in self.hittable_opponents_of(owner) {
-                        self.hit_unpowered(Some(owner), target, amount, false);
-                    }
+                    // One `CreatureCmd.Damage` over them all.
+                    let targets = self.hittable_opponents_of(owner);
+                    self.damage_command(|board| {
+                        for target in targets {
+                            board.hit_unpowered(Some(owner), target, amount, false);
+                        }
+                    });
                 }
                 (listener, effect) => {
                     unimplemented!("{listener:?} asking for {effect:?} once stars are gained")
@@ -4235,9 +4371,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 // `CreatureCmd.Damage` over `HittableEnemies`, unpowered and
                 // from the relic's owner.
                 (Listener::Relic { .. }, HookEffect::DamageOpponents(amount)) => {
-                    for target in self.hittable_opponents_of(player) {
-                        self.hit_unpowered(Some(player), target, amount, false);
-                    }
+                    // One `CreatureCmd.Damage` over them all.
+                    let targets = self.hittable_opponents_of(player);
+                    self.damage_command(|board| {
+                        for target in targets {
+                            board.hit_unpowered(Some(player), target, amount, false);
+                        }
+                    });
                 }
                 (listener, effect) => {
                     unimplemented!("{listener:?} asking for {effect:?} as an orb is channelled")
@@ -5611,6 +5751,7 @@ impl<'a, V: Rules> Board<'a, V> {
             held: Vec::new(),
             left: None,
             landed: None,
+            command: None,
         }
     }
 }
@@ -6186,9 +6327,12 @@ fn random_cost<V: Rules>(rngs: &mut CombatRngs<'_>, below: u8) -> V::Number {
 /// primary, and no listener holds the fight open.
 #[tracing::instrument(level = "trace", skip_all)]
 pub(super) fn ending<V: Rules>(walk: Walk<'_, V>) -> bool {
+    // `IsAlive` is `CurrentHp > 0`. A creature a damage command took to
+    // nothing is dead to it before the command kills it.
     let primary_enemy_remains = walk.live.creatures.iter().any(|creature| {
         creature.side == <V::CombatSide as SideKinds>::ENEMY
             && creature.alive
+            && creature.hp > V::Health::zero()
             && !walk.live.powers.of(creature.id).any(|held| {
                 <V as sts2_core::Hooks>::decide_hook(
                     held.listener(
