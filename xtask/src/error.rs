@@ -92,6 +92,12 @@ pub enum ProcessError {
         status: ExitStatus,
         stderr: String,
     },
+    #[error("{what}: {source}")]
+    Io {
+        what: &'static str,
+        #[source]
+        source: std::io::Error,
+    },
 }
 
 /// The program a command runs, by the name a message calls it.

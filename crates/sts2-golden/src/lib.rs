@@ -43,6 +43,8 @@ pub fn golden_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden")
 }
 
+pub mod random;
+pub mod recorded;
 pub mod scenario;
 pub mod suite;
 
