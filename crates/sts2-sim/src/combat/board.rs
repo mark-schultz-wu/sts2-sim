@@ -1586,7 +1586,7 @@ impl<'a, V: Rules> Board<'a, V> {
 
     /// `IsOverOrEnding`: a loss waits, or no primary enemy stands.
     fn over(&self) -> bool {
-        self.ended == Some(super::Ended::Lost) || self.ending()
+        self.ended == Some(super::Ended::Lost) || self.live.lost || self.ending()
     }
 
     /// A command stops on: a loss waits, the win this effect saw still
@@ -1594,8 +1594,8 @@ impl<'a, V: Rules> Board<'a, V> {
     /// [`Board::over`] where nothing has ended.
     fn stopped(&self) -> bool {
         match self.ended {
-            // A fight an earlier effect won stays over.
-            None => self.live.won,
+            // A fight an earlier effect won or lost stays over.
+            None => self.live.won || self.live.lost,
             Some(super::Ended::Lost) => true,
             Some(super::Ended::Won) => self.ending(),
         }
@@ -1707,6 +1707,12 @@ impl<'a, V: Rules> Board<'a, V> {
             self.live.potions.deafen();
             self.live.cards.deafen();
             self.ended = Some(super::Ended::Lost);
+            self.live.lost = true;
+            // `CreatureCmd.Kill` ends a player's turn that player dies on,
+            // and `PlayerCmd.EndTurn` puts it in its end phase.
+            if self.live.side == <V::CombatSide as SideKinds>::PLAYER {
+                self.live.phase = <V::PlayerTurnPhase as sts2_core::TurnPhaseKinds>::END;
+            }
             return;
         }
 

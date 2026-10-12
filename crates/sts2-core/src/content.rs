@@ -7584,6 +7584,16 @@ pub trait Rules: Hooks {
         fight: &mut F,
     ) -> Played<Self>;
 
+    /// The hit count `move_id`'s `MultiAttackIntent` reads off its monster's
+    /// model now, as the intent's lambda does each time it is shown:
+    /// `TestSubject.MultiClawTotalCount`. Nothing for a count the table
+    /// prints.
+    fn intent_repeats_now(
+        monster: Self::Monster,
+        move_id: Self::MoveId,
+        model: &Self::MonsterState,
+    ) -> Option<Self::Count>;
+
     /// The rest of a move that handed back [`Played::Waiting`], from `at`,
     /// once what it waited on is over.
     fn resume_move<F: Fight<Self>>(
