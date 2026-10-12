@@ -29,31 +29,35 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ## Open
 
-### 1. Sovereign Blade
-
-53 runs first part after Sovereign Blade is played.
-
-### 2. Pael's Flesh
+### 1. Pael's Flesh
 
 47 runs first part after Pael offers its Flesh.
 
-### 3. Test Subject's turn
+### 2. Test Subject's turn
 
-45 runs first part after a turn ends against the Test Subject boss.
+47 runs first part after a turn ends against the Test Subject boss.
 
-### 4. The Knights' turn
+### 3. The Knights' turn
 
-44 runs first part after a turn ends against the Knights elite.
+46 runs first part after a turn ends against the Knights elite.
 
-### 5. The Slumbering Beetle's turn
+### 4. The Slumbering Beetle's turn
 
 31 runs first part after a turn ends against a Slumbering Beetle.
 
-### 6. Aeonglass's turn
+### 5. The Queen's turn
+
+30 runs first part after a turn ends against the Queen boss.
+
+### 6. A Divine answer
+
+30 runs first part after answering a Divine question.
+
+### 7. Aeonglass's turn
 
 29 runs first part after a turn ends against the Aeonglass boss.
 
-### 7. Every other split the recorded runs find
+### 8. Every other split the recorded runs find
 
 `cargo xtask coverage` lists the commonest first splits, by the move
 that led to each. Each one with more than a handful of runs becomes its
@@ -61,31 +65,31 @@ own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
 
-### 8. A listener walk that can pause
+### 9. A listener walk that can pause
 
 The game walks `AfterCardPlayed` listeners one at a time, and a draw
 can pause the walk. The sim raises them all first, so Bygone Effigy's
 Slow counts a card early in the preview while Stratagem's question
 waits. Needs a design, for Mark.
 
-### 9. Ascension
+### 10. Ascension
 
 The sim threads the ascension level through, but every scenario and
 census run plays at `None`. Record runs at each level, and each split
 they find becomes an item.
 
-### 10. Run modifiers
+### 11. Run modifiers
 
 A run started with any modifier panics (`crates/sts2-sim/src/engine/sim.rs`).
 Hoarder's removal ban is one rule known to need one. Port the custom
 mode's modifiers, and record runs with each.
 
-### 11. A speed target
+### 12. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.
 
-### 12. v0.111.0
+### 13. v0.111.0
 
 Only the generated tables exist. Its behaviour layer has to be written,
 and its runs recorded.
