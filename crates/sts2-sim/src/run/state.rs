@@ -88,6 +88,9 @@ pub(crate) struct State<V: Rules> {
     /// pulls from. The player's own bag still holds them, until one is
     /// obtained.
     shared_dealt: Arc<Vec<V::Relic>>,
+    /// `PlayerCombatState.TurnNumber` as the last fight left it. A fight's
+    /// state outlives it until the next one starts.
+    last_turn: Option<V::Count>,
     /// `PlayerExtraFields.CardShopRemovalsUsed`, which every merchant's
     /// removal price climbs with. It counts over the run, not the room.
     removals_used: usize,
@@ -422,6 +425,7 @@ impl<V: Rules> Clone for State<V> {
             odds,
             dealt_relics,
             shared_dealt,
+            last_turn,
             removals_used,
             phase,
             resuming,
@@ -443,6 +447,7 @@ impl<V: Rules> Clone for State<V> {
         *odds = source.odds;
         dealt_relics.clone_from(&source.dealt_relics);
         shared_dealt.clone_from(&source.shared_dealt);
+        *last_turn = source.last_turn;
         *removals_used = source.removals_used;
         resuming.clone_from(&source.resuming);
         match (phase, &source.phase) {
@@ -1055,6 +1060,7 @@ impl<V: Rules> State<V> {
             odds: Odds::default(),
             dealt_relics: Arc::new(Vec::new()),
             shared_dealt: Arc::new(Vec::new()),
+            last_turn: None,
             removals_used: 0,
             streams,
             resuming: None,
@@ -1552,6 +1558,7 @@ impl<V: Rules> State<V> {
     /// built from the run's own numbers and is where they stood while the
     /// fight lasted.
     pub(super) fn won(&mut self, combat: Combat<V>, offered: Vec<Offer<V>>) {
+        self.last_turn = Some(combat.turn);
         if let Some(player) = combat
             .creatures
             .iter()
@@ -1715,6 +1722,15 @@ impl<V: Rules> State<V> {
         Ok(Decided::Resolved)
     }
 
+    /// `Owner.PlayerCombatState?.TurnNumber`: the fight's while one runs, and
+    /// otherwise the last one's.
+    fn player_turn(&self) -> Option<V::Count> {
+        match &self.phase {
+            Phase::Combat(live) => Some(live.turn),
+            _ => self.last_turn,
+        }
+    }
+
     /// `RelicCmd.Obtain`: the relic joins the belt, and its own pickup runs.
     ///
     /// The model's `AfterObtained` state is written as the relic is built. A
@@ -1767,7 +1783,8 @@ impl<V: Rules> State<V> {
                 unimplemented!("{relic:?} asking for {effect:?} as it is set up");
             }
         }
-        let effects = crate::combat::obtained::<V>(&mut held, self.character(), self.act);
+        let effects =
+            crate::combat::obtained::<V>(&mut held, self.character(), self.act, self.player_turn());
         self.player.relics.push(held);
         self.carry_out(effects)
     }
@@ -2062,8 +2079,12 @@ impl<V: Rules> State<V> {
                         unimplemented!("replacing {from:?}, which the run does not carry");
                     };
                     let mut held = HeldRelic::new(to);
-                    let effects =
-                        crate::combat::obtained::<V>(&mut held, self.character(), self.act);
+                    let effects = crate::combat::obtained::<V>(
+                        &mut held,
+                        self.character(),
+                        self.act,
+                        self.player_turn(),
+                    );
                     self.player.relics.replace(slot, held);
                     if let Some(effect) = effects.first() {
                         unimplemented!("{to:?} asking for {effect:?} as it replaces {from:?}");
@@ -2087,8 +2108,12 @@ impl<V: Rules> State<V> {
                         .find(|&&(from, _)| from == starter)
                         .map_or(fallback, |&(_, to)| to);
                     let mut held = HeldRelic::new(upgraded);
-                    let effects =
-                        crate::combat::obtained::<V>(&mut held, self.character(), self.act);
+                    let effects = crate::combat::obtained::<V>(
+                        &mut held,
+                        self.character(),
+                        self.act,
+                        self.player_turn(),
+                    );
                     self.player.relics.replace(slot, held);
                     if let Some(effect) = effects.first() {
                         unimplemented!(
