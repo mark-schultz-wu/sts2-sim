@@ -611,12 +611,12 @@ pub(super) enum Phase<V: Rules> {
     /// still the one it was fought in, so the fight is still reported. Nothing
     /// is offered, because a dead run takes nothing.
     Lost { combat: Combat<V> },
-    /// The last act's boss beaten, which `RunManager.WinRun` ends the run on.
+    /// The run won: The Architect's `PROCEED`, which is `RunManager.WinRun`.
+    /// `WinRun` kills every player, which leaves nothing to decide.
     ///
-    /// The game enters The Architect's room first. It is dialogue, and its
-    /// proceed wins, so the run goes straight to the win. `WinRun` then kills
-    /// every player, which leaves nothing to decide.
-    Won,
+    /// The room stays The Architect's, with the option that won marked
+    /// chosen, as `EventOption.WasChosen` reports it.
+    Won { room: Option<Room<V>> },
     /// A merchant, and how far through its shelves the run has bought.
     ///
     /// The entries are stocked once, when the run walks in. A slot the run
@@ -779,7 +779,7 @@ impl<V: Rules> Phase<V> {
             | Phase::Combat(_)
             | Phase::Rewards { .. }
             | Phase::Lost { .. }
-            | Phase::Won
+            | Phase::Won { .. }
             | Phase::Event { .. } => false,
         }
     }
@@ -1092,7 +1092,7 @@ impl<V: Rules> State<V> {
             | Phase::Neow { .. }
             | Phase::Rewards { .. }
             | Phase::Lost { .. }
-            | Phase::Won
+            | Phase::Won { .. }
             | Phase::Event { .. }
             | Phase::Treasure { .. }
             | Phase::RestSite { .. }
@@ -1677,6 +1677,12 @@ impl<V: Rules> State<V> {
         self.act
     }
 
+    /// `CurrentActIndex >= Acts.Count - 1`: whether the run stands in its
+    /// last act.
+    pub(super) fn in_last_act(&self) -> bool {
+        self.act + 1 >= self.shared.opening.acts.len()
+    }
+
     /// `RunManager.EnterNextAct`, which the finished act's boss room offers.
     /// Past the last act, a run in its victory room wins, and a run anywhere
     /// else enters The Architect, whose room that is.
@@ -1702,7 +1708,13 @@ impl<V: Rules> State<V> {
         let next = self.act + 1;
         let Some(&(act, _)) = self.shared.opening.acts.get(next) else {
             if self.in_victory_room() {
-                self.phase = Phase::Won;
+                let mut room = self.event_room();
+                if let Some(Room::Event { options, .. }) = &mut room {
+                    for option in options {
+                        option.chosen = true;
+                    }
+                }
+                self.phase = Phase::Won { room };
                 return Ok(Decided::Resolved);
             }
             return self.enter_architect();
@@ -5583,7 +5595,7 @@ impl<V: Rules> State<V> {
                 }
             }
             // `GuaranteeKillAllPlayers`, which `WinRun` ends on.
-            Phase::Won => Standing {
+            Phase::Won { .. } => Standing {
                 hp: num_traits::zero(),
                 max_hp: self.player.max_hp,
                 alive: false,
@@ -5703,7 +5715,7 @@ impl<V: Rules> State<V> {
             Phase::Rewards {
                 offered, removing, ..
             } => removing.is_none() && offered.iter().all(Offer::taken),
-            Phase::Combat(_) | Phase::Lost { .. } | Phase::Won => false,
+            Phase::Combat(_) | Phase::Lost { .. } | Phase::Won { .. } => false,
         }
     }
 
@@ -6183,7 +6195,7 @@ impl<V: Rules> State<V> {
                 run_over: !standing.alive,
                 // `CurrentRoom.IsVictoryRoom`, asked only once the run is
                 // over, which The Architect's room is.
-                victory: (!standing.alive).then_some(matches!(self.phase, Phase::Won)),
+                victory: (!standing.alive).then_some(matches!(self.phase, Phase::Won { .. })),
                 gold: self.player.gold,
                 relics: self.carried().collect(),
                 potions: self.belt(),
@@ -6266,7 +6278,7 @@ impl<V: Rules> State<V> {
                 Some(combat)
             }
             Phase::Map
-            | Phase::Won
+            | Phase::Won { .. }
             | Phase::Neow { .. }
             | Phase::Event { .. }
             | Phase::Treasure { .. }
@@ -6420,7 +6432,7 @@ impl<V: Rules> State<V> {
                 })
             }
             // An act opens on its map, which is no room and asks nothing.
-            Phase::Map | Phase::Lost { .. } | Phase::Won | Phase::Treasure { .. } => None,
+            Phase::Map | Phase::Lost { .. } | Phase::Won { .. } | Phase::Treasure { .. } => None,
         }
     }
 
@@ -6487,6 +6499,7 @@ impl<V: Rules> State<V> {
                 })
             }
             Phase::Event { .. } => self.event_room(),
+            Phase::Won { room } => room.clone(),
             Phase::Treasure { relic, finished } => {
                 // A taken relic empties the chest. A skip leaves its relic
                 // showing, answered, until the room is left.
@@ -6547,11 +6560,7 @@ impl<V: Rules> State<V> {
                     .collect();
                 Some(Room::Shop { entries })
             }
-            Phase::Map
-            | Phase::Combat(_)
-            | Phase::Lost { .. }
-            | Phase::Won
-            | Phase::Rewards { .. } => None,
+            Phase::Map | Phase::Combat(_) | Phase::Lost { .. } | Phase::Rewards { .. } => None,
         }
     }
 }

@@ -1,0 +1,23 @@
+# A run won through The Architect's PROCEED stays in The Architect's room,
+# with the option it chose marked chosen. Three bosses won and proceeded past
+# reach the room, and an Ironclad with no wins answers one line first.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"SOUL_FYSH_BOSS"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":500,"target":0}
+{"cmd":"grant","card":"STRIKE_IRONCLAD"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"answer","skip":true}
+{"cmd":"proceed"}
+{"cmd":"fight","encounter":"SOUL_FYSH_BOSS"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":500,"target":0}
+{"cmd":"grant","card":"STRIKE_IRONCLAD"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"answer","skip":true}
+{"cmd":"proceed"}
+{"cmd":"fight","encounter":"SOUL_FYSH_BOSS"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":500,"target":0}
+{"cmd":"grant","card":"STRIKE_IRONCLAD"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"proceed"}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}
