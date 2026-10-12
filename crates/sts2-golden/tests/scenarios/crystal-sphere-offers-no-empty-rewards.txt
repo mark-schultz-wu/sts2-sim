@@ -1,0 +1,8 @@
+# Crystal Sphere's divinations here uncover nothing. `RewardsSet.Offer` puts
+# up no screen for an empty set, so the event finishes straight away.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"CRYSTAL_SPHERE"}
+{"cmd":"choose_option","index":0}
+{"cmd":"answer","divine":{"x":0,"y":3,"tool":"Small"}}
+{"cmd":"answer","divine":{"x":0,"y":5,"tool":"Small"}}
+{"cmd":"answer","divine":{"x":0,"y":7,"tool":"Small"}}
