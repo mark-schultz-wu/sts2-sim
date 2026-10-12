@@ -1,0 +1,16 @@
+# The last Decimillipede segments to die keep the moves they showed.
+# `ReattachPower.AfterDeath` sends a segment to its dead move only while
+# another stands, and `IsDead` counts one on nothing as dead. At a hundred
+# Focus, Cracked Core's Lightning kills the front segment alone, and it
+# goes to its dead move. Then the Glass orb's passive is one
+# `CreatureCmd.Damage` over the other two, and they die together on
+# Writhe and Bulk.
+#
+# A Glass orb that hits each as its own command, or a Reattach that counts
+# a segment on nothing as standing, sends the middle one to its dead move.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"DECIMILLIPEDE_ELITE"}
+{"cmd":"power","power":"FOCUS_POWER","amount":100,"target":0}
+{"cmd":"grant","card":"GLASSWORK"}
+{"cmd":"play_card","index":5}
+{"cmd":"end_turn"}

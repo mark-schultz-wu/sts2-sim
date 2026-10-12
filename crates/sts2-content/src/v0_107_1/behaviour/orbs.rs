@@ -73,9 +73,12 @@ pub(crate) fn passive<F: Fight<V>>(orb: &mut Channelled<V>, fight: &mut F) {
             if value > 0 {
                 orb.passive = (orb.passive - 1).max(0);
                 orb.evoke = orb.passive * 2;
-                for target in targets {
-                    unpowered(value, target, fight);
-                }
+                // One `CreatureCmd.Damage` over them all.
+                fight.damage_command(|fight| {
+                    for target in targets {
+                        unpowered(value, target, fight);
+                    }
+                });
             }
         }
         orb => unimplemented!("what {orb:?} does as its passive"),
@@ -168,9 +171,12 @@ pub(crate) fn evoke<F: Fight<V>>(orb: &Channelled<V>, fight: &mut F) -> sts2_cor
             if value <= 0 {
                 return sts2_core::Opponents::new();
             }
-            for &target in &targets {
-                unpowered(value, target, fight);
-            }
+            // One `CreatureCmd.Damage` over them all.
+            fight.damage_command(|fight| {
+                for &target in &targets {
+                    unpowered(value, target, fight);
+                }
+            });
             targets.into_iter().collect()
         }
         orb => unimplemented!("what {orb:?} does as it is evoked"),

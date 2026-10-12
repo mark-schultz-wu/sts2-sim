@@ -3890,10 +3890,15 @@ pub(crate) fn event_hook(
         // The last segment to die keeps the move it showed. The game spends
         // that branch on the fade every segment plays, and the fight ends.
         (Power::ReattachPower, _, EventHook::AfterDeath { creature, .. }) if creature == holder => {
+            // `AreAllOtherSegmentsDead` reads `IsDead`, which is
+            // `CurrentHp <= 0`. A segment the same command took to nothing is
+            // dead to it, though its own death is still to come.
             let others = fight.living_opponents(fight.player());
-            let standing = others
-                .iter()
-                .any(|&other| other != holder && fight.power(other, Power::ReattachPower).is_some());
+            let standing = others.iter().any(|&other| {
+                other != holder
+                    && fight.power(other, Power::ReattachPower).is_some()
+                    && fight.current_hp(other).is_some_and(|hp| hp > 0)
+            });
             standing.then(|| {
                 state.set_reviving(true);
                 HookEffect::EnterMove {
