@@ -36,6 +36,7 @@
 //!         character: Character::Ironclad,
 //!         ascension: AscensionLevel::None,
 //!         modifiers: vec![],
+//!         wins: 0,
 //!     },
 //! )?;
 //!

@@ -122,10 +122,14 @@ public static class MapLegality
     /// </summary>
     /// <remarks>
     /// The room half of the precondition
-    /// <c>NRewardsScreen.OnProceedButtonPressed</c> tests: a boss room, or the
-    /// run's victory room. Kept here rather than in <c>Protocol</c> because it is
-    /// a map rule — the answer to "where can this run go", asked about the one
-    /// move the grid cannot express.
+    /// <c>NRewardsScreen.OnProceedButtonPressed</c> tests: a boss room. Kept
+    /// here rather than in <c>Protocol</c> because it is a map rule — the answer
+    /// to "where can this run go", asked about the one move the grid cannot
+    /// express.
+    ///
+    /// The screen accepts the run's victory room too. That is The Architect's
+    /// event room, which shows no rewards screen, so its own <c>PROCEED</c>
+    /// option is the only way out.
     ///
     /// The other half is that the fight is over, which the caller checks: there
     /// is no <c>IsFinished</c> on a room, and a boss room with its combat still
@@ -135,8 +139,7 @@ public static class MapLegality
     public static bool CanProceed(RunState state)
     {
         AbstractRoom? room = state.CurrentRoom;
-        return room != null && (room.RoomType == RoomType.Boss || room.IsVictoryRoom)
-            || ResumesEvent(state);
+        return room is { RoomType: RoomType.Boss } || ResumesEvent(state);
     }
 
     /// <summary>

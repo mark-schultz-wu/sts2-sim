@@ -91,6 +91,9 @@ mod tests {
         fn floor(&self) -> u32 {
             unreachable!("Tea Master does not inspect the floor")
         }
+        fn wins(&self) -> u32 {
+            unreachable!("Tea Master does not inspect the profile")
+        }
         fn hp(&self) -> i32 {
             unreachable!("Tea Master does not inspect HP")
         }

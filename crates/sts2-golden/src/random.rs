@@ -6,6 +6,18 @@
 
 use sts2_core::Decision;
 
+/// The profile's wins with the character as a run on `seed` starts, from
+/// none to five.
+///
+/// The Architect picks a won run's last dialogue by it: one for each of a
+/// character's first few wins, then a pool. Six counts reach them all. The
+/// draw has a generator of its own, so a seed picks the moves it picked
+/// before.
+pub fn wins(seed: &str) -> u32 {
+    let mut pick = Pick::for_seed(&format!("{seed} wins"));
+    u32::try_from(pick.below(6)).expect("a count below six fits a u32")
+}
+
 /// SplitMix64, which is enough for picking among a handful of moves.
 pub struct Pick(u64);
 

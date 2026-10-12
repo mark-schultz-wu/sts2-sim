@@ -911,6 +911,10 @@ impl sts2_core::Rules for V0_107_1 {
         &generated::events::SHARED_ANCIENTS
     }
 
+    fn the_architect() -> Self::Event {
+        generated::events::Event::TheArchitect
+    }
+
     type EventState = EventState;
 
     fn event_allowed(event: Self::Event, run: &impl sts2_core::EventView<Self>) -> bool {

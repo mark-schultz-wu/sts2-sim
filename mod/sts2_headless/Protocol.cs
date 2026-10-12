@@ -24,6 +24,7 @@ using MegaCrit.Sts2.Core.Rewards;
 using MegaCrit.Sts2.Core.Models.Events;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
+using MegaCrit.Sts2.Core.Saves;
 
 namespace Sts2Headless;
 
@@ -254,7 +255,31 @@ internal static class Protocol
         }
     }
 
-    /// <summary>Discards the current run and starts another (H6's fresh-run case).</summary>
+    /// <summary>
+    /// The runs the profile has won with the character, as a count.
+    /// </summary>
+    /// <remarks>
+    /// Absent means none, and anything but a count is refused.
+    /// </remarks>
+    private static bool Wins(JsonElement req, out int wins, out string malformed)
+    {
+        wins = 0;
+        malformed = "";
+
+        if (!req.TryGetProperty("wins", out JsonElement w))
+        {
+            return true;
+        }
+
+        if (w.ValueKind == JsonValueKind.Number && w.TryGetInt32(out wins) && wins >= 0)
+        {
+            return true;
+        }
+
+        malformed = "wins must be a count";
+        return false;
+    }
+
     /// <summary>
     /// The run's ascension, as a level name or as a number.
     /// </summary>
@@ -297,19 +322,26 @@ internal static class Protocol
         return false;
     }
 
+    /// <summary>Discards the current run and starts another (H6's fresh-run case).</summary>
     private static async Task Start(JsonElement req)
     {
         string? seed = Str(req, "seed");
         string? character = Str(req, "character");
 
         if (!Ascension(req, out int ascension, out string malformed)
-            || !Modifiers(req, out ModifierModel[] modifiers, out malformed))
+            || !Modifiers(req, out ModifierModel[] modifiers, out malformed)
+            || !Wins(req, out int wins, out malformed))
         {
             await Error("start", Refusals.Malformed(malformed));
             return;
         }
 
         _state = await Driver.Restart(seed, character, ascension, modifiers);
+        // The profile keeps every run the oracle won, and The Architect picks
+        // the dialogue that ends a won run by the character's count. So the
+        // run says what the count is. Nothing else in a run reads it.
+        SaveManager.Instance.Progress
+            .GetOrCreateCharacterStats(_state.Players[0].Character.Id).TotalWins = wins;
         await Observe(req, "start");
     }
 

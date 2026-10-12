@@ -40,6 +40,9 @@ pub enum Command<V: sts2_content_wire::WireContentVersion> {
         // cannot reopen.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         modifiers: Vec<V::Modifier>,
+        // Omitted when none, for the same reason.
+        #[serde(default, skip_serializing_if = "is_zero")]
+        wins: u32,
     },
     Fight {
         encounter: V::Encounter,
@@ -101,6 +104,10 @@ pub enum Command<V: sts2_content_wire::WireContentVersion> {
     Quit,
 }
 
+fn is_zero(wins: &u32) -> bool {
+    *wins == 0
+}
+
 impl<V: sts2_content_wire::WireContentVersion> From<&Start<V>> for Command<V> {
     /// The one command that is not a decision. See [`sts2_core::Start`].
     fn from(s: &Start<V>) -> Self {
@@ -109,6 +116,7 @@ impl<V: sts2_content_wire::WireContentVersion> From<&Start<V>> for Command<V> {
             character: s.character,
             ascension: s.ascension,
             modifiers: s.modifiers.clone(),
+            wins: s.wins,
         }
     }
 }
@@ -191,11 +199,13 @@ impl<V: sts2_content_wire::WireContentVersion> Command<V> {
                 character,
                 ascension,
                 modifiers,
+                wins,
             } => Some(Start {
                 seed,
                 character,
                 ascension,
                 modifiers,
+                wins,
             }),
             _ => None,
         }
@@ -604,10 +614,11 @@ mod tests {
                 character: Character::Silent,
                 ascension: AscensionLevel::AscendersBane,
                 modifiers: vec![Modifier::Draft],
+                wins: 3,
             }),
             json!({
                 "cmd": "start", "ascension": "AscendersBane", "seed": "ABC",
-                "character": "SILENT", "modifiers": ["DRAFT"],
+                "character": "SILENT", "modifiers": ["DRAFT"], "wins": 3,
             })
         );
     }

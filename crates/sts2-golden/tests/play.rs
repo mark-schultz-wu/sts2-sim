@@ -23,6 +23,7 @@ fn fighting() -> Sim<V> {
             character: Character::Regent,
             ascension: AscensionLevel::None,
             modifiers: Vec::new(),
+            wins: 0,
         },
     )
     .expect("the run starts");

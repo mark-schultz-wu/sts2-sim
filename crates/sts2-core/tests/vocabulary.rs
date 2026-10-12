@@ -23,6 +23,7 @@ fn a_recording_takes_either_half_of_a_step() {
         character: Character::Ironclad,
         ascension: AscensionLevel::None,
         modifiers: vec![],
+        wins: 0,
     });
     assert!(r.is_empty(), "the start is not a step");
 

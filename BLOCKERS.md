@@ -29,24 +29,7 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ## Open
 
-### 1. A won run ends in The Architect
-
-After the last act's boss, the game's `proceed` enters `TheArchitect`,
-an event, and the run is over only once its `PROCEED` option runs
-`WinRun`. The sim ends the run at the boss. The wire cannot read the
-event's option keys either: a dialogue line is
-`THE_ARCHITECT.dialogue.<n>` and the last option a bare `PROCEED`,
-neither of them `<event>.pages.<page>.options.<option>`. A finished
-ancient and the Relic Trader offer a bare `PROCEED` too. So every run
-the recorder plays to a win fails, as seed C000000000 did for four
-characters.
-
-`LoadDialogue` picks the dialogue by the profile's wins and the
-character's, then off the event's own stream. So what the game does
-there depends on the profile it was given. `AnimPlayerAttackIfNecessary`
-shuffles off that stream as well, which the digest counts.
-
-### 2. Record the census's runs
+### 1. Record the census's runs
 
 `cargo xtask record` plays every census seed on the game, 32 at once,
 and writes `crates/sts2-golden/tests/recorded.bin`. Record the 300 seeds
@@ -59,47 +42,47 @@ one.
 A trial of ten runs: the five that lost all part from the sim, at steps
 217, 380, 581, 592 and 956.
 
-### 3. Coverage reports the recorded runs
+### 2. Coverage reports the recorded runs
 
 `cargo xtask coverage` reports how far the sim follows each recorded
 run and 0RACLE1-REGENT-2, by character. It counts steps matched and runs
 matched to the end, and lists the commonest first splits. The check
 ratchets the total of matched steps so it cannot fall.
 
-### 4. 0RACLE1-REGENT-2 parts at step 537
+### 3. 0RACLE1-REGENT-2 parts at step 537
 
 Sovereign Blade previews 29 damage in the game and 24 in the sim.
 
-### 5. Every split the recorded runs find
+### 4. Every split the recorded runs find
 
 Each first split becomes its own item, here, as the recorded runs
 reach it. The live `unimplemented!()` branches surface this way.
 
-### 6. A listener walk that can pause
+### 5. A listener walk that can pause
 
 The game walks `AfterCardPlayed` listeners one at a time, and a draw
 can pause the walk. The sim raises them all first, so Bygone Effigy's
 Slow counts a card early in the preview while Stratagem's question
 waits. Needs a design, for Mark.
 
-### 7. Ascension
+### 6. Ascension
 
 The sim threads the ascension level through, but every scenario and
 census run plays at `None`. Record runs at each level, and each split
 they find becomes an item.
 
-### 8. Run modifiers
+### 7. Run modifiers
 
 A run started with any modifier panics (`crates/sts2-sim/src/engine/sim.rs`).
 Hoarder's removal ban is one rule known to need one. Port the custom
 mode's modifiers, and record runs with each.
 
-### 9. A speed target
+### 8. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.
 
-### 10. v0.111.0
+### 9. v0.111.0
 
 Only the generated tables exist. Its behaviour layer has to be written,
 and its runs recorded.

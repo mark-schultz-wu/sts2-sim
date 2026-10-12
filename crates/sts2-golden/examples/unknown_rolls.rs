@@ -125,6 +125,7 @@ fn run(cli: Cli) -> Result<(), Error> {
             character,
             ascension: sts2_content::v0_107_1::ascension::AscensionLevel::None,
             modifiers: Vec::new(),
+            wins: 0,
         };
         let sim = |source| Error::Sim {
             seed: seed.clone(),

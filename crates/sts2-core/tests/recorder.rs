@@ -130,6 +130,7 @@ fn started() -> Start<V> {
         character: <V as ContentVersion>::Character::ALL[0],
         ascension: <V as ContentVersion>::AscensionLevel::ALL[0],
         modifiers: vec![],
+        wins: 0,
     }
 }
 

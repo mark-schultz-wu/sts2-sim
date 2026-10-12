@@ -88,7 +88,8 @@ pub fn observation<V: sts2_content_wire::WireContentVersion>(
 ///
 /// `DENSE_VEGETATION.pages.REST.options.FIGHT`. The room already names the
 /// event, so the first segment is held to it rather than read again. The two
-/// disagreeing is the game saying two things at once.
+/// disagreeing is the game saying two things at once. A key that names no
+/// page, as The Architect's do, is the build's to read.
 fn option_key<V: sts2_content_wire::WireContentVersion>(
     path: &str,
     event: V::Event,
@@ -115,6 +116,9 @@ fn option_key<V: sts2_content_wire::WireContentVersion>(
             },
         )
     };
+    if let Some(option) = V::event_option_unpaged(event, text) {
+        return Ok(EventOptionKey { event, option });
+    }
     let (page, rest) = text
         .strip_prefix(&named_event)
         .and_then(|rest| rest.strip_prefix(".pages."))
@@ -1520,6 +1524,37 @@ mod tests {
                 matches!(&err.why, Why::Unknown { value, .. } if value == bad),
                 "{bad}: {err}"
             );
+        }
+    }
+
+    /// The Architect's keys name no page: a line, and the bare `PROCEED`.
+    /// Each reads as its option and is spelled back the same.
+    #[test]
+    fn the_architects_keys_are_its_lines_and_proceed() {
+        use sts2_content::v0_107_1::EventOptionId;
+
+        let read = |key: &str| {
+            let mut state = base();
+            state["room"] = json!({
+                "type": "Event", "id": "THE_ARCHITECT", "finished": false,
+                "title": null, "text": null,
+                "options": [{"index": 0, "key": key, "title": null, "text": null,
+                             "locked": false, "proceed": false, "chosen": false,
+                             "relic": null}]
+            });
+            match parse(&state).expect("the key parses").room {
+                Some(Room::Event { options, .. }) => options[0].clone(),
+                other => panic!("not an event: {other:?}"),
+            }
+        };
+
+        for (key, option) in [
+            ("THE_ARCHITECT.dialogue.1", EventOptionId::Dialogue(1)),
+            ("PROCEED", EventOptionId::Proceed),
+        ] {
+            let read = read(key);
+            assert_eq!(read.key.option, option, "{key}");
+            assert_eq!(sts2_content_wire::option_key(&read), key);
         }
     }
 

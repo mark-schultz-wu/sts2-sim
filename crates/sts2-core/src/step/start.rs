@@ -13,7 +13,7 @@ use crate::Seed;
 
 /// The inputs a fresh run needs.
 ///
-/// The same four the game's own `start` command takes. See
+/// The same five the game's own `start` command takes. See
 /// [PROTOCOL.md](../../../mod/sts2_headless/PROTOCOL.md) for what each means to
 /// the real game.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,4 +23,7 @@ pub struct Start<V: ContentVersion> {
     pub ascension: V::AscensionLevel,
     /// Run modifiers, which no implementation but the real game accepts yet.
     pub modifiers: Vec<V::Modifier>,
+    /// The runs the profile has won with this character, its `TotalWins`.
+    /// The Architect picks the dialogue that ends a won run by it.
+    pub wins: u32,
 }

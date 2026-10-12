@@ -115,7 +115,9 @@ impl<V: Rules> State<V> {
                 let mut event_rng =
                     crate::event::stream::<V, crate::rng::MegaRng>(self.raw_seed(), 0, event);
                 let mut streams = *self.streams();
-                let (state, layout) = self.open_event(event, &mut event_rng, &mut streams)?;
+                let floor = sts2_core::EventView::floor(&*self) + num_traits::one();
+                let (state, layout) =
+                    self.open_event(event, floor, &mut event_rng, &mut streams)?;
                 let (events_used, _, unknown_odds) = self.event_state();
                 self.enter_event(
                     to,
@@ -177,7 +179,8 @@ impl<V: Rules> State<V> {
                 });
             let mut event_rng =
                 crate::event::stream::<V, crate::rng::MegaRng>(self.raw_seed(), 0, event);
-            let (state, layout) = self.open_event(event, &mut event_rng, &mut streams)?;
+            let floor = sts2_core::EventView::floor(&*self) + num_traits::one();
+            let (state, layout) = self.open_event(event, floor, &mut event_rng, &mut streams)?;
             self.enter_event(
                 to,
                 super::state::EnteredEvent {

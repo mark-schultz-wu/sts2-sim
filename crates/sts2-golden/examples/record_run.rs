@@ -106,6 +106,7 @@ fn record(cli: Cli) -> Result<(), Error> {
     let mut config = Config::new(game_dir_from_env().ok_or(Error::NoGame)?);
     config.data_home = data_home;
     let start = Start::<V> {
+        wins: sts2_golden::random::wins(seed.as_str()),
         seed,
         character,
         ascension: sts2_content::v0_107_1::ascension::AscensionLevel::None,
@@ -172,6 +173,7 @@ fn record(cli: Cli) -> Result<(), Error> {
             character: id(&start.character),
             seed: start.seed.as_str().to_owned(),
             ascension: id(&start.ascension),
+            wins: start.wins,
             ending,
             digests,
             moves,

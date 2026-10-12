@@ -290,6 +290,7 @@ mod tests {
             character: Character::Ironclad,
             ascension: AscensionLevel::None,
             modifiers: vec![],
+            wins: 0,
         });
         r.push(Decision::Travel {
             to: Coord::new(1, 1),
@@ -431,6 +432,7 @@ mod tests {
             character: Character::Ironclad,
             ascension: AscensionLevel::None,
             modifiers: vec![],
+            wins: 0,
         });
         r.push(sts2_core::Setup::Fight {
             encounter: <V as sts2_core::ContentVersion>::Encounter::ShrinkerBeetleWeak,

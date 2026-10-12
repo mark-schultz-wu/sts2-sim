@@ -100,6 +100,7 @@ fn main() -> ExitCode {
 fn run(cli: Cli) -> Result<(), Error> {
     let Cli { seed, character } = cli;
     let start = Start::<V> {
+        wins: sts2_golden::random::wins(seed.as_str()),
         seed,
         character,
         ascension: sts2_content::v0_107_1::ascension::AscensionLevel::None,
