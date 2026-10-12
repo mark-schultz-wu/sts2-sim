@@ -1,0 +1,9 @@
+# A Phrog Parasite's Infested spawns Wrigglers as it dies, each set to start
+# stunned. Their move machines open on the Spawned move, which a roll cannot
+# leave until it is performed. Poison kills the Parasite as the enemies' turn
+# starts, so the Wrigglers come in after the moves were rolled, and the roll
+# as the player's turn starts leaves them stunned still.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"PHROG_PARASITE_ELITE"}
+{"cmd":"power","power":"POISON_POWER","amount":999,"target":1}
+{"cmd":"end_turn"}

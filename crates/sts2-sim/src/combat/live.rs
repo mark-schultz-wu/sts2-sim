@@ -2993,10 +2993,13 @@ impl<V: Rules> Live<V> {
     }
 
     /// `SwitchSides`: the turn now over joins the history, and `side` takes
-    /// its turn.
+    /// its turn. `OnSideSwitch` clears every monster's `SpawnedThisTurn`.
     pub(super) fn switch_side(&mut self, side: V::CombatSide) {
         self.history.end_turn(self.round, self.side, self.turn);
         self.side = side;
+        for held in &mut self.machines {
+            held.spawned_this_turn = false;
+        }
     }
 
     /// `CurrentRoom.RoomType`, which is the encounter's.

@@ -203,11 +203,19 @@ pub(super) fn end_from_flush<V: Rules>(
         }
         return Ok(Some(ended));
     }
+    // `Creature.TakeTurn` performs nothing for a monster `SpawnedThisTurn`,
+    // which came in as this side's turn started.
+    let fresh = |id: CombatId| {
+        next.machines
+            .iter()
+            .any(|held| held.creature == id && held.spawned_this_turn)
+    };
     let acting: SmallVec<[CombatId; CREATURES]> = next
         .creatures
         .iter()
         .filter(|creature| creature.side == <V::CombatSide as SideKinds>::ENEMY)
         .map(|creature| creature.id)
+        .filter(|&id| !fresh(id))
         .collect();
     enemies_act(
         Fighting {

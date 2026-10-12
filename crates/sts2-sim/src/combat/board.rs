@@ -1652,11 +1652,14 @@ impl<'a, V: Rules> Board<'a, V> {
                     let count = num_traits::cast(count)
                         .unwrap_or_else(|| unimplemented!("a death summoning {count:?} monsters"));
                     for offset in 0..count {
-                        let id = super::monster::summon(
+                        // `GenerateMoveStateMachine` opens on the move the
+                        // spawn names, which a Wriggler's `StartStunned`
+                        // makes its Spawned move.
+                        let id = super::monster::summon_built::<V>(
                             self.live,
-                            monster,
+                            sts2_core::Spawned::opening_on(monster, opening.id),
+                            sts2_core::MonsterModel::new(monster),
                             position + offset,
-                            None,
                             self.rngs.niche,
                         );
                         self.arrived(id, monster);
