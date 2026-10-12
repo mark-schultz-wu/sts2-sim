@@ -357,7 +357,7 @@ pub(crate) fn enter<V: Rules>(
             // which the deck is in by now. It lands once the piles are dealt.
             (
                 super::listen::Listener::Relic { .. },
-                HookEffect::AddToDrawAtRandom { card, count },
+                HookEffect::AddToDrawAtRandom { card, count, .. },
             ) => {
                 let count: usize = num_traits::cast(count)
                     .unwrap_or_else(|| unimplemented!("{count:?} cards into the draw pile"));
@@ -417,8 +417,10 @@ pub(crate) fn enter<V: Rules>(
             None,
             None,
         );
+        // A relic's, whose owner is the player.
+        let player = board.live.player().id;
         for card in shuffled_in {
-            board.add_to_draw_at_random(card);
+            board.add_to_draw_at_random(card, Some(player));
         }
     }
     // `BeforeSideTurnStart`, which is where a monster that opens the fight

@@ -21,6 +21,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
         EventHook::BeforeHandDraw { turn: 1, .. } => asked.push(HookEffect::AddToDrawAtRandom {
             card: Cards::Status(StatusCard::Dazed),
             count: DAZED,
+            by_owner: true,
         }),
         EventHook::BeforeHandDraw { .. } | EventHook::Obtained { .. } => {}
         hook => unimplemented!("what BlessedAntler does for {hook:?}"),

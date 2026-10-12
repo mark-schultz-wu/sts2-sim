@@ -23,6 +23,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
         EventHook::Shuffled => asked.push(HookEffect::AddToDrawAtRandom {
             card: Cards::Status(StatusCard::Soot),
             count: 1,
+            by_owner: true,
         }),
         _ => {}
     }

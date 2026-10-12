@@ -1527,7 +1527,8 @@ pub(super) fn carry_setup<V: Rules>(
                         }
                         // `AddGeneratedCardsToCombat` into the draw pile, each
                         // at `CardPilePosition.Random`.
-                        sts2_core::HookEffect::AddToDrawAtRandom { card, count } => {
+                        // A relic's, whose owner is the player.
+                        sts2_core::HookEffect::AddToDrawAtRandom { card, count, .. } => {
                             let count: usize = num_traits::cast(count).unwrap_or_else(|| {
                                 unimplemented!("adding {count:?} cards to the draw pile")
                             });

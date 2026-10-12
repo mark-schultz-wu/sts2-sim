@@ -1,0 +1,15 @@
+# A draw draws nothing once the fight is over. Iron Club draws on the
+# fourth card played, after that card's play. The fourth here is a Strike
+# that wins the fight, so the empty draw pile is never shuffled.
+#
+# A port that forgets the win once the play's own effect is done draws,
+# and shuffles the discard pile back in.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"IRON_CLUB"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":2}
+{"cmd":"play_card","index":2}
+{"cmd":"play_card","index":2}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":300,"target":0}
+{"cmd":"play_card","index":0,"target":1}
