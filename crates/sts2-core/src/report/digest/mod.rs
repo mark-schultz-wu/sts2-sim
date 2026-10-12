@@ -827,6 +827,7 @@ impl Sink {
                 max,
                 asker,
                 options,
+                picked,
             } => {
                 self.u8(0);
                 self.u32(*min);
@@ -837,6 +838,10 @@ impl Sink {
                     sink.card(&option.card);
                     sink.prose_option(&option.text);
                 });
+                self.len(picked.len());
+                for at in picked.iter() {
+                    self.len(at);
+                }
             }
             Question::Rewards { skippable, rewards } => {
                 self.u8(1);

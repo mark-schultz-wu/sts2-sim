@@ -150,6 +150,8 @@ pub enum Reason<V: ContentVersion> {
     Duplicate { index: usize },
     /// A selection of a size the question does not take.
     WrongCount { chosen: usize, min: u32, max: u32 },
+    /// An undo with no card picked to take back.
+    NothingPicked,
     /// A reward set that must be answered, not skipped.
     NotSkippable,
     /// A reward already taken. The indices never renumber, so a taken reward

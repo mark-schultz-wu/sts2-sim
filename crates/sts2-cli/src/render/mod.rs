@@ -141,6 +141,7 @@ fn question_of<V: sts2_content_wire::WireContentVersion>(
             max,
             asker,
             options,
+            picked,
         } => {
             let who = match asker.as_deref() {
                 Some(asker) => format!(" for {}", who_asked(asker)),
@@ -151,6 +152,9 @@ fn question_of<V: sts2_content_wire::WireContentVersion>(
                 (a, b) => format!("{a} to {b}"),
             };
             writeln!(f, "asks    pick {count}{who}:")?;
+            if !picked.is_empty() {
+                writeln!(f, "picked  {picked:?}")?;
+            }
             for o in options {
                 writeln!(
                     f,
@@ -840,7 +844,7 @@ mod tests {
     fn the_card_hint_never_names_an_option_that_is_not_there() {
         let out = rendered(json!({
             "type": "pending", "seq": 5, "cmd": "play_card", "digest": "AA", "state": {},
-            "kind": "select_cards", "min": 0, "max": 3, "asker": null,
+            "kind": "select_cards", "picked": [], "min": 0, "max": 3, "asker": null,
             "options": [{"index": 0, "card": "STRIKE_IRONCLAD"}, {"index": 1, "card": "DEFEND_IRONCLAD"}]
         }));
 
@@ -857,7 +861,7 @@ mod tests {
             .collect();
         let out = rendered(json!({
             "type": "pending", "seq": 5, "cmd": "play_card", "digest": "AA", "state": {},
-            "kind": "select_cards", "min": 5, "max": 5, "asker": null, "options": options
+            "kind": "select_cards", "picked": [], "min": 5, "max": 5, "asker": null, "options": options
         }));
 
         assert!(out.contains("next sts2 act choose 0 1 2 3 4"), "{out}");

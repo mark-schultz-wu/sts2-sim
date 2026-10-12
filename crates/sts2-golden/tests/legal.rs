@@ -6,7 +6,7 @@
 //! move it makes was legal where it made it, and has to be on the list.
 
 use sts2_content::v0_107_1::V0_107_1;
-use sts2_core::{Construct, Decision, Play, Step};
+use sts2_core::{Answer, Construct, Decision, Play, Question, Step};
 use sts2_golden::bench::reached;
 use sts2_golden::{every_run, recording};
 use sts2_sim::Sim;
@@ -23,11 +23,33 @@ fn every_move_a_recording_played_was_on_the_list() {
         let mut sim = Sim::<V>::begin((), &start).expect("a recording starts a run");
 
         for (at, step) in steps[..supported].iter().enumerate() {
-            // An answer is listed by size, as the first `n` options, not as
-            // every selection. The recording's own choice need not be one.
-            if let Step::Decision(decision) = step
-                && !matches!(decision, Decision::Answer(_))
+            // A selection is offered a click at a time. A recording answers
+            // one with the whole list, which is each of its cards picked in
+            // turn and then done, so each of those clicks has to be offered.
+            if let Step::Decision(Decision::Answer(Answer::Cards(cards))) = step
+                && let Ok(Some(Question::SelectCards { .. })) =
+                    sim.observe().map(|seen| seen.asking)
             {
+                let clicks = cards
+                    .iter()
+                    .map(|card| {
+                        Answer::Pick(u8::try_from(card).expect("a pick names a near option"))
+                    })
+                    .chain([Answer::Done]);
+                for click in clicks {
+                    let click = Decision::Answer(click);
+                    let legal = sim.legal();
+                    assert!(
+                        legal.contains(&click),
+                        "{name} @{at}: answered with {click:?}, which is not among {legal:?}"
+                    );
+                    sim.play(&click)
+                        .expect("a supported click applies")
+                        .expect("and is not refused");
+                }
+                continue;
+            }
+            if let Step::Decision(decision) = step {
                 let legal = sim.legal();
                 assert!(
                     legal.contains(decision),

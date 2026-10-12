@@ -25,7 +25,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
         asked.extend([
             HookEffect::LoseMaxHp(MAX_HP),
             HookEffect::OnDeckCards {
-                act: DeckAct::Transform(Stream::Player(PlayerRngType::Transformations)),
+                act: DeckAct::TransformTogether(Stream::Player(PlayerRngType::Transformations)),
                 picks: PICKS,
             },
         ]);

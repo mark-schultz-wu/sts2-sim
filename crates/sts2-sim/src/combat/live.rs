@@ -2856,6 +2856,7 @@ impl<V: Rules> Live<V> {
                     text: None,
                 })
                 .collect(),
+            picked: sts2_core::Picks::none(),
         })
     }
 

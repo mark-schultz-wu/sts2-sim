@@ -163,6 +163,15 @@ internal sealed class CardSelection : Pending
     private readonly int _max;
     private readonly string? _asker;
 
+    /// <summary>The options picked so far, in the order they were picked.</summary>
+    /// <remarks>
+    /// The game's screens take a selection a click at a time, and hand the
+    /// cards back in click order. The hand keeps a list, and a grid keeps a set
+    /// whose freed slot goes to the next pick, so taking back the last pick
+    /// leaves either screen where it was before that pick.
+    /// </remarks>
+    private readonly List<int> _picked = new List<int>();
+
     private CardSelection(IReadOnlyList<CardModel> options, int min, int max, string? asker)
     {
         _options = options;
@@ -199,24 +208,78 @@ internal sealed class CardSelection : Pending
             ["card"] = Observation.Ident(c),
             ["text"] = Observation.Text(c),
         }).ToList(),
+        ["picked"] = _picked.ToList(),
     };
 
+    /// <remarks>
+    /// <c>pick</c> adds one card, <c>undo</c> takes back the last, and
+    /// <c>done</c> hands the picks to the game. <c>cards</c> is each of its
+    /// cards picked and then done, in one answer. A refused answer leaves the
+    /// picks as they were. A pick or an undo leaves the question parked, so the
+    /// reply asks it again with the picks so far.
+    /// </remarks>
     public override Dictionary<string, object?>? Accept(JsonElement req)
     {
-        if (!req.TryGetProperty("cards", out JsonElement el) || el.ValueKind != JsonValueKind.Array)
+        if (req.TryGetProperty("undo", out JsonElement undo))
         {
-            return Refusals.Malformed($"'{Kind}' expects a 'cards' array of option indices");
-        }
-
-        var chosen = new List<CardModel>();
-        var seen = new HashSet<int>();
-        foreach (JsonElement e in el.EnumerateArray())
-        {
-            if (!e.TryGetInt32(out int i))
+            if (undo.ValueKind != JsonValueKind.True)
             {
-                return Refusals.Malformed($"'{Kind}' expects whole numbers in its 'cards' array");
+                return Refusals.Malformed("'undo' is only an answer when it is true");
             }
 
+            if (_picked.Count == 0)
+            {
+                return Refusals.NothingPicked();
+            }
+
+            _picked.RemoveAt(_picked.Count - 1);
+            return null;
+        }
+
+        var more = new List<int>();
+        bool done;
+        if (req.TryGetProperty("pick", out JsonElement pick))
+        {
+            if (!pick.TryGetInt32(out int i))
+            {
+                return Refusals.Malformed($"'{Kind}' expects a whole number in 'pick'");
+            }
+
+            more.Add(i);
+            done = false;
+        }
+        else if (req.TryGetProperty("done", out JsonElement finished))
+        {
+            if (finished.ValueKind != JsonValueKind.True)
+            {
+                return Refusals.Malformed("'done' is only an answer when it is true");
+            }
+
+            done = true;
+        }
+        else if (req.TryGetProperty("cards", out JsonElement el) && el.ValueKind == JsonValueKind.Array)
+        {
+            foreach (JsonElement e in el.EnumerateArray())
+            {
+                if (!e.TryGetInt32(out int i))
+                {
+                    return Refusals.Malformed($"'{Kind}' expects whole numbers in its 'cards' array");
+                }
+
+                more.Add(i);
+            }
+
+            done = true;
+        }
+        else
+        {
+            return Refusals.Malformed(
+                $"'{Kind}' expects 'pick', 'undo', 'done', or a 'cards' array of option indices");
+        }
+
+        var picked = new List<int>(_picked);
+        foreach (int i in more)
+        {
             if (i < 0 || i >= _options.Count)
             {
                 return Refusals.OutOfRange(i, _options.Count);
@@ -224,21 +287,34 @@ internal sealed class CardSelection : Pending
 
             // The same card twice would be one selection to the game and two to
             // the client, which is a divergence waiting to happen.
-            if (!seen.Add(i))
+            if (picked.Contains(i))
             {
                 return Refusals.Duplicate(i);
             }
 
-            chosen.Add(_options[i]);
+            // The screen stops taking cards once it holds the most it asks for.
+            if (picked.Count >= _max)
+            {
+                return Refusals.WrongCount(picked.Count + 1, _min, _max);
+            }
+
+            picked.Add(i);
         }
 
-        if (chosen.Count < _min || chosen.Count > _max)
+        if (!done)
         {
-            return Refusals.WrongCount(chosen.Count, _min, _max);
+            _picked.Clear();
+            _picked.AddRange(picked);
+            return null;
+        }
+
+        if (picked.Count < _min)
+        {
+            return Refusals.WrongCount(picked.Count, _min, _max);
         }
 
         Release();
-        _answer.SetResult(chosen);
+        _answer.SetResult(picked.Select(i => _options[i]).ToList());
         return null;
     }
 

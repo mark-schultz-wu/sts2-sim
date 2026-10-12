@@ -18,7 +18,8 @@ use crate::{CardIdent, ContentVersion, RelicTable, Tool};
 /// A question the game stopped to ask.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Question<V: ContentVersion> {
-    /// Answer with [`crate::Answer::Cards`].
+    /// Answer with [`crate::Answer::Pick`], [`crate::Answer::Undo`] and
+    /// [`crate::Answer::Done`].
     SelectCards {
         min: u32,
         max: u32,
@@ -27,6 +28,8 @@ pub enum Question<V: ContentVersion> {
         /// wording.
         asker: Option<String>,
         options: Vec<CardOption<V>>,
+        /// The options picked so far, in the order they were picked.
+        picked: crate::Picks,
     },
     /// Answer with [`crate::Answer::Skip`] or [`crate::Answer::Take`].
     Rewards {

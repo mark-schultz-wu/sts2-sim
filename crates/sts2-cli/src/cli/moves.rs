@@ -76,17 +76,32 @@ pub fn takeable<V: sts2_content_wire::WireContentVersion>(
 /// Every answer a parked game accepts.
 fn answers<V: sts2_content_wire::WireContentVersion>(question: &Question<V>) -> Vec<Decision<V>> {
     match question {
-        // Every legal *size* of selection rather than every combination, which
-        // is exponential and mostly the same question asked again. The indices
-        // are the first `n`; which cards those are is the shuffle's business,
-        // and a driver picking differently is picking between equals.
+        // A click at a time: each card not yet picked while the selection
+        // takes more, taking back the last pick, and handing the picks over
+        // once there are enough.
         Question::SelectCards {
-            min, max, options, ..
+            min,
+            max,
+            options,
+            picked,
+            ..
         } => {
-            let most = (*max as usize).min(options.len());
-            (*min as usize..=most)
-                .map(|n| Decision::Answer(Answer::Cards((0..n).collect())))
-                .collect()
+            let mut moves: Vec<Decision<V>> = Vec::new();
+            if picked.len() < *max as usize {
+                moves.extend(
+                    (0..options.len())
+                        .filter(|&at| !picked.iter().any(|taken| taken == at))
+                        .filter_map(|at| u8::try_from(at).ok())
+                        .map(|at| Decision::Answer(Answer::Pick(at))),
+                );
+            }
+            if !picked.is_empty() {
+                moves.push(Decision::Answer(Answer::Undo));
+            }
+            if picked.len() >= *min as usize {
+                moves.push(Decision::Answer(Answer::Done));
+            }
+            moves
         }
 
         // Yes and no.
@@ -295,6 +310,9 @@ pub fn describe<V: sts2_content_wire::WireContentVersion>(decision: &Decision<V>
         Decision::Answer(Answer::Skip) => "skipped".into(),
         Decision::Answer(Answer::Cards(cards)) if cards.is_empty() => "chose no cards".into(),
         Decision::Answer(Answer::Cards(cards)) => format!("chose cards {cards:?}"),
+        Decision::Answer(Answer::Pick(at)) => format!("picked card {at}"),
+        Decision::Answer(Answer::Undo) => "took back the last pick".into(),
+        Decision::Answer(Answer::Done) => "handed over the picks".into(),
         Decision::Answer(Answer::Take(TakeReward::Card { index, card })) => {
             format!("took {index}.{card}")
         }
@@ -548,17 +566,47 @@ mod tests {
 
     /// Every legal size of selection, so a driver can decline one that allows it.
     #[test]
-    fn a_card_selection_offers_every_size_it_allows() {
+    fn a_card_selection_offers_each_card_left_then_undo_and_done() {
         let out = answering(json!({
             "type": "pending", "seq": 3, "cmd": "play_card", "digest": "AA",
             "state": {},
             "kind": "select_cards", "min": 0, "max": 3, "asker": "DISCARD",
-            "options": [{"index": 0, "card": "ANGER"}, {"index": 1, "card": "ARMAMENTS"}]
+            "options": [
+                {"index": 0, "card": "ANGER"},
+                {"index": 1, "card": "ARMAMENTS"},
+                {"index": 2, "card": "BASH"}
+            ],
+            "picked": [1]
         }));
 
-        // Nought, one or two — `max` is 3 but only two cards are there.
-        assert_eq!(out.len(), 3, "{out:?}");
-        assert!(out.contains(&Decision::Answer(Answer::Cards([].into()))));
-        assert!(out.contains(&Decision::Answer(Answer::Cards([0, 1].into()))));
+        // The two cards not picked, taking back the pick, and handing it over.
+        assert_eq!(
+            out,
+            [
+                Decision::Answer(Answer::Pick(0)),
+                Decision::Answer(Answer::Pick(2)),
+                Decision::Answer(Answer::Undo),
+                Decision::Answer(Answer::Done),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_full_selection_offers_only_undo_and_done() {
+        let out = answering(json!({
+            "type": "pending", "seq": 3, "cmd": "play_card", "digest": "AA",
+            "state": {},
+            "kind": "select_cards", "min": 1, "max": 1, "asker": "DISCARD",
+            "options": [{"index": 0, "card": "ANGER"}, {"index": 1, "card": "ARMAMENTS"}],
+            "picked": [0]
+        }));
+
+        assert_eq!(
+            out,
+            [
+                Decision::Answer(Answer::Undo),
+                Decision::Answer(Answer::Done)
+            ]
+        );
     }
 }

@@ -422,14 +422,41 @@ public static class SelfTest
 
         Check("selector: refusing an answer leaves the decision parked", Pending.Current == parked);
 
-        using (JsonDocument good = JsonDocument.Parse("{\"cards\":[0]}"))
-        {
-            Check("selector: a valid choice is accepted", parked.Accept(good.RootElement) == null);
-        }
+        // A click at a time. A refused click leaves the picks as they were, and
+        // an accepted one that is not `done` leaves the question parked.
+        Check("selector: an undo with nothing picked is refused",
+            Answer(parked, "{\"undo\":true}")?["kind"] as string == "nothing_picked");
+        Check("selector: done short of the minimum is refused",
+            Answer(parked, "{\"done\":true}")?["kind"] as string == "wrong_count");
+        Check("selector: a pick is accepted", Answer(parked, "{\"pick\":0}") == null);
+        Check("selector: a pick leaves the decision parked", Pending.Current == parked);
+        Check("selector: the pick is reported", Picked(parked).SequenceEqual(new[] { 0 }));
+        Check("selector: a pick past the maximum is refused",
+            Answer(parked, "{\"pick\":1}")?["kind"] as string == "wrong_count");
+        Check("selector: an undo is accepted", Answer(parked, "{\"undo\":true}") == null);
+        Check("selector: the undo takes the pick back", Picked(parked).Count == 0);
+        Check("selector: a card can be picked again after its undo",
+            Answer(parked, "{\"pick\":0}") == null);
+        Check("selector: a card picked twice is refused",
+            Answer(parked, "{\"pick\":0}")?["kind"] as string == "duplicate");
+        Check("selector: done hands the picks over", Answer(parked, "{\"done\":true}") == null);
 
         Check("selector: answering resolves it", await Driver.WaitForDecisionPoint());
         Check("selector: nothing is pending afterwards", Pending.Current == null);
     }
+
+    /// <summary>An answer as a client sends it, and the refusal it got, if any.</summary>
+    private static Dictionary<string, object?>? Answer(Pending parked, string json)
+    {
+        using JsonDocument answer = JsonDocument.Parse(json);
+        return parked.Accept(answer.RootElement);
+    }
+
+    /// <summary>The picks a parked card selection reports.</summary>
+    private static List<int> Picked(Pending parked) =>
+        parked.Describe().TryGetValue("picked", out object? picked) && picked is List<int> list
+            ? list
+            : new List<int> { -1 };
 
     /// <summary>
     /// Travelling moves the run, records the move, and changes what is next.

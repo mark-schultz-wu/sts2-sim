@@ -122,6 +122,7 @@ pub(crate) enum WireReason {
         min: u32,
         max: u32,
     },
+    NothingPicked {},
     NotSkippable {},
     AlreadyTaken {
         index: usize,
@@ -257,6 +258,7 @@ impl WireReason {
 
             WireReason::Duplicate { index } => Reason::Duplicate { index },
             WireReason::WrongCount { chosen, min, max } => Reason::WrongCount { chosen, min, max },
+            WireReason::NothingPicked {} => Reason::NothingPicked,
             WireReason::NotSkippable {} => Reason::NotSkippable,
             WireReason::AlreadyTaken { index } => Reason::AlreadyTaken { index },
             WireReason::NeedsCardChoice { index, count } => {

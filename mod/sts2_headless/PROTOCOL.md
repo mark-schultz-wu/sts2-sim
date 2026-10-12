@@ -401,7 +401,8 @@ replaces the reply to whatever command was issued.
 {"type":"pending","seq":7,"cmd":"play_card","kind":"select_cards",
  "min":1,"max":1,"asker":"DiscardAction",
  "options":[{"index":0,"card":"STRIKE","text":"Deal 6 damage."},
-            {"index":1,"card":"BASH+1","text":"Deal 10 damage.\nApply 3 Vulnerable."}]}
+            {"index":1,"card":"BASH+1","text":"Deal 10 damage.\nApply 3 Vulnerable."}],
+ "picked":[]}
 ```
 
 `asker` is the running action, not the game's own prompt text. `ICardSelector`
@@ -414,9 +415,26 @@ card does in general, which is the question a selection prompt asks. It carries
 the game's own markup (`[gold]Block[/gold]`, `[img]…[/img]`), which is a
 display's problem rather than the protocol's.
 
-Answer with option indices, as `{"cmd":"answer","cards":[0]}`. Repeating an
-index is refused. The same card twice is one selection to the game, and two to
-the client.
+Answer a click at a time, as the game's screens take a selection:
+
+- `{"cmd":"answer","pick":0}` adds one option after those already picked.
+- `{"cmd":"answer","undo":true}` takes back the last pick.
+- `{"cmd":"answer","done":true}` hands the picks to the game.
+
+A pick or an undo leaves the question parked, and the reply asks it again with
+`picked` holding the picks so far, in order. The order is part of the answer.
+The game hands the cards back in click order, and Purity exhausts them in it.
+
+`{"cmd":"answer","cards":[0,2]}` picks each of its options in turn after any
+picks so far, then hands them over, in one answer.
+
+Refusals leave the picks as they were:
+
+- `out_of_range` is an index past the options.
+- `duplicate` is an option picked already. The same card twice is one selection
+  to the game, and two to the client.
+- `wrong_count` is a pick past `max`, or done short of `min`.
+- `nothing_picked` is an undo with no pick to take back.
 
 ### divine
 

@@ -150,6 +150,8 @@ internal static class Refusals
     public static Dictionary<string, object?> WrongCount(int chosen, int min, int max) =>
         Kind("wrong_count", ("chosen", chosen), ("min", min), ("max", max));
 
+    public static Dictionary<string, object?> NothingPicked() => Kind("nothing_picked");
+
     public static Dictionary<string, object?> NotSkippable() => Kind("not_skippable");
 
     public static Dictionary<string, object?> AlreadyTaken(int index) =>

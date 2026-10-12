@@ -4865,6 +4865,11 @@ pub enum DeckAct<V: ContentVersion> {
     /// The same, with each replacement upgraded before it lands, as
     /// `CardCmd.Upgrade` then `CardCmd.Transform`.
     TransformUpgraded(Stream<V>),
+    /// `CardCmd.Transform` over the whole list at once, off the named
+    /// stream. Its `PileIndexSort` lands the replacements in their
+    /// originals' deck order. A transform a card at a time lands each in the
+    /// order the cards were taken.
+    TransformTogether(Stream<V>),
     /// `FromDeckForRemoval` over the deck's basic cards with this tag that
     /// can be removed, then `CardPileCmd.RemoveFromDeck`.
     RemoveBasicTagged(V::CardTag),

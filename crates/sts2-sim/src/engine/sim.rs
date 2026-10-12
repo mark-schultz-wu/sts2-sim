@@ -92,7 +92,7 @@ impl<V: Rules> Sim<V> {
         }
         match decision {
             Decision::ChooseOption { index } => self.state.choose(*index).map(Ok),
-            Decision::Answer(answer) => self.state.answer(answer).map(Ok),
+            Decision::Answer(answer) => self.state.respond(answer),
             Decision::PlayCard { index, target } => self.state.play_card(*index, *target),
             Decision::EndTurn => self.state.end_turn(),
             Decision::UsePotion { index, target } => self.state.use_potion(*index, *target),

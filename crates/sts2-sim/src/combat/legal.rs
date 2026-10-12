@@ -3,7 +3,7 @@
 //! `CardModel.CanPlay` starts at no reasons and adds one per rule it fails.
 //! So this reports a set, rather than the first refusal.
 
-use crate::legal::{Legal, aimed, belt_index, hand_index, selections};
+use crate::legal::{Legal, aimed, belt_index, hand_index};
 use smallvec::{SmallVec, smallvec};
 use sts2_core::{
     CardIdent, CardTable, CombatId, Cost, Decision, EffectResolution, FlagSet, Held, Pile,
@@ -361,11 +361,6 @@ pub(crate) fn moves<V: Rules>(
     alive: bool,
 ) -> Legal<V> {
     let mut moves = Legal::new();
-    if let Some((min, max, offered)) = live.selecting() {
-        selections(min as usize, max as usize, offered, &mut moves);
-        return moves;
-    }
-
     drinks::<V>(potions, Some(live), alive, false, &mut moves);
 
     let asks = asks_should_play::<V>(Walk { live, relics });
