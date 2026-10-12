@@ -2120,7 +2120,7 @@ pub trait Fight<V: ContentVersion> {
         });
         self.attack(Scaling::Dynamic, |fight| {
             for _ in 0..repeats {
-                for target in fight.opponents() {
+                let hit = |fight: &mut Self, target| {
                     let attack = fight.resolve(Effect::Attack {
                         dealer: fight.actor(),
                         target,
@@ -2128,6 +2128,17 @@ pub trait Fight<V: ContentVersion> {
                         scaling: Scaling::Dynamic,
                     });
                     fight.apply(attack);
+                };
+                // Each hit is one `CreatureCmd.Damage` over them all. Over
+                // one, that is the hit alone.
+                let targets = fight.opponents();
+                match targets[..] {
+                    [target] => hit(fight, target),
+                    _ => fight.damage_command(|fight| {
+                        for target in targets {
+                            hit(fight, target);
+                        }
+                    }),
                 }
             }
         });

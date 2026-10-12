@@ -321,15 +321,19 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
         // `GrandFinale`: its damage to every enemy, as one attack.
         SilentCard::GrandFinale => {
             fight.attack(Scaling::Dynamic, |fight| {
-                for target in fight.opponents() {
-                    let attack = fight.resolve(Effect::Attack {
-                        dealer: fight.actor(),
-                        target,
-                        damage: Amount::Var(CardVar::Damage),
-                        scaling: Scaling::Dynamic,
-                    });
-                    fight.apply(attack);
-                }
+                let targets = fight.opponents();
+                // One `CreatureCmd.Damage` over them all.
+                fight.damage_command(|fight| {
+                    for target in targets {
+                        let attack = fight.resolve(Effect::Attack {
+                            dealer: fight.actor(),
+                            target,
+                            damage: Amount::Var(CardVar::Damage),
+                            scaling: Scaling::Dynamic,
+                        });
+                        fight.apply(attack);
+                    }
+                });
             });
             Played::Done
         }
@@ -527,15 +531,19 @@ fn hit_target<F: Fight<V>>(fight: &mut F, hits: super::Number) {
 fn dagger_spray<F: Fight<V>>(fight: &mut F) -> Played<V> {
     fight.attack(Scaling::Dynamic, |fight| {
         for _ in 0..2 {
-            for target in fight.opponents() {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(attack);
-            }
+            let targets = fight.opponents();
+            // One `CreatureCmd.Damage` over them all.
+            fight.damage_command(|fight| {
+                for target in targets {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
+                }
+            });
         }
     });
     Played::Done
@@ -627,15 +635,21 @@ fn echoing_slash<F: Fight<V>>(fight: &mut F) -> Played<V> {
         let mut left = 1;
         while left > 0 {
             left -= 1;
-            for target in fight.hittable_opponents() {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(attack);
-                // A creature the hit killed has left the fight's list.
+            let targets = fight.hittable_opponents();
+            // One `CreatureCmd.Damage` over them all.
+            fight.damage_command(|fight| {
+                for &target in &targets {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
+                }
+            });
+            // A creature the command killed has left the fight's list.
+            for target in targets {
                 let standing = fight
                     .creatures()
                     .any(|creature| creature.id() == target && creature.alive());

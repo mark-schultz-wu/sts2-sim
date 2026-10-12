@@ -76,15 +76,19 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
             use sts2_core::{Amount, Effect, Scaling};
 
             fight.attack(Scaling::Dynamic, |fight| {
-                for target in fight.opponents() {
-                    let hit = fight.resolve(Effect::Attack {
-                        dealer: fight.actor(),
-                        target,
-                        damage: Amount::Var(CardVar::Damage),
-                        scaling: Scaling::Dynamic,
-                    });
-                    fight.apply(hit);
-                }
+                let targets = fight.opponents();
+                // One `CreatureCmd.Damage` over them all.
+                fight.damage_command(|fight| {
+                    for target in targets {
+                        let hit = fight.resolve(Effect::Attack {
+                            dealer: fight.actor(),
+                            target,
+                            damage: Amount::Var(CardVar::Damage),
+                            scaling: Scaling::Dynamic,
+                        });
+                        fight.apply(hit);
+                    }
+                });
             });
             let room =
                 sts2_core::MAX_CARDS_IN_HAND.saturating_sub(fight.cards_in(Pile::Hand).len());
@@ -140,15 +144,19 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
 
             let enemies = fight.hittable_opponents();
             fight.attack(Scaling::Dynamic, |fight| {
-                for target in fight.opponents() {
-                    let hit = fight.resolve(Effect::Attack {
-                        dealer: fight.actor(),
-                        target,
-                        damage: Amount::Var(CardVar::Damage),
-                        scaling: Scaling::Dynamic,
-                    });
-                    fight.apply(hit);
-                }
+                let targets = fight.opponents();
+                // One `CreatureCmd.Damage` over them all.
+                fight.damage_command(|fight| {
+                    for target in targets {
+                        let hit = fight.resolve(Effect::Attack {
+                            dealer: fight.actor(),
+                            target,
+                            damage: Amount::Var(CardVar::Damage),
+                            scaling: Scaling::Dynamic,
+                        });
+                        fight.apply(hit);
+                    }
+                });
             });
             let loss = PowerAmount::Counted(fight.var(CardVar::StrengthLoss));
             for target in enemies {

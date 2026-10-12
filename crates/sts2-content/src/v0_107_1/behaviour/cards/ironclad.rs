@@ -255,15 +255,19 @@ pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<
                 .is_some_and(|exhausted| exhausted >= fight.var(CardVar::Cards))
             {
                 fight.attack(Scaling::Dynamic, |fight| {
-                    for target in fight.opponents() {
-                        let hit = fight.resolve(Effect::Attack {
-                            dealer: fight.actor(),
-                            target,
-                            damage: Amount::Var(CardVar::Damage),
-                            scaling: Scaling::Dynamic,
-                        });
-                        fight.apply(hit);
-                    }
+                    let targets = fight.opponents();
+                    // One `CreatureCmd.Damage` over them all.
+                    fight.damage_command(|fight| {
+                        for target in targets {
+                            let hit = fight.resolve(Effect::Attack {
+                                dealer: fight.actor(),
+                                target,
+                                damage: Amount::Var(CardVar::Damage),
+                                scaling: Scaling::Dynamic,
+                            });
+                            fight.apply(hit);
+                        }
+                    });
                 });
             }
             Played::Done
@@ -384,15 +388,19 @@ pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<
         IroncladCard::Breakthrough => {
             fight.damage_unblockable(fight.actor(), fight.var(CardVar::HpLoss));
             fight.attack(Scaling::Dynamic, |fight| {
-                for target in fight.opponents() {
-                    let attack = fight.resolve(Effect::Attack {
-                        dealer: fight.actor(),
-                        target,
-                        damage: Amount::Var(CardVar::Damage),
-                        scaling: Scaling::Dynamic,
-                    });
-                    fight.apply(attack);
-                }
+                let targets = fight.opponents();
+                // One `CreatureCmd.Damage` over them all.
+                fight.damage_command(|fight| {
+                    for target in targets {
+                        let attack = fight.resolve(Effect::Attack {
+                            dealer: fight.actor(),
+                            target,
+                            damage: Amount::Var(CardVar::Damage),
+                            scaling: Scaling::Dynamic,
+                        });
+                        fight.apply(attack);
+                    }
+                });
             });
             Played::Done
         }
@@ -700,15 +708,19 @@ fn whirlwind<F: Fight<V>>(fight: &mut F) -> Played<V> {
     let hits = fight.x_value();
     fight.attack(Scaling::Dynamic, |fight| {
         for _ in 0..hits {
-            for target in fight.opponents() {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(attack);
-            }
+            let targets = fight.opponents();
+            // One `CreatureCmd.Damage` over them all.
+            fight.damage_command(|fight| {
+                for target in targets {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
+                }
+            });
         }
     });
     Played::Done

@@ -213,15 +213,19 @@ fn bone_shards<F: Fight<V>>(fight: &mut F) -> Played<V> {
         return Played::Done;
     };
     fight.attack_from(osty, Scaling::Dynamic, |fight| {
-        for target in fight.opponents() {
-            let hit = fight.resolve(Effect::Attack {
-                dealer: osty,
-                target,
-                damage: Amount::Var(CardVar::OstyDamage),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(hit);
-        }
+        let targets = fight.opponents();
+        // One `CreatureCmd.Damage` over them all.
+        fight.damage_command(|fight| {
+            for target in targets {
+                let hit = fight.resolve(Effect::Attack {
+                    dealer: osty,
+                    target,
+                    damage: Amount::Var(CardVar::OstyDamage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(hit);
+            }
+        });
     });
     let block = fight.resolve(Effect::GainBlock {
         recipient: fight.actor(),
@@ -528,15 +532,19 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
                 return Played::Done;
             };
             fight.attack_from(osty, Scaling::Dynamic, |fight| {
-                for target in fight.opponents() {
-                    let hit = fight.resolve(Effect::Attack {
-                        dealer: osty,
-                        target,
-                        damage: Amount::Var(CardVar::OstyDamage),
-                        scaling: Scaling::Dynamic,
-                    });
-                    fight.apply(hit);
-                }
+                let targets = fight.opponents();
+                // One `CreatureCmd.Damage` over them all.
+                fight.damage_command(|fight| {
+                    for target in targets {
+                        let hit = fight.resolve(Effect::Attack {
+                            dealer: osty,
+                            target,
+                            damage: Amount::Var(CardVar::OstyDamage),
+                            scaling: Scaling::Dynamic,
+                        });
+                        fight.apply(hit);
+                    }
+                });
             });
             let vulnerable = sts2_core::PowerAmount::Counted(fight.var(CardVar::VulnerablePower));
             for target in fight.hittable_opponents() {

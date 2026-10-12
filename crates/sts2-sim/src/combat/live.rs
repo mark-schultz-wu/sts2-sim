@@ -2346,6 +2346,10 @@ pub(crate) struct Live<V: Rules> {
     /// `AttackCommand.Results` of the attack whose `AfterAttack` is being
     /// raised, which a listener reads. Empty at any other time.
     pub(super) attack_results: Vec<sts2_core::DamageResult<V>>,
+    /// The hits of the damage commands under way that have landed and wait
+    /// for their command's last, the innermost last. Empty between effects,
+    /// and kept here so its room outlasts each board.
+    pub(super) landing: Vec<super::board::Landed<V>>,
     /// The last creature id this fight gave out. A creature that leaves keeps
     /// its id, and the next one to arrive takes the id after this.
     pub(super) last_creature: CombatId,
@@ -2600,6 +2604,7 @@ impl<V: Rules> Clone for Live<V> {
             card_ids: self.card_ids.clone(),
             kept_faces: self.kept_faces.clone(),
             attack_results: self.attack_results.clone(),
+            landing: Vec::new(),
             notes: self.notes.clone(),
             asking: self.asking.clone(),
             deferred: self.deferred.clone(),
@@ -2647,6 +2652,7 @@ impl<V: Rules> Clone for Live<V> {
             kept_faces,
             attacks,
             attack_results,
+            landing,
             last_creature,
             won,
             notes,
@@ -2689,6 +2695,7 @@ impl<V: Rules> Clone for Live<V> {
         kept_faces.clone_from(&source.kept_faces);
         *attacks = source.attacks;
         attack_results.clone_from(&source.attack_results);
+        landing.clear();
         *last_creature = source.last_creature;
         *won = source.won;
         notes.clone_from(&source.notes);
@@ -3507,6 +3514,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             kept_faces: Vec::new(),
             attacks: 0,
             attack_results: Vec::new(),
+            landing: Vec::new(),
             last_creature: CombatId::new(nonmax::NonMaxU8::ZERO),
             won: false,
             notes: smallvec::SmallVec::new(),

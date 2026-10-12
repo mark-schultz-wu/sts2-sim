@@ -29,18 +29,7 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ## Open
 
-### 1. An attack's hit over many targets is one damage command
-
-`AttackCommand` calls `CreatureCmd.Damage` once per hit over every
-target still standing, so each hit lands on all of them before any
-dies. Hook effects, orb evokes and the start of a turn now group their
-hits through `Fight::damage_command`. Card plays that hit every enemy,
-the generated ones and the hand ports, still kill each target as its
-hit lands. So do potions like Explosive Ampoule and the Glory monsters.
-Each needs the inner loop of one hit wrapped in a command, and the
-code generator needs to write it.
-
-### 2. Every other split the recorded runs find
+### 1. Every other split the recorded runs find
 
 `cargo xtask coverage` lists the commonest first splits, by the move
 that led to each. Each one with more than a handful of runs becomes its
@@ -48,31 +37,31 @@ own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
 
-### 3. A listener walk that can pause
+### 2. A listener walk that can pause
 
 The game walks `AfterCardPlayed` listeners one at a time, and a draw
 can pause the walk. The sim raises them all first, so Bygone Effigy's
 Slow counts a card early in the preview while Stratagem's question
 waits. Needs a design, for Mark.
 
-### 4. Ascension
+### 3. Ascension
 
 The sim threads the ascension level through, but every scenario and
 census run plays at `None`. Record runs at each level, and each split
 they find becomes an item.
 
-### 5. Run modifiers
+### 4. Run modifiers
 
 A run started with any modifier panics (`crates/sts2-sim/src/engine/sim.rs`).
 Hoarder's removal ban is one rule known to need one. Port the custom
 mode's modifiers, and record runs with each.
 
-### 6. A speed target
+### 5. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.
 
-### 7. v0.111.0
+### 6. v0.111.0
 
 Only the generated tables exist. Its behaviour layer has to be written,
 and its runs recorded.
