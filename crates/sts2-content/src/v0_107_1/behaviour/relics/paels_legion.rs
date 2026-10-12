@@ -73,9 +73,10 @@ pub(super) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
     }
 }
 
-/// `DisplayAmount`: the turns it still sleeps, or `-1` while it is awake.
-pub(super) fn display_amount(state: &State) -> Number {
-    match state.cooldown > 0 {
+/// `DisplayAmount`: the turns it still sleeps, or `-1` while it is awake,
+/// and outside a fight, which a player's death leaves the run.
+pub(super) fn display_amount(state: &State, fighting: bool) -> Number {
+    match fighting && state.cooldown > 0 {
         true => state.cooldown,
         false => -1,
     }

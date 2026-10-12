@@ -166,6 +166,12 @@ impl<V: Rules, P: Piles> Cards<V, P> {
         self.counts.hears(hooks)
     }
 
+    /// No card the fight holds hears a hook after, as a dead player's
+    /// cards hear none.
+    pub(crate) fn deafen(&mut self) {
+        self.counts.deafen();
+    }
+
     /// Every copy whose card overrides a hook in `hooks`, in `AllPiles`
     /// order: hand, draw, discard, exhaust, then the play pile. Each comes
     /// with every hook its card overrides.
