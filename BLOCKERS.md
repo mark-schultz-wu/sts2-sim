@@ -29,19 +29,21 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ## Open
 
-### 1. Ovicopter's turn
+### 1. The Knights' turn
 
-24 runs first part after a turn ends against an Ovicopter.
+23 runs first part after a turn ends against the Knights elite.
 
-### 2. Fabricator's turn
+### 2. Deaths wait for every hit of one damage command
 
-21 runs first part after a turn ends against a Fabricator.
+`CreatureCmd.Damage` over many targets lands every hit before it kills
+anyone. A creature on zero is dead to `IsEnding` already. The sim kills
+each target as its hit lands, and its `alive` flag stays set until
+then. Run 1326 parts on it, where Mercury Hourglass kills an egg and the
+Ovicopter together. The sim's Gremlin Horn then grants energy for the
+egg, with the Ovicopter already on zero. Every
+multi-target damage site needs it: hook effects, orbs, potions and cards.
 
-### 3. The Knights' turn
-
-21 runs first part after a turn ends against the Knights elite.
-
-### 4. Every other split the recorded runs find
+### 3. Every other split the recorded runs find
 
 `cargo xtask coverage` lists the commonest first splits, by the move
 that led to each. Each one with more than a handful of runs becomes its
@@ -49,31 +51,31 @@ own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
 
-### 5. A listener walk that can pause
+### 4. A listener walk that can pause
 
 The game walks `AfterCardPlayed` listeners one at a time, and a draw
 can pause the walk. The sim raises them all first, so Bygone Effigy's
 Slow counts a card early in the preview while Stratagem's question
 waits. Needs a design, for Mark.
 
-### 6. Ascension
+### 5. Ascension
 
 The sim threads the ascension level through, but every scenario and
 census run plays at `None`. Record runs at each level, and each split
 they find becomes an item.
 
-### 7. Run modifiers
+### 6. Run modifiers
 
 A run started with any modifier panics (`crates/sts2-sim/src/engine/sim.rs`).
 Hoarder's removal ban is one rule known to need one. Port the custom
 mode's modifiers, and record runs with each.
 
-### 8. A speed target
+### 7. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.
 
-### 9. v0.111.0
+### 8. v0.111.0
 
 Only the generated tables exist. Its behaviour layer has to be written,
 and its runs recorded.
