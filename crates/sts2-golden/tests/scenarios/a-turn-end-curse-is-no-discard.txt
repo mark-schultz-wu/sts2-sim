@@ -1,0 +1,7 @@
+# Regret's turn-end effect ends with the card added to the discard pile,
+# which is no discard. Tough Bandages hears discards, and gives no block.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"TOUGH_BANDAGES"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"REGRET"}
+{"cmd":"end_turn"}

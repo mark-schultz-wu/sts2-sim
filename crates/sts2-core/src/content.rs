@@ -2197,8 +2197,12 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("adding generated cards to a pile")
     }
 
-    /// `CardCmd.Discard(this)`, for the card whose behavior is running.
-    fn discard_this(&mut self);
+    /// The end of `OnTurnEndInHandWrapper`, once the card whose behavior is
+    /// running has had its turn-end effect: `CardPileCmd.Add` to the discard
+    /// pile. That is no discard, so nothing that listens for one hears it. A
+    /// fight that is ending refuses the add, and the card stays in the play
+    /// pile the wrapper moved it to.
+    fn discard_after_turn_end(&mut self);
 
     /// `CreatureCmd.Stun(target, nextMoveId)` on a monster: `stun` in place of
     /// the move it advertised, then `then`. A monster that has to perform
