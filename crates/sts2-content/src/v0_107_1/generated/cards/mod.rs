@@ -840,6 +840,8 @@ pub struct CardData {
     pub gains_block: bool,
     /// `VisualCardPool.IsColorless`: whether it shows as colorless.
     pub visually_colorless: bool,
+    /// `HasTurnEndInHandEffect`: whether it acts when a turn ends with it in hand.
+    pub turn_end_in_hand: bool,
 }
 
 /// Every card, grouped by the pool it belongs to.
@@ -3587,6 +3589,10 @@ impl sts2_core::CardTable for Cards {
 
     fn visually_colorless(self) -> bool {
         self.data().visually_colorless
+    }
+
+    fn turn_end_in_hand(self) -> bool {
+        self.data().turn_end_in_hand
     }
 
     fn exhausts(self) -> bool {

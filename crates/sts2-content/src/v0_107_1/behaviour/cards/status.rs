@@ -44,18 +44,16 @@ pub(super) fn on_turn_end<F: Fight<V>>(card: StatusCard, fight: &mut F) {
         StatusCard::Infection | StatusCard::Burn | StatusCard::Wither | StatusCard::Toxic => {
             infection(fight)
         }
-        // `Beckon`: its `HpLoss` off its holder, unblockable, and then it goes
-        // to the discard pile.
+        // `Beckon`: its `HpLoss` off its holder, unblockable.
         StatusCard::Beckon => {
             fight.damage_unblockable(fight.actor(), fight.var(CardVar::HpLoss));
-            fight.discard_after_turn_end();
         }
         card => card_plays::status::on_turn_end(card, fight),
     }
 }
 
 /// `Infection`, `Burn`, `Wither` and `Toxic`, each of which hurts its holder
-/// by its damage and goes to the discard pile.
+/// by its damage.
 fn infection<F: Fight<V>>(fight: &mut F) {
     let damage = fight.resolve(Effect::Attack {
         dealer: fight.actor(),
@@ -64,7 +62,6 @@ fn infection<F: Fight<V>>(fight: &mut F) {
         scaling: Scaling::Static,
     });
     fight.apply(damage);
-    fight.discard_after_turn_end();
 }
 
 /// Deliver a notification to one status card in the fight.

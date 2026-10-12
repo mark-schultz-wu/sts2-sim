@@ -776,9 +776,10 @@ fn auto_play_from_draw<V: Rules>(
 /// `DoTurnEnd`: the orbs, then the cards in hand that answer to a turn
 /// ending, and how the fight ended if an orb ended it.
 ///
-/// Every orb triggers first. The game then looks through the hand once. An
-/// ethereal card is exhausted, and a card with a turn-end effect of its own
-/// runs it after every exhaust. No card is both.
+/// Every orb triggers first. The game then looks through the hand once. A
+/// card with `HasTurnEndInHandEffect` runs `OnTurnEndInHandWrapper`, after
+/// every other ethereal card is exhausted. An ethereal card with the effect
+/// is exhausted by the wrapper, once the effect is over.
 #[tracing::instrument(level = "trace", skip_all)]
 fn turn_end<V: Rules>(
     live: &mut Live<V>,
@@ -792,8 +793,11 @@ fn turn_end<V: Rules>(
         return Some(ended);
     }
     let held: SmallVec<[_; MAX_CARDS_IN_HAND]> = live.cards.iter(Pile::Hand).collect();
+    let acts = |held: &&super::live::CardInstance<V>| {
+        sts2_core::CardTable::turn_end_in_hand(held.face.ident.card)
+    };
     // In hand order, each found where the exhausts before it left it.
-    for ethereal in held.iter().filter(|held| held.face.ethereal()) {
+    for ethereal in (held.iter()).filter(|held| held.face.ethereal() && !acts(held)) {
         let at = live
             .cards
             .find(Pile::Hand, ethereal.id)
@@ -808,7 +812,15 @@ fn turn_end<V: Rules>(
             return Some(ended);
         }
     }
-    for card in held.iter().filter(|card| !card.face.ethereal()) {
+    // `OnTurnEndInHandWrapper`: to the play pile, the effect, then to the
+    // exhaust pile for an ethereal card or the discard pile for any other.
+    // A fight that is ending refuses the second move, and the card stays in
+    // the play pile.
+    for card in held.iter().filter(acts) {
+        let Some(at) = live.cards.find(Pile::Hand, card.id) else {
+            continue;
+        };
+        live.cards.move_to(Pile::Hand, at, Pile::Play);
         let mut board = Board::for_card(
             live,
             rngs.reborrow(),
@@ -823,6 +835,22 @@ fn turn_end<V: Rules>(
         super::play::merge::<V>(&mut live.skip_tick, skipped);
         if ended.is_some() {
             return ended;
+        }
+        let Some(at) = live.cards.find(Pile::Play, card.id) else {
+            continue;
+        };
+        if !card.face.ethereal() {
+            live.cards.move_to(Pile::Play, at, Pile::Discard);
+            continue;
+        }
+        // `CardCmd.Exhaust`, which ethereal causes.
+        let card = live
+            .cards
+            .get(Pile::Play, at)
+            .expect("a card stands where it was found");
+        live.cards.move_to(Pile::Play, at, Pile::Exhaust);
+        if let Some(ended) = exhausted::<V>(live, rngs.reborrow(), relics, &card, true, false) {
+            return Some(ended);
         }
     }
     None

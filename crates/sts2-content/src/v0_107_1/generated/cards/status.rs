@@ -73,6 +73,7 @@ pub(super) static ROWS: [CardData; 12] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        turn_end_in_hand: true,
     },
     CardData {
         kind: Field::Constant(CardType::Status),
@@ -91,6 +92,7 @@ pub(super) static ROWS: [CardData; 12] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        turn_end_in_hand: true,
     },
     CardData {
         kind: Field::Constant(CardType::Status),
@@ -104,6 +106,7 @@ pub(super) static ROWS: [CardData; 12] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        turn_end_in_hand: false,
     },
     CardData {
         kind: Field::Constant(CardType::Status),
@@ -117,6 +120,7 @@ pub(super) static ROWS: [CardData; 12] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        turn_end_in_hand: false,
     },
     CardData {
         kind: Field::Constant(CardType::Status),
@@ -130,6 +134,7 @@ pub(super) static ROWS: [CardData; 12] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        turn_end_in_hand: false,
     },
     CardData {
         kind: Field::Constant(CardType::Status),
@@ -148,6 +153,7 @@ pub(super) static ROWS: [CardData; 12] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        turn_end_in_hand: true,
     },
     CardData {
         kind: Field::Constant(CardType::Status),
@@ -166,6 +172,7 @@ pub(super) static ROWS: [CardData; 12] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        turn_end_in_hand: false,
     },
     CardData {
         kind: Field::Constant(CardType::Status),
@@ -179,6 +186,7 @@ pub(super) static ROWS: [CardData; 12] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        turn_end_in_hand: false,
     },
     CardData {
         kind: Field::Constant(CardType::Status),
@@ -197,6 +205,7 @@ pub(super) static ROWS: [CardData; 12] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        turn_end_in_hand: true,
     },
     CardData {
         kind: Field::Constant(CardType::Status),
@@ -215,6 +224,7 @@ pub(super) static ROWS: [CardData; 12] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        turn_end_in_hand: false,
     },
     CardData {
         kind: Field::Constant(CardType::Status),
@@ -233,6 +243,7 @@ pub(super) static ROWS: [CardData; 12] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        turn_end_in_hand: true,
     },
     CardData {
         kind: Field::Constant(CardType::Status),
@@ -246,5 +257,6 @@ pub(super) static ROWS: [CardData; 12] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        turn_end_in_hand: false,
     },
 ];

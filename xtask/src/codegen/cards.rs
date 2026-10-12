@@ -170,6 +170,7 @@ struct Card {
     gains_block: bool,
     /// `VisualCardPool.IsColorless`.
     visually_colorless: bool,
+    turn_end_in_hand: bool,
     /// Name, printed value, whether the game recomputes it in a fight, and
     /// the `DynamicVar` subclass it is.
     vars: Vec<(String, String, bool, String)>,
@@ -447,6 +448,7 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
             },
             gains_block: f[13] == "1",
             visually_colorless: f[14] == "1",
+            turn_end_in_hand: f[15] == "1",
             vars: Vec::new(),
         })
         .collect();
@@ -656,6 +658,7 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
                 card.visually_colorless
             )
             .unwrap();
+            writeln!(row, "        turn_end_in_hand: {},", card.turn_end_in_hand).unwrap();
             write!(row, "    }}").unwrap();
             table.push(row);
         }
@@ -971,6 +974,12 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     )
     .unwrap();
     writeln!(out, "    pub visually_colorless: bool,").unwrap();
+    writeln!(
+        out,
+        "    /// `HasTurnEndInHandEffect`: whether it acts when a turn ends with it in hand."
+    )
+    .unwrap();
+    writeln!(out, "    pub turn_end_in_hand: bool,").unwrap();
     writeln!(out, "}}\n").unwrap();
 
     // Untagged, so it round-trips as the flat id the wire already uses: the
@@ -1481,6 +1490,10 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     writeln!(out).unwrap();
     writeln!(out, "    fn visually_colorless(self) -> bool {{").unwrap();
     writeln!(out, "        self.data().visually_colorless").unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out).unwrap();
+    writeln!(out, "    fn turn_end_in_hand(self) -> bool {{").unwrap();
+    writeln!(out, "        self.data().turn_end_in_hand").unwrap();
     writeln!(out, "    }}").unwrap();
     writeln!(out).unwrap();
     writeln!(out, "    fn exhausts(self) -> bool {{").unwrap();

@@ -1,0 +1,9 @@
+# Hex makes the cards in hand Ethereal. A Debt among them has a turn-end
+# effect, so it is no ethereal card the turn's end exhausts first. It takes
+# its gold, and then its own wrapper exhausts it, after the rest of the hand
+# that Hex made Ethereal too.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"DEBT"}
+{"cmd":"power","power":"HEX_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}
