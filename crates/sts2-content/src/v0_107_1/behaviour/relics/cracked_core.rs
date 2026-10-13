@@ -14,7 +14,7 @@ const LIGHTNING: usize = 1;
 /// one, so the player's side starting is always its owner's.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
     match hook {
-        EventHook::BeforeSideTurnStart { side, turn }
+        EventHook::BeforeSideTurnStart { side, turn, .. }
             if side == <CombatSide as SideKinds>::PLAYER && turn <= 1 =>
         {
             asked.extend((0..LIGHTNING).map(|_| HookEffect::Channel(Orb::LightningOrb)));

@@ -1582,11 +1582,11 @@ impl<V: Rules> sts2_core::FightView<V> for Onlookers<'_, V> {
             .map(|fighter| fighter.hp)
     }
 
-    /// The other side's creatures, a pet among them.
     fn player(&self) -> CombatId {
         super::board::player::<V>(self.creatures)
     }
 
+    /// The other side's creatures, a pet among them.
     fn living_opponents(&self, creature: CombatId) -> smallvec::SmallVec<[CombatId; 8]> {
         let Some(side) = self
             .creatures
@@ -3054,7 +3054,6 @@ impl<V: Rules> Live<V> {
         Some(next)
     }
 
-    /// The player, which every fight has one of.
     /// The orb queue as the game reports it, each number its getter's
     /// `PassiveVal` or `EvokeVal`. The queue itself, while nothing listens.
     pub(crate) fn reported_orbs(
@@ -3062,6 +3061,11 @@ impl<V: Rules> Live<V> {
         relics: &crate::run::Belt<V>,
     ) -> Option<std::borrow::Cow<'_, sts2_core::Orbs<V>>> {
         let orbs = self.orbs.as_ref()?;
+        // No slot and no orb reads as no orbs at all, as for a character
+        // that never had them, once Bulk Up takes the last slot.
+        if num_traits::Zero::is_zero(&orbs.capacity) && orbs.queue.is_empty() {
+            return None;
+        }
         if !super::listen::heard::<V>(self, relics, sts2_core::ModelHook::ModifyOrbValue) {
             return Some(std::borrow::Cow::Borrowed(orbs));
         }
@@ -3127,6 +3131,7 @@ impl<V: Rules> Live<V> {
         <V::Encounter as sts2_core::EncounterTable>::room(self.encounter)
     }
 
+    /// The player, which every fight has one of.
     pub(crate) fn player(&self) -> &Fighter<V> {
         self.creatures
             .iter()

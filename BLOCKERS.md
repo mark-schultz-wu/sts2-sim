@@ -47,7 +47,8 @@ before the draw pauses. Recorded run 1424 shows it: Scrape keeps two
 Strikes and a Compact the game discards. Pillage reads its draw the same
 way, and a drawn card can leave the hand before the comparison runs, with
 no pause. In recorded run 151 a Strike Pillage draws is discarded as it
-lands. The sim stops drawing there, and the game draws an Evil Eye.
+lands. The sim stops drawing there, and the game draws an Evil Eye. Runs
+79, 1220 and 1419 part the same way.
 The history keeps the card a draw drew but not which copy. Carrying
 the copies across the pause needs a design, for Mark.
 
@@ -84,9 +85,9 @@ Mark.
 
 Pael's Eye's `AnyCardsPlayedThisTurn` answers yes on turn one when its
 owner holds Whispering Earring. A relic's hook in the sim sees its own
-state and the hook, not the belt, so the port cannot ask. In recorded
-runs 223 and 365, Vakuu plays the first turn, and Pael's Eye gives the
-sim an extra turn the game does not take. Either the hook carries the turn and
+state and the hook, not the belt, so the port cannot ask. Recorded runs
+223, 365 and 1423 show it. Vakuu plays the first turn, and Pael's Eye gives
+the sim an extra turn the game does not take. Either the hook carries the turn and
 whether the belt holds the Earring, or a relic reads the belt. Needs a
 design, for Mark.
 

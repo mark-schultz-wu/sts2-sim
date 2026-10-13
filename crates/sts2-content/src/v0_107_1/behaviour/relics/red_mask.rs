@@ -15,6 +15,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
     if let EventHook::BeforeSideTurnStart {
         side: CombatSide::Player,
         turn,
+        ..
     } = hook
         && turn <= 1
     {

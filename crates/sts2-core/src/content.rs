@@ -4079,12 +4079,20 @@ pub enum EventHook<V: ContentVersion> {
     /// owner it is about to have.
     BeforeApplied { landing: PowerAmount<V::Number> },
     /// `BeforeSideTurnStart`, which runs before the side draws anything.
-    BeforeSideTurnStart { side: V::CombatSide, turn: V::Count },
+    /// `turn` is the player's `TurnNumber`, and `round` the fight's
+    /// `RoundNumber`, which an extra turn does not move on.
+    BeforeSideTurnStart {
+        side: V::CombatSide,
+        turn: V::Count,
+        round: V::Count,
+    },
     /// `AfterSideTurnStart`, which runs once the side has drawn, in a room of
     /// this type.
     SideTurnStart {
         side: V::CombatSide,
         turn: V::Count,
+        /// `RoundNumber`, which an extra turn does not move on.
+        round: V::Count,
         room: V::RoomType,
         /// `CombatManager.PlayersTakingExtraTurn` is not empty: the player
         /// takes another turn, and the enemy's turn did not run between.
