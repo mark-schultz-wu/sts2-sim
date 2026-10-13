@@ -762,7 +762,7 @@ impl<'a, V: Rules> Board<'a, V> {
     pub(super) fn remove_power_carried(&mut self, id: CombatId, power: V::Power) {
         for effect in self.live.remove_power_asking(id, power) {
             match effect {
-                HookEffect::KillCreature(creature) => self.kill_outright(creature),
+                HookEffect::KillCreature(creature) => self.kill_outright(creature, true),
                 // `CardCmd.Upgrade` on a copy that has left the fight writes on
                 // a model the fight no longer holds.
                 HookEffect::UpgradeCopy { card, .. } if self.live.cards.named(card).is_none() => {}
@@ -1422,7 +1422,7 @@ impl<'a, V: Rules> Board<'a, V> {
     }
 
     fn kill(&mut self, at: usize) {
-        self.die(at);
+        self.die(at, false);
         self.end_if_ending();
     }
 
@@ -1440,7 +1440,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 && self.live.creatures[at].alive
             {
                 self.live.creatures[at].hp = V::Health::zero();
-                self.die(at);
+                self.die(at, false);
             }
         }
         self.ended = Some(super::Ended::Won);
@@ -1493,7 +1493,7 @@ impl<'a, V: Rules> Board<'a, V> {
     /// branch of the same question, for a player whose teammates still stand,
     /// and a run with one player never reaches it.
     #[tracing::instrument(level = "trace", skip_all)]
-    fn die(&mut self, at: usize) {
+    fn die(&mut self, at: usize, force: bool) {
         let owner = self.live.creatures[at].side;
         let id = self.live.creatures[at].id;
         // `Hook.BeforeDeath`, once its hit points are gone and before
@@ -1518,26 +1518,30 @@ impl<'a, V: Rules> Board<'a, V> {
             }
         }
         // `Hook.ShouldDie`, then `Hook.ShouldDieLate`, and the model that
-        // kept the creature alive.
+        // kept the creature alive. A forced death asks neither.
         let player = self.live.player().id;
-        let preventer = super::listen::first_deciding::<V>(
-            self.walk(),
-            sts2_core::DecisionHook::ShouldDie {
-                creature: id,
-                player,
-            },
-            false,
-        )
-        .or_else(|| {
-            super::listen::first_deciding::<V>(
-                self.walk(),
-                sts2_core::DecisionHook::ShouldDieLate {
-                    creature: id,
-                    player,
-                },
-                false,
-            )
-        });
+        let preventer = (!force)
+            .then(|| {
+                super::listen::first_deciding::<V>(
+                    self.walk(),
+                    sts2_core::DecisionHook::ShouldDie {
+                        creature: id,
+                        player,
+                    },
+                    false,
+                )
+                .or_else(|| {
+                    super::listen::first_deciding::<V>(
+                        self.walk(),
+                        sts2_core::DecisionHook::ShouldDieLate {
+                            creature: id,
+                            player,
+                        },
+                        false,
+                    )
+                })
+            })
+            .flatten();
         if let Some(preventer) = preventer {
             self.death_prevented(at, preventer);
             return;
@@ -1558,6 +1562,15 @@ impl<'a, V: Rules> Board<'a, V> {
                 unimplemented!("a power asking for {effect:?} over a player's death")
             }
             self.strip_powers(at);
+            // `OrbQueue.Clear`, which leaves no orb and no capacity.
+            self.live.orbs = None;
+            // `Kill(player.Osty, force)` while Osty stands.
+            let osty = osty(&self.live.creatures)
+                .filter(|osty| osty.alive)
+                .map(|osty| osty.id);
+            if let Some(osty) = osty {
+                self.kill_outright(osty, force);
+            }
             self.ended = Some(super::Ended::Lost);
             return;
         }
@@ -2100,7 +2113,7 @@ impl<'a, V: Rules> Board<'a, V> {
             })
             .count();
         for &creature in doomed {
-            self.kill_outright(creature);
+            self.kill_outright(creature, false);
         }
         let asked = super::listen::notify::<V>(
             self.live,
@@ -2116,8 +2129,8 @@ impl<'a, V: Rules> Board<'a, V> {
     }
 
     /// `CreatureCmd.Kill`: the creature loses what hit points it has, and
-    /// dies.
-    fn kill_outright(&mut self, creature: CombatId) {
+    /// dies. A `force`d kill asks no hook whether it dies.
+    pub(super) fn kill_outright(&mut self, creature: CombatId, force: bool) {
         let Some(at) = self.at(creature) else {
             return;
         };
@@ -2127,7 +2140,8 @@ impl<'a, V: Rules> Board<'a, V> {
             self.current_hp_changed(creature, -hp);
         }
         if let Some(at) = self.at(creature) {
-            self.kill(at);
+            self.die(at, force);
+            self.end_if_ending();
         }
     }
 
@@ -2275,7 +2289,7 @@ impl<'a, V: Rules> Board<'a, V> {
                         self.add_to_draw_at_random(card);
                     }
                 }
-                HookEffect::KillOwner => self.kill_outright(owner),
+                HookEffect::KillOwner => self.kill_outright(owner, false),
                 // `OstyCmd.Summon` for the player.
                 HookEffect::Summon(amount) => sts2_core::Fight::summon_osty(self, amount),
                 // `CreatureCmd.Damage` over `HittableEnemies`, from the
@@ -3635,7 +3649,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn kill(&mut self, creature: CombatId) {
-        self.kill_outright(creature);
+        self.kill_outright(creature, false);
     }
 
     fn self_note(&self) -> V::Number {

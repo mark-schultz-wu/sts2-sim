@@ -400,9 +400,11 @@ fn raise<V: Rules>(
         }
     }
 
+    if decremented.is_empty() {
+        return asked;
+    }
     // `PowerCmd.Decrement` on the instance that asked, by its place, which
-    // nothing moves until every one has ticked. Then each instance is taken
-    // off at zero, the way a duration tick does.
+    // nothing moves until every one has ticked.
     for &listener in &decremented {
         let Listener::Power { owner, at, .. } = listener else {
             continue;
@@ -413,9 +415,25 @@ fn raise<V: Rules>(
             held.amount = held.amount.ticked();
         }
     }
-    for &listener in &decremented {
-        if let Listener::Power { owner, .. } = listener {
-            live.powers.retain(owner, |held| !held.amount.spent());
+    // Then `PowerCmd.Remove` on each at zero, which raises its `AfterRemoved`.
+    // What that asks for goes back beside it. The last place first, so taking
+    // one off moves none still to come.
+    let mut places: SmallVec<[(CombatId, u8, V::Power); 4]> = (decremented.iter())
+        .filter_map(|listener| match *listener {
+            Listener::Power { owner, at, power } => Some((owner, at, power)),
+            _ => None,
+        })
+        .collect();
+    places.sort_unstable_by_key(|&(owner, at, _)| std::cmp::Reverse((owner, at)));
+    places.dedup_by_key(|&mut (owner, at, _)| (owner, at));
+    for (owner, at, power) in places {
+        let spent =
+            (live.powers.of(owner).nth(usize::from(at))).is_some_and(|held| held.amount.spent());
+        if spent {
+            let listener = Listener::Power { owner, at, power };
+            for effect in live.remove_power_at_asking(owner, usize::from(at)) {
+                asked.push((listener, effect));
+            }
         }
     }
     asked

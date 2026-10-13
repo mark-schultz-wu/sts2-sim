@@ -1,0 +1,9 @@
+# The Insatiable eats a Necrobinder, and Osty dies with it.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"THE_INSATIABLE_BOSS"}
+{"cmd":"power","power":"PLATING_POWER","amount":100,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

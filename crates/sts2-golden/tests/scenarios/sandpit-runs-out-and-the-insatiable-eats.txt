@@ -1,0 +1,11 @@
+# The Insatiable's Sandpit loses one as each enemy turn starts. Once it runs
+# out, the power goes, and the Insatiable eats the player whatever its block.
+# Plating keeps the player alive until then.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"THE_INSATIABLE_BOSS"}
+{"cmd":"power","power":"PLATING_POWER","amount":100,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

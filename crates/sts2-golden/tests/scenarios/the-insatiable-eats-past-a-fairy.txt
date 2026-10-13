@@ -1,0 +1,11 @@
+# The Insatiable eats the player with a forced kill, which no Fairy in a
+# Bottle can stop. Plating keeps the player alive until then.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","potion":"FAIRY_IN_A_BOTTLE"}
+{"cmd":"fight","encounter":"THE_INSATIABLE_BOSS"}
+{"cmd":"power","power":"PLATING_POWER","amount":100,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
