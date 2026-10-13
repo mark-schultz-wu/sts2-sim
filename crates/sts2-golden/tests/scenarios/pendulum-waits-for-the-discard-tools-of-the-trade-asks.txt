@@ -1,0 +1,13 @@
+# Tools of the Trade asks for a discard as the second turn starts, and the
+# walk of `AfterPlayerTurnStart` stands still on it. Pendulum comes later
+# in the walk, so it still counts one turn at the question, and two once the
+# discard is made.
+#
+# A walk that asks every listener first counts Pendulum's turn early.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","relic":"PENDULUM"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"PLATING_POWER","amount":99,"target":0}
+{"cmd":"power","power":"TOOLS_OF_THE_TRADE_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"answer","cards":[0]}
