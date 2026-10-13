@@ -89,12 +89,12 @@ impl<V: Rules, P: Piles> Cards<V, P> {
 
     /// A fight's opening piles, of fresh copies.
     ///
-    /// A fresh copy's state follows from its identity alone. So each identity
-    /// is stored once, and its copies point at it. A new identity is a new
-    /// state, and is stored without a search.
+    /// A fresh copy's state is its identity and what its deck card saved,
+    /// as The Scythe's gained damage. Each state is stored once, and its
+    /// copies point at it. A new identity is stored without a search.
     ///
-    /// An identity is looked up by the card's place in the build's id order,
-    /// which no two cards share. The rest of it is compared only on a match.
+    /// The search is by the card's place in the build's id order. The rest
+    /// of the state is compared only on a match.
     pub(super) fn dealt(hand: &[CardInstance<V>], draw: &[CardInstance<V>]) -> Self {
         let mut cards = Self::with_cards(hand.len() + draw.len());
         // One for each identity the deck holds, which is inline for a deck of
@@ -104,7 +104,7 @@ impl<V: Rules, P: Piles> Cards<V, P> {
             for card in dealt {
                 let order = card.face.ident.card.order();
                 let found = (0..orders.len())
-                    .find(|&at| orders[at] == order && cards.faces[at].ident == card.face.ident);
+                    .find(|&at| orders[at] == order && cards.faces[at] == card.face);
                 let face = match found {
                     Some(at) => at,
                     None => {
