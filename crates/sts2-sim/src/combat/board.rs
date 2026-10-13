@@ -3537,6 +3537,11 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 source,
                 modifying,
             } => {
+                // `CreatureCmd.GainBlock` gives nothing once the fight is over
+                // or ending, as after a hit that killed the player.
+                if self.over() {
+                    return;
+                }
                 // `Hook.AfterModifyingBlockAmount`, asked of each relic that
                 // changed the gain, before it lands.
                 for relic in modifying {
