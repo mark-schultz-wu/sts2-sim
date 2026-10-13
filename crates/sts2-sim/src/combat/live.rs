@@ -2406,6 +2406,7 @@ impl<V: Rules> CombatHistory<V> {
             card,
             id,
             energy: play.energy,
+            auto: play.auto,
             x: play.x,
             stars: play.stars,
             first,

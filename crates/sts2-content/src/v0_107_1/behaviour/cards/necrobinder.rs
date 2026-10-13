@@ -690,6 +690,7 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
         }
         // `CaptureSpirit`: its damage to the target, unblockable and
         // unpowered, then its `Cards` of Souls into the draw pile at random.
+        // The damage meets no block.
         NecrobinderCard::CaptureSpirit => {
             use super::super::super::generated::cards::{Cards, TokenCard};
 
@@ -699,7 +700,7 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
                 damage: Amount::Var(CardVar::Damage),
                 scaling: Scaling::Static,
             });
-            fight.apply(damage);
+            fight.apply_unblockable(damage);
             for _ in 0..fight.var(CardVar::Cards) {
                 if fight
                     .add_at_random(Cards::Token(TokenCard::Soul), Pile::Draw)

@@ -476,7 +476,12 @@ pub(super) fn auto_play_in_play<V: Rules>(
     };
     super::turn::unheard::<V>(live, relics, sts2_core::ModelHook::BeforeCardAutoPlayed);
 
-    let energy = num_traits::zero();
+    // `EnergyValue` is `GetAmountToSpend`: what the card costs, though an
+    // auto-play spends none of it.
+    let (cost, star_cost) =
+        super::legal::costs::<V>(&card, None, super::listen::Walk { live, relics });
+    let energy = super::legal::spend(cost, live.energy)
+        .unwrap_or_else(|| unimplemented!("an energy cost the count cannot hold"));
     let (pile, position) = result_pile::<V, _>(live, &mut rngs, relics, &card, energy);
     let count = play_count::<V, _>(live, &mut rngs, relics, &card);
     // `AutoPlay` spends nothing, and captures an X from what the pools hold,
@@ -485,7 +490,6 @@ pub(super) fn auto_play_in_play<V: Rules>(
         sts2_core::Cost::X => captured.map_or(live.energy, |(energy, _)| energy),
         _ => num_traits::zero(),
     };
-    let star_cost = super::legal::costs::<V>(&card, None, super::listen::Walk { live, relics }).1;
     let stars = match captured {
         Some((_, stars)) => stars,
         None => super::legal::spend(star_cost, live.stars)
