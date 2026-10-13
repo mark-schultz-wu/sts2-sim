@@ -1,0 +1,178 @@
+//! How far the simulator follows the runs the game played, for `coverage`.
+//!
+//! Each recorded run in `crates/sts2-golden/tests/recorded.bin` is followed
+//! by `sts2-golden`'s `follow_run`, in a process of its own so a panic names
+//! its run. Then the runs' long run, 0RACLE1-REGENT-2, by its `BASELINE`.
+
+use std::collections::BTreeMap;
+use std::fmt::Write as _;
+use std::path::Path;
+use std::process::Command;
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+use crate::coverage::Error;
+
+/// How many of the commonest first splits the report names.
+const SPLITS: usize = 20;
+
+/// The long run the divergence test replays.
+const LONG_RUN: &str = "0RACLE1-REGENT-2";
+
+/// One run, as `follow_run` left it.
+struct Line {
+    character: String,
+    /// The positions that agreed, and how many the run has.
+    matched: usize,
+    positions: usize,
+    /// The move before the first split, or the panic that cut it.
+    split: Option<String>,
+}
+
+/// One character's runs, summed.
+#[derive(Default)]
+struct Tally {
+    runs: usize,
+    whole: usize,
+    matched: usize,
+    positions: usize,
+}
+
+pub fn report(root: &Path, out: &mut String) -> Result<(), Error> {
+    let follow = crate::error::build_example(root, "follow_run")?;
+    let file = root.join("crates/sts2-golden/tests/recorded.bin");
+    let counted = crate::error::output(Command::new(&follow).arg(&file))?;
+    let runs: usize = String::from_utf8_lossy(&counted.stdout)
+        .trim()
+        .parse()
+        .expect("follow_run prints how many runs there are");
+
+    let next = AtomicUsize::new(0);
+    let lines = Mutex::new(Vec::with_capacity(runs));
+    let width = std::thread::available_parallelism().map_or(4, |n| n.get());
+    let failed = Mutex::new(None);
+    std::thread::scope(|scope| {
+        for _ in 0..width {
+            scope.spawn(|| {
+                loop {
+                    let index = next.fetch_add(1, Ordering::Relaxed);
+                    if index >= runs {
+                        break;
+                    }
+                    match crate::error::spawned(
+                        Command::new(&follow).arg(&file).arg(index.to_string()),
+                    ) {
+                        Ok(output) => {
+                            let line = read(&output);
+                            lines.lock().expect("no thread panics").push(line);
+                        }
+                        Err(e) => *failed.lock().expect("no thread panics") = Some(e),
+                    }
+                }
+            });
+        }
+    });
+    if let Some(e) = failed.into_inner().expect("no thread panics") {
+        return Err(e.into());
+    }
+    let lines = lines.into_inner().expect("no thread panics");
+
+    let mut by_character: BTreeMap<&str, Tally> = BTreeMap::new();
+    let mut splits: BTreeMap<&str, usize> = BTreeMap::new();
+    for line in &lines {
+        let tally = by_character.entry(&line.character).or_default();
+        tally.runs += 1;
+        tally.matched += line.matched;
+        tally.positions += line.positions;
+        match &line.split {
+            None => tally.whole += 1,
+            Some(split) => *splits.entry(split).or_default() += 1,
+        }
+    }
+
+    writeln!(
+        out,
+        "\nrecorded runs the simulator follows, of {}",
+        file.strip_prefix(root).unwrap_or(&file).display()
+    )
+    .unwrap();
+    let mut all = Tally::default();
+    for (character, tally) in &by_character {
+        row(out, character, tally);
+        all.runs += tally.runs;
+        all.whole += tally.whole;
+        all.matched += tally.matched;
+        all.positions += tally.positions;
+    }
+    row(out, "all", &all);
+
+    let golden = root.join("crates/sts2-golden/tests/golden").join(LONG_RUN);
+    let baseline = crate::error::read(&golden.join("BASELINE"))?;
+    let steps = crate::error::read(&golden.join("digests"))?.lines().count();
+    writeln!(out, "  {LONG_RUN}  {} of {steps} steps", baseline.trim()).unwrap();
+
+    let mut splits: Vec<(&str, usize)> = splits.into_iter().collect();
+    splits.sort_by_key(|(split, count)| (std::cmp::Reverse(*count), *split));
+    writeln!(
+        out,
+        "\nthe commonest first splits, by the move that led to them"
+    )
+    .unwrap();
+    for (split, count) in splits.iter().take(SPLITS) {
+        writeln!(out, "  {count:>4}  {split}").unwrap();
+    }
+    Ok(())
+}
+
+fn row(out: &mut String, name: &str, tally: &Tally) {
+    let percent = match tally.positions {
+        0 => 100,
+        positions => 100 * tally.matched / positions,
+    };
+    writeln!(
+        out,
+        "  {name:<12} {:>4}/{:<4} whole  {:>8}/{:<8} positions {percent:>3}%",
+        tally.whole, tally.runs, tally.matched, tally.positions
+    )
+    .unwrap();
+}
+
+/// One `follow_run` line, or the panic that ended it.
+fn read(output: &std::process::Output) -> Line {
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let words: Vec<&str> = stdout.split_whitespace().collect();
+    match words.as_slice() {
+        [character, "whole", positions] => Line {
+            character: character.to_string(),
+            matched: positions.parse().expect("a count"),
+            positions: positions.parse().expect("a count"),
+            split: None,
+        },
+        [character, "parted", step, positions, after @ ..] => Line {
+            character: character.to_string(),
+            matched: step.parse().expect("a count"),
+            positions: positions.parse().expect("a count"),
+            split: Some(after.join(" ")),
+        },
+        // The character comes first, so a panic still names it. The panic
+        // prints its message on the line after where it was.
+        [character, ..] => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let why = stderr
+                .lines()
+                .skip_while(|line| !line.contains("panicked at"))
+                .nth(1)
+                .unwrap_or("no word why");
+            Line {
+                character: character.to_string(),
+                matched: 0,
+                positions: 0,
+                split: Some(format!("panicked: {why}")),
+            }
+        }
+        [] => panic!(
+            "follow_run printed nothing: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ),
+    }
+}

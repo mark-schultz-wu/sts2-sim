@@ -29,52 +29,68 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ## Open
 
-### 1. Coverage reports the recorded runs
-
-`cargo xtask coverage` reports how far the sim follows each recorded
-run and 0RACLE1-REGENT-2, by character. It counts steps matched and runs
-matched to the end, and lists the commonest first splits. The check
-ratchets the total of matched steps so it cannot fall.
-
-`crates/sts2-golden/tests/recorded.bin` holds the census's 1500 runs.
-`cargo xtask record` plays them again, on purpose and never in CI. The
-sim follows 4 to the end, and 747k of their 1.32M steps. The first
-splits spread wide, from step 14 on.
-
-### 2. 0RACLE1-REGENT-2 parts at step 537
+### 1. 0RACLE1-REGENT-2 parts at step 537
 
 Sovereign Blade previews 29 damage in the game and 24 in the sim.
 
-### 3. Every split the recorded runs find
+### 2. The Insatiable's turn
 
-Each first split becomes its own item, here, as the recorded runs
-reach it. The live `unimplemented!()` branches surface this way.
+165 recorded runs first part after a turn ends against The Insatiable,
+the most of any move. `cargo xtask coverage` lists the splits.
 
-### 4. A listener walk that can pause
+### 3. Travel
+
+141 runs first part after a move on the map.
+
+### 4. Decimillipede's turn
+
+86 runs first part after a turn ends against the Decimillipede elite.
+
+### 5. Soul Fysh's turn
+
+51 runs first part after a turn ends against the Soul Fysh boss.
+
+### 6. Pael's Flesh
+
+46 runs first part after Pael offers its Flesh.
+
+### 7. Sovereign Blade
+
+43 runs first part after Sovereign Blade is played. Item 1 is a Sovereign
+Blade preview too.
+
+### 8. Every other split the recorded runs find
+
+`cargo xtask coverage` lists the commonest first splits, by the move
+that led to each. Each one with more than a handful of runs becomes its
+own item, above this one. The live `unimplemented!()` branches surface
+this way.
+
+### 9. A listener walk that can pause
 
 The game walks `AfterCardPlayed` listeners one at a time, and a draw
 can pause the walk. The sim raises them all first, so Bygone Effigy's
 Slow counts a card early in the preview while Stratagem's question
 waits. Needs a design, for Mark.
 
-### 5. Ascension
+### 10. Ascension
 
 The sim threads the ascension level through, but every scenario and
 census run plays at `None`. Record runs at each level, and each split
 they find becomes an item.
 
-### 6. Run modifiers
+### 11. Run modifiers
 
 A run started with any modifier panics (`crates/sts2-sim/src/engine/sim.rs`).
 Hoarder's removal ban is one rule known to need one. Port the custom
 mode's modifiers, and record runs with each.
 
-### 7. A speed target
+### 12. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.
 
-### 8. v0.111.0
+### 13. v0.111.0
 
 Only the generated tables exist. Its behaviour layer has to be written,
 and its runs recorded.
