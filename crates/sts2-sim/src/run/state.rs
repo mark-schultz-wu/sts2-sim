@@ -240,6 +240,9 @@ const COOK_CARDS: usize = 2;
 #[derive(Debug)]
 pub(crate) struct Belt<V: Rules> {
     held: SmallVec<[HeldRelic<V>; BELT_INLINE]>,
+    /// Each slot's relic, apart from its saved fields, so a relic's hook can
+    /// read the belt while it writes its own fields.
+    relics: SmallVec<[V::Relic; BELT_INLINE]>,
     /// Every hook some relic on the belt overrides.
     heard: sts2_core::Overrides,
     /// For each hook, the slots of the relics that override it, one bit a
@@ -251,6 +254,7 @@ impl<V: Rules> Clone for Belt<V> {
     fn clone(&self) -> Self {
         Belt {
             held: self.held.clone(),
+            relics: self.relics.clone(),
             heard: self.heard,
             slots: self.slots,
         }
@@ -285,6 +289,7 @@ impl<V: Rules> Belt<V> {
     pub(crate) fn new() -> Self {
         Self {
             held: SmallVec::new(),
+            relics: SmallVec::new(),
             heard: sts2_core::Overrides::default(),
             slots: [0; sts2_core::ModelHook::ALL.len()],
         }
@@ -307,7 +312,18 @@ impl<V: Rules> Belt<V> {
             self.slots[at] |= slot;
         }
         self.heard = self.heard.union(overrides);
+        self.relics.push(held.relic);
         self.held.push(held);
+    }
+
+    /// `Owner.Relics`, which a relic's hook reads.
+    pub(crate) fn relics(&self) -> &[V::Relic] {
+        &self.relics
+    }
+
+    /// The saved fields of the relic in `slot`, beside the belt it sits on.
+    pub(crate) fn state_beside(&mut self, slot: usize) -> (&mut V::RelicState, &[V::Relic]) {
+        (&mut self.held[slot].state, &self.relics)
     }
 
     /// Take the relic in `slot` off the belt. The slots after it close up,
@@ -339,6 +355,7 @@ impl<V: Rules> Belt<V> {
 
     pub(crate) fn copy_from(&mut self, source: &Self) {
         self.held.clone_from(&source.held);
+        self.relics.clone_from(&source.relics);
         self.heard = source.heard;
         self.slots = source.slots;
     }
@@ -1808,8 +1825,10 @@ impl<V: Rules> State<V> {
         };
         if let Some(character) = named {
             let mut asked = sts2_core::HookEffects::new();
+            // Set up before it joins the belt, which it reads as it stands.
             V::relic_event_hook(
                 &mut held.state,
+                self.player.relics.relics(),
                 sts2_core::EventHook::CharacterNamed(character),
                 &mut asked,
             );
@@ -1817,9 +1836,15 @@ impl<V: Rules> State<V> {
                 unimplemented!("{relic:?} asking for {effect:?} as it is set up");
             }
         }
-        let effects =
-            crate::combat::obtained::<V>(&mut held, self.character(), self.act, self.player_turn());
         self.player.relics.push(held);
+        let (character, act, turn) = (self.character(), self.act, self.player_turn());
+        let slot = self.player.relics.len() - 1;
+        let effects = crate::combat::obtained::<V>(
+            self.player.relics.state_beside(slot),
+            character,
+            act,
+            turn,
+        );
         self.carry_out(effects)
     }
 
@@ -2112,14 +2137,14 @@ impl<V: Rules> State<V> {
                     else {
                         unimplemented!("replacing {from:?}, which the run does not carry");
                     };
-                    let mut held = HeldRelic::new(to);
+                    self.player.relics.replace(slot, HeldRelic::new(to));
+                    let (character, act, turn) = (self.character(), self.act, self.player_turn());
                     let effects = crate::combat::obtained::<V>(
-                        &mut held,
-                        self.character(),
-                        self.act,
-                        self.player_turn(),
+                        self.player.relics.state_beside(slot),
+                        character,
+                        act,
+                        turn,
                     );
-                    self.player.relics.replace(slot, held);
                     if let Some(effect) = effects.first() {
                         unimplemented!("{to:?} asking for {effect:?} as it replaces {from:?}");
                     }
@@ -2141,14 +2166,14 @@ impl<V: Rules> State<V> {
                         .iter()
                         .find(|&&(from, _)| from == starter)
                         .map_or(fallback, |&(_, to)| to);
-                    let mut held = HeldRelic::new(upgraded);
+                    self.player.relics.replace(slot, HeldRelic::new(upgraded));
+                    let (character, act, turn) = (self.character(), self.act, self.player_turn());
                     let effects = crate::combat::obtained::<V>(
-                        &mut held,
-                        self.character(),
-                        self.act,
-                        self.player_turn(),
+                        self.player.relics.state_beside(slot),
+                        character,
+                        act,
+                        turn,
                     );
-                    self.player.relics.replace(slot, held);
                     if let Some(effect) = effects.first() {
                         unimplemented!(
                             "{upgraded:?} asking for {effect:?} as it replaces {starter:?}"
@@ -2181,17 +2206,18 @@ impl<V: Rules> State<V> {
                 }
                 // The relic carries its option out itself.
                 HookEffect::RestOptionOfRelic(relic) => {
-                    let Some(held) = self
+                    let Some(slot) = self
                         .player
                         .relics
-                        .iter_mut()
-                        .find(|held| held.relic == relic)
+                        .iter()
+                        .position(|held| held.relic == relic)
                     else {
                         unimplemented!("an option of {relic:?}, which the run does not carry");
                     };
+                    let (state, belt) = self.player.relics.state_beside(slot);
                     let mut asked = sts2_core::HookEffects::new();
                     let taken = sts2_core::EventHook::RestOptionTaken;
-                    V::relic_event_hook(&mut held.state, taken, &mut asked);
+                    V::relic_event_hook(state, belt, taken, &mut asked);
                     if let Some(effect) = asked.first() {
                         unimplemented!("{relic:?} asking for {effect:?} as its option is taken");
                     }
@@ -2667,6 +2693,7 @@ impl<V: Rules> State<V> {
             let listener: crate::combat::Heard<'_, V> = sts2_core::Listener::Relic {
                 state: &self.player.relics[slot].state,
                 fight: None,
+                belt: self.player.relics.relics(),
             };
             match V::modify_hook(listener, hook) {
                 sts2_core::Modify::Nothing => {}
@@ -2831,6 +2858,7 @@ impl<V: Rules> State<V> {
                 crate::combat::Heard::<V>::Relic {
                     state: held,
                     fight: None,
+                    belt: self.player.relics.relics(),
                 },
                 hook,
             )
@@ -2852,10 +2880,10 @@ impl<V: Rules> State<V> {
         let max_hp: V::Number =
             num_traits::cast(self.player.max_hp).expect("maximum health fits a game number");
         let hook = sts2_core::EventHook::DeathPrevented { max_hp };
-        let held = &mut self.player.relics[slot];
-        let relic = held.relic;
+        let relic = self.player.relics[slot].relic;
+        let (state, belt) = self.player.relics.state_beside(slot);
         let mut asked = sts2_core::HookEffects::new();
-        V::relic_event_hook(&mut held.state, hook, &mut asked);
+        V::relic_event_hook(state, belt, hook, &mut asked);
         for effect in asked {
             match effect {
                 sts2_core::HookEffect::Heal(amount) => {
@@ -2903,6 +2931,7 @@ impl<V: Rules> State<V> {
                 let listener: crate::combat::Heard<'_, V> = sts2_core::Listener::Relic {
                     state: &self.player.relics[slot].state,
                     fight: None,
+                    belt: self.player.relics.relics(),
                 };
                 match V::modify_hook(listener, hook) {
                     sts2_core::Modify::Nothing => {}
@@ -2942,6 +2971,7 @@ impl<V: Rules> State<V> {
             let listener: crate::combat::Heard<'_, V> = sts2_core::Listener::Relic {
                 state: &self.player.relics[slot].state,
                 fight: None,
+                belt: self.player.relics.relics(),
             };
             match V::modify_hook(listener, hook) {
                 sts2_core::Modify::Nothing => {}
@@ -3354,7 +3384,8 @@ impl<V: Rules> State<V> {
         while left != 0 {
             let slot = left.trailing_zeros() as usize;
             left &= left - 1;
-            V::relic_event_hook(&mut self.player.relics[slot].state, hook, &mut asked);
+            let (state, belt) = self.player.relics.state_beside(slot);
+            V::relic_event_hook(state, belt, hook, &mut asked);
         }
         asked
     }
@@ -3376,6 +3407,7 @@ impl<V: Rules> State<V> {
             let listener: crate::combat::Heard<'_, V> = sts2_core::Listener::Relic {
                 state: &self.player.relics[slot].state,
                 fight: None,
+                belt: self.player.relics.relics(),
             };
             match V::modify_hook(listener, hook) {
                 sts2_core::Modify::Nothing => {}
@@ -3724,7 +3756,8 @@ impl<V: Rules> State<V> {
                     let encounter = matches!(rolled, Some(crate::reward::Rolled::Room(_)));
                     let mut asked = sts2_core::HookEffects::new();
                     let options = sts2_core::EventHook::CardRewardOptions { encounter };
-                    V::relic_event_hook(&mut self.player.relics[slot].state, options, &mut asked);
+                    let (state, belt) = self.player.relics.state_beside(slot);
+                    V::relic_event_hook(state, belt, options, &mut asked);
                     if let Some(effect) = asked.first() {
                         unimplemented!("a relic obtained over a card reward asking for {effect:?}");
                     }
@@ -3736,7 +3769,8 @@ impl<V: Rules> State<V> {
                 let mut asked = sts2_core::HookEffects::new();
                 let modified =
                     sts2_core::EventHook::CardRewardOptionsModified { card_reward: true };
-                V::relic_event_hook(&mut self.player.relics[slot].state, modified, &mut asked);
+                let (state, belt) = self.player.relics.state_beside(slot);
+                V::relic_event_hook(state, belt, modified, &mut asked);
                 if let Some(effect) = asked.first() {
                     unimplemented!("a relic asking for {effect:?} once a card reward was modified");
                 }
@@ -3755,12 +3789,14 @@ impl<V: Rules> State<V> {
                 card: *card,
                 card_reward,
             };
-            V::relic_event_hook(&mut self.player.relics[slot].state, option, &mut asked);
+            let (state, belt) = self.player.relics.state_beside(slot);
+            V::relic_event_hook(state, belt, option, &mut asked);
             *card = rewrite(*card, asked);
         }
         let mut asked = sts2_core::HookEffects::new();
         let pick = sts2_core::EventHook::CardRewardPick { card_reward };
-        V::relic_event_hook(&mut self.player.relics[slot].state, pick, &mut asked);
+        let (state, belt) = self.player.relics.state_beside(slot);
+        V::relic_event_hook(state, belt, pick, &mut asked);
         for effect in asked {
             match effect {
                 sts2_core::HookEffect::EnchantOneRewardCard {
@@ -4113,6 +4149,7 @@ impl<V: Rules> State<V> {
                 crate::combat::Heard::<V>::Relic {
                     state: &held.state,
                     fight: None,
+                    belt: self.player.relics.relics(),
                 },
                 hook,
             )
@@ -6069,6 +6106,7 @@ impl<V: Rules> State<V> {
                 crate::combat::Heard::<V>::Relic {
                     state: &held.state,
                     fight: None,
+                    belt: self.player.relics.relics(),
                 },
                 hook,
             )
@@ -6099,6 +6137,7 @@ impl<V: Rules> State<V> {
                 crate::combat::Heard::<V>::Relic {
                     state: &held.state,
                     fight: None,
+                    belt: self.player.relics.relics(),
                 },
                 hook,
             ) {
@@ -6127,6 +6166,7 @@ impl<V: Rules> State<V> {
                 crate::combat::Heard::<V>::Relic {
                     state: &held.state,
                     fight: None,
+                    belt: self.player.relics.relics(),
                 },
                 hook,
             )
@@ -6165,6 +6205,7 @@ impl<V: Rules> State<V> {
                 crate::combat::Heard::<V>::Relic {
                     state: &held.state,
                     fight: None,
+                    belt: self.player.relics.relics(),
                 },
                 hook,
             )
@@ -6303,6 +6344,7 @@ impl<V: Rules> State<V> {
                 crate::combat::Heard::<V>::Relic {
                     state: &held.state,
                     fight: None,
+                    belt: self.player.relics.relics(),
                 },
                 hook,
             )
@@ -6325,6 +6367,7 @@ impl<V: Rules> State<V> {
                 crate::combat::Heard::<V>::Relic {
                     state: &held.state,
                     fight: None,
+                    belt: self.player.relics.relics(),
                 },
                 hook,
             )

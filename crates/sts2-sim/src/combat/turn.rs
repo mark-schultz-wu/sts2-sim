@@ -148,7 +148,10 @@ pub(super) fn end_from_flush<V: Rules>(
         let plays = next.history.unprompted_plays_this_turn();
         listen::any_decides::<V>(
             listen::Walk { live: next, relics },
-            sts2_core::DecisionHook::ShouldTakeExtraTurn { plays },
+            sts2_core::DecisionHook::ShouldTakeExtraTurn {
+                plays,
+                turn: next.turn,
+            },
             true,
         )
     };
@@ -1120,7 +1123,11 @@ fn before_turn_end<V: Rules>(
         true => live.history.unprompted_plays_this_turn(),
         false => 0,
     };
-    let hook = sts2_core::EventHook::BeforeSideTurnEndEarly { side, plays };
+    let hook = sts2_core::EventHook::BeforeSideTurnEndEarly {
+        side,
+        plays,
+        turn: live.turn,
+    };
     for (listener, effect) in listen::notify::<V>(live, relics, hook) {
         match (listener, effect) {
             (Listener::Power { owner, .. }, sts2_core::HookEffect::GainBlock(amount)) => {

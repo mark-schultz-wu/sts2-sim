@@ -859,15 +859,16 @@ pub(super) fn play_count<V: Rules, S: LendsCombat>(
             .iter()
             .position(|held| std::ptr::eq(&held.state, state))
             .expect("a relic that answered the walk is on the belt");
-        let held = &mut relics[slot];
-        if !sts2_core::RelicTable::overrides(held.relic)
+        if !sts2_core::RelicTable::overrides(relics[slot].relic)
             .contains(sts2_core::ModelHook::AfterModifyingCardPlayCount)
         {
             continue;
         }
+        let (state, belt) = relics.state_beside(slot);
         let mut asked = sts2_core::HookEffects::new();
         V::relic_event_hook(
-            &mut held.state,
+            state,
+            belt,
             sts2_core::EventHook::PlayCountModified {
                 card: card.face.ident.card,
             },

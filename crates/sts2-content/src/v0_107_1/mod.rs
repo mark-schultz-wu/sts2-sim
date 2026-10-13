@@ -149,7 +149,7 @@ impl sts2_core::Hooks for V0_107_1 {
                 };
                 behaviour::powers::modify_hook(power, amount, held, state, hook)
             }
-            sts2_core::Listener::Relic { state, fight } => {
+            sts2_core::Listener::Relic { state, fight, .. } => {
                 behaviour::relics::modify_hook(state, fight, hook)
             }
             // The fight asks only a monster whose class overrides the hook,
@@ -198,7 +198,9 @@ impl sts2_core::Hooks for V0_107_1 {
                 };
                 behaviour::powers::decide_hook(power, amount, held, state, hook)
             }
-            sts2_core::Listener::Relic { state, .. } => behaviour::relics::decide_hook(state, hook),
+            sts2_core::Listener::Relic { state, belt, .. } => {
+                behaviour::relics::decide_hook(state, belt, hook)
+            }
             sts2_core::Listener::Potion(potion) => behaviour::potions::decide_hook(potion, hook),
             sts2_core::Listener::Card {
                 card,
@@ -310,10 +312,11 @@ impl sts2_core::Hooks for V0_107_1 {
 
     fn relic_event_hook(
         state: &mut Self::RelicState,
+        belt: &[Self::Relic],
         hook: sts2_core::EventHook<Self>,
         asked: &mut sts2_core::HookEffects<Self>,
     ) {
-        behaviour::relics::event_hook(state, hook, asked)
+        behaviour::relics::event_hook(state, belt, hook, asked)
     }
 
     fn potion_event_hook(

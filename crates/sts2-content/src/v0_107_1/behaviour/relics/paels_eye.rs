@@ -4,6 +4,7 @@
 use sts2_core::{DecisionHook, EventHook, HookEffect, HookResponse, SideKinds as _};
 
 use super::super::super::V0_107_1 as V;
+use super::Relic;
 
 /// Its two fields, `UsedThisCombat` and `WasOwnerPartOfLastPlayerTurn`.
 ///
@@ -28,12 +29,20 @@ impl State {
     /// `!UsedThisCombat && !AnyCardsPlayedThisTurn() &&
     /// WasOwnerPartOfLastPlayerTurn`, with `plays` the player's finished
     /// plays this turn that no auto-play made.
-    ///
-    /// `AnyCardsPlayedThisTurn` also answers yes on turn one for an owner
-    /// holding Whispering Earring, which this port has not reached.
-    fn takes_the_turn(&self, plays: u8) -> bool {
-        !self.used_this_combat && plays == 0 && self.was_owner_part_of_last_player_turn
+    fn takes_the_turn(&self, belt: &[Relic], plays: u8, turn: Count) -> bool {
+        !self.used_this_combat
+            && !any_cards_played_this_turn(belt, plays, turn)
+            && self.was_owner_part_of_last_player_turn
     }
+}
+
+type Count = <V as sts2_core::ContentVersion>::Count;
+
+/// `AnyCardsPlayedThisTurn`: yes on the owner's first turn while it holds
+/// Whispering Earring, which plays that turn for it. Otherwise whether it
+/// finished a play no auto-play made.
+fn any_cards_played_this_turn(belt: &[Relic], plays: u8, turn: Count) -> bool {
+    (turn == Count::from(1u8) && belt.contains(&Relic::WhisperingEarring)) || plays > 0
 }
 
 /// `AfterObtained` and `AfterSideTurnStart` note that the owner takes part
@@ -43,6 +52,7 @@ impl State {
 /// the relic's `Status`, which the game shows and nothing reads.
 pub(super) fn event_hook(
     state: &mut State,
+    belt: &[Relic],
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
@@ -52,8 +62,8 @@ pub(super) fn event_hook(
         EventHook::SideTurnStart { side, .. } if side == player && !state.used_this_combat => {
             state.was_owner_part_of_last_player_turn = true;
         }
-        EventHook::BeforeSideTurnEndEarly { side, plays } if side == player => {
-            if state.takes_the_turn(plays) {
+        EventHook::BeforeSideTurnEndEarly { side, plays, turn } if side == player => {
+            if state.takes_the_turn(belt, plays, turn) {
                 asked.push(HookEffect::ExhaustHand);
             }
         }
@@ -67,10 +77,14 @@ pub(super) fn event_hook(
 }
 
 /// `ShouldTakeExtraTurn`.
-pub(super) fn decide_hook(state: &State, hook: DecisionHook<V>) -> HookResponse<bool> {
+pub(super) fn decide_hook(
+    state: &State,
+    belt: &[Relic],
+    hook: DecisionHook<V>,
+) -> HookResponse<bool> {
     match hook {
-        DecisionHook::ShouldTakeExtraTurn { plays } => {
-            HookResponse::Decision(state.takes_the_turn(plays))
+        DecisionHook::ShouldTakeExtraTurn { plays, turn } => {
+            HookResponse::Decision(state.takes_the_turn(belt, plays, turn))
         }
         hook => unimplemented!("what PaelsEye decides for {hook:?}"),
     }
