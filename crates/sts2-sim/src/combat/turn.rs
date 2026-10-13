@@ -1171,9 +1171,6 @@ fn before_turn_end<V: Rules>(
         hand: live.cards.len(Pile::Hand),
     };
     let mut ended = None;
-    // The instances taken off so far, which moves the place of each one
-    // after them on the same creature.
-    let mut removed: SmallVec<[(CombatId, u8); 2]> = SmallVec::new();
     for (listener, effect) in listen::notify::<V>(live, relics, hook) {
         match (listener, effect) {
             // `CreatureCmd.Damage` over `HittableEnemies`, unpowered, from the
@@ -1193,30 +1190,21 @@ fn before_turn_end<V: Rules>(
                 ended = board.ended();
             }
             // `PowerCmd.Remove(this)`, on the instance that asked.
-            (Listener::Power { owner, at, power }, sts2_core::HookEffect::Remove) => {
-                let before = removed
-                    .iter()
-                    .filter(|&&(creature, gone)| creature == owner && gone < at)
-                    .count();
-                let place = usize::from(at) - before;
-                // An effect before this one can take a power off its owner, as
-                // The Bomb's blast does when it kills a Possess Strength's
-                // caster. A power comes on at the end, so the instance stands
-                // at its place or below it.
-                let place = live
-                    .powers
-                    .of(owner)
-                    .enumerate()
-                    .take(place + 1)
-                    .filter(|(_, held)| held.power() == power)
-                    .last()
-                    .map(|(found, _)| found);
-                if let Some(place) = place
+            // An effect before this one can take it off already, as The Bomb's
+            // blast does when it kills a Possess Strength's caster.
+            (
+                Listener::Power {
+                    owner,
+                    instance,
+                    power,
+                },
+                sts2_core::HookEffect::Remove,
+            ) => {
+                if let Some(place) = live.powers.place_of(owner, instance)
                     && let Some(effect) = live.remove_power_at_asking(owner, place).first()
                 {
                     unimplemented!("{power:?} asking for {effect:?} as it comes off")
                 }
-                removed.push((owner, at));
             }
             (Listener::Card { id }, sts2_core::HookEffect::NoteOnSelf(note)) => {
                 live.note(id, note);
@@ -1859,16 +1847,20 @@ pub(super) fn carry_setup<V: Rules>(
                         // `PowerModel.SetAmount` on the listener's own instance,
                         // which no hook hears.
                         sts2_core::HookEffect::SetAmount(amount) => {
-                            let Listener::Power { owner, at, power } = listener else {
+                            let Listener::Power {
+                                owner,
+                                instance,
+                                power,
+                            } = listener
+                            else {
                                 unimplemented!("{listener:?} setting its amount as the turn starts")
                             };
                             let held = live
                                 .powers
                                 .of_mut(owner)
-                                .nth(usize::from(at))
-                                .filter(|held| held.power() == power)
+                                .find(|held| held.instance == instance)
                                 .unwrap_or_else(|| {
-                                    unimplemented!("{power:?} moved before it set its amount")
+                                    unimplemented!("{power:?} left before it set its amount")
                                 });
                             held.amount = super::live::Stacked::counted(amount);
                         }

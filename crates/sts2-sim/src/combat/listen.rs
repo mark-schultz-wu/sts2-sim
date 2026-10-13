@@ -31,10 +31,10 @@ pub(crate) type Answers<V> = SmallVec<[(Listener<V>, HookEffect<V>); 4]>;
 /// One listener, by what names it rather than by a borrow of it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Listener<V: Rules> {
-    /// The power at `at` on the creature `owner`.
+    /// The power instance `instance` on the creature `owner`.
     Power {
         owner: CombatId,
-        at: u8,
+        instance: super::live::PowerInstance,
         power: V::Power,
     },
     /// The relic in belt slot `slot`.
@@ -317,14 +317,19 @@ fn raise<V: Rules>(
             // By position, since asking lends the whole fight and takes the
             // power's own state back after.
             for at in 0..live.powers.of(id).count() {
-                let Some(power) = live.powers.of(id).nth(at).map(|held| held.power()) else {
+                let Some((power, instance)) = live
+                    .powers
+                    .of(id)
+                    .nth(at)
+                    .map(|held| (held.power(), held.instance))
+                else {
                     break;
                 };
                 if power.overrides().contains(model_hook) {
                     live.ask_power_as(Some(&*relics), carrier, at, hook, &mut answer);
                     let listener = Listener::Power {
                         owner: id,
-                        at: at as u8,
+                        instance,
                         power,
                     };
                     take(&mut asked, &mut decremented, listener, &mut answer);
@@ -408,35 +413,39 @@ fn raise<V: Rules>(
     if decremented.is_empty() {
         return asked;
     }
-    // `PowerCmd.Decrement` on the instance that asked, by its place, which
-    // nothing moves until every one has ticked.
+    // `PowerCmd.Decrement` on the instance that asked.
     for &listener in &decremented {
-        let Listener::Power { owner, at, .. } = listener else {
+        let Listener::Power {
+            owner, instance, ..
+        } = listener
+        else {
             continue;
         };
-        if let Some(held) = live.powers.of_mut(owner).nth(usize::from(at))
+        if let Some(held) = live
+            .powers
+            .of_mut(owner)
+            .find(|held| held.instance == instance)
             && held.amount.count().is_some()
         {
             held.amount = held.amount.ticked();
         }
     }
     // Then `PowerCmd.Remove` on each at zero, which raises its `AfterRemoved`.
-    // What that asks for goes back beside it. The last place first, so taking
-    // one off moves none still to come.
-    let mut places: SmallVec<[(CombatId, u8, V::Power); 4]> = (decremented.iter())
-        .filter_map(|listener| match *listener {
-            Listener::Power { owner, at, power } => Some((owner, at, power)),
+    // What that asks for goes back beside it. The last place first.
+    let mut places: SmallVec<[(CombatId, usize, Listener<V>); 4]> = (decremented.iter())
+        .filter_map(|&listener| match listener {
+            Listener::Power {
+                owner, instance, ..
+            } => Some((owner, live.powers.place_of(owner, instance)?, listener)),
             _ => None,
         })
         .collect();
     places.sort_unstable_by_key(|&(owner, at, _)| std::cmp::Reverse((owner, at)));
     places.dedup_by_key(|&mut (owner, at, _)| (owner, at));
-    for (owner, at, power) in places {
-        let spent =
-            (live.powers.of(owner).nth(usize::from(at))).is_some_and(|held| held.amount.spent());
+    for (owner, at, listener) in places {
+        let spent = (live.powers.of(owner).nth(at)).is_some_and(|held| held.amount.spent());
         if spent {
-            let listener = Listener::Power { owner, at, power };
-            for effect in live.remove_power_at_asking(owner, usize::from(at)) {
+            for effect in live.remove_power_at_asking(owner, at) {
                 asked.push((listener, effect));
             }
         }

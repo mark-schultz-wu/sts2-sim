@@ -13,7 +13,7 @@
 use sts2_core::{CombatId, Overrides, PowerTable as _, Rules};
 
 use super::listen::HookCounts;
-use super::live::{HeldPower, PowerList};
+use super::live::{HeldPower, PowerInstance, PowerList};
 
 /// The powers every creature in a fight carries.
 pub(crate) trait Powers<V: Rules>: Clone + std::fmt::Debug {
@@ -26,8 +26,15 @@ pub(crate) trait Powers<V: Rules>: Clone + std::fmt::Debug {
     /// `creature`'s powers, in order, to write on.
     fn of_mut(&mut self, creature: CombatId) -> impl Iterator<Item = &mut HeldPower<V>> + '_;
 
-    /// Put `held` on `creature`, after everything it carries.
+    /// Put `held` on `creature`, after everything it carries, as a new
+    /// instance.
     fn push(&mut self, creature: CombatId, held: HeldPower<V>);
+
+    /// Where the instance `instance` stands in `creature`'s order, if it is
+    /// still on it.
+    fn place_of(&self, creature: CombatId, instance: PowerInstance) -> Option<usize> {
+        self.of(creature).position(|held| held.instance == instance)
+    }
 
     /// Take the power at `at` in `creature`'s order off it.
     fn remove(&mut self, creature: CombatId, at: usize) -> HeldPower<V>;
@@ -51,23 +58,30 @@ fn slot(creature: CombatId) -> usize {
 #[derive(Debug)]
 pub(crate) struct PerCreature<V: Rules> {
     lists: Vec<PowerList<V>>,
+    /// The instance the next power to arrive is.
+    next: PowerInstance,
 }
 
 impl<V: Rules> Clone for PerCreature<V> {
     fn clone(&self) -> Self {
         Self {
             lists: self.lists.clone(),
+            next: self.next,
         }
     }
 
     fn clone_from(&mut self, source: &Self) {
         self.lists.clone_from(&source.lists);
+        self.next = source.next;
     }
 }
 
 impl<V: Rules> Powers<V> for PerCreature<V> {
     fn new() -> Self {
-        Self { lists: Vec::new() }
+        Self {
+            lists: Vec::new(),
+            next: PowerInstance::default(),
+        }
     }
 
     fn of(&self, creature: CombatId) -> impl Iterator<Item = &HeldPower<V>> + Clone + '_ {
@@ -84,11 +98,13 @@ impl<V: Rules> Powers<V> for PerCreature<V> {
             .iter_mut()
     }
 
-    fn push(&mut self, creature: CombatId, held: HeldPower<V>) {
+    fn push(&mut self, creature: CombatId, mut held: HeldPower<V>) {
         let at = slot(creature);
         if at >= self.lists.len() {
             self.lists.resize(at + 1, PowerList::new());
         }
+        held.instance = self.next;
+        self.next.0 += 1;
         self.lists[at].push(held);
     }
 
