@@ -40,7 +40,7 @@ impl<V: Rules> Observed<V> for State<V> {
     }
 
     fn victory(&self) -> Option<bool> {
-        (!self.standing().alive).then_some(matches!(self.phase, Phase::Won))
+        (!self.standing().alive).then_some(matches!(self.phase, Phase::Won { .. }))
     }
 
     fn gold(&self) -> V::Number {
@@ -116,7 +116,7 @@ impl<V: Rules> Observed<V> for State<V> {
             }),
             Phase::Lost { combat } | Phase::Rewards { combat, .. } => Some(Fight::Over(combat)),
             Phase::Map
-            | Phase::Won
+            | Phase::Won { .. }
             | Phase::Neow { .. }
             | Phase::Event { .. }
             | Phase::Treasure { .. }

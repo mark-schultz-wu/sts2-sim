@@ -1428,7 +1428,7 @@ impl<'a, V: Rules> Board<'a, V> {
 
     /// `CheckWinCondition` once a creature leaves: a fight with no primary
     /// enemy left ends, won.
-    fn end_if_ending(&mut self) {
+    pub(super) fn end_if_ending(&mut self) {
         if !self.ending() {
             return;
         }

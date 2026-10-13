@@ -1,0 +1,8 @@
+# Stampede plays an Attack from hand as the post-play phase opens. Here it
+# kills the last enemy, and `CheckWinCondition` after the turn-end hooks ends
+# the fight there, before the enemies get a turn.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":200,"target":0}
+{"cmd":"power","power":"STAMPEDE_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}

@@ -59,13 +59,21 @@ pub(super) fn end_after_post_play<V: Rules>(
 
     // `EndPlayerTurnPhaseOne`: the turn-end hooks, and the win check they can
     // end the fight for, come before the orbs and the hand.
-    if let Some(ended) = before_turn_end::<V>(
+    let ended = before_turn_end::<V>(
         next,
         streams.combat(),
         relics,
         ascension,
         <V::CombatSide as SideKinds>::PLAYER,
-    ) {
+    )
+    .or_else(|| {
+        // `CheckWinCondition`, whatever ended the fight: an auto-play in the
+        // post-play phase can kill the last enemy as well as a hook can.
+        let mut board = Board::for_card(next, streams.combat(), relics, ascension, None, None);
+        board.end_if_ending();
+        board.ended()
+    });
+    if let Some(ended) = ended {
         next.skip_tick = skipping;
         if ended == super::Ended::Won {
             listen::combat_ended::<V>(next, relics);

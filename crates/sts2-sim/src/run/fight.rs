@@ -235,6 +235,16 @@ impl<V: Rules> State<V> {
                         .proceed()
                         .unwrap_or_else(|e| unreachable!("an event resumes after its fight: {e}"));
                 }
+                // `WithRewardsFromRoom` sets nothing for the last act's boss,
+                // its room's extra rewards included, and rolls nothing. The
+                // Architect is what comes after it.
+                let last_boss = combat.encounter.is_some_and(|encounter| {
+                    sts2_core::EncounterTable::room(encounter) == <_ as sts2_core::RoomKinds>::BOSS
+                }) && self.in_last_act();
+                if last_boss {
+                    self.won(combat, Vec::new());
+                    return self.decided();
+                }
                 let mut offered = self.combat_rewards(&combat, proportion, &extra_rewards, &taken);
                 // `GoldReward.Populate` draws `NextInt(min, max + 1)` off the
                 // rewards stream, after the room's own, even for a gold
