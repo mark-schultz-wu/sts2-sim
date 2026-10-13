@@ -119,7 +119,8 @@ fn shiv<F: Fight<V>>(fight: &mut F) -> Played<V> {
 }
 
 /// `SovereignBlade`. Deal its damage, as many times as it repeats, to every
-/// opponent under Seeking Edge.
+/// opponent under Seeking Edge. Then, while its owner holds Parry, gain its
+/// `CalculatedBlock`.
 ///
 /// The damage is this copy's own. A forge raises it, and the card that was
 /// forged twice hits for more than the one beside it.
@@ -137,5 +138,23 @@ fn sovereign_blade<F: Fight<V>>(fight: &mut F) -> Played<V> {
             }
         }
     });
+    // `GetOwnerParryAmount(this) > 0`.
+    let actor = fight.actor();
+    let parried = fight
+        .creatures()
+        .find(|creature| creature.id() == actor)
+        .and_then(|creature| creature.power(Power::ParryPower))
+        .is_some_and(|amount| match amount {
+            sts2_core::PowerAmount::Counted(amount) => amount > 0,
+            sts2_core::PowerAmount::Endless => unimplemented!("an endless Parry"),
+        });
+    if parried {
+        let block = fight.resolve(Effect::GainBlock {
+            recipient: actor,
+            amount: Amount::Var(CardVar::CalculatedBlock),
+            scaling: Scaling::Dynamic,
+        });
+        fight.apply(block);
+    }
     Played::Done
 }
