@@ -849,8 +849,11 @@ impl<'a, V: Rules> Board<'a, V> {
     /// `BeforeDamageReceived`, block, then hit points, then the deaths the
     /// hit caused. `dealer` is nothing for damage no creature deals, and
     /// `card` for damage no card deals. A target that has left the fight
-    /// takes nothing, which is what the command does against a creature with
-    /// no combat state.
+    /// takes nothing.
+    ///
+    /// `attack`'s hits add their results to the attack's. Thorns deals its
+    /// damage as a command of its own, whose results are not among them.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn hit(
         &mut self,
         dealer: Option<CombatId>,
@@ -859,6 +862,7 @@ impl<'a, V: Rules> Board<'a, V> {
         powered: bool,
         unblockable: bool,
         card: Option<V::Card>,
+        attack: bool,
     ) {
         let Some(at) = self.at(target) else { return };
         if !self.live.creatures[at].alive {
@@ -955,7 +959,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 true => blocked + lost,
                 false => lost,
             };
-            if let Some(landed) = self.landed.as_mut() {
+            if let Some(landed) = self.landed.as_mut().filter(|_| attack) {
                 landed.push(sts2_core::DamageResult {
                     receiver,
                     total,
@@ -1051,7 +1055,7 @@ impl<'a, V: Rules> Board<'a, V> {
         unblockable: bool,
     ) {
         let damage = modified::<V>(self.walk(), dealer, Some(target), None, amount, false);
-        self.hit(dealer, target, damage, false, unblockable, None);
+        self.hit(dealer, target, damage, false, unblockable, None, false);
     }
 
     /// `HittableEnemies`: the opponents alive, less any a listener refuses a
@@ -2295,7 +2299,8 @@ impl<'a, V: Rules> Board<'a, V> {
                 HookEffect::LoseMaxHpOf { target, amount } => {
                     sts2_core::Fight::lose_max_hp(self, target, amount)
                 }
-                // `CreatureCmd.Damage`, unpowered, from the power's owner.
+                // `CreatureCmd.Damage`, unpowered, from the power's owner. A
+                // command of its own, so its results are not the attack's.
                 HookEffect::Damage { target, amount } => {
                     let hit = resolve::<V>(
                         self.walk(),
@@ -2307,7 +2312,16 @@ impl<'a, V: Rules> Board<'a, V> {
                             scaling: Scaling::Static,
                         },
                     );
-                    self.apply(hit);
+                    match hit.effect {
+                        Resolved::Attack {
+                            dealer,
+                            target,
+                            damage,
+                            powered,
+                            card,
+                        } => self.hit(Some(dealer), target, damage, powered, false, card, false),
+                        effect => self.apply(ResolvedEffect { effect }),
+                    }
                 }
                 HookEffect::StunOwner { stun, then } => self.stun_monster(owner, stun, then),
                 effect => unimplemented!("a power asking for {effect:?} after a hit"),
@@ -3496,7 +3510,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 damage,
                 powered,
                 card,
-            } => self.hit(Some(dealer), target, damage, powered, false, card),
+            } => self.hit(Some(dealer), target, damage, powered, false, card, true),
             Resolved::Held(effect) => self.held.push(effect),
             Resolved::GainBlock {
                 recipient,
@@ -4431,7 +4445,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .playing
             .and_then(|id| self.live.cards.named(id))
             .map(|held| held.face.ident.card);
-        self.hit(dealer, target, damage, false, true, card);
+        self.hit(dealer, target, damage, false, true, card, false);
     }
 
     fn lose_block(&mut self, creature: CombatId, amount: V::Number) {

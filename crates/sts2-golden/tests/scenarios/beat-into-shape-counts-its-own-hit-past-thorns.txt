@@ -1,0 +1,8 @@
+# Beat Into Shape counts its own powered hit, and so forges its base. Thorns
+# on the target hits back during the attack.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"THORNS_POWER","amount":5,"target":1}
+{"cmd":"grant","card":"BEAT_INTO_SHAPE"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"end_turn"}
