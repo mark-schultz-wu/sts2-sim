@@ -29,13 +29,17 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ## Open
 
-### 1. Every other split the recorded runs find
+### 1. A relic that reads the belt
 
-`cargo xtask coverage` lists the commonest first splits, by the move
-that led to each. Each one with more than a handful of runs becomes its
-own item, above this one. `cargo xtask split <index> <name>` writes a
-run, up to its first split, as a scenario, which names what parts. The
-live `unimplemented!()` branches surface this way.
+Pael's Eye's `AnyCardsPlayedThisTurn` answers yes on turn one when its
+owner holds Whispering Earring. A relic's hook in the sim sees its own
+state and the hook, not the belt, so the port cannot ask. Recorded runs
+223, 365 and 1423 show it. Vakuu plays the first turn, and Pael's Eye gives
+the sim an extra turn the game does not take.
+
+The design: a relic's hooks see the relics beside it, as the game's
+`Owner.Relics` does. `BeforeSideTurnEndEarly` and `ShouldTakeExtraTurn`
+carry the player's turn number.
 
 ### 2. What a draw drew, when the draw pauses
 
@@ -49,8 +53,11 @@ way, and a drawn card can leave the hand before the comparison runs, with
 no pause. In recorded run 151 a Strike Pillage draws is discarded as it
 lands. The sim stops drawing there, and the game draws an Evil Eye. Runs
 79, 1220 and 1419 part the same way.
-The history keeps the card a draw drew but not which copy. Carrying
-the copies across the pause needs a design, for Mark.
+
+The design: `Fight::draw` hands back the copies it drew, in order. A
+draw that pauses keeps the ones drawn so far in its deferred entry. The
+card waits, and resumes with them once the draw is over. Pillage's loop
+becomes a resume point.
 
 ### 3. A listener walk that can pause
 
@@ -78,48 +85,41 @@ listeners asked for. In recorded run 267, the Soul Fysh's Intangible
 ticks off before Demise's damage lands, which the game caps at one. In
 run 1175, Veilpiercer's own decrement takes it off before Danse Macabre
 reads Reap's cost. The game then blocks for the card at its full cost. The
-sim worked the cost out once, before the walk. Needs a design, for
-Mark.
+sim worked the cost out once, before the walk.
 
-### 4. A relic that reads the belt
+The design: the walk takes a snapshot of its listeners and asks each one
+as it reaches it, skipping any that left. An effect that asks a question
+parks the rest of the snapshot, which goes on after the answer. A
+decrement is an effect, applied in its turn. Every event hook walks this
+way. Each held power carries a per-fight instance id, as a card does, so
+the walk can tell a removed power from a new one.
 
-Pael's Eye's `AnyCardsPlayedThisTurn` answers yes on turn one when its
-owner holds Whispering Earring. A relic's hook in the sim sees its own
-state and the hook, not the belt, so the port cannot ask. Recorded runs
-223, 365 and 1423 show it. Vakuu plays the first turn, and Pael's Eye gives
-the sim an extra turn the game does not take. Either the hook carries the turn and
-whether the belt holds the Earring, or a relic reads the belt. Needs a
-design, for Mark.
+### 4. Every other split the recorded runs find
 
-### 5. A hit that heals
+`cargo xtask coverage` lists the commonest first splits, by the move
+that led to each. Each one with more than a handful of runs becomes its
+own item, above this one. `cargo xtask split <index> <name>` writes a
+run, up to its first split, as a scenario, which names what parts. The
+live `unimplemented!()` branches surface this way.
 
-`Hook.ModifyHpLost` floors nothing, and `LoseHpInternal` takes a
-negative loss as a heal. Hardened Shell caps a turn's loss at its amount
-less what its owner already lost, which can be below nothing. In
-recorded run 159, Ashen Strike lands past the cap and the enemy gains
-four. Flechettes' last hit does the same in run 306. The sim floors every modify pass at nothing, and Tungsten Rod's
-`Math.Max(0, amount - 1)` leans on that floor. Lifting it for the
-hit-point passes needs an answer that floors itself, a `Modify` shape
-for Mark to choose.
-
-### 6. Ascension
+### 5. Ascension
 
 The sim threads the ascension level through, but every scenario and
 census run plays at `None`. Record runs at each level, and each split
 they find becomes an item.
 
-### 7. Run modifiers
+### 6. Run modifiers
 
 A run started with any modifier panics (`crates/sts2-sim/src/engine/sim.rs`).
 Hoarder's removal ban is one rule known to need one. Port the custom
 mode's modifiers, and record runs with each.
 
-### 8. A speed target
+### 7. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.
 
-### 9. v0.111.0
+### 8. v0.111.0
 
 Only the generated tables exist. Its behaviour layer has to be written,
 and its runs recorded.

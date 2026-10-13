@@ -9,12 +9,11 @@ use super::Number;
 const REDUCTION: Number = 1;
 
 /// `ModifyHpLostAfterOsty`: its reduction off a loss its owner takes,
-/// `Math.Max(0, amount - 1)`. The fight floors the number at nothing once
-/// every listener is done, which is the same while no later one adds to it.
+/// `Math.Max(0, amount - 1)`.
 pub(super) fn modify_hook(hook: ModifyHook<V>) -> Modify<Number> {
     match hook {
         ModifyHook::HpLostAfterOsty { target, player, .. } if target == player => {
-            Modify::Added(-REDUCTION)
+            Modify::Less(REDUCTION)
         }
         ModifyHook::HpLostAfterOsty { .. } => Modify::Nothing,
         hook => unimplemented!("what TungstenRod does for {hook:?}"),

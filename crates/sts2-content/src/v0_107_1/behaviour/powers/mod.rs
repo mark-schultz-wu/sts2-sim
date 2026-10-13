@@ -1712,7 +1712,8 @@ pub(crate) fn modify_hook(
         }
         (Power::BufferPower, _, ModifyHook::HpLostAfterOstyLate { .. }) => Modify::Nothing,
         // `HardenedShellPower.ModifyHpLostBeforeOstyLate`: its owner loses no
-        // more in a turn than its amount, less what it has lost this turn.
+        // more in a turn than its amount, less what it has lost this turn. A
+        // hit that takes nothing stays at nothing.
         (
             Power::HardenedShellPower,
             PowerAmount::Counted(amount),
@@ -1721,7 +1722,7 @@ pub(crate) fn modify_hook(
             let State::HardenedShell { received } = state else {
                 unreachable!("Hardened Shell holding {state:?}")
             };
-            Modify::AtMost(amount - received)
+            Modify::AtMostUnlessNothing(amount - received)
         }
         (
             Power::HardenedShellPower,

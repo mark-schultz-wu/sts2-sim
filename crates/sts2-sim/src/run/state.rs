@@ -2907,6 +2907,7 @@ impl<V: Rules> State<V> {
                 match V::modify_hook(listener, hook) {
                     sts2_core::Modify::Nothing => {}
                     sts2_core::Modify::Added(more) => lost = lost + more,
+                    sts2_core::Modify::Less(less) => lost = (lost - less).max(num_traits::zero()),
                     answer => {
                         unimplemented!("a relic answering {hook:?} outside a fight with {answer:?}")
                     }

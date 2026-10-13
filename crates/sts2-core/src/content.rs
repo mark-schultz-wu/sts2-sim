@@ -3250,6 +3250,13 @@ pub enum Modify<N> {
     /// A floor under what is left, once it is at least `from`. The Boot
     /// raises a loss of one to four to five, and leaves nothing at nothing.
     RaisedTo { floor: N, from: N },
+    /// Less by this much, and never below nothing: `Math.Max(0, amount - n)`.
+    /// Tungsten Rod takes one off that way, where a loss below nothing heals.
+    Less(N),
+    /// [`Modify::AtMost`] on anything but nothing, which stays nothing. Hardened
+    /// Shell's cap, which can be below nothing, leaves a hit that took nothing
+    /// alone.
+    AtMostUnlessNothing(N),
 }
 
 /// A value-producing hook the simulator asks one content model to apply.
