@@ -219,15 +219,18 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         SilentCard::Flechettes => unimplemented!("what {card:?} does when it is played"),
         SilentCard::FlickFlack => {
             fight.attack(Scaling::Dynamic, |fight| {
-                for target in fight.opponents() {
-                    let attack = fight.resolve(Effect::Attack {
-                        dealer: fight.actor(),
-                        target,
-                        damage: Amount::Var(CardVar::Damage),
-                        scaling: Scaling::Dynamic,
-                    });
-                    fight.apply(attack);
-                }
+                let targets = fight.opponents();
+                fight.damage_command(|fight| {
+                    for target in targets {
+                        let attack = fight.resolve(Effect::Attack {
+                            dealer: fight.actor(),
+                            target,
+                            damage: Amount::Var(CardVar::Damage),
+                            scaling: Scaling::Dynamic,
+                        });
+                        fight.apply(attack);
+                    }
+                });
             });
             Played::Done
         }

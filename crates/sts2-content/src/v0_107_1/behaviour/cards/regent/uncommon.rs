@@ -53,15 +53,19 @@ pub(super) fn radiate<F: sts2_core::Fight<V>>(fight: &mut F) -> sts2_core::Playe
     let hits = fight.var(CardVar::CalculatedHits);
     fight.attack(sts2_core::Scaling::Dynamic, |fight| {
         for _ in 0..hits {
-            for target in fight.opponents() {
-                let attack = fight.resolve(sts2_core::Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: sts2_core::Amount::Var(CardVar::Damage),
-                    scaling: sts2_core::Scaling::Dynamic,
-                });
-                fight.apply(attack);
-            }
+            let targets = fight.opponents();
+            // One `CreatureCmd.Damage` over them all.
+            fight.damage_command(|fight| {
+                for target in targets {
+                    let attack = fight.resolve(sts2_core::Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: sts2_core::Amount::Var(CardVar::Damage),
+                        scaling: sts2_core::Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
+                }
+            });
         }
     });
     sts2_core::Played::Done

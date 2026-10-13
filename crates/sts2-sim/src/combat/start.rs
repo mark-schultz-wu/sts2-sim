@@ -128,6 +128,7 @@ pub(crate) fn enter<V: Rules>(
         kept_faces: Vec::new(),
         attacks: 0,
         attack_results: Vec::new(),
+        landing: Vec::new(),
         last_creature: CombatId::new(nonmax::NonMaxU8::ZERO),
         won: false,
         notes: smallvec::SmallVec::new(),

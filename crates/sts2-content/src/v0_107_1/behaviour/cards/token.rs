@@ -105,15 +105,19 @@ fn targets<F: Fight<V>>(fight: &F, power: Power) -> Opponents {
 /// `Shiv`. Deal its damage once, to every opponent under Fan of Knives.
 fn shiv<F: Fight<V>>(fight: &mut F) -> Played<V> {
     fight.attack(Scaling::Dynamic, |fight| {
-        for target in targets(fight, Power::FanOfKnivesPower) {
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(attack);
-        }
+        let targets = targets(fight, Power::FanOfKnivesPower);
+        // One `CreatureCmd.Damage` over them all.
+        fight.damage_command(|fight| {
+            for target in targets {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            }
+        });
     });
     Played::Done
 }
@@ -127,15 +131,19 @@ fn shiv<F: Fight<V>>(fight: &mut F) -> Played<V> {
 fn sovereign_blade<F: Fight<V>>(fight: &mut F) -> Played<V> {
     fight.attack(Scaling::Dynamic, |fight| {
         for _ in 0..fight.var(CardVar::Repeat) {
-            for target in targets(fight, Power::SeekingEdgePower) {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(attack);
-            }
+            let targets = targets(fight, Power::SeekingEdgePower);
+            // One `CreatureCmd.Damage` over them all.
+            fight.damage_command(|fight| {
+                for target in targets {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
+                }
+            });
         }
     });
     // `GetOwnerParryAmount(this) > 0`.

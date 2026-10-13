@@ -73,9 +73,9 @@ pub(super) struct Board<'a, V: Rules> {
     /// The results of the attack command whose hits are landing, which
     /// `AttackCommand.Results` gathers.
     landed: Option<sts2_core::AttackResults<V>>,
-    /// The hits of the damage command under way that have landed, which
-    /// wait for the command's last before their hooks run.
-    command: Option<SmallVec<[Landed<V>; 4]>>,
+    /// Whether a hit lands inside a [`Board::damage_command`], to wait for
+    /// the command's last before its hooks run.
+    commanding: bool,
 }
 
 /// The game's `PlayerChoiceContext`, as far as it decides what a question
@@ -95,6 +95,7 @@ pub(super) enum Choice {
 
 /// What one hit took off one creature's hit points, before its block is
 /// counted in.
+#[derive(Debug)]
 struct Lost<V: Rules> {
     receiver: CombatId,
     lost: V::Number,
@@ -104,6 +105,7 @@ struct Lost<V: Rules> {
 
 /// One hit of a `CreatureCmd.Damage` that has landed, and waits for its
 /// hooks.
+#[derive(Debug)]
 pub(super) struct Landed<V: Rules> {
     dealer: Option<CombatId>,
     target: CombatId,
@@ -207,7 +209,7 @@ impl<'a, V: Rules> Board<'a, V> {
             held: Vec::new(),
             left: None,
             landed: None,
-            command: None,
+            commanding: false,
         }
     }
 
@@ -259,7 +261,7 @@ impl<'a, V: Rules> Board<'a, V> {
             held: Vec::new(),
             left: None,
             landed: None,
-            command: None,
+            commanding: false,
         }
     }
 
@@ -893,7 +895,7 @@ impl<'a, V: Rules> Board<'a, V> {
         card: Option<V::Card>,
         attack: bool,
     ) {
-        if self.command.is_none() {
+        if !self.commanding {
             let mut dying = SmallVec::<[CombatId; 2]>::new();
             if let Some(landed) =
                 self.land_hit(dealer, target, damage, powered, unblockable, card, attack)
@@ -903,14 +905,12 @@ impl<'a, V: Rules> Board<'a, V> {
             self.kill_together(&dying);
             return;
         }
-        // A command a listener runs while this hit lands is a command of its
+        // A hit a listener makes while this one lands is a command of its
         // own, and settles before this one goes on.
-        let mut pending = self.command.take();
+        self.commanding = false;
         let landed = self.land_hit(dealer, target, damage, powered, unblockable, card, attack);
-        if let Some(pending) = pending.as_mut() {
-            pending.extend(landed);
-        }
-        self.command = pending;
+        self.commanding = true;
+        self.live.landing.extend(landed);
     }
 
     /// `CreatureCmd.Damage` over many targets: every hit `hits` makes lands
@@ -918,14 +918,19 @@ impl<'a, V: Rules> Board<'a, V> {
     /// they killed die together. Until then a creature the hits took to
     /// nothing still stands, though `IsEnding` counts it dead.
     pub(super) fn damage_command(&mut self, hits: impl FnOnce(&mut Self)) {
-        let outer = self.command.replace(SmallVec::new());
+        let outer = std::mem::replace(&mut self.commanding, true);
+        let start = self.live.landing.len();
         hits(self);
-        let pending = std::mem::replace(&mut self.command, outer).unwrap_or_default();
+        // What the hooks run is not this command's. A command they run
+        // lands above this one's hits, and takes its own back off.
+        self.commanding = false;
         let mut dying = SmallVec::<[CombatId; 2]>::new();
-        for landed in pending {
+        while self.live.landing.len() > start {
+            let landed = self.live.landing.remove(start);
             self.settle_hit(landed, &mut dying);
         }
         self.kill_together(&dying);
+        self.commanding = outer;
     }
 
     /// `CreatureCmd.Kill` over `dying`, in order, then `CheckWinCondition`
@@ -5751,7 +5756,7 @@ impl<'a, V: Rules> Board<'a, V> {
             held: Vec::new(),
             left: None,
             landed: None,
-            command: None,
+            commanding: false,
         }
     }
 }

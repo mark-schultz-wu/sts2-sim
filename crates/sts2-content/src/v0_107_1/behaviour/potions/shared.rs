@@ -164,15 +164,19 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
         // `CreatureCmd.Damage` over `HittableEnemies`, unpowered and from the
         // player.
         Potion::ExplosiveAmpoule => {
-            for target in fight.hittable_opponents() {
-                let hit = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Number(EXPLOSIVE),
-                    scaling: Scaling::Static,
-                });
-                fight.apply(hit);
-            }
+            let targets = fight.hittable_opponents();
+            // One `CreatureCmd.Damage` over them all.
+            fight.damage_command(|fight| {
+                for target in targets {
+                    let hit = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Number(EXPLOSIVE),
+                        scaling: Scaling::Static,
+                    });
+                    fight.apply(hit);
+                }
+            });
             Played::Done
         }
         Potion::VulnerablePotion => {

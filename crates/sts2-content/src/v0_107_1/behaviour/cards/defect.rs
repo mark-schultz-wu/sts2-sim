@@ -285,15 +285,19 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
         // off its owner.
         DefectCard::Hyperbeam => {
             fight.attack(Scaling::Dynamic, |fight| {
-                for target in fight.opponents() {
-                    let hit = fight.resolve(Effect::Attack {
-                        dealer: fight.actor(),
-                        target,
-                        damage: Amount::Var(CardVar::Damage),
-                        scaling: Scaling::Dynamic,
-                    });
-                    fight.apply(hit);
-                }
+                let targets = fight.opponents();
+                // One `CreatureCmd.Damage` over them all.
+                fight.damage_command(|fight| {
+                    for target in targets {
+                        let hit = fight.resolve(Effect::Attack {
+                            dealer: fight.actor(),
+                            target,
+                            damage: Amount::Var(CardVar::Damage),
+                            scaling: Scaling::Dynamic,
+                        });
+                        fight.apply(hit);
+                    }
+                });
             });
             fight.apply_to_actor(
                 Power::FocusPower,
@@ -334,15 +338,19 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
         // `SweepingBeam`: its damage to every enemy, then its `Cards` drawn.
         DefectCard::SweepingBeam => {
             fight.attack(Scaling::Dynamic, |fight| {
-                for target in fight.opponents() {
-                    let hit = fight.resolve(Effect::Attack {
-                        dealer: fight.actor(),
-                        target,
-                        damage: Amount::Var(CardVar::Damage),
-                        scaling: Scaling::Dynamic,
-                    });
-                    fight.apply(hit);
-                }
+                let targets = fight.opponents();
+                // One `CreatureCmd.Damage` over them all.
+                fight.damage_command(|fight| {
+                    for target in targets {
+                        let hit = fight.resolve(Effect::Attack {
+                            dealer: fight.actor(),
+                            target,
+                            damage: Amount::Var(CardVar::Damage),
+                            scaling: Scaling::Dynamic,
+                        });
+                        fight.apply(hit);
+                    }
+                });
             });
             fight.draw(fight.var(CardVar::Cards));
             Played::Done
@@ -704,15 +712,19 @@ fn tempest<F: Fight<V>>(fight: &mut F) -> Played<V> {
 /// as it leaves.
 fn shatter<F: Fight<V>>(fight: &mut F) -> Played<V> {
     fight.attack(Scaling::Dynamic, |fight| {
-        for target in fight.opponents() {
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(attack);
-        }
+        let targets = fight.opponents();
+        // One `CreatureCmd.Damage` over them all.
+        fight.damage_command(|fight| {
+            for target in targets {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            }
+        });
     });
     for _ in 0..fight.orbs_held() {
         fight.evoke_next(false);

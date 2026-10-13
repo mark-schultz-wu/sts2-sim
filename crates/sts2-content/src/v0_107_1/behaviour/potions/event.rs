@@ -51,15 +51,19 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
                 .filter(|creature| creature.alive() && creature.owner().is_none())
                 .map(|creature| creature.id())
                 .collect();
-            for target in hit {
-                let hit = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Number(FOUL),
-                    scaling: Scaling::Static,
-                });
-                fight.apply(hit);
-            }
+            let targets = hit;
+            // One `CreatureCmd.Damage` over them all.
+            fight.damage_command(|fight| {
+                for target in targets {
+                    let hit = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Number(FOUL),
+                        scaling: Scaling::Static,
+                    });
+                    fight.apply(hit);
+                }
+            });
             Played::Done
         }
         // `CardCmd.Exhaust` of each card in hand, one at a time, then its

@@ -115,11 +115,15 @@ fn command(out: &mut String, words: &[String]) -> Result<(), Error> {
             match *target {
                 "chosen" => hit(out, key, scaling),
                 // The list is taken before the first hit lands, and again for
-                // each hit after it.
+                // each hit after it. Each hit is one `CreatureCmd.Damage` over
+                // the lot.
                 "opponents" => {
-                    writeln!(out, "for target in fight.opponents() {{").unwrap();
+                    writeln!(out, "let targets = fight.opponents();").unwrap();
+                    writeln!(out, "fight.damage_command(|fight| {{").unwrap();
+                    writeln!(out, "for target in targets {{").unwrap();
                     hit(out, key, scaling);
                     writeln!(out, "}}").unwrap();
+                    writeln!(out, "}});").unwrap();
                 }
                 // Drawn for each hit, and the hits stop once no opponent is
                 // left to draw.
