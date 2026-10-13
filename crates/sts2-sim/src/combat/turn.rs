@@ -1191,7 +1191,21 @@ fn before_turn_end<V: Rules>(
                     .filter(|&&(creature, gone)| creature == owner && gone < at)
                     .count();
                 let place = usize::from(at) - before;
-                if let Some(effect) = live.remove_power_at_asking(owner, place).first() {
+                // An effect before this one can take a power off its owner, as
+                // The Bomb's blast does when it kills a Possess Strength's
+                // caster. A power comes on at the end, so the instance stands
+                // at its place or below it.
+                let place = live
+                    .powers
+                    .of(owner)
+                    .enumerate()
+                    .take(place + 1)
+                    .filter(|(_, held)| held.power() == power)
+                    .last()
+                    .map(|(found, _)| found);
+                if let Some(place) = place
+                    && let Some(effect) = live.remove_power_at_asking(owner, place).first()
+                {
                     unimplemented!("{power:?} asking for {effect:?} as it comes off")
                 }
                 removed.push((owner, at));
@@ -3204,11 +3218,13 @@ pub(super) fn energy_reset<V: Rules>(
                 sts2_core::Fight::modify_energy(&mut board, amount);
                 live.remove_power(owner, power);
             }
-            // `PlayerCmd.GainStars`.
+            // `PlayerCmd.GainStars`, whose `AfterStarsGained` can end the
+            // fight, as Black Hole's damage does.
             (_, sts2_core::HookEffect::GainStars(amount)) => {
                 let mut board =
                     Board::for_card(live, streams.combat(), relics, ascension, None, None);
                 sts2_core::Fight::gain_stars(&mut board, amount);
+                ended = ended.or(board.ended());
             }
             // `PowerCmd.Remove(this)`.
             (Listener::Power { owner, power, .. }, sts2_core::HookEffect::Remove) => {

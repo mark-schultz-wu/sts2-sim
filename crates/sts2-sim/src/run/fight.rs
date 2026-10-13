@@ -254,26 +254,8 @@ impl<V: Rules> State<V> {
                     self.won(combat, Vec::new());
                     return self.decided();
                 }
-                let mut offered = self.combat_rewards(&combat, proportion, &extra_rewards, &taken);
-                // `GoldReward.Populate` draws `NextInt(min, max + 1)` off the
-                // rewards stream, after the room's own, even for a gold
-                // reward whose two bounds are the one amount.
-                // A card removal's own `Populate` draws nothing.
-                for effect in extra {
-                    offered.push(match effect {
-                        sts2_core::HookEffect::AddGoldReward(amount) => {
-                            let (rng, _) = self.rewarding();
-                            crate::reward::Offer::Gold {
-                                amount: crate::reward::fixed_gold::<V, _>(rng, amount),
-                                taken: false,
-                            }
-                        }
-                        sts2_core::HookEffect::AddCardRemovalReward => {
-                            crate::reward::Offer::CardRemoval { taken: false }
-                        }
-                        _ => unreachable!("the extra rewards are gold and card removals"),
-                    });
-                }
+                let mut offered =
+                    self.combat_rewards(&combat, proportion, &extra_rewards, &extra, &taken);
                 crate::reward::sort(&mut offered);
                 self.won(combat, offered);
             }
@@ -292,6 +274,7 @@ impl<V: Rules> State<V> {
         combat: &sts2_core::Combat<V>,
         proportion: f32,
         extra_rewards: &[combat::ExtraReward<V>],
+        ending: &[sts2_core::HookEffect<V>],
         taken: &[sts2_core::DeckCard<V>],
     ) -> Vec<crate::reward::Offer<V>> {
         let encounter = combat
@@ -407,6 +390,26 @@ impl<V: Rules> State<V> {
                         &added,
                     )
                 }
+            });
+        }
+        // What `AfterCombatEnd` added to `ExtraRewards`, after what the fight
+        // added. `GoldReward.Populate` draws `NextInt(min, max + 1)` off the
+        // rewards stream even for a gold reward whose two bounds are the one
+        // amount, and a card removal's draws nothing. `ModifyRewards` comes
+        // after them all.
+        for effect in ending {
+            offered.push(match *effect {
+                sts2_core::HookEffect::AddGoldReward(amount) => {
+                    let (rng, _) = self.rewarding();
+                    crate::reward::Offer::Gold {
+                        amount: crate::reward::fixed_gold::<V, _>(rng, amount),
+                        taken: false,
+                    }
+                }
+                sts2_core::HookEffect::AddCardRemovalReward => {
+                    crate::reward::Offer::CardRemoval { taken: false }
+                }
+                _ => unreachable!("the extra rewards are gold and card removals"),
             });
         }
         self.reward_offers(&mut offered);

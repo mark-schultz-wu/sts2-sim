@@ -1883,6 +1883,21 @@ impl<V: Rules> HeldPower<V> {
         sts2_core::PowerModel::power(&self.state)
     }
 
+    /// A power as `PowerCmd.Apply` lands one, its model as `BeforeApplied`
+    /// left it.
+    pub(crate) fn landing(
+        state: V::PowerState,
+        amount: Stacked,
+        applier: Option<CombatId>,
+    ) -> Self {
+        Self {
+            amount,
+            on_turn_start: Stacked::counted(0),
+            applier,
+            state,
+        }
+    }
+
     /// A power as `PowerCmd.Apply` lands one, its model as new as it is.
     pub(crate) fn new(power: V::Power, amount: Stacked, applier: Option<CombatId>) -> Self {
         Self {

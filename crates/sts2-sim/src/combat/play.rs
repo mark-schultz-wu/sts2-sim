@@ -613,6 +613,11 @@ fn before_played<V: Rules, S: LendsCombat>(
     if !super::listen::heard::<V>(live, relics, sts2_core::ModelHook::BeforeCardPlayed) {
         return;
     }
+    // `IterateCombatHookListeners` hands a fight that is over or ending no
+    // listeners, as for the replay of a play that won it.
+    if live.won || live.lost || super::board::ending::<V>(super::listen::Walk { live, relics }) {
+        return;
+    }
     let energy = play.energy;
     let resolved = match card.face.ident.card.cost() {
         sts2_core::Cost::X => num_traits::cast(play.x).expect("an energy fits a game number"),

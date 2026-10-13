@@ -68,15 +68,21 @@ The turn's start walks its listeners the same way. In recorded runs 461
 and 1008, Tools of the Trade's discard and Gambling Chip's choice stand
 the walk still. The game has not yet reached Pendulum. The
 sim counted Pendulum's turn before the question. Entropy's choice does
-the same in runs 611, 764 and 1466. Needs a design, for Mark.
+the same in runs 611, 616, 764 and 1466.
+
+A listener's `PowerCmd.Decrement` waits its turn in the walk as well. The
+sim ticks every decrement as it raises the hook, ahead of what earlier
+listeners asked for. In recorded run 267, the Soul Fysh's Intangible
+ticks off before Demise's damage lands, which the game caps at one.
+Needs a design, for Mark.
 
 ### 4. A relic that reads the belt
 
 Pael's Eye's `AnyCardsPlayedThisTurn` answers yes on turn one when its
 owner holds Whispering Earring. A relic's hook in the sim sees its own
 state and the hook, not the belt, so the port cannot ask. In recorded
-run 223, Vakuu plays the first turn, and Pael's Eye gives the sim an
-extra turn the game does not take. Either the hook carries the turn and
+runs 223 and 365, Vakuu plays the first turn, and Pael's Eye gives the
+sim an extra turn the game does not take. Either the hook carries the turn and
 whether the belt holds the Earring, or a relic reads the belt. Needs a
 design, for Mark.
 
@@ -86,7 +92,7 @@ design, for Mark.
 negative loss as a heal. Hardened Shell caps a turn's loss at its amount
 less what its owner already lost, which can be below nothing. In
 recorded run 159, Ashen Strike lands past the cap and the enemy gains
-four. The sim floors every modify pass at nothing, and Tungsten Rod's
+four. Flechettes' last hit does the same in run 306. The sim floors every modify pass at nothing, and Tungsten Rod's
 `Math.Max(0, amount - 1)` leans on that floor. Lifting it for the
 hit-point passes needs an answer that floors itself, a `Modify` shape
 for Mark to choose.
