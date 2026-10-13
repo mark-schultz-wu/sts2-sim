@@ -874,6 +874,28 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::monsters::perform(monster, move_id, fight)
     }
 
+    fn intent_repeats_now(
+        monster: Self::Monster,
+        move_id: Self::MoveId,
+        model: &Self::MonsterState,
+    ) -> Option<Self::Count> {
+        use generated::monsters::State;
+
+        let held = sts2_core::Table::data(monster)
+            .states
+            .iter()
+            .find_map(|state| match state {
+                State::Move(held) if held.id == move_id => Some(held),
+                _ => None,
+            })?;
+        match held.intents.attack?.repeats {
+            crate::Field::Computed => Some(behaviour::monsters::computed_repeats(
+                monster, move_id, model,
+            )),
+            crate::Field::Constant(_) => None,
+        }
+    }
+
     fn resume_move<F: sts2_core::Fight<Self>>(
         monster: Self::Monster,
         move_id: Self::MoveId,

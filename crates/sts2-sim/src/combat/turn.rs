@@ -3638,6 +3638,21 @@ fn enemy_turn<V: Rules>(
         let played = V::perform_move(monster, next_move.id, &mut board);
         ended = ended.or(board.ended());
         super::play::merge::<V>(skipping, std::mem::take(&mut board.skipped));
+        // An intent that works its hit count out from the model shows the
+        // count the move left, until the next move is drawn. Only a fight
+        // that ends here shows it before then.
+        if ended.is_some()
+            && let Some(repeats) = live
+                .machines
+                .iter()
+                .find(|held| held.creature == id)
+                .and_then(|held| V::intent_repeats_now(monster, next_move.id, &held.state))
+            && let Some(creature) = live.creatures.iter_mut().find(|c| c.id == id)
+            && let Some(telegraphed) = creature.next_move.as_mut()
+            && telegraphed.id == next_move.id
+        {
+            telegraphed.reread_repeats(repeats);
+        }
         match played {
             sts2_core::Played::Done => {}
             sts2_core::Played::Choosing {

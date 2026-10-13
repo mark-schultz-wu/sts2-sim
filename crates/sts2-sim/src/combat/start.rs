@@ -131,6 +131,7 @@ pub(crate) fn enter<V: Rules>(
         landing: Vec::new(),
         last_creature: CombatId::new(nonmax::NonMaxU8::ZERO),
         won: false,
+        lost: false,
         notes: smallvec::SmallVec::new(),
         asking: None,
         deferred: super::live::Deferrals::new(),

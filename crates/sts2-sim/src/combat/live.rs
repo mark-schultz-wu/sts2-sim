@@ -1725,6 +1725,19 @@ impl<V: Rules> Telegraphed<V> {
         self.intents().find_map(|intent| intent.attack)
     }
 
+    /// Its attack's hit count read again, as an intent that works its count
+    /// out reads it each time it is shown.
+    pub(crate) fn reread_repeats(&mut self, repeats: V::Count) {
+        let repeats = num_traits::NumCast::from(repeats)
+            .and_then(NonMaxU16::new)
+            .unwrap_or_else(|| unimplemented!("an attack landing {repeats:?} times"));
+        for intent in self.intents.iter_mut().flatten() {
+            if let Some(attack) = intent.attack.as_mut() {
+                attack.repeats = repeats;
+            }
+        }
+    }
+
     /// What a report shows of it.
     pub(crate) fn telegraph(&self) -> sts2_core::NextMove<V> {
         sts2_core::NextMove {
@@ -2364,6 +2377,8 @@ pub(crate) struct Live<V: Rules> {
     /// has ended since. Only these two start a win, so the check at the end
     /// of a decision reads the fight again only once this is set.
     pub(super) won: bool,
+    /// The player has died, which ends the fight lost.
+    pub(super) lost: bool,
     /// Numbers a card keeps on its own model and prints nowhere, by copy,
     /// such as Regret's `CardsInHand`.
     pub(super) notes: smallvec::SmallVec<[(CardId<V>, V::Number); 2]>,
@@ -2663,6 +2678,7 @@ impl<V: Rules> Clone for Live<V> {
             landing,
             last_creature,
             won,
+            lost,
             notes,
             asking,
             deferred,
@@ -2706,6 +2722,7 @@ impl<V: Rules> Clone for Live<V> {
         landing.clear();
         *last_creature = source.last_creature;
         *won = source.won;
+        *lost = source.lost;
         notes.clone_from(&source.notes);
         asking.clone_from(&source.asking);
         deferred.clone_from(&source.deferred);
@@ -3525,6 +3542,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             landing: Vec::new(),
             last_creature: CombatId::new(nonmax::NonMaxU8::ZERO),
             won: false,
+            lost: false,
             notes: smallvec::SmallVec::new(),
             asking: None,
             deferred: Deferrals::new(),

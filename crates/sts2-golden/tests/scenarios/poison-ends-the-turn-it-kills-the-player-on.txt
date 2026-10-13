@@ -1,0 +1,12 @@
+# `CreatureCmd.Kill` ends the turn of a player it kills on that player's
+# own turn, and the fight ends in the end phase. Poison at two hundred
+# kills the Ironclad as its second turn starts, after Crimson Mantle's
+# block.
+#
+# A port that leaves the turn where the death found it shows the start
+# phase.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"CRIMSON_MANTLE_POWER","amount":10,"target":0}
+{"cmd":"power","power":"POISON_POWER","amount":200,"target":0}
+{"cmd":"end_turn"}
