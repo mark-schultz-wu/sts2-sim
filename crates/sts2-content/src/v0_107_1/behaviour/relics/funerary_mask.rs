@@ -19,6 +19,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
         asked.push(HookEffect::AddToDrawAtRandom {
             card: Cards::Token(TokenCard::Soul),
             count: CARDS,
+            by_owner: true,
         });
     }
 }

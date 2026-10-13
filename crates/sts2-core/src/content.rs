@@ -3448,6 +3448,40 @@ pub enum ModifyHook<V: ContentVersion> {
 }
 
 impl<V: ContentVersion> ModifyHook<V> {
+    /// Whether `Hook` walks `IterateCombatHookListeners` for this, which
+    /// hands a fight that is over or ending no listeners. The rest walk the
+    /// run's, which keep answering.
+    pub const fn combat_listeners(&self) -> bool {
+        match self {
+            ModifyHook::GoldGained
+            | ModifyHook::RestSiteHealAmount
+            | ModifyHook::DamageAdditive { .. }
+            | ModifyHook::DamageMultiplicative { .. }
+            | ModifyHook::DamageCap { .. }
+            | ModifyHook::HpLostBeforeOsty { .. }
+            | ModifyHook::HpLostBeforeOstyLate { .. }
+            | ModifyHook::HpLostAfterOsty { .. }
+            | ModifyHook::HpLostAfterOstyLate { .. }
+            | ModifyHook::MerchantPrice => false,
+            ModifyHook::BlockAdditive { .. }
+            | ModifyHook::BlockMultiplicative { .. }
+            | ModifyHook::PowerAmountGivenAdditive { .. }
+            | ModifyHook::PowerAmountGivenMultiplicative { .. }
+            | ModifyHook::PowerAmountReceived { .. }
+            | ModifyHook::HandDraw { .. }
+            | ModifyHook::HandDrawLate { .. }
+            | ModifyHook::StarCost { .. }
+            | ModifyHook::EnergyGain { .. }
+            | ModifyHook::MaxEnergy { .. }
+            | ModifyHook::EnergyCost { .. }
+            | ModifyHook::EnergyCostLate { .. }
+            | ModifyHook::OrbPassiveTriggerCount { .. }
+            | ModifyHook::XValue
+            | ModifyHook::OrbValue { .. }
+            | ModifyHook::CardPlayCount { .. } => true,
+        }
+    }
+
     /// The `AbstractModel` hook this is raised as.
     pub fn model_hook(&self) -> ModelHook {
         match self {
@@ -5731,6 +5765,10 @@ pub enum HookEffect<V: ContentVersion> {
     AddToDrawAtRandom {
         card: V::Card,
         count: V::Number,
+        /// `addedByPlayer` is the listener's owner, as a relic names it.
+        /// Personal Hive names nobody, though its Dazed land in the
+        /// player's pile.
+        by_owner: bool,
     },
     /// `PlayerCmd.GainEnergy`.
     GainEnergy(V::Number),

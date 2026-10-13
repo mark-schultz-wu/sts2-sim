@@ -46,6 +46,7 @@ pub(super) fn event_hook(
                 asked.push(HookEffect::AddToDrawAtRandom {
                     card: Cards::Status(StatusCard::Dazed),
                     count: DAZED,
+                    by_owner: true,
                 });
                 state.combats_left -= 1;
             }

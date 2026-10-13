@@ -3682,6 +3682,7 @@ pub(crate) fn event_hook(
         ) if target == holder => Some(HookEffect::AddToDrawAtRandom {
             card: Cards::Status(StatusCard::Dazed),
             count: amount,
+            by_owner: false,
         }),
         (
             Power::PersonalHivePower,

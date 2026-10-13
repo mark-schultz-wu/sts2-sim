@@ -1,0 +1,11 @@
+# `Hook.ModifyOrbValue` walks `IterateCombatHookListeners`, which hands a
+# fight that is over no listeners. Infused Core raises each Lightning to
+# four and nine while the fight lasts. Once a Strike wins it, the orbs
+# read three and eight.
+#
+# A walk that keeps answering after the win leaves them at four and nine.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"grant","relic":"INFUSED_CORE"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":300,"target":0}
+{"cmd":"play_card","index":0,"target":1}

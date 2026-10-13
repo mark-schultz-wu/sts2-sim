@@ -363,11 +363,12 @@ impl<'a, V: Rules> Board<'a, V> {
         if self.over() {
             return;
         }
-        let alive = self
-            .live
-            .creatures
-            .iter()
-            .any(|creature| creature.id == at && creature.alive);
+        // `IsAlive` is `CurrentHp > 0`, so a creature a hit took to nothing
+        // is dead to it before it dies.
+        let alive =
+            self.live.creatures.iter().any(|creature| {
+                creature.id == at && creature.alive && creature.hp > V::Health::zero()
+            });
         if super::listen::any_decides::<V>(
             self.walk(),
             sts2_core::DecisionHook::ShouldAllowHitting {
@@ -1302,14 +1303,20 @@ impl<'a, V: Rules> Board<'a, V> {
     /// come here.
     /// `AddGeneratedCardToCombat` of one new copy into the draw pile at
     /// `CardPilePosition.Random`. Nothing once the fight is over.
-    pub(super) fn add_to_draw_at_random(&mut self, card: V::Card) {
-        self.add_at_random_here(card, Pile::Draw);
+    pub(super) fn add_to_draw_at_random(&mut self, card: V::Card, creator: Option<CombatId>) {
+        self.add_at_random_here(card, Pile::Draw, creator);
     }
 
     /// `AddGeneratedCardToCombat` of one new copy into `pile` at
     /// `CardPilePosition.Random`: the place `Rng.Shuffle.NextInt(count + 1)`
-    /// names, from the top. Nothing once the fight is over.
-    fn add_at_random_here(&mut self, card: V::Card, pile: Pile) -> Option<CardAt<V>> {
+    /// names, from the top, made by `creator`. Nothing once the fight is
+    /// over.
+    fn add_at_random_here(
+        &mut self,
+        card: V::Card,
+        pile: Pile,
+        creator: Option<CombatId>,
+    ) -> Option<CardAt<V>> {
         use sts2_core::rng::GameRng as _;
 
         if self.stopped() {
@@ -1328,7 +1335,7 @@ impl<'a, V: Rules> Board<'a, V> {
             .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
         let at = CardAt::new(id, pile, index);
         self.card_entered_combat(at, card, false);
-        self.card_generated(at, card, self.creator());
+        self.card_generated(at, card, creator);
         Some(at)
     }
 
@@ -1582,11 +1589,13 @@ impl<'a, V: Rules> Board<'a, V> {
         self.ended == Some(super::Ended::Lost) || self.ending()
     }
 
-    /// A command stops on: a loss waits, or the win this effect saw still
-    /// holds. Cheaper than [`Board::over`] where nothing has ended.
+    /// A command stops on: a loss waits, the win this effect saw still
+    /// holds, or an earlier effect won the fight. Cheaper than
+    /// [`Board::over`] where nothing has ended.
     fn stopped(&self) -> bool {
         match self.ended {
-            None => false,
+            // A fight an earlier effect won stays over.
+            None => self.live.won,
             Some(super::Ended::Lost) => true,
             Some(super::Ended::Won) => self.ending(),
         }
@@ -2411,11 +2420,15 @@ impl<'a, V: Rules> Board<'a, V> {
                 HookEffect::RemoveFromOwner(power) => self.remove_power_carried(owner, power),
                 // `PowerCmd.Remove(this)`.
                 HookEffect::Remove => self.remove_power_carried(owner, this),
-                HookEffect::AddToDrawAtRandom { card, count } => {
+                HookEffect::AddToDrawAtRandom {
+                    card,
+                    count,
+                    by_owner,
+                } => {
                     let count: usize = num_traits::cast(count)
                         .unwrap_or_else(|| unimplemented!("{count:?} cards into the draw pile"));
                     for _ in 0..count {
-                        self.add_to_draw_at_random(card);
+                        self.add_to_draw_at_random(card, by_owner.then_some(owner));
                     }
                 }
                 HookEffect::KillOwner => self.kill_outright(owner, false),
@@ -2525,9 +2538,13 @@ fn scaled_by<V: Rules>(
     // Its own walk rather than [`answers`], which keeps the walk inlined on
     // this, the hot path.
     let mut answers = Answers::new();
-    super::listen::each::<V>(fight, hooks_of(phases), |listener, overrides| {
-        answer::<V>(listener, overrides, phases, &mut answers)
-    });
+    // `IterateCombatHookListeners` hands a fight that is over no listeners,
+    // so what an observation reads after the win is the number alone.
+    if !(fight.live.won && phases.iter().all(ModifyHook::combat_listeners)) {
+        super::listen::each::<V>(fight, hooks_of(phases), |listener, overrides| {
+            answer::<V>(listener, overrides, phases, &mut answers)
+        });
+    }
     answers.sort_by_key(|&(at, _)| at);
     let mut number = amount;
     let mut at = 0;
@@ -2564,9 +2581,13 @@ fn scaled_exactly<V: Rules>(
     phases: &[ModifyHook<V>],
 ) -> Decimal {
     let mut answers = Answers::new();
-    super::listen::each::<V>(fight, hooks_of(phases), |listener, overrides| {
-        answer::<V>(listener, overrides, phases, &mut answers)
-    });
+    // `IterateCombatHookListeners` hands a fight that is over no listeners,
+    // so what an observation reads after the win is the number alone.
+    if !(fight.live.won && phases.iter().all(ModifyHook::combat_listeners)) {
+        super::listen::each::<V>(fight, hooks_of(phases), |listener, overrides| {
+            answer::<V>(listener, overrides, phases, &mut answers)
+        });
+    }
     answers.sort_by_key(|&(at, _)| at);
     let number = scale.map_or(amount, |scale| amount * scale);
     worked_out::<V>(number, &answers)
@@ -3759,7 +3780,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn add_at_random(&mut self, card: V::Card, pile: Pile) -> Option<CardAt<V>> {
         self.ran_on();
-        self.add_at_random_here(card, pile)
+        self.add_at_random_here(card, pile, self.creator())
     }
 
     fn modify_power_amount(
@@ -5660,14 +5681,20 @@ impl<V: Rules> Board<'_, V> {
         results
     }
 
-    /// What an `AfterShuffle` listener asked for, carried out.
+    /// What an `AfterShuffle` listener asked for, carried out. A relic is
+    /// the only listener that adds cards then, and its owner is the player.
     fn after_shuffle(&mut self, effect: HookEffect<V>) {
         match effect {
-            HookEffect::AddToDrawAtRandom { card, count } => {
+            HookEffect::AddToDrawAtRandom {
+                card,
+                count,
+                by_owner,
+            } => {
                 let count: usize = num_traits::cast(count)
                     .unwrap_or_else(|| unimplemented!("{count:?} cards into the draw pile"));
+                let creator = by_owner.then(|| self.live.player().id);
                 for _ in 0..count {
-                    self.add_to_draw_at_random(card);
+                    self.add_to_draw_at_random(card, creator);
                 }
             }
             // `CreatureCmd.GainBlock`, unpowered, on a relic's owner, which
