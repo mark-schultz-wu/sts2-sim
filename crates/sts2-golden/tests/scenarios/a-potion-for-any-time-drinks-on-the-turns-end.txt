@@ -1,0 +1,12 @@
+# `NPotionPopup` asks whose turn it is only of a `CombatOnly` potion.
+# Well-Laid Plans asks what to keep as the turn ends. While it waits, the
+# Strength Potion is out of turn, and the Foul Potion, usable any time, is
+# not.
+#
+# A turn check asked of every potion refuses the Foul Potion too.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","potion":"FOUL_POTION"}
+{"cmd":"grant","potion":"STRENGTH_POTION"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"WELL_LAID_PLANS_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}

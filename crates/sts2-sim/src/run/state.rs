@@ -3189,7 +3189,7 @@ impl<V: Rules> State<V> {
                 // `CardReward.Populate` after the hook: three cards at the
                 // odds of the room named.
                 sts2_core::HookEffect::AddCardReward(room) => {
-                    use crate::reward::combat::{CARDS_OFFERED, Room};
+                    use crate::reward::combat::Room;
                     use sts2_core::RoomKinds as _;
 
                     let room = match room {
@@ -3199,18 +3199,23 @@ impl<V: Rules> State<V> {
                     };
                     let ascension = self.ascension();
                     let act = self.act();
-                    self.card_reward_unheard();
+                    // `CardCreationOptions.ForRoom`, whose source is an
+                    // encounter, so the options a won fight's reward gains it
+                    // gains too.
+                    let added = self.card_reward_added();
                     let pool = self.reward_pool();
                     let (rng, odds) = self.rewarding();
-                    let mut cards = crate::reward::card::encounter::<V, _>(
+                    let Offer::Card { mut cards, .. } = crate::reward::combat::card_reward::<V, _>(
                         rng,
                         odds,
                         ascension,
                         pool.drafted(),
-                        CARDS_OFFERED,
                         act,
-                        room.card_odds(),
-                    );
+                        room,
+                        &added,
+                    ) else {
+                        unreachable!("a card reward rolls a card offer");
+                    };
                     self.reward_options(&mut cards, true);
                     offered.push(Offer::Card {
                         cards,

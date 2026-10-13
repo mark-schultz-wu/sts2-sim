@@ -76,6 +76,10 @@ pub(super) struct Board<'a, V: Rules> {
     /// Whether a hit lands inside a [`Board::damage_command`], to wait for
     /// the command's last before its hooks run.
     commanding: bool,
+    /// The card making the attack under way, as it stood when the attack
+    /// began. `DamageCmd.Attack` takes its numbers as the command is built,
+    /// so a hit later in it reads them as they were.
+    attacking_as: Option<CardInstance<V>>,
 }
 
 /// The game's `PlayerChoiceContext`, as far as it decides what a question
@@ -210,6 +214,7 @@ impl<'a, V: Rules> Board<'a, V> {
             left: None,
             landed: None,
             commanding: false,
+            attacking_as: None,
         }
     }
 
@@ -262,7 +267,24 @@ impl<'a, V: Rules> Board<'a, V> {
             left: None,
             landed: None,
             commanding: false,
+            attacking_as: None,
         }
+    }
+
+    /// `Creature.CanReceivePowers` for a creature in the fight: no listener's
+    /// `ShouldAllowHitting` refuses it. `IsAlive` is `CurrentHp > 0`, so a
+    /// creature a hit took to nothing is dead to it before it dies.
+    fn can_receive_powers(&self, creature: CombatId) -> bool {
+        let alive = self
+            .live
+            .creatures
+            .iter()
+            .any(|held| held.id == creature && held.alive && held.hp > V::Health::zero());
+        !super::listen::any_decides::<V>(
+            self.walk(),
+            sts2_core::DecisionHook::ShouldAllowHitting { creature, alive },
+            false,
+        )
     }
 
     /// The card whose effect this is, as the fight holds it now.
@@ -271,6 +293,9 @@ impl<'a, V: Rules> Board<'a, V> {
     ///
     /// A card the fight no longer holds.
     fn acting(&self) -> Option<CardInstance<V>> {
+        if self.attacking_as.is_some() {
+            return self.attacking_as;
+        }
         self.playing.map(|id| {
             self.live
                 .cards
@@ -363,20 +388,7 @@ impl<'a, V: Rules> Board<'a, V> {
         if self.over() {
             return;
         }
-        // `IsAlive` is `CurrentHp > 0`, so a creature a hit took to nothing
-        // is dead to it before it dies.
-        let alive =
-            self.live.creatures.iter().any(|creature| {
-                creature.id == at && creature.alive && creature.hp > V::Health::zero()
-            });
-        if super::listen::any_decides::<V>(
-            self.walk(),
-            sts2_core::DecisionHook::ShouldAllowHitting {
-                creature: at,
-                alive,
-            },
-            false,
-        ) {
+        if !self.can_receive_powers(at) {
             return;
         }
         let id = at;
@@ -439,10 +451,14 @@ impl<'a, V: Rules> Board<'a, V> {
             }
         };
         let state = self.apply_fresh(at, power, amount, applier, copy);
-        // The hook can take the creature out of the fight.
+        // The hook can take the creature out of the fight, or kill one that
+        // stays in it, and `CanReceivePowers` is asked again.
         let Some(found) = self.at(id) else {
             return;
         };
+        if !self.can_receive_powers(id) {
+            return;
+        }
         debug_assert_eq!(found, at, "a power landing does not reorder the fight");
         if self
             .live
@@ -1402,8 +1418,11 @@ impl<'a, V: Rules> Board<'a, V> {
             }
         }
         // A power answers a card its own holder made, and that holder is the
-        // creature acting.
+        // creature acting. Its block names no `CardPlay`, so the card being
+        // played lends it no enchantment.
+        let playing = self.playing.take();
         super::hook::apply::<V, _>(self, rest);
+        self.playing = playing;
     }
 
     /// Who a card the acting creature makes is made by: the player, where
@@ -5610,7 +5629,10 @@ impl<V: Rules> Board<'_, V> {
         }
         // A command inside another's hits keeps its own results.
         let outer = self.landed.replace(sts2_core::AttackResults::new());
+        let acting = self.acting();
+        let as_was = std::mem::replace(&mut self.attacking_as, acting);
         hits(self);
+        self.attacking_as = as_was;
         let results = std::mem::replace(&mut self.landed, outer).unwrap_or_default();
         let attack = super::live::HeldAttack {
             command,
@@ -5863,6 +5885,7 @@ impl<'a, V: Rules> Board<'a, V> {
             left: None,
             landed: None,
             commanding: false,
+            attacking_as: None,
         }
     }
 }
