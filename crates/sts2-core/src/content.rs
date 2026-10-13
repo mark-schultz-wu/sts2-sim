@@ -3808,6 +3808,10 @@ pub enum EventHook<V: ContentVersion> {
         character: V::Character,
         /// `RunState.CurrentActIndex`.
         act: usize,
+        /// `Owner.PlayerCombatState?.TurnNumber`: the player's turn in the
+        /// fight it stands in, or in the last one it fought, which a fight
+        /// leaves behind. Nothing before the first.
+        turn: Option<V::Count>,
     },
     /// The character a relic is set up for, before it is obtained, as the
     /// ancient that offers Sea Glass sets its `CharacterId`.

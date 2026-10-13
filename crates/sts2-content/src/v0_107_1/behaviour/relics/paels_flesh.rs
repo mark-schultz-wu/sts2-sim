@@ -12,9 +12,12 @@ const ENERGY: Number = 1;
 /// The `TurnNumber` from which it adds.
 const FROM_TURN: u32 = 3;
 
-/// Its owner's `TurnNumber` while a fight runs, which its counter shows. The
-/// fight tells it each turn through `BeforeSideTurnStart`, which the game
-/// uses to refresh that counter.
+/// Its owner's `PlayerCombatState?.TurnNumber`, which its counter shows. A
+/// fight's state stays until the next fight replaces it. So out of a fight
+/// the counter shows the turn the last one reached.
+///
+/// It reads the number as it is picked up. A fresh fight's state starts at
+/// nought, and each turn moves it through `BeforeSideTurnStart`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct State {
     turn: Option<u32>,
@@ -24,11 +27,13 @@ pub struct State {
 /// side holds its owner.
 pub(super) fn event_hook(state: &mut State, hook: EventHook<V>) {
     match hook {
+        EventHook::Obtained { turn, .. } => state.turn = turn,
+        // `ResetCombatState`, as the fight is set up.
+        EventHook::CombatStarting { .. } => state.turn = Some(0),
         EventHook::BeforeSideTurnStart {
             side: CombatSide::Player,
             turn,
         } => state.turn = Some(turn),
-        EventHook::CombatEnd { .. } => state.turn = None,
         _ => {}
     }
 }

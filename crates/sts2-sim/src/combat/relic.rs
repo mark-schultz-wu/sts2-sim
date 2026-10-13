@@ -13,11 +13,16 @@ pub(crate) fn obtained<V: Rules>(
     held: &mut HeldRelic<V>,
     character: V::Character,
     act: usize,
+    turn: Option<V::Count>,
 ) -> sts2_core::HookEffects<V> {
     let mut asked = sts2_core::HookEffects::new();
     V::relic_event_hook(
         &mut held.state,
-        EventHook::Obtained { character, act },
+        EventHook::Obtained {
+            character,
+            act,
+            turn,
+        },
         &mut asked,
     );
     asked

@@ -2188,7 +2188,7 @@ pub(crate) struct Live<V: Rules> {
     /// What the run is being played at, which a card or a move reads for the
     /// numbers the level moves.
     pub(super) ascension: V::AscensionLevel,
-    pub(super) turn: V::Count,
+    pub(crate) turn: V::Count,
     pub(super) phase: V::PlayerTurnPhase,
     pub(super) energy: V::Count,
     pub(super) stars: V::Count,
