@@ -25,6 +25,8 @@ pub enum Resume {
     BurningPactExhaust,
     /// `BattleTrance`, after a question inside its draw was answered.
     BattleTranceDrew,
+    /// `Pillage`, after a question inside one of its draws was answered.
+    PillageDrew,
     /// `FiendFire`, after a question inside its exhausts was answered, with
     /// this many hits to land.
     FiendFireExhausted(u8),
@@ -36,6 +38,8 @@ pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V>
     match at {
         Resume::BattleTranceDrew => battle_trance_drew(fight),
         Resume::FiendFireExhausted(hits) => fiend_fire_hits(fight, usize::from(hits)),
+        // A draw that never ran, as the fight ended, drew nothing.
+        Resume::PillageDrew => Played::Done,
         at => unreachable!("{at:?} stops on a pick, not on a question it waited for"),
     }
 }
@@ -70,7 +74,7 @@ pub(super) fn resume_play<F: Fight<V>>(
     chosen: sts2_core::SelectedCards<V>,
 ) -> Played<V> {
     match at {
-        Resume::BattleTranceDrew | Resume::FiendFireExhausted(_) => {
+        Resume::BattleTranceDrew | Resume::FiendFireExhausted(_) | Resume::PillageDrew => {
             unreachable!("{at:?} waits on a question, not a pick")
         }
         // `CardPileCmd.Add(cardModel, PileType.Draw, CardPilePosition.Top)`.
@@ -685,22 +689,52 @@ fn molten_fist<F: Fight<V>>(fight: &mut F) -> Played<V> {
 fn pillage<F: Fight<V>>(fight: &mut F) -> Played<V> {
     let target = fight.target();
     strike(fight, target);
+    pillage_draws(fight)
+}
+
+/// `Pillage`'s draws, one card at a time. A shuffle inside one can ask, and
+/// the rest waits for it.
+fn pillage_draws<F: Fight<V>>(fight: &mut F) -> Played<V> {
     loop {
-        let before = fight.cards_in(Pile::Hand);
-        fight.draw(1);
-        let after = fight.cards_in(Pile::Hand);
-        let Some(drawn) = after
-            .iter()
-            .find(|card| !before.iter().any(|held| held.id() == card.id()))
-        else {
-            break;
-        };
-        let attack = V::card_kind(fight.card_ident(*drawn).card) == Some(CardKind::Attack);
-        if !attack || after.len() >= sts2_core::MAX_CARDS_IN_HAND {
-            break;
+        let drew = fight.draw(1);
+        if fight.waiting() {
+            return Played::Waiting {
+                at: super::super::Resume::Card(super::Resume::Ironclad(Resume::PillageDrew)),
+            };
+        }
+        if !pillage_goes_on(fight, &drew) {
+            return Played::Done;
         }
     }
-    Played::Done
+}
+
+/// Whether `Pillage` draws again after `drew`: the card it drew is an Attack,
+/// wherever it stands now, and the hand has room.
+fn pillage_goes_on<F: Fight<V>>(fight: &F, drew: &[sts2_core::CardId<V>]) -> bool {
+    let Some(&id) = drew.first() else {
+        return false;
+    };
+    let drawn = fight
+        .find_card(id)
+        .unwrap_or_else(|| unimplemented!("Pillage reading {id:?}, which left the fight"));
+    V::card_kind(fight.card_ident(drawn).card) == Some(CardKind::Attack)
+        && fight.cards_in(Pile::Hand).len() < sts2_core::MAX_CARDS_IN_HAND
+}
+
+/// The rest of an Ironclad card's play that waited on its own draw, with
+/// every copy that draw drew.
+pub(super) fn resume_drew<F: Fight<V>>(
+    fight: &mut F,
+    at: Resume,
+    drew: &[sts2_core::CardId<V>],
+) -> Played<V> {
+    match at {
+        Resume::PillageDrew => match pillage_goes_on(fight, drew) {
+            true => pillage_draws(fight),
+            false => Played::Done,
+        },
+        at => resume_waited(fight, at),
+    }
 }
 
 /// `Whirlwind`: its damage to every enemy, once for each energy of its X.

@@ -155,6 +155,24 @@ impl<V: Rules, P: Piles> Cards<V, P> {
         self.piles.position(pile.into(), number(id))
     }
 
+    /// Where the copy `id` names stands, wherever the fight holds it.
+    pub(crate) fn find_any(&self, id: CardId<V>) -> Option<sts2_core::CardAt<V>> {
+        use super::piles::Place;
+
+        let card = number(id);
+        let place = self.piles.place(card)?;
+        let pile = match place {
+            Place::Hand => Pile::Hand,
+            Place::Draw => Pile::Draw,
+            Place::Discard => Pile::Discard,
+            Place::Exhaust => Pile::Exhaust,
+            Place::Play => Pile::Play,
+        };
+        let at = self.piles.position(place, card)?;
+        let at = num_traits::NumCast::from(at).expect("a pile's index fits the build's");
+        Some(sts2_core::CardAt::new(id, pile, at))
+    }
+
     /// The copy `id` names, wherever the fight holds it.
     pub(crate) fn named(&self, id: CardId<V>) -> Option<CardInstance<V>> {
         let card = number(id);

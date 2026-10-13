@@ -25,7 +25,9 @@ pub(crate) fn apply<V: Rules, F: Fight<V>>(
                 }
             }
             HookEffect::LoseEnergy(amount) => fight.modify_energy(-amount),
-            HookEffect::Draw(amount) => fight.draw(amount),
+            HookEffect::Draw(amount) => {
+                fight.draw(amount);
+            }
             HookEffect::GenerateForCombat { kind, count } => {
                 let pool: Vec<V::Card> = V::combat_cards(fight.character())
                     .iter()

@@ -29,6 +29,8 @@ pub enum Resume {
     HandTrick,
     /// `Nightmare`, after its owner picked the card to copy.
     Nightmare,
+    /// `EscapePlan`, after a question inside its draw was answered.
+    EscapePlanDrew,
 }
 
 pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
@@ -141,24 +143,15 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
             Played::Done
         }
         // `EscapePlan`: a card drawn, then its block where that card is a
-        // Skill. The history holds the draw as it happens.
+        // Skill. A shuffle inside the draw can ask, and the block waits.
         SilentCard::EscapePlan => {
-            let before = fight.history().drawn_this_turn().count();
-            fight.draw(1);
-            let skill = fight
-                .history()
-                .drawn_this_turn()
-                .nth(before)
-                .is_some_and(|card| V::card_kind(card) == Some(CardKind::Skill));
-            if skill {
-                let block = fight.resolve(Effect::GainBlock {
-                    recipient: fight.actor(),
-                    amount: Amount::Var(CardVar::Block),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(block);
+            let drew = fight.draw(1);
+            if fight.waiting() {
+                return Played::Waiting {
+                    at: super::super::Resume::Card(super::Resume::Silent(Resume::EscapePlanDrew)),
+                };
             }
-            Played::Done
+            escape_plan_drew(fight, &drew)
         }
         // `CloakAndDagger`: its block, then its `Cards` of Shivs into hand
         // one at a time.
@@ -461,6 +454,7 @@ pub(super) fn resume_play<F: Fight<V>>(
         Resume::HiddenDaggersShivs => {
             unreachable!("Hidden Daggers' Shivs wait on a card, not a pick")
         }
+        Resume::EscapePlanDrew => unreachable!("Escape Plan waits on its draw, not a pick"),
     }
 }
 
@@ -469,9 +463,44 @@ pub(super) fn resume_play<F: Fight<V>>(
 /// # Panics
 ///
 /// A resume point no play waits at.
+/// `EscapePlan`, once its draw is over: its block where the card it drew is
+/// a Skill, wherever that card stands now.
+fn escape_plan_drew<F: Fight<V>>(fight: &mut F, drew: &[sts2_core::CardId<V>]) -> Played<V> {
+    let skill = drew.first().is_some_and(|&id| {
+        let drawn = fight
+            .find_card(id)
+            .unwrap_or_else(|| unimplemented!("Escape Plan reading {id:?}, which left the fight"));
+        V::card_kind(fight.card_ident(drawn).card) == Some(CardKind::Skill)
+    });
+    if skill {
+        let block = fight.resolve(Effect::GainBlock {
+            recipient: fight.actor(),
+            amount: Amount::Var(CardVar::Block),
+            scaling: Scaling::Dynamic,
+        });
+        fight.apply(block);
+    }
+    Played::Done
+}
+
+/// The rest of a Silent card's play that waited on its own draw, with every
+/// copy that draw drew.
+pub(super) fn resume_drew<F: Fight<V>>(
+    fight: &mut F,
+    at: Resume,
+    drew: &[sts2_core::CardId<V>],
+) -> Played<V> {
+    match at {
+        Resume::EscapePlanDrew => escape_plan_drew(fight, drew),
+        at => resume_waited(fight, at),
+    }
+}
+
 pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
     match at {
         Resume::HiddenDaggersShivs => hidden_daggers_shivs(fight),
+        // A draw that never ran, as the fight ended, drew nothing.
+        Resume::EscapePlanDrew => escape_plan_drew(fight, &[]),
         at => unimplemented!("{at:?} resumed after waiting"),
     }
 }

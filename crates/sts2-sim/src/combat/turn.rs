@@ -1714,6 +1714,7 @@ pub(super) fn carry_setup<V: Rules>(
                     left,
                     true,
                     resumed,
+                    None,
                 ) {
                     // A card auto-played as it is drawn can end the fight, and
                     // an ending fight hands the hooks after it no listeners.
@@ -2069,6 +2070,7 @@ pub(super) fn carry_setup<V: Rules>(
                 left,
                 false,
                 resumed,
+                None,
             ) {
                 super::board::Drawn::Done(Some(ended)) => return Carried::Done(Some(ended)),
                 super::board::Drawn::Done(None) => Setup::PlayerTurnStart(rest),
@@ -3620,7 +3622,9 @@ fn applied<V: Rules>(
                 unblockable,
                 dealer,
             } => board.hit_unpowered(dealer, owner, amount, unblockable),
-            TurnEndAsk::Draw(amount) => sts2_core::Fight::draw(&mut board, amount),
+            TurnEndAsk::Draw(amount) => {
+                sts2_core::Fight::draw(&mut board, amount);
+            }
             TurnEndAsk::Relic(effect) => super::hook::apply::<V, _>(&mut board, [effect]),
             TurnEndAsk::Heal(at, amount) => sts2_core::Fight::heal(&mut board, at, amount),
             TurnEndAsk::Decrement(at, power) => {

@@ -1086,6 +1086,21 @@ pub(crate) fn resume_play<F: Fight<V>>(
 
 /// The rest of a play that waited on a card it auto-played, whose play is
 /// over.
+/// The rest of a play that waited on its own draw, with every copy the draw
+/// drew. A play that waited on anything else carries on as after a wait.
+pub(crate) fn resume_drew<F: Fight<V>>(
+    fight: &mut F,
+    at: Resume,
+    drew: &[sts2_core::CardId<V>],
+) -> Played<V> {
+    match at {
+        Resume::Defect(at) => defect::resume_drew(fight, at, drew),
+        Resume::Ironclad(at) => ironclad::resume_drew(fight, at, drew),
+        Resume::Silent(at) => silent::resume_drew(fight, at, drew),
+        at => resume_waited(fight, at),
+    }
+}
+
 pub(crate) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
     match at {
         Resume::Colorless(at) => colorless::resume_waited(fight, at),
