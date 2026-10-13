@@ -1,0 +1,15 @@
+# `CombatState.CreateCreature` keeps a new enemy's health clear of the other
+# enemies' maxima, and Osty stands with the allies. Three Bodyguards take
+# Osty to sixteen. The Ovicopter's eggs then roll fourteen to eighteen, and
+# sixteen stays open to them.
+#
+# A port that counts Osty among the healths to avoid rolls other eggs.
+{"cmd":"start","seed":"0RACLE2","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"OVICOPTER_NORMAL"}
+{"cmd":"grant","card":"BODYGUARD"}
+{"cmd":"grant","card":"BODYGUARD"}
+{"cmd":"grant","card":"BODYGUARD"}
+{"cmd":"play_card","index":7}
+{"cmd":"play_card","index":6}
+{"cmd":"play_card","index":5}
+{"cmd":"end_turn"}

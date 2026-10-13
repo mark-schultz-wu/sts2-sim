@@ -885,6 +885,9 @@ pub(super) enum OrbMoment {
 /// if a trigger ended it.
 ///
 /// The queue is read once, before the first trigger, as `Orbs.ToList()` is.
+/// A trigger that ends the fight stops none after it. The game stops only
+/// once the player leaves the combat state. So a Glass orb behind the one
+/// that killed the last enemy still loses its one.
 ///
 /// # Panics
 ///
@@ -900,6 +903,7 @@ pub(super) fn orb_triggers<V: Rules>(
         Some(orbs) if !orbs.queue.is_empty() => orbs.queue.clone(),
         _ => return None,
     };
+    let mut first_ended = None;
     for (place, orb) in held.into_iter().enumerate() {
         // `Hook.ModifyOrbPassiveTriggerCount` from one. Its
         // `AfterModifyingOrbPassiveTriggerCount` only flashes the one relic
@@ -918,12 +922,10 @@ pub(super) fn orb_triggers<V: Rules>(
             }
             let ended = board.ended();
             keep_orb(live, place, orb);
-            if let Some(ended) = ended {
-                return Some(ended);
-            }
+            first_ended = first_ended.or(ended);
         }
     }
-    None
+    first_ended
 }
 
 /// The numbers an orb's trigger moved, kept on the orb at `place` while that

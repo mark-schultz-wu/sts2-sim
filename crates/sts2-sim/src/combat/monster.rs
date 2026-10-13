@@ -40,15 +40,13 @@ pub(crate) struct Roster<'a, V: Rules> {
     pub(crate) rolled: &'a [V::Health],
 }
 
-/// The maximum health of each monster among `creatures`, which a roll keeps
-/// clear of.
+/// The maximum health of each enemy among `creatures`, which a roll keeps
+/// clear of. Only the enemy side's list counts, so Osty's is no bar.
 fn monster_hps<V: Rules>(creatures: &[Fighter<V>]) -> SmallVec<[V::Health; CREATURES]> {
     creatures
         .iter()
-        .filter_map(|creature| match creature.model {
-            Some(ModelId::Monster(_)) => Some(creature.max_hp),
-            _ => None,
-        })
+        .filter(|creature| creature.side == <V::CombatSide as SideKinds>::ENEMY)
+        .map(|creature| creature.max_hp)
         .collect()
 }
 

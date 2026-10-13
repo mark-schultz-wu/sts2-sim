@@ -1,0 +1,12 @@
+# `OrbQueue.BeforeTurnEnd` stops only once the player leaves the combat
+# state, so every orb still triggers after the one that ends the fight. Fifty
+# Focus makes Cracked Core's Lightning kill the Nibbit at the turn's end. The
+# Glass orb behind it then finds no enemy, but still drops one off its base.
+#
+# A port that stops the queue at the win leaves the Glass orb on its four.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"FOCUS_POWER","amount":50,"target":0}
+{"cmd":"grant","card":"GLASSWORK"}
+{"cmd":"play_card","index":5}
+{"cmd":"end_turn"}
