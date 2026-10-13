@@ -3882,20 +3882,23 @@ pub(crate) fn event_hook(
             Some(HookEffect::GainBlockAndRemove(amount))
         }
         // `ReattachPower.AfterDeath`, which sends the segment to the dead move
-        // its own graph holds. The reattach that follows it is the graph's, so
-        // nothing here installs one.
+        // its own graph holds, and sets `isReviving`, while another segment
+        // stands. The reattach that follows it is the graph's, so nothing
+        // here installs one.
         //
-        // A segment whose row is otherwise dead is left where it lies. The
-        // fight is over by then, and the game spends that branch on the fade
-        // every segment plays.
-        //
-        // `isReviving` is set too. The segment that dies with the rest of its
-        // row sets nothing in the game, and the fight ends with it.
+        // The last segment to die keeps the move it showed. The game spends
+        // that branch on the fade every segment plays, and the fight ends.
         (Power::ReattachPower, _, EventHook::AfterDeath { creature, .. }) if creature == holder => {
-            state.set_reviving(true);
-            Some(HookEffect::EnterMove {
-                to: MoveId::DeadMove,
-                force: false,
+            let others = fight.living_opponents(fight.player());
+            let standing = others
+                .iter()
+                .any(|&other| other != holder && fight.power(other, Power::ReattachPower).is_some());
+            standing.then(|| {
+                state.set_reviving(true);
+                HookEffect::EnterMove {
+                    to: MoveId::DeadMove,
+                    force: false,
+                }
             })
         }
         (Power::IllusionPower, _, EventHook::AfterDeath { creature, .. }) if creature == holder => {
