@@ -97,6 +97,7 @@ pub(crate) fn enter<V: Rules>(
         cards: Cards::with_cards(0),
         removed_from_deck: Vec::new(),
         ending_turn: false,
+        effect_depth: 0,
         point: entering.coord,
         deck_versions: super::live::DeckVersions::none(),
         taken_from_deck: Vec::new(),

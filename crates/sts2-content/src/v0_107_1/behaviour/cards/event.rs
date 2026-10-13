@@ -385,11 +385,21 @@ fn maul<F: Fight<V>>(fight: &mut F) -> Played<V> {
 /// `Apotheosis`: every other card its owner holds in the fight upgraded,
 /// where it can be.
 fn apotheosis<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    // `AllCards` less itself: the hand, the draw, discard and exhaust piles.
-    // `CardCmd.Upgrade` leaves a card at its highest alone.
-    for pile in [Pile::Hand, Pile::Draw, Pile::Discard, Pile::Exhaust] {
+    // `AllCards` less itself: the hand, the draw, discard, exhaust and play
+    // piles, where a card that auto-played it stands. `CardCmd.Upgrade`
+    // leaves a card at its highest alone.
+    let this = fight.playing();
+    for pile in [
+        Pile::Hand,
+        Pile::Draw,
+        Pile::Discard,
+        Pile::Exhaust,
+        Pile::Play,
+    ] {
         for card in fight.cards_in(pile) {
-            fight.modify_card(card, Change::Upgrade, Lasting::ThisFight);
+            if card.id() != this {
+                fight.modify_card(card, Change::Upgrade, Lasting::ThisFight);
+            }
         }
     }
     Played::Done

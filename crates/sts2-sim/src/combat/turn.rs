@@ -1647,10 +1647,11 @@ pub(super) fn carry_setup<V: Rules>(
                                 true => Pile::Discard,
                                 false => Pile::Hand,
                             };
+                            // A full hand sends it to the bottom of the
+                            // discard pile, out of the discard pile too.
                             match found {
                                 Some((Pile::Hand, _)) => {}
-                                Some((from, at)) if from != to => live.cards.move_to(from, at, to),
-                                Some(_) => {}
+                                Some((from, at)) => live.cards.move_to(from, at, to),
                                 None => unimplemented!(
                                     "a card moving to the hand from outside the piles"
                                 ),
@@ -1832,16 +1833,21 @@ pub(super) fn carry_setup<V: Rules>(
                             };
                             live.remove_power(owner, power);
                         }
-                        // `PowerModel.SetAmount`, which no hook hears.
+                        // `PowerModel.SetAmount` on the listener's own instance,
+                        // which no hook hears.
                         sts2_core::HookEffect::SetAmount(amount) => {
-                            let Listener::Power { owner, power, .. } = listener else {
+                            let Listener::Power { owner, at, power } = listener else {
                                 unimplemented!("{listener:?} setting its amount as the turn starts")
                             };
-                            for held in live.powers.of_mut(owner) {
-                                if held.power() == power {
-                                    held.amount = super::live::Stacked::counted(amount);
-                                }
-                            }
+                            let held = live
+                                .powers
+                                .of_mut(owner)
+                                .nth(usize::from(at))
+                                .filter(|held| held.power() == power)
+                                .unwrap_or_else(|| {
+                                    unimplemented!("{power:?} moved before it set its amount")
+                                });
+                            held.amount = super::live::Stacked::counted(amount);
                         }
                         // `OrbCmd.Passive` on whichever orb is first each
                         // time, which returns once the fight is ending.

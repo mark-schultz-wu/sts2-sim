@@ -1,0 +1,15 @@
+# `CheckForEmptyHand` runs after any play while no card or potion effect is
+# running. Second Wind exhausts the Defends and Bash is played, which leaves
+# a Strike. Stampede plays it as the turn ends, the hand is empty, and
+# Unceasing Top draws a card before the hand is discarded.
+#
+# A check that only a decision's play makes leaves the draw pile whole.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"UNCEASING_TOP"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"STAMPEDE_POWER","amount":1,"target":0}
+{"cmd":"power","power":"PLATING_POWER","amount":100,"target":0}
+{"cmd":"grant","card":"SECOND_WIND"}
+{"cmd":"play_card","index":5}
+{"cmd":"play_card","index":1,"target":1}
+{"cmd":"end_turn"}

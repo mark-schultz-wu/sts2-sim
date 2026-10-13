@@ -2435,6 +2435,8 @@ impl<V: Rules> State<V> {
                     self.heal(self.player.max_hp * percent / hundred);
                     continue;
                 }
+                // `RewardsSet.Offer` makes nothing for a dead player.
+                HookEffect::OfferRewards(_) if self.player.hp == num_traits::zero() => continue,
                 HookEffect::OfferRewards(rewards) => Pickup::Rewards {
                     offered: self.custom_rewards(
                         rewards,
