@@ -1165,9 +1165,12 @@ fn before_turn_end<V: Rules>(
                 }
                 let mut board =
                     Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
-                for target in board.hittable_opponents_of(owner) {
-                    board.hit_unpowered(Some(owner), target, amount, false);
-                }
+                let targets = board.hittable_opponents_of(owner);
+                board.damage_command(|board| {
+                    for target in targets {
+                        board.hit_unpowered(Some(owner), target, amount, false);
+                    }
+                });
                 ended = board.ended();
             }
             // `PowerCmd.Remove(this)`, on the instance that asked.
@@ -1215,18 +1218,21 @@ fn before_turn_end<V: Rules>(
                 }
                 let mut board =
                     Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
-                for target in sts2_core::Fight::opponents(&board) {
-                    let hit = sts2_core::Fight::resolve(
-                        &board,
-                        sts2_core::Effect::Attack {
-                            dealer: owner,
-                            target,
-                            damage: sts2_core::Amount::Number(amount),
-                            scaling: sts2_core::Scaling::Static,
-                        },
-                    );
-                    sts2_core::Fight::apply(&mut board, hit);
-                }
+                let targets = sts2_core::Fight::opponents(&board);
+                board.damage_command(|board| {
+                    for target in targets {
+                        let hit = sts2_core::Fight::resolve(
+                            board,
+                            sts2_core::Effect::Attack {
+                                dealer: owner,
+                                target,
+                                damage: sts2_core::Amount::Number(amount),
+                                scaling: sts2_core::Scaling::Static,
+                            },
+                        );
+                        sts2_core::Fight::apply(board, hit);
+                    }
+                });
                 ended = board.ended();
             }
             // `CreatureCmd.GainBlock`, unpowered, on the player who carries
@@ -1708,18 +1714,21 @@ pub(super) fn carry_setup<V: Rules>(
                                 None,
                                 None,
                             );
-                            for target in board.hittable_opponents() {
-                                let hit = sts2_core::Fight::resolve(
-                                    &board,
-                                    sts2_core::Effect::Attack {
-                                        dealer: player,
-                                        target,
-                                        damage: sts2_core::Amount::Number(amount),
-                                        scaling: sts2_core::Scaling::Static,
-                                    },
-                                );
-                                sts2_core::Fight::apply(&mut board, hit);
-                            }
+                            let targets = board.hittable_opponents();
+                            board.damage_command(|board| {
+                                for target in targets {
+                                    let hit = sts2_core::Fight::resolve(
+                                        board,
+                                        sts2_core::Effect::Attack {
+                                            dealer: player,
+                                            target,
+                                            damage: sts2_core::Amount::Number(amount),
+                                            scaling: sts2_core::Scaling::Static,
+                                        },
+                                    );
+                                    sts2_core::Fight::apply(board, hit);
+                                }
+                            });
                             ended = ended.or(board.ended());
                         }
                         sts2_core::HookEffect::ChooseFromPoolIntoHand { count, writes } => {

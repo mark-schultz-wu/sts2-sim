@@ -86,15 +86,18 @@ pub(crate) fn apply<V: Rules, F: Fight<V>>(
             // `CreatureCmd.Damage` over `HittableEnemies`, unpowered and from
             // the owner.
             HookEffect::DamageOpponents(amount) => {
-                for target in fight.hittable_opponents() {
-                    let hit = fight.resolve(sts2_core::Effect::Attack {
-                        dealer: fight.actor(),
-                        target,
-                        damage: sts2_core::Amount::Number(amount),
-                        scaling: sts2_core::Scaling::Static,
-                    });
-                    fight.apply(hit);
-                }
+                let targets = fight.hittable_opponents();
+                fight.damage_command(|fight| {
+                    for target in targets {
+                        let hit = fight.resolve(sts2_core::Effect::Attack {
+                            dealer: fight.actor(),
+                            target,
+                            damage: sts2_core::Amount::Number(amount),
+                            scaling: sts2_core::Scaling::Static,
+                        });
+                        fight.apply(hit);
+                    }
+                });
             }
             // `CreatureCmd.Damage` on one of `HittableEnemies` drawn off
             // `CombatTargets`, unpowered.
