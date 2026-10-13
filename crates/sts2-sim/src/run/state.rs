@@ -1337,11 +1337,23 @@ impl<V: Rules> State<V> {
             sts2_core::DeckAct::TransformInto(into) => {
                 use sts2_core::CardTable as _;
 
-                let mut gone = taken.to_vec();
-                gone.sort_unstable();
-                let replaced: Vec<CardIdent<V>> = gone
+                // `CardCmd.Transform` takes each card out in the order it was
+                // picked, noting where it stood once the ones before it were
+                // gone. It adds the replacements sorted by that, and a tie
+                // keeps the pick order: `List.Sort` on a list this short is
+                // an insertion sort.
+                let mut order: Vec<(usize, usize)> = taken
                     .iter()
-                    .map(|&at| {
+                    .enumerate()
+                    .map(|(picked, &at)| {
+                        let before = taken[..picked].iter().filter(|&&gone| gone < at).count();
+                        (at - before, at)
+                    })
+                    .collect();
+                order.sort_by_key(|&(stood, _)| stood);
+                let replaced: Vec<CardIdent<V>> = order
+                    .iter()
+                    .map(|&(_, at)| {
                         let original = self.player.deck[at].ident;
                         let mut ident = CardIdent::new(into);
                         if original.upgrade > 0 && into.max_upgrade() > 0 {
@@ -1355,6 +1367,8 @@ impl<V: Rules> State<V> {
                         ident
                     })
                     .collect();
+                let mut gone = taken.to_vec();
+                gone.sort_unstable();
                 for &at in gone.iter().rev() {
                     self.player.deck_mut().remove(at);
                 }
@@ -5150,8 +5164,12 @@ impl<V: Rules> State<V> {
                 self.purchase_everything(Some(shelf));
             }
         }
-        // A rest site's option is done once its pickup is.
-        if let Phase::RestSite { .. } = &self.phase {
+        // A rest site's option is done once its pickup is. A pickup no
+        // option made, such as a relic granted there, finishes none.
+        if let Phase::RestSite {
+            chosen: Some(_), ..
+        } = &self.phase
+        {
             self.rest_option_through();
         }
         Decided::Resolved

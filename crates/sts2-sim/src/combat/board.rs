@@ -3248,6 +3248,13 @@ pub(crate) fn var<V: Rules>(
     let number = held.face.number(key);
     match number.calculated {
         false => number.base,
+        // `CalculatedVar.Calculate` counts nothing once `IsInProgress` is
+        // false, so a fight won or lost leaves the base alone.
+        true if live.won || live.lost => {
+            held.face
+                .number(<V::CardVar as sts2_core::CardVars>::CALCULATION_BASE)
+                .base
+        }
         true => {
             let standing = osty::<V>(&live.creatures).filter(|osty| osty.alive);
             let osty = standing.map(|osty| osty.hp);

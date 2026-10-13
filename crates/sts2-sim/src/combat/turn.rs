@@ -1330,6 +1330,28 @@ fn park_setup<V: Rules>(
     stage: Setup<V>,
     question: super::live::Asked<V>,
 ) -> Carried {
+    // `CardSelectCmd.FromHand` lists the hand as it asks. The setup's task
+    // pauses there, and `AfterSideTurnStart` runs on while it waits, so a
+    // card a listener adds then is not among the choices.
+    let question = match question {
+        super::live::Asked::Pile {
+            pile: Pile::Hand,
+            selection,
+        } => super::live::Asked::Among {
+            cards: live
+                .cards
+                .iter(Pile::Hand)
+                .enumerate()
+                .map(|(at, held)| {
+                    let at = num_traits::NumCast::from(at)
+                        .unwrap_or_else(|| unimplemented!("a hand deeper than a fight can number"));
+                    sts2_core::CardAt::new(held.id, Pile::Hand, at)
+                })
+                .collect(),
+            selection,
+        },
+        question => question,
+    };
     live.asking = Some(super::live::Asking {
         then: Then::Setup { act },
         question,
