@@ -4923,6 +4923,12 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         if self.stopped() {
             return;
         }
+        // `CombatManager.IsEnding` heals no creature but a player. A hit
+        // that took the last enemy to nothing has the fight ending already,
+        // so Sic 'Em's summon then grows Osty without healing it.
+        if at != self.live.player().id && self.ending() {
+            return;
+        }
         let Some(creature) = self.live.creatures.iter_mut().find(|c| c.id == at) else {
             return;
         };
