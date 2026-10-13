@@ -29,17 +29,17 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ## Open
 
-### 1. A Divine answer
-
-32 runs first part after answering a Divine question.
-
-### 2. Phrog Parasite's turn
+### 1. Phrog Parasite's turn
 
 28 runs first part after a turn ends against the Phrog Parasite elite.
 
-### 3. Aeonglass's turn
+### 2. Aeonglass's turn
 
-25 runs first part after a turn ends against the Aeonglass boss.
+27 runs first part after a turn ends against the Aeonglass boss.
+
+### 3. The Insatiable's turn
+
+24 runs first part after a turn ends against The Insatiable.
 
 ### 4. Every other split the recorded runs find
 

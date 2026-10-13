@@ -2451,8 +2451,14 @@ impl<V: Rules> State<V> {
                         unreachable!("only an event offers rewards of its own")
                     };
                     let rewards = V::event_rewards(state);
+                    let offered = self.custom_rewards(&rewards, sts2_core::Stream::Event);
+                    // `RewardsSet.Offer` puts up no screen for an empty set
+                    // outside a fight, which `OfferCustom` does not allow.
+                    if offered.is_empty() {
+                        continue;
+                    }
                     Pickup::Rewards {
-                        offered: self.custom_rewards(&rewards, sts2_core::Stream::Event),
+                        offered,
                         skippable: true,
                     }
                 }
