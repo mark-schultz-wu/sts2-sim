@@ -87,6 +87,10 @@ pub(crate) struct Machine<V: Rules> {
     pub(crate) machine: MoveMachine,
     /// What the monster's own model keeps between its moves.
     pub(crate) state: V::MonsterState,
+    /// `MonsterModel.SpawnedThisTurn`: set as it is set up, and cleared as
+    /// the sides switch. A monster that comes in during its side's turn
+    /// takes no turn then.
+    pub(crate) spawned_this_turn: bool,
 }
 
 impl<V: Rules> Clone for Machine<V> {
@@ -191,6 +195,7 @@ pub(crate) fn initialize<V: Rules>(
             slot,
             machine,
             state,
+            spawned_this_turn: true,
         });
         creatures.push(Fighter {
             id,
@@ -375,6 +380,7 @@ pub(super) fn summon_built<V: Rules>(
             slot,
             machine: V::opening_move_machine(monster, opens_on),
             state,
+            spawned_this_turn: true,
         },
     );
     for (position, held) in live.machines.iter_mut().enumerate() {
