@@ -1436,6 +1436,10 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                     // The model is the card's, wherever its play put it.
                     next.cards
                         .write_named(card, |face| face.set_enchantment_state(state));
+                    // The enchantment's play can kill its owner too.
+                    if next.lost {
+                        return Ok(effect.ended);
+                    }
                 }
                 let ended = finished::<V, _>(
                     Fighting {
@@ -1806,7 +1810,7 @@ fn finished<V: Rules, S: LendsCombat>(
         },
     );
     if !asked.is_empty() {
-        let mut rest: SmallVec<[sts2_core::HookEffect<V>; 4]> = SmallVec::new();
+        // Each listener acts as the walk reaches it.
         for (listener, effect) in asked {
             match (listener, effect) {
                 // Written on the card that asked, wherever it stands.
@@ -1913,18 +1917,18 @@ fn finished<V: Rules, S: LendsCombat>(
                     }
                     ended = ended.or(board.ended());
                 }
-                // `PowerCmd.Apply` from nobody.
                 (
                     super::listen::Listener::Power { .. },
                     sts2_core::HookEffect::ApplyPower {
                         target,
                         power,
                         amount,
+                        applier,
                     },
                 ) => {
                     let mut board =
                         Board::for_card(next, streams.combat(), relics, ascension, None, None);
-                    board.land(target, power, amount, None);
+                    board.land(target, power, amount, applier);
                     ended = ended.or(board.ended());
                 }
                 // `CardCmd.Upgrade` on a copy wherever it stands, which skips
@@ -1944,22 +1948,24 @@ fn finished<V: Rules, S: LendsCombat>(
                     Board::for_card(next, streams.combat(), relics, ascension, None, None)
                         .write_cards([effect]);
                 }
-                (_, effect) => rest.push(effect),
+                // The play's own choice context, so a shuffle's question
+                // inside a listener's `CardPileCmd.Draw` stands the play still.
+                (_, effect) => {
+                    if next.asking.is_some() {
+                        unimplemented!(
+                            "{effect:?} after a play, behind a question a listener asked"
+                        );
+                    }
+                    let mut board =
+                        Board::for_card(next, streams.combat(), relics, ascension, None, None)
+                            .blocking();
+                    hook::apply::<V, _>(&mut board, [effect]);
+                    ended = ended.or(board.ended());
+                    let skipped = std::mem::take(&mut board.skipped);
+                    merge::<V>(&mut next.skip_tick, skipped);
+                }
             }
         }
-        // The play's own choice context, so a shuffle's question inside a
-        // listener's `CardPileCmd.Draw` stands the play still.
-        let mut board =
-            Board::for_card(next, streams.combat(), relics, ascension, None, None).blocking();
-        for effect in rest {
-            if board.live.asking.is_some() {
-                unimplemented!("{effect:?} after a play, behind a question a listener asked");
-            }
-            hook::apply::<V, _>(&mut board, [effect]);
-        }
-        ended = ended.or(board.ended());
-        let skipped = std::mem::take(&mut board.skipped);
-        merge::<V>(&mut next.skip_tick, skipped);
     }
     if ended.is_none() {
         if next.asking.is_some() {

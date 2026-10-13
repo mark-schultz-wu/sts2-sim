@@ -2524,6 +2524,7 @@ pub(crate) fn event_hook(
                 target: holder,
                 power: Power::StrengthPower,
                 amount: PowerAmount::Counted(amount),
+                applier: Some(holder),
             })
         }
         (Power::RupturePower, PowerAmount::Endless, EventHook::DamageReceived { .. }) => {
@@ -3060,6 +3061,7 @@ pub(crate) fn event_hook(
                 target: holder,
                 power: Power::DoomPower,
                 amount: PowerAmount::Counted(amount),
+                applier,
             })
         }
         // `OblivionPower.AfterSideTurnEnd`: gone as the player's turn ends.
@@ -3396,6 +3398,7 @@ pub(crate) fn event_hook(
             target,
             power: Power::PoisonPower,
             amount: PowerAmount::Counted(amount),
+            applier: Some(holder),
         }),
         (Power::EnvenomPower, PowerAmount::Endless, EventHook::DamageGiven { dealer, .. })
             if dealer == Some(holder) =>
@@ -3491,6 +3494,7 @@ pub(crate) fn event_hook(
                     _ => Power::DexterityPower,
                 },
                 amount: PowerAmount::Counted(-stolen),
+                applier: None,
             })
         }
         (Power::PossessStrengthPower | Power::PossessSpeedPower, _, EventHook::AfterDeath { .. }) => {
@@ -3816,6 +3820,7 @@ pub(crate) fn event_hook(
             target: fight.player(),
             power: Power::TaintedPower,
             amount: PowerAmount::Counted(amount),
+            applier: None,
         }),
         (
             Power::VitalSparkPower,
@@ -5134,6 +5139,7 @@ pub(crate) fn event_hook(
             target,
             power: Power::MonarchsGazeStrengthDownPower,
             amount,
+            applier: Some(holder),
         }),
         (Power::MonarchsGazePower, _, EventHook::DamageGiven { .. }) => None,
         // `RegenPower.AfterSideTurnEnd`: its stack healed, then one off, as
@@ -5269,6 +5275,7 @@ pub(crate) fn event_hook(
                 target,
                 power: Power::DoomPower,
                 amount: PowerAmount::Counted(total * amount),
+                applier: Some(holder),
             })
         }
         (Power::ReaperFormPower, PowerAmount::Endless, EventHook::DamageGiven { .. }) => {

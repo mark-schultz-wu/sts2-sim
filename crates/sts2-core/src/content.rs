@@ -5431,12 +5431,13 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CreatureCmd.Damage` on every enemy that can be hit, from the
     /// listener's owner, for a number no power scales.
     DamageOpponents(V::Number),
-    /// `PowerCmd.Apply<P>(target, amount, Owner)`, onto a creature the
-    /// listener names.
+    /// `PowerCmd.Apply<P>(target, amount, applier)`, onto a creature the
+    /// listener names, from the creature it names or from nobody.
     ApplyPower {
         target: crate::CombatId,
         power: V::Power,
         amount: PowerAmount<V::Number>,
+        applier: Option<crate::CombatId>,
     },
     /// `PowerCmd.Apply<P>` onto one enemy that can be hit, drawn by
     /// `NextItem` off `CombatTargets`, from the listener's owner. Nothing
