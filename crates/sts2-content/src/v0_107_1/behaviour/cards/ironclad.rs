@@ -502,9 +502,19 @@ fn dismantle<F: Fight<V>>(fight: &mut F) -> Played<V> {
     let vulnerable = fight.creatures().any(|creature| {
         creature.id() == target && creature.power(Power::VulnerablePower).is_some()
     });
-    for _ in 0..1 + u8::from(vulnerable) {
-        strike(fight, target);
-    }
+    // One `DamageCmd.Attack` with its hit count, so what hears the attack's
+    // end hears it once.
+    fight.attack(Scaling::Dynamic, |fight| {
+        for _ in 0..1 + u8::from(vulnerable) {
+            let attack = fight.resolve(Effect::Attack {
+                dealer: fight.actor(),
+                target,
+                damage: Amount::Var(CardVar::Damage),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(attack);
+        }
+    });
     Played::Done
 }
 

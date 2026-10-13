@@ -89,6 +89,10 @@ pub struct Args {
     /// One seed to play, whose command line to replay it is printed.
     #[arg(long)]
     seed: Option<String>,
+    /// The ascension level every run plays at, by the id the game spells it
+    /// with.
+    #[arg(long, default_value = "None")]
+    ascension: String,
 }
 
 pub fn run(args: Args) -> Result<String, crate::error::ProcessError> {
@@ -97,6 +101,7 @@ pub fn run(args: Args) -> Result<String, crate::error::ProcessError> {
         top,
         mut characters,
         seed,
+        ascension,
     } = args;
     if characters.is_empty() {
         characters = CHARACTERS.iter().map(|c| c.to_string()).collect();
@@ -107,7 +112,13 @@ pub fn run(args: Args) -> Result<String, crate::error::ProcessError> {
     if let Some(seed) = seed {
         return Ok(characters
             .iter()
-            .map(|character| replay(&binary, &one(&binary, &seed, character)))
+            .map(|character| {
+                replay(
+                    &binary,
+                    &one(&binary, &seed, character, &ascension),
+                    &ascension,
+                )
+            })
             .collect());
     }
 
@@ -124,7 +135,7 @@ pub fn run(args: Args) -> Result<String, crate::error::ProcessError> {
         for _ in 0..threads {
             scope.spawn(|| {
                 while let Some((seed, character)) = jobs.get(next.fetch_add(1, Ordering::Relaxed)) {
-                    let run = one(&binary, seed, character);
+                    let run = one(&binary, seed, character, &ascension);
                     done.lock().expect("no thread panics").push(run);
                 }
             });
@@ -135,8 +146,8 @@ pub fn run(args: Args) -> Result<String, crate::error::ProcessError> {
 }
 
 /// One run of the runner, in a process of its own.
-fn one(binary: &std::path::Path, seed: &str, character: &str) -> Run {
-    let (ending, reached) = attempt(binary, seed, character);
+fn one(binary: &std::path::Path, seed: &str, character: &str, ascension: &str) -> Run {
+    let (ending, reached) = attempt(binary, seed, character, ascension);
     Run {
         seed: seed.to_owned(),
         character: character.to_owned(),
@@ -146,9 +157,9 @@ fn one(binary: &std::path::Path, seed: &str, character: &str) -> Run {
 }
 
 /// How `run` ended, and the command line that plays it there again.
-fn replay(binary: &std::path::Path, run: &Run) -> String {
+fn replay(binary: &std::path::Path, run: &Run, ascension: &str) -> String {
     format!(
-        "{:?}\n{} {} {}\n",
+        "{:?}\n{} {} {} --ascension {ascension}\n",
         run.ending,
         binary.display(),
         run.seed,
@@ -157,11 +168,16 @@ fn replay(binary: &std::path::Path, run: &Run) -> String {
 }
 
 /// How the runner ended, and the act and floor it last stood on.
-fn attempt(binary: &std::path::Path, seed: &str, character: &str) -> (Ending, (u32, u32)) {
+fn attempt(
+    binary: &std::path::Path,
+    seed: &str,
+    character: &str,
+    ascension: &str,
+) -> (Ending, (u32, u32)) {
     let output = Command::new("timeout")
         .args(["-k", "5", TIMEOUT])
         .arg(binary)
-        .args([seed, character])
+        .args([seed, character, "--ascension", ascension])
         .output();
     let output = match output {
         Ok(output) => output,

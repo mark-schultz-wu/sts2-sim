@@ -38,20 +38,41 @@ fn recorded() -> Recorded {
     Recorded::decode(&bytes).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
 }
 
+/// The census characters, which every ascension's runs play alike.
+const CHARACTERS: [&str; 5] = ["DEFECT", "IRONCLAD", "NECROBINDER", "REGENT", "SILENT"];
+
 #[test]
 fn the_committed_file_holds_every_census_run() {
     let recorded = recorded();
-    let mut seeds: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    // Each ascension's seeds, by character.
+    let mut seeds: BTreeMap<&str, BTreeMap<&str, Vec<&str>>> = BTreeMap::new();
     for run in &recorded.runs {
-        seeds.entry(&run.character).or_default().push(&run.seed);
+        seeds
+            .entry(&run.ascension)
+            .or_default()
+            .entry(&run.character)
+            .or_default()
+            .push(&run.seed);
     }
-    let want: Vec<String> = (0..RUNS).map(|at| format!("C{at:09}")).collect();
-    for character in ["DEFECT", "IRONCLAD", "NECROBINDER", "REGENT", "SILENT"] {
-        let mut played = seeds.remove(character).unwrap_or_default();
-        played.sort_unstable();
-        assert_eq!(played, want, "{character}'s seeds");
+    let first =
+        |count: usize| -> Vec<String> { (0..count).map(|at| format!("C{at:09}")).collect() };
+    for (ascension, mut by_character) in seeds {
+        // The census itself plays at no ascension. A rung's runs play the
+        // census's first seeds, as many for every character.
+        let want = match ascension {
+            "None" => first(RUNS),
+            _ => first(by_character.get("IRONCLAD").map_or(0, Vec::len)),
+        };
+        for character in CHARACTERS {
+            let mut played = by_character.remove(character).unwrap_or_default();
+            played.sort_unstable();
+            assert_eq!(played, want, "{character}'s seeds at {ascension}");
+        }
+        assert!(
+            by_character.is_empty(),
+            "runs at {ascension} for no census character: {by_character:?}"
+        );
     }
-    assert!(seeds.is_empty(), "runs for no census character: {seeds:?}");
 }
 
 /// The positions of `run` the simulator agrees with, from the start.

@@ -134,7 +134,13 @@ pub(crate) fn card_reward<V: Rules, R: GameRng>(
             unoffered
         };
         if !drawn.is_empty() {
-            cards.push(card::added::<V, R>(rng, &drawn, room.card_odds(), act));
+            cards.push(card::added::<V, R>(
+                ascension,
+                rng,
+                &drawn,
+                room.card_odds(),
+                act,
+            ));
         }
     }
     Offer::Card {

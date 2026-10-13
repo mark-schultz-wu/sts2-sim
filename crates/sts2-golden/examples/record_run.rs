@@ -49,6 +49,16 @@ struct Cli {
     /// A directory for the game's own profile, so several run at once.
     #[arg(long, value_name = "DIR")]
     data_home: Option<PathBuf>,
+    /// The ascension level, by the id the game spells it with.
+    #[arg(long, value_parser = ascension, default_value = "None")]
+    ascension: sts2_content::v0_107_1::ascension::AscensionLevel,
+}
+
+/// An ascension level by the id the game spells it with.
+fn ascension(
+    id: &str,
+) -> Result<sts2_content::v0_107_1::ascension::AscensionLevel, serde_json::Error> {
+    serde_json::from_value(serde_json::Value::String(id.to_owned()))
 }
 
 fn seed(text: &str) -> Result<Seed, sts2_core::seed::Error> {
@@ -102,6 +112,7 @@ fn record(cli: Cli) -> Result<(), Error> {
         character,
         out,
         data_home,
+        ascension,
     } = cli;
     let mut config = Config::new(game_dir_from_env().ok_or(Error::NoGame)?);
     config.data_home = data_home;
@@ -109,7 +120,7 @@ fn record(cli: Cli) -> Result<(), Error> {
         wins: sts2_golden::random::wins(seed.as_str()),
         seed,
         character,
-        ascension: sts2_content::v0_107_1::ascension::AscensionLevel::None,
+        ascension,
         modifiers: Vec::new(),
     };
     let mut pick = sts2_golden::random::Pick::for_seed(start.seed.as_str());

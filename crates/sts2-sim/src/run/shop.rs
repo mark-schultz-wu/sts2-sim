@@ -34,6 +34,8 @@ pub(super) struct Merchant<'a, V: Rules> {
     pub(super) character: V::Character,
     /// The saved card rarity offset, which a shop reads and does not move.
     pub(super) offset: f32,
+    /// The run's ascension, whose Scarcity halves a card's chance of rare.
+    pub(super) ascension: V::AscensionLevel,
     /// `CardShopRemovalsUsed`, which this merchant's removal price opens at.
     pub(super) removals_used: usize,
 }
@@ -51,7 +53,9 @@ const SHELVES: [CardKind; 5] = [
 const COLORLESS: [RewardRarity; 2] = [RewardRarity::Uncommon, RewardRarity::Rare];
 
 /// `CardRarityOddsType.Shop`, whose rare share the saved offset moves.
+/// `ShopRareOdds` halves it in a scarce run.
 const SHOP_RARE: f32 = 0.09;
+const SCARCE_SHOP_RARE: f32 = 0.045;
 const SHOP_UNCOMMON: f32 = 0.37;
 
 /// `MerchantCardEntry.GetCost`, before the haggle.
@@ -62,9 +66,12 @@ const COMMON_CARD: i32 = 50;
 /// What the colourless shelf adds to a card's price.
 const COLORLESS_MARKUP: f32 = 1.15;
 
-/// `MerchantCardRemovalEntry`'s opening price and what each removal adds.
+/// `MerchantCardRemovalEntry`'s opening price and what each removal adds,
+/// `BaseCost` and `PriceIncrease`, which Inflation raises.
 const REMOVAL_BASE: i32 = 75;
 const REMOVAL_STEP: i32 = 25;
+const INFLATED_REMOVAL_BASE: i32 = 100;
+const INFLATED_REMOVAL_STEP: i32 = 50;
 
 /// `MerchantPotionEntry.GetCost`, which is flat.
 const RARE_POTION: i32 = 100;
@@ -109,7 +116,7 @@ impl<V: Rules> Merchant<'_, V> {
         for (potion, cost) in potions {
             entries.push(self.entry(Stock::Potion(Some(potion)), cost, entries.len()));
         }
-        let removal = removal_cost(self.removals_used);
+        let removal = removal_cost::<V>(self.removals_used, self.ascension);
         entries.push(self.entry(Stock::CardRemoval, removal, entries.len()));
         entries
     }
@@ -268,7 +275,11 @@ impl<V: Rules> Merchant<'_, V> {
     /// `RollWithoutChangingFutureOdds(Shop)`, which reads the saved offset and
     /// leaves it where it was.
     fn rolled_rarity(&mut self) -> RewardRarity {
-        let rare = SHOP_RARE + self.offset;
+        let base = match crate::reward::combat::scarce::<V>(self.ascension) {
+            true => SCARCE_SHOP_RARE,
+            false => SHOP_RARE,
+        };
+        let rare = base + self.offset;
         let roll = self.rewards().next_double() as f32;
         if roll < rare {
             RewardRarity::Rare
@@ -396,8 +407,15 @@ fn potion_cost<V: Rules>(character: V::Character, potion: V::Potion) -> i32 {
 }
 
 /// `MerchantCardRemovalEntry.GetCost`, which climbs with every removal bought.
-pub(super) fn removal_cost(used: usize) -> i32 {
-    REMOVAL_BASE + REMOVAL_STEP * i32::try_from(used).expect("a run buys fewer removals than that")
+pub(super) fn removal_cost<V: Rules>(used: usize, ascension: V::AscensionLevel) -> i32 {
+    let (base, step) = match sts2_core::AscensionKinds::has(
+        ascension,
+        <V::AscensionLevel as sts2_core::AscensionKinds>::INFLATION,
+    ) {
+        true => (INFLATED_REMOVAL_BASE, INFLATED_REMOVAL_STEP),
+        false => (REMOVAL_BASE, REMOVAL_STEP),
+    };
+    base + step * i32::try_from(used).expect("a run buys fewer removals than that")
 }
 
 /// `Mathf.RoundToInt`, which is `Math.Round` and so rounds a half to even.

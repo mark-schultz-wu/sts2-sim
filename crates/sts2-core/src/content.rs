@@ -1827,6 +1827,8 @@ pub trait AscensionKinds: std::fmt::Debug + Copy + Eq + 'static {
     const WEARY_TRAVELER: Self;
     /// Gold from a chest comes to three quarters.
     const POVERTY: Self;
+    /// The run opens with one potion slot fewer.
+    const TIGHT_BELT: Self;
 
     /// Whether a run at this level has the rule `rung` names.
     fn has(self, rung: Self) -> bool;
@@ -7196,6 +7198,10 @@ pub trait Rules: Hooks {
 
     /// How many potion slots an ordinary run opens with.
     fn starting_potion_slots() -> usize;
+
+    /// `AscensionManager.ApplyEffectsTo`'s card, which an ascension adds to
+    /// the opening deck: Ascender's Bane from its rung up.
+    fn ascension_deck(ascension: Self::AscensionLevel) -> Option<Self::Card>;
 
     /// The energy a character's turn begins with, before a relic moves it.
     fn max_energy(character: Self::Character) -> u8;
