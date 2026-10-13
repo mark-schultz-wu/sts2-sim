@@ -3707,9 +3707,10 @@ pub enum EventHook<V: ContentVersion> {
         in_fight: bool,
         holding_potions: bool,
     },
-    /// `AfterModifyingCardRewardOptions`, once a card reward's cards have
-    /// had their late pass.
-    CardRewardOptionsModified,
+    /// `AfterModifyingCardRewardOptions`, once cards made for a reward have
+    /// had their late pass. `card_reward` is as for
+    /// [`EventHook::CardRewardOption`].
+    CardRewardOptionsModified { card_reward: bool },
     /// `TryModifyCardRewardOptionsLate`, for one card `CardFactory` made for
     /// a reward. A listener answers with what it does to the card.
     ///
@@ -4349,7 +4350,9 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::PotionDiscarded { .. } => ModelHook::AfterPotionDiscarded,
             EventHook::CardRewardOption { .. } => ModelHook::TryModifyCardRewardOptionsLate,
             EventHook::CardRewardPick { .. } => ModelHook::TryModifyCardRewardOptionsLate,
-            EventHook::CardRewardOptionsModified => ModelHook::AfterModifyingCardRewardOptions,
+            EventHook::CardRewardOptionsModified { .. } => {
+                ModelHook::AfterModifyingCardRewardOptions
+            }
             EventHook::CardBeingAddedToDeck { .. } => ModelHook::TryModifyCardBeingAddedToDeck,
             EventHook::MerchantCardCreated { .. } => ModelHook::ModifyMerchantCardCreationResults,
             EventHook::CardPlayedLate { .. } => ModelHook::AfterCardPlayedLate,

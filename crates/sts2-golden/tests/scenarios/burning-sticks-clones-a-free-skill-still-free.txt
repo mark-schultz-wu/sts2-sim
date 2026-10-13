@@ -1,0 +1,13 @@
+# `AfterCardPlayedCleanup` clears what lasts until a card is played once the
+# card is in its result pile. Bullet Time frees Piercing Wail, which exhausts
+# as it plays. Burning Sticks clones it on the exhaust, and the clone still
+# costs nothing.
+#
+# A cleanup before the exhaust gives the clone its own cost of one.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","relic":"BURNING_STICKS"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"PIERCING_WAIL"}
+{"cmd":"grant","card":"BULLET_TIME"}
+{"cmd":"play_card","index":8}
+{"cmd":"play_card","index":7}

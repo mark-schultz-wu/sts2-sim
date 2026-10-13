@@ -1,0 +1,11 @@
+# Share Knowledge makes its cards with `CardFactory.CreateForReward`, and
+# only a `CardReward` sets `IsCardReward`. Silver Crucible upgrades only a
+# card reward's cards, so the five come unupgraded and it keeps its three.
+# Wing Charm asks no such thing, and one of them takes Swift.
+#
+# A pass that calls every set made for a reward a card reward upgrades them.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","relic":"SILVER_CRUCIBLE"}
+{"cmd":"grant","relic":"WING_CHARM"}
+{"cmd":"event","event":"BRAIN_LEECH"}
+{"cmd":"choose_option","index":0}

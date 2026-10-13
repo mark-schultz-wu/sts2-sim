@@ -1071,9 +1071,9 @@ pub(crate) fn modify_hook(
             },
         ) if dealer == Some(holder) => Modify::Scaled(SHRUNK),
         // `TryModifyEnergyCostInCombatLate`: nothing for a card of its kind
-        // that its owner holds or is playing, which is every card whose cost
-        // the fight reads. A fight here has one player, so its owner's cards
-        // are the player's.
+        // in its owner's hand or play pile. A card in another pile keeps its
+        // cost. A fight here has one player, so its owner's cards are the
+        // player's.
         (
             Power::FreeAttackPower
             | Power::FreeSkillPower
@@ -1083,6 +1083,7 @@ pub(crate) fn modify_hook(
             ModifyHook::EnergyCostLate {
                 card: (_, card),
                 ethereal,
+                pile: Some(sts2_core::Pile::Hand) | None,
                 ..
             },
         ) if owner == CombatSide::Player && frees(power, card, ethereal) => {
@@ -2536,8 +2537,9 @@ pub(crate) fn event_hook(
             .map(|owed| HookEffect::ApplyToOwner(Power::StrengthPower, PowerAmount::Counted(owed))),
         // `BlackHolePower.AfterCardPlayed`: its stack, unpowered, to each enemy
         // that can be hit, once a play that spent stars is over and it ends
-        // its replays. The play's started entry keeps what it spent. A fight
-        // here has one player, whose cards are all its holder's.
+        // its replays. The play's started entry keeps what it spent, and an
+        // auto-play spends none. A fight here has one player, whose cards are
+        // all its holder's.
         (
             Power::BlackHolePower,
             PowerAmount::Counted(amount),
@@ -2547,7 +2549,7 @@ pub(crate) fn event_hook(
                 .started_this_turn()
                 .filter(|started| started.id == id)
                 .last()
-                .is_some_and(|started| started.stars > 0);
+                .is_some_and(|started| !started.auto && started.stars > 0);
             (spent && last).then_some(HookEffect::DamageOpponents(amount))
         }
         // `BlackHolePower.AfterStarsGained`: the same, for stars its owner

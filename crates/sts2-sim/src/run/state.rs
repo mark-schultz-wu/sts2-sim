@@ -2051,7 +2051,7 @@ impl<V: Rules> State<V> {
                     );
                     for card in drawn {
                         let mut card = [card];
-                        self.reward_options(&mut card);
+                        self.reward_options(&mut card, false);
                         self.add_to_deck(card[0]);
                     }
                     continue;
@@ -2585,7 +2585,7 @@ impl<V: Rules> State<V> {
                             drawn.push(card);
                         }
                         let mut made: Vec<_> = drawn.into_iter().map(CardIdent::new).collect();
-                        self.reward_options(&mut made);
+                        self.reward_options(&mut made, false);
                         offered.extend(made);
                     }
                     Pickup::Cards { offered, min, max }
@@ -2614,7 +2614,7 @@ impl<V: Rules> State<V> {
                         }
                     };
                     let mut offered: Vec<_> = drawn;
-                    self.reward_options(&mut offered);
+                    self.reward_options(&mut offered, false);
                     Pickup::Cards { offered, min, max }
                 }
                 effect => unimplemented!("a run-level relic effect: {effect:?}"),
@@ -3209,7 +3209,7 @@ impl<V: Rules> State<V> {
                         act,
                         room.card_odds(),
                     );
-                    self.reward_options(&mut cards);
+                    self.reward_options(&mut cards, true);
                     offered.push(Offer::Card {
                         cards,
                         rolled: Some(crate::reward::Rolled::Room(room)),
@@ -3673,9 +3673,10 @@ impl<V: Rules> State<V> {
     /// `AfterModifyingCardRewardOptions`.
     ///
     /// The game asks the second only of a listener that answered the first.
-    /// Each listener here answers it where its own first answer was yes, for
-    /// every reward that comes here is a `CardReward`'s.
-    pub(super) fn reward_options(&mut self, cards: &mut [CardIdent<V>]) {
+    /// Each listener here answers it where its own first answer was yes.
+    /// `card_reward` is `CardCreationFlags.IsCardReward`, which only a
+    /// `CardReward` sets.
+    pub(super) fn reward_options(&mut self, cards: &mut [CardIdent<V>], card_reward: bool) {
         // Relic by relic, in the belt's order, each over the whole reward:
         // one relic's card can be another's to enchant or not.
         let hook = sts2_core::ModelHook::TryModifyCardRewardOptionsLate;
@@ -3683,9 +3684,10 @@ impl<V: Rules> State<V> {
         while left != 0 {
             let slot = left.trailing_zeros() as usize;
             left &= left - 1;
-            self.reward_options_of(slot, cards);
+            self.reward_options_of(slot, cards, card_reward);
         }
-        let asked = self.notify_belt(sts2_core::EventHook::CardRewardOptionsModified);
+        let modified = sts2_core::EventHook::CardRewardOptionsModified { card_reward };
+        let asked = self.notify_belt(modified);
         if let Some(effect) = asked.first() {
             unimplemented!("a relic asking for {effect:?} once a card reward was modified");
         }
@@ -3722,9 +3724,10 @@ impl<V: Rules> State<V> {
                 if !late {
                     continue;
                 }
-                self.reward_options_of(slot, cards);
+                self.reward_options_of(slot, cards, true);
                 let mut asked = sts2_core::HookEffects::new();
-                let modified = sts2_core::EventHook::CardRewardOptionsModified;
+                let modified =
+                    sts2_core::EventHook::CardRewardOptionsModified { card_reward: true };
                 V::relic_event_hook(&mut self.player.relics[slot].state, modified, &mut asked);
                 if let Some(effect) = asked.first() {
                     unimplemented!("a relic asking for {effect:?} once a card reward was modified");
@@ -3735,20 +3738,20 @@ impl<V: Rules> State<V> {
 
     /// `TryModifyCardRewardOptionsLate` of the relic in `slot` over each card
     /// a reward offers.
-    fn reward_options_of(&mut self, slot: usize, cards: &mut [CardIdent<V>]) {
+    fn reward_options_of(&mut self, slot: usize, cards: &mut [CardIdent<V>], card_reward: bool) {
         use sts2_core::rng::GameRng as _;
 
         for card in cards.iter_mut() {
             let mut asked = sts2_core::HookEffects::new();
             let option = sts2_core::EventHook::CardRewardOption {
                 card: *card,
-                card_reward: true,
+                card_reward,
             };
             V::relic_event_hook(&mut self.player.relics[slot].state, option, &mut asked);
             *card = rewrite(*card, asked);
         }
         let mut asked = sts2_core::HookEffects::new();
-        let pick = sts2_core::EventHook::CardRewardPick { card_reward: true };
+        let pick = sts2_core::EventHook::CardRewardPick { card_reward };
         V::relic_event_hook(&mut self.player.relics[slot].state, pick, &mut asked);
         for effect in asked {
             match effect {
@@ -3773,7 +3776,7 @@ impl<V: Rules> State<V> {
     pub(super) fn reward_offers(&mut self, offered: &mut [Offer<V>]) {
         for offer in offered {
             if let Offer::Card { cards, .. } = offer {
-                self.reward_options(cards);
+                self.reward_options(cards, true);
             }
         }
     }
@@ -5130,7 +5133,7 @@ impl<V: Rules> State<V> {
             2,
             Some(act),
         );
-        self.reward_options(&mut offered);
+        self.reward_options(&mut offered, false);
         Ok(self.park(Asked {
             pickup: Pickup::Cards {
                 offered,
@@ -5645,7 +5648,7 @@ impl<V: Rules> State<V> {
                         self.custom_cards(reward, stream, Some(&pool))
                     }
                 };
-                self.reward_options(cards);
+                self.reward_options(cards, true);
             }
             // The alternative's `OnSelect`, which completes the reward.
             (
