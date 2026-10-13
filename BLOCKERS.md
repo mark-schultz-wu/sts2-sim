@@ -31,11 +31,23 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ### 1. Travel
 
-143 runs first part after a move on the map.
+118 runs first part after a move on the map. Maw Bank and a skipped
+chest relic are fixed. A later sample of eight runs found the second in
+three of them. The other five:
+
+- Three stock another relic in a chest or a shop. Each follows an act
+  change or an ancient's relic. The bags part somewhere the observation
+  does not show.
+- Two show another card preview as the next fight opens. One is a
+  `CalculatedDamage` of 13 against 16. The other is 6 against 9 on a
+  Necrobinder's Osty card.
+
+`cargo xtask split <index> <name>` writes a run, up to its first split,
+as a scenario.
 
 ### 2. Decimillipede's turn
 
-86 runs first part after a turn ends against the Decimillipede elite.
+89 runs first part after a turn ends against the Decimillipede elite.
 
 ### 3. Soul Fysh's turn
 
@@ -47,7 +59,7 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ### 5. Sovereign Blade
 
-43 runs first part after Sovereign Blade is played.
+46 runs first part after Sovereign Blade is played.
 
 ### 6. Every other split the recorded runs find
 

@@ -84,6 +84,10 @@ pub(crate) struct State<V: Rules> {
     /// that deals a relic must not deal it to the other, so what moves lives
     /// here. It is a handful over a run, not the whole table.
     dealt_relics: Arc<Vec<V::Relic>>,
+    /// The relics dealt out of the shared bag alone, which a treasure chest
+    /// pulls from. The player's own bag still holds them, until one is
+    /// obtained.
+    shared_dealt: Arc<Vec<V::Relic>>,
     /// `PlayerExtraFields.CardShopRemovalsUsed`, which every merchant's
     /// removal price climbs with. It counts over the run, not the room.
     removals_used: usize,
@@ -388,6 +392,7 @@ impl<V: Rules> Clone for State<V> {
             player: self.player.clone(),
             visited_events: Arc::clone(&self.visited_events),
             dealt_relics: Arc::clone(&self.dealt_relics),
+            shared_dealt: Arc::clone(&self.shared_dealt),
             phase: self.phase.clone(),
             resuming: self.resuming.clone(),
             ..*self
@@ -416,6 +421,7 @@ impl<V: Rules> Clone for State<V> {
             unknown_odds,
             odds,
             dealt_relics,
+            shared_dealt,
             removals_used,
             phase,
             resuming,
@@ -436,6 +442,7 @@ impl<V: Rules> Clone for State<V> {
         *unknown_odds = source.unknown_odds;
         *odds = source.odds;
         dealt_relics.clone_from(&source.dealt_relics);
+        shared_dealt.clone_from(&source.shared_dealt);
         *removals_used = source.removals_used;
         resuming.clone_from(&source.resuming);
         match (phase, &source.phase) {
@@ -1047,6 +1054,7 @@ impl<V: Rules> State<V> {
             unknown_odds: UNKNOWN_ODDS,
             odds: Odds::default(),
             dealt_relics: Arc::new(Vec::new()),
+            shared_dealt: Arc::new(Vec::new()),
             removals_used: 0,
             streams,
             resuming: None,
@@ -1629,12 +1637,14 @@ impl<V: Rules> State<V> {
         relic
     }
 
-    /// The next relic in the shared bag, without dealing it yet.
+    /// The next relic in the shared bag, without dealing it yet. What left
+    /// either bag has left this one.
     pub(super) fn next_shared_relic(&self, rarity: Rarity<V>) -> V::Relic {
-        self.shared
-            .opening
-            .shared_relics
-            .front(rarity, &self.dealt_relics)
+        let gone: Vec<V::Relic> = (self.dealt_relics.iter())
+            .chain(self.shared_dealt.iter())
+            .copied()
+            .collect();
+        self.shared.opening.shared_relics.front(rarity, &gone)
     }
 
     /// `Player.CanRemovePotions` off: an event that holds the potions while it
@@ -3889,8 +3899,11 @@ impl<V: Rules> State<V> {
             let rarity = crate::reward::relic_rarity::<V, _>(
                 self.streams.run(V::RunRngType::TREASURE_ROOM_RELICS),
             );
+            // `SharedRelicGrabBag.PullFromFront`, which leaves the player's
+            // bag holding it. Taking it from the chest obtains it, which
+            // takes it out of both.
             let relic = self.next_shared_relic(rarity);
-            Arc::make_mut(&mut self.dealt_relics).push(relic);
+            Arc::make_mut(&mut self.shared_dealt).push(relic);
             relic
         });
         if let Phase::Treasure {
@@ -4541,10 +4554,13 @@ impl<V: Rules> State<V> {
         at: Location,
     ) -> Result<CreatedFight<V>, Error> {
         let floor = self.floor + num_traits::one();
-        self.build_fight(encounter, queue, at, floor, &[], &[])
+        self.build_fight(encounter, queue, at, floor, &[], &[], true)
     }
 
-    /// [`State::create_fight`] on a floor the caller names.
+    /// [`State::create_fight`] on a floor the caller names. `base` is whether
+    /// the fight's room is the run's `BaseRoom`, which a fight an event opens
+    /// inside its own room is not.
+    #[allow(clippy::too_many_arguments)]
     fn build_fight(
         &mut self,
         encounter: V::Encounter,
@@ -4553,6 +4569,7 @@ impl<V: Rules> State<V> {
         floor: V::Count,
         rolled: &[V::Health],
         roster: &[V::Monster],
+        base: bool,
     ) -> Result<CreatedFight<V>, Error> {
         let standing = self.standing();
         let (raw_seed, character, ascension) =
@@ -4573,8 +4590,7 @@ impl<V: Rules> State<V> {
             },
             rolled,
             roster,
-            // A fight an event opens stands inside the event's room.
-            base: !matches!(self.phase, Phase::Event { .. }),
+            base,
         };
         let crate::combat::Entered {
             live,
@@ -4632,6 +4648,7 @@ impl<V: Rules> State<V> {
                 self.floor,
                 &rolled,
                 roster,
+                false,
             )?
         };
         let mut live = live;

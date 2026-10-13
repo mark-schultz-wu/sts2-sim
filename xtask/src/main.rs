@@ -23,6 +23,7 @@ mod neow;
 mod plays;
 mod record;
 mod scenario_diff;
+mod split;
 mod trace;
 mod unknown;
 
@@ -66,6 +67,8 @@ enum Command {
     Unknown(unknown::Args),
     /// Show where a scenario's simulator and game part.
     ScenarioDiff(scenario_diff::Args),
+    /// Write a recorded run, up to its first split, as a scenario.
+    Split(split::Args),
 }
 
 /// The repository's root, which is where cargo and the profiles live.
@@ -101,6 +104,8 @@ enum Error {
     Unknown(error::ProcessError),
     #[error("scenario-diff failed: {0}")]
     ScenarioDiff(error::ProcessError),
+    #[error("split failed: {0}")]
+    Split(#[from] split::Error),
 }
 
 fn run(command: Command) -> Result<String, Error> {
@@ -117,6 +122,7 @@ fn run(command: Command) -> Result<String, Error> {
         Command::Trace(args) => trace::run(args)?,
         Command::Unknown(args) => unknown::run(args).map_err(Error::Unknown)?,
         Command::ScenarioDiff(args) => scenario_diff::run(args).map_err(Error::ScenarioDiff)?,
+        Command::Split(args) => split::run(args)?,
     })
 }
 
