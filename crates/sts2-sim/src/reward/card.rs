@@ -76,14 +76,16 @@ impl<V: Rules> Pool<V> {
 /// Draw distinct cards with regular-encounter rarity odds.
 ///
 /// Each card costs two draws, rarity and the item in that rarity, and a third
-/// for the upgrade roll unless `CardCreationFlags.NoUpgradeRoll` is set. At
-/// Neow the upgrade chance is zero, but the roll still happens.
+/// for the upgrade roll unless `CardCreationFlags.NoUpgradeRoll` is set.
+/// `upgrade_in` is the act the roll is made in, which sets its chance. At
+/// Neow the chance is zero, but the roll still happens.
 pub(crate) fn regular<V: Rules, R: GameRng>(
     rng: &mut R,
     cards: Drafted<'_, V::Card>,
     count: usize,
-    upgrade_roll: bool,
-) -> Vec<V::Card> {
+    upgrade_in: Option<usize>,
+) -> Vec<CardIdent<V>> {
+    let mut offered = Vec::with_capacity(count);
     let mut drawn = Vec::with_capacity(count);
     for _ in 0..count {
         // `RollWithBaseOdds`, which holds the roll to the uncommon odds
@@ -103,19 +105,19 @@ pub(crate) fn regular<V: Rules, R: GameRng>(
         let bound = Bound::try_new(left).expect("an available rarity has a card");
         let at =
             num_traits::cast(rng.next_int(bound)).expect("a bounded draw is a valid card index");
-        drawn.push(
-            choices
-                .iter()
-                .filter(|card| !drawn.contains(card))
-                .nth(at)
-                .copied()
-                .expect("the draw is inside the count"),
-        );
-        if upgrade_roll {
-            let _roll = rng.next_double();
-        }
+        let card = choices
+            .iter()
+            .filter(|card| !drawn.contains(card))
+            .nth(at)
+            .copied()
+            .expect("the draw is inside the count");
+        drawn.push(card);
+        offered.push(match upgrade_in {
+            Some(act) => roll_for_upgrade::<V, R>(rng, card, act),
+            None => CardIdent::new(card),
+        });
     }
-    drawn
+    offered
 }
 
 /// Whether `filter` keeps `card`.
@@ -153,12 +155,12 @@ pub(crate) fn uniform_of<V: Rules, R: GameRng>(
 }
 
 /// [`uniform_of`], with [`roll_for_upgrade`] after each card in the act
-/// `roll` names.
+/// `upgrade_in` names.
 pub(crate) fn uniform_rolled<V: Rules, R: GameRng>(
     rng: &mut R,
     pool: &[V::Card],
     count: usize,
-    roll: Option<usize>,
+    upgrade_in: Option<usize>,
 ) -> Vec<CardIdent<V>> {
     let mut drawn: Vec<V::Card> = Vec::with_capacity(count);
     let mut offered = Vec::with_capacity(count);
@@ -172,7 +174,7 @@ pub(crate) fn uniform_rolled<V: Rules, R: GameRng>(
             .choose(&left)
             .unwrap_or_else(|_| unimplemented!("a reward pool with no card left"));
         drawn.push(card);
-        offered.push(match roll {
+        offered.push(match upgrade_in {
             Some(act) => roll_for_upgrade::<V, R>(rng, card, act),
             None => CardIdent::new(card),
         });

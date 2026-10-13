@@ -2032,10 +2032,10 @@ impl<V: Rules> State<V> {
                             rare: &rare,
                         },
                         1,
-                        false,
+                        None,
                     );
                     for card in drawn {
-                        let mut card = [CardIdent::new(card)];
+                        let mut card = [card];
                         self.reward_options(&mut card);
                         self.add_to_deck(card[0]);
                     }
@@ -2578,7 +2578,11 @@ impl<V: Rules> State<V> {
                     max,
                 } => {
                     let drawn = match draw {
-                        sts2_core::CardDraw::Uniform(rarity) => self.uniform_cards(count, rarity),
+                        sts2_core::CardDraw::Uniform(rarity) => self
+                            .uniform_cards(count, rarity)
+                            .into_iter()
+                            .map(CardIdent::new)
+                            .collect(),
                         sts2_core::CardDraw::Regular => {
                             self.card_reward_unheard();
                             let character = self.character();
@@ -2586,11 +2590,11 @@ impl<V: Rules> State<V> {
                                 self.streams.player(V::PlayerRngType::REWARDS),
                                 V::reward_cards(character),
                                 count,
-                                false,
+                                None,
                             )
                         }
                     };
-                    let mut offered: Vec<_> = drawn.into_iter().map(CardIdent::new).collect();
+                    let mut offered: Vec<_> = drawn;
                     self.reward_options(&mut offered);
                     Pickup::Cards { offered, min, max }
                 }
@@ -3101,16 +3105,10 @@ impl<V: Rules> State<V> {
                 pool.expect("a character's card reward has its pools")
                     .drafted(),
                 count,
-                upgrade_roll,
-            )
-            .into_iter()
-            .map(CardIdent::new)
-            .collect(),
+                upgrade_roll.then_some(act),
+            ),
             CustomReward::ColorlessCards(count) => {
-                crate::reward::card::regular::<V, _>(rng, V::colorless_cards(), count, false)
-                    .into_iter()
-                    .map(CardIdent::new)
-                    .collect()
+                crate::reward::card::regular::<V, _>(rng, V::colorless_cards(), count, None)
             }
             CustomReward::CardsOf {
                 pool,
@@ -3484,18 +3482,19 @@ impl<V: Rules> State<V> {
             .map(|character| {
                 // `CardFactory.CreateForReward` of one card, with its hooks.
                 self.card_reward_unheard();
+                let act = self.act();
                 let rng = self.streams.player(V::PlayerRngType::REWARDS);
-                let [card] =
-                    crate::reward::card::regular::<V, _>(rng, V::reward_cards(character), 1, true)
-                        [..]
-                else {
+                let [card] = crate::reward::card::regular::<V, _>(
+                    rng,
+                    V::reward_cards(character),
+                    1,
+                    Some(act),
+                )[..] else {
                     unreachable!("one card drawn is one card");
                 };
-                self.rewritten(CardIdent::new(card), |card| {
-                    sts2_core::EventHook::CardRewardOption {
-                        card,
-                        card_reward: false,
-                    }
+                self.rewritten(card, |card| sts2_core::EventHook::CardRewardOption {
+                    card,
+                    card_reward: false,
                 })
             })
             .collect()
@@ -5040,13 +5039,13 @@ impl<V: Rules> State<V> {
             .relics
             .push(HeldRelic::new(V::lead_paperweight()));
         self.card_reward_unheard();
-        let offered = crate::reward::card::regular::<V, _>(
+        let act = self.act();
+        let mut offered = crate::reward::card::regular::<V, _>(
             self.streams.player(V::PlayerRngType::REWARDS),
             V::colorless_cards(),
             2,
-            true,
+            Some(act),
         );
-        let mut offered: Vec<_> = offered.into_iter().map(CardIdent::new).collect();
         self.reward_options(&mut offered);
         Ok(self.park(Asked {
             pickup: Pickup::Cards {
@@ -6084,6 +6083,37 @@ impl<V: Rules> State<V> {
         let asked = self.notify_belt(sts2_core::EventHook::ItemPurchased { gold });
         if let Some(effect) = asked.first() {
             unimplemented!("a relic asking for {effect:?} after a purchase");
+        }
+        self.entries_updated();
+    }
+
+    /// `MerchantInventory.UpdateEntries`, once a purchase completes:
+    /// `Hook.ModifyMerchantCardCreationResults` again over every card a
+    /// shelf holds. An egg bought here upgrades what is already for sale.
+    /// The price stays what the shelf was stocked at.
+    fn entries_updated(&mut self) {
+        let Phase::Shop { entries, .. } = &self.phase else {
+            return;
+        };
+        let held: Vec<(usize, CardIdent<V>)> = entries
+            .iter()
+            .enumerate()
+            .filter_map(|(at, entry)| match entry.stock {
+                sts2_core::Stock::Card(Some(on_sale)) if entry.stocked => Some((at, on_sale.card)),
+                _ => None,
+            })
+            .collect();
+        for (at, card) in held {
+            let card = self.rewritten(card, |card| sts2_core::EventHook::MerchantCardCreated {
+                card,
+            });
+            let Phase::Shop { entries, .. } = &mut self.phase else {
+                unreachable!("a shop stays a shop while it updates");
+            };
+            if let sts2_core::Stock::Card(Some(on_sale)) = &mut entries[at].stock {
+                on_sale.card = card;
+                (on_sale.cost, on_sale.star_cost) = crate::combat::printed_costs(card);
+            }
         }
     }
 
