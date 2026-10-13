@@ -41,15 +41,15 @@ pub(super) fn event_hook(
     }
 }
 
-/// `DisplayAmount`: the turn it stands on until the seventh, and nothing
-/// outside a fight or after it, which a player's death leaves the run.
-pub(super) fn display_amount(state: &State, fighting: bool) -> Number {
-    if !fighting {
-        return -1;
-    }
-    match state.turn {
-        0 => -1,
-        turn if turn >= DAMAGE_TURN => -1,
-        turn => Number::from(turn),
+/// `DisplayAmount`: its owner's `TurnNumber` until the seventh, and nothing
+/// outside a fight or after it, which a player's death leaves the run. It
+/// reads the turn rather than its own state, so a melted calendar still
+/// counts.
+pub(super) fn display_amount(turn: Option<u32>) -> Number {
+    match turn {
+        Some(turn) if turn < u32::from(DAMAGE_TURN) => {
+            Number::try_from(turn).expect("a turn below seven fits a game number")
+        }
+        _ => -1,
     }
 }

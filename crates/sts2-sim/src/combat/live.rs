@@ -568,6 +568,13 @@ impl<V: Rules> PartialEq for CardInstance<V> {
 
 impl<V: Rules> Eq for CardInstance<V> {}
 
+/// `EnergyCost` and `StarCost` of a fresh card `ident` names, with what its
+/// upgrade and enchantment write on them, as a merchant shows one.
+pub(crate) fn printed_costs<V: Rules>(ident: CardIdent<V>) -> (sts2_core::Cost, sts2_core::Cost) {
+    let face = Face::fresh(ident);
+    (face.cost, face.star_cost)
+}
+
 impl<V: Rules> CardInstance<V> {
     /// A fresh copy, printing what the table prints.
     pub(super) fn new(ident: CardIdent<V>, id: CardId<V>) -> Self {

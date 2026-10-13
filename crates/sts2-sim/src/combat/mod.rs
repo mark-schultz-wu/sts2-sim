@@ -21,7 +21,7 @@ mod relic;
 mod start;
 mod turn;
 pub(crate) use legal::{belt, drinks, moves as legal_moves};
-pub(crate) use live::{ExtraReward, Heard, Live};
+pub(crate) use live::{ExtraReward, Heard, Live, printed_costs};
 pub(crate) use observed::Fight;
 pub(crate) use play::{answer, apply_power, belt_changed, enchant, grant_card, play, resolve};
 pub(crate) use potion::drink;

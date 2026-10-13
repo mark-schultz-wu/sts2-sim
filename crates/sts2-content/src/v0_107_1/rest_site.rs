@@ -30,17 +30,17 @@ impl RestKinds<V0_107_1> for RestSiteOption {
 
     /// `HEAL` and `SMITH`, and what `TryModifyRestSiteOptions` adds.
     ///
-    /// `MEND` is the second player's, and a run here has one player. The
-    /// belt answers the hook ahead of the deck, where each Byrdonis Egg adds
-    /// `HATCH`.
+    /// `MEND` is the second player's, and a run here has one player.
+    /// `IterateHookListeners` walks the deck ahead of the belt, so each
+    /// Byrdonis Egg adds `HATCH` before any relic adds its option.
     fn offered(from_belt: &[RestSiteOption], deck: &[CardIdent<V0_107_1>]) -> Vec<RestSiteOption> {
         let mut offered = vec![RestSiteOption::Heal, RestSiteOption::Smith];
-        offered.extend_from_slice(from_belt);
         offered.extend(
             deck.iter()
                 .filter(|card| card.card == Cards::Quest(QuestCard::ByrdonisEgg))
                 .map(|_| RestSiteOption::Hatch),
         );
+        offered.extend_from_slice(from_belt);
         offered
     }
 
