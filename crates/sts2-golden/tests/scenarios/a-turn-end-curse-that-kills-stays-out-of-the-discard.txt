@@ -1,0 +1,15 @@
+# A card with a turn-end effect goes to the play pile, has its effect, and is
+# added to the discard pile. Bad Luck's thirteen kill the player, the fight is
+# ending, and the add is refused, so the card is not in the discard pile.
+# Plating takes the Nibbits' hits between the two turns.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"PLATING_POWER","amount":100,"target":0}
+{"cmd":"grant","card":"BAD_LUCK"}
+{"cmd":"grant","card":"BAD_LUCK"}
+{"cmd":"grant","card":"BAD_LUCK"}
+{"cmd":"grant","card":"BAD_LUCK"}
+{"cmd":"grant","card":"BAD_LUCK"}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"BAD_LUCK"}
+{"cmd":"end_turn"}

@@ -48,7 +48,7 @@ pub(super) fn on_turn_end<F: Fight<V>>(card: StatusCard, fight: &mut F) {
         // to the discard pile.
         StatusCard::Beckon => {
             fight.damage_unblockable(fight.actor(), fight.var(CardVar::HpLoss));
-            fight.discard_this();
+            fight.discard_after_turn_end();
         }
         card => card_plays::status::on_turn_end(card, fight),
     }
@@ -64,7 +64,7 @@ fn infection<F: Fight<V>>(fight: &mut F) {
         scaling: Scaling::Static,
     });
     fight.apply(damage);
-    fight.discard_this();
+    fight.discard_after_turn_end();
 }
 
 /// Deliver a notification to one status card in the fight.

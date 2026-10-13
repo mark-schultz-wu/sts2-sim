@@ -5041,25 +5041,20 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .has_keyword(keyword)
     }
 
-    fn discard_this(&mut self) {
+    /// The wrapper moves the card to the play pile before its effect, and
+    /// here it moves once the effect is over. Nothing the effects do reads
+    /// where the card stands.
+    fn discard_after_turn_end(&mut self) {
         self.ran_on();
         let playing = self.playing.expect("a card behavior has a card");
         let Some(at) = self.live.cards.find(Pile::Hand, playing) else {
             return;
         };
-        let card = self
-            .live
-            .cards
-            .get(Pile::Hand, at)
-            .expect("a card stands where it was found")
-            .face
-            .ident
-            .card;
-        // `CardCmd.Discard`.
-        self.live.cards.move_to(Pile::Hand, at, Pile::Discard);
-        self.live.history.discarded(card);
-        let ended = super::turn::card_discarded::<V>(self.live, self.rngs.reborrow(), self.relics);
-        self.ended = self.ended.or(ended);
+        let to = match self.stopped() {
+            true => Pile::Play,
+            false => Pile::Discard,
+        };
+        self.live.cards.move_to(Pile::Hand, at, to);
     }
 
     fn summon(&mut self, monster: V::Monster, position: usize) -> CombatId {

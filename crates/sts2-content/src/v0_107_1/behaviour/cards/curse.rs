@@ -28,7 +28,7 @@ pub(super) fn on_turn_end<F: Fight<V>>(card: CurseCard, fight: &mut F) {
 /// on a fresh one.
 fn shame<F: Fight<V>>(fight: &mut F) {
     fight.apply_to_actor(Power::FrailPower, PowerAmount::Counted(SHAME_FRAIL));
-    fight.discard_this();
+    fight.discard_after_turn_end();
 }
 
 /// `Doubt`: its Weak onto its holder, which then goes to the discard pile.
@@ -38,7 +38,7 @@ fn doubt<F: Fight<V>>(fight: &mut F) {
         Power::WeakPower,
         PowerAmount::Counted(fight.var(CardVar::WeakPower)),
     );
-    fight.discard_this();
+    fight.discard_after_turn_end();
 }
 
 /// `Regret`: as many hit points off its holder, unblockable, as the hand
@@ -47,14 +47,14 @@ fn doubt<F: Fight<V>>(fight: &mut F) {
 fn regret<F: Fight<V>>(fight: &mut F) {
     fight.damage_unblockable(fight.actor(), fight.self_note());
     fight.set_self_note(0);
-    fight.discard_this();
+    fight.discard_after_turn_end();
 }
 
 /// `BadLuck`: its `HpLoss` off its holder, unblockable, and then it goes to
 /// the discard pile.
 fn bad_luck<F: Fight<V>>(fight: &mut F) {
     fight.damage_unblockable(fight.actor(), fight.var(CardVar::HpLoss));
-    fight.discard_this();
+    fight.discard_after_turn_end();
 }
 
 /// Deliver a notification to one curse in the fight.
@@ -92,7 +92,7 @@ pub(super) fn event_hook(
 /// where that is less. Then it goes to the discard pile.
 fn debt<F: Fight<V>>(fight: &mut F) {
     fight.lose_gold(fight.var(CardVar::Gold));
-    fight.discard_this();
+    fight.discard_after_turn_end();
 }
 
 /// `Decay`: its damage to its holder, unpowered, and then it goes to the
@@ -105,5 +105,5 @@ fn decay<F: Fight<V>>(fight: &mut F) {
         scaling: Scaling::Static,
     });
     fight.apply(damage);
-    fight.discard_this();
+    fight.discard_after_turn_end();
 }
