@@ -29,17 +29,17 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ## Open
 
-### 1. The Slumbering Beetle's turn
+### 1. A Divine answer
 
-31 runs first part after a turn ends against a Slumbering Beetle.
+32 runs first part after answering a Divine question.
 
-### 2. A Divine answer
-
-31 runs first part after answering a Divine question.
-
-### 3. Phrog Parasite's turn
+### 2. Phrog Parasite's turn
 
 28 runs first part after a turn ends against the Phrog Parasite elite.
+
+### 3. Aeonglass's turn
+
+25 runs first part after a turn ends against the Aeonglass boss.
 
 ### 4. Every other split the recorded runs find
 

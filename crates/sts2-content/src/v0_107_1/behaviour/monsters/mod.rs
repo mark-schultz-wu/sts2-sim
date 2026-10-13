@@ -374,6 +374,21 @@ fn perform_from<F: Fight<V>>(
     // `IllusionPower` builds the other, and what each does belongs to
     // whoever built it rather than to the monster standing on it.
     match move_id {
+        // `SlumberPower` stuns the beetle with `WakeUpMove` as the stun's own
+        // move, which takes its Plating off. Whistle's plain stun does
+        // nothing, and lands only on a beetle still asleep or already awake:
+        // one with Slumber, or with no Plating left.
+        MoveId::Stunned if monster == Monster::SlumberingBeetle => {
+            use sts2_core::CreatureView as _;
+            let actor = fight.actor();
+            let asleep = fight.creatures().any(|creature| {
+                creature.id() == actor && creature.power(Power::SlumberPower).is_some()
+            });
+            if !asleep {
+                fight.remove_power(actor, Power::PlatingPower);
+            }
+            return Played::Done;
+        }
         MoveId::Stunned => return Played::Done,
         MoveId::ReviveMove => {
             revive(fight);
