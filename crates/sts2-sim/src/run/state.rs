@@ -1611,6 +1611,7 @@ impl<V: Rules> State<V> {
             sts2_core::RelicPull::Stocked(_) => self.shared.opening.player_relics.front_where(
                 rarity,
                 &self.dealt_relics,
+                num_traits::cast(self.floor).expect("a floor fits a usize"),
                 V::Relic::allowed_in_shops,
             ),
         };
@@ -1628,11 +1629,11 @@ impl<V: Rules> State<V> {
     /// what `SharedRelicGrabBag.Remove` does on the other side, so the shared
     /// bag needs no second one.
     pub(super) fn pull_relic(&mut self, rarity: Rarity<V>) -> V::Relic {
-        let relic = self
-            .shared
-            .opening
-            .player_relics
-            .front(rarity, &self.dealt_relics);
+        let relic = self.shared.opening.player_relics.front(
+            rarity,
+            &self.dealt_relics,
+            num_traits::cast(self.floor).expect("a floor fits a usize"),
+        );
         Arc::make_mut(&mut self.dealt_relics).push(relic);
         relic
     }
@@ -1644,7 +1645,11 @@ impl<V: Rules> State<V> {
             .chain(self.shared_dealt.iter())
             .copied()
             .collect();
-        self.shared.opening.shared_relics.front(rarity, &gone)
+        self.shared.opening.shared_relics.front(
+            rarity,
+            &gone,
+            num_traits::cast(self.floor).expect("a floor fits a usize"),
+        )
     }
 
     /// `Player.CanRemovePotions` off: an event that holds the potions while it
@@ -4368,6 +4373,9 @@ impl<V: Rules> State<V> {
             streams: &mut streams,
             player_relics: &self.shared.opening.player_relics,
             dealt_relics: &mut dealt,
+            // Stocked as the room is built, which `EnterRoom` does once the
+            // room's floor counts.
+            floor: num_traits::cast(self.floor + num_traits::one()).expect("a floor fits a usize"),
             character: self.shared.character,
             offset: self.odds.rarity,
             removals_used: self.removals_used,
@@ -6063,6 +6071,7 @@ impl<V: Rules> State<V> {
             streams: &mut streams,
             player_relics: &self.shared.opening.player_relics,
             dealt_relics: &mut dealt,
+            floor: num_traits::cast(self.floor).expect("a floor fits a usize"),
             character: self.shared.character,
             offset: self.odds.rarity,
             removals_used: self.removals_used,
@@ -6606,10 +6615,10 @@ impl<V: Rules> sts2_core::EventView<V> for State<V> {
     }
 
     fn relics_left(&self) -> bool {
-        self.shared
-            .opening
-            .player_relics
-            .has_left(&self.dealt_relics)
+        self.shared.opening.player_relics.has_left(
+            &self.dealt_relics,
+            num_traits::cast(self.floor).expect("a floor fits a usize"),
+        )
     }
 }
 

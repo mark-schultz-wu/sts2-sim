@@ -31,6 +31,11 @@ pub struct RelicBag<V: Rules> {
     deques: IndexMap<Rarity<V>, Vec<V::Relic>>,
 }
 
+/// `RelicModel.IsAllowed` for a run of one player, `floor` floors in.
+fn allowed_now<V: Rules>(relic: V::Relic, floor: usize) -> bool {
+    V::relic_allowed(relic, floor, 1)
+}
+
 impl<V: Rules> RelicBag<V> {
     /// Each rarity's relics, in the order the bag first saw that rarity.
     pub fn deques(&self) -> impl Iterator<Item = (Rarity<V>, &[V::Relic])> {
@@ -64,20 +69,18 @@ impl<V: Rules> RelicBag<V> {
 
     /// `RelicGrabBag.PullFromFront`, as a read rather than a write.
     ///
-    /// The game only ever removes what it deals, and a deque's shuffle never
-    /// moves. So the deque less what a run dealt is the same sequence.
-    /// `dealt` is every relic this run handed out.
+    /// The game removes what it deals, and what `RelicModel.IsAllowed` fails
+    /// as it pulls. The shuffle never moves and a floor only climbs, so the
+    /// deque less `dealt` and less what fails at `floor` is the same sequence.
     ///
     /// Answers the deque for `rarity`, or the next up when it is spent: shop,
-    /// common, uncommon, rare. `RelicModel.IsAllowed` is not read, and 62
-    /// relics override it.
+    /// common, uncommon, rare.
     ///
     /// # Panics
     ///
-    /// A bag with nothing left at any rarity. The game refreshes a spent one
-    /// and falls back to a relic of its own, and neither is reached.
-    pub fn front(&self, rarity: Rarity<V>, dealt: &[V::Relic]) -> V::Relic {
-        self.pull(rarity, dealt, |_| true, false)
+    /// A bag with nothing left, which the game refreshes. That is not reached.
+    pub fn front(&self, rarity: Rarity<V>, dealt: &[V::Relic], floor: usize) -> V::Relic {
+        self.pull(rarity, dealt, floor, |_| true, false)
     }
 
     /// [`Self::front`] through a filter, which a rarity's deque is walked
@@ -86,9 +89,10 @@ impl<V: Rules> RelicBag<V> {
         &self,
         rarity: Rarity<V>,
         dealt: &[V::Relic],
+        floor: usize,
         allowed: impl Fn(V::Relic) -> bool,
     ) -> V::Relic {
-        self.pull(rarity, dealt, allowed, false)
+        self.pull(rarity, dealt, floor, allowed, false)
     }
 
     /// `RelicGrabBag.PullFromBack`, which is what a merchant stocks from.
@@ -100,27 +104,32 @@ impl<V: Rules> RelicBag<V> {
         &self,
         rarity: Rarity<V>,
         dealt: &[V::Relic],
+        floor: usize,
         allowed: impl Fn(V::Relic) -> bool,
     ) -> V::Relic {
-        self.pull(rarity, dealt, allowed, true)
+        self.pull(rarity, dealt, floor, allowed, true)
     }
 
     /// `RelicGrabBag.HasAvailableRelics`: whether a deal from the front finds
     /// a relic at any of the rarities a bag deals.
     ///
     /// Every drafted rarity is walked up to rare, so any undealt relic at any
-    /// of the four answers yes. `IsAllowed` is not read, as in [`Self::front`].
+    /// of the four that `IsAllowed` lets through answers yes.
     ///
     /// # Panics
     ///
     /// A bag with nothing left, where the game refreshes a spent deque or
     /// falls back to a relic of its own. Neither is reached.
-    pub fn has_left(&self, dealt: &[V::Relic]) -> bool {
+    pub fn has_left(&self, dealt: &[V::Relic], floor: usize) -> bool {
         let left = self
             .deques
             .iter()
             .filter(|(rarity, _)| Rarity::<V>::DRAFTED.contains(rarity))
-            .any(|(_, relics)| relics.iter().any(|relic| !dealt.contains(relic)));
+            .any(|(_, relics)| {
+                relics
+                    .iter()
+                    .any(|&relic| !dealt.contains(&relic) && allowed_now::<V>(relic, floor))
+            });
         if !left {
             unimplemented!("a relic bag with nothing left to deal");
         }
@@ -132,16 +141,16 @@ impl<V: Rules> RelicBag<V> {
         &self,
         rarity: Rarity<V>,
         dealt: &[V::Relic],
+        floor: usize,
         allowed: impl Fn(V::Relic) -> bool,
         from_back: bool,
     ) -> V::Relic {
         let mut rarity = rarity;
         loop {
             let held = self.deques.get(&rarity).map(|relics| {
-                let left = relics
-                    .iter()
-                    .copied()
-                    .filter(|relic| !dealt.contains(relic) && allowed(*relic));
+                let left = relics.iter().copied().filter(|&relic| {
+                    !dealt.contains(&relic) && allowed_now::<V>(relic, floor) && allowed(relic)
+                });
                 match from_back {
                     true => left.last(),
                     false => left.take(1).last(),

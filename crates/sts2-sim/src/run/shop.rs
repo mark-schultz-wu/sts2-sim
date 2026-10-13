@@ -28,6 +28,9 @@ pub(super) struct Merchant<'a, V: Rules> {
     pub(super) streams: &'a mut Streams<V>,
     pub(super) player_relics: &'a RelicBag<V>,
     pub(super) dealt_relics: &'a mut Vec<V::Relic>,
+    /// The run's `TotalFloor` as the shelves are stocked, which
+    /// `RelicModel.IsAllowed` reads.
+    pub(super) floor: usize,
     pub(super) character: V::Character,
     /// The saved card rarity offset, which a shop reads and does not move.
     pub(super) offset: f32,
@@ -150,9 +153,12 @@ impl<V: Rules> Merchant<'_, V> {
             }
             Stock::Relic(_) => {
                 let rarity = self.rolled_relic_rarity();
-                let relic =
-                    self.player_relics
-                        .back(rarity, self.dealt_relics, V::Relic::allowed_in_shops);
+                let relic = self.player_relics.back(
+                    rarity,
+                    self.dealt_relics,
+                    self.floor,
+                    V::Relic::allowed_in_shops,
+                );
                 self.dealt_relics.push(relic);
                 let base = relic
                     .merchant_price()
@@ -315,9 +321,12 @@ impl<V: Rules> Merchant<'_, V> {
             // `PullNextRelicFromBack` reads the player's own bag and then takes
             // what it drew out of the shared one, so a relic sold here is gone
             // from both. The dealt list is what both bags are read against.
-            let relic =
-                self.player_relics
-                    .back(rarity, self.dealt_relics, V::Relic::allowed_in_shops);
+            let relic = self.player_relics.back(
+                rarity,
+                self.dealt_relics,
+                self.floor,
+                V::Relic::allowed_in_shops,
+            );
             self.dealt_relics.push(relic);
             let base = relic
                 .merchant_price()

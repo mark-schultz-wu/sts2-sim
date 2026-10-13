@@ -7606,6 +7606,12 @@ pub trait Rules: Hooks {
     /// offer yet.
     fn allowed_at_neow(relic: Self::Relic, players: usize) -> bool;
 
+    /// `RelicModel.IsAllowed`, for a run `floor` floors in, which is its
+    /// `TotalFloor`. A relic bag drops, for good, each relic that fails it as
+    /// the bag is pulled from. A run's floor only climbs, so a relic that
+    /// fails it once fails it for the rest of the run.
+    fn relic_allowed(relic: Self::Relic, floor: usize, players: usize) -> bool;
+
     /// Every run stream, in the order the game creates them.
     fn run_rng_types() -> &'static [Self::RunRngType];
 
