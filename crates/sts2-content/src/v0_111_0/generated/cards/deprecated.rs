@@ -44,4 +44,5 @@ pub(super) static ROWS: [CardData; 1] = [CardData {
     tags: TagSet::new(&[]),
     gains_block: false,
     visually_colorless: true,
+    turn_end_in_hand: false,
 }];

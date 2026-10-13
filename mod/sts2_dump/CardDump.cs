@@ -60,7 +60,7 @@ public static class CardDump
         // Stamped, so regenerating against a different build fails visibly
         // rather than quietly replacing the table.
         output.Append(Stamp.Header("card"));
-        output.Append("# card <id> <pool> <type> <rarity> <target> <cost> <costsX> <starCost> <starCostsX> <maxUpgrade> <keywords> <tags> <gainsBlock>\n");
+        output.Append("# card <id> <pool> <type> <rarity> <target> <cost> <costsX> <starCost> <starCostsX> <maxUpgrade> <keywords> <tags> <gainsBlock> <visuallyColorless> <turnEndInHand>\n");
         output.Append("# var <card> <name> <base> <calculated> <class>\n");
         output.Append("# pool <pool> <index> <card>\n");
         output.Append("# combatpool <pool> <index> <card>\n");
@@ -180,6 +180,9 @@ public static class CardDump
                 // `VisualCardPool.IsColorless`. A few event cards show a
                 // character's frame, and Heirloom Hammer reads that.
                 card.VisualCardPool.IsColorless ? "1" : "0",
+                // `HasTurnEndInHandEffect`: whether a turn that ends with it
+                // in hand runs `OnTurnEndInHandWrapper` on it.
+                card.HasTurnEndInHandEffect ? "1" : "0",
             }));
             output.Append('\n');
 

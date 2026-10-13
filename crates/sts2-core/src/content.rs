@@ -329,6 +329,10 @@ pub trait CardTable: Table {
     /// Most cards show their own pool, and a few event cards a character's.
     fn visually_colorless(self) -> bool;
 
+    /// `HasTurnEndInHandEffect`: whether a turn that ends with it in hand
+    /// runs `OnTurnEndInHandWrapper` on it.
+    fn turn_end_in_hand(self) -> bool;
+
     /// Whether it carries the keyword that exhausts it from hand at the end
     /// of a turn.
     fn ethereal(self) -> bool;
@@ -2196,13 +2200,6 @@ pub trait Fight<V: ContentVersion> {
     ) -> Vec<crate::CardAt<V>> {
         unimplemented!("adding generated cards to a pile")
     }
-
-    /// The end of `OnTurnEndInHandWrapper`, once the card whose behavior is
-    /// running has had its turn-end effect: `CardPileCmd.Add` to the discard
-    /// pile. That is no discard, so nothing that listens for one hears it. A
-    /// fight that is ending refuses the add, and the card stays in the play
-    /// pile the wrapper moved it to.
-    fn discard_after_turn_end(&mut self);
 
     /// `CreatureCmd.Stun(target, nextMoveId)` on a monster: `stun` in place of
     /// the move it advertised, then `then`. A monster that has to perform

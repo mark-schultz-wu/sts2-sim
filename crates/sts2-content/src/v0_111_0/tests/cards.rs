@@ -124,7 +124,7 @@ fn every_card_is_present_and_well_formed() {
     assert_eq!(cards.len(), 596, "the build has 596 cards");
 
     for row in &cards {
-        assert_eq!(row.len(), 15, "a card row has fifteen fields: {row:?}");
+        assert_eq!(row.len(), 16, "a card row has sixteen fields: {row:?}");
         assert_eq!(row[0], "card");
     }
 }
