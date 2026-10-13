@@ -619,45 +619,55 @@ fn before_played<V: Rules, S: LendsCombat>(
         return;
     }
     let energy = play.energy;
-    let resolved = match card.face.ident.card.cost() {
-        sts2_core::Cost::X => num_traits::cast(play.x).expect("an energy fits a game number"),
-        _ => {
-            let fight = super::listen::Walk { live, relics };
-            match super::legal::costs::<V>(card, None, fight).0 {
-                sts2_core::Cost::Fixed(cost) => {
-                    num_traits::cast(cost.get()).expect("a cost fits a game number")
+    // The cost each listener reads as the walk reaches it, which an earlier
+    // one can move, as Veilpiercer's decrement does.
+    let hook = |live: &Live<V>, relics: &crate::run::Belt<V>| {
+        let resolved = match card.face.ident.card.cost() {
+            sts2_core::Cost::X => num_traits::cast(play.x).expect("an energy fits a game number"),
+            _ => {
+                let fight = super::listen::Walk { live, relics };
+                match super::legal::costs::<V>(card, None, fight).0 {
+                    sts2_core::Cost::Fixed(cost) => {
+                        num_traits::cast(cost.get()).expect("a cost fits a game number")
+                    }
+                    cost => unimplemented!("a card played at a cost of {cost:?}"),
                 }
-                cost => unimplemented!("a card played at a cost of {cost:?}"),
+            }
+        };
+        sts2_core::EventHook::CardPlaying {
+            card: card.face.ident.card,
+            id: card.id,
+            affliction: card.face.ident.affliction,
+            target,
+            ethereal: card.face.ethereal(),
+            resolved,
+            spent: num_traits::cast(energy).expect("an energy fits a game number"),
+            side: live.side,
+            dupe: card.face.dupe(),
+        }
+    };
+    // Each listener acts as the walk reaches it.
+    let mut walk = super::listen::walk::<V>(live, relics, hook(live, relics));
+    let mut asked = sts2_core::HookEffects::new();
+    while let Some(listener) = walk.next(live, relics, &mut asked) {
+        let mut rest: SmallVec<[sts2_core::HookEffect<V>; 4]> = SmallVec::new();
+        for effect in asked.drain(..) {
+            match (listener, effect) {
+                (
+                    super::listen::Listener::Card { id },
+                    sts2_core::HookEffect::ModifySelf { change, lasting },
+                ) => live.modify_self(id, change, lasting),
+                (_, effect) => rest.push(effect),
             }
         }
-    };
-    let hook = sts2_core::EventHook::CardPlaying {
-        card: card.face.ident.card,
-        id: card.id,
-        affliction: card.face.ident.affliction,
-        target,
-        ethereal: card.face.ethereal(),
-        resolved,
-        spent: num_traits::cast(energy).expect("an energy fits a game number"),
-        side: live.side,
-        dupe: card.face.dupe(),
-    };
-    let mut rest: SmallVec<[sts2_core::HookEffect<V>; 4]> = SmallVec::new();
-    for (listener, effect) in super::listen::notify::<V>(live, relics, hook) {
-        match (listener, effect) {
-            (
-                super::listen::Listener::Card { id },
-                sts2_core::HookEffect::ModifySelf { change, lasting },
-            ) => live.modify_self(id, change, lasting),
-            (_, effect) => rest.push(effect),
+        if !rest.is_empty() {
+            let ascension = live.ascension;
+            let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
+            hook::apply::<V, _>(&mut board, rest);
+            let skipped = std::mem::take(&mut board.skipped);
+            merge::<V>(&mut live.skip_tick, skipped);
         }
-    }
-    if !rest.is_empty() {
-        let ascension = live.ascension;
-        let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
-        hook::apply::<V, _>(&mut board, rest);
-        let skipped = std::mem::take(&mut board.skipped);
-        merge::<V>(&mut live.skip_tick, skipped);
+        walk.rehook(hook(live, relics));
     }
 }
 

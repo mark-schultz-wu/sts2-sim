@@ -2883,227 +2883,244 @@ pub(super) fn side_turn_started<V: Rules>(
         room: live.room(),
         extra,
     };
-    for (listener, effect) in listen::notify::<V>(live, relics, hook) {
-        match effect {
-            // `PowerCmd.Remove(this)`, from a power spent as its side begins.
-            sts2_core::HookEffect::Remove => {
-                let Listener::Power { owner, power, .. } = listener else {
-                    unimplemented!("{listener:?} removing itself as a side turn starts")
-                };
-                live.remove_power(owner, power);
-            }
-            // `PowerCmd.Decrement(this)`.
-            sts2_core::HookEffect::Decrement => {
-                let Listener::Power { owner, power, .. } = listener else {
-                    unimplemented!("{listener:?} decrementing itself as a side turn starts")
-                };
-                let mut board =
-                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
-                board.modify_amount(owner, power, -num_traits::one::<V::Number>());
-            }
-            // `PowerCmd.Apply<P>(Owner, amount, Owner)`. A relic's owner is
-            // the player.
-            sts2_core::HookEffect::ApplyToOwner(power, amount) => {
-                let owner = match listener {
-                    Listener::Power { owner, .. } => owner,
-                    Listener::Relic { .. } => live.player().id,
-                    listener => unimplemented!("{listener:?} applying a power to its owner"),
-                };
-                let mut board =
-                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
-                board.land(owner, power, amount, Some(owner));
-            }
-            // `NextItem` over `HittableEnemies` off `CombatTargets`, then
-            // `PowerCmd.Apply<P>` from the listener's owner.
-            sts2_core::HookEffect::ApplyToRandomOpponent { power, amount } => {
-                let Listener::Power { owner, .. } = listener else {
-                    unimplemented!("{listener:?} applying a power to a random enemy")
-                };
-                let mut board =
-                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
-                if let Some(target) = sts2_core::Fight::random_opponent(&mut board) {
-                    board.land(target, power, amount, Some(owner));
+    // Each listener acts as the walk reaches it.
+    let mut walk = listen::walk::<V>(live, relics, hook);
+    let mut asked = sts2_core::HookEffects::new();
+    while let Some(listener) = walk.next(live, relics, &mut asked) {
+        for effect in asked.drain(..) {
+            match effect {
+                // `PowerCmd.Remove(this)`, from a power spent as its side begins.
+                sts2_core::HookEffect::Remove => {
+                    let Listener::Power { owner, power, .. } = listener else {
+                        unimplemented!("{listener:?} removing itself as a side turn starts")
+                    };
+                    live.remove_power(owner, power);
                 }
-            }
-            sts2_core::HookEffect::UpgradeHand => live.cards.write_every(
-                &[sts2_core::Pile::Hand],
-                |_| true,
-                |card| card.modify(sts2_core::Change::Upgrade, sts2_core::Lasting::ThisFight),
-            ),
-            sts2_core::HookEffect::Forge { card, amount } => {
-                let mut board =
-                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
-                sts2_core::Fight::forge(&mut board, card, amount);
-            }
-            // `PlayerCmd.GainEnergy`.
-            sts2_core::HookEffect::GainEnergy(amount) => {
-                let mut board =
-                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
-                sts2_core::Fight::modify_energy(&mut board, amount);
-            }
-            sts2_core::HookEffect::GainEnergyForGold { energy, gold } => {
-                if live.gold >= gold {
-                    let mut board =
-                        Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
-                    sts2_core::Fight::modify_energy(&mut board, energy);
-                    live.gold = live.gold - gold;
-                }
-            }
-            // `CreatureCmd.GainBlock`, unpowered, on the power's owner.
-            sts2_core::HookEffect::GainBlockPerOrbKind(amount) => {
-                let Listener::Power { owner, .. } = listener else {
-                    unimplemented!("{listener:?} gaining block for its orbs")
-                };
-                let mut kinds: SmallVec<[V::Orb; 10]> = SmallVec::new();
-                for held in live.orbs.iter().flat_map(|orbs| &orbs.queue) {
-                    if !kinds.contains(&held.orb) {
-                        kinds.push(held.orb);
-                    }
-                }
-                let count: V::Number = num_traits::cast(kinds.len())
-                    .expect("a queue's kinds of orb fit a game number");
-                super::board::gain_unpowered_block::<V>(
-                    live,
-                    rngs.reborrow(),
-                    relics,
-                    live.ascension,
-                    owner,
-                    amount * count,
-                );
-            }
-            // `PoisonPower.AfterSideTurnStart`: each round hits the owner for
-            // the stack it holds then, and takes one off while it lives. An
-            // ending fight runs no more commands.
-            sts2_core::HookEffect::DamageSelfByStack { times } => {
-                let Listener::Power { owner, power, .. } = listener else {
-                    unimplemented!("{listener:?} damaging itself by its stack")
-                };
-                let mut round = num_traits::zero::<V::Number>();
-                while round < times && ended.is_none() {
-                    round = round + num_traits::one();
-                    let Some(PowerAmount::Counted(stack)) = live
-                        .powers
-                        .of(owner)
-                        .find(|held| held.power() == power)
-                        .map(|held| held.amount.amount())
-                    else {
-                        break;
+                // `PowerCmd.Decrement(this)`.
+                sts2_core::HookEffect::Decrement => {
+                    let Listener::Power { owner, power, .. } = listener else {
+                        unimplemented!("{listener:?} decrementing itself as a side turn starts")
                     };
                     let mut board =
                         Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
-                    board.hit_unpowered(None, owner, stack, true);
-                    let alive = board
-                        .at(owner)
-                        .is_some_and(|at| board.live.creatures[at].alive);
-                    if alive {
-                        board.modify_amount(owner, power, -num_traits::one::<V::Number>());
+                    board.modify_amount(owner, power, -num_traits::one::<V::Number>());
+                }
+                // `PowerCmd.Apply<P>(Owner, amount, Owner)`. A relic's owner is
+                // the player.
+                sts2_core::HookEffect::ApplyToOwner(power, amount) => {
+                    let owner = match listener {
+                        Listener::Power { owner, .. } => owner,
+                        Listener::Relic { .. } => live.player().id,
+                        listener => unimplemented!("{listener:?} applying a power to its owner"),
+                    };
+                    let mut board =
+                        Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                    board.land(owner, power, amount, Some(owner));
+                }
+                // `NextItem` over `HittableEnemies` off `CombatTargets`, then
+                // `PowerCmd.Apply<P>` from the listener's owner.
+                sts2_core::HookEffect::ApplyToRandomOpponent { power, amount } => {
+                    let Listener::Power { owner, .. } = listener else {
+                        unimplemented!("{listener:?} applying a power to a random enemy")
+                    };
+                    let mut board =
+                        Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                    if let Some(target) = sts2_core::Fight::random_opponent(&mut board) {
+                        board.land(target, power, amount, Some(owner));
+                    }
+                }
+                sts2_core::HookEffect::UpgradeHand => live.cards.write_every(
+                    &[sts2_core::Pile::Hand],
+                    |_| true,
+                    |card| card.modify(sts2_core::Change::Upgrade, sts2_core::Lasting::ThisFight),
+                ),
+                sts2_core::HookEffect::Forge { card, amount } => {
+                    let mut board =
+                        Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                    sts2_core::Fight::forge(&mut board, card, amount);
+                }
+                // `PlayerCmd.GainEnergy`.
+                sts2_core::HookEffect::GainEnergy(amount) => {
+                    let mut board =
+                        Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                    sts2_core::Fight::modify_energy(&mut board, amount);
+                }
+                sts2_core::HookEffect::GainEnergyForGold { energy, gold } => {
+                    if live.gold >= gold {
+                        let mut board =
+                            Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                        sts2_core::Fight::modify_energy(&mut board, energy);
+                        live.gold = live.gold - gold;
+                    }
+                }
+                // `CreatureCmd.GainBlock`, unpowered, on the power's owner.
+                sts2_core::HookEffect::GainBlockPerOrbKind(amount) => {
+                    let Listener::Power { owner, .. } = listener else {
+                        unimplemented!("{listener:?} gaining block for its orbs")
+                    };
+                    let mut kinds: SmallVec<[V::Orb; 10]> = SmallVec::new();
+                    for held in live.orbs.iter().flat_map(|orbs| &orbs.queue) {
+                        if !kinds.contains(&held.orb) {
+                            kinds.push(held.orb);
+                        }
+                    }
+                    let count: V::Number = num_traits::cast(kinds.len())
+                        .expect("a queue's kinds of orb fit a game number");
+                    super::board::gain_unpowered_block::<V>(
+                        live,
+                        rngs.reborrow(),
+                        relics,
+                        live.ascension,
+                        owner,
+                        amount * count,
+                    );
+                }
+                // `PoisonPower.AfterSideTurnStart`: each round hits the owner for
+                // the stack it holds then, and takes one off while it lives. An
+                // ending fight runs no more commands.
+                sts2_core::HookEffect::DamageSelfByStack { times } => {
+                    let Listener::Power { owner, power, .. } = listener else {
+                        unimplemented!("{listener:?} damaging itself by its stack")
+                    };
+                    let mut round = num_traits::zero::<V::Number>();
+                    while round < times && ended.is_none() {
+                        round = round + num_traits::one();
+                        let Some(PowerAmount::Counted(stack)) = live
+                            .powers
+                            .of(owner)
+                            .find(|held| held.power() == power)
+                            .map(|held| held.amount.amount())
+                        else {
+                            break;
+                        };
+                        let mut board =
+                            Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                        board.hit_unpowered(None, owner, stack, true);
+                        let alive = board
+                            .at(owner)
+                            .is_some_and(|at| board.live.creatures[at].alive);
+                        if alive {
+                            board.modify_amount(owner, power, -num_traits::one::<V::Number>());
+                        }
+                        ended = ended.or(board.ended());
+                    }
+                }
+                // `PowerCmd.Apply<P>` over `GetOpponentsOf(Owner)` that are
+                // alive, from nobody. A relic's owner is the player.
+                sts2_core::HookEffect::ApplyToLivingOpponents(power, amount)
+                    if matches!(listener, Listener::Relic { .. }) =>
+                {
+                    let targets: SmallVec<[CombatId; CREATURES]> = (live.creatures.iter())
+                        .filter(|creature| {
+                            creature.side == <V::CombatSide as SideKinds>::ENEMY && creature.alive
+                        })
+                        .map(|creature| creature.id)
+                        .collect();
+                    let mut board =
+                        Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                    for target in targets {
+                        board.land(target, power, amount, None);
                     }
                     ended = ended.or(board.ended());
                 }
-            }
-            // `PowerCmd.Apply<P>` over `GetOpponentsOf(Owner)` that are
-            // alive, from nobody. A relic's owner is the player.
-            sts2_core::HookEffect::ApplyToLivingOpponents(power, amount)
-                if matches!(listener, Listener::Relic { .. }) =>
-            {
-                let targets: SmallVec<[CombatId; CREATURES]> = (live.creatures.iter())
-                    .filter(|creature| {
-                        creature.side == <V::CombatSide as SideKinds>::ENEMY && creature.alive
-                    })
-                    .map(|creature| creature.id)
-                    .collect();
-                let mut board =
-                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
-                for target in targets {
-                    board.land(target, power, amount, None);
+                // `PowerCmd.Apply<P>(HittableEnemies, amount, Owner)`.
+                sts2_core::HookEffect::ApplyToOpponents(power, amount) => {
+                    let Listener::Power { owner, .. } = listener else {
+                        unimplemented!("{listener:?} applying a power to its opponents")
+                    };
+                    let mut board =
+                        Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                    for target in board.hittable_opponents() {
+                        board.land(target, power, amount, Some(owner));
+                    }
+                    ended = ended.or(board.ended());
                 }
-                ended = ended.or(board.ended());
-            }
-            // `PowerCmd.Apply<P>(HittableEnemies, amount, Owner)`.
-            sts2_core::HookEffect::ApplyToOpponents(power, amount) => {
-                let Listener::Power { owner, .. } = listener else {
-                    unimplemented!("{listener:?} applying a power to its opponents")
-                };
-                let mut board =
-                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
-                for target in board.hittable_opponents() {
-                    board.land(target, power, amount, Some(owner));
+                // `PlayerCmd.GainStars`.
+                sts2_core::HookEffect::GainStars(amount) => {
+                    let mut board =
+                        Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                    sts2_core::Fight::gain_stars(&mut board, amount);
                 }
-                ended = ended.or(board.ended());
-            }
-            // `PlayerCmd.GainStars`.
-            sts2_core::HookEffect::GainStars(amount) => {
-                let mut board =
-                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
-                sts2_core::Fight::gain_stars(&mut board, amount);
-            }
-            // `OrbCmd.Channel` on the player, which evokes an orb to make room.
-            sts2_core::HookEffect::Channel(orb) => {
-                let mut board =
-                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
-                sts2_core::Fight::channel(&mut board, orb);
-                ended = ended.or(board.ended());
-            }
-            // `OstyCmd.Summon` for the player.
-            sts2_core::HookEffect::Summon(amount) => {
-                super::board::summon_osty::<V>(live, rngs.reborrow(), relics, ascension, amount);
-            }
-            // `CreatureCmd.GainBlock`, unpowered, on a relic's owner, who is
-            // the player the board acts for.
-            effect @ sts2_core::HookEffect::GainBlock(_)
-                if matches!(listener, Listener::Relic { .. }) =>
-            {
-                let mut board =
-                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
-                super::hook::apply::<V, _>(&mut board, [effect]);
-                ended = ended.or(board.ended());
-            }
-            // `PlayerCmd.LoseEnergy` from the player's pool.
-            effect @ sts2_core::HookEffect::LoseEnergy(_) => {
-                let mut board =
-                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
-                super::hook::apply::<V, _>(&mut board, [effect]);
-            }
-            // `CreatureCmd.GainBlock`, unpowered, on a creature the listener
-            // names.
-            effect @ sts2_core::HookEffect::GainBlockOf { .. } => {
-                let mut board =
-                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
-                super::hook::apply::<V, _>(&mut board, [effect]);
-                ended = ended.or(board.ended());
-            }
-            sts2_core::HookEffect::GenerateFromPool {
-                filter,
-                count,
-                writes,
-            } => generate_from_pool::<V>(
-                live,
-                rngs.reborrow(),
-                relics,
-                ascension,
-                filter,
-                count,
-                writes,
-            ),
-            sts2_core::HookEffect::GenerateDistinctColorless { count } => {
-                generate_distinct_colorless::<V>(live, rngs.reborrow(), relics, ascension, count)
-            }
-            sts2_core::HookEffect::AddOrbSlots(amount) => {
-                let mut board =
-                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
-                sts2_core::Fight::add_orb_slots(&mut board, amount);
-            }
-            sts2_core::HookEffect::GenerateDistinctFromPool { filter, count } => {
-                generate_distinct_from_pool::<V>(
+                // `OrbCmd.Channel` on the player, which evokes an orb to make room.
+                sts2_core::HookEffect::Channel(orb) => {
+                    let mut board =
+                        Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                    sts2_core::Fight::channel(&mut board, orb);
+                    ended = ended.or(board.ended());
+                }
+                // `OstyCmd.Summon` for the player.
+                sts2_core::HookEffect::Summon(amount) => {
+                    super::board::summon_osty::<V>(
+                        live,
+                        rngs.reborrow(),
+                        relics,
+                        ascension,
+                        amount,
+                    );
+                }
+                // `CreatureCmd.GainBlock`, unpowered, on a relic's owner, who is
+                // the player the board acts for.
+                effect @ sts2_core::HookEffect::GainBlock(_)
+                    if matches!(listener, Listener::Relic { .. }) =>
+                {
+                    let mut board =
+                        Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                    super::hook::apply::<V, _>(&mut board, [effect]);
+                    ended = ended.or(board.ended());
+                }
+                // `PlayerCmd.LoseEnergy` from the player's pool.
+                effect @ sts2_core::HookEffect::LoseEnergy(_) => {
+                    let mut board =
+                        Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                    super::hook::apply::<V, _>(&mut board, [effect]);
+                }
+                // `CreatureCmd.GainBlock`, unpowered, on a creature the listener
+                // names.
+                effect @ sts2_core::HookEffect::GainBlockOf { .. } => {
+                    let mut board =
+                        Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                    super::hook::apply::<V, _>(&mut board, [effect]);
+                    ended = ended.or(board.ended());
+                }
+                sts2_core::HookEffect::GenerateFromPool {
+                    filter,
+                    count,
+                    writes,
+                } => generate_from_pool::<V>(
                     live,
                     rngs.reborrow(),
                     relics,
                     ascension,
                     filter,
                     count,
-                )
+                    writes,
+                ),
+                sts2_core::HookEffect::GenerateDistinctColorless { count } => {
+                    generate_distinct_colorless::<V>(
+                        live,
+                        rngs.reborrow(),
+                        relics,
+                        ascension,
+                        count,
+                    )
+                }
+                sts2_core::HookEffect::AddOrbSlots(amount) => {
+                    let mut board =
+                        Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                    sts2_core::Fight::add_orb_slots(&mut board, amount);
+                }
+                sts2_core::HookEffect::GenerateDistinctFromPool { filter, count } => {
+                    generate_distinct_from_pool::<V>(
+                        live,
+                        rngs.reborrow(),
+                        relics,
+                        ascension,
+                        filter,
+                        count,
+                    )
+                }
+                effect => unimplemented!("a listener asking for {effect:?} as a side turn starts"),
             }
-            effect => unimplemented!("a listener asking for {effect:?} as a side turn starts"),
         }
     }
     if ended.is_some() {
@@ -3421,114 +3438,149 @@ fn clear_block<V: Rules>(
 }
 
 /// `hook`, `AfterSideTurnEnd` or its late pass, raised on every listener once a
-/// side's turn ends.
+/// side's turn ends. Each listener acts as the walk reaches it, and how the
+/// fight ended comes back if one ended it. The walk goes on past that, and
+/// what the listeners after it ask for is not carried out.
 ///
-/// Which side's turn ending counts a power down is the power's own rule. What
-/// the powers ask to apply comes back, in the order they asked.
+/// Which side's turn ending counts a power down is the power's own rule.
 ///
 /// # Panics
 ///
 /// A listener asking for something no turn end carries out.
 #[tracing::instrument(level = "trace", skip_all)]
-fn tick_powers<V: Rules>(
+fn walk_turn_end<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    ascension: V::AscensionLevel,
+    skipping: &mut Skips<V>,
+    hook: sts2_core::EventHook<V>,
+) -> Option<super::Ended> {
+    let mut ended = None;
+    let mut walk = listen::walk::<V>(live, relics, hook);
+    let mut asked = sts2_core::HookEffects::new();
+    while let Some(listener) = walk.next(live, relics, &mut asked) {
+        for effect in asked.drain(..) {
+            // A fight that is ending runs no more commands, though the walk
+            // still asks every listener.
+            if ended.is_some() {
+                break;
+            }
+            let ask = match listener {
+                // What a relic asks for, on the player who carries it.
+                Listener::Relic { .. } => TurnEndAsk::Relic(effect),
+                Listener::Power {
+                    owner,
+                    instance,
+                    power,
+                } => match effect {
+                    sts2_core::HookEffect::TickDownDuration => {
+                        tick_down::<V>(live, relics, skipping, owner, power);
+                        continue;
+                    }
+                    // `PowerCmd.Apply` on the creature carrying the power,
+                    // which is what a power that grows its owner asks for.
+                    sts2_core::HookEffect::ApplyToOwner(power, amount) => {
+                        TurnEndAsk::Apply(owner, power, amount)
+                    }
+                    sts2_core::HookEffect::DamageOwnerInFight {
+                        amount,
+                        unblockable,
+                        self_dealt,
+                    } => TurnEndAsk::Damage {
+                        owner,
+                        amount,
+                        unblockable,
+                        dealer: self_dealt.then_some(owner),
+                    },
+                    // `PowerCmd.Remove(this)`.
+                    sts2_core::HookEffect::Remove => {
+                        if let Some(at) = live.powers.place_of(owner, instance)
+                            && let Some(effect) = live.remove_power_at_asking(owner, at).first()
+                        {
+                            unimplemented!("{power:?} asking for {effect:?} as it comes off")
+                        }
+                        continue;
+                    }
+                    sts2_core::HookEffect::RemoveFromOwner(power) => {
+                        live.remove_power(owner, power);
+                        continue;
+                    }
+                    // `CardPileCmd.Draw` for the player, once the hand is
+                    // flushed.
+                    sts2_core::HookEffect::Draw(amount) => TurnEndAsk::Draw(amount),
+                    // `CreatureCmd.Heal` on the creature carrying the power.
+                    sts2_core::HookEffect::Heal(amount) => TurnEndAsk::Heal(owner, amount),
+                    sts2_core::HookEffect::Escape => TurnEndAsk::Escape(owner),
+                    sts2_core::HookEffect::EvokeLast(count) => TurnEndAsk::EvokeLast(count),
+                    sts2_core::HookEffect::ClearAffliction(to) => TurnEndAsk::ClearAffliction(to),
+                    other => unimplemented!("a power asking for {other:?} as a turn ends"),
+                },
+                listener => unimplemented!("{listener:?} asking for {effect:?} as a turn ends"),
+            };
+            ended = applied::<V>(
+                live,
+                rngs.reborrow(),
+                relics,
+                ascension,
+                [ask].into_iter().collect(),
+            );
+        }
+    }
+    ended
+}
+
+/// `PowerModel.TickDownDuration` of `power` on `owner`: one off it, unless its
+/// skip flag is set, which clears instead. At nothing, it comes off.
+///
+/// # Panics
+///
+/// A listener changing the tick, or one asking for anything after it.
+fn tick_down<V: Rules>(
     live: &mut Live<V>,
     relics: &mut crate::run::Belt<V>,
     skipping: &mut Skips<V>,
-    hook: sts2_core::EventHook<V>,
-) -> Applying<V> {
-    let mut applying = Applying::<V>::new();
-    let mut ticking: SmallVec<[(CombatId, V::Power); 8]> = SmallVec::new();
-    let mut leaving: SmallVec<[(CombatId, V::Power); 4]> = SmallVec::new();
-    for (listener, effect) in listen::notify::<V>(live, relics, hook) {
-        // What a relic asks for, on the player who carries it.
-        if let Listener::Relic { .. } = listener {
-            applying.push(TurnEndAsk::Relic(effect));
-            continue;
-        }
-        let Listener::Power { owner, power, .. } = listener else {
-            unimplemented!("{listener:?} asking for {effect:?} as a turn ends")
-        };
-        match effect {
-            sts2_core::HookEffect::TickDownDuration => ticking.push((owner, power)),
-            // `PowerCmd.Apply` on the creature carrying the power, which is
-            // what a power that grows its owner asks for.
-            sts2_core::HookEffect::ApplyToOwner(power, amount) => {
-                applying.push(TurnEndAsk::Apply(owner, power, amount));
-            }
-            sts2_core::HookEffect::DamageOwnerInFight {
-                amount,
-                unblockable,
-                self_dealt,
-            } => applying.push(TurnEndAsk::Damage {
-                owner,
-                amount,
-                unblockable,
-                dealer: self_dealt.then_some(owner),
-            }),
-            // `PowerCmd.Remove(this)`, taken after the ticks for the same
-            // reason a power it applies is.
-            sts2_core::HookEffect::Remove => leaving.push((owner, power)),
-            sts2_core::HookEffect::RemoveFromOwner(power) => leaving.push((owner, power)),
-            // `CardPileCmd.Draw` for the player, once the hand is flushed.
-            sts2_core::HookEffect::Draw(amount) => applying.push(TurnEndAsk::Draw(amount)),
-            // `CreatureCmd.Heal` on the creature carrying the power.
-            sts2_core::HookEffect::Heal(amount) => applying.push(TurnEndAsk::Heal(owner, amount)),
-            // `PowerCmd.Decrement(this)`.
-            sts2_core::HookEffect::Decrement => applying.push(TurnEndAsk::Decrement(owner, power)),
-            sts2_core::HookEffect::Escape => applying.push(TurnEndAsk::Escape(owner)),
-            sts2_core::HookEffect::EvokeLast(count) => applying.push(TurnEndAsk::EvokeLast(count)),
-            sts2_core::HookEffect::ClearAffliction(to) => {
-                applying.push(TurnEndAsk::ClearAffliction(to));
-            }
-            other => unimplemented!("a power asking for {other:?} as a turn ends"),
-        }
+    owner: CombatId,
+    power: V::Power,
+) {
+    // `TickDownDuration` passes over an instance whose flag is set, and
+    // clears the flag rather than counting down twice later.
+    if let Some(at) = skipping.iter().position(|held| *held == (owner, power)) {
+        skipping.remove(at);
+        return;
     }
-
-    for (owner, power) in ticking {
-        // `TickDownDuration` passes over an instance whose flag is set, and
-        // clears the flag rather than counting down twice later.
-        if let Some(at) = skipping.iter().position(|held| *held == (owner, power)) {
-            skipping.remove(at);
-            continue;
-        }
-        // `PowerCmd.Decrement`, which is `ModifyAmount` by one down.
-        let fight = listen::Walk { live, relics };
-        let (_, modifiers) =
-            super::board::received_by::<V>(fight, owner, power, -num_traits::one::<V::Number>());
-        if !modifiers.is_empty() {
-            unimplemented!("a listener changing a {power:?} tick");
-        }
-        for held in live
-            .powers
-            .of_mut(owner)
-            .filter(|held| held.power() == power)
-        {
-            held.amount = held.amount.ticked();
-        }
-        // `AfterPowerAmountChanged` for the one it took.
-        let hook = sts2_core::EventHook::PowerAmountChanged {
-            creature: owner,
-            power,
-            delta: -num_traits::one::<V::Number>(),
-            applier: None,
-        };
-        if let Some((listener, effect)) = listen::notify::<V>(live, relics, hook).into_iter().next()
-        {
-            unimplemented!("{listener:?} asking for {effect:?} as {power:?} ticks down");
-        }
-        // `ShouldRemoveDueToAmount`, and `PowerCmd.Remove`.
-        if live
-            .powers
-            .of(owner)
-            .any(|held| held.power() == power && held.amount.spent())
-        {
-            live.remove_power(owner, power);
-        }
+    // `PowerCmd.Decrement`, which is `ModifyAmount` by one down.
+    let fight = listen::Walk { live, relics };
+    let (_, modifiers) =
+        super::board::received_by::<V>(fight, owner, power, -num_traits::one::<V::Number>());
+    if !modifiers.is_empty() {
+        unimplemented!("a listener changing a {power:?} tick");
     }
-    for (owner, power) in leaving {
+    for held in live
+        .powers
+        .of_mut(owner)
+        .filter(|held| held.power() == power)
+    {
+        held.amount = held.amount.ticked();
+    }
+    // `AfterPowerAmountChanged` for the one it took.
+    let hook = sts2_core::EventHook::PowerAmountChanged {
+        creature: owner,
+        power,
+        delta: -num_traits::one::<V::Number>(),
+        applier: None,
+    };
+    if let Some((listener, effect)) = listen::notify::<V>(live, relics, hook).into_iter().next() {
+        unimplemented!("{listener:?} asking for {effect:?} as {power:?} ticks down");
+    }
+    // `ShouldRemoveDueToAmount`, and `PowerCmd.Remove`.
+    if live
+        .powers
+        .of(owner)
+        .any(|held| held.power() == power && held.amount.spent())
+    {
         live.remove_power(owner, power);
     }
-    applying
 }
 
 /// `Hook.AfterTurnEnd`: every `AfterSideTurnEnd`, then every
@@ -3550,8 +3602,9 @@ fn after_turn_end<V: Rules>(
         sts2_core::EventHook::SideTurnEndLate { side },
     ];
     for hook in hooks {
-        let asked = tick_powers::<V>(live, relics, skipping, hook);
-        if let Some(ended) = applied::<V>(live, rngs.reborrow(), relics, ascension, asked) {
+        if let Some(ended) =
+            walk_turn_end::<V>(live, rngs.reborrow(), relics, ascension, skipping, hook)
+        {
             return Some(ended);
         }
     }
@@ -3577,8 +3630,6 @@ enum TurnEndAsk<V: Rules> {
     Draw(V::Number),
     /// `CreatureCmd.Heal`.
     Heal(CombatId, V::Number),
-    /// `PowerCmd.Decrement`.
-    Decrement(CombatId, V::Power),
     /// `CreatureCmd.Escape`.
     Escape(CombatId),
     /// `OrbCmd.EvokeLast`, this many times.
@@ -3589,11 +3640,8 @@ enum TurnEndAsk<V: Rules> {
     Relic(sts2_core::HookEffect<V>),
 }
 
-/// What the powers that just ticked asked for, and whatever that ended.
-///
-/// After the tick rather than inside it, because a power applying one is
-/// holding the creature it sits on. The order is the belt's, which is the
-/// order they were asked in. A fight that ends runs no more of them.
+/// What a turn end's listener asked for, carried out in order, and whatever
+/// that ended. A fight that ends runs no more of them.
 #[tracing::instrument(level = "trace", skip_all)]
 fn applied<V: Rules>(
     live: &mut Live<V>,
@@ -3619,9 +3667,6 @@ fn applied<V: Rules>(
             }
             TurnEndAsk::Relic(effect) => super::hook::apply::<V, _>(&mut board, [effect]),
             TurnEndAsk::Heal(at, amount) => sts2_core::Fight::heal(&mut board, at, amount),
-            TurnEndAsk::Decrement(at, power) => {
-                board.modify_amount(at, power, -num_traits::one::<V::Number>())
-            }
             TurnEndAsk::Escape(at) => board.escape_creature(at),
             TurnEndAsk::EvokeLast(count) => {
                 for _ in 0..num_traits::cast::<_, usize>(count).unwrap_or(0) {
