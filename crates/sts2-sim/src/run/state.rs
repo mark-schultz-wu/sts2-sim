@@ -220,10 +220,10 @@ impl<V: Rules> HeldRelic<V> {
         }
     }
 
-    /// The number it shows, which is `RelicModel.DisplayAmount`, on the
-    /// fight's `turn` or outside a fight.
-    pub(crate) fn amount(&self, turn: Option<V::Count>) -> V::Number {
-        self.state.display_amount(self.relic, turn)
+    /// The number it shows, which is `RelicModel.DisplayAmount`, while a
+    /// fight is `fighting` or not, on the player's `turn`.
+    pub(crate) fn amount(&self, fighting: bool, turn: Option<V::Count>) -> V::Number {
+        self.state.display_amount(self.relic, fighting, turn)
     }
 }
 
@@ -1587,6 +1587,7 @@ impl<V: Rules> State<V> {
     /// where they stayed. Nothing writes them back, because a run that is over
     /// has nowhere to carry them to.
     pub(super) fn lost(&mut self, combat: Combat<V>) {
+        self.last_turn = Some(combat.turn);
         self.phase = Phase::Lost { combat };
     }
 
@@ -6297,10 +6298,7 @@ impl<V: Rules> State<V> {
     fn carried(&self) -> impl ExactSizeIterator<Item = Carried<V>> + '_ {
         self.player.relics.iter().map(|held| Carried {
             relic: held.relic,
-            amount: held.amount(match &self.phase {
-                Phase::Combat(live) => Some(live.turn),
-                _ => None,
-            }),
+            amount: held.amount(matches!(self.phase, Phase::Combat(_)), self.player_turn()),
             title: None,
             text: None,
         })

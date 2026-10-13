@@ -3,7 +3,6 @@
 use sts2_core::{EventHook, Modify, ModifyHook};
 
 use super::super::super::V0_107_1 as V;
-use super::super::super::generated::runstate::CombatSide;
 use super::Number;
 
 /// `EnergyVar(1)`.
@@ -12,31 +11,10 @@ const ENERGY: Number = 1;
 /// The `TurnNumber` from which it adds.
 const FROM_TURN: u32 = 3;
 
-/// Its owner's `PlayerCombatState?.TurnNumber`, which its counter shows. A
-/// fight's state stays until the next fight replaces it. So out of a fight
-/// the counter shows the turn the last one reached.
-///
-/// It reads the number as it is picked up. A fresh fight's state starts at
-/// nought, and each turn moves it through `BeforeSideTurnStart`.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct State {
-    turn: Option<u32>,
-}
-
-/// A relic's owner is the player, and a fight here has one, so the player's
-/// side holds its owner.
-pub(super) fn event_hook(state: &mut State, hook: EventHook<V>) {
-    match hook {
-        EventHook::Obtained { turn, .. } => state.turn = turn,
-        // `ResetCombatState`, as the fight is set up.
-        EventHook::CombatStarting { .. } => state.turn = Some(0),
-        EventHook::BeforeSideTurnStart {
-            side: CombatSide::Player,
-            turn,
-        } => state.turn = Some(turn),
-        _ => {}
-    }
-}
+/// `BeforeCombatStart`, `BeforeSideTurnStart` and `AfterSideTurnStart`,
+/// which refresh its counter and light it from the third turn. None
+/// changes the fight, and it does nothing for any other hook.
+pub(super) fn event_hook(_hook: EventHook<V>) {}
 
 /// `ModifyMaxEnergy`: its energy while its owner's `TurnNumber` is three or
 /// more. A relic's owner is the player, and a fight here has one.
@@ -48,9 +26,10 @@ pub(super) fn modify_hook(hook: ModifyHook<V>) -> Modify<Number> {
     }
 }
 
-/// `DisplayAmount`: `PlayerCombatState?.TurnNumber ?? 1`.
-pub(super) fn display_amount(state: &State) -> Number {
-    state.turn.map_or(1, |turn| {
+/// `DisplayAmount`: `PlayerCombatState?.TurnNumber ?? 1`, which is the
+/// fight's while one runs and the last one's otherwise.
+pub(super) fn display_amount(turn: Option<u32>) -> Number {
+    turn.map_or(1, |turn| {
         Number::try_from(turn).expect("a turn number fits the game's numbers")
     })
 }

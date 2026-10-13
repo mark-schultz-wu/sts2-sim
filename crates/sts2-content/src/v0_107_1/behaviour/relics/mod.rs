@@ -422,7 +422,7 @@ pub enum State {
     NewLeaf,
     NutritiousOyster,
     PaelsBlood,
-    PaelsFlesh(paels_flesh::State),
+    PaelsFlesh,
     PaelsHorn,
     PaelsTears(paels_tears::State),
     Permafrost(permafrost::State),
@@ -792,7 +792,7 @@ pub(crate) fn event_hook(
             EventHook::Obtained { .. } => {}
             hook => unimplemented!("what PaelsBlood does for {hook:?}"),
         },
-        State::PaelsFlesh(state) => paels_flesh::event_hook(state, hook),
+        State::PaelsFlesh => paels_flesh::event_hook(hook),
         State::PaelsHorn => paels_horn::event_hook(hook, asked),
         State::PaelsTears(state) => paels_tears::event_hook(state, hook, asked),
         State::Permafrost(state) => permafrost::event_hook(state, hook, asked),
@@ -1127,7 +1127,7 @@ pub(crate) fn modify_hook(
         State::MysticLighter => mystic_lighter::modify_hook(hook),
         State::GoldPlatedCables => gold_plated_cables::modify_hook(hook),
         State::PaelsBlood => paels_blood::modify_hook(hook),
-        State::PaelsFlesh(_) => paels_flesh::modify_hook(hook),
+        State::PaelsFlesh => paels_flesh::modify_hook(hook),
         State::Sozu => sozu::modify_hook(hook),
         State::TungstenRod => tungsten_rod::modify_hook(hook),
         State::TheBoot => the_boot::modify_hook(hook),
@@ -1465,7 +1465,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::NewLeaf => State::NewLeaf,
             Relic::NutritiousOyster => State::NutritiousOyster,
             Relic::PaelsBlood => State::PaelsBlood,
-            Relic::PaelsFlesh => State::PaelsFlesh(paels_flesh::State::default()),
+            Relic::PaelsFlesh => State::PaelsFlesh,
             Relic::PaelsHorn => State::PaelsHorn,
             Relic::PaelsTears => State::PaelsTears(paels_tears::State::default()),
             Relic::Permafrost => State::Permafrost(permafrost::State::default()),
@@ -1738,8 +1738,7 @@ impl sts2_core::RelicModel<V> for State {
         }
     }
 
-    fn display_amount(&self, relic: Relic, turn: Option<u32>) -> Number {
-        let fighting = turn.is_some();
+    fn display_amount(&self, relic: Relic, fighting: bool, turn: Option<u32>) -> Number {
         match Table::data(relic).display_amount {
             // The table holds the column's own width, and a relic counts in
             // the build's game number. Widening here is the only place the two
@@ -1754,7 +1753,7 @@ impl sts2_core::RelicModel<V> for State {
                 State::WingedBoots(state) => winged_boots::display_amount(state),
                 State::Pocketwatch(state) => pocketwatch::display_amount(state),
                 State::PollinousCore(state) => pollinous_core::display_amount(state),
-                State::PaelsFlesh(state) => paels_flesh::display_amount(state),
+                State::PaelsFlesh => paels_flesh::display_amount(turn),
                 State::PenNib(state) => pen_nib::display_amount(state),
                 State::BookOfFiveRings(state) => book_of_five_rings::display_amount(state),
                 State::Kusarigama(state) => kusarigama::display_amount(state),
@@ -1776,7 +1775,9 @@ impl sts2_core::RelicModel<V> for State {
                 State::LetterOpener(state) => letter_opener::display_amount(state),
                 State::OrnamentalFan(state) => ornamental_fan::display_amount(state),
                 State::Shuriken(state) => shuriken::display_amount(state),
-                State::StoneCalendar(_) => stone_calendar::display_amount(turn),
+                State::StoneCalendar(_) => {
+                    stone_calendar::display_amount(turn.filter(|_| fighting))
+                }
                 State::Nunchaku(state) => nunchaku::display_amount(state),
                 State::IronClub(state) => iron_club::display_amount(state),
                 State::DiamondDiadem(state) => diamond_diadem::display_amount(state),
