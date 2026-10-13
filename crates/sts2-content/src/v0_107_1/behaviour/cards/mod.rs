@@ -768,20 +768,228 @@ impl sts2_core::CardModel<V> for State {
     }
 
     /// `Guilty.CombatsSeen`'s setter prints `Combats` as the fights it has
-    /// left. `CurrentBlock` and `CurrentDamage` print the base and what the
-    /// card gained.
+    /// left. The copy of a Genetic Algorithm or a Scythe keeps what the card
+    /// gained, and prints the base and that.
     fn written(&self) -> Option<Change> {
         match *self {
             Self::Guilty { combats_seen } if combats_seen > 0 => {
                 Some(Change::Raise(CardVar::Combats, -Number::from(combats_seen)))
             }
-            Self::GeneticAlgorithm { increased_block } if increased_block != 0 => {
-                Some(Change::Raise(CardVar::Block, increased_block))
+            Self::GeneticAlgorithm {
+                increased_block: gained,
             }
-            Self::TheScythe { increased_damage } if increased_damage != 0 => {
-                Some(Change::Raise(CardVar::Damage, increased_damage))
-            }
+            | Self::TheScythe {
+                increased_damage: gained,
+            } if gained != 0 => Some(Change::Own(CardWrite::BuffFromPlay(gained))),
             _ => None,
+        }
+    }
+}
+
+/// A method of a card's own class, on one fight copy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CardWrite {
+    /// `Claw.BuffFromClawPlay`, `Maul.BuffFromMaulPlay`, and `BuffFromPlay`
+    /// of `TheScythe` and `GeneticAlgorithm`. Rampage's play and Kingly
+    /// Punch's draw make the same two writes inline.
+    BuffFromPlay(Number),
+    /// What Thrash's play writes inline: the hit it took from the card it
+    /// exhausted.
+    ExtraDamage(sts2_core::Fixed),
+}
+
+/// The fields a fight copy's own class adds to `CardModel`, for the classes
+/// whose `AfterDowngraded` reads them.
+///
+/// Each number is a [`Field`], so that a copy holds them in four bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Fields {
+    /// A class that adds none `AfterDowngraded` reads.
+    Nothing,
+    /// `Claw.ExtraDamageFromClawPlays`.
+    Claw { extra_damage: Field },
+    /// `Maul.ExtraDamageFromMaulPlays`.
+    Maul { extra_damage: Field },
+    /// `Rampage.ExtraDamageFromPlays`.
+    Rampage { extra_damage: Field },
+    /// `KinglyPunch.ExtraDamage`.
+    KinglyPunch { extra_damage: Field },
+    /// `Thrash.ExtraDamage`, a decimal: its coefficient and scale.
+    Thrash { coefficient: Field, scale: u8 },
+    /// `TheScythe.IncreasedDamage`.
+    TheScythe { increased_damage: Field },
+    /// `GeneticAlgorithm.IncreasedBlock`.
+    GeneticAlgorithm { increased_block: Field },
+    /// `SovereignBlade.CurrentDamage`. Its `CurrentRepeats` stays at one,
+    /// because nothing calls `SetRepeats`.
+    SovereignBlade { current_damage: Field },
+}
+
+/// One number of [`Fields`], as two bytes hold it.
+///
+/// `None` is a number that outgrew them, which panics only where it is read.
+/// So a fight that forges a blade past them panics only if it then
+/// downgrades the blade.
+pub type Field = Option<nonmax::NonMaxI16>;
+
+/// `TheScythe`'s damage before anything it gained.
+const SCYTHE_DAMAGE: Number = 13;
+/// `GeneticAlgorithm`'s block before anything it gained.
+const GENETIC_ALGORITHM_BLOCK: Number = 1;
+/// `SovereignBlade._currentDamage` as a blade is made.
+const SOVEREIGN_BLADE_DAMAGE: Number = 10;
+
+/// `number` as a [`Field`].
+fn field(number: impl TryInto<i16>) -> Field {
+    nonmax::NonMaxI16::new(number.try_into().ok()?)
+}
+
+/// What `field` holds, for a downgrade to write back.
+///
+/// # Panics
+///
+/// A number that outgrew the field.
+fn read(field: Field) -> Number {
+    let field = field.unwrap_or_else(|| unimplemented!("a card's field past what two bytes hold"));
+    Number::from(field.get())
+}
+
+/// `field + by`.
+fn added(field: Field, by: Number) -> Field {
+    self::field(Number::from(field?.get()).checked_add(by)?)
+}
+
+/// The raise that takes `key` from what `printed` holds to `to`.
+fn set<P: sts2_core::Printed<V0_107_1> + ?Sized>(
+    key: CardVar,
+    to: Number,
+    printed: &P,
+) -> sts2_core::Change<V0_107_1> {
+    sts2_core::Change::Raise(key, to - printed.face(key))
+}
+
+impl sts2_core::CardFields<V0_107_1> for Fields {
+    fn new(card: Cards) -> Self {
+        use super::super::generated::cards::EventCard;
+        let zero = field(0);
+        match card {
+            Cards::Defect(DefectCard::Claw) => Self::Claw { extra_damage: zero },
+            Cards::Event(EventCard::Maul) => Self::Maul { extra_damage: zero },
+            Cards::Ironclad(IroncladCard::Rampage) => Self::Rampage { extra_damage: zero },
+            Cards::Regent(RegentCard::KinglyPunch) => Self::KinglyPunch { extra_damage: zero },
+            Cards::Ironclad(IroncladCard::Thrash) => Self::Thrash {
+                coefficient: zero,
+                scale: 0,
+            },
+            Cards::Necrobinder(NecrobinderCard::TheScythe) => Self::TheScythe {
+                increased_damage: zero,
+            },
+            Cards::Defect(DefectCard::GeneticAlgorithm) => Self::GeneticAlgorithm {
+                increased_block: zero,
+            },
+            Cards::Token(TokenCard::SovereignBlade) => Self::SovereignBlade {
+                current_damage: field(SOVEREIGN_BLADE_DAMAGE),
+            },
+            _ => Self::Nothing,
+        }
+    }
+
+    fn write<P: sts2_core::Printed<V0_107_1> + ?Sized>(
+        &mut self,
+        write: CardWrite,
+        printed: &P,
+    ) -> sts2_core::Change<V0_107_1> {
+        use sts2_core::Change;
+        match (self, write) {
+            (
+                Self::Claw { extra_damage }
+                | Self::Maul { extra_damage }
+                | Self::Rampage { extra_damage }
+                | Self::KinglyPunch { extra_damage },
+                CardWrite::BuffFromPlay(by),
+            ) => {
+                *extra_damage = added(*extra_damage, by);
+                Change::Raise(CardVar::Damage, by)
+            }
+            // `CurrentDamage = 13 + IncreasedDamage`, whose setter prints it.
+            (Self::TheScythe { increased_damage }, CardWrite::BuffFromPlay(by)) => {
+                *increased_damage = added(*increased_damage, by);
+                set(
+                    CardVar::Damage,
+                    SCYTHE_DAMAGE + read(*increased_damage),
+                    printed,
+                )
+            }
+            // `CurrentBlock = 1 + IncreasedBlock`, whose setter prints it.
+            (Self::GeneticAlgorithm { increased_block }, CardWrite::BuffFromPlay(by)) => {
+                *increased_block = added(*increased_block, by);
+                set(
+                    CardVar::Block,
+                    GENETIC_ALGORITHM_BLOCK + read(*increased_block),
+                    printed,
+                )
+            }
+            (Self::Thrash { coefficient, scale }, CardWrite::ExtraDamage(by)) => {
+                let sum = coefficient
+                    .map(|held| {
+                        sts2_core::Fixed::new(held.get().into(), *scale).exact() + by.exact()
+                    })
+                    .and_then(sts2_core::Fixed::from_exact);
+                *coefficient = sum.and_then(|sum| field(sum.coefficient()));
+                *scale = sum.map_or(0, sts2_core::Fixed::scale);
+                Change::RaiseExactly(CardVar::Damage, by)
+            }
+            (fields, write) => unimplemented!("{write:?} on a copy keeping {fields:?}"),
+        }
+    }
+
+    fn add_damage<P: sts2_core::Printed<V0_107_1> + ?Sized>(
+        &mut self,
+        amount: Number,
+        printed: &P,
+    ) -> sts2_core::Change<V0_107_1> {
+        let Self::SovereignBlade { current_damage } = self else {
+            unreachable!("AddDamage on a copy keeping {self:?}")
+        };
+        // `Damage.BaseValue += amount`, then `CurrentDamage` is what it
+        // prints.
+        *current_damage = printed
+            .face(CardVar::Damage)
+            .checked_add(amount)
+            .and_then(field);
+        sts2_core::Change::Raise(CardVar::Damage, amount)
+    }
+
+    fn after_downgraded<P: sts2_core::Printed<V0_107_1> + ?Sized>(
+        &self,
+        printed: &P,
+    ) -> Option<sts2_core::Change<V0_107_1>> {
+        use sts2_core::Change;
+        match *self {
+            Self::Nothing => None,
+            Self::Claw { extra_damage }
+            | Self::Maul { extra_damage }
+            | Self::Rampage { extra_damage }
+            | Self::KinglyPunch { extra_damage } => {
+                Some(Change::Raise(CardVar::Damage, read(extra_damage)))
+            }
+            Self::Thrash { coefficient, scale } => Some(Change::RaiseExactly(
+                CardVar::Damage,
+                sts2_core::Fixed::new(read(coefficient), scale),
+            )),
+            Self::TheScythe { increased_damage } => Some(set(
+                CardVar::Damage,
+                SCYTHE_DAMAGE + read(increased_damage),
+                printed,
+            )),
+            Self::GeneticAlgorithm { increased_block } => Some(set(
+                CardVar::Block,
+                GENETIC_ALGORITHM_BLOCK + read(increased_block),
+                printed,
+            )),
+            Self::SovereignBlade { current_damage } => {
+                Some(set(CardVar::Damage, read(current_damage), printed))
+            }
         }
     }
 }

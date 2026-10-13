@@ -3,7 +3,7 @@
 use sts2_core::{EventHook, HookEffect};
 
 use super::super::super::V0_107_1 as V;
-use super::super::super::generated::cards::{CardVar, Cards, TokenCard};
+use super::super::super::generated::cards::{Cards, TokenCard};
 use super::super::super::generated::runstate::CombatSide;
 use super::Number;
 
@@ -20,7 +20,6 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
             ..
         } if turn <= 1 => asked.push(HookEffect::Forge {
             card: Cards::Token(TokenCard::SovereignBlade),
-            key: CardVar::Damage,
             amount: FORGE,
         }),
         EventHook::SideTurnStart { .. } | EventHook::Obtained { .. } => {}

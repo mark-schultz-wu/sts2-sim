@@ -642,6 +642,10 @@ pub(crate) struct Face<V: Rules> {
     /// `IsDupe`: a copy made to be played once, which leaves the fight once
     /// its play is over.
     dupe: bool,
+    /// The fields the copy's own class adds, which its `AfterDowngraded`
+    /// reads. A fight starts every copy's fresh, then writes on what its deck
+    /// card saved. A copy of a copy carries them over.
+    fields: V::CardFields,
 }
 
 impl<V: Rules> Clone for Face<V> {
@@ -662,6 +666,12 @@ impl<V: Rules> Face<V> {
 impl<V: Rules> sts2_core::Printed<V> for CardInstance<V> {
     fn face(&self, key: V::CardVar) -> V::Number {
         self.face.number(key).base
+    }
+}
+
+impl<V: Rules> sts2_core::Printed<V> for Face<V> {
+    fn face(&self, key: V::CardVar) -> V::Number {
+        self.number(key).base
     }
 }
 
@@ -874,6 +884,7 @@ impl<V: Rules> Face<V> {
                 ident.enchantment.map(|enchanted| enchanted.enchantment),
             ),
             dupe: false,
+            fields: sts2_core::CardFields::new(ident.card),
         };
         if card.ident.upgrade != 0 {
             assert_eq!(card.ident.upgrade, 1, "only first upgrades are ported");
@@ -884,12 +895,17 @@ impl<V: Rules> Face<V> {
             }
             card.recalculate();
         }
-        if let Some(enchanted) = card.ident.enchantment {
+        card.enchantment_writes();
+        card
+    }
+
+    /// `Enchantment.ModifyCard`: what the copy's enchantment writes on it.
+    fn enchantment_writes(&mut self) {
+        if let Some(enchanted) = self.ident.enchantment {
             for &change in V::enchanted_changes(enchanted.enchantment) {
-                card.modify(change, sts2_core::Lasting::ThisFight);
+                self.modify(change, sts2_core::Lasting::ThisFight);
             }
         }
-        card
     }
 
     /// `EnergyCost.GetWithModifiers` and its star twin, as the pair a play
@@ -987,6 +1003,17 @@ impl<V: Rules> Face<V> {
             sts2_core::Change::RemoveKeyword(keyword) => {
                 self.added_keywords = sts2_core::FlagSet::without(self.added_keywords, keyword);
                 self.removed_keywords = sts2_core::FlagSet::with(self.removed_keywords, keyword);
+            }
+            // A field of the class lasts as long as the copy does.
+            sts2_core::Change::Own(write) => {
+                assert!(
+                    lasting == sts2_core::Lasting::ThisFight,
+                    "a class's field written for less than the fight"
+                );
+                let mut fields = self.fields;
+                let change = sts2_core::CardFields::write(&mut fields, write, self);
+                self.fields = fields;
+                self.modify(change, lasting);
             }
         }
     }
@@ -1346,17 +1373,33 @@ impl<V: Rules> Face<V> {
 
     /// `CardModel.DowngradeInternal`: the level to nothing, and the printed
     /// numbers, prices and keywords back, which drops what the fight wrote on
-    /// them. The cost modifiers stay, and the enchantment writes again.
+    /// them. The cost modifiers and the class's own fields stay. Then the
+    /// class's `AfterDowngraded` writes, and the enchantment writes again.
     pub(super) fn downgrade(&mut self) {
         let mut fresh = Self::fresh(CardIdent {
             upgrade: 0,
+            enchantment: None,
             ..self.ident
         });
+        fresh.ident.enchantment = self.ident.enchantment;
         fresh.cost_modifiers = self.cost_modifiers;
         fresh.modifiers = self.modifiers;
         fresh.replays = self.replays;
         fresh.enchantment_state = self.enchantment_state;
+        fresh.fields = self.fields;
+        if let Some(change) = sts2_core::CardFields::after_downgraded(&fresh.fields, &fresh) {
+            fresh.modify(change, sts2_core::Lasting::ThisFight);
+        }
+        fresh.enchantment_writes();
         *self = fresh;
+    }
+
+    /// `SovereignBlade.AddDamage(amount)`, which a forge calls.
+    pub(super) fn add_damage(&mut self, amount: V::Number) {
+        let mut fields = self.fields;
+        let change = sts2_core::CardFields::add_damage(&mut fields, amount, self);
+        self.fields = fields;
+        self.modify(change, sts2_core::Lasting::ThisFight);
     }
 
     pub(super) fn upgrade(&mut self) {
@@ -3470,5 +3513,10 @@ mod sizes {
         );
         assert_eq!(size_of::<Stacked>(), 2);
         assert_eq!(size_of::<Fighter<V>>(), 40);
+        assert_eq!(
+            size_of::<Face<V>>(),
+            64,
+            "a class's fields fit in four bytes"
+        );
     }
 }

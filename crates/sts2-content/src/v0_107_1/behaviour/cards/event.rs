@@ -368,7 +368,7 @@ fn maul<F: Fight<V>>(fight: &mut F) -> Played<V> {
 
     let target = fight.target();
     hit(fight, target, 2);
-    let raise = Change::Raise(CardVar::Damage, fight.var(CardVar::Increase));
+    let raise = Change::Own(super::CardWrite::BuffFromPlay(fight.var(CardVar::Increase)));
     // `AllCards`: the hand, the draw, discard and exhaust piles, then the
     // play pile, which holds the Maul being played.
     for pile in [Pile::Hand, Pile::Draw, Pile::Discard, Pile::Exhaust] {

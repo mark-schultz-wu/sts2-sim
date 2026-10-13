@@ -37,11 +37,11 @@ pub use play::recording;
 
 pub use content::{
     ActTable, AfflictionTable, Amount, AscensionKinds, AttackId, AttackResults, BlockGained,
-    CHOICES, CardDraw, CardKind, CardLogic, CardModel, CardNumber, CardNumberModifier, CardOwner,
-    CardRarityKinds, CardSource, CardTable, CardTagKinds, CardVars, Change, CharacterTable,
-    ContentError, ContentVersion, Cost, CostPool, CreatureView, CustomReward, DamageReceived,
-    DamageResult, Decimal, DecisionHook, DeckAct, DeckCard, DeckPick, Drafted, Effect,
-    EffectResolution, EnchantHook, EnchantmentModel, EnchantmentStatus, EnchantmentTable,
+    CHOICES, CardDraw, CardFields, CardKind, CardLogic, CardModel, CardNumber, CardNumberModifier,
+    CardOwner, CardRarityKinds, CardSource, CardTable, CardTagKinds, CardVars, Change,
+    CharacterTable, ContentError, ContentVersion, Cost, CostPool, CreatureView, CustomReward,
+    DamageReceived, DamageResult, Decimal, DecisionHook, DeckAct, DeckCard, DeckPick, Drafted,
+    Effect, EffectResolution, EnchantHook, EnchantmentModel, EnchantmentStatus, EnchantmentTable,
     EncounterModel, EncounterRoster, EncounterTable, EventHook, EventPower, EventTable, Fight,
     FightView, Fixed, FlagSet, HeldInstance, History, HistoryEntry, HookEffect, HookEffects, Hooks,
     Kept, KeywordKinds, Lasting, Layout, Listener, MAX_CARDS_IN_HAND, MapPointKinds, ModelHook,
