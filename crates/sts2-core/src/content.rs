@@ -4085,6 +4085,9 @@ pub enum EventHook<V: ContentVersion> {
         side: V::CombatSide,
         turn: V::Count,
         room: V::RoomType,
+        /// `CombatManager.PlayersTakingExtraTurn` is not empty: the player
+        /// takes another turn, and the enemy's turn did not run between.
+        extra: bool,
     },
     BeforeSideTurnEndEarly {
         side: V::CombatSide,

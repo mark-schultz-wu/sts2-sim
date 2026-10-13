@@ -32,6 +32,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
         side: CombatSide::Player,
         turn,
         room: RoomType::Elite,
+        ..
     } = hook
         && turn <= 1
     {

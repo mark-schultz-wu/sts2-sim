@@ -496,6 +496,7 @@ pub(crate) fn enter<V: Rules>(
         relics,
         ascension,
         <V::CombatSide as SideKinds>::PLAYER,
+        false,
     ) {
         if ended == super::Ended::Won {
             super::listen::combat_ended::<V>(&mut live, relics);

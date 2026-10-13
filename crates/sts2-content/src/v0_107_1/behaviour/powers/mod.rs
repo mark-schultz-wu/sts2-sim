@@ -3424,13 +3424,15 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Paper Cuts")
         }
         (Power::PaperCutsPower, _, EventHook::DamageGiven { .. }) => None,
-        // `RampartPower.AfterSideTurnStart`, for the player's side: its
-        // amount of block on each Turret Operator among the enemies.
+        // `RampartPower.AfterSideTurnStart`, for the player's side when no
+        // player takes an extra turn: its amount of block on each Turret
+        // Operator among the enemies.
         (
             Power::RampartPower,
             PowerAmount::Counted(amount),
             EventHook::SideTurnStart {
                 side: CombatSide::Player,
+                extra: false,
                 ..
             },
         ) => {
