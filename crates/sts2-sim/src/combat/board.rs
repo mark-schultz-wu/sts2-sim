@@ -1708,10 +1708,16 @@ impl<'a, V: Rules> Board<'a, V> {
             self.live.cards.deafen();
             self.ended = Some(super::Ended::Lost);
             self.live.lost = true;
-            // `CreatureCmd.Kill` ends a player's turn that player dies on,
-            // and `PlayerCmd.EndTurn` puts it in its end phase.
-            if self.live.side == <V::CombatSide as SideKinds>::PLAYER {
-                self.live.phase = <V::PlayerTurnPhase as sts2_core::TurnPhaseKinds>::END;
+            // `CreatureCmd.Kill` readies the turn a player dies on to end.
+            // A turn being set up ends once the setup is done, and goes to
+            // its end phase. A card or potion the player is running holds
+            // the end until it finishes, and the run is over by then, so a
+            // death in the play phase stays there.
+            type Phase<V> = <V as sts2_core::ContentVersion>::PlayerTurnPhase;
+            if self.live.side == <V::CombatSide as SideKinds>::PLAYER
+                && self.live.phase != <Phase<V> as sts2_core::TurnPhaseKinds>::PLAY
+            {
+                self.live.phase = <Phase<V> as sts2_core::TurnPhaseKinds>::END;
             }
             return;
         }
@@ -4920,12 +4926,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     /// of them dead.
     fn heal(&mut self, at: CombatId, amount: V::Number) {
         self.ran_on();
-        if self.stopped() {
-            return;
-        }
         // `CombatManager.IsEnding` heals no creature but a player. A hit
         // that took the last enemy to nothing has the fight ending already,
-        // so Sic 'Em's summon then grows Osty without healing it.
+        // so Sic 'Em's summon then grows Osty without healing it, and Feed's
+        // kill still heals its owner.
         if at != self.live.player().id && self.ending() {
             return;
         }

@@ -2230,8 +2230,14 @@ pub(super) fn act_on<V: Rules>(
             .unwrap_or_else(|| unimplemented!("a picked card that left its pile"));
         let to = match act {
             // `CardCmd.Exhaust`, which raises its hook once the card is
-            // down.
+            // down, and does nothing once the fight is over or ending.
             sts2_core::PileAct::Exhaust => {
+                if live.won
+                    || live.lost
+                    || super::board::ending::<V>(super::listen::Walk { live, relics })
+                {
+                    continue;
+                }
                 let held = live
                     .cards
                     .get(from, at)
