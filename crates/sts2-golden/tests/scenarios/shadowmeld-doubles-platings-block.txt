@@ -1,0 +1,11 @@
+# `CreatureCmd.GainBlock` runs `Hook.ModifyBlock` on unpowered block as
+# well. Shadowmeld doubles every block its owner gains, so Plating's five
+# lands as ten as the Silent's turn ends. The Knowledge Demon's question
+# shows it before the block clears.
+#
+# A port that adds a power's block without the hook gains five.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"KNOWLEDGE_DEMON_BOSS"}
+{"cmd":"power","power":"SHADOWMELD_POWER","amount":1,"target":0}
+{"cmd":"power","power":"PLATING_POWER","amount":5,"target":0}
+{"cmd":"end_turn"}
