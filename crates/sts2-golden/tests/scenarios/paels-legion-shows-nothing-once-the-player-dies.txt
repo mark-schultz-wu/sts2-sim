@@ -1,0 +1,10 @@
+# Pael's Legion shows the turns it still sleeps, and nothing outside a
+# fight. A Defend puts it to sleep for two, and the player's death ends the
+# fight, so the counter shows nothing.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"PAELS_LEGION"}
+{"cmd":"fight","encounter":"AEONGLASS_BOSS"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":100,"target":1}
+{"cmd":"grant","card":"DEFEND_IRONCLAD"}
+{"cmd":"play_card","index":5,"target":null}
+{"cmd":"end_turn"}

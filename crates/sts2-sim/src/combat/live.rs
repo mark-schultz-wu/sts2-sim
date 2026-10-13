@@ -2162,6 +2162,11 @@ impl<V: Rules> PotionBelt<V> {
         self.hooks.intersects(hooks)
     }
 
+    /// No potion hears a hook after, as a dead player's potions hear none.
+    pub(super) fn deafen(&mut self) {
+        self.hooks = sts2_core::Overrides::default();
+    }
+
     /// `RemoveBeforeUse` on the potion at `at`.
     pub(super) fn spend(&mut self, at: usize) -> V::Potion {
         let potion = self.held.remove(at);

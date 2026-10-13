@@ -1571,6 +1571,11 @@ impl<'a, V: Rules> Board<'a, V> {
             if let Some(osty) = osty {
                 self.kill_outright(osty, force);
             }
+            // `DeactivateHooks`: the player's relics, potions and cards
+            // hear nothing after.
+            self.relics.deafen();
+            self.live.potions.deafen();
+            self.live.cards.deafen();
             self.ended = Some(super::Ended::Lost);
             return;
         }

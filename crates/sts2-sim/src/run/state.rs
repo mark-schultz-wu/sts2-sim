@@ -220,9 +220,10 @@ impl<V: Rules> HeldRelic<V> {
         }
     }
 
-    /// The number it shows, which is `RelicModel.DisplayAmount`.
-    pub(crate) fn amount(&self) -> V::Number {
-        self.state.display_amount(self.relic)
+    /// The number it shows, which is `RelicModel.DisplayAmount`, while a
+    /// fight is `fighting` or not.
+    pub(crate) fn amount(&self, fighting: bool) -> V::Number {
+        self.state.display_amount(self.relic, fighting)
     }
 }
 
@@ -345,6 +346,12 @@ impl<V: Rules> Belt<V> {
     /// Whether any relic on the belt overrides a hook in `hooks`.
     pub(crate) fn hear(&self, hooks: sts2_core::Overrides) -> bool {
         self.heard.intersects(hooks)
+    }
+
+    /// No relic on the belt hears a hook after, as a dead player's relics
+    /// hear none.
+    pub(crate) fn deafen(&mut self) {
+        self.heard = sts2_core::Overrides::default();
     }
 
     /// The slots of the relics that override `hook`, one bit a slot, the
@@ -6257,7 +6264,7 @@ impl<V: Rules> State<V> {
     fn carried(&self) -> impl ExactSizeIterator<Item = Carried<V>> + '_ {
         self.player.relics.iter().map(|held| Carried {
             relic: held.relic,
-            amount: held.amount(),
+            amount: held.amount(matches!(self.phase, Phase::Combat(_))),
             title: None,
             text: None,
         })

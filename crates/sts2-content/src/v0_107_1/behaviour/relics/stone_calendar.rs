@@ -42,8 +42,11 @@ pub(super) fn event_hook(
 }
 
 /// `DisplayAmount`: the turn it stands on until the seventh, and nothing
-/// outside a fight or after it.
-pub(super) fn display_amount(state: &State) -> Number {
+/// outside a fight or after it, which a player's death leaves the run.
+pub(super) fn display_amount(state: &State, fighting: bool) -> Number {
+    if !fighting {
+        return -1;
+    }
     match state.turn {
         0 => -1,
         turn if turn >= DAMAGE_TURN => -1,

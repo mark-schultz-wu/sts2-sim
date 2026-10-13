@@ -97,6 +97,11 @@ impl HookCounts {
     pub(crate) fn hears(&self, hooks: Overrides) -> bool {
         self.heard.intersects(hooks)
     }
+
+    /// Every listener stops hearing, as a dead player's hooks do.
+    pub(crate) fn deafen(&mut self) {
+        self.heard = Overrides::default();
+    }
 }
 
 /// What a walk reads without writing: the fight, and the belt its player
