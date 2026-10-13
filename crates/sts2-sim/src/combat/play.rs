@@ -255,6 +255,7 @@ pub(crate) fn play<V: Rules>(
 
     // `SpendResources`, before the card leaves the hand: the energy, then
     // `AfterEnergySpent`, then the stars.
+    live.history.energy_spent(play.energy);
     live.energy = live.energy - play.energy;
     let energy: V::Number =
         num_traits::cast(play.energy).expect("an energy cost fits a game number");

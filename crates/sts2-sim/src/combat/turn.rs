@@ -2798,6 +2798,7 @@ fn spend_resources<V: Rules>(
     let energy = super::legal::spend(cost, live.energy)
         .unwrap_or_else(|| unimplemented!("a cost of {cost:?}"))
         .min(live.energy);
+    live.history.energy_spent(energy);
     live.energy = live.energy - energy;
     let spent: V::Number = num_traits::cast(energy).expect("an energy cost fits a game number");
     if let Some(ended) = super::board::energy_spent::<V>(live, rngs.reborrow(), relics, spent) {

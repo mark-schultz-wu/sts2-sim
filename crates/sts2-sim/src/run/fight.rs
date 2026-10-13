@@ -136,19 +136,25 @@ impl<V: Rules> State<V> {
     }
 
     /// `SetReadyToEndTurn`: a play that asked for the turn to end has it end
-    /// once the play is over and nothing waits on the player.
-    fn turn_ended_by_play(&mut self) -> Result<Option<combat::Ended>, Error> {
+    /// once the play is over and nothing waits on the player. A play during a
+    /// turn's setup, as Whispering Earring's are, ends it once the setup is
+    /// done, and the next turn's setup can ask again.
+    pub(super) fn turn_ended_by_play(&mut self) -> Result<Option<combat::Ended>, Error> {
         let max_energy: V::Count = num_traits::cast(V::max_energy(self.character()))
             .expect("the turn's energy fits the build's count type");
         let ascension = self.ascension();
-        let Some(fighting) = self.fighting() else {
-            return Ok(None);
-        };
-        if !fighting.live.ending_turn() || fighting.live.question().is_some() {
-            return Ok(None);
+        loop {
+            let Some(fighting) = self.fighting() else {
+                return Ok(None);
+            };
+            if !fighting.live.ending_turn() || fighting.live.question().is_some() {
+                return Ok(None);
+            }
+            fighting.live.take_ending_turn();
+            if let Some(ended) = combat::end_turn(fighting, ascension, max_energy)? {
+                return Ok(Some(ended));
+            }
         }
-        fighting.live.take_ending_turn();
-        combat::end_turn(fighting, ascension, max_energy)
     }
 
     /// End the player's turn, and set up the next one.
@@ -164,7 +170,10 @@ impl<V: Rules> State<V> {
         };
 
         let since = fighting.live.removed_from_deck().len();
-        let ended = combat::end_turn(fighting, ascension, max_energy)?;
+        let ended = match combat::end_turn(fighting, ascension, max_energy)? {
+            None => self.turn_ended_by_play()?,
+            ended => ended,
+        };
         Ok(Ok(self.settle(ended, since)))
     }
 

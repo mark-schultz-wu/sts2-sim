@@ -155,7 +155,7 @@ impl<V: Rules> State<V> {
                     .expect("an act rolled the fights its monster rooms deal");
                 let at = Location::MapPoint(to);
                 let fight = self.create_fight(encounter, EncounterQueue::Normal, at)?;
-                return Ok(self.enter_fight(fight, at));
+                return self.enter_fight(fight, at);
             }
             // `RoomSet.EnsureNextEventIsValid`, which passes over an event
             // that is not allowed or was seen already. The one it stops at
@@ -201,6 +201,6 @@ impl<V: Rules> State<V> {
 
         let at = Location::MapPoint(to);
         let fight = self.create_fight(encounter, queue, at)?;
-        Ok(self.enter_fight(fight, at))
+        self.enter_fight(fight, at)
     }
 }

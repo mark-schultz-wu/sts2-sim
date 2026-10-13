@@ -3676,8 +3676,6 @@ impl<V: Rules> State<V> {
     /// Each listener here answers it where its own first answer was yes, for
     /// every reward that comes here is a `CardReward`'s.
     pub(super) fn reward_options(&mut self, cards: &mut [CardIdent<V>]) {
-        use sts2_core::rng::GameRng as _;
-
         // Relic by relic, in the belt's order, each over the whole reward:
         // one relic's card can be another's to enchant or not.
         let hook = sts2_core::ModelHook::TryModifyCardRewardOptionsLate;
@@ -3685,39 +3683,89 @@ impl<V: Rules> State<V> {
         while left != 0 {
             let slot = left.trailing_zeros() as usize;
             left &= left - 1;
-            for card in cards.iter_mut() {
-                let mut asked = sts2_core::HookEffects::new();
-                let option = sts2_core::EventHook::CardRewardOption {
-                    card: *card,
-                    card_reward: true,
-                };
-                V::relic_event_hook(&mut self.player.relics[slot].state, option, &mut asked);
-                *card = rewrite(*card, asked);
-            }
-            let mut asked = sts2_core::HookEffects::new();
-            let pick = sts2_core::EventHook::CardRewardPick { card_reward: true };
-            V::relic_event_hook(&mut self.player.relics[slot].state, pick, &mut asked);
-            for effect in asked {
-                match effect {
-                    sts2_core::HookEffect::EnchantOneRewardCard {
-                        enchantment,
-                        amount,
-                    } => {
-                        let eligible: Vec<usize> = (0..cards.len())
-                            .filter(|&at| V::can_enchant(enchantment, &cards[at]))
-                            .collect();
-                        let rng = self.streams.run(V::RunRngType::NICHE);
-                        if let Ok(&at) = rng.choose(&eligible) {
-                            V::enchant(enchantment, amount, &mut cards[at]);
-                        }
-                    }
-                    effect => unimplemented!("a relic asking for {effect:?} over a card reward"),
-                }
-            }
+            self.reward_options_of(slot, cards);
         }
         let asked = self.notify_belt(sts2_core::EventHook::CardRewardOptionsModified);
         if let Some(effect) = asked.first() {
             unimplemented!("a relic asking for {effect:?} once a card reward was modified");
+        }
+    }
+
+    /// `CardReward.OnRelicObtained` for the relic in the last slot, over
+    /// each card reward in `offered` not yet taken. The relic answers its own
+    /// `TryModifyCardRewardOptions` and `TryModifyCardRewardOptionsLate`,
+    /// then `AfterModifyingRewards`.
+    fn reward_options_on_obtained(&mut self, offered: &mut [Offer<V>]) {
+        let slot = self.player.relics.len() - 1;
+        let hears = |state: &Self, hook| {
+            state.player.relics.hearing(sts2_core::Overrides::of(hook)) & (1 << slot) != 0
+        };
+        let early = hears(self, sts2_core::ModelHook::TryModifyCardRewardOptions);
+        let late = hears(self, sts2_core::ModelHook::TryModifyCardRewardOptionsLate);
+        for offer in offered {
+            if let Offer::Card {
+                cards,
+                rolled,
+                taken: false,
+                ..
+            } = offer
+            {
+                if early {
+                    let encounter = matches!(rolled, Some(crate::reward::Rolled::Room(_)));
+                    let mut asked = sts2_core::HookEffects::new();
+                    let options = sts2_core::EventHook::CardRewardOptions { encounter };
+                    V::relic_event_hook(&mut self.player.relics[slot].state, options, &mut asked);
+                    if let Some(effect) = asked.first() {
+                        unimplemented!("a relic obtained over a card reward asking for {effect:?}");
+                    }
+                }
+                if !late {
+                    continue;
+                }
+                self.reward_options_of(slot, cards);
+                let mut asked = sts2_core::HookEffects::new();
+                let modified = sts2_core::EventHook::CardRewardOptionsModified;
+                V::relic_event_hook(&mut self.player.relics[slot].state, modified, &mut asked);
+                if let Some(effect) = asked.first() {
+                    unimplemented!("a relic asking for {effect:?} once a card reward was modified");
+                }
+            }
+        }
+    }
+
+    /// `TryModifyCardRewardOptionsLate` of the relic in `slot` over each card
+    /// a reward offers.
+    fn reward_options_of(&mut self, slot: usize, cards: &mut [CardIdent<V>]) {
+        use sts2_core::rng::GameRng as _;
+
+        for card in cards.iter_mut() {
+            let mut asked = sts2_core::HookEffects::new();
+            let option = sts2_core::EventHook::CardRewardOption {
+                card: *card,
+                card_reward: true,
+            };
+            V::relic_event_hook(&mut self.player.relics[slot].state, option, &mut asked);
+            *card = rewrite(*card, asked);
+        }
+        let mut asked = sts2_core::HookEffects::new();
+        let pick = sts2_core::EventHook::CardRewardPick { card_reward: true };
+        V::relic_event_hook(&mut self.player.relics[slot].state, pick, &mut asked);
+        for effect in asked {
+            match effect {
+                sts2_core::HookEffect::EnchantOneRewardCard {
+                    enchantment,
+                    amount,
+                } => {
+                    let eligible: Vec<usize> = (0..cards.len())
+                        .filter(|&at| V::can_enchant(enchantment, &cards[at]))
+                        .collect();
+                    let rng = self.streams.run(V::RunRngType::NICHE);
+                    if let Ok(&at) = rng.choose(&eligible) {
+                        V::enchant(enchantment, amount, &mut cards[at]);
+                    }
+                }
+                effect => unimplemented!("a relic asking for {effect:?} over a card reward"),
+            }
         }
     }
 
@@ -4508,7 +4556,11 @@ impl<V: Rules> State<V> {
     /// The act counts the fight here rather than where it was built, because
     /// the count is how far down its list the run has walked. A fight the run
     /// never walked into moves no list on.
-    pub(super) fn enter_fight(&mut self, fight: CreatedFight<V>, at: Location) -> Decided {
+    pub(super) fn enter_fight(
+        &mut self,
+        fight: CreatedFight<V>,
+        at: Location,
+    ) -> Result<Decided, Error> {
         let CreatedFight {
             live,
             streams,
@@ -4524,9 +4576,13 @@ impl<V: Rules> State<V> {
         self.drew(streams);
         self.enter(at, Phase::Combat(live));
         self.arrived(arriving);
+        let ended = match ended {
+            None => self.turn_ended_by_play()?,
+            ended => ended,
+        };
         // A fight its opening ended goes straight on, the way one a decision
         // ended does.
-        self.settle(ended, 0)
+        Ok(self.settle(ended, 0))
     }
 
     /// `UnknownMapPointOdds.Roll`: a room other than an event, or nothing for
@@ -4755,6 +4811,10 @@ impl<V: Rules> State<V> {
             }));
         }
         self.arrived(arriving);
+        let ended = match ended {
+            None => self.turn_ended_by_play()?,
+            ended => ended,
+        };
         Ok(self.settle(ended, 0))
     }
 
@@ -4776,7 +4836,7 @@ impl<V: Rules> State<V> {
     /// way. The encounter is named, so the act's own list is not drawn from.
     pub(crate) fn fight_here(&mut self, encounter: V::Encounter) -> Result<Decided, Error> {
         let fight = self.create_fight(encounter, EncounterQueue::Named, Location::NoLocation)?;
-        Ok(self.enter_fight(fight, Location::NoLocation))
+        self.enter_fight(fight, Location::NoLocation)
     }
 
     /// Enter a named event, off the map.
@@ -5537,7 +5597,9 @@ impl<V: Rules> State<V> {
             ) => {
                 let (relic, wax) = (*relic, *wax);
                 *taken = true;
-                return self.obtain_as(relic, wax);
+                let asked = self.obtain_as(relic, wax);
+                self.reward_options_on_obtained(offered);
+                return asked;
             }
             // `CardReward.Reroll`: `CanReroll` goes, and the pack is rolled
             // again as it was. The reward stays on offer.

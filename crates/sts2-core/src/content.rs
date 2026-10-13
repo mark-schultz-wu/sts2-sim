@@ -4561,6 +4561,9 @@ pub struct PlayFinished<V: ContentVersion> {
 pub enum HistoryEntry<V: ContentVersion> {
     Started(PlayStarted<V>),
     Finished(PlayFinished<V>),
+    /// An `EnergySpentEntry`, by its `Amount`, which `CardModel.SpendEnergy`
+    /// records for the player's card whatever plays it.
+    EnergySpent(V::Count),
     /// A `CardDrawnEntry`, by the card drawn and `FromHandDraw`.
     Drawn {
         card: V::Card,
@@ -4730,15 +4733,15 @@ impl<V: ContentVersion> History<'_, V> {
         let mut spent = num_traits::zero::<V::Count>();
         let mut latest = num_traits::zero::<V::Count>();
         for entry in self.this_turn {
-            if let HistoryEntry::Started(started) = entry {
-                let paid = match started.auto {
-                    true => num_traits::zero(),
-                    false => started.energy,
-                };
-                if started.first {
-                    spent = spent + paid;
+            match entry {
+                HistoryEntry::EnergySpent(amount) => spent = spent + *amount,
+                HistoryEntry::Started(started) => {
+                    latest = match started.auto {
+                        true => num_traits::zero(),
+                        false => started.energy,
+                    };
                 }
-                latest = paid;
+                _ => {}
             }
         }
         (spent, latest)

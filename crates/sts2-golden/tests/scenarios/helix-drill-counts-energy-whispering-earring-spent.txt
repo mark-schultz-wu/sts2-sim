@@ -1,0 +1,9 @@
+# `CardModel.SpendResources` records the energy it spends, whatever then
+# plays the card. Whispering Earring spends before each of Vakuu's plays,
+# so Helix Drill counts all four energy the first turn spent.
+#
+# A count that skips auto-plays gives Helix Drill no hits.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"grant","relic":"WHISPERING_EARRING"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"HELIX_DRILL"}
