@@ -366,7 +366,7 @@ fn sculpting_strike<F: Fight<V>>(fight: &mut F) -> Played<V> {
     let cards = fight
         .cards_in(Pile::Hand)
         .into_iter()
-        .filter(|&card| !fight.card_keyword(card, ethereal))
+        .filter(|&card| !fight.card_local_keyword(card, ethereal))
         .collect();
     Played::AskingAmong {
         cards,

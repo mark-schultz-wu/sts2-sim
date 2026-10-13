@@ -899,12 +899,14 @@ impl<V: Rules> Face<V> {
         card
     }
 
-    /// `Enchantment.ModifyCard`: what the copy's enchantment writes on it.
+    /// `Enchantment.ModifyCard`: what the copy's enchantment writes on it,
+    /// then `RecalculateForUpgradeOrEnchant`.
     fn enchantment_writes(&mut self) {
         if let Some(enchanted) = self.ident.enchantment {
             for &change in V::enchanted_changes(enchanted.enchantment) {
                 self.modify(change, sts2_core::Lasting::ThisFight);
             }
+            self.recalculate();
         }
     }
 
@@ -1040,10 +1042,23 @@ impl<V: Rules> Face<V> {
     ///
     /// A word the table does not answer for.
     pub(super) fn has_keyword(&self, keyword: V::CardKeyword) -> bool {
+        self.keyword(self.prints(keyword), keyword)
+    }
+
+    /// `LocalKeywords.Contains(keyword)`: what the table prints and the fight
+    /// wrote on, less what it took off. No word for the turn, and none a
+    /// power grants.
+    pub(super) fn has_local_keyword(&self, keyword: V::CardKeyword) -> bool {
+        (self.prints(keyword) || sts2_core::FlagSet::contains(self.added_keywords, keyword))
+            && !sts2_core::FlagSet::contains(self.removed_keywords, keyword)
+    }
+
+    /// Whether the table prints `keyword` on this card.
+    fn prints(&self, keyword: V::CardKeyword) -> bool {
         use sts2_core::{CardTable as _, KeywordKinds};
 
         let card = self.ident.card;
-        let printed = match keyword {
+        match keyword {
             k if k == <V::CardKeyword as KeywordKinds<V>>::INNATE => card.innate(),
             k if k == <V::CardKeyword as KeywordKinds<V>>::RETAIN => card.retains(),
             k if k == <V::CardKeyword as KeywordKinds<V>>::SLY => card.sly(),
@@ -1051,8 +1066,7 @@ impl<V: Rules> Face<V> {
             k if k == <V::CardKeyword as KeywordKinds<V>>::EXHAUST => card.exhausts(),
             k if k == <V::CardKeyword as KeywordKinds<V>>::UNPLAYABLE => card.unplayable(),
             keyword => unimplemented!("whether {card:?} prints {keyword:?}"),
-        };
-        self.keyword(printed, keyword)
+        }
     }
 
     /// `Keywords.Contains(Exhaust)` for this copy, which an upgrade can take
@@ -1375,6 +1389,10 @@ impl<V: Rules> Face<V> {
     /// numbers, prices and keywords back, which drops what the fight wrote on
     /// them. The cost modifiers and the class's own fields stay. Then the
     /// class's `AfterDowngraded` writes, and the enchantment writes again.
+    ///
+    /// A calculated number keeps the base the upgraded `CalculationBase`
+    /// printed. `DynamicVars.Clone(this)` sets each one's base from its
+    /// owner's vars, and the owner still holds the old set while it does.
     pub(super) fn downgrade(&mut self) {
         let mut fresh = Self::fresh(CardIdent {
             upgrade: 0,
@@ -1387,6 +1405,7 @@ impl<V: Rules> Face<V> {
         fresh.replays = self.replays;
         fresh.enchantment_state = self.enchantment_state;
         fresh.fields = self.fields;
+        fresh.calculate_from(self);
         if let Some(change) = sts2_core::CardFields::after_downgraded(&fresh.fields, &fresh) {
             fresh.modify(change, sts2_core::Lasting::ThisFight);
         }
@@ -1418,11 +1437,18 @@ impl<V: Rules> Face<V> {
     /// `RecalculateForUpgradeOrEnchant`, which gives a calculated number the
     /// base its `CalculationBase` now prints.
     fn recalculate(&mut self) {
+        let from = *self;
+        self.calculate_from(&from);
+    }
+
+    /// Give each calculated number the base `from`'s `CalculationBase`
+    /// prints.
+    fn calculate_from(&mut self, from: &Self) {
         let base = <V::CardVar as sts2_core::CardVars>::CALCULATION_BASE;
         let calculated: smallvec::SmallVec<[_; 2]> =
             self.numbers().filter(|n| n.calculated).collect();
         for number in calculated {
-            let by = self.number(base).base - number.base;
+            let by = from.number(base).base - number.base;
             if by != num_traits::zero() {
                 self.raise(number.id, by);
             }

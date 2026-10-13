@@ -567,6 +567,10 @@ pub enum CardNumberModifier {
     /// `Hook.ModifyPowerAmountGiven`, for the power a `PowerVar` applies,
     /// from the card's owner to the creature the card is pointed at.
     PowerGiven,
+    /// `ExtraDamageVar`: the number times the card's enchantment's
+    /// `EnchantDamageMultiplicative`, and no hook. Only the preview reads it
+    /// so. A play reads the number the card prints.
+    ExtraDamage,
 }
 
 /// The numbers a build's cards can print, as one set.
@@ -2155,6 +2159,13 @@ pub trait Fight<V: ContentVersion> {
     /// what the fight wrote on it, less what the fight took off.
     fn card_keyword(&self, _card: crate::CardAt<V>, _keyword: V::CardKeyword) -> bool {
         unimplemented!("reading a card's keywords")
+    }
+
+    /// `GetKeywordsWithSources(KeywordSources.Local).Contains(keyword)`: the
+    /// words the card itself carries, without what a power grants it for the
+    /// fight, as Hex grants Ethereal.
+    fn card_local_keyword(&self, _card: crate::CardAt<V>, _keyword: V::CardKeyword) -> bool {
+        unimplemented!("reading a card's own keywords")
     }
 
     /// `CardPileCmd.Shuffle`: the discard pile and the draw pile shuffled

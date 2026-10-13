@@ -666,6 +666,12 @@ fn previewed<V: Rules>(
                     );
                     Some(given)
                 }
+                // `ExtraDamageVar.UpdateCardPreview`: the enchantment's
+                // `EnchantDamageMultiplicative` over the number, for a
+                // powered hit, and nothing else.
+                (Some(sts2_core::CardNumberModifier::ExtraDamage), _) => {
+                    super::board::enchant_scaled::<V>(held, printed())
+                }
                 (Some(modifier), _) => match super::board::dealer_of::<V>(modifier, creatures) {
                     Some(dealer) => super::board::effect_of::<V>(modifier, var.id, dealer, target)
                         .map(|effect| {
