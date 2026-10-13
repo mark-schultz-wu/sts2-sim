@@ -1,0 +1,12 @@
+# `MerchantInventory.UpdateEntries` runs once a purchase completes, and
+# asks `ModifyMerchantCardCreationResults` again over every card a shelf
+# holds. Toxic Egg, granted in the shop, upgrades nothing until the
+# Silent buys Flick Flack. Then Hidden Daggers and Backflip on their
+# shelves upgrade, at the prices they were stocked at.
+#
+# A port that asks the hook only as a shelf is stocked leaves them as
+# they were.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"enter_room","type":"Shop"}
+{"cmd":"grant","relic":"TOXIC_EGG"}
+{"cmd":"buy","index":0}
