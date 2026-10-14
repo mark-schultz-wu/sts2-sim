@@ -1,0 +1,13 @@
+# `CalculatedVar.Calculate` counts nothing once `IsInProgress` is false.
+# Retain Hand keeps Murder in hand as the Silent dies to a Nibbit at two
+# hundred Strength, and the hand it is left showing prints Murder at its
+# base of one.
+#
+# A preview that counts the cards drawn after the fight is over shows
+# eight.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"MURDER"}
+{"cmd":"power","power":"RETAIN_HAND_POWER","amount":1,"target":0}
+{"cmd":"power","power":"STRENGTH_POWER","amount":200,"target":1}
+{"cmd":"end_turn"}

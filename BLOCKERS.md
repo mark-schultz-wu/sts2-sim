@@ -37,7 +37,18 @@ own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
 
-### 2. A listener walk that can pause
+### 2. What a draw drew, when the draw pauses
+
+`CardPileCmd.Draw` returns the cards it drew, and Scrape discards the
+ones that cost energy. A shuffle inside the draw can ask, as Stratagem
+does, and the draw finishes after the answer. The sim finds what Scrape
+drew by comparing the hand before and after, and that comparison runs
+before the draw pauses. Recorded run 1424 shows it: Scrape keeps two
+Strikes and a Compact the game discards. Pillage reads its draw the same
+way. The history keeps the card a draw drew but not which copy. Carrying
+the copies across the pause needs a design, for Mark.
+
+### 3. A listener walk that can pause
 
 The game walks `AfterCardPlayed` listeners one at a time, and a draw
 can pause the walk. The sim raises them all first, so Bygone Effigy's
@@ -51,24 +62,24 @@ Shield, and the game never asks its Rampart. The sim asked Rampart with
 the rest before any of them acted, and the Turret Operator gains block.
 Needs a design, for Mark.
 
-### 3. Ascension
+### 4. Ascension
 
 The sim threads the ascension level through, but every scenario and
 census run plays at `None`. Record runs at each level, and each split
 they find becomes an item.
 
-### 4. Run modifiers
+### 5. Run modifiers
 
 A run started with any modifier panics (`crates/sts2-sim/src/engine/sim.rs`).
 Hoarder's removal ban is one rule known to need one. Port the custom
 mode's modifiers, and record runs with each.
 
-### 5. A speed target
+### 6. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.
 
-### 6. v0.111.0
+### 7. v0.111.0
 
 Only the generated tables exist. Its behaviour layer has to be written,
 and its runs recorded.
