@@ -105,7 +105,7 @@ pub(crate) fn enter<V: Rules>(
         exhaust_next: smallvec::SmallVec::new(),
         leaving: Vec::new(),
         for_run: Vec::new(),
-        after_pick: Vec::new(),
+        after_pick: None,
         hook_draws: smallvec::SmallVec::new(),
         drawn_late: None,
         drew: None,
@@ -477,7 +477,8 @@ pub(crate) fn enter<V: Rules>(
         player,
         turn: live.turn,
     };
-    let asked = super::listen::notify::<V>(&mut live, relics, hook);
+    let asked =
+        super::listen::Walking::begin::<super::listen::Checked>(&live, relics, hook).map(Box::new);
     let ended = match super::turn::carry_setup(
         &mut live,
         streams.combat(),

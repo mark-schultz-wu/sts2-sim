@@ -157,6 +157,9 @@ pub(crate) trait Cursor<V: Rules>: std::fmt::Debug + Clone + PartialEq {
 
     /// The next listener the list held, or nothing past its end.
     fn next(&mut self, live: &Live<V>, relics: &Belt<V>) -> Option<Snapped<V>>;
+
+    /// Whether the list has nothing left to hand out.
+    fn done(&self) -> bool;
 }
 
 /// The cursor every walk uses.
@@ -280,6 +283,10 @@ impl<V: Rules> Cursor<V> for Snapshot<V> {
         let snapped = self.listeners.get(self.next).copied()?;
         self.next += 1;
         Some(snapped)
+    }
+
+    fn done(&self) -> bool {
+        self.next >= self.listeners.len()
     }
 }
 
@@ -521,6 +528,12 @@ impl<V: Rules> Walking<V> {
         hook: EventHook<V>,
     ) -> Option<Self> {
         Walker::begin::<S>(live, relics, hook).map(Self::new)
+    }
+
+    /// Whether the walk has nothing left: no answer to carry out and no
+    /// listener to ask.
+    pub(crate) fn exhausted(&self) -> bool {
+        self.rest.is_empty() && self.walker.pending_from.is_none() && self.walker.cursor.done()
     }
 
     fn new(walker: Walker<V>) -> Self {
