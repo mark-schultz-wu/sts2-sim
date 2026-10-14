@@ -3904,6 +3904,10 @@ pub enum EventHook<V: ContentVersion> {
         /// The player's `Block`, which a relic reads off its owner.
         block: V::Number,
     },
+    /// The end of a command the model itself asked for, awaited inside its
+    /// own hook, which the code after the `await` runs on. Asked of that
+    /// model alone, even once a question inside the command is answered.
+    OwnCommandOver,
     /// `AfterObtained`, as the run picks the model up. `character` is its
     /// owner's, which a relic reads off `Owner.Character`.
     Obtained {
@@ -4477,6 +4481,7 @@ impl<V: ContentVersion> EventHook<V> {
                 ModelHook::AfterModifyingCardPlayResultPileOrPosition
             }
             EventHook::Obtained { .. }
+            | EventHook::OwnCommandOver
             | EventHook::CharacterNamed(_)
             | EventHook::Removed
             | EventHook::Applied

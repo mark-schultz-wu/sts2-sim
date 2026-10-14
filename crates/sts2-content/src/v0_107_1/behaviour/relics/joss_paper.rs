@@ -18,19 +18,19 @@ pub struct State {
 }
 
 impl State {
-    /// `DrawIfThresholdMet`: a card for every whole five, and the count kept
-    /// to what is left.
-    fn draw(&mut self, asked: &mut sts2_core::HookEffects<V>) {
+    /// `DrawIfThresholdMet`: a card for every whole five. The count keeps to
+    /// what is left once the draw is over.
+    fn draw(&self, asked: &mut sts2_core::HookEffects<V>) {
         if self.cards_exhausted >= EXHAUST {
             asked.push(HookEffect::Draw(self.cards_exhausted / EXHAUST));
-            self.cards_exhausted %= EXHAUST;
         }
     }
 }
 
 /// `AfterCardExhausted` counts each card its owner exhausts, and one that
 /// Ethereal exhausted waits for `AfterSideTurnEnd` on its owner's side.
-/// `AfterCombatEnd` drops what waits.
+/// `AfterCombatEnd` drops what waits. Its own draw over, the count keeps
+/// to what is left.
 pub(super) fn event_hook(
     state: &mut State,
     hook: EventHook<V>,
@@ -51,6 +51,7 @@ pub(super) fn event_hook(
             state.draw(asked);
         }
         EventHook::CombatEnd { .. } => state.ethereal = 0,
+        EventHook::OwnCommandOver => state.cards_exhausted %= EXHAUST,
         _ => {}
     }
 }
