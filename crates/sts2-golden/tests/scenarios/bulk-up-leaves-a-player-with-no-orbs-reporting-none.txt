@@ -1,0 +1,16 @@
+# An orb queue with no slot and no orb reports as no orbs at all. Bulk Up
+# takes one of the Defect's three slots each turn, and once the last goes
+# with the orb in it the fight reports no orbs.
+#
+# A queue reported as it stands shows an empty one.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"PLATING_POWER","amount":200,"target":0}
+{"cmd":"grant","card":"BULK_UP"}
+{"cmd":"play_card","index":5}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"BULK_UP"}
+{"cmd":"play_card","index":5}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"BULK_UP"}
+{"cmd":"play_card","index":5}

@@ -4085,8 +4085,12 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             self.hit_unpowered(None, creature, hp - max_hp, true);
         }
         let Some(at) = self.at(creature) else { return };
-        self.live.creatures[at].max_hp = num_traits::cast(max_hp.max(num_traits::one()))
+        // `SetMaxHpInternal` takes the health down to the new maximum, which
+        // a hit Buffer stopped leaves above it.
+        let held = &mut self.live.creatures[at];
+        held.max_hp = num_traits::cast(max_hp.max(num_traits::one()))
             .expect("a maximum health fits the build's health");
+        held.hp = held.hp.min(held.max_hp);
     }
 
     fn gold(&self) -> V::Number {
@@ -5483,9 +5487,13 @@ pub(super) fn shuffle_asking<V: Rules>(
     relics: &mut Belt<V>,
     ascension: V::AscensionLevel,
 ) -> Option<ShuffleAsks> {
-    live.cards.reshuffle(rngs.shuffle);
+    // `Hook.ModifyShuffleOrder` walks its listeners while the cards still
+    // stand in the piles they are shuffled from, so the order they move in
+    // is that walk's. Each moves its card in the list once it is shuffled.
     let hook = sts2_core::EventHook::ShuffleOrder { initial: false };
-    for (listener, effect) in super::listen::notify::<V>(live, relics, hook) {
+    let asked = super::listen::notify::<V>(live, relics, hook);
+    live.cards.reshuffle(rngs.shuffle);
+    for (listener, effect) in asked {
         match (listener, effect) {
             // The shuffled list is the discard and draw piles, and a card
             // anywhere else stays put.

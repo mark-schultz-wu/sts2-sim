@@ -4731,7 +4731,8 @@ impl<V: Rules> State<V> {
             potions: &self.player.potions,
             alive: standing.alive,
             deck: &self.player.deck,
-            strayed: self.strays(at),
+            // A fight an event opens moves the run nowhere.
+            strayed: base && self.strays(at),
             point: self.point_type(at),
             coord: match at {
                 Location::MapPoint(coord) => Some(coord),
@@ -4790,10 +4791,16 @@ impl<V: Rules> State<V> {
                 Phase::Event { layout, .. } => layout.clone(),
                 _ => SmallVec::new(),
             };
+            // `CurrentMapPoint` is still the event's, which `AfterRoomEntered`
+            // reads as the fight's room opens.
+            let at = self
+                .visited
+                .last()
+                .map_or(Location::NoLocation, |&point| Location::MapPoint(point));
             self.build_fight(
                 encounter,
                 EncounterQueue::Named,
-                Location::NoLocation,
+                at,
                 self.floor,
                 &rolled,
                 roster,

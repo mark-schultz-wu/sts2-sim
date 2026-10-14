@@ -1,0 +1,12 @@
+# Plating answers the fight's `RoundNumber`, which an extra turn does not
+# move on. Pael's Eye gives a turn with no card played another, and the
+# Slumbering Beetle's Plating plates it again and takes nothing off before
+# the second round.
+#
+# A Plating that reads the player's turn number skips both.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"grant","relic":"PAELS_EYE"}
+{"cmd":"fight","encounter":"SLUMBERING_BEETLE_NORMAL"}
+{"cmd":"power","power":"PLATING_POWER","amount":200,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

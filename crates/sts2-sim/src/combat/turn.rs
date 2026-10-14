@@ -992,7 +992,8 @@ pub(super) fn before_side_turn_start<V: Rules>(
             held.on_turn_start = held.amount;
         }
     }
-    let hook = sts2_core::EventHook::BeforeSideTurnStart { side, turn };
+    let round = live.round;
+    let hook = sts2_core::EventHook::BeforeSideTurnStart { side, turn, round };
     for (listener, effect) in listen::notify::<V>(live, relics, hook) {
         match (listener, effect) {
             (Listener::Power { owner, .. }, sts2_core::HookEffect::GainBlock(amount)) => {
@@ -2877,6 +2878,7 @@ pub(super) fn side_turn_started<V: Rules>(
     let hook = sts2_core::EventHook::SideTurnStart {
         side,
         turn,
+        round: live.round,
         room: live.room(),
         extra,
     };

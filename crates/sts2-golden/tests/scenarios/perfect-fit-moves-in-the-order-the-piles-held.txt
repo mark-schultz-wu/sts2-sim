@@ -1,0 +1,15 @@
+# `Hook.ModifyShuffleOrder` walks its listeners while the cards still stand
+# in the piles they are shuffled from. A Perfect Fit Defend and a Perfect
+# Fit Strike each move to the top in turn, so the one the walk reaches last,
+# the Strike, is drawn first.
+#
+# A walk made after the reshuffle takes them in the shuffled order.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"PLATING_POWER","amount":100,"target":0}
+{"cmd":"grant","card":"DEFEND_IRONCLAD"}
+{"cmd":"grant","card":"STRIKE_IRONCLAD"}
+{"cmd":"enchant","enchantment":"PERFECT_FIT","amount":1,"index":5}
+{"cmd":"enchant","enchantment":"PERFECT_FIT","amount":1,"index":6}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

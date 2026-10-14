@@ -24,7 +24,9 @@ pub(super) fn event_hook(
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     match hook {
-        EventHook::CombatStarting { .. } => *state = State::default(),
+        // The history it reads is the fight's own, which the next fight
+        // starts empty.
+        EventHook::CombatEnd { .. } => *state = State::default(),
         EventHook::DamageReceived {
             target,
             player,

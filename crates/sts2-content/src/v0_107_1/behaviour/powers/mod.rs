@@ -4583,26 +4583,29 @@ pub(crate) fn event_hook(
         (Power::SwordSagePower, PowerAmount::Endless, EventHook::CardEnteredCombat { .. }) => {
             unimplemented!("an endless Sword Sage")
         }
+        // `PlatingPower.AfterSideTurnStart` on a monster: one off each of
+        // its side's turns once the first round is over.
         (
             Power::PlatingPower,
             PowerAmount::Counted(_),
-            EventHook::SideTurnStart { side, turn, .. },
+            EventHook::SideTurnStart { side, round, .. },
         ) if owner == CombatSide::Enemy
             && side == owner
-            && turn > <V as sts2_core::ContentVersion>::Count::from(1u8) =>
+            && round > <V as sts2_core::ContentVersion>::Count::from(1u8) =>
         {
             Some(HookEffect::Decrement)
         }
         // `PlatingPower.BeforeSideTurnStart`: a monster that opens the fight
-        // with Plating opens it behind that much block. It answers the
-        // player's first turn opening and no other, and only on a monster.
+        // with Plating opens it behind that much block. It answers each
+        // player turn of the first round, an extra one among them, and only
+        // on a monster.
         (
             Power::PlatingPower,
             PowerAmount::Counted(amount),
-            EventHook::BeforeSideTurnStart { side, turn },
+            EventHook::BeforeSideTurnStart { side, round, .. },
         ) if side == CombatSide::Player
             && owner == CombatSide::Enemy
-            && turn == <V as sts2_core::ContentVersion>::Count::from(1u8) =>
+            && round <= <V as sts2_core::ContentVersion>::Count::from(1u8) =>
         {
             Some(HookEffect::GainBlock(amount))
         }
