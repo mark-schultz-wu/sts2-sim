@@ -1,0 +1,12 @@
+# `Hook.BeforeCardPlayed` walks `IterateCombatHookListeners`, which hands a
+# fight that is over or ending no listeners. One-Two Punch plays Twin Strike
+# twice, and its first play kills the Nibbit, so Pen Nib counts one attack.
+#
+# A walk that ignores the win counts the replay too, and Pen Nib shows two.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"PEN_NIB"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"ONE_TWO_PUNCH_POWER","amount":1,"target":0}
+{"cmd":"power","power":"STRENGTH_POWER","amount":50,"target":0}
+{"cmd":"grant","card":"TWIN_STRIKE"}
+{"cmd":"play_card","index":5,"target":1}

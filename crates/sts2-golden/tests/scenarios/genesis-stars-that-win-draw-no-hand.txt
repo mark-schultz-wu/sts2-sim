@@ -1,0 +1,12 @@
+# Genesis gives stars as energy resets, and Black Hole's damage on them can
+# end the fight before the hand is drawn. The Nibbit dies as the third turn
+# sets up, and the draw that would shuffle the discard pile never runs.
+#
+# A setup that misses the win draws the hand and shuffles.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"PLATING_POWER","amount":100,"target":0}
+{"cmd":"power","power":"GENESIS_POWER","amount":1,"target":0}
+{"cmd":"power","power":"BLACK_HOLE_POWER","amount":30,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

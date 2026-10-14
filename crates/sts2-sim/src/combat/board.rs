@@ -438,7 +438,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 }
             }
         };
-        self.apply_fresh(at, power, amount, applier, copy);
+        let state = self.apply_fresh(at, power, amount, applier, copy);
         // The hook can take the creature out of the fight.
         let Some(found) = self.at(id) else {
             return;
@@ -459,7 +459,7 @@ impl<'a, V: Rules> Board<'a, V> {
         if landed {
             self.live
                 .powers
-                .push(id, HeldPower::new(power, amount.into(), applier));
+                .push(id, HeldPower::landing(state, amount.into(), applier));
             self.live.history.power_received(power, applier);
         }
         self.power_received(modifiers, power);
@@ -1234,6 +1234,8 @@ impl<'a, V: Rules> Board<'a, V> {
     /// attaches, and the tick the creature it lands on will pass over. A
     /// second stack of a power reaches neither, because the command hands one
     /// to `ModifyAmount` before it gets here.
+    ///
+    /// The instance as `BeforeApplied` left it, which is what attaches.
     fn apply_fresh(
         &mut self,
         at: usize,
@@ -1241,7 +1243,7 @@ impl<'a, V: Rules> Board<'a, V> {
         amount: PowerAmount<V::Number>,
         applier: Option<CombatId>,
         copy: Option<V::PowerState>,
-    ) {
+    ) -> V::PowerState {
         // `BeforeApplied`, which runs before the power attaches. What it asks
         // for lands first, so a creature carries those powers ahead of this
         // one.
@@ -1288,7 +1290,7 @@ impl<'a, V: Rules> Board<'a, V> {
         // By id, because what landed can kill the creature, and a death takes
         // it out of the list.
         let Some(at) = self.at(carrier.id) else {
-            return;
+            return state;
         };
 
         // `SkipNextDurationTick`, which the next tick then passes over. The
@@ -1302,6 +1304,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 self.skipped.push((id, power));
             }
         }
+        state
     }
 
     /// `AfterCardEnteredCombat`, for a card that reached a combat pile from no
@@ -3162,7 +3165,12 @@ pub(crate) fn resolve<V: Rules>(
                 None => amount,
             };
             let powered = scaling == Scaling::Dynamic;
-            let play = playing.and_then(|held| fight.live.history.play_at(held.id));
+            // A preview has no `CardPlay`, though the copy may have played
+            // earlier in the turn. A copy being played stands in the play
+            // pile.
+            let play = playing
+                .filter(|held| fight.live.cards.in_play(held.id))
+                .and_then(|held| fight.live.history.play_at(held.id));
             let source = playing.map(|held| held.id);
             // `CreatureCmd.GainBlock` always runs `Hook.ModifyBlock`. A card's
             // block and a monster move's are the powered ones.
