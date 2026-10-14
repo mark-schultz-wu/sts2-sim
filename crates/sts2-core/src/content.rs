@@ -4920,7 +4920,9 @@ impl<V: ContentVersion> History<'_, V> {
 /// `CreatureCmd.Stun`'s `nextMoveId`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StunResume {
-    /// None named: the state the stun interrupted.
+    /// None named: `StateLog.Last()`. That is the state the stun interrupted,
+    /// unless a `SetMoveImmediate` forced that state, which writes nothing
+    /// into the log.
     Interrupted,
     /// `StateLog.Last().GetNextState`: the state the interrupted move leaves
     /// for.

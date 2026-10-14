@@ -762,7 +762,13 @@ impl<'a, V: Rules> Board<'a, V> {
             return;
         }
         match then {
-            sts2_core::StunResume::Interrupted => machine.machine.interpose(),
+            sts2_core::StunResume::Interrupted => {
+                let last = machine.machine.log.recent(1).next();
+                match last {
+                    Some(last) => machine.machine.interpose_to(last),
+                    None => machine.machine.interpose(),
+                }
+            }
             sts2_core::StunResume::AfterInterrupted => {
                 let after = V::follow_up(machine.monster, &machine.machine);
                 machine.machine.interpose_to(after);

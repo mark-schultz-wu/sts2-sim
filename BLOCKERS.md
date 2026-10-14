@@ -29,19 +29,19 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ## Open
 
-### 1. Splits the ascension runs find
+### 1. A relic that settles once its own draw is over
 
-`cargo xtask record --ascension <rung> --append` recorded 100 runs at each
-of levels 1 to 10. Three part from the game:
+Joss Paper's `DrawIfThresholdMet` draws, and takes its count down only
+once the draw is over. A question inside the draw shows the count at
+five, and a card exhausted during the draw adds to the count before it
+goes down. The sim takes the count down as it asks for the draw. In
+recorded run 2090, at Ascender's Bane, Synchronize's play leaves a
+question inside that draw, and the sim shows Joss Paper at nothing.
 
-- Runs 1855 and 1955, the Queen. A token the player auto-plays kills the
-  Torch Head Amalgam, and the sim's Queen enrages. The game's Queen goes
-  on burning bright, so her `AfterDeath` there does not set her
-  `HasAmalgamDied`, or her branch has not resolved.
-- Run 2090, Joss Paper. `DrawIfThresholdMet` draws, then takes the count
-  down, so a question inside the draw shows the count at five. The sim
-  takes it down before it draws. Mirroring it needs the relic to settle its
-  own count once its draw is over.
+A relic answers its hook once, and nothing calls it back when its effect
+lands, least of all across a pause. Mirroring this needs a way for a
+relic to settle what it saved once its own command is over, a shape
+for Mark to choose.
 
 ### 2. A power the walk reaches after it came off
 
