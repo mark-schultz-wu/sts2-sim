@@ -1012,7 +1012,7 @@ impl<'a, V: Rules> Board<'a, V> {
         // `ModifyHpLost` over what the block left, before and after the
         // damage finds who takes it. A power that caps a hit rather
         // than shrinks it acts here.
-        let before = modified_by::<V>(
+        let before = hp_lost_by::<V>(
             self.walk(),
             (damage - blocked).max(zero),
             &[
@@ -1569,8 +1569,8 @@ impl<'a, V: Rules> Board<'a, V> {
         let hp = self.live.creatures[at].hp;
         let health_zero = V::Health::zero();
         let killed = hp > health_zero && amount >= V::Number::from(hp);
-        self.live.creatures[at].hp =
-            (hp - V::Health::from(amount.min(V::Number::from(hp)))).max(health_zero);
+        // A loss below nothing heals, past the creature's maximum too.
+        self.live.creatures[at].hp = (hp - V::Health::from(amount)).max(health_zero);
         let lost = V::Number::from(hp - self.live.creatures[at].hp);
         let overkill = match killed {
             true => (amount - V::Number::from(hp)).max(zero),
@@ -2222,6 +2222,11 @@ impl<'a, V: Rules> Board<'a, V> {
                         Modify::RaisedTo { floor, from } => {
                             raised(number, exact(floor), exact(from))
                         }
+                        Modify::Less(less) => (number - exact(less)).max(Decimal::ZERO),
+                        Modify::AtMostUnlessNothing(most) => match number.is_zero() {
+                            true => number,
+                            false => number.min(exact(most)),
+                        },
                     };
                     if before.trunc() != number.trunc() {
                         match listener {
@@ -2538,7 +2543,7 @@ impl<'a, V: Rules> Board<'a, V> {
 
 /// `amount` run through `phases` in order, which is how `Hook` modifies a
 /// number. Each listener in a phase is handed what the one before it left. The
-/// result is floored at zero.
+/// result is floored at zero, unlike [`hp_lost_by`]'s.
 ///
 /// One walk asks every phase a listener overrides. An answer never reads the
 /// number it is handed, so the phases need no walk each.
@@ -2546,6 +2551,16 @@ impl<'a, V: Rules> Board<'a, V> {
 /// A run of shares multiplies together before it lands.
 #[tracing::instrument(level = "trace", skip_all)]
 pub(super) fn modified_by<V: Rules>(
+    fight: Walk<'_, V>,
+    amount: V::Number,
+    phases: &[ModifyHook<V>],
+) -> V::Number {
+    scaled_by::<V>(fight, amount, None, phases).max(V::Number::zero())
+}
+
+/// `Hook.ModifyHpLost` over `phases`, which floors nothing. A loss a cap takes
+/// below nothing heals, as `LoseHpInternal` takes it.
+pub(super) fn hp_lost_by<V: Rules>(
     fight: Walk<'_, V>,
     amount: V::Number,
     phases: &[ModifyHook<V>],
@@ -2601,12 +2616,17 @@ fn scaled_by<V: Rules>(
                     true => floor,
                     false => number,
                 },
+                Modify::Less(less) => (number - less).max(V::Number::zero()),
+                Modify::AtMostUnlessNothing(most) => match number.is_zero() {
+                    true => number,
+                    false => number.min(most),
+                },
                 Modify::Scaled(_) => break,
             };
             at += 1;
         }
         if at == answers.len() {
-            return number.max(V::Number::zero());
+            return number;
         }
     }
     let number = exact::<V>(number);
@@ -2632,7 +2652,7 @@ fn scaled_exactly<V: Rules>(
     }
     answers.sort_by_key(|&(at, _)| at);
     let number = scale.map_or(amount, |scale| amount * scale);
-    worked_out::<V>(number, &answers)
+    worked_out::<V>(number, &answers).max(Decimal::ZERO)
 }
 
 /// What the listeners answer for a hook's phases, each beside its phase. A
@@ -2678,9 +2698,14 @@ fn worked_out<V: Rules>(mut number: Decimal, answers: &[(u8, Modify<V::Number>)]
             Modify::AtMost(most) => number.min(exact(most)),
             Modify::Replaced(with) => exact(with),
             Modify::RaisedTo { floor, from } => raised(number, exact(floor), exact(from)),
+            Modify::Less(less) => (number - exact(less)).max(Decimal::ZERO),
+            Modify::AtMostUnlessNothing(most) => match number.is_zero() {
+                true => number,
+                false => number.min(exact(most)),
+            },
         };
     }
-    number.max(Decimal::ZERO)
+    number
 }
 
 /// The most orb slots `OrbCmd.AddSlots` gives a player.
@@ -2710,7 +2735,7 @@ fn after_osty<V: Rules>(
 ) -> V::Number {
     let player = fight.live.player().id;
     let osty = osty::<V>(&fight.live.creatures).map(|osty| osty.id);
-    modified_by::<V>(
+    hp_lost_by::<V>(
         fight,
         amount,
         &[
@@ -2748,7 +2773,7 @@ pub(crate) fn modified<V: Rules>(
 ) -> V::Number {
     let (added, scale) = enchanted_hit::<V>(card, powered);
     let phases = hit_phases::<V>(fight, dealer, target, card, powered);
-    scaled_by::<V>(fight, damage + added, scale, &phases)
+    scaled_by::<V>(fight, damage + added, scale, &phases).max(V::Number::zero())
 }
 
 /// [`modified`] before the floor, which is the decimal `Hook.ModifyDamage`
