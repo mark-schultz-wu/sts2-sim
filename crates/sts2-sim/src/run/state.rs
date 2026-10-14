@@ -1633,6 +1633,14 @@ impl<V: Rules> State<V> {
     ///
     /// # Panics
     ///
+    /// The powers taken off during the decision, which no walk asks once
+    /// it is over.
+    pub(super) fn forget_detached(&mut self) {
+        if let Phase::Combat(live) = &mut self.phase {
+            live.forget_detached();
+        }
+    }
+
     /// Something that asks the run a question.
     pub(super) fn asked_by_fight(&mut self) {
         let Phase::Combat(live) = &mut self.phase else {

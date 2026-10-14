@@ -411,13 +411,20 @@ impl<V: Rules, C: Cursor<V>> Walker<V, C> {
                         },
                     };
                     let at = match live.powers.of(owner).nth(usize::from(at)) {
-                        Some(held) if held.instance == instance => usize::from(at),
-                        _ => match live.powers.place_of(owner, instance) {
-                            Some(at) => at,
-                            None => continue,
-                        },
+                        Some(held) if held.instance == instance => Some(usize::from(at)),
+                        _ => live.powers.place_of(owner, instance),
                     };
-                    live.ask_power_as(Some(&*relics), carrier, at, hook, asked);
+                    match at {
+                        Some(at) => live.ask_power_as(Some(&*relics), carrier, at, hook, asked),
+                        // Taken off since the walk began: asked as a model on
+                        // its own, as `Hook` asks every item of its list.
+                        None => {
+                            if !live.ask_detached_as(Some(&*relics), carrier, instance, hook, asked)
+                            {
+                                continue;
+                            }
+                        }
+                    }
                     Listener::Power {
                         owner,
                         instance,
@@ -574,6 +581,16 @@ fn decrement<V: Rules>(
         .of_mut(owner)
         .find(|held| held.instance == instance)
     else {
+        // One taken off already ticks down on its own model, and comes off
+        // nothing more.
+        if let Some((_, held)) = live
+            .detached
+            .iter_mut()
+            .find(|(holder, held)| *holder == owner && held.instance == instance)
+            && held.amount.count().is_some()
+        {
+            held.amount = held.amount.ticked();
+        }
         return sts2_core::HookEffects::new();
     };
     if held.amount.count().is_some() {
