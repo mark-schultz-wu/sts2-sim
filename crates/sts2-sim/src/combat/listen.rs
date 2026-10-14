@@ -151,6 +151,7 @@ pub(crate) fn notify<V: Rules>(
 /// What a listener asks for lands before the next is asked, which the caller
 /// sees to between calls to [`Walker::next`]. The walk asks `Contains(item)`
 /// of each, so one whose creature or card left the fight is skipped.
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Walker<V: Rules> {
     hook: EventHook<V>,
     listeners: SmallVec<[Snapped<V>; 8]>,
@@ -162,7 +163,7 @@ pub(crate) struct Walker<V: Rules> {
 }
 
 /// One listener in a walk's snapshot.
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum Snapped<V: Rules> {
     Power {
         owner: CombatId,
@@ -404,6 +405,44 @@ impl<V: Rules> Walker<V> {
         asked.extend(self.pending.drain(..upto));
         if self.pending.is_empty() {
             self.pending_from = None;
+        }
+    }
+}
+
+/// A walk partway through what one listener asked, which can park on a
+/// question one of its effects asks and go on after the answer.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Walking<V: Rules> {
+    walker: Walker<V>,
+    /// The listener whose effects these are, and what it asked still to
+    /// carry out.
+    listener: Option<Listener<V>>,
+    rest: sts2_core::HookEffects<V>,
+}
+
+impl<V: Rules> Walking<V> {
+    pub(crate) fn new(walker: Walker<V>) -> Self {
+        Self {
+            walker,
+            listener: None,
+            rest: sts2_core::HookEffects::new(),
+        }
+    }
+
+    /// The next effect to carry out, and the listener that asked it. The next
+    /// listener is asked only once the last one's effects are out.
+    pub(crate) fn next(
+        &mut self,
+        live: &mut Live<V>,
+        relics: &mut Belt<V>,
+    ) -> Option<(Listener<V>, HookEffect<V>)> {
+        loop {
+            if let Some(listener) = self.listener
+                && !self.rest.is_empty()
+            {
+                return Some((listener, self.rest.remove(0)));
+            }
+            self.listener = Some(self.walker.next(live, relics, &mut self.rest)?);
         }
     }
 }

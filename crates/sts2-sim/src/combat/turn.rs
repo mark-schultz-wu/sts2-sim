@@ -1712,7 +1712,14 @@ pub(super) fn carry_setup<V: Rules>(
                             player,
                             turn: live.turn,
                         };
-                        Setup::PlayerTurnStart(listen::notify::<V>(live, relics, hook))
+                        let heard = listen::heard::<V>(
+                            live,
+                            relics,
+                            sts2_core::ModelHook::AfterPlayerTurnStart,
+                        );
+                        Setup::PlayerTurnStart(heard.then(|| {
+                            Box::new(listen::Walking::new(listen::walk::<V>(live, relics, hook)))
+                        }))
                     }
                     // A card auto-played as it was drawn asked, and the rest
                     // of the draw waits for its play.
@@ -1743,11 +1750,14 @@ pub(super) fn carry_setup<V: Rules>(
             }
             // `Hook.AfterPlayerTurnStart`, the last of the setup. A relic's
             // damage here can end the fight.
+            // Each listener acts as the walk reaches it, and a question one
+            // asks parks the rest of the walk.
             Setup::PlayerTurnStart(mut rest) => {
                 let mut ended = None;
                 let mut drawing = None;
-                while !rest.is_empty() {
-                    let (listener, effect) = rest.remove(0);
+                while let Some((listener, effect)) =
+                    rest.as_mut().and_then(|walking| walking.next(live, relics))
+                {
                     match effect {
                         // `CreatureCmd.Damage` over `HittableEnemies`, from
                         // the player.

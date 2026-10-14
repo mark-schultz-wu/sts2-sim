@@ -376,14 +376,17 @@ pub(super) enum Setup<V: Rules> {
     /// draw that a shuffle's question paused.
     Drawing { left: usize, resumed: bool },
     /// Inside `AfterPlayerTurnStart`, the last of the setup.
-    PlayerTurnStart(super::listen::Answers<V>),
+    /// Boxed, as the walk is far larger than the stages before it, which
+    /// move it at every step of the setup. Nothing where no listener hears
+    /// the hook.
+    PlayerTurnStart(Option<Box<super::listen::Walking<V>>>),
     /// Drawing for a listener inside `AfterPlayerTurnStart`, with this many
     /// cards still to draw and the listeners after it still to run.
     /// `resumed` for a draw that a shuffle's question paused.
     TurnStartDrawing {
         left: usize,
         resumed: bool,
-        rest: super::listen::Answers<V>,
+        rest: Option<Box<super::listen::Walking<V>>>,
     },
 }
 
