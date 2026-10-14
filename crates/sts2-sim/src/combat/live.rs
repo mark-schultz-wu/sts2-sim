@@ -252,6 +252,9 @@ pub(super) enum Deferred<V: Rules> {
     /// `CardPileCmd.AutoPlayFromDrawPile`, which a shuffle's question stood
     /// still while it took its cards.
     AutoPlayFromDraw(super::board::AutoPlayFromDraw<V>),
+    /// The code after the `await` on a command the relic `relic` in `slot`
+    /// asked for, which a question inside the command stood still.
+    OwnCommandOver { slot: u8, relic: V::Relic },
     /// `CardPileCmd.Draw` of `count` cards. `resumed` for the rest of a draw
     /// a shuffle's question stopped, which asked `ShouldDraw` already.
     Draw {

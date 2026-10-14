@@ -1285,6 +1285,10 @@ fn run_deferred<V: Rules>(
                 }
                 ended
             }
+            super::live::Deferred::OwnCommandOver { slot, relic } => {
+                super::relic::own_command_over::<V>(fighting.relics, slot, relic);
+                ended
+            }
             super::live::Deferred::PlayOver => {
                 let ended = check_for_empty_hand::<V, _>(
                     fighting.live,

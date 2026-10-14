@@ -29,21 +29,7 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ## Open
 
-### 1. A relic that settles once its own draw is over
-
-Joss Paper's `DrawIfThresholdMet` draws, and takes its count down only
-once the draw is over. A question inside the draw shows the count at
-five, and a card exhausted during the draw adds to the count before it
-goes down. The sim takes the count down as it asks for the draw. In
-recorded run 2090, at Ascender's Bane, Synchronize's play leaves a
-question inside that draw, and the sim shows Joss Paper at nothing.
-
-A relic answers its hook once, and nothing calls it back when its effect
-lands, least of all across a pause. Mirroring this needs a way for a
-relic to settle what it saved once its own command is over, a shape
-for Mark to choose.
-
-### 2. A power the walk reaches after it came off
+### 1. A power the walk reaches after it came off
 
 `CombatState.Contains` asks of a power only whether its owner is still in
 the fight. The walk still asks a power an earlier listener took off, as a
@@ -54,7 +40,7 @@ its owner no longer carries, since it keeps no model for one taken off. No
 recorded run parts on it yet. Keeping the model for the walk needs a
 design, for Mark.
 
-### 3. Every other split the recorded runs find
+### 2. Every other split the recorded runs find
 
 `cargo xtask coverage` lists the commonest first splits, by the move
 that led to each. Each one with more than a handful of runs becomes its
@@ -62,17 +48,17 @@ own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
 
-### 4. Run modifiers
+### 3. Run modifiers
 
 A run started with any modifier panics (`crates/sts2-sim/src/engine/sim.rs`).
 Hoarder's removal ban is one rule known to need one. Port the custom
 mode's modifiers, and record runs with each.
 
-### 5. v0.111.0
+### 4. v0.111.0
 
 Only the generated tables exist. Its behaviour layer has to be written,
 and its runs recorded.
-### 6. Every hook on the walk cursor
+### 5. Every hook on the walk cursor
 
 Every event hook walks with the cursor, and the eager `notify` goes. The
 cursor's snapshot costs 0.7% on the three hooks it walks now, so every
@@ -86,7 +72,7 @@ the sim asked them all first. So Pinpoint in hand counts a Defend early,
 and shows one cheaper while the pick waits. A walk that parks there, on
 the snapshot cursor, cost 2.5% a step.
 
-### 7. A speed target
+### 6. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.
