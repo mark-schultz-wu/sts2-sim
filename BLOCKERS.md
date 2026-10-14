@@ -29,25 +29,7 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ## Open
 
-### 1. What a draw drew, when the draw pauses
-
-`CardPileCmd.Draw` returns the cards it drew, and Scrape discards the
-ones that cost energy. A shuffle inside the draw can ask, as Stratagem
-does, and the draw finishes after the answer. The sim finds what Scrape
-drew by comparing the hand before and after, and that comparison runs
-before the draw pauses. Recorded run 1424 shows it: Scrape keeps two
-Strikes and a Compact the game discards. Pillage reads its draw the same
-way, and a drawn card can leave the hand before the comparison runs, with
-no pause. In recorded run 151 a Strike Pillage draws is discarded as it
-lands. The sim stops drawing there, and the game draws an Evil Eye. Runs
-79, 1220 and 1419 part the same way.
-
-The design: `Fight::draw` hands back the copies it drew, in order. A
-draw that pauses keeps the ones drawn so far in its deferred entry. The
-card waits, and resumes with them once the draw is over. Pillage's loop
-becomes a resume point.
-
-### 2. A listener walk that can pause
+### 1. A listener walk that can pause
 
 The game walks `AfterCardPlayed` listeners one at a time, and a draw
 can pause the walk. The sim raises them all first, so Bygone Effigy's
@@ -82,7 +64,7 @@ decrement is an effect, applied in its turn. Every event hook walks this
 way. Each held power carries a per-fight instance id, as a card does, so
 the walk can tell a removed power from a new one.
 
-### 3. Every other split the recorded runs find
+### 2. Every other split the recorded runs find
 
 `cargo xtask coverage` lists the commonest first splits, by the move
 that led to each. Each one with more than a handful of runs becomes its
@@ -90,24 +72,24 @@ own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
 
-### 4. Ascension
+### 3. Ascension
 
 The sim threads the ascension level through, but every scenario and
 census run plays at `None`. Record runs at each level, and each split
 they find becomes an item.
 
-### 5. Run modifiers
+### 4. Run modifiers
 
 A run started with any modifier panics (`crates/sts2-sim/src/engine/sim.rs`).
 Hoarder's removal ban is one rule known to need one. Port the custom
 mode's modifiers, and record runs with each.
 
-### 6. A speed target
+### 5. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.
 
-### 7. v0.111.0
+### 6. v0.111.0
 
 Only the generated tables exist. Its behaviour layer has to be written,
 and its runs recorded.

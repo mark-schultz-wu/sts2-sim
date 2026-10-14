@@ -1333,6 +1333,7 @@ fn run_deferred<V: Rules>(
                 count,
                 hand_draw,
                 resumed,
+                drew,
             } => match ended {
                 None => super::board::draw_in_effect::<V>(
                     fighting.live,
@@ -1342,10 +1343,15 @@ fn run_deferred<V: Rules>(
                     count,
                     hand_draw,
                     resumed,
+                    drew,
                 ),
                 ended => ended,
             },
         };
+    }
+    // A draw no effect waited on leaves its copies to nothing.
+    if live.asking.is_none() {
+        live.drew = None;
     }
     Ok(ended)
 }
@@ -1398,7 +1404,12 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                 playing,
             )
             .blocking();
-            played = V::resume_play(&mut board, at, sts2_core::Taken::Waited);
+            // The copies its own draw drew, where that is what it waited on.
+            let taken = match board.live.drew.take() {
+                Some(drew) => sts2_core::Taken::Drew(drew),
+                None => sts2_core::Taken::Waited,
+            };
+            played = V::resume_play(&mut board, at, taken);
             effect.ended = effect.ended.or(board.ended());
             let skipped = std::mem::take(&mut board.skipped);
             merge::<V>(&mut next.skip_tick, skipped);

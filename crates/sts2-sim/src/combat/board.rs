@@ -852,7 +852,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 }
                 // `CardPileCmd.Draw` for the player.
                 (Listener::Power { .. }, HookEffect::Draw(count)) => {
-                    sts2_core::Fight::draw(self, count)
+                    sts2_core::Fight::draw(self, count);
                 }
                 // `CreatureCmd.Damage`, unpowered, from the power's owner.
                 (Listener::Power { owner, .. }, HookEffect::Damage { target, amount }) => {
@@ -4279,10 +4279,11 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.intent_repeats
     }
 
-    fn draw(&mut self, count: V::Number) {
+    fn draw(&mut self, count: V::Number) -> sts2_core::Drew<V> {
+        let mut drew = sts2_core::Drew::new();
         // `IsOverOrEnding` draws nothing.
         if self.stopped() {
-            return;
+            return drew;
         }
         // A negative count draws nothing: the game's own loop runs no times.
         let count = num_traits::NumCast::from(count).unwrap_or(0usize);
@@ -4293,9 +4294,9 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 self.relics,
                 self.ascension,
                 count,
-                false,
+                Some(&mut drew),
             );
-            return;
+            return drew;
         }
         // A question a card this effect auto-played asked stands the draw
         // still, before it starts.
@@ -4304,8 +4305,9 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 count,
                 hand_draw: false,
                 resumed: false,
+                drew: Some(drew),
             });
-            return;
+            return sts2_core::Drew::new();
         }
         self.ended = draw_in_effect(
             self.live,
@@ -4315,7 +4317,17 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             count,
             false,
             false,
+            Some(drew),
         );
+        // A draw that stood still left its copies for the effect's resume.
+        match self.live.asking {
+            Some(_) => sts2_core::Drew::new(),
+            None => self.live.drew.take().unwrap_or_default(),
+        }
+    }
+
+    fn find_card(&self, id: CardId<V>) -> Option<sts2_core::CardAt<V>> {
+        self.live.cards.find_any(id)
     }
 
     fn ascension(&self) -> V::AscensionLevel {
@@ -5832,9 +5844,9 @@ pub(super) fn draw<V: Rules>(
     relics: &mut Belt<V>,
     ascension: V::AscensionLevel,
     count: usize,
-    hand_draw: bool,
+    drew: Option<&mut sts2_core::Drew<V>>,
 ) -> Option<super::Ended> {
-    match draw_pausing::<V>(live, rngs, relics, ascension, count, hand_draw, false) {
+    match draw_pausing::<V>(live, rngs, relics, ascension, count, false, false, drew) {
         Drawn::Done(ended) => ended,
         Drawn::Paused { asks, .. } => {
             unimplemented!("a shuffle asking for {asks:?} inside a draw that cannot pause")
@@ -5967,7 +5979,9 @@ pub(super) fn land_held<V: Rules>(
 
 /// [`draw`] inside a card's or a potion's effect, which a shuffle's question
 /// can stand still. The question parks, and the rest of the draw waits in
-/// [`Live::deferred`] with the effect behind it.
+/// [`Live::deferred`] with the effect behind it. `drew` gathers what it
+/// draws, for the effect to read once it is over.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn draw_in_effect<V: Rules>(
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
@@ -5976,6 +5990,7 @@ pub(super) fn draw_in_effect<V: Rules>(
     count: usize,
     hand_draw: bool,
     resumed: bool,
+    mut drew: Option<sts2_core::Drew<V>>,
 ) -> Option<super::Ended> {
     let (mut count, mut resumed) = (count, resumed);
     loop {
@@ -5987,14 +6002,20 @@ pub(super) fn draw_in_effect<V: Rules>(
             count,
             hand_draw,
             resumed,
+            drew.as_mut(),
         ) {
-            Drawn::Done(ended) => return ended,
+            // What an effect's draw drew waits for the effect.
+            Drawn::Done(ended) => {
+                live.drew = drew;
+                return ended;
+            }
             // The auto-played card's play waits first, then the draw.
             Drawn::Asked { left } => {
                 live.defer(super::live::Deferred::Draw {
                     count: left,
                     hand_draw,
                     resumed: true,
+                    drew,
                 });
                 return None;
             }
@@ -6015,6 +6036,7 @@ pub(super) fn draw_in_effect<V: Rules>(
                             count: left,
                             hand_draw,
                             resumed: true,
+                            drew,
                         });
                         return None;
                     }
@@ -6172,7 +6194,9 @@ impl Drawn {
 
 /// [`draw`], stopping where a shuffle inside it asks the player something.
 /// `resumed` is a draw that carries on from such a stop, which has asked
-/// `ShouldDraw` already.
+/// `ShouldDraw` already. `drew` gathers the copies it draws itself, and
+/// none a listener's draw inside it draws.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn draw_pausing<V: Rules>(
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
@@ -6181,6 +6205,7 @@ pub(super) fn draw_pausing<V: Rules>(
     count: usize,
     hand_draw: bool,
     resumed: bool,
+    mut drew: Option<&mut sts2_core::Drew<V>>,
 ) -> Drawn {
     // `Hook.ShouldDraw`, once for the whole draw, and `AfterPreventingDraw`
     // when a listener stops it.
@@ -6234,6 +6259,7 @@ pub(super) fn draw_pausing<V: Rules>(
                 left,
                 false,
                 true,
+                None,
             ) {
                 Drawn::Done(Some(ended)) => return Drawn::Done(Some(ended)),
                 Drawn::Done(None) => match carry_out_drawn::<V>(
@@ -6289,6 +6315,9 @@ pub(super) fn draw_pausing<V: Rules>(
             .cards
             .draw()
             .expect("a draw pile just checked for cards");
+        if let Some(drew) = drew.as_deref_mut() {
+            drew.push(drawn.id);
+        }
         // `History.CardDrawn`, before the hook, so a listener counts this
         // draw among the turn's.
         live.history.draw(drawn.face.ident.card, hand_draw);
@@ -6460,7 +6489,16 @@ fn carry_out_drawn<V: Rules>(
             return Drawn::Done(ended);
         }
         let below = live.hook_draws.len();
-        match draw_pausing::<V>(live, rngs.reborrow(), relics, ascension, owed, false, false) {
+        match draw_pausing::<V>(
+            live,
+            rngs.reborrow(),
+            relics,
+            ascension,
+            owed,
+            false,
+            false,
+            None,
+        ) {
             Drawn::Done(now) => {
                 ended = now;
                 queue = after.into_iter().collect();

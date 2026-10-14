@@ -21,6 +21,8 @@ pub enum Resume {
     RebootShuffled,
     /// `Modded`, after a question inside its draw was answered.
     ModdedDrew,
+    /// `Scrape`, after a question inside its draw was answered.
+    ScrapeDrew,
 }
 
 /// The rest of a Defect card's play that stood still on a question its own
@@ -36,6 +38,8 @@ pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V>
             Played::Done
         }
         Resume::ModdedDrew => modded_drew(fight),
+        // A draw that never ran, as the fight ended, drew nothing.
+        Resume::ScrapeDrew => scrape_drew(fight, &[]),
         at => unreachable!("{at:?} stops on a pick, not on a question it waited for"),
     }
 }
@@ -46,7 +50,10 @@ pub(super) fn resume_play<F: Fight<V>>(
     chosen: sts2_core::SelectedCards<V>,
 ) -> Played<V> {
     match at {
-        Resume::OverclockDrew | Resume::RebootShuffled | Resume::ModdedDrew => {
+        Resume::OverclockDrew
+        | Resume::RebootShuffled
+        | Resume::ModdedDrew
+        | Resume::ScrapeDrew => {
             unreachable!("{at:?} waits on a question, not a pick")
         }
         // `CardPileCmd.Add(cardModel, PileType.Hand)`.
@@ -685,16 +692,43 @@ fn scrape<F: Fight<V>>(fight: &mut F) -> Played<V> {
         });
         fight.apply(attack);
     });
-    let before = fight.cards_in(Pile::Hand);
-    fight.draw(fight.var(CardVar::Cards));
-    let costly: Vec<sts2_core::CardAt<V>> = fight
-        .cards_in(Pile::Hand)
-        .into_iter()
-        .filter(|card| !before.iter().any(|held| held.id() == card.id()))
+    let drew = fight.draw(fight.var(CardVar::Cards));
+    // A shuffle inside the draw can ask, and the discard waits for it.
+    if fight.waiting() {
+        return Played::Waiting {
+            at: super::super::Resume::Card(super::Resume::Defect(Resume::ScrapeDrew)),
+        };
+    }
+    scrape_drew(fight, &drew)
+}
+
+/// `Scrape`, once its draw is over: each copy it drew whose own cost is
+/// anything but nothing discarded, wherever it stands.
+fn scrape_drew<F: Fight<V>>(fight: &mut F, drew: &[sts2_core::CardId<V>]) -> Played<V> {
+    let costly: Vec<sts2_core::CardAt<V>> = drew
+        .iter()
+        .map(|&id| {
+            fight
+                .find_card(id)
+                .unwrap_or_else(|| unimplemented!("Scrape discarding {id:?}, which left the fight"))
+        })
         .filter(|&card| fight.local_cost(card) != sts2_core::Cost::fixed(0))
         .collect();
     fight.act_on(PileAct::Discard, &costly);
     Played::Done
+}
+
+/// The rest of a Defect card's play that waited on its own draw, with every
+/// copy that draw drew.
+pub(super) fn resume_drew<F: Fight<V>>(
+    fight: &mut F,
+    at: Resume,
+    drew: &[sts2_core::CardId<V>],
+) -> Played<V> {
+    match at {
+        Resume::ScrapeDrew => scrape_drew(fight, drew),
+        at => resume_waited(fight, at),
+    }
 }
 
 /// `Tempest`: a Lightning channelled for each energy of its X, and one more

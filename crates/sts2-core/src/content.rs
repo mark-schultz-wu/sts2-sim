@@ -2157,11 +2157,22 @@ pub trait Fight<V: ContentVersion> {
     /// one, the way [`Fight::attack_opponents`] does.
     fn apply_to_opponents(&mut self, power: V::Power, amount: PowerAmount<V::Number>);
 
-    /// `CardPileCmd.Draw(count, Owner)`.
+    /// `CardPileCmd.Draw(count, Owner)`, which hands back the copies it drew,
+    /// in order, wherever they stand now.
     ///
     /// A printed number, so signed. A card printing a negative one draws
     /// nothing, which is what the game's own loop does.
-    fn draw(&mut self, count: V::Number);
+    ///
+    /// A shuffle inside it can ask, which [`Fight::waiting`] says. Nothing comes
+    /// back here then, and every copy drawn comes with [`Taken::Drew`] once
+    /// the draw is over.
+    fn draw(&mut self, count: V::Number) -> Drew<V>;
+
+    /// Where the copy `id` stands, or nothing for one the fight no longer
+    /// holds.
+    fn find_card(&self, _id: crate::CardId<V>) -> Option<crate::CardAt<V>> {
+        unimplemented!("finding a copy by its identity")
+    }
 
     /// `CardPileCmd.AddToCombatAndPreview<C>(targets, Discard, count)`.
     ///
@@ -3064,7 +3075,13 @@ pub enum Taken<V: ContentVersion> {
     Chosen(Option<crate::CardIdent<V>>),
     /// Nothing asked: the play waited on a card it auto-played.
     Waited,
+    /// The play waited on its own draw, which a shuffle inside stood still.
+    /// These are every copy it drew, in order.
+    Drew(Drew<V>),
 }
+
+/// The copies one `CardPileCmd.Draw` drew, in order. A hand holds no more.
+pub type Drew<V> = smallvec::SmallVec<[crate::CardId<V>; MAX_CARDS_IN_HAND]>;
 
 /// The choose-a-card screen's fixed capacity.
 pub const CHOICES: usize = 3;
