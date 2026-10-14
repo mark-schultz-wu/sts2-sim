@@ -1,7 +1,8 @@
 //! One run the game plays at random, for `cargo xtask record`.
 //!
 //! ```text
-//! record_run <seed> <character> <out> [--data-home <dir>]
+//! record_run <seed> <character> <out> [--data-home <dir>] [--ascension <id>]
+//!     [--modifiers <id>,...]
 //! ```
 //!
 //! The game plays the run, carrying what the census's runs carry. It picks
@@ -52,6 +53,15 @@ struct Cli {
     /// The ascension level, by the id the game spells it with.
     #[arg(long, value_parser = ascension, default_value = "None")]
     ascension: sts2_content::v0_107_1::ascension::AscensionLevel,
+    /// The modifiers the run starts with, by the ids the game spells them
+    /// with.
+    #[arg(long, value_parser = modifier, value_delimiter = ',')]
+    modifiers: Vec<sts2_content::v0_107_1::modifiers::Modifier>,
+}
+
+/// A modifier by the id the game spells it with.
+fn modifier(id: &str) -> Result<sts2_content::v0_107_1::modifiers::Modifier, serde_json::Error> {
+    serde_json::from_value(serde_json::Value::String(id.to_owned()))
 }
 
 /// An ascension level by the id the game spells it with.
@@ -113,6 +123,7 @@ fn record(cli: Cli) -> Result<(), Error> {
         out,
         data_home,
         ascension,
+        modifiers,
     } = cli;
     let mut config = Config::new(game_dir_from_env().ok_or(Error::NoGame)?);
     config.data_home = data_home;
@@ -121,7 +132,7 @@ fn record(cli: Cli) -> Result<(), Error> {
         seed,
         character,
         ascension,
-        modifiers: Vec::new(),
+        modifiers,
     };
     let mut pick = sts2_golden::random::Pick::for_seed(start.seed.as_str());
     let mut game = Oracle::<V>::begin(config, &start)?;
@@ -184,6 +195,7 @@ fn record(cli: Cli) -> Result<(), Error> {
             character: id(&start.character),
             seed: start.seed.as_str().to_owned(),
             ascension: id(&start.ascension),
+            modifiers: start.modifiers.iter().map(id).collect(),
             wins: start.wins,
             ending,
             digests,

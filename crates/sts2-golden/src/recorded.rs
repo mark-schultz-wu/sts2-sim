@@ -18,7 +18,7 @@ use sts2_core::{Decision, Digest, Digested as _, Room, Snapshot, Start};
 const MAGIC: &[u8; 8] = b"STS2REC\x00";
 
 /// The layout below. A change here is a re-record, not a migration.
-const VERSION: u16 = 1;
+const VERSION: u16 = 2;
 
 /// Every recorded run, and the build that played them.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -44,6 +44,8 @@ pub struct Run {
     pub seed: String,
     /// The ascension level, as the game names it.
     pub ascension: String,
+    /// The modifiers the run was started with, as the game spells their ids.
+    pub modifiers: Vec<String>,
     /// See [`sts2_core::Start::wins`].
     pub wins: u32,
     pub ending: Ending,
@@ -86,7 +88,7 @@ impl Run {
             seed: sts2_core::Seed::new(&self.seed).expect("a recorded seed is a seed"),
             character: from_id(&self.character),
             ascension: from_id(&self.ascension),
-            modifiers: Vec::new(),
+            modifiers: self.modifiers.iter().map(|id| from_id(id)).collect(),
             wins: self.wins,
         }
     }
@@ -200,10 +202,16 @@ impl Recorded {
         out.extend_from_slice(&count.to_le_bytes());
 
         for run in &self.runs {
-            for text in [&run.character, &run.seed, &run.ascension] {
-                let len = u8::try_from(text.len()).expect("an id is short");
-                out.push(len);
+            let text = |out: &mut Vec<u8>, text: &str| {
+                out.push(u8::try_from(text.len()).expect("an id is short"));
                 out.extend_from_slice(text.as_bytes());
+            };
+            for id in [&run.character, &run.seed, &run.ascension] {
+                text(&mut out, id);
+            }
+            out.push(u8::try_from(run.modifiers.len()).expect("a run has few modifiers"));
+            for id in &run.modifiers {
+                text(&mut out, id);
             }
             out.extend_from_slice(&run.wins.to_le_bytes());
             out.push(match run.ending {
@@ -255,6 +263,9 @@ impl Recorded {
             let character = read.text()?;
             let seed = read.text()?;
             let ascension = read.text()?;
+            let modifiers = (0..read.u8()?)
+                .map(|_| read.text())
+                .collect::<Result<Vec<_>, _>>()?;
             let wins = read.u32()?;
             let ending = match read.u8()? {
                 0 => Ending::Won,
@@ -273,6 +284,7 @@ impl Recorded {
                 character,
                 seed,
                 ascension,
+                modifiers,
                 wins,
                 ending,
                 digests,
@@ -345,6 +357,7 @@ mod tests {
             character: "SILENT".into(),
             seed: seed.into(),
             ascension: "None".into(),
+            modifiers: Vec::new(),
             wins: 4,
             ending: Ending::Lost,
             digests: (0..=moves.len() as u32)
@@ -364,6 +377,10 @@ mod tests {
             runs: vec![
                 run("C000000001", vec![0, 3, 127, 128, 300, 16383, 65535]),
                 run("C000000002", vec![]),
+                Run {
+                    modifiers: vec!["FLIGHT".into(), "MIDAS".into()],
+                    ..run("C000000003", vec![1])
+                },
             ],
         };
 

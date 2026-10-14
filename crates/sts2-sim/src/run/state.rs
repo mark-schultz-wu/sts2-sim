@@ -153,6 +153,8 @@ struct RunData<V: Rules> {
     raw_seed: u64,
     character: V::Character,
     ascension: V::AscensionLevel,
+    /// `RunState.Modifiers`, in the order the run was started with them.
+    modifiers: Vec<V::Modifier>,
     /// See [`sts2_core::Start::wins`].
     wins: u32,
 }
@@ -813,7 +815,11 @@ impl<V: Rules> Phase<V> {
     /// way.
     fn finished(&self) -> bool {
         match self {
-            Phase::Neow { chosen, asking, .. } => chosen.is_some() && asking.is_none(),
+            Phase::Neow {
+                options,
+                chosen,
+                asking,
+            } => (chosen.is_some() || options.is_empty()) && asking.is_none(),
             Phase::Treasure { finished, .. } => *finished,
             Phase::RestSite { options, .. } => options.is_empty(),
             // A merchant never runs out. The run leaves when it decides to,
@@ -913,12 +919,13 @@ impl<V: Rules> State<V> {
         act: V::Act,
         index: usize,
         ascension: V::AscensionLevel,
+        second_boss: bool,
     ) -> ActMap<V> {
         let named = MAP_STREAMS
             .get(index)
             .unwrap_or_else(|| unimplemented!("the map stream a run's act {index} draws from"));
         let mut rng: MegaRng = sts2_core::rng::named::<V, _>(raw_seed, named);
-        ActMap::<V>::generate(&mut rng, V::act_layout(act), ascension)
+        ActMap::<V>::generate(&mut rng, V::act_layout(act), ascension, second_boss)
             .expect("an act's layout fits a packed map path")
     }
 
@@ -930,7 +937,14 @@ impl<V: Rules> State<V> {
     /// A deck card that changes the map, or a relic asking for anything but
     /// a map of its own.
     fn generate_map(&mut self, act: V::Act) -> ActMap<V> {
-        let mut map = Self::act_map(self.shared.raw_seed, act, self.act, self.ascension());
+        let second_boss = self.shared.opening.acts[self.act].1.second_boss.is_some();
+        let mut map = Self::act_map(
+            self.shared.raw_seed,
+            act,
+            self.act,
+            self.ascension(),
+            second_boss,
+        );
         // `IterateHookListeners` walks the deck's cards ahead of the relics.
         let cards: Vec<V::Card> = self
             .deck_cards_hearing(sts2_core::ModelHook::ModifyGeneratedMap)
@@ -1044,21 +1058,36 @@ impl<V: Rules> State<V> {
         seed: &Seed,
         character: V::Character,
         ascension: V::AscensionLevel,
+        modifiers: &[V::Modifier],
         wins: u32,
     ) -> Self {
         let raw_seed = stream_seed::<V>(seed);
         let acts = super::setup::run_acts::<V>(raw_seed);
         let mut streams = Streams::<V>::opening(raw_seed);
-        let opening = Opening::draw(streams.run(V::RunRngType::UP_FRONT), character, &acts);
+        let opening = Opening::draw(
+            streams.run(V::RunRngType::UP_FRONT),
+            character,
+            &acts,
+            ascension,
+        );
 
-        let map = Self::act_map(raw_seed, acts[0], 0, ascension);
+        let second_boss = opening.acts[0].1.second_boss.is_some();
+        let map = Self::act_map(raw_seed, acts[0], 0, ascension, second_boss);
         let at = map
             .ancient()
             .expect("a generated act map opens somewhere")
             .at;
 
-        let mut neow_rng: MegaRng = Blessing::<V>::stream(raw_seed, 0);
-        let neow_options = Blessing::<V>::roll(&mut neow_rng, 1).options;
+        // `Neow.GenerateInitialOptions`: a run with modifiers is offered what
+        // they put in front of it instead, and no ported modifier offers
+        // anything. Nothing offered leaves the event finished.
+        let neow_options = match modifiers.is_empty() {
+            true => {
+                let mut neow_rng: MegaRng = Blessing::<V>::stream(raw_seed, 0);
+                Blessing::<V>::roll(&mut neow_rng, 1).options
+            }
+            false => Default::default(),
+        };
 
         let mut player = Player {
             relics: V::starting_relics(character)
@@ -1098,6 +1127,7 @@ impl<V: Rules> State<V> {
                 raw_seed,
                 character,
                 ascension,
+                modifiers: modifiers.to_vec(),
                 wins,
             }),
             map: Arc::new(map),
@@ -1746,6 +1776,17 @@ impl<V: Rules> State<V> {
     /// Which act the run stands in, counted from zero.
     pub(super) fn act(&self) -> usize {
         self.act
+    }
+
+    /// Whether the run stands on a boss point that leads on to another, which
+    /// is `SecondBossMapPoint != null && CurrentMapCoord == BossMapPoint.coord`.
+    fn boss_ahead(&self) -> bool {
+        use sts2_core::{ActMap as _, MapPointKinds as _};
+
+        self.visited
+            .last()
+            .and_then(|&at| self.map.at(at).ok())
+            .is_some_and(|here| here.kind == V::MapPointType::BOSS && !here.to.is_empty())
     }
 
     /// `CurrentActIndex >= Acts.Count - 1`: whether the run stands in its
@@ -5054,13 +5095,21 @@ impl<V: Rules> State<V> {
             .copied()
     }
 
-    /// The one boss an act rolled, which is the fight out of it.
+    /// `RoomSet.NextBossEncounter`: the boss an act rolled, or its second
+    /// once a boss room is behind the run in this act.
     pub(super) fn boss_encounter(&self, act: usize) -> Option<V::Encounter> {
-        self.shared
-            .opening
-            .acts
-            .get(act)
-            .map(|(_, rooms)| rooms.boss)
+        use sts2_core::{ActMap as _, MapPointKinds as _};
+
+        let (_, rooms) = self.shared.opening.acts.get(act)?;
+        let fought = self.visited.iter().any(|&at| {
+            self.map
+                .at(at)
+                .is_ok_and(|node| node.kind == V::MapPointType::BOSS)
+        });
+        Some(match (fought, rooms.second_boss) {
+            (true, Some(second)) => second,
+            _ => rooms.boss,
+        })
     }
 
     pub(crate) fn choose(&mut self, index: u8) -> Result<Decided, Error> {
@@ -6396,8 +6445,8 @@ impl<V: Rules> State<V> {
         forced
     }
 
-    /// `Hook.ShouldAllowFreeTravel`, which any relic on the belt can answer
-    /// yes to.
+    /// `Hook.ShouldAllowFreeTravel`, which any relic on the belt or any
+    /// modifier can answer yes to.
     fn free_travel(&self) -> bool {
         let hook = sts2_core::DecisionHook::ShouldAllowFreeTravel;
         let hooks = sts2_core::Overrides::of(sts2_core::ModelHook::ShouldAllowFreeTravel);
@@ -6415,6 +6464,14 @@ impl<V: Rules> State<V> {
                 hook,
             )
             .is_decision_and(|allowed| allowed);
+        }
+        for &modifier in &self.shared.modifiers {
+            if sts2_core::ModifierTable::overrides(modifier)
+                .contains(sts2_core::ModelHook::ShouldAllowFreeTravel)
+            {
+                free |= V::decide_hook(crate::combat::Heard::<V>::Modifier(modifier), hook)
+                    .is_decision_and(|allowed| allowed);
+            }
         }
         free
     }
@@ -6473,10 +6530,15 @@ impl<V: Rules> State<V> {
     /// leaving one is not a move.
     /// `MapLegality.CanProceed`: the run stands in a boss room, and its fight
     /// is over. The room is the fight's, wherever on the map it was fought.
+    ///
+    /// The first of two bosses is not a way out: travel to the second is.
     fn can_proceed(&self) -> bool {
         let Phase::Rewards { combat, .. } = &self.phase else {
             return false;
         };
+        if self.boss_ahead() {
+            return false;
+        }
         // `ProceedFromTerminalRewardsScreen` goes back to the event.
         if self.resuming.is_some() {
             return true;
@@ -6886,6 +6948,7 @@ impl<V: Rules> sts2_core::EventView<V> for State<V> {
             .map(|held| sts2_core::CarriedRelic {
                 relic: held.relic,
                 used_up: held.state.used_up(held.relic),
+                melted: held.melted,
             })
     }
 
@@ -7076,6 +7139,7 @@ mod tests {
             &Seed::new("0RACLE1").expect("the fixture's seed is a seed"),
             Character::Regent,
             AscensionLevel::None,
+            &[],
             0,
         )
     }

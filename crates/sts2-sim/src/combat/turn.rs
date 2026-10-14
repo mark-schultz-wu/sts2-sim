@@ -2472,8 +2472,8 @@ pub(super) fn exhausted<V: Rules>(
     if pausable {
         board = board.blocking();
     }
-    let mut rest: SmallVec<[sts2_core::HookEffect<V>; 4]> = SmallVec::new();
-    for (_, effect) in asked {
+    let mut rest: SmallVec<[(Listener<V>, sts2_core::HookEffect<V>); 4]> = SmallVec::new();
+    for (listener, effect) in asked {
         match effect {
             // Clones of the card just exhausted, which the exhaust pile still
             // holds.
@@ -2488,10 +2488,15 @@ pub(super) fn exhausted<V: Rules>(
                     board.clone_written(card, Pile::Hand, writes);
                 }
             }
-            effect => rest.push(effect),
+            effect => rest.push((listener, effect)),
         }
     }
-    super::hook::apply::<V, _>(&mut board, rest);
+    for (listener, effect) in rest {
+        match listener {
+            Listener::Relic { slot } => board.relic_asked(slot, effect),
+            _ => super::hook::apply::<V, _>(&mut board, [effect]),
+        }
+    }
     let skipped = std::mem::take(&mut board.skipped);
     let ended = board.ended();
     super::play::merge::<V>(&mut live.skip_tick, skipped);
@@ -3487,7 +3492,7 @@ fn walk_turn_end<V: Rules>(
             }
             let ask = match listener {
                 // What a relic asks for, on the player who carries it.
-                Listener::Relic { .. } => TurnEndAsk::Relic(effect),
+                Listener::Relic { slot } => TurnEndAsk::Relic(slot, effect),
                 Listener::Power {
                     owner,
                     instance,
@@ -3655,8 +3660,8 @@ enum TurnEndAsk<V: Rules> {
     EvokeLast(V::Number),
     /// `CardCmd.ClearAffliction` on the fight's cards.
     ClearAffliction(sts2_core::Writing<V>),
-    /// What a relic asked for, carried out for the player.
-    Relic(sts2_core::HookEffect<V>),
+    /// What the relic in a slot asked for, carried out for the player.
+    Relic(u8, sts2_core::HookEffect<V>),
 }
 
 /// What a turn end's listener asked for, carried out in order, and whatever
@@ -3684,7 +3689,7 @@ fn applied<V: Rules>(
             TurnEndAsk::Draw(amount) => {
                 sts2_core::Fight::draw(&mut board, amount);
             }
-            TurnEndAsk::Relic(effect) => super::hook::apply::<V, _>(&mut board, [effect]),
+            TurnEndAsk::Relic(slot, effect) => board.relic_asked(slot, effect),
             TurnEndAsk::Heal(at, amount) => sts2_core::Fight::heal(&mut board, at, amount),
             TurnEndAsk::Escape(at) => board.escape_creature(at),
             TurnEndAsk::EvokeLast(count) => {

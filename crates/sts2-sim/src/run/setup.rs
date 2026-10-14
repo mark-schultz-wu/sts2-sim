@@ -290,6 +290,9 @@ pub struct Rooms<V: Rules> {
     pub elite: Vec<V::Encounter>,
     pub boss: V::Encounter,
     pub ancient: V::Event,
+    /// `RoomSet.SecondBoss`, which the last act holds at Double Boss and
+    /// fights once its first boss is done.
+    pub second_boss: Option<V::Encounter>,
 }
 
 impl<V: Rules> Rooms<V> {
@@ -336,6 +339,7 @@ impl<V: Rules> Rooms<V> {
             elite,
             boss,
             ancient,
+            second_boss: None,
         }
     }
 
@@ -459,7 +463,12 @@ impl<V: Rules> Opening<V> {
     ///
     /// `rng` is the run's `UpFront` stream at its start. `acts` is the run's
     /// act list in order, which [`run_acts`] draws.
-    pub fn draw<R: GameRng>(rng: &mut R, character: V::Character, acts: &[V::Act]) -> Self {
+    pub fn draw<R: GameRng>(
+        rng: &mut R,
+        character: V::Character,
+        acts: &[V::Act],
+        ascension: V::AscensionLevel,
+    ) -> Self {
         let shared_relics = RelicBag::shared(rng);
         let player_relics = RelicBag::player(rng, character);
 
@@ -478,13 +487,31 @@ impl<V: Rules> Opening<V> {
             dealt.push(pool.drain(..taken).collect());
         }
 
+        let last = acts.len() - 1;
+        let double_boss = sts2_core::AscensionKinds::has(
+            ascension,
+            <V::AscensionLevel as sts2_core::AscensionKinds>::DOUBLE_BOSS,
+        );
         let rooms = acts
             .iter()
             .zip(&dealt)
-            .map(|(&act, share)| {
+            .enumerate()
+            .map(|(at, (&act, share))| {
                 let mut ancients: Vec<V::Event> = V::ancients(act).to_vec();
                 ancients.extend(share);
-                (act, Rooms::roll(rng, act, &ancients))
+                let mut rooms = Rooms::roll(rng, act, &ancients);
+                // `SetSecondBossEncounter`, off the same stream once the last
+                // act's rooms are rolled: another of its bosses.
+                if at == last && double_boss {
+                    let others: Vec<V::Encounter> =
+                        Rooms::<V>::of_room(act, V::RoomType::BOSS, false)
+                            .into_iter()
+                            .filter(|&boss| boss != rooms.boss)
+                            .collect();
+                    rooms.second_boss =
+                        Some(next_item(rng, &others).expect("a last act fields a second boss"));
+                }
+                (act, rooms)
             })
             .collect();
 

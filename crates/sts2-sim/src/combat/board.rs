@@ -762,7 +762,13 @@ impl<'a, V: Rules> Board<'a, V> {
             return;
         }
         match then {
-            sts2_core::StunResume::Interrupted => machine.machine.interpose(),
+            sts2_core::StunResume::Interrupted => {
+                let last = machine.machine.log.recent(1).next();
+                match last {
+                    Some(last) => machine.machine.interpose_to(last),
+                    None => machine.machine.interpose(),
+                }
+            }
             sts2_core::StunResume::AfterInterrupted => {
                 let after = V::follow_up(machine.monster, &machine.machine);
                 machine.machine.interpose_to(after);
@@ -2083,7 +2089,7 @@ impl<'a, V: Rules> Board<'a, V> {
                     Listener::Relic { .. },
                     sts2_core::HookEffect::GainEnergy(_) | sts2_core::HookEffect::Draw(_),
                 ) if self.ending() => {}
-                (Listener::Relic { .. }, effect) => super::hook::apply::<V, _>(self, [effect]),
+                (Listener::Relic { slot }, effect) => self.relic_asked(slot, effect),
                 // `PowerCmd.Remove(this)`, from a power that goes with the
                 // creature that applied it.
                 (Listener::Power { owner, power, .. }, HookEffect::Remove) if owner != creature => {
@@ -2307,7 +2313,7 @@ impl<'a, V: Rules> Board<'a, V> {
         );
         for (listener, effect) in asked {
             match listener {
-                Listener::Relic { .. } => super::hook::apply::<V, _>(self, [effect]),
+                Listener::Relic { slot } => self.relic_asked(slot, effect),
                 listener => unimplemented!("{listener:?} asking for {effect:?} after Doom kills"),
             }
         }
@@ -2420,13 +2426,30 @@ impl<'a, V: Rules> Board<'a, V> {
         self.after_hit(asked);
     }
 
+    /// What the relic in `slot` asked for, carried out for the player. Its
+    /// `CardPileCmd.Draw` runs the code after its `await` once the draw is
+    /// over, behind a question the draw left.
+    pub(super) fn relic_asked(&mut self, slot: u8, effect: HookEffect<V>) {
+        let HookEffect::Draw(count) = effect else {
+            return super::hook::apply::<V, _>(self, [effect]);
+        };
+        sts2_core::Fight::draw(self, count);
+        let relic = self.relics[usize::from(slot)].relic;
+        match self.pausable() && self.live.asking.is_some() {
+            true => self
+                .live
+                .defer(super::live::Deferred::OwnCommandOver { slot, relic }),
+            false => super::relic::own_command_over::<V>(self.relics, slot, relic),
+        }
+    }
+
     /// Carry out what the powers asked for after a hit or a broken block,
     /// each on the creature carrying it.
     fn after_hit(&mut self, asked: impl IntoIterator<Item = (Listener<V>, HookEffect<V>)>) {
         for (listener, effect) in asked {
             // `CardPileCmd.Draw` for the relic's owner, the player.
-            if let (Listener::Relic { .. }, HookEffect::Draw(count)) = (listener, effect) {
-                sts2_core::Fight::draw(self, count);
+            if let (Listener::Relic { slot }, effect @ HookEffect::Draw(_)) = (listener, effect) {
+                self.relic_asked(slot, effect);
                 continue;
             }
             // `CreatureCmd.Heal` on the relic's owner, the player.
@@ -6386,6 +6409,12 @@ fn card_drawn_late<V: Rules>(
     hand_draw: bool,
     ended: Option<super::Ended>,
 ) -> Drawn {
+    // `IterateCombatHookListeners` hands a fight that is over or ending no
+    // listeners, as one an auto-play in the early pass won, which `ended`
+    // already says.
+    if ended.is_some() {
+        return Drawn::Done(ended);
+    }
     // `Hook.AfterCardDrawn`, raised for each card inside the loop rather
     // than once for the whole draw. So a card that spends the pool as it
     // arrives has spent it before the next card is taken.

@@ -34,11 +34,17 @@ impl<V: Rules> Play<V> for Sim<V> {
     type Host = ();
 
     fn begin(_: Self::Host, start: &Start<V>) -> Result<Self, Self::Error> {
-        if !start.modifiers.is_empty() {
-            unimplemented!("a run started with modifiers");
+        if let Some(modifier) = start.modifiers.iter().find(|&&m| !V::modifier_ported(m)) {
+            unimplemented!("a run started with {modifier:?}");
         }
         Ok(Self {
-            state: State::start(&start.seed, start.character, start.ascension, start.wins),
+            state: State::start(
+                &start.seed,
+                start.character,
+                start.ascension,
+                &start.modifiers,
+                start.wins,
+            ),
         })
     }
 

@@ -56,7 +56,7 @@ fn generate(seed: &str, ascension: AscensionLevel) -> String {
     let seed = Seed::new(seed).expect("a fixture's seed is a seed");
     let mut rng = sts2_core::rng::named::<V, MegaRng>(stream_seed::<V>(&seed), "act_1_map");
     let layout = V::act_layout(sts2_content::v0_107_1::acts::Act::Overgrowth);
-    render(&ActMap::<V>::generate(&mut rng, layout, ascension).unwrap())
+    render(&ActMap::<V>::generate(&mut rng, layout, ascension, false).unwrap())
 }
 
 /// The rung a fixture block names, by the game's own spelling.

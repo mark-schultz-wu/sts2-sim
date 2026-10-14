@@ -409,6 +409,19 @@ impl<V: Rules> Walker<V> {
     }
 }
 
+/// `CombatState.Contains` for a listener asked already: its creature, or its
+/// card, is still in the fight.
+pub(crate) fn still_in_fight<V: Rules>(live: &Live<V>, listener: Listener<V>) -> bool {
+    match listener {
+        Listener::Power { owner, .. }
+        | Listener::Monster {
+            creature: owner, ..
+        } => live.creatures.iter().any(|creature| creature.id == owner),
+        Listener::Card { id } => live.cards.named(id).is_some(),
+        Listener::Relic { .. } => true,
+    }
+}
+
 /// A walk partway through what one listener asked, which can park on a
 /// question one of its effects asks and go on after the answer.
 #[derive(Debug, Clone, PartialEq)]
@@ -969,6 +982,7 @@ fn first_of<V: Rules>(
                 }
                 sts2_core::Listener::Card { card, .. } => sts2_core::ModelId::Card(card),
                 sts2_core::Listener::Potion(potion) => sts2_core::ModelId::Potion(potion),
+                sts2_core::Listener::Modifier(modifier) => sts2_core::ModelId::Modifier(modifier),
                 // The relic whose model this is, which only its place on the
                 // belt names.
                 sts2_core::Listener::Relic { state, .. } => sts2_core::ModelId::Relic(

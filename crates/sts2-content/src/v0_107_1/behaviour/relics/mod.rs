@@ -659,8 +659,7 @@ pub enum State {
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
-/// pet, and neither a starter, an event relic nor an ancient's. Nothing here
-/// melts a relic.
+/// pet, and neither a starter, an event relic nor an ancient's.
 ///
 /// # Panics
 ///
@@ -678,6 +677,7 @@ pub(crate) fn tradable(held: sts2_core::CarriedRelic<V>) -> bool {
         return false;
     }
     !held.used_up
+        && !held.melted
         && [RelicFlag::UponPickup, RelicFlag::SpawnsPets]
             .into_iter()
             .all(|flag| match data.flags.get(flag) {

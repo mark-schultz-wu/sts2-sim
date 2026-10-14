@@ -1234,6 +1234,13 @@ pub trait EnchantmentTable: Copy {
     fn overrides(self) -> Overrides;
 }
 
+/// What a table says about a run modifier, beyond its row.
+pub trait ModifierTable: Copy {
+    /// The hooks this modifier's class overrides, as the hook dump measured
+    /// them. See [`PowerTable::overrides`].
+    fn overrides(self) -> Overrides;
+}
+
 /// `EnchantmentStatus`: whether an enchantment still acts, which its own
 /// `OnPlay` reads and sets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
@@ -1829,6 +1836,8 @@ pub trait AscensionKinds: std::fmt::Debug + Copy + Eq + 'static {
     const POVERTY: Self;
     /// The run opens with one potion slot fewer.
     const TIGHT_BELT: Self;
+    /// The last act fields a second boss after its first.
+    const DOUBLE_BOSS: Self;
 
     /// Whether a run at this level has the rule `rung` names.
     fn has(self, rung: Self) -> bool;
@@ -3902,6 +3911,10 @@ pub enum EventHook<V: ContentVersion> {
         /// The player's `Block`, which a relic reads off its owner.
         block: V::Number,
     },
+    /// The end of a command the model itself asked for, awaited inside its
+    /// own hook, which the code after the `await` runs on. Asked of that
+    /// model alone, even once a question inside the command is answered.
+    OwnCommandOver,
     /// `AfterObtained`, as the run picks the model up. `character` is its
     /// owner's, which a relic reads off `Owner.Character`.
     Obtained {
@@ -4475,6 +4488,7 @@ impl<V: ContentVersion> EventHook<V> {
                 ModelHook::AfterModifyingCardPlayResultPileOrPosition
             }
             EventHook::Obtained { .. }
+            | EventHook::OwnCommandOver
             | EventHook::CharacterNamed(_)
             | EventHook::Removed
             | EventHook::Applied
@@ -4918,7 +4932,9 @@ impl<V: ContentVersion> History<'_, V> {
 /// `CreatureCmd.Stun`'s `nextMoveId`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StunResume {
-    /// None named: the state the stun interrupted.
+    /// None named: `StateLog.Last()`. That is the state the stun interrupted,
+    /// unless a `SetMoveImmediate` forced that state, which writes nothing
+    /// into the log.
     Interrupted,
     /// `StateLog.Last().GetNextState`: the state the interrupted move leaves
     /// for.
@@ -6314,6 +6330,9 @@ pub enum Listener<'a, V: Hooks, P: Printed<V> + ?Sized> {
     },
     /// A potion in the belt, which the fight asks after the relics.
     Potion(V::Potion),
+    /// A modifier the run was started with, which is asked after the
+    /// potions.
+    Modifier(V::Modifier),
     Relic {
         state: &'a V::RelicState,
         /// The fight's creatures, for a relic that asks about one. Nothing
@@ -6497,6 +6516,11 @@ pub trait Hooks: ContentVersion {
         hook: EventHook<Self>,
         asked: &mut HookEffects<Self>,
     );
+
+    /// Whether this build ports every rule of `modifier`. Some rules run
+    /// from no hook the fight or the run raises, such as `AfterRunCreated`.
+    /// So a run started with a modifier this says no to panics as it begins.
+    fn modifier_ported(modifier: Self::Modifier) -> bool;
 
     /// [`Hooks::power_event_hook`] for a relic, by what its model saves.
     /// `belt` is `Owner.Relics`, itself among them.
@@ -7007,6 +7031,7 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + std::hash::Hash
         + serde::Serialize
         + serde::de::DeserializeOwned
+        + ModifierTable
         + 'static;
 
     /// One creature in a fight.

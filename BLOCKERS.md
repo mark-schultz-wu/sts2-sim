@@ -29,31 +29,7 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ## Open
 
-### 1. Double Boss
-
-The sim has not ported the last rung, `DoubleBoss`. `RunManager` draws a
-second boss for the last act off `UpFront` as it builds the run, so every
-draw after it moves too. The sim ports every other rung: recorded runs at
-each of levels 1 to 9 match, but for the splits in the next item. Recording at level 10
-waits for this one.
-
-### 2. Splits the ascension runs find
-
-`cargo xtask record --ascension <rung> --append` recorded 100 runs at each
-of levels 1 to 9. Six part from the game, each for a reason of its own:
-
-- Runs 1855 and 1955, the Queen. A token the player auto-plays kills the
-  Torch Head Amalgam, and the sim's Queen enrages. The game's Queen goes
-  on burning bright, so her `AfterDeath` there does not set her
-  `HasAmalgamDied`, or her branch has not resolved.
-- Run 1800. The run's RNG counter is one ahead of the game's as a turn
-  ends against a Slimed Berserker.
-- Run 2090. A relic's amount reads 0 in the sim and 5 in the game as
-  Synchronize is played.
-- Run 2259. The Relic Trader's trade leaves the belt in another order.
-- Run 2317. Vicious's play leaves the player two hit points short.
-
-### 3. A power the walk reaches after it came off
+### 1. A power the walk reaches after it came off
 
 `CombatState.Contains` asks of a power only whether its owner is still in
 the fight. The walk still asks a power an earlier listener took off, as a
@@ -64,7 +40,7 @@ its owner no longer carries, since it keeps no model for one taken off. No
 recorded run parts on it yet. Keeping the model for the walk needs a
 design, for Mark.
 
-### 4. Every other split the recorded runs find
+### 2. Every other split the recorded runs find
 
 `cargo xtask coverage` lists the commonest first splits, by the move
 that led to each. Each one with more than a handful of runs becomes its
@@ -72,17 +48,42 @@ own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
 
-### 5. Run modifiers
+### 3. Run modifiers: rewards and rest sites
 
-A run started with any modifier panics (`crates/sts2-sim/src/engine/sim.rs`).
-Hoarder's removal ban is one rule known to need one. Port the custom
-mode's modifiers, and record runs with each.
+Vintage, Midas and Night Terrors. They need `TryModifyRewardsLate`,
+`TryModifyRestSiteOptions`, `ModifyRestSiteHealAmount` and
+`AfterRestSiteHeal` asked of the run's modifiers, after its relics and
+potions. Record 100 runs with each.
 
-### 6. v0.111.0
+### 4. Run modifiers in a fight
+
+Murderous and Terminal. `CombatState` lists the modifiers last among its
+listeners, after the cards, so they join the fight's walk there. They
+answer `AfterRoomEntered` and `AfterCreatureAddedToCombat`. Record 100
+runs with each.
+
+### 5. Run modifiers that change the run's own rules
+
+- Deadly Events: `AfterRunCreated` sets the odds and takes Juzu Bracelet
+  out of the relic bags.
+- Cursed Run: `AfterActEntered`, which no `ModelHook` names yet.
+- Hoarder: `AfterCardChangedPiles`, with the cards it saves to skip.
+- Big Game Hunter: `ModifyGeneratedMap` and card rewards.
+- Character Cards, which names a character.
+
+Record 100 runs with each.
+
+### 6. Run modifiers at Neow
+
+All Star, Specialized, Draft, Sealed Deck and Insanity. Neow offers each
+modifier's option in turn, and three of them empty the starting deck
+first. Record 100 runs with each.
+
+### 7. v0.111.0
 
 Only the generated tables exist. Its behaviour layer has to be written,
 and its runs recorded.
-### 7. Every hook on the walk cursor
+### 8. Every hook on the walk cursor
 
 Every event hook walks with the cursor, and the eager `notify` goes. The
 cursor's snapshot costs 0.7% on the three hooks it walks now, so every
@@ -96,7 +97,13 @@ the sim asked them all first. So Pinpoint in hand counts a Defend early,
 and shows one cheaper while the pick waits. A walk that parks there, on
 the snapshot cursor, cost 2.5% a step.
 
-### 8. A speed target
+`AfterCardDrawn` needs it too. Pagestorm draws a card when an Ethereal
+one is drawn, and that draw runs before Chains of Binding hears the first.
+So the nested card is Bound first and takes the last of the stack. The
+sim asks Chains about both before either is Bound, and binds one card too
+many. Recorded run 2571, a Flight run, parts there against the Queen.
+
+### 9. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.

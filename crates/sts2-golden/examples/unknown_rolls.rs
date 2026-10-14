@@ -141,7 +141,7 @@ fn run(cli: Cli) -> Result<(), Error> {
         let acts = sts2_sim::run::run_acts::<V>(stream_seed::<V>(&start.seed));
         let mut up_front =
             sts2_core::rng::named::<V, MegaRng>(stream_seed::<V>(&start.seed), "up_front");
-        let opening = Opening::<V>::draw(&mut up_front, character, &acts);
+        let opening = Opening::<V>::draw(&mut up_front, character, &acts, start.ascension);
         let mut queue = opening.acts[0].1.events.clone();
         queue.rotate_left(1);
         let events: Vec<String> = queue
