@@ -34,6 +34,7 @@ impl<V: Rules> ActMapBuilder<V> {
             starts: Order::new(),
             boss: 0,
             ancient: 0,
+            second_boss: None,
             counts,
         };
         map.boss = map.add(MIDDLE, rows);
