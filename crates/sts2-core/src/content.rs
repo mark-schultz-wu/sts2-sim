@@ -3580,8 +3580,9 @@ pub enum DecisionHook<V: ContentVersion> {
     ShouldForcePotionReward { room: V::RoomType },
     /// `ShouldTakeExtraTurn`, once the player's turn is over. `plays` is the
     /// player's plays finished this turn that no auto-play made. One
-    /// listener answering yes keeps the turn with the player.
-    ShouldTakeExtraTurn { plays: u8 },
+    /// listener answering yes keeps the turn with the player. `turn` is the
+    /// player's `TurnNumber`.
+    ShouldTakeExtraTurn { plays: u8, turn: V::Count },
     /// `ShouldRefillMerchantEntry`, once a shelf's purchase went through. One
     /// listener answering yes restocks the shelf rather than emptying it.
     ShouldRefillMerchantEntry,
@@ -4110,6 +4111,8 @@ pub enum EventHook<V: ContentVersion> {
         /// The player's plays finished this turn that no auto-play made,
         /// which a listener reads off `CardPlaysFinished`, at most 255.
         plays: u8,
+        /// The player's `TurnNumber`.
+        turn: V::Count,
     },
     /// `AfterTakingExtraTurn`, as the player's side keeps the turn.
     TakingExtraTurn,
@@ -6297,6 +6300,8 @@ pub enum Listener<'a, V: Hooks, P: Printed<V> + ?Sized> {
         /// The fight's creatures, for a relic that asks about one. Nothing
         /// outside a fight.
         fight: Option<&'a dyn FightView<V>>,
+        /// `Owner.Relics`: the belt it sits on, itself among them.
+        belt: &'a [V::Relic],
     },
     /// A monster's own model, which the fight asks after the powers on its
     /// creature.
@@ -6475,8 +6480,10 @@ pub trait Hooks: ContentVersion {
     );
 
     /// [`Hooks::power_event_hook`] for a relic, by what its model saves.
+    /// `belt` is `Owner.Relics`, itself among them.
     fn relic_event_hook(
         state: &mut Self::RelicState,
+        belt: &[Self::Relic],
         hook: EventHook<Self>,
         asked: &mut HookEffects<Self>,
     );

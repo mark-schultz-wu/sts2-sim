@@ -358,8 +358,8 @@ fn raise<V: Rules>(
             while left != 0 {
                 let slot = left.trailing_zeros() as usize;
                 left &= left - 1;
-                let held = &mut relics[slot];
-                V::relic_event_hook(&mut held.state, hook, &mut answer);
+                let (state, belt) = relics.state_beside(slot);
+                V::relic_event_hook(state, belt, hook, &mut answer);
                 take(
                     &mut asked,
                     &mut decremented,
@@ -532,6 +532,7 @@ pub(crate) fn each<V: Rules>(
                     Heard::<V>::Relic {
                         state: &held.state,
                         fight: Some(&onlookers),
+                        belt: relics.relics(),
                     },
                     held.relic.overrides(),
                 );
@@ -658,12 +659,13 @@ pub(crate) fn ask_relic<V: Rules>(
     relic: V::Relic,
     hook: EventHook<V>,
 ) -> sts2_core::HookEffects<V> {
-    let held = relics
-        .iter_mut()
-        .find(|held| held.relic == relic)
+    let slot = relics
+        .iter()
+        .position(|held| held.relic == relic)
         .expect("the relic asked is on the belt");
+    let (state, belt) = relics.state_beside(slot);
     let mut asked = sts2_core::HookEffects::new();
-    V::relic_event_hook(&mut held.state, hook, &mut asked);
+    V::relic_event_hook(state, belt, hook, &mut asked);
     asked
 }
 

@@ -691,9 +691,10 @@ pub(crate) fn adds_pet(relic: Relic) -> bool {
     matches!(relic, Relic::Byrdpip | Relic::PaelsLegion)
 }
 
-/// Deliver a notification to one relic.
+/// Deliver a notification to one relic, which sits on `belt`.
 pub(crate) fn event_hook(
     state: &mut State,
+    belt: &[Relic],
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
@@ -943,7 +944,7 @@ pub(crate) fn event_hook(
         State::SeaGlass(state) => sea_glass::event_hook(state, hook, asked),
         State::GoldenCompass(state) => golden_compass::event_hook(state, hook, asked),
         State::PaelsLegion(state) => paels_legion::event_hook(state, hook, asked),
-        State::PaelsEye(state) => paels_eye::event_hook(state, hook, asked),
+        State::PaelsEye(state) => paels_eye::event_hook(state, belt, hook, asked),
         State::Ectoplasm => ectoplasm::event_hook(hook),
         State::SneckoEye => snecko_eye::event_hook(hook, asked),
         State::ElectricShrymp => electric_shrymp::event_hook(hook, asked),
@@ -1064,9 +1065,11 @@ pub(crate) fn event_hook(
 
 /// Ask one relic a yes-or-no question.
 ///
-/// The fight and the run ask only a relic that overrides the hook.
+/// The fight and the run ask only a relic that overrides the hook. It sits on
+/// `belt`.
 pub(crate) fn decide_hook(
     state: &State,
+    belt: &[Relic],
     hook: sts2_core::DecisionHook<V>,
 ) -> sts2_core::HookResponse<bool> {
     match state {
@@ -1083,7 +1086,7 @@ pub(crate) fn decide_hook(
         State::TheCourier => the_courier::decide_hook(hook),
         State::MiniatureTent => miniature_tent::decide_hook(hook),
         State::SilverCrucible(state) => silver_crucible::decide_hook(state, hook),
-        State::PaelsEye(state) => paels_eye::decide_hook(state, hook),
+        State::PaelsEye(state) => paels_eye::decide_hook(state, belt, hook),
         _ => match hook.model_hook() {
             Some(_) => unimplemented!("what {state:?} decides for {hook:?}"),
             None => sts2_core::HookResponse::DoesNotImplement,

@@ -7,7 +7,7 @@ mod state;
 mod travel;
 
 pub use setup::{Opening, Rarity, RelicBag, run_acts};
-pub(crate) use state::{BELT, Belt, HeldRelic, State};
+pub(crate) use state::{BELT, Belt, State};
 
 /// What one command decided, or the refusal that stopped it.
 ///

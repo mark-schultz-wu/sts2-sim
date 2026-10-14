@@ -1,0 +1,12 @@
+# Pael's Eye counts the first turn as played while its owner holds Whispering
+# Earring, which plays that turn itself. The first turn ends with no extra
+# one. The second, with no card played, exhausts the hand and earns it.
+#
+# An Eye that does not read the belt gives the extra turn after the first.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"PAELS_EYE"}
+{"cmd":"grant","relic":"WHISPERING_EARRING"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"PLATING_POWER","amount":99,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
