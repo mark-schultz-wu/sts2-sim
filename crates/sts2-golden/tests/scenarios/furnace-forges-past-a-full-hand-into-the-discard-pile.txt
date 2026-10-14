@@ -1,0 +1,17 @@
+# `ForgeCmd.Forge` adds a new Sovereign Blade through
+# `AddGeneratedCardToCombat`, which sends a card past a full hand to the
+# discard pile. The kept hand fills to ten as the turn starts, so Furnace's
+# blade lands in the discard pile.
+#
+# A forge that always puts its blade in the hand holds eleven.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"FURNACE_POWER","amount":5,"target":0}
+{"cmd":"power","power":"RETAIN_HAND_POWER","amount":1,"target":0}
+{"cmd":"power","power":"PLATING_POWER","amount":100,"target":0}
+{"cmd":"grant","card":"DEFEND_REGENT"}
+{"cmd":"grant","card":"DEFEND_REGENT"}
+{"cmd":"grant","card":"DEFEND_REGENT"}
+{"cmd":"grant","card":"DEFEND_REGENT"}
+{"cmd":"grant","card":"DEFEND_REGENT"}
+{"cmd":"end_turn"}

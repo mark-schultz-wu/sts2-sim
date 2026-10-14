@@ -63,7 +63,12 @@ an earlier listener took off is skipped. Recorded run 1045 shows it:
 Countdown's Doom sets off Sleight of Flesh, which kills the Living
 Shield, and the game never asks its Rampart. The sim asked Rampart with
 the rest before any of them acted, and the Turret Operator gains block.
-Needs a design, for Mark.
+
+The turn's start walks its listeners the same way. In recorded runs 461
+and 1008, Tools of the Trade's discard and Gambling Chip's choice stand
+the walk still. The game has not yet reached Pendulum. The
+sim counted Pendulum's turn before the question. Needs a design, for
+Mark.
 
 ### 4. Ascension
 

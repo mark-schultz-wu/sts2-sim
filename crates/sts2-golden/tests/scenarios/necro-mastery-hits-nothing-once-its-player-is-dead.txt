@@ -1,0 +1,11 @@
+# `CreatureCmd.Damage` lands nothing from a dealer with no hit points. The
+# Nibbit's hit takes Osty and the player to nothing together, before any
+# hook. Necro Mastery then answers Osty's loss with damage from the dead
+# player, so the Nibbit keeps its health.
+#
+# A damage command that reads only the death puts the Nibbit one lower.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"NECRO_MASTERY_POWER","amount":1,"target":0}
+{"cmd":"power","power":"STRENGTH_POWER","amount":100,"target":1}
+{"cmd":"end_turn"}

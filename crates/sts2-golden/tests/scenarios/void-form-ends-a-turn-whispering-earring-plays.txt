@@ -1,0 +1,28 @@
+# Void Form ends its player's turn. Whispering Earring's Vakuu plays the
+# first turn's hand while the turn is set up, and the turn ends once the
+# setup is done. The fight opens on its second turn.
+#
+# A turn's end that only a decision checks for leaves the first turn open.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","relic":"WHISPERING_EARRING"}
+{"cmd":"grant","card":"VOID_FORM"}
+{"cmd":"grant","card":"VOID_FORM"}
+{"cmd":"grant","card":"VOID_FORM"}
+{"cmd":"grant","card":"VOID_FORM"}
+{"cmd":"grant","card":"VOID_FORM"}
+{"cmd":"grant","card":"VOID_FORM"}
+{"cmd":"grant","card":"VOID_FORM"}
+{"cmd":"grant","card":"VOID_FORM"}
+{"cmd":"grant","card":"VOID_FORM"}
+{"cmd":"grant","card":"VOID_FORM"}
+{"cmd":"grant","card":"VOID_FORM"}
+{"cmd":"grant","card":"VOID_FORM"}
+{"cmd":"grant","card":"VOID_FORM"}
+{"cmd":"grant","card":"VOID_FORM"}
+{"cmd":"grant","card":"VOID_FORM"}
+{"cmd":"grant","card":"VOID_FORM"}
+{"cmd":"grant","card":"VOID_FORM"}
+{"cmd":"grant","card":"VOID_FORM"}
+{"cmd":"grant","card":"VOID_FORM"}
+{"cmd":"grant","card":"VOID_FORM"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}

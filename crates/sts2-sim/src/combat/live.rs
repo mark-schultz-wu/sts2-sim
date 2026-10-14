@@ -2463,6 +2463,15 @@ impl<V: Rules> CombatHistory<V> {
             .push(sts2_core::HistoryEntry::Attacked(monster));
     }
 
+    /// `History.EnergySpent`, in the turn the fight stands in, for a spend of
+    /// more than nothing.
+    pub(super) fn energy_spent(&mut self, amount: V::Count) {
+        if amount > num_traits::zero() {
+            self.this_turn
+                .push(sts2_core::HistoryEntry::EnergySpent(amount));
+        }
+    }
+
     /// `History.CardAfflicted`, in the turn the fight stands in.
     pub(super) fn afflicted(&mut self, affliction: V::Affliction) {
         self.this_turn

@@ -1176,6 +1176,14 @@ impl<'a, V: Rules> Board<'a, V> {
         amount: V::Number,
         unblockable: bool,
     ) {
+        // `CreatureCmd.Damage` lands nothing from a dealer with no hit points
+        // left, though its death is still to come.
+        if dealer
+            .and_then(|dealer| self.at(dealer))
+            .is_some_and(|at| self.live.creatures[at].hp <= V::Health::zero())
+        {
+            return;
+        }
         let damage = modified::<V>(self.walk(), dealer, Some(target), None, amount, false);
         self.hit(dealer, target, damage, false, unblockable, None, false);
     }
@@ -4352,20 +4360,27 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn forge(&mut self, card: V::Card, amount: V::Number) {
         self.ran_on();
-        // `ForgeCmd.Forge` creates one when the fight holds none it can reach.
-        // The exhaust pile is not one it can reach, and is forged all the same.
+        // `ForgeCmd.Forge` does nothing in a fight that is over or ending.
+        if self.over() {
+            return;
+        }
+        // It creates one when the fight holds none it can reach. The exhaust
+        // pile is not one it can reach, and is forged all the same. A full
+        // hand sends the new one to the discard pile.
         let held = self
             .live
             .cards
             .any_outside_exhaust(|held| held.ident.card == card);
         let created = (!held).then(|| {
             let id = self.live.card_ids.mint();
+            let full = self.live.cards.len(Pile::Hand) >= super::pile::MAX_CARDS_IN_HAND;
+            let pile = if full { Pile::Discard } else { Pile::Hand };
+            let index = num_traits::NumCast::from(self.live.cards.len(pile))
+                .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
             self.live
                 .cards
-                .push(Pile::Hand, CardInstance::new(CardIdent::new(card), id));
-            let index = num_traits::NumCast::from(self.live.cards.len(Pile::Hand) - 1)
-                .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
-            CardAt::new(id, Pile::Hand, index)
+                .push(pile, CardInstance::new(CardIdent::new(card), id));
+            CardAt::new(id, pile, index)
         });
         // `IncreaseSovereignBladeDamage`, over `AllCards`: every copy, in
         // every pile, the one being played among them.
