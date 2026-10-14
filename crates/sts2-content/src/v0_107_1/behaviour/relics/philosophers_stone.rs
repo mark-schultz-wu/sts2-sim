@@ -34,6 +34,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
             target: creature,
             power: Power::StrengthPower,
             amount: strength,
+            applier: None,
         }),
         _ => {}
     }

@@ -1843,13 +1843,13 @@ impl<'a, V: Rules> Board<'a, V> {
                     self.roll_joined(id);
                     self.enemy_added(id);
                 }
-                // `PowerCmd.Apply` from nobody, which the Possess powers
-                // hand back with.
+                // `PowerCmd.Apply`, which the Possess powers hand back with.
                 sts2_core::HookEffect::ApplyPower {
                     target,
                     power,
                     amount,
-                } => self.land(target, power, amount, None),
+                    applier,
+                } => self.land(target, power, amount, applier),
                 sts2_core::HookEffect::PerformDeath(power) => {
                     V::perform_power_death(power, id, self)
                 }
@@ -2346,12 +2346,12 @@ impl<'a, V: Rules> Board<'a, V> {
         for (listener, effect) in super::listen::notify::<V>(self.live, self.relics, hook) {
             match effect {
                 HookEffect::SetEnemiesHp { creature, hp } => self.set_enemies_hp(creature, hp),
-                // `PowerCmd.Apply` from nobody.
                 HookEffect::ApplyPower {
                     target,
                     power,
                     amount,
-                } => self.land(target, power, amount, None),
+                    applier,
+                } => self.land(target, power, amount, applier),
                 effect => unimplemented!("{listener:?} asking for {effect:?} as an enemy arrives"),
             }
         }
@@ -2408,18 +2408,17 @@ impl<'a, V: Rules> Board<'a, V> {
                 self.land(player, power, amount, Some(player));
                 continue;
             }
-            // `PowerCmd.Apply` from the relic's owner, the player.
             if let (
                 Listener::Relic { .. },
                 HookEffect::ApplyPower {
                     target,
                     power,
                     amount,
+                    applier,
                 },
             ) = (listener, effect)
             {
-                let player = self.live.player().id;
-                self.land(target, power, amount, Some(player));
+                self.land(target, power, amount, applier);
                 continue;
             }
             let Listener::Power {
@@ -2471,7 +2470,8 @@ impl<'a, V: Rules> Board<'a, V> {
                     target,
                     power,
                     amount,
-                } => self.land(target, power, amount, Some(owner)),
+                    applier,
+                } => self.land(target, power, amount, applier),
                 HookEffect::LoseMaxHpOf { target, amount } => {
                     sts2_core::Fight::lose_max_hp(self, target, amount)
                 }

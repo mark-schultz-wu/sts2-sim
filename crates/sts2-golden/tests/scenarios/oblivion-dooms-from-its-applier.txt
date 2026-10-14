@@ -1,0 +1,12 @@
+# `OblivionPower` applies its Doom from its applier, the player who played
+# Oblivion. Shroud gives block for Doom its owner applies, so the Defend
+# played after Oblivion blocks five and Shroud's three.
+#
+# A Doom applied from nobody leaves the block at five.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"SHROUD_POWER","amount":3,"target":0}
+{"cmd":"grant","card":"OBLIVION"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"grant","card":"DEFEND_NECROBINDER"}
+{"cmd":"play_card","index":5}

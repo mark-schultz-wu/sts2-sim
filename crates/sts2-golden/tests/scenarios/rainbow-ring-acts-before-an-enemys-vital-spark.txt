@@ -1,0 +1,15 @@
+# `Hook.AfterCardPlayed` walks its listeners in order, and each acts as the
+# walk reaches it. Rainbow Ring's Strength lands before the Tainted the
+# Nibbit's Vital Spark gives, so the player's Strength stands first.
+#
+# A walk that lands a power's own effects before the rest puts Tainted first.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","relic":"RAINBOW_RING"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"VITAL_SPARK_POWER","amount":4,"target":1}
+{"cmd":"grant","card":"FOOTWORK"}
+{"cmd":"play_card","index":7}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"grant","card":"DEFLECT"}
+{"cmd":"play_card","index":7}

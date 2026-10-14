@@ -1,0 +1,13 @@
+# `OnPlayWrapper` returns once its owner is dead, after an enchantment's
+# play as after the card's. Poison leaves the player two hit points, and a
+# Corrupted Strike takes them. The Strike stays in the play pile.
+#
+# A play that goes on to its cleanup sends the Strike to the discard pile.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"PLATING_POWER","amount":100,"target":0}
+{"cmd":"power","power":"POISON_POWER","amount":64,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"STRIKE_NECROBINDER"}
+{"cmd":"enchant","enchantment":"CORRUPTED","amount":1,"index":5}
+{"cmd":"play_card","index":5,"target":1}

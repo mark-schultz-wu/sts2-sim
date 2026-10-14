@@ -25,6 +25,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
                 target,
                 power: Power::VulnerablePower,
                 amount: PowerAmount::Counted(VULNERABLE),
+                applier: Some(player),
             });
         }
         EventHook::DamageGiven { .. } | EventHook::Obtained { .. } => {}
