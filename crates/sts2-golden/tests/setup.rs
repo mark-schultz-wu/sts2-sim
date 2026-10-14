@@ -135,7 +135,12 @@ fn setting_up_a_run_draws_what_the_game_drew() {
     let mut rng = sts2_core::rng::named::<V, MegaRng>(stream_seed::<V>(&seed), "up_front");
 
     let acts = sts2_sim::run::run_acts::<V>(stream_seed::<V>(&seed));
-    let opening = Opening::<V>::draw(&mut rng, Character::Regent, &acts);
+    let opening = Opening::<V>::draw(
+        &mut rng,
+        Character::Regent,
+        &acts,
+        sts2_content::v0_107_1::ascension::AscensionLevel::None,
+    );
 
     let mut report = String::new();
     for (act, rooms) in &opening.acts {

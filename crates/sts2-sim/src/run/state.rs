@@ -913,12 +913,13 @@ impl<V: Rules> State<V> {
         act: V::Act,
         index: usize,
         ascension: V::AscensionLevel,
+        second_boss: bool,
     ) -> ActMap<V> {
         let named = MAP_STREAMS
             .get(index)
             .unwrap_or_else(|| unimplemented!("the map stream a run's act {index} draws from"));
         let mut rng: MegaRng = sts2_core::rng::named::<V, _>(raw_seed, named);
-        ActMap::<V>::generate(&mut rng, V::act_layout(act), ascension)
+        ActMap::<V>::generate(&mut rng, V::act_layout(act), ascension, second_boss)
             .expect("an act's layout fits a packed map path")
     }
 
@@ -930,7 +931,14 @@ impl<V: Rules> State<V> {
     /// A deck card that changes the map, or a relic asking for anything but
     /// a map of its own.
     fn generate_map(&mut self, act: V::Act) -> ActMap<V> {
-        let mut map = Self::act_map(self.shared.raw_seed, act, self.act, self.ascension());
+        let second_boss = self.shared.opening.acts[self.act].1.second_boss.is_some();
+        let mut map = Self::act_map(
+            self.shared.raw_seed,
+            act,
+            self.act,
+            self.ascension(),
+            second_boss,
+        );
         // `IterateHookListeners` walks the deck's cards ahead of the relics.
         let cards: Vec<V::Card> = self
             .deck_cards_hearing(sts2_core::ModelHook::ModifyGeneratedMap)
@@ -1049,9 +1057,15 @@ impl<V: Rules> State<V> {
         let raw_seed = stream_seed::<V>(seed);
         let acts = super::setup::run_acts::<V>(raw_seed);
         let mut streams = Streams::<V>::opening(raw_seed);
-        let opening = Opening::draw(streams.run(V::RunRngType::UP_FRONT), character, &acts);
+        let opening = Opening::draw(
+            streams.run(V::RunRngType::UP_FRONT),
+            character,
+            &acts,
+            ascension,
+        );
 
-        let map = Self::act_map(raw_seed, acts[0], 0, ascension);
+        let second_boss = opening.acts[0].1.second_boss.is_some();
+        let map = Self::act_map(raw_seed, acts[0], 0, ascension, second_boss);
         let at = map
             .ancient()
             .expect("a generated act map opens somewhere")
@@ -1746,6 +1760,17 @@ impl<V: Rules> State<V> {
     /// Which act the run stands in, counted from zero.
     pub(super) fn act(&self) -> usize {
         self.act
+    }
+
+    /// Whether the run stands on a boss point that leads on to another, which
+    /// is `SecondBossMapPoint != null && CurrentMapCoord == BossMapPoint.coord`.
+    fn boss_ahead(&self) -> bool {
+        use sts2_core::{ActMap as _, MapPointKinds as _};
+
+        self.visited
+            .last()
+            .and_then(|&at| self.map.at(at).ok())
+            .is_some_and(|here| here.kind == V::MapPointType::BOSS && !here.to.is_empty())
     }
 
     /// `CurrentActIndex >= Acts.Count - 1`: whether the run stands in its
@@ -5054,13 +5079,21 @@ impl<V: Rules> State<V> {
             .copied()
     }
 
-    /// The one boss an act rolled, which is the fight out of it.
+    /// `RoomSet.NextBossEncounter`: the boss an act rolled, or its second
+    /// once a boss room is behind the run in this act.
     pub(super) fn boss_encounter(&self, act: usize) -> Option<V::Encounter> {
-        self.shared
-            .opening
-            .acts
-            .get(act)
-            .map(|(_, rooms)| rooms.boss)
+        use sts2_core::{ActMap as _, MapPointKinds as _};
+
+        let (_, rooms) = self.shared.opening.acts.get(act)?;
+        let fought = self.visited.iter().any(|&at| {
+            self.map
+                .at(at)
+                .is_ok_and(|node| node.kind == V::MapPointType::BOSS)
+        });
+        Some(match (fought, rooms.second_boss) {
+            (true, Some(second)) => second,
+            _ => rooms.boss,
+        })
     }
 
     pub(crate) fn choose(&mut self, index: u8) -> Result<Decided, Error> {
@@ -6473,10 +6506,15 @@ impl<V: Rules> State<V> {
     /// leaving one is not a move.
     /// `MapLegality.CanProceed`: the run stands in a boss room, and its fight
     /// is over. The room is the fight's, wherever on the map it was fought.
+    ///
+    /// The first of two bosses is not a way out: travel to the second is.
     fn can_proceed(&self) -> bool {
         let Phase::Rewards { combat, .. } = &self.phase else {
             return false;
         };
+        if self.boss_ahead() {
+            return false;
+        }
         // `ProceedFromTerminalRewardsScreen` goes back to the event.
         if self.resuming.is_some() {
             return true;

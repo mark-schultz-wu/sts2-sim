@@ -108,12 +108,15 @@ impl<V: Rules> ActMap<V> {
     /// Never inlined, so a profile can name it. All a map costs runs under it.
     #[tracing::instrument(level = "trace", skip_all)]
     #[inline(never)]
+    ///
+    /// `second_boss` is the last act's at Double Boss, a row past the first.
     pub fn generate<R: GameRng>(
         rng: &mut R,
         layout: Layout,
         ascension: V::AscensionLevel,
+        second_boss: bool,
     ) -> Result<Self, Error> {
-        Ok(ActMapBuilder::<V>::generate(rng, layout, ascension)?.into())
+        Ok(ActMapBuilder::<V>::generate(rng, layout, ascension, second_boss)?.into())
     }
 
     /// Generate the Spoils map, which is `SpoilsActMap`, off the run's
@@ -221,6 +224,9 @@ struct ActMapBuilder<V: Rules> {
     starts: Order<Id>,
     boss: Id,
     ancient: Id,
+    /// `SecondBossMapPoint`, a row past the boss, for the last act of a run at
+    /// Double Boss.
+    second_boss: Option<Id>,
     counts: types::Counts,
 }
 
@@ -230,12 +236,23 @@ impl<V: Rules> ActMapBuilder<V> {
         rng: &mut R,
         layout: Layout,
         ascension: V::AscensionLevel,
+        second_boss: bool,
     ) -> Result<Self, Error> {
         let mut map = Self::dealt(rng, layout, ascension);
         prune::prune_and_repair(&mut map, rng)?;
         tidy::center(&mut map);
         tidy::spread(&mut map);
         tidy::straighten(&mut map);
+        // The game makes it with the boss and links it as the paths are
+        // walked. It sits outside the grid, which is all pruning and tidying
+        // read, so adding it once they are done leaves every draw where it
+        // was.
+        if second_boss {
+            let id = map.add(COLS / 2, map.rows + 1);
+            map.points[id].kind = V::MapPointType::BOSS;
+            map.link(map.boss, id);
+            map.second_boss = Some(id);
+        }
         Ok(map)
     }
 
@@ -251,6 +268,7 @@ impl<V: Rules> ActMapBuilder<V> {
             starts: Order::new(),
             boss: 0,
             ancient: 0,
+            second_boss: None,
             counts,
         };
 
@@ -289,10 +307,11 @@ impl<V: Rules> ActMapBuilder<V> {
             }
         };
         let mut nodes = Vec::with_capacity(self.points.len());
-        for row in 0..=self.rows {
+        let outside = [Some(self.ancient), Some(self.boss), self.second_boss];
+        for row in 0..=self.rows + 1 {
             for col in 0..COLS {
                 nodes.extend(self.cell(col, row).map(node));
-                for id in [self.ancient, self.boss] {
+                for id in outside.into_iter().flatten() {
                     if (self.points[id].col, self.points[id].row) == (col, row) {
                         nodes.push(node(id));
                     }
@@ -499,7 +518,7 @@ mod tests {
         let seed = Seed::new("0RACLE1").expect("the fixture's seed is a seed");
         let mut rng: MegaRng = sts2_core::rng::named::<V, _>(stream_seed::<V>(&seed), "act_1_map");
         let layout = <V as Rules>::act_layout(sts2_content::v0_107_1::acts::Act::Overgrowth);
-        ActMap::<V>::generate(&mut rng, layout, AscensionLevel::None)
+        ActMap::<V>::generate(&mut rng, layout, AscensionLevel::None, false)
             .expect("the fixture's map generates")
     }
 

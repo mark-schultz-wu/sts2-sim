@@ -1829,6 +1829,8 @@ pub trait AscensionKinds: std::fmt::Debug + Copy + Eq + 'static {
     const POVERTY: Self;
     /// The run opens with one potion slot fewer.
     const TIGHT_BELT: Self;
+    /// The last act fields a second boss after its first.
+    const DOUBLE_BOSS: Self;
 
     /// Whether a run at this level has the rule `rung` names.
     fn has(self, rung: Self) -> bool;

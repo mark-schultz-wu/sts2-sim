@@ -139,10 +139,22 @@ public static class MapLegality
     /// A fight the player died in is over too, and shows the game over screen
     /// rather than rewards. So a dead player proceeds nowhere, which is the
     /// game's <c>IsGameOver</c>.
+    ///
+    /// The first of two bosses is not a way out. Its button only calls
+    /// <c>ProceedFromTerminalRewardsScreen</c>, which opens the map and changes
+    /// nothing in the run, so the move it leads to is travel to the second.
+    /// Headless, that call opens no map, and a proceed there left the run
+    /// standing still for good.
     /// </remarks>
     public static bool CanProceed(RunState state)
     {
         if (!state.Players[0].Creature.IsAlive)
+        {
+            return false;
+        }
+
+        ActMap map = state.Map;
+        if (map.SecondBossMapPoint != null && state.CurrentMapCoord == map.BossMapPoint.coord)
         {
             return false;
         }

@@ -1001,9 +1001,9 @@ internal static class Protocol
     /// legal.
     ///
     /// The rule is <c>NRewardsScreen.OnProceedButtonPressed</c>'s, which is the
-    /// only place the game decides it. Two branches, and the order matters: an
-    /// act with a second boss goes to that boss rather than to the next act, and
-    /// it is the same button either way.
+    /// only place the game decides it. The first of two bosses leads to the
+    /// second by travel instead, which <see cref="MapLegality.CanProceed"/>
+    /// says.
     ///
     /// Deliberately not a room option. It is available exactly when a boss room
     /// is finished, which is a property of the run rather than a list the room
@@ -1024,12 +1024,7 @@ internal static class Protocol
             return;
         }
 
-        ActMap map = _state.Map;
         if (MapLegality.ResumesEvent(_state))
-        {
-            await RunManager.Instance.ProceedFromTerminalRewardsScreen();
-        }
-        else if (map.SecondBossMapPoint != null && _state.CurrentMapCoord == map.BossMapPoint.coord)
         {
             await RunManager.Instance.ProceedFromTerminalRewardsScreen();
         }
