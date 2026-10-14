@@ -153,6 +153,8 @@ struct RunData<V: Rules> {
     raw_seed: u64,
     character: V::Character,
     ascension: V::AscensionLevel,
+    /// `RunState.Modifiers`, in the order the run was started with them.
+    modifiers: Vec<V::Modifier>,
     /// See [`sts2_core::Start::wins`].
     wins: u32,
 }
@@ -813,7 +815,11 @@ impl<V: Rules> Phase<V> {
     /// way.
     fn finished(&self) -> bool {
         match self {
-            Phase::Neow { chosen, asking, .. } => chosen.is_some() && asking.is_none(),
+            Phase::Neow {
+                options,
+                chosen,
+                asking,
+            } => (chosen.is_some() || options.is_empty()) && asking.is_none(),
             Phase::Treasure { finished, .. } => *finished,
             Phase::RestSite { options, .. } => options.is_empty(),
             // A merchant never runs out. The run leaves when it decides to,
@@ -1052,6 +1058,7 @@ impl<V: Rules> State<V> {
         seed: &Seed,
         character: V::Character,
         ascension: V::AscensionLevel,
+        modifiers: &[V::Modifier],
         wins: u32,
     ) -> Self {
         let raw_seed = stream_seed::<V>(seed);
@@ -1071,8 +1078,16 @@ impl<V: Rules> State<V> {
             .expect("a generated act map opens somewhere")
             .at;
 
-        let mut neow_rng: MegaRng = Blessing::<V>::stream(raw_seed, 0);
-        let neow_options = Blessing::<V>::roll(&mut neow_rng, 1).options;
+        // `Neow.GenerateInitialOptions`: a run with modifiers is offered what
+        // they put in front of it instead, and no ported modifier offers
+        // anything. Nothing offered leaves the event finished.
+        let neow_options = match modifiers.is_empty() {
+            true => {
+                let mut neow_rng: MegaRng = Blessing::<V>::stream(raw_seed, 0);
+                Blessing::<V>::roll(&mut neow_rng, 1).options
+            }
+            false => Default::default(),
+        };
 
         let mut player = Player {
             relics: V::starting_relics(character)
@@ -1112,6 +1127,7 @@ impl<V: Rules> State<V> {
                 raw_seed,
                 character,
                 ascension,
+                modifiers: modifiers.to_vec(),
                 wins,
             }),
             map: Arc::new(map),
@@ -6429,8 +6445,8 @@ impl<V: Rules> State<V> {
         forced
     }
 
-    /// `Hook.ShouldAllowFreeTravel`, which any relic on the belt can answer
-    /// yes to.
+    /// `Hook.ShouldAllowFreeTravel`, which any relic on the belt or any
+    /// modifier can answer yes to.
     fn free_travel(&self) -> bool {
         let hook = sts2_core::DecisionHook::ShouldAllowFreeTravel;
         let hooks = sts2_core::Overrides::of(sts2_core::ModelHook::ShouldAllowFreeTravel);
@@ -6448,6 +6464,14 @@ impl<V: Rules> State<V> {
                 hook,
             )
             .is_decision_and(|allowed| allowed);
+        }
+        for &modifier in &self.shared.modifiers {
+            if sts2_core::ModifierTable::overrides(modifier)
+                .contains(sts2_core::ModelHook::ShouldAllowFreeTravel)
+            {
+                free |= V::decide_hook(crate::combat::Heard::<V>::Modifier(modifier), hook)
+                    .is_decision_and(|allowed| allowed);
+            }
         }
         free
     }
@@ -7115,6 +7139,7 @@ mod tests {
             &Seed::new("0RACLE1").expect("the fixture's seed is a seed"),
             Character::Regent,
             AscensionLevel::None,
+            &[],
             0,
         )
     }

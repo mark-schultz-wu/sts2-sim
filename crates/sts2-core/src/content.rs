@@ -1234,6 +1234,13 @@ pub trait EnchantmentTable: Copy {
     fn overrides(self) -> Overrides;
 }
 
+/// What a table says about a run modifier, beyond its row.
+pub trait ModifierTable: Copy {
+    /// The hooks this modifier's class overrides, as the hook dump measured
+    /// them. See [`PowerTable::overrides`].
+    fn overrides(self) -> Overrides;
+}
+
 /// `EnchantmentStatus`: whether an enchantment still acts, which its own
 /// `OnPlay` reads and sets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
@@ -6323,6 +6330,9 @@ pub enum Listener<'a, V: Hooks, P: Printed<V> + ?Sized> {
     },
     /// A potion in the belt, which the fight asks after the relics.
     Potion(V::Potion),
+    /// A modifier the run was started with, which is asked after the
+    /// potions.
+    Modifier(V::Modifier),
     Relic {
         state: &'a V::RelicState,
         /// The fight's creatures, for a relic that asks about one. Nothing
@@ -6506,6 +6516,11 @@ pub trait Hooks: ContentVersion {
         hook: EventHook<Self>,
         asked: &mut HookEffects<Self>,
     );
+
+    /// Whether this build ports every rule of `modifier`. Some rules run
+    /// from no hook the fight or the run raises, such as `AfterRunCreated`.
+    /// So a run started with a modifier this says no to panics as it begins.
+    fn modifier_ported(modifier: Self::Modifier) -> bool;
 
     /// [`Hooks::power_event_hook`] for a relic, by what its model saves.
     /// `belt` is `Owner.Relics`, itself among them.
@@ -7016,6 +7031,7 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + std::hash::Hash
         + serde::Serialize
         + serde::de::DeserializeOwned
+        + ModifierTable
         + 'static;
 
     /// One creature in a fight.

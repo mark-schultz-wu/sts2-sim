@@ -337,3 +337,55 @@ pub const EXCLUSIVE: [ModifierSet; 1] = [ModifierSet::new(&[
     Modifier::Insanity,
     Modifier::SealedDeck,
 ])];
+
+/// The hooks each class overrides, from `hooks.txt`, indexed by the modifier's discriminant.
+static OVERRIDES: [sts2_core::Overrides; 17] = [
+    // ALL_STAR
+    sts2_core::Overrides::NONE,
+    // BIG_GAME_HUNTER
+    sts2_core::Overrides::NONE
+        .with(sts2_core::ModelHook::ModifyCardRewardCreationOptions)
+        .with(sts2_core::ModelHook::ModifyGeneratedMap),
+    // CHARACTER_CARDS
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ModifyCardRewardCreationOptions),
+    // CURSED_RUN
+    sts2_core::Overrides::NONE,
+    // DEADLY_EVENTS
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ModifyOddsIncreaseForUnrolledRoomType),
+    // DEPRECATED_MODIFIER
+    sts2_core::Overrides::NONE,
+    // DRAFT
+    sts2_core::Overrides::NONE,
+    // FLIGHT
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ShouldAllowFreeTravel),
+    // HOARDER
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardChangedPiles),
+    // INSANITY
+    sts2_core::Overrides::NONE,
+    // MIDAS
+    sts2_core::Overrides::NONE
+        .with(sts2_core::ModelHook::TryModifyRestSiteOptions)
+        .with(sts2_core::ModelHook::TryModifyRewardsLate),
+    // MURDEROUS
+    sts2_core::Overrides::NONE
+        .with(sts2_core::ModelHook::AfterCreatureAddedToCombat)
+        .with(sts2_core::ModelHook::AfterRoomEntered),
+    // NIGHT_TERRORS
+    sts2_core::Overrides::NONE
+        .with(sts2_core::ModelHook::AfterRestSiteHeal)
+        .with(sts2_core::ModelHook::ModifyRestSiteHealAmount),
+    // SEALED_DECK
+    sts2_core::Overrides::NONE,
+    // SPECIALIZED
+    sts2_core::Overrides::NONE,
+    // TERMINAL
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterRoomEntered),
+    // VINTAGE
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::TryModifyRewardsLate),
+];
+
+impl sts2_core::ModifierTable for Modifier {
+    fn overrides(self) -> sts2_core::Overrides {
+        OVERRIDES[self as usize]
+    }
+}

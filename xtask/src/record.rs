@@ -47,6 +47,10 @@ pub struct Args {
     /// with.
     #[arg(long, default_value = "None")]
     ascension: String,
+    /// The modifiers every run starts with, by the ids the game spells them
+    /// with, such as `FLIGHT`.
+    #[arg(long, value_delimiter = ',')]
+    modifiers: Vec<String>,
     /// Add the runs to those `out` already holds, rather than replace them.
     /// Both have to come from one build of the game.
     #[arg(long)]
@@ -67,8 +71,10 @@ pub fn run(args: Args) -> Result<String, crate::error::ProcessError> {
         width,
         out,
         ascension,
+        modifiers,
         append,
     } = args;
+    let setup = setup(ascension, &modifiers);
     if characters.is_empty() {
         characters = CHARACTERS.iter().map(|c| c.to_string()).collect();
     }
@@ -97,13 +103,12 @@ pub fn run(args: Args) -> Result<String, crate::error::ProcessError> {
     std::thread::scope(|scope| {
         for worker in 0..width.max(1) {
             let home = scratch.join(format!("home{worker}"));
-            let (jobs, next, retried, failed, recorder, scratch, ascension) = (
-                &jobs, &next, &retried, &failed, &recorder, &scratch, &ascension,
-            );
+            let (jobs, next, retried, failed, recorder, scratch, setup) =
+                (&jobs, &next, &retried, &failed, &recorder, &scratch, &setup);
             scope.spawn(move || {
                 while let Some((seed, character)) = jobs.get(next.fetch_add(1, Ordering::Relaxed)) {
                     let at = run_file(scratch, character, seed);
-                    let run = (seed.as_str(), character.as_str(), ascension.as_str());
+                    let run = (seed.as_str(), character.as_str(), setup.as_slice());
                     if let Err(why) = record_one(recorder, run, &at, &home, retried) {
                         failed.lock().expect("no thread panics").push(Failed {
                             seed: seed.clone(),
@@ -159,10 +164,20 @@ fn run_file(scratch: &Path, character: &str, seed: &str) -> PathBuf {
     scratch.join("runs").join(format!("{character}-{seed}.bin"))
 }
 
+/// The runner's flags for a run at `ascension` with `modifiers`, which
+/// `record_run` and `random_run` both read.
+pub(crate) fn setup(ascension: String, modifiers: &[String]) -> Vec<String> {
+    let mut setup = vec!["--ascension".to_owned(), ascension];
+    if !modifiers.is_empty() {
+        setup.extend(["--modifiers".to_owned(), modifiers.join(",")]);
+    }
+    setup
+}
+
 /// Plays one run, again after a crash, and says why it failed if it did.
 fn record_one(
     recorder: &Path,
-    (seed, character, ascension): (&str, &str, &str),
+    (seed, character, setup): (&str, &str, &[String]),
     out: &Path,
     home: &Path,
     retried: &AtomicUsize,
@@ -174,7 +189,7 @@ fn record_one(
         let output = Command::new(recorder)
             .args([seed, character])
             .arg(out)
-            .args(["--ascension", ascension])
+            .args(setup)
             .arg("--data-home")
             .arg(home)
             .output()

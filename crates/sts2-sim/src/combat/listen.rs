@@ -982,6 +982,7 @@ fn first_of<V: Rules>(
                 }
                 sts2_core::Listener::Card { card, .. } => sts2_core::ModelId::Card(card),
                 sts2_core::Listener::Potion(potion) => sts2_core::ModelId::Potion(potion),
+                sts2_core::Listener::Modifier(modifier) => sts2_core::ModelId::Modifier(modifier),
                 // The relic whose model this is, which only its place on the
                 // belt names.
                 sts2_core::Listener::Relic { state, .. } => sts2_core::ModelId::Relic(
