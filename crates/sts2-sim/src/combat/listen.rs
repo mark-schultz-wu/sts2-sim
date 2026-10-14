@@ -145,26 +145,48 @@ pub(crate) fn notify<V: Rules>(
     }
 }
 
-/// `Hook`'s walk over a hook's listeners: a snapshot of them, each asked as
-/// the walk reaches it.
+/// How a walk finds its listeners: the list `IterateHookListeners` takes as
+/// the walk begins, handed out one at a time.
+///
+/// A cursor only says which listener comes next. [`Walker`] asks whether it
+/// is still in the fight, and asks it. A cursor need take no list at all,
+/// so long as it hands out what the list held, in its order.
+pub(crate) trait Cursor<V: Rules>: std::fmt::Debug + Clone + PartialEq {
+    /// The listeners that override `hook`, as the fight stands.
+    fn begin(live: &Live<V>, relics: &Belt<V>, hook: ModelHook) -> Self;
+
+    /// The next listener the list held, or nothing past its end.
+    fn next(&mut self, live: &Live<V>, relics: &Belt<V>) -> Option<Snapped<V>>;
+}
+
+/// The cursor every walk uses.
+pub(crate) type Active<V> = Snapshot<V>;
+
+/// `Hook`'s walk over a hook's listeners, each asked as the walk reaches it.
 ///
 /// What a listener asks for lands before the next is asked, which the caller
 /// sees to between calls to [`Walker::next`]. The walk asks `Contains(item)`
 /// of each, so one whose creature or card left the fight is skipped.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct Walker<V: Rules> {
+pub(crate) struct Walker<V: Rules, C: Cursor<V> = Active<V>> {
     hook: EventHook<V>,
-    listeners: SmallVec<[Snapped<V>; 8]>,
-    next: usize,
+    cursor: C,
     /// What a listener asked from its decrement on, which waits for what
     /// came before to land, and the listener that asked it.
     pending: sts2_core::HookEffects<V>,
     pending_from: Option<Listener<V>>,
 }
 
-/// One listener in a walk's snapshot.
+/// The reference cursor: the whole list, taken as the walk begins.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Snapshot<V: Rules> {
+    listeners: SmallVec<[Snapped<V>; 8]>,
+    next: usize,
+}
+
+/// One listener as a cursor found it.
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum Snapped<V: Rules> {
+pub(crate) enum Snapped<V: Rules> {
     Power {
         owner: CombatId,
         instance: super::live::PowerInstance,
@@ -191,17 +213,55 @@ enum Snapped<V: Rules> {
 ///
 /// # Panics
 ///
-/// A hook that is not one `AbstractModel` declares, or one a potion hears.
+/// A hook that is not one `AbstractModel` declares.
 pub(crate) fn walk<V: Rules>(live: &Live<V>, relics: &Belt<V>, hook: EventHook<V>) -> Walker<V> {
     let model_hook = hook
         .model_hook()
         .unwrap_or_else(|| unreachable!("{hook:?} is asked of one model, not raised"));
+    Walker {
+        hook,
+        cursor: Active::begin(live, relics, model_hook),
+        pending: sts2_core::HookEffects::new(),
+        pending_from: None,
+    }
+}
+
+impl<V: Rules> Cursor<V> for Snapshot<V> {
+    /// # Panics
+    ///
+    /// A potion hearing `hook`.
+    fn begin(live: &Live<V>, relics: &Belt<V>, model_hook: ModelHook) -> Self {
+        Snapshot {
+            listeners: snapshot(live, relics, model_hook),
+            next: 0,
+        }
+    }
+
+    fn next(&mut self, _: &Live<V>, _: &Belt<V>) -> Option<Snapped<V>> {
+        let snapped = self.listeners.get(self.next).copied()?;
+        self.next += 1;
+        Some(snapped)
+    }
+}
+
+/// `IterateHookListeners` over the listeners that override `model_hook`, in
+/// its order. That is each creature in turn: its powers, then its monster,
+/// and for the player the belt and the cards.
+///
+/// # Panics
+///
+/// A potion hearing `model_hook`.
+fn snapshot<V: Rules>(
+    live: &Live<V>,
+    relics: &Belt<V>,
+    model_hook: ModelHook,
+) -> SmallVec<[Snapped<V>; 8]> {
     let hooks = Overrides::of(model_hook);
     let mut listeners = SmallVec::new();
     if let Some(kinds) = Kinds::hearing(live, relics, hooks) {
         // A potion overrides only hooks the fight asks of it alone.
         if kinds.potions {
-            unimplemented!("a potion hearing {hook:?}");
+            unimplemented!("a potion hearing {}", model_hook.name());
         }
         for (creature_at, creature) in live.creatures.iter().enumerate() {
             if kinds.powers {
@@ -247,16 +307,10 @@ pub(crate) fn walk<V: Rules>(live: &Live<V>, relics: &Belt<V>, hook: EventHook<V
             }
         }
     }
-    Walker {
-        hook,
-        listeners,
-        next: 0,
-        pending: sts2_core::HookEffects::new(),
-        pending_from: None,
-    }
+    listeners
 }
 
-impl<V: Rules> Walker<V> {
+impl<V: Rules, C: Cursor<V>> Walker<V, C> {
     /// The hook as the listeners still to come are handed it, where what it
     /// carries is read off the fight as each is reached.
     pub(crate) fn rehook(&mut self, hook: EventHook<V>) {
@@ -293,8 +347,7 @@ impl<V: Rules> Walker<V> {
             return Some(listener);
         }
         let hook = self.hook;
-        while let Some(&snapped) = self.listeners.get(self.next) {
-            self.next += 1;
+        while let Some(snapped) = self.cursor.next(live, relics) {
             let listener = match snapped {
                 Snapped::Power {
                     owner,
