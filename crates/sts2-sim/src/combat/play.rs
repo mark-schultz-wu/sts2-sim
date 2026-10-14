@@ -1857,6 +1857,11 @@ fn finished<V: Rules, S: LendsCombat>(
     if !asked.is_empty() {
         // Each listener acts as the walk reaches it.
         for (listener, effect) in asked {
+            // `Contains`: one whose creature or card left the fight as an
+            // earlier listener acted does nothing. What it kept leaves with it.
+            if !super::listen::still_in_fight::<V>(next, listener) {
+                continue;
+            }
             match (listener, effect) {
                 // Written on the card that asked, wherever it stands.
                 (

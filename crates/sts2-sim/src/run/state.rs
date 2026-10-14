@@ -6924,6 +6924,7 @@ impl<V: Rules> sts2_core::EventView<V> for State<V> {
             .map(|held| sts2_core::CarriedRelic {
                 relic: held.relic,
                 used_up: held.state.used_up(held.relic),
+                melted: held.melted,
             })
     }
 

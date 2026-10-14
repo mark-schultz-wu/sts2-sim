@@ -6386,6 +6386,12 @@ fn card_drawn_late<V: Rules>(
     hand_draw: bool,
     ended: Option<super::Ended>,
 ) -> Drawn {
+    // `IterateCombatHookListeners` hands a fight that is over or ending no
+    // listeners, as one an auto-play in the early pass won, which `ended`
+    // already says.
+    if ended.is_some() {
+        return Drawn::Done(ended);
+    }
     // `Hook.AfterCardDrawn`, raised for each card inside the loop rather
     // than once for the whole draw. So a card that spends the pool as it
     // arrives has spent it before the next card is taken.
