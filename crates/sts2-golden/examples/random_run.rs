@@ -46,6 +46,15 @@ struct Cli {
     /// The ascension level, by the id the game spells it with.
     #[arg(long, value_parser = ascension, default_value = "None")]
     ascension: sts2_content::v0_107_1::ascension::AscensionLevel,
+    /// The modifiers the run starts with, by the ids the game spells them
+    /// with.
+    #[arg(long, value_parser = modifier, value_delimiter = ',')]
+    modifiers: Vec<sts2_content::v0_107_1::modifiers::Modifier>,
+}
+
+/// A modifier by the id the game spells it with.
+fn modifier(id: &str) -> Result<sts2_content::v0_107_1::modifiers::Modifier, serde_json::Error> {
+    serde_json::from_value(serde_json::Value::String(id.to_owned()))
 }
 
 /// An ascension level by the id the game spells it with.
@@ -112,13 +121,14 @@ fn run(cli: Cli) -> Result<(), Error> {
         seed,
         character,
         ascension,
+        modifiers,
     } = cli;
     let start = Start::<V> {
         wins: sts2_golden::random::wins(seed.as_str()),
         seed,
         character,
         ascension,
-        modifiers: Vec::new(),
+        modifiers,
     };
     let mut pick = sts2_golden::random::Pick::for_seed(start.seed.as_str());
     let mut sim = Sim::<V>::begin((), &start).map_err(Error::Begin)?;

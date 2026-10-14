@@ -166,6 +166,10 @@ impl sts2_core::Hooks for V0_107_1 {
             sts2_core::Listener::Potion(potion) => {
                 unimplemented!("what {potion:?} does for {hook:?}")
             }
+            // No modifier in this build overrides a number's hook.
+            sts2_core::Listener::Modifier(modifier) => {
+                unimplemented!("what {modifier:?} does for {hook:?}")
+            }
         }
     }
 
@@ -202,6 +206,9 @@ impl sts2_core::Hooks for V0_107_1 {
                 behaviour::relics::decide_hook(state, belt, hook)
             }
             sts2_core::Listener::Potion(potion) => behaviour::potions::decide_hook(potion, hook),
+            sts2_core::Listener::Modifier(modifier) => {
+                behaviour::modifiers::decide_hook(modifier, hook)
+            }
             sts2_core::Listener::Card {
                 card,
                 pile,
@@ -308,6 +315,10 @@ impl sts2_core::Hooks for V0_107_1 {
         asked: &mut sts2_core::HookEffects<Self>,
     ) {
         behaviour::cards::deck_event_hook(card, state, hook, asked)
+    }
+
+    fn modifier_ported(modifier: Self::Modifier) -> bool {
+        behaviour::modifiers::ported(modifier)
     }
 
     fn relic_event_hook(

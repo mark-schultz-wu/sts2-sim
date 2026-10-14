@@ -41,14 +41,18 @@ fn recorded() -> Recorded {
 /// The census characters, which every ascension's runs play alike.
 const CHARACTERS: [&str; 5] = ["DEFECT", "IRONCLAD", "NECROBINDER", "REGENT", "SILENT"];
 
+/// What a run was started with besides its seed and character: its
+/// ascension and its modifiers.
+type RunSetup<'a> = (&'a str, &'a [String]);
+
 #[test]
 fn the_committed_file_holds_every_census_run() {
     let recorded = recorded();
-    // Each ascension's seeds, by character.
-    let mut seeds: BTreeMap<&str, BTreeMap<&str, Vec<&str>>> = BTreeMap::new();
+    // Each setup's seeds, by character: its ascension and its modifiers.
+    let mut seeds: BTreeMap<RunSetup<'_>, BTreeMap<&str, Vec<&str>>> = BTreeMap::new();
     for run in &recorded.runs {
         seeds
-            .entry(&run.ascension)
+            .entry((&run.ascension, &run.modifiers))
             .or_default()
             .entry(&run.character)
             .or_default()
@@ -56,21 +60,22 @@ fn the_committed_file_holds_every_census_run() {
     }
     let first =
         |count: usize| -> Vec<String> { (0..count).map(|at| format!("C{at:09}")).collect() };
-    for (ascension, mut by_character) in seeds {
-        // The census itself plays at no ascension. A rung's runs play the
-        // census's first seeds, as many for every character.
-        let want = match ascension {
-            "None" => first(RUNS),
+    for (setup, mut by_character) in seeds {
+        // The census itself plays at no ascension and with no modifiers.
+        // Any other setup's runs play the census's first seeds, as many for
+        // every character.
+        let want = match setup {
+            ("None", []) => first(RUNS),
             _ => first(by_character.get("IRONCLAD").map_or(0, Vec::len)),
         };
         for character in CHARACTERS {
             let mut played = by_character.remove(character).unwrap_or_default();
             played.sort_unstable();
-            assert_eq!(played, want, "{character}'s seeds at {ascension}");
+            assert_eq!(played, want, "{character}'s seeds at {setup:?}");
         }
         assert!(
             by_character.is_empty(),
-            "runs at {ascension} for no census character: {by_character:?}"
+            "runs at {setup:?} for no census character: {by_character:?}"
         );
     }
 }

@@ -102,6 +102,18 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     emit_shape(&mut out);
     emit_modifiers(&mut out, &modifiers)?;
     emit_exclusive(&mut out, &modifiers, &exclusive)?;
+    let overrides = super::overrides(&build, "MODIFIER")?;
+    super::emit_overrides(
+        &mut out,
+        "indexed by the modifier's discriminant.",
+        modifiers.iter().map(|row| row[1].as_str()),
+        &overrides,
+    );
+    writeln!(
+        out,
+        "\nimpl sts2_core::ModifierTable for Modifier {{\n    fn overrides(self) -> sts2_core::Overrides {{\n        OVERRIDES[self as usize]\n    }}\n}}"
+    )
+    .unwrap();
 
     let path = root.join("modifiers.rs");
     error::write(&path, &out)?;

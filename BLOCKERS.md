@@ -48,17 +48,42 @@ own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
 
-### 3. Run modifiers
+### 3. Run modifiers: rewards and rest sites
 
-A run started with any modifier panics (`crates/sts2-sim/src/engine/sim.rs`).
-Hoarder's removal ban is one rule known to need one. Port the custom
-mode's modifiers, and record runs with each.
+Vintage, Midas and Night Terrors. They need `TryModifyRewardsLate`,
+`TryModifyRestSiteOptions`, `ModifyRestSiteHealAmount` and
+`AfterRestSiteHeal` asked of the run's modifiers, after its relics and
+potions. Record 100 runs with each.
 
-### 4. v0.111.0
+### 4. Run modifiers in a fight
+
+Murderous and Terminal. `CombatState` lists the modifiers last among its
+listeners, after the cards, so they join the fight's walk there. They
+answer `AfterRoomEntered` and `AfterCreatureAddedToCombat`. Record 100
+runs with each.
+
+### 5. Run modifiers that change the run's own rules
+
+- Deadly Events: `AfterRunCreated` sets the odds and takes Juzu Bracelet
+  out of the relic bags.
+- Cursed Run: `AfterActEntered`, which no `ModelHook` names yet.
+- Hoarder: `AfterCardChangedPiles`, with the cards it saves to skip.
+- Big Game Hunter: `ModifyGeneratedMap` and card rewards.
+- Character Cards, which names a character.
+
+Record 100 runs with each.
+
+### 6. Run modifiers at Neow
+
+All Star, Specialized, Draft, Sealed Deck and Insanity. Neow offers each
+modifier's option in turn, and three of them empty the starting deck
+first. Record 100 runs with each.
+
+### 7. v0.111.0
 
 Only the generated tables exist. Its behaviour layer has to be written,
 and its runs recorded.
-### 5. Every hook on the walk cursor
+### 8. Every hook on the walk cursor
 
 Every event hook walks with the cursor, and the eager `notify` goes. The
 cursor's snapshot costs 0.7% on the three hooks it walks now, so every
@@ -72,7 +97,13 @@ the sim asked them all first. So Pinpoint in hand counts a Defend early,
 and shows one cheaper while the pick waits. A walk that parks there, on
 the snapshot cursor, cost 2.5% a step.
 
-### 6. A speed target
+`AfterCardDrawn` needs it too. Pagestorm draws a card when an Ethereal
+one is drawn, and that draw runs before Chains of Binding hears the first.
+So the nested card is Bound first and takes the last of the stack. The
+sim asks Chains about both before either is Bound, and binds one card too
+many. Recorded run 2571, a Flight run, parts there against the Queen.
+
+### 9. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.
