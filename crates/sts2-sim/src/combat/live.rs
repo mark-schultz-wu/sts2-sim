@@ -1870,7 +1870,15 @@ pub(crate) struct HeldPower<V: Rules> {
     /// `PowerModel.Applier`.
     pub(crate) applier: Option<CombatId>,
     pub(crate) state: V::PowerState,
+    /// Which instance this is. The store hands each power a new one as it
+    /// arrives, so one taken off and applied again is another.
+    pub(crate) instance: PowerInstance,
 }
+
+/// One power instance in a fight, which the game tells apart by reference.
+/// A walk over the listeners names a power by this.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
+pub(crate) struct PowerInstance(pub(crate) u32);
 
 impl<V: Rules> Clone for HeldPower<V> {
     fn clone(&self) -> Self {
@@ -1898,6 +1906,7 @@ impl<V: Rules> HeldPower<V> {
             on_turn_start: Stacked::counted(0),
             applier,
             state,
+            instance: PowerInstance::default(),
         }
     }
 
@@ -1908,6 +1917,7 @@ impl<V: Rules> HeldPower<V> {
             on_turn_start: Stacked::counted(0),
             applier,
             state: <V::PowerState as sts2_core::PowerModel<V>>::new(power),
+            instance: PowerInstance::default(),
         }
     }
 
