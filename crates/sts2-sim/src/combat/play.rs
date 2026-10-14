@@ -285,6 +285,8 @@ pub(crate) fn play<V: Rules>(
         pile,
         position,
     };
+    // `BeginCardOrPotionEffect`, before the first play.
+    live.effect_depth += 1;
     before_played::<V, _>(live, streams, relics, &card, begun, play.target);
     live.history
         .start(card.face.ident.card, card.id, begun, true);
@@ -505,6 +507,8 @@ pub(super) fn auto_play_in_play<V: Rules>(
         pile,
         position,
     };
+    // `BeginCardOrPotionEffect`, before the first play.
+    live.effect_depth += 1;
     before_played::<V, _>(live, &mut rngs, relics, &card, begun, target);
     live.history
         .start(card.face.ident.card, card.id, begun, true);
@@ -1405,6 +1409,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                 // `OnPlayWrapper` returns where it stands once the player is
                 // dead, which leaves the card in the play pile.
                 if next.lost {
+                    next.effect_depth -= 1;
                     return Ok(effect.ended);
                 }
                 let card = play.id;
@@ -1439,6 +1444,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                         .write_named(card, |face| face.set_enchantment_state(state));
                     // The enchantment's play can kill its owner too.
                     if next.lost {
+                        next.effect_depth -= 1;
                         return Ok(effect.ended);
                     }
                 }
@@ -1605,6 +1611,11 @@ fn finish_effect<V: Rules, S: LendsCombat>(
         streams,
         relics,
     } = fighting;
+    // `EndCardOrPotionEffect`, once the last play's `AfterCardPlayed` or the
+    // potion's `OnUse` is over. `CheckForEmptyHand` acts only with no card
+    // or potion of the player's still running.
+    next.effect_depth -= 1;
+    let idle = next.effect_depth == 0;
     let mut ended = effect.ended;
     let Asker::Card(play) = effect.asker else {
         // `Hook.AfterPotionUsed`, once the potion is done, for a fight still
@@ -1625,7 +1636,7 @@ fn finish_effect<V: Rules, S: LendsCombat>(
                 ended = board.ended();
             }
         }
-        let ended = match outermost {
+        let ended = match idle {
             true => check_for_empty_hand::<V, _>(next, streams, relics, ascension, ended),
             false => ended,
         };
@@ -1641,7 +1652,7 @@ fn finish_effect<V: Rules, S: LendsCombat>(
         // `AfterCardPlayedCleanup`, wherever the card went.
         next.cards
             .write_named(play.id, super::live::Face::was_played);
-        let ended = match outermost {
+        let ended = match idle {
             true => check_for_empty_hand::<V, _>(next, streams, relics, ascension, ended),
             false => ended,
         };
@@ -1689,7 +1700,7 @@ fn finish_effect<V: Rules, S: LendsCombat>(
         }
         return Ok(ended);
     }
-    let ended = match outermost {
+    let ended = match idle {
         true => check_for_empty_hand::<V, _>(next, streams, relics, ascension, ended),
         false => ended,
     };

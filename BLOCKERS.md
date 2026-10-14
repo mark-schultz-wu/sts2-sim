@@ -67,27 +67,48 @@ the rest before any of them acted, and the Turret Operator gains block.
 The turn's start walks its listeners the same way. In recorded runs 461
 and 1008, Tools of the Trade's discard and Gambling Chip's choice stand
 the walk still. The game has not yet reached Pendulum. The
-sim counted Pendulum's turn before the question. Needs a design, for
-Mark.
+sim counted Pendulum's turn before the question. Entropy's choice does
+the same in runs 611, 764 and 1466. Needs a design, for Mark.
 
-### 4. Ascension
+### 4. A relic that reads the belt
+
+Pael's Eye's `AnyCardsPlayedThisTurn` answers yes on turn one when its
+owner holds Whispering Earring. A relic's hook in the sim sees its own
+state and the hook, not the belt, so the port cannot ask. In recorded
+run 223, Vakuu plays the first turn, and Pael's Eye gives the sim an
+extra turn the game does not take. Either the hook carries the turn and
+whether the belt holds the Earring, or a relic reads the belt. Needs a
+design, for Mark.
+
+### 5. A hit that heals
+
+`Hook.ModifyHpLost` floors nothing, and `LoseHpInternal` takes a
+negative loss as a heal. Hardened Shell caps a turn's loss at its amount
+less what its owner already lost, which can be below nothing. In
+recorded run 159, Ashen Strike lands past the cap and the enemy gains
+four. The sim floors every modify pass at nothing, and Tungsten Rod's
+`Math.Max(0, amount - 1)` leans on that floor. Lifting it for the
+hit-point passes needs an answer that floors itself, a `Modify` shape
+for Mark to choose.
+
+### 6. Ascension
 
 The sim threads the ascension level through, but every scenario and
 census run plays at `None`. Record runs at each level, and each split
 they find becomes an item.
 
-### 5. Run modifiers
+### 7. Run modifiers
 
 A run started with any modifier panics (`crates/sts2-sim/src/engine/sim.rs`).
 Hoarder's removal ban is one rule known to need one. Port the custom
 mode's modifiers, and record runs with each.
 
-### 6. A speed target
+### 8. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.
 
-### 7. v0.111.0
+### 9. v0.111.0
 
 Only the generated tables exist. Its behaviour layer has to be written,
 and its runs recorded.

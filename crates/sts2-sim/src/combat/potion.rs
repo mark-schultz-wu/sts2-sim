@@ -29,6 +29,8 @@ pub(crate) fn drink<V: Rules>(
     if let Some((listener, effect)) = super::listen::notify::<V>(live, relics, hook).first() {
         unimplemented!("{listener:?} asking for {effect:?} before a potion")
     }
+    // `BeginCardOrPotionEffect`.
+    live.effect_depth += 1;
     let mut board =
         Board::for_card(live, streams.combat(), relics, ascension, target, None).blocking();
     let used = V::on_use(potion, &mut board);

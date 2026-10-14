@@ -1,0 +1,15 @@
+# Apotheosis upgrades `AllCards`, the play pile among them. Decisions,
+# Decisions auto-plays it from the hand, and stands in the play pile while
+# it does, so Decisions, Decisions comes out upgraded.
+#
+# An upgrade of the four piles alone leaves it as it was.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":1}
+{"cmd":"grant","card":"VENERATE"}
+{"cmd":"play_card","index":4}
+{"cmd":"grant","card":"APOTHEOSIS"}
+{"cmd":"grant","card":"DECISIONS_DECISIONS"}
+{"cmd":"play_card","index":5}
+{"cmd":"answer","pick":2}
+{"cmd":"answer","done":true}

@@ -1,0 +1,11 @@
+# Rolling Boulder Power is instanced, and each instance hits and then adds
+# five to its own amount as the player's turn starts. Two stacks of twenty
+# and five grow to twenty-five and ten.
+#
+# A growth written onto every stack of the power gives both the same.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"PLATING_POWER","amount":100,"target":0}
+{"cmd":"power","power":"ROLLING_BOULDER_POWER","amount":20,"target":0}
+{"cmd":"power","power":"ROLLING_BOULDER_POWER","amount":5,"target":0}
+{"cmd":"end_turn"}
