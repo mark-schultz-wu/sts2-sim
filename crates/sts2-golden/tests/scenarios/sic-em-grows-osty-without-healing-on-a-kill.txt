@@ -1,0 +1,14 @@
+# `CreatureCmd.Heal` heals no creature but a player once
+# `CombatManager.IsEnding`, which a hit that takes the last enemy to
+# nothing makes true before the enemy dies. Sic 'Em summons as Osty's
+# Unleash kills the Nibbit, so Osty's maximum grows to four and its
+# health stays at one.
+#
+# A heal that waits for the enemy's death to stop heals Osty to four.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"SIC_EM"}
+{"cmd":"grant","card":"UNLEASH"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"power","power":"STRENGTH_POWER","amount":300,"target":2}
+{"cmd":"play_card","index":1,"target":1}
