@@ -173,7 +173,8 @@ pub(crate) struct Walker<V: Rules, C: Cursor<V> = Active<V>> {
     cursor: C,
     /// What a listener asked from its decrement on, which waits for what
     /// came before to land, and the listener that asked it.
-    pending: sts2_core::HookEffects<V>,
+    /// A `Vec`, as nearly every walk leaves it empty and moves it often.
+    pending: Vec<HookEffect<V>>,
     pending_from: Option<Listener<V>>,
 }
 
@@ -221,7 +222,7 @@ pub(crate) fn walk<V: Rules>(live: &Live<V>, relics: &Belt<V>, hook: EventHook<V
     Walker {
         hook,
         cursor: Active::begin(live, relics, model_hook),
-        pending: sts2_core::HookEffects::new(),
+        pending: Vec::new(),
         pending_from: None,
     }
 }
@@ -471,6 +472,24 @@ pub(crate) struct Walking<V: Rules> {
     /// carry out.
     listener: Option<Listener<V>>,
     rest: sts2_core::HookEffects<V>,
+}
+
+/// The walk over `hook`'s listeners, or nothing where none hears it, which
+/// costs a walk nothing to build.
+///
+/// # Panics
+///
+/// A hook that is not one `AbstractModel` declares.
+pub(crate) fn walking<V: Rules>(
+    live: &Live<V>,
+    relics: &Belt<V>,
+    hook: EventHook<V>,
+) -> Option<Walking<V>> {
+    let model_hook = hook
+        .model_hook()
+        .unwrap_or_else(|| unreachable!("{hook:?} is asked of one model, not raised"));
+    Kinds::hearing(live, relics, Overrides::of(model_hook))?;
+    Some(Walking::new(walk::<V>(live, relics, hook)))
 }
 
 impl<V: Rules> Walking<V> {

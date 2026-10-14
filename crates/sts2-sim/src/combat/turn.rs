@@ -730,7 +730,10 @@ fn before_flush_late<V: Rules>(
     }
     let player = live.player().id;
     let turn = live.turn;
-    for (listener, effect) in listen::notify::<V>(live, relics, sts2_core::EventHook::FlushingLate)
+    let mut walking = listen::walking::<V>(live, relics, sts2_core::EventHook::FlushingLate);
+    while let Some((listener, effect)) = walking
+        .as_mut()
+        .and_then(|walking| walking.next(live, relics))
     {
         match effect {
             // `CardSelectCmd.FromHand` of up to `count` cards that do not
@@ -997,7 +1000,11 @@ pub(super) fn before_side_turn_start<V: Rules>(
     }
     let round = live.round;
     let hook = sts2_core::EventHook::BeforeSideTurnStart { side, turn, round };
-    for (listener, effect) in listen::notify::<V>(live, relics, hook) {
+    let mut walking = listen::walking::<V>(live, relics, hook);
+    while let Some((listener, effect)) = walking
+        .as_mut()
+        .and_then(|walking| walking.next(live, relics))
+    {
         match (listener, effect) {
             (Listener::Power { owner, .. }, sts2_core::HookEffect::GainBlock(amount)) => {
                 super::board::gain_unpowered_block::<V>(
@@ -1105,8 +1112,11 @@ fn before_turn_end<V: Rules>(
 ) -> Option<super::Ended> {
     let block = live.player().block;
     let hook = sts2_core::EventHook::BeforeSideTurnEndVeryEarly { side, block };
-    let asked = listen::notify::<V>(live, relics, hook);
-    for &(listener, effect) in asked.iter() {
+    let mut walking = listen::walking::<V>(live, relics, hook);
+    while let Some((listener, effect)) = walking
+        .as_mut()
+        .and_then(|walking| walking.next(live, relics))
+    {
         match (listener, effect) {
             // `PowerCmd.Remove` of another power on the listener's owner.
             (Listener::Power { owner, .. }, sts2_core::HookEffect::RemoveFromOwner(power)) => {
@@ -1128,7 +1138,11 @@ fn before_turn_end<V: Rules>(
         plays,
         turn: live.turn,
     };
-    for (listener, effect) in listen::notify::<V>(live, relics, hook) {
+    let mut walking = listen::walking::<V>(live, relics, hook);
+    while let Some((listener, effect)) = walking
+        .as_mut()
+        .and_then(|walking| walking.next(live, relics))
+    {
         match (listener, effect) {
             (Listener::Power { owner, .. }, sts2_core::HookEffect::GainBlock(amount)) => {
                 super::board::gain_unpowered_block::<V>(
@@ -1171,7 +1185,11 @@ fn before_turn_end<V: Rules>(
         hand: live.cards.len(Pile::Hand),
     };
     let mut ended = None;
-    for (listener, effect) in listen::notify::<V>(live, relics, hook) {
+    let mut walking = listen::walking::<V>(live, relics, hook);
+    while let Some((listener, effect)) = walking
+        .as_mut()
+        .and_then(|walking| walking.next(live, relics))
+    {
         match (listener, effect) {
             // `CreatureCmd.Damage` over `HittableEnemies`, unpowered, from the
             // power's owner.
@@ -2038,7 +2056,11 @@ pub(super) fn carry_setup<V: Rules>(
                             player,
                             turn: live.turn,
                         };
-                        for (listener, effect) in listen::notify::<V>(live, relics, hook) {
+                        let mut walking = listen::walking::<V>(live, relics, hook);
+                        while let Some((listener, effect)) = walking
+                            .as_mut()
+                            .and_then(|walking| walking.next(live, relics))
+                        {
                             match effect {
                                 // `CreatureCmd.Heal` on the player who carries
                                 // the relic.
@@ -2386,20 +2408,18 @@ pub(super) fn card_discarded<V: Rules>(
     relics: &mut crate::run::Belt<V>,
 ) -> Option<super::Ended> {
     let hook = sts2_core::EventHook::CardDiscarded { side: live.side };
-    let asked = listen::notify::<V>(live, relics, hook);
-    if asked.is_empty() {
+    if !listen::heard::<V>(live, relics, sts2_core::ModelHook::AfterCardDiscarded) {
         return None;
     }
-    let mut effects: SmallVec<[sts2_core::HookEffect<V>; 2]> = SmallVec::new();
-    for (listener, effect) in asked {
+    let mut walking = listen::Walking::new(listen::walk::<V>(live, relics, hook));
+    let ascension = live.ascension;
+    let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
+    while let Some((listener, effect)) = board.next_of(&mut walking) {
         match listener {
-            Listener::Relic { .. } => effects.push(effect),
+            Listener::Relic { slot } => board.relic_asked(slot, effect),
             listener => unimplemented!("{listener:?} asking for {effect:?} after a discard"),
         }
     }
-    let ascension = live.ascension;
-    let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
-    super::hook::apply::<V, _>(&mut board, effects);
     board.ended()
 }
 
@@ -2463,10 +2483,10 @@ pub(super) fn exhausted<V: Rules>(
         id: card.id,
         ethereal,
     };
-    let asked = listen::notify::<V>(live, relics, hook);
-    if asked.is_empty() {
+    if !listen::heard::<V>(live, relics, sts2_core::ModelHook::AfterCardExhausted) {
         return None;
     }
+    let mut walking = listen::Walking::new(listen::walk::<V>(live, relics, hook));
     let ascension = live.ascension;
     // Inside an effect, a question a listener's command asks stands the
     // effect still.
@@ -2474,29 +2494,26 @@ pub(super) fn exhausted<V: Rules>(
     if pausable {
         board = board.blocking();
     }
-    let mut rest: SmallVec<[(Listener<V>, sts2_core::HookEffect<V>); 4]> = SmallVec::new();
-    for (listener, effect) in asked {
-        match effect {
+    while let Some((listener, effect)) = board.next_of(&mut walking) {
+        match (listener, effect) {
             // Clones of the card just exhausted, which the exhaust pile still
             // holds.
-            sts2_core::HookEffect::CloneIntoHand {
-                card,
-                count,
-                writes,
-            } => {
+            (
+                _,
+                sts2_core::HookEffect::CloneIntoHand {
+                    card,
+                    count,
+                    writes,
+                },
+            ) => {
                 let count: usize =
                     num_traits::cast(count).unwrap_or_else(|| unimplemented!("{count:?} clones"));
                 for _ in 0..count {
                     board.clone_written(card, Pile::Hand, writes);
                 }
             }
-            effect => rest.push((listener, effect)),
-        }
-    }
-    for (listener, effect) in rest {
-        match listener {
-            Listener::Relic { slot } => board.relic_asked(slot, effect),
-            _ => super::hook::apply::<V, _>(&mut board, [effect]),
+            (Listener::Relic { slot }, effect) => board.relic_asked(slot, effect),
+            (_, effect) => super::hook::apply::<V, _>(&mut board, [effect]),
         }
     }
     let skipped = std::mem::take(&mut board.skipped);
@@ -2861,11 +2878,13 @@ fn spend_resources<V: Rules>(
             player: live.player().id,
             amount: spent,
         };
-        let asked = listen::notify::<V>(live, relics, hook);
-        if !asked.is_empty() {
+        if listen::heard::<V>(live, relics, sts2_core::ModelHook::AfterStarsSpent) {
+            let mut walking = listen::Walking::new(listen::walk::<V>(live, relics, hook));
             let ascension = live.ascension;
             let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
-            super::hook::apply::<V, _>(&mut board, asked.into_iter().map(|(_, effect)| effect));
+            while let Some((_, effect)) = board.next_of(&mut walking) {
+                super::hook::apply::<V, _>(&mut board, [effect]);
+            }
             if let Some(ended) = board.ended() {
                 unimplemented!("a fight {ended:?} as its stars were spent");
             }
@@ -3155,7 +3174,11 @@ pub(super) fn side_turn_started<V: Rules>(
     // `Hook.AfterSideTurnStartLate`. A power's `PowerCmd.Decrement(this)`
     // has ticked by the time this hears it.
     let hook = sts2_core::EventHook::SideTurnStartLate { side };
-    for (listener, effect) in listen::notify::<V>(live, relics, hook) {
+    let mut walking = listen::walking::<V>(live, relics, hook);
+    while let Some((listener, effect)) = walking
+        .as_mut()
+        .and_then(|walking| walking.next(live, relics))
+    {
         match (listener, effect) {
             // `CreatureCmd.Kill`, from a power the decrement took off.
             (Listener::Power { .. }, sts2_core::HookEffect::KillCreature(creature)) => {
@@ -3195,12 +3218,13 @@ fn flush_hand<V: Rules>(
         live.cards.sift(Pile::Hand, Pile::Discard, Face::retains);
     }
     // `Hook.AfterFlush`, with what stayed in hand retained.
-    let asked = listen::notify::<V>(live, relics, sts2_core::EventHook::Flushed);
-    if asked.is_empty() {
+    if !listen::heard::<V>(live, relics, sts2_core::ModelHook::AfterFlush) {
         return;
     }
+    let hook = sts2_core::EventHook::Flushed;
+    let mut walking = listen::Walking::new(listen::walk::<V>(live, relics, hook));
     let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
-    for (listener, effect) in asked {
+    while let Some((listener, effect)) = board.next_of(&mut walking) {
         match effect {
             sts2_core::HookEffect::LowerRetainedCost => {
                 let costly: Vec<_> = sts2_core::Fight::cards_in(&board, Pile::Hand)
@@ -3252,7 +3276,11 @@ pub(super) fn energy_reset<V: Rules>(
         turn: live.turn,
     };
     let mut ended = None;
-    for (listener, effect) in listen::notify::<V>(live, relics, hook) {
+    let mut walking = listen::walking::<V>(live, relics, hook);
+    while let Some((listener, effect)) = walking
+        .as_mut()
+        .and_then(|walking| walking.next(live, relics))
+    {
         match (listener, effect) {
             // `PlayerCmd.GainEnergy`, then `PowerCmd.Remove(this)`.
             (
@@ -3320,7 +3348,11 @@ pub(super) fn energy_reset_late<V: Rules>(
         player,
         turn: live.turn,
     };
-    for (_, effect) in listen::notify::<V>(live, relics, hook) {
+    let mut walking = listen::walking::<V>(live, relics, hook);
+    while let Some((_, effect)) = walking
+        .as_mut()
+        .and_then(|walking| walking.next(live, relics))
+    {
         match effect {
             sts2_core::HookEffect::Summon(amount) => {
                 super::board::summon_osty::<V>(live, rngs.reborrow(), relics, ascension, amount);
@@ -3402,7 +3434,11 @@ fn clear_block<V: Rules>(
             player,
             turn: live.turn,
         };
-        for (listener, effect) in listen::notify::<V>(live, relics, hook) {
+        let mut walking = listen::walking::<V>(live, relics, hook);
+        while let Some((listener, effect)) = walking
+            .as_mut()
+            .and_then(|walking| walking.next(live, relics))
+        {
             match (listener, effect) {
                 // `CreatureCmd.GainBlock`, unpowered, on the player who
                 // carries the relic.
