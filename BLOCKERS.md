@@ -29,28 +29,7 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ## Open
 
-### 1. A listener walk that asks each listener as it reaches it
-
-`Hook` walks a snapshot of its listeners and asks each one as it reaches
-it, skipping any `!Contains(item)`. The sim's `notify` asks them all
-first, then carries out what they asked. Recorded run 1045 shows it:
-Countdown's Doom sets off Sleight of Flesh, which kills the Living
-Shield, and the game never asks its Rampart. The sim asked Rampart with
-the rest before any of them acted, and the Turret Operator gains block.
-
-A listener's `PowerCmd.Decrement` waits its turn in the walk as well. The
-sim ticks every decrement as it raises the hook, ahead of what earlier
-listeners asked for. In recorded run 267, the Soul Fysh's Intangible
-ticks off before Demise's damage lands, which the game caps at one. In
-run 1175, Veilpiercer's own decrement takes it off before Danse Macabre
-reads Reap's cost. The game then blocks for the card at its full cost.
-
-The design: a walk cursor over a snapshot of the listeners, which names
-each power by its instance. Each is asked as the cursor reaches it, and
-what it asked lands before the next is asked. A decrement is an effect
-applied in its turn. This item converts the hooks these runs reach.
-
-### 2. A walk a question stands still
+### 1. A walk a question stands still
 
 The game walks `AfterCardPlayed` listeners one at a time, and a draw
 can pause the walk. The sim raises them all first, so Bygone Effigy's
@@ -67,9 +46,23 @@ and 853.
 The design: an effect that asks a question parks the rest of the
 cursor's snapshot, which goes on after the answer.
 
-### 3. Every hook on the walk cursor
+### 2. Every hook on the walk cursor
 
-Every event hook walks with the cursor, and the eager `notify` goes.
+Every event hook walks with the cursor, and the eager `notify` goes. The
+cursor's snapshot costs 0.7% on the three hooks it walks now, so every
+hook needs a cheaper one first. Power instances and card ids only grow, so
+a cursor can skip what arrived after the walk began and take no snapshot.
+
+### 3. A power the walk reaches after it came off
+
+`CombatState.Contains` asks of a power only whether its owner is still in
+the fight. The walk still asks a power an earlier listener took off, as a
+model on its own. Nemesis takes Intangible off as the enemies' turn ends, and the
+game then decrements the Intangible it took off. That raises the
+amount-changed hooks and writes the history. The sim's walk skips a power
+its owner no longer carries, since it keeps no model for one taken off. No
+recorded run parts on it yet. Keeping the model for the walk needs a
+design, for Mark.
 
 ### 4. Every other split the recorded runs find
 

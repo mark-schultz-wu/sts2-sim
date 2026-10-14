@@ -145,6 +145,295 @@ pub(crate) fn notify<V: Rules>(
     }
 }
 
+/// `Hook`'s walk over a hook's listeners: a snapshot of them, each asked as
+/// the walk reaches it.
+///
+/// What a listener asks for lands before the next is asked, which the caller
+/// sees to between calls to [`Walker::next`]. The walk asks `Contains(item)`
+/// of each, so one whose creature or card left the fight is skipped.
+pub(crate) struct Walker<V: Rules> {
+    hook: EventHook<V>,
+    listeners: SmallVec<[Snapped<V>; 8]>,
+    next: usize,
+    /// What a listener asked from its decrement on, which waits for what
+    /// came before to land, and the listener that asked it.
+    pending: sts2_core::HookEffects<V>,
+    pending_from: Option<Listener<V>>,
+}
+
+/// One listener in a walk's snapshot.
+#[derive(Clone, Copy)]
+enum Snapped<V: Rules> {
+    Power {
+        owner: CombatId,
+        instance: super::live::PowerInstance,
+        power: V::Power,
+        /// Where its owner and it stood as the walk began, which is where
+        /// they stand still unless a listener moved something.
+        creature_at: u8,
+        at: u8,
+    },
+    Monster {
+        creature: CombatId,
+        monster: V::Monster,
+    },
+    Relic {
+        slot: u8,
+        relic: V::Relic,
+    },
+    Card {
+        id: CardId<V>,
+    },
+}
+
+/// The walk `Hook` makes over the listeners to `hook`, as the fight stands.
+///
+/// # Panics
+///
+/// A hook that is not one `AbstractModel` declares, or one a potion hears.
+pub(crate) fn walk<V: Rules>(live: &Live<V>, relics: &Belt<V>, hook: EventHook<V>) -> Walker<V> {
+    let model_hook = hook
+        .model_hook()
+        .unwrap_or_else(|| unreachable!("{hook:?} is asked of one model, not raised"));
+    let hooks = Overrides::of(model_hook);
+    let mut listeners = SmallVec::new();
+    if let Some(kinds) = Kinds::hearing(live, relics, hooks) {
+        // A potion overrides only hooks the fight asks of it alone.
+        if kinds.potions {
+            unimplemented!("a potion hearing {hook:?}");
+        }
+        for (creature_at, creature) in live.creatures.iter().enumerate() {
+            if kinds.powers {
+                for (at, held) in live.powers.of(creature.id).enumerate() {
+                    if held.power().overrides().contains(model_hook) {
+                        listeners.push(Snapped::Power {
+                            owner: creature.id,
+                            instance: held.instance,
+                            power: held.power(),
+                            creature_at: creature_at as u8,
+                            at: at as u8,
+                        });
+                    }
+                }
+            }
+            if kinds.monsters
+                && let Some(monster) = creature.carrier().monster
+                && monster.overrides().contains(model_hook)
+            {
+                listeners.push(Snapped::Monster {
+                    creature: creature.id,
+                    monster,
+                });
+            }
+            let Some(ModelId::Character(_)) = creature.model else {
+                continue;
+            };
+            if kinds.belt {
+                let mut left = relics.hearing_hook(model_hook);
+                while left != 0 {
+                    let slot = left.trailing_zeros() as usize;
+                    left &= left - 1;
+                    listeners.push(Snapped::Relic {
+                        slot: slot as u8,
+                        relic: relics[slot].relic,
+                    });
+                }
+            }
+            if kinds.cards {
+                for (id, _) in live.cards.listening(hooks) {
+                    listeners.push(Snapped::Card { id });
+                }
+            }
+        }
+    }
+    Walker {
+        hook,
+        listeners,
+        next: 0,
+        pending: sts2_core::HookEffects::new(),
+        pending_from: None,
+    }
+}
+
+impl<V: Rules> Walker<V> {
+    /// The hook as the listeners still to come are handed it, where what it
+    /// carries is read off the fight as each is reached.
+    pub(crate) fn rehook(&mut self, hook: EventHook<V>) {
+        self.hook = hook;
+    }
+
+    /// The next listener in the walk that asks for anything, with what it
+    /// asks for in `asked`. A power's `PowerCmd.Decrement` of itself is
+    /// carried out here, in its turn. What it asked before the decrement
+    /// comes back first. The rest comes on the next call, after what its
+    /// `AfterRemoved` asks for. That call comes back even with nothing asked,
+    /// so the caller can read the fight again.
+    ///
+    /// # Panics
+    ///
+    /// A belt that changed under the walk.
+    pub(crate) fn next(
+        &mut self,
+        live: &mut Live<V>,
+        relics: &mut Belt<V>,
+        asked: &mut sts2_core::HookEffects<V>,
+    ) -> Option<Listener<V>> {
+        asked.clear();
+        if let Some(listener) = self.pending_from {
+            if let Listener::Power {
+                owner, instance, ..
+            } = listener
+                && self.pending.first() == Some(&HookEffect::Decrement)
+            {
+                self.pending.remove(0);
+                *asked = decrement::<V>(live, owner, instance);
+            }
+            self.take_pending(asked);
+            return Some(listener);
+        }
+        let hook = self.hook;
+        while let Some(&snapped) = self.listeners.get(self.next) {
+            self.next += 1;
+            let listener = match snapped {
+                Snapped::Power {
+                    owner,
+                    instance,
+                    power,
+                    creature_at,
+                    at,
+                } => {
+                    // `Contains`: the power's owner is still in the fight.
+                    let carrier = match live.creatures.get(usize::from(creature_at)) {
+                        Some(creature) if creature.id == owner => creature.carrier(),
+                        _ => match live.creatures.iter().find(|creature| creature.id == owner) {
+                            Some(creature) => creature.carrier(),
+                            None => continue,
+                        },
+                    };
+                    let at = match live.powers.of(owner).nth(usize::from(at)) {
+                        Some(held) if held.instance == instance => usize::from(at),
+                        _ => match live.powers.place_of(owner, instance) {
+                            Some(at) => at,
+                            None => continue,
+                        },
+                    };
+                    live.ask_power_as(Some(&*relics), carrier, at, hook, asked);
+                    Listener::Power {
+                        owner,
+                        instance,
+                        power,
+                    }
+                }
+                Snapped::Monster { creature, monster } => {
+                    if !live.creatures.iter().any(|fighter| fighter.id == creature) {
+                        continue;
+                    }
+                    let Some(machine) = live
+                        .machines
+                        .iter_mut()
+                        .find(|machine| machine.creature == creature)
+                    else {
+                        unreachable!("a monster in the fight has its graph")
+                    };
+                    V::monster_event_hook(monster, &mut machine.state, creature, hook, asked);
+                    Listener::Monster { creature, monster }
+                }
+                Snapped::Relic { slot, relic } => {
+                    if relics.get(usize::from(slot)).map(|held| held.relic) != Some(relic) {
+                        unimplemented!("the belt changing under a walk over {hook:?}")
+                    }
+                    let (state, belt) = relics.state_beside(usize::from(slot));
+                    V::relic_event_hook(state, belt, hook, asked);
+                    Listener::Relic { slot }
+                }
+                Snapped::Card { id } => {
+                    let Some(card) = live.cards.named(id) else {
+                        continue;
+                    };
+                    let model_hook = hook
+                        .model_hook()
+                        .unwrap_or_else(|| unreachable!("a walk raises a model's hook"));
+                    // The card's own override, then its enchantment's, which
+                    // is the order the combat state lists them in.
+                    if card.face.ident.card.overrides().contains(model_hook) {
+                        V::card_event_hook(
+                            card.face.ident.card,
+                            id,
+                            live.cards.pile_of(id),
+                            &card,
+                            live.history(),
+                            hook,
+                            asked,
+                        );
+                    }
+                    if let Some(enchanted) = card.face.ident.enchantment
+                        && <V::Enchantment as sts2_core::EnchantmentTable>::overrides(
+                            enchanted.enchantment,
+                        )
+                        .contains(model_hook)
+                    {
+                        V::enchantment_event_hook(enchanted, id, hook, asked);
+                    }
+                    Listener::Card { id }
+                }
+            };
+            if asked.is_empty() {
+                continue;
+            }
+            if let Listener::Power { .. } = listener
+                && let Some(at) = asked.iter().position(|e| *e == HookEffect::Decrement)
+            {
+                self.pending.extend(asked.drain(at..));
+                self.pending_from = Some(listener);
+                if asked.is_empty() {
+                    return self.next(live, relics, asked);
+                }
+            }
+            return Some(listener);
+        }
+        None
+    }
+
+    /// Move what waits into `asked`, up to the next decrement.
+    fn take_pending(&mut self, asked: &mut sts2_core::HookEffects<V>) {
+        let upto = self
+            .pending
+            .iter()
+            .position(|e| *e == HookEffect::Decrement)
+            .unwrap_or(self.pending.len());
+        asked.extend(self.pending.drain(..upto));
+        if self.pending.is_empty() {
+            self.pending_from = None;
+        }
+    }
+}
+
+/// `PowerCmd.Decrement` of the instance `instance` on `owner`, and its
+/// removal at nothing. What its `AfterRemoved` asks for comes back.
+fn decrement<V: Rules>(
+    live: &mut Live<V>,
+    owner: CombatId,
+    instance: super::live::PowerInstance,
+) -> sts2_core::HookEffects<V> {
+    let Some(held) = live
+        .powers
+        .of_mut(owner)
+        .find(|held| held.instance == instance)
+    else {
+        return sts2_core::HookEffects::new();
+    };
+    if held.amount.count().is_some() {
+        held.amount = held.amount.ticked();
+    }
+    if !held.amount.spent() {
+        return sts2_core::HookEffects::new();
+    }
+    match live.powers.place_of(owner, instance) {
+        Some(at) => live.remove_power_at_asking(owner, at),
+        None => sts2_core::HookEffects::new(),
+    }
+}
+
 /// Which kinds of listener hear a hook, and so which a walk looks through.
 #[derive(Clone, Copy)]
 struct Kinds {
