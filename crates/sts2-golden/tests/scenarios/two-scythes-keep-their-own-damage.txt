@@ -1,0 +1,18 @@
+# A deck card's model keeps what it saved, and a fight's copy of it
+# starts from that. The Scythe gains four damage on its deck card each
+# time it is played. A second Scythe, added after the first was played,
+# has gained nothing. The next fight deals the new one at thirteen and
+# the first at seventeen.
+#
+# A fight that stores one state per card identity deals both Scythes at
+# whichever it met first.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"grant","card":"THE_SCYTHE"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":300,"target":0}
+{"cmd":"play_card","index":1,"target":1}
+{"cmd":"answer","skip":true}
+{"cmd":"grant","card":"THE_SCYTHE"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}

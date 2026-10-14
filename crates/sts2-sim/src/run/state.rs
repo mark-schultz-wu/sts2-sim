@@ -2472,12 +2472,16 @@ impl<V: Rules> State<V> {
                 }
                 HookEffect::AskEvent => Pickup::Event,
                 HookEffect::CloneDeckCard { excluding } => Pickup::CloneDeckCard { excluding },
-                // `Deck.Cards[i]` for each place the deck had as it began, so
-                // the clones are not cloned again.
+                // `CloneCard(Deck.Cards[i])` for each place the deck had as it
+                // began, so the clones are not cloned again. A clone keeps
+                // what its card's model saved.
                 HookEffect::CloneDeck => {
                     for at in 0..self.player.deck.len() {
-                        let card = self.player.deck[at].ident;
-                        self.add_to_deck(card);
+                        let card = sts2_core::DeckCard {
+                            id: self.player.mint(),
+                            ..self.player.deck[at]
+                        };
+                        self.add_deck_card(card);
                     }
                     continue;
                 }
@@ -4234,7 +4238,12 @@ impl<V: Rules> State<V> {
         let Some(card) = offered.get(index).copied() else {
             unimplemented!("a clone naming a card that was not offered");
         };
-        self.add_to_deck(card);
+        // `CloneCard`, which keeps what the card's model saved.
+        let card = sts2_core::DeckCard {
+            id: self.player.mint(),
+            ..card
+        };
+        self.add_deck_card(card);
         // `OnTryPurchaseWrapper` has returned now, so the shelf the relic came
         // off empties or restocks.
         self.purchased(shelf, spent);
@@ -4377,12 +4386,12 @@ impl<V: Rules> State<V> {
     }
 
     /// The deck as a pickup's selection offers it.
-    fn clonable(&self, excluding: sts2_core::CardKind) -> Vec<CardIdent<V>> {
+    fn clonable(&self, excluding: sts2_core::CardKind) -> Vec<sts2_core::DeckCard<V>> {
         self.player
             .deck
             .iter()
-            .map(|held| held.ident)
-            .filter(|card| V::card_kind(card.card) != Some(excluding))
+            .filter(|held| V::card_kind(held.ident.card) != Some(excluding))
+            .copied()
             .collect()
     }
 
@@ -6457,7 +6466,12 @@ impl<V: Rules> State<V> {
                             .map(|(_, card)| card)
                             .collect(),
                     ),
-                    Some(Unfinished::Pickup { excluding, .. }) => Some(self.clonable(*excluding)),
+                    Some(Unfinished::Pickup { excluding, .. }) => Some(
+                        self.clonable(*excluding)
+                            .into_iter()
+                            .map(|held| held.ident)
+                            .collect::<Vec<_>>(),
+                    ),
                     Some(Unfinished::Relic { .. }) => {
                         unreachable!("the parked pickup is asked first")
                     }
