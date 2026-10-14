@@ -29,20 +29,25 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ## Open
 
-### 1. A walk interface, and every hook on it
+### 1. Cursors behind the walk, measured
 
-Pull what the callers need from the listener walk into one interface. A
-walk begins on a hook, takes the next listener, and carries out its
-answer. It parks on a question and resumes, and it says whether a
-listener is still in the fight.
-The snapshot cursor is its reference. Behind it, measure the others:
+`listen::Cursor` says which listener a walk reaches next. `Walker` checks
+it is still in the fight, asks it, and handles a power's decrement, the
+same for every cursor. `listen::Active` names the cursor in use.
+`Snapshot`, the list taken as the walk begins, is the reference. Measure
+the others behind it, on `AfterCardPlayed` and `AfterCardDrawn` walked:
 
 - Two lists, one the walk reads and one that takes the writes.
 - Copy on write. Adding or removing a listener moves a counter, and a
   walk copies only when the counter moves under it.
 - The bounded cursor, which measured at 3.9% (memory `walk-cursor-costs`).
 
-Then every event hook walks on the winner, and the eager `notify` goes.
+The cheapest one that follows every recorded run becomes `Active`.
+
+### 2. Every hook on the walk
+
+Every event hook walks with the cursor, and the eager `notify` goes, in
+batches of call sites. There are 71.
 
 `AfterCardPlayed` needs it most, since every play walks it. A draw inside
 the walk can stop on a question, as Iron Club's does on Stratagem's pick.
@@ -60,7 +65,7 @@ on its own. Nemesis takes Intangible off as the enemies' turn ends, and
 the game then decrements the Intangible it took off. The read side of the
 walk has to keep that model writable. No recorded run parts on it yet.
 
-### 2. Every other split the recorded runs find
+### 3. Every other split the recorded runs find
 
 `cargo xtask coverage` lists the commonest first splits, by the move
 that led to each. Each one with more than a handful of runs becomes its
@@ -68,7 +73,7 @@ own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
 
-### 3. Run modifiers that change the run's own rules
+### 4. Run modifiers that change the run's own rules
 
 - Deadly Events: `AfterRunCreated` sets the odds and takes Juzu Bracelet
   out of the relic bags.
@@ -77,34 +82,34 @@ live `unimplemented!()` branches surface this way.
 
 Record 100 runs with each.
 
-### 4. Run modifiers in a fight
+### 5. Run modifiers in a fight
 
 Murderous and Terminal. `CombatState` lists the modifiers last among its
 listeners, after the cards, so they join the fight's walk there. They
 answer `AfterRoomEntered` and `AfterCreatureAddedToCombat`. This waits
-for item 1. Record 100 runs with each.
+for item 2. Record 100 runs with each.
 
-### 5. Run modifiers that carry data
+### 6. Run modifiers that carry data
 
 Hoarder saves the cards it copied, so it needs state of its own per run.
 Character Cards names a character, which the start command, the run and
-the recorded-run format have to carry. Mark revisits both after item 1.
+the recorded-run format have to carry. Mark revisits both after item 2.
 
-### 6. Run modifiers at Neow
+### 7. Run modifiers at Neow
 
 All Star, Specialized, Draft, Sealed Deck and Insanity. Neow offers each
 modifier's option in turn, and three of them empty the starting deck
 first. Draft and Sealed Deck build that deck through repeated picks. Mark
-revisits the design after item 1. Record 100 runs with each.
+revisits the design after item 2. Record 100 runs with each.
 
-### 7. v0.111.0
+### 8. v0.111.0
 
 Only the generated tables exist. Codegen runs per build as it does now.
 The behaviour is written once, for v0.107.1. A v0.111.0 rule whose game
 code did not change calls that one. The v0.107.1 rule first becomes
 generic over the build. A rule that changed gets one of its own. Then record its runs.
 
-### 8. A speed target
+### 9. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.
