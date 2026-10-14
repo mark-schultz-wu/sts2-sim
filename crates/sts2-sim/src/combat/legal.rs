@@ -474,8 +474,11 @@ fn undrinkable<V: Rules>(
         None => {}
         // `CurrentSide` not the player's, or `PlayerActionsDisabled`, which
         // ending the turn sets and the next player turn's start clears. So a
-        // question asked as the turn starts leaves potions drinkable.
-        Some(fight) if !drinking_turn::<V>(fight) => return Some(Undrinkable::NotYourTurn),
+        // question asked as the turn starts leaves potions drinkable. Only a
+        // `CombatOnly` potion asks, and one usable any time does not.
+        Some(fight) if potion.usage() == PotionUsage::CombatOnly && !drinking_turn::<V>(fight) => {
+            return Some(Undrinkable::NotYourTurn);
+        }
         Some(_) => {}
     }
     let passes = potion

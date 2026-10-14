@@ -68,13 +68,17 @@ The turn's start walks its listeners the same way. In recorded runs 461
 and 1008, Tools of the Trade's discard and Gambling Chip's choice stand
 the walk still. The game has not yet reached Pendulum. The
 sim counted Pendulum's turn before the question. Entropy's choice does
-the same in runs 611, 616, 764 and 1466.
+the same in runs 611, 616, 764, 1095 and 1466, and Tyranny's in runs 682
+and 853.
 
 A listener's `PowerCmd.Decrement` waits its turn in the walk as well. The
 sim ticks every decrement as it raises the hook, ahead of what earlier
 listeners asked for. In recorded run 267, the Soul Fysh's Intangible
-ticks off before Demise's damage lands, which the game caps at one.
-Needs a design, for Mark.
+ticks off before Demise's damage lands, which the game caps at one. In
+run 1175, Veilpiercer's own decrement takes it off before Danse Macabre
+reads Reap's cost. The game then blocks for the card at its full cost. The
+sim worked the cost out once, before the walk. Needs a design, for
+Mark.
 
 ### 4. A relic that reads the belt
 

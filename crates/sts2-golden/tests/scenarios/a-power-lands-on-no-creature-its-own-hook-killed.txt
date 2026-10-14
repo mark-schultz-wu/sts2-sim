@@ -1,0 +1,11 @@
+# `PowerCmd.Apply` asks `CanReceivePowers` again once `BeforeApplied` has
+# run. Enfeebling Touch's power takes Strength first, Sleight of Flesh
+# answers the debuff and kills the Test Subject, and the power never lands
+# on the creature left waiting to come back.
+#
+# A power that attaches to any creature still in the fight lands on it.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"TEST_SUBJECT_BOSS"}
+{"cmd":"power","power":"SLEIGHT_OF_FLESH_POWER","amount":300,"target":0}
+{"cmd":"grant","card":"ENFEEBLING_TOUCH"}
+{"cmd":"play_card","index":5,"target":1}

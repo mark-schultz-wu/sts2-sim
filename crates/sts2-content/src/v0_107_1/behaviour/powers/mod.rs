@@ -4565,13 +4565,15 @@ pub(crate) fn event_hook(
             amount: delta,
         }),
         // `SwordSagePower.AfterCardEnteredCombat`, which gives a blade that
-        // joins later the replays the ones already here were given.
+        // joins later the replays the ones already here were given. A clone
+        // copied its original's, and is given none.
         (
             Power::SwordSagePower,
             PowerAmount::Counted(amount),
             EventHook::CardEnteredCombat {
                 at,
                 card: Cards::Token(TokenCard::SovereignBlade),
+                clone: false,
                 ..
             },
         ) => Some(HookEffect::AddReplays {
