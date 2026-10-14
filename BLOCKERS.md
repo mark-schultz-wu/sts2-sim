@@ -42,7 +42,14 @@ live `unimplemented!()` branches surface this way.
 The game walks `AfterCardPlayed` listeners one at a time, and a draw
 can pause the walk. The sim raises them all first, so Bygone Effigy's
 Slow counts a card early in the preview while Stratagem's question
-waits. Needs a design, for Mark.
+waits.
+
+The walk also asks `Contains(item)` as it reaches each listener, so one
+an earlier listener took off is skipped. Recorded run 1045 shows it:
+Countdown's Doom sets off Sleight of Flesh, which kills the Living
+Shield, and the game never asks its Rampart. The sim asked Rampart with
+the rest before any of them acted, and the Turret Operator gains block.
+Needs a design, for Mark.
 
 ### 3. Ascension
 

@@ -207,6 +207,7 @@ pub(super) fn end_from_flush<V: Rules>(
         relics,
         ascension,
         <V::CombatSide as SideKinds>::ENEMY,
+        false,
     ) {
         next.skip_tick = skipping;
         if ended == super::Ended::Won {
@@ -554,6 +555,7 @@ fn start_player_turn<V: Rules>(
         relics,
         ascension,
         <V::CombatSide as SideKinds>::PLAYER,
+        extra,
     ) {
         next.skip_tick = skipping;
         if ended == super::Ended::Won {
@@ -2819,6 +2821,7 @@ pub(super) fn side_turn_started<V: Rules>(
     relics: &mut crate::run::Belt<V>,
     ascension: V::AscensionLevel,
     side: V::CombatSide,
+    extra: bool,
 ) -> Option<super::Ended> {
     let turn = live.turn;
     let mut ended = None;
@@ -2826,6 +2829,7 @@ pub(super) fn side_turn_started<V: Rules>(
         side,
         turn,
         room: live.room(),
+        extra,
     };
     for (listener, effect) in listen::notify::<V>(live, relics, hook) {
         match effect {
