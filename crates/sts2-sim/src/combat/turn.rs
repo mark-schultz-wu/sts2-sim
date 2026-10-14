@@ -501,6 +501,15 @@ fn start_player_turn<V: Rules>(
         relics,
         <V::CombatSide as SideKinds>::PLAYER,
     );
+    // A block the clear gives back can end the fight, through a hit it sets
+    // off. `ResetEnergy` still runs, but no listener hears a hook from then
+    // on, so the energy is the plain maximum and nothing is drawn.
+    if next.won && super::board::ending::<V>(listen::Walk { live: next, relics }) {
+        next.energy = max_energy;
+        next.skip_tick = skipping;
+        listen::combat_ended::<V>(next, relics);
+        return Ok(Some(super::Ended::Won));
+    }
     // `ResetEnergy`, to `MaxEnergy`, which runs `Hook.ModifyMaxEnergy`. A
     // player `Hook.ShouldPlayerResetEnergy` keeps from it adds the maximum
     // to what they have instead.

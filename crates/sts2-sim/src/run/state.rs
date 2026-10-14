@@ -1273,7 +1273,20 @@ impl<V: Rules> State<V> {
         {
             state.map = Arc::new(state.generate_map(acts[0]));
         }
+        state.act_entered();
         state
+    }
+
+    /// `Hook.AfterActEntered`, once the run stands in the act's first room.
+    ///
+    /// # Panics
+    ///
+    /// A listener whose answer asks a question.
+    fn act_entered(&mut self) {
+        let effects = self.notify_run(sts2_core::EventHook::ActEntered);
+        if self.carry_out(effects).is_some() {
+            unimplemented!("a question asked as an act is entered");
+        }
     }
 
     pub(crate) fn raw_seed(&self) -> u64 {
@@ -1969,6 +1982,7 @@ impl<V: Rules> State<V> {
         self.elite_fights = 0;
         self.events_used = 0;
         self.phase = Phase::Map;
+        self.act_entered();
         Ok(Decided::Resolved)
     }
 

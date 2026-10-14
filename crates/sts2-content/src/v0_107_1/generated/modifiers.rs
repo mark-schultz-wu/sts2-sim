@@ -349,7 +349,7 @@ static OVERRIDES: [sts2_core::Overrides; 17] = [
     // CHARACTER_CARDS
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ModifyCardRewardCreationOptions),
     // CURSED_RUN
-    sts2_core::Overrides::NONE,
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterActEntered),
     // DEADLY_EVENTS
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ModifyOddsIncreaseForUnrolledRoomType),
     // DEPRECATED_MODIFIER
