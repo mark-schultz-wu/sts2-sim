@@ -39,10 +39,13 @@ live `unimplemented!()` branches surface this way.
 
 ### 2. Run modifiers that change the run's own rules
 
-- Deadly Events: `AfterRunCreated` sets the odds and takes Juzu Bracelet
-  out of the relic bags.
-- Cursed Run: `AfterActEntered`, which gets a `ModelHook` of its own.
-- Big Game Hunter: `ModifyGeneratedMap` and card rewards.
+- Cursed Run: `AfterActEntered`, which gets a `ModelHook` of its own. It
+  draws from the curses whose `CanBeGeneratedByModifiers` holds. That is a
+  per-card property no dump carries yet, so the card dump gains a column,
+  for both builds, and the mod is deployed again.
+- Big Game Hunter: `ModifyGeneratedMap` builds the act's map again with
+  two and a half times the elites, which `MapPointTypeCounts` overrides.
+  Its elite card rewards draw from the rares alone, at even odds.
 
 Record 100 runs with each.
 

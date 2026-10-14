@@ -6,10 +6,18 @@ use sts2_core::{DecisionHook, EventHook, HookEffect, HookResponse, Modify, Modif
 use super::super::V0_107_1 as V;
 use super::super::generated::encounters::RoomType;
 use super::super::generated::modifiers::Modifier;
+use super::super::generated::relics::Relic;
 use super::super::generated::restsite::RestSiteOption;
 
 /// `NightTerrors._maxHpLoss`.
 const NIGHT_TERRORS_LOSS: i32 = 5;
+
+/// What `DeadlyEvents.AfterRunCreated` sets an unknown room's elite odds to,
+/// and their base.
+const DEADLY_ELITE_ODDS: sts2_core::Fixed = sts2_core::Fixed::new(1, 1);
+
+/// `DeadlyEvents.ModifyOddsIncreaseForUnrolledRoomType`, on a treasure's.
+const DEADLY_TREASURE_RISE: sts2_core::Fixed = sts2_core::Fixed::new(2, 0);
 
 /// What `modifier` decides for `hook`.
 ///
@@ -35,6 +43,14 @@ pub(crate) fn modify_hook(modifier: Modifier, hook: ModifyHook<V>) -> Modify<i32
         (Modifier::NightTerrors, ModifyHook::RestSiteHealAmount { max_hp }) => {
             Modify::Replaced(max_hp)
         }
+        // `DeadlyEvents.ModifyOddsIncreaseForUnrolledRoomType`: a treasure's
+        // rise doubled.
+        (Modifier::DeadlyEvents, ModifyHook::OddsIncreaseForUnrolledRoomType { room }) => {
+            match room {
+                RoomType::Treasure => Modify::Scaled(DEADLY_TREASURE_RISE),
+                _ => Modify::Nothing,
+            }
+        }
         (modifier, hook) => unimplemented!("what {modifier:?} does for {hook:?}"),
     }
 }
@@ -50,6 +66,18 @@ pub(crate) fn event_hook(
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     match (modifier, hook) {
+        // `DeadlyEvents.AfterRunCreated`: no Juzu Bracelet in either bag, and
+        // an unknown room can be an elite.
+        (Modifier::DeadlyEvents, EventHook::RunCreated) => asked.extend([
+            HookEffect::RemoveFromRelicBags(Relic::JuzuBracelet),
+            HookEffect::SetUnknownRoomOdds {
+                room: RoomType::Elite,
+                odds: DEADLY_ELITE_ODDS,
+                base: DEADLY_ELITE_ODDS,
+            },
+        ]),
+        // `OnRunCreated` alone, which clears no deck for these.
+        (_, EventHook::RunCreated) => {}
         // `Vintage.TryModifyRewardsLate`: a relic for each card reward, in a
         // monster's room.
         (Modifier::Vintage, EventHook::ModifyRewardsLate { room }) => {
@@ -80,6 +108,10 @@ pub(crate) fn event_hook(
 pub(crate) fn ported(modifier: Modifier) -> bool {
     matches!(
         modifier,
-        Modifier::Flight | Modifier::Vintage | Modifier::Midas | Modifier::NightTerrors
+        Modifier::Flight
+            | Modifier::Vintage
+            | Modifier::Midas
+            | Modifier::NightTerrors
+            | Modifier::DeadlyEvents
     )
 }

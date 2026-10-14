@@ -50,7 +50,13 @@ pub(super) fn event_hook(
             asked.push(HookEffect::FixedPathMap(&GOLDEN_PATH));
         }
         EventHook::UnknownRoomTypes { act } if state.golden_path_act == Some(act) => {
-            for room in [RoomType::Monster, RoomType::Treasure, RoomType::Shop] {
+            // Every room an unknown point can be besides an event.
+            for room in [
+                RoomType::Monster,
+                RoomType::Elite,
+                RoomType::Treasure,
+                RoomType::Shop,
+            ] {
                 asked.push(HookEffect::RemoveRoomType(room));
             }
         }

@@ -75,7 +75,7 @@ pub(crate) struct State<V: Rules> {
     /// Shared until one is written. A run walks into a handful of events over
     /// four acts, and no decision inside a fight touches the list.
     visited_events: Arc<Vec<V::Event>>,
-    unknown_odds: [f32; 3],
+    unknown_odds: [f32; 4],
     odds: Odds,
     /// Every relic this run has dealt out of a bag, in the order it dealt
     /// them.
@@ -133,11 +133,13 @@ pub(super) enum EncounterQueue {
 /// sentences. A run has four acts, and the game's own name for each is here.
 const MAP_STREAMS: [&str; 4] = ["act_1_map", "act_2_map", "act_3_map", "act_4_map"];
 
-/// `UnknownMapPointOdds`, as an act opens with them.
+/// `UnknownMapPointOdds`, as a run opens with them, in [`UnknownRoom`]'s
+/// order.
 ///
-/// The three are what an unknown room resolves to, and they climb as a run
-/// walks into ones that stay events.
-const UNKNOWN_ODDS: [f32; 3] = [0.1, 0.02, 0.03];
+/// They are what an unknown room resolves to, and they climb as a run walks
+/// into ones that stay events. The elite's are negative, so it never rolls
+/// unless a modifier says otherwise.
+const UNKNOWN_ODDS: [f32; 4] = [0.1, -1.0, 0.02, 0.03];
 
 /// `DoTreasureRoomRewards`' `NextInt(42, 53)`: a chest's gold, the top
 /// excluded.
@@ -153,6 +155,11 @@ struct RunData<V: Rules> {
     raw_seed: u64,
     character: V::Character,
     ascension: V::AscensionLevel,
+    /// `UnknownMapPointOdds`'s base odds, in [`UnknownRoom`]'s order. Each
+    /// goes back to its base once rolled and as an act opens, and rises by
+    /// it when another room rolls. A modifier can set them as the run is
+    /// created.
+    unknown_base: [f32; 4],
     /// `RunState.Modifiers`, in the order the run was started with them.
     modifiers: Vec<V::Modifier>,
     /// See [`sts2_core::Start::wins`].
@@ -605,7 +612,7 @@ pub(super) struct EnteredEvent<V: Rules> {
     pub rng: MegaRng,
     pub streams: Streams<V>,
     pub events_used: usize,
-    pub unknown_odds: [f32; 3],
+    pub unknown_odds: [f32; 4],
 }
 
 #[derive(Debug, Clone)]
@@ -744,18 +751,14 @@ pub(super) struct Asked<V: Rules> {
 }
 
 /// What an unknown room rolls besides an event, in the order
-/// `UnknownMapPointOdds` walks its odds. The elite's odds are negative, so it
-/// never rolls.
+/// `UnknownMapPointOdds` walks its odds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum UnknownRoom {
     Monster,
+    Elite,
     Treasure,
     Shop,
 }
-
-/// `UnknownMapPointOdds`'s base odds for each, in [`UnknownRoom`]'s order,
-/// which is also what each rises by when another room rolls.
-const UNKNOWN_BASE: [f32; 3] = [0.1, 0.02, 0.03];
 
 /// A fight built and not yet entered.
 ///
@@ -1103,6 +1106,42 @@ impl<V: Rules> State<V> {
             false => Default::default(),
         };
 
+        // `ModifierModel.OnRunCreated`, once the bags are filled. No ported
+        // modifier clears the deck.
+        let mut unknown_base = UNKNOWN_ODDS;
+        let mut unknown_odds = UNKNOWN_ODDS;
+        let mut out_of_bags = Vec::new();
+        for &modifier in modifiers {
+            let mut asked = sts2_core::HookEffects::new();
+            V::modifier_event_hook(modifier, sts2_core::EventHook::RunCreated, &mut asked);
+            for effect in asked {
+                match effect {
+                    sts2_core::HookEffect::RemoveFromRelicBags(relic) => out_of_bags.push(relic),
+                    sts2_core::HookEffect::SetUnknownRoomOdds { room, odds, base } => {
+                        use sts2_core::RoomKinds as _;
+                        let at = [
+                            V::RoomType::MONSTER,
+                            V::RoomType::ELITE,
+                            V::RoomType::TREASURE,
+                            V::RoomType::SHOP,
+                        ]
+                        .iter()
+                        .position(|&kind| kind == room)
+                        .unwrap_or_else(|| unimplemented!("unknown-room odds for {room:?}"));
+                        let float = |fixed: sts2_core::Fixed| {
+                            num_traits::ToPrimitive::to_f32(&fixed.exact())
+                                .expect("odds fit a float")
+                        };
+                        unknown_odds[at] = float(odds);
+                        unknown_base[at] = float(base);
+                    }
+                    effect => {
+                        unimplemented!("{modifier:?} asking for {effect:?} as the run is created")
+                    }
+                }
+            }
+        }
+
         let mut player = Player {
             relics: V::starting_relics(character)
                 .into_iter()
@@ -1141,6 +1180,7 @@ impl<V: Rules> State<V> {
                 raw_seed,
                 character,
                 ascension,
+                unknown_base,
                 modifiers: modifiers.to_vec(),
                 wins,
             }),
@@ -1156,9 +1196,9 @@ impl<V: Rules> State<V> {
             // A run opens in Neow's room, which is an event room.
             events_used: 1,
             visited_events: Arc::new(Vec::new()),
-            unknown_odds: UNKNOWN_ODDS,
+            unknown_odds,
             odds: Odds::default(),
-            dealt_relics: Arc::new(Vec::new()),
+            dealt_relics: Arc::new(out_of_bags),
             shared_dealt: Arc::new(Vec::new()),
             last_turn: None,
             removals_used: 0,
@@ -1858,7 +1898,7 @@ impl<V: Rules> State<V> {
         self.visited.clear();
         // `Odds.UnknownMapPoint.ResetToBase`, which is the only one of the
         // run's odds an act puts back.
-        self.unknown_odds = UNKNOWN_ODDS;
+        self.unknown_odds = self.shared.unknown_base;
         // Each act deals its own encounters and is met from the front of its
         // own list.
         self.normal_fights = 0;
@@ -4026,7 +4066,7 @@ impl<V: Rules> State<V> {
         &self.shared.opening.acts[self.act()].1.events
     }
 
-    pub(super) fn event_state(&self) -> (usize, &[V::Event], [f32; 3]) {
+    pub(super) fn event_state(&self) -> (usize, &[V::Event], [f32; 4]) {
         (self.events_used, &self.visited_events, self.unknown_odds)
     }
 
@@ -4830,7 +4870,6 @@ impl<V: Rules> State<V> {
             }
         }
         let removes = |room| removed.contains(&room);
-        self.unheard(sts2_core::ModelHook::ModifyOddsIncreaseForUnrolledRoomType);
         let node = |at| self.map.at(at).expect("a map edge leads to a node");
         let after = &node(to).to;
         let all_shops = !after.is_empty()
@@ -4839,37 +4878,73 @@ impl<V: Rules> State<V> {
                 .all(|&at| node(at).kind == V::MapPointType::SHOP);
         // The room the run leaves is the one it still stands in.
         let in_shop = matches!(self.phase, Phase::Shop { .. });
-        let barred = [
-            narrowed || removes(<V::RoomType as sts2_core::RoomKinds>::MONSTER),
-            narrowed || removes(<V::RoomType as sts2_core::RoomKinds>::TREASURE),
-            narrowed
-                || in_shop
-                || all_shops
-                || removes(<V::RoomType as sts2_core::RoomKinds>::SHOP),
+        use sts2_core::RoomKinds as _;
+        let types = [
+            V::RoomType::MONSTER,
+            V::RoomType::ELITE,
+            V::RoomType::TREASURE,
+            V::RoomType::SHOP,
         ];
-        let odds = &mut self.unknown_odds;
+        let barred = [
+            narrowed || removes(types[0]),
+            narrowed || removes(types[1]),
+            narrowed || removes(types[2]),
+            narrowed || in_shop || all_shops || removes(types[3]),
+        ];
         let rooms = [
             UnknownRoom::Monster,
+            UnknownRoom::Elite,
             UnknownRoom::Treasure,
             UnknownRoom::Shop,
         ];
         let roll = streams.run(V::RunRngType::UNKNOWN_MAP_POINT).next_double() as f32;
         let mut cumulative = 0.0;
+        // A room with negative odds never rolls.
         let rolled = (0..rooms.len()).find(|&at| {
-            if barred[at] {
+            if barred[at] || self.unknown_odds[at] < 0.0 {
                 return false;
             }
-            cumulative += odds[at];
+            cumulative += self.unknown_odds[at];
             roll <= cumulative
         });
+        let base = self.shared.unknown_base;
         for at in 0..rooms.len() {
             if Some(at) == rolled {
-                odds[at] = UNKNOWN_BASE[at];
+                self.unknown_odds[at] = base[at];
             } else if !barred[at] {
-                odds[at] += UNKNOWN_BASE[at];
+                let rise = self.odds_increase(types[at], base[at]);
+                self.unknown_odds[at] += rise;
             }
         }
         rolled.map(|at| rooms[at])
+    }
+
+    /// `Hook.ModifyOddsIncreaseForUnrolledRoomType` over `base`, how far an
+    /// unknown room's odds of being `room` rise when it rolls something
+    /// else. The run's modifiers answer it, in the order it holds them.
+    ///
+    /// # Panics
+    ///
+    /// A relic answering it, or a modifier answering other than by scaling.
+    fn odds_increase(&self, room: V::RoomType, base: f32) -> f32 {
+        let hook = sts2_core::ModifyHook::OddsIncreaseForUnrolledRoomType { room };
+        self.unheard(hook.model_hook());
+        let mut rise = base;
+        for &modifier in &self.shared.modifiers {
+            if !sts2_core::ModifierTable::overrides(modifier).contains(hook.model_hook()) {
+                continue;
+            }
+            let listener: crate::combat::Heard<'_, V> = sts2_core::Listener::Modifier(modifier);
+            match V::modify_hook(listener, hook) {
+                sts2_core::Modify::Nothing => {}
+                sts2_core::Modify::Scaled(by) => {
+                    rise *= num_traits::ToPrimitive::to_f32(&by.exact())
+                        .expect("an odds scale fits a float");
+                }
+                answer => unimplemented!("a modifier answering {hook:?} with {answer:?}"),
+            }
+        }
+        rise
     }
 
     /// Take back the streams a rule drew from.
