@@ -113,6 +113,7 @@ mod tests {
             self.relics.iter().map(|&relic| sts2_core::CarriedRelic {
                 relic,
                 used_up: false,
+                melted: false,
             })
         }
         fn deck(&self) -> Vec<CardIdent<V>> {

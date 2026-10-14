@@ -409,6 +409,19 @@ impl<V: Rules> Walker<V> {
     }
 }
 
+/// `CombatState.Contains` for a listener asked already: its creature, or its
+/// card, is still in the fight.
+pub(crate) fn still_in_fight<V: Rules>(live: &Live<V>, listener: Listener<V>) -> bool {
+    match listener {
+        Listener::Power { owner, .. }
+        | Listener::Monster {
+            creature: owner, ..
+        } => live.creatures.iter().any(|creature| creature.id == owner),
+        Listener::Card { id } => live.cards.named(id).is_some(),
+        Listener::Relic { .. } => true,
+    }
+}
+
 /// A walk partway through what one listener asked, which can park on a
 /// question one of its effects asks and go on after the answer.
 #[derive(Debug, Clone, PartialEq)]

@@ -32,18 +32,16 @@ Speed is a goal as well as a guard. The target is still to be set.
 ### 1. Splits the ascension runs find
 
 `cargo xtask record --ascension <rung> --append` recorded 100 runs at each
-of levels 1 to 10. Six part from the game, each for a reason of its own:
+of levels 1 to 10. Three part from the game:
 
 - Runs 1855 and 1955, the Queen. A token the player auto-plays kills the
   Torch Head Amalgam, and the sim's Queen enrages. The game's Queen goes
   on burning bright, so her `AfterDeath` there does not set her
   `HasAmalgamDied`, or her branch has not resolved.
-- Run 1800. The run's RNG counter is one ahead of the game's as a turn
-  ends against a Slimed Berserker.
-- Run 2090. A relic's amount reads 0 in the sim and 5 in the game as
-  Synchronize is played.
-- Run 2259. The Relic Trader's trade leaves the belt in another order.
-- Run 2317. Vicious's play leaves the player two hit points short.
+- Run 2090, Joss Paper. `DrawIfThresholdMet` draws, then takes the count
+  down, so a question inside the draw shows the count at five. The sim
+  takes it down before it draws. Mirroring it needs the relic to settle its
+  own count once its draw is over.
 
 ### 2. A power the walk reaches after it came off
 

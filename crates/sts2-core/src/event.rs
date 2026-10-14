@@ -10,6 +10,8 @@ pub struct CarriedRelic<V: ContentVersion> {
     /// `RelicModel.IsUsedUp`, which some relics work out from what they
     /// saved.
     pub used_up: bool,
+    /// `RelicModel.IsMelted`: Toy Box melted it, and it stays on the belt.
+    pub melted: bool,
 }
 
 /// The read-only run facts event behavior can inspect.
