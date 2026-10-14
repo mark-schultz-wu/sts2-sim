@@ -1,0 +1,47 @@
+# Vintage swaps each card reward of a monster fight for a relic reward,
+# where the card reward stood. The relic is pulled once the reward hooks
+# are through. Without it, the first fight offers gold and a card reward.
+{"cmd":"start","seed":"C000000000","character":"IRONCLAD","ascension":"None","modifiers":["VINTAGE"],"wins":5}
+{"cmd":"grant","relic":"GORGET"}
+{"cmd":"grant","relic":"GORGET"}
+{"cmd":"grant","relic":"GORGET"}
+{"cmd":"grant","relic":"GORGET"}
+{"cmd":"grant","relic":"GORGET"}
+{"cmd":"grant","relic":"GORGET"}
+{"cmd":"grant","relic":"GORGET"}
+{"cmd":"grant","relic":"GORGET"}
+{"cmd":"grant","relic":"GORGET"}
+{"cmd":"grant","relic":"GORGET"}
+{"cmd":"grant","relic":"GORGET"}
+{"cmd":"grant","relic":"GORGET"}
+{"cmd":"grant","relic":"GORGET"}
+{"cmd":"grant","relic":"GORGET"}
+{"cmd":"grant","relic":"GORGET"}
+{"cmd":"grant","relic":"GORGET"}
+{"cmd":"grant","relic":"GORGET"}
+{"cmd":"grant","relic":"GORGET"}
+{"cmd":"grant","relic":"GORGET"}
+{"cmd":"grant","relic":"GORGET"}
+{"cmd":"grant","relic":"GORGET"}
+{"cmd":"grant","relic":"GORGET"}
+{"cmd":"grant","relic":"GORGET"}
+{"cmd":"grant","relic":"GORGET"}
+{"cmd":"grant","relic":"GORGET"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"travel","col":4,"row":1}
+{"cmd":"play_card","index":4,"target":null}
+{"cmd":"play_card","index":2,"target":null}
+{"cmd":"play_card","index":2,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":3,"target":1}
+{"cmd":"play_card","index":1,"target":null}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":0,"target":null}
+{"cmd":"play_card","index":3,"target":null}
+{"cmd":"play_card","index":1,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":1,"target":null}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":4,"target":1}
+{"cmd":"play_card","index":1,"target":1}

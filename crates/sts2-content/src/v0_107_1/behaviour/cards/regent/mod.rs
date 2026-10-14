@@ -321,8 +321,8 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
     }
 }
 
-/// Its damage to the target, as one attack.
-fn strike<F: Fight<V>>(fight: &mut F) {
+/// Its damage to the target, as one attack, and the attack's results.
+fn strike<F: Fight<V>>(fight: &mut F) -> sts2_core::AttackResults<V> {
     use sts2_core::{Amount, Effect, Scaling};
 
     let target = fight.target();
@@ -334,20 +334,13 @@ fn strike<F: Fight<V>>(fight: &mut F) {
             scaling: Scaling::Dynamic,
         });
         fight.apply(attack);
-    });
+    })
 }
 
-/// `KnockoutBlow`: its damage to the target, then its stars where the hit
-/// killed it.
+/// `KnockoutBlow`: its damage to the target, then its stars where a result
+/// says `WasTargetKilled`, whatever brought the target back after.
 fn knockout_blow<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    use sts2_core::CreatureView as _;
-
-    let target = fight.target();
-    strike(fight);
-    let standing = fight
-        .creatures()
-        .any(|creature| creature.id() == target && creature.alive());
-    if !standing {
+    if strike(fight).iter().any(|result| result.killed) {
         fight.gain_stars(fight.var(CardVar::Stars));
     }
     Played::Done

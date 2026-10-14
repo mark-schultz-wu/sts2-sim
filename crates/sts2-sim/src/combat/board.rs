@@ -2524,12 +2524,18 @@ impl<'a, V: Rules> Board<'a, V> {
                         }
                     });
                 }
+                // `PowerCmd.Apply`, which every power answering a hit gives no
+                // `cardSource`, even inside a card's play.
                 HookEffect::ApplyPower {
                     target,
                     power,
                     amount,
                     applier,
-                } => self.land(target, power, amount, applier),
+                } => {
+                    let playing = self.playing.take();
+                    self.land(target, power, amount, applier);
+                    self.playing = playing;
+                }
                 HookEffect::LoseMaxHpOf { target, amount } => {
                     sts2_core::Fight::lose_max_hp(self, target, amount)
                 }
@@ -4156,16 +4162,31 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn gain_gold(&mut self, amount: V::Number) {
         self.ran_on();
-        // `Hook.ModifyGoldGained` and `AfterModifyingGoldGained`, which
-        // nothing in a fight answers yet.
-        for hook in [
-            sts2_core::ModelHook::ModifyGoldGained,
-            sts2_core::ModelHook::AfterModifyingGoldGained,
-        ] {
-            if super::listen::heard::<V>(self.live, self.relics, hook) {
-                unimplemented!("a listener hearing {} as a fight gains gold", hook.name());
-            }
+        // `Hook.ModifyGoldGained`, over the fight's listeners in the order
+        // the game asks them, as Bowler Hat scales a gain.
+        let hook = sts2_core::ModifyHook::GoldGained;
+        let mut gained = exact::<V>(amount);
+        super::listen::each::<V>(
+            self.walk(),
+            sts2_core::Overrides::of(hook.model_hook()),
+            |listener, _| match <V as sts2_core::Hooks>::modify_hook(listener, hook) {
+                Modify::Nothing => {}
+                Modify::Scaled(by) => gained *= by.exact(),
+                // The listener's own number in place of what it was handed.
+                Modify::Replaced(with) => gained = exact::<V>(with),
+                answer => unimplemented!("a listener answering {hook:?} with {answer:?}"),
+            },
+        );
+        // `AfterModifyingGoldGained`, which only flashes what answered.
+        let asked = super::listen::notify::<V>(
+            self.live,
+            self.relics,
+            sts2_core::EventHook::GoldGainModified,
+        );
+        if let Some((listener, effect)) = asked.first() {
+            unimplemented!("{listener:?} asking for {effect:?} as a gold gain is modified");
         }
+        let amount = whole::<V>(gained);
         if amount <= V::Number::zero() {
             return;
         }
@@ -5138,18 +5159,22 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         }
         let ascension = self.ascension;
         if !self.pausable() {
-            shuffle::<V>(self.live, self.rngs.reborrow(), self.relics, ascension);
+            self.ended = shuffle::<V>(self.live, self.rngs.reborrow(), self.relics, ascension);
             return;
         }
         if self.live.asking.is_some() {
             unimplemented!("a shuffle behind a question an effect already asked");
         }
         // Inside an effect, a listener's question stands the effect still.
-        let Some((pile, selection, act)) =
-            shuffle_asking::<V>(self.live, self.rngs.reborrow(), self.relics, ascension)
-        else {
-            return;
-        };
+        let (pile, selection, act) =
+            match shuffle_asking::<V>(self.live, self.rngs.reborrow(), self.relics, ascension) {
+                Ok(Some(asks)) => asks,
+                Ok(None) => return,
+                Err(ended) => {
+                    self.ended = Some(ended);
+                    return;
+                }
+            };
         if !self.live.after_pick.is_empty() {
             unimplemented!("listeners behind a shuffle's question outside a draw");
         }
@@ -5492,14 +5517,19 @@ pub(super) type ShuffleAsks = (Pile, sts2_core::Selection, sts2_core::PileAct);
 ///
 /// A listener asking the player something after the shuffle, which only a
 /// draw that can pause carries out.
+#[must_use = "a listener after the shuffle can end the fight"]
 pub(super) fn shuffle<V: Rules>(
     live: &mut Live<V>,
     rngs: CombatRngs<'_>,
     relics: &mut Belt<V>,
     ascension: V::AscensionLevel,
-) {
-    if let Some(asks) = shuffle_asking::<V>(live, rngs, relics, ascension) {
-        unimplemented!("a shuffle asking for {asks:?} inside a draw that cannot pause");
+) -> Option<super::Ended> {
+    match shuffle_asking::<V>(live, rngs, relics, ascension) {
+        Ok(None) => None,
+        Ok(Some(asks)) => {
+            unimplemented!("a shuffle asking for {asks:?} inside a draw that cannot pause")
+        }
+        Err(ended) => Some(ended),
     }
 }
 
@@ -5540,13 +5570,19 @@ pub(super) fn gain_unpowered_block<V: Rules>(
 }
 
 /// [`shuffle`], handing back the selection a listener asks for after it,
-/// which is `CardSelectCmd.FromCombatPile` inside `AfterShuffle`.
+/// which is `CardSelectCmd.FromCombatPile` inside `AfterShuffle`. Or how a
+/// listener's command after it ended the fight, as Smokestack's damage over
+/// a Status card one adds can.
+///
+/// # Panics
+///
+/// A listener asking a question after another ended the fight.
 pub(super) fn shuffle_asking<V: Rules>(
     live: &mut Live<V>,
     rngs: CombatRngs<'_>,
     relics: &mut Belt<V>,
     ascension: V::AscensionLevel,
-) -> Option<ShuffleAsks> {
+) -> Result<Option<ShuffleAsks>, super::Ended> {
     // `Hook.ModifyShuffleOrder` walks its listeners while the cards still
     // stand in the piles they are shuffled from, so the order they move in
     // is that walk's. Each moves its card in the list once it is shuffled.
@@ -5570,7 +5606,7 @@ pub(super) fn shuffle_asking<V: Rules>(
     // `Hook.AfterShuffle`.
     let asked = super::listen::notify::<V>(live, relics, sts2_core::EventHook::Shuffled);
     if asked.is_empty() {
-        return None;
+        return Ok(None);
     }
     let mut asks = None;
     let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
@@ -5604,7 +5640,13 @@ pub(super) fn shuffle_asking<V: Rules>(
             effect => unimplemented!("{listener:?} asking for {effect:?} after a shuffle"),
         }
     }
-    asks
+    match (board.ended(), asks) {
+        (None, asks) => Ok(asks),
+        (Some(ended), None) => Err(ended),
+        (Some(ended), Some(asks)) => {
+            unimplemented!("a shuffle asking for {asks:?} in a fight that ended {ended:?}")
+        }
+    }
 }
 
 impl<V: Rules> Board<'_, V> {
@@ -6138,11 +6180,14 @@ pub(super) fn auto_play_from_draw<V: Rules>(
     }
     for taking in 0..left {
         // `ShuffleIfNecessary`, which needs a discard pile to shuffle in.
-        if live.cards.is_empty(Pile::Draw)
-            && !live.cards.is_empty(Pile::Discard)
-            && let Some((pile, selection, act)) =
-                shuffle_asking::<V>(live, rngs.reborrow(), relics, ascension)
-        {
+        let asks = match live.cards.is_empty(Pile::Draw) && !live.cards.is_empty(Pile::Discard) {
+            true => match shuffle_asking::<V>(live, rngs.reborrow(), relics, ascension) {
+                Ok(asks) => asks,
+                Err(ended) => return Some(ended),
+            },
+            false => None,
+        };
+        if let Some((pile, selection, act)) = asks {
             if !pausable {
                 unimplemented!("a shuffle asking for {pile:?} outside an effect's auto-play");
             }
@@ -6327,11 +6372,16 @@ pub(super) fn draw_pausing<V: Rules>(
             if live.cards.is_empty(Pile::Discard) {
                 return Drawn::Done(ended);
             }
-            if let Some(asks) = shuffle_asking::<V>(live, rngs.reborrow(), relics, ascension) {
-                return Drawn::Paused {
-                    left: count - drawing,
-                    asks,
-                };
+            match shuffle_asking::<V>(live, rngs.reborrow(), relics, ascension) {
+                Ok(None) => {}
+                Ok(Some(asks)) => {
+                    return Drawn::Paused {
+                        left: count - drawing,
+                        asks,
+                    };
+                }
+                // `IsOverOrEnding` stops the draw.
+                Err(ended) => return Drawn::Done(Some(ended)),
             }
         }
         let drawn = live

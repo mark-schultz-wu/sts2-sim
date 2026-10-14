@@ -1582,13 +1582,15 @@ pub(super) fn carry_setup<V: Rules>(
                             if !live.cards.is_empty(Pile::Draw) {
                                 continue;
                             }
-                            let Some((pile, selection, act)) = super::board::shuffle_asking::<V>(
+                            let (pile, selection, act) = match super::board::shuffle_asking::<V>(
                                 live,
                                 rngs.reborrow(),
                                 relics,
                                 ascension,
-                            ) else {
-                                continue;
+                            ) {
+                                Ok(Some(asks)) => asks,
+                                Ok(None) => continue,
+                                Err(ended) => return Carried::Done(Some(ended)),
                             };
                             match select::<V>(live, rngs.reborrow(), relics, pile, selection, act) {
                                 Err(question) => {

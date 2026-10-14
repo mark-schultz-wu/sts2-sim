@@ -184,12 +184,12 @@ pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<
             Played::Done
         }
         // `Feed`: its damage to the target, then its `MaxHp` onto its owner's
-        // maximum where the hit killed a target whose death, read before the
-        // hit, triggers Fatal.
+        // maximum where a result says `WasTargetKilled` of a target whose
+        // death, read before the hit, triggers Fatal.
         IroncladCard::Feed => {
             let target = fight.target();
             let fatal = fight.death_triggers_fatal(target);
-            fight.attack(Scaling::Dynamic, |fight| {
+            let results = fight.attack(Scaling::Dynamic, |fight| {
                 let attack = fight.resolve(Effect::Attack {
                     dealer: fight.actor(),
                     target,
@@ -198,10 +198,7 @@ pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<
                 });
                 fight.apply(attack);
             });
-            let standing = fight
-                .creatures()
-                .any(|creature| creature.id() == target && creature.alive());
-            if fatal && !standing {
+            if fatal && results.iter().any(|result| result.killed) {
                 fight.gain_max_hp(fight.actor(), fight.var(CardVar::MaxHp));
             }
             Played::Done

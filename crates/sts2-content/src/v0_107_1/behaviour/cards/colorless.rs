@@ -52,15 +52,15 @@ pub(super) fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played
     match card {
         ColorlessCard::Volley => volley(fight),
         ColorlessCard::Catastrophe => catastrophe(fight, fight.var(CardVar::Cards)),
-        // `HandOfGreed`: its damage to the target, then its `Gold` where the
-        // hit killed a target whose death, read before the hit, triggers
-        // Fatal.
+        // `HandOfGreed`: its damage to the target, then its `Gold` where a
+        // result says `WasTargetKilled` of a target whose death, read before
+        // the hit, triggers Fatal.
         ColorlessCard::HandOfGreed => {
-            use sts2_core::{Amount, CreatureView as _, Effect, Scaling};
+            use sts2_core::{Amount, Effect, Scaling};
 
             let target = fight.target();
             let fatal = fight.death_triggers_fatal(target);
-            fight.attack(Scaling::Dynamic, |fight| {
+            let results = fight.attack(Scaling::Dynamic, |fight| {
                 let attack = fight.resolve(Effect::Attack {
                     dealer: fight.actor(),
                     target,
@@ -69,10 +69,7 @@ pub(super) fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played
                 });
                 fight.apply(attack);
             });
-            let standing = fight
-                .creatures()
-                .any(|creature| creature.id() == target && creature.alive());
-            if fatal && !standing {
+            if fatal && results.iter().any(|result| result.killed) {
                 fight.gain_gold(fight.var(CardVar::Gold));
             }
             Played::Done

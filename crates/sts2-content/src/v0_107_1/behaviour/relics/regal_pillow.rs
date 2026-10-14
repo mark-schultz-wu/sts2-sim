@@ -13,7 +13,7 @@ const HEAL: Number = 15;
 /// the relic is drawn.
 pub(super) fn modify_hook(hook: ModifyHook<V>) -> Modify<Number> {
     match hook {
-        ModifyHook::RestSiteHealAmount => Modify::Added(HEAL),
+        ModifyHook::RestSiteHealAmount { .. } => Modify::Added(HEAL),
         hook => unimplemented!("what RegalPillow does for {hook:?}"),
     }
 }
