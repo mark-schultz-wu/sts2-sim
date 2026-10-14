@@ -45,7 +45,10 @@ does, and the draw finishes after the answer. The sim finds what Scrape
 drew by comparing the hand before and after, and that comparison runs
 before the draw pauses. Recorded run 1424 shows it: Scrape keeps two
 Strikes and a Compact the game discards. Pillage reads its draw the same
-way. The history keeps the card a draw drew but not which copy. Carrying
+way, and a drawn card can leave the hand before the comparison runs, with
+no pause. In recorded run 151 a Strike Pillage draws is discarded as it
+lands. The sim stops drawing there, and the game draws an Evil Eye.
+The history keeps the card a draw drew but not which copy. Carrying
 the copies across the pause needs a design, for Mark.
 
 ### 3. A listener walk that can pause

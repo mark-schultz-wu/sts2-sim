@@ -1401,6 +1401,11 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                 let Asker::Card(play) = effect.asker else {
                     break;
                 };
+                // `OnPlayWrapper` returns where it stands once the player is
+                // dead, which leaves the card in the play pile.
+                if next.lost {
+                    return Ok(effect.ended);
+                }
                 let card = play.id;
                 let face = next
                     .cards
