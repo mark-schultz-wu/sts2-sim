@@ -381,6 +381,15 @@ impl sts2_core::Rules for V0_107_1 {
         sts2_core::Table::data(character).deck.iter().collect()
     }
 
+    fn ascension_deck(ascension: Self::AscensionLevel) -> Option<Self::Card> {
+        use generated::ascension::AscensionLevel;
+        use generated::cards::{Cards, CurseCard};
+
+        ascension
+            .has(AscensionLevel::AscendersBane)
+            .then_some(Cards::Curse(CurseCard::AscendersBane))
+    }
+
     fn starting_relics(character: Self::Character) -> Vec<Self::Relic> {
         sts2_core::Table::data(character)
             .starting_relics

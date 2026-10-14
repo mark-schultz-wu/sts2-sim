@@ -7,6 +7,7 @@
 //! ```text
 //! cargo xtask record
 //! cargo xtask record --runs 10 --character SILENT --width 8
+//! cargo xtask record --runs 50 --ascension DoubleBoss --append
 //! ```
 //!
 //! A game waits on its frames rather than the processor, so many run at once,
@@ -42,6 +43,14 @@ pub struct Args {
     /// Where the runs go.
     #[arg(long, default_value = "crates/sts2-golden/tests/recorded.bin")]
     out: PathBuf,
+    /// The ascension level every run plays at, by the id the game spells it
+    /// with.
+    #[arg(long, default_value = "None")]
+    ascension: String,
+    /// Add the runs to those `out` already holds, rather than replace them.
+    /// Both have to come from one build of the game.
+    #[arg(long)]
+    append: bool,
 }
 
 /// One run that did not come back.
@@ -57,6 +66,8 @@ pub fn run(args: Args) -> Result<String, crate::error::ProcessError> {
         mut characters,
         width,
         out,
+        ascension,
+        append,
     } = args;
     if characters.is_empty() {
         characters = CHARACTERS.iter().map(|c| c.to_string()).collect();
@@ -86,12 +97,14 @@ pub fn run(args: Args) -> Result<String, crate::error::ProcessError> {
     std::thread::scope(|scope| {
         for worker in 0..width.max(1) {
             let home = scratch.join(format!("home{worker}"));
-            let (jobs, next, retried, failed, recorder, scratch) =
-                (&jobs, &next, &retried, &failed, &recorder, &scratch);
+            let (jobs, next, retried, failed, recorder, scratch, ascension) = (
+                &jobs, &next, &retried, &failed, &recorder, &scratch, &ascension,
+            );
             scope.spawn(move || {
                 while let Some((seed, character)) = jobs.get(next.fetch_add(1, Ordering::Relaxed)) {
                     let at = run_file(scratch, character, seed);
-                    if let Err(why) = record_one(recorder, seed, character, &at, &home, retried) {
+                    let run = (seed.as_str(), character.as_str(), ascension.as_str());
+                    if let Err(why) = record_one(recorder, run, &at, &home, retried) {
                         failed.lock().expect("no thread panics").push(Failed {
                             seed: seed.clone(),
                             character: character.clone(),
@@ -110,7 +123,18 @@ pub fn run(args: Args) -> Result<String, crate::error::ProcessError> {
         .filter(|file| file.is_file())
         .collect();
     let target = root.join(&out);
-    crate::error::status(Command::new(&merger).arg(&target).args(&kept))?;
+    // The runs `out` held go first, when these join them.
+    let held = (append && target.is_file()).then(|| {
+        let held = scratch.join("held.bin");
+        std::fs::copy(&target, &held).map(|_| held)
+    });
+    let held = held
+        .transpose()
+        .map_err(|source| crate::error::ProcessError::Io {
+            what: "keeping the runs already recorded",
+            source,
+        })?;
+    crate::error::status(Command::new(&merger).arg(&target).args(&held).args(&kept))?;
 
     let mut report = format!(
         "{} of {} runs recorded into {}, {} played again after a crash\n",
@@ -138,8 +162,7 @@ fn run_file(scratch: &Path, character: &str, seed: &str) -> PathBuf {
 /// Plays one run, again after a crash, and says why it failed if it did.
 fn record_one(
     recorder: &Path,
-    seed: &str,
-    character: &str,
+    (seed, character, ascension): (&str, &str, &str),
     out: &Path,
     home: &Path,
     retried: &AtomicUsize,
@@ -151,6 +174,7 @@ fn record_one(
         let output = Command::new(recorder)
             .args([seed, character])
             .arg(out)
+            .args(["--ascension", ascension])
             .arg("--data-home")
             .arg(home)
             .output()

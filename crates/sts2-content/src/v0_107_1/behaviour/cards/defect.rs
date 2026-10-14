@@ -432,17 +432,20 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
             add_status(fight, StatusCard::Void);
             Played::Done
         }
-        // `Sunder`: its damage to the target, then its energy where the hit
-        // killed it.
+        // `Sunder`: its damage to the target, then its energy where a result
+        // says `WasTargetKilled`, whatever brought the target back after.
         DefectCard::Sunder => {
-            use sts2_core::CreatureView as _;
-
             let target = fight.target();
-            hit(fight, target, 1);
-            let standing = fight
-                .creatures()
-                .any(|creature| creature.id() == target && creature.alive());
-            if !standing {
+            let results = fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            if results.iter().any(|result| result.killed) {
                 fight.modify_energy(fight.var(CardVar::Energy));
             }
             Played::Done

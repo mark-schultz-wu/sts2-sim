@@ -2255,11 +2255,20 @@ pub(super) fn act_on<V: Rules>(
         if !asked_before && live.asking.is_some() && taking > 0 {
             unimplemented!("{act:?} of more cards behind a question");
         }
-        let from = card.pile();
+        // `CardCmd` acts on the card wherever it stands now, which an
+        // earlier card's hook can have moved.
+        let from = match live.cards.find(card.pile(), card.id()) {
+            Some(_) => card.pile(),
+            None => live
+                .cards
+                .find_any(card.id())
+                .unwrap_or_else(|| unimplemented!("a picked card that left the fight"))
+                .pile(),
+        };
         let at = live
             .cards
             .find(from, card.id())
-            .unwrap_or_else(|| unimplemented!("a picked card that left its pile"));
+            .expect("a card stands in the pile it was just found in");
         let to = match act {
             // `CardCmd.Exhaust`, which raises its hook once the card is
             // down, and does nothing once the fight is over or ending.

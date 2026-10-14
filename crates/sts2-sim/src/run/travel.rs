@@ -1,6 +1,6 @@
 //! Moving to a map point, and entering what waits there.
 
-use sts2_core::{AscensionKinds, Coord, Decided, MapPointKinds, Reason, Rules};
+use sts2_core::{Coord, Decided, MapPointKinds, Reason, Rules};
 
 use super::State;
 use super::state::{EncounterQueue, Location, UnknownRoom};
@@ -97,16 +97,9 @@ impl<V: Rules> State<V> {
                 return Ok(Decided::Resolved);
             }
             if kind == V::MapPointType::ANCIENT {
-                // `AncientEventModel.BeforeEventStarted`, which heals what the
-                // run is missing before the ancient says anything. The rung
-                // that heals four fifths of it instead is not ported.
-                if self
-                    .ascension()
-                    .has(<V::AscensionLevel as AscensionKinds>::WEARY_TRAVELER)
-                {
-                    unimplemented!("an ancient healing a weary traveller");
-                }
-                self.heal_fully();
+                // `AncientEventModel.BeforeEventStarted`, which heals before
+                // the ancient says anything.
+                self.ancient_heal();
                 // The act rolled which ancient it opens on when it rolled its
                 // rooms, so nothing is drawn for it here. The question mark
                 // odds and the event queue are the unknown rooms' own, and an

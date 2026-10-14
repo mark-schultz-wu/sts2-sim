@@ -1,5 +1,6 @@
 //! Card rewards drawn from a player's reward stream.
 
+use super::combat::scarce;
 use sts2_core::rng::{Bound, GameRng};
 use sts2_core::{CardIdent, CardTable as _, Drafted, RewardRarity, Rules};
 
@@ -80,6 +81,7 @@ impl<V: Rules> Pool<V> {
 /// `upgrade_in` is the act the roll is made in, which sets its chance. At
 /// Neow the chance is zero, but the roll still happens.
 pub(crate) fn regular<V: Rules, R: GameRng>(
+    ascension: V::AscensionLevel,
     rng: &mut R,
     cards: Drafted<'_, V::Card>,
     count: usize,
@@ -90,7 +92,7 @@ pub(crate) fn regular<V: Rules, R: GameRng>(
     for _ in 0..count {
         // `RollWithBaseOdds`, which holds the roll to the uncommon odds
         // alone. The offset roll a fight makes adds them to the rare's.
-        let (rare, uncommon) = RarityOdds::Regular.bands();
+        let (rare, uncommon) = RarityOdds::Regular.bands(scarce::<V>(ascension));
         let roll = rng.next_double() as f32;
         let wanted = if roll < rare {
             RewardRarity::Rare
@@ -113,7 +115,7 @@ pub(crate) fn regular<V: Rules, R: GameRng>(
             .expect("the draw is inside the count");
         drawn.push(card);
         offered.push(match upgrade_in {
-            Some(act) => roll_for_upgrade::<V, R>(rng, card, act),
+            Some(act) => roll_for_upgrade::<V, R>(ascension, rng, card, act),
             None => CardIdent::new(card),
         });
     }
@@ -148,7 +150,9 @@ pub(crate) fn uniform_of<V: Rules, R: GameRng>(
     pool: &[V::Card],
     count: usize,
 ) -> Vec<V::Card> {
-    uniform_rolled::<V, R>(rng, pool, count, None)
+    // No upgrade roll, so no ascension reads anything.
+    let none = <V::AscensionLevel as sts2_core::AscensionKinds>::NONE;
+    uniform_rolled::<V, R>(none, rng, pool, count, None)
         .into_iter()
         .map(|card| card.card)
         .collect()
@@ -157,6 +161,7 @@ pub(crate) fn uniform_of<V: Rules, R: GameRng>(
 /// [`uniform_of`], with [`roll_for_upgrade`] after each card in the act
 /// `upgrade_in` names.
 pub(crate) fn uniform_rolled<V: Rules, R: GameRng>(
+    ascension: V::AscensionLevel,
     rng: &mut R,
     pool: &[V::Card],
     count: usize,
@@ -175,7 +180,7 @@ pub(crate) fn uniform_rolled<V: Rules, R: GameRng>(
             .unwrap_or_else(|_| unimplemented!("a reward pool with no card left"));
         drawn.push(card);
         offered.push(match upgrade_in {
-            Some(act) => roll_for_upgrade::<V, R>(rng, card, act),
+            Some(act) => roll_for_upgrade::<V, R>(ascension, rng, card, act),
             None => CardIdent::new(card),
         });
     }
@@ -184,13 +189,23 @@ pub(crate) fn uniform_rolled<V: Rules, R: GameRng>(
 
 /// `CardFactory.RollForUpgrade` from no base chance, in the act at `act`: one
 /// roll, whatever the card. One that is not rare upgrades at a quarter per
-/// act.
-fn roll_for_upgrade<V: Rules, R: GameRng>(rng: &mut R, card: V::Card, act: usize) -> CardIdent<V> {
+/// act, or an eighth in a scarce run.
+fn roll_for_upgrade<V: Rules, R: GameRng>(
+    ascension: V::AscensionLevel,
+    rng: &mut R,
+    card: V::Card,
+    act: usize,
+) -> CardIdent<V> {
     let upgrade_roll = rng.next_double() as f32;
+    // `UpgradedCardOddScaling`.
+    let scaling = match scarce::<V>(ascension) {
+        true => 0.125,
+        false => 0.25,
+    };
     let upgrade_chance = if V::reward_rarity(card) == RewardRarity::Rare {
         0.0
     } else {
-        act as f32 * 0.25
+        act as f32 * scaling
     };
     let mut ident = CardIdent::new(card);
     if card.max_upgrade() > 0 && upgrade_roll <= upgrade_chance {
@@ -263,13 +278,16 @@ pub(crate) enum RarityOdds {
 }
 
 impl RarityOdds {
-    /// The chance of a rare, then of an uncommon.
-    fn bands(self) -> (f32, f32) {
-        match self {
-            RarityOdds::Regular => (0.03, 0.37),
-            RarityOdds::Elite => (0.1, 0.4),
+    /// The chance of a rare, then of an uncommon. A scarce run halves the
+    /// rare's, near enough.
+    fn bands(self, scarce: bool) -> (f32, f32) {
+        match (self, scarce) {
+            (RarityOdds::Regular, false) => (0.03, 0.37),
+            (RarityOdds::Regular, true) => (0.0149, 0.37),
+            (RarityOdds::Elite, false) => (0.1, 0.4),
+            (RarityOdds::Elite, true) => (0.05, 0.4),
             // A boss pays a rare and nothing else.
-            RarityOdds::Boss => (1.0, 0.0),
+            (RarityOdds::Boss, _) => (1.0, 0.0),
         }
     }
 
@@ -288,8 +306,10 @@ impl RarityOdds {
 /// Where the offset goes back to once a rare lands.
 const OFFSET_BASE: f32 = -0.05;
 
-/// What a roll that is not a rare adds to the offset, and the cap it climbs to.
+/// What a roll that is not a rare adds to the offset, `RarityGrowth`, which
+/// a scarce run halves. And the cap it climbs to.
 const OFFSET_GROWTH: f32 = 0.01;
+const SCARCE_OFFSET_GROWTH: f32 = 0.005;
 const OFFSET_MAX: f32 = 0.4;
 
 /// Draw distinct cards the way a won fight does.
@@ -310,13 +330,11 @@ pub(crate) fn encounter<V: Rules, R: GameRng>(
     act: usize,
     bands: RarityOdds,
 ) -> Vec<CardIdent<V>> {
-    if super::combat::scarce::<V>(ascension) {
-        unimplemented!("the reward odds a scarce run rolls");
-    }
+    let scarce = scarce::<V>(ascension);
     let mut drawn: Vec<V::Card> = Vec::with_capacity(count);
     let mut offered = Vec::with_capacity(count);
     for _ in 0..count {
-        let wanted = rarity(rng, odds, bands);
+        let wanted = rarity(rng, odds, bands, scarce);
         let choices = available::<V>(cards, &drawn, wanted);
         let left = choices.iter().filter(|card| !drawn.contains(card)).count();
         let left = num_traits::cast(left).expect("an available rarity fits the RNG integer");
@@ -330,7 +348,7 @@ pub(crate) fn encounter<V: Rules, R: GameRng>(
             .copied()
             .expect("the draw is inside the count");
         drawn.push(card);
-        offered.push(roll_for_upgrade::<V, R>(rng, card, act));
+        offered.push(roll_for_upgrade::<V, R>(ascension, rng, card, act));
     }
     offered
 }
@@ -346,12 +364,13 @@ pub(crate) fn encounter<V: Rules, R: GameRng>(
 ///
 /// An empty pool.
 pub(crate) fn added<V: Rules, R: GameRng>(
+    ascension: V::AscensionLevel,
     rng: &mut R,
     pool: &[V::Card],
     bands: RarityOdds,
     act: usize,
 ) -> CardIdent<V> {
-    let (rare, uncommon) = bands.bands();
+    let (rare, uncommon) = bands.bands(scarce::<V>(ascension));
     let roll = rng.next_double() as f32;
     let wanted = if roll < rare {
         RewardRarity::Rare
@@ -381,12 +400,21 @@ pub(crate) fn added<V: Rules, R: GameRng>(
     let bound = Bound::try_new(count).expect("an available rarity has a card");
     let at: usize =
         num_traits::cast(rng.next_int(bound)).expect("a bounded draw is a valid card index");
-    roll_for_upgrade::<V, R>(rng, choices[at], act)
+    roll_for_upgrade::<V, R>(ascension, rng, choices[at], act)
 }
 
 /// One rarity, and the offset it leaves behind.
-fn rarity<R: GameRng>(rng: &mut R, odds: &mut Odds, bands: RarityOdds) -> RewardRarity {
-    let (rare, uncommon) = bands.bands();
+fn rarity<R: GameRng>(
+    rng: &mut R,
+    odds: &mut Odds,
+    bands: RarityOdds,
+    scarce: bool,
+) -> RewardRarity {
+    let (rare, uncommon) = bands.bands(scarce);
+    let growth = match scarce {
+        true => SCARCE_OFFSET_GROWTH,
+        false => OFFSET_GROWTH,
+    };
     let rolled = rng.next_double() as f32;
     let rare_below = rare + bands.offset(odds.rarity);
     let wanted = if rolled < rare_below {
@@ -398,7 +426,7 @@ fn rarity<R: GameRng>(rng: &mut R, odds: &mut Odds, bands: RarityOdds) -> Reward
     };
     odds.rarity = match wanted {
         RewardRarity::Rare => OFFSET_BASE,
-        _ => (odds.rarity + OFFSET_GROWTH).min(OFFSET_MAX),
+        _ => (odds.rarity + growth).min(OFFSET_MAX),
     };
     wanted
 }

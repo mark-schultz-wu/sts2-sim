@@ -1,0 +1,6 @@
+# A run at Deadly Enemies opens with every rung below it. Weary Traveler
+# leaves Neow's heal four fifths of the way, at 64 of 80. Tight Belt takes a
+# potion slot, and Ascender's Bane joins the deck.
+#
+# A rung left out opens at full health, with three slots, or with no curse.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"DeadlyEnemies"}

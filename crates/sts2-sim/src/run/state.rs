@@ -177,9 +177,30 @@ fn sold<V: Rules>(entries: &mut [sts2_core::Entry<V>], index: u8) {
     }
 }
 
+/// The health an ancient's heal leaves the run at, from `hp` of `max_hp`.
+/// `SetCurrentHpInternal` truncates what four fifths of the gap leaves.
+fn ancient_heal<V: Rules>(
+    ascension: V::AscensionLevel,
+    hp: V::Health,
+    max_hp: V::Health,
+) -> V::Health {
+    use sts2_core::AscensionKinds as _;
+
+    match ascension.has(<V::AscensionLevel as sts2_core::AscensionKinds>::WEARY_TRAVELER) {
+        true => {
+            let (four, five): (V::Health, V::Health) = (
+                num_traits::cast(4).expect("four fits a health"),
+                num_traits::cast(5).expect("five fits a health"),
+            );
+            hp + (max_hp - hp) * four / five
+        }
+        false => max_hp,
+    }
+}
+
 /// `MerchantCardRemovalEntry.CalcCost`, in the build's own number.
-fn removal_cost<V: Rules>(used: usize) -> V::Number {
-    num_traits::cast(super::shop::removal_cost(used))
+fn removal_cost<V: Rules>(used: usize, ascension: V::AscensionLevel) -> V::Number {
+    num_traits::cast(super::shop::removal_cost::<V>(used, ascension))
         .expect("a removal price fits the build's number")
 }
 
@@ -1048,15 +1069,26 @@ impl<V: Rules> State<V> {
             potion_positions: Bounded::new(),
             deck: Arc::new(Vec::new()),
             minted: sts2_core::DeckCardId::new(0),
-            hp: V::starting_hp(character),
+            // Neow's `BeforeEventStarted` sets it to nothing and heals what
+            // is missing, which a weary traveller gets four fifths of.
+            hp: ancient_heal::<V>(ascension, num_traits::zero(), V::starting_hp(character)),
             max_hp: V::starting_hp(character),
             gold: num_traits::cast(V::starting_gold(character))
                 .expect("starting gold fits the build's game-number type"),
             potion_slots: num_traits::cast(V::starting_potion_slots())
                 .expect("starting potion slots fit the build's count type"),
         };
+        // `AscensionManager.ApplyEffectsTo`: a slot fewer, and the curse on
+        // the end of the deck.
+        if sts2_core::AscensionKinds::has(
+            ascension,
+            <V::AscensionLevel as sts2_core::AscensionKinds>::TIGHT_BELT,
+        ) {
+            player.potion_slots = player.potion_slots - num_traits::one();
+        }
         let deck = V::starting_deck(character)
             .into_iter()
+            .chain(V::ascension_deck(ascension))
             .map(|card| sts2_core::DeckCard::new(player.mint(), CardIdent::new(card)))
             .collect();
         player.deck = Arc::new(deck);
@@ -2065,6 +2097,7 @@ impl<V: Rules> State<V> {
                         narrow(pool.rare),
                     );
                     let drawn = crate::reward::card::regular::<V, _>(
+                        self.ascension(),
                         self.streams.player(V::PlayerRngType::REWARDS),
                         sts2_core::Drafted {
                             common: &common,
@@ -2634,6 +2667,7 @@ impl<V: Rules> State<V> {
                             self.card_reward_unheard();
                             let character = self.character();
                             crate::reward::card::regular::<V, _>(
+                                self.ascension(),
                                 self.streams.player(V::PlayerRngType::REWARDS),
                                 V::reward_cards(character),
                                 count,
@@ -3146,28 +3180,34 @@ impl<V: Rules> State<V> {
     ) -> Vec<CardIdent<V>> {
         use sts2_core::CustomReward;
 
-        let (character, act) = (self.character(), self.act());
+        let (character, act, ascension) = (self.character(), self.act(), self.ascension());
         let rng = stream_of(&mut self.phase, &mut self.streams, stream);
         match reward {
             CustomReward::CharacterCards {
                 count,
                 upgrade_roll,
             } => crate::reward::card::regular::<V, _>(
+                ascension,
                 rng,
                 pool.expect("a character's card reward has its pools")
                     .drafted(),
                 count,
                 upgrade_roll.then_some(act),
             ),
-            CustomReward::ColorlessCards(count) => {
-                crate::reward::card::regular::<V, _>(rng, V::colorless_cards(), count, None)
-            }
+            CustomReward::ColorlessCards(count) => crate::reward::card::regular::<V, _>(
+                ascension,
+                rng,
+                V::colorless_cards(),
+                count,
+                None,
+            ),
             CustomReward::CardsOf {
                 pool,
                 rarity,
                 count,
                 upgrade_roll,
             } => crate::reward::card::uniform_rolled::<V, _>(
+                ascension,
                 rng,
                 V::reward_cards(pool.unwrap_or(character)).at(rarity),
                 count,
@@ -3541,9 +3581,10 @@ impl<V: Rules> State<V> {
             .map(|character| {
                 // `CardFactory.CreateForReward` of one card, with its hooks.
                 self.card_reward_unheard();
-                let act = self.act();
+                let (act, ascension) = (self.act(), self.ascension());
                 let rng = self.streams.player(V::PlayerRngType::REWARDS);
                 let [card] = crate::reward::card::regular::<V, _>(
+                    ascension,
                     rng,
                     V::reward_cards(character),
                     1,
@@ -3852,12 +3893,11 @@ impl<V: Rules> State<V> {
         }
     }
 
-    /// Put the run back to the health it started with.
-    ///
-    /// `CreatureCmd.Heal(MaxHp - CurrentHp)`, which is what an ancient gives a
-    /// run before it offers anything.
-    pub(super) fn heal_fully(&mut self) {
-        self.heal(self.player.max_hp - self.player.hp);
+    /// `AncientEventModel.BeforeEventStarted`: `CreatureCmd.Heal` of what the
+    /// run is missing, which a weary traveller gets four fifths of.
+    pub(super) fn ancient_heal(&mut self) {
+        let (hp, max_hp) = (self.player.hp, self.player.max_hp);
+        self.heal(ancient_heal::<V>(self.ascension(), hp, max_hp) - hp);
     }
 
     /// The ancient this act opens on, which it rolled with its rooms.
@@ -4373,7 +4413,7 @@ impl<V: Rules> State<V> {
         // back, and `CardShopRemovalsUsed` climbs over the run.
         let spent = match free {
             true => num_traits::zero(),
-            false => self.merchant_price(removal_cost::<V>(self.removals_used)),
+            false => self.merchant_price(removal_cost::<V>(self.removals_used, self.ascension())),
         };
         self.player.gold = self.player.gold - spent;
         self.removals_used += 1;
@@ -4547,6 +4587,7 @@ impl<V: Rules> State<V> {
             floor: num_traits::cast(self.floor + num_traits::one()).expect("a floor fits a usize"),
             character: self.shared.character,
             offset: self.odds.rarity,
+            ascension: self.ascension(),
             removals_used: self.removals_used,
         }
         .stock();
@@ -5180,6 +5221,7 @@ impl<V: Rules> State<V> {
         self.card_reward_unheard();
         let act = self.act();
         let mut offered = crate::reward::card::regular::<V, _>(
+            self.ascension(),
             self.streams.player(V::PlayerRngType::REWARDS),
             V::colorless_cards(),
             2,
@@ -6305,6 +6347,7 @@ impl<V: Rules> State<V> {
             floor: num_traits::cast(self.floor).expect("a floor fits a usize"),
             character: self.shared.character,
             offset: self.odds.rarity,
+            ascension: self.ascension(),
             removals_used: self.removals_used,
         }
         .restock(usize::from(index), stock, &on_shelves);
