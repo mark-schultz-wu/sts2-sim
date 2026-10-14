@@ -159,6 +159,20 @@ struct RunData<V: Rules> {
     wins: u32,
 }
 
+/// A reward of a set while `Hook.ModifyRewards` runs. It is filled in
+/// already, or a hook added or swapped it in, and `Populate` fills it in
+/// once the hooks are through.
+enum Filling<V: Rules> {
+    Filled(Offer<V>),
+    /// `RelicReward(player)`, of no set rarity.
+    Relic,
+    /// `CardReward` at the odds of `room`, rerollable once `CanReroll` is set.
+    Card {
+        room: crate::reward::combat::Room,
+        reroll: bool,
+    },
+}
+
 /// `ClearAfterPurchase`, which empties one shelf.
 ///
 /// Each subclass drops what it was holding, so the slot keeps its index and
@@ -961,7 +975,7 @@ impl<V: Rules> State<V> {
             }
         }
         let hook = sts2_core::EventHook::GeneratedMap { act: self.act };
-        for effect in self.notify_belt(hook) {
+        for effect in self.notify_run(hook) {
             match effect {
                 sts2_core::HookEffect::FixedPathMap(rooms) => map = ActMap::fixed_path(rooms),
                 effect => unimplemented!("a relic asking for {effect:?} as a map is generated"),
@@ -987,7 +1001,7 @@ impl<V: Rules> State<V> {
             }
         }
         let hook = sts2_core::EventHook::GeneratedMapLate { act: self.act };
-        for effect in self.notify_belt(hook) {
+        for effect in self.notify_run(hook) {
             match effect {
                 sts2_core::HookEffect::MarkCombatPoints { relic, count, name } => {
                     self.mark_combat_points(&map, relic, count, name);
@@ -1523,7 +1537,7 @@ impl<V: Rules> State<V> {
             crate::combat::belt_changed(fighting, hook);
             return;
         }
-        if let Some(effect) = self.notify_belt(hook).first() {
+        if let Some(effect) = self.notify_run(hook).first() {
             unimplemented!("a relic asking for {effect:?} on {hook:?} outside a fight");
         }
     }
@@ -2779,7 +2793,7 @@ impl<V: Rules> State<V> {
             }
         }
         if let Some(effect) = self
-            .notify_belt(sts2_core::EventHook::GoldGainModified)
+            .notify_run(sts2_core::EventHook::GoldGainModified)
             .first()
         {
             unimplemented!("a relic asking for {effect:?} as a gold gain is modified");
@@ -2795,7 +2809,7 @@ impl<V: Rules> State<V> {
             {
                 unimplemented!("a deck card listening to AfterGoldGained");
             }
-            let asked = self.notify_belt(sts2_core::EventHook::GoldGained);
+            let asked = self.notify_run(sts2_core::EventHook::GoldGained);
             if let Some(asked) = self.carry_out(asked) {
                 let pickup = asked.pickup;
                 unimplemented!("a relic asking for {pickup:?} as gold is gained");
@@ -2884,7 +2898,7 @@ impl<V: Rules> State<V> {
                 in_fight: false,
                 player: self.player_health(),
             };
-            if let Some(effect) = self.notify_belt(hook).first() {
+            if let Some(effect) = self.notify_run(hook).first() {
                 unimplemented!("a relic asking for {effect:?} as damage lands outside a fight");
             }
         }
@@ -3035,7 +3049,9 @@ impl<V: Rules> State<V> {
             .expect("maximum health fits an unsigned rest calculation");
         let mut healed: V::Number =
             num_traits::cast(max_hp * 3 / 10).expect("rest healing fits a game number");
-        let hook = sts2_core::ModifyHook::RestSiteHealAmount;
+        let max_hp: V::Number =
+            num_traits::cast(max_hp).expect("maximum health fits a game number");
+        let hook = sts2_core::ModifyHook::RestSiteHealAmount { max_hp };
         let mut left = self
             .player
             .relics
@@ -3054,15 +3070,28 @@ impl<V: Rules> State<V> {
                 answer => unimplemented!("a relic answering {hook:?} with {answer:?}"),
             }
         }
+        for &modifier in &self.shared.modifiers {
+            if !sts2_core::ModifierTable::overrides(modifier).contains(hook.model_hook()) {
+                continue;
+            }
+            let listener: crate::combat::Heard<'_, V> = sts2_core::Listener::Modifier(modifier);
+            match V::modify_hook(listener, hook) {
+                sts2_core::Modify::Nothing => {}
+                sts2_core::Modify::Replaced(with) => healed = with,
+                answer => unimplemented!("a modifier answering {hook:?} with {answer:?}"),
+            }
+        }
         let healed: V::Health =
             num_traits::cast(healed).expect("rest healing fits the build's health type");
         self.heal(healed);
-        let asked = self.notify_belt(sts2_core::EventHook::RestSiteHeal { mimicked });
+        let max_hp =
+            num_traits::cast(self.player.max_hp).expect("maximum health fits a game number");
+        let asked = self.notify_run(sts2_core::EventHook::RestSiteHeal { mimicked, max_hp });
         if let Some(asked) = self.carry_out(asked) {
             let pickup = asked.pickup;
             unimplemented!("a rest site's heal asking for {pickup:?}");
         }
-        let rewards = self.notify_belt(sts2_core::EventHook::RestSiteHealRewards { mimicked });
+        let rewards = self.notify_run(sts2_core::EventHook::RestSiteHealRewards { mimicked });
         self.carry_out(rewards)
     }
 
@@ -3267,48 +3296,101 @@ impl<V: Rules> State<V> {
         }
     }
 
-    /// `Hook.ModifyRewards`, once a set is filled in. A reward it adds is
-    /// filled in after, and the set's sort puts it among its own kind.
+    /// `Hook.ModifyRewards`, once a set is filled in: `TryModifyRewards`,
+    /// then `TryModifyRewardsLate`. A reward they add or swap in is filled
+    /// in once both are through, in the set's order. The set's sort then
+    /// puts it among its own kind.
     ///
     /// # Panics
     ///
-    /// A relic modifying rewards some other way, or late.
+    /// A listener modifying rewards some other way.
     pub(super) fn modify_rewards(
         &mut self,
         offered: &mut Vec<Offer<V>>,
         room: Option<V::RoomType>,
     ) {
+        use crate::reward::combat::Room;
+        use sts2_core::RoomKinds as _;
+
+        let mut set: Vec<Filling<V>> = offered.drain(..).map(Filling::Filled).collect();
         let hook = sts2_core::EventHook::ModifyRewards {
             room,
             act: self.act(),
             acts: self.shared.opening.acts.len(),
         };
-        for effect in self.notify_belt(hook) {
+        for effect in self.notify_run(hook) {
             match effect {
                 sts2_core::HookEffect::AddRelicRewards(count) => {
-                    for _ in 0..count {
-                        let (rng, _) = self.rewarding();
-                        let rarity = crate::reward::relic_rarity::<V, _>(rng);
-                        let relic = self.pull_relic(rarity);
-                        offered.push(Offer::Relic {
-                            relic,
-                            rarity: <_ as sts2_core::RarityKinds>::UNDRAFTED,
-                            wax: false,
-                            taken: false,
-                        });
-                    }
+                    set.extend((0..count).map(|_| Filling::Relic));
                 }
-                // `CardReward.Populate` after the hook: three cards at the
-                // odds of the room named.
-                sts2_core::HookEffect::AddCardReward(room) => {
-                    use crate::reward::combat::Room;
-                    use sts2_core::RoomKinds as _;
-
-                    let room = match room {
+                sts2_core::HookEffect::AddCardReward(room) => set.push(Filling::Card {
+                    room: match room {
                         room if room == V::RoomType::ELITE => Room::Elite,
                         room if room == V::RoomType::BOSS => Room::Boss,
                         _ => Room::Monster,
-                    };
+                    },
+                    reroll: false,
+                }),
+                // `GoldReward(amount)` sets its amount as it is built, so it
+                // is populated already and draws nothing.
+                sts2_core::HookEffect::AddGoldReward(amount) => {
+                    set.push(Filling::Filled(Offer::Gold {
+                        amount,
+                        taken: false,
+                    }))
+                }
+                effect => unimplemented!("a listener modifying rewards with {effect:?}"),
+            }
+        }
+        let late = self.notify_run(sts2_core::EventHook::ModifyRewardsLate { room });
+        for effect in late {
+            match effect {
+                sts2_core::HookEffect::RerollableCardRewards => {
+                    for filling in set.iter_mut() {
+                        if let Filling::Filled(Offer::Card { reroll, .. })
+                        | Filling::Card { reroll, .. } = filling
+                        {
+                            *reroll = true;
+                        }
+                    }
+                }
+                // `new GoldReward(Amount * 2)`, populated as it is built.
+                sts2_core::HookEffect::DoubleGoldRewards => {
+                    for filling in set.iter_mut() {
+                        if let Filling::Filled(Offer::Gold { amount, .. }) = filling {
+                            *amount = *amount + *amount;
+                        }
+                    }
+                }
+                // `new RelicReward(player)` where each card reward stood.
+                sts2_core::HookEffect::RelicRewardsForCardRewards => {
+                    for filling in set.iter_mut() {
+                        if let Filling::Filled(Offer::Card { .. }) | Filling::Card { .. } = filling
+                        {
+                            *filling = Filling::Relic;
+                        }
+                    }
+                }
+                effect => unimplemented!("a listener modifying rewards late with {effect:?}"),
+            }
+        }
+        for filling in set {
+            let offer = match filling {
+                Filling::Filled(offer) => offer,
+                // `RelicReward.Populate` of no set rarity.
+                Filling::Relic => {
+                    let (rng, _) = self.rewarding();
+                    let rarity = crate::reward::relic_rarity::<V, _>(rng);
+                    Offer::Relic {
+                        relic: self.pull_relic(rarity),
+                        rarity: <_ as sts2_core::RarityKinds>::UNDRAFTED,
+                        wax: false,
+                        taken: false,
+                    }
+                }
+                // `CardReward.Populate`: three cards at the odds of the room
+                // named.
+                Filling::Card { room, reroll } => {
                     let ascension = self.ascension();
                     let act = self.act();
                     // `CardCreationOptions.ForRoom`, whose source is an
@@ -3329,35 +3411,16 @@ impl<V: Rules> State<V> {
                         unreachable!("a card reward rolls a card offer");
                     };
                     self.reward_options(&mut cards, true);
-                    offered.push(Offer::Card {
+                    Offer::Card {
                         cards,
                         rolled: Some(crate::reward::Rolled::Room(room)),
-                        reroll: false,
+                        reroll,
                         sacrifice: false,
                         taken: false,
-                    });
-                }
-                // `GoldReward(amount)` sets its amount as it is built, so it
-                // is populated already and draws nothing.
-                sts2_core::HookEffect::AddGoldReward(amount) => offered.push(Offer::Gold {
-                    amount,
-                    taken: false,
-                }),
-                effect => unimplemented!("a relic modifying rewards with {effect:?}"),
-            }
-        }
-        let late = self.notify_belt(sts2_core::EventHook::ModifyRewardsLate);
-        for effect in late {
-            match effect {
-                sts2_core::HookEffect::RerollableCardRewards => {
-                    for offer in offered.iter_mut() {
-                        if let Offer::Card { reroll, .. } = offer {
-                            *reroll = true;
-                        }
                     }
                 }
-                effect => unimplemented!("a relic modifying rewards late with {effect:?}"),
-            }
+            };
+            offered.push(offer);
         }
         self.card_reward_alternatives(offered);
     }
@@ -3368,7 +3431,7 @@ impl<V: Rules> State<V> {
             let Offer::Card { sacrifice, .. } = offer else {
                 continue;
             };
-            for effect in self.notify_belt(sts2_core::EventHook::CardRewardAlternatives) {
+            for effect in self.notify_run(sts2_core::EventHook::CardRewardAlternatives) {
                 match effect {
                     sts2_core::HookEffect::OfferRewardAlternative(
                         sts2_core::RewardAlternative::Sacrifice,
@@ -3403,7 +3466,7 @@ impl<V: Rules> State<V> {
             card: card.ident.card,
             cloned: false,
         };
-        for effect in self.notify_belt(hook) {
+        for effect in self.notify_run(hook) {
             match effect {
                 HookEffect::CloneIntoDeck => {
                     let clone = sts2_core::DeckCard {
@@ -3415,7 +3478,7 @@ impl<V: Rules> State<V> {
                         card: card.ident.card,
                         cloned: true,
                     };
-                    for effect in self.notify_belt(hook) {
+                    for effect in self.notify_run(hook) {
                         self.card_joined_deck(effect);
                     }
                 }
@@ -3450,10 +3513,10 @@ impl<V: Rules> State<V> {
     }
 
     /// `hook`, raised on each relic on the belt that overrides it, in slot
-    /// order, and what they ask the run for.
-    ///
-    /// A run with no fight has no other listeners.
-    pub(super) fn notify_belt(
+    /// order, then on each of the run's modifiers that does. Hands back what
+    /// they ask the run for. That is `RunState.IterateHookListeners`, whose
+    /// potions answer none of the hooks raised here.
+    pub(super) fn notify_run(
         &mut self,
         hook: sts2_core::EventHook<V>,
     ) -> sts2_core::HookEffects<V> {
@@ -3467,6 +3530,11 @@ impl<V: Rules> State<V> {
             left &= left - 1;
             let (state, belt) = self.player.relics.state_beside(slot);
             V::relic_event_hook(state, belt, hook, &mut asked);
+        }
+        for &modifier in &self.shared.modifiers {
+            if sts2_core::ModifierTable::overrides(modifier).contains(model_hook) {
+                V::modifier_event_hook(modifier, hook, &mut asked);
+            }
         }
         asked
     }
@@ -3730,7 +3798,7 @@ impl<V: Rules> State<V> {
 
         let own = self.character();
         let mut pools: SmallVec<[Source<V>; 6]> = smallvec::smallvec![Source::Character(own)];
-        for effect in self.notify_belt(sts2_core::EventHook::CardRewardCreationOptions) {
+        for effect in self.notify_run(sts2_core::EventHook::CardRewardCreationOptions) {
             match effect {
                 // `Union`: the new pools first, then what was there and is
                 // not among them.
@@ -3771,7 +3839,7 @@ impl<V: Rules> State<V> {
     pub(super) fn card_reward_unheard(&mut self) {
         self.unheard(sts2_core::ModelHook::ModifyCardRewardUpgradeOdds);
         if let Some(effect) = self
-            .notify_belt(sts2_core::EventHook::CardRewardOptions { encounter: false })
+            .notify_run(sts2_core::EventHook::CardRewardOptions { encounter: false })
             .first()
         {
             unimplemented!("a relic asking for {effect:?} over a card reward");
@@ -3782,7 +3850,7 @@ impl<V: Rules> State<V> {
     /// of each option the belt adds.
     pub(super) fn card_reward_added(&mut self) -> Vec<sts2_core::CardKind> {
         self.unheard(sts2_core::ModelHook::ModifyCardRewardUpgradeOdds);
-        self.notify_belt(sts2_core::EventHook::CardRewardOptions { encounter: true })
+        self.notify_run(sts2_core::EventHook::CardRewardOptions { encounter: true })
             .into_iter()
             .map(|effect| match effect {
                 sts2_core::HookEffect::AddCardRewardOption(kind) => kind,
@@ -3809,7 +3877,7 @@ impl<V: Rules> State<V> {
             self.reward_options_of(slot, cards, card_reward);
         }
         let modified = sts2_core::EventHook::CardRewardOptionsModified { card_reward };
-        let asked = self.notify_belt(modified);
+        let asked = self.notify_run(modified);
         if let Some(effect) = asked.first() {
             unimplemented!("a relic asking for {effect:?} once a card reward was modified");
         }
@@ -3918,7 +3986,7 @@ impl<V: Rules> State<V> {
         mut card: CardIdent<V>,
         hook: impl Fn(CardIdent<V>) -> sts2_core::EventHook<V>,
     ) -> CardIdent<V> {
-        card = rewrite(card, self.notify_belt(hook(card)));
+        card = rewrite(card, self.notify_run(hook(card)));
         card
     }
 
@@ -3993,7 +4061,7 @@ impl<V: Rules> State<V> {
     ///
     /// A relic asking for something the run cannot carry out as it enters.
     fn room_entered(&mut self, room: V::RoomType, strayed: bool, point: Option<V::MapPointType>) {
-        let asked = self.notify_belt(sts2_core::EventHook::RoomEntered {
+        let asked = self.notify_run(sts2_core::EventHook::RoomEntered {
             room,
             strayed,
             point,
@@ -4659,16 +4727,20 @@ impl<V: Rules> State<V> {
     /// Enter a rest site, with the options this run's belt and deck open it on.
     pub(super) fn enter_rest_site(&mut self, at: Location) {
         let deck: Vec<CardIdent<V>> = self.player.deck.iter().map(|held| held.ident).collect();
-        // `TryModifyRestSiteOptions`, which the belt answers after the deck.
-        let from_belt: Vec<V::RestSiteOption> = self
-            .notify_belt(sts2_core::EventHook::RestSiteOptions)
-            .into_iter()
-            .map(|effect| match effect {
-                sts2_core::HookEffect::OfferRestOption(option) => option,
-                effect => unimplemented!("a relic asking for {effect:?} as a rest site opens"),
-            })
-            .collect();
-        let options = <V::RestSiteOption as sts2_core::RestKinds<V>>::offered(&from_belt, &deck);
+        // `TryModifyRestSiteOptions`, which the belt answers after the deck,
+        // and the modifiers after the belt.
+        let mut from_belt: Vec<V::RestSiteOption> = Vec::new();
+        let mut withdrawn: Vec<V::RestSiteOption> = Vec::new();
+        for effect in self.notify_run(sts2_core::EventHook::RestSiteOptions) {
+            match effect {
+                sts2_core::HookEffect::OfferRestOption(option) => from_belt.push(option),
+                sts2_core::HookEffect::WithdrawRestOption(option) => withdrawn.push(option),
+                effect => unimplemented!("a listener asking for {effect:?} as a rest site opens"),
+            }
+        }
+        let mut options =
+            <V::RestSiteOption as sts2_core::RestKinds<V>>::offered(&from_belt, &deck);
+        options.retain(|option| !withdrawn.contains(option));
         self.enter(
             at,
             Phase::RestSite {
@@ -4743,7 +4815,7 @@ impl<V: Rules> State<V> {
             .any(|card| V::deck_card_narrows_unknown_rooms(card, self.act));
         // The same hook on the belt, where a relic takes a room type out.
         let mut removed: SmallVec<[V::RoomType; 2]> = SmallVec::new();
-        for effect in self.notify_belt(sts2_core::EventHook::UnknownRoomTypes { act: self.act }) {
+        for effect in self.notify_run(sts2_core::EventHook::UnknownRoomTypes { act: self.act }) {
             match effect {
                 sts2_core::HookEffect::RemoveRoomType(room) => removed.push(room),
                 effect => unimplemented!("a relic asking for {effect:?} as an unknown room rolls"),
@@ -5808,7 +5880,7 @@ impl<V: Rules> State<V> {
                 }
                 *taken = true;
                 let chosen = sts2_core::EventHook::CardRewardAlternativeChosen(alternative);
-                let effects = self.notify_belt(chosen);
+                let effects = self.notify_run(chosen);
                 return self.carry_out(effects);
             }
             _ => unimplemented!("a reward taken as the wrong kind"),
@@ -6320,7 +6392,7 @@ impl<V: Rules> State<V> {
     ///
     /// A relic asking for something as it hears of the purchase.
     fn item_purchased(&mut self, gold: V::Number) {
-        let asked = self.notify_belt(sts2_core::EventHook::ItemPurchased { gold });
+        let asked = self.notify_run(sts2_core::EventHook::ItemPurchased { gold });
         if let Some(effect) = asked.first() {
             unimplemented!("a relic asking for {effect:?} after a purchase");
         }

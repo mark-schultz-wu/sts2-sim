@@ -3296,8 +3296,11 @@ pub enum ModifyHook<V: ContentVersion> {
     /// `ModifyGoldGained`: the gold the player is about to gain, outside a
     /// fight.
     GoldGained,
-    /// `ModifyRestSiteHealAmount`: what a rest site's heal gives the player.
-    RestSiteHealAmount,
+    /// `ModifyRestSiteHealAmount`: what a rest site's heal gives the player,
+    /// whose maximum health is `max_hp`.
+    RestSiteHealAmount {
+        max_hp: V::Number,
+    },
     /// `ModifyDamageAdditive`. The target is absent for a hit previewed
     /// against nobody.
     DamageAdditive {
@@ -3489,7 +3492,7 @@ impl<V: ContentVersion> ModifyHook<V> {
     pub const fn combat_listeners(&self) -> bool {
         match self {
             ModifyHook::GoldGained
-            | ModifyHook::RestSiteHealAmount
+            | ModifyHook::RestSiteHealAmount { .. }
             | ModifyHook::DamageAdditive { .. }
             | ModifyHook::DamageMultiplicative { .. }
             | ModifyHook::DamageCap { .. }
@@ -3539,7 +3542,7 @@ impl<V: ContentVersion> ModifyHook<V> {
             ModifyHook::PowerAmountReceived { .. } => ModelHook::TryModifyPowerAmountReceived,
             ModifyHook::HandDrawLate { .. } => ModelHook::ModifyHandDrawLate,
             ModifyHook::GoldGained => ModelHook::ModifyGoldGained,
-            ModifyHook::RestSiteHealAmount => ModelHook::ModifyRestSiteHealAmount,
+            ModifyHook::RestSiteHealAmount { .. } => ModelHook::ModifyRestSiteHealAmount,
             ModifyHook::MaxEnergy { .. } => ModelHook::ModifyMaxEnergy,
             ModifyHook::EnergyGain { .. } => ModelHook::ModifyEnergyGain,
             ModifyHook::StarCost { .. } => ModelHook::TryModifyStarCost,
@@ -3839,8 +3842,9 @@ pub enum EventHook<V: ContentVersion> {
         /// `RunState.Acts.Count`.
         acts: usize,
     },
-    /// `TryModifyRewardsLate`, once `TryModifyRewards` is through.
-    ModifyRewardsLate,
+    /// `TryModifyRewardsLate`, once `TryModifyRewards` is through, for the
+    /// same rewards as [`EventHook::ModifyRewards`].
+    ModifyRewardsLate { room: Option<V::RoomType> },
     /// `TryModifyCardRewardAlternatives`, for one card reward.
     CardRewardAlternatives,
     /// A card reward's alternative chosen, which is its `OnSelect`. Only the
@@ -3862,8 +3866,9 @@ pub enum EventHook<V: ContentVersion> {
     /// of this type.
     CombatEnd { room: V::RoomType },
     /// `AfterRestSiteHeal`, once a rest site's heal has landed. `mimicked`
-    /// for a heal an event gives the way a rest site does.
-    RestSiteHeal { mimicked: bool },
+    /// for a heal an event gives the way a rest site does. `max_hp` is the
+    /// player's maximum health then.
+    RestSiteHeal { mimicked: bool, max_hp: V::Number },
     /// `TryModifyRestSiteHealRewards`, once `AfterRestSiteHeal` has run. A
     /// listener answers with the rewards it adds.
     RestSiteHealRewards { mimicked: bool },
@@ -4414,7 +4419,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::GeneratedMapLate { .. } => ModelHook::ModifyGeneratedMapLate,
             EventHook::CardRewardCreationOptions => ModelHook::ModifyCardRewardCreationOptions,
             EventHook::ModifyRewards { .. } => ModelHook::TryModifyRewards,
-            EventHook::ModifyRewardsLate => ModelHook::TryModifyRewardsLate,
+            EventHook::ModifyRewardsLate { .. } => ModelHook::TryModifyRewardsLate,
             EventHook::CardRewardAlternatives | EventHook::CardRewardAlternativeChosen(_) => {
                 ModelHook::TryModifyCardRewardAlternatives
             }
@@ -5400,6 +5405,11 @@ pub enum HookEffect<V: ContentVersion> {
     MeltFirstWax,
     /// `CanReroll = true` on each card reward of the set.
     RerollableCardRewards,
+    /// Each gold reward of the set made again at twice its amount.
+    DoubleGoldRewards,
+    /// Each card reward of the set swapped, where it stands, for a relic
+    /// reward of no set rarity.
+    RelicRewardsForCardRewards,
     /// A `CardRewardAlternative` added to the card reward's list.
     OfferRewardAlternative(crate::RewardAlternative),
     /// `Rng.NextInt(below)` off a stream, drawn for its place in the stream
@@ -5417,6 +5427,9 @@ pub enum HookEffect<V: ContentVersion> {
     ProcurePotion(V::Potion),
     /// A rest site option added to those a rest site offers.
     OfferRestOption(V::RestSiteOption),
+    /// Every rest site option of this kind taken off those a rest site
+    /// offers.
+    WithdrawRestOption(V::RestSiteOption),
     /// One more option on a card reward: a card of this kind from the pool
     /// the reward drew, by `CreateForReward` from `CardCreationSource.Other`.
     /// It is one the reward does not offer, unless it offers them all.
@@ -6513,6 +6526,14 @@ pub trait Hooks: ContentVersion {
     fn deck_card_event_hook(
         card: Self::Card,
         state: &mut Self::CardState,
+        hook: EventHook<Self>,
+        asked: &mut HookEffects<Self>,
+    );
+
+    /// [`Hooks::power_event_hook`] for a run modifier, which saves nothing
+    /// of its own.
+    fn modifier_event_hook(
+        modifier: Self::Modifier,
         hook: EventHook<Self>,
         asked: &mut HookEffects<Self>,
     );

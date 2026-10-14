@@ -166,9 +166,8 @@ impl sts2_core::Hooks for V0_107_1 {
             sts2_core::Listener::Potion(potion) => {
                 unimplemented!("what {potion:?} does for {hook:?}")
             }
-            // No modifier in this build overrides a number's hook.
             sts2_core::Listener::Modifier(modifier) => {
-                unimplemented!("what {modifier:?} does for {hook:?}")
+                behaviour::modifiers::modify_hook(modifier, hook)
             }
         }
     }
@@ -315,6 +314,14 @@ impl sts2_core::Hooks for V0_107_1 {
         asked: &mut sts2_core::HookEffects<Self>,
     ) {
         behaviour::cards::deck_event_hook(card, state, hook, asked)
+    }
+
+    fn modifier_event_hook(
+        modifier: Self::Modifier,
+        hook: sts2_core::EventHook<Self>,
+        asked: &mut sts2_core::HookEffects<Self>,
+    ) {
+        behaviour::modifiers::event_hook(modifier, hook, asked)
     }
 
     fn modifier_ported(modifier: Self::Modifier) -> bool {

@@ -116,7 +116,7 @@ impl<V: Rules> State<V> {
             if self.carry_out(effects).is_some() {
                 unimplemented!("a potion drunk outside a fight that asks a question");
             }
-            let used = self.notify_belt(sts2_core::EventHook::PotionUsed {
+            let used = self.notify_run(sts2_core::EventHook::PotionUsed {
                 in_fight: false,
                 holding_potions: self.holding_potions(),
             });

@@ -338,17 +338,15 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
             fight.apply_to_actor(Power::ShadowStepPower, PowerAmount::Counted(1));
             Played::Done
         }
-        // `TheHunt`: its damage to the target. Where the hit killed a target
-        // whose death, read before the hit, triggers Fatal, the room offers
-        // one more card reward, and its owner takes one The Hunt.
+        // `TheHunt`: its damage to the target. Where a result says
+        // `WasTargetKilled` of a target whose death, read before the hit,
+        // triggers Fatal, the room offers one more card reward, and its owner
+        // takes one The Hunt.
         SilentCard::TheHunt => {
             let target = fight.target();
             let fatal = fight.death_triggers_fatal(target);
-            hit_target(fight, 1);
-            let standing = fight
-                .creatures()
-                .any(|creature| creature.id() == target && creature.alive());
-            if fatal && !standing {
+            let results = hit_target(fight, 1);
+            if fatal && results.iter().any(|result| result.killed) {
                 fight.add_card_reward();
                 fight.apply_to_actor(Power::TheHuntPower, PowerAmount::Counted(1));
             }
@@ -541,7 +539,7 @@ fn dagger_throw<F: Fight<V>>(fight: &mut F) -> Played<V> {
 }
 
 /// Its damage to the target, `hits` times, as one attack.
-fn hit_target<F: Fight<V>>(fight: &mut F, hits: super::Number) {
+fn hit_target<F: Fight<V>>(fight: &mut F, hits: super::Number) -> sts2_core::AttackResults<V> {
     let target = fight.target();
     fight.attack(Scaling::Dynamic, |fight| {
         for _ in 0..hits {
@@ -553,7 +551,7 @@ fn hit_target<F: Fight<V>>(fight: &mut F, hits: super::Number) {
             });
             fight.apply(attack);
         }
-    });
+    })
 }
 
 /// `DaggerSpray`: its damage to every enemy, twice.
@@ -658,13 +656,14 @@ fn piercing_wail<F: Fight<V>>(fight: &mut F) -> Played<V> {
 }
 
 /// `EchoingSlash`: its damage to every enemy that can be hit, and again for
-/// each one that hit killed, as one attack.
+/// each result of it that says `WasTargetKilled`, as one attack.
 fn echoing_slash<F: Fight<V>>(fight: &mut F) -> Played<V> {
     fight.attack(Scaling::Dynamic, |fight| {
         let mut left = 1;
         while left > 0 {
             left -= 1;
             let targets = fight.hittable_opponents();
+            let before = fight.attack_results().len();
             // One `CreatureCmd.Damage` over them all.
             fight.damage_command(|fight| {
                 for &target in &targets {
@@ -677,15 +676,10 @@ fn echoing_slash<F: Fight<V>>(fight: &mut F) -> Played<V> {
                     fight.apply(attack);
                 }
             });
-            // A creature the command killed has left the fight's list.
-            for target in targets {
-                let standing = fight
-                    .creatures()
-                    .any(|creature| creature.id() == target && creature.alive());
-                if !standing {
-                    left += 1;
-                }
-            }
+            left += fight.attack_results()[before..]
+                .iter()
+                .filter(|result| result.killed)
+                .count();
         }
     });
     Played::Done

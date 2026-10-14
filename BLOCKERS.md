@@ -29,16 +29,36 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ## Open
 
-### 1. A power the walk reaches after it came off
+### 1. A walk interface, and every hook on it
 
-`CombatState.Contains` asks of a power only whether its owner is still in
-the fight. The walk still asks a power an earlier listener took off, as a
-model on its own. Nemesis takes Intangible off as the enemies' turn ends, and the
-game then decrements the Intangible it took off. That raises the
-amount-changed hooks and writes the history. The sim's walk skips a power
-its owner no longer carries, since it keeps no model for one taken off. No
-recorded run parts on it yet. Keeping the model for the walk needs a
-design, for Mark.
+Pull what the callers need from the listener walk into one interface. A
+walk begins on a hook, takes the next listener, and carries out its
+answer. It parks on a question and resumes, and it says whether a
+listener is still in the fight.
+The snapshot cursor is its reference. Behind it, measure the others:
+
+- Two lists, one the walk reads and one that takes the writes.
+- Copy on write. Adding or removing a listener moves a counter, and a
+  walk copies only when the counter moves under it.
+- The bounded cursor, which measured at 3.9% (memory `walk-cursor-costs`).
+
+Then every event hook walks on the winner, and the eager `notify` goes.
+
+`AfterCardPlayed` needs it most, since every play walks it. A draw inside
+the walk can stop on a question, as Iron Club's does on Stratagem's pick.
+The game has not yet asked the listeners after it, and the sim asked them
+all first. So Pinpoint in hand counts a Defend early.
+
+`AfterCardDrawn` needs it too. Pagestorm draws a card when an Ethereal
+one is drawn, and that draw runs before Chains of Binding hears the first.
+So the nested card is Bound first and takes the last of the stack. The sim
+asks Chains about both before either is Bound. Recorded run 2571, a
+Flight run, parts there against the Queen.
+
+The walk also still asks a power an earlier listener took off, as a model
+on its own. Nemesis takes Intangible off as the enemies' turn ends, and
+the game then decrements the Intangible it took off. The read side of the
+walk has to keep that model writable. No recorded run parts on it yet.
 
 ### 2. Every other split the recorded runs find
 
@@ -48,62 +68,43 @@ own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
 
-### 3. Run modifiers: rewards and rest sites
+### 3. Run modifiers that change the run's own rules
 
-Vintage, Midas and Night Terrors. They need `TryModifyRewardsLate`,
-`TryModifyRestSiteOptions`, `ModifyRestSiteHealAmount` and
-`AfterRestSiteHeal` asked of the run's modifiers, after its relics and
-potions. Record 100 runs with each.
+- Deadly Events: `AfterRunCreated` sets the odds and takes Juzu Bracelet
+  out of the relic bags.
+- Cursed Run: `AfterActEntered`, which gets a `ModelHook` of its own.
+- Big Game Hunter: `ModifyGeneratedMap` and card rewards.
+
+Record 100 runs with each.
 
 ### 4. Run modifiers in a fight
 
 Murderous and Terminal. `CombatState` lists the modifiers last among its
 listeners, after the cards, so they join the fight's walk there. They
-answer `AfterRoomEntered` and `AfterCreatureAddedToCombat`. Record 100
-runs with each.
+answer `AfterRoomEntered` and `AfterCreatureAddedToCombat`. This waits
+for item 1. Record 100 runs with each.
 
-### 5. Run modifiers that change the run's own rules
+### 5. Run modifiers that carry data
 
-- Deadly Events: `AfterRunCreated` sets the odds and takes Juzu Bracelet
-  out of the relic bags.
-- Cursed Run: `AfterActEntered`, which no `ModelHook` names yet.
-- Hoarder: `AfterCardChangedPiles`, with the cards it saves to skip.
-- Big Game Hunter: `ModifyGeneratedMap` and card rewards.
-- Character Cards, which names a character.
-
-Record 100 runs with each.
+Hoarder saves the cards it copied, so it needs state of its own per run.
+Character Cards names a character, which the start command, the run and
+the recorded-run format have to carry. Mark revisits both after item 1.
 
 ### 6. Run modifiers at Neow
 
 All Star, Specialized, Draft, Sealed Deck and Insanity. Neow offers each
 modifier's option in turn, and three of them empty the starting deck
-first. Record 100 runs with each.
+first. Draft and Sealed Deck build that deck through repeated picks. Mark
+revisits the design after item 1. Record 100 runs with each.
 
 ### 7. v0.111.0
 
-Only the generated tables exist. Its behaviour layer has to be written,
-and its runs recorded.
-### 8. Every hook on the walk cursor
+Only the generated tables exist. Codegen runs per build as it does now.
+The behaviour is written once, for v0.107.1. A v0.111.0 rule whose game
+code did not change calls that one. The v0.107.1 rule first becomes
+generic over the build. A rule that changed gets one of its own. Then record its runs.
 
-Every event hook walks with the cursor, and the eager `notify` goes. The
-cursor's snapshot costs 0.7% on the three hooks it walks now, so every
-hook needs a cheaper one first. Power instances and card ids only grow, so
-a cursor can skip what arrived after the walk began and take no snapshot.
-
-`AfterCardPlayed` is the hook that needs it most, since every play walks
-it. A draw inside the walk can stop on a question, as Iron Club's does on
-Stratagem's pick. The game has not yet asked the listeners after it, and
-the sim asked them all first. So Pinpoint in hand counts a Defend early,
-and shows one cheaper while the pick waits. A walk that parks there, on
-the snapshot cursor, cost 2.5% a step.
-
-`AfterCardDrawn` needs it too. Pagestorm draws a card when an Ethereal
-one is drawn, and that draw runs before Chains of Binding hears the first.
-So the nested card is Bound first and takes the last of the stack. The
-sim asks Chains about both before either is Bound, and binds one card too
-many. Recorded run 2571, a Flight run, parts there against the Queen.
-
-### 9. A speed target
+### 8. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.
