@@ -9,7 +9,7 @@ use super::super::super::V0_107_1 as V;
 /// whose options take a change to their pools.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
     match hook {
-        EventHook::CardRewardCreationOptions => asked.push(HookEffect::AddColorlessPool),
+        EventHook::CardRewardCreationOptions { .. } => asked.push(HookEffect::AddColorlessPool),
         EventHook::Obtained { .. } => {}
         hook => unimplemented!("what DingyRug does for {hook:?}"),
     }

@@ -23,7 +23,7 @@ pub(super) fn modify_hook(hook: ModifyHook<V>) -> Modify<Number> {
 /// change to their pools, and whose pool is not colorless alone.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
     match hook {
-        EventHook::CardRewardCreationOptions => {
+        EventHook::CardRewardCreationOptions { .. } => {
             asked.push(HookEffect::AddCharacterPools(&super::super::ALL_CHARACTERS));
         }
         EventHook::Obtained { .. } => {}

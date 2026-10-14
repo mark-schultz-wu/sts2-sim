@@ -1613,6 +1613,11 @@ impl<'a, V: Rules> Board<'a, V> {
                 self.die(at, false);
             }
         }
+        // `CheckWinCondition` processes a pending loss first, so a fight the
+        // player already lost stays lost.
+        if self.ended == Some(super::Ended::Lost) || self.live.lost {
+            return;
+        }
         self.ended = Some(super::Ended::Won);
         self.live.won = true;
     }

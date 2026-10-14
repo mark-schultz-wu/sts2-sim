@@ -16,6 +16,9 @@ const NIGHT_TERRORS_LOSS: i32 = 5;
 /// and their base.
 const DEADLY_ELITE_ODDS: sts2_core::Fixed = sts2_core::Fixed::new(1, 1);
 
+/// `BigGameHunter`'s elites, against the map's own.
+const HUNTER_ELITES: sts2_core::Fixed = sts2_core::Fixed::new(25, 1);
+
 /// `DeadlyEvents.ModifyOddsIncreaseForUnrolledRoomType`, on a treasure's.
 const DEADLY_TREASURE_RISE: sts2_core::Fixed = sts2_core::Fixed::new(2, 0);
 
@@ -78,6 +81,21 @@ pub(crate) fn event_hook(
         ]),
         // `OnRunCreated` alone, which clears no deck for these.
         (_, EventHook::RunCreated) => {}
+        // `BigGameHunter.ModifyGeneratedMap`: the map again, with two and a
+        // half times its elites.
+        (Modifier::BigGameHunter, EventHook::GeneratedMap { .. }) => {
+            asked.push(HookEffect::ScaledElitesMap(HUNTER_ELITES));
+        }
+        // `BigGameHunter.ModifyCardRewardCreationOptions`: a won elite's
+        // reward offers rares alone, at even odds. Its options carry neither
+        // flag that would stop it.
+        (
+            Modifier::BigGameHunter,
+            EventHook::CardRewardCreationOptions {
+                elite_encounter: true,
+            },
+        ) => asked.push(HookEffect::RaresAtEvenOdds),
+        (Modifier::BigGameHunter, EventHook::CardRewardCreationOptions { .. }) => {}
         // `Vintage.TryModifyRewardsLate`: a relic for each card reward, in a
         // monster's room.
         (Modifier::Vintage, EventHook::ModifyRewardsLate { room }) => {
@@ -113,5 +131,6 @@ pub(crate) fn ported(modifier: Modifier) -> bool {
             | Modifier::Midas
             | Modifier::NightTerrors
             | Modifier::DeadlyEvents
+            | Modifier::BigGameHunter
     )
 }

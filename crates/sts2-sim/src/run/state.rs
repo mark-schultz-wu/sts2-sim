@@ -942,7 +942,7 @@ impl<V: Rules> State<V> {
             .get(index)
             .unwrap_or_else(|| unimplemented!("the map stream a run's act {index} draws from"));
         let mut rng: MegaRng = sts2_core::rng::named::<V, _>(raw_seed, named);
-        ActMap::<V>::generate(&mut rng, V::act_layout(act), ascension, second_boss)
+        ActMap::<V>::generate(&mut rng, V::act_layout(act), ascension, second_boss, None)
             .expect("an act's layout fits a packed map path")
     }
 
@@ -962,6 +962,14 @@ impl<V: Rules> State<V> {
             self.ascension(),
             second_boss,
         );
+        // Which class the map is, which a later listener reads.
+        #[derive(PartialEq)]
+        enum Made {
+            Standard,
+            Spoils,
+            FixedPath,
+        }
+        let mut made = Made::Standard;
         // `IterateHookListeners` walks the deck's cards ahead of the relics.
         let cards: Vec<V::Card> = self
             .deck_cards_hearing(sts2_core::ModelHook::ModifyGeneratedMap)
@@ -971,8 +979,9 @@ impl<V: Rules> State<V> {
                 Some(sts2_core::ReplacedMap::Spoils) => {
                     let mut rng: MegaRng =
                         sts2_core::rng::named::<V, _>(self.shared.raw_seed, "spoils_map");
-                    map = ActMap::<V>::spoils(&mut rng, V::act_layout(act), self.ascension())
+                    map = ActMap::<V>::spoils(&mut rng, V::act_layout(act), self.ascension(), None)
                         .expect("a Spoils layout fits a packed map path");
+                    made = Made::Spoils;
                 }
                 None => {}
             }
@@ -980,8 +989,52 @@ impl<V: Rules> State<V> {
         let hook = sts2_core::EventHook::GeneratedMap { act: self.act };
         for effect in self.notify_run(hook) {
             match effect {
-                sts2_core::HookEffect::FixedPathMap(rooms) => map = ActMap::fixed_path(rooms),
-                effect => unimplemented!("a relic asking for {effect:?} as a map is generated"),
+                sts2_core::HookEffect::FixedPathMap(rooms) => {
+                    map = ActMap::fixed_path(rooms);
+                    made = Made::FixedPath;
+                }
+                // `MapPointTypeCounts(map)` with the elites scaled, then the
+                // map made again over it. A map of neither class stays.
+                sts2_core::HookEffect::ScaledElitesMap(by) => {
+                    use sts2_core::MapPointKinds as _;
+                    let count = |kind| map.nodes().iter().filter(|node| node.kind == kind).count();
+                    let by = num_traits::ToPrimitive::to_f32(&by.exact())
+                        .expect("an elite scale fits a float");
+                    // `(int)Math.Round((float)count * scale)`, which rounds
+                    // a half to even.
+                    let elites = (count(V::MapPointType::ELITE) as f32 * by) as f64;
+                    let recount = crate::map::Recount {
+                        unknowns: count(V::MapPointType::UNKNOWN),
+                        rests: count(V::MapPointType::REST_SITE),
+                        elites: elites.round_ties_even() as usize,
+                    };
+                    let layout = V::act_layout(act);
+                    map = match made {
+                        Made::Standard => {
+                            let named = MAP_STREAMS.get(self.act).unwrap_or_else(|| {
+                                unimplemented!("the map stream act {} draws from", self.act)
+                            });
+                            let mut rng: MegaRng =
+                                sts2_core::rng::named::<V, _>(self.shared.raw_seed, named);
+                            ActMap::<V>::generate(
+                                &mut rng,
+                                layout,
+                                self.ascension(),
+                                second_boss,
+                                Some(recount),
+                            )
+                            .expect("an act's layout fits a packed map path")
+                        }
+                        Made::Spoils => {
+                            let mut rng: MegaRng =
+                                sts2_core::rng::named::<V, _>(self.shared.raw_seed, "spoils_map");
+                            ActMap::<V>::spoils(&mut rng, layout, self.ascension(), Some(recount))
+                                .expect("a Spoils layout fits a packed map path")
+                        }
+                        Made::FixedPath => map,
+                    };
+                }
+                effect => unimplemented!("a listener asking for {effect:?} as a map is generated"),
             }
         }
         // `ModifyGeneratedMapLate`, over what the first pass left, which
@@ -1174,7 +1227,7 @@ impl<V: Rules> State<V> {
             .map(|card| sts2_core::DeckCard::new(player.mint(), CardIdent::new(card)))
             .collect();
         player.deck = Arc::new(deck);
-        Self {
+        let mut state = Self {
             shared: Arc::new(RunData {
                 opening,
                 raw_seed,
@@ -1209,7 +1262,18 @@ impl<V: Rules> State<V> {
                 chosen: None,
                 asking: None,
             },
+        };
+        // `RunManager.GenerateMap` runs its hooks for the first act too, and
+        // a modifier is the only listener a new run holds that hears them.
+        let maps = sts2_core::Overrides::of(sts2_core::ModelHook::ModifyGeneratedMap)
+            .with(sts2_core::ModelHook::ModifyGeneratedMapLate);
+        if modifiers
+            .iter()
+            .any(|&modifier| sts2_core::ModifierTable::overrides(modifier).intersects(maps))
+        {
+            state.map = Arc::new(state.generate_map(acts[0]));
         }
+        state
     }
 
     pub(crate) fn raw_seed(&self) -> u64 {
@@ -2021,7 +2085,7 @@ impl<V: Rules> State<V> {
                 // each card to the deck.
                 HookEffect::AddRolledToDeck(reward) => {
                     let pool = matches!(reward, sts2_core::CustomReward::CharacterCards { .. })
-                        .then(|| self.reward_pool());
+                        .then(|| self.reward_pool(false));
                     let stream = sts2_core::Stream::Player(V::PlayerRngType::REWARDS);
                     for card in self.custom_cards(reward, stream, pool.as_ref()) {
                         self.add_to_deck(card);
@@ -3202,7 +3266,7 @@ impl<V: Rules> State<V> {
                     CustomReward::CharacterCards { .. } | CustomReward::MonsterRoomCards
                 )
             })
-            .then(|| self.reward_pool());
+            .then(|| self.reward_pool(false));
         // What a fight's own card reward adds, which the monster room's
         // reward reads the same way.
         let added =
@@ -3252,9 +3316,7 @@ impl<V: Rules> State<V> {
                     rng,
                     &mut self.odds,
                     ascension,
-                    pool.as_ref()
-                        .expect("a monster room's reward has its pool")
-                        .drafted(),
+                    pool.as_ref().expect("a monster room's reward has its pool"),
                     act,
                     crate::reward::combat::Room::Monster,
                     &added,
@@ -3445,16 +3507,10 @@ impl<V: Rules> State<V> {
                     // encounter, so the options a won fight's reward gains it
                     // gains too.
                     let added = self.card_reward_added();
-                    let pool = self.reward_pool();
+                    let pool = self.reward_pool(room == Room::Elite);
                     let (rng, odds) = self.rewarding();
                     let Offer::Card { mut cards, .. } = crate::reward::combat::card_reward::<V, _>(
-                        rng,
-                        odds,
-                        ascension,
-                        pool.drafted(),
-                        act,
-                        room,
-                        &added,
+                        rng, odds, ascension, &pool, act, room, &added,
                     ) else {
                         unreachable!("a card reward rolls a card offer");
                     };
@@ -3841,13 +3897,31 @@ impl<V: Rules> State<V> {
     /// # Panics
     ///
     /// A relic asking for anything but more pools.
-    pub(super) fn reward_pool(&mut self) -> crate::reward::card::Pool<V> {
+    pub(super) fn reward_pool(&mut self, elite_encounter: bool) -> crate::reward::card::Pool<V> {
         use crate::reward::card::Source;
 
         let own = self.character();
         let mut pools: SmallVec<[Source<V>; 6]> = smallvec::smallvec![Source::Character(own)];
-        for effect in self.notify_run(sts2_core::EventHook::CardRewardCreationOptions) {
+        let hook = sts2_core::EventHook::CardRewardCreationOptions { elite_encounter };
+        let mut asked = self.notify_run(hook).into_iter();
+        while let Some(effect) = asked.next() {
             match effect {
+                // `WithCustomPool` of the rares the pools hold, or the
+                // character's own, at even odds. Nothing after it is ported.
+                sts2_core::HookEffect::RaresAtEvenOdds => {
+                    if let Some(effect) = asked.next() {
+                        unimplemented!("a listener asking for {effect:?} over a pool at even odds");
+                    }
+                    let possible = crate::reward::card::Pool::of(&pools);
+                    let mut cards = possible.drafted().rare.to_vec();
+                    if cards.is_empty() {
+                        cards = crate::reward::card::Pool::<V>::of(&[Source::Character(own)])
+                            .drafted()
+                            .rare
+                            .to_vec();
+                    }
+                    return crate::reward::card::Pool::Uniform(cards);
+                }
                 // `Union`: the new pools first, then what was there and is
                 // not among them.
                 sts2_core::HookEffect::AddCharacterPools(added) => {
@@ -5922,26 +5996,21 @@ impl<V: Rules> State<V> {
                 let how =
                     rolled.unwrap_or_else(|| unimplemented!("a reroll of a pack set by hand"));
                 *reroll = false;
-                let pool = self.reward_pool();
                 *cards = match how {
                     crate::reward::Rolled::Room(room) => {
+                        let pool = self.reward_pool(room == crate::reward::combat::Room::Elite);
                         let (ascension, act) = (self.ascension(), self.act());
                         let added = self.card_reward_added();
                         let (rng, odds) = self.rewarding();
                         let Offer::Card { cards, .. } = crate::reward::combat::card_reward::<V, _>(
-                            rng,
-                            odds,
-                            ascension,
-                            pool.drafted(),
-                            act,
-                            room,
-                            &added,
+                            rng, odds, ascension, &pool, act, room, &added,
                         ) else {
                             unreachable!("a card reward rolls a card offer");
                         };
                         cards
                     }
                     crate::reward::Rolled::Custom { reward, stream } => {
+                        let pool = self.reward_pool(false);
                         self.card_reward_unheard();
                         self.custom_cards(reward, stream, Some(&pool))
                     }

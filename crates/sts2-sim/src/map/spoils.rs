@@ -12,7 +12,7 @@ use sts2_core::rng::{GameRng, RngInteger, Span};
 use sts2_core::{Layout, MapPointKinds, Rules};
 
 use super::set::Order;
-use super::{ActMapBuilder, COLS, Error, Id, PATHS, prune, types};
+use super::{ActMapBuilder, COLS, Error, Id, PATHS, prune};
 
 /// The middle column, which the treasure sits in.
 const MIDDLE: usize = COLS / 2;
@@ -24,9 +24,10 @@ impl<V: Rules> ActMapBuilder<V> {
         rng: &mut R,
         layout: Layout,
         ascension: V::AscensionLevel,
+        recount: Option<super::Recount>,
     ) -> Result<Self, Error> {
         let rows = layout.rooms + 1;
-        let counts = types::Counts::roll(rng, layout, ascension);
+        let counts = super::counts(rng, layout, ascension, recount);
         let mut map = ActMapBuilder {
             points: Vec::new(),
             grid: vec![None; COLS * rows],
@@ -222,7 +223,7 @@ mod tests {
         let layout = <V as Rules>::act_layout(Act::Hive);
         for seed in 0..500u64 {
             let mut rng: MegaRng = sts2_core::rng::named::<V, _>(seed, "spoils_map");
-            let map = ActMap::<V>::spoils(&mut rng, layout, AscensionLevel::None)
+            let map = ActMap::<V>::spoils(&mut rng, layout, AscensionLevel::None, None)
                 .expect("a Spoils map generates");
             let treasures: Vec<_> = (map.nodes().iter())
                 .filter(|node| node.kind == MapPointType::TREASURE)

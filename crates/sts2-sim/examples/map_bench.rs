@@ -55,7 +55,14 @@ type V = V0_107_1;
 fn generate(seed: u64) -> ActMap<V> {
     let mut rng = MegaRng::new(seed);
     let layout = V::act_layout(sts2_content::v0_107_1::acts::Act::Overgrowth);
-    ActMap::generate(&mut rng, layout, AscensionLevel::SwarmingElites, false).unwrap()
+    ActMap::generate(
+        &mut rng,
+        layout,
+        AscensionLevel::SwarmingElites,
+        false,
+        None,
+    )
+    .unwrap()
 }
 
 /// Time map generation, then count what it allocates.
