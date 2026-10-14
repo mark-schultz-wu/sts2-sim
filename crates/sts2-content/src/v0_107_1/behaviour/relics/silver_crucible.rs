@@ -38,11 +38,12 @@ pub(super) fn event_hook(
             asked.push(HookEffect::UpgradeCard);
         }
         EventHook::CardRewardOption { .. } | EventHook::CardRewardPick { .. } => {}
-        EventHook::CardRewardOptionsModified => {
+        EventHook::CardRewardOptionsModified { card_reward: true } => {
             if state.times_used < CARDS {
                 state.times_used += 1;
             }
         }
+        EventHook::CardRewardOptionsModified { .. } => {}
         EventHook::RoomEntered { room, .. } => {
             if room == RoomType::TREASURE {
                 state.treasure_rooms += 1;

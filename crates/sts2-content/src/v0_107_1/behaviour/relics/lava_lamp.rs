@@ -46,7 +46,7 @@ pub(super) fn event_hook(
             }
         }
         EventHook::Obtained { .. }
-        | EventHook::CardRewardOptionsModified
+        | EventHook::CardRewardOptionsModified { .. }
         | EventHook::CardRewardPick { .. } => {}
         hook => unimplemented!("what LavaLamp does for {hook:?}"),
     }

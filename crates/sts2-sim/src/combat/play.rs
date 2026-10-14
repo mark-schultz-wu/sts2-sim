@@ -1635,13 +1635,12 @@ fn finish_effect<V: Rules, S: LendsCombat>(
         return Ok(ended);
     };
 
-    // `AfterCardPlayedCleanup`, wherever the card went.
-    next.cards
-        .write_named(play.id, super::live::Face::was_played);
-
     // `Pile.Type == PileType.Play`: a card that put itself elsewhere while it
     // ran stays there.
     if !next.cards.in_play(play.id) {
+        // `AfterCardPlayedCleanup`, wherever the card went.
+        next.cards
+            .write_named(play.id, super::live::Face::was_played);
         let ended = match outermost {
             true => check_for_empty_hand::<V, _>(next, streams, relics, ascension, ended),
             false => ended,
@@ -1675,6 +1674,13 @@ fn finish_effect<V: Rules, S: LendsCombat>(
         }
         (ended, _) => ended,
     };
+    // `AfterCardPlayedCleanup`, once the card is in its pile and its exhaust
+    // was heard, so a clone made of it keeps what the play had not yet
+    // cleared. A card that left the fight has nothing left to clear.
+    if next.cards.named(play.id).is_some() {
+        next.cards
+            .write_named(play.id, super::live::Face::was_played);
+    }
     // A question a hook of the exhaust asked stands the end of the play
     // still: the empty hand's check waits for it.
     if next.asking.is_some() {
@@ -1993,8 +1999,9 @@ fn played_late<V: Rules>(
     let late = sts2_core::EventHook::CardPlayedLate { card, id, energy };
     for (listener, effect) in super::listen::notify::<V>(next, relics, late) {
         match (listener, effect) {
-            // `CardPileCmd.Add(this, PileType.Hand)`, which a full hand
-            // turns away.
+            // `CardPileCmd.Add(this, PileType.Hand)`, which sends the card
+            // past a full hand to the bottom of the discard pile, from the
+            // discard pile too.
             (
                 super::listen::Listener::Card { id },
                 sts2_core::HookEffect::AddSelfToHand { only_from },
@@ -2003,10 +2010,15 @@ fn played_late<V: Rules>(
                     pile != sts2_core::Pile::Hand && only_from.is_none_or(|only| only == pile)
                 });
                 if let Some(from) = from
-                    && next.cards.len(sts2_core::Pile::Hand) < super::pile::MAX_CARDS_IN_HAND
                     && let Some(at) = next.cards.find(from, id)
                 {
-                    next.cards.move_to(from, at, sts2_core::Pile::Hand);
+                    let full =
+                        next.cards.len(sts2_core::Pile::Hand) >= super::pile::MAX_CARDS_IN_HAND;
+                    let to = match full {
+                        true => sts2_core::Pile::Discard,
+                        false => sts2_core::Pile::Hand,
+                    };
+                    next.cards.move_to(from, at, to);
                 }
             }
             (listener, effect) => {

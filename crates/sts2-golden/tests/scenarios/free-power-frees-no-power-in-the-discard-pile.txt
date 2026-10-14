@@ -1,0 +1,13 @@
+# Free Power Power frees a Power only in its owner's hand or play pile.
+# Defragment sits in the discard pile at its own cost, so All For One, which
+# takes back what costs nothing, leaves it there.
+#
+# A freeing that ignores the pile sends Defragment to the hand.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"PLATING_POWER","amount":100,"target":0}
+{"cmd":"grant","card":"DEFRAGMENT"}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"FREE_POWER_POWER","amount":1,"target":0}
+{"cmd":"grant","card":"ALL_FOR_ONE"}
+{"cmd":"play_card","index":5,"target":1}
