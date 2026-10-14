@@ -4387,6 +4387,7 @@ impl<V: ContentVersion> EventHook<V> {
     /// `AfterRemoved` are a power's, which [`EventHook::power_virtual`]
     /// names. A move being performed is the move state's. A model's overrides
     /// cannot say whether it answers one of those, so it is always asked.
+    #[inline(always)]
     pub fn model_hook(&self) -> Option<ModelHook> {
         Some(match self {
             EventHook::ShuffleOrder { .. } => ModelHook::ModifyShuffleOrder,

@@ -210,20 +210,58 @@ pub(crate) enum Snapped<V: Rules> {
     },
 }
 
-/// The walk `Hook` makes over the listeners to `hook`, as the fight stands.
+/// Whether a walk begins: asked before any list is taken.
 ///
-/// # Panics
-///
-/// A hook that is not one `AbstractModel` declares.
-pub(crate) fn walk<V: Rules>(live: &Live<V>, relics: &Belt<V>, hook: EventHook<V>) -> Walker<V> {
-    let model_hook = hook
-        .model_hook()
-        .unwrap_or_else(|| unreachable!("{hook:?} is asked of one model, not raised"));
-    Walker {
-        hook,
-        cursor: Active::begin(live, relics, model_hook),
-        pending: Vec::new(),
-        pending_from: None,
+/// `Hook` hands a hook nobody hears no listeners, and a walk over them asks
+/// nothing. [`Checked`] asks the fight's counts first and builds no walk
+/// then. [`Eager`] builds the walk unasked, for a hook nearly always heard,
+/// where the question costs more than it saves.
+pub(crate) trait Start {
+    /// Whether to begin a walk over the listeners to `hook`.
+    fn begins<V: Rules>(live: &Live<V>, relics: &Belt<V>, hook: ModelHook) -> bool;
+}
+
+/// Begins a walk only where some listener hears the hook.
+pub(crate) struct Checked;
+
+impl Start for Checked {
+    #[inline(always)]
+    fn begins<V: Rules>(live: &Live<V>, relics: &Belt<V>, hook: ModelHook) -> bool {
+        Kinds::hearing(live, relics, Overrides::of(hook)).is_some()
+    }
+}
+
+/// Begins every walk, without asking who hears.
+pub(crate) struct Eager;
+
+impl Start for Eager {
+    fn begins<V: Rules>(_: &Live<V>, _: &Belt<V>, _: ModelHook) -> bool {
+        true
+    }
+}
+
+impl<V: Rules> Walker<V> {
+    /// The walk `Hook` makes over the listeners to `hook`, as the fight
+    /// stands, where `S` begins one.
+    ///
+    /// # Panics
+    ///
+    /// A hook that is not one `AbstractModel` declares.
+    #[inline(always)]
+    pub(crate) fn begin<S: Start>(
+        live: &Live<V>,
+        relics: &Belt<V>,
+        hook: EventHook<V>,
+    ) -> Option<Self> {
+        let model_hook = hook
+            .model_hook()
+            .unwrap_or_else(|| unreachable!("{hook:?} is asked of one model, not raised"));
+        S::begins(live, relics, model_hook).then(|| Walker {
+            hook,
+            cursor: Active::begin(live, relics, model_hook),
+            pending: Vec::new(),
+            pending_from: None,
+        })
     }
 }
 
@@ -474,26 +512,18 @@ pub(crate) struct Walking<V: Rules> {
     rest: sts2_core::HookEffects<V>,
 }
 
-/// The walk over `hook`'s listeners, or nothing where none hears it, which
-/// costs a walk nothing to build.
-///
-/// # Panics
-///
-/// A hook that is not one `AbstractModel` declares.
-pub(crate) fn walking<V: Rules>(
-    live: &Live<V>,
-    relics: &Belt<V>,
-    hook: EventHook<V>,
-) -> Option<Walking<V>> {
-    let model_hook = hook
-        .model_hook()
-        .unwrap_or_else(|| unreachable!("{hook:?} is asked of one model, not raised"));
-    Kinds::hearing(live, relics, Overrides::of(model_hook))?;
-    Some(Walking::new(walk::<V>(live, relics, hook)))
-}
-
 impl<V: Rules> Walking<V> {
-    pub(crate) fn new(walker: Walker<V>) -> Self {
+    /// [`Walker::begin`], to carry out one effect at a time.
+    #[inline(always)]
+    pub(crate) fn begin<S: Start>(
+        live: &Live<V>,
+        relics: &Belt<V>,
+        hook: EventHook<V>,
+    ) -> Option<Self> {
+        Walker::begin::<S>(live, relics, hook).map(Self::new)
+    }
+
+    fn new(walker: Walker<V>) -> Self {
         Self {
             walker,
             listener: None,

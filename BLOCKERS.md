@@ -31,12 +31,15 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ### 1. Every hook on the walk
 
-Every event hook walks with the snapshot cursor, `listen::Snapshot`, and
-the eager `notify` goes, in batches of call sites. `AfterCardPlayed`, the
-late pass of `AfterCardDrawn` and the plain sites of `turn.rs` walk
-already, at 5.4% a step together. About 55 call sites are left: the rest
-of `turn.rs`, which park their answers, then `board.rs`, `start.rs`,
-`play.rs` and `potion.rs`.
+Every event hook that carries anything out walks with the snapshot
+cursor, `listen::Snapshot`. A walk begins through `listen::Start`.
+`Checked` asks the fight's counts first and builds no walk where nobody
+hears. `Eager` builds it unasked, for the hooks every walk hears.
+
+What is left parks its answers behind a question, so its walk has to park
+instead. That is `BeforeHandDraw` at a turn's start and at a fight's, the
+pre-play and post-play passes, and `AfterShuffle`. About 15 more only
+check that nobody answers, and in any order they find the same.
 
 The walk also still asks a power an earlier listener took off, as a model
 on its own. Nemesis takes Intangible off as the enemies' turn ends, and

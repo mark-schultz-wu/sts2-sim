@@ -159,13 +159,13 @@ pub(crate) fn belt_changed<V: Rules>(fighting: Fighting<'_, V>, hook: sts2_core:
         streams,
         relics,
     } = fighting;
-    let asked = super::listen::notify::<V>(live, relics, hook);
-    if asked.is_empty() {
+    let Some(walking) = super::listen::Walking::begin::<super::listen::Checked>(live, relics, hook)
+    else {
         return;
-    }
+    };
     let ascension = live.ascension;
     let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
-    super::hook::apply::<V, _>(&mut board, asked.into_iter().map(|(_, effect)| effect));
+    board.carry_out_walk(Some(walking));
     if let Some(ended) = board.ended() {
         unimplemented!("a fight that ends {ended:?} as the belt changes");
     }
@@ -647,9 +647,13 @@ fn before_played<V: Rules, S: LendsCombat>(
         }
     };
     // Each listener acts as the walk reaches it.
-    let mut walk = super::listen::walk::<V>(live, relics, hook(live, relics));
+    let mut walk =
+        super::listen::Walker::begin::<super::listen::Eager>(live, relics, hook(live, relics));
     let mut asked = sts2_core::HookEffects::new();
-    while let Some(listener) = walk.next(live, relics, &mut asked) {
+    while let Some(listener) = walk
+        .as_mut()
+        .and_then(|walk| walk.next(live, relics, &mut asked))
+    {
         let mut rest: SmallVec<[sts2_core::HookEffect<V>; 4]> = SmallVec::new();
         for effect in asked.drain(..) {
             match (listener, effect) {
@@ -667,7 +671,9 @@ fn before_played<V: Rules, S: LendsCombat>(
             let skipped = std::mem::take(&mut board.skipped);
             merge::<V>(&mut live.skip_tick, skipped);
         }
-        walk.rehook(hook(live, relics));
+        if let Some(walk) = walk.as_mut() {
+            walk.rehook(hook(live, relics));
+        }
     }
 }
 
@@ -1652,7 +1658,7 @@ fn finish_effect<V: Rules, S: LendsCombat>(
         // `Hook.AfterPotionUsed`, once the potion is done, for a fight still
         // in progress.
         if ended.is_none() {
-            let asked = super::listen::notify::<V>(
+            let walking = super::listen::Walking::begin::<super::listen::Checked>(
                 next,
                 relics,
                 sts2_core::EventHook::PotionUsed {
@@ -1660,10 +1666,10 @@ fn finish_effect<V: Rules, S: LendsCombat>(
                     holding_potions: !next.potions.is_empty(),
                 },
             );
-            if !asked.is_empty() {
+            if walking.is_some() {
                 let mut board =
                     Board::for_card(next, streams.combat(), relics, ascension, None, None);
-                hook::apply::<V, _>(&mut board, asked.into_iter().map(|(_, effect)| effect));
+                board.carry_out_walk(walking);
                 ended = board.ended();
             }
         }
@@ -1757,10 +1763,10 @@ fn stars_spent<V: Rules>(
         player: live.player().id,
         amount: spent,
     };
-    let asked = super::listen::notify::<V>(live, relics, hook);
-    if !asked.is_empty() {
+    let walking = super::listen::Walking::begin::<super::listen::Checked>(live, relics, hook);
+    if walking.is_some() {
         let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
-        hook::apply::<V, _>(&mut board, asked.into_iter().map(|(_, effect)| effect));
+        board.carry_out_walk(walking);
         if let Some(ended) = board.ended() {
             unimplemented!("a fight {ended:?} as its stars were spent");
         }
@@ -1797,15 +1803,12 @@ fn hand_emptied<V: Rules, S: LendsCombat>(
         player: next.player().id,
         phase: next.phase,
     };
-    let asked = super::listen::notify::<V>(next, relics, hook);
-    if asked.is_empty() {
-        return None;
-    }
+    let mut walking = super::listen::Walking::begin::<super::listen::Checked>(next, relics, hook)?;
     // The play's own choice context, so a shuffle's question inside Unceasing
     // Top's `CardPileCmd.Draw` stands the play still.
     let mut board =
         Board::for_card(next, streams.combat(), relics, ascension, None, None).blocking();
-    for (_, effect) in asked {
+    while let Some((_, effect)) = board.next_of(&mut walking) {
         if board.live.asking.is_some() {
             unimplemented!("{effect:?} after the hand emptied, behind a question");
         }
@@ -1853,7 +1856,7 @@ fn finished<V: Rules, S: LendsCombat>(
         auto: play.auto,
         last,
     };
-    let walking = super::listen::Walking::new(super::listen::walk::<V>(next, relics, hook));
+    let walking = super::listen::Walking::begin::<super::listen::Checked>(next, relics, hook);
     walk_played::<V, S>(
         Fighting {
             live: next,
@@ -1874,7 +1877,7 @@ fn finished<V: Rules, S: LendsCombat>(
 pub(super) fn walk_played<V: Rules, S: LendsCombat>(
     fighting: Fighting<'_, V, S>,
     ascension: V::AscensionLevel,
-    mut walking: super::listen::Walking<V>,
+    mut walking: Option<super::listen::Walking<V>>,
     (card, id, spent): (V::Card, sts2_core::CardId<V>, V::Count),
     mut ended: Option<super::Ended>,
 ) -> Option<super::Ended> {
@@ -1893,7 +1896,10 @@ pub(super) fn walk_played<V: Rules, S: LendsCombat>(
             });
             return ended;
         }
-        let Some((listener, effect)) = walking.next(next, relics) else {
+        let Some((listener, effect)) = walking
+            .as_mut()
+            .and_then(|walking| walking.next(next, relics))
+        else {
             break;
         };
         ended = ended.or(played_effect::<V, S>(
@@ -2074,7 +2080,11 @@ fn played_late<V: Rules>(
     energy: V::Count,
 ) {
     let late = sts2_core::EventHook::CardPlayedLate { card, id, energy };
-    for (listener, effect) in super::listen::notify::<V>(next, relics, late) {
+    let mut walking = super::listen::Walking::begin::<super::listen::Checked>(next, relics, late);
+    while let Some((listener, effect)) = walking
+        .as_mut()
+        .and_then(|walking| walking.next(next, relics))
+    {
         match (listener, effect) {
             // `CardPileCmd.Add(this, PileType.Hand)`, which sends the card
             // past a full hand to the bottom of the discard pile, from the
