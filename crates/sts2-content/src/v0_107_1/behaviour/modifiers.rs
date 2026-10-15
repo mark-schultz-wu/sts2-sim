@@ -45,6 +45,18 @@ const SPECIALIZED_COPIES: usize = 5;
 /// `Insanity`'s cards.
 const INSANITY_CARDS: usize = 30;
 
+/// `Draft`'s card rewards.
+const DRAFT_REWARDS: usize = 10;
+
+/// `Draft`'s cards in each reward.
+const DRAFT_CARDS: usize = 3;
+
+/// `SealedDeck`'s cards to choose from.
+const SEALED_CARDS: usize = 30;
+
+/// `SealedDeck`'s cards chosen, which `CardSelectorPrefs` asks exactly.
+const SEALED_CHOSEN: usize = 10;
+
 /// `Hoarder`'s copies of each card the deck gains.
 const HOARDED_COPIES: usize = 2;
 
@@ -240,6 +252,32 @@ pub(crate) fn event_hook(
             },
             HookEffect::RemoveFromRelicBags(Relic::PandorasBox),
         ]),
+        // `Draft.OfferRewards`: ten card rewards of the character's pool in a
+        // row, none of which can be skipped, then no Pandora's Box.
+        (Modifier::Draft, EventHook::NeowOptionChosen) => {
+            let reward = sts2_core::CustomReward::CharacterCards {
+                count: DRAFT_CARDS,
+                upgrade_roll: false,
+            };
+            asked.extend(std::iter::repeat_n(
+                HookEffect::SelectReward(reward),
+                DRAFT_REWARDS,
+            ));
+            asked.push(HookEffect::RemoveFromRelicBags(Relic::PandorasBox));
+        }
+        // `SealedDeck.ChooseCards`: thirty cards of the character's pool,
+        // made for a reward, then exactly ten of them into the deck. Then no
+        // Pandora's Box.
+        (Modifier::SealedDeck, EventHook::NeowOptionChosen) => asked.extend([
+            HookEffect::ChooseCards {
+                draw: sts2_core::CardDraw::Encounter,
+                count: SEALED_CARDS,
+                min: SEALED_CHOSEN,
+                max: SEALED_CHOSEN,
+                card_reward: true,
+            },
+            HookEffect::RemoveFromRelicBags(Relic::PandorasBox),
+        ]),
         // `AfterRunCreated`, which these leave alone. A deck one clears is
         // `ClearsPlayerDeck`, which the run reads off the modifier's row.
         (_, EventHook::RunCreated) => {}
@@ -317,6 +355,8 @@ pub(crate) fn ported(modifier: Modifier) -> bool {
             | Modifier::AllStar
             | Modifier::Specialized
             | Modifier::Insanity
+            | Modifier::Draft
+            | Modifier::SealedDeck
             | Modifier::Murderous
             | Modifier::Terminal
     )

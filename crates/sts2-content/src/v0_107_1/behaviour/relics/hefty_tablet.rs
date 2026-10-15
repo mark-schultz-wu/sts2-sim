@@ -18,6 +18,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
                 count: CARDS,
                 min: 0,
                 max: 1,
+                card_reward: false,
             },
             HookEffect::AddToDeck(Cards::Curse(CurseCard::Injury)),
         ]);

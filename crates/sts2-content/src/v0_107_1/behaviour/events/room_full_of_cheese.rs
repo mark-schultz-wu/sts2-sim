@@ -58,6 +58,7 @@ impl EventBehavior<V> for RoomFullOfCheese {
                     count: 8,
                     min: 2,
                     max: 2,
+                    card_reward: false,
                 },
                 HookEffect::FinishEvent,
             ],

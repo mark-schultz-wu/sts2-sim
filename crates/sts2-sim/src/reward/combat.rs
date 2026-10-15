@@ -131,7 +131,7 @@ pub(crate) fn card_reward<V: Rules, R: GameRng>(
         ascension,
         pool,
         CARDS_OFFERED,
-        act,
+        Some(act),
         room.card_odds(),
     );
     for &kind in added {

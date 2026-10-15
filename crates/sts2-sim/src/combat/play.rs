@@ -558,24 +558,22 @@ pub(super) fn auto_play_in_play<V: Rules>(
 
 /// `CardModel.MoveToResultPileWithoutPlaying` for a card in the play pile:
 /// out of the fight for a dupe, exhausted once `ExhaustOnNextPlay` or its
-/// Exhaust says so, and discarded otherwise.
+/// Exhaust says so, and discarded otherwise. It leaves `ExhaustOnNextPlay`
+/// set, so a card refused again later in the turn exhausts again.
 fn without_playing<V: Rules>(
     live: &mut Live<V>,
     rngs: crate::stream::CombatRngs<'_>,
     relics: &mut crate::run::Belt<V>,
     card: &super::live::CardInstance<V>,
 ) -> Option<super::Ended> {
-    let marked = live.exhaust_next.iter().position(|&id| id == card.id);
-    if let Some(at) = marked {
-        live.exhaust_next.remove(at);
-    }
+    let marked = live.exhaust_next.contains(&card.id);
     // A dupe leaves the fight, whatever else it carries.
     if card.face.dupe() {
         live.cards
             .leave_play(card.id, None, sts2_core::PilePosition::Bottom);
         return None;
     }
-    match marked.is_some() || card.face.exhausts() {
+    match marked || card.face.exhausts() {
         true => {
             live.cards.leave_play(
                 card.id,

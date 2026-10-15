@@ -5232,6 +5232,10 @@ pub enum CardDraw {
     Uniform(RewardRarity),
     /// `RegularEncounter` odds, which roll a rarity first.
     Regular,
+    /// `RegularEncounter` odds rolled with `CardRarityOdds.Roll`, which moves
+    /// the run's offset as a fight's reward does. `ForceRarityOddsChange`
+    /// asks for it.
+    Encounter,
 }
 
 /// A deck card a relic names rather than asks for.
@@ -5287,6 +5291,9 @@ pub enum HookEffect<V: ContentVersion> {
     /// `RewardsCmd.OfferCustom`: a screen of these rewards, filled in in this
     /// order, which the player takes from or skips.
     OfferRewards(&'static [CustomReward<V>]),
+    /// `Reward.SelectUnsynchronized` on a reward no set holds, with `CanSkip`
+    /// false. It fills in alone, so no set's hooks or sort run over it.
+    SelectReward(CustomReward<V>),
     /// `RewardsCmd.OfferCustom` over the rewards the event built for itself,
     /// which [`Rules::event_rewards`] names. Each draws off the event's own
     /// stream.
@@ -5379,12 +5386,14 @@ pub enum HookEffect<V: ContentVersion> {
     /// pool, with no upgrade roll. A screen then takes between `min` and
     /// `max` of them into the deck, in the order picked.
     /// `FromChooseACardScreen` takes one or none, and
-    /// `FromSimpleGridForRewards` its own count.
+    /// `FromSimpleGridForRewards` its own count. `card_reward` is
+    /// `CardCreationFlags.IsCardReward`, which the late hooks read.
     ChooseCards {
         draw: CardDraw,
         count: usize,
         min: usize,
         max: usize,
+        card_reward: bool,
     },
     /// `CardCmd.Transform` on every deck card that `IsBasicStrikeOrDefend`
     /// and is removable, each into `CreateRandomCardForTransform` off the

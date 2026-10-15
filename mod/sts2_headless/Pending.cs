@@ -547,7 +547,7 @@ internal sealed class RewardChoice : Pending
     /// the set without content — `RelicReward.Populate` can fail to find a relic
     /// — and an unpopulated reward is not the same as an absent one.
     /// </remarks>
-    private static Dictionary<string, object?> Detail(Reward reward, int index)
+    internal static Dictionary<string, object?> Detail(Reward reward, int index)
     {
         var d = new Dictionary<string, object?>
         {
@@ -657,7 +657,7 @@ internal sealed class RewardChoice : Pending
     private static Dictionary<string, object?> Taking(Dictionary<string, object?> reward) =>
         Answering("take", new List<Dictionary<string, object?>> { reward });
 
-    private static List<string> Alternatives(CardReward card) =>
+    internal static List<string> Alternatives(CardReward card) =>
         CardRewardAlternative.Generate(card)
             .Select(a => a.OptionId)
             .Where(id => id != "Skip")
@@ -829,6 +829,116 @@ internal sealed class RewardChoice : Pending
             }
         }
     }
+}
+
+/// <summary>
+/// A card reward selected on its own, as <c>Draft</c> selects each of its ten,
+/// asked in the shape of a reward screen holding that one reward.
+/// </summary>
+/// <remarks>
+/// <c>Reward.SelectUnsynchronized</c> is awaited outside any set, so nothing
+/// gathered the card first, and <c>GetSelectedCardReward</c> cannot ask. This
+/// asks before the selection runs, and the card goes in
+/// <see cref="RewardPlan.CardInFlight"/> as a screen's does. The reward's
+/// <c>CanSkip</c> is what the question allows.
+/// </remarks>
+internal sealed class LoneCardReward : Pending
+{
+    private readonly TaskCompletionSource<int?> _answer =
+        new TaskCompletionSource<int?>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private readonly CardReward _reward;
+
+    private LoneCardReward(CardReward reward) => _reward = reward;
+
+    public override string Kind => "rewards";
+
+    /// <summary>The card taken, or null for a skip.</summary>
+    public static Task<int?> Ask(CardReward reward)
+    {
+        if (RewardChoice.Alternatives(reward).Count > 0)
+        {
+            throw new NotSupportedException(
+                "a card reward selected alone offers alternatives; the oracle asks only for its cards");
+        }
+
+        var pending = new LoneCardReward(reward);
+        Park(pending);
+        return pending._answer.Task;
+    }
+
+    public override Dictionary<string, object?> Describe() => new Dictionary<string, object?>
+    {
+        ["kind"] = Kind,
+        ["skippable"] = _reward.CanSkip,
+        ["rewards"] = new List<Dictionary<string, object?>> { RewardChoice.Detail(_reward, 0) },
+    };
+
+    public override List<Dictionary<string, object?>> Answers()
+    {
+        var answers = new List<Dictionary<string, object?>>();
+        for (int c = 0; c < _reward.Cards.Count(); c++)
+        {
+            answers.Add(Answering("take", new List<Dictionary<string, object?>>
+            {
+                new Dictionary<string, object?> { ["index"] = 0, ["card"] = c },
+            }));
+        }
+
+        if (_reward.CanSkip)
+        {
+            answers.Add(Answering("skip", true));
+        }
+
+        return answers;
+    }
+
+    public override Dictionary<string, object?>? Accept(JsonElement req)
+    {
+        if (req.TryGetProperty("skip", out JsonElement s) && s.ValueKind == JsonValueKind.True)
+        {
+            if (!_reward.CanSkip)
+            {
+                return Refusals.NotSkippable();
+            }
+
+            Release();
+            BackgroundWork.Hold();
+            _answer.SetResult(null);
+            return null;
+        }
+
+        if (!req.TryGetProperty("take", out JsonElement el) || el.ValueKind != JsonValueKind.Array
+            || el.GetArrayLength() != 1)
+        {
+            return Refusals.Malformed("a lone card reward expects a 'take' of one entry, or \"skip\": true");
+        }
+
+        JsonElement e = el[0];
+        if (!e.TryGetProperty("index", out JsonElement iEl) || !iEl.TryGetInt32(out int i))
+        {
+            return Refusals.Malformed("each 'take' entry needs a whole-number 'index'");
+        }
+
+        if (i != 0)
+        {
+            return Refusals.OutOfRange(i, 1);
+        }
+
+        int count = _reward.Cards.Count();
+        if (!e.TryGetProperty("card", out JsonElement cEl) || !cEl.TryGetInt32(out int c)
+            || c < 0 || c >= count)
+        {
+            return Refusals.NeedsCardChoice(i, count);
+        }
+
+        Release();
+        BackgroundWork.Hold();
+        _answer.SetResult(c);
+        return null;
+    }
+
+    protected override void Fail(Exception e) => _answer.SetException(e);
 }
 
 /// <summary>What the client decided to do with a reward set.</summary>

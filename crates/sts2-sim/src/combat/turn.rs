@@ -3668,9 +3668,16 @@ fn walk_turn_end<V: Rules>(
     {
         for effect in asked.drain(..) {
             // A fight that is ending runs no more commands, though the walk
-            // still asks every listener.
+            // still asks every listener. `CardPileCmd.Draw` returns at once
+            // there, and a relic's code after it still runs.
             if ended.is_some() {
-                break;
+                if let (Listener::Relic { slot }, sts2_core::HookEffect::Draw(_)) =
+                    (listener, effect)
+                {
+                    let relic = relics[usize::from(slot)].relic;
+                    super::relic::own_command_over::<V>(relics, slot, relic);
+                }
+                continue;
             }
             let ask = match listener {
                 // What a relic asks for, on the player who carries it.

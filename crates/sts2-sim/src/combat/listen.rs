@@ -429,14 +429,22 @@ impl<V: Rules, C: Cursor<V>> Walker<V, C> {
                     creature_at,
                     at,
                 } => {
-                    // `Contains`: the power's owner is still in the fight.
-                    let carrier = match live.creatures.get(usize::from(creature_at)) {
-                        Some(creature) if creature.id == owner => creature.carrier(),
+                    // `Contains`: the power's owner is still in the fight,
+                    // and a player's own is active for hooks, which the
+                    // player's death ends with `DeactivateHooks`. The fight
+                    // is lost from then.
+                    let fighter = match live.creatures.get(usize::from(creature_at)) {
+                        Some(creature) if creature.id == owner => creature,
                         _ => match live.creatures.iter().find(|creature| creature.id == owner) {
-                            Some(creature) => creature.carrier(),
+                            Some(creature) => creature,
                             None => continue,
                         },
                     };
+                    if live.lost && matches!(fighter.model, Some(sts2_core::ModelId::Character(_)))
+                    {
+                        continue;
+                    }
+                    let carrier = fighter.carrier();
                     let at = match live.powers.of(owner).nth(usize::from(at)) {
                         Some(held) if held.instance == instance => Some(usize::from(at)),
                         _ => live.powers.place_of(owner, instance),
@@ -473,6 +481,10 @@ impl<V: Rules, C: Cursor<V>> Walker<V, C> {
                     Listener::Monster { creature, monster }
                 }
                 Snapped::Relic { slot, relic } => {
+                    // `Contains`: its owner is active for hooks.
+                    if live.lost {
+                        continue;
+                    }
                     if relics.get(usize::from(slot)).map(|held| held.relic) != Some(relic) {
                         unimplemented!("the belt changing under a walk over {hook:?}")
                     }
@@ -481,7 +493,9 @@ impl<V: Rules, C: Cursor<V>> Walker<V, C> {
                     Listener::Relic { slot }
                 }
                 Snapped::Card { id } => {
-                    let Some(card) = live.cards.named(id) else {
+                    // `Contains`: still in the fight, and its owner active for
+                    // hooks.
+                    let Some(card) = live.cards.named(id).filter(|_| !live.lost) else {
                         continue;
                     };
                     let model_hook = hook
