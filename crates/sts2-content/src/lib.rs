@@ -25,10 +25,14 @@
 //! exposes a row through an associated type, so what a row is made of is this
 //! crate's business.
 
+mod behaviour;
+mod build;
 pub mod generated;
 pub mod ids;
 pub mod v0_107_1;
 pub mod v0_111_0;
+
+pub use build::Build;
 
 /// A field that is usually a constant, but which some content works out from
 /// combat state.

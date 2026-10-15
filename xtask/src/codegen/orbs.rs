@@ -352,10 +352,14 @@ fn emit_orbs(
     for row in orbs {
         writeln!(out, "        Orb::{},", camel(&row[1])).unwrap();
     }
-    writeln!(out, "    ];\n").unwrap();
+    writeln!(out, "    ];").unwrap();
+    writeln!(out, "}}\n").unwrap();
 
+    writeln!(out, "impl sts2_core::Table for Orb {{").unwrap();
+    writeln!(out, "    type Data = OrbData;\n").unwrap();
+    writeln!(out, "    const ALL: &'static [Orb] = &Orb::ALL;\n").unwrap();
     writeln!(out, "    /// Its values and when its passive fires.").unwrap();
-    writeln!(out, "    pub const fn data(self) -> OrbData {{").unwrap();
+    writeln!(out, "    fn data(self) -> &'static OrbData {{").unwrap();
     writeln!(out, "        match self {{").unwrap();
     for row in orbs {
         let trigger = match TRIGGERS.iter().find(|(dumped, ..)| *dumped == row[2]) {
@@ -370,11 +374,16 @@ fn emit_orbs(
         };
         let [passive, evoke] = &values[&row[1]];
 
-        writeln!(out, "            Self::{} => OrbData {{", camel(&row[1])).unwrap();
+        writeln!(
+            out,
+            "            Self::{} => &const {{ OrbData {{",
+            camel(&row[1])
+        )
+        .unwrap();
         writeln!(out, "                trigger: {trigger},").unwrap();
         writeln!(out, "                passive: {passive},").unwrap();
         writeln!(out, "                evoke: {evoke},").unwrap();
-        writeln!(out, "            }},").unwrap();
+        writeln!(out, "            }} }},").unwrap();
     }
     writeln!(out, "        }}").unwrap();
     writeln!(out, "    }}").unwrap();

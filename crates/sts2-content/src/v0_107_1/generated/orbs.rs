@@ -53,76 +53,106 @@ impl Orb {
         Orb::MockCombatCleanupOrb,
         Orb::PlasmaOrb,
     ];
+}
+
+impl sts2_core::Table for Orb {
+    type Data = OrbData;
+
+    const ALL: &'static [Orb] = &Orb::ALL;
 
     /// Its values and when its passive fires.
-    pub const fn data(self) -> OrbData {
+    fn data(self) -> &'static OrbData {
         match self {
-            Self::DarkOrb => OrbData {
-                trigger: Some(OrbTrigger::TurnEnd),
-                passive: OrbValue {
-                    amount: NonMaxU8::new(6),
-                    hooked: true,
-                },
-                evoke: OrbValue {
-                    amount: NonMaxU8::new(6),
-                    hooked: false,
-                },
-            },
-            Self::FrostOrb => OrbData {
-                trigger: Some(OrbTrigger::TurnEnd),
-                passive: OrbValue {
-                    amount: NonMaxU8::new(2),
-                    hooked: true,
-                },
-                evoke: OrbValue {
-                    amount: NonMaxU8::new(5),
-                    hooked: true,
-                },
-            },
-            Self::GlassOrb => OrbData {
-                trigger: Some(OrbTrigger::TurnEnd),
-                passive: OrbValue {
-                    amount: NonMaxU8::new(4),
-                    hooked: true,
-                },
-                evoke: OrbValue {
-                    amount: None,
-                    hooked: false,
-                },
-            },
-            Self::LightningOrb => OrbData {
-                trigger: Some(OrbTrigger::TurnEnd),
-                passive: OrbValue {
-                    amount: NonMaxU8::new(3),
-                    hooked: true,
-                },
-                evoke: OrbValue {
-                    amount: NonMaxU8::new(8),
-                    hooked: true,
-                },
-            },
-            Self::MockCombatCleanupOrb => OrbData {
-                trigger: None,
-                passive: OrbValue {
-                    amount: NonMaxU8::new(0),
-                    hooked: false,
-                },
-                evoke: OrbValue {
-                    amount: NonMaxU8::new(0),
-                    hooked: false,
-                },
-            },
-            Self::PlasmaOrb => OrbData {
-                trigger: Some(OrbTrigger::TurnStart),
-                passive: OrbValue {
-                    amount: NonMaxU8::new(1),
-                    hooked: false,
-                },
-                evoke: OrbValue {
-                    amount: NonMaxU8::new(2),
-                    hooked: false,
-                },
-            },
+            Self::DarkOrb => {
+                &const {
+                    OrbData {
+                        trigger: Some(OrbTrigger::TurnEnd),
+                        passive: OrbValue {
+                            amount: NonMaxU8::new(6),
+                            hooked: true,
+                        },
+                        evoke: OrbValue {
+                            amount: NonMaxU8::new(6),
+                            hooked: false,
+                        },
+                    }
+                }
+            }
+            Self::FrostOrb => {
+                &const {
+                    OrbData {
+                        trigger: Some(OrbTrigger::TurnEnd),
+                        passive: OrbValue {
+                            amount: NonMaxU8::new(2),
+                            hooked: true,
+                        },
+                        evoke: OrbValue {
+                            amount: NonMaxU8::new(5),
+                            hooked: true,
+                        },
+                    }
+                }
+            }
+            Self::GlassOrb => {
+                &const {
+                    OrbData {
+                        trigger: Some(OrbTrigger::TurnEnd),
+                        passive: OrbValue {
+                            amount: NonMaxU8::new(4),
+                            hooked: true,
+                        },
+                        evoke: OrbValue {
+                            amount: None,
+                            hooked: false,
+                        },
+                    }
+                }
+            }
+            Self::LightningOrb => {
+                &const {
+                    OrbData {
+                        trigger: Some(OrbTrigger::TurnEnd),
+                        passive: OrbValue {
+                            amount: NonMaxU8::new(3),
+                            hooked: true,
+                        },
+                        evoke: OrbValue {
+                            amount: NonMaxU8::new(8),
+                            hooked: true,
+                        },
+                    }
+                }
+            }
+            Self::MockCombatCleanupOrb => {
+                &const {
+                    OrbData {
+                        trigger: None,
+                        passive: OrbValue {
+                            amount: NonMaxU8::new(0),
+                            hooked: false,
+                        },
+                        evoke: OrbValue {
+                            amount: NonMaxU8::new(0),
+                            hooked: false,
+                        },
+                    }
+                }
+            }
+            Self::PlasmaOrb => {
+                &const {
+                    OrbData {
+                        trigger: Some(OrbTrigger::TurnStart),
+                        passive: OrbValue {
+                            amount: NonMaxU8::new(1),
+                            hooked: false,
+                        },
+                        evoke: OrbValue {
+                            amount: NonMaxU8::new(2),
+                            hooked: false,
+                        },
+                    }
+                }
+            }
         }
     }
 }

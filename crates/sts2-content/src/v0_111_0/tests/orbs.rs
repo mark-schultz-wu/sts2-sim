@@ -16,6 +16,7 @@ use super::super::orbs::*;
 use super::super::{ORBS, VERSION};
 use super::{build, rows, wire};
 use nonmax::NonMaxU8;
+use sts2_core::Table as _;
 
 fn orb(id: &str) -> Orb {
     *Orb::ALL

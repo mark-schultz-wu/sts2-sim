@@ -14,7 +14,6 @@ pub(crate) mod encounters;
 pub mod events;
 pub(crate) mod modifiers;
 pub(crate) mod monsters;
-pub(crate) mod orbs;
 pub(crate) mod potions;
 pub(crate) mod powers;
 pub(crate) mod relics;

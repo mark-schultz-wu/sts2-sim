@@ -434,21 +434,21 @@ impl sts2_core::Rules for V0_107_1 {
     }
 
     fn channelled(orb: Self::Orb) -> sts2_core::Channelled<Self> {
-        behaviour::orbs::channelled(orb)
+        crate::behaviour::orbs::channelled::<Self>(orb)
     }
 
     fn orb_turn_end<F: sts2_core::Fight<Self>>(
         orb: &mut sts2_core::Channelled<Self>,
         fight: &mut F,
     ) {
-        behaviour::orbs::turn_end(orb, fight);
+        crate::behaviour::orbs::turn_end(orb, fight);
     }
 
     fn orb_turn_start<F: sts2_core::Fight<Self>>(
         orb: &mut sts2_core::Channelled<Self>,
         fight: &mut F,
     ) {
-        behaviour::orbs::turn_start(orb, fight);
+        crate::behaviour::orbs::turn_start(orb, fight);
     }
 
     fn enchantment_on_play<F: sts2_core::Fight<Self>>(
@@ -463,28 +463,28 @@ impl sts2_core::Rules for V0_107_1 {
         orb: &sts2_core::Channelled<Self>,
         fight: &mut F,
     ) -> sts2_core::Opponents {
-        behaviour::orbs::evoke(orb, fight)
+        crate::behaviour::orbs::evoke(orb, fight)
     }
 
     fn orb_passive<F: sts2_core::Fight<Self>>(
         orb: &mut sts2_core::Channelled<Self>,
         fight: &mut F,
     ) {
-        behaviour::orbs::passive(orb, fight);
+        crate::behaviour::orbs::passive(orb, fight);
     }
 
     fn orb_passive_val(
         orb: &sts2_core::Channelled<Self>,
         modify: impl FnOnce(Self::Number) -> Self::Number,
     ) -> Self::Number {
-        behaviour::orbs::passive_val(orb, modify)
+        crate::behaviour::orbs::passive_val(orb, modify)
     }
 
     fn orb_evoke_val(
         orb: &sts2_core::Channelled<Self>,
         modify: impl FnOnce(Self::Number) -> Self::Number,
     ) -> Self::Number {
-        behaviour::orbs::evoke_val(orb, modify)
+        crate::behaviour::orbs::evoke_val(orb, modify)
     }
 
     fn starting_potion_slots() -> usize {

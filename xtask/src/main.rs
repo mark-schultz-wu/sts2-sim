@@ -18,6 +18,7 @@ mod coverage;
 mod dump;
 mod error;
 mod followed;
+mod generic;
 mod instructions;
 mod neow;
 mod plays;
@@ -69,6 +70,8 @@ enum Command {
     ScenarioDiff(scenario_diff::Args),
     /// Write a recorded run, up to its first split, as a scenario.
     Split(split::Args),
+    /// Rewrite a build's behaviour to be generic over the build.
+    Generic(generic::Args),
 }
 
 /// The repository's root, which is where cargo and the profiles live.
@@ -84,6 +87,8 @@ pub(crate) fn workspace() -> PathBuf {
 enum Error {
     #[error("codegen failed: {0}")]
     Codegen(#[from] codegen::Error),
+    #[error("generic failed: {0}")]
+    Generic(#[from] generic::Error),
     #[error("dump failed: {0}")]
     Dump(#[from] dump::Error),
     #[error("instructions failed: {0}")]
@@ -112,6 +117,7 @@ fn run(command: Command) -> Result<String, Error> {
     Ok(match command {
         // Both print a line of their own after what they wrote.
         Command::Codegen(args) => codegen::run(args)? + "\n",
+        Command::Generic(args) => generic::run(args)?,
         Command::Dump(args) => dump::run(args)? + "\n",
         Command::Instructions(args) => instructions::run(args)?,
         Command::Allocations(args) => allocations::run(args)?,
