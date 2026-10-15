@@ -5832,7 +5832,7 @@ pub(crate) fn perform_death<F: sts2_core::Fight<V>>(
                     Some(holder),
                 );
                 if stolen > 0 {
-                    fight.write_encounter(super::encounters::State::mark_gold_stolen);
+                    fight.write_encounter(crate::behaviour::encounters::State::mark_gold_stolen);
                 }
             }
         }

@@ -110,7 +110,7 @@ impl sts2_core::Hooks for V0_107_1 {
     type ModifierState = crate::behaviour::modifiers::State;
     type PowerState = behaviour::powers::State;
     type MonsterState = behaviour::monsters::Model;
-    type EncounterState = behaviour::encounters::State;
+    type EncounterState = crate::behaviour::encounters::State;
     type CardState = behaviour::cards::State;
     type CardFields = behaviour::cards::Fields;
 
@@ -394,7 +394,7 @@ impl sts2_core::Rules for V0_107_1 {
     }
 
     fn act_layout(act: Self::Act) -> sts2_core::Layout {
-        behaviour::acts::layout(act)
+        crate::behaviour::acts::layout::<Self>(act)
     }
 
     fn starting_deck(character: Self::Character) -> Vec<Self::Card> {
@@ -690,7 +690,7 @@ impl sts2_core::Rules for V0_107_1 {
         state: &Self::EncounterState,
         escaped: &[Self::Monster],
     ) -> Option<f32> {
-        behaviour::encounters::gold_proportion(encounter, state, escaped)
+        crate::behaviour::encounters::gold_proportion::<Self>(encounter, state, escaped)
     }
 
     fn perform_power_death<F: sts2_core::Fight<Self>>(
@@ -952,7 +952,7 @@ impl sts2_core::Rules for V0_107_1 {
         encounter: Self::Encounter,
         rng: &mut R,
     ) -> Result<Vec<sts2_core::Spawned<Self>>, sts2_core::ContentError> {
-        Ok(behaviour::encounters::generate(encounter, rng))
+        Ok(crate::behaviour::encounters::generate(encounter, rng))
     }
 
     fn encounters(act: Self::Act) -> &'static [Self::Encounter] {

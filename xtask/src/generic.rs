@@ -811,6 +811,63 @@ fn rewrite_uses(s: &str, content: &Content, build: &str, left: &mut Left) -> Str
     out
 }
 
+/// A `const` inside a function that names `V` cannot, since an item does not
+/// see its function's generics. It becomes a `let`, named in lower case
+/// through the rest of its block.
+fn local_consts(s: &str) -> String {
+    let mut s = s.to_owned();
+    loop {
+        let found = s.match_indices("\n").find_map(|(at, _)| {
+            let line_start = at + 1;
+            let rest = &s[line_start..];
+            let indent = rest.len() - rest.trim_start_matches(' ').len();
+            let rest = rest.trim_start_matches(' ');
+            let name = rest.strip_prefix("const ")?;
+            let name: String = name
+                .chars()
+                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                .collect();
+            let end = scan_to(s.as_bytes(), line_start, |s, k| s[k] == b';');
+            let item = &s[line_start..end];
+            let names_v = item
+                .split(|c: char| !(c.is_alphanumeric() || c == '_'))
+                .any(|w| w == "V");
+            (indent > 0 && names_v).then_some((line_start + indent, name))
+        });
+        let Some((at, name)) = found else {
+            return s;
+        };
+        // The rest of the block the const stands in.
+        let block_end = scan_to(s.as_bytes(), at, |_, _| false);
+        let lower = name.to_lowercase();
+        let block = s[at..block_end].replacen("const ", "let ", 1);
+        let mut renamed = String::new();
+        let mut last = 0;
+        let b = block.as_bytes();
+        let mut i = 0;
+        while i < b.len() {
+            if let Some(next) = skip_noise(b, i) {
+                i = next;
+                continue;
+            }
+            if block[i..].starts_with(name.as_str())
+                && (i == 0 || !is_ident(b[i - 1]))
+                && b.get(i + name.len()).is_none_or(|&c| !is_ident(c))
+                && !block[..i].ends_with("::")
+            {
+                renamed.push_str(&block[last..i]);
+                renamed.push_str(&lower);
+                i += name.len();
+                last = i;
+                continue;
+            }
+            i += 1;
+        }
+        renamed.push_str(&block[last..]);
+        s.replace_range(at..block_end, &renamed);
+    }
+}
+
 /// Relative paths up out of the file, made absolute.
 fn absolute_paths(s: &str, module: &[String]) -> String {
     let mut out = String::new();
@@ -1034,6 +1091,7 @@ pub fn run(args: Args) -> Result<String, Error> {
         let text = rewrite_lets(&text, &content, &mut left);
         let text = rewrite_rest(&text, &content, &mut left);
         let text = rewrite_uses(&text, &content, &args.build, &mut left);
+        let text = local_consts(&text);
         let text = generic_fns(&text);
         let text = import_ids(&text, &content);
         error::write(path, &text)?;

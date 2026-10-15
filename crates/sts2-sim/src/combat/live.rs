@@ -3810,7 +3810,10 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             history: CombatHistory::new(),
             kept: Vec::new(),
             encounter: Encounter::SlimesWeak,
-            encounter_state: sts2_core::EncounterModel::new(Encounter::SlimesWeak),
+            encounter_state:
+                <_ as sts2_core::EncounterModel<sts2_content::v0_107_1::V0_107_1>>::new(
+                    Encounter::SlimesWeak,
+                ),
             cards: super::cards::Cards::with_cards(0),
             removed_from_deck: Vec::new(),
             ending_turn: false,

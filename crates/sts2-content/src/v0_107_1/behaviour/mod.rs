@@ -7,9 +7,7 @@
 //! Filed the way `generated/` is, so a thing's behaviour sits under the same
 //! name as its row.
 
-pub(crate) mod acts;
 pub(crate) mod cards;
-pub(crate) mod encounters;
 pub mod events;
 pub(crate) mod monsters;
 pub(crate) mod potions;

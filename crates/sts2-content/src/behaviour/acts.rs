@@ -4,9 +4,8 @@
 //! it rolls. The room count sits in the table beside them, so this reads it
 //! from there rather than print it twice.
 
+use crate::ids::ActIds as _;
 use sts2_core::{Layout, Rests};
-
-use super::super::generated::acts::Act;
 
 /// `MapPointTypeCounts.StandardRandomUnknownCount`, and what each act takes
 /// off it.
@@ -19,11 +18,11 @@ const FEWER_LATE: usize = 1;
 /// # Panics
 ///
 /// An act nobody has ported. The deprecated act is one no run reaches.
-pub(crate) fn layout(act: Act) -> Layout {
-    let rooms = usize::from(sts2_core::Table::data(act).rooms);
+pub(crate) fn layout<V: crate::Build>(act: V::Act) -> Layout {
+    let rooms = usize::from(sts2_core::ActTable::rooms(act));
     let (rests, fewer_unknowns) = match act {
         // `NextGaussianInt(7, 1, 6, 7)`, and the standard question marks.
-        Act::Overgrowth | Act::Underdocks => (
+        __c0 if __c0 == V::Act::OVERGROWTH || __c0 == V::Act::UNDERDOCKS => (
             Rests::Around {
                 mean: 7,
                 min: 6,
@@ -32,7 +31,7 @@ pub(crate) fn layout(act: Act) -> Layout {
             0,
         ),
         // One fewer of each than the act before it.
-        Act::Hive => (
+        __c0 if __c0 == V::Act::HIVE => (
             Rests::Around {
                 mean: 6,
                 min: 6,
@@ -41,7 +40,7 @@ pub(crate) fn layout(act: Act) -> Layout {
             FEWER_LATE,
         ),
         // The one act that rolls its rest sites flat.
-        Act::Glory => (Rests::Between { min: 5, max: 7 }, FEWER_LATE),
+        __c0 if __c0 == V::Act::GLORY => (Rests::Between { min: 5, max: 7 }, FEWER_LATE),
         act => unimplemented!("the map {act:?} generates"),
     };
     Layout {
