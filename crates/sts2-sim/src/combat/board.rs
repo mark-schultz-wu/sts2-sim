@@ -66,6 +66,9 @@ pub(super) struct Board<'a, V: Rules> {
     choice: Choice,
     /// The hits of the attack under way that wait on a question, in order.
     held: Vec<Effect<V>>,
+    /// The hit of the attack under way whose `BeforeDamageReceived` asked,
+    /// which lands before the rest once the answer is in.
+    half: Option<super::live::HalfHit<V>>,
     /// The model of a monster that left the fight during its own move. The
     /// game's model object outlives the creature, so the rest of the move
     /// still reads and writes it.
@@ -215,6 +218,7 @@ impl<'a, V: Rules> Board<'a, V> {
             ended: None,
             choice: Choice::Throwing,
             held: Vec::new(),
+            half: None,
             left: None,
             landed: None,
             commanding: false,
@@ -269,6 +273,7 @@ impl<'a, V: Rules> Board<'a, V> {
             ended: None,
             choice: Choice::Move { attacking: false },
             held: Vec::new(),
+            half: None,
             left: None,
             landed: None,
             commanding: false,
@@ -1011,7 +1016,52 @@ impl<'a, V: Rules> Board<'a, V> {
                 card,
             },
         );
+        let asked_before = self.live.asking.is_some();
         self.after_hit(walking);
+        let half = super::live::HalfHit {
+            dealer,
+            target,
+            damage,
+            powered,
+            unblockable,
+            card,
+            attack,
+        };
+        // A listener's question stands the hit still, inside a play whose
+        // context it awaits on. It lands once the answer is in.
+        if !asked_before && self.live.asking.is_some() && matches!(self.choice, Choice::Blocking) {
+            self.hold_half(half);
+            return None;
+        }
+        self.land_rest(half)
+    }
+
+    /// Hold `half` to land once the question its `BeforeDamageReceived`
+    /// asked is answered.
+    #[cold]
+    fn hold_half(&mut self, half: super::live::HalfHit<V>) {
+        if self.commanding {
+            unimplemented!("a question before a hit lands, inside a command over many targets")
+        }
+        if self.landed.is_none() || self.half.is_some() {
+            unimplemented!("a question before a hit lands, outside an attack's first wait")
+        }
+        self.half = Some(half);
+    }
+
+    /// The rest of [`Board::land_hit`] once `BeforeDamageReceived` is over:
+    /// the block the hit meets, and the hit points it takes.
+    #[inline(always)]
+    fn land_rest(&mut self, half: super::live::HalfHit<V>) -> Option<Landed<V>> {
+        let super::live::HalfHit {
+            dealer,
+            target,
+            damage,
+            powered,
+            unblockable,
+            card,
+            attack,
+        } = half;
         // What answered can have moved the creatures.
         let at = self.at(target)?;
         let zero = V::Number::zero();
@@ -5903,10 +5953,11 @@ impl<V: Rules> Board<'_, V> {
             powered: scaling == Scaling::Dynamic,
             source,
         };
-        if !self.held.is_empty() {
+        if !self.held.is_empty() || self.half.is_some() {
             self.live.defer(super::live::Deferred::Hits {
                 frame: self.frame(),
                 attack,
+                half: self.half.take(),
                 hits: std::mem::take(&mut self.held),
                 landed: results.clone(),
             });
@@ -6148,6 +6199,7 @@ impl<'a, V: Rules> Board<'a, V> {
             ended: None,
             choice,
             held: Vec::new(),
+            half: None,
             left: None,
             landed: None,
             commanding: false,
@@ -6169,6 +6221,7 @@ pub(super) fn land_held<V: Rules>(
     let super::live::Deferred::Hits {
         frame,
         attack,
+        half,
         hits,
         landed,
     } = held
@@ -6177,6 +6230,13 @@ pub(super) fn land_held<V: Rules>(
     };
     let mut board = Board::in_frame(live, rngs, relics, ascension, frame);
     board.landed = Some(landed);
+    if let Some(half) = half {
+        let mut dying = SmallVec::<[CombatId; 2]>::new();
+        if let Some(landed) = board.land_rest(half) {
+            board.settle_hit(landed, &mut dying);
+        }
+        board.kill_together(&dying);
+    }
     for effect in hits {
         let hit = Fight::resolve(&board, effect);
         Fight::apply(&mut board, hit);
@@ -6189,6 +6249,7 @@ pub(super) fn land_held<V: Rules>(
         board.live.defer(super::live::Deferred::Hits {
             frame,
             attack,
+            half: None,
             hits,
             landed: results,
         });

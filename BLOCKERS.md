@@ -29,13 +29,13 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ## Open
 
-### 1. A question before a hit lands
+### 1. A question before a hit lands, inside a command over many targets
 
-`BeforeDamageReceived` hands its listeners the hit's own context. Thorns'
-damage back can draw through Centennial Puzzle, and the draw's shuffle
-asks. The hit then lands once the answer is in, then the attack's other
-hits, then the card's code after it. The sim lands the hit first. The
-Ironclad's waits after an attack get their scenarios once this lands.
+A hit whose `BeforeDamageReceived` asks now waits for the answer, then
+the attack's other hits, then the card. Inside one `CreatureCmd.Damage`
+over many targets, the hits already landed wait too, before their hooks.
+The sim stops there. Thunderclap or Breakthrough against a Thorns enemy,
+with Centennial Puzzle and Stratagem, shows it.
 
 ### 2. A death's listener's question over a pile that changed
 

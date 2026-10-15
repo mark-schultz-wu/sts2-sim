@@ -318,6 +318,8 @@ pub(super) enum Deferred<V: Rules> {
     Hits {
         frame: super::board::Frame<V>,
         attack: HeldAttack<V>,
+        /// A hit whose `BeforeDamageReceived` asked, to land first.
+        half: Option<HalfHit<V>>,
         hits: Vec<sts2_core::Effect<V>>,
         landed: sts2_core::AttackResults<V>,
     },
@@ -407,6 +409,19 @@ impl<V: Rules> Clone for Deferrals<V> {
         self.waiting.clone_from(&source.waiting);
         self.batch = source.batch;
     }
+}
+
+/// A hit whose `BeforeDamageReceived` listeners have run, and which waits
+/// on the question one of them asked to meet block and take hit points.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct HalfHit<V: Rules> {
+    pub(super) dealer: Option<CombatId>,
+    pub(super) target: CombatId,
+    pub(super) damage: V::Number,
+    pub(super) powered: bool,
+    pub(super) unblockable: bool,
+    pub(super) card: Option<V::Card>,
+    pub(super) attack: bool,
 }
 
 /// The attack command whose hits wait, which `AfterAttack` names once they
