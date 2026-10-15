@@ -3,6 +3,7 @@
 use sts2_core::{Amount, Effect, EventHook, Fight, HookEffect, Scaling};
 
 use super::super::super::generated::card_plays;
+use super::super::super::generated::cards::Cards;
 use super::super::super::generated::cards::{CardVar, StatusCard};
 use super::super::super::generated::powers::Power;
 use super::V;
@@ -11,7 +12,7 @@ use super::V;
 pub(super) fn on_play<F: Fight<V>>(card: StatusCard, fight: &mut F) -> sts2_core::Played<V> {
     match card {
         StatusCard::FranticEscape => frantic_escape(fight),
-        card => card_plays::status::on_play(card, fight),
+        card => super::generated_from(Cards::Status(card), fight, 0),
     }
 }
 

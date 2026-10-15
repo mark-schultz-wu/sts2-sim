@@ -5,7 +5,7 @@ use sts2_core::{
     PowerAmount, Rules as _, Scaling, Selection,
 };
 
-use super::super::super::generated::card_plays;
+use super::super::super::generated::cards::Cards;
 use super::super::super::generated::cards::{CardType, CardVar, EventCard};
 use super::super::super::generated::powers::Power;
 use super::V;
@@ -181,7 +181,7 @@ pub(super) fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> 
             fight.apply(block);
             Played::Done
         }
-        card => card_plays::event::on_play(card, fight),
+        card => super::generated_from(Cards::Event(card), fight, 0),
     }
 }
 

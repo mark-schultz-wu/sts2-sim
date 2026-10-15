@@ -2,7 +2,7 @@
 
 use sts2_core::{Amount, Effect, Fight, Pile, PileAct, Played, PowerAmount, Scaling};
 
-use super::super::super::generated::card_plays;
+use super::super::super::generated::cards::Cards;
 use super::super::super::generated::cards::{CardVar, DefectCard, StatusCard};
 use super::super::super::generated::orbs::Orb;
 use super::super::super::generated::powers::Power;
@@ -546,7 +546,7 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
         DefectCard::Scrape => scrape(fight),
         DefectCard::MomentumStrike => momentum_strike(fight),
         DefectCard::TeslaCoil => tesla_coil(fight),
-        card => card_plays::defect::on_play(card, fight),
+        card => super::generated_from(Cards::Defect(card), fight, 0),
     }
 }
 

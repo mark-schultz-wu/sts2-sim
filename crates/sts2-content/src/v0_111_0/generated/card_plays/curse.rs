@@ -8,29 +8,32 @@ use sts2_core::{Change, Fight, Played};
 
 type V = super::super::super::V0_111_0;
 
-/// `OnPlay`, for every card whose statements the dump matched.
+/// `OnPlay` from the command at `from` on, for every card whose
+/// statements the dump matched. A command that leaves a question
+/// waiting stands the rest still, as the game's `await` does, and
+/// the play comes back as `Err` with the command to go on from.
 ///
 /// Any other card panics, and `behaviour/` ports it by hand.
-pub fn on_play<F: Fight<V>>(card: CurseCard, _fight: &mut F) -> Played<V> {
+pub fn play_from<F: Fight<V>>(card: CurseCard, _fight: &mut F, _from: u8) -> Result<Played<V>, u8> {
     match card {
-        CurseCard::AscendersBane => Played::Done,
-        CurseCard::BadLuck => Played::Done,
-        CurseCard::Clumsy => Played::Done,
-        CurseCard::CurseOfTheBell => Played::Done,
-        CurseCard::Debt => Played::Done,
-        CurseCard::Decay => Played::Done,
-        CurseCard::Doubt => Played::Done,
-        CurseCard::Enthralled => Played::Done,
-        CurseCard::Folly => Played::Done,
-        CurseCard::Greed => Played::Done,
-        CurseCard::Guilty => Played::Done,
-        CurseCard::Injury => Played::Done,
-        CurseCard::Normality => Played::Done,
-        CurseCard::PoorSleep => Played::Done,
-        CurseCard::Regret => Played::Done,
-        CurseCard::Shame => Played::Done,
-        CurseCard::SporeMind => Played::Done,
-        CurseCard::Writhe => Played::Done,
+        CurseCard::AscendersBane => Ok(Played::Done),
+        CurseCard::BadLuck => Ok(Played::Done),
+        CurseCard::Clumsy => Ok(Played::Done),
+        CurseCard::CurseOfTheBell => Ok(Played::Done),
+        CurseCard::Debt => Ok(Played::Done),
+        CurseCard::Decay => Ok(Played::Done),
+        CurseCard::Doubt => Ok(Played::Done),
+        CurseCard::Enthralled => Ok(Played::Done),
+        CurseCard::Folly => Ok(Played::Done),
+        CurseCard::Greed => Ok(Played::Done),
+        CurseCard::Guilty => Ok(Played::Done),
+        CurseCard::Injury => Ok(Played::Done),
+        CurseCard::Normality => Ok(Played::Done),
+        CurseCard::PoorSleep => Ok(Played::Done),
+        CurseCard::Regret => Ok(Played::Done),
+        CurseCard::Shame => Ok(Played::Done),
+        CurseCard::SporeMind => Ok(Played::Done),
+        CurseCard::Writhe => Ok(Played::Done),
     }
 }
 

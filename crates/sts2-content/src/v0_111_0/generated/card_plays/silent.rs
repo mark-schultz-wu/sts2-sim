@@ -9,94 +9,128 @@ use sts2_core::{Amount, Change, CostPool, Effect, Fight, Played, PowerAmount, Sc
 
 type V = super::super::super::V0_111_0;
 
-/// `OnPlay`, for every card whose statements the dump matched.
+/// `OnPlay` from the command at `from` on, for every card whose
+/// statements the dump matched. A command that leaves a question
+/// waiting stands the rest still, as the game's `await` does, and
+/// the play comes back as `Err` with the command to go on from.
 ///
 /// Any other card panics, and `behaviour/` ports it by hand.
-pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
+pub fn play_from<F: Fight<V>>(card: SilentCard, fight: &mut F, from: u8) -> Result<Played<V>, u8> {
     match card {
         SilentCard::Abrasive => {
-            fight.apply_to_actor(
-                Power::DexterityPower,
-                PowerAmount::Counted(fight.power_var(CardVar::DexterityPower)),
-            );
-            fight.apply_to_actor(
-                Power::ThornsPower,
-                PowerAmount::Counted(fight.power_var(CardVar::ThornsPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::DexterityPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::DexterityPower)),
+                );
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(
+                    Power::ThornsPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::ThornsPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         SilentCard::Accelerant => {
-            fight.apply_to_actor(
-                Power::AccelerantPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Accelerant)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::AccelerantPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Accelerant)),
+                );
+            }
+            Ok(Played::Done)
         }
         SilentCard::Accuracy => {
-            fight.apply_to_actor(
-                Power::AccuracyPower,
-                PowerAmount::Counted(fight.power_var(CardVar::AccuracyPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::AccuracyPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::AccuracyPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call CardSelectCmd.FromHandForDiscard`
         SilentCard::Acrobatics => unimplemented!("what {card:?} does when it is played"),
         // `if`
         SilentCard::Adrenaline => unimplemented!("what {card:?} does when it is played"),
         SilentCard::Afterimage => {
-            fight.apply_to_actor(
-                Power::AfterimagePower,
-                PowerAmount::Counted(fight.power_var(CardVar::AfterimagePower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::AfterimagePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::AfterimagePower)),
+                );
+            }
+            Ok(Played::Done)
         }
         SilentCard::Anticipate => {
-            fight.apply_to_actor(
-                Power::AnticipatePower,
-                PowerAmount::Counted(fight.power_var(CardVar::DexterityPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::AnticipatePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::DexterityPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         SilentCard::Assassinate => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.apply_power(
-                target,
-                Power::VulnerablePower,
-                PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
-            );
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_power(
+                    target,
+                    Power::VulnerablePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
+                );
+            }
+            Ok(Played::Done)
         }
         SilentCard::Backflip => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            fight.draw(fight.var(CardVar::Cards));
-            Played::Done
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.draw(fight.var(CardVar::Cards));
+            }
+            Ok(Played::Done)
         }
         SilentCard::Backstab => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            Played::Done
+            }
+            Ok(Played::Done)
         }
         // `for`
         SilentCard::BladeDance => unimplemented!("what {card:?} does when it is played"),
@@ -105,17 +139,24 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         // `if`
         SilentCard::BladeSymphony => unimplemented!("what {card:?} does when it is played"),
         SilentCard::Blur => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            fight.apply_to_actor(
-                Power::BlurPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Blur)),
-            );
-            Played::Done
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(
+                    Power::BlurPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Blur)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `for`
         SilentCard::BouncingFlask => unimplemented!("what {card:?} does when it is played"),
@@ -124,11 +165,13 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         // `foreach`
         SilentCard::BulletTime => unimplemented!("what {card:?} does when it is played"),
         SilentCard::Burst => {
-            fight.apply_to_actor(
-                Power::BurstPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Skills)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::BurstPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Skills)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call PileType.Hand.GetPile`
         SilentCard::CalculatedGamble => unimplemented!("what {card:?} does when it is played"),
@@ -136,19 +179,23 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         SilentCard::CloakAndDagger => unimplemented!("what {card:?} does when it is played"),
         SilentCard::Concoct => {
             let target = fight.target();
-            fight.apply_power(
-                target,
-                Power::ConcoctPower,
-                PowerAmount::Counted(fight.power_var(CardVar::ConcoctPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_power(
+                    target,
+                    Power::ConcoctPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::ConcoctPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         SilentCard::CorrosiveWave => {
-            fight.apply_to_actor(
-                Power::CorrosiveWavePower,
-                PowerAmount::Counted(fight.power_var(CardVar::CorrosiveWave)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::CorrosiveWavePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::CorrosiveWave)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call DamageCmd.Attack`
         SilentCard::DaggerSpray => unimplemented!("what {card:?} does when it is played"),
@@ -156,60 +203,75 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         SilentCard::DaggerThrow => unimplemented!("what {card:?} does when it is played"),
         SilentCard::Dash => {
             let target = fight.target();
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
                     scaling: Scaling::Dynamic,
                 });
-                fight.apply(attack);
-            });
-            Played::Done
+                fight.apply(block);
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
+                });
+            }
+            Ok(Played::Done)
         }
         SilentCard::DeadlyPoison => {
             let target = fight.target();
-            fight.apply_power(
-                target,
-                Power::PoisonPower,
-                PowerAmount::Counted(fight.power_var(CardVar::PoisonPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_power(
+                    target,
+                    Power::PoisonPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::PoisonPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         SilentCard::Defend => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            Played::Done
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
+            Ok(Played::Done)
         }
         SilentCard::Deflect => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            Played::Done
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
+            Ok(Played::Done)
         }
         // `call CreatureCmd.GainBlock`
         SilentCard::DodgeAndRoll => unimplemented!("what {card:?} does when it is played"),
         // `call AttackCommand.CreateContextAsync`
         SilentCard::EchoingSlash => unimplemented!("what {card:?} does when it is played"),
         SilentCard::Envenom => {
-            fight.apply_to_actor(
-                Power::EnvenomPower,
-                PowerAmount::Counted(fight.power_var(CardVar::EnvenomPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::EnvenomPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::EnvenomPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call CardPileCmd.Draw`
         SilentCard::EscapePlan => unimplemented!("what {card:?} does when it is played"),
@@ -219,12 +281,14 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         SilentCard::Expose => unimplemented!("what {card:?} does when it is played"),
         SilentCard::Fade => {
             let target = fight.target();
-            fight.apply_power(
-                target,
-                Power::FadePower,
-                PowerAmount::Counted(fight.power_var(CardVar::DexterityPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_power(
+                    target,
+                    Power::FadePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::DexterityPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `for`
         SilentCard::FanOfKnives => unimplemented!("what {card:?} does when it is played"),
@@ -232,34 +296,40 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         SilentCard::Finisher => unimplemented!("what {card:?} does when it is played"),
         SilentCard::Flanking => {
             let target = fight.target();
-            fight.apply_power(target, Power::FlankingPower, PowerAmount::Counted(2));
-            Played::Done
+            if from == 0 {
+                fight.apply_power(target, Power::FlankingPower, PowerAmount::Counted(2));
+            }
+            Ok(Played::Done)
         }
         // `call DamageCmd.Attack`
         SilentCard::Flechettes => unimplemented!("what {card:?} does when it is played"),
         SilentCard::FlickFlack => {
-            fight.attack(Scaling::Dynamic, |fight| {
-                let targets = fight.opponents();
-                fight.damage_command(|fight| {
-                    for target in targets {
-                        let attack = fight.resolve(Effect::Attack {
-                            dealer: fight.actor(),
-                            target,
-                            damage: Amount::Var(CardVar::Damage),
-                            scaling: Scaling::Dynamic,
-                        });
-                        fight.apply(attack);
-                    }
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let targets = fight.opponents();
+                    fight.damage_command(|fight| {
+                        for target in targets {
+                            let attack = fight.resolve(Effect::Attack {
+                                dealer: fight.actor(),
+                                target,
+                                damage: Amount::Var(CardVar::Damage),
+                                scaling: Scaling::Dynamic,
+                            });
+                            fight.apply(attack);
+                        }
+                    });
                 });
-            });
-            Played::Done
+            }
+            Ok(Played::Done)
         }
         SilentCard::Footwork => {
-            fight.apply_to_actor(
-                Power::DexterityPower,
-                PowerAmount::Counted(fight.power_var(CardVar::DexterityPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::DexterityPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::DexterityPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `overrides IsPlayable`
         SilentCard::GrandFinale => unimplemented!("what {card:?} does when it is played"),
@@ -270,8 +340,10 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         // `call CardCmd.Discard`
         SilentCard::HiddenDaggers => unimplemented!("what {card:?} does when it is played"),
         SilentCard::InfiniteBlades => {
-            fight.apply_to_actor(Power::InfiniteBladesPower, PowerAmount::Counted(1));
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(Power::InfiniteBladesPower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
         }
         // `call PileType.Exhaust.GetPile`
         SilentCard::KnifeTrap => unimplemented!("what {card:?} does when it is played"),
@@ -279,342 +351,447 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         SilentCard::LeadingStrike => unimplemented!("what {card:?} does when it is played"),
         SilentCard::LegSweep => {
             let target = fight.target();
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            fight.apply_power(
-                target,
-                Power::WeakPower,
-                PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
-            );
-            Played::Done
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_power(
+                    target,
+                    Power::WeakPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call ResolveEnergyXValue`
         SilentCard::Malaise => unimplemented!("what {card:?} does when it is played"),
         SilentCard::MasterPlanner => {
-            fight.apply_to_actor(Power::MasterPlannerPower, PowerAmount::Counted(1));
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(Power::MasterPlannerPower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
         }
         SilentCard::MementoMori => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::CalculatedDamage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::CalculatedDamage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            Played::Done
+            }
+            Ok(Played::Done)
         }
         // `call CreatureCmd.GainBlock`
         SilentCard::Mirage => unimplemented!("what {card:?} does when it is played"),
         SilentCard::Murder => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::CalculatedDamage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::CalculatedDamage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            Played::Done
+            }
+            Ok(Played::Done)
         }
         SilentCard::Neutralize => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.apply_power(
-                target,
-                Power::WeakPower,
-                PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
-            );
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_power(
+                    target,
+                    Power::WeakPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call CardSelectCmd.FromHand`
         SilentCard::Nightmare => unimplemented!("what {card:?} does when it is played"),
         SilentCard::NoxiousFumes => {
-            fight.apply_to_actor(
-                Power::NoxiousFumesPower,
-                PowerAmount::Counted(fight.power_var(CardVar::PoisonPerTurn)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::NoxiousFumesPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::PoisonPerTurn)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `foreach`
         SilentCard::Outbreak => unimplemented!("what {card:?} does when it is played"),
         SilentCard::PhantomBlades => {
-            fight.apply_to_actor(
-                Power::PhantomBladesPower,
-                PowerAmount::Counted(fight.power_var(CardVar::PhantomBladesPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::PhantomBladesPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::PhantomBladesPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `foreach`
         SilentCard::PiercingWail => unimplemented!("what {card:?} does when it is played"),
         SilentCard::Pinpoint => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            Played::Done
+            }
+            Ok(Played::Done)
         }
         SilentCard::PoisonedStab => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.apply_power(
-                target,
-                Power::PoisonPower,
-                PowerAmount::Counted(fight.power_var(CardVar::PoisonPower)),
-            );
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_power(
+                    target,
+                    Power::PoisonPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::PoisonPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         SilentCard::Pounce => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.apply_to_actor(Power::FreeSkillPower, PowerAmount::Counted(1));
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(Power::FreeSkillPower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
         }
         SilentCard::PreciseCut => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::CalculatedDamage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::CalculatedDamage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            Played::Done
+            }
+            Ok(Played::Done)
         }
         SilentCard::Predator => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.apply_to_actor(Power::DrawCardsNextTurnPower, PowerAmount::Counted(2));
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(Power::DrawCardsNextTurnPower, PowerAmount::Counted(2));
+            }
+            Ok(Played::Done)
         }
         // `call CardPileCmd.Draw`
         SilentCard::Prepared => unimplemented!("what {card:?} does when it is played"),
         SilentCard::Reflex => {
-            fight.draw(fight.var(CardVar::Cards));
-            Played::Done
+            if from == 0 {
+                fight.draw(fight.var(CardVar::Cards));
+            }
+            Ok(Played::Done)
         }
         // `call DamageCmd.Attack`
         SilentCard::Ricochet => unimplemented!("what {card:?} does when it is played"),
         SilentCard::SerpentForm => {
-            fight.apply_to_actor(
-                Power::SerpentFormPower,
-                PowerAmount::Counted(fight.power_var(CardVar::SerpentFormPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::SerpentFormPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::SerpentFormPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         SilentCard::Shadowmeld => {
-            fight.apply_to_actor(
-                Power::ShadowmeldPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Power)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::ShadowmeldPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Power)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call CardCmd.Discard`
         SilentCard::ShadowStep => unimplemented!("what {card:?} does when it is played"),
         SilentCard::Sidestep => {
-            fight.apply_to_actor(
-                Power::EnergyNextTurnPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Energy)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::EnergyNextTurnPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Energy)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call DamageCmd.Attack`
         SilentCard::Skewer => unimplemented!("what {card:?} does when it is played"),
         SilentCard::Slice => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            Played::Done
+            }
+            Ok(Played::Done)
         }
         SilentCard::Snakebite => {
             let target = fight.target();
-            fight.apply_power(
-                target,
-                Power::PoisonPower,
-                PowerAmount::Counted(fight.power_var(CardVar::PoisonPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_power(
+                    target,
+                    Power::PoisonPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::PoisonPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         SilentCard::Sneaky => {
-            fight.apply_to_actor(
-                Power::SneakyPower,
-                PowerAmount::Counted(fight.power_var(CardVar::SneakyPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::SneakyPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::SneakyPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         SilentCard::Speedster => {
-            fight.apply_to_actor(
-                Power::SpeedsterPower,
-                PowerAmount::Counted(fight.power_var(CardVar::SpeedsterPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::SpeedsterPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::SpeedsterPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call PileType.Hand.GetPile`
         SilentCard::StormOfSteel => unimplemented!("what {card:?} does when it is played"),
         SilentCard::Strangle => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.apply_power(
-                target,
-                Power::StranglePower,
-                PowerAmount::Counted(fight.power_var(CardVar::StranglePower)),
-            );
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_power(
+                    target,
+                    Power::StranglePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::StranglePower)),
+                );
+            }
+            Ok(Played::Done)
         }
         SilentCard::Strike => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            Played::Done
+            }
+            Ok(Played::Done)
         }
         SilentCard::SuckerPunch => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.apply_power(
-                target,
-                Power::WeakPower,
-                PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
-            );
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_power(
+                    target,
+                    Power::WeakPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         SilentCard::Suppress => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.apply_power(
-                target,
-                Power::WeakPower,
-                PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
-            );
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_power(
+                    target,
+                    Power::WeakPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call CardSelectCmd.FromHandForDiscard`
         SilentCard::Survivor => unimplemented!("what {card:?} does when it is played"),
         SilentCard::Tactician => {
-            fight.modify_energy(fight.var(CardVar::Energy));
-            Played::Done
+            if from == 0 {
+                fight.modify_energy(fight.var(CardVar::Energy));
+            }
+            Ok(Played::Done)
         }
         // `if`
         SilentCard::TheHunt => unimplemented!("what {card:?} does when it is played"),
         SilentCard::ToolsOfTheTrade => {
-            fight.apply_to_actor(Power::ToolsOfTheTradePower, PowerAmount::Counted(1));
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(Power::ToolsOfTheTradePower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
         }
         SilentCard::Tracking => {
-            fight.apply_to_actor(Power::TrackingPower, PowerAmount::Counted(50));
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(Power::TrackingPower, PowerAmount::Counted(50));
+            }
+            Ok(Played::Done)
         }
         SilentCard::Untouchable => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            Played::Done
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
+            Ok(Played::Done)
         }
         // `for`
         SilentCard::UpMySleeve => unimplemented!("what {card:?} does when it is played"),
         SilentCard::WellLaidPlans => {
-            fight.apply_to_actor(Power::WellLaidPlansPower, PowerAmount::Counted(1));
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(Power::WellLaidPlansPower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
         }
         SilentCard::WraithForm => {
-            fight.apply_to_actor(
-                Power::IntangiblePower,
-                PowerAmount::Counted(fight.power_var(CardVar::IntangiblePower)),
-            );
-            fight.apply_to_actor(
-                Power::WraithFormPower,
-                PowerAmount::Counted(fight.power_var(CardVar::WraithFormPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::IntangiblePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::IntangiblePower)),
+                );
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(
+                    Power::WraithFormPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::WraithFormPower)),
+                );
+            }
+            Ok(Played::Done)
         }
     }
 }

@@ -4,7 +4,7 @@ use sts2_core::{
     CardKind, EventHook, Fight, HookEffect, Pile, PileAct, Played, Rules as _, Selection,
 };
 
-use super::super::super::generated::card_plays;
+use super::super::super::generated::cards::Cards;
 use super::super::super::generated::cards::{CardKeyword, CardRarity, CardVar, ColorlessCard};
 use super::{Number, V};
 
@@ -298,7 +298,7 @@ pub(super) fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played
         ColorlessCard::Splash => splash(fight),
         ColorlessCard::HiddenGem => hidden_gem(fight),
         ColorlessCard::Omnislice => omnislice(fight),
-        card => card_plays::colorless::on_play(card, fight),
+        card => super::generated_from(Cards::Colorless(card), fight, 0),
     }
 }
 

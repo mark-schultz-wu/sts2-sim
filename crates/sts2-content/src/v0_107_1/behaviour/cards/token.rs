@@ -2,7 +2,7 @@
 
 use sts2_core::{Amount, CardVars, CreatureView as _, Effect, Fight, Opponents, Played, Scaling};
 
-use super::super::super::generated::card_plays;
+use super::super::super::generated::cards::Cards;
 use super::super::super::generated::cards::{CardVar, TargetType, TokenCard};
 use super::super::super::generated::powers::Power;
 use super::{Number, V};
@@ -62,7 +62,7 @@ pub(super) fn on_play<F: Fight<V>>(card: TokenCard, fight: &mut F) -> Played<V> 
         TokenCard::SovereignBlade => sovereign_blade(fight),
         TokenCard::Shiv => shiv(fight),
         TokenCard::SweepingGaze => sweeping_gaze(fight),
-        card => card_plays::token::on_play(card, fight),
+        card => super::generated_from(Cards::Token(card), fight, 0),
     }
 }
 

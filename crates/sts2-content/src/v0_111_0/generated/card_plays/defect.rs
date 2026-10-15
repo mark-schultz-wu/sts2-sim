@@ -10,10 +10,13 @@ use sts2_core::{Amount, Change, CostPool, Effect, Fight, Played, PowerAmount, Sc
 
 type V = super::super::super::V0_111_0;
 
-/// `OnPlay`, for every card whose statements the dump matched.
+/// `OnPlay` from the command at `from` on, for every card whose
+/// statements the dump matched. A command that leaves a question
+/// waiting stands the rest still, as the game's `await` does, and
+/// the play comes back as `Err` with the command to go on from.
 ///
 /// Any other card panics, and `behaviour/` ports it by hand.
-pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
+pub fn play_from<F: Fight<V>>(card: DefectCard, fight: &mut F, from: u8) -> Result<Played<V>, u8> {
     match card {
         // `call CreateClone`
         DefectCard::AdaptiveStrike => unimplemented!("what {card:?} does when it is played"),
@@ -21,66 +24,91 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::AllForOne => unimplemented!("what {card:?} does when it is played"),
         DefectCard::BallLightning => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.channel(Orb::LightningOrb);
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.channel(Orb::LightningOrb);
+            }
+            Ok(Played::Done)
         }
         // `call DamageCmd.Attack`
         DefectCard::Barrage => unimplemented!("what {card:?} does when it is played"),
         DefectCard::BeamCell => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.apply_power(
-                target,
-                Power::VulnerablePower,
-                PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
-            );
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_power(
+                    target,
+                    Power::VulnerablePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
+                );
+            }
+            Ok(Played::Done)
         }
         DefectCard::BiasedCognition => {
-            fight.apply_to_actor(
-                Power::FocusPower,
-                PowerAmount::Counted(fight.power_var(CardVar::FocusPower)),
-            );
-            fight.apply_to_actor(
-                Power::BiasedCognitionPower,
-                PowerAmount::Counted(fight.power_var(CardVar::BiasedCognitionPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::FocusPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::FocusPower)),
+                );
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(
+                    Power::BiasedCognitionPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::BiasedCognitionPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call CombatState.CreateCard`
         DefectCard::BoostAway => unimplemented!("what {card:?} does when it is played"),
         DefectCard::BootSequence => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            Played::Done
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
+            Ok(Played::Done)
         }
         DefectCard::Buffer => {
-            fight.apply_to_actor(
-                Power::BufferPower,
-                PowerAmount::Counted(fight.power_var(CardVar::BufferPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::BufferPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::BufferPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call OrbCmd.RemoveSlots`
         DefectCard::BulkUp => unimplemented!("what {card:?} does when it is played"),
@@ -89,17 +117,24 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         // `for`
         DefectCard::Chaos => unimplemented!("what {card:?} does when it is played"),
         DefectCard::ChargeBattery => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            fight.apply_to_actor(
-                Power::EnergyNextTurnPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Energy)),
-            );
-            Played::Done
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(
+                    Power::EnergyNextTurnPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Energy)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `foreach`
         DefectCard::Chill => unimplemented!("what {card:?} does when it is played"),
@@ -107,17 +142,24 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::Claw => unimplemented!("what {card:?} does when it is played"),
         DefectCard::ColdSnap => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.channel(Orb::FrostOrb);
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.channel(Orb::FrostOrb);
+            }
+            Ok(Played::Done)
         }
         // `call PileType.Hand.GetPile`
         DefectCard::Compact => unimplemented!("what {card:?} does when it is played"),
@@ -126,61 +168,80 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         // `for`
         DefectCard::ConsumingShadow => unimplemented!("what {card:?} does when it is played"),
         DefectCard::Coolant => {
-            fight.apply_to_actor(
-                Power::CoolantPower,
-                PowerAmount::Counted(fight.power_var(CardVar::CoolantPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::CoolantPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::CoolantPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         DefectCard::Coolheaded => {
-            fight.channel(Orb::FrostOrb);
-            fight.draw(fight.var(CardVar::Cards));
-            Played::Done
+            if from == 0 {
+                fight.channel(Orb::FrostOrb);
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.draw(fight.var(CardVar::Cards));
+            }
+            Ok(Played::Done)
         }
         DefectCard::CreativeAi => {
-            fight.apply_to_actor(
-                Power::CreativeAiPower,
-                PowerAmount::Counted(fight.power_var(CardVar::CreativeAi)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::CreativeAiPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::CreativeAi)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call Owner.PlayerCombatState.OrbQueue.Orbs.Where`
         DefectCard::Darkness => unimplemented!("what {card:?} does when it is played"),
         DefectCard::Defend => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            Played::Done
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
+            Ok(Played::Done)
         }
         DefectCard::Defragment => {
-            fight.apply_to_actor(
-                Power::FocusPower,
-                PowerAmount::Counted(fight.power_var(CardVar::FocusPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::FocusPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::FocusPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call PlayerCmd.GainEnergy`
         DefectCard::DoubleEnergy => unimplemented!("what {card:?} does when it is played"),
         // `if`
         DefectCard::Dualcast => unimplemented!("what {card:?} does when it is played"),
         DefectCard::EchoForm => {
-            fight.apply_to_actor(
-                Power::EchoFormPower,
-                PowerAmount::Counted(fight.power_var(CardVar::EchoForm)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::EchoFormPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::EchoForm)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call CombatState.GetTeammatesOf`
         DefectCard::EnergySurge => unimplemented!("what {card:?} does when it is played"),
         DefectCard::Feral => {
-            fight.apply_to_actor(
-                Power::FeralPower,
-                PowerAmount::Counted(fight.power_var(CardVar::FeralPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::FeralPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::FeralPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `for`
         DefectCard::FightThrough => unimplemented!("what {card:?} does when it is played"),
@@ -188,51 +249,69 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::FlakCannon => unimplemented!("what {card:?} does when it is played"),
         DefectCard::FocusedStrike => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.apply_to_actor(
-                Power::FocusedStrikePower,
-                PowerAmount::Counted(fight.power_var(CardVar::FocusPower)),
-            );
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(
+                    Power::FocusedStrikePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::FocusPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `if`
         DefectCard::Ftl => unimplemented!("what {card:?} does when it is played"),
         DefectCard::Fusion => {
-            fight.channel(Orb::PlasmaOrb);
-            Played::Done
+            if from == 0 {
+                fight.channel(Orb::PlasmaOrb);
+            }
+            Ok(Played::Done)
         }
         // `call BuffFromPlay`
         DefectCard::GeneticAlgorithm => unimplemented!("what {card:?} does when it is played"),
         // `for`
         DefectCard::Glacier => unimplemented!("what {card:?} does when it is played"),
         DefectCard::Glasswork => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            fight.channel(Orb::GlassOrb);
-            Played::Done
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.channel(Orb::GlassOrb);
+            }
+            Ok(Played::Done)
         }
         // `if`
         DefectCard::GoForTheEyes => unimplemented!("what {card:?} does when it is played"),
         // `call CombatState.CreateCard`
         DefectCard::GunkUp => unimplemented!("what {card:?} does when it is played"),
         DefectCard::Hailstorm => {
-            fight.apply_to_actor(
-                Power::HailstormPower,
-                PowerAmount::Counted(fight.power_var(CardVar::HailstormPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::HailstormPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::HailstormPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call DamageCmd.Attack`
         DefectCard::HelixDrill => unimplemented!("what {card:?} does when it is played"),
@@ -241,11 +320,13 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         // `call CardSelectCmd.FromCombatPile`
         DefectCard::Hologram => unimplemented!("what {card:?} does when it is played"),
         DefectCard::Hotfix => {
-            fight.apply_to_actor(
-                Power::HotfixPower,
-                PowerAmount::Counted(fight.power_var(CardVar::FocusPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::HotfixPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::FocusPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call DamageCmd.Attack`
         DefectCard::Hyperbeam => unimplemented!("what {card:?} does when it is played"),
@@ -256,47 +337,62 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         // `statement`
         DefectCard::ImitationLearning => unimplemented!("what {card:?} does when it is played"),
         DefectCard::Iteration => {
-            fight.apply_to_actor(
-                Power::IterationPower,
-                PowerAmount::Counted(fight.power_var(CardVar::IterationPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::IterationPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::IterationPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         DefectCard::Leap => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            Played::Done
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
+            Ok(Played::Done)
         }
         DefectCard::LightningRod => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            fight.apply_to_actor(
-                Power::LightningRodPower,
-                PowerAmount::Counted(fight.power_var(CardVar::LightningRodPower)),
-            );
-            Played::Done
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(
+                    Power::LightningRodPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::LightningRodPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         DefectCard::Loop => {
-            fight.apply_to_actor(
-                Power::LoopPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Loop)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::LoopPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Loop)),
+                );
+            }
+            Ok(Played::Done)
         }
         DefectCard::MachineLearning => {
-            fight.apply_to_actor(
-                Power::MachineLearningPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Cards)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::MachineLearningPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Cards)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `for`
         DefectCard::MeteorStrike => unimplemented!("what {card:?} does when it is played"),
@@ -308,22 +404,34 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::MultiCast => unimplemented!("what {card:?} does when it is played"),
         DefectCard::Null => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.apply_power(
-                target,
-                Power::WeakPower,
-                PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
-            );
-            fight.channel(Orb::DarkOrb);
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_power(
+                    target,
+                    Power::WeakPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
+                );
+                if fight.waiting() {
+                    return Err(2);
+                }
+            }
+            if from <= 2 {
+                fight.channel(Orb::DarkOrb);
+            }
+            Ok(Played::Done)
         }
         // `foreach`
         DefectCard::OneForAll => unimplemented!("what {card:?} does when it is played"),
@@ -332,10 +440,22 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         // `if`
         DefectCard::Quadcast => unimplemented!("what {card:?} does when it is played"),
         DefectCard::Rainbow => {
-            fight.channel(Orb::LightningOrb);
-            fight.channel(Orb::FrostOrb);
-            fight.channel(Orb::DarkOrb);
-            Played::Done
+            if from == 0 {
+                fight.channel(Orb::LightningOrb);
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.channel(Orb::FrostOrb);
+                if fight.waiting() {
+                    return Err(2);
+                }
+            }
+            if from <= 2 {
+                fight.channel(Orb::DarkOrb);
+            }
+            Ok(Played::Done)
         }
         // `foreach`
         DefectCard::Reboot => unimplemented!("what {card:?} does when it is played"),
@@ -343,83 +463,111 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::Refract => unimplemented!("what {card:?} does when it is played"),
         DefectCard::RocketPunch => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.draw(fight.var(CardVar::Cards));
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.draw(fight.var(CardVar::Cards));
+            }
+            Ok(Played::Done)
         }
         // `call CardSelectCmd.FromHand`
         DefectCard::Scavenge => unimplemented!("what {card:?} does when it is played"),
         // `call CardPileCmd.Draw`
         DefectCard::Scrape => unimplemented!("what {card:?} does when it is played"),
         DefectCard::ShadowShield => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            fight.channel(Orb::DarkOrb);
-            Played::Done
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.channel(Orb::DarkOrb);
+            }
+            Ok(Played::Done)
         }
         // `for`
         DefectCard::Shatter => unimplemented!("what {card:?} does when it is played"),
         DefectCard::SignalBoost => {
-            fight.apply_to_actor(
-                Power::SignalBoostPower,
-                PowerAmount::Counted(fight.power_var(CardVar::SignalBoostPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::SignalBoostPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::SignalBoostPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         DefectCard::Skim => {
-            fight.draw(fight.var(CardVar::Cards));
-            Played::Done
+            if from == 0 {
+                fight.draw(fight.var(CardVar::Cards));
+            }
+            Ok(Played::Done)
         }
         DefectCard::Smokestack => {
-            fight.apply_to_actor(
-                Power::SmokestackPower,
-                PowerAmount::Counted(fight.power_var(CardVar::SmokestackPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::SmokestackPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::SmokestackPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `if`
         DefectCard::Spinner => unimplemented!("what {card:?} does when it is played"),
         DefectCard::Storm => {
-            fight.apply_to_actor(
-                Power::StormPower,
-                PowerAmount::Counted(fight.power_var(CardVar::StormPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::StormPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::StormPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         DefectCard::Strike => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            Played::Done
+            }
+            Ok(Played::Done)
         }
         DefectCard::Subroutine => {
-            fight.apply_to_actor(Power::SubroutinePower, PowerAmount::Counted(1));
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(Power::SubroutinePower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
         }
         // `if`
         DefectCard::Sunder => unimplemented!("what {card:?} does when it is played"),
         DefectCard::Supercritical => {
-            fight.modify_energy(fight.var(CardVar::Energy));
-            Played::Done
+            if from == 0 {
+                fight.modify_energy(fight.var(CardVar::Energy));
+            }
+            Ok(Played::Done)
         }
         // `call DamageCmd.Attack`
         DefectCard::SweepingBeam => unimplemented!("what {card:?} does when it is played"),
@@ -427,32 +575,43 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::Synchronize => unimplemented!("what {card:?} does when it is played"),
         DefectCard::Synthesis => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.apply_to_actor(Power::FreePowerPower, PowerAmount::Counted(1));
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(Power::FreePowerPower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
         }
         // `call ResolveEnergyXValue`
         DefectCard::Tempest => unimplemented!("what {card:?} does when it is played"),
         // `call Owner.PlayerCombatState.OrbQueue.Orbs.OfType`
         DefectCard::TeslaCoil => unimplemented!("what {card:?} does when it is played"),
         DefectCard::Thunder => {
-            fight.apply_to_actor(
-                Power::ThunderPower,
-                PowerAmount::Counted(fight.power_var(CardVar::ThunderPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::ThunderPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::ThunderPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         DefectCard::TrashToTreasure => {
-            fight.apply_to_actor(Power::TrashToTreasurePower, PowerAmount::Counted(1));
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(Power::TrashToTreasurePower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
         }
         // `call CombatState.CreateCard`
         DefectCard::Turbo => unimplemented!("what {card:?} does when it is played"),
@@ -463,8 +622,10 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         // `call CardFactory.GetDistinctForCombat`
         DefectCard::WhiteNoise => unimplemented!("what {card:?} does when it is played"),
         DefectCard::Zap => {
-            fight.channel(Orb::LightningOrb);
-            Played::Done
+            if from == 0 {
+                fight.channel(Orb::LightningOrb);
+            }
+            Ok(Played::Done)
         }
     }
 }

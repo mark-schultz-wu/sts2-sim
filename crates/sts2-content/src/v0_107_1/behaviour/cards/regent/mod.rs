@@ -2,7 +2,6 @@
 
 use sts2_core::{CardIdent, Fight, Pile, Played};
 
-use super::super::super::generated::card_plays;
 use super::super::super::generated::cards::{CardVar, Cards, RegentCard, TokenCard};
 use super::V;
 
@@ -30,10 +29,6 @@ pub enum Resume {
     /// `Charge`, after its owner picked the cards to turn into Minion Dive
     /// Bombs.
     ChargeTransform,
-    /// `Glow`, after a question inside its draw was answered.
-    GlowDrew,
-    /// `BigBang`, after a question inside its draw was answered.
-    BigBangDrew,
     /// `DecisionsDecisions`, after a question inside its draw was answered.
     DecisionsDrew,
     /// `DecisionsDecisions`, after its owner picked the Skill to play.
@@ -44,6 +39,32 @@ pub enum Resume {
         card: sts2_core::CardAt<V>,
         left: u8,
     },
+    /// `CrushUnder`, after a question inside its attack or a power. `held`
+    /// is the opponents it took before the attack, and `at` the one to go on
+    /// from.
+    CrushUnder { held: super::Held, at: u8 },
+}
+
+/// The rest of `CrushUnder` from the opponent at `from` on: its Crush Under
+/// on each, its amount read once. A question left before one waits.
+fn crush_under_powers<F: Fight<V>>(fight: &mut F, held: super::Held, from: u8) -> Played<V> {
+    use super::super::super::generated::powers::Power;
+    use sts2_core::PowerAmount;
+
+    let amount = PowerAmount::Counted(fight.power_var(CardVar::StrengthLoss));
+    for (at, target) in held.creatures().enumerate().skip(usize::from(from)) {
+        if fight.waiting() {
+            let at = u8::try_from(at).expect("a fight's creatures fit a u8");
+            return Played::Waiting {
+                at: super::super::Resume::Card(super::Resume::Regent(Resume::CrushUnder {
+                    held,
+                    at,
+                })),
+            };
+        }
+        fight.apply_power(target, Power::CrushUnderPower, amount);
+    }
+    Played::Done
 }
 
 /// `BeatIntoShape`: its damage to the target, then a Forge of its calculated
@@ -175,28 +196,28 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
             Played::Done
         }
         RegentCard::Glitterstream => common::glitterstream(fight),
-        // `BigBang`: its draw, then its stars, energy and Forge. A shuffle
-        // inside the draw can ask, and the rest waits for it.
-        RegentCard::BigBang => {
-            fight.draw(fight.var(CardVar::Cards));
-            if fight.waiting() {
-                return Played::Waiting {
-                    at: super::super::Resume::Card(super::Resume::Regent(Resume::BigBangDrew)),
-                };
-            }
-            big_bang_drew(fight)
-        }
-        // `Glow`: its stars, its draw, then Draw Cards Next Turn at as many.
-        RegentCard::Glow => {
-            fight.gain_stars(fight.var(CardVar::Stars));
-            fight.draw(fight.var(CardVar::Cards));
-            // A shuffle inside the draw can ask, and the rest waits for it.
-            if fight.waiting() {
-                return Played::Waiting {
-                    at: super::super::Resume::Card(super::Resume::Regent(Resume::GlowDrew)),
-                };
-            }
-            glow_drew(fight)
+        // `CrushUnder`: the opponents taken, its damage to every enemy, then
+        // its Crush Under on each one taken.
+        RegentCard::CrushUnder => {
+            use sts2_core::{Amount, Effect, Scaling};
+
+            let held = super::Held::of(&fight.opponents());
+            fight.attack(Scaling::Dynamic, |fight| {
+                let targets = fight.opponents();
+                // One `CreatureCmd.Damage` over them all.
+                fight.damage_command(|fight| {
+                    for target in targets {
+                        let attack = fight.resolve(Effect::Attack {
+                            dealer: fight.actor(),
+                            target,
+                            damage: Amount::Var(CardVar::Damage),
+                            scaling: Scaling::Dynamic,
+                        });
+                        fight.apply(attack);
+                    }
+                });
+            });
+            crush_under_powers(fight, held, 0)
         }
         // `DecisionsDecisions`: its `Cards` drawn, then a playable Skill of the
         // hand picked. A shuffle inside the draw can ask, and the rest waits.
@@ -317,7 +338,7 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
             }
         }
         RegentCard::ManifestAuthority => manifest_authority(fight),
-        card => card_plays::regent::on_play(card, fight),
+        card => super::generated_from(Cards::Regent(card), fight, 0),
     }
 }
 
@@ -594,10 +615,7 @@ pub(super) fn resume_play<F: Fight<V>>(
             Played::Done
         }
         Resume::QuasarChoice => unreachable!("Quasar stops on a choice, not a pick"),
-        Resume::GlowDrew
-        | Resume::BigBangDrew
-        | Resume::DecisionsDrew
-        | Resume::DecisionsPlayed { .. } => {
+        Resume::DecisionsDrew | Resume::DecisionsPlayed { .. } | Resume::CrushUnder { .. } => {
             unreachable!("{at:?} waits on a question, not a pick")
         }
         Resume::DecisionsPicked => match chosen.as_slice() {
@@ -675,38 +693,11 @@ fn decisions_play<F: Fight<V>>(
     Played::Done
 }
 
-fn glow_drew<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    use sts2_core::PowerAmount;
-
-    use super::super::super::generated::powers::Power;
-
-    fight.apply_to_actor(
-        Power::DrawCardsNextTurnPower,
-        PowerAmount::Counted(fight.var(CardVar::Cards)),
-    );
-    Played::Done
-}
-
-/// `BigBang` after its draw: its stars, its energy, then a Forge of its
-/// `Forge`.
-fn big_bang_drew<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    use super::super::super::generated::cards::{Cards, TokenCard};
-
-    fight.gain_stars(fight.var(CardVar::Stars));
-    fight.modify_energy(fight.var(CardVar::Energy));
-    fight.forge(
-        Cards::Token(TokenCard::SovereignBlade),
-        fight.var(CardVar::Forge),
-    );
-    Played::Done
-}
-
 /// The rest of a Regent card's play that stood still on a question its own
 /// command raised.
 pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
     match at {
-        Resume::GlowDrew => glow_drew(fight),
-        Resume::BigBangDrew => big_bang_drew(fight),
+        Resume::CrushUnder { held, at } => crush_under_powers(fight, held, at),
         Resume::DecisionsDrew => decisions_ask(fight),
         Resume::DecisionsPlayed { card, left } => {
             decisions_play(fight, card, super::Number::from(left))
