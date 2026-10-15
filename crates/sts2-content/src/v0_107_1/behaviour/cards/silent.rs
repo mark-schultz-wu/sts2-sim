@@ -32,6 +32,21 @@ pub enum Resume {
     EscapePlanDrew,
     /// `ShadowStep`, once a card its discard played has finished.
     ShadowStepDiscarded,
+    /// `LeadingStrike`, after a question inside its attack was answered.
+    LeadingStrikeHit,
+    /// `TheHunt`, whose reward and power come where `gains` says.
+    TheHuntHit { gains: bool },
+    /// `StormOfSteel`, after a question inside its discard was answered,
+    /// with how many cards the hand held.
+    StormOfSteelDiscarded { count: u8 },
+}
+
+/// The rest of the play waits at `at`, where a command left a question and
+/// more commands follow.
+fn wait(at: Resume) -> Played<V> {
+    Played::Waiting {
+        at: super::super::Resume::Card(super::Resume::Silent(at)),
+    }
 }
 
 pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
@@ -276,15 +291,12 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
         // hand, each upgraded once Storm of Steel is.
         SilentCard::StormOfSteel => {
             let hand = fight.cards_in(Pile::Hand);
+            let count = u8::try_from(hand.len()).expect("a hand's worth fits a u8");
             fight.act_on(sts2_core::PileAct::Discard, &hand);
-            let shiv = CardIdent::new(Cards::Token(TokenCard::Shiv));
-            let upgraded = fight.upgraded();
-            for at in fight.add_generated_cards(shiv, Pile::Hand, hand.len()) {
-                if upgraded {
-                    fight.modify_card(at, Change::Upgrade, Lasting::ThisFight);
-                }
+            if fight.waiting() {
+                return wait(Resume::StormOfSteelDiscarded { count });
             }
-            Played::Done
+            storm_of_steel_discarded(fight, count)
         }
         // `BulletTime`: each card of the hand that does not cost X free this
         // turn, then one No Draw on its owner.
@@ -355,11 +367,11 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
             let target = fight.target();
             let fatal = fight.death_triggers_fatal(target);
             let results = hit_target(fight, 1);
-            if fatal && results.iter().any(|result| result.killed) {
-                fight.add_card_reward();
-                fight.apply_to_actor(Power::TheHuntPower, PowerAmount::Counted(1));
+            let gains = fatal && results.iter().any(|result| result.killed);
+            if fight.waiting() {
+                return wait(Resume::TheHuntHit { gains });
             }
-            Played::Done
+            the_hunt_hit(fight, gains)
         }
         card => super::generated_from(Cards::Silent(card), fight, 0),
     }
@@ -465,6 +477,7 @@ pub(super) fn resume_play<F: Fight<V>>(
         Resume::ShadowStepDiscarded => {
             unreachable!("Shadow Step waits on a card, not a pick")
         }
+        at => unreachable!("{at:?} waits on a question, not a pick"),
     }
 }
 
@@ -512,6 +525,9 @@ pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V>
         Resume::ShadowStepDiscarded => shadow_step_discarded(fight),
         // A draw that never ran, as the fight ended, drew nothing.
         Resume::EscapePlanDrew => escape_plan_drew(fight, &[]),
+        Resume::LeadingStrikeHit => leading_strike_hit(fight),
+        Resume::TheHuntHit { gains } => the_hunt_hit(fight, gains),
+        Resume::StormOfSteelDiscarded { count } => storm_of_steel_discarded(fight, count),
         at => unimplemented!("{at:?} resumed after waiting"),
     }
 }
@@ -557,6 +573,29 @@ fn dagger_throw<F: Fight<V>>(fight: &mut F) -> Played<V> {
     }
 }
 
+/// The rest of `TheHunt`, once its attack is over: one more card reward and
+/// The Hunt on its owner, where `gains`.
+fn the_hunt_hit<F: Fight<V>>(fight: &mut F, gains: bool) -> Played<V> {
+    if gains {
+        fight.add_card_reward();
+        fight.apply_to_actor(Power::TheHuntPower, PowerAmount::Counted(1));
+    }
+    Played::Done
+}
+
+/// The rest of `StormOfSteel`, once its discard is over: `count` Shivs into
+/// hand, each upgraded once Storm of Steel is.
+fn storm_of_steel_discarded<F: Fight<V>>(fight: &mut F, count: u8) -> Played<V> {
+    let shiv = CardIdent::new(Cards::Token(TokenCard::Shiv));
+    let upgraded = fight.upgraded();
+    for at in fight.add_generated_cards(shiv, Pile::Hand, usize::from(count)) {
+        if upgraded {
+            fight.modify_card(at, Change::Upgrade, Lasting::ThisFight);
+        }
+    }
+    Played::Done
+}
+
 /// Its damage to the target, `hits` times, as one attack.
 fn hit_target<F: Fight<V>>(fight: &mut F, hits: super::Number) -> sts2_core::AttackResults<V> {
     let target = fight.target();
@@ -599,6 +638,15 @@ fn dagger_spray<F: Fight<V>>(fight: &mut F) -> Played<V> {
 /// at a time.
 fn leading_strike<F: Fight<V>>(fight: &mut F) -> Played<V> {
     hit_target(fight, 1);
+    if fight.waiting() {
+        return wait(Resume::LeadingStrikeHit);
+    }
+    leading_strike_hit(fight)
+}
+
+/// The rest of `LeadingStrike`, once its attack is over: its `Shivs` into
+/// hand one at a time.
+fn leading_strike_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
     for _ in 0..fight.var(CardVar::Shivs) {
         fight.add_generated_cards(CardIdent::new(Cards::Token(TokenCard::Shiv)), Pile::Hand, 1);
     }
