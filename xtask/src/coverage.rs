@@ -423,9 +423,9 @@ pub fn run(args: Args) -> Result<String, Error> {
     let hand_cards = hand_ported(&build, "behaviour/cards", "on_play")?;
     for (module, enum_name) in CARD_POOLS {
         let source = build.read(format!("generated/card_plays/{module}.rs"))?;
-        let body = function(&source, "on_play").ok_or(Error::Missing {
+        let body = function(&source, "play_from").ok_or(Error::Missing {
             file: build.dir.join(format!("generated/card_plays/{module}.rs")),
-            what: "fn on_play",
+            what: "fn play_from",
         })?;
         let plays: Vec<(String, Ported)> = arms(body, 8, &format!("{enum_name}::"))
             .into_iter()
