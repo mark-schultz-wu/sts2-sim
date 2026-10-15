@@ -5,6 +5,7 @@
 //! build changed stays in each build that has it.
 
 pub(crate) mod enchantments;
+pub(crate) mod modifiers;
 pub(crate) mod orbs;
 
 /// What a fight's card writes on its deck version.

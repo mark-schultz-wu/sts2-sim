@@ -107,7 +107,7 @@ impl sts2_core::ContentVersion for V0_107_1 {
 /// Dispatch the hook shapes this simulator can execute.
 impl sts2_core::Hooks for V0_107_1 {
     type RelicState = behaviour::relics::State;
-    type ModifierState = behaviour::modifiers::State;
+    type ModifierState = crate::behaviour::modifiers::State;
     type PowerState = behaviour::powers::State;
     type MonsterState = behaviour::monsters::Model;
     type EncounterState = behaviour::encounters::State;
@@ -168,7 +168,7 @@ impl sts2_core::Hooks for V0_107_1 {
                 unimplemented!("what {potion:?} does for {hook:?}")
             }
             sts2_core::Listener::Modifier(modifier) => {
-                behaviour::modifiers::modify_hook(modifier, hook)
+                crate::behaviour::modifiers::modify_hook(modifier, hook)
             }
         }
     }
@@ -207,7 +207,7 @@ impl sts2_core::Hooks for V0_107_1 {
             }
             sts2_core::Listener::Potion(potion) => behaviour::potions::decide_hook(potion, hook),
             sts2_core::Listener::Modifier(modifier) => {
-                behaviour::modifiers::decide_hook(modifier, hook)
+                crate::behaviour::modifiers::decide_hook(modifier, hook)
             }
             sts2_core::Listener::Card {
                 card,
@@ -323,11 +323,11 @@ impl sts2_core::Hooks for V0_107_1 {
         hook: sts2_core::EventHook<Self>,
         asked: &mut sts2_core::HookEffects<Self>,
     ) {
-        behaviour::modifiers::event_hook(modifier, state, hook, asked)
+        crate::behaviour::modifiers::event_hook(modifier, state, hook, asked)
     }
 
     fn modifier_ported(modifier: Self::Modifier) -> bool {
-        behaviour::modifiers::ported(modifier)
+        crate::behaviour::modifiers::ported::<Self>(modifier)
     }
 
     fn relic_event_hook(

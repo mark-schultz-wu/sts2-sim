@@ -590,7 +590,17 @@ fn rewrite_matches_macro(s: &str, content: &Content) -> String {
                     .iter()
                     .map(|(_, conds)| conds[0].replacen("__c0", expr, 1))
                     .collect();
-                write!(out, "({})", ors.join(" || ")).unwrap();
+                // Bare where it stands alone: a block's value, a binding, an
+                // argument.
+                let before = out.trim_end();
+                let after = rest[close + 1..].trim_start();
+                let alone = (before.ends_with(['{', '=', ',', '(']) || before.ends_with("return"))
+                    && !before.ends_with("==")
+                    && after.starts_with(['}', ';', ',', ')']);
+                match alone {
+                    true => out.push_str(&ors.join(" || ")),
+                    false => write!(out, "({})", ors.join(" || ")).unwrap(),
+                }
             } else {
                 write!(out, "match {expr} {{ {pattern} => true, _ => false }}").unwrap();
             }

@@ -11,24 +11,6 @@
 //! Every hook dispatches on the state alone. The state names the relic that
 //! saved it, so no caller can pair a relic with another relic's model.
 
-/// `CurseCardPool`'s cards whose `CanBeGeneratedByModifiers` holds, ordered
-/// by id. Ascender's Bane, Bad Luck, Curse of the Bell, Enthralled, Folly,
-/// Greed, Poor Sleep and Spore Mind override it to refuse.
-pub(super) const MODIFIER_CURSES: [super::super::generated::cards::Cards; 10] = [
-    super::super::generated::cards::Cards::Curse(super::super::generated::cards::CurseCard::Clumsy),
-    super::super::generated::cards::Cards::Curse(super::super::generated::cards::CurseCard::Debt),
-    super::super::generated::cards::Cards::Curse(super::super::generated::cards::CurseCard::Decay),
-    super::super::generated::cards::Cards::Curse(super::super::generated::cards::CurseCard::Doubt),
-    super::super::generated::cards::Cards::Curse(super::super::generated::cards::CurseCard::Guilty),
-    super::super::generated::cards::Cards::Curse(super::super::generated::cards::CurseCard::Injury),
-    super::super::generated::cards::Cards::Curse(
-        super::super::generated::cards::CurseCard::Normality,
-    ),
-    super::super::generated::cards::Cards::Curse(super::super::generated::cards::CurseCard::Regret),
-    super::super::generated::cards::Cards::Curse(super::super::generated::cards::CurseCard::Shame),
-    super::super::generated::cards::Cards::Curse(super::super::generated::cards::CurseCard::Writhe),
-];
-
 mod akabeko;
 mod alchemical_coffer;
 mod amethyst_aubergine;
