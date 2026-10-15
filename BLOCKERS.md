@@ -37,8 +37,8 @@ auto-play and a card's own selection already queue behind a question, so
 none needs one. Thorns and Centennial Puzzle can ask on a hit or a loss.
 Vicious can on Vulnerable, Dark Embrace on an exhaust, Reflex on a
 discard, and Stratagem on a shuffle.
-A scenario for each card one of them reaches. The Regent,
-then the colorless, event and token cards.
+A scenario for each card one of them reaches. The colorless,
+event and token cards are left.
 Generated plays already wait.
 
 ### 2. Every other split the recorded runs find

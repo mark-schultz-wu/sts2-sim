@@ -22,6 +22,15 @@ pub(super) fn collision_course<F: Fight<V>>(fight: &mut F) -> Played<V> {
         });
         fight.apply(attack);
     });
+    if fight.waiting() {
+        return super::wait(super::Resume::CollisionCourseHit);
+    }
+    collision_course_hit(fight)
+}
+
+/// The rest of `CollisionCourse`, once its attack is over: a Debris into
+/// hand.
+pub(super) fn collision_course_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
     fight.add_generated_cards(
         CardIdent::new(Cards::Status(StatusCard::Debris)),
         Pile::Hand,
