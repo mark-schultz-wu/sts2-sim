@@ -524,7 +524,7 @@ fn aimable<V: Rules>(potion: V::Potion, creatures: &[Fighter<V>]) -> Targets {
     creatures
         .iter()
         .filter(|creature| {
-            creature.alive
+            creature.is_alive()
                 && match target {
                     t if t == <V::TargetType as TargetKinds>::ANY_ENEMY => {
                         creature.side == <V::CombatSide as SideKinds>::ENEMY
@@ -562,7 +562,7 @@ pub(super) fn names_creature<V: Rules>(target: V::TargetType) -> bool {
 }
 
 fn valid_target<V: Rules>(target: V::TargetType, creature: &Fighter<V>) -> bool {
-    if !creature.alive {
+    if !creature.is_alive() {
         return false;
     }
     // The player is the only creature a card is played from, so "the other
