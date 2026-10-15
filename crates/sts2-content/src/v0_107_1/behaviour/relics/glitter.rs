@@ -4,7 +4,7 @@ use sts2_core::{EventHook, HookEffect};
 
 use super::super::super::V0_107_1 as V;
 use super::super::super::generated::enchantments::Enchantment;
-use super::super::enchantments::can_enchant;
+use crate::behaviour::enchantments::can_enchant;
 
 /// `TryModifyCardRewardOptionsLate`: each reward card Glam can enchant is
 /// replaced by a clone enchanted with it at one. A run here has one player.

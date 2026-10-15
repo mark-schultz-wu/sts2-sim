@@ -37,7 +37,7 @@ pub struct SlipperyBridge;
 /// Basic. After that it takes cards of another kind than the one named last.
 /// With none left it takes any card that can be removed.
 fn named<R: GameRng>(deck: &[CardIdent<V>], state: Option<&State>, rng: &mut R) -> usize {
-    let removable = |card: &CardIdent<V>| !super::super::enchantments::card_eternal(card);
+    let removable = |card: &CardIdent<V>| !crate::behaviour::enchantments::card_eternal(card);
     let mut places: Vec<usize> = deck
         .iter()
         .enumerate()

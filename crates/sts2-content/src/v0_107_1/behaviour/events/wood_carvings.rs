@@ -8,7 +8,7 @@ use super::super::super::V0_107_1 as V;
 use super::super::super::generated::cards::{CardRarity, Cards, EventCard};
 use super::super::super::generated::enchantments::Enchantment;
 use super::super::super::generated::events::{Event, EventOption as Said};
-use super::super::enchantments::can_enchant;
+use crate::behaviour::enchantments::can_enchant;
 
 #[derive(Debug, Clone, Default)]
 pub struct State {
@@ -24,7 +24,7 @@ impl EventBehavior<V> for WoodCarvings {
     fn allowed(&self, run: &impl EventView<V>) -> bool {
         run.deck().iter().any(|card| {
             card.card.rarity() == CardRarity::Basic
-                && !super::super::enchantments::card_eternal(card)
+                && !crate::behaviour::enchantments::card_eternal(card)
         })
     }
 

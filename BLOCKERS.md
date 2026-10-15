@@ -46,13 +46,14 @@ content path becomes a const from `sts2_content::ids`,
 `V::Orb::LIGHTNING_ORB`, and a pattern naming one becomes a guard,
 since a `match` cannot name a generic const. A match left with no
 catch-all gains an `unreachable!()` arm. It lists what it leaves for a
-hand. Each move adds to `Build` the bounds its rules read. A row lookup
+hand. Each move adds to `BuildContent` the bounds its rules read.
+`Build` is that and `Rules`, which v0.111.0 gains in the next item. A row lookup
 a build spelled as an inherent method becomes a `sts2_core::Table`
 impl in codegen. A spike on the powers' hooks and every card play
 measured 12,264 instructions a step before and 12,184 after. Every
 recorded run still matches after each move.
 
-The orbs are shared. The rest: enchantments, modifiers,
+The orbs and enchantments are shared. The rest: modifiers,
 acts, encounters, potions, relics, powers, monsters, events, and the
 cards, pool by pool.
 

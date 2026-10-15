@@ -8,7 +8,7 @@ use sts2_core::{
 use super::super::super::V0_107_1 as V;
 use super::super::super::generated::enchantments::Enchantment;
 use super::super::super::generated::events::{Event, EventOption as Said};
-use super::super::enchantments::can_enchant;
+use crate::behaviour::enchantments::can_enchant;
 
 /// Each option's enchantment, the card type it takes, and how much of it.
 const READINGS: [(Said, Enchantment, CardKind); 3] = [

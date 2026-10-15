@@ -16,7 +16,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
         EventHook::CardRewardOption { card, .. }
         | EventHook::MerchantCardCreated { card }
         | EventHook::CardBeingAddedToDeck { card }
-            if super::super::enchantments::can_enchant(Enchantment::Nimble, &card) =>
+            if crate::behaviour::enchantments::can_enchant(Enchantment::Nimble, &card) =>
         {
             asked.push(HookEffect::EnchantCard {
                 enchantment: Enchantment::Nimble,

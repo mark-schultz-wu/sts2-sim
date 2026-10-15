@@ -76,7 +76,7 @@ impl sts2_core::ContentVersion for V0_107_1 {
     type CardVar = generated::cards::CardVar;
     type CardTag = generated::cards::CardTag;
     type Character = generated::characters::Character;
-    type EnchantmentState = behaviour::enchantments::State;
+    type EnchantmentState = crate::behaviour::enchantments::State;
     type Enchantment = generated::enchantments::Enchantment;
     type Encounter = generated::encounters::Encounter;
     type Event = generated::events::Event;
@@ -264,11 +264,11 @@ impl sts2_core::Hooks for V0_107_1 {
     }
 
     fn card_eternal(card: &sts2_core::CardIdent<Self>) -> bool {
-        behaviour::enchantments::card_eternal(card)
+        crate::behaviour::enchantments::card_eternal(card)
     }
 
     fn enchanted_changes(enchantment: Self::Enchantment) -> &'static [sts2_core::Change<Self>] {
-        behaviour::enchantments::enchanted_changes(enchantment)
+        crate::behaviour::enchantments::enchanted_changes(enchantment)
     }
 
     fn card_result_pile(
@@ -362,7 +362,7 @@ impl sts2_core::Hooks for V0_107_1 {
         state: &Self::EnchantmentState,
         hook: sts2_core::EnchantHook,
     ) -> sts2_core::Modify<Self::Number> {
-        behaviour::enchantments::modify(enchanted, state, hook)
+        crate::behaviour::enchantments::modify(enchanted, state, hook)
     }
 
     fn enchantment_event_hook(
@@ -371,7 +371,7 @@ impl sts2_core::Hooks for V0_107_1 {
         hook: sts2_core::EventHook<Self>,
         asked: &mut sts2_core::HookEffects<Self>,
     ) {
-        behaviour::enchantments::event_hook(enchanted, id, hook, asked);
+        crate::behaviour::enchantments::event_hook(enchanted, id, hook, asked);
     }
 
     fn card_event_hook<P: sts2_core::Printed<Self> + ?Sized>(
@@ -456,7 +456,7 @@ impl sts2_core::Rules for V0_107_1 {
         state: &mut Self::EnchantmentState,
         fight: &mut F,
     ) {
-        behaviour::enchantments::on_play(enchanted, state, fight);
+        crate::behaviour::enchantments::on_play(enchanted, state, fight);
     }
 
     fn orb_evoke<F: sts2_core::Fight<Self>>(
@@ -655,17 +655,17 @@ impl sts2_core::Rules for V0_107_1 {
     }
 
     fn can_enchant(enchantment: Self::Enchantment, card: &sts2_core::CardIdent<Self>) -> bool {
-        behaviour::enchantments::can_enchant(enchantment, card)
+        crate::behaviour::enchantments::can_enchant(enchantment, card)
     }
 
     fn enchant(enchantment: Self::Enchantment, amount: u8, card: &mut sts2_core::CardIdent<Self>) {
-        behaviour::enchantments::enchant(enchantment, amount, card);
+        crate::behaviour::enchantments::enchant(enchantment, amount, card);
     }
 
     fn should_start_at_bottom_of_draw_pile(
         enchantment: Self::Enchantment,
     ) -> sts2_core::HookResponse<bool> {
-        behaviour::enchantments::should_start_at_bottom_of_draw_pile(enchantment)
+        crate::behaviour::enchantments::should_start_at_bottom_of_draw_pile::<Self>(enchantment)
     }
 
     fn encounter_gold(
