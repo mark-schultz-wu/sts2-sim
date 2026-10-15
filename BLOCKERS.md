@@ -37,13 +37,13 @@ own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
 
-### 2. Run modifiers at Neow
+### 2. Draft and Sealed Deck at Neow
 
-All Star, Specialized, Draft, Sealed Deck and Insanity. Neow offers each
-modifier's option in turn, and three of them empty the starting deck
-first. Draft and Sealed Deck build that deck through repeated picks. The
-design is Mark's, which he meant to revisit once the walk was done.
-Record 100 runs with each.
+Both empty the starting deck, and Neow's option for each builds it again
+through repeated picks. Draft asks ten card rewards in a row, each with
+no skip, through the reward questions. Sealed Deck asks the `SelectCards`
+grid for exactly ten, a card at a time and then done. Neow's options
+already queue in `Phase::Neow`. Record 100 runs with each.
 
 ### 3. v0.111.0
 

@@ -648,7 +648,7 @@ fn previewed<V: Rules>(
     held.face
         .numbers()
         .map(|var| {
-            let printed = || super::board::var::<V>(held, var.id, fight.live, target);
+            let printed = || super::board::var::<V>(held, var.id, fight, target);
             let resolved = match (var.modifier, target) {
                 // `UpdateCardPreview` hands the null target to
                 // `Hook.ModifyDamage` rather than skipping it, so a hit

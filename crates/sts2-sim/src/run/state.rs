@@ -626,6 +626,10 @@ pub(super) enum Phase<V: Rules> {
     Neow {
         options: SmallVec<[V::Relic; 4]>,
         chosen: Option<nonmax::NonMaxU8>,
+        /// `ModifierOptions`: the run's modifiers whose option Neow has not
+        /// offered and run yet, by their place among the run's. The first is
+        /// the one Neow shows. A run with modifiers is offered no blessing.
+        modifier_options: SmallVec<[u8; 4]>,
         asking: Option<Asked<V>>,
     },
     /// The map itself, which an act opens on and no room owns.
@@ -841,8 +845,13 @@ impl<V: Rules> Phase<V> {
             Phase::Neow {
                 options,
                 chosen,
+                modifier_options,
                 asking,
-            } => (chosen.is_some() || options.is_empty()) && asking.is_none(),
+            } => {
+                (chosen.is_some() || options.is_empty())
+                    && modifier_options.is_empty()
+                    && asking.is_none()
+            }
             Phase::Treasure { finished, .. } => *finished,
             Phase::RestSite { options, .. } => options.is_empty(),
             // A merchant never runs out. The run leaves when it decides to,
@@ -1165,8 +1174,8 @@ impl<V: Rules> State<V> {
             false => Default::default(),
         };
 
-        // `ModifierModel.OnRunCreated`, once the bags are filled. No ported
-        // modifier clears the deck.
+        // `ModifierModel.OnRunCreated`, once the bags are filled. The deck it
+        // clears is cleared as the deck is built, below.
         let mut unknown_base = UNKNOWN_ODDS;
         let mut unknown_odds = UNKNOWN_ODDS;
         let mut out_of_bags = Vec::new();
@@ -1232,7 +1241,16 @@ impl<V: Rules> State<V> {
         ) {
             player.potion_slots = player.potion_slots - num_traits::one();
         }
-        let deck = V::starting_deck(character)
+        // `OnRunCreated` empties the deck for a modifier that clears it, and
+        // the ascension's curse goes on after.
+        let cleared = modifiers
+            .iter()
+            .any(|entry| sts2_core::ModifierTable::clears_deck(entry.modifier));
+        let starting = match cleared {
+            true => Vec::new(),
+            false => V::starting_deck(character).into_iter().collect(),
+        };
+        let deck = starting
             .into_iter()
             .chain(V::ascension_deck(ascension))
             .map(|card| sts2_core::DeckCard::new(player.mint(), CardIdent::new(card)))
@@ -1272,6 +1290,14 @@ impl<V: Rules> State<V> {
             phase: Phase::Neow {
                 options: neow_options.into_iter().collect(),
                 chosen: None,
+                modifier_options: modifiers
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, entry)| {
+                        sts2_core::ModifierTable::offers_neow_option(entry.modifier)
+                    })
+                    .map(|(at, _)| u8::try_from(at).expect("a run has few modifiers"))
+                    .collect(),
                 asking: None,
             },
         };
@@ -2140,13 +2166,15 @@ impl<V: Rules> State<V> {
                     });
                     continue;
                 }
-                HookEffect::MimicRestSiteHeal => {
-                    if let Some(asked) = self.rest_site_heal(true) {
-                        let pickup = asked.pickup;
-                        unimplemented!("a heal an event gives offering {pickup:?}");
+                // `RewardsCmd.OfferCustom` inside the event, which goes on
+                // once its rewards are done.
+                HookEffect::MimicRestSiteHeal => match self.rest_site_heal(true) {
+                    None => continue,
+                    Some(mut asked) => {
+                        asked.rest.extend(effects);
+                        return Some(asked);
                     }
-                    continue;
-                }
+                },
                 HookEffect::FightInEvent { .. } => {
                     unreachable!("a fight in an event is the whole of its option")
                 }
@@ -5737,11 +5765,22 @@ impl<V: Rules> State<V> {
             });
         }
         let Phase::Neow {
-            options, chosen, ..
+            options,
+            chosen,
+            modifier_options,
+            ..
         } = &mut self.phase
         else {
             unimplemented!("choosing an option inside a fight");
         };
+        // `OnModifierOptionSelected`: the modifier's option, then the next.
+        if !modifier_options.is_empty() {
+            if index != 0 {
+                unimplemented!("an option Neow does not offer");
+            }
+            let at = usize::from(modifier_options.remove(0));
+            return Ok(self.neow_modifier_option(at));
+        }
         let option = *options
             .get(index as usize)
             .unwrap_or_else(|| unimplemented!("an option the blessing does not offer"));
@@ -5780,6 +5819,67 @@ impl<V: Rules> State<V> {
             rest: SmallVec::new(),
             under: None,
         }))
+    }
+
+    /// What the modifier at `at` among the run's does as its Neow option is
+    /// chosen.
+    ///
+    /// # Panics
+    ///
+    /// The modifier asking for something no Neow option carries out.
+    fn neow_modifier_option(&mut self, at: usize) -> Decided {
+        let entry = self.shared.modifiers[at];
+        let mut asked = sts2_core::HookEffects::new();
+        let state = &mut Arc::make_mut(&mut self.modifier_states)[at];
+        V::modifier_event_hook(
+            entry,
+            state,
+            sts2_core::EventHook::NeowOptionChosen,
+            &mut asked,
+        );
+        for effect in asked {
+            match effect {
+                sts2_core::HookEffect::AddUniformToDeck {
+                    colorless,
+                    draws,
+                    copies,
+                } => {
+                    let pool = match colorless {
+                        true => V::unlocked_colorless_cards(),
+                        false => V::unlocked_cards(self.character()),
+                    };
+                    // `Uniform` leaves out the basic and ancient cards, which
+                    // are every rarity a pool holds past the three.
+                    let cards: Vec<V::Card> = pool
+                        .iter()
+                        .copied()
+                        .filter(|&card| V::reward_rarity(card) != sts2_core::RewardRarity::Other)
+                        .collect();
+                    for _ in 0..draws {
+                        // `TryModifyCardRewardOptions` over the one card.
+                        self.card_reward_unheard();
+                        let [card] = crate::reward::card::uniform_rolled::<V, _>(
+                            self.ascension(),
+                            self.streams.player(V::PlayerRngType::REWARDS),
+                            &cards,
+                            1,
+                            None,
+                        )[..] else {
+                            unreachable!("one draw is one card");
+                        };
+                        for _ in 0..copies {
+                            self.add_to_deck(card);
+                        }
+                    }
+                }
+                // `RelicGrabBag.Remove`, which counts the relic as dealt.
+                sts2_core::HookEffect::RemoveFromRelicBags(relic) => {
+                    Arc::make_mut(&mut self.dealt_relics).push(relic);
+                }
+                effect => unimplemented!("{entry:?} asking for {effect:?} as its Neow option"),
+            }
+        }
+        Decided::Resolved
     }
 
     /// Take from a reward screen a room is parked on. The screen stays up
@@ -6565,6 +6665,13 @@ impl<V: Rules> State<V> {
         let finished = self.phase.finished();
         match &self.phase {
             Phase::Neow {
+                modifier_options, ..
+            } if !finished && !modifier_options.is_empty() => {
+                if self.phase.asking().is_none() {
+                    moves.push(Decision::ChooseOption { index: 0 });
+                }
+            }
+            Phase::Neow {
                 options, chosen, ..
             } if !finished => moves.extend(
                 (0..options.len())
@@ -7301,8 +7408,32 @@ impl<V: Rules> State<V> {
             Phase::Neow {
                 options: neow_options,
                 chosen: neow_chosen,
+                modifier_options,
                 ..
             } => {
+                // Neow shows the next modifier's option alone.
+                if let Some(&at) = modifier_options.first() {
+                    let modifier = self.shared.modifiers[usize::from(at)].modifier;
+                    return Some(Room::Event {
+                        event: V::neow_event(),
+                        finished,
+                        title: None,
+                        text: None,
+                        options: vec![EventOption {
+                            index: 0,
+                            key: EventOptionKey {
+                                event: V::neow_event(),
+                                option: V::EventOptionId::from_modifier(modifier),
+                            },
+                            title: None,
+                            text: None,
+                            locked: false,
+                            proceed: false,
+                            chosen: false,
+                            relic: None,
+                        }],
+                    });
+                }
                 let options = neow_options
                     .iter()
                     .copied()
@@ -7465,6 +7596,10 @@ impl<V: Rules> sts2_core::EventView<V> for State<V> {
 
     fn wins(&self) -> u32 {
         self.shared.wins
+    }
+
+    fn modifiers(&self) -> &[sts2_core::RunModifier<V>] {
+        &self.shared.modifiers
     }
 
     fn relics(&self) -> impl Iterator<Item = sts2_core::CarriedRelic<V>> + '_ {

@@ -1731,11 +1731,15 @@ pub(crate) fn modify_hook(
         ) if target == holder => unimplemented!("an endless Hardened Shell"),
         (Power::HardenedShellPower, _, ModifyHook::HpLostBeforeOstyLate { .. }) => Modify::Nothing,
         // `FocusPower.ModifyOrbValue`: its stack onto each number its owner's
-        // orbs show, and no lower than nothing.
+        // orbs show, and no lower than nothing in its own step. A listener
+        // after it, such as Infused Core, adds to the floored number.
         (Power::FocusPower, PowerAmount::Counted(amount), ModifyHook::OrbValue { player, .. })
             if player == holder =>
         {
-            Modify::Added(amount)
+            match amount < 0 {
+                true => Modify::Less(-amount),
+                false => Modify::Added(amount),
+            }
         }
         (Power::FocusPower, PowerAmount::Endless, ModifyHook::OrbValue { player, .. })
             if player == holder =>

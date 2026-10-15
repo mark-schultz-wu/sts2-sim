@@ -281,6 +281,9 @@ pub trait EventOptionKinds<V: ContentVersion>:
 {
     fn from_relic(relic: V::Relic) -> Self;
     fn relic(self) -> Option<V::Relic>;
+    /// The option a run modifier's `GenerateNeowOption` gives Neow, which its
+    /// key names by the modifier's id.
+    fn from_modifier(modifier: V::Modifier) -> Self;
 }
 
 /// One thing an event offers.

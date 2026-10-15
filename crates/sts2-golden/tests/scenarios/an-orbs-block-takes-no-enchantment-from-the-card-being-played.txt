@@ -1,0 +1,15 @@
+# `FrostOrb` gains its block with no `cardSource`, so `Hook.ModifyBlock`
+# asks no enchantment, even while a Nimble Glacier is being played. The
+# first Glacier fills the three slots behind Cracked Core's Lightning. The
+# second gives its own six and Nimble's two, then channels into the full
+# queue, which evokes the Lightning and then the first Frost for five.
+#
+# A Frost that borrows the played card's enchantment gives seven.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"GLACIER"}
+{"cmd":"play_card","index":5}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"GLACIER"}
+{"cmd":"enchant","enchantment":"NIMBLE","amount":2,"index":5}
+{"cmd":"play_card","index":5}

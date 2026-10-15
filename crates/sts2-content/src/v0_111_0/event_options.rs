@@ -1,6 +1,6 @@
 use sts2_core::EventOptionKinds;
 
-use super::{V0_111_0, events::EventOption, relics::Relic};
+use super::{V0_111_0, events::EventOption, modifiers::Modifier, relics::Relic};
 
 /// An option an event offers.
 ///
@@ -16,6 +16,8 @@ pub enum EventOptionId {
     Dialogue(u8),
     /// A bare `PROCEED`, which no page names.
     Proceed,
+    /// The option a run modifier gives Neow, whose key is the modifier's id.
+    Modifier(Modifier),
 }
 
 impl EventOptionKinds<V0_111_0> for EventOptionId {
@@ -26,7 +28,11 @@ impl EventOptionKinds<V0_111_0> for EventOptionId {
     fn relic(self) -> Option<Relic> {
         match self {
             Self::Relic(relic) => Some(relic),
-            Self::Said(_) | Self::Dialogue(_) | Self::Proceed => None,
+            Self::Said(_) | Self::Modifier(_) | Self::Dialogue(_) | Self::Proceed => None,
         }
+    }
+
+    fn from_modifier(modifier: Modifier) -> Self {
+        Self::Modifier(modifier)
     }
 }

@@ -36,6 +36,15 @@ const TERMINAL_PLATING: PowerAmount<i32> = PowerAmount::Counted(5);
 /// `DeadlyEvents.ModifyOddsIncreaseForUnrolledRoomType`, on a treasure's.
 const DEADLY_TREASURE_RISE: sts2_core::Fixed = sts2_core::Fixed::new(2, 0);
 
+/// `AllStar`'s colorless cards.
+const ALL_STAR_CARDS: usize = 5;
+
+/// `Specialized`'s copies of its one card.
+const SPECIALIZED_COPIES: usize = 5;
+
+/// `Insanity`'s cards.
+const INSANITY_CARDS: usize = 30;
+
 /// `Hoarder`'s copies of each card the deck gains.
 const HOARDED_COPIES: usize = 2;
 
@@ -203,7 +212,36 @@ pub(crate) fn event_hook(
                 ));
             }
         }
-        // `OnRunCreated` alone, which clears no deck for these.
+        // `AllStar.GenerateNeowOption`: five colorless cards, each drawn on
+        // its own.
+        (Modifier::AllStar, EventHook::NeowOptionChosen) => {
+            asked.push(HookEffect::AddUniformToDeck {
+                colorless: true,
+                draws: ALL_STAR_CARDS,
+                copies: 1,
+            });
+        }
+        // `Specialized.GenerateNeowOption`: one card of the character's pool,
+        // and five copies of it into the deck.
+        (Modifier::Specialized, EventHook::NeowOptionChosen) => {
+            asked.push(HookEffect::AddUniformToDeck {
+                colorless: false,
+                draws: 1,
+                copies: SPECIALIZED_COPIES,
+            });
+        }
+        // `Insanity.GenerateNeowOption`: thirty cards of the character's
+        // pool, each drawn on its own, then no Pandora's Box in either bag.
+        (Modifier::Insanity, EventHook::NeowOptionChosen) => asked.extend([
+            HookEffect::AddUniformToDeck {
+                colorless: false,
+                draws: INSANITY_CARDS,
+                copies: 1,
+            },
+            HookEffect::RemoveFromRelicBags(Relic::PandorasBox),
+        ]),
+        // `AfterRunCreated`, which these leave alone. A deck one clears is
+        // `ClearsPlayerDeck`, which the run reads off the modifier's row.
         (_, EventHook::RunCreated) => {}
         // `BigGameHunter.ModifyGeneratedMap`: the map again, with two and a
         // half times its elites.
@@ -276,6 +314,9 @@ pub(crate) fn ported(modifier: Modifier) -> bool {
             | Modifier::CursedRun
             | Modifier::CharacterCards
             | Modifier::Hoarder
+            | Modifier::AllStar
+            | Modifier::Specialized
+            | Modifier::Insanity
             | Modifier::Murderous
             | Modifier::Terminal
     )

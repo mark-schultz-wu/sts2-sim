@@ -35,6 +35,8 @@ pub trait EventView<V: ContentVersion> {
     /// The runs the profile had won with the character as this one started.
     /// See [`Start::wins`](crate::Start::wins).
     fn wins(&self) -> u32;
+    /// `RunState.Modifiers`, in the order the run was started with them.
+    fn modifiers(&self) -> &[crate::RunModifier<V>];
     /// The relics the run carries, in panel order.
     fn relics(&self) -> impl Iterator<Item = CarriedRelic<V>> + '_;
     /// The deck as it stands, in deck order, by what each card is.

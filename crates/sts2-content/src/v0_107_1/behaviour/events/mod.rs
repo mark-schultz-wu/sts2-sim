@@ -718,6 +718,7 @@ pub(crate) fn resume<R: sts2_core::rng::GameRng>(
             war_historian_repy::WarHistorianRepy.resume(state, run, rng)
         }
         State::EndlessConveyor(state) => endless_conveyor::EndlessConveyor.resume(state, run, rng),
+        State::DenseVegetation(state) => dense_vegetation::DenseVegetation.resume(state, run, rng),
         state => unimplemented!("{state:?} resumed after its pickup"),
     }
 }

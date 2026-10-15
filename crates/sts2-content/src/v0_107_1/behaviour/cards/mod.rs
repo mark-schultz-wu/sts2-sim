@@ -380,12 +380,16 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
         }
         // `Barrage`: a base, and one more hit for each orb its owner holds.
         // `HelixDrill`: a base, and one more hit for each energy its owner
-        // spent this turn. In the play pile it leaves out its own cost, which
-        // is what its own play spent.
+        // spent this turn. In the play pile it leaves out what it costs now.
         (Cards::Defect(DefectCard::HelixDrill), CardVar::CalculatedHits) => {
-            let (spent, latest) = owner.history.energy_spent_this_turn();
-            let own = if owner.playing { latest } else { 0 };
-            let energy = Number::try_from(spent - own).expect("a turn's energy fits a game number");
+            let spent = owner.history.energy_spent_this_turn();
+            let own = match owner.cost_in_play {
+                None => 0,
+                Some(sts2_core::Cost::Fixed(cost)) => cost.get(),
+                Some(cost) => unimplemented!("Helix Drill costing {cost:?} in play"),
+            };
+            let spent = Number::try_from(spent).expect("a turn's energy fits a game number");
+            let energy = spent - Number::from(own);
             printed.face(CardVar::CalculationBase)
                 + printed.face(CardVar::CalculationExtra) * energy
         }
