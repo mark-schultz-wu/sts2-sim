@@ -1,0 +1,11 @@
+# Murderous gives every creature in a combat room three Strength as the
+# room opens, the player too. An enemy that joins later gets three as it
+# arrives: the Living Fog's Bloat adds a Gas Bomb, which comes in with
+# three Strength, and its Explode hits harder by three.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None","modifiers":["MURDEROUS"]}
+{"cmd":"fight","encounter":"LIVING_FOG_NORMAL"}
+{"cmd":"power","power":"PLATING_POWER","amount":99,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

@@ -129,7 +129,13 @@ public static class Moves
             List<uint> targets = Observation.Targets(belt[i], state);
             if (targets.Count == 0)
             {
-                moves.Add(Aimed("use_potion", i, null));
+                // `UsePotion` with no target falls back to the drinker. A
+                // potion thrown at one other creature is valid at neither, so
+                // with none to throw it at there is nothing to drink.
+                if (belt[i].IsValidTarget(me.Creature) || belt[i].IsValidTarget(null))
+                {
+                    moves.Add(Aimed("use_potion", i, null));
+                }
             }
             else
             {

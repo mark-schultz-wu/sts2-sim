@@ -1,0 +1,6 @@
+# Terminal takes one off the maximum in each room the map opens, Neow's
+# first, and gives five Plating in each fight. The player stands on 78 of
+# 78 in the first fight, plated for five.
+{"cmd":"start","seed":"C000000006","character":"IRONCLAD","ascension":"None","modifiers":["TERMINAL"]}
+{"cmd":"travel","col":0,"row":1}
+{"cmd":"end_turn"}

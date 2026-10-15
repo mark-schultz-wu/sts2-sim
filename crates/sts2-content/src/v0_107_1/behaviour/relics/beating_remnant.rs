@@ -15,7 +15,8 @@ pub struct State {
     damage_received_this_turn: Number,
 }
 
-/// `AfterDamageReceived` on its owner, in a fight, adds what the hit took.
+/// `AfterDamageReceived` on its owner, in a fight in progress, adds what the
+/// hit took.
 /// `BeforeSideTurnStart` on its owner's side starts the count again.
 pub(super) fn event_hook(state: &mut State, hook: EventHook<V>) {
     match hook {
@@ -23,6 +24,7 @@ pub(super) fn event_hook(state: &mut State, hook: EventHook<V>) {
             target,
             unblocked,
             player,
+            in_progress: true,
             ..
         } if target == player => state.damage_received_this_turn += unblocked,
         EventHook::BeforeSideTurnStart {

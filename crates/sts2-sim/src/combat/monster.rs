@@ -231,7 +231,7 @@ pub(crate) fn added_to_room<V: Rules>(
         // A fight opens on the player's side.
         let side = <V::CombatSide as SideKinds>::PLAYER;
         for (power, amount) in V::monster_starting_powers(monster, ascension, side, &held.state) {
-            powers.push(id, HeldPower::new(power, Stacked::from(amount), Some(id)));
+            starting::<V>(powers, id, power, Stacked::from(amount), Some(id));
         }
         let opponents: SmallVec<[CombatId; 2]> = creatures
             .iter()
@@ -240,10 +240,7 @@ pub(crate) fn added_to_room<V: Rules>(
             .collect();
         for (power, amount) in V::monster_starting_opponent_powers(monster, ascension) {
             for &opponent in &opponents {
-                powers.push(
-                    opponent,
-                    HeldPower::new(power, Stacked::from(amount), Some(id)),
-                );
+                starting::<V>(powers, opponent, power, Stacked::from(amount), Some(id));
             }
         }
     }
@@ -278,6 +275,30 @@ pub(crate) fn added_to_room<V: Rules>(
             creatures[at].hp = hp;
         }
     }
+}
+
+/// `PowerCmd.Apply` of a starting power onto `creature`. Only what a room's
+/// `AfterRoomEntered` landed stands there before it, and a counter stacks
+/// into that instance through `ModifyAmount`.
+fn starting<V: Rules>(
+    powers: &mut PowerStore<V>,
+    creature: CombatId,
+    power: V::Power,
+    amount: Stacked,
+    applier: Option<CombatId>,
+) {
+    let per_applier = sts2_core::PowerTable::per_applier(power);
+    let fresh = sts2_core::PowerTable::instanced(power) && !per_applier;
+    let stacks =
+        |held: &HeldPower<V>| held.power() == power && (!per_applier || held.applier == applier);
+    if !fresh && let Some(held) = powers.of_mut(creature).find(|held| stacks(held)) {
+        let (Some(had), Some(more)) = (held.amount.count(), amount.count()) else {
+            unimplemented!("an endless {power:?} stacking as a monster arrives")
+        };
+        held.amount = Stacked::counted(had + more);
+        return;
+    }
+    powers.push(creature, HeldPower::new(power, amount, applier));
 }
 
 /// Add a monster during a fight, before the enemy side prepares its next

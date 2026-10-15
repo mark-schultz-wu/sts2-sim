@@ -1,0 +1,24 @@
+# Twenty Royal Poisons hurt the player for eighty as the first turn
+# starts. The player dies in the setup, and the turn goes to its end.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"ROYAL_POISON"}
+{"cmd":"grant","relic":"ROYAL_POISON"}
+{"cmd":"grant","relic":"ROYAL_POISON"}
+{"cmd":"grant","relic":"ROYAL_POISON"}
+{"cmd":"grant","relic":"ROYAL_POISON"}
+{"cmd":"grant","relic":"ROYAL_POISON"}
+{"cmd":"grant","relic":"ROYAL_POISON"}
+{"cmd":"grant","relic":"ROYAL_POISON"}
+{"cmd":"grant","relic":"ROYAL_POISON"}
+{"cmd":"grant","relic":"ROYAL_POISON"}
+{"cmd":"grant","relic":"ROYAL_POISON"}
+{"cmd":"grant","relic":"ROYAL_POISON"}
+{"cmd":"grant","relic":"ROYAL_POISON"}
+{"cmd":"grant","relic":"ROYAL_POISON"}
+{"cmd":"grant","relic":"ROYAL_POISON"}
+{"cmd":"grant","relic":"ROYAL_POISON"}
+{"cmd":"grant","relic":"ROYAL_POISON"}
+{"cmd":"grant","relic":"ROYAL_POISON"}
+{"cmd":"grant","relic":"ROYAL_POISON"}
+{"cmd":"grant","relic":"ROYAL_POISON"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}

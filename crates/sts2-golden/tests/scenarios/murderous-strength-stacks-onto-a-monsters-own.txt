@@ -1,0 +1,5 @@
+# Murderous's three Strength land as the room opens, before the monsters
+# get their starting powers. The Mysterious Knight's own six then stack
+# onto those three, for one Strength of nine.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None","modifiers":["MURDEROUS"]}
+{"cmd":"fight","encounter":"MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER"}

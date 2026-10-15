@@ -1273,6 +1273,10 @@ impl<V: Rules> State<V> {
         {
             state.map = Arc::new(state.generate_map(acts[0]));
         }
+        // `EnterAct` enters Neow's room, which is an event room the map
+        // opens, and then raises `AfterActEntered`.
+        let point = state.point_type(Location::MapPoint(at));
+        state.room_entered(<V::RoomType as sts2_core::RoomKinds>::EVENT, false, point);
         state.act_entered();
         state
     }
@@ -5092,6 +5096,7 @@ impl<V: Rules> State<V> {
             max_hp: standing.max_hp,
             gold: self.player.gold,
             potions: &self.player.potions,
+            modifiers: &self.shared.modifiers,
             alive: standing.alive,
             deck: &self.player.deck,
             // A fight an event opens moves the run nowhere.

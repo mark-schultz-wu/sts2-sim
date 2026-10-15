@@ -1,11 +1,15 @@
 //! What a run modifier does, as ported code. A modifier is asked only about
 //! a hook its class overrides.
 
-use sts2_core::{DecisionHook, EventHook, HookEffect, HookResponse, Modify, ModifyHook};
+use sts2_core::{
+    DecisionHook, EventHook, HookEffect, HookResponse, Modify, ModifyHook, PowerAmount,
+    SideKinds as _,
+};
 
 use super::super::V0_107_1 as V;
 use super::super::generated::encounters::RoomType;
 use super::super::generated::modifiers::Modifier;
+use super::super::generated::powers::Power;
 use super::super::generated::relics::Relic;
 use super::super::generated::restsite::RestSiteOption;
 use super::super::generated::runstate::RunRngType;
@@ -19,6 +23,15 @@ const DEADLY_ELITE_ODDS: sts2_core::Fixed = sts2_core::Fixed::new(1, 1);
 
 /// `BigGameHunter`'s elites, against the map's own.
 const HUNTER_ELITES: sts2_core::Fixed = sts2_core::Fixed::new(25, 1);
+
+/// `Murderous._strengthAmount`.
+const MURDEROUS_STRENGTH: PowerAmount<i32> = PowerAmount::Counted(3);
+
+/// What `Terminal` takes off the maximum in each room.
+const TERMINAL_LOSS: i32 = 1;
+
+/// `Terminal`'s Plating, for each fight.
+const TERMINAL_PLATING: PowerAmount<i32> = PowerAmount::Counted(5);
 
 /// `DeadlyEvents.ModifyOddsIncreaseForUnrolledRoomType`, on a treasure's.
 const DEADLY_TREASURE_RISE: sts2_core::Fixed = sts2_core::Fixed::new(2, 0);
@@ -89,6 +102,47 @@ pub(crate) fn event_hook(
                 stream: RunRngType::Niche,
             });
         }
+        // `Murderous.AfterRoomEntered`: three Strength on every creature in
+        // a combat room, the player too.
+        (Modifier::Murderous, EventHook::RoomEntered { room, .. }) => {
+            if is_combat(room) {
+                asked.push(HookEffect::ApplyToEveryCreature(
+                    Power::StrengthPower,
+                    MURDEROUS_STRENGTH,
+                ));
+            }
+        }
+        // `Murderous.AfterCreatureAddedToCombat`: three Strength on a
+        // creature that joins anywhere but the player's side.
+        (Modifier::Murderous, EventHook::CreatureAdded { creature, side, .. }) => {
+            if side != <V as sts2_core::ContentVersion>::CombatSide::PLAYER {
+                asked.push(HookEffect::ApplyPower {
+                    target: creature,
+                    power: Power::StrengthPower,
+                    amount: MURDEROUS_STRENGTH,
+                    applier: None,
+                });
+            }
+        }
+        // `Terminal.AfterRoomEntered`: one off the maximum in each room the
+        // map opens, while there is more than one to lose. Then five Plating
+        // in a combat room.
+        (
+            Modifier::Terminal,
+            EventHook::RoomEntered {
+                room, player, base, ..
+            },
+        ) => {
+            if base && (player.hp > 1 || player.max_hp > 1) {
+                asked.push(HookEffect::LoseMaxHp(TERMINAL_LOSS));
+            }
+            if is_combat(room) {
+                asked.push(HookEffect::ApplyToPlayers(
+                    Power::PlatingPower,
+                    TERMINAL_PLATING,
+                ));
+            }
+        }
         // `OnRunCreated` alone, which clears no deck for these.
         (_, EventHook::RunCreated) => {}
         // `BigGameHunter.ModifyGeneratedMap`: the map again, with two and a
@@ -132,6 +186,11 @@ pub(crate) fn event_hook(
     }
 }
 
+/// `room is CombatRoom`.
+fn is_combat(room: RoomType) -> bool {
+    matches!(room, RoomType::Monster | RoomType::Elite | RoomType::Boss)
+}
+
 /// Whether every rule of `modifier` is ported.
 pub(crate) fn ported(modifier: Modifier) -> bool {
     matches!(
@@ -143,5 +202,7 @@ pub(crate) fn ported(modifier: Modifier) -> bool {
             | Modifier::DeadlyEvents
             | Modifier::BigGameHunter
             | Modifier::CursedRun
+            | Modifier::Murderous
+            | Modifier::Terminal
     )
 }

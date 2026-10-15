@@ -55,7 +55,7 @@ pub(super) fn end_after_post_play<V: Rules>(
         streams,
         relics,
     } = fighting;
-    let mut skipping = std::mem::take(&mut next.skip_tick);
+    let skipping = std::mem::take(&mut next.skip_tick);
 
     // `EndPlayerTurnPhaseOne`: the turn-end hooks, and the win check they can
     // end the fight for, come before the orbs and the hand.
@@ -82,10 +82,82 @@ pub(super) fn end_after_post_play<V: Rules>(
     }
     // `DoTurnEnd` returns once the fight is over, and a fight an orb ended
     // ends the turn with it.
-    let ended = turn_end(next, streams.combat(), relics, ascension);
+    let done = turn_end(next, streams.combat(), relics, ascension);
+    after_turn_end_in_hand(
+        Fighting {
+            live: next,
+            streams,
+            relics,
+        },
+        ascension,
+        done,
+        max_energy,
+        skipping,
+    )
+}
+
+/// `DoTurnEnd` from the end of `card`'s `OnTurnEndInHandWrapper`, once the
+/// question its effect asked is answered. The cards in `rest` run theirs
+/// after it, and the turn's end goes on to the flush.
+pub(super) fn end_from_hand<V: Rules>(
+    fighting: Fighting<'_, V>,
+    ascension: V::AscensionLevel,
+    card: sts2_core::CardId<V>,
+    rest: &[sts2_core::CardId<V>],
+    max_energy: V::Count,
+    skipping: Skips<V>,
+) -> Result<Option<super::Ended>, Error> {
+    let Fighting {
+        live: next,
+        streams,
+        relics,
+    } = fighting;
+    let done = match wrapper_end(next, streams.combat(), relics, card) {
+        Some(ended) => InHand::Done(Some(ended)),
+        None => cards_turn_end(next, streams.combat(), relics, ascension, rest),
+    };
+    after_turn_end_in_hand(
+        Fighting {
+            live: next,
+            streams,
+            relics,
+        },
+        ascension,
+        done,
+        max_energy,
+        skipping,
+    )
+}
+
+/// The player's turn end once `DoTurnEnd` came to `done`: over with the
+/// fight, stood still behind a question, or on to the flush.
+fn after_turn_end_in_hand<V: Rules>(
+    fighting: Fighting<'_, V>,
+    ascension: V::AscensionLevel,
+    done: InHand<V>,
+    max_energy: V::Count,
+    mut skipping: Skips<V>,
+) -> Result<Option<super::Ended>, Error> {
+    let Fighting {
+        live: next,
+        streams,
+        relics,
+    } = fighting;
     // What `DoTurnEnd` put on the player skips this turn's tick too.
     let landed = std::mem::take(&mut next.skip_tick);
     super::play::merge::<V>(&mut skipping, landed.iter().copied().collect());
+    let ended = match done {
+        InHand::Done(ended) => ended,
+        InHand::Parked { card, rest } => {
+            next.defer(super::live::Deferred::TurnEnd {
+                card,
+                rest,
+                max_energy,
+                skipping,
+            });
+            return Ok(None);
+        }
+    };
     if let Some(ended) = ended {
         next.skip_tick = skipping;
         if ended == super::Ended::Won {
@@ -815,11 +887,11 @@ fn turn_end<V: Rules>(
     mut rngs: CombatRngs<'_>,
     relics: &mut crate::run::Belt<V>,
     ascension: V::AscensionLevel,
-) -> Option<super::Ended> {
+) -> InHand<V> {
     if let Some(ended) =
         orb_triggers::<V>(live, rngs.reborrow(), relics, ascension, OrbMoment::TurnEnd)
     {
-        return Some(ended);
+        return InHand::Done(Some(ended));
     }
     let held: SmallVec<[_; MAX_CARDS_IN_HAND]> = live.cards.iter(Pile::Hand).collect();
     let acts = |held: &&super::live::CardInstance<V>| {
@@ -838,51 +910,89 @@ fn turn_end<V: Rules>(
             .expect("an Ethereal card stands where it was found");
         live.cards.move_to(Pile::Hand, at, Pile::Exhaust);
         if let Some(ended) = exhausted::<V>(live, rngs.reborrow(), relics, &card, true, false) {
-            return Some(ended);
+            return InHand::Done(Some(ended));
         }
     }
-    // `OnTurnEndInHandWrapper`: to the play pile, the effect, then to the
-    // exhaust pile for an ethereal card or the discard pile for any other.
-    // A fight that is ending refuses the second move, and the card stays in
-    // the play pile.
-    for card in held.iter().filter(acts) {
-        let Some(at) = live.cards.find(Pile::Hand, card.id) else {
+    let acting: SmallVec<[_; MAX_CARDS_IN_HAND]> =
+        held.iter().filter(acts).map(|held| held.id).collect();
+    cards_turn_end(live, rngs, relics, ascension, &acting)
+}
+
+/// What `DoTurnEnd` came to.
+pub(super) enum InHand<V: Rules> {
+    /// Done, and how the fight ended if it did.
+    Done(Option<super::Ended>),
+    /// `card`'s effect stood still on a question, with `rest` still to run.
+    Parked {
+        card: sts2_core::CardId<V>,
+        rest: SmallVec<[sts2_core::CardId<V>; MAX_CARDS_IN_HAND]>,
+    },
+}
+
+/// `OnTurnEndInHandWrapper` for each of `cards` still in hand. The card goes
+/// to the play pile, and its effect runs. Then it goes to the exhaust pile
+/// for an ethereal card, or the discard pile for any other. A fight that is ending refuses the second
+/// move, and the card stays in the play pile. An effect that asks a
+/// question stands the rest still behind the answer.
+fn cards_turn_end<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    ascension: V::AscensionLevel,
+    cards: &[sts2_core::CardId<V>],
+) -> InHand<V> {
+    for (at_card, &id) in cards.iter().enumerate() {
+        let Some(at) = live.cards.find(Pile::Hand, id) else {
             continue;
         };
+        let card = live
+            .cards
+            .get(Pile::Hand, at)
+            .expect("a card stands where it was found");
         live.cards.move_to(Pile::Hand, at, Pile::Play);
-        let mut board = Board::for_card(
-            live,
-            rngs.reborrow(),
-            relics,
-            ascension,
-            None,
-            Some(card.id),
-        );
+        let mut board =
+            Board::for_card(live, rngs.reborrow(), relics, ascension, None, Some(id)).blocking();
         V::on_card_turn_end(card.face.ident.card, &mut board);
         let skipped = std::mem::take(&mut board.skipped);
         let ended = board.ended();
         super::play::merge::<V>(&mut live.skip_tick, skipped);
         if ended.is_some() {
-            return ended;
+            return InHand::Done(ended);
         }
-        let Some(at) = live.cards.find(Pile::Play, card.id) else {
-            continue;
-        };
-        if !card.face.ethereal() {
-            live.cards.move_to(Pile::Play, at, Pile::Discard);
-            continue;
+        if live.asking.is_some() {
+            return InHand::Parked {
+                card: id,
+                rest: cards[at_card + 1..].iter().copied().collect(),
+            };
         }
-        // `CardCmd.Exhaust`, which ethereal causes.
-        let card = live
-            .cards
-            .get(Pile::Play, at)
-            .expect("a card stands where it was found");
-        live.cards.move_to(Pile::Play, at, Pile::Exhaust);
-        if let Some(ended) = exhausted::<V>(live, rngs.reborrow(), relics, &card, true, false) {
-            return Some(ended);
+        if let Some(ended) = wrapper_end(live, rngs.reborrow(), relics, id) {
+            return InHand::Done(Some(ended));
         }
     }
-    None
+    InHand::Done(None)
+}
+
+/// The end of `OnTurnEndInHandWrapper` for `id`, once its effect is over:
+/// to the exhaust pile for an ethereal card, or the discard pile for any
+/// other.
+fn wrapper_end<V: Rules>(
+    live: &mut Live<V>,
+    rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    id: sts2_core::CardId<V>,
+) -> Option<super::Ended> {
+    let at = live.cards.find(Pile::Play, id)?;
+    let card = live
+        .cards
+        .get(Pile::Play, at)
+        .expect("a card stands where it was found");
+    if !card.face.ethereal() {
+        live.cards.move_to(Pile::Play, at, Pile::Discard);
+        return None;
+    }
+    // `CardCmd.Exhaust`, which ethereal causes.
+    live.cards.move_to(Pile::Play, at, Pile::Exhaust);
+    exhausted::<V>(live, rngs, relics, &card, true, false)
 }
 
 /// When an orb's own trigger runs.
