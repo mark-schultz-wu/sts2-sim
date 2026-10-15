@@ -23,6 +23,38 @@ pub enum Resume {
     ModdedDrew,
     /// `Scrape`, after a question inside its draw was answered.
     ScrapeDrew,
+    /// After a question inside the card's attack was answered.
+    IceLanceHit,
+    MeteorStrikeHit,
+    HyperbeamHit,
+    AllForOneHit,
+    RefractHit,
+    AdaptiveStrikeHit,
+    UproarHit,
+    ShatterHit,
+    ClawHit,
+    GoForTheEyesHit,
+    GunkUpHit,
+    MomentumStrikeHit,
+    TeslaCoilHit,
+    /// `Sunder`, whose energy comes where `gains` says.
+    SunderHit {
+        gains: bool,
+    },
+    /// `FlakCannon`, after a question inside its exhausts was answered, with
+    /// the statuses left to exhaust and this many hits to land.
+    FlakCannon {
+        left: super::Left,
+        hits: u8,
+    },
+}
+
+/// The rest of the play waits at `at`, where a command left a question and
+/// more commands follow.
+fn wait(at: Resume) -> Played<V> {
+    Played::Waiting {
+        at: super::super::Resume::Card(super::Resume::Defect(at)),
+    }
 }
 
 /// The rest of a Defect card's play that stood still on a question its own
@@ -40,6 +72,24 @@ pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V>
         Resume::ModdedDrew => modded_drew(fight),
         // A draw that never ran, as the fight ended, drew nothing.
         Resume::ScrapeDrew => scrape_drew(fight, &[]),
+        Resume::IceLanceHit => ice_lance_hit(fight),
+        Resume::MeteorStrikeHit => meteor_strike_hit(fight),
+        Resume::HyperbeamHit => hyperbeam_hit(fight),
+        Resume::AllForOneHit => all_for_one_hit(fight),
+        Resume::RefractHit => refract_hit(fight),
+        Resume::AdaptiveStrikeHit => adaptive_strike_hit(fight),
+        Resume::UproarHit => uproar_hit(fight),
+        Resume::ShatterHit => shatter_hit(fight),
+        Resume::ClawHit => claw_hit(fight),
+        Resume::GoForTheEyesHit => go_for_the_eyes_hit(fight),
+        Resume::GunkUpHit => gunk_up_hit(fight),
+        Resume::MomentumStrikeHit => momentum_strike_hit(fight),
+        Resume::TeslaCoilHit => tesla_coil_hit(fight),
+        Resume::SunderHit { gains } => sunder_hit(fight, gains),
+        Resume::FlakCannon { left, hits } => {
+            let left: Vec<_> = left.cards().collect();
+            flak_cannon(fight, &left, hits)
+        }
         at => unreachable!("{at:?} stops on a pick, not on a question it waited for"),
     }
 }
@@ -50,12 +100,18 @@ pub(super) fn resume_play<F: Fight<V>>(
     chosen: sts2_core::SelectedCards<V>,
 ) -> Played<V> {
     match at {
-        Resume::OverclockDrew
-        | Resume::RebootShuffled
-        | Resume::ModdedDrew
-        | Resume::ScrapeDrew => {
-            unreachable!("{at:?} waits on a question, not a pick")
-        }
+        Resume::HologramIntoHand | Resume::ScavengeExhaust => resume_picked(fight, at, chosen),
+        at => unreachable!("{at:?} waits on a question, not a pick"),
+    }
+}
+
+/// [`resume_play`] for the stops that ask for a pick.
+fn resume_picked<F: Fight<V>>(
+    fight: &mut F,
+    at: Resume,
+    chosen: sts2_core::SelectedCards<V>,
+) -> Played<V> {
+    match at {
         // `CardPileCmd.Add(cardModel, PileType.Hand)`.
         Resume::HologramIntoHand => {
             fight.act_on(PileAct::IntoHand, chosen.as_slice());
@@ -71,7 +127,122 @@ pub(super) fn resume_play<F: Fight<V>>(
             fight.apply_to_actor(Power::EnergyNextTurnPower, energy);
             Played::Done
         }
+        at => unreachable!("{at:?} waits on a question, not a pick"),
     }
+}
+
+/// The rest of `IceLance`, once its attack is over: its Frosts channelled.
+fn ice_lance_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    for _ in 0..fight.var(CardVar::Repeat) {
+        fight.channel(Orb::FrostOrb);
+    }
+    Played::Done
+}
+
+/// The rest of `MeteorStrike`, once its attack is over: three Plasma
+/// channelled.
+fn meteor_strike_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    for _ in 0..3 {
+        fight.channel(Orb::PlasmaOrb);
+    }
+    Played::Done
+}
+
+/// The rest of `Hyperbeam`, once its attack is over: its Focus off its
+/// owner.
+fn hyperbeam_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    fight.apply_to_actor(
+        Power::FocusPower,
+        PowerAmount::Counted(-fight.var(CardVar::FocusPower)),
+    );
+    Played::Done
+}
+
+/// The rest of `AllForOne`, once its attack is over: each card of the
+/// discard pile that costs nothing into hand, one at a time.
+fn all_for_one_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let free: Vec<_> = fight
+        .cards_in(Pile::Discard)
+        .into_iter()
+        .filter(|&card| {
+            matches!(
+                <V as sts2_core::Rules>::card_kind(fight.card_ident(card).card),
+                Some(
+                    sts2_core::CardKind::Attack
+                        | sts2_core::CardKind::Skill
+                        | sts2_core::CardKind::Power
+                )
+            ) && fight.card_costs(card, true).0 == sts2_core::Cost::fixed(0)
+        })
+        .collect();
+    for card in free {
+        let at = fight
+            .cards_in(Pile::Discard)
+            .into_iter()
+            .find(|held| held.id() == card.id());
+        if let Some(at) = at {
+            fight.act_on(PileAct::IntoHand, &[at]);
+        }
+    }
+    Played::Done
+}
+
+/// The rest of `Refract`, once its attack is over: its Glass orbs
+/// channelled.
+fn refract_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    for _ in 0..fight.var(CardVar::Repeat) {
+        fight.channel(Orb::GlassOrb);
+    }
+    Played::Done
+}
+
+/// The rest of `AdaptiveStrike`, once its attack is over: a clone of itself
+/// into the discard pile, costing nothing for the fight.
+fn adaptive_strike_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    if let Some(clone) = fight.clone_this(Pile::Discard) {
+        fight.modify_card(
+            clone,
+            sts2_core::Change::SetCost(sts2_core::CostPool::Energy, 0),
+            sts2_core::Lasting::ThisFight,
+        );
+    }
+    Played::Done
+}
+
+/// The rest of `Sunder`, once its attack is over: its energy where `gains`.
+fn sunder_hit<F: Fight<V>>(fight: &mut F, gains: bool) -> Played<V> {
+    if gains {
+        fight.modify_energy(fight.var(CardVar::Energy));
+    }
+    Played::Done
+}
+
+/// `FlakCannon` over the statuses `cards`: each exhausted, then `hits` hits,
+/// each at an enemy drawn for it. A wait keeps the statuses still to go,
+/// which have to fit a hand.
+fn flak_cannon<F: Fight<V>>(fight: &mut F, cards: &[sts2_core::CardAt<V>], hits: u8) -> Played<V> {
+    for (at, &card) in cards.iter().enumerate() {
+        fight.act_on(PileAct::Exhaust, &[card]);
+        if fight.waiting() {
+            let left = super::Left::of(&cards[at + 1..]);
+            return wait(Resume::FlakCannon { left, hits });
+        }
+    }
+    fight.attack(Scaling::Dynamic, |fight| {
+        for _ in 0..hits {
+            let Some(target) = fight.random_target() else {
+                break;
+            };
+            let hit = fight.resolve(Effect::Attack {
+                dealer: fight.actor(),
+                target,
+                damage: Amount::Var(CardVar::Damage),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(hit);
+        }
+    });
+    Played::Done
 }
 
 /// Its block, onto its owner.
@@ -162,10 +333,10 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
         DefectCard::IceLance => {
             let target = fight.target();
             hit(fight, target, 1);
-            for _ in 0..fight.var(CardVar::Repeat) {
-                fight.channel(Orb::FrostOrb);
+            if fight.waiting() {
+                return wait(Resume::IceLanceHit);
             }
-            Played::Done
+            ice_lance_hit(fight)
         }
         // `Voltaic`: a Lightning orb channelled for each its owner channelled
         // this fight before.
@@ -179,7 +350,8 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
         // exhausted, then its damage once for each, each hit at an enemy
         // drawn at random. The hits are counted before the statuses go.
         DefectCard::FlakCannon => {
-            let hits = fight.var(CardVar::CalculatedHits);
+            let hits = u8::try_from(fight.var(CardVar::CalculatedHits))
+                .expect("a count of statuses fits a u8");
             // `AllCards`: the hand, then the draw and discard piles.
             let statuses: Vec<_> = [Pile::Hand, Pile::Draw, Pile::Discard]
                 .into_iter()
@@ -189,22 +361,7 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
                         == Some(sts2_core::CardKind::Status)
                 })
                 .collect();
-            fight.act_on(PileAct::Exhaust, &statuses);
-            fight.attack(Scaling::Dynamic, |fight| {
-                for _ in 0..hits {
-                    let Some(target) = fight.random_target() else {
-                        break;
-                    };
-                    let hit = fight.resolve(Effect::Attack {
-                        dealer: fight.actor(),
-                        target,
-                        damage: Amount::Var(CardVar::Damage),
-                        scaling: Scaling::Dynamic,
-                    });
-                    fight.apply(hit);
-                }
-            });
-            Played::Done
+            flak_cannon(fight, &statuses, hits)
         }
         // `Spinner`: a Glass orb channelled once upgraded, then its Spinner.
         DefectCard::Spinner => {
@@ -250,10 +407,10 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
         DefectCard::MeteorStrike => {
             let target = fight.target();
             hit(fight, target, 1);
-            for _ in 0..3 {
-                fight.channel(Orb::PlasmaOrb);
+            if fight.waiting() {
+                return wait(Resume::MeteorStrikeHit);
             }
-            Played::Done
+            meteor_strike_hit(fight)
         }
         // `Chaos`: a random orb off `CombatOrbGeneration` for each of its
         // `Repeat`.
@@ -306,41 +463,20 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
                     }
                 });
             });
-            fight.apply_to_actor(
-                Power::FocusPower,
-                PowerAmount::Counted(-fight.var(CardVar::FocusPower)),
-            );
-            Played::Done
+            if fight.waiting() {
+                return wait(Resume::HyperbeamHit);
+            }
+            hyperbeam_hit(fight)
         }
         // `AllForOne`: its damage to the target, then every Attack, Skill or
         // Power in the discard pile that costs nothing into the hand.
         DefectCard::AllForOne => {
             let target = fight.target();
             hit(fight, target, 1);
-            let free: Vec<_> = fight
-                .cards_in(Pile::Discard)
-                .into_iter()
-                .filter(|&card| {
-                    matches!(
-                        <V as sts2_core::Rules>::card_kind(fight.card_ident(card).card),
-                        Some(
-                            sts2_core::CardKind::Attack
-                                | sts2_core::CardKind::Skill
-                                | sts2_core::CardKind::Power
-                        )
-                    ) && fight.card_costs(card, true).0 == sts2_core::Cost::fixed(0)
-                })
-                .collect();
-            for card in free {
-                let at = fight
-                    .cards_in(Pile::Discard)
-                    .into_iter()
-                    .find(|held| held.id() == card.id());
-                if let Some(at) = at {
-                    fight.act_on(PileAct::IntoHand, &[at]);
-                }
+            if fight.waiting() {
+                return wait(Resume::AllForOneHit);
             }
-            Played::Done
+            all_for_one_hit(fight)
         }
         // `SweepingBeam`: its damage to every enemy, then its `Cards` drawn.
         DefectCard::SweepingBeam => {
@@ -367,10 +503,10 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
         DefectCard::Refract => {
             let target = fight.target();
             hit(fight, target, 2);
-            for _ in 0..fight.var(CardVar::Repeat) {
-                fight.channel(Orb::GlassOrb);
+            if fight.waiting() {
+                return wait(Resume::RefractHit);
             }
-            Played::Done
+            refract_hit(fight)
         }
         // `Darkness`: a Dark orb, then every Dark orb's passive, once or twice
         // upgraded, one orb after another.
@@ -445,10 +581,11 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
                 });
                 fight.apply(attack);
             });
-            if results.iter().any(|result| result.killed) {
-                fight.modify_energy(fight.var(CardVar::Energy));
+            let gains = results.iter().any(|result| result.killed);
+            if fight.waiting() {
+                return wait(Resume::SunderHit { gains });
             }
-            Played::Done
+            sunder_hit(fight, gains)
         }
         // `Capacitor`: its `Repeat` more orb slots.
         DefectCard::Capacitor => {
@@ -484,14 +621,10 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
         // into the discard pile, free for the rest of the fight.
         DefectCard::AdaptiveStrike => {
             hit(fight, fight.target(), 1);
-            if let Some(clone) = fight.clone_this(Pile::Discard) {
-                fight.modify_card(
-                    clone,
-                    sts2_core::Change::SetCost(sts2_core::CostPool::Energy, 0),
-                    sts2_core::Lasting::ThisFight,
-                );
+            if fight.waiting() {
+                return wait(Resume::AdaptiveStrikeHit);
             }
-            Played::Done
+            adaptive_strike_hit(fight)
         }
         // `BoostAway`: its block, then a Dazed into the discard pile.
         DefectCard::BoostAway => {
@@ -577,10 +710,18 @@ fn barrage<F: Fight<V>>(fight: &mut F) -> Played<V> {
 /// `Claw`: its damage to the target, then its `Increase` onto the damage of
 /// every Claw its owner holds in the fight, itself included.
 fn claw<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    use super::super::super::generated::cards::Cards;
-
     let target = fight.target();
     hit(fight, target, 1);
+    if fight.waiting() {
+        return wait(Resume::ClawHit);
+    }
+    claw_hit(fight)
+}
+
+/// The rest of `Claw`, once its attack is over: every Claw's damage raised.
+fn claw_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use super::super::super::generated::cards::Cards;
+
     let raise =
         sts2_core::Change::Own(super::CardWrite::BuffFromPlay(fight.var(CardVar::Increase)));
     // `AllCards`: the hand, the draw, discard and exhaust piles, then the
@@ -609,13 +750,22 @@ fn compile_driver<F: Fight<V>>(fight: &mut F) -> Played<V> {
 /// `GoForTheEyes`: its damage to the target, then its Weak on it where the
 /// target `IntendsToAttack`: an attack or a death blow among its intents.
 fn go_for_the_eyes<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    use sts2_core::CreatureView as _;
-
-    use super::super::super::generated::monsters::IntentKind;
-    use super::super::super::generated::powers::Power;
-
     let target = fight.target();
     hit(fight, target, 1);
+    if fight.waiting() {
+        return wait(Resume::GoForTheEyesHit);
+    }
+    go_for_the_eyes_hit(fight)
+}
+
+/// The rest of `GoForTheEyes`, once its attack is over: its Weak, where the
+/// target means to attack.
+fn go_for_the_eyes_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use super::super::super::generated::monsters::IntentKind;
+    use super::super::super::generated::powers::Power;
+    use sts2_core::CreatureView as _;
+
+    let target = fight.target();
     let attacking = fight
         .creatures()
         .find(|creature| creature.id() == target)
@@ -634,11 +784,20 @@ fn go_for_the_eyes<F: Fight<V>>(fight: &mut F) -> Played<V> {
 /// `GunkUp`: its damage to the target, once for each of its `Repeat`, then a
 /// Slimed into the discard pile.
 fn gunk_up<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    use super::super::super::generated::cards::{Cards, StatusCard};
-
     let target = fight.target();
     let hits = fight.var(CardVar::Repeat);
     hit(fight, target, hits);
+    if fight.waiting() {
+        return wait(Resume::GunkUpHit);
+    }
+    gunk_up_hit(fight)
+}
+
+/// The rest of `GunkUp`, once its attack is over: a Slimed into the discard
+/// pile.
+fn gunk_up_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use super::super::super::generated::cards::{Cards, StatusCard};
+
     fight.add_generated_cards(
         sts2_core::CardIdent::new(Cards::Status(StatusCard::Slimed)),
         Pile::Discard,
@@ -675,6 +834,15 @@ fn momentum_strike<F: Fight<V>>(fight: &mut F) -> Played<V> {
         });
         fight.apply(attack);
     });
+    if fight.waiting() {
+        return wait(Resume::MomentumStrikeHit);
+    }
+    momentum_strike_hit(fight)
+}
+
+/// The rest of `MomentumStrike`, once its attack is over: its own cost to
+/// nothing for the fight.
+fn momentum_strike_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
     fight.modify_this(
         sts2_core::Change::SetCost(sts2_core::CostPool::Energy, 0),
         sts2_core::Lasting::ThisFight,
@@ -763,6 +931,14 @@ fn shatter<F: Fight<V>>(fight: &mut F) -> Played<V> {
             }
         });
     });
+    if fight.waiting() {
+        return wait(Resume::ShatterHit);
+    }
+    shatter_hit(fight)
+}
+
+/// The rest of `Shatter`, once its attack is over: each orb evoked twice.
+fn shatter_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
     for _ in 0..fight.orbs_held() {
         fight.evoke_next(false);
         fight.evoke_next(true);
@@ -794,6 +970,16 @@ fn tesla_coil<F: Fight<V>>(fight: &mut F) -> Played<V> {
         });
         fight.apply(hit);
     });
+    if fight.waiting() {
+        return wait(Resume::TeslaCoilHit);
+    }
+    tesla_coil_hit(fight)
+}
+
+/// The rest of `TeslaCoil`, once its attack is over: each Lightning's passive
+/// on the target.
+fn tesla_coil_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let target = fight.target();
     let times = if fight.upgraded() { 2 } else { 1 };
     let lightning: Vec<_> = fight
         .channelled()
@@ -812,10 +998,6 @@ fn tesla_coil<F: Fight<V>>(fight: &mut F) -> Played<V> {
 /// pile auto-played. The first of the playable Attacks stably shuffled off
 /// `Shuffle`, or where none is playable, the first of all of them.
 fn uproar<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    use sts2_core::{CardKind, Rules as _, RunStreamKinds as _};
-
-    use super::super::super::generated::cards::CardKeyword;
-
     let target = fight.target();
     fight.attack(Scaling::Dynamic, |fight| {
         for _ in 0..2 {
@@ -828,6 +1010,18 @@ fn uproar<F: Fight<V>>(fight: &mut F) -> Played<V> {
             fight.apply(attack);
         }
     });
+    if fight.waiting() {
+        return wait(Resume::UproarHit);
+    }
+    uproar_hit(fight)
+}
+
+/// The rest of `Uproar`, once its attack is over: an Attack of the draw
+/// pile auto-played.
+fn uproar_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use super::super::super::generated::cards::CardKeyword;
+    use sts2_core::{CardKind, Rules as _, RunStreamKinds as _};
+
     let stream = <V as sts2_core::ContentVersion>::RunRngType::SHUFFLE;
     let attacks: Vec<_> = fight
         .cards_in(Pile::Draw)
