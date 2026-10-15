@@ -31,7 +31,7 @@ pub(crate) struct Entering<'a, V: Rules> {
     /// The player's potions, in slot order.
     pub(crate) potions: &'a [V::Potion],
     /// The modifiers the run was started with.
-    pub(crate) modifiers: &'a [V::Modifier],
+    pub(crate) modifiers: &'a [sts2_core::RunModifier<V>],
     pub(crate) alive: bool,
     pub(crate) deck: &'a [sts2_core::DeckCard<V>],
     /// Whether the run reached this room off the map's lines.

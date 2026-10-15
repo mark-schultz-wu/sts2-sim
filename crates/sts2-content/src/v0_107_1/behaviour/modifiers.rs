@@ -78,11 +78,11 @@ pub(crate) fn modify_hook(modifier: Modifier, hook: ModifyHook<V>) -> Modify<i32
 ///
 /// A modifier whose override of `hook` is not ported.
 pub(crate) fn event_hook(
-    modifier: Modifier,
+    entry: sts2_core::RunModifier<V>,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
-    match (modifier, hook) {
+    match (entry.modifier, hook) {
         // `DeadlyEvents.AfterRunCreated`: no Juzu Bracelet in either bag, and
         // an unknown room can be an elite.
         (Modifier::DeadlyEvents, EventHook::RunCreated) => asked.extend([
@@ -160,6 +160,18 @@ pub(crate) fn event_hook(
             },
         ) => asked.push(HookEffect::RaresAtEvenOdds),
         (Modifier::BigGameHunter, EventHook::CardRewardCreationOptions { .. }) => {}
+        // `CharacterCards.ModifyCardRewardCreationOptions` and
+        // `ModifyMerchantCardPool`: its character's unlocked cards after the
+        // pool's own. A merchant's colorless shelves are never asked.
+        (
+            Modifier::CharacterCards,
+            EventHook::CardRewardCreationOptions { .. } | EventHook::MerchantCardPool,
+        ) => {
+            let character = entry
+                .character
+                .unwrap_or_else(|| unreachable!("Character Cards is started with its character"));
+            asked.push(HookEffect::ConcatCharacterPool(character));
+        }
         // `Vintage.TryModifyRewardsLate`: a relic for each card reward, in a
         // monster's room.
         (Modifier::Vintage, EventHook::ModifyRewardsLate { room }) => {
@@ -202,6 +214,7 @@ pub(crate) fn ported(modifier: Modifier) -> bool {
             | Modifier::DeadlyEvents
             | Modifier::BigGameHunter
             | Modifier::CursedRun
+            | Modifier::CharacterCards
             | Modifier::Murderous
             | Modifier::Terminal
     )

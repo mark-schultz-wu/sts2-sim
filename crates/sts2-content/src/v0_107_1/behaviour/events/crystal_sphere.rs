@@ -85,12 +85,13 @@ impl Item {
             Item::Relic => CustomReward::RolledRelic,
             Item::Potion(rarity) => CustomReward::PotionOf(rarity),
             // `CardRarityOddsType.Uniform` over the character's pool, which
-            // rolls each card's upgrade.
+            // rolls each card's upgrade, and which the pool's hooks reach.
             Item::Cards(rarity) => CustomReward::CardsOf {
                 pool: None,
                 rarity,
                 count: 3,
                 upgrade_roll: true,
+                no_pool_modifications: false,
             },
             Item::Curse => return None,
             Item::Gold { big: false } => CustomReward::Gold(10),

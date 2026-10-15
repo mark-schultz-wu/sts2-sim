@@ -51,7 +51,7 @@ pub(crate) enum Listener<V: Rules> {
     },
     /// A modifier the run was started with.
     Modifier {
-        modifier: V::Modifier,
+        modifier: sts2_core::RunModifier<V>,
     },
 }
 
@@ -216,7 +216,7 @@ pub(crate) enum Snapped<V: Rules> {
         id: CardId<V>,
     },
     Modifier {
-        modifier: V::Modifier,
+        modifier: sts2_core::RunModifier<V>,
     },
 }
 
@@ -1124,7 +1124,7 @@ fn ask_modifiers<V: Rules>(
     ask: &mut impl FnMut(Heard<'_, V>, Overrides),
 ) {
     for (modifier, overrides) in live.modifiers.hearing(hooks) {
-        ask(sts2_core::Listener::Modifier(modifier), overrides);
+        ask(sts2_core::Listener::Modifier(modifier.modifier), overrides);
     }
 }
 

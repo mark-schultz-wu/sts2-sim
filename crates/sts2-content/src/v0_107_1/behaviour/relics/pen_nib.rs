@@ -36,11 +36,11 @@ pub(super) fn event_hook(state: &mut State, hook: EventHook<V>) {
 /// `ModifyDamageMultiplicative`: double for a powered hit from the attack it
 /// doubles. With none being doubled, double for one previewed out of play
 /// while the next attack is the tenth. A card's hit comes from its owner or
-/// Osty, as a fight here has one player.
+/// Osty, as a fight here has one player. An Osty attack with no Osty comes
+/// from nobody, which is what `Owner.Osty` is then, so it counts too.
 pub(super) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> {
     let ModifyHook::DamageMultiplicative {
         card: Some(source),
-        dealer: Some(_),
         powered: true,
         ..
     } = hook

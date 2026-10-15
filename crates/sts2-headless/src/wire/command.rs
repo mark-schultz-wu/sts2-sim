@@ -39,7 +39,7 @@ pub enum Command<V: sts2_content_wire::WireContentVersion> {
         // empty — otherwise a recorded `start` with no modifiers is a file this
         // cannot reopen.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
-        modifiers: Vec<V::Modifier>,
+        modifiers: Vec<sts2_core::RunModifier<V>>,
         // Omitted when none, for the same reason.
         #[serde(default, skip_serializing_if = "is_zero")]
         wins: u32,
@@ -613,7 +613,7 @@ mod tests {
                 seed: Seed::new("ABC").expect("a seed"),
                 character: Character::Silent,
                 ascension: AscensionLevel::AscendersBane,
-                modifiers: vec![Modifier::Draft],
+                modifiers: vec![sts2_core::RunModifier::plain(Modifier::Draft)],
                 wins: 3,
             }),
             json!({
@@ -621,6 +621,27 @@ mod tests {
                 "character": "SILENT", "modifiers": ["DRAFT"], "wins": 3,
             })
         );
+    }
+
+    #[test]
+    fn a_modifier_set_up_with_a_character_carries_it_on_the_wire() {
+        let start = Start {
+            seed: Seed::new("ABC").expect("a seed"),
+            character: Character::Silent,
+            ascension: AscensionLevel::AscendersBane,
+            modifiers: vec![sts2_core::RunModifier {
+                modifier: Modifier::CharacterCards,
+                character: Some(Character::Defect),
+            }],
+            wins: 0,
+        };
+        let wire = wire_start(&start);
+        assert_eq!(
+            wire["modifiers"],
+            json!([{"id": "CHARACTER_CARDS", "character": "DEFECT"}])
+        );
+        let back: Wire = serde_json::from_value(wire).expect("a start reads back");
+        assert_eq!(back.into_start(), Some(start));
     }
 
     #[test]

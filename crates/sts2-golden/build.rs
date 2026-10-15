@@ -33,6 +33,7 @@ fn main() {
     println!("cargo::rerun-if-env-changed=STS2_GAME_DIR");
     println!("cargo::rerun-if-env-changed=STS2_GAME_VERSION");
     println!("cargo::rerun-if-env-changed=STS2_ORACLE_STORE");
+    println!("cargo::rerun-if-env-changed=STS2_ORACLE_WIDTH");
 
     let cache = cache_dir();
     std::fs::create_dir_all(&cache).expect("the cache directory is creatable");
@@ -42,16 +43,45 @@ fn main() {
         std::fs::create_dir_all(store).expect("the oracle store is creatable");
     }
 
-    // One game answers every miss. `start` restarts the run in place, so a
-    // launch is paid once rather than once for each recording.
-    let mut game = None;
-    for (name, recording) in every_recording() {
-        if let Err(why) = ensure(&name, &recording, &cache, store.as_deref(), &mut game) {
-            // A warning and not a failure. Somebody without the game vendored
-            // still builds and still runs everything that does not need it.
-            println!("cargo::warning=no oracle transcript for {name}: {why}");
+    // A few games share the misses, each taking the next recording as it
+    // frees up. `start` restarts the run in place, so each game's launch is
+    // paid once rather than once for each recording. A mod change misses
+    // every recording, and one game alone answers them in half an hour.
+    let recordings = every_recording();
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    std::thread::scope(|scope| {
+        for worker in 0..width() {
+            let home = cache.join("homes").join(format!("worker{worker}"));
+            let (recordings, next, cache, store) = (&recordings, &next, &cache, &store);
+            scope.spawn(move || {
+                let mut game = None;
+                while let Some((name, recording)) =
+                    recordings.get(next.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+                {
+                    let ensured =
+                        ensure(name, recording, cache, store.as_deref(), &home, &mut game);
+                    if let Err(why) = ensured {
+                        // A warning and not a failure. Somebody without the
+                        // game vendored still builds and still runs everything
+                        // that does not need it.
+                        println!("cargo::warning=no oracle transcript for {name}: {why}");
+                    }
+                }
+            });
         }
-    }
+    });
+}
+
+/// How many games answer the misses at once: `STS2_ORACLE_WIDTH`, or half
+/// the machine's threads up to sixteen.
+fn width() -> usize {
+    std::env::var("STS2_ORACLE_WIDTH")
+        .ok()
+        .and_then(|width| width.parse().ok())
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism().map_or(1, |threads| (threads.get() / 2).min(16))
+        })
+        .max(1)
 }
 
 /// `<target>/sts2-oracle`, wherever the target directory turns out to be.
@@ -130,6 +160,7 @@ fn ensure(
     recording: &str,
     cache: &Path,
     store: Option<&Path>,
+    home: &Path,
     game: &mut Option<Oracle<V>>,
 ) -> Result<(), String> {
     let bytes = recording.as_bytes();
@@ -169,7 +200,13 @@ fn ensure(
     // failed partway is dropped, and the next miss launches a fresh one.
     let oracle = match game.take() {
         Some(oracle) => oracle,
-        None => Oracle::<V>::launch(Config::new(dir)).map_err(|e| format!("launching: {e}"))?,
+        None => {
+            let mut config = Config::new(dir);
+            // A profile of its own, since games that share one race on its
+            // saves.
+            config.data_home = Some(home.to_path_buf());
+            Oracle::<V>::launch(config).map_err(|e| format!("launching: {e}"))?
+        }
     };
     // The start goes first and is not a step. `Play::begin` takes it, so
     // `steps()` does not carry it, and a game driven from `steps()` alone

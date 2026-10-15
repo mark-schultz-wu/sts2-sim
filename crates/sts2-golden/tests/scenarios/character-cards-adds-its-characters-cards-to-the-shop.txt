@@ -1,0 +1,6 @@
+# Character Cards with the Defect's cards, on an Ironclad. Each character
+# shelf draws from the Ironclad's cards of its type and rarity, less what
+# is stocked, then every Defect card of them. The colorless shelves are
+# left alone.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None","modifiers":[{"id":"CHARACTER_CARDS","character":"DEFECT"}]}
+{"cmd":"enter_room","type":"Shop"}

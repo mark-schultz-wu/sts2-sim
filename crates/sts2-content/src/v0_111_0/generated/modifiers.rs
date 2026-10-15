@@ -347,7 +347,9 @@ static OVERRIDES: [sts2_core::Overrides; 17] = [
         .with(sts2_core::ModelHook::ModifyCardRewardCreationOptions)
         .with(sts2_core::ModelHook::ModifyGeneratedMap),
     // CHARACTER_CARDS
-    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ModifyCardRewardCreationOptions),
+    sts2_core::Overrides::NONE
+        .with(sts2_core::ModelHook::ModifyCardRewardCreationOptions)
+        .with(sts2_core::ModelHook::ModifyMerchantCardPool),
     // CURSED_RUN
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterActEntered),
     // DEADLY_EVENTS

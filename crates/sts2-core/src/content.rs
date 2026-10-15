@@ -778,6 +778,7 @@ pub enum ModelHook {
     ModifyGeneratedMap,
     ModifyGeneratedMapLate,
     ModifyCardRewardCreationOptions,
+    ModifyMerchantCardPool,
     ModifyOddsIncreaseForUnrolledRoomType,
     ModifyCardRewardUpgradeOdds,
     TryModifyCardRewardOptions,
@@ -805,7 +806,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 149] = [
+    pub const ALL: [ModelHook; 150] = [
         ModelHook::AfterRoomEntered,
         ModelHook::AfterMapGenerated,
         ModelHook::AfterActEntered,
@@ -931,6 +932,7 @@ impl ModelHook {
         ModelHook::ModifyGeneratedMap,
         ModelHook::ModifyGeneratedMapLate,
         ModelHook::ModifyCardRewardCreationOptions,
+        ModelHook::ModifyMerchantCardPool,
         ModelHook::ModifyOddsIncreaseForUnrolledRoomType,
         ModelHook::ModifyCardRewardUpgradeOdds,
         ModelHook::TryModifyCardRewardOptions,
@@ -966,6 +968,7 @@ impl ModelHook {
             ModelHook::ModifyGeneratedMap => "ModifyGeneratedMap",
             ModelHook::ModifyGeneratedMapLate => "ModifyGeneratedMapLate",
             ModelHook::ModifyCardRewardCreationOptions => "ModifyCardRewardCreationOptions",
+            ModelHook::ModifyMerchantCardPool => "ModifyMerchantCardPool",
             ModelHook::BeforeCombatStart => "BeforeCombatStart",
             ModelHook::AfterCombatEnd => "AfterCombatEnd",
             ModelHook::AfterCardPlayed => "AfterCardPlayed",
@@ -3828,6 +3831,10 @@ pub enum EventHook<V: ContentVersion> {
     /// elite's reward: `Source` is `Encounter` and `RarityOdds` is
     /// `EliteEncounter`.
     CardRewardCreationOptions { elite_encounter: bool },
+    /// `ModifyMerchantCardPool`, as a merchant stocks a card from the
+    /// character's own pool. The colorless shelves are left out, which every
+    /// listener here leaves alone.
+    MerchantCardPool,
     /// `AfterRoomEntered`, for a room of this type.
     RoomEntered {
         room: V::RoomType,
@@ -4325,8 +4332,7 @@ pub enum EventHook<V: ContentVersion> {
         /// `Creature.Monster`, which is nothing for the player.
         monster: Option<V::Monster>,
         /// `wasRemovalPrevented`: a `ShouldDie` listener kept the creature
-        /// alive. The fight asks no `ShouldDie`, so it raises this for no
-        /// death but one that happened.
+        /// alive, as Die For You keeps Osty.
         removal_prevented: bool,
     },
     /// `AfterPowerAmountChanged`, raised on every listener once a power's
@@ -4446,6 +4452,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::CardRewardCreationOptions { .. } => {
                 ModelHook::ModifyCardRewardCreationOptions
             }
+            EventHook::MerchantCardPool => ModelHook::ModifyMerchantCardPool,
             EventHook::ModifyRewards { .. } => ModelHook::TryModifyRewards,
             EventHook::ModifyRewardsLate { .. } => ModelHook::TryModifyRewardsLate,
             EventHook::CardRewardAlternatives | EventHook::CardRewardAlternativeChosen(_) => {
@@ -5142,14 +5149,17 @@ pub enum CustomReward<V: ContentVersion> {
     /// three cards a monster fight's reward offers, at its odds.
     MonsterRoomCards,
     /// `CardReward` over a character's pool at uniform odds, of one rarity,
-    /// with no rarity or pool modification. `pool` names another character's
-    /// pool, and nothing is the character's own. Glass Eye offers five.
+    /// with no rarity modification. `pool` names another character's pool,
+    /// and nothing is the character's own. Glass Eye offers five.
     CardsOf {
         pool: Option<V::Character>,
         rarity: RewardRarity,
         count: usize,
         /// `RollForUpgrade` for each card, which `NoUpgradeRoll` leaves out.
         upgrade_roll: bool,
+        /// `CardCreationFlags.NoCardPoolModifications`, which keeps
+        /// `ModifyCardRewardCreationOptions` off the pool.
+        no_pool_modifications: bool,
     },
     /// `CardReward` over the character's own pool at uniform odds, of one
     /// rarity and one type, and then every card it offers upgraded. The
@@ -5417,6 +5427,9 @@ pub enum HookEffect<V: ContentVersion> {
     /// `WithCardPools` over the reward's pools with the colorless pool after
     /// them, where it is not among them already.
     AddColorlessPool,
+    /// `Concat` of this character's unlocked cards after the pool's own. A
+    /// card reward drops repeats as it draws, and a merchant keeps them.
+    ConcatCharacterPool(V::Character),
     /// `RunManager.GenerateMap` for the act the run stands in, which the
     /// hooks can replace.
     RegenerateMap,
@@ -6582,10 +6595,10 @@ pub trait Hooks: ContentVersion {
         asked: &mut HookEffects<Self>,
     );
 
-    /// [`Hooks::power_event_hook`] for a run modifier, which saves nothing
-    /// of its own.
+    /// [`Hooks::power_event_hook`] for a run modifier, with what it was set
+    /// up with.
     fn modifier_event_hook(
-        modifier: Self::Modifier,
+        modifier: crate::RunModifier<Self>,
         hook: EventHook<Self>,
         asked: &mut HookEffects<Self>,
     );
@@ -7395,6 +7408,10 @@ pub trait Rules: Hooks {
     /// The character's pool narrowed by `CardFactory.FilterForCombat`, in the
     /// order a combat generation effect shuffles it.
     fn combat_cards(character: Self::Character) -> &'static [Self::Card];
+
+    /// `Character.CardPool.GetUnlockedCards` for a one-player run, every
+    /// rarity, in the pool's order.
+    fn unlocked_cards(character: Self::Character) -> &'static [Self::Card];
 
     /// The colorless pool narrowed by `CardFactory.FilterForCombat`, in the
     /// order a combat generation effect shuffles it.

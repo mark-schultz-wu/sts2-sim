@@ -34,7 +34,11 @@ impl<V: Rules> Play<V> for Sim<V> {
     type Host = ();
 
     fn begin(_: Self::Host, start: &Start<V>) -> Result<Self, Self::Error> {
-        if let Some(modifier) = start.modifiers.iter().find(|&&m| !V::modifier_ported(m)) {
+        if let Some(modifier) = start
+            .modifiers
+            .iter()
+            .find(|m| !V::modifier_ported(m.modifier))
+        {
             unimplemented!("a run started with {modifier:?}");
         }
         Ok(Self {

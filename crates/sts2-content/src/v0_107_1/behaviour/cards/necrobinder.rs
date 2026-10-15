@@ -953,15 +953,20 @@ pub(super) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
                 });
             }
         }
-        // `Melancholy.AfterDeath`: any creature's death takes its `Energy` off
-        // its cost for the rest of the fight. The sim prevents no death, so
-        // every one counts, and a card that hears a hook is in a combat pile.
-        (NecrobinderCard::Melancholy, EventHook::AfterDeath { .. }) => {
-            asked.push(HookEffect::ModifySelf {
-                change: Change::ChangeCost(CostPool::Energy, -printed.face(CardVar::Energy)),
-                lasting: Lasting::ThisFight,
-            })
-        }
+        // `Melancholy.AfterDeath`: a creature's death takes its `Energy` off
+        // its cost for the rest of the fight, unless the creature's removal
+        // was prevented. A card that hears a hook is in a combat pile.
+        (
+            NecrobinderCard::Melancholy,
+            EventHook::AfterDeath {
+                removal_prevented: false,
+                ..
+            },
+        ) => asked.push(HookEffect::ModifySelf {
+            change: Change::ChangeCost(CostPool::Energy, -printed.face(CardVar::Energy)),
+            lasting: Lasting::ThisFight,
+        }),
+        (NecrobinderCard::Melancholy, EventHook::AfterDeath { .. }) => {}
         // `BansheesCry.AfterCardPlayed`: its `Energy` off its cost for the
         // rest of the fight for each Ethereal card its owner plays. A fight
         // here has one player.

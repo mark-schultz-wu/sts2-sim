@@ -12,7 +12,7 @@
 //! half folded into the high. Four find the first step two runs part at as
 //! surely as eight do here.
 
-use sts2_core::{Decision, Digest, Digested as _, Room, Snapshot, Start};
+use sts2_core::{Decision, Digest, Digested as _, Room, RunModifier, Snapshot, Start};
 
 /// What the file starts with, so a wrong one is refused rather than read.
 const MAGIC: &[u8; 8] = b"STS2REC\x00";
@@ -44,7 +44,8 @@ pub struct Run {
     pub seed: String,
     /// The ascension level, as the game names it.
     pub ascension: String,
-    /// The modifiers the run was started with, as the game spells their ids.
+    /// The modifiers the run was started with, each as [`spell_modifier`]
+    /// writes it.
     pub modifiers: Vec<String>,
     /// See [`sts2_core::Start::wins`].
     pub wins: u32,
@@ -88,9 +89,48 @@ impl Run {
             seed: sts2_core::Seed::new(&self.seed).expect("a recorded seed is a seed"),
             character: from_id(&self.character),
             ascension: from_id(&self.ascension),
-            modifiers: self.modifiers.iter().map(|id| from_id(id)).collect(),
+            modifiers: self
+                .modifiers
+                .iter()
+                .map(|text| read_modifier(text).unwrap_or_else(|e| panic!("{text:?}: {e}")))
+                .collect(),
             wins: self.wins,
         }
+    }
+}
+
+/// A run modifier as text: its id as the game spells it. One set up with a
+/// character adds `:` and the character's id, as `CHARACTER_CARDS:DEFECT`.
+pub fn spell_modifier<V: sts2_core::ContentVersion>(entry: &RunModifier<V>) -> String {
+    let modifier = spelled(&entry.modifier);
+    match &entry.character {
+        None => modifier,
+        Some(character) => format!("{modifier}:{}", spelled(character)),
+    }
+}
+
+/// [`spell_modifier`]'s text, read back.
+pub fn read_modifier<V: sts2_core::ContentVersion>(
+    text: &str,
+) -> Result<RunModifier<V>, serde_json::Error> {
+    let (modifier, character) = match text.split_once(':') {
+        Some((modifier, character)) => (modifier, Some(character)),
+        None => (text, None),
+    };
+    fn read<T: serde::de::DeserializeOwned>(id: &str) -> Result<T, serde_json::Error> {
+        serde_json::from_value(serde_json::Value::String(id.to_owned()))
+    }
+    Ok(RunModifier {
+        modifier: read(modifier)?,
+        character: character.map(read).transpose()?,
+    })
+}
+
+/// The id the game spells `value` with.
+fn spelled<T: serde::Serialize>(value: &T) -> String {
+    match serde_json::to_value(value) {
+        Ok(serde_json::Value::String(id)) => id,
+        other => panic!("{other:?} is not an id"),
     }
 }
 
@@ -378,13 +418,28 @@ mod tests {
                 run("C000000001", vec![0, 3, 127, 128, 300, 16383, 65535]),
                 run("C000000002", vec![]),
                 Run {
-                    modifiers: vec!["FLIGHT".into(), "MIDAS".into()],
+                    modifiers: vec!["FLIGHT".into(), "CHARACTER_CARDS:DEFECT".into()],
                     ..run("C000000003", vec![1])
                 },
             ],
         };
 
         assert_eq!(Recorded::decode(&recorded.encode()), Ok(recorded));
+    }
+
+    #[test]
+    fn a_modifier_with_a_character_reads_back_as_it_was_spelled() {
+        use sts2_content::v0_107_1::{V0_107_1, characters::Character, modifiers::Modifier};
+
+        let entry = RunModifier::<V0_107_1> {
+            modifier: Modifier::CharacterCards,
+            character: Some(Character::Defect),
+        };
+        let text = spell_modifier(&entry);
+        assert_eq!(text, "CHARACTER_CARDS:DEFECT");
+        assert_eq!(read_modifier::<V0_107_1>(&text).ok(), Some(entry));
+        let plain = RunModifier::<V0_107_1>::plain(Modifier::Flight);
+        assert_eq!(spell_modifier(&plain), "FLIGHT");
     }
 
     #[test]

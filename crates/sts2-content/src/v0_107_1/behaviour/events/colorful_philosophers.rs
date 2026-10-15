@@ -38,6 +38,7 @@ static REWARDS: [[CustomReward<V>; 3]; 5] = {
                 rarity,
                 count: CARDS,
                 upgrade_roll: true,
+                no_pool_modifications: true,
             }
         }
         [
