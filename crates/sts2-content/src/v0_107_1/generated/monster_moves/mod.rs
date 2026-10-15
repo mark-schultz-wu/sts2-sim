@@ -3,26 +3,19 @@
 //! What each monster's moves do, one module per act it is met in.
 //! Source: `dumps/monster_moves.txt`, build v0.107.1 (59260271), assembly 1692500715.
 
-pub mod glory;
-pub mod hive;
-pub mod overgrowth;
-pub mod shared;
-pub mod summoned;
-pub mod underdocks;
+pub use crate::generated::monster_moves::Filed;
 
-/// The file a monster's moves are filed in, one per act it is met in.
-///
-/// `behaviour/` files its hand ports the same way, and routes a move by
-/// this.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Filed {
-    Glory,
-    Hive,
-    Overgrowth,
-    Shared,
-    Summoned,
-    Underdocks,
-}
+pub mod glory;
+
+pub mod hive;
+
+pub mod overgrowth;
+
+pub mod shared;
+
+pub mod summoned;
+
+pub mod underdocks;
 
 /// Where `monster`'s moves are filed.
 pub fn filed(monster: super::monsters::Monster) -> Filed {

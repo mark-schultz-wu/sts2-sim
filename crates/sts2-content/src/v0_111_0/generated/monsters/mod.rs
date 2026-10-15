@@ -4,115 +4,11 @@
 //! Source: `dumps/monsters.txt`, build v0.111.0 (41cef1ea), assembly 1579942752, content 1568834832.
 
 use super::acts::Act;
+pub use crate::generated::monsters::{
+    Attack, Branch, FollowUp, IntentKind, IntentList, Repeat, RepeatCount, StateIndex,
+};
 use crate::{Field, Scaled};
 use serde::{Deserialize, Serialize};
-
-/// What a monster telegraphs before a move resolves.
-///
-/// Not what the move does — that is the move body, ported by hand. The
-/// game declares the two separately, so this is only what is displayed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum IntentKind {
-    Attack = 0,
-    Buff = 1,
-    Debuff = 2,
-    DebuffStrong = 3,
-    Defend = 4,
-    Escape = 5,
-    Heal = 6,
-    Hidden = 7,
-    Summon = 8,
-    Sleep = 9,
-    Stun = 10,
-    StatusCard = 11,
-    CardDebuff = 12,
-    DeathBlow = 13,
-    Unknown = 14,
-}
-
-/// A move's [`IntentKind`]s, in the order it declares them.
-///
-/// Up to 3, four bits each at the kind's discriminant, the first in the
-/// low bits. 15 marks a place left empty.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct IntentList(u16);
-
-impl IntentList {
-    /// Every kind, at its discriminant.
-    const MEMBERS: [IntentKind; 15] = [
-        IntentKind::Attack,
-        IntentKind::Buff,
-        IntentKind::Debuff,
-        IntentKind::DebuffStrong,
-        IntentKind::Defend,
-        IntentKind::Escape,
-        IntentKind::Heal,
-        IntentKind::Hidden,
-        IntentKind::Summon,
-        IntentKind::Sleep,
-        IntentKind::Stun,
-        IntentKind::StatusCard,
-        IntentKind::CardDebuff,
-        IntentKind::DeathBlow,
-        IntentKind::Unknown,
-    ];
-
-    /// How many kinds a move can declare.
-    const PLACES: usize = 3;
-
-    /// A place with no kind in it.
-    const EMPTY: u16 = 15;
-
-    pub const fn new(members: &[IntentKind]) -> Self {
-        assert!(
-            members.len() <= Self::PLACES,
-            "a move declares too many intents"
-        );
-        let mut bits = 0u16;
-        let mut at = 0;
-        while at < Self::PLACES {
-            let kind = match at < members.len() {
-                true => members[at] as u16,
-                false => Self::EMPTY,
-            };
-            bits |= kind << (4 * at);
-            at += 1;
-        }
-        Self(bits)
-    }
-
-    /// The kinds, in the order the move declares them.
-    pub fn iter(self) -> impl Iterator<Item = IntentKind> {
-        (0..Self::PLACES)
-            .map(move |at| (self.0 >> (4 * at)) & 0xF)
-            .take_while(|&kind| kind != Self::EMPTY)
-            .map(|kind| Self::MEMBERS[usize::from(kind)])
-    }
-
-    pub fn contains(self, member: IntentKind) -> bool {
-        self.iter().any(|kind| kind == member)
-    }
-}
-
-impl std::fmt::Debug for IntentList {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_list().entries(self.iter()).finish()
-    }
-}
-
-/// The numbers an attacking intent displays.
-///
-/// One type for `Attack` and `DeathBlow` alike, because
-/// `DeathBlowIntent` extends `SingleAttackIntent` and carries the same
-/// two numbers, and no move telegraphs both.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Attack {
-    pub damage: Field<Scaled<u16>>,
-    /// `SingleAttackIntent.Repeats` is 1; `MultiAttackIntent` computes
-    /// or stores its own.
-    pub repeats: Field<Scaled<u8>>,
-}
 
 /// Everything a move telegraphs.
 ///
@@ -132,122 +28,6 @@ pub struct Intents {
     pub attack: Option<Attack>,
     /// `StatusIntent.CardCount` — how many cards it will add.
     pub cards: Option<Field<Scaled<u8>>>,
-}
-
-/// How far back a [`Repeat`] rule looks.
-///
-/// A capped count rather than a `u8` so that `Repeat` stays small: it
-/// needs two fieldless discriminants beside this one, and a `u8` payload
-/// uses every pattern there is. The cap is 8, against a build
-/// whose largest window is 3 — `cargo xtask codegen` fails rather
-/// than truncating if one ever exceeds it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-#[repr(u8)]
-pub enum RepeatCount {
-    One = 1,
-    Two = 2,
-    Three = 3,
-    Four = 4,
-    Five = 5,
-    Six = 6,
-    Seven = 7,
-    Eight = 8,
-}
-
-impl RepeatCount {
-    /// The count as a number.
-    pub const fn get(self) -> u8 {
-        self as u8
-    }
-}
-
-/// What bars a branch the machine would otherwise be free to take.
-///
-/// The game spends three fields on this — `MoveRepeatType`, `maxTimes`
-/// and `cooldown` — and `GetStateWeight` blocks the branch if *either*
-/// the repeat type or the cooldown says so. One of the two is always
-/// redundant, because each implies the other in one direction:
-///
-/// - `InARow(n)` blocking means the last `n` log entries are all this
-///   branch, and `n` is never zero, so the most recent entry is this
-///   branch — which is exactly what a cooldown of 1 or more already
-///   blocks on. A cooldown beside an in-a-row limit swallows it.
-/// - A cooldown blocking means the branch is somewhere in the log, which
-///   is what [`Once`](Self::Once) blocks on. `Once` swallows a cooldown.
-///
-/// So the pair collapses to whichever half is the stronger, and no
-/// behaviour is lost. Of this build's 68 branches, 5
-/// carry a cooldown at all.
-///
-/// The two windowed variants are different questions, not the same one
-/// with different numbers: [`InARow`](Self::InARow) asks whether *every*
-/// entry of a recent window is this branch, [`Cooldown`](Self::Cooldown)
-/// whether *any* is. They coincide only at `n = 1`, which generates as
-/// `InARow(One)`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Repeat {
-    /// Never barred by its own history.
-    Forever,
-    /// Barred while the last `n` moves were all this branch — so it may
-    /// be taken at most `n` times in a row.
-    InARow(RepeatCount),
-    /// Barred while this branch is anywhere in the last `n` moves — so
-    /// `n` other moves must pass before it comes round again.
-    Cooldown(RepeatCount),
-    /// Barred once this branch has been taken at all, ever.
-    Once,
-}
-
-/// A state's position in its monster's own `states` slice.
-///
-/// The game keys states by string and looks them up in a dictionary;
-/// nothing outside a monster's own graph refers to one, so an index is
-/// enough and costs no hashing. Every index a generated table contains
-/// is in range for its monster, which the tests check.
-///
-/// A `u8` and not a capped enum. Capping would buy nothing: the only
-/// thing that could use the spare discriminants is a niche, and
-/// [`FollowUp`] has two variants carrying one of these, so it is a tag
-/// plus a payload either way. The build's largest graph is 8
-/// states; codegen refuses one that would not fit here.
-pub type StateIndex = u8;
-
-/// Where the machine goes when it leaves a move.
-///
-/// The game spells this as a nullable `FollowUpStateId` beside a
-/// `MustPerformOnceBeforeTransitioning` bool, but both are about
-/// leaving: `CanTransitionAway` returns `_performedAtLeastOnce` when the
-/// bool is set, and `FindNextMoveState` returns early while it is false.
-/// So the bool gates the transition and belongs to it.
-///
-/// A missing follow-up is not "no next state" either —
-/// `MoveState.GetNextState` throws on one. That is
-/// [`Never`](Self::Never), and it makes the combination the game can
-/// express but never uses — must perform once, then go nowhere —
-/// unrepresentable here.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum FollowUp {
-    /// Leaves for this state.
-    Next(StateIndex),
-    /// Leaves for this state, but not before the move has been
-    /// performed at least once; the machine stays here until it has.
-    OncePerformed(StateIndex),
-    /// Never leaves. Asking is an error, not a stop.
-    Never,
-}
-
-/// One branch of a random choice.
-///
-/// A single target, because the game's own `StateWeight` has one: a
-/// random node is a list of these and picking one picks its target.
-/// The branch is where the repeat rules live rather than the target,
-/// because two nodes can offer the same target on different terms.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Branch {
-    pub target: StateIndex,
-    pub repeat: Repeat,
-    /// `Computed` when the game works it out from combat state.
-    pub weight: Field<f32>,
 }
 
 /// A move the monster can make.
@@ -1937,6 +1717,7 @@ static OVERRIDES: [sts2_core::Overrides; 126] = [
     // ZAPBOT
     sts2_core::Overrides::NONE,
 ];
+
 impl sts2_core::MonsterTable for Monster {
     type Act = Act;
 
@@ -2153,9 +1934,15 @@ impl sts2_core::MonsterTable for Monster {
         }
     }
 }
+
 mod glory;
+
 mod hive;
+
 mod overgrowth;
+
 mod shared;
+
 mod summoned;
+
 mod underdocks;

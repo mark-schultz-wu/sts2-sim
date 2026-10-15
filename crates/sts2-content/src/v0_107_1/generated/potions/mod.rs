@@ -6,169 +6,11 @@
 use super::cards::TargetType;
 use super::characters::Character;
 use crate::Field;
+pub use crate::generated::potions::{
+    PotionData, PotionFlag, PotionFlags, PotionPool, PotionRarity, PotionUsage,
+};
 use serde::{Deserialize, Serialize};
 use sts2_core::Drafted;
-
-// `PotionUsage::None` is not generated: no potion has it, and `NPotionPopup` throws "No potions should have 'None' usage." on the branch that would handle one. The game says it should not exist and the build agrees, so it is not generated.
-// `PotionRarity::None` is not generated: `PotionRarityExtensions.ToLocString` throws `ArgumentOutOfRangeException` on it, so it is not a rarity the game can name. Two models carry it — `DEPRECATED_POTION` and a mock — and neither is content, so it is `Option<PotionRarity>` here: no rarity, rather than a rarity called none.
-
-/// The pools a potion can be stocked by.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum PotionPool {
-    #[serde(rename = "DEFECT_POTION_POOL")]
-    Defect = 0,
-    #[serde(rename = "DEPRECATED_POTION_POOL")]
-    Deprecated = 1,
-    #[serde(rename = "EVENT_POTION_POOL")]
-    Event = 2,
-    #[serde(rename = "IRONCLAD_POTION_POOL")]
-    Ironclad = 3,
-    #[serde(rename = "MOCK_POTION_POOL")]
-    Mock = 4,
-    #[serde(rename = "NECROBINDER_POTION_POOL")]
-    Necrobinder = 5,
-    #[serde(rename = "REGENT_POTION_POOL")]
-    Regent = 6,
-    #[serde(rename = "SHARED_POTION_POOL")]
-    Shared = 7,
-    #[serde(rename = "SILENT_POTION_POOL")]
-    Silent = 8,
-    #[serde(rename = "TOKEN_POTION_POOL")]
-    Token = 9,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum PotionRarity {
-    Common = 1,
-    Uncommon = 2,
-    Rare = 3,
-    Event = 4,
-    Token = 5,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum PotionUsage {
-    CombatOnly = 1,
-    AnyTime = 2,
-    Automatic = 3,
-}
-
-/// A yes-or-no fact about a potion.
-///
-/// Two separate `PotionModel` members rather than a game enum, so the
-/// numbering is the order the dump writes the columns in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum PotionFlag {
-    /// A card or a relic may conjure one mid-fight. False for three:
-    /// Fairy in a Bottle, Fruit Juice and Regen Potion.
-    GeneratedInCombat = 0,
-    /// Whether the potion has anything to say about being drinkable
-    /// beyond its `usage`. True for every potion but `FOUL_POTION`,
-    /// which works it out.
-    PassesUsabilityCheck = 1,
-}
-
-/// The flags a potion has, and the one it works out at the time.
-///
-/// `PassesCustomUsabilityCheck` is `virtual` and `FOUL_POTION`
-/// overrides it, which is the whole reason this is two words.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct PotionFlags {
-    /// The flags that are set. A computed flag is never in here.
-    yes: u8,
-    /// The flags the model decides at the time.
-    computed: u8,
-}
-
-impl PotionFlags {
-    /// Every flag, in bit order.
-    const MEMBERS: [PotionFlag; 2] = [
-        PotionFlag::GeneratedInCombat,
-        PotionFlag::PassesUsabilityCheck,
-    ];
-
-    /// The flags a model sets, and the ones it computes.
-    ///
-    /// A flag in both lists is a contradiction, and this is a `const
-    /// fn` called from a `const`, so saying so fails the build rather
-    /// than the run.
-    pub const fn new(yes: &[PotionFlag], computed: &[PotionFlag]) -> Self {
-        let mut set = 0u8;
-        let mut i = 0;
-        while i < yes.len() {
-            set |= 1u8 << yes[i] as u8;
-            i += 1;
-        }
-
-        let mut asked = 0u8;
-        i = 0;
-        while i < computed.len() {
-            asked |= 1u8 << computed[i] as u8;
-            i += 1;
-        }
-
-        assert!(set & asked == 0, "a flag cannot be both set and computed");
-        Self {
-            yes: set,
-            computed: asked,
-        }
-    }
-
-    /// One flag: the answer, or the cue to ask for it.
-    ///
-    /// There is no `contains`. A computed flag has no answer until
-    /// something asks the model, and a `bool` would have to invent
-    /// one.
-    pub const fn get(self, flag: PotionFlag) -> Field<bool> {
-        let bit = 1u8 << flag as u8;
-        if self.computed & bit != 0 {
-            return Field::Computed;
-        }
-        Field::Constant(self.yes & bit != 0)
-    }
-}
-
-impl std::fmt::Debug for PotionFlags {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut set = f.debug_set();
-        let mut i = 0;
-        while i < Self::MEMBERS.len() {
-            let flag = Self::MEMBERS[i];
-            match self.get(flag) {
-                Field::Constant(true) => {
-                    set.entry(&flag);
-                }
-                Field::Computed => {
-                    set.entry(&format_args!("{flag:?}: computed"));
-                }
-                Field::Constant(false) => {}
-            }
-            i += 1;
-        }
-        set.finish()
-    }
-}
-
-/// What is true of a potion with no run in progress.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct PotionData {
-    /// How often one turns up. `None` is the game's
-    /// `PotionRarity.None`, which `ToLocString` throws on — so it is
-    /// the absence of a rarity, and only a deprecated model and a
-    /// mock have it.
-    pub rarity: Option<PotionRarity>,
-    /// When it can be drunk. Sixty of the sixty-five are combat
-    /// only.
-    pub usage: PotionUsage,
-    /// What it can be pointed at, which is the cards domain's own
-    /// `TargetType`: a potion targets the way a card does.
-    pub target: Field<TargetType>,
-    pub flags: PotionFlags,
-}
 
 /// Every potion in the build.
 ///
@@ -716,6 +558,7 @@ static OVERRIDES: [sts2_core::Overrides; 65] = [
     // WEAK_POTION
     sts2_core::Overrides::NONE,
 ];
+
 /// The potions a pool stocks, in the order the game enumerates them.
 ///
 /// `PotionPoolModel.AllPotions`, which a reward indexes into after
@@ -1348,12 +1191,21 @@ pub fn unlocked_potions(character: Character) -> &'static [Potion] {
 }
 
 mod defect;
+
 mod deprecated;
+
 mod event;
+
 mod ironclad;
+
 mod mock;
+
 mod necrobinder;
+
 mod regent;
+
 mod shared;
+
 mod silent;
+
 mod token;

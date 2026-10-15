@@ -2396,62 +2396,6 @@ impl CardVarIds for crate::v0_111_0::cards::CardVar {
     const WRAITH_FORM_POWER: Self = Self::WraithFormPower;
 }
 
-/// The `CardKeyword` of every build, by id.
-pub trait CardKeywordIds: Copy + Eq + 'static {
-    const ETERNAL: Self;
-    const ETHEREAL: Self;
-    const EXHAUST: Self;
-    const INNATE: Self;
-    const RETAIN: Self;
-    const SLY: Self;
-    const UNPLAYABLE: Self;
-}
-
-impl CardKeywordIds for crate::v0_107_1::cards::CardKeyword {
-    const ETERNAL: Self = Self::Eternal;
-    const ETHEREAL: Self = Self::Ethereal;
-    const EXHAUST: Self = Self::Exhaust;
-    const INNATE: Self = Self::Innate;
-    const RETAIN: Self = Self::Retain;
-    const SLY: Self = Self::Sly;
-    const UNPLAYABLE: Self = Self::Unplayable;
-}
-
-impl CardKeywordIds for crate::v0_111_0::cards::CardKeyword {
-    const ETERNAL: Self = Self::Eternal;
-    const ETHEREAL: Self = Self::Ethereal;
-    const EXHAUST: Self = Self::Exhaust;
-    const INNATE: Self = Self::Innate;
-    const RETAIN: Self = Self::Retain;
-    const SLY: Self = Self::Sly;
-    const UNPLAYABLE: Self = Self::Unplayable;
-}
-
-/// The `CardTag` of every build, by id.
-pub trait CardTagIds: Copy + Eq + 'static {
-    const DEFEND: Self;
-    const MINION: Self;
-    const OSTY_ATTACK: Self;
-    const SHIV: Self;
-    const STRIKE: Self;
-}
-
-impl CardTagIds for crate::v0_107_1::cards::CardTag {
-    const DEFEND: Self = Self::Defend;
-    const MINION: Self = Self::Minion;
-    const OSTY_ATTACK: Self = Self::OstyAttack;
-    const SHIV: Self = Self::Shiv;
-    const STRIKE: Self = Self::Strike;
-}
-
-impl CardTagIds for crate::v0_111_0::cards::CardTag {
-    const DEFEND: Self = Self::Defend;
-    const MINION: Self = Self::Minion;
-    const OSTY_ATTACK: Self = Self::OstyAttack;
-    const SHIV: Self = Self::Shiv;
-    const STRIKE: Self = Self::Strike;
-}
-
 /// The `Character` of every build, by id.
 pub trait CharacterIds: Copy + Eq + 'static {
     const DEFECT: Self;
@@ -3080,59 +3024,575 @@ impl EventIds for crate::v0_111_0::events::Event {
     const ZEN_WEAVER: Self = Self::ZenWeaver;
 }
 
-/// The `IntentKind` of every build, by id.
-pub trait IntentKindIds: Copy + Eq + 'static {
-    const ATTACK: Self;
-    const BUFF: Self;
-    const CARD_DEBUFF: Self;
-    const DEATH_BLOW: Self;
-    const DEBUFF: Self;
-    const DEBUFF_STRONG: Self;
-    const DEFEND: Self;
-    const ESCAPE: Self;
-    const HEAL: Self;
-    const HIDDEN: Self;
-    const SLEEP: Self;
-    const STATUS_CARD: Self;
-    const STUN: Self;
-    const SUMMON: Self;
-    const UNKNOWN: Self;
+/// The `EventOption` of every build, by id.
+pub trait EventOptionIds: Copy + Eq + 'static {
+    const ABYSSAL_BATHS_ABSTAIN: Self;
+    const ABYSSAL_BATHS_ALL_EXIT_BATHS: Self;
+    const ABYSSAL_BATHS_ALL_LINGER: Self;
+    const ABYSSAL_BATHS_IMMERSE: Self;
+    const AMALGAMATOR_COMBINE_DEFENDS: Self;
+    const AMALGAMATOR_COMBINE_STRIKES: Self;
+    const AROMA_OF_CHAOS_LET_GO: Self;
+    const AROMA_OF_CHAOS_MAINTAIN_CONTROL: Self;
+    const BATTLEWORN_DUMMY_SETTING1: Self;
+    const BATTLEWORN_DUMMY_SETTING2: Self;
+    const BATTLEWORN_DUMMY_SETTING3: Self;
+    const BRAIN_LEECH_RIP: Self;
+    const BRAIN_LEECH_SHARE_KNOWLEDGE: Self;
+    const BUGSLAYER_EXTERMINATION: Self;
+    const BUGSLAYER_SQUASH: Self;
+    const BYRDONIS_NEST_EAT: Self;
+    const BYRDONIS_NEST_TAKE: Self;
+    const COLORFUL_PHILOSOPHERS_DEFECT: Self;
+    const COLORFUL_PHILOSOPHERS_EQUALITY: Self;
+    const COLORFUL_PHILOSOPHERS_IRONCLAD: Self;
+    const COLORFUL_PHILOSOPHERS_NECROBINDER: Self;
+    const COLORFUL_PHILOSOPHERS_REGENT: Self;
+    const COLORFUL_PHILOSOPHERS_SILENT: Self;
+    const COLOSSAL_FLOWER_EXTRACT_CURRENT_PRIZE1: Self;
+    const COLOSSAL_FLOWER_REACH_DEEPER1: Self;
+    const COLOSSAL_FLOWER_REACH_DEEPER1_EXTRACT_CURRENT_PRIZE2: Self;
+    const COLOSSAL_FLOWER_REACH_DEEPER1_REACH_DEEPER2: Self;
+    const COLOSSAL_FLOWER_REACH_DEEPER2_EXTRACT_INSTEAD: Self;
+    const COLOSSAL_FLOWER_REACH_DEEPER2_POLLINOUS_CORE: Self;
+    const CRYSTAL_SPHERE_PAYMENT_PLAN: Self;
+    const CRYSTAL_SPHERE_UNCOVER_FUTURE: Self;
+    const DENSE_VEGETATION_REST: Self;
+    const DENSE_VEGETATION_REST_FIGHT: Self;
+    const DENSE_VEGETATION_TRUDGE_ON: Self;
+    const DOLL_ROOM_EXAMINE: Self;
+    const DOLL_ROOM_RANDOM: Self;
+    const DOLL_ROOM_TAKE_SOME_TIME: Self;
+    const DOORS_OF_LIGHT_AND_DARK_DARK: Self;
+    const DOORS_OF_LIGHT_AND_DARK_LIGHT: Self;
+    const DROWNING_BEACON_BOTTLE: Self;
+    const DROWNING_BEACON_CLIMB: Self;
+    const ENDLESS_CONVEYOR_ALL_CAVIAR: Self;
+    const ENDLESS_CONVEYOR_ALL_CLAM_ROLL: Self;
+    const ENDLESS_CONVEYOR_ALL_FRIED_EEL: Self;
+    const ENDLESS_CONVEYOR_ALL_GOLDEN_FYSH: Self;
+    const ENDLESS_CONVEYOR_ALL_JELLY_LIVER: Self;
+    const ENDLESS_CONVEYOR_ALL_LOCKED: Self;
+    const ENDLESS_CONVEYOR_ALL_SEAPUNK_SALAD: Self;
+    const ENDLESS_CONVEYOR_ALL_SPICY_SNAPPY: Self;
+    const ENDLESS_CONVEYOR_ALL_SUSPICIOUS_CONDIMENT: Self;
+    const ENDLESS_CONVEYOR_GRAB_SOMETHING_OFF_THE_BELT_LEAVE: Self;
+    const ENDLESS_CONVEYOR_OBSERVE_CHEF: Self;
+    const FIELD_OF_MAN_SIZED_HOLES_ENTER_YOUR_HOLE: Self;
+    const FIELD_OF_MAN_SIZED_HOLES_RESIST: Self;
+    const GRAVE_OF_THE_FORGOTTEN_ACCEPT: Self;
+    const GRAVE_OF_THE_FORGOTTEN_CONFRONT: Self;
+    const HUNGRY_FOR_MUSHROOMS_BIG_MUSHROOM: Self;
+    const HUNGRY_FOR_MUSHROOMS_FRAGRANT_MUSHROOM: Self;
+    const INFESTED_AUTOMATON_STUDY: Self;
+    const INFESTED_AUTOMATON_TOUCH_CORE: Self;
+    const JUNGLE_MAZE_ADVENTURE_JOIN_FORCES: Self;
+    const JUNGLE_MAZE_ADVENTURE_SOLO_QUEST: Self;
+    const LOST_WISP_CLAIM: Self;
+    const LOST_WISP_SEARCH: Self;
+    const LUMINOUS_CHOIR_OFFER_TRIBUTE: Self;
+    const LUMINOUS_CHOIR_REACH_INTO_THE_FLESH: Self;
+    const MOCK_EVENT_MODEL_TEST: Self;
+    const MORPHIC_GROVE_GROUP: Self;
+    const MORPHIC_GROVE_LONER: Self;
+    const POTION_COURIER_GRAB_POTIONS: Self;
+    const POTION_COURIER_RANSACK: Self;
+    const PUNCH_OFF_ICAN_TAKE_THEM: Self;
+    const PUNCH_OFF_ICAN_TAKE_THEM_FIGHT: Self;
+    const PUNCH_OFF_NAB: Self;
+    const RANWID_THE_ELDER_GOLD: Self;
+    const RANWID_THE_ELDER_POTION: Self;
+    const RANWID_THE_ELDER_RELIC: Self;
+    const REFLECTIONS_SHATTER: Self;
+    const REFLECTIONS_TOUCH_AMIRROR: Self;
+    const RELIC_TRADER_BOTTOM: Self;
+    const RELIC_TRADER_MIDDLE: Self;
+    const RELIC_TRADER_TOP: Self;
+    const ROOM_FULL_OF_CHEESE_GORGE: Self;
+    const ROOM_FULL_OF_CHEESE_SEARCH: Self;
+    const ROUND_TEA_PARTY_ENJOY_TEA: Self;
+    const ROUND_TEA_PARTY_PICK_FIGHT: Self;
+    const ROUND_TEA_PARTY_PICK_FIGHT_CONTINUE_FIGHT: Self;
+    const SAPPHIRE_SEED_EAT: Self;
+    const SAPPHIRE_SEED_PLANT: Self;
+    const SELF_HELP_BOOK_NO_OPTIONS: Self;
+    const SELF_HELP_BOOK_READ_ENTIRE_BOOK: Self;
+    const SELF_HELP_BOOK_READ_PASSAGE: Self;
+    const SELF_HELP_BOOK_READ_THE_BACK: Self;
+    const SLIPPERY_BRIDGE_HOLD_ON0: Self;
+    const SLIPPERY_BRIDGE_HOLD_ON0_HOLD_ON1: Self;
+    const SLIPPERY_BRIDGE_HOLD_ON1_HOLD_ON2: Self;
+    const SLIPPERY_BRIDGE_HOLD_ON2_HOLD_ON3: Self;
+    const SLIPPERY_BRIDGE_HOLD_ON3_HOLD_ON4: Self;
+    const SLIPPERY_BRIDGE_HOLD_ON4_HOLD_ON5: Self;
+    const SLIPPERY_BRIDGE_HOLD_ON5_HOLD_ON6: Self;
+    const SLIPPERY_BRIDGE_HOLD_ON6_HOLD_ON_LOOP: Self;
+    const SLIPPERY_BRIDGE_HOLD_ON_LOOP_HOLD_ON_LOOP: Self;
+    const SLIPPERY_BRIDGE_OVERCOME: Self;
+    const SPIRALING_WHIRLPOOL_DRINK: Self;
+    const SPIRALING_WHIRLPOOL_OBSERVE: Self;
+    const SPIRALING_WHIRLPOOL_REACH_IN: Self;
+    const SPIRIT_GRAFTER_LET_IT_IN: Self;
+    const SPIRIT_GRAFTER_REJECTION: Self;
+    const STONE_OF_ALL_TIME_LIFT: Self;
+    const STONE_OF_ALL_TIME_PUSH: Self;
+    const SUNKEN_STATUE_DIVE_INTO_WATER: Self;
+    const SUNKEN_STATUE_GRAB_SWORD: Self;
+    const SUNKEN_TREASURY_FIRST_CHEST: Self;
+    const SUNKEN_TREASURY_SECOND_CHEST: Self;
+    const SYMBIOTE_APPROACH: Self;
+    const SYMBIOTE_KILL_WITH_FIRE: Self;
+    const TABLET_OF_TRUTH_DECIPHER1: Self;
+    const TABLET_OF_TRUTH_DECIPHER1_DECIPHER: Self;
+    const TABLET_OF_TRUTH_DECIPHER2_DECIPHER: Self;
+    const TABLET_OF_TRUTH_DECIPHER3_DECIPHER: Self;
+    const TABLET_OF_TRUTH_DECIPHER4_DECIPHER: Self;
+    const TABLET_OF_TRUTH_DECIPHER_GIVE_UP: Self;
+    const TABLET_OF_TRUTH_SMASH: Self;
+    const TEA_MASTER_BONE_TEA: Self;
+    const TEA_MASTER_EMBER_TEA: Self;
+    const TEA_MASTER_TEA_OF_DISCOURTESY: Self;
+    const THE_FUTURE_OF_POTIONS_POTION: Self;
+    const THE_LANTERN_KEY_KEEP_THE_KEY: Self;
+    const THE_LANTERN_KEY_KEEP_THE_KEY_FIGHT: Self;
+    const THE_LANTERN_KEY_RETURN_THE_KEY: Self;
+    const THE_LEGENDS_WERE_TRUE_NAB_THE_MAP: Self;
+    const THE_LEGENDS_WERE_TRUE_SLOWLY_FIND_AN_EXIT: Self;
+    const THIS_OR_THAT_ORNATE: Self;
+    const THIS_OR_THAT_PLAIN: Self;
+    const TINKER_TIME_CHOOSE_CARD_TYPE: Self;
+    const TINKER_TIME_CHOOSE_CARD_TYPE_ATTACK: Self;
+    const TINKER_TIME_CHOOSE_CARD_TYPE_POWER: Self;
+    const TINKER_TIME_CHOOSE_CARD_TYPE_SKILL: Self;
+    const TINKER_TIME_CHOOSE_RIDER_CHAOS: Self;
+    const TINKER_TIME_CHOOSE_RIDER_CHOKING: Self;
+    const TINKER_TIME_CHOOSE_RIDER_CURIOUS: Self;
+    const TINKER_TIME_CHOOSE_RIDER_ENERGIZED: Self;
+    const TINKER_TIME_CHOOSE_RIDER_EXPERTISE: Self;
+    const TINKER_TIME_CHOOSE_RIDER_IMPROVEMENT: Self;
+    const TINKER_TIME_CHOOSE_RIDER_SAPPING: Self;
+    const TINKER_TIME_CHOOSE_RIDER_VIOLENCE: Self;
+    const TINKER_TIME_CHOOSE_RIDER_WISDOM: Self;
+    const TRASH_HEAP_DIVE_IN: Self;
+    const TRASH_HEAP_GRAB: Self;
+    const TRIAL_ACCEPT: Self;
+    const TRIAL_MERCHANT_GUILTY: Self;
+    const TRIAL_MERCHANT_INNOCENT: Self;
+    const TRIAL_NOBLE_GUILTY: Self;
+    const TRIAL_NOBLE_INNOCENT: Self;
+    const TRIAL_NONDESCRIPT_GUILTY: Self;
+    const TRIAL_NONDESCRIPT_INNOCENT: Self;
+    const TRIAL_REJECT: Self;
+    const TRIAL_REJECT_ACCEPT: Self;
+    const TRIAL_REJECT_DOUBLE_DOWN: Self;
+    const UNREST_SITE_KILL: Self;
+    const UNREST_SITE_REST: Self;
+    const WAR_HISTORIAN_REPY_UNLOCK_CAGE: Self;
+    const WAR_HISTORIAN_REPY_UNLOCK_CHEST: Self;
+    const WATERLOGGED_SCRIPTORIUM_BLOODY_INK: Self;
+    const WATERLOGGED_SCRIPTORIUM_PRICKLY_SPONGE: Self;
+    const WATERLOGGED_SCRIPTORIUM_TENTACLE_QUILL: Self;
+    const WELCOME_TO_WONGOS_BARGAIN_BIN: Self;
+    const WELCOME_TO_WONGOS_FEATURED_ITEM: Self;
+    const WELCOME_TO_WONGOS_LEAVE: Self;
+    const WELCOME_TO_WONGOS_MYSTERY_BOX: Self;
+    const WELLSPRING_BATHE: Self;
+    const WELLSPRING_BOTTLE: Self;
+    const WHISPERING_HOLLOW_GOLD: Self;
+    const WHISPERING_HOLLOW_HUG: Self;
+    const WOOD_CARVINGS_BIRD: Self;
+    const WOOD_CARVINGS_SNAKE: Self;
+    const WOOD_CARVINGS_TORUS: Self;
+    const ZEN_WEAVER_ARACHNID_ACUPUNCTURE: Self;
+    const ZEN_WEAVER_BREATHING_TECHNIQUES: Self;
+    const ZEN_WEAVER_EMOTIONAL_AWARENESS: Self;
+    const ZEN_WEAVER_LOCKED: Self;
 }
 
-impl IntentKindIds for crate::v0_107_1::monsters::IntentKind {
-    const ATTACK: Self = Self::Attack;
-    const BUFF: Self = Self::Buff;
-    const CARD_DEBUFF: Self = Self::CardDebuff;
-    const DEATH_BLOW: Self = Self::DeathBlow;
-    const DEBUFF: Self = Self::Debuff;
-    const DEBUFF_STRONG: Self = Self::DebuffStrong;
-    const DEFEND: Self = Self::Defend;
-    const ESCAPE: Self = Self::Escape;
-    const HEAL: Self = Self::Heal;
-    const HIDDEN: Self = Self::Hidden;
-    const SLEEP: Self = Self::Sleep;
-    const STATUS_CARD: Self = Self::StatusCard;
-    const STUN: Self = Self::Stun;
-    const SUMMON: Self = Self::Summon;
-    const UNKNOWN: Self = Self::Unknown;
+impl EventOptionIds for crate::v0_107_1::events::EventOption {
+    const ABYSSAL_BATHS_ABSTAIN: Self = Self::AbyssalBathsAbstain;
+    const ABYSSAL_BATHS_ALL_EXIT_BATHS: Self = Self::AbyssalBathsAllExitBaths;
+    const ABYSSAL_BATHS_ALL_LINGER: Self = Self::AbyssalBathsAllLinger;
+    const ABYSSAL_BATHS_IMMERSE: Self = Self::AbyssalBathsImmerse;
+    const AMALGAMATOR_COMBINE_DEFENDS: Self = Self::AmalgamatorCombineDefends;
+    const AMALGAMATOR_COMBINE_STRIKES: Self = Self::AmalgamatorCombineStrikes;
+    const AROMA_OF_CHAOS_LET_GO: Self = Self::AromaOfChaosLetGo;
+    const AROMA_OF_CHAOS_MAINTAIN_CONTROL: Self = Self::AromaOfChaosMaintainControl;
+    const BATTLEWORN_DUMMY_SETTING1: Self = Self::BattlewornDummySetting1;
+    const BATTLEWORN_DUMMY_SETTING2: Self = Self::BattlewornDummySetting2;
+    const BATTLEWORN_DUMMY_SETTING3: Self = Self::BattlewornDummySetting3;
+    const BRAIN_LEECH_RIP: Self = Self::BrainLeechRip;
+    const BRAIN_LEECH_SHARE_KNOWLEDGE: Self = Self::BrainLeechShareKnowledge;
+    const BUGSLAYER_EXTERMINATION: Self = Self::BugslayerExtermination;
+    const BUGSLAYER_SQUASH: Self = Self::BugslayerSquash;
+    const BYRDONIS_NEST_EAT: Self = Self::ByrdonisNestEat;
+    const BYRDONIS_NEST_TAKE: Self = Self::ByrdonisNestTake;
+    const COLORFUL_PHILOSOPHERS_DEFECT: Self = Self::ColorfulPhilosophersDefect;
+    const COLORFUL_PHILOSOPHERS_EQUALITY: Self = Self::ColorfulPhilosophersEquality;
+    const COLORFUL_PHILOSOPHERS_IRONCLAD: Self = Self::ColorfulPhilosophersIronclad;
+    const COLORFUL_PHILOSOPHERS_NECROBINDER: Self = Self::ColorfulPhilosophersNecrobinder;
+    const COLORFUL_PHILOSOPHERS_REGENT: Self = Self::ColorfulPhilosophersRegent;
+    const COLORFUL_PHILOSOPHERS_SILENT: Self = Self::ColorfulPhilosophersSilent;
+    const COLOSSAL_FLOWER_EXTRACT_CURRENT_PRIZE1: Self = Self::ColossalFlowerExtractCurrentPrize1;
+    const COLOSSAL_FLOWER_REACH_DEEPER1: Self = Self::ColossalFlowerReachDeeper1;
+    const COLOSSAL_FLOWER_REACH_DEEPER1_EXTRACT_CURRENT_PRIZE2: Self =
+        Self::ColossalFlowerReachDeeper1ExtractCurrentPrize2;
+    const COLOSSAL_FLOWER_REACH_DEEPER1_REACH_DEEPER2: Self =
+        Self::ColossalFlowerReachDeeper1ReachDeeper2;
+    const COLOSSAL_FLOWER_REACH_DEEPER2_EXTRACT_INSTEAD: Self =
+        Self::ColossalFlowerReachDeeper2ExtractInstead;
+    const COLOSSAL_FLOWER_REACH_DEEPER2_POLLINOUS_CORE: Self =
+        Self::ColossalFlowerReachDeeper2PollinousCore;
+    const CRYSTAL_SPHERE_PAYMENT_PLAN: Self = Self::CrystalSpherePaymentPlan;
+    const CRYSTAL_SPHERE_UNCOVER_FUTURE: Self = Self::CrystalSphereUncoverFuture;
+    const DENSE_VEGETATION_REST: Self = Self::DenseVegetationRest;
+    const DENSE_VEGETATION_REST_FIGHT: Self = Self::DenseVegetationRestFight;
+    const DENSE_VEGETATION_TRUDGE_ON: Self = Self::DenseVegetationTrudgeOn;
+    const DOLL_ROOM_EXAMINE: Self = Self::DollRoomExamine;
+    const DOLL_ROOM_RANDOM: Self = Self::DollRoomRandom;
+    const DOLL_ROOM_TAKE_SOME_TIME: Self = Self::DollRoomTakeSomeTime;
+    const DOORS_OF_LIGHT_AND_DARK_DARK: Self = Self::DoorsOfLightAndDarkDark;
+    const DOORS_OF_LIGHT_AND_DARK_LIGHT: Self = Self::DoorsOfLightAndDarkLight;
+    const DROWNING_BEACON_BOTTLE: Self = Self::DrowningBeaconBottle;
+    const DROWNING_BEACON_CLIMB: Self = Self::DrowningBeaconClimb;
+    const ENDLESS_CONVEYOR_ALL_CAVIAR: Self = Self::EndlessConveyorAllCaviar;
+    const ENDLESS_CONVEYOR_ALL_CLAM_ROLL: Self = Self::EndlessConveyorAllClamRoll;
+    const ENDLESS_CONVEYOR_ALL_FRIED_EEL: Self = Self::EndlessConveyorAllFriedEel;
+    const ENDLESS_CONVEYOR_ALL_GOLDEN_FYSH: Self = Self::EndlessConveyorAllGoldenFysh;
+    const ENDLESS_CONVEYOR_ALL_JELLY_LIVER: Self = Self::EndlessConveyorAllJellyLiver;
+    const ENDLESS_CONVEYOR_ALL_LOCKED: Self = Self::EndlessConveyorAllLocked;
+    const ENDLESS_CONVEYOR_ALL_SEAPUNK_SALAD: Self = Self::EndlessConveyorAllSeapunkSalad;
+    const ENDLESS_CONVEYOR_ALL_SPICY_SNAPPY: Self = Self::EndlessConveyorAllSpicySnappy;
+    const ENDLESS_CONVEYOR_ALL_SUSPICIOUS_CONDIMENT: Self =
+        Self::EndlessConveyorAllSuspiciousCondiment;
+    const ENDLESS_CONVEYOR_GRAB_SOMETHING_OFF_THE_BELT_LEAVE: Self =
+        Self::EndlessConveyorGrabSomethingOffTheBeltLeave;
+    const ENDLESS_CONVEYOR_OBSERVE_CHEF: Self = Self::EndlessConveyorObserveChef;
+    const FIELD_OF_MAN_SIZED_HOLES_ENTER_YOUR_HOLE: Self = Self::FieldOfManSizedHolesEnterYourHole;
+    const FIELD_OF_MAN_SIZED_HOLES_RESIST: Self = Self::FieldOfManSizedHolesResist;
+    const GRAVE_OF_THE_FORGOTTEN_ACCEPT: Self = Self::GraveOfTheForgottenAccept;
+    const GRAVE_OF_THE_FORGOTTEN_CONFRONT: Self = Self::GraveOfTheForgottenConfront;
+    const HUNGRY_FOR_MUSHROOMS_BIG_MUSHROOM: Self = Self::HungryForMushroomsBigMushroom;
+    const HUNGRY_FOR_MUSHROOMS_FRAGRANT_MUSHROOM: Self = Self::HungryForMushroomsFragrantMushroom;
+    const INFESTED_AUTOMATON_STUDY: Self = Self::InfestedAutomatonStudy;
+    const INFESTED_AUTOMATON_TOUCH_CORE: Self = Self::InfestedAutomatonTouchCore;
+    const JUNGLE_MAZE_ADVENTURE_JOIN_FORCES: Self = Self::JungleMazeAdventureJoinForces;
+    const JUNGLE_MAZE_ADVENTURE_SOLO_QUEST: Self = Self::JungleMazeAdventureSoloQuest;
+    const LOST_WISP_CLAIM: Self = Self::LostWispClaim;
+    const LOST_WISP_SEARCH: Self = Self::LostWispSearch;
+    const LUMINOUS_CHOIR_OFFER_TRIBUTE: Self = Self::LuminousChoirOfferTribute;
+    const LUMINOUS_CHOIR_REACH_INTO_THE_FLESH: Self = Self::LuminousChoirReachIntoTheFlesh;
+    const MOCK_EVENT_MODEL_TEST: Self = Self::MockEventModelTest;
+    const MORPHIC_GROVE_GROUP: Self = Self::MorphicGroveGroup;
+    const MORPHIC_GROVE_LONER: Self = Self::MorphicGroveLoner;
+    const POTION_COURIER_GRAB_POTIONS: Self = Self::PotionCourierGrabPotions;
+    const POTION_COURIER_RANSACK: Self = Self::PotionCourierRansack;
+    const PUNCH_OFF_ICAN_TAKE_THEM: Self = Self::PunchOffICanTakeThem;
+    const PUNCH_OFF_ICAN_TAKE_THEM_FIGHT: Self = Self::PunchOffICanTakeThemFight;
+    const PUNCH_OFF_NAB: Self = Self::PunchOffNab;
+    const RANWID_THE_ELDER_GOLD: Self = Self::RanwidTheElderGold;
+    const RANWID_THE_ELDER_POTION: Self = Self::RanwidTheElderPotion;
+    const RANWID_THE_ELDER_RELIC: Self = Self::RanwidTheElderRelic;
+    const REFLECTIONS_SHATTER: Self = Self::ReflectionsShatter;
+    const REFLECTIONS_TOUCH_AMIRROR: Self = Self::ReflectionsTouchAMirror;
+    const RELIC_TRADER_BOTTOM: Self = Self::RelicTraderBottom;
+    const RELIC_TRADER_MIDDLE: Self = Self::RelicTraderMiddle;
+    const RELIC_TRADER_TOP: Self = Self::RelicTraderTop;
+    const ROOM_FULL_OF_CHEESE_GORGE: Self = Self::RoomFullOfCheeseGorge;
+    const ROOM_FULL_OF_CHEESE_SEARCH: Self = Self::RoomFullOfCheeseSearch;
+    const ROUND_TEA_PARTY_ENJOY_TEA: Self = Self::RoundTeaPartyEnjoyTea;
+    const ROUND_TEA_PARTY_PICK_FIGHT: Self = Self::RoundTeaPartyPickFight;
+    const ROUND_TEA_PARTY_PICK_FIGHT_CONTINUE_FIGHT: Self =
+        Self::RoundTeaPartyPickFightContinueFight;
+    const SAPPHIRE_SEED_EAT: Self = Self::SapphireSeedEat;
+    const SAPPHIRE_SEED_PLANT: Self = Self::SapphireSeedPlant;
+    const SELF_HELP_BOOK_NO_OPTIONS: Self = Self::SelfHelpBookNoOptions;
+    const SELF_HELP_BOOK_READ_ENTIRE_BOOK: Self = Self::SelfHelpBookReadEntireBook;
+    const SELF_HELP_BOOK_READ_PASSAGE: Self = Self::SelfHelpBookReadPassage;
+    const SELF_HELP_BOOK_READ_THE_BACK: Self = Self::SelfHelpBookReadTheBack;
+    const SLIPPERY_BRIDGE_HOLD_ON0: Self = Self::SlipperyBridgeHoldOn0;
+    const SLIPPERY_BRIDGE_HOLD_ON0_HOLD_ON1: Self = Self::SlipperyBridgeHoldOn0HoldOn1;
+    const SLIPPERY_BRIDGE_HOLD_ON1_HOLD_ON2: Self = Self::SlipperyBridgeHoldOn1HoldOn2;
+    const SLIPPERY_BRIDGE_HOLD_ON2_HOLD_ON3: Self = Self::SlipperyBridgeHoldOn2HoldOn3;
+    const SLIPPERY_BRIDGE_HOLD_ON3_HOLD_ON4: Self = Self::SlipperyBridgeHoldOn3HoldOn4;
+    const SLIPPERY_BRIDGE_HOLD_ON4_HOLD_ON5: Self = Self::SlipperyBridgeHoldOn4HoldOn5;
+    const SLIPPERY_BRIDGE_HOLD_ON5_HOLD_ON6: Self = Self::SlipperyBridgeHoldOn5HoldOn6;
+    const SLIPPERY_BRIDGE_HOLD_ON6_HOLD_ON_LOOP: Self = Self::SlipperyBridgeHoldOn6HoldOnLoop;
+    const SLIPPERY_BRIDGE_HOLD_ON_LOOP_HOLD_ON_LOOP: Self =
+        Self::SlipperyBridgeHoldOnLoopHoldOnLoop;
+    const SLIPPERY_BRIDGE_OVERCOME: Self = Self::SlipperyBridgeOvercome;
+    const SPIRALING_WHIRLPOOL_DRINK: Self = Self::SpiralingWhirlpoolDrink;
+    const SPIRALING_WHIRLPOOL_OBSERVE: Self = Self::SpiralingWhirlpoolObserve;
+    const SPIRALING_WHIRLPOOL_REACH_IN: Self = Self::SpiralingWhirlpoolReachIn;
+    const SPIRIT_GRAFTER_LET_IT_IN: Self = Self::SpiritGrafterLetItIn;
+    const SPIRIT_GRAFTER_REJECTION: Self = Self::SpiritGrafterRejection;
+    const STONE_OF_ALL_TIME_LIFT: Self = Self::StoneOfAllTimeLift;
+    const STONE_OF_ALL_TIME_PUSH: Self = Self::StoneOfAllTimePush;
+    const SUNKEN_STATUE_DIVE_INTO_WATER: Self = Self::SunkenStatueDiveIntoWater;
+    const SUNKEN_STATUE_GRAB_SWORD: Self = Self::SunkenStatueGrabSword;
+    const SUNKEN_TREASURY_FIRST_CHEST: Self = Self::SunkenTreasuryFirstChest;
+    const SUNKEN_TREASURY_SECOND_CHEST: Self = Self::SunkenTreasurySecondChest;
+    const SYMBIOTE_APPROACH: Self = Self::SymbioteApproach;
+    const SYMBIOTE_KILL_WITH_FIRE: Self = Self::SymbioteKillWithFire;
+    const TABLET_OF_TRUTH_DECIPHER1: Self = Self::TabletOfTruthDecipher1;
+    const TABLET_OF_TRUTH_DECIPHER1_DECIPHER: Self = Self::TabletOfTruthDecipher1Decipher;
+    const TABLET_OF_TRUTH_DECIPHER2_DECIPHER: Self = Self::TabletOfTruthDecipher2Decipher;
+    const TABLET_OF_TRUTH_DECIPHER3_DECIPHER: Self = Self::TabletOfTruthDecipher3Decipher;
+    const TABLET_OF_TRUTH_DECIPHER4_DECIPHER: Self = Self::TabletOfTruthDecipher4Decipher;
+    const TABLET_OF_TRUTH_DECIPHER_GIVE_UP: Self = Self::TabletOfTruthDecipherGiveUp;
+    const TABLET_OF_TRUTH_SMASH: Self = Self::TabletOfTruthSmash;
+    const TEA_MASTER_BONE_TEA: Self = Self::TeaMasterBoneTea;
+    const TEA_MASTER_EMBER_TEA: Self = Self::TeaMasterEmberTea;
+    const TEA_MASTER_TEA_OF_DISCOURTESY: Self = Self::TeaMasterTeaOfDiscourtesy;
+    const THE_FUTURE_OF_POTIONS_POTION: Self = Self::TheFutureOfPotionsPotion;
+    const THE_LANTERN_KEY_KEEP_THE_KEY: Self = Self::TheLanternKeyKeepTheKey;
+    const THE_LANTERN_KEY_KEEP_THE_KEY_FIGHT: Self = Self::TheLanternKeyKeepTheKeyFight;
+    const THE_LANTERN_KEY_RETURN_THE_KEY: Self = Self::TheLanternKeyReturnTheKey;
+    const THE_LEGENDS_WERE_TRUE_NAB_THE_MAP: Self = Self::TheLegendsWereTrueNabTheMap;
+    const THE_LEGENDS_WERE_TRUE_SLOWLY_FIND_AN_EXIT: Self =
+        Self::TheLegendsWereTrueSlowlyFindAnExit;
+    const THIS_OR_THAT_ORNATE: Self = Self::ThisOrThatOrnate;
+    const THIS_OR_THAT_PLAIN: Self = Self::ThisOrThatPlain;
+    const TINKER_TIME_CHOOSE_CARD_TYPE: Self = Self::TinkerTimeChooseCardType;
+    const TINKER_TIME_CHOOSE_CARD_TYPE_ATTACK: Self = Self::TinkerTimeChooseCardTypeAttack;
+    const TINKER_TIME_CHOOSE_CARD_TYPE_POWER: Self = Self::TinkerTimeChooseCardTypePower;
+    const TINKER_TIME_CHOOSE_CARD_TYPE_SKILL: Self = Self::TinkerTimeChooseCardTypeSkill;
+    const TINKER_TIME_CHOOSE_RIDER_CHAOS: Self = Self::TinkerTimeChooseRiderChaos;
+    const TINKER_TIME_CHOOSE_RIDER_CHOKING: Self = Self::TinkerTimeChooseRiderChoking;
+    const TINKER_TIME_CHOOSE_RIDER_CURIOUS: Self = Self::TinkerTimeChooseRiderCurious;
+    const TINKER_TIME_CHOOSE_RIDER_ENERGIZED: Self = Self::TinkerTimeChooseRiderEnergized;
+    const TINKER_TIME_CHOOSE_RIDER_EXPERTISE: Self = Self::TinkerTimeChooseRiderExpertise;
+    const TINKER_TIME_CHOOSE_RIDER_IMPROVEMENT: Self = Self::TinkerTimeChooseRiderImprovement;
+    const TINKER_TIME_CHOOSE_RIDER_SAPPING: Self = Self::TinkerTimeChooseRiderSapping;
+    const TINKER_TIME_CHOOSE_RIDER_VIOLENCE: Self = Self::TinkerTimeChooseRiderViolence;
+    const TINKER_TIME_CHOOSE_RIDER_WISDOM: Self = Self::TinkerTimeChooseRiderWisdom;
+    const TRASH_HEAP_DIVE_IN: Self = Self::TrashHeapDiveIn;
+    const TRASH_HEAP_GRAB: Self = Self::TrashHeapGrab;
+    const TRIAL_ACCEPT: Self = Self::TrialAccept;
+    const TRIAL_MERCHANT_GUILTY: Self = Self::TrialMerchantGuilty;
+    const TRIAL_MERCHANT_INNOCENT: Self = Self::TrialMerchantInnocent;
+    const TRIAL_NOBLE_GUILTY: Self = Self::TrialNobleGuilty;
+    const TRIAL_NOBLE_INNOCENT: Self = Self::TrialNobleInnocent;
+    const TRIAL_NONDESCRIPT_GUILTY: Self = Self::TrialNondescriptGuilty;
+    const TRIAL_NONDESCRIPT_INNOCENT: Self = Self::TrialNondescriptInnocent;
+    const TRIAL_REJECT: Self = Self::TrialReject;
+    const TRIAL_REJECT_ACCEPT: Self = Self::TrialRejectAccept;
+    const TRIAL_REJECT_DOUBLE_DOWN: Self = Self::TrialRejectDoubleDown;
+    const UNREST_SITE_KILL: Self = Self::UnrestSiteKill;
+    const UNREST_SITE_REST: Self = Self::UnrestSiteRest;
+    const WAR_HISTORIAN_REPY_UNLOCK_CAGE: Self = Self::WarHistorianRepyUnlockCage;
+    const WAR_HISTORIAN_REPY_UNLOCK_CHEST: Self = Self::WarHistorianRepyUnlockChest;
+    const WATERLOGGED_SCRIPTORIUM_BLOODY_INK: Self = Self::WaterloggedScriptoriumBloodyInk;
+    const WATERLOGGED_SCRIPTORIUM_PRICKLY_SPONGE: Self = Self::WaterloggedScriptoriumPricklySponge;
+    const WATERLOGGED_SCRIPTORIUM_TENTACLE_QUILL: Self = Self::WaterloggedScriptoriumTentacleQuill;
+    const WELCOME_TO_WONGOS_BARGAIN_BIN: Self = Self::WelcomeToWongosBargainBin;
+    const WELCOME_TO_WONGOS_FEATURED_ITEM: Self = Self::WelcomeToWongosFeaturedItem;
+    const WELCOME_TO_WONGOS_LEAVE: Self = Self::WelcomeToWongosLeave;
+    const WELCOME_TO_WONGOS_MYSTERY_BOX: Self = Self::WelcomeToWongosMysteryBox;
+    const WELLSPRING_BATHE: Self = Self::WellspringBathe;
+    const WELLSPRING_BOTTLE: Self = Self::WellspringBottle;
+    const WHISPERING_HOLLOW_GOLD: Self = Self::WhisperingHollowGold;
+    const WHISPERING_HOLLOW_HUG: Self = Self::WhisperingHollowHug;
+    const WOOD_CARVINGS_BIRD: Self = Self::WoodCarvingsBird;
+    const WOOD_CARVINGS_SNAKE: Self = Self::WoodCarvingsSnake;
+    const WOOD_CARVINGS_TORUS: Self = Self::WoodCarvingsTorus;
+    const ZEN_WEAVER_ARACHNID_ACUPUNCTURE: Self = Self::ZenWeaverArachnidAcupuncture;
+    const ZEN_WEAVER_BREATHING_TECHNIQUES: Self = Self::ZenWeaverBreathingTechniques;
+    const ZEN_WEAVER_EMOTIONAL_AWARENESS: Self = Self::ZenWeaverEmotionalAwareness;
+    const ZEN_WEAVER_LOCKED: Self = Self::ZenWeaverLocked;
 }
 
-impl IntentKindIds for crate::v0_111_0::monsters::IntentKind {
-    const ATTACK: Self = Self::Attack;
-    const BUFF: Self = Self::Buff;
-    const CARD_DEBUFF: Self = Self::CardDebuff;
-    const DEATH_BLOW: Self = Self::DeathBlow;
-    const DEBUFF: Self = Self::Debuff;
-    const DEBUFF_STRONG: Self = Self::DebuffStrong;
-    const DEFEND: Self = Self::Defend;
-    const ESCAPE: Self = Self::Escape;
-    const HEAL: Self = Self::Heal;
-    const HIDDEN: Self = Self::Hidden;
-    const SLEEP: Self = Self::Sleep;
-    const STATUS_CARD: Self = Self::StatusCard;
-    const STUN: Self = Self::Stun;
-    const SUMMON: Self = Self::Summon;
-    const UNKNOWN: Self = Self::Unknown;
+impl EventOptionIds for crate::v0_111_0::events::EventOption {
+    const ABYSSAL_BATHS_ABSTAIN: Self = Self::AbyssalBathsAbstain;
+    const ABYSSAL_BATHS_ALL_EXIT_BATHS: Self = Self::AbyssalBathsAllExitBaths;
+    const ABYSSAL_BATHS_ALL_LINGER: Self = Self::AbyssalBathsAllLinger;
+    const ABYSSAL_BATHS_IMMERSE: Self = Self::AbyssalBathsImmerse;
+    const AMALGAMATOR_COMBINE_DEFENDS: Self = Self::AmalgamatorCombineDefends;
+    const AMALGAMATOR_COMBINE_STRIKES: Self = Self::AmalgamatorCombineStrikes;
+    const AROMA_OF_CHAOS_LET_GO: Self = Self::AromaOfChaosLetGo;
+    const AROMA_OF_CHAOS_MAINTAIN_CONTROL: Self = Self::AromaOfChaosMaintainControl;
+    const BATTLEWORN_DUMMY_SETTING1: Self = Self::BattlewornDummySetting1;
+    const BATTLEWORN_DUMMY_SETTING2: Self = Self::BattlewornDummySetting2;
+    const BATTLEWORN_DUMMY_SETTING3: Self = Self::BattlewornDummySetting3;
+    const BRAIN_LEECH_RIP: Self = Self::BrainLeechRip;
+    const BRAIN_LEECH_SHARE_KNOWLEDGE: Self = Self::BrainLeechShareKnowledge;
+    const BUGSLAYER_EXTERMINATION: Self = Self::BugslayerExtermination;
+    const BUGSLAYER_SQUASH: Self = Self::BugslayerSquash;
+    const BYRDONIS_NEST_EAT: Self = Self::ByrdonisNestEat;
+    const BYRDONIS_NEST_TAKE: Self = Self::ByrdonisNestTake;
+    const COLORFUL_PHILOSOPHERS_DEFECT: Self = Self::ColorfulPhilosophersDefect;
+    const COLORFUL_PHILOSOPHERS_EQUALITY: Self = Self::ColorfulPhilosophersEquality;
+    const COLORFUL_PHILOSOPHERS_IRONCLAD: Self = Self::ColorfulPhilosophersIronclad;
+    const COLORFUL_PHILOSOPHERS_NECROBINDER: Self = Self::ColorfulPhilosophersNecrobinder;
+    const COLORFUL_PHILOSOPHERS_REGENT: Self = Self::ColorfulPhilosophersRegent;
+    const COLORFUL_PHILOSOPHERS_SILENT: Self = Self::ColorfulPhilosophersSilent;
+    const COLOSSAL_FLOWER_EXTRACT_CURRENT_PRIZE1: Self = Self::ColossalFlowerExtractCurrentPrize1;
+    const COLOSSAL_FLOWER_REACH_DEEPER1: Self = Self::ColossalFlowerReachDeeper1;
+    const COLOSSAL_FLOWER_REACH_DEEPER1_EXTRACT_CURRENT_PRIZE2: Self =
+        Self::ColossalFlowerReachDeeper1ExtractCurrentPrize2;
+    const COLOSSAL_FLOWER_REACH_DEEPER1_REACH_DEEPER2: Self =
+        Self::ColossalFlowerReachDeeper1ReachDeeper2;
+    const COLOSSAL_FLOWER_REACH_DEEPER2_EXTRACT_INSTEAD: Self =
+        Self::ColossalFlowerReachDeeper2ExtractInstead;
+    const COLOSSAL_FLOWER_REACH_DEEPER2_POLLINOUS_CORE: Self =
+        Self::ColossalFlowerReachDeeper2PollinousCore;
+    const CRYSTAL_SPHERE_PAYMENT_PLAN: Self = Self::CrystalSpherePaymentPlan;
+    const CRYSTAL_SPHERE_UNCOVER_FUTURE: Self = Self::CrystalSphereUncoverFuture;
+    const DENSE_VEGETATION_REST: Self = Self::DenseVegetationRest;
+    const DENSE_VEGETATION_REST_FIGHT: Self = Self::DenseVegetationRestFight;
+    const DENSE_VEGETATION_TRUDGE_ON: Self = Self::DenseVegetationTrudgeOn;
+    const DOLL_ROOM_EXAMINE: Self = Self::DollRoomExamine;
+    const DOLL_ROOM_RANDOM: Self = Self::DollRoomRandom;
+    const DOLL_ROOM_TAKE_SOME_TIME: Self = Self::DollRoomTakeSomeTime;
+    const DOORS_OF_LIGHT_AND_DARK_DARK: Self = Self::DoorsOfLightAndDarkDark;
+    const DOORS_OF_LIGHT_AND_DARK_LIGHT: Self = Self::DoorsOfLightAndDarkLight;
+    const DROWNING_BEACON_BOTTLE: Self = Self::DrowningBeaconBottle;
+    const DROWNING_BEACON_CLIMB: Self = Self::DrowningBeaconClimb;
+    const ENDLESS_CONVEYOR_ALL_CAVIAR: Self = Self::EndlessConveyorAllCaviar;
+    const ENDLESS_CONVEYOR_ALL_CLAM_ROLL: Self = Self::EndlessConveyorAllClamRoll;
+    const ENDLESS_CONVEYOR_ALL_FRIED_EEL: Self = Self::EndlessConveyorAllFriedEel;
+    const ENDLESS_CONVEYOR_ALL_GOLDEN_FYSH: Self = Self::EndlessConveyorAllGoldenFysh;
+    const ENDLESS_CONVEYOR_ALL_JELLY_LIVER: Self = Self::EndlessConveyorAllJellyLiver;
+    const ENDLESS_CONVEYOR_ALL_LOCKED: Self = Self::EndlessConveyorAllLocked;
+    const ENDLESS_CONVEYOR_ALL_SEAPUNK_SALAD: Self = Self::EndlessConveyorAllSeapunkSalad;
+    const ENDLESS_CONVEYOR_ALL_SPICY_SNAPPY: Self = Self::EndlessConveyorAllSpicySnappy;
+    const ENDLESS_CONVEYOR_ALL_SUSPICIOUS_CONDIMENT: Self =
+        Self::EndlessConveyorAllSuspiciousCondiment;
+    const ENDLESS_CONVEYOR_GRAB_SOMETHING_OFF_THE_BELT_LEAVE: Self =
+        Self::EndlessConveyorGrabSomethingOffTheBeltLeave;
+    const ENDLESS_CONVEYOR_OBSERVE_CHEF: Self = Self::EndlessConveyorObserveChef;
+    const FIELD_OF_MAN_SIZED_HOLES_ENTER_YOUR_HOLE: Self = Self::FieldOfManSizedHolesEnterYourHole;
+    const FIELD_OF_MAN_SIZED_HOLES_RESIST: Self = Self::FieldOfManSizedHolesResist;
+    const GRAVE_OF_THE_FORGOTTEN_ACCEPT: Self = Self::GraveOfTheForgottenAccept;
+    const GRAVE_OF_THE_FORGOTTEN_CONFRONT: Self = Self::GraveOfTheForgottenConfront;
+    const HUNGRY_FOR_MUSHROOMS_BIG_MUSHROOM: Self = Self::HungryForMushroomsBigMushroom;
+    const HUNGRY_FOR_MUSHROOMS_FRAGRANT_MUSHROOM: Self = Self::HungryForMushroomsFragrantMushroom;
+    const INFESTED_AUTOMATON_STUDY: Self = Self::InfestedAutomatonStudy;
+    const INFESTED_AUTOMATON_TOUCH_CORE: Self = Self::InfestedAutomatonTouchCore;
+    const JUNGLE_MAZE_ADVENTURE_JOIN_FORCES: Self = Self::JungleMazeAdventureJoinForces;
+    const JUNGLE_MAZE_ADVENTURE_SOLO_QUEST: Self = Self::JungleMazeAdventureSoloQuest;
+    const LOST_WISP_CLAIM: Self = Self::LostWispClaim;
+    const LOST_WISP_SEARCH: Self = Self::LostWispSearch;
+    const LUMINOUS_CHOIR_OFFER_TRIBUTE: Self = Self::LuminousChoirOfferTribute;
+    const LUMINOUS_CHOIR_REACH_INTO_THE_FLESH: Self = Self::LuminousChoirReachIntoTheFlesh;
+    const MOCK_EVENT_MODEL_TEST: Self = Self::MockEventModelTest;
+    const MORPHIC_GROVE_GROUP: Self = Self::MorphicGroveGroup;
+    const MORPHIC_GROVE_LONER: Self = Self::MorphicGroveLoner;
+    const POTION_COURIER_GRAB_POTIONS: Self = Self::PotionCourierGrabPotions;
+    const POTION_COURIER_RANSACK: Self = Self::PotionCourierRansack;
+    const PUNCH_OFF_ICAN_TAKE_THEM: Self = Self::PunchOffICanTakeThem;
+    const PUNCH_OFF_ICAN_TAKE_THEM_FIGHT: Self = Self::PunchOffICanTakeThemFight;
+    const PUNCH_OFF_NAB: Self = Self::PunchOffNab;
+    const RANWID_THE_ELDER_GOLD: Self = Self::RanwidTheElderGold;
+    const RANWID_THE_ELDER_POTION: Self = Self::RanwidTheElderPotion;
+    const RANWID_THE_ELDER_RELIC: Self = Self::RanwidTheElderRelic;
+    const REFLECTIONS_SHATTER: Self = Self::ReflectionsShatter;
+    const REFLECTIONS_TOUCH_AMIRROR: Self = Self::ReflectionsTouchAMirror;
+    const RELIC_TRADER_BOTTOM: Self = Self::RelicTraderBottom;
+    const RELIC_TRADER_MIDDLE: Self = Self::RelicTraderMiddle;
+    const RELIC_TRADER_TOP: Self = Self::RelicTraderTop;
+    const ROOM_FULL_OF_CHEESE_GORGE: Self = Self::RoomFullOfCheeseGorge;
+    const ROOM_FULL_OF_CHEESE_SEARCH: Self = Self::RoomFullOfCheeseSearch;
+    const ROUND_TEA_PARTY_ENJOY_TEA: Self = Self::RoundTeaPartyEnjoyTea;
+    const ROUND_TEA_PARTY_PICK_FIGHT: Self = Self::RoundTeaPartyPickFight;
+    const ROUND_TEA_PARTY_PICK_FIGHT_CONTINUE_FIGHT: Self =
+        Self::RoundTeaPartyPickFightContinueFight;
+    const SAPPHIRE_SEED_EAT: Self = Self::SapphireSeedEat;
+    const SAPPHIRE_SEED_PLANT: Self = Self::SapphireSeedPlant;
+    const SELF_HELP_BOOK_NO_OPTIONS: Self = Self::SelfHelpBookNoOptions;
+    const SELF_HELP_BOOK_READ_ENTIRE_BOOK: Self = Self::SelfHelpBookReadEntireBook;
+    const SELF_HELP_BOOK_READ_PASSAGE: Self = Self::SelfHelpBookReadPassage;
+    const SELF_HELP_BOOK_READ_THE_BACK: Self = Self::SelfHelpBookReadTheBack;
+    const SLIPPERY_BRIDGE_HOLD_ON0: Self = Self::SlipperyBridgeHoldOn0;
+    const SLIPPERY_BRIDGE_HOLD_ON0_HOLD_ON1: Self = Self::SlipperyBridgeHoldOn0HoldOn1;
+    const SLIPPERY_BRIDGE_HOLD_ON1_HOLD_ON2: Self = Self::SlipperyBridgeHoldOn1HoldOn2;
+    const SLIPPERY_BRIDGE_HOLD_ON2_HOLD_ON3: Self = Self::SlipperyBridgeHoldOn2HoldOn3;
+    const SLIPPERY_BRIDGE_HOLD_ON3_HOLD_ON4: Self = Self::SlipperyBridgeHoldOn3HoldOn4;
+    const SLIPPERY_BRIDGE_HOLD_ON4_HOLD_ON5: Self = Self::SlipperyBridgeHoldOn4HoldOn5;
+    const SLIPPERY_BRIDGE_HOLD_ON5_HOLD_ON6: Self = Self::SlipperyBridgeHoldOn5HoldOn6;
+    const SLIPPERY_BRIDGE_HOLD_ON6_HOLD_ON_LOOP: Self = Self::SlipperyBridgeHoldOn6HoldOnLoop;
+    const SLIPPERY_BRIDGE_HOLD_ON_LOOP_HOLD_ON_LOOP: Self =
+        Self::SlipperyBridgeHoldOnLoopHoldOnLoop;
+    const SLIPPERY_BRIDGE_OVERCOME: Self = Self::SlipperyBridgeOvercome;
+    const SPIRALING_WHIRLPOOL_DRINK: Self = Self::SpiralingWhirlpoolDrink;
+    const SPIRALING_WHIRLPOOL_OBSERVE: Self = Self::SpiralingWhirlpoolObserve;
+    const SPIRALING_WHIRLPOOL_REACH_IN: Self = Self::SpiralingWhirlpoolReachIn;
+    const SPIRIT_GRAFTER_LET_IT_IN: Self = Self::SpiritGrafterLetItIn;
+    const SPIRIT_GRAFTER_REJECTION: Self = Self::SpiritGrafterRejection;
+    const STONE_OF_ALL_TIME_LIFT: Self = Self::StoneOfAllTimeLift;
+    const STONE_OF_ALL_TIME_PUSH: Self = Self::StoneOfAllTimePush;
+    const SUNKEN_STATUE_DIVE_INTO_WATER: Self = Self::SunkenStatueDiveIntoWater;
+    const SUNKEN_STATUE_GRAB_SWORD: Self = Self::SunkenStatueGrabSword;
+    const SUNKEN_TREASURY_FIRST_CHEST: Self = Self::SunkenTreasuryFirstChest;
+    const SUNKEN_TREASURY_SECOND_CHEST: Self = Self::SunkenTreasurySecondChest;
+    const SYMBIOTE_APPROACH: Self = Self::SymbioteApproach;
+    const SYMBIOTE_KILL_WITH_FIRE: Self = Self::SymbioteKillWithFire;
+    const TABLET_OF_TRUTH_DECIPHER1: Self = Self::TabletOfTruthDecipher1;
+    const TABLET_OF_TRUTH_DECIPHER1_DECIPHER: Self = Self::TabletOfTruthDecipher1Decipher;
+    const TABLET_OF_TRUTH_DECIPHER2_DECIPHER: Self = Self::TabletOfTruthDecipher2Decipher;
+    const TABLET_OF_TRUTH_DECIPHER3_DECIPHER: Self = Self::TabletOfTruthDecipher3Decipher;
+    const TABLET_OF_TRUTH_DECIPHER4_DECIPHER: Self = Self::TabletOfTruthDecipher4Decipher;
+    const TABLET_OF_TRUTH_DECIPHER_GIVE_UP: Self = Self::TabletOfTruthDecipherGiveUp;
+    const TABLET_OF_TRUTH_SMASH: Self = Self::TabletOfTruthSmash;
+    const TEA_MASTER_BONE_TEA: Self = Self::TeaMasterBoneTea;
+    const TEA_MASTER_EMBER_TEA: Self = Self::TeaMasterEmberTea;
+    const TEA_MASTER_TEA_OF_DISCOURTESY: Self = Self::TeaMasterTeaOfDiscourtesy;
+    const THE_FUTURE_OF_POTIONS_POTION: Self = Self::TheFutureOfPotionsPotion;
+    const THE_LANTERN_KEY_KEEP_THE_KEY: Self = Self::TheLanternKeyKeepTheKey;
+    const THE_LANTERN_KEY_KEEP_THE_KEY_FIGHT: Self = Self::TheLanternKeyKeepTheKeyFight;
+    const THE_LANTERN_KEY_RETURN_THE_KEY: Self = Self::TheLanternKeyReturnTheKey;
+    const THE_LEGENDS_WERE_TRUE_NAB_THE_MAP: Self = Self::TheLegendsWereTrueNabTheMap;
+    const THE_LEGENDS_WERE_TRUE_SLOWLY_FIND_AN_EXIT: Self =
+        Self::TheLegendsWereTrueSlowlyFindAnExit;
+    const THIS_OR_THAT_ORNATE: Self = Self::ThisOrThatOrnate;
+    const THIS_OR_THAT_PLAIN: Self = Self::ThisOrThatPlain;
+    const TINKER_TIME_CHOOSE_CARD_TYPE: Self = Self::TinkerTimeChooseCardType;
+    const TINKER_TIME_CHOOSE_CARD_TYPE_ATTACK: Self = Self::TinkerTimeChooseCardTypeAttack;
+    const TINKER_TIME_CHOOSE_CARD_TYPE_POWER: Self = Self::TinkerTimeChooseCardTypePower;
+    const TINKER_TIME_CHOOSE_CARD_TYPE_SKILL: Self = Self::TinkerTimeChooseCardTypeSkill;
+    const TINKER_TIME_CHOOSE_RIDER_CHAOS: Self = Self::TinkerTimeChooseRiderChaos;
+    const TINKER_TIME_CHOOSE_RIDER_CHOKING: Self = Self::TinkerTimeChooseRiderChoking;
+    const TINKER_TIME_CHOOSE_RIDER_CURIOUS: Self = Self::TinkerTimeChooseRiderCurious;
+    const TINKER_TIME_CHOOSE_RIDER_ENERGIZED: Self = Self::TinkerTimeChooseRiderEnergized;
+    const TINKER_TIME_CHOOSE_RIDER_EXPERTISE: Self = Self::TinkerTimeChooseRiderExpertise;
+    const TINKER_TIME_CHOOSE_RIDER_IMPROVEMENT: Self = Self::TinkerTimeChooseRiderImprovement;
+    const TINKER_TIME_CHOOSE_RIDER_SAPPING: Self = Self::TinkerTimeChooseRiderSapping;
+    const TINKER_TIME_CHOOSE_RIDER_VIOLENCE: Self = Self::TinkerTimeChooseRiderViolence;
+    const TINKER_TIME_CHOOSE_RIDER_WISDOM: Self = Self::TinkerTimeChooseRiderWisdom;
+    const TRASH_HEAP_DIVE_IN: Self = Self::TrashHeapDiveIn;
+    const TRASH_HEAP_GRAB: Self = Self::TrashHeapGrab;
+    const TRIAL_ACCEPT: Self = Self::TrialAccept;
+    const TRIAL_MERCHANT_GUILTY: Self = Self::TrialMerchantGuilty;
+    const TRIAL_MERCHANT_INNOCENT: Self = Self::TrialMerchantInnocent;
+    const TRIAL_NOBLE_GUILTY: Self = Self::TrialNobleGuilty;
+    const TRIAL_NOBLE_INNOCENT: Self = Self::TrialNobleInnocent;
+    const TRIAL_NONDESCRIPT_GUILTY: Self = Self::TrialNondescriptGuilty;
+    const TRIAL_NONDESCRIPT_INNOCENT: Self = Self::TrialNondescriptInnocent;
+    const TRIAL_REJECT: Self = Self::TrialReject;
+    const TRIAL_REJECT_ACCEPT: Self = Self::TrialRejectAccept;
+    const TRIAL_REJECT_DOUBLE_DOWN: Self = Self::TrialRejectDoubleDown;
+    const UNREST_SITE_KILL: Self = Self::UnrestSiteKill;
+    const UNREST_SITE_REST: Self = Self::UnrestSiteRest;
+    const WAR_HISTORIAN_REPY_UNLOCK_CAGE: Self = Self::WarHistorianRepyUnlockCage;
+    const WAR_HISTORIAN_REPY_UNLOCK_CHEST: Self = Self::WarHistorianRepyUnlockChest;
+    const WATERLOGGED_SCRIPTORIUM_BLOODY_INK: Self = Self::WaterloggedScriptoriumBloodyInk;
+    const WATERLOGGED_SCRIPTORIUM_PRICKLY_SPONGE: Self = Self::WaterloggedScriptoriumPricklySponge;
+    const WATERLOGGED_SCRIPTORIUM_TENTACLE_QUILL: Self = Self::WaterloggedScriptoriumTentacleQuill;
+    const WELCOME_TO_WONGOS_BARGAIN_BIN: Self = Self::WelcomeToWongosBargainBin;
+    const WELCOME_TO_WONGOS_FEATURED_ITEM: Self = Self::WelcomeToWongosFeaturedItem;
+    const WELCOME_TO_WONGOS_LEAVE: Self = Self::WelcomeToWongosLeave;
+    const WELCOME_TO_WONGOS_MYSTERY_BOX: Self = Self::WelcomeToWongosMysteryBox;
+    const WELLSPRING_BATHE: Self = Self::WellspringBathe;
+    const WELLSPRING_BOTTLE: Self = Self::WellspringBottle;
+    const WHISPERING_HOLLOW_GOLD: Self = Self::WhisperingHollowGold;
+    const WHISPERING_HOLLOW_HUG: Self = Self::WhisperingHollowHug;
+    const WOOD_CARVINGS_BIRD: Self = Self::WoodCarvingsBird;
+    const WOOD_CARVINGS_SNAKE: Self = Self::WoodCarvingsSnake;
+    const WOOD_CARVINGS_TORUS: Self = Self::WoodCarvingsTorus;
+    const ZEN_WEAVER_ARACHNID_ACUPUNCTURE: Self = Self::ZenWeaverArachnidAcupuncture;
+    const ZEN_WEAVER_BREATHING_TECHNIQUES: Self = Self::ZenWeaverBreathingTechniques;
+    const ZEN_WEAVER_EMOTIONAL_AWARENESS: Self = Self::ZenWeaverEmotionalAwareness;
+    const ZEN_WEAVER_LOCKED: Self = Self::ZenWeaverLocked;
 }
 
 /// The `Modifier` of every build, by id.
@@ -6410,78 +6870,4 @@ impl RestSiteOptionIds for crate::v0_111_0::restsite::RestSiteOption {
     const LIFT: Self = Self::Lift;
     const MEND: Self = Self::Mend;
     const SMITH: Self = Self::Smith;
-}
-
-/// The `RoomType` of every build, by id.
-pub trait RoomTypeIds: Copy + Eq + 'static {
-    const BOSS: Self;
-    const ELITE: Self;
-    const EVENT: Self;
-    const MAP: Self;
-    const MONSTER: Self;
-    const REST_SITE: Self;
-    const SHOP: Self;
-    const TREASURE: Self;
-}
-
-impl RoomTypeIds for crate::v0_107_1::encounters::RoomType {
-    const BOSS: Self = Self::Boss;
-    const ELITE: Self = Self::Elite;
-    const EVENT: Self = Self::Event;
-    const MAP: Self = Self::Map;
-    const MONSTER: Self = Self::Monster;
-    const REST_SITE: Self = Self::RestSite;
-    const SHOP: Self = Self::Shop;
-    const TREASURE: Self = Self::Treasure;
-}
-
-impl RoomTypeIds for crate::v0_111_0::encounters::RoomType {
-    const BOSS: Self = Self::Boss;
-    const ELITE: Self = Self::Elite;
-    const EVENT: Self = Self::Event;
-    const MAP: Self = Self::Map;
-    const MONSTER: Self = Self::Monster;
-    const REST_SITE: Self = Self::RestSite;
-    const SHOP: Self = Self::Shop;
-    const TREASURE: Self = Self::Treasure;
-}
-
-/// The `TargetType` of every build, by id.
-pub trait TargetTypeIds: Copy + Eq + 'static {
-    const ALL_ALLIES: Self;
-    const ALL_ENEMIES: Self;
-    const ANY_ALLY: Self;
-    const ANY_ENEMY: Self;
-    const ANY_PLAYER: Self;
-    const NONE: Self;
-    const OSTY: Self;
-    const RANDOM_ENEMY: Self;
-    const SELF: Self;
-    const TARGETED_NO_CREATURE: Self;
-}
-
-impl TargetTypeIds for crate::v0_107_1::cards::TargetType {
-    const ALL_ALLIES: Self = Self::AllAllies;
-    const ALL_ENEMIES: Self = Self::AllEnemies;
-    const ANY_ALLY: Self = Self::AnyAlly;
-    const ANY_ENEMY: Self = Self::AnyEnemy;
-    const ANY_PLAYER: Self = Self::AnyPlayer;
-    const NONE: Self = Self::None;
-    const OSTY: Self = Self::Osty;
-    const RANDOM_ENEMY: Self = Self::RandomEnemy;
-    const SELF: Self = Self::SelfTarget;
-    const TARGETED_NO_CREATURE: Self = Self::TargetedNoCreature;
-}
-
-impl TargetTypeIds for crate::v0_111_0::cards::TargetType {
-    const ALL_ALLIES: Self = Self::AllAllies;
-    const ALL_ENEMIES: Self = Self::AllEnemies;
-    const ANY_ALLY: Self = Self::AnyAlly;
-    const ANY_ENEMY: Self = Self::AnyEnemy;
-    const ANY_PLAYER: Self = Self::AnyPlayer;
-    const NONE: Self = Self::None;
-    const OSTY: Self = Self::Osty;
-    const RANDOM_ENEMY: Self = Self::RandomEnemy;
-    const SELF: Self = Self::SelfTarget;
-    const TARGETED_NO_CREATURE: Self = Self::TargetedNoCreature;
 }

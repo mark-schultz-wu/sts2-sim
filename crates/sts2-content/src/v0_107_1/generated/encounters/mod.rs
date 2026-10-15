@@ -5,12 +5,10 @@
 
 use super::acts::Act;
 use super::monsters::{Monster, MoveId};
-use crate::{Few, Scaled};
+use crate::Few;
+pub use crate::generated::encounters::{EncounterFlag, FlagSet, Gold, RoomType, Slot};
 use serde::{Deserialize, Serialize};
 use sts2_core::Table;
-
-// `Family::None` is not generated: no encounter has it and nothing in the game names it: zero references in the whole assembly, its own declaration aside. `Tags` defaults to an empty sequence rather than to this, so the absence of a tag is already spelled as no tag.
-// `RoomType::Unassigned` is not generated: all eight uses are an absent answer, and one of them throws. `TryGetRoomTypeForTutorial` assigns it to its `out` before returning false; `RollRoomTypeFor` returns it for `MapPointType.Unassigned` and the reverse switch maps it back — not injectively, since `RoomType.Map` maps there too; `IBootstrapSettings` throws `ArgumentOutOfRangeException` on it; the three debug bootstrappers read it as `no room was chosen, enter the act`; and `AutoSlayer` waits for a room to stop being it, timing out with `Room type not assigned`. So it is `Option<RoomType>` at whatever site asks, and no encounter is ever in one — all 96 are Monster, Elite or Boss.
 
 /// The creature family an encounter fields.
 ///
@@ -55,27 +53,6 @@ pub enum Family {
     Slugs = 13,
     #[serde(rename = "Exoskeletons")]
     Exoskeletons = 14,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum RoomType {
-    #[serde(rename = "Monster")]
-    Monster = 1,
-    #[serde(rename = "Elite")]
-    Elite = 2,
-    #[serde(rename = "Boss")]
-    Boss = 3,
-    #[serde(rename = "Treasure")]
-    Treasure = 4,
-    #[serde(rename = "Shop")]
-    Shop = 5,
-    #[serde(rename = "Event")]
-    Event = 6,
-    #[serde(rename = "RestSite")]
-    RestSite = 7,
-    #[serde(rename = "Map")]
-    Map = 8,
 }
 
 /// The families an encounter fields.
@@ -148,109 +125,6 @@ impl sts2_core::FlagSet for FamilySet {
     fn contains(self, member: Family) -> bool {
         Self::contains(self, member)
     }
-}
-
-/// A yes-or-no fact about a flagset.
-///
-/// Three separate `EncounterModel` overrides rather than a game enum,
-/// so the numbering is the dump's column order. Unlike a power's
-/// flags these are never computed — nothing here asks the encounter —
-/// so the set is one word and `contains` can answer plainly.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum EncounterFlag {
-    /// One of the first fights of an act.
-    Weak = 0,
-    /// Winning it pays gold and a card.
-    GivesRewards = 1,
-    /// Not content: the eight mocks and `DEPRECATED_ENCOUNTER`.
-    Debug = 2,
-}
-
-/// The flags an encounter has.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct FlagSet(u8);
-
-impl FlagSet {
-    /// Every member, in the enum's own order.
-    const MEMBERS: [EncounterFlag; 3] = [
-        EncounterFlag::Weak,
-        EncounterFlag::GivesRewards,
-        EncounterFlag::Debug,
-    ];
-
-    pub const fn new(members: &[EncounterFlag]) -> Self {
-        let mut bits = 0u8;
-        let mut i = 0;
-        while i < members.len() {
-            bits |= 1u8 << members[i] as u8;
-            i += 1;
-        }
-        Self(bits)
-    }
-
-    pub const fn contains(self, member: EncounterFlag) -> bool {
-        self.0 & (1u8 << member as u8) != 0
-    }
-
-    /// The members, in the enum's own order.
-    pub fn iter(self) -> impl Iterator<Item = EncounterFlag> {
-        Self::MEMBERS.into_iter().filter(move |&m| self.contains(m))
-    }
-}
-
-impl std::fmt::Debug for FlagSet {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_set().entries(self.iter()).finish()
-    }
-}
-
-impl sts2_core::FlagSet for FlagSet {
-    type Member = EncounterFlag;
-
-    const MEMBERS: &'static [EncounterFlag] = &Self::MEMBERS;
-
-    fn from_members(members: &[EncounterFlag]) -> Self {
-        Self::new(members)
-    }
-
-    fn contains(self, member: EncounterFlag) -> bool {
-        Self::contains(self, member)
-    }
-}
-
-/// Which of an encounter's slots a monster stands in.
-///
-/// An index, not a name: slot names are encounter-local scene
-/// positions with no shared vocabulary — 44 of them across 96
-/// encounters — and nothing outside the game ever sees one. Capped
-/// rather than a `u8` so that the spare values leave a niche, which is
-/// what makes `Option<Slot>` cost nothing beside a `Monster`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum Slot {
-    First = 0,
-    Second = 1,
-    Third = 2,
-    Fourth = 3,
-    Fifth = 4,
-    Sixth = 5,
-    Seventh = 6,
-    Eighth = 7,
-}
-
-/// What winning pays.
-///
-/// Scaled because Poverty multiplies both by
-/// `AscensionHelper.PovertyAscensionGoldMultiplier`. Every encounter
-/// but one steps at that level and nowhere else, and the exception is
-/// the point of sweeping rather than assuming:
-/// `FAKE_MERCHANT_EVENT_ENCOUNTER` overrides both properties with a
-/// flat 300 and so owes the rule nothing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Gold {
-    pub min: Scaled<u16>,
-    pub max: Scaled<u16>,
 }
 
 /// One monster on the board when the fight starts.
@@ -897,17 +771,10 @@ impl sts2_core::EncounterTable for Encounter {
     }
 }
 
-impl sts2_core::RoomKinds for RoomType {
-    const MONSTER: RoomType = RoomType::Monster;
-    const ELITE: RoomType = RoomType::Elite;
-    const BOSS: RoomType = RoomType::Boss;
-    const TREASURE: RoomType = RoomType::Treasure;
-    const SHOP: RoomType = RoomType::Shop;
-    const EVENT: RoomType = RoomType::Event;
-    const REST_SITE: RoomType = RoomType::RestSite;
-}
 mod boss;
+
 mod elite;
+
 mod normal;
 
 /// Every encounter an act fields, in the act's own order.

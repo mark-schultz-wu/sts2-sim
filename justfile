@@ -82,13 +82,9 @@ prose-stdin label="standard input":
 generated:
     #!/usr/bin/env bash
     set -euo pipefail
-    builds=0
-    for lock in mod/games/*.lock; do
-        STS2_GAME_VERSION="$(basename "$lock" .lock)" cargo run -q -p xtask -- codegen
-        builds=$((builds + 1))
-    done
-    test "$builds" -gt 0
-    git diff --exit-code -- 'crates/sts2-content/src/*/generated' crates/sts2-content/src/ids.rs
+    cargo run -q -p xtask -- codegen
+    git diff --exit-code -- 'crates/sts2-content/src/*/generated' crates/sts2-content/src/generated crates/sts2-content/src/ids.rs
+    test -z "$(git ls-files --others --exclude-standard -- crates/sts2-content/src)"
 
 # How far the simulator gets through a real run before it disagrees with the
 # game. The build script takes the game's answers once and keeps them under

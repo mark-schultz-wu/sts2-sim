@@ -13,6 +13,7 @@ pub enum Verb {
     Reading,
     Writing,
     Creating,
+    Removing,
 }
 
 impl std::fmt::Display for Verb {
@@ -21,6 +22,7 @@ impl std::fmt::Display for Verb {
             Verb::Reading => "reading",
             Verb::Writing => "writing",
             Verb::Creating => "creating",
+            Verb::Removing => "removing",
         })
     }
 }
@@ -58,6 +60,14 @@ pub fn write(path: &Path, contents: impl AsRef<[u8]>) -> Result<(), FileError> {
 /// `fs::create_dir_all`.
 pub fn create_dir(path: &Path) -> Result<(), FileError> {
     std::fs::create_dir_all(path).map_err(FileError::at(Verb::Creating, path))
+}
+
+/// `fs::remove_dir_all`, where the directory exists.
+pub fn remove_dir(path: &Path) -> Result<(), FileError> {
+    match path.is_dir() {
+        true => std::fs::remove_dir_all(path).map_err(FileError::at(Verb::Removing, path)),
+        false => Ok(()),
+    }
 }
 
 /// `File::create`.

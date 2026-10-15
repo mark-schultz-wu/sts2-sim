@@ -25,6 +25,7 @@ mod characters;
 mod enchantments;
 mod encounters;
 mod events;
+mod hoist;
 mod ids;
 mod mad_science;
 mod modifiers;
@@ -475,7 +476,65 @@ fn emit_overrides<'a>(
     writeln!(out, "];").unwrap();
 }
 
-pub fn run() -> Result<String, Error> {
+/// `cargo xtask codegen`'s arguments.
+#[derive(clap::Args)]
+pub struct Args {
+    /// Generate only the build `STS2_GAME_VERSION` names, and leave what the
+    /// builds share alone. Each build's run of the whole is one of these.
+    #[arg(long, hide = true)]
+    one: bool,
+}
+
+/// Every build's tables, then what they share.
+///
+/// A type is shared only when every build generated it alike. So every build
+/// is generated afresh first, and none still holds the last run's re-exports.
+pub fn run(args: Args) -> Result<String, Error> {
+    if args.one {
+        return run_one();
+    }
+    let mut out = String::new();
+    let mut locks: Vec<PathBuf> = error::entries(Path::new("mod/games"))
+        .map_err(DumpError::from)?
+        .into_iter()
+        .filter(|p| p.extension().is_some_and(|e| e == "lock"))
+        .collect();
+    locks.sort();
+    let exe = std::env::current_exe().map_err(|source| {
+        DumpError::from(FileError {
+            verb: error::Verb::Reading,
+            path: PathBuf::from("current_exe"),
+            source,
+        })
+    })?;
+    for lock in &locks {
+        let name = lock.file_stem().unwrap_or_default();
+        let made = error::output(
+            Command::new(&exe)
+                .args(["codegen", "--one"])
+                .env("STS2_GAME_VERSION", name),
+        )
+        .map_err(DumpError::from)?;
+        out.push_str(&String::from_utf8_lossy(&made.stdout));
+    }
+
+    let src = Path::new("crates/sts2-content/src");
+    let builds = ids::builds(src)?;
+    let mut written = hoist::hoist(src, &builds)?;
+    written.push(ids::generate(src)?);
+    error::status(
+        Command::new("rustfmt")
+            .arg("--edition")
+            .arg("2024")
+            .args(&written),
+    )
+    .map_err(DumpError::from)?;
+    writeln!(out, "hoisted into {}/generated/", src.display()).unwrap();
+    Ok(out)
+}
+
+/// One build's tables.
+fn run_one() -> Result<String, Error> {
     let dir = version_dir().map_err(DumpError::from)?;
     let root = dir.join("generated");
     error::create_dir(&root).map_err(DumpError::from)?;
@@ -538,17 +597,6 @@ pub fn run() -> Result<String, Error> {
     // included, and matching rustfmt by hand in a `writeln!` is a losing game —
     // it reorders `mod` declarations and rewraps anything past the margin.
     format(&root)?;
-
-    // Every build's tables are written by now, this one's included.
-    let src = dir.parent().unwrap_or(&dir);
-    let ids = ids::generate(src)?;
-    error::status(
-        Command::new("rustfmt")
-            .arg("--edition")
-            .arg("2024")
-            .arg(&ids),
-    )
-    .map_err(DumpError::from)?;
 
     Ok(format!(
         "generated {}/generated/ — {} domains: {}\n  build {build}",

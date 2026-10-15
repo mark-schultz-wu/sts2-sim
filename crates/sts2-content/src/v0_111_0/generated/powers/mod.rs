@@ -4,180 +4,10 @@
 //! Source: `dumps/powers.txt`, build v0.111.0 (41cef1ea), assembly 1579942752, content 1568834832.
 
 use crate::Field;
+pub use crate::generated::powers::{
+    PowerData, PowerFlag, PowerFlags, PowerInstanceType, PowerStackType, PowerType,
+};
 use serde::{Deserialize, Serialize};
-
-// `PowerType::None` is not generated: no power has it and nothing in the game names it: zero references in the whole assembly, its own declaration aside. It is the C# zero and nothing else.
-// `PowerInstanceType::None` is not generated: 252 powers have it, but all four places that read `InstanceType` ask the same yes-or-no question. `PowerCmd` switches on it to decide between modifying the power already there and applying another, `Creature` refuses a second instance while it is set, and `HoverTip` derives `IsInstanced` from it. That is the absence of an instancing rule, which is `Option` here.
-// `PowerStackType::None` is not generated: one power has it, and nothing in the assembly can tell it apart from `Single`: all three readers test `== Counter` and nothing else. `NPower` shows an amount label for a counter; `Creature` and `GetTypeForAmount` both ask `Counter && AllowNegative && amount < 0`. A third state nothing distinguishes is not a state.
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum PowerInstanceType {
-    Instanced = 1,
-    InstancedPerApplier = 2,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum PowerStackType {
-    Counter = 1,
-    Single = 2,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum PowerType {
-    Buff = 1,
-    Debuff = 2,
-}
-
-/// A yes-or-no fact about a power.
-///
-/// Five separate `PowerModel` overrides rather than a game enum, so
-/// unlike the card keywords there is no discriminant to inherit. The
-/// numbering is the order the dump writes the columns in, which is the
-/// order `PowerModel` declares them.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum PowerFlag {
-    /// The amount may go below zero.
-    ///
-    /// Load-bearing twice over: `ShouldRemoveDueToAmount` removes a power
-    /// at zero only when this is set, and `GetTypeForAmount` reads it to
-    /// decide whether a negative amount flips the type.
-    AllowNegative = 0,
-    /// The power goes away when its owner dies.
-    RemovedOnOwnerDeath = 1,
-    /// The owner dying is a real death rather than something the power
-    /// intercepts.
-    ///
-    /// `REATTACH_POWER` computes it: a segment of its owner dying is only
-    /// fatal once every other segment is already dead.
-    OwnerDeathIsFatal = 2,
-    /// The applied amount scales with the party size.
-    ScalesInMultiplayer = 3,
-    /// The owner counts as a secondary enemy while this is on it. One
-    /// power in the build.
-    OwnerIsSecondaryEnemy = 4,
-}
-
-/// The flags a power has, and the ones it works out at the time.
-///
-/// Two powers compute one: `REATTACH_POWER` decides whether its
-/// owner's death is fatal from how many segments are still alive,
-/// and a mock decides whether it scales in multiplayer.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct PowerFlags {
-    /// The flags that are set. A computed flag is never in here.
-    yes: u8,
-    /// The flags the model decides at the time.
-    computed: u8,
-}
-
-impl PowerFlags {
-    /// Every flag, in bit order.
-    const MEMBERS: [PowerFlag; 5] = [
-        PowerFlag::AllowNegative,
-        PowerFlag::RemovedOnOwnerDeath,
-        PowerFlag::OwnerDeathIsFatal,
-        PowerFlag::ScalesInMultiplayer,
-        PowerFlag::OwnerIsSecondaryEnemy,
-    ];
-
-    /// The flags a model sets, and the ones it computes.
-    ///
-    /// A flag in both lists is a contradiction, and this is a `const
-    /// fn` called from a `const`, so saying so fails the build rather
-    /// than the run.
-    pub const fn new(yes: &[PowerFlag], computed: &[PowerFlag]) -> Self {
-        let mut set = 0u8;
-        let mut i = 0;
-        while i < yes.len() {
-            set |= 1u8 << yes[i] as u8;
-            i += 1;
-        }
-
-        let mut asked = 0u8;
-        i = 0;
-        while i < computed.len() {
-            asked |= 1u8 << computed[i] as u8;
-            i += 1;
-        }
-
-        assert!(set & asked == 0, "a flag cannot be both set and computed");
-        Self {
-            yes: set,
-            computed: asked,
-        }
-    }
-
-    /// One flag: the answer, or the cue to ask for it.
-    ///
-    /// There is no `contains`. A computed flag has no answer until
-    /// something asks the model, and a `bool` would have to invent
-    /// one.
-    pub const fn get(self, flag: PowerFlag) -> Field<bool> {
-        let bit = 1u8 << flag as u8;
-        if self.computed & bit != 0 {
-            return Field::Computed;
-        }
-        Field::Constant(self.yes & bit != 0)
-    }
-}
-
-impl std::fmt::Debug for PowerFlags {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut set = f.debug_set();
-        let mut i = 0;
-        while i < Self::MEMBERS.len() {
-            let flag = Self::MEMBERS[i];
-            match self.get(flag) {
-                Field::Constant(true) => {
-                    set.entry(&flag);
-                }
-                Field::Computed => {
-                    set.entry(&format_args!("{flag:?}: computed"));
-                }
-                Field::Constant(false) => {}
-            }
-            i += 1;
-        }
-        set.finish()
-    }
-}
-
-/// What is true of a power with no combat running.
-///
-/// Not what it does: that is hooks, and hooks are ported by hand. These
-/// are the facts the engine reads off a power without asking it
-/// anything.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct PowerData {
-    /// Buff or debuff — what `PowerCmd` checks before Artifact eats it,
-    /// and what `Rend` and `Misery` count.
-    ///
-    /// Not the same as `TypeForCurrentAmount`, which the game derives from
-    /// this, `stack` and `AllowNegative` together: a debuff that does not
-    /// allow negatives reads as a buff while its amount is below zero.
-    pub kind: Field<PowerType>,
-    /// Whether several of these coexist on one creature, and whether
-    /// they are kept apart by who applied them.
-    ///
-    /// `None` is the game's `PowerInstanceType.None`: not instanced, so
-    /// a second application finds the power already there and modifies
-    /// it rather than adding another.
-    pub instance: Option<PowerInstanceType>,
-    /// How a second application combines with the first.
-    ///
-    /// `Constant(None)` is the game's `PowerStackType.None`, which one
-    /// power has and which no reader distinguishes from `Single`;
-    /// `Computed` is a power that decides at the time, like `ShrinkPower`
-    /// switching to `Single` once its amount goes negative.
-    pub stack: Field<Option<PowerStackType>>,
-    /// The yes-or-no facts, which are a set rather than five fields
-    /// in a row nothing keeps in order.
-    pub flags: PowerFlags,
-}
 
 /// Every power in the build.
 ///
@@ -2308,6 +2138,9 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
     // WRAITH_FORM_POWER
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterSideTurnStart),
 ];
+
 mod buffs;
+
 mod debuffs;
+
 mod temporary;

@@ -46,7 +46,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// Generate the content tables from the dumps.
-    Codegen,
+    Codegen(codegen::Args),
     /// Ask the game for its dumps.
     Dump(dump::Args),
     /// Count what a replayed step costs, in instructions.
@@ -111,7 +111,7 @@ enum Error {
 fn run(command: Command) -> Result<String, Error> {
     Ok(match command {
         // Both print a line of their own after what they wrote.
-        Command::Codegen => codegen::run()? + "\n",
+        Command::Codegen(args) => codegen::run(args)? + "\n",
         Command::Dump(args) => dump::run(args)? + "\n",
         Command::Instructions(args) => instructions::run(args)?,
         Command::Allocations(args) => allocations::run(args)?,

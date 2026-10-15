@@ -3,63 +3,9 @@
 //! Every orb's values and when its passive fires.
 //! Source: `dumps/orbs.txt`, build v0.111.0 (41cef1ea), assembly 1579942752, content 1568834832.
 
+pub use crate::generated::orbs::{OrbData, OrbTrigger, OrbValue};
 use nonmax::NonMaxU8;
 use serde::{Deserialize, Serialize};
-
-/// When an orb's passive fires.
-///
-/// Both are `virtual` on `OrbModel` and do nothing by default, so which
-/// one an orb overrides is the whole statement. An orb that overrides
-/// neither has no passive, and carries no trigger at all.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum OrbTrigger {
-    /// Before the turn ends. Four of the five.
-    #[serde(rename = "turnEnd")]
-    TurnEnd,
-    /// After the turn starts — a whole turn earlier than the rest,
-    /// which is when Plasma's energy arrives.
-    #[serde(rename = "turnStart")]
-    TurnStart,
-}
-
-/// One of an orb's two numbers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct OrbValue {
-    /// The number the getter names, or nothing where it names none.
-    ///
-    /// `None` says only that: there is no numeral in the getter to
-    /// take. It is not a claim about the orb. Glass's evoke is the
-    /// only one, and it is `PassiveVal * 2` — the same relationship
-    /// Plasma's evoke has to its passive, which is spelled as a
-    /// plain 2 and so has a number here. How a value is combined,
-    /// decayed or accumulated is the orb's body, and bodies are
-    /// ported by hand.
-    pub amount: Option<NonMaxU8>,
-    /// Whether this getter runs `ModifyOrbValue` — whether Focus is
-    /// applied at this level.
-    ///
-    /// Two models implement that hook: `FocusPower` adds its amount
-    /// to any hooked value, and `InfusedCore` adds to Lightning's.
-    /// At *this* level is the whole of the claim: Glass's evoke is
-    /// unhooked and still moves with Focus, because it doubles a
-    /// passive that is hooked. What the flag rules out is a second
-    /// application on top. Plasma is the one orb Focus does not
-    /// reach at all.
-    pub hooked: bool,
-}
-
-/// What is true of an orb with no run in progress.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct OrbData {
-    /// When the passive fires, or nothing where the orb has no
-    /// passive.
-    pub trigger: Option<OrbTrigger>,
-    /// What it does every turn while it sits in a slot.
-    pub passive: OrbValue,
-    /// What it does when it leaves one.
-    pub evoke: OrbValue,
-}
 
 /// Every orb in the build.
 ///
