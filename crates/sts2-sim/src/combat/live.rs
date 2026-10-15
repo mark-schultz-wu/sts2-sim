@@ -2591,6 +2591,10 @@ pub(crate) struct Live<V: Rules> {
     /// pauses only that listener. The play runs on, and the question is
     /// asked once the decision is over.
     pub(super) paused: Vec<Paused<V>>,
+    /// The results of the last attack that ended while a question waited,
+    /// or whose hits landed once it was answered. A card waiting behind its
+    /// own attack reads them as it goes on.
+    pub(super) waited_attack: Option<sts2_core::AttackResults<V>>,
 }
 
 /// How many history entries one turn holds before its list reaches the heap:
@@ -2848,6 +2852,7 @@ impl<V: Rules> Clone for Live<V> {
             asking: self.asking.clone(),
             deferred: self.deferred.clone(),
             paused: self.paused.clone(),
+            waited_attack: self.waited_attack.clone(),
             ..*self
         }
     }
@@ -2905,6 +2910,7 @@ impl<V: Rules> Clone for Live<V> {
             asking,
             deferred,
             paused,
+            waited_attack,
         } = self;
         *character = source.character;
         *ascension = source.ascension;
@@ -2955,6 +2961,7 @@ impl<V: Rules> Clone for Live<V> {
         asking.clone_from(&source.asking);
         deferred.clone_from(&source.deferred);
         paused.clone_from(&source.paused);
+        waited_attack.clone_from(&source.waited_attack);
     }
 }
 
@@ -3838,6 +3845,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             asking: None,
             deferred: Deferrals::new(),
             paused: Vec::new(),
+            waited_attack: None,
         }
     }
 }

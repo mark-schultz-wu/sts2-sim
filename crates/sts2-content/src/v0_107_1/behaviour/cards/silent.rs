@@ -34,8 +34,8 @@ pub enum Resume {
     ShadowStepDiscarded,
     /// `LeadingStrike`, after a question inside its attack was answered.
     LeadingStrikeHit,
-    /// `TheHunt`, whose reward and power come where `gains` says.
-    TheHuntHit { gains: bool },
+    /// `TheHunt`, whose kill counts where `fatal` says.
+    TheHuntHit { fatal: bool },
     /// `StormOfSteel`, after a question inside its discard was answered,
     /// with how many cards the hand held.
     StormOfSteelDiscarded { count: u8 },
@@ -367,11 +367,10 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
             let target = fight.target();
             let fatal = fight.death_triggers_fatal(target);
             let results = hit_target(fight, 1);
-            let gains = fatal && results.iter().any(|result| result.killed);
             if fight.waiting() {
-                return wait(Resume::TheHuntHit { gains });
+                return wait(Resume::TheHuntHit { fatal });
             }
-            the_hunt_hit(fight, gains)
+            the_hunt_hit(fight, fatal && results.iter().any(|result| result.killed))
         }
         card => super::generated_from(Cards::Silent(card), fight, 0),
     }
@@ -526,7 +525,10 @@ pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V>
         // A draw that never ran, as the fight ended, drew nothing.
         Resume::EscapePlanDrew => escape_plan_drew(fight, &[]),
         Resume::LeadingStrikeHit => leading_strike_hit(fight),
-        Resume::TheHuntHit { gains } => the_hunt_hit(fight, gains),
+        Resume::TheHuntHit { fatal } => {
+            let results = fight.waited_attack_results();
+            the_hunt_hit(fight, fatal && results.iter().any(|result| result.killed))
+        }
         Resume::StormOfSteelDiscarded { count } => storm_of_steel_discarded(fight, count),
         at => unimplemented!("{at:?} resumed after waiting"),
     }
