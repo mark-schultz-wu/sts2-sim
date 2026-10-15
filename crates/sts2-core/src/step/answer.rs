@@ -14,7 +14,7 @@ pub enum Answer {
     ///
     /// The game's own screens take a selection a click at a time. The cards
     /// are handed back in the order of the clicks.
-    Pick(u8),
+    Pick(u16),
     /// Take back the last card picked.
     ///
     /// The hand's list drops its last entry. A grid's set hands the freed
@@ -49,7 +49,9 @@ pub struct Picks {
     /// How many of `at` are picks. The rest stay zero, so the derived
     /// equality and hash see only the picks.
     len: u8,
-    at: [u8; PICKS],
+    /// Each option's place among the question's. A deck Hoarder grows can
+    /// hold more cards than a byte counts.
+    at: [u16; PICKS],
 }
 
 /// How many cards one selection can take, held inline so that a
@@ -87,7 +89,7 @@ impl Picks {
         if self.iter().any(|taken| taken == option) {
             return Err(Unpickable::Repeated(option));
         }
-        let Ok(at) = u8::try_from(option) else {
+        let Ok(at) = u16::try_from(option) else {
             return Err(Unpickable::Distant(option));
         };
         let Some(slot) = self.at.get_mut(usize::from(self.len)) else {
@@ -354,6 +356,6 @@ mod tests {
     #[test]
     #[should_panic(expected = "past any a selection names")]
     fn an_option_past_what_one_holds_panics() {
-        let _ = Picks::from([usize::from(u8::MAX) + 1]);
+        let _ = Picks::from([usize::from(u16::MAX) + 1]);
     }
 }

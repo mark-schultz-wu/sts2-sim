@@ -37,15 +37,7 @@ own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
 
-### 2. Hoarder
-
-Hoarder copies each card the deck gains twice, and keeps the copies it
-added so its own hook skips them. Mark chose state per run for it: the
-run's modifiers hold models with state, and Hoarder keeps the deck-card
-ids it still has to skip. It also refuses a merchant's card removal.
-Record 100 runs with it.
-
-### 3. Run modifiers at Neow
+### 2. Run modifiers at Neow
 
 All Star, Specialized, Draft, Sealed Deck and Insanity. Neow offers each
 modifier's option in turn, and three of them empty the starting deck
@@ -53,14 +45,14 @@ first. Draft and Sealed Deck build that deck through repeated picks. The
 design is Mark's, which he meant to revisit once the walk was done.
 Record 100 runs with each.
 
-### 4. v0.111.0
+### 3. v0.111.0
 
 Only the generated tables exist. Codegen runs per build as it does now.
 The behaviour is written once, for v0.107.1. A v0.111.0 rule whose game
 code did not change calls that one. The v0.107.1 rule first becomes
 generic over the build. A rule that changed gets one of its own. Then record its runs.
 
-### 5. A walk that shares only who listens
+### 4. A walk that shares only who listens
 
 The snapshot copies each walk's listeners. Most walks see none arrive or
 leave: 1.3% of `AfterCardPlayed` walks do, and 28% of `AfterSideTurnEnd`
@@ -70,7 +62,7 @@ A cheaper walk shares only which listeners there are and their order,
 kept apart from what they hold. That is part of the flat-state pass,
 which needs a design first.
 
-### 6. A speed target
+### 5. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.

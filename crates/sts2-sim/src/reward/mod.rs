@@ -54,10 +54,11 @@ pub(crate) enum Offer<V: Rules> {
     },
     /// `SpecialCardReward`: one card, and what its model saved. An event's
     /// has nothing saved. A card a thief hands back has what it saved in the
-    /// deck.
+    /// deck, and is the deck card `returning` names, which joins it again.
     SpecialCard {
         card: sts2_core::CardIdent<V>,
         state: V::CardState,
+        returning: Option<sts2_core::DeckCardId>,
         taken: bool,
     },
     Potion {

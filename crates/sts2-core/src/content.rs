@@ -771,6 +771,7 @@ pub enum ModelHook {
     ModifyRestSiteHealAmount,
     TryModifyRestSiteHealRewards,
     ShouldAllowFreeTravel,
+    ShouldAllowMerchantCardRemoval,
     TryModifyRewards,
     TryModifyRewardsLate,
     TryModifyCardRewardAlternatives,
@@ -806,7 +807,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 150] = [
+    pub const ALL: [ModelHook; 151] = [
         ModelHook::AfterRoomEntered,
         ModelHook::AfterMapGenerated,
         ModelHook::AfterActEntered,
@@ -925,6 +926,7 @@ impl ModelHook {
         ModelHook::ModifyRestSiteHealAmount,
         ModelHook::TryModifyRestSiteHealRewards,
         ModelHook::ShouldAllowFreeTravel,
+        ModelHook::ShouldAllowMerchantCardRemoval,
         ModelHook::TryModifyRewards,
         ModelHook::TryModifyRewardsLate,
         ModelHook::TryModifyCardRewardAlternatives,
@@ -1056,6 +1058,7 @@ impl ModelHook {
             ModelHook::ModifyRestSiteHealAmount => "ModifyRestSiteHealAmount",
             ModelHook::TryModifyRestSiteHealRewards => "TryModifyRestSiteHealRewards",
             ModelHook::ShouldAllowFreeTravel => "ShouldAllowFreeTravel",
+            ModelHook::ShouldAllowMerchantCardRemoval => "ShouldAllowMerchantCardRemoval",
             ModelHook::TryModifyRewards => "TryModifyRewards",
             ModelHook::TryModifyRewardsLate => "TryModifyRewardsLate",
             ModelHook::TryModifyCardRewardAlternatives => "TryModifyCardRewardAlternatives",
@@ -3690,6 +3693,9 @@ pub enum DecisionHook<V: ContentVersion> {
     /// `ShouldAllowFreeTravel`: whether the run can go on to any point of
     /// the next row, rather than only those its point leads on to.
     ShouldAllowFreeTravel,
+    /// `ShouldAllowMerchantCardRemoval`: whether a merchant's card removal
+    /// is on sale. One no marks it used as its slot fills.
+    ShouldAllowMerchantCardRemoval,
     /// `ShouldProcurePotion`: whether the player takes `potion`. One no
     /// refuses it.
     ShouldProcurePotion { potion: V::Potion },
@@ -3713,6 +3719,9 @@ impl<V: ContentVersion> DecisionHook<V> {
             DecisionHook::ShouldStopCombatFromEnding => ModelHook::ShouldStopCombatFromEnding,
             DecisionHook::ShouldAllowHitting { .. } => ModelHook::ShouldAllowHitting,
             DecisionHook::ShouldAllowFreeTravel => ModelHook::ShouldAllowFreeTravel,
+            DecisionHook::ShouldAllowMerchantCardRemoval => {
+                ModelHook::ShouldAllowMerchantCardRemoval
+            }
             DecisionHook::ShouldProcurePotion { .. } => ModelHook::ShouldProcurePotion,
             DecisionHook::ShouldDraw { .. } => ModelHook::ShouldDraw,
             DecisionHook::ShouldDie { .. } => ModelHook::ShouldDie,
@@ -3975,7 +3984,17 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `AfterCardChangedPiles` for a card that joined the deck, outside a
     /// fight. `cloned` is `clonedBy` being set, for a copy a listener made.
-    AddedToDeck { card: V::Card, cloned: bool },
+    AddedToDeck {
+        card: V::Card,
+        id: crate::DeckCardId,
+        cloned: bool,
+        /// `CardCmd.Transform` landed it, which hands the hook the deck as
+        /// `oldPileType`. Any other card came from no pile.
+        transformed: bool,
+    },
+    /// The copy `id` that the listener's own `CloneCard` made, before
+    /// `CardPileCmd.Add` puts it in the deck. Asked of that listener alone.
+    CopyMade { id: crate::DeckCardId },
     /// `AfterCardChangedPiles`, once a card lands in the pile it moved to.
     /// The fight raises it where a transform lands the replacement.
     CardChangedPiles {
@@ -4529,6 +4548,7 @@ impl<V: ContentVersion> EventHook<V> {
             }
             EventHook::Obtained { .. }
             | EventHook::OwnCommandOver
+            | EventHook::CopyMade { .. }
             | EventHook::RunCreated
             | EventHook::CharacterNamed(_)
             | EventHook::Removed
@@ -5383,9 +5403,11 @@ pub enum HookEffect<V: ContentVersion> {
         upgrades: &'static [(V::Relic, V::Relic)],
         fallback: V::Relic,
     },
-    /// `CardPileCmd.Add` of a clone of the card that just joined the deck, at
-    /// the deck's bottom, cloned by the listener.
-    CloneIntoDeck,
+    /// `RunState.CloneCard` of the card that just joined the deck, then
+    /// `CardPileCmd.Add` of the copy to the deck's bottom with `clonedBy` the
+    /// listener, this many times. [`EventHook::CopyMade`] is asked of the
+    /// listener between the two.
+    CopyIntoDeck(usize),
     /// `RunState.CloneCard` of each deck card carrying this enchantment, in
     /// deck order, each then `CardPileCmd.Add` to the deck's bottom.
     CloneEnchantedIntoDeck(V::Enchantment),
@@ -6124,6 +6146,12 @@ pub enum HookEffect<V: ContentVersion> {
 /// `RelicModel` is an instance per relic held, and this is the type of that
 /// instance. The two things a run asks one without giving it a hook: build it,
 /// and read the number it shows.
+/// What a run modifier's model saves.
+pub trait ModifierModel<V: Hooks>: Clone + std::fmt::Debug + PartialEq + Eq + Sized {
+    /// The model as the run is started with it.
+    fn new(modifier: V::Modifier) -> Self;
+}
+
 pub trait RelicModel<V: Hooks>: Clone + std::fmt::Debug + PartialEq + Eq + Sized {
     /// The model as `RelicCmd.Obtain` builds it.
     ///
@@ -6478,6 +6506,10 @@ pub trait Hooks: ContentVersion {
     /// What one relic's own model saves, which the run carries for it.
     type RelicState: RelicModel<Self>;
 
+    /// What one run modifier's own model saves, which the run carries for
+    /// it.
+    type ModifierState: ModifierModel<Self>;
+
     /// What one power's own model saves, which the creature carries for it.
     type PowerState: PowerModel<Self>;
 
@@ -6596,9 +6628,10 @@ pub trait Hooks: ContentVersion {
     );
 
     /// [`Hooks::power_event_hook`] for a run modifier, with what it was set
-    /// up with.
+    /// up with and what its model saves.
     fn modifier_event_hook(
         modifier: crate::RunModifier<Self>,
+        state: &mut Self::ModifierState,
         hook: EventHook<Self>,
         asked: &mut HookEffects<Self>,
     );

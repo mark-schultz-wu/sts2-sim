@@ -192,7 +192,7 @@ mod tests {
     fn a_choice_nothing_can_hold_is_an_error() {
         let repeated = command::<V>(&Awaiting::Cards, &typed(&["1", "1"]));
         assert!(repeated.is_err(), "the same card twice");
-        let distant = command::<V>(&Awaiting::Cards, &typed(&["300"]));
+        let distant = command::<V>(&Awaiting::Cards, &typed(&["70000"]));
         assert!(distant.is_err(), "an option past any a selection names");
         let far = command::<V>(&Awaiting::Rewards, &typed(&["300"]));
         assert!(far.is_err(), "a reward past any a screen offers");

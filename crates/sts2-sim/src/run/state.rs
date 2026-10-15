@@ -32,6 +32,9 @@ use sts2_core::{Reason, Refusal};
 #[derive(Debug)]
 pub(crate) struct State<V: Rules> {
     shared: Arc<RunData<V>>,
+    /// What each of the run's modifiers saves, in their order. Shared until
+    /// a modifier writes it.
+    modifier_states: Arc<Vec<V::ModifierState>>,
     /// The act's map, which is generated again for every act.
     map: Arc<ActMap<V>>,
     /// The point the Spoils Map's quest stands on, with the card and the gold
@@ -458,6 +461,7 @@ impl<V: Rules> Clone for State<V> {
     fn clone(&self) -> Self {
         Self {
             shared: Arc::clone(&self.shared),
+            modifier_states: Arc::clone(&self.modifier_states),
             map: Arc::clone(&self.map),
             spoils: self.spoils,
             player: self.player.clone(),
@@ -477,6 +481,7 @@ impl<V: Rules> Clone for State<V> {
     fn clone_from(&mut self, source: &Self) {
         let State {
             shared,
+            modifier_states,
             map,
             spoils,
             act,
@@ -499,6 +504,7 @@ impl<V: Rules> Clone for State<V> {
             resuming,
         } = self;
         shared.clone_from(&source.shared);
+        modifier_states.clone_from(&source.modifier_states);
         map.clone_from(&source.map);
         *spoils = source.spoils;
         *act = source.act;
@@ -1164,10 +1170,14 @@ impl<V: Rules> State<V> {
         let mut unknown_base = UNKNOWN_ODDS;
         let mut unknown_odds = UNKNOWN_ODDS;
         let mut out_of_bags = Vec::new();
-        for &entry in modifiers {
+        let mut modifier_states: Vec<V::ModifierState> = modifiers
+            .iter()
+            .map(|entry| sts2_core::ModifierModel::new(entry.modifier))
+            .collect();
+        for (&entry, state) in modifiers.iter().zip(&mut modifier_states) {
             let modifier = entry.modifier;
             let mut asked = sts2_core::HookEffects::new();
-            V::modifier_event_hook(entry, sts2_core::EventHook::RunCreated, &mut asked);
+            V::modifier_event_hook(entry, state, sts2_core::EventHook::RunCreated, &mut asked);
             for effect in asked {
                 match effect {
                     sts2_core::HookEffect::RemoveFromRelicBags(relic) => out_of_bags.push(relic),
@@ -1238,6 +1248,7 @@ impl<V: Rules> State<V> {
                 modifiers: modifiers.to_vec(),
                 wins,
             }),
+            modifier_states: Arc::new(modifier_states),
             map: Arc::new(map),
             spoils: None,
             act: 0,
@@ -1543,7 +1554,7 @@ impl<V: Rules> State<V> {
                     self.player.deck_mut().remove(at);
                 }
                 for (_, card) in replaced {
-                    self.add_to_deck(card);
+                    self.add_transformed(card);
                 }
             }
             // `CardCmd.Transform` with the replacements made first. The
@@ -1588,7 +1599,7 @@ impl<V: Rules> State<V> {
                     self.player.deck_mut().remove(at);
                 }
                 for card in replaced {
-                    self.add_to_deck(card);
+                    self.add_transformed(card);
                 }
             }
             // `CardCmd.TransformTo`, which lands the named card where
@@ -1600,7 +1611,7 @@ impl<V: Rules> State<V> {
                     self.player.deck_mut().remove(at);
                 }
                 for _ in &gone {
-                    self.add_to_deck(CardIdent::new(into));
+                    self.add_transformed(CardIdent::new(into));
                 }
             }
             sts2_core::DeckAct::Enchant {
@@ -2327,7 +2338,7 @@ impl<V: Rules> State<V> {
                         let mut ident = CardIdent::new(into);
                         ident.upgrade = u8::from(held.ident.upgrade > 0);
                         ident.enchantment = held.ident.enchantment;
-                        self.add_to_deck(ident);
+                        self.add_transformed(ident);
                     }
                     continue;
                 }
@@ -2337,7 +2348,7 @@ impl<V: Rules> State<V> {
                     deck.retain(|held| held.ident.card != from);
                     let transformed = before - deck.len();
                     for _ in 0..transformed {
-                        self.add_to_deck(CardIdent::new(into));
+                        self.add_transformed(CardIdent::new(into));
                     }
                     continue;
                 }
@@ -3355,6 +3366,7 @@ impl<V: Rules> State<V> {
                 CustomReward::SpecialCard(card) => Offer::SpecialCard {
                     card: CardIdent::new(card),
                     state: <V::CardState as sts2_core::CardModel<V>>::new(card),
+                    returning: None,
                     taken: false,
                 },
             });
@@ -3592,35 +3604,123 @@ impl<V: Rules> State<V> {
     }
 
     /// [`State::add_to_deck`] for a card that carries what its model saved.
-    pub(super) fn add_deck_card(&mut self, mut card: sts2_core::DeckCard<V>) {
-        use sts2_core::{EventHook, HookEffect};
+    pub(super) fn add_deck_card(&mut self, card: sts2_core::DeckCard<V>) {
+        self.land_in_deck(card, false);
+    }
+
+    /// `CardCmd.Transform`'s replacement for a card the deck held, which
+    /// lands at the deck's bottom.
+    fn add_transformed(&mut self, card: CardIdent<V>) {
+        let id = self.player.mint();
+        self.land_in_deck(sts2_core::DeckCard::new(id, card), true);
+    }
+
+    /// `Hook.ModifyCardBeingAddedToDeck` over `card`, then the card at the
+    /// deck's bottom and `AfterCardChangedPiles` for it.
+    fn land_in_deck(&mut self, mut card: sts2_core::DeckCard<V>, transformed: bool) {
+        use sts2_core::EventHook;
 
         // `Hook.ModifyCardBeingAddedToDeck`, both passes.
         card.ident = self.rewritten(card.ident, |card| EventHook::CardBeingAddedToDeck { card });
         self.unheard(sts2_core::ModelHook::TryModifyCardBeingAddedToDeckLate);
 
         self.player.deck_mut().push(card);
-        let hook = EventHook::AddedToDeck {
+        self.joined_deck(card, transformed);
+    }
+
+    /// `AfterCardChangedPiles` for `card`, which just joined the deck with no
+    /// `clonedBy`, and what its listeners ask for: the belt, then the run's
+    /// modifiers.
+    fn joined_deck(&mut self, card: sts2_core::DeckCard<V>, transformed: bool) {
+        let hook = sts2_core::EventHook::AddedToDeck {
             card: card.ident.card,
+            id: card.id,
             cloned: false,
+            transformed,
         };
-        for effect in self.notify_run(hook) {
-            match effect {
-                HookEffect::CloneIntoDeck => {
-                    let clone = sts2_core::DeckCard {
-                        id: self.player.mint(),
-                        ..card
-                    };
-                    self.player.deck_mut().push(clone);
-                    let hook = EventHook::AddedToDeck {
-                        card: card.ident.card,
-                        cloned: true,
-                    };
-                    for effect in self.notify_run(hook) {
-                        self.card_joined_deck(effect);
+        let model_hook = sts2_core::ModelHook::AfterCardChangedPiles;
+        let mut asked = sts2_core::HookEffects::new();
+        let mut left = self.player.relics.hearing_hook(model_hook);
+        while left != 0 {
+            let slot = left.trailing_zeros() as usize;
+            left &= left - 1;
+            let (state, belt) = self.player.relics.state_beside(slot);
+            V::relic_event_hook(state, belt, hook, &mut asked);
+            for effect in std::mem::take(&mut asked) {
+                match effect {
+                    sts2_core::HookEffect::CopyIntoDeck(copies) => {
+                        self.copy_into_deck(card, copies, Copier::Relic(slot));
                     }
+                    effect => self.card_joined_deck(effect),
                 }
-                effect => self.card_joined_deck(effect),
+            }
+        }
+        for at in 0..self.shared.modifiers.len() {
+            let entry = self.shared.modifiers[at];
+            if !sts2_core::ModifierTable::overrides(entry.modifier).contains(model_hook) {
+                continue;
+            }
+            let state = &mut Arc::make_mut(&mut self.modifier_states)[at];
+            V::modifier_event_hook(entry, state, hook, &mut asked);
+            for effect in std::mem::take(&mut asked) {
+                match effect {
+                    sts2_core::HookEffect::CopyIntoDeck(copies) => {
+                        self.copy_into_deck(card, copies, Copier::Modifier(at));
+                    }
+                    effect => self.card_joined_deck(effect),
+                }
+            }
+        }
+    }
+
+    /// `RunState.CloneCard` of `card`, and the copy handed to `copier`. Then
+    /// `CardPileCmd.Add` to the deck's bottom with `clonedBy` the copier,
+    /// which the deck's hooks hear as a clone. Each of `copies` in turn.
+    ///
+    /// # Panics
+    ///
+    /// The copier asking for anything over its copy, or a listener replacing
+    /// the copy as it joins.
+    fn copy_into_deck(&mut self, card: sts2_core::DeckCard<V>, copies: usize, copier: Copier) {
+        use sts2_core::EventHook;
+
+        for _ in 0..copies {
+            let mut copy = sts2_core::DeckCard {
+                id: self.player.mint(),
+                ..card
+            };
+            let made = EventHook::CopyMade { id: copy.id };
+            let mut asked = sts2_core::HookEffects::new();
+            match copier {
+                Copier::Relic(slot) => {
+                    let (state, belt) = self.player.relics.state_beside(slot);
+                    V::relic_event_hook(state, belt, made, &mut asked);
+                }
+                Copier::Modifier(at) => {
+                    let entry = self.shared.modifiers[at];
+                    let state = &mut Arc::make_mut(&mut self.modifier_states)[at];
+                    V::modifier_event_hook(entry, state, made, &mut asked);
+                }
+            }
+            if let Some(effect) = asked.first() {
+                unimplemented!("{copier:?} asking for {effect:?} for its copy");
+            }
+            let rewritten =
+                self.rewritten(copy.ident, |card| EventHook::CardBeingAddedToDeck { card });
+            if rewritten != copy.ident {
+                unimplemented!("a listener replacing a copy {copier:?} made");
+            }
+            copy.ident = rewritten;
+            self.unheard(sts2_core::ModelHook::TryModifyCardBeingAddedToDeckLate);
+            self.player.deck_mut().push(copy);
+            let hook = EventHook::AddedToDeck {
+                card: copy.ident.card,
+                id: copy.id,
+                cloned: true,
+                transformed: false,
+            };
+            for effect in self.notify_run(hook) {
+                self.card_joined_deck(effect);
             }
         }
     }
@@ -3669,9 +3769,11 @@ impl<V: Rules> State<V> {
             let (state, belt) = self.player.relics.state_beside(slot);
             V::relic_event_hook(state, belt, hook, &mut asked);
         }
-        for &entry in &self.shared.modifiers {
+        for at in 0..self.shared.modifiers.len() {
+            let entry = self.shared.modifiers[at];
             if sts2_core::ModifierTable::overrides(entry.modifier).contains(model_hook) {
-                V::modifier_event_hook(entry, hook, &mut asked);
+                let state = &mut Arc::make_mut(&mut self.modifier_states)[at];
+                V::modifier_event_hook(entry, state, hook, &mut asked);
             }
         }
         asked
@@ -4989,7 +5091,18 @@ impl<V: Rules> State<V> {
                 }
                 entry
             })
-            .collect();
+            .collect::<Vec<_>>();
+        // `NMerchantCardRemoval.FillSlot` marks the removal used where
+        // `ShouldAllowMerchantCardRemoval` says no, and `IsStocked` is
+        // `!Used`.
+        let mut entries = entries;
+        if !self.card_removal_allowed() {
+            for entry in
+                (entries.iter_mut()).filter(|entry| entry.stock == sts2_core::Stock::CardRemoval)
+            {
+                entry.stocked = false;
+            }
+        }
         Phase::Shop {
             entries,
             unfinished: None,
@@ -6110,10 +6223,18 @@ impl<V: Rules> State<V> {
                 *taken = true;
                 self.add_to_deck(chosen);
             }
-            (Offer::SpecialCard { card, state, taken }, TakeReward::NonCard { .. }) => {
+            (
+                Offer::SpecialCard {
+                    card,
+                    state,
+                    returning,
+                    taken,
+                },
+                TakeReward::NonCard { .. },
+            ) => {
                 let (ident, state) = (*card, *state);
                 *taken = true;
-                let id = self.player.mint();
+                let id = returning.unwrap_or_else(|| self.player.mint());
                 self.add_deck_card(sts2_core::DeckCard { id, ident, state });
             }
             (
@@ -6823,6 +6944,35 @@ impl<V: Rules> State<V> {
         forced
     }
 
+    /// `Hook.ShouldAllowMerchantCardRemoval`, which any relic on the belt
+    /// or any modifier can answer no to.
+    fn card_removal_allowed(&self) -> bool {
+        let hook = sts2_core::DecisionHook::ShouldAllowMerchantCardRemoval;
+        let hooks = sts2_core::Overrides::of(sts2_core::ModelHook::ShouldAllowMerchantCardRemoval);
+        let mut left = self.player.relics.hearing(hooks);
+        let mut allowed = true;
+        while left != 0 {
+            let held = &self.player.relics[left.trailing_zeros() as usize];
+            left &= left - 1;
+            allowed &= !V::decide_hook(
+                crate::combat::Heard::<V>::Relic {
+                    state: &held.state,
+                    fight: None,
+                    belt: self.player.relics.relics(),
+                },
+                hook,
+            )
+            .is_decision_and(|allowed| !allowed);
+        }
+        for modifier in self.shared.modifiers.iter().map(|entry| entry.modifier) {
+            if sts2_core::ModifierTable::overrides(modifier).intersects(hooks) {
+                allowed &= !V::decide_hook(crate::combat::Heard::<V>::Modifier(modifier), hook)
+                    .is_decision_and(|allowed| !allowed);
+            }
+        }
+        allowed
+    }
+
     /// `Hook.ShouldAllowFreeTravel`, which any relic on the belt or any
     /// modifier can answer yes to.
     fn free_travel(&self) -> bool {
@@ -7512,6 +7662,14 @@ enum Hooked<V: Rules> {
         pools: SmallVec<[crate::reward::card::Source<V>; 6]>,
         concat: Option<V::Character>,
     },
+}
+
+/// Who asked a copy into the deck: a relic by its slot on the belt, or a run
+/// modifier by its place among the run's.
+#[derive(Debug, Clone, Copy)]
+enum Copier {
+    Relic(usize),
+    Modifier(usize),
 }
 
 #[cfg(test)]

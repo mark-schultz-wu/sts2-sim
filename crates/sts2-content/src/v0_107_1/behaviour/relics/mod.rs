@@ -396,7 +396,7 @@ pub enum State {
     MercuryHourglass,
     DaughterOfTheWind,
     MrStruggles,
-    BingBong,
+    BingBong(bing_bong::State),
     IntimidatingHelmet,
     RunicPyramid,
     TungstenRod,
@@ -740,7 +740,7 @@ pub(crate) fn event_hook(
         State::MercuryHourglass => mercury_hourglass::event_hook(hook, asked),
         State::DaughterOfTheWind => daughter_of_the_wind::event_hook(hook, asked),
         State::MrStruggles => mr_struggles::event_hook(hook, asked),
-        State::BingBong => bing_bong::event_hook(hook, asked),
+        State::BingBong(state) => bing_bong::event_hook(state, hook, asked),
         State::IntimidatingHelmet => intimidating_helmet::event_hook(hook, asked),
         State::EmptyCage => empty_cage::event_hook(hook, asked),
         State::Astrolabe => astrolabe::event_hook(hook, asked),
@@ -1183,7 +1183,7 @@ pub(crate) fn modify_hook(
         | State::MercuryHourglass
         | State::DaughterOfTheWind
         | State::MrStruggles
-        | State::BingBong
+        | State::BingBong(_)
         | State::IntimidatingHelmet
         | State::RunicPyramid
         | State::TouchOfOrobas
@@ -1442,7 +1442,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::MercuryHourglass => State::MercuryHourglass,
             Relic::DaughterOfTheWind => State::DaughterOfTheWind,
             Relic::MrStruggles => State::MrStruggles,
-            Relic::BingBong => State::BingBong,
+            Relic::BingBong => State::BingBong(bing_bong::State::default()),
             Relic::IntimidatingHelmet => State::IntimidatingHelmet,
             Relic::RunicPyramid => State::RunicPyramid,
             Relic::TungstenRod => State::TungstenRod,

@@ -107,6 +107,7 @@ impl sts2_core::ContentVersion for V0_107_1 {
 /// Dispatch the hook shapes this simulator can execute.
 impl sts2_core::Hooks for V0_107_1 {
     type RelicState = behaviour::relics::State;
+    type ModifierState = behaviour::modifiers::State;
     type PowerState = behaviour::powers::State;
     type MonsterState = behaviour::monsters::Model;
     type EncounterState = behaviour::encounters::State;
@@ -318,10 +319,11 @@ impl sts2_core::Hooks for V0_107_1 {
 
     fn modifier_event_hook(
         modifier: sts2_core::RunModifier<Self>,
+        state: &mut Self::ModifierState,
         hook: sts2_core::EventHook<Self>,
         asked: &mut sts2_core::HookEffects<Self>,
     ) {
-        behaviour::modifiers::event_hook(modifier, hook, asked)
+        behaviour::modifiers::event_hook(modifier, state, hook, asked)
     }
 
     fn modifier_ported(modifier: Self::Modifier) -> bool {

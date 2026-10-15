@@ -33,7 +33,7 @@ fn every_move_a_recording_played_was_on_the_list() {
                 let clicks = cards
                     .iter()
                     .map(|card| {
-                        Answer::Pick(u8::try_from(card).expect("a pick names a near option"))
+                        Answer::Pick(u16::try_from(card).expect("a pick names a near option"))
                     })
                     .chain([Answer::Done]);
                 for click in clicks {
