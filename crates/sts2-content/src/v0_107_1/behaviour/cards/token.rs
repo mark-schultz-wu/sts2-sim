@@ -7,6 +7,21 @@ use super::super::super::generated::cards::{CardVar, TargetType, TokenCard};
 use super::super::super::generated::powers::Power;
 use super::{Number, V};
 
+/// Where a token card's play stops to ask something.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Resume {
+    /// `SovereignBlade`, after a question inside its attack was answered.
+    SovereignBladeHit,
+}
+
+/// The rest of a token card's play that stood still on a question its own
+/// command raised.
+pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
+    match at {
+        Resume::SovereignBladeHit => sovereign_blade_hit(fight),
+    }
+}
+
 /// What a card works out from the fight for a number it prints.
 pub(super) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
     card: TokenCard,
@@ -146,6 +161,17 @@ fn sovereign_blade<F: Fight<V>>(fight: &mut F) -> Played<V> {
             });
         }
     });
+    if fight.waiting() {
+        return Played::Waiting {
+            at: super::super::Resume::Card(super::Resume::Token(Resume::SovereignBladeHit)),
+        };
+    }
+    sovereign_blade_hit(fight)
+}
+
+/// The rest of `SovereignBlade`, once its attack is over: its block where its
+/// owner carries Parry.
+fn sovereign_blade_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
     // `GetOwnerParryAmount(this) > 0`.
     let actor = fight.actor();
     let parried = fight

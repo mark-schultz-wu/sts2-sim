@@ -621,6 +621,7 @@ pub enum Resume {
     Necrobinder(necrobinder::Resume),
     Regent(regent::Resume),
     Silent(silent::Resume),
+    Token(token::Resume),
     /// A generated play, from the command after the one that left a
     /// question waiting.
     Generated(Cards, u8),
@@ -1166,6 +1167,7 @@ pub(crate) fn resume_play<F: Fight<V>>(
         Resume::Necrobinder(at) => necrobinder::resume_play(fight, at, chosen),
         Resume::Regent(at) => regent::resume_play(fight, at, chosen),
         Resume::Silent(at) => silent::resume_play(fight, at, chosen),
+        Resume::Token(at) => unreachable!("{at:?} waits on a question, not a pick"),
         Resume::Generated(card, _) => {
             unreachable!("generated {card:?} waits on a question, not a pick")
         }
@@ -1198,6 +1200,7 @@ pub(crate) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V>
         Resume::Necrobinder(at) => necrobinder::resume_waited(fight, at),
         Resume::Regent(at) => regent::resume_waited(fight, at),
         Resume::Silent(at) => silent::resume_waited(fight, at),
+        Resume::Token(at) => token::resume_waited(fight, at),
         Resume::Generated(card, from) => generated_from(card, fight, from),
     }
 }
