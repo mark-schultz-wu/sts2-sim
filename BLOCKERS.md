@@ -37,16 +37,14 @@ own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
 
-### 2. v0.111.0's own rules
+### 2. v0.111.0 is a `Build`
 
-Every rule is in `sts2_content::behaviour`, generic over `V: Build`,
-and v0.107.1's `Rules` calls it. v0.111.0's `Rules` uses the same
-behaviour. A rule whose game code changed between the builds gets a
-port of its own, chosen by the build. Content new in v0.111.0 is
-ported there. Dump and record with the mod built for v0.111.0, and its
-recorded runs are the measure.
-
-What the shared behaviour asks of a build:
+Every rule is in `sts2_content::behaviour`, generic over `V: Build`.
+`Hooks` and `Rules` are generic functions in `behaviour::rules`, which
+the `rules!` macro in `build.rs` forwards a build's methods to. A rule
+that is only a table read forwards to the build's own tables inside the
+macro. v0.111.0 implements what the shared behaviour asks of a build and
+calls `rules!`, so its `Rules` is the shared one:
 
 - `BuildContent`: the content traits in `sts2_content::ids`, the shared
   vocabulary types, and `Lists`, which a `lists!` macro beside each rule
@@ -57,16 +55,28 @@ What the shared behaviour asks of a build:
   are Diamond Diadem's and Outbreak's powers, Scare, and Expect a Fight.
   The Amalgamator, Battleworn Dummy and Tinker Time events are its own
   too. A shared dispatcher asks the build first and answers
-  itself when the hook passes.
-- A shared module that waits on a question resumes at its own `Resume`,
-  which the build's wraps through `From`.
+  itself when the hook passes. v0.111.0 starts from v0.107.1's.
+- The pinned state types, and `Resume = behaviour::Resume<Self>`, which
+  wraps each shared module's own `Resume`.
 
 `cargo xtask generic <file>` rewrites a build's rule to be generic, for
 a port that starts from the other build's code. A move can shift what
 the compiler inlines. The relics' and the cards' decision dispatchers
 stay out of line, since the walk inlining them cost 3.9% and 3.4%.
 
-### 3. A walk that shares only who listens
+### 3. Recorded v0.111.0 runs
+
+Dump the build and record its runs with the mod built for it. Deploy
+with `STS2_GAME_VERSION=v0.111.0`, and redeploy v0.107.1 after. Its
+recorded runs are the measure for the next item.
+
+### 4. v0.111.0's changed rules
+
+A rule whose game code changed between the builds gets a port of its
+own, chosen by the build through `OwnRules`. Content new in v0.111.0 is
+ported there. The recorded runs from item 3 show which rules split.
+
+### 5. A walk that shares only who listens
 
 The snapshot copies each walk's listeners. Most walks see none arrive or
 leave: 1.3% of `AfterCardPlayed` walks do, and 28% of `AfterSideTurnEnd`
@@ -76,7 +86,7 @@ A cheaper walk shares only which listeners there are and their order,
 kept apart from what they hold. That is part of the flat-state pass,
 which needs a design first.
 
-### 4. A speed target
+### 6. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.

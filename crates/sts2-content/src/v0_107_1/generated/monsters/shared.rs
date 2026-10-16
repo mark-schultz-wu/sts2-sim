@@ -6,7 +6,7 @@
 use super::{Attack, FollowUp, IntentKind, IntentList, Intents, MonsterData, Move, MoveId, State};
 use crate::{Field, Scaled};
 
-pub(super) const CUBEX_CONSTRUCT: MonsterData = MonsterData {
+pub(super) const CUBEX_CONSTRUCT: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 65u16,
         step: Some((8, 70u16)),
@@ -83,7 +83,7 @@ pub(super) const CUBEX_CONSTRUCT: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const PUNCH_CONSTRUCT: MonsterData = MonsterData {
+pub(super) const PUNCH_CONSTRUCT: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 55u16,
         step: Some((8, 60u16)),

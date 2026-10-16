@@ -112,6 +112,26 @@ pub struct Attack {
     pub repeats: Field<Scaled<u8>>,
 }
 
+/// Everything a move telegraphs.
+///
+/// The kinds in order, and beside them the numbers the three kinds that
+/// carry any actually carry. Held here rather than one payload per
+/// intent because it saves the slice: a move's telegraph is now inline,
+/// and the whole table lost a separate array of 433 intents.
+///
+/// The two payloads and the kinds agree, which codegen checks: `attack`
+/// is present exactly when the kinds hold `Attack` or `DeathBlow`, and
+/// `cards` exactly when it holds `StatusCard`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Intents {
+    pub kinds: IntentList,
+    /// The numbers for whichever of `Attack` or `DeathBlow` is in
+    /// `kinds`.
+    pub attack: Option<Attack>,
+    /// `StatusIntent.CardCount` — how many cards it will add.
+    pub cards: Option<Field<Scaled<u8>>>,
+}
+
 /// How far back a [`Repeat`] rule looks.
 ///
 /// A capped count rather than a `u8` so that `Repeat` stays small: it
@@ -226,4 +246,43 @@ pub struct Branch {
     pub repeat: Repeat,
     /// `Computed` when the game works it out from combat state.
     pub weight: Field<f32>,
+}
+
+/// A move the monster can make.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Move<M> {
+    /// The name the game calls this state, which is what an
+    /// observation reports as a monster's intent.
+    ///
+    /// Here so that the intent can be found in the graph: a move is
+    /// a state at a position, the wire names it, and without this
+    /// there is nothing to match the name against.
+    pub id: M,
+    pub follow_up: FollowUp,
+    pub intents: Intents,
+}
+
+/// A node in a monster's move graph.
+///
+/// `Random` takes exactly one RNG draw and walks its branches in order;
+/// `Conditional` takes none and picks the first branch whose predicate
+/// holds. Both are transparent to `StateLog` — the machine loops until
+/// it lands on a `Move`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum State<M: 'static> {
+    Move(Move<M>),
+    Random(&'static [Branch]),
+    /// Targets in order; the predicates are ported by hand.
+    Conditional(&'static [StateIndex]),
+}
+
+/// What is true of a monster before it is put into a combat.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MonsterData<M: 'static> {
+    /// Rolled between inclusive bounds, and both step with ascension
+    /// — 102 of 126 monsters gain HP at `ToughEnemies`.
+    pub min_hp: Scaled<u16>,
+    pub max_hp: Scaled<u16>,
+    pub initial: StateIndex,
+    pub states: &'static [State<M>],
 }

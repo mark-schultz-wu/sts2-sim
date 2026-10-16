@@ -9,7 +9,7 @@ use super::{
 };
 use crate::{Field, Scaled};
 
-pub(super) const ARCHITECT: MonsterData = MonsterData {
+pub(super) const ARCHITECT: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 9999u16,
         step: None,
@@ -30,7 +30,7 @@ pub(super) const ARCHITECT: MonsterData = MonsterData {
     })],
 };
 
-pub(super) const BATTLE_FRIEND_V1: MonsterData = MonsterData {
+pub(super) const BATTLE_FRIEND_V1: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 75u16,
         step: None,
@@ -51,7 +51,7 @@ pub(super) const BATTLE_FRIEND_V1: MonsterData = MonsterData {
     })],
 };
 
-pub(super) const BATTLE_FRIEND_V2: MonsterData = MonsterData {
+pub(super) const BATTLE_FRIEND_V2: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 150u16,
         step: None,
@@ -72,7 +72,7 @@ pub(super) const BATTLE_FRIEND_V2: MonsterData = MonsterData {
     })],
 };
 
-pub(super) const BATTLE_FRIEND_V3: MonsterData = MonsterData {
+pub(super) const BATTLE_FRIEND_V3: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 300u16,
         step: None,
@@ -93,7 +93,7 @@ pub(super) const BATTLE_FRIEND_V3: MonsterData = MonsterData {
     })],
 };
 
-pub(super) const BIG_DUMMY: MonsterData = MonsterData {
+pub(super) const BIG_DUMMY: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 9999u16,
         step: None,
@@ -114,7 +114,7 @@ pub(super) const BIG_DUMMY: MonsterData = MonsterData {
     })],
 };
 
-pub(super) const BYRDPIP: MonsterData = MonsterData {
+pub(super) const BYRDPIP: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 9999u16,
         step: None,
@@ -135,7 +135,7 @@ pub(super) const BYRDPIP: MonsterData = MonsterData {
     })],
 };
 
-pub(super) const DEPRECATED_MONSTER: MonsterData = MonsterData {
+pub(super) const DEPRECATED_MONSTER: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 0u16,
         step: None,
@@ -156,7 +156,7 @@ pub(super) const DEPRECATED_MONSTER: MonsterData = MonsterData {
     })],
 };
 
-pub(super) const FAKE_MERCHANT_MONSTER: MonsterData = MonsterData {
+pub(super) const FAKE_MERCHANT_MONSTER: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 165u16,
         step: Some((8, 175u16)),
@@ -272,7 +272,7 @@ pub(super) const FAKE_MERCHANT_MONSTER: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const MOCK_ARTIFACT_MONSTER: MonsterData = MonsterData {
+pub(super) const MOCK_ARTIFACT_MONSTER: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 9999u16,
         step: None,
@@ -293,7 +293,7 @@ pub(super) const MOCK_ARTIFACT_MONSTER: MonsterData = MonsterData {
     })],
 };
 
-pub(super) const MOCK_ATTACK_AND_SUMMON_MINION_MONSTER: MonsterData = MonsterData {
+pub(super) const MOCK_ATTACK_AND_SUMMON_MINION_MONSTER: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 10u16,
         step: None,
@@ -323,7 +323,7 @@ pub(super) const MOCK_ATTACK_AND_SUMMON_MINION_MONSTER: MonsterData = MonsterDat
     })],
 };
 
-pub(super) const MOCK_ATTACK_MONSTER: MonsterData = MonsterData {
+pub(super) const MOCK_ATTACK_MONSTER: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 9999u16,
         step: None,
@@ -353,7 +353,7 @@ pub(super) const MOCK_ATTACK_MONSTER: MonsterData = MonsterData {
     })],
 };
 
-pub(super) const MOCK_INTANGIBLE_MONSTER: MonsterData = MonsterData {
+pub(super) const MOCK_INTANGIBLE_MONSTER: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 9999u16,
         step: None,
@@ -385,7 +385,7 @@ pub(super) const MOCK_INTANGIBLE_MONSTER: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const MOCK_PLATING_MONSTER: MonsterData = MonsterData {
+pub(super) const MOCK_PLATING_MONSTER: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 9999u16,
         step: None,
@@ -406,7 +406,7 @@ pub(super) const MOCK_PLATING_MONSTER: MonsterData = MonsterData {
     })],
 };
 
-pub(super) const MOCK_REATTACH_MONSTER: MonsterData = MonsterData {
+pub(super) const MOCK_REATTACH_MONSTER: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 1u16,
         step: None,
@@ -447,7 +447,7 @@ pub(super) const MOCK_REATTACH_MONSTER: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const MULTI_ATTACK_MOVE_MONSTER: MonsterData = MonsterData {
+pub(super) const MULTI_ATTACK_MOVE_MONSTER: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 999u16,
         step: None,
@@ -477,7 +477,7 @@ pub(super) const MULTI_ATTACK_MOVE_MONSTER: MonsterData = MonsterData {
     })],
 };
 
-pub(super) const MYSTERIOUS_KNIGHT: MonsterData = MonsterData {
+pub(super) const MYSTERIOUS_KNIGHT: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 101u16,
         step: Some((8, 108u16)),
@@ -553,7 +553,7 @@ pub(super) const MYSTERIOUS_KNIGHT: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const ONE_HP_MONSTER: MonsterData = MonsterData {
+pub(super) const ONE_HP_MONSTER: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 1u16,
         step: None,
@@ -574,7 +574,7 @@ pub(super) const ONE_HP_MONSTER: MonsterData = MonsterData {
     })],
 };
 
-pub(super) const OSTY: MonsterData = MonsterData {
+pub(super) const OSTY: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 1u16,
         step: None,
@@ -595,7 +595,7 @@ pub(super) const OSTY: MonsterData = MonsterData {
     })],
 };
 
-pub(super) const PAELS_LEGION: MonsterData = MonsterData {
+pub(super) const PAELS_LEGION: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 9999u16,
         step: None,
@@ -616,7 +616,7 @@ pub(super) const PAELS_LEGION: MonsterData = MonsterData {
     })],
 };
 
-pub(super) const SINGLE_ATTACK_MOVE_MONSTER: MonsterData = MonsterData {
+pub(super) const SINGLE_ATTACK_MOVE_MONSTER: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 999u16,
         step: None,
@@ -646,7 +646,7 @@ pub(super) const SINGLE_ATTACK_MOVE_MONSTER: MonsterData = MonsterData {
     })],
 };
 
-pub(super) const TEN_HP_MONSTER: MonsterData = MonsterData {
+pub(super) const TEN_HP_MONSTER: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 10u16,
         step: None,
@@ -667,7 +667,7 @@ pub(super) const TEN_HP_MONSTER: MonsterData = MonsterData {
     })],
 };
 
-pub(super) const THE_ADVERSARY_MK_ONE: MonsterData = MonsterData {
+pub(super) const THE_ADVERSARY_MK_ONE: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 100u16,
         step: None,
@@ -735,7 +735,7 @@ pub(super) const THE_ADVERSARY_MK_ONE: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const THE_ADVERSARY_MK_THREE: MonsterData = MonsterData {
+pub(super) const THE_ADVERSARY_MK_THREE: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 300u16,
         step: None,
@@ -803,7 +803,7 @@ pub(super) const THE_ADVERSARY_MK_THREE: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const THE_ADVERSARY_MK_TWO: MonsterData = MonsterData {
+pub(super) const THE_ADVERSARY_MK_TWO: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 200u16,
         step: None,
