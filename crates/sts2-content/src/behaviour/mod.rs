@@ -15,6 +15,7 @@ pub(crate) mod orbs;
 pub(crate) mod potions;
 pub(crate) mod powers;
 pub(crate) mod relics;
+pub(crate) mod restsite;
 pub(crate) mod rules;
 
 use sts2_core::{CardAt, CardKind, Change, CostPool, Fight, Lasting, Pile, RunStreamKinds};

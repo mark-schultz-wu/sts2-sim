@@ -67,20 +67,22 @@ a port that starts from the other build's code. A move can shift what
 the compiler inlines. The relics' and the cards' decision dispatchers
 stay out of line, since the walk inlining them cost 3.9% and 3.4%.
 
-The simulator follows 14,476 of the 264,153 recorded positions, 5%.
-The commonest first splits, out of 1,500 runs:
+The simulator follows 170,368 of the 729,660 recorded positions, 23%,
+and 54 of 1,500 runs whole. The commonest first splits:
 
-- 898 at the first rest site, whose options and effects are unported.
-- 115 at the start, before any move, so the run's opening differs.
+- 193 after a travel, and 115 at the start, before any move: where the
+  run's position differs with no panic.
+- 137 at Tunneler's Bite, whose move is unported here.
 - 70 in Dowsing Rod's rule for a run that carries it.
-- Cards whose generated play is unported here: Thunderclap, Sword
-  Boomerang, Ricochet, Deathbringer and Rip and Tear among them.
-- Powers the shared rules answer for v0.107.1 alone: Doom, Regen,
-  Juggling and Pale Blue Dot among them.
+- End turns that part with no panic, against Ovicopter, Gremlin Merc and
+  the Knowledge Demon. A shared rule there answers as v0.107.1's game
+  does.
+- Cards whose generated play is unported here: Ricochet, Sword
+  Boomerang and Thunderclap among them.
+- Powers and relics the shared rules answer for v0.107.1 alone: Doom,
+  Regen and Pendulum among them.
 - Expect a Fight, Diamond Diadem and the Battleworn Dummy event changed,
   and are v0.111.0's own, unported.
-- Positions that part with no panic, after an end turn or a play, where
-  a shared rule answers as v0.107.1's game does.
 
 About 60 of the game's engine files changed too, outside the content
 models: its commands, game actions, entities and runs. `sts2-sim`
