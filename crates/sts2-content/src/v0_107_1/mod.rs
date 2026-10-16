@@ -20,15 +20,16 @@
 //! costs one method, and the reverse costs a divergence nobody can see.
 
 mod behaviour;
-mod event_options;
 mod generated;
 mod keywords;
 mod rest_site;
 
-pub use behaviour::events::State as EventState;
+/// An event's state, as the shared events keep it.
+pub type EventState = crate::behaviour::events::State<V0_107_1>;
 /// A relic's state, as the shared relics keep it.
 pub type RelicState = crate::behaviour::relics::State<V0_107_1>;
-pub use event_options::EventOptionId;
+/// An option an event offers, as every build spells it.
+pub type EventOptionId = crate::behaviour::EventOptionId<V0_107_1>;
 pub use generated::*;
 
 use sts2_core::Version;
@@ -57,7 +58,8 @@ impl sts2_core::ContentVersion for V0_107_1 {
         parts as u32 as u64
     }
 
-    type EventOptionId = event_options::EventOptionId;
+    type EventOptionId = EventOptionId;
+    type EventOption = generated::events::EventOption;
 
     type Number = i32;
     type Health = i32;
@@ -993,7 +995,7 @@ impl sts2_core::Rules for V0_107_1 {
     type EventState = EventState;
 
     fn event_allowed(event: Self::Event, run: &impl sts2_core::EventView<Self>) -> bool {
-        behaviour::events::allowed(event, run)
+        crate::behaviour::events::allowed::<V0_107_1>(event, run)
     }
 
     fn enter_event<R: sts2_core::rng::GameRng>(
@@ -1001,7 +1003,7 @@ impl sts2_core::Rules for V0_107_1 {
         run: &impl sts2_core::EventView<Self>,
         rng: &mut R,
     ) -> Self::EventState {
-        behaviour::events::enter(event, run, rng)
+        crate::behaviour::events::enter::<V0_107_1, _>(event, run, rng)
     }
 
     fn set_up_event<R: sts2_core::rng::GameRng>(
@@ -1009,26 +1011,26 @@ impl sts2_core::Rules for V0_107_1 {
         run: &impl sts2_core::EventView<Self>,
         rewards: &mut R,
     ) {
-        behaviour::events::set_up(state, run, rewards);
+        crate::behaviour::events::set_up::<V0_107_1, _>(state, run, rewards);
     }
 
     fn event_relics_pulled(state: &Self::EventState) -> &'static [sts2_core::RelicPull<Self>] {
-        behaviour::events::relics_pulled(state)
+        crate::behaviour::events::relics_pulled::<V0_107_1>(state)
     }
 
     fn hand_event_pulled_relics(state: &mut Self::EventState, relics: &[Self::Relic]) {
-        behaviour::events::hand_pulled_relics(state, relics);
+        crate::behaviour::events::hand_pulled_relics::<V0_107_1>(state, relics);
     }
 
     fn event_holds_potions(state: &Self::EventState) -> bool {
-        behaviour::events::holds_potions(state)
+        crate::behaviour::events::holds_potions::<V0_107_1>(state)
     }
 
     fn observe_event(
         state: &Self::EventState,
         run: &impl sts2_core::EventView<Self>,
     ) -> sts2_core::Room<Self> {
-        behaviour::events::observe(state, run)
+        crate::behaviour::events::observe::<V0_107_1>(state, run)
     }
 
     fn choose_event<R: sts2_core::rng::GameRng>(
@@ -1037,26 +1039,26 @@ impl sts2_core::Rules for V0_107_1 {
         run: &impl sts2_core::EventView<Self>,
         rng: &mut R,
     ) -> sts2_core::HookEffects<Self> {
-        behaviour::events::choose(state, option, run, rng)
+        crate::behaviour::events::choose::<V0_107_1, _>(state, option, run, rng)
     }
 
     fn stock_event<R: sts2_core::rng::GameRng>(state: &mut Self::EventState, shops: &mut R) {
-        behaviour::events::stock(state, shops)
+        crate::behaviour::events::stock::<V0_107_1, _>(state, shops)
     }
 
     fn buy_in_event(state: &mut Self::EventState, index: u8) -> sts2_core::HookEffects<Self> {
-        behaviour::events::buy(state, index)
+        crate::behaviour::events::buy::<V0_107_1>(state, index)
     }
 
     fn event_question(state: &Self::EventState) -> Option<sts2_core::Question<Self>> {
-        behaviour::events::question(state)
+        crate::behaviour::events::question::<V0_107_1>(state)
     }
 
     fn answer_event(
         state: &mut Self::EventState,
         answer: &sts2_core::Answer,
     ) -> sts2_core::HookEffects<Self> {
-        behaviour::events::answer(state, answer)
+        crate::behaviour::events::answer::<V0_107_1>(state, answer)
     }
 
     fn resume_event<R: sts2_core::rng::GameRng>(
@@ -1064,18 +1066,18 @@ impl sts2_core::Rules for V0_107_1 {
         run: &impl sts2_core::EventView<Self>,
         rng: &mut R,
     ) -> sts2_core::HookEffects<Self> {
-        behaviour::events::resume(state, run, rng)
+        crate::behaviour::events::resume::<V0_107_1, _>(state, run, rng)
     }
 
     fn resume_event_from_fight(
         state: &mut Self::EventState,
         escaped: bool,
     ) -> sts2_core::HookEffects<Self> {
-        behaviour::events::resume_from_fight(state, escaped)
+        crate::behaviour::events::resume_from_fight::<V0_107_1>(state, escaped)
     }
 
     fn event_rewards(state: &Self::EventState) -> Vec<sts2_core::CustomReward<Self>> {
-        behaviour::events::rewards(state)
+        crate::behaviour::events::rewards::<V0_107_1>(state)
     }
 
     fn neow_curses() -> &'static [Self::Relic] {

@@ -5,24 +5,24 @@
 //! `sts2_core::Table`. What every build spells alike is one type, in
 //! [`crate::generated`]. Each bound here is one a shared rule reads.
 
-use sts2_core::{CardTable, ContentVersion, PotionTable, Rules, Table};
+use sts2_core::{CardTable, ContentVersion, PotionTable, RelicTable, Rules, Table};
 
 use crate::generated::ascension::AscensionLevel;
 use crate::generated::cards::{CardKeyword, CardRarity, CardTag, KeywordSet, TargetType};
 use crate::generated::encounters::RoomType;
 use crate::generated::monsters::IntentKind;
 use crate::generated::orbs::OrbData;
-use crate::generated::potions::PotionPool;
+use crate::generated::potions::{PotionData, PotionPool};
 use crate::generated::powers::PowerData;
-use crate::generated::relics::RelicData;
+use crate::generated::relics::{RelicData, RelicRarity};
 use crate::generated::runstate::{
     CombatSide, MapPointType, PlayerRngType, PlayerTurnPhase, RunRngType, UnplayableReason,
     UnplayableReasons,
 };
 use crate::ids::{
     ActIds, AfflictionIds, CardIds, CardVarIds, CharacterIds, EnchantmentIds, EncounterIds,
-    EventIds, ModifierIds, MonsterIds, MoveIds, OrbIds, PotionIds, PowerIds, RelicIds,
-    RestSiteOptionIds,
+    EventIds, EventOptionIds, ModifierIds, MonsterIds, MoveIds, OrbIds, PotionIds, PowerIds,
+    RelicIds, RestSiteOptionIds,
 };
 
 /// The content a shared rule reads, which every build has.
@@ -61,13 +61,15 @@ pub trait BuildContent:
         Enchantment: EnchantmentIds,
         Encounter: EncounterIds,
         Event: EventIds,
+        EventOption: EventOptionIds,
+        EventOptionId = crate::behaviour::EventOptionId<Self>,
         Modifier: ModifierIds,
         Monster: MonsterIds,
         MoveId: MoveIds,
         Orb: OrbIds + Table<Data = OrbData>,
-        Potion: PotionIds + PotionTable<Pool = PotionPool>,
+        Potion: PotionIds + PotionTable<Pool = PotionPool> + Table<Data = PotionData>,
         Power: PowerIds + Table<Data = PowerData>,
-        Relic: RelicIds + Table<Data = RelicData>,
+        Relic: RelicIds + Table<Data = RelicData> + RelicTable<Rarity = RelicRarity>,
         RestSiteOption: RestSiteOptionIds,
     >
 {
@@ -111,6 +113,42 @@ pub trait Lists: ContentVersion {
     const POWERS_VALID_ORBS: &'static [Self::Orb];
     const GLORY_DEFENSE_SPAWNS: &'static [Self::Monster];
     const GLORY_AGGRO_SPAWNS: &'static [Self::Monster];
+    const COLORFUL_PHILOSOPHERS_COLOR_ORDER: &'static [(Self::Character, Self::EventOption)];
+    const COLORFUL_PHILOSOPHERS_REWARDS: &'static [[sts2_core::CustomReward<Self>; 3]];
+    const COLOSSAL_FLOWER_PAGES: &'static [[Self::EventOption; 2]];
+    const DARV_SETS: &'static [(Option<usize>, &[Self::Relic])];
+    const DOLL_ROOM_DOLLS: &'static [Self::Relic];
+    const DOLL_ROOM_DOLLS_BY_ID: &'static [Self::Relic];
+    const DROWNING_BEACON_BOTTLE: &'static [sts2_core::CustomReward<Self>];
+    const ENDLESS_CONVEYOR_CONDIMENT: &'static [sts2_core::CustomReward<Self>];
+    const FAKE_MERCHANT_INVENTORY: &'static [Self::Relic];
+    const HUNGRY_FOR_MUSHROOMS_OFFERED: &'static [(Self::EventOption, Self::Relic)];
+    const NONUPEIPE_POOL: &'static [Self::Relic];
+    const OROBAS_POOL_ONE: &'static [Self::Relic];
+    const OROBAS_POOL_TWO: &'static [Self::Relic];
+    const PAEL_POOL_ONE: &'static [Self::Relic];
+    const PAEL_POOL_THREE: &'static [Self::Relic];
+    const POTION_COURIER_FOUL: &'static [sts2_core::CustomReward<Self>];
+    const RELIC_TRADER_PULLED: &'static [sts2_core::RelicPull<Self>];
+    const RELIC_TRADER_OPTIONS: &'static [Self::EventOption];
+    const SELF_HELP_BOOK_READINGS: &'static [(
+        Self::EventOption,
+        Self::Enchantment,
+        sts2_core::CardKind,
+    )];
+    const TANX_POOL: &'static [Self::Relic];
+    const TEZCATARA_POOL_ONE: &'static [Self::Relic];
+    const TEZCATARA_POOL_TWO: &'static [Self::Relic];
+    const TEZCATARA_POOL_THREE: &'static [Self::Relic];
+    const THE_FUTURE_OF_POTIONS_REWARDS: &'static [[sts2_core::CustomReward<Self>; 1]];
+    const THE_LANTERN_KEY_REWARDS: &'static [sts2_core::CustomReward<Self>];
+    const TRASH_HEAP_RELICS: &'static [Self::Relic];
+    const TRASH_HEAP_CARDS: &'static [Self::Card];
+    const TRIAL_REWARDS: &'static [sts2_core::CustomReward<Self>];
+    const VAKUU_POOL_ONE: &'static [Self::Relic];
+    const VAKUU_POOL_TWO: &'static [Self::Relic];
+    const VAKUU_POOL_THREE: &'static [Self::Relic];
+    const WAR_HISTORIAN_REPY_CHEST: &'static [sts2_core::CustomReward<Self>];
 }
 
 /// The lookups into a build's tables a shared rule makes, where the row they
@@ -137,6 +175,9 @@ pub trait Tables: ContentVersion {
         monster: Self::Monster,
         at: u8,
     ) -> Option<&'static [crate::generated::monsters::StateIndex]>;
+
+    /// A relic's place in the build's table, which is `ModelDb` order.
+    fn relic_index(relic: Self::Relic) -> u16;
 
     /// The bounds a monster's health is rolled between, lowest first.
     fn monster_hp(monster: Self::Monster) -> (crate::Scaled<u16>, crate::Scaled<u16>);
@@ -179,6 +220,10 @@ macro_rules! tables {
                 }
             }
 
+            fn relic_index(relic: Self::Relic) -> u16 {
+                relic as u16
+            }
+
             fn monster_hp(monster: Self::Monster) -> (crate::Scaled<u16>, crate::Scaled<u16>) {
                 let data = Table::data(monster);
                 (data.min_hp, data.max_hp)
@@ -214,6 +259,28 @@ macro_rules! lists {
             crate::behaviour::relics::vexing_puzzlebox::lists!($build);
             crate::behaviour::powers::lists!($build);
             crate::behaviour::monsters::glory::lists!($build);
+            crate::behaviour::events::colorful_philosophers::lists!($build);
+            crate::behaviour::events::colossal_flower::lists!($build);
+            crate::behaviour::events::darv::lists!($build);
+            crate::behaviour::events::doll_room::lists!($build);
+            crate::behaviour::events::drowning_beacon::lists!($build);
+            crate::behaviour::events::endless_conveyor::lists!($build);
+            crate::behaviour::events::fake_merchant::lists!($build);
+            crate::behaviour::events::hungry_for_mushrooms::lists!($build);
+            crate::behaviour::events::nonupeipe::lists!($build);
+            crate::behaviour::events::orobas::lists!($build);
+            crate::behaviour::events::pael::lists!($build);
+            crate::behaviour::events::potion_courier::lists!($build);
+            crate::behaviour::events::relic_trader::lists!($build);
+            crate::behaviour::events::self_help_book::lists!($build);
+            crate::behaviour::events::tanx::lists!($build);
+            crate::behaviour::events::tezcatara::lists!($build);
+            crate::behaviour::events::the_future_of_potions::lists!($build);
+            crate::behaviour::events::the_lantern_key::lists!($build);
+            crate::behaviour::events::trash_heap::lists!($build);
+            crate::behaviour::events::trial::lists!($build);
+            crate::behaviour::events::vakuu::lists!($build);
+            crate::behaviour::events::war_historian_repy::lists!($build);
         }
     };
 }
@@ -242,6 +309,23 @@ pub trait OwnRules: ContentVersion + Sized {
     ) -> Option<u8>
     where
         Self: Build;
+
+    /// The events whose rules the build ports for itself, as one
+    /// `EventBehavior` over their states.
+    type OwnEvents: sts2_core::EventBehavior<Self> + Default + Clone + std::fmt::Debug;
+
+    /// `IsAllowed` for an event whose rule is the build's own, or nothing for
+    /// a shared one.
+    fn own_event_allowed(event: Self::Event, run: &impl sts2_core::EventView<Self>)
+    -> Option<bool>;
+
+    /// An event whose rule is the build's own, entered, or nothing for a
+    /// shared one.
+    fn own_event_enter<R: sts2_core::rng::GameRng>(
+        event: Self::Event,
+        run: &impl sts2_core::EventView<Self>,
+        rng: &mut R,
+    ) -> Option<<Self::OwnEvents as sts2_core::EventBehavior<Self>>::State>;
 
     /// Whether a power's rule is the build's own.
     fn own_power(power: Self::Power) -> bool;

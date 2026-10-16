@@ -44,7 +44,7 @@ impl EventBehavior<V> for BattlewornDummy {
     }
 
     fn observe(&self, state: &State, _run: &impl EventView<V>) -> Room<V> {
-        super::page(
+        crate::behaviour::events::page::<V>(
             Event::BattlewornDummy,
             &SETTINGS.map(|(said, _)| (said, false)),
             state.chosen,
