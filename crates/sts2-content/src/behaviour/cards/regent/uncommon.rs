@@ -1,14 +1,11 @@
 //! The Regent's uncommon cards the generator leaves to a hand port.
 
+use crate::ids::CardVarIds as _;
 use sts2_core::{Change, CostPool, EventHook, HookEffect, Lasting};
-
-use super::super::super::super::generated::cards::CardVar;
-
-use super::V;
 
 /// `KinglyKick.AfterCardDrawn`: each time it is drawn, it costs one less for
 /// the rest of the fight.
-pub(super) fn kingly_kick(
+pub(super) fn kingly_kick<V: crate::Build>(
     id: sts2_core::CardId<V>,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
@@ -27,7 +24,7 @@ pub(super) fn kingly_kick(
 
 /// `KinglyPunch.AfterCardDrawn`: each time it is drawn, its damage rises by
 /// its `Increase` for the rest of the fight.
-pub(super) fn kingly_punch<P: sts2_core::Printed<V> + ?Sized>(
+pub(super) fn kingly_punch<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
     id: sts2_core::CardId<V>,
     printed: &P,
     hook: EventHook<V>,
@@ -36,8 +33,8 @@ pub(super) fn kingly_punch<P: sts2_core::Printed<V> + ?Sized>(
     match hook {
         EventHook::CardDrawn { id: drawn, .. } if drawn == id => {
             asked.push(HookEffect::ModifySelf {
-                change: Change::Own(super::super::CardWrite::BuffFromPlay(
-                    printed.face(CardVar::Increase),
+                change: Change::Own(crate::behaviour::cards::CardWrite::BuffFromPlay(
+                    printed.face(V::CardVar::INCREASE),
                 )),
                 lasting: Lasting::ThisFight,
             })
@@ -49,8 +46,10 @@ pub(super) fn kingly_punch<P: sts2_core::Printed<V> + ?Sized>(
 
 /// `Radiate`: its damage to every enemy, once for each of its calculated
 /// hits.
-pub(super) fn radiate<F: sts2_core::Fight<V>>(fight: &mut F) -> sts2_core::Played<V> {
-    let hits = fight.var(CardVar::CalculatedHits);
+pub(super) fn radiate<V: crate::Build, F: sts2_core::Fight<V>>(
+    fight: &mut F,
+) -> sts2_core::Played<V> {
+    let hits = fight.var(V::CardVar::CALCULATED_HITS);
     fight.attack(sts2_core::Scaling::Dynamic, |fight| {
         for _ in 0..hits {
             let targets = fight.opponents();
@@ -60,7 +59,7 @@ pub(super) fn radiate<F: sts2_core::Fight<V>>(fight: &mut F) -> sts2_core::Playe
                     let attack = fight.resolve(sts2_core::Effect::Attack {
                         dealer: fight.actor(),
                         target,
-                        damage: sts2_core::Amount::Var(CardVar::Damage),
+                        damage: sts2_core::Amount::Var(V::CardVar::DAMAGE),
                         scaling: sts2_core::Scaling::Dynamic,
                     });
                     fight.apply(attack);
@@ -73,15 +72,17 @@ pub(super) fn radiate<F: sts2_core::Fight<V>>(fight: &mut F) -> sts2_core::Playe
 
 /// `LunarBlast`: its `Damage` at its target, once for each of its
 /// `CalculatedHits`.
-pub(super) fn lunar_blast<F: sts2_core::Fight<V>>(fight: &mut F) -> sts2_core::Played<V> {
-    let hits = fight.var(CardVar::CalculatedHits);
+pub(super) fn lunar_blast<V: crate::Build, F: sts2_core::Fight<V>>(
+    fight: &mut F,
+) -> sts2_core::Played<V> {
+    let hits = fight.var(V::CardVar::CALCULATED_HITS);
     let target = fight.target();
     fight.attack(sts2_core::Scaling::Dynamic, |fight| {
         for _ in 0..hits {
             let attack = fight.resolve(sts2_core::Effect::Attack {
                 dealer: fight.actor(),
                 target,
-                damage: sts2_core::Amount::Var(CardVar::Damage),
+                damage: sts2_core::Amount::Var(V::CardVar::DAMAGE),
                 scaling: sts2_core::Scaling::Dynamic,
             });
             fight.apply(attack);

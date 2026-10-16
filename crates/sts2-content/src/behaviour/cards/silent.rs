@@ -2,12 +2,11 @@
 
 use sts2_core::{
     Amount, CardIdent, CardKind, Change, CostPool, CreatureView as _, Effect, EventHook, Fight,
-    HookEffect, Lasting, Pile, Played, PowerAmount, Rules as _, Scaling, Selection,
+    HookEffect, Lasting, Pile, Played, PowerAmount, Scaling, Selection,
 };
 
-use super::super::super::generated::cards::{CardKeyword, CardVar, Cards, SilentCard, TokenCard};
-use super::super::super::generated::powers::Power;
-use super::V;
+use crate::generated::cards::CardKeyword;
+use crate::ids::{CardIds as _, CardVarIds as _, EnchantmentIds as _, PowerIds as _};
 
 /// Where a Silent card stopped inside its own play.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -43,50 +42,48 @@ pub enum Resume {
 
 /// The rest of the play waits at `at`, where a command left a question and
 /// more commands follow.
-fn wait(at: Resume) -> Played<V> {
+fn wait<V: crate::Build>(at: Resume) -> Played<V> {
     Played::Waiting {
-        at: super::super::Resume::Card(super::Resume::Silent(at)),
+        at: crate::behaviour::cards::Resume::Silent(at).into(),
     }
 }
 
-pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
+pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F) -> Played<V> {
     match card {
-        SilentCard::Survivor => survivor(fight),
-        SilentCard::Prepared => prepared(fight),
-        SilentCard::DaggerSpray => dagger_spray(fight),
-        SilentCard::LeadingStrike => leading_strike(fight),
-        SilentCard::Skewer => skewer(fight),
-        SilentCard::DaggerThrow => dagger_throw(fight),
-        SilentCard::Haze => haze(fight),
-        SilentCard::Malaise => malaise(fight),
-        SilentCard::UpMySleeve => up_my_sleeve(fight),
-        SilentCard::BladeDance => blade_dance(fight),
-        SilentCard::PiercingWail => piercing_wail(fight),
-        SilentCard::EchoingSlash => echoing_slash(fight),
-        SilentCard::HandTrick => hand_trick(fight),
+        __c0 if __c0 == V::Card::SURVIVOR => survivor::<V, _>(fight),
+        __c0 if __c0 == V::Card::PREPARED => prepared::<V, _>(fight),
+        __c0 if __c0 == V::Card::DAGGER_SPRAY => dagger_spray::<V, _>(fight),
+        __c0 if __c0 == V::Card::LEADING_STRIKE => leading_strike::<V, _>(fight),
+        __c0 if __c0 == V::Card::SKEWER => skewer::<V, _>(fight),
+        __c0 if __c0 == V::Card::DAGGER_THROW => dagger_throw::<V, _>(fight),
+        __c0 if __c0 == V::Card::HAZE => haze::<V, _>(fight),
+        __c0 if __c0 == V::Card::MALAISE => malaise::<V, _>(fight),
+        __c0 if __c0 == V::Card::UP_MY_SLEEVE => up_my_sleeve::<V, _>(fight),
+        __c0 if __c0 == V::Card::BLADE_DANCE => blade_dance::<V, _>(fight),
+        __c0 if __c0 == V::Card::PIERCING_WAIL => piercing_wail::<V, _>(fight),
+        __c0 if __c0 == V::Card::ECHOING_SLASH => echoing_slash::<V, _>(fight),
+        __c0 if __c0 == V::Card::HAND_TRICK => hand_trick::<V, _>(fight),
         // `Nightmare`: one card of the hand picked, to copy into hand before
         // the next hand is drawn.
-        SilentCard::Nightmare => Played::Asking {
+        __c0 if __c0 == V::Card::NIGHTMARE => Played::Asking {
             pile: Pile::Hand,
             selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
-            at: super::super::Resume::Card(super::Resume::Silent(Resume::Nightmare)),
+            at: crate::behaviour::cards::Resume::Silent(Resume::Nightmare).into(),
         },
         // `BladeOfInk`: its `Cards` of Shivs into hand, each enchanted with
         // one Inky. `CardCmd.Enchant` raises no hook, so the Shivs arrive
         // enchanted.
-        SilentCard::BladeOfInk => {
-            use super::super::super::generated::enchantments::Enchantment;
-
-            let mut shiv = CardIdent::new(Cards::Token(TokenCard::Shiv));
-            <V as sts2_core::Rules>::enchant(Enchantment::Inky, 1, &mut shiv);
+        __c0 if __c0 == V::Card::BLADE_OF_INK => {
+            let mut shiv = CardIdent::new(<V::Card as crate::ids::CardIds>::SHIV);
+            <V as sts2_core::Rules>::enchant(V::Enchantment::INKY, 1, &mut shiv);
             let count: usize =
-                num_traits::cast(fight.var(CardVar::Cards)).expect("a count of Shivs");
+                num_traits::cast(fight.var(V::CardVar::CARDS)).expect("a count of Shivs");
             fight.add_generated_cards(shiv, Pile::Hand, count);
             Played::Done
         }
         // `KnifeTrap`: each Shiv of the exhaust pile, upgraded where Knife
         // Trap is, auto-played at its target, one at a time.
-        SilentCard::KnifeTrap => {
+        __c0 if __c0 == V::Card::KNIFE_TRAP => {
             let target = fight.target();
             let shivs: Vec<_> = fight
                 .cards_in(Pile::Exhaust)
@@ -116,30 +113,27 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
             }
             Played::Done
         }
-        // `Scare`: one Weak on each enemy that can be hit.
-        SilentCard::Scare => {
-            for target in fight.hittable_opponents() {
-                fight.apply_power(target, Power::WeakPower, PowerAmount::Counted(1));
-            }
-            Played::Done
-        }
         // `Expose`: the target loses all its block and any Artifact, then
         // takes its `Power` of Vulnerable.
-        SilentCard::Expose => {
+        __c0 if __c0 == V::Card::EXPOSE => {
             let target = fight.target();
             let block = fight
                 .creatures()
                 .find(|creature| creature.id() == target)
                 .map_or(0, |creature| creature.block());
             fight.lose_block(target, block);
-            fight.remove_power(target, Power::ArtifactPower);
-            let amount = fight.var(CardVar::Power);
-            fight.apply_power(target, Power::VulnerablePower, PowerAmount::Counted(amount));
+            fight.remove_power(target, V::Power::ARTIFACT_POWER);
+            let amount = fight.var(V::CardVar::POWER);
+            fight.apply_power(
+                target,
+                V::Power::VULNERABLE_POWER,
+                PowerAmount::Counted(amount),
+            );
             Played::Done
         }
         // `DodgeAndRoll`: its block, then as much as it gave as Block Next
         // Turn.
-        SilentCard::DodgeAndRoll => {
+        __c0 if __c0 == V::Card::DODGE_AND_ROLL => {
             let actor = fight.actor();
             let held = |fight: &F| {
                 fight
@@ -150,39 +144,42 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
             let before = held(fight);
             let block = fight.resolve(Effect::GainBlock {
                 recipient: actor,
-                amount: Amount::Var(CardVar::Block),
+                amount: Amount::Var(V::CardVar::BLOCK),
                 scaling: Scaling::Dynamic,
             });
             fight.apply(block);
             let gained = held(fight) - before;
-            fight.apply_to_actor(Power::BlockNextTurnPower, PowerAmount::Counted(gained));
+            fight.apply_to_actor(
+                V::Power::BLOCK_NEXT_TURN_POWER,
+                PowerAmount::Counted(gained),
+            );
             Played::Done
         }
         // `EscapePlan`: a card drawn, then its block where that card is a
         // Skill. A shuffle inside the draw can ask, and the block waits.
-        SilentCard::EscapePlan => {
+        __c0 if __c0 == V::Card::ESCAPE_PLAN => {
             let drew = fight.draw(1);
             if fight.waiting() {
                 return Played::Waiting {
-                    at: super::super::Resume::Card(super::Resume::Silent(Resume::EscapePlanDrew)),
+                    at: crate::behaviour::cards::Resume::Silent(Resume::EscapePlanDrew).into(),
                 };
             }
-            escape_plan_drew(fight, &drew)
+            escape_plan_drew::<V, _>(fight, &drew)
         }
         // `CloakAndDagger`: its block, then its `Cards` of Shivs into hand
         // one at a time.
-        SilentCard::CloakAndDagger => {
+        __c0 if __c0 == V::Card::CLOAK_AND_DAGGER => {
             let block = fight.resolve(Effect::GainBlock {
                 recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
+                amount: Amount::Var(V::CardVar::BLOCK),
                 scaling: Scaling::Dynamic,
             });
             fight.apply(block);
-            let count: usize = num_traits::cast(fight.var(CardVar::Cards))
+            let count: usize = num_traits::cast(fight.var(V::CardVar::CARDS))
                 .expect("a count of Shivs is not negative");
             for _ in 0..count {
                 fight.add_generated_cards(
-                    CardIdent::new(Cards::Token(TokenCard::Shiv)),
+                    CardIdent::new(<V::Card as crate::ids::CardIds>::SHIV),
                     Pile::Hand,
                     1,
                 );
@@ -190,98 +187,99 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
             Played::Done
         }
         // `Tracking`: Tracking on its owner, two the first time and one after.
-        SilentCard::Tracking => {
+        __c0 if __c0 == V::Card::TRACKING => {
             let actor = fight.actor();
             let tracking = fight.creatures().any(|creature| {
-                creature.id() == actor && creature.power(Power::TrackingPower).is_some()
+                creature.id() == actor && creature.power(V::Power::TRACKING_POWER).is_some()
             });
             let amount = if tracking { 1 } else { 2 };
-            fight.apply_to_actor(Power::TrackingPower, PowerAmount::Counted(amount));
+            fight.apply_to_actor(V::Power::TRACKING_POWER, PowerAmount::Counted(amount));
             Played::Done
         }
         // `Acrobatics`: its `Cards` drawn, then one card of the hand
         // discarded.
-        SilentCard::Acrobatics => {
-            fight.draw(fight.var(CardVar::Cards));
+        __c0 if __c0 == V::Card::ACROBATICS => {
+            fight.draw(fight.var(V::CardVar::CARDS));
             Played::Asking {
                 pile: Pile::Hand,
                 selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
-                at: super::super::Resume::Card(super::Resume::Silent(Resume::Acrobatics)),
+                at: crate::behaviour::cards::Resume::Silent(Resume::Acrobatics).into(),
             }
         }
         // `Finisher`: its damage to the target, once for each attack its
         // owner finished this turn.
-        SilentCard::Finisher => {
-            hit_target(fight, fight.var(CardVar::CalculatedHits));
+        __c0 if __c0 == V::Card::FINISHER => {
+            hit_target::<V, _>(fight, fight.var(V::CardVar::CALCULATED_HITS));
             Played::Done
         }
         // `Flechettes`: its damage to the target, once for each Skill in its
         // owner's hand.
-        SilentCard::Flechettes => {
-            hit_target(fight, fight.var(CardVar::CalculatedHits));
+        __c0 if __c0 == V::Card::FLECHETTES => {
+            hit_target::<V, _>(fight, fight.var(V::CardVar::CALCULATED_HITS));
             Played::Done
         }
         // `Expertise`: cards drawn up to its `Cards` in hand.
-        SilentCard::Expertise => {
-            let hand = super::Number::try_from(fight.cards_in(Pile::Hand).len())
+        __c0 if __c0 == V::Card::EXPERTISE => {
+            let hand = crate::behaviour::cards::Number::try_from(fight.cards_in(Pile::Hand).len())
                 .expect("a hand fits a game number");
-            fight.draw((fight.var(CardVar::Cards) - hand).max(0));
+            fight.draw((fight.var(V::CardVar::CARDS) - hand).max(0));
             Played::Done
         }
         // `HiddenDaggers`: its `Cards` of the hand discarded, then Shivs.
-        SilentCard::HiddenDaggers => {
-            let count = usize::try_from(fight.var(CardVar::Cards))
+        __c0 if __c0 == V::Card::HIDDEN_DAGGERS => {
+            let count = usize::try_from(fight.var(V::CardVar::CARDS))
                 .ok()
                 .and_then(nonmax::NonMaxUsize::new)
                 .expect("a count of cards is not negative");
             Played::Asking {
                 pile: Pile::Hand,
                 selection: Selection::Exactly(count),
-                at: super::super::Resume::Card(super::Resume::Silent(Resume::HiddenDaggers)),
+                at: crate::behaviour::cards::Resume::Silent(Resume::HiddenDaggers).into(),
             }
         }
         // `BouncingFlask`: its Poison on an enemy drawn off `CombatTargets`,
         // its `Repeat` times.
-        SilentCard::BouncingFlask => {
-            let poison = PowerAmount::Counted(fight.var(CardVar::PoisonPower));
-            for _ in 0..fight.var(CardVar::Repeat) {
+        __c0 if __c0 == V::Card::BOUNCING_FLASK => {
+            let poison = PowerAmount::Counted(fight.var(V::CardVar::POISON_POWER));
+            for _ in 0..fight.var(V::CardVar::REPEAT) {
                 if let Some(target) = fight.random_opponent() {
-                    fight.apply_power(target, Power::PoisonPower, poison);
+                    fight.apply_power(target, V::Power::POISON_POWER, poison);
                 }
             }
             Played::Done
         }
         // `BubbleBubble`: its Poison on the target, where it already carries
         // Poison.
-        SilentCard::BubbleBubble => {
+        __c0 if __c0 == V::Card::BUBBLE_BUBBLE => {
             let target = fight.target();
             let poisoned = fight.creatures().any(|creature| {
-                creature.id() == target && creature.power(Power::PoisonPower).is_some()
+                creature.id() == target && creature.power(V::Power::POISON_POWER).is_some()
             });
             if poisoned {
-                let poison = PowerAmount::Counted(fight.var(CardVar::PoisonPower));
-                fight.apply_power(target, Power::PoisonPower, poison);
+                let poison = PowerAmount::Counted(fight.var(V::CardVar::POISON_POWER));
+                fight.apply_power(target, V::Power::POISON_POWER, poison);
             }
             Played::Done
         }
         // `Adrenaline`: its energy, then its `Cards` drawn.
-        SilentCard::Adrenaline => {
-            fight.modify_energy(fight.var(CardVar::Energy));
-            fight.draw(fight.var(CardVar::Cards));
+        __c0 if __c0 == V::Card::ADRENALINE => {
+            fight.modify_energy(fight.var(V::CardVar::ENERGY));
+            fight.draw(fight.var(V::CardVar::CARDS));
             Played::Done
         }
         // `CalculatedGamble`: the whole hand discarded, then as many drawn.
-        SilentCard::CalculatedGamble => {
+        __c0 if __c0 == V::Card::CALCULATED_GAMBLE => {
             let hand = fight.cards_in(Pile::Hand);
-            let count = super::Number::try_from(hand.len()).expect("a hand fits a game number");
+            let count = crate::behaviour::cards::Number::try_from(hand.len())
+                .expect("a hand fits a game number");
             fight.discard_and_draw(&hand, count);
             Played::Done
         }
         // `Mirage`: its calculated block.
-        SilentCard::Mirage => {
+        __c0 if __c0 == V::Card::MIRAGE => {
             let block = fight.resolve(Effect::GainBlock {
                 recipient: fight.actor(),
-                amount: Amount::Var(CardVar::CalculatedBlock),
+                amount: Amount::Var(V::CardVar::CALCULATED_BLOCK),
                 scaling: Scaling::Dynamic,
             });
             fight.apply(block);
@@ -289,35 +287,35 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
         }
         // `StormOfSteel`: the whole hand discarded, then as many Shivs into
         // hand, each upgraded once Storm of Steel is.
-        SilentCard::StormOfSteel => {
+        __c0 if __c0 == V::Card::STORM_OF_STEEL => {
             let hand = fight.cards_in(Pile::Hand);
             let count = u8::try_from(hand.len()).expect("a hand's worth fits a u8");
             fight.act_on(sts2_core::PileAct::Discard, &hand);
             if fight.waiting() {
-                return wait(Resume::StormOfSteelDiscarded { count });
+                return wait::<V>(Resume::StormOfSteelDiscarded { count });
             }
-            storm_of_steel_discarded(fight, count)
+            storm_of_steel_discarded::<V, _>(fight, count)
         }
         // `BulletTime`: each card of the hand that does not cost X free this
         // turn, then one No Draw on its owner.
-        SilentCard::BulletTime => {
+        __c0 if __c0 == V::Card::BULLET_TIME => {
             for at in fight.cards_in(Pile::Hand) {
                 if sts2_core::CardTable::cost(fight.card_ident(at).card) != sts2_core::Cost::X {
                     crate::behaviour::free_this_turn(fight, at);
                 }
             }
-            fight.apply_to_actor(Power::NoDrawPower, PowerAmount::Counted(1));
+            fight.apply_to_actor(V::Power::NO_DRAW_POWER, PowerAmount::Counted(1));
             Played::Done
         }
         // `FanOfKnives`: one Fan of Knives on its owner, then its `Shivs`
         // into hand one at a time.
-        SilentCard::FanOfKnives => {
-            fight.apply_to_actor(Power::FanOfKnivesPower, PowerAmount::Counted(1));
+        __c0 if __c0 == V::Card::FAN_OF_KNIVES => {
+            fight.apply_to_actor(V::Power::FAN_OF_KNIVES_POWER, PowerAmount::Counted(1));
             let count: usize =
-                num_traits::cast(fight.var(CardVar::Shivs)).expect("a count of Shivs");
+                num_traits::cast(fight.var(V::CardVar::SHIVS)).expect("a count of Shivs");
             for _ in 0..count {
                 fight.add_generated_cards(
-                    CardIdent::new(Cards::Token(TokenCard::Shiv)),
+                    CardIdent::new(<V::Card as crate::ids::CardIds>::SHIV),
                     Pile::Hand,
                     1,
                 );
@@ -325,7 +323,7 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
             Played::Done
         }
         // `GrandFinale`: its damage to every enemy, as one attack.
-        SilentCard::GrandFinale => {
+        __c0 if __c0 == V::Card::GRAND_FINALE => {
             fight.attack(Scaling::Dynamic, |fight| {
                 let targets = fight.opponents();
                 // One `CreatureCmd.Damage` over them all.
@@ -334,7 +332,7 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
                         let attack = fight.resolve(Effect::Attack {
                             dealer: fight.actor(),
                             target,
-                            damage: Amount::Var(CardVar::Damage),
+                            damage: Amount::Var(V::CardVar::DAMAGE),
                             scaling: Scaling::Dynamic,
                         });
                         fight.apply(attack);
@@ -347,52 +345,54 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
         // owner.
         // `ShadowStep`: the hand discarded, which a Sly card it holds can
         // stand still behind a question. Then its power.
-        SilentCard::ShadowStep => {
+        __c0 if __c0 == V::Card::SHADOW_STEP => {
             let hand = fight.cards_in(Pile::Hand);
             fight.act_on(sts2_core::PileAct::Discard, &hand);
             if fight.waiting() {
                 return Played::Waiting {
-                    at: super::super::Resume::Card(super::Resume::Silent(
-                        Resume::ShadowStepDiscarded,
-                    )),
+                    at: crate::behaviour::cards::Resume::Silent(Resume::ShadowStepDiscarded).into(),
                 };
             }
-            shadow_step_discarded(fight)
+            shadow_step_discarded::<V, _>(fight)
         }
         // `TheHunt`: its damage to the target. Where a result says
         // `WasTargetKilled` of a target whose death, read before the hit,
         // triggers Fatal, the room offers one more card reward, and its owner
         // takes one The Hunt.
-        SilentCard::TheHunt => {
+        __c0 if __c0 == V::Card::THE_HUNT => {
             let target = fight.target();
             let fatal = fight.death_triggers_fatal(target);
-            let results = hit_target(fight, 1);
+            let results = hit_target::<V, _>(fight, 1);
             if fight.waiting() {
-                return wait(Resume::TheHuntHit { fatal });
+                return wait::<V>(Resume::TheHuntHit { fatal });
             }
-            the_hunt_hit(fight, fatal && results.iter().any(|result| result.killed))
+            the_hunt_hit::<V, _>(fight, fatal && results.iter().any(|result| result.killed))
         }
-        card => super::generated_from(Cards::Silent(card), fight, 0),
+        card => crate::behaviour::cards::generated_from::<V, _>(card, fight, 0),
     }
 }
 
 /// `Malaise`: its X, one more once upgraded, off the target's Strength, then
 /// as Weak on it.
-fn malaise<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    let amount = fight.x_value() + super::Number::from(fight.upgraded());
+fn malaise<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let amount = fight.x_value() + crate::behaviour::cards::Number::from(fight.upgraded());
     let target = fight.target();
-    fight.apply_power(target, Power::StrengthPower, PowerAmount::Counted(-amount));
-    fight.apply_power(target, Power::WeakPower, PowerAmount::Counted(amount));
+    fight.apply_power(
+        target,
+        V::Power::STRENGTH_POWER,
+        PowerAmount::Counted(-amount),
+    );
+    fight.apply_power(target, V::Power::WEAK_POWER, PowerAmount::Counted(amount));
     Played::Done
 }
 
 /// `Haze`: its Poison onto each enemy that can be hit, one at a time.
-fn haze<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn haze<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     for target in fight.hittable_opponents() {
         fight.apply_power(
             target,
-            Power::PoisonPower,
-            PowerAmount::Counted(fight.var(CardVar::PoisonPower)),
+            V::Power::POISON_POWER,
+            PowerAmount::Counted(fight.var(V::CardVar::POISON_POWER)),
         );
     }
     Played::Done
@@ -404,10 +404,10 @@ const NIGHTMARE: i32 = 3;
 
 /// `HandTrick`: its block, then one skill of the hand that is not Sly this
 /// turn picked, to be Sly until the turn ends.
-fn hand_trick<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn hand_trick<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     let block = fight.resolve(Effect::GainBlock {
         recipient: fight.actor(),
-        amount: Amount::Var(CardVar::Block),
+        amount: Amount::Var(V::CardVar::BLOCK),
         scaling: Scaling::Dynamic,
     });
     fight.apply(block);
@@ -422,11 +422,11 @@ fn hand_trick<F: Fight<V>>(fight: &mut F) -> Played<V> {
     Played::AskingAmong {
         cards,
         selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
-        at: super::super::Resume::Card(super::Resume::Silent(Resume::HandTrick)),
+        at: crate::behaviour::cards::Resume::Silent(Resume::HandTrick).into(),
     }
 }
 
-pub(super) fn resume_play<F: Fight<V>>(
+pub(super) fn resume_play<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
     at: Resume,
     chosen: sts2_core::SelectedCards<V>,
@@ -442,8 +442,8 @@ pub(super) fn resume_play<F: Fight<V>>(
         Resume::Nightmare => {
             if let Some(card) = chosen.one_or_none() {
                 let owner = fight.actor();
-                fight.apply_to_actor(Power::NightmarePower, PowerAmount::Counted(NIGHTMARE));
-                fight.keep_card_on_power(owner, Power::NightmarePower, card);
+                fight.apply_to_actor(V::Power::NIGHTMARE_POWER, PowerAmount::Counted(NIGHTMARE));
+                fight.keep_card_on_power(owner, V::Power::NIGHTMARE_POWER, card);
             }
             Played::Done
         }
@@ -462,12 +462,10 @@ pub(super) fn resume_play<F: Fight<V>>(
             fight.act_on(sts2_core::PileAct::Discard, chosen.as_slice());
             if fight.waiting() {
                 return Played::Waiting {
-                    at: super::super::Resume::Card(super::Resume::Silent(
-                        Resume::HiddenDaggersShivs,
-                    )),
+                    at: crate::behaviour::cards::Resume::Silent(Resume::HiddenDaggersShivs).into(),
                 };
             }
-            hidden_daggers_shivs(fight)
+            hidden_daggers_shivs::<V, _>(fight)
         }
         Resume::HiddenDaggersShivs => {
             unreachable!("Hidden Daggers' Shivs wait on a card, not a pick")
@@ -487,7 +485,10 @@ pub(super) fn resume_play<F: Fight<V>>(
 /// A resume point no play waits at.
 /// `EscapePlan`, once its draw is over: its block where the card it drew is
 /// a Skill, wherever that card stands now.
-fn escape_plan_drew<F: Fight<V>>(fight: &mut F, drew: &[sts2_core::CardId<V>]) -> Played<V> {
+fn escape_plan_drew<V: crate::Build, F: Fight<V>>(
+    fight: &mut F,
+    drew: &[sts2_core::CardId<V>],
+) -> Played<V> {
     let skill = drew.first().is_some_and(|&id| {
         let drawn = fight
             .find_card(id)
@@ -497,7 +498,7 @@ fn escape_plan_drew<F: Fight<V>>(fight: &mut F, drew: &[sts2_core::CardId<V>]) -
     if skill {
         let block = fight.resolve(Effect::GainBlock {
             recipient: fight.actor(),
-            amount: Amount::Var(CardVar::Block),
+            amount: Amount::Var(V::CardVar::BLOCK),
             scaling: Scaling::Dynamic,
         });
         fight.apply(block);
@@ -507,45 +508,45 @@ fn escape_plan_drew<F: Fight<V>>(fight: &mut F, drew: &[sts2_core::CardId<V>]) -
 
 /// The rest of a Silent card's play that waited on its own draw, with every
 /// copy that draw drew.
-pub(super) fn resume_drew<F: Fight<V>>(
+pub(super) fn resume_drew<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
     at: Resume,
     drew: &[sts2_core::CardId<V>],
 ) -> Played<V> {
     match at {
-        Resume::EscapePlanDrew => escape_plan_drew(fight, drew),
-        at => resume_waited(fight, at),
+        Resume::EscapePlanDrew => escape_plan_drew::<V, _>(fight, drew),
+        at => resume_waited::<V, _>(fight, at),
     }
 }
 
-pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
+pub(super) fn resume_waited<V: crate::Build, F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
     match at {
-        Resume::HiddenDaggersShivs => hidden_daggers_shivs(fight),
-        Resume::ShadowStepDiscarded => shadow_step_discarded(fight),
+        Resume::HiddenDaggersShivs => hidden_daggers_shivs::<V, _>(fight),
+        Resume::ShadowStepDiscarded => shadow_step_discarded::<V, _>(fight),
         // A draw that never ran, as the fight ended, drew nothing.
-        Resume::EscapePlanDrew => escape_plan_drew(fight, &[]),
-        Resume::LeadingStrikeHit => leading_strike_hit(fight),
+        Resume::EscapePlanDrew => escape_plan_drew::<V, _>(fight, &[]),
+        Resume::LeadingStrikeHit => leading_strike_hit::<V, _>(fight),
         Resume::TheHuntHit { fatal } => {
             let results = fight.waited_attack_results();
-            the_hunt_hit(fight, fatal && results.iter().any(|result| result.killed))
+            the_hunt_hit::<V, _>(fight, fatal && results.iter().any(|result| result.killed))
         }
-        Resume::StormOfSteelDiscarded { count } => storm_of_steel_discarded(fight, count),
+        Resume::StormOfSteelDiscarded { count } => storm_of_steel_discarded::<V, _>(fight, count),
         at => unimplemented!("{at:?} resumed after waiting"),
     }
 }
 
 /// `ShadowStep`'s power on its owner, once its discard is over.
-fn shadow_step_discarded<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    fight.apply_to_actor(Power::ShadowStepPower, PowerAmount::Counted(1));
+fn shadow_step_discarded<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+    fight.apply_to_actor(V::Power::SHADOW_STEP_POWER, PowerAmount::Counted(1));
     Played::Done
 }
 
 /// `HiddenDaggers`' Shivs into the hand, upgraded where it is.
-fn hidden_daggers_shivs<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn hidden_daggers_shivs<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     let shivs: usize =
-        num_traits::cast(fight.var(CardVar::Shivs)).expect("a count of Shivs is not negative");
+        num_traits::cast(fight.var(V::CardVar::SHIVS)).expect("a count of Shivs is not negative");
     let upgraded = fight.upgraded();
-    let shiv = CardIdent::new(Cards::Token(TokenCard::Shiv));
+    let shiv = CardIdent::new(<V::Card as crate::ids::CardIds>::SHIV);
     for at in fight.add_generated_cards(shiv, Pile::Hand, shivs) {
         if upgraded {
             fight.modify_card(at, Change::Upgrade, Lasting::ThisFight);
@@ -556,13 +557,13 @@ fn hidden_daggers_shivs<F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// `DaggerThrow`: its damage to the target, one card drawn, then one card
 /// from hand to discard.
-fn dagger_throw<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn dagger_throw<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     let target = fight.target();
     fight.attack(Scaling::Dynamic, |fight| {
         let attack = fight.resolve(Effect::Attack {
             dealer: fight.actor(),
             target,
-            damage: Amount::Var(CardVar::Damage),
+            damage: Amount::Var(V::CardVar::DAMAGE),
             scaling: Scaling::Dynamic,
         });
         fight.apply(attack);
@@ -571,24 +572,24 @@ fn dagger_throw<F: Fight<V>>(fight: &mut F) -> Played<V> {
     Played::Asking {
         pile: Pile::Hand,
         selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
-        at: super::super::Resume::Card(super::Resume::Silent(Resume::DaggerThrow)),
+        at: crate::behaviour::cards::Resume::Silent(Resume::DaggerThrow).into(),
     }
 }
 
 /// The rest of `TheHunt`, once its attack is over: one more card reward and
 /// The Hunt on its owner, where `gains`.
-fn the_hunt_hit<F: Fight<V>>(fight: &mut F, gains: bool) -> Played<V> {
+fn the_hunt_hit<V: crate::Build, F: Fight<V>>(fight: &mut F, gains: bool) -> Played<V> {
     if gains {
         fight.add_card_reward();
-        fight.apply_to_actor(Power::TheHuntPower, PowerAmount::Counted(1));
+        fight.apply_to_actor(V::Power::THE_HUNT_POWER, PowerAmount::Counted(1));
     }
     Played::Done
 }
 
 /// The rest of `StormOfSteel`, once its discard is over: `count` Shivs into
 /// hand, each upgraded once Storm of Steel is.
-fn storm_of_steel_discarded<F: Fight<V>>(fight: &mut F, count: u8) -> Played<V> {
-    let shiv = CardIdent::new(Cards::Token(TokenCard::Shiv));
+fn storm_of_steel_discarded<V: crate::Build, F: Fight<V>>(fight: &mut F, count: u8) -> Played<V> {
+    let shiv = CardIdent::new(<V::Card as crate::ids::CardIds>::SHIV);
     let upgraded = fight.upgraded();
     for at in fight.add_generated_cards(shiv, Pile::Hand, usize::from(count)) {
         if upgraded {
@@ -599,14 +600,17 @@ fn storm_of_steel_discarded<F: Fight<V>>(fight: &mut F, count: u8) -> Played<V> 
 }
 
 /// Its damage to the target, `hits` times, as one attack.
-fn hit_target<F: Fight<V>>(fight: &mut F, hits: super::Number) -> sts2_core::AttackResults<V> {
+fn hit_target<V: crate::Build, F: Fight<V>>(
+    fight: &mut F,
+    hits: crate::behaviour::cards::Number,
+) -> sts2_core::AttackResults<V> {
     let target = fight.target();
     fight.attack(Scaling::Dynamic, |fight| {
         for _ in 0..hits {
             let attack = fight.resolve(Effect::Attack {
                 dealer: fight.actor(),
                 target,
-                damage: Amount::Var(CardVar::Damage),
+                damage: Amount::Var(V::CardVar::DAMAGE),
                 scaling: Scaling::Dynamic,
             });
             fight.apply(attack);
@@ -615,7 +619,7 @@ fn hit_target<F: Fight<V>>(fight: &mut F, hits: super::Number) -> sts2_core::Att
 }
 
 /// `DaggerSpray`: its damage to every enemy, twice.
-fn dagger_spray<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn dagger_spray<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     fight.attack(Scaling::Dynamic, |fight| {
         for _ in 0..2 {
             let targets = fight.opponents();
@@ -625,7 +629,7 @@ fn dagger_spray<F: Fight<V>>(fight: &mut F) -> Played<V> {
                     let attack = fight.resolve(Effect::Attack {
                         dealer: fight.actor(),
                         target,
-                        damage: Amount::Var(CardVar::Damage),
+                        damage: Amount::Var(V::CardVar::DAMAGE),
                         scaling: Scaling::Dynamic,
                     });
                     fight.apply(attack);
@@ -638,33 +642,37 @@ fn dagger_spray<F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// `LeadingStrike`: its damage to the target, then its `Shivs` into hand one
 /// at a time.
-fn leading_strike<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    hit_target(fight, 1);
+fn leading_strike<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+    hit_target::<V, _>(fight, 1);
     if fight.waiting() {
-        return wait(Resume::LeadingStrikeHit);
+        return wait::<V>(Resume::LeadingStrikeHit);
     }
-    leading_strike_hit(fight)
+    leading_strike_hit::<V, _>(fight)
 }
 
 /// The rest of `LeadingStrike`, once its attack is over: its `Shivs` into
 /// hand one at a time.
-fn leading_strike_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    for _ in 0..fight.var(CardVar::Shivs) {
-        fight.add_generated_cards(CardIdent::new(Cards::Token(TokenCard::Shiv)), Pile::Hand, 1);
+fn leading_strike_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+    for _ in 0..fight.var(V::CardVar::SHIVS) {
+        fight.add_generated_cards(
+            CardIdent::new(<V::Card as crate::ids::CardIds>::SHIV),
+            Pile::Hand,
+            1,
+        );
     }
     Played::Done
 }
 
 /// `Skewer`: its damage to the target, once for each energy its X spent.
-fn skewer<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn skewer<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     let hits = fight.x_value();
-    hit_target(fight, hits);
+    hit_target::<V, _>(fight, hits);
     Played::Done
 }
 
 /// `Prepared`: its `Cards` drawn, then as many from hand to discard.
-fn prepared<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    let cards = fight.var(CardVar::Cards);
+fn prepared<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let cards = fight.var(V::CardVar::CARDS);
     fight.draw(cards);
     let count = usize::try_from(cards)
         .ok()
@@ -673,60 +681,68 @@ fn prepared<F: Fight<V>>(fight: &mut F) -> Played<V> {
     Played::Asking {
         pile: Pile::Hand,
         selection: Selection::Exactly(count),
-        at: super::super::Resume::Card(super::Resume::Silent(Resume::Prepared)),
+        at: crate::behaviour::cards::Resume::Silent(Resume::Prepared).into(),
     }
 }
 
 /// `Survivor`: its block, then one card from hand to discard.
-fn survivor<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn survivor<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     let block = fight.resolve(Effect::GainBlock {
         recipient: fight.actor(),
-        amount: Amount::Var(CardVar::Block),
+        amount: Amount::Var(V::CardVar::BLOCK),
         scaling: Scaling::Dynamic,
     });
     fight.apply(block);
     Played::Asking {
         pile: Pile::Hand,
         selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
-        at: super::super::Resume::Card(super::Resume::Silent(Resume::Survivor)),
+        at: crate::behaviour::cards::Resume::Silent(Resume::Survivor).into(),
     }
 }
 
 /// `UpMySleeve`: its `Cards` of Shivs into hand one at a time, then one off
 /// its own cost for the rest of the fight.
-fn up_my_sleeve<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn up_my_sleeve<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     let count: usize =
-        num_traits::cast(fight.var(CardVar::Cards)).expect("a count of Shivs is not negative");
+        num_traits::cast(fight.var(V::CardVar::CARDS)).expect("a count of Shivs is not negative");
     for _ in 0..count {
-        fight.add_generated_cards(CardIdent::new(Cards::Token(TokenCard::Shiv)), Pile::Hand, 1);
+        fight.add_generated_cards(
+            CardIdent::new(<V::Card as crate::ids::CardIds>::SHIV),
+            Pile::Hand,
+            1,
+        );
     }
     fight.modify_this(Change::ChangeCost(CostPool::Energy, -1), Lasting::ThisFight);
     Played::Done
 }
 
 /// `BladeDance`: its `Cards` of Shivs into hand one at a time.
-fn blade_dance<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn blade_dance<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     let count: usize =
-        num_traits::cast(fight.var(CardVar::Cards)).expect("a count of Shivs is not negative");
+        num_traits::cast(fight.var(V::CardVar::CARDS)).expect("a count of Shivs is not negative");
     for _ in 0..count {
-        fight.add_generated_cards(CardIdent::new(Cards::Token(TokenCard::Shiv)), Pile::Hand, 1);
+        fight.add_generated_cards(
+            CardIdent::new(<V::Card as crate::ids::CardIds>::SHIV),
+            Pile::Hand,
+            1,
+        );
     }
     Played::Done
 }
 
 /// `PiercingWail`: its `StrengthLoss` as Piercing Wail onto each enemy that
 /// can be hit, one at a time.
-fn piercing_wail<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    let amount = PowerAmount::Counted(fight.var(CardVar::StrengthLoss));
+fn piercing_wail<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let amount = PowerAmount::Counted(fight.var(V::CardVar::STRENGTH_LOSS));
     for target in fight.hittable_opponents() {
-        fight.apply_power(target, Power::PiercingWailPower, amount);
+        fight.apply_power(target, V::Power::PIERCING_WAIL_POWER, amount);
     }
     Played::Done
 }
 
 /// `EchoingSlash`: its damage to every enemy that can be hit, and again for
 /// each result of it that says `WasTargetKilled`, as one attack.
-fn echoing_slash<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn echoing_slash<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     fight.attack(Scaling::Dynamic, |fight| {
         let mut left = 1;
         while left > 0 {
@@ -739,7 +755,7 @@ fn echoing_slash<F: Fight<V>>(fight: &mut F) -> Played<V> {
                     let attack = fight.resolve(Effect::Attack {
                         dealer: fight.actor(),
                         target,
-                        damage: Amount::Var(CardVar::Damage),
+                        damage: Amount::Var(V::CardVar::DAMAGE),
                         scaling: Scaling::Dynamic,
                     });
                     fight.apply(attack);
@@ -755,18 +771,18 @@ fn echoing_slash<F: Fight<V>>(fight: &mut F) -> Played<V> {
 }
 
 /// Deliver a notification to one Silent card in the fight.
-pub(super) fn event_hook(
-    card: SilentCard,
+pub(super) fn event_hook<V: crate::Build>(
+    card: V::Card,
     id: sts2_core::CardId<V>,
     history: sts2_core::History<'_, V>,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
-    let skill = |card: Cards| V::card_kind(card) == Some(CardKind::Skill);
+    let skill = |card: V::Card| V::card_kind(card) == Some(CardKind::Skill);
     match (card, hook) {
         // `Pinpoint.AfterCardPlayed`: one off its cost this turn for each
         // Skill its owner plays. A fight here has one player.
-        (SilentCard::Pinpoint, EventHook::CardPlayed { card, .. }) => {
+        (__c0, EventHook::CardPlayed { card, .. }) if __c0 == V::Card::PINPOINT => {
             if skill(card) {
                 asked.push(HookEffect::ModifySelf {
                     change: Change::ChangeCost(CostPool::Energy, -1),
@@ -777,9 +793,9 @@ pub(super) fn event_hook(
         // `Pinpoint.AfterCardEnteredCombat`, for its own entry alone and not
         // a clone's: one off this turn for each Skill play finished this turn
         // before it came.
-        (SilentCard::Pinpoint, EventHook::CardEnteredCombat { at, clone, .. }) => {
+        (__c0, EventHook::CardEnteredCombat { at, clone, .. }) if __c0 == V::Card::PINPOINT => {
             if at.id() == id && !clone {
-                let skills: super::Number = history
+                let skills: crate::behaviour::cards::Number = history
                     .finished_this_turn()
                     .filter(|&card| skill(card))
                     .count()

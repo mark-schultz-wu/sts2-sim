@@ -66,8 +66,8 @@ impl sts2_core::ContentVersion for V0_107_1 {
     type Count = u32;
     type Index = u16;
     type Resume = behaviour::Resume;
-    type CardWrite = behaviour::cards::CardWrite;
-    type DeckWrite = behaviour::cards::DeckWrite;
+    type CardWrite = crate::behaviour::cards::CardWrite;
+    type DeckWrite = crate::behaviour::DeckWrite;
     type CardSerial = u16;
 
     type AscensionLevel = generated::ascension::AscensionLevel;
@@ -114,8 +114,8 @@ impl sts2_core::Hooks for V0_107_1 {
     type PowerState = crate::behaviour::powers::State<V0_107_1>;
     type MonsterState = crate::behaviour::monsters::Model<V0_107_1>;
     type EncounterState = crate::behaviour::encounters::State;
-    type CardState = behaviour::cards::State;
-    type CardFields = behaviour::cards::Fields;
+    type CardState = crate::behaviour::cards::State;
+    type CardFields = crate::behaviour::cards::Fields;
 
     fn power_noted(state: &mut Self::PowerState, note: Self::Number) {
         crate::behaviour::powers::noted::<Self>(state, note);
@@ -219,7 +219,7 @@ impl sts2_core::Hooks for V0_107_1 {
                 pile,
                 history,
                 ..
-            } => behaviour::cards::decide_hook(card, pile, history, hook),
+            } => crate::behaviour::cards::decide_hook::<V0_107_1>(card, pile, history, hook),
             // A raised hook reaches only a listener that overrides it, and no
             // monster this build ports overrides one of these.
             sts2_core::Listener::Monster { .. } => match hook.model_hook() {
@@ -280,18 +280,18 @@ impl sts2_core::Hooks for V0_107_1 {
         card: Self::Card,
         base: Option<sts2_core::Pile>,
     ) -> sts2_core::HookResponse<Option<sts2_core::Pile>> {
-        behaviour::cards::result_pile(card, base)
+        crate::behaviour::cards::result_pile::<V0_107_1>(card, base)
     }
 
     fn write_deck_card(card: &mut sts2_core::DeckCard<Self>, write: Self::DeckWrite) {
-        behaviour::cards::write_deck_card(card, write);
+        crate::behaviour::cards::write_deck_card::<V0_107_1>(card, write);
     }
 
     fn card_is_playable(
         card: Self::Card,
         fight: sts2_core::CardLogic,
     ) -> sts2_core::HookResponse<bool> {
-        behaviour::cards::is_playable(card, fight)
+        crate::behaviour::cards::is_playable::<V0_107_1>(card, fight)
     }
 
     fn result_pile<P: sts2_core::Printed<Self> + ?Sized>(
@@ -321,7 +321,7 @@ impl sts2_core::Hooks for V0_107_1 {
         hook: sts2_core::EventHook<Self>,
         asked: &mut sts2_core::HookEffects<Self>,
     ) {
-        behaviour::cards::deck_event_hook(card, state, hook, asked)
+        crate::behaviour::cards::deck_event_hook::<V0_107_1>(card, state, hook, asked)
     }
 
     fn modifier_event_hook(
@@ -390,7 +390,9 @@ impl sts2_core::Hooks for V0_107_1 {
         hook: sts2_core::EventHook<Self>,
         asked: &mut sts2_core::HookEffects<Self>,
     ) {
-        behaviour::cards::event_hook(card, id, pile, printed, history, hook, asked)
+        crate::behaviour::cards::event_hook::<V0_107_1, _>(
+            card, id, pile, printed, history, hook, asked,
+        )
     }
 }
 /// Nothing yet. The rules land here as they are ported, one pool at a time.
@@ -521,7 +523,7 @@ impl sts2_core::Rules for V0_107_1 {
     }
 
     fn card_upgrade(card: Self::Card) -> &'static [sts2_core::Change<Self>] {
-        behaviour::cards::upgrade(card)
+        crate::behaviour::cards::upgrade::<V0_107_1>(card)
     }
 
     fn on_use<F: sts2_core::Fight<Self>>(
@@ -543,11 +545,11 @@ impl sts2_core::Rules for V0_107_1 {
         card: Self::Card,
         fight: &mut F,
     ) -> sts2_core::Played<Self> {
-        behaviour::cards::on_play(card, fight)
+        crate::behaviour::cards::on_play::<V0_107_1, _>(card, fight)
     }
 
     fn on_card_turn_end<F: sts2_core::Fight<Self>>(card: Self::Card, fight: &mut F) {
-        behaviour::cards::on_turn_end(card, fight);
+        crate::behaviour::cards::on_turn_end::<V0_107_1, _>(card, fight);
     }
 
     fn resume_play<F: sts2_core::Fight<Self>>(
@@ -876,30 +878,30 @@ impl sts2_core::Rules for V0_107_1 {
         card: Self::Card,
         powers: &[sts2_core::Stack<Self>],
     ) -> Self::TargetType {
-        behaviour::cards::computed_target(card, powers)
+        crate::behaviour::cards::computed_target::<V0_107_1>(card, powers)
     }
 
     fn deck_card_narrows_unknown_rooms(card: Self::Card, act: usize) -> bool {
-        behaviour::cards::narrows_unknown_rooms(card, act)
+        crate::behaviour::cards::narrows_unknown_rooms::<V0_107_1>(card, act)
     }
 
     fn deck_card_modify_generated_map(
         card: Self::Card,
         act: usize,
     ) -> Option<sts2_core::ReplacedMap> {
-        behaviour::cards::modify_generated_map(card, act)
+        crate::behaviour::cards::modify_generated_map::<V0_107_1>(card, act)
     }
 
     fn deck_card_modify_generated_map_late(card: Self::Card, act: usize) -> Option<Self::Number> {
-        behaviour::cards::modify_generated_map_late(card, act)
+        crate::behaviour::cards::modify_generated_map_late::<V0_107_1>(card, act)
     }
 
     fn deck_card_after_map_generated(card: Self::Card, act: usize) {
-        behaviour::cards::after_map_generated(card, act);
+        crate::behaviour::cards::after_map_generated::<V0_107_1>(card, act);
     }
 
     fn deck_card_next_event(card: Self::Card, act: usize, event: Self::Event) -> Self::Event {
-        behaviour::cards::next_event(card, act, event)
+        crate::behaviour::cards::next_event::<V0_107_1>(card, act, event)
     }
 
     fn computed_potion_target(potion: Self::Potion, in_combat: bool) -> Self::TargetType {
@@ -916,7 +918,7 @@ impl sts2_core::Rules for V0_107_1 {
         printed: &P,
         owner: sts2_core::CardOwner<'_, Self>,
     ) -> Self::Number {
-        behaviour::cards::calculated(card, key, printed, owner)
+        crate::behaviour::cards::calculated::<V0_107_1, _>(card, key, printed, owner)
     }
 
     fn perform_move<F: sts2_core::Fight<Self>>(

@@ -5,20 +5,17 @@ use sts2_core::{
     Scaling, Selection,
 };
 
-use super::super::super::generated::cards::Cards;
-use super::super::super::generated::cards::{CardKeyword, CardVar, NecrobinderCard};
-use super::super::super::generated::monsters::Monster;
-use super::super::super::generated::powers::Power;
-use super::V;
+use crate::generated::cards::CardKeyword;
+use crate::ids::{CardIds as _, CardVarIds as _, PowerIds as _};
 
 /// Its damage to the target, as one attack.
-fn strike<F: Fight<V>>(fight: &mut F) {
+fn strike<V: crate::Build, F: Fight<V>>(fight: &mut F) {
     let target = fight.target();
     fight.attack(Scaling::Dynamic, |fight| {
         let attack = fight.resolve(Effect::Attack {
             dealer: fight.actor(),
             target,
-            damage: Amount::Var(CardVar::Damage),
+            damage: Amount::Var(V::CardVar::DAMAGE),
             scaling: Scaling::Dynamic,
         });
         fight.apply(attack);
@@ -27,8 +24,8 @@ fn strike<F: Fight<V>>(fight: &mut F) {
 
 /// `Snap`: Osty's damage to the target, where Osty stands, then one card of
 /// the hand that does not Retain made to.
-fn snap<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    osty_hit(fight, CardVar::OstyDamage);
+fn snap<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+    osty_hit::<V, _>(fight, V::CardVar::OSTY_DAMAGE);
     let cards = fight
         .cards_in(Pile::Hand)
         .into_iter()
@@ -37,24 +34,24 @@ fn snap<F: Fight<V>>(fight: &mut F) -> Played<V> {
     Played::AskingAmong {
         cards,
         selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
-        at: super::super::Resume::Card(super::Resume::Necrobinder(Resume::SnapRetain)),
+        at: crate::behaviour::cards::Resume::Necrobinder(Resume::SnapRetain).into(),
     }
 }
 
 /// `Fetch`: where Osty stands, its damage to the target, then its `Cards`
 /// drawn unless this copy finished a play already this turn.
-fn fetch<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn fetch<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     if fight.osty().is_none() {
         return Played::Done;
     }
-    osty_hit(fight, CardVar::OstyDamage);
+    osty_hit::<V, _>(fight, V::CardVar::OSTY_DAMAGE);
     let this = fight.playing();
     let played =
         fight.history().this_turn.iter().any(
             |entry| matches!(entry, sts2_core::HistoryEntry::Finished(done) if done.id == this),
         );
     if !played {
-        fight.draw(fight.var(CardVar::Cards));
+        fight.draw(fight.var(V::CardVar::CARDS));
     }
     Played::Done
 }
@@ -62,10 +59,10 @@ fn fetch<F: Fight<V>>(fight: &mut F) -> Played<V> {
 /// `DrainPower`: its damage to the target, then its `Cards` of the discard
 /// pile's upgradable cards taken at random off `CombatCardSelection`, each
 /// upgraded.
-fn drain_power<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn drain_power<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     use sts2_core::CardTable as _;
 
-    strike(fight);
+    strike::<V, _>(fight);
     let mut upgradable: Vec<_> = fight
         .cards_in(Pile::Discard)
         .into_iter()
@@ -74,7 +71,7 @@ fn drain_power<F: Fight<V>>(fight: &mut F) -> Played<V> {
             ident.upgrade < ident.card.max_upgrade()
         })
         .collect();
-    let count = usize::try_from(fight.var(CardVar::Cards)).expect("a count is not negative");
+    let count = usize::try_from(fight.var(V::CardVar::CARDS)).expect("a count is not negative");
     for card in fight.take_random_cards(&mut upgradable, count) {
         fight.modify_card(card, Change::Upgrade, Lasting::ThisFight);
     }
@@ -83,13 +80,11 @@ fn drain_power<F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// `Reave`: its damage to the target, then its `Cards` of Souls into the
 /// draw pile at random, each upgraded where Reave is.
-fn reave<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    use super::super::super::generated::cards::{Cards, TokenCard};
-
-    strike(fight);
+fn reave<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+    strike::<V, _>(fight);
     let upgraded = fight.upgraded();
-    for _ in 0..fight.var(CardVar::Cards) {
-        let Some(soul) = fight.add_at_random(Cards::Token(TokenCard::Soul), Pile::Draw) else {
+    for _ in 0..fight.var(V::CardVar::CARDS) {
+        let Some(soul) = fight.add_at_random(V::Card::SOUL, Pile::Draw) else {
             break;
         };
         if upgraded {
@@ -100,34 +95,35 @@ fn reave<F: Fight<V>>(fight: &mut F) -> Played<V> {
 }
 
 /// `Putrefy`: its `Power` as Weak, then as Vulnerable, on the target.
-fn putrefy<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    use super::super::super::generated::powers::Power;
-
+fn putrefy<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     let target = fight.target();
-    let amount = sts2_core::PowerAmount::Counted(fight.var(CardVar::Power));
-    fight.apply_power(target, Power::WeakPower, amount);
-    fight.apply_power(target, Power::VulnerablePower, amount);
+    let amount = sts2_core::PowerAmount::Counted(fight.var(V::CardVar::POWER));
+    fight.apply_power(target, V::Power::WEAK_POWER, amount);
+    fight.apply_power(target, V::Power::VULNERABLE_POWER, amount);
     Played::Done
 }
 
 /// `Spur`: its `Summon` of Osty, then its `Heal` on Osty.
-fn spur<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    fight.summon_osty(fight.var(CardVar::Summon));
+fn spur<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+    fight.summon_osty(fight.var(V::CardVar::SUMMON));
     if let Some(osty) = fight.osty() {
-        fight.heal(osty, fight.var(CardVar::Heal));
+        fight.heal(
+            osty,
+            fight.var(<V::CardVar as crate::ids::CardVarIds>::HEAL),
+        );
     }
     Played::Done
 }
 
 /// `Sacrifice`: where Osty stands, its calculated block worked out, then
 /// Osty killed, then the block gained.
-fn sacrifice<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn sacrifice<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     let Some(osty) = fight.osty() else {
         return Played::Done;
     };
     let block = fight.resolve(Effect::GainBlock {
         recipient: fight.actor(),
-        amount: Amount::Var(CardVar::CalculatedBlock),
+        amount: Amount::Var(V::CardVar::CALCULATED_BLOCK),
         scaling: Scaling::Dynamic,
     });
     fight.kill(osty);
@@ -137,7 +133,7 @@ fn sacrifice<F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// `Eradicate`: its damage to the target, once for each energy its X spent,
 /// as one attack.
-fn eradicate<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn eradicate<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     let target = fight.target();
     let hits = fight.x_value();
     fight.attack(Scaling::Dynamic, |fight| {
@@ -145,7 +141,7 @@ fn eradicate<F: Fight<V>>(fight: &mut F) -> Played<V> {
             let attack = fight.resolve(Effect::Attack {
                 dealer: fight.actor(),
                 target,
-                damage: Amount::Var(CardVar::Damage),
+                damage: Amount::Var(V::CardVar::DAMAGE),
                 scaling: Scaling::Dynamic,
             });
             fight.apply(attack);
@@ -156,20 +152,15 @@ fn eradicate<F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// `GraveWarden`: its block, then its `Cards` of Souls into the draw pile at
 /// random.
-fn grave_warden<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    use super::super::super::generated::cards::{Cards, TokenCard};
-
+fn grave_warden<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     let block = fight.resolve(Effect::GainBlock {
         recipient: fight.actor(),
-        amount: Amount::Var(CardVar::Block),
+        amount: Amount::Var(V::CardVar::BLOCK),
         scaling: Scaling::Dynamic,
     });
     fight.apply(block);
-    for _ in 0..fight.var(CardVar::Cards) {
-        if fight
-            .add_at_random(Cards::Token(TokenCard::Soul), Pile::Draw)
-            .is_none()
-        {
+    for _ in 0..fight.var(V::CardVar::CARDS) {
+        if fight.add_at_random(V::Card::SOUL, Pile::Draw).is_none() {
             break;
         }
     }
@@ -177,29 +168,25 @@ fn grave_warden<F: Fight<V>>(fight: &mut F) -> Played<V> {
 }
 
 /// `NegativePulse`: its block, then its Doom on each enemy that can be hit.
-fn negative_pulse<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    use super::super::super::generated::powers::Power;
-
+fn negative_pulse<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     let block = fight.resolve(Effect::GainBlock {
         recipient: fight.actor(),
-        amount: Amount::Var(CardVar::Block),
+        amount: Amount::Var(V::CardVar::BLOCK),
         scaling: Scaling::Dynamic,
     });
     fight.apply(block);
-    let doom = sts2_core::PowerAmount::Counted(fight.var(CardVar::DoomPower));
+    let doom = sts2_core::PowerAmount::Counted(fight.var(V::CardVar::DOOM_POWER));
     for target in fight.hittable_opponents() {
-        fight.apply_power(target, Power::DoomPower, doom);
+        fight.apply_power(target, V::Power::DOOM_POWER, doom);
     }
     Played::Done
 }
 
 /// `Severance`: its damage to the target, then a Soul into the draw pile at
 /// random, one into the discard pile and one into hand.
-fn severance<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    use super::super::super::generated::cards::{Cards, TokenCard};
-
-    strike(fight);
-    let soul = Cards::Token(TokenCard::Soul);
+fn severance<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+    strike::<V, _>(fight);
+    let soul = V::Card::SOUL;
     fight.add_at_random(soul, Pile::Draw);
     fight.add_generated_cards(sts2_core::CardIdent::new(soul), Pile::Discard, 1);
     fight.add_generated_cards(sts2_core::CardIdent::new(soul), Pile::Hand, 1);
@@ -208,7 +195,7 @@ fn severance<F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// `BoneShards`: where Osty stands, its damage from Osty to every enemy, its
 /// block, then Osty killed where it still lives.
-fn bone_shards<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn bone_shards<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     let Some(osty) = fight.osty() else {
         return Played::Done;
     };
@@ -220,7 +207,7 @@ fn bone_shards<F: Fight<V>>(fight: &mut F) -> Played<V> {
                 let hit = fight.resolve(Effect::Attack {
                     dealer: osty,
                     target,
-                    damage: Amount::Var(CardVar::OstyDamage),
+                    damage: Amount::Var(V::CardVar::OSTY_DAMAGE),
                     scaling: Scaling::Dynamic,
                 });
                 fight.apply(hit);
@@ -229,7 +216,7 @@ fn bone_shards<F: Fight<V>>(fight: &mut F) -> Played<V> {
     });
     let block = fight.resolve(Effect::GainBlock {
         recipient: fight.actor(),
-        amount: Amount::Var(CardVar::Block),
+        amount: Amount::Var(V::CardVar::BLOCK),
         scaling: Scaling::Dynamic,
     });
     fight.apply(block);
@@ -241,35 +228,33 @@ fn bone_shards<F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// `BlightStrike`: its damage to the target, then as much Doom on it as the
 /// attack's hits dealt, block included.
-fn blight_strike<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn blight_strike<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     let target = fight.target();
     let results = fight.attack(Scaling::Dynamic, |fight| {
         let attack = fight.resolve(Effect::Attack {
             dealer: fight.actor(),
             target,
-            damage: Amount::Var(CardVar::Damage),
+            damage: Amount::Var(V::CardVar::DAMAGE),
             scaling: Scaling::Dynamic,
         });
         fight.apply(attack);
     });
     if fight.waiting() {
-        return wait(Resume::BlightStrikeHit);
+        return wait::<V>(Resume::BlightStrikeHit);
     }
-    blight_strike_hit(fight, &results)
+    blight_strike_hit::<V, _>(fight, &results)
 }
 
 /// The rest of `BlightStrike`, once its attack is over: as much Doom on the
 /// target as `results` dealt.
-fn blight_strike_hit<F: Fight<V>>(
+fn blight_strike_hit<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
     results: &sts2_core::AttackResults<V>,
 ) -> Played<V> {
-    use super::super::super::generated::powers::Power;
-
     let doom = results.iter().map(|result| result.total).sum();
     fight.apply_power(
         fight.target(),
-        Power::DoomPower,
+        V::Power::DOOM_POWER,
         sts2_core::PowerAmount::Counted(doom),
     );
     Played::Done
@@ -279,17 +264,17 @@ fn blight_strike_hit<F: Fight<V>>(
 /// target. Each other hittable enemy then takes each of those debuffs: onto
 /// the instance it stacks with through `PowerCmd.ModifyAmount`, else as a
 /// new one through `PowerCmd.Apply`. Both come from the debuff's applier.
-fn misery<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    use super::super::super::generated::powers::{Power, PowerInstanceType};
+fn misery<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use crate::generated::powers::PowerInstanceType;
     use sts2_core::{PowerAmount, Table as _};
 
     let target = fight.target();
     let debuffs: Vec<_> = fight
         .powers_on(target)
         .into_iter()
-        .filter(|held| super::debuff_for_amount(held.power, held.amount))
+        .filter(|held| crate::behaviour::cards::debuff_for_amount::<V>(held.power, held.amount))
         .collect();
-    strike(fight);
+    strike::<V, _>(fight);
     for enemy in fight.hittable_opponents() {
         if enemy == target {
             continue;
@@ -310,7 +295,7 @@ fn misery<F: Fight<V>>(fight: &mut F) -> Played<V> {
             let PowerAmount::Counted(amount) = held.amount else {
                 unimplemented!("Misery copying an endless {power:?}");
             };
-            match Power::data(power).instance {
+            match power.data().instance {
                 Some(_) if temporary => {
                     unimplemented!("Misery copying {power:?}, an instanced temporary power")
                 }
@@ -347,16 +332,14 @@ fn misery<F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// `Dirge`: its `Summon` of Osty once for each energy its X spent. Then as
 /// many Souls go into the draw pile at random, upgraded where Dirge is.
-fn dirge<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    use super::super::super::generated::cards::{Cards, TokenCard};
-
+fn dirge<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     let x = fight.x_value();
     for _ in 0..x {
-        fight.summon_osty(fight.var(CardVar::Summon));
+        fight.summon_osty(fight.var(V::CardVar::SUMMON));
     }
     let upgraded = fight.upgraded();
     for _ in 0..x {
-        let Some(soul) = fight.add_at_random(Cards::Token(TokenCard::Soul), Pile::Draw) else {
+        let Some(soul) = fight.add_at_random(V::Card::SOUL, Pile::Draw) else {
             break;
         };
         if upgraded {
@@ -368,26 +351,26 @@ fn dirge<F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// `SculptingStrike`: its damage to the target, then one card of the hand
 /// that is not Ethereal of its own made Ethereal.
-fn sculpting_strike<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn sculpting_strike<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     let target = fight.target();
     fight.attack(Scaling::Dynamic, |fight| {
         let attack = fight.resolve(Effect::Attack {
             dealer: fight.actor(),
             target,
-            damage: Amount::Var(CardVar::Damage),
+            damage: Amount::Var(V::CardVar::DAMAGE),
             scaling: Scaling::Dynamic,
         });
         fight.apply(attack);
     });
     if fight.waiting() {
-        return wait(Resume::SculptingStrikeHit);
+        return wait::<V>(Resume::SculptingStrikeHit);
     }
-    sculpting_strike_hit(fight)
+    sculpting_strike_hit::<V, _>(fight)
 }
 
 /// The rest of `SculptingStrike`, once its attack is over: one card of the
 /// hand that is not Ethereal picked, to become so.
-fn sculpting_strike_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn sculpting_strike_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     let ethereal = CardKeyword::Ethereal;
     let cards = fight
         .cards_in(Pile::Hand)
@@ -397,43 +380,41 @@ fn sculpting_strike_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
     Played::AskingAmong {
         cards,
         selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
-        at: super::super::Resume::Card(super::Resume::Necrobinder(Resume::SculptingStrikeEthereal)),
+        at: crate::behaviour::cards::Resume::Necrobinder(Resume::SculptingStrikeEthereal).into(),
     }
 }
 
-pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
+pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F) -> Played<V> {
     match card {
         // `Seance`: its `Cards` of the draw pile picked, to turn into Souls.
-        NecrobinderCard::Seance => {
-            let count = usize::try_from(fight.var(CardVar::Cards))
+        __c0 if __c0 == V::Card::SEANCE => {
+            let count = usize::try_from(fight.var(V::CardVar::CARDS))
                 .ok()
                 .and_then(nonmax::NonMaxUsize::new)
                 .expect("a count of cards is not negative");
             Played::Asking {
                 pile: Pile::Draw,
                 selection: Selection::Exactly(count),
-                at: super::super::Resume::Card(super::Resume::Necrobinder(
-                    Resume::SeanceTransforms,
-                )),
+                at: crate::behaviour::cards::Resume::Necrobinder(Resume::SeanceTransforms).into(),
             }
         }
         // `DeathsDoor`: its block, and its `Repeat` times more where its owner
         // applied Doom this turn.
-        NecrobinderCard::DeathsDoor => {
+        __c0 if __c0 == V::Card::DEATHS_DOOR => {
             let owner = fight.actor();
             let doomed = fight
                 .history()
                 .received_this_turn()
-                .any(|(power, applier)| power == Power::DoomPower && applier == Some(owner));
+                .any(|(power, applier)| power == V::Power::DOOM_POWER && applier == Some(owner));
             let gains = 1 + if doomed {
-                fight.var(CardVar::Repeat)
+                fight.var(V::CardVar::REPEAT)
             } else {
                 0
             };
             for _ in 0..gains {
                 let block = fight.resolve(Effect::GainBlock {
                     recipient: owner,
-                    amount: Amount::Var(CardVar::Block),
+                    amount: Amount::Var(V::CardVar::BLOCK),
                     scaling: Scaling::Dynamic,
                 });
                 fight.apply(block);
@@ -442,58 +423,58 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
         }
         // `Hang`: its damage to the target, then Hang on it: as much as it
         // already carries, and at least two.
-        NecrobinderCard::Hang => {
+        __c0 if __c0 == V::Card::HANG => {
             let target = fight.target();
             fight.attack(Scaling::Dynamic, |fight| {
                 let hit = fight.resolve(Effect::Attack {
                     dealer: fight.actor(),
                     target,
-                    damage: Amount::Var(CardVar::Damage),
+                    damage: Amount::Var(V::CardVar::DAMAGE),
                     scaling: Scaling::Dynamic,
                 });
                 fight.apply(hit);
             });
             if fight.waiting() {
-                return wait(Resume::HangHit);
+                return wait::<V>(Resume::HangHit);
             }
-            hang_hit(fight)
+            hang_hit::<V, _>(fight)
         }
         // `TheScythe`: its damage to the target, then `BuffFromPlay` of its
         // `Increase` on this copy and on its deck version.
-        NecrobinderCard::TheScythe => {
+        __c0 if __c0 == V::Card::THE_SCYTHE => {
             let target = fight.target();
             fight.attack(Scaling::Dynamic, |fight| {
                 let hit = fight.resolve(Effect::Attack {
                     dealer: fight.actor(),
                     target,
-                    damage: Amount::Var(CardVar::Damage),
+                    damage: Amount::Var(V::CardVar::DAMAGE),
                     scaling: Scaling::Dynamic,
                 });
                 fight.apply(hit);
             });
             if fight.waiting() {
-                return wait(Resume::TheScytheHit);
+                return wait::<V>(Resume::TheScytheHit);
             }
-            the_scythe_hit(fight)
+            the_scythe_hit::<V, _>(fight)
         }
         // `Cleanse`: its `Summon` of Osty, then one card of the draw pile
         // picked, to exhaust.
-        NecrobinderCard::Cleanse => {
-            fight.summon_osty(fight.var(CardVar::Summon));
+        __c0 if __c0 == V::Card::CLEANSE => {
+            fight.summon_osty(fight.var(V::CardVar::SUMMON));
             Played::Asking {
                 pile: Pile::Draw,
                 selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
-                at: super::super::Resume::Card(super::Resume::Necrobinder(Resume::CleanseExhausts)),
+                at: crate::behaviour::cards::Resume::Necrobinder(Resume::CleanseExhausts).into(),
             }
         }
         // `EndOfDays`: its Doom on each enemy that can be hit, then
         // `DoomKill` of those it leaves doomed.
-        NecrobinderCard::EndOfDays => {
+        __c0 if __c0 == V::Card::END_OF_DAYS => {
             use sts2_core::CreatureView as _;
 
-            let doom = sts2_core::PowerAmount::Counted(fight.var(CardVar::DoomPower));
+            let doom = sts2_core::PowerAmount::Counted(fight.var(V::CardVar::DOOM_POWER));
             for target in fight.hittable_opponents() {
-                fight.apply_power(target, Power::DoomPower, doom);
+                fight.apply_power(target, V::Power::DOOM_POWER, doom);
             }
             let doomed: Vec<_> = fight
                 .hittable_opponents()
@@ -501,9 +482,9 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
                 .filter(|&target| {
                     fight.creatures().any(|creature| {
                         creature.id() == target
-                            && match creature.power(Power::DoomPower) {
+                            && match creature.power(V::Power::DOOM_POWER) {
                                 Some(sts2_core::PowerAmount::Counted(doom)) => {
-                                    super::Number::from(creature.hp()) <= doom
+                                    crate::behaviour::cards::Number::from(creature.hp()) <= doom
                                 }
                                 Some(sts2_core::PowerAmount::Endless) => {
                                     unimplemented!("an endless Doom")
@@ -518,7 +499,7 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
         }
         // `HighFive`: where Osty stands, its damage from Osty to every enemy,
         // then its Vulnerable on each enemy that can be hit.
-        NecrobinderCard::HighFive => {
+        __c0 if __c0 == V::Card::HIGH_FIVE => {
             let Some(osty) = fight.osty() else {
                 return Played::Done;
             };
@@ -530,7 +511,7 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
                         let hit = fight.resolve(Effect::Attack {
                             dealer: osty,
                             target,
-                            damage: Amount::Var(CardVar::OstyDamage),
+                            damage: Amount::Var(V::CardVar::OSTY_DAMAGE),
                             scaling: Scaling::Dynamic,
                         });
                         fight.apply(hit);
@@ -538,63 +519,67 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
                 });
             });
             if fight.waiting() {
-                return wait(Resume::HighFiveHit);
+                return wait::<V>(Resume::HighFiveHit);
             }
-            high_five_hit(fight)
+            high_five_hit::<V, _>(fight)
         }
-        NecrobinderCard::Unleash | NecrobinderCard::Protector => {
-            osty_attack(fight, CardVar::CalculatedDamage)
+        __c0 if __c0 == V::Card::UNLEASH || __c0 == V::Card::PROTECTOR => {
+            osty_attack::<V, _>(fight, V::CardVar::CALCULATED_DAMAGE)
         }
-        NecrobinderCard::RightHandHand => osty_attack(fight, CardVar::OstyDamage),
-        NecrobinderCard::Poke | NecrobinderCard::Flatten => osty_attack(fight, CardVar::OstyDamage),
-        NecrobinderCard::Graveblast => graveblast(fight),
-        NecrobinderCard::SculptingStrike => sculpting_strike(fight),
-        NecrobinderCard::Snap => snap(fight),
+        __c0 if __c0 == V::Card::RIGHT_HAND_HAND => {
+            osty_attack::<V, _>(fight, V::CardVar::OSTY_DAMAGE)
+        }
+        __c0 if __c0 == V::Card::POKE || __c0 == V::Card::FLATTEN => {
+            osty_attack::<V, _>(fight, V::CardVar::OSTY_DAMAGE)
+        }
+        __c0 if __c0 == V::Card::GRAVEBLAST => graveblast::<V, _>(fight),
+        __c0 if __c0 == V::Card::SCULPTING_STRIKE => sculpting_strike::<V, _>(fight),
+        __c0 if __c0 == V::Card::SNAP => snap::<V, _>(fight),
         // `Transfigure`: one card of the hand picked, to cost one more and
         // play once more.
-        NecrobinderCard::Transfigure => Played::Asking {
+        __c0 if __c0 == V::Card::TRANSFIGURE => Played::Asking {
             pile: Pile::Hand,
             selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
-            at: super::super::Resume::Card(super::Resume::Necrobinder(Resume::TransfigureReplay)),
+            at: crate::behaviour::cards::Resume::Necrobinder(Resume::TransfigureReplay).into(),
         },
         // `Squeeze`: its calculated damage from Osty to the target, where
         // Osty stands.
-        NecrobinderCard::Squeeze => {
-            osty_hit(fight, CardVar::CalculatedDamage);
+        __c0 if __c0 == V::Card::SQUEEZE => {
+            osty_hit::<V, _>(fight, V::CardVar::CALCULATED_DAMAGE);
             Played::Done
         }
         // `SicEm`: Osty's damage to the target, where Osty stands, then its
         // power on the target.
-        NecrobinderCard::SicEm => {
-            osty_hit(fight, CardVar::OstyDamage);
+        __c0 if __c0 == V::Card::SIC_EM => {
+            osty_hit::<V, _>(fight, V::CardVar::OSTY_DAMAGE);
             let target = fight.target();
             fight.apply_power(
                 target,
-                Power::SicEmPower,
-                sts2_core::PowerAmount::Counted(fight.var(CardVar::SicEmPower)),
+                V::Power::SIC_EM_POWER,
+                sts2_core::PowerAmount::Counted(fight.var(V::CardVar::SIC_EM_POWER)),
             );
             Played::Done
         }
-        NecrobinderCard::Fetch => fetch(fight),
-        NecrobinderCard::DrainPower => drain_power(fight),
-        NecrobinderCard::Reave => reave(fight),
-        NecrobinderCard::Putrefy => putrefy(fight),
-        NecrobinderCard::Spur => spur(fight),
-        NecrobinderCard::Sacrifice => sacrifice(fight),
-        NecrobinderCard::Eradicate => eradicate(fight),
-        NecrobinderCard::GraveWarden => grave_warden(fight),
-        NecrobinderCard::Dirge => dirge(fight),
+        __c0 if __c0 == V::Card::FETCH => fetch::<V, _>(fight),
+        __c0 if __c0 == V::Card::DRAIN_POWER => drain_power::<V, _>(fight),
+        __c0 if __c0 == V::Card::REAVE => reave::<V, _>(fight),
+        __c0 if __c0 == V::Card::PUTREFY => putrefy::<V, _>(fight),
+        __c0 if __c0 == V::Card::SPUR => spur::<V, _>(fight),
+        __c0 if __c0 == V::Card::SACRIFICE => sacrifice::<V, _>(fight),
+        __c0 if __c0 == V::Card::ERADICATE => eradicate::<V, _>(fight),
+        __c0 if __c0 == V::Card::GRAVE_WARDEN => grave_warden::<V, _>(fight),
+        __c0 if __c0 == V::Card::DIRGE => dirge::<V, _>(fight),
         // `PullFromBelow`: its damage to the target, as many times as its
         // calculated hits, counted before the first.
-        NecrobinderCard::PullFromBelow => {
+        __c0 if __c0 == V::Card::PULL_FROM_BELOW => {
             let target = fight.target();
-            let hits = fight.var(CardVar::CalculatedHits);
+            let hits = fight.var(V::CardVar::CALCULATED_HITS);
             fight.attack(Scaling::Dynamic, |fight| {
                 for _ in 0..hits {
                     let hit = fight.resolve(Effect::Attack {
                         dealer: fight.actor(),
                         target,
-                        damage: Amount::Var(CardVar::Damage),
+                        damage: Amount::Var(V::CardVar::DAMAGE),
                         scaling: Scaling::Dynamic,
                     });
                     fight.apply(hit);
@@ -604,18 +589,18 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
         }
         // `Rattle`: where Osty stands, its damage from Osty to the target, as
         // many times as its calculated hits, counted before the first.
-        NecrobinderCard::Rattle => {
+        __c0 if __c0 == V::Card::RATTLE => {
             let Some(osty) = fight.osty() else {
                 return Played::Done;
             };
             let target = fight.target();
-            let hits = fight.var(CardVar::CalculatedHits);
+            let hits = fight.var(V::CardVar::CALCULATED_HITS);
             fight.attack_from(osty, Scaling::Dynamic, |fight| {
                 for _ in 0..hits {
                     let hit = fight.resolve(Effect::Attack {
                         dealer: osty,
                         target,
-                        damage: Amount::Var(CardVar::OstyDamage),
+                        damage: Amount::Var(V::CardVar::OSTY_DAMAGE),
                         scaling: Scaling::Dynamic,
                     });
                     fight.apply(hit);
@@ -623,22 +608,20 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
             });
             Played::Done
         }
-        NecrobinderCard::BlightStrike => blight_strike(fight),
-        NecrobinderCard::Misery => misery(fight),
+        __c0 if __c0 == V::Card::BLIGHT_STRIKE => blight_strike::<V, _>(fight),
+        __c0 if __c0 == V::Card::MISERY => misery::<V, _>(fight),
         // `NoEscape`: its calculated Doom on the target.
-        NecrobinderCard::NoEscape => {
-            use super::super::super::generated::powers::Power;
-
+        __c0 if __c0 == V::Card::NO_ESCAPE => {
             let target = fight.target();
-            let doom = sts2_core::PowerAmount::Counted(fight.var(CardVar::CalculatedDoom));
-            fight.apply_power(target, Power::DoomPower, doom);
+            let doom = sts2_core::PowerAmount::Counted(fight.var(V::CardVar::CALCULATED_DOOM));
+            fight.apply_power(target, V::Power::DOOM_POWER, doom);
             Played::Done
         }
         // `Undeath`: its block, then a clone of itself into the discard pile.
-        NecrobinderCard::Undeath => {
+        __c0 if __c0 == V::Card::UNDEATH => {
             let block = fight.resolve(Effect::GainBlock {
                 recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
+                amount: Amount::Var(V::CardVar::BLOCK),
                 scaling: Scaling::Dynamic,
             });
             fight.apply(block);
@@ -646,78 +629,72 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
             Played::Done
         }
         // `SharedFate`: its Strength off its owner, then off the target.
-        NecrobinderCard::SharedFate => {
-            use super::super::super::generated::powers::Power;
-
-            let own = fight.var(CardVar::PlayerStrengthLoss);
-            fight.apply_to_actor(Power::StrengthPower, sts2_core::PowerAmount::Counted(-own));
-            let theirs = fight.var(CardVar::EnemyStrengthLoss);
+        __c0 if __c0 == V::Card::SHARED_FATE => {
+            let own = fight.var(V::CardVar::PLAYER_STRENGTH_LOSS);
+            fight.apply_to_actor(
+                V::Power::STRENGTH_POWER,
+                sts2_core::PowerAmount::Counted(-own),
+            );
+            let theirs = fight.var(V::CardVar::ENEMY_STRENGTH_LOSS);
             let target = fight.target();
             fight.apply_power(
                 target,
-                Power::StrengthPower,
+                V::Power::STRENGTH_POWER,
                 sts2_core::PowerAmount::Counted(-theirs),
             );
             Played::Done
         }
-        NecrobinderCard::BoneShards => bone_shards(fight),
-        NecrobinderCard::NegativePulse => negative_pulse(fight),
-        NecrobinderCard::Severance => severance(fight),
+        __c0 if __c0 == V::Card::BONE_SHARDS => bone_shards::<V, _>(fight),
+        __c0 if __c0 == V::Card::NEGATIVE_PULSE => negative_pulse::<V, _>(fight),
+        __c0 if __c0 == V::Card::SEVERANCE => severance::<V, _>(fight),
         // `Friendship`: its Strength off its owner, then its Energy as
         // Friendship.
-        NecrobinderCard::Dredge => dredge(fight),
+        __c0 if __c0 == V::Card::DREDGE => dredge::<V, _>(fight),
         // `Eidolon`: every card of the hand exhausted, one at a time, then one
         // Intangible where that came to nine or more.
-        NecrobinderCard::Eidolon => {
+        __c0 if __c0 == V::Card::EIDOLON => {
             let hand = fight.cards_in(Pile::Hand);
             let count = u8::try_from(hand.len()).expect("a hand's worth fits a u8");
-            eidolon(fight, &hand, count)
+            eidolon::<V, _>(fight, &hand, count)
         }
         // `CaptureSpirit`: its damage to the target, unblockable and
         // unpowered, then its `Cards` of Souls into the draw pile at random.
         // The damage meets no block.
-        NecrobinderCard::CaptureSpirit => {
-            use super::super::super::generated::cards::{Cards, TokenCard};
-
+        __c0 if __c0 == V::Card::CAPTURE_SPIRIT => {
             let damage = fight.resolve(Effect::Attack {
                 dealer: fight.actor(),
                 target: fight.target(),
-                damage: Amount::Var(CardVar::Damage),
+                damage: Amount::Var(V::CardVar::DAMAGE),
                 scaling: Scaling::Static,
             });
             fight.apply_unblockable(damage);
-            for _ in 0..fight.var(CardVar::Cards) {
-                if fight
-                    .add_at_random(Cards::Token(TokenCard::Soul), Pile::Draw)
-                    .is_none()
-                {
+            for _ in 0..fight.var(V::CardVar::CARDS) {
+                if fight.add_at_random(V::Card::SOUL, Pile::Draw).is_none() {
                     break;
                 }
             }
             Played::Done
         }
-        NecrobinderCard::Friendship => {
-            use super::super::super::generated::powers::Power;
-
-            let strength = fight.var(CardVar::StrengthPower);
+        __c0 if __c0 == V::Card::FRIENDSHIP => {
+            let strength = fight.var(V::CardVar::STRENGTH_POWER);
             fight.apply_to_actor(
-                Power::StrengthPower,
+                V::Power::STRENGTH_POWER,
                 sts2_core::PowerAmount::Counted(-strength),
             );
-            let energy = fight.var(CardVar::Energy);
+            let energy = fight.var(V::CardVar::ENERGY);
             fight.apply_to_actor(
-                Power::FriendshipPower,
+                V::Power::FRIENDSHIP_POWER,
                 sts2_core::PowerAmount::Counted(energy),
             );
             Played::Done
         }
-        card => super::generated_from(Cards::Necrobinder(card), fight, 0),
+        card => crate::behaviour::cards::generated_from::<V, _>(card, fight, 0),
     }
 }
 
 /// Where a Necrobinder card stopped inside its own play.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Resume {
+pub enum Resume<V: crate::Build> {
     /// `Seance`, after its owner picked the cards of the draw pile to turn
     /// into Souls.
     SeanceTransforms,
@@ -743,33 +720,36 @@ pub enum Resume {
     /// `HighFive`, after a question inside one of its Vulnerables. `held` is
     /// the enemies it took after the attack, and `at` the one to go on from.
     HighFive {
-        held: super::Held,
+        held: crate::behaviour::cards::Held,
         at: u8,
     },
     /// `Eidolon`, after a question inside its exhausts was answered, with the
     /// cards left to exhaust and how many the hand held.
     Eidolon {
-        left: super::Left,
+        left: crate::behaviour::cards::Left<V>,
         count: u8,
     },
 }
 
 /// The rest of a Necrobinder card's play that stood still on a question its
 /// own command raised.
-pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
+pub(super) fn resume_waited<V: crate::Build, F: Fight<V>>(
+    fight: &mut F,
+    at: Resume<V>,
+) -> Played<V> {
     match at {
-        Resume::HangHit => hang_hit(fight),
-        Resume::TheScytheHit => the_scythe_hit(fight),
-        Resume::SculptingStrikeHit => sculpting_strike_hit(fight),
+        Resume::HangHit => hang_hit::<V, _>(fight),
+        Resume::TheScytheHit => the_scythe_hit::<V, _>(fight),
+        Resume::SculptingStrikeHit => sculpting_strike_hit::<V, _>(fight),
         Resume::BlightStrikeHit => {
             let results = fight.waited_attack_results();
-            blight_strike_hit(fight, &results)
+            blight_strike_hit::<V, _>(fight, &results)
         }
-        Resume::HighFiveHit => high_five_hit(fight),
-        Resume::HighFive { held, at } => high_five_vulnerable(fight, held, at),
+        Resume::HighFiveHit => high_five_hit::<V, _>(fight),
+        Resume::HighFive { held, at } => high_five_vulnerable::<V, _>(fight, held, at),
         Resume::Eidolon { left, count } => {
             let left: Vec<_> = left.cards().collect();
-            eidolon(fight, &left, count)
+            eidolon::<V, _>(fight, &left, count)
         }
         at => unreachable!("{at:?} stops on a pick, not on a question it waited for"),
     }
@@ -777,23 +757,21 @@ pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V>
 
 /// The rest of the play waits at `at`, where a command left a question and
 /// more commands follow.
-fn wait(at: Resume) -> Played<V> {
+fn wait<V: crate::Build>(at: Resume<V>) -> Played<V> {
     Played::Waiting {
-        at: super::super::Resume::Card(super::Resume::Necrobinder(at)),
+        at: crate::behaviour::cards::Resume::Necrobinder(at).into(),
     }
 }
 
-pub(super) fn resume_play<F: Fight<V>>(
+pub(super) fn resume_play<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
-    at: Resume,
+    at: Resume<V>,
     chosen: sts2_core::SelectedCards<V>,
 ) -> Played<V> {
     match at {
         // `CardCmd.TransformTo<Soul>` of each one taken.
         Resume::SeanceTransforms => {
-            use super::super::super::generated::cards::{Cards, TokenCard};
-
-            let soul = sts2_core::CardIdent::new(Cards::Token(TokenCard::Soul));
+            let soul = sts2_core::CardIdent::new(V::Card::SOUL);
             for &card in chosen.as_slice() {
                 fight.transform(card, soul);
             }
@@ -851,14 +829,14 @@ const EIDOLON_CARDS: usize = 9;
 
 /// The rest of `Hang`, once its attack is over: Hang on the target, as much
 /// as it already carries, and at least two.
-fn hang_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn hang_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     use sts2_core::CreatureView as _;
 
     let target = fight.target();
     let carried = fight
         .creatures()
         .find(|creature| creature.id() == target)
-        .and_then(|creature| creature.power(Power::HangPower));
+        .and_then(|creature| creature.power(V::Power::HANG_POWER));
     let carried = match carried {
         Some(sts2_core::PowerAmount::Counted(amount)) => amount,
         Some(sts2_core::PowerAmount::Endless) => unimplemented!("an endless Hang"),
@@ -867,7 +845,7 @@ fn hang_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
     let added = carried.max(HANG_AT_LEAST).min((HANG_MOST - carried).max(0));
     fight.apply_power(
         target,
-        Power::HangPower,
+        V::Power::HANG_POWER,
         sts2_core::PowerAmount::Counted(added),
     );
     Played::Done
@@ -875,64 +853,75 @@ fn hang_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// The rest of `TheScythe`, once its attack is over: `BuffFromPlay` of its
 /// `Increase` on this copy and on its deck version.
-fn the_scythe_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    let increase = fight.var(CardVar::Increase);
+fn the_scythe_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let increase = fight.var(V::CardVar::INCREASE);
     fight.modify_this(
-        sts2_core::Change::Own(super::CardWrite::BuffFromPlay(increase)),
+        sts2_core::Change::Own(crate::behaviour::cards::CardWrite::BuffFromPlay(increase)),
         sts2_core::Lasting::ThisFight,
     );
-    fight.write_deck_version(super::DeckWrite::BuffFromPlay(increase));
+    fight.write_deck_version(crate::behaviour::cards::DeckWrite::BuffFromPlay(increase));
     Played::Done
 }
 
 /// The rest of `HighFive`, once Osty's attack is over: its Vulnerable on each
 /// enemy that can be hit then.
-fn high_five_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    let held = super::Held::of(&fight.hittable_opponents());
-    high_five_vulnerable(fight, held, 0)
+fn high_five_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let held = crate::behaviour::cards::Held::of(&fight.hittable_opponents());
+    high_five_vulnerable::<V, _>(fight, held, 0)
 }
 
 /// `HighFive`'s Vulnerable on each of `held` from the one at `from` on. A
 /// question left before one waits.
-fn high_five_vulnerable<F: Fight<V>>(fight: &mut F, held: super::Held, from: u8) -> Played<V> {
-    let vulnerable = sts2_core::PowerAmount::Counted(fight.var(CardVar::VulnerablePower));
+fn high_five_vulnerable<V: crate::Build, F: Fight<V>>(
+    fight: &mut F,
+    held: crate::behaviour::cards::Held,
+    from: u8,
+) -> Played<V> {
+    let vulnerable = sts2_core::PowerAmount::Counted(fight.var(V::CardVar::VULNERABLE_POWER));
     for (at, target) in held.creatures().enumerate().skip(usize::from(from)) {
         if fight.waiting() {
             let at = u8::try_from(at).expect("a fight's creatures fit a u8");
-            return wait(Resume::HighFive { held, at });
+            return wait::<V>(Resume::HighFive { held, at });
         }
-        fight.apply_power(target, Power::VulnerablePower, vulnerable);
+        fight.apply_power(target, V::Power::VULNERABLE_POWER, vulnerable);
     }
     Played::Done
 }
 
 /// `Eidolon` over the cards `cards`: each exhausted, then one Intangible
 /// where the hand held nine or more.
-fn eidolon<F: Fight<V>>(fight: &mut F, cards: &[sts2_core::CardAt<V>], count: u8) -> Played<V> {
+fn eidolon<V: crate::Build, F: Fight<V>>(
+    fight: &mut F,
+    cards: &[sts2_core::CardAt<V>],
+    count: u8,
+) -> Played<V> {
     for (at, &card) in cards.iter().enumerate() {
         fight.act_on(PileAct::Exhaust, &[card]);
         if fight.waiting() {
-            let left = super::Left::of(&cards[at + 1..]);
-            return wait(Resume::Eidolon { left, count });
+            let left = crate::behaviour::cards::Left::of(&cards[at + 1..]);
+            return wait::<V>(Resume::Eidolon { left, count });
         }
     }
     if usize::from(count) >= EIDOLON_CARDS {
-        fight.apply_to_actor(Power::IntangiblePower, sts2_core::PowerAmount::Counted(1));
+        fight.apply_to_actor(
+            V::Power::INTANGIBLE_POWER,
+            sts2_core::PowerAmount::Counted(1),
+        );
     }
     Played::Done
 }
 
 /// `Dredge`: its `Cards` from the discard pile picked into hand, as many as
 /// the hand has room for.
-fn dredge<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn dredge<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     let cards: usize =
-        num_traits::cast(fight.var(CardVar::Cards)).expect("a count of cards is not negative");
+        num_traits::cast(fight.var(V::CardVar::CARDS)).expect("a count of cards is not negative");
     let room = sts2_core::MAX_CARDS_IN_HAND.saturating_sub(fight.cards_in(Pile::Hand).len());
     match nonmax::NonMaxUsize::new(cards.min(room)) {
         Some(count) if count.get() > 0 => Played::Asking {
             pile: Pile::Discard,
             selection: Selection::Exactly(count),
-            at: super::super::Resume::Card(super::Resume::Necrobinder(Resume::DredgeTakeBack)),
+            at: crate::behaviour::cards::Resume::Necrobinder(Resume::DredgeTakeBack).into(),
         },
         _ => Played::Done,
     }
@@ -940,13 +929,13 @@ fn dredge<F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// `Graveblast`: its damage to the target, then one card from the discard
 /// pile picked into hand.
-fn graveblast<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn graveblast<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     let target = fight.target();
     fight.attack(Scaling::Dynamic, |fight| {
         let attack = fight.resolve(Effect::Attack {
             dealer: fight.actor(),
             target,
-            damage: Amount::Var(CardVar::Damage),
+            damage: Amount::Var(V::CardVar::DAMAGE),
             scaling: Scaling::Dynamic,
         });
         fight.apply(attack);
@@ -954,7 +943,7 @@ fn graveblast<F: Fight<V>>(fight: &mut F) -> Played<V> {
     Played::Asking {
         pile: Pile::Discard,
         selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
-        at: super::super::Resume::Card(super::Resume::Necrobinder(Resume::GraveblastTakeBack)),
+        at: crate::behaviour::cards::Resume::Necrobinder(Resume::GraveblastTakeBack).into(),
     }
 }
 
@@ -962,13 +951,13 @@ fn graveblast<F: Fight<V>>(fight: &mut F) -> Played<V> {
 /// unless `Osty.CheckMissingWithAnim` finds no Osty. Osty is the attacker, so
 /// the hooks an attack raises name Osty, and the card is what they read as
 /// the source.
-fn osty_attack<F: Fight<V>>(fight: &mut F, damage: CardVar) -> Played<V> {
-    osty_hit(fight, damage);
+fn osty_attack<V: crate::Build, F: Fight<V>>(fight: &mut F, damage: V::CardVar) -> Played<V> {
+    osty_hit::<V, _>(fight, damage);
     Played::Done
 }
 
 /// Osty's damage to the target, where Osty stands.
-fn osty_hit<F: Fight<V>>(fight: &mut F, damage: CardVar) {
+fn osty_hit<V: crate::Build, F: Fight<V>>(fight: &mut F, damage: V::CardVar) {
     let Some(osty) = fight.osty() else {
         return;
     };
@@ -985,14 +974,14 @@ fn osty_hit<F: Fight<V>>(fight: &mut F, damage: CardVar) {
 }
 
 /// `Hang`'s `Math.Max(2, powerAmount)`: the least Hang it adds.
-const HANG_AT_LEAST: super::Number = 2;
+const HANG_AT_LEAST: crate::behaviour::cards::Number = 2;
 
 /// The stack Hang keeps under, `999999999`.
-const HANG_MOST: super::Number = 999_999_999;
+const HANG_MOST: crate::behaviour::cards::Number = 999_999_999;
 
 /// Deliver a notification to one Necrobinder card in the fight.
-pub(super) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
-    card: NecrobinderCard,
+pub(super) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
+    card: V::Card,
     id: sts2_core::CardId<V>,
     printed: &P,
     history: sts2_core::History<'_, V>,
@@ -1003,8 +992,8 @@ pub(super) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
         // `RightHandHand.AfterCardPlayedLate`: back into hand from the discard
         // pile after a play of its owner's that spent its `Energy` or more. A
         // fight here has one player.
-        (NecrobinderCard::RightHandHand, EventHook::CardPlayedLate { energy, .. }) => {
-            if i64::from(energy) >= i64::from(printed.face(CardVar::Energy)) {
+        (__c0, EventHook::CardPlayedLate { energy, .. }) if __c0 == V::Card::RIGHT_HAND_HAND => {
+            if i64::from(energy) >= i64::from(printed.face(V::CardVar::ENERGY)) {
                 asked.push(HookEffect::AddSelfToHand {
                     only_from: Some(Pile::Discard),
                 });
@@ -1013,24 +1002,26 @@ pub(super) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
         // `Flatten.AfterAttack`, which answers an attack by its owner's Osty
         // alone. A fight here has one player, so any Osty is theirs.
         (
-            NecrobinderCard::Flatten,
+            __c0,
             EventHook::AfterAttack {
-                monster: Some(Monster::Osty),
+                monster: Some(__c1),
                 ..
             },
-        ) => asked.push(HookEffect::ModifySelf {
-            change: Change::SetCost(CostPool::Energy, 0),
-            lasting: Lasting::ThisTurn,
-        }),
-        (NecrobinderCard::Flatten, EventHook::AfterAttack { .. }) => {}
+        ) if (__c0 == V::Card::FLATTEN && __c1 == <V::Monster as crate::ids::MonsterIds>::OSTY) => {
+            asked.push(HookEffect::ModifySelf {
+                change: Change::SetCost(CostPool::Energy, 0),
+                lasting: Lasting::ThisTurn,
+            })
+        }
+        (__c0, EventHook::AfterAttack { .. }) if __c0 == V::Card::FLATTEN => {}
         // `Flatten.AfterCardEnteredCombat`, which answers its own entry
         // alone, and then only once Osty has attacked this turn. A fight here
         // has one player, so any Osty is theirs.
-        (NecrobinderCard::Flatten, EventHook::CardEnteredCombat { at, .. }) => {
+        (__c0, EventHook::CardEnteredCombat { at, .. }) if __c0 == V::Card::FLATTEN => {
             if at.id() == id
                 && history
                     .attacked_this_turn()
-                    .any(|monster| monster == Some(Monster::Osty))
+                    .any(|monster| monster == Some(<V::Monster as crate::ids::MonsterIds>::OSTY))
             {
                 asked.push(HookEffect::ModifySelf {
                     change: Change::SetCost(CostPool::Energy, 0),
@@ -1042,32 +1033,32 @@ pub(super) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
         // its cost for the rest of the fight, unless the creature's removal
         // was prevented. A card that hears a hook is in a combat pile.
         (
-            NecrobinderCard::Melancholy,
+            __c0,
             EventHook::AfterDeath {
                 removal_prevented: false,
                 ..
             },
-        ) => asked.push(HookEffect::ModifySelf {
-            change: Change::ChangeCost(CostPool::Energy, -printed.face(CardVar::Energy)),
+        ) if __c0 == V::Card::MELANCHOLY => asked.push(HookEffect::ModifySelf {
+            change: Change::ChangeCost(CostPool::Energy, -printed.face(V::CardVar::ENERGY)),
             lasting: Lasting::ThisFight,
         }),
-        (NecrobinderCard::Melancholy, EventHook::AfterDeath { .. }) => {}
+        (__c0, EventHook::AfterDeath { .. }) if __c0 == V::Card::MELANCHOLY => {}
         // `BansheesCry.AfterCardPlayed`: its `Energy` off its cost for the
         // rest of the fight for each Ethereal card its owner plays. A fight
         // here has one player.
-        (NecrobinderCard::BansheesCry, EventHook::CardPlayed { ethereal: true, .. }) => {
+        (__c0, EventHook::CardPlayed { ethereal: true, .. }) if __c0 == V::Card::BANSHEES_CRY => {
             asked.push(HookEffect::ModifySelf {
-                change: Change::ChangeCost(CostPool::Energy, -printed.face(CardVar::Energy)),
+                change: Change::ChangeCost(CostPool::Energy, -printed.face(V::CardVar::ENERGY)),
                 lasting: Lasting::ThisFight,
             })
         }
-        (NecrobinderCard::BansheesCry, EventHook::CardPlayed { .. }) => {}
+        (__c0, EventHook::CardPlayed { .. }) if __c0 == V::Card::BANSHEES_CRY => {}
         // `BansheesCry.AfterCardEnteredCombat`, for its own entry alone and
         // not a clone's: its `Energy` off for the rest of the fight for each
         // Ethereal play finished this fight before it came.
-        (NecrobinderCard::BansheesCry, EventHook::CardEnteredCombat { at, clone, .. }) => {
+        (__c0, EventHook::CardEnteredCombat { at, clone, .. }) if __c0 == V::Card::BANSHEES_CRY => {
             if at.id() == id && !clone {
-                let ethereal: super::Number = history
+                let ethereal: crate::behaviour::cards::Number = history
                     .finished_this_fight()
                     .filter(|finished| finished.ethereal)
                     .count()
@@ -1077,7 +1068,7 @@ pub(super) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
                     asked.push(HookEffect::ModifySelf {
                         change: Change::ChangeCost(
                             CostPool::Energy,
-                            -ethereal * printed.face(CardVar::Energy),
+                            -ethereal * printed.face(V::CardVar::ENERGY),
                         ),
                         lasting: Lasting::ThisFight,
                     });
