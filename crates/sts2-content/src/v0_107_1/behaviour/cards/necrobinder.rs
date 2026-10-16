@@ -299,12 +299,12 @@ fn misery<F: Fight<V>>(fight: &mut F) -> Played<V> {
             // `DoHackyThingsForSpecificPowers`: an `ITemporaryPower` ignores
             // its next instance, which is the lent stat the copy would move
             // again.
-            let temporary = super::super::powers::lends::<V>(power).is_some();
+            let temporary = crate::behaviour::powers::lends::<V>(power).is_some();
             // `ClonePreservingMutability` builds its internal data anew, which
             // is all a noted play is. Imbalanced's off-balance is the Bowlbug
             // Rock's `IsOffBalance`, or a stun, which the port keeps on the
             // power and the game's model holds nothing of.
-            if !held.fresh && !super::super::powers::clone_starts_anew(power) {
+            if !held.fresh && !crate::behaviour::powers::clone_starts_anew::<V>(power) {
                 unimplemented!("Misery copying {power:?}, whose model carries state");
             }
             let PowerAmount::Counted(amount) = held.amount else {
@@ -329,8 +329,9 @@ fn misery<F: Fight<V>>(fight: &mut F) -> Played<V> {
                     fight.modify_power_amount(enemy, power, amount, held.applier);
                 }
                 None if temporary => {
-                    let mut copy =
-                        <super::super::powers::State as sts2_core::PowerModel<V>>::new(power);
+                    let mut copy = <crate::behaviour::powers::State<V> as sts2_core::PowerModel<
+                        V,
+                    >>::new(power);
                     copy.ignore_next_instance();
                     fight.apply_power_copy(enemy, copy, held.amount, held.applier);
                 }

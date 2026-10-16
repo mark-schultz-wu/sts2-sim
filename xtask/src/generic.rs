@@ -715,7 +715,14 @@ fn rewrite_rest(s: &str, content: &Content, left: &mut Left) -> String {
     }
     let s = whole.as_str();
     let mut out = String::new();
+    let mut in_use = false;
     for (number, line) in s.split_inclusive('\n').enumerate() {
+        // A `use` over several lines is `rewrite_uses`' to change.
+        if in_use || line.trim_start().starts_with("use ") {
+            in_use = !line.trim_end().ends_with(';');
+            out.push_str(line);
+            continue;
+        }
         let item = line
             .trim_start_matches("pub(crate) ")
             .trim_start_matches("pub(super) ")
@@ -1042,7 +1049,9 @@ fn generic_fns(s: &str) -> (String, Vec<(String, usize)>) {
             let names_v = s[i..end.min(s.len())]
                 .split(|c: char| !(c.is_alphanumeric() || c == '_'))
                 .any(|w| w == "V");
-            if names_v {
+            // A test takes no generics: its module names the build instead.
+            let test = s[..i].trim_end().ends_with("#[test]");
+            if names_v && !test {
                 let name = s[i + 3..name_end].trim().to_owned();
                 let others = match b[name_end] {
                     b'<' => {
@@ -1247,13 +1256,17 @@ struct List {
     name: String,
     /// Its type there, with `Self` for the build.
     declared: String,
+    /// A function returning it, for a list built on first use.
+    lazy: bool,
 }
 
-/// A top-level `const` or `static` cannot name `V`, since an item does not
-/// see a generic. Nor can a list of a generic type live as long as the
-/// program. So each becomes a const on `Lists`. The file's `lists!` macro
-/// writes it for a build, and the file reads it as `V::NAME`.
-fn lists(s: &str, prefix: &str, left: &mut Left) -> (String, Vec<List>) {
+/// Each top-level `const` or `static` naming `V`, as a const on `Lists`.
+///
+/// An item does not see a generic, and a list of a generic type cannot live
+/// as long as the program. The file's `lists!` macro writes each for a build,
+/// and the file reads it as `V::NAME`. A `LazyLock` becomes a function there
+/// instead, with the `static` inside it.
+fn lists(s: &str, prefix: &str, module: &str, left: &mut Left) -> (String, Vec<List>) {
     let mut out = String::new();
     let mut found: Vec<(String, String, String, String, String)> = Vec::new();
     let b = s.as_bytes();
@@ -1345,12 +1358,41 @@ fn lists(s: &str, prefix: &str, left: &mut Left) -> (String, Vec<List>) {
         }
         text
     };
+    // The file's own functions, which a list's value can call.
+    let local_fns: Vec<String> = s
+        .lines()
+        .filter_map(|l| {
+            let l = l
+                .trim_start_matches("pub(crate) ")
+                .trim_start_matches("pub(super) ")
+                .trim_start_matches("pub ");
+            let rest = l.strip_prefix("fn ")?;
+            Some(
+                rest.chars()
+                    .take_while(|c| c.is_alphanumeric() || *c == '_')
+                    .collect(),
+            )
+        })
+        .collect();
+    let mut called: Vec<String> = Vec::new();
     let mut declared = Vec::new();
     let mut body = String::new();
     for (name, ty, value, docs, _) in &found {
         let ty = qualify(ty);
-        let value = qualify(value);
+        let mut value = qualify(value);
+        for local in &local_fns {
+            let call = format!("{local}(");
+            if value.contains(&call) {
+                value = replace_word(&value, local, &format!("{module}::{local}::<V>"));
+                called.push(local.clone());
+            }
+        }
         let full = format!("{prefix}{name}");
+        let lazy_inner = ty
+            .strip_prefix("std::sync::LazyLock<")
+            .or_else(|| ty.strip_prefix("LazyLock<"))
+            .and_then(|t| t.strip_suffix('>'))
+            .map(str::to_owned);
         let as_build = |text: &str| {
             text.replace("<V>", "<$build>")
                 .replace("V::", "<$build as sts2_core::ContentVersion>::")
@@ -1361,6 +1403,28 @@ fn lists(s: &str, prefix: &str, left: &mut Left) -> (String, Vec<List>) {
             .lines()
             .map(|l| format!("        {}\n", l.trim()))
             .collect();
+        if let Some(inner) = lazy_inner {
+            let function = full.to_lowercase();
+            let value = value
+                .strip_prefix("LazyLock::new")
+                .map_or(value.clone(), |rest| {
+                    format!("std::sync::LazyLock::new{rest}")
+                });
+            let inner_build = as_build(&inner);
+            writeln!(
+                body,
+                "{docs}        fn {function}() -> &'static {inner_build} {{\n            static LIST: std::sync::LazyLock<{inner_build}> = {value};\n            &LIST\n        }}"
+            )
+            .unwrap();
+            declared.push(List {
+                name: function.clone(),
+                declared: inner.replace("<V>", "<Self>").replace("V::", "Self::"),
+                lazy: true,
+            });
+            out = replace_word(&out, name, &format!("V::{function}()"));
+            out = out.replace(&format!("&V::{function}()"), &format!("V::{function}()"));
+            continue;
+        }
         writeln!(
             body,
             "{docs}        const {full}: {} = {value};",
@@ -1370,10 +1434,20 @@ fn lists(s: &str, prefix: &str, left: &mut Left) -> (String, Vec<List>) {
         declared.push(List {
             name: full.clone(),
             declared: ty.replace("<V>", "<Self>").replace("V::", "Self::"),
+            lazy: false,
         });
         // The file reads it off the build.
         out = replace_word(&out, name, &format!("V::{full}"));
         out = out.replace(&format!("&V::{full}"), &format!("V::{full}"));
+    }
+    // A function a list calls is the build's to reach.
+    for local in &called {
+        for vis in ["\nfn ", "\npub(super) fn "] {
+            out = out.replace(
+                &format!("{vis}{local}"),
+                &format!("\npub(crate) fn {local}"),
+            );
+        }
     }
     // A name only the lists used goes from the file's imports.
     let listed: String = found.iter().map(|f| format!("{} {}", f.1, f.2)).collect();
@@ -1569,7 +1643,15 @@ fn declare_lists(lists: &[(String, Vec<List>)]) -> Result<(), Error> {
     let mut calls = String::new();
     for (module, declared) in lists {
         for list in declared {
-            writeln!(decls, "    const {}: {};", list.name, list.declared).unwrap();
+            match list.lazy {
+                true => writeln!(
+                    decls,
+                    "    fn {}() -> &'static {};",
+                    list.name, list.declared
+                )
+                .unwrap(),
+                false => writeln!(decls, "    const {}: {};", list.name, list.declared).unwrap(),
+            }
         }
         writeln!(calls, "            {module}::lists!($build);").unwrap();
     }
@@ -1970,7 +2052,8 @@ pub fn run(args: Args) -> Result<String, Error> {
         // Where the module lands, and what its lists are called by.
         let shared: Vec<String> = module.iter().skip(2).cloned().collect();
         let stem = shared.last().cloned().unwrap_or_default().to_uppercase();
-        let (text, lists) = lists(&text, &format!("{stem}_"), &mut left);
+        let shared_path = format!("crate::behaviour::{}", shared.join("::"));
+        let (text, lists) = lists(&text, &format!("{stem}_"), &shared_path, &mut left);
         if !lists.is_empty() {
             declared.push((format!("crate::behaviour::{}", shared.join("::")), lists));
         }
@@ -2038,7 +2121,18 @@ pub fn run(args: Args) -> Result<String, Error> {
                     build.to_uppercase()
                 );
                 text.insert_str(at + "mod tests {\n".len(), &alias);
-                text
+                // `V` is a concrete build there, whose associated types need
+                // their trait named.
+                let (before, tests) = text.split_at(at);
+                let mut tests = tests.to_owned();
+                for assoc in content.types.values() {
+                    let name = assoc.trim_start_matches("V::");
+                    tests = tests.replace(
+                        &format!("V::{name}"),
+                        &format!("<V as sts2_core::ContentVersion>::{name}"),
+                    );
+                }
+                format!("{before}{tests}")
             }
             _ => text,
         };

@@ -41,3 +41,43 @@ pub(crate) fn resume<F: Fight<V>>(fight: &mut F, at: Resume, answer: Taken<V>) -
         (at, answer) => unimplemented!("{at:?} resumed with {answer:?}"),
     }
 }
+
+impl crate::build::OwnRules for V {
+    fn own_relic_event_hook(
+        state: &mut crate::behaviour::relics::State<V>,
+        hook: sts2_core::EventHook<V>,
+        asked: &mut sts2_core::HookEffects<V>,
+    ) {
+        relics::own_relic_event_hook(state, hook, asked);
+    }
+
+    fn own_power(power: <V as sts2_core::ContentVersion>::Power) -> bool {
+        powers::own_power(power)
+    }
+
+    fn own_power_state(
+        power: <V as sts2_core::ContentVersion>::Power,
+    ) -> Option<crate::behaviour::powers::State<V>> {
+        powers::own_power_state(power)
+    }
+
+    fn own_power_modify_hook(
+        power: <V as sts2_core::ContentVersion>::Power,
+        amount: sts2_core::PowerAmount<i32>,
+        held: crate::behaviour::powers::Held<'_, V>,
+        state: &crate::behaviour::powers::State<V>,
+        hook: sts2_core::ModifyHook<V>,
+    ) -> Option<sts2_core::Modify<i32>> {
+        powers::own_power_modify_hook(power, amount, held, state, hook)
+    }
+
+    fn own_power_event_hook(
+        power: <V as sts2_core::ContentVersion>::Power,
+        amount: sts2_core::PowerAmount<i32>,
+        held: crate::behaviour::powers::Held<'_, V>,
+        state: &mut crate::behaviour::powers::State<V>,
+        hook: sts2_core::EventHook<V>,
+    ) -> Option<Option<sts2_core::HookEffect<V>>> {
+        powers::own_power_event_hook(power, amount, held, state, hook)
+    }
+}

@@ -8,16 +8,15 @@ use super::super::generated;
 use crate::behaviour::relics::State;
 use crate::generated::runstate::CombatSide;
 
-impl crate::build::OwnRules for V {
-    fn own_relic_event_hook(
-        state: &mut State<V>,
-        hook: EventHook<V>,
-        asked: &mut sts2_core::HookEffects<V>,
-    ) {
-        match state {
-            State::DiamondDiadem(state) => diamond_diadem(state, hook, asked),
-            state => unreachable!("{state:?} is a shared relic"),
-        }
+/// `EventHook` for a relic of this build's own.
+pub(crate) fn own_relic_event_hook(
+    state: &mut State<V>,
+    hook: EventHook<V>,
+    asked: &mut sts2_core::HookEffects<V>,
+) {
+    match state {
+        State::DiamondDiadem(state) => diamond_diadem(state, hook, asked),
+        state => unreachable!("{state:?} is a shared relic"),
     }
 }
 

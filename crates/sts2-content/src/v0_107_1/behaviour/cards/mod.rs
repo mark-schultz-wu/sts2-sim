@@ -180,7 +180,7 @@ pub(crate) fn result_pile(
 }
 
 /// `PowerModel.TypeForCurrentAmount == PowerType.Debuff`, which
-/// [`super::powers::debuff_at`] answers. An endless power's amount is the
+/// [`crate::behaviour::powers::debuff_at`] answers. An endless power's amount is the
 /// game's -1.
 pub(super) fn debuff_for_amount(
     power: super::super::generated::powers::Power,
@@ -190,7 +190,7 @@ pub(super) fn debuff_for_amount(
         sts2_core::PowerAmount::Counted(amount) => amount,
         sts2_core::PowerAmount::Endless => -1,
     };
-    super::powers::debuff_at::<V>(power, amount)
+    crate::behaviour::powers::debuff_at::<V>(power, amount)
 }
 
 /// What a card works out from the fight for a number it prints.
@@ -211,7 +211,7 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
                     // A temporary power's type is worked out as it stands, and
                     // Rend leaves it out whatever it is.
                     .filter(|held| {
-                        super::powers::lends::<V>(held.power).is_none()
+                        crate::behaviour::powers::lends::<V>(held.power).is_none()
                             && debuff_for_amount(held.power, held.amount)
                     })
                     .count()

@@ -109,18 +109,18 @@ impl sts2_core::ContentVersion for V0_107_1 {
 impl sts2_core::Hooks for V0_107_1 {
     type RelicState = RelicState;
     type ModifierState = crate::behaviour::modifiers::State;
-    type PowerState = behaviour::powers::State;
+    type PowerState = crate::behaviour::powers::State<V0_107_1>;
     type MonsterState = behaviour::monsters::Model;
     type EncounterState = crate::behaviour::encounters::State;
     type CardState = behaviour::cards::State;
     type CardFields = behaviour::cards::Fields;
 
     fn power_noted(state: &mut Self::PowerState, note: Self::Number) {
-        behaviour::powers::noted(state, note);
+        crate::behaviour::powers::noted::<Self>(state, note);
     }
 
     fn power_kept_card(state: &mut Self::PowerState, kept: sts2_core::CardId<Self>) {
-        behaviour::powers::kept_card(state, kept);
+        crate::behaviour::powers::kept_card::<Self>(state, kept);
     }
 
     fn modify_hook<P: sts2_core::Printed<Self> + ?Sized>(
@@ -140,7 +140,7 @@ impl sts2_core::Hooks for V0_107_1 {
                 history,
                 fight,
             } => {
-                let held = behaviour::powers::Held {
+                let held = crate::behaviour::powers::Held {
                     owner,
                     holder,
                     applier,
@@ -149,7 +149,7 @@ impl sts2_core::Hooks for V0_107_1 {
                     history,
                     fight,
                 };
-                behaviour::powers::modify_hook(power, amount, held, state, hook)
+                crate::behaviour::powers::modify_hook::<Self>(power, amount, held, state, hook)
             }
             sts2_core::Listener::Relic { state, fight, .. } => {
                 crate::behaviour::relics::modify_hook(state, fight, hook)
@@ -192,7 +192,7 @@ impl sts2_core::Hooks for V0_107_1 {
                 fight,
                 ..
             } => {
-                let held = behaviour::powers::Held {
+                let held = crate::behaviour::powers::Held {
                     owner,
                     holder,
                     applier,
@@ -201,7 +201,7 @@ impl sts2_core::Hooks for V0_107_1 {
                     history,
                     fight,
                 };
-                behaviour::powers::decide_hook(power, amount, held, state, hook)
+                crate::behaviour::powers::decide_hook::<Self>(power, amount, held, state, hook)
             }
             sts2_core::Listener::Relic { state, belt, .. } => {
                 crate::behaviour::relics::decide_hook(state, belt, hook)
@@ -244,7 +244,7 @@ impl sts2_core::Hooks for V0_107_1 {
             history,
             fight,
         } = power;
-        let held = behaviour::powers::Held {
+        let held = crate::behaviour::powers::Held {
             owner,
             holder,
             applier,
@@ -253,7 +253,7 @@ impl sts2_core::Hooks for V0_107_1 {
             history,
             fight,
         };
-        behaviour::powers::event_hook(power, amount, held, state, hook, asked)
+        crate::behaviour::powers::event_hook::<Self>(power, amount, held, state, hook, asked)
     }
 
     fn keyword_while_afflicted(affliction: Self::Affliction) -> Option<Self::CardKeyword> {
@@ -304,7 +304,9 @@ impl sts2_core::Hooks for V0_107_1 {
                 state,
                 history,
                 ..
-            } => behaviour::powers::result_pile(power, amount, holder, state, history, hook),
+            } => crate::behaviour::powers::result_pile::<Self>(
+                power, amount, holder, state, history, hook,
+            ),
             // The fight asks only a listener whose class overrides the hook,
             // and no relic, monster or card this build ports does.
             _ => unimplemented!("a listener other than a power moving a played card"),
@@ -701,7 +703,7 @@ impl sts2_core::Rules for V0_107_1 {
         holder: sts2_core::CombatId,
         fight: &mut F,
     ) {
-        behaviour::powers::perform_death(power, holder, fight)
+        crate::behaviour::powers::perform_death::<Self, _>(power, holder, fight)
     }
 
     fn monster_hp_after_added(

@@ -31,7 +31,7 @@ use crate::ids::{
 /// in the same types. What every build spells alike is the shared type.
 pub trait BuildContent:
     Lists
-    + Pools
+    + Tables
     + ContentVersion<
         Number = i32,
         Health = i32,
@@ -105,25 +105,56 @@ pub trait Lists: ContentVersion {
         sts2_core::Change<Self>,
         sts2_core::Lasting,
     )];
+    fn powers_stunned() -> &'static sts2_core::NextMove<Self>;
+    fn powers_revive() -> &'static sts2_core::NextMove<Self>;
+    fn powers_spawned() -> &'static sts2_core::NextMove<Self>;
+    const POWERS_VALID_ORBS: &'static [Self::Orb];
 }
 
-/// The cards a character's pool holds, in the order its model generates them,
-/// which is `CardPool.AllCards`.
-pub trait Pools: ContentVersion {
+/// The lookups into a build's tables a shared rule makes, where the row they
+/// read names content and so is each build's own.
+pub trait Tables: ContentVersion {
+    /// The cards a character's pool holds, in the order its model generates
+    /// them, which is `CardPool.AllCards`.
     fn pool_cards(character: Self::Character) -> &'static [Self::Card];
+
+    /// Where `wanted` stands among the monster's states, as a move-state
+    /// index. `at` is the index the caller read, for the error.
+    fn monster_state_of(
+        monster: Self::Monster,
+        wanted: Self::MoveId,
+        at: u8,
+    ) -> Result<u8, sts2_core::ContentError>;
 }
 
-impl Pools for crate::v0_107_1::V0_107_1 {
-    fn pool_cards(character: Self::Character) -> &'static [Self::Card] {
-        crate::v0_107_1::cards::pool_cards(Table::data(character).card_pool)
-    }
+/// [`Tables`] for one build, off its own generated tables.
+macro_rules! tables {
+    ($build:ty, $module:ident) => {
+        impl Tables for $build {
+            fn pool_cards(character: Self::Character) -> &'static [Self::Card] {
+                crate::$module::cards::pool_cards(Table::data(character).card_pool)
+            }
+
+            fn monster_state_of(
+                monster: Self::Monster,
+                wanted: Self::MoveId,
+                at: u8,
+            ) -> Result<u8, sts2_core::ContentError> {
+                Table::data(monster)
+                    .states
+                    .iter()
+                    .position(|state| {
+                        matches!(state, crate::$module::monsters::State::Move(held) if held.id == wanted)
+                    })
+                    .and_then(|found| u8::try_from(found).ok())
+                    .ok_or(sts2_core::ContentError::InvalidMonsterState { index: at })
+            }
+        }
+    };
 }
 
-impl Pools for crate::v0_111_0::V0_111_0 {
-    fn pool_cards(character: Self::Character) -> &'static [Self::Card] {
-        crate::v0_111_0::cards::pool_cards(Table::data(character).card_pool)
-    }
-}
+tables!(crate::v0_107_1::V0_107_1, v0_107_1);
+tables!(crate::v0_111_0::V0_111_0, v0_111_0);
 
 /// Every rule's lists, for one build.
 macro_rules! lists {
@@ -147,6 +178,7 @@ macro_rules! lists {
             crate::behaviour::relics::touch_of_orobas::lists!($build);
             crate::behaviour::relics::toy_box::lists!($build);
             crate::behaviour::relics::vexing_puzzlebox::lists!($build);
+            crate::behaviour::powers::lists!($build);
         }
     };
 }
@@ -164,6 +196,39 @@ pub trait OwnRules: ContentVersion + Sized {
         asked: &mut sts2_core::HookEffects<Self>,
     ) where
         Self: Build;
+
+    /// Whether a power's rule is the build's own.
+    fn own_power(power: Self::Power) -> bool;
+
+    /// The state a power of the build's own starts with, or nothing for a
+    /// shared one.
+    fn own_power_state(power: Self::Power) -> Option<crate::behaviour::powers::State<Self>>
+    where
+        Self: Build;
+
+    /// `ModifyHook` for a power of the build's own, or nothing for a hook the
+    /// shared powers answer for it.
+    fn own_power_modify_hook(
+        power: Self::Power,
+        amount: sts2_core::PowerAmount<i32>,
+        held: crate::behaviour::powers::Held<'_, Self>,
+        state: &crate::behaviour::powers::State<Self>,
+        hook: sts2_core::ModifyHook<Self>,
+    ) -> Option<sts2_core::Modify<i32>>
+    where
+        Self: Build;
+
+    /// `EventHook` for a power of the build's own, or nothing for a hook the
+    /// shared powers answer for it.
+    fn own_power_event_hook(
+        power: Self::Power,
+        amount: sts2_core::PowerAmount<i32>,
+        held: crate::behaviour::powers::Held<'_, Self>,
+        state: &mut crate::behaviour::powers::State<Self>,
+        hook: sts2_core::EventHook<Self>,
+    ) -> Option<Option<sts2_core::HookEffect<Self>>>
+    where
+        Self: Build;
 }
 
 /// A build the shared behaviour runs in: its content, and its rules, which
@@ -172,14 +237,21 @@ pub trait OwnRules: ContentVersion + Sized {
 /// A shared rule that waits on a question names where it resumes as its own
 /// module's `Resume`, which the build's wraps.
 pub trait Build:
-    BuildContent + Rules + OwnRules + ContentVersion<Resume: From<crate::behaviour::potions::Resume>>
+    BuildContent
+    + Rules<
+        PowerState = crate::behaviour::powers::State<Self>,
+        EncounterState = crate::behaviour::encounters::State,
+    > + OwnRules
+    + ContentVersion<Resume: From<crate::behaviour::potions::Resume>>
 {
 }
 
 impl<V> Build for V where
     V: BuildContent
-        + Rules
-        + OwnRules
+        + Rules<
+            PowerState = crate::behaviour::powers::State<V>,
+            EncounterState = crate::behaviour::encounters::State,
+        > + OwnRules
         + ContentVersion<Resume: From<crate::behaviour::potions::Resume>>
 {
 }
