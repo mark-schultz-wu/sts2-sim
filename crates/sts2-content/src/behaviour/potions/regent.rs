@@ -2,9 +2,8 @@
 
 use sts2_core::{Fight, Played};
 
-use super::super::super::V0_107_1 as V;
-use super::super::super::generated::potions::Potion;
-use super::Number;
+use crate::behaviour::potions::Number;
+use crate::ids::{CardIds as _, PotionIds as _};
 
 /// `KingsCourage`'s `ForgeVar(15)`.
 const KINGS_COURAGE: Number = 15;
@@ -20,24 +19,22 @@ const STARS: Number = 3;
 /// # Panics
 ///
 /// A potion of this pool nobody has ported.
-pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
+pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mut F) -> Played<V> {
     match potion {
         // `PlayerCmd.GainStars` by its `Stars`.
-        Potion::StarPotion => {
+        __c0 if __c0 == V::Potion::STAR_POTION => {
             fight.gain_stars(STARS);
             Played::Done
         }
         // `AnyPlayer`: `ForgeCmd.Forge` for its `Forge`.
-        Potion::KingsCourage => {
-            use super::super::super::generated::cards::{Cards, TokenCard};
-
-            fight.forge(Cards::Token(TokenCard::SovereignBlade), KINGS_COURAGE);
+        __c0 if __c0 == V::Potion::KINGS_COURAGE => {
+            fight.forge(V::Card::SOVEREIGN_BLADE, KINGS_COURAGE);
             Played::Done
         }
         // `Self`: `GetDistinctForCombat` of three colorless cards off
         // `CombatCardGeneration`, each upgraded and into hand.
-        Potion::CosmicConcoction => {
-            use sts2_core::{Change, Lasting, Pile, Rules as _, RunStreamKinds as _};
+        __c0 if __c0 == V::Potion::COSMIC_CONCOCTION => {
+            use sts2_core::{Change, Lasting, Pile, RunStreamKinds as _};
 
             let mut cards = V::combat_colorless_cards().to_vec();
             let made: [_; COSMIC_CARDS] = fight

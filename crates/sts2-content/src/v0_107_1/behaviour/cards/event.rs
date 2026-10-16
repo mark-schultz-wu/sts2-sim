@@ -6,7 +6,7 @@ use sts2_core::{
 };
 
 use super::super::super::generated::cards::Cards;
-use super::super::super::generated::cards::{CardType, CardVar, EventCard};
+use super::super::super::generated::cards::{CardVar, EventCard};
 use super::super::super::generated::powers::Power;
 use super::V;
 
@@ -136,7 +136,7 @@ pub(super) fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> 
         // `Distraction`: a Skill of the character's pool, free this turn,
         // into the hand.
         EventCard::Distraction => {
-            super::super::free_card_into_hand(
+            crate::behaviour::free_card_into_hand(
                 fight,
                 |card| V::card_kind(card) == Some(sts2_core::CardKind::Skill),
                 true,
@@ -255,7 +255,7 @@ fn neows_fury<F: Fight<V>>(fight: &mut F) -> Played<V> {
 /// `NextItem` off `CombatCardGeneration`, free this fight and into the draw
 /// pile at a random place.
 fn metamorphosis<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    let attacks = super::super::character_cards(fight, CardType::Attack);
+    let attacks = crate::behaviour::character_cards(fight, sts2_core::CardKind::Attack);
     for _ in 0..fight.var(CardVar::Cards) {
         let Some(card) = fight.generate_card(&attacks) else {
             unimplemented!("a character pool with no attack")
@@ -361,7 +361,7 @@ fn mad_science<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
                 EventCard::MadScienceWisdom => {
                     fight.draw(fight.var(CardVar::WisdomCards));
                 }
-                _ => super::super::free_card_into_hand(fight, |_| true, false),
+                _ => crate::behaviour::free_card_into_hand(fight, |_| true, false),
             }
         }
         EventCard::MadScienceExpertise => {

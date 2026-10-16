@@ -427,7 +427,7 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
         // `WhiteNoise`: a Power of the character's pool, free this turn, into
         // the hand.
         DefectCard::WhiteNoise => {
-            super::super::free_card_into_hand(
+            crate::behaviour::free_card_into_hand(
                 fight,
                 |card| <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Power),
                 true,

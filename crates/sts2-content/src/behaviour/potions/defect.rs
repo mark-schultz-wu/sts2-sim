@@ -2,10 +2,8 @@
 
 use sts2_core::{Fight, Played, PowerAmount};
 
-use super::super::super::V0_107_1 as V;
-use super::super::super::generated::potions::Potion;
-use super::super::super::generated::powers::Power;
-use super::Number;
+use crate::behaviour::potions::Number;
+use crate::ids::{OrbIds as _, PotionIds as _, PowerIds as _};
 
 /// `FocusPotion`'s `PowerVar<FocusPower>(2)`.
 const FOCUS: Number = 2;
@@ -18,22 +16,22 @@ const CAPACITY: Number = 2;
 /// # Panics
 ///
 /// A potion of this pool nobody has ported.
-pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
+pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mut F) -> Played<V> {
     match potion {
         // On its drinker, whom `Self` names.
-        Potion::FocusPotion => {
-            fight.apply_to_actor(Power::FocusPower, PowerAmount::Counted(FOCUS));
+        __c0 if __c0 == V::Potion::FOCUS_POTION => {
+            fight.apply_to_actor(V::Power::FOCUS_POWER, PowerAmount::Counted(FOCUS));
             Played::Done
         }
         // `OrbCmd.AddSlots` for its drinker.
-        Potion::PotionOfCapacity => {
+        __c0 if __c0 == V::Potion::POTION_OF_CAPACITY => {
             fight.add_orb_slots(CAPACITY);
             Played::Done
         }
         // `OrbCmd.Channel<DarkOrb>` once for each of its drinker's orb slots.
-        Potion::EssenceOfDarkness => {
+        __c0 if __c0 == V::Potion::ESSENCE_OF_DARKNESS => {
             for _ in 0..fight.orb_capacity() {
-                fight.channel(super::super::super::generated::orbs::Orb::DarkOrb);
+                fight.channel(V::Orb::DARK_ORB);
             }
             Played::Done
         }

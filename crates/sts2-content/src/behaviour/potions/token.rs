@@ -2,9 +2,8 @@
 
 use sts2_core::{Amount, Effect, Fight, Played, Scaling};
 
-use super::super::super::V0_107_1 as V;
-use super::super::super::generated::potions::Potion;
-use super::Number;
+use crate::behaviour::potions::Number;
+use crate::ids::PotionIds as _;
 
 /// `PotionShapedRock`'s `DamageVar(15, ValueProp.Unpowered)`.
 const ROCK: Number = 15;
@@ -14,10 +13,10 @@ const ROCK: Number = 15;
 /// # Panics
 ///
 /// A token potion nobody has ported.
-pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
+pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mut F) -> Played<V> {
     match potion {
         // `CreatureCmd.Damage` on the target, unpowered and from the player.
-        Potion::PotionShapedRock => {
+        __c0 if __c0 == V::Potion::POTION_SHAPED_ROCK => {
             let target = fight.target();
             let hit = fight.resolve(Effect::Attack {
                 dealer: fight.actor(),
