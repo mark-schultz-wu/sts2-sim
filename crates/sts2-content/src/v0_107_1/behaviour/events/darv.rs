@@ -10,7 +10,6 @@ use super::super::super::V0_107_1 as V;
 use super::super::super::generated::cards::{CardRarity, Cards, pool_cards};
 use super::super::super::generated::events::Event;
 use super::super::super::generated::relics::Relic;
-use super::super::relics::TRANSCENDENCE;
 use super::ancient::{Offered, next_item};
 
 /// `_validRelicSets`, in order, each with the act it asks for, where it asks
@@ -90,7 +89,11 @@ impl EventBehavior<V> for Darv {
             .iter()
             .copied()
             .filter(|&card| card.rarity() == CardRarity::Ancient)
-            .filter(|&card| !TRANSCENDENCE.iter().any(|&(_, into)| into == card))
+            .filter(|&card| {
+                !<V as crate::build::Lists>::ARCHAIC_TOOTH_TRANSCENDENCE
+                    .iter()
+                    .any(|&(_, into)| into == card)
+            })
             .collect();
         state.ancient = next_item(rewards, &ancient);
     }

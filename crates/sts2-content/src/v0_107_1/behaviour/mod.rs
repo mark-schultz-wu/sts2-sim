@@ -17,18 +17,6 @@ use sts2_core::{Fight, Played, Taken};
 
 use super::V0_107_1 as V;
 
-/// The characters `ModelDb.AllCharacters` lists, in its order, which is
-/// also `UnlockState.CharacterCardPools`' with every character unlocked.
-///
-/// Not the table's, which is alphabetical. A draw indexes into this one.
-pub(crate) const ALL_CHARACTERS: [super::generated::characters::Character; 5] = [
-    super::generated::characters::Character::Ironclad,
-    super::generated::characters::Character::Silent,
-    super::generated::characters::Character::Regent,
-    super::generated::characters::Character::Necrobinder,
-    super::generated::characters::Character::Defect,
-];
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Resume {
     Card(cards::Resume),

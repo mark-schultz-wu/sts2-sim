@@ -26,7 +26,8 @@ mod keywords;
 mod rest_site;
 
 pub use behaviour::events::State as EventState;
-pub use behaviour::relics::State as RelicState;
+/// A relic's state, as the shared relics keep it.
+pub type RelicState = crate::behaviour::relics::State<V0_107_1>;
 pub use event_options::EventOptionId;
 pub use generated::*;
 
@@ -37,7 +38,7 @@ use sts2_core::Version;
 /// Zero-sized: it exists to be a type parameter, so that a client or a
 /// simulator names the build once and every id follows. See
 /// [`ContentVersion`](sts2_core::ContentVersion).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct V0_107_1;
 
 impl sts2_core::ContentVersion for V0_107_1 {
@@ -106,7 +107,7 @@ impl sts2_core::ContentVersion for V0_107_1 {
 
 /// Dispatch the hook shapes this simulator can execute.
 impl sts2_core::Hooks for V0_107_1 {
-    type RelicState = behaviour::relics::State;
+    type RelicState = RelicState;
     type ModifierState = crate::behaviour::modifiers::State;
     type PowerState = behaviour::powers::State;
     type MonsterState = behaviour::monsters::Model;
@@ -151,7 +152,7 @@ impl sts2_core::Hooks for V0_107_1 {
                 behaviour::powers::modify_hook(power, amount, held, state, hook)
             }
             sts2_core::Listener::Relic { state, fight, .. } => {
-                behaviour::relics::modify_hook(state, fight, hook)
+                crate::behaviour::relics::modify_hook(state, fight, hook)
             }
             // The fight asks only a monster whose class overrides the hook,
             // and no monster this build ports overrides one of these.
@@ -203,7 +204,7 @@ impl sts2_core::Hooks for V0_107_1 {
                 behaviour::powers::decide_hook(power, amount, held, state, hook)
             }
             sts2_core::Listener::Relic { state, belt, .. } => {
-                behaviour::relics::decide_hook(state, belt, hook)
+                crate::behaviour::relics::decide_hook(state, belt, hook)
             }
             sts2_core::Listener::Potion(potion) => {
                 crate::behaviour::potions::decide_hook(potion, hook)
@@ -338,7 +339,7 @@ impl sts2_core::Hooks for V0_107_1 {
         hook: sts2_core::EventHook<Self>,
         asked: &mut sts2_core::HookEffects<Self>,
     ) {
-        behaviour::relics::event_hook(state, belt, hook, asked)
+        crate::behaviour::relics::event_hook(state, belt, hook, asked)
     }
 
     fn potion_event_hook(

@@ -10,6 +10,8 @@ pub(crate) mod encounters;
 pub(crate) mod modifiers;
 pub(crate) mod orbs;
 pub(crate) mod potions;
+pub(crate) mod powers;
+pub(crate) mod relics;
 
 use sts2_core::{CardAt, CardKind, Change, CostPool, Fight, Lasting, Pile, RunStreamKinds};
 
@@ -82,3 +84,24 @@ pub(crate) fn character_cards<V: crate::Build, F: Fight<V>>(
         .filter(|&card| V::card_kind(card) == Some(kind))
         .collect()
 }
+
+/// `ALL_CHARACTERS`, written for one build's own types.
+macro_rules! lists {
+    ($build:ty) => {
+        /// The characters `ModelDb.AllCharacters` lists, in its order, which
+        /// is also `UnlockState.CharacterCardPools`' with every character
+        /// unlocked.
+        ///
+        /// Not the table's, which is alphabetical. A draw indexes into this
+        /// one.
+        const ALL_CHARACTERS: &'static [<$build as sts2_core::ContentVersion>::Character] = &[
+            <$build as sts2_core::ContentVersion>::Character::IRONCLAD,
+            <$build as sts2_core::ContentVersion>::Character::SILENT,
+            <$build as sts2_core::ContentVersion>::Character::REGENT,
+            <$build as sts2_core::ContentVersion>::Character::NECROBINDER,
+            <$build as sts2_core::ContentVersion>::Character::DEFECT,
+        ];
+    };
+}
+
+pub(crate) use lists;

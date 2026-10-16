@@ -6,8 +6,8 @@ use sts2_core::{EventBehavior, EventView, HookEffect, HookEffects, Room};
 use super::super::super::V0_107_1 as V;
 use super::super::super::generated::events::{Event, EventOption as Said};
 use super::super::super::generated::relics::Relic;
-use super::super::relics::tradable;
 use super::ancient::next_item;
+use crate::behaviour::relics::tradable;
 
 /// `GoldVar(100)`.
 const GOLD: i32 = 100;

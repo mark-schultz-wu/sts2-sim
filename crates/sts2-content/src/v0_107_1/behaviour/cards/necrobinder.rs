@@ -299,7 +299,7 @@ fn misery<F: Fight<V>>(fight: &mut F) -> Played<V> {
             // `DoHackyThingsForSpecificPowers`: an `ITemporaryPower` ignores
             // its next instance, which is the lent stat the copy would move
             // again.
-            let temporary = super::super::powers::lends(power).is_some();
+            let temporary = super::super::powers::lends::<V>(power).is_some();
             // `ClonePreservingMutability` builds its internal data anew, which
             // is all a noted play is. Imbalanced's off-balance is the Bowlbug
             // Rock's `IsOffBalance`, or a stun, which the port keeps on the

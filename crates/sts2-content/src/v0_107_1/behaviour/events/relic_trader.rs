@@ -7,7 +7,7 @@ use sts2_core::{EventBehavior, EventView, HookEffect, HookEffects, Room};
 use super::super::super::V0_107_1 as V;
 use super::super::super::generated::events::{Event, EventOption as Said};
 use super::super::super::generated::relics::Relic;
-use super::super::relics::tradable;
+use crate::behaviour::relics::tradable;
 
 /// The options, top to bottom, one for each relic on offer.
 const OPTIONS: [Said; 3] = [

@@ -78,9 +78,9 @@ use super::super::generated::cards::{CardRarity, CardTag, Cards, QuestCard};
 use super::super::generated::enchantments::Enchantment;
 use super::super::generated::events::{Event, EventOption as Said};
 use super::super::generated::potions::Potion;
-use super::relics::adds_pet;
-use super::relics::tradable;
 use crate::behaviour::enchantments::can_enchant;
+use crate::behaviour::relics::adds_pet;
+use crate::behaviour::relics::tradable;
 
 #[derive(Debug, Clone)]
 pub enum State {
@@ -278,7 +278,7 @@ pub(crate) fn allowed(event: Event, run: &impl EventView<V>) -> bool {
 /// `Player.HasEventPet`: a relic that adds a pet, or a Byrdonis Egg in the
 /// deck.
 fn has_event_pet(run: &impl EventView<V>) -> bool {
-    run.relics().any(|held| adds_pet(held.relic))
+    run.relics().any(|held| adds_pet::<V>(held.relic))
         || run
             .deck()
             .iter()
