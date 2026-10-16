@@ -44,7 +44,7 @@ impl crate::build::OwnRules for V {
         card: <V as sts2_core::ContentVersion>::Card,
         fight: &mut F,
     ) -> Option<sts2_core::Played<V>> {
-        cards::play(card, fight)
+        cards::on_play(card, fight)
     }
 
     fn own_card_calculated<P: sts2_core::Printed<V> + ?Sized>(

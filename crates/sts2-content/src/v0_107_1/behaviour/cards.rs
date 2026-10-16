@@ -11,7 +11,7 @@ type Number = i32;
 
 /// What a card of this build's own does when it is played, or nothing for a
 /// shared one.
-pub(crate) fn play<F: Fight<V>>(card: Cards, fight: &mut F) -> Option<Played<V>> {
+pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Option<Played<V>> {
     Some(match card {
         // `ExpectAFight`: its calculated energy, then No Energy Gain on its
         // owner.

@@ -1,9 +1,10 @@
-//! The committed file of runs the game played, read back and followed.
+//! The committed files of runs the game played, read back and followed.
 //!
-//! `cargo xtask record` writes it, on purpose and never in CI. This holds it
-//! to what the recorder plays: every census seed for every character, each
-//! run whole. Then it follows each run on the simulator, and holds the
-//! positions that agree to `recorded.matched`. That count fails the test if
+//! `cargo xtask record` writes them, one per build, on purpose and never in
+//! CI. This holds each to what the recorder plays: every census seed for
+//! every character, each run whole, on its own build. Then it follows
+//! v0.107.1's runs on the simulator, and holds the positions that agree to
+//! `recorded.matched`. That count fails the test if
 //! it falls, and asks to be raised if it rises, the way `BASELINE` does.
 //! `cargo xtask coverage` says where the runs part.
 
@@ -19,7 +20,7 @@ use sts2_sim::Sim;
 
 #[path = "../examples/carried/mod.rs"]
 mod carried;
-use carried::CARRIED;
+use carried::carried;
 
 type V = V0_107_1;
 
@@ -32,8 +33,8 @@ fn here(file: &str) -> PathBuf {
         .join(file)
 }
 
-fn recorded() -> Recorded {
-    let path = here("recorded.bin");
+fn recorded(file: &str) -> Recorded {
+    let path = here(file);
     let bytes = std::fs::read(&path).unwrap_or_else(|e| panic!("reading {}: {e}", path.display()));
     Recorded::decode(&bytes).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
 }
@@ -47,7 +48,24 @@ type RunSetup<'a> = (&'a str, &'a [String]);
 
 #[test]
 fn the_committed_file_holds_every_census_run() {
-    let recorded = recorded();
+    holds_every_census_run(&recorded("recorded.bin"), &sts2_content::v0_107_1::VERSION);
+}
+
+#[test]
+fn the_committed_v0_111_0_file_holds_every_census_run() {
+    holds_every_census_run(
+        &recorded("recorded-v0.111.0.bin"),
+        &sts2_content::v0_111_0::VERSION,
+    );
+}
+
+/// Every census seed for every character, recorded on `build`.
+fn holds_every_census_run(recorded: &Recorded, build: &sts2_core::Version) {
+    assert_eq!(
+        recorded.stamp.assembly, build.assembly_hash,
+        "recorded on {}",
+        build.name
+    );
     // Each setup's seeds, by character: its ascension and its modifiers.
     let mut seeds: BTreeMap<RunSetup<'_>, BTreeMap<&str, Vec<&str>>> = BTreeMap::new();
     for run in &recorded.runs {
@@ -83,7 +101,7 @@ fn the_committed_file_holds_every_census_run() {
 /// The positions of `run` the simulator agrees with, from the start.
 fn matched(run: &Run) -> usize {
     let mut sim = Sim::<V>::begin((), &run.start()).expect("the run starts");
-    for (relic, count) in CARRIED {
+    for (relic, count) in carried::<V>() {
         for _ in 0..count {
             sim.setup(&Setup::Grant(Gift::Relic(relic)))
                 .expect("a grant applies")
@@ -98,7 +116,7 @@ fn matched(run: &Run) -> usize {
 
 #[test]
 fn the_simulator_follows_the_recorded_runs_no_less_far() {
-    let recorded = recorded();
+    let recorded = recorded("recorded.bin");
     let path = here("recorded.matched");
     let floor: usize = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("reading {}: {e}", path.display()))

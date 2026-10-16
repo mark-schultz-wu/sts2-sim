@@ -23,6 +23,7 @@ mod instructions;
 mod neow;
 mod plays;
 mod record;
+mod respell;
 mod scenario_diff;
 mod split;
 mod trace;
@@ -98,7 +99,7 @@ enum Error {
     #[error("census failed: {0}")]
     Census(#[from] error::ProcessError),
     #[error("record failed: {0}")]
-    Record(error::ProcessError),
+    Record(record::Error),
     #[error("coverage failed: {0}")]
     Coverage(#[from] coverage::Error),
     #[error("neow failed: {0}")]

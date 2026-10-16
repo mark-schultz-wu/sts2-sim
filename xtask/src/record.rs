@@ -8,7 +8,11 @@
 //! cargo xtask record
 //! cargo xtask record --runs 10 --character SILENT --width 8
 //! cargo xtask record --runs 50 --ascension DoubleBoss --append
+//! STS2_GAME_VERSION=v0.111.0 cargo xtask record
 //! ```
+//!
+//! The build is `STS2_GAME_VERSION`'s, and its runs go to its own file, which
+//! `cargo xtask coverage` reads under the same setting.
 //!
 //! A game waits on its frames rather than the processor, so many run at once,
 //! each with a profile of its own. One sometimes crashes, and the run is
@@ -40,9 +44,9 @@ pub struct Args {
     /// How many games play at once.
     #[arg(long, default_value_t = 32)]
     width: usize,
-    /// Where the runs go.
-    #[arg(long, default_value = "crates/sts2-golden/tests/recorded.bin")]
-    out: PathBuf,
+    /// Where the runs go. The build's own recorded file when none is named.
+    #[arg(long)]
+    out: Option<PathBuf>,
     /// The ascension level every run plays at, by the id the game spells it
     /// with.
     #[arg(long, default_value = "None")]
@@ -64,7 +68,15 @@ struct Failed {
     why: String,
 }
 
-pub fn run(args: Args) -> Result<String, crate::error::ProcessError> {
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Process(#[from] crate::error::ProcessError),
+    #[error(transparent)]
+    Version(#[from] crate::codegen::VersionError),
+}
+
+pub fn run(args: Args) -> Result<String, Error> {
     let Args {
         runs,
         mut characters,
@@ -79,6 +91,10 @@ pub fn run(args: Args) -> Result<String, crate::error::ProcessError> {
         characters = CHARACTERS.iter().map(|c| c.to_string()).collect();
     }
     let root = crate::workspace();
+    let out = match out {
+        Some(out) => out,
+        None => crate::followed::recorded_file(&root)?,
+    };
     let recorder = crate::error::build_example(&root, "record_run")?;
     let merger = crate::error::build_example(&root, "merge_runs")?;
 
