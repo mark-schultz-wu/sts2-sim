@@ -432,7 +432,12 @@ fn rewrite_match(s: &str, brace: usize, content: &Content) -> (String, usize) {
             out.push('}');
             return (out, i + 1);
         }
-        last_indent = s[s[..i].rfind('\n').map_or(0, |at| at + 1)..i].to_owned();
+        // The arm's indent, or a space where it shares its line.
+        let line = &s[s[..i].rfind('\n').map_or(0, |at| at + 1)..i];
+        last_indent = match line.trim().is_empty() {
+            true => line.to_owned(),
+            false => " ".to_owned(),
+        };
         let pattern_end = scan_to(b, i, |s, k| at("=>")(s, k) || at_kw(s, k, "if"));
         let pattern = &s[i..pattern_end];
         let (guard, arrow) = if at_kw(b, pattern_end, "if") {
@@ -474,25 +479,30 @@ fn rewrite_match(s: &str, brace: usize, content: &Content) -> (String, usize) {
         }
 
         // Alternatives grouped by what is left once their content is bound.
-        let mut groups: Vec<(String, Vec<Vec<String>>)> = Vec::new();
+        // Compared without spaces, since rustfmt spaces a pattern by its line.
+        let mut groups: Vec<(String, String, Vec<Vec<String>>)> = Vec::new();
         for alt in split_top(pattern, b'|') {
             let (skeleton, conds) = bind_paths(alt.trim(), content);
-            let key = code_of(&skeleton)
+            let shown = code_of(&skeleton)
                 .split_whitespace()
                 .collect::<Vec<_>>()
                 .join(" ");
-            match groups.iter_mut().find(|(k, _)| *k == key) {
-                Some((_, all)) => all.push(conds),
-                None => groups.push((key, vec![conds])),
+            let key: String = shown.chars().filter(|c| !c.is_whitespace()).collect();
+            match groups.iter_mut().find(|(k, _, _)| *k == key) {
+                Some((_, _, all)) => all.push(conds),
+                None => groups.push((key, shown, vec![conds])),
             }
         }
-        if groups.iter().all(|(_, all)| all.iter().all(Vec::is_empty)) {
+        if groups
+            .iter()
+            .all(|(_, _, all)| all.iter().all(Vec::is_empty))
+        {
             out.push_str(&s[i..body_end]);
         } else {
             changed = true;
             let arms: Vec<String> = groups
                 .into_iter()
-                .map(|(skeleton, all)| {
+                .map(|(_, skeleton, all)| {
                     let mut parts = Vec::new();
                     if all.iter().any(|c| !c.is_empty()) {
                         let ors: Vec<String> = all
@@ -535,7 +545,11 @@ fn rewrite_match(s: &str, brace: usize, content: &Content) -> (String, usize) {
                     false => arm.clone(),
                 })
                 .collect();
-            out.push_str(&joined.join(&format!("\n{last_indent}")));
+            let separator = match last_indent.as_str() {
+                " " => " ".to_owned(),
+                indent => format!("\n{indent}"),
+            };
+            out.push_str(&joined.join(&separator));
         }
         i = body_end;
     }
@@ -619,7 +633,35 @@ fn rewrite_matches_macro(s: &str, content: &Content) -> String {
                     false => write!(out, "({})", ors.join(" || ")).unwrap(),
                 }
             } else {
-                write!(out, "match {expr} {{ {pattern} => true, _ => false }}").unwrap();
+                // One `matches!` per shape the alternatives take once bound,
+                // each with its comparisons as a guard.
+                let mut shapes: Vec<(String, String, Vec<String>)> = Vec::new();
+                for (skeleton, conds) in &alts {
+                    let shown = code_of(skeleton)
+                        .split_whitespace()
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    let key: String = shown.chars().filter(|c| !c.is_whitespace()).collect();
+                    let cond = match conds.len() {
+                        0 => "true".to_owned(),
+                        1 => conds[0].clone(),
+                        _ => format!("({})", conds.join(" && ")),
+                    };
+                    match shapes.iter_mut().find(|(k, _, _)| *k == key) {
+                        Some((_, _, ors)) => ors.push(cond),
+                        None => shapes.push((key, shown, vec![cond])),
+                    }
+                }
+                let tests: Vec<String> = shapes
+                    .iter()
+                    .map(|(_, shown, ors)| {
+                        format!("matches!({expr}, {shown} if {})", ors.join(" || "))
+                    })
+                    .collect();
+                match tests.as_slice() {
+                    [one] => out.push_str(one),
+                    many => write!(out, "({})", many.join(" || ")).unwrap(),
+                }
             }
         }
         rest = &rest[close + 1..];
@@ -705,6 +747,12 @@ fn rewrite_lets(s: &str, content: &Content, left: &mut Left) -> String {
 /// What is left: a content path is its const, a content type its associated
 /// type.
 fn rewrite_rest(s: &str, content: &Content, left: &mut Left) -> String {
+    // `Power::ALL` is the table's, through the trait the file imports.
+    let mut s = s.to_owned();
+    for (name, assoc) in &content.types {
+        s = replace_word(&s, &format!("{name}::ALL"), &format!("{assoc}::ALL"));
+    }
+    let s = s.as_str();
     // Paths first, over the whole text: rustfmt breaks a long one over lines.
     let mut whole = s.to_owned();
     for (start, end, konst) in content_paths(s, content).into_iter().rev() {
@@ -716,7 +764,16 @@ fn rewrite_rest(s: &str, content: &Content, left: &mut Left) -> String {
     let s = whole.as_str();
     let mut out = String::new();
     let mut in_use = false;
+    // Inside an `enum` body, where a line's first name declares a member.
+    let mut in_enum = false;
     for (number, line) in s.split_inclusive('\n').enumerate() {
+        if !line.starts_with(char::is_whitespace) {
+            let item = line
+                .trim_start_matches("pub(crate) ")
+                .trim_start_matches("pub(super) ")
+                .trim_start_matches("pub ");
+            in_enum = item.starts_with("enum ") && line.trim_end().ends_with('{');
+        }
         // A `use` over several lines is `rewrite_uses`' to change.
         if in_use || line.trim_start().starts_with("use ") {
             in_use = !line.trim_end().ends_with(';');
@@ -756,7 +813,8 @@ fn rewrite_rest(s: &str, content: &Content, left: &mut Left) -> String {
                 let word = &text[i..end];
                 let path_follows = text[end..].starts_with("::");
                 // `    Event(event::Resume),` declares a member named so.
-                let declares = text[..i].trim().is_empty()
+                let declares = in_enum
+                    && text[..i].trim().is_empty()
                     && (text[end..].starts_with('(')
                         || text[end..].starts_with(',')
                         || text[end..].starts_with(" {")
@@ -810,7 +868,7 @@ fn rewrite_uses(s: &str, content: &Content, build: &str, left: &mut Left) -> Str
         }
         let end = scan_to(b, i, |s, k| s[k] == b';');
         let body = s[i + 4..end].trim();
-        let (prefix, names): (String, Vec<String>) = match body.split_once("::{") {
+        let (prefix, imported): (String, Vec<String>) = match body.split_once("::{") {
             Some((prefix, names)) => (
                 prefix.to_owned(),
                 names
@@ -825,11 +883,24 @@ fn rewrite_uses(s: &str, content: &Content, build: &str, left: &mut Left) -> Str
                 None => (String::new(), vec![body.to_owned()]),
             },
         };
-        let kept: Vec<String> = names
+        // A card pool's enum nothing names now goes first, so what is left
+        // can be found where every build shares it.
+        let code_names = names(
+            &s.split_inclusive('\n')
+                .filter(|l| !l.trim_start().starts_with("use "))
+                .collect::<String>(),
+        );
+        let imported: Vec<String> = imported
+            .into_iter()
+            .filter(|n| !(content.pools.contains(n) && !code_names.contains(n)))
+            .collect();
+        let kept: Vec<String> = imported
             .iter()
             .filter(|n| !content.types.contains_key(n.as_str()) || prefix.is_empty())
             // `Build` is `Rules`, so its methods need no import.
             .filter(|n| !(prefix == "sts2_core" && *n == "Rules as _"))
+            // The build is the generic now.
+            .filter(|n| *n != "V")
             .cloned()
             .collect();
         let prefix = match prefix.strip_prefix(&private) {
@@ -1592,7 +1663,7 @@ fn imports(s: &str) -> Vec<(String, String)> {
             },
         };
         for name in names {
-            if name.is_empty() || name.ends_with(" as _") || name == "self" {
+            if name.is_empty() || name.ends_with(" as _") || name == "self" || name == "V" {
                 continue;
             }
             match name.split_once(" as ") {
@@ -1675,7 +1746,15 @@ fn declare_lists(lists: &[(String, Vec<List>)]) -> Result<(), Error> {
 /// Whether the name at `at` stands where a type does, as opposed to a
 /// struct literal or a path to a member.
 fn type_position(s: &str, at: usize, end: usize) -> bool {
-    let before = s[..at].trim_end();
+    // Past the path the name is spelled under, `crate::behaviour::`.
+    let mut before = s[..at].trim_end();
+    while let Some(rest) = before.strip_suffix("::") {
+        let segment = rest.trim_end_matches(|c: char| c.is_alphanumeric() || c == '_');
+        if segment.len() == rest.len() {
+            break;
+        }
+        before = segment.trim_end();
+    }
     let after = s[end..].trim_start();
     if after.starts_with("::") || after.starts_with('<') || after.starts_with('(') {
         return false;
@@ -1979,6 +2058,12 @@ fn shared_paths(s: &str, build: &str, moving: &[String], content: &Content) -> S
 
 /// A `use` of a card pool's enum the rewrite left nothing naming.
 fn unused_pools(s: &str, content: &Content) -> String {
+    // What the code names, its `use` lines aside.
+    let code = names(
+        &s.split_inclusive('\n')
+            .filter(|l| !l.trim_start().starts_with("use "))
+            .collect::<String>(),
+    );
     let mut out = String::new();
     for line in s.split_inclusive('\n') {
         let trimmed = line.trim();
@@ -1989,7 +2074,7 @@ fn unused_pools(s: &str, content: &Content) -> String {
             out.push_str(line);
             continue;
         };
-        let (prefix, names): (&str, Vec<&str>) = match body.split_once("::{") {
+        let (prefix, imported): (&str, Vec<&str>) = match body.split_once("::{") {
             Some((prefix, names)) => (
                 prefix,
                 names
@@ -2003,13 +2088,12 @@ fn unused_pools(s: &str, content: &Content) -> String {
                 None => (body, vec![]),
             },
         };
-        let unused =
-            |name: &&str| content.pools.iter().any(|p| p == name) && s.matches(*name).count() == 1;
-        if names.is_empty() || !names.iter().any(unused) {
+        let unused = |name: &&str| content.pools.iter().any(|p| p == name) && !code.contains(*name);
+        if imported.is_empty() || !imported.iter().any(unused) {
             out.push_str(line);
             continue;
         }
-        let kept: Vec<&str> = names
+        let kept: Vec<&str> = imported
             .iter()
             .filter(|n| !unused(n) && !n.is_empty())
             .copied()
@@ -2043,6 +2127,12 @@ pub fn run(args: Args) -> Result<String, Error> {
         let text = absolute_paths(&text, &module);
         let text = shared_paths(&text, &args.build, &moving, &content);
         let text = text.replace(&format!("use crate::{}::V0_107_1 as V;\n", args.build), "");
+        // The build named outright is `V` too.
+        let marker = args.build.to_uppercase();
+        let text = text
+            .replace(&format!("<{marker} as"), "<V as")
+            .replace(&format!("type V = {marker};\n"), "")
+            .replace(&format!("use crate::{}::{marker};\n", args.build), "");
         let text = rewrite_matches_macro(&text, &content);
         let text = rewrite_matches(&text, &content);
         let text = rewrite_lets(&text, &content, &mut left);

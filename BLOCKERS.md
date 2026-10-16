@@ -53,9 +53,10 @@ impl in codegen. A spike on the powers' hooks and every card play
 measured 12,264 instructions a step before and 12,184 after. Every
 recorded run still matches after each move.
 
-The orbs, enchantments, modifiers, acts, encounters, potions, relics and
-powers are shared. The rest: monsters, events, and the cards, pool by
-pool.
+The orbs, enchantments, modifiers, acts, encounters, potions, relics,
+powers and monsters are shared. The rest: events, and the cards, pool by
+pool. A move or play the build's codegen wrote stays the build's, and a
+shared rule reaches it through `OwnRules`, as the monsters' scripts are.
 
 - A shared module that waits on a question resumes at its own `Resume`,
   which the build's wraps through `From`. The build's own `Resume` moves

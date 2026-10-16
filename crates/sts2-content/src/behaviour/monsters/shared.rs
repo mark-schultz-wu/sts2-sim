@@ -2,10 +2,8 @@
 
 use sts2_core::{Fight, PowerAmount};
 
-use super::super::super::generated::monster_moves;
-use super::super::super::generated::monsters::{Monster, MoveId};
-use super::super::super::generated::powers::Power;
-use super::{Number, V};
+use crate::behaviour::monsters::Number;
+use crate::ids::{MonsterIds as _, MoveIds as _, PowerIds as _};
 
 /// What the Cubex Construct's Charge Up adds to it, a constant in the move.
 const CHARGE_UP_STRENGTH: Number = 2;
@@ -14,31 +12,37 @@ const CHARGE_UP_STRENGTH: Number = 2;
 ///
 /// The Cubex Construct gains block first, which `CreatureCmd.GainBlock`
 /// refuses while the fight is not yet in progress.
-pub(super) fn starting_powers(monster: Monster) -> Option<Vec<(Power, PowerAmount<Number>)>> {
+pub(super) fn starting_powers<V: crate::Build>(
+    monster: V::Monster,
+) -> Option<Vec<(V::Power, PowerAmount<Number>)>> {
     Some(match monster {
-        Monster::CubexConstruct => vec![(Power::ArtifactPower, PowerAmount::Counted(1))],
+        __c0 if __c0 == V::Monster::CUBEX_CONSTRUCT => {
+            vec![(V::Power::ARTIFACT_POWER, PowerAmount::Counted(1))]
+        }
         _ => return None,
     })
 }
 
 /// Perform one of these monsters' moves, where the generator left it to a
 /// hand port.
-pub(super) fn perform<F: Fight<V>>(
-    monster: Monster,
-    move_id: MoveId,
+pub(super) fn perform<V: crate::Build, F: Fight<V>>(
+    monster: V::Monster,
+    move_id: V::MoveId,
     step: u8,
     fight: &mut F,
 ) -> Option<u8> {
     match (monster, move_id) {
         // `IsBurrowed` and `IsCharging`, which it sets first, pick its
         // animation.
-        (Monster::CubexConstruct, MoveId::ChargeUpMove) => {
+        (__c0, __c1)
+            if (__c0 == V::Monster::CUBEX_CONSTRUCT && __c1 == V::MoveId::CHARGE_UP_MOVE) =>
+        {
             fight.apply_to_actor(
-                Power::StrengthPower,
+                V::Power::STRENGTH_POWER,
                 PowerAmount::Counted(CHARGE_UP_STRENGTH),
             );
         }
-        (monster, move_id) => return monster_moves::shared::perform(monster, move_id, step, fight),
+        (monster, move_id) => return V::generated_move(monster, move_id, step, fight),
     }
     None
 }
