@@ -19,6 +19,26 @@ impl crate::build::OwnRules for V {
     /// Diamond Diadem is this build's own, and its state is shared.
     type OwnRelic = std::convert::Infallible;
 
+    /// No deck card is its own.
+    type OwnCard = std::convert::Infallible;
+
+    fn own_card_state(_card: <V as sts2_core::ContentVersion>::Card) -> Option<Self::OwnCard> {
+        None
+    }
+
+    fn own_card_written(own: Self::OwnCard) -> Option<sts2_core::Change<V>> {
+        match own {}
+    }
+
+    fn own_deck_card_event_hook(
+        _card: <V as sts2_core::ContentVersion>::Card,
+        own: &mut Self::OwnCard,
+        _hook: sts2_core::EventHook<V>,
+        _asked: &mut sts2_core::HookEffects<V>,
+    ) {
+        match *own {}
+    }
+
     fn own_relic_state(_relic: <V as sts2_core::ContentVersion>::Relic) -> Option<Self::OwnRelic> {
         None
     }

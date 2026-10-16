@@ -18,6 +18,25 @@ impl crate::build::OwnRules for V {
     type OwnEvents = events::OwnEvents;
     type OwnRelic = relics::OwnRelic;
 
+    type OwnCard = cards::OwnCard;
+
+    fn own_card_state(card: <V as sts2_core::ContentVersion>::Card) -> Option<Self::OwnCard> {
+        cards::own_card_state(card)
+    }
+
+    fn own_card_written(own: Self::OwnCard) -> Option<sts2_core::Change<V>> {
+        cards::own_card_written(own)
+    }
+
+    fn own_deck_card_event_hook(
+        card: <V as sts2_core::ContentVersion>::Card,
+        own: &mut Self::OwnCard,
+        hook: sts2_core::EventHook<V>,
+        asked: &mut sts2_core::HookEffects<V>,
+    ) {
+        cards::own_deck_card_event_hook(card, own, hook, asked);
+    }
+
     fn own_relic_state(relic: <V as sts2_core::ContentVersion>::Relic) -> Option<Self::OwnRelic> {
         relics::own_relic_state(relic)
     }

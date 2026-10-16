@@ -1504,6 +1504,63 @@ impl<V: Rules> State<V> {
         }
     }
 
+    /// `Hook.BeforeRoomEntered`, which `RunManager.EnterRoom` raises once the
+    /// room is pushed and before it is entered. `point` is the map point's
+    /// type, and `base` is whether the room is the point's first.
+    ///
+    /// Only the deck's own cards hear it.
+    ///
+    /// # Panics
+    ///
+    /// A relic listening to it, or a card asking for anything but its own
+    /// transform.
+    pub(super) fn room_entering(&mut self, point: Option<V::MapPointType>, base: bool) {
+        use sts2_core::CardTable as _;
+
+        let heard = sts2_core::Overrides::of(sts2_core::ModelHook::BeforeRoomEntered);
+        if self.player.relics.hear(heard) {
+            unimplemented!("a relic hearing BeforeRoomEntered");
+        }
+        // No card of the build hears it, so no deck card can.
+        if !V::Card::heard_by_any().contains(sts2_core::ModelHook::BeforeRoomEntered) {
+            return;
+        }
+        let hook = sts2_core::EventHook::RoomEntering { point, base };
+        let mut at = 0;
+        while at < self.player.deck.len() {
+            let card = self.player.deck[at].ident.card;
+            if !card
+                .overrides()
+                .contains(sts2_core::ModelHook::BeforeRoomEntered)
+            {
+                at += 1;
+                continue;
+            }
+            let mut asked = sts2_core::HookEffects::new();
+            V::deck_card_event_hook(
+                card,
+                &mut self.player.deck_mut()[at].state,
+                hook,
+                &mut asked,
+            );
+            let mut transformed = false;
+            for effect in asked {
+                match effect {
+                    // `CardCmd.TransformTo`: out of the deck, and the new
+                    // card at its end.
+                    sts2_core::HookEffect::TransformTo(into) => {
+                        self.act_on_deck(sts2_core::DeckAct::TransformInto(into), &[at]);
+                        transformed = true;
+                    }
+                    effect => unimplemented!("{card:?} in the deck asking for {effect:?}"),
+                }
+            }
+            if !transformed {
+                at += 1;
+            }
+        }
+    }
+
     /// Carry `act` out on the deck cards at `taken`, in the order they were
     /// taken.
     fn act_on_deck(&mut self, act: sts2_core::DeckAct<V>, taken: &[usize]) {
@@ -4502,7 +4559,7 @@ impl<V: Rules> State<V> {
     }
 
     /// The type of the map point at `at`. None off the map.
-    fn point_type(&self, at: Location) -> Option<V::MapPointType> {
+    pub(super) fn point_type(&self, at: Location) -> Option<V::MapPointType> {
         use sts2_core::ActMap as _;
 
         let Location::MapPoint(to) = at else {
@@ -4576,6 +4633,11 @@ impl<V: Rules> State<V> {
     /// last act. The room has no map point, so the run gains no floor and
     /// stands where it stood. `AfterRoomEntered` hears the point it stands on.
     fn enter_architect(&mut self) -> Result<Decided, Error> {
+        let point = self
+            .visited
+            .last()
+            .and_then(|&at| self.point_type(Location::MapPoint(at)));
+        self.room_entering(point, true);
         let event = V::the_architect();
         let mut rng = crate::event::stream::<V, crate::rng::MegaRng>(self.raw_seed(), 0, event);
         let mut streams = *self.streams();
@@ -4591,10 +4653,6 @@ impl<V: Rules> State<V> {
             finished: false,
             layout,
         };
-        let point = self
-            .visited
-            .last()
-            .and_then(|&at| self.point_type(Location::MapPoint(at)));
         self.room_entered(<V::RoomType as sts2_core::RoomKinds>::EVENT, false, point);
         Ok(Decided::Resolved)
     }
@@ -5088,6 +5146,7 @@ impl<V: Rules> State<V> {
     /// run travelled to is, so a scenario stands in front of the shop a run
     /// walks into.
     pub(crate) fn enter_room(&mut self, room: V::RoomType) -> Result<Decided, Error> {
+        self.room_entering(self.point_type(Location::NoLocation), true);
         if room == <V::RoomType as sts2_core::RoomKinds>::REST_SITE {
             self.enter_rest_site(Location::NoLocation);
             return Ok(Decided::Resolved);
@@ -5485,6 +5544,8 @@ impl<V: Rules> State<V> {
                 .visited
                 .last()
                 .map_or(Location::NoLocation, |&point| Location::MapPoint(point));
+            // The fight's room stacks on the event's.
+            self.room_entering(self.point_type(at), false);
             self.build_fight(
                 encounter,
                 EncounterQueue::Named,
@@ -5540,6 +5601,7 @@ impl<V: Rules> State<V> {
     /// reaching a chosen fight without hunting for a seed that puts one on the
     /// way. The encounter is named, so the act's own list is not drawn from.
     pub(crate) fn fight_here(&mut self, encounter: V::Encounter) -> Result<Decided, Error> {
+        self.room_entering(self.point_type(Location::NoLocation), true);
         let fight = self.create_fight(encounter, EncounterQueue::Named, Location::NoLocation)?;
         self.enter_fight(fight, Location::NoLocation)
     }
@@ -5555,6 +5617,7 @@ impl<V: Rules> State<V> {
         if event == V::the_architect() {
             return self.enter_architect();
         }
+        self.room_entering(self.point_type(Location::NoLocation), true);
         let mut rng = crate::event::stream::<V, crate::rng::MegaRng>(self.raw_seed(), 0, event);
         let mut streams = *self.streams();
         let floor = self.floor + num_traits::one();

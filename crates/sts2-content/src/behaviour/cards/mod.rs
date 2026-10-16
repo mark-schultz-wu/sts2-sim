@@ -840,8 +840,10 @@ pub(crate) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
 /// What a deck card's own model saves between fights: its `[SavedProperty]`
 /// fields.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum State {
+pub enum State<V: crate::Build> {
     Stateless,
+    /// A card whose rule is the build's own.
+    Own(V::OwnCard),
     /// `Guilty.CombatsSeen`.
     Guilty {
         combats_seen: u8,
@@ -856,7 +858,7 @@ pub enum State {
     },
 }
 
-impl<V: crate::Build> sts2_core::CardModel<V> for State {
+impl<V: crate::Build> sts2_core::CardModel<V> for State<V> {
     fn new(card: V::Card) -> Self {
         match card {
             __c0 if __c0 == V::Card::GUILTY => Self::Guilty { combats_seen: 0 },
@@ -866,7 +868,7 @@ impl<V: crate::Build> sts2_core::CardModel<V> for State {
             __c0 if __c0 == V::Card::THE_SCYTHE => Self::TheScythe {
                 increased_damage: 0,
             },
-            _ => Self::Stateless,
+            card => V::own_card_state(card).map_or(Self::Stateless, Self::Own),
         }
     }
 
@@ -885,6 +887,7 @@ impl<V: crate::Build> sts2_core::CardModel<V> for State {
             | Self::TheScythe {
                 increased_damage: gained,
             } if gained != 0 => Some(sts2_core::Change::Own(CardWrite::BuffFromPlay(gained))),
+            Self::Own(own) => V::own_card_written(own),
             _ => None,
         }
     }
@@ -1146,11 +1149,12 @@ const GUILTY_COMBATS: u8 = 5;
 /// An override nobody has ported.
 pub(crate) fn deck_event_hook<V: crate::Build>(
     card: V::Card,
-    state: &mut State,
+    state: &mut State<V>,
     hook: sts2_core::EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     match (card, state, hook) {
+        (card, State::Own(own), hook) => V::own_deck_card_event_hook(card, own, hook, asked),
         // `Guilty.AfterCombatEnd`: one more fight seen, and out of the deck at
         // five.
         (__c0, State::Guilty { combats_seen }, sts2_core::EventHook::CombatEnd { .. })
