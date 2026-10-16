@@ -344,6 +344,8 @@ fn egg<V: crate::Build>(
 /// That variant is what says the port has read the relic and found no state.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum State<V: crate::Build> {
+    /// A relic whose rule is the build's own.
+    Own(V::OwnRelic),
     AlchemicalCoffer,
     Anchor,
     ArcaneScroll,
@@ -889,7 +891,9 @@ pub(crate) fn event_hook<V: crate::Build>(
         State::WarHammer => war_hammer::event_hook::<V>(hook, asked),
         State::BeautifulBracelet => beautiful_bracelet::event_hook::<V>(hook, asked),
         State::BlessedAntler => blessed_antler::event_hook::<V>(hook, asked),
-        state @ State::DiamondDiadem(_) => V::own_relic_event_hook(state, hook, asked),
+        state @ (State::DiamondDiadem(_) | State::Own(_)) => {
+            V::own_relic_event_hook(state, hook, asked)
+        }
         State::JewelryBox => jewelry_box::event_hook::<V>(hook, asked),
         State::LoomingFruit => looming_fruit::event_hook::<V>(hook, asked),
         State::SignetRing => signet_ring::event_hook::<V>(hook, asked),
@@ -1142,7 +1146,8 @@ pub(crate) fn modify_hook<V: crate::Build>(
         State::RuinedHelmet(state) => ruined_helmet::modify_hook::<V>(state, hook),
         // The fight asks only a relic that overrides the hook, and none of
         // the rest overrides one of these.
-        State::AlchemicalCoffer
+        State::Own(_)
+        | State::AlchemicalCoffer
         | State::Anchor
         | State::ArcaneScroll
         | State::ArchaicTooth
@@ -1783,7 +1788,10 @@ impl<V: crate::Build> sts2_core::RelicModel<V> for State<V> {
             __c0 if __c0 == V::Relic::CHARONS_ASHES => State::CharonsAshes,
             __c0 if __c0 == V::Relic::ODDLY_SMOOTH_STONE => State::OddlySmoothStone,
             __c0 if __c0 == V::Relic::POTION_BELT => State::PotionBelt,
-            relic => unimplemented!("what {relic:?} does in a run that carries it"),
+            relic => match V::own_relic_state(relic) {
+                Some(own) => State::Own(own),
+                None => unimplemented!("what {relic:?} does in a run that carries it"),
+            },
         }
     }
 

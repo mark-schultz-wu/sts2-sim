@@ -209,6 +209,17 @@ where
     P: sts2_core::Play<V>,
     P::Error: std::fmt::Display,
 {
+    follow_noting(run, driven, |_| {})
+}
+
+/// [`follow`], telling `agreed` the count each time one more position
+/// agrees. A caller then knows how far the run got if the simulator panics.
+pub fn follow_noting<V, P>(run: &Run, driven: &mut P, mut agreed: impl FnMut(usize)) -> Followed
+where
+    V: sts2_core::ContentVersion,
+    P: sts2_core::Play<V>,
+    P::Error: std::fmt::Display,
+{
     let mut after = String::from("the start");
     for (step, &want) in run.digests.iter().enumerate() {
         let seen = driven
@@ -217,6 +228,7 @@ where
         if position(&seen) != want {
             return Followed::PartedAt { step, after };
         }
+        agreed(step + 1);
         let Some(&at) = run.moves.get(step) else {
             break;
         };

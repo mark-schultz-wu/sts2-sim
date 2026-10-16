@@ -52,9 +52,11 @@ impl<V: Rules> Blessing<V> {
         };
 
         let mut positives: Vec<V::Relic> = V::neow_positives().to_vec();
-        if let Some((_, paired)) = V::neow_pairs().iter().find(|(with, _)| *with == curse) {
-            positives.retain(|relic| relic != paired);
-        }
+        positives.retain(|relic| {
+            !V::neow_pairs()
+                .iter()
+                .any(|(with, paired)| *with == curse && paired == relic)
+        });
 
         // One of each pair, on a coin flip. The first pair is skipped when the
         // curse drawn is the one that suppresses it, which is why the flip

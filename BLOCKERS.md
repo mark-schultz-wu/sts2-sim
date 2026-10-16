@@ -67,18 +67,22 @@ a port that starts from the other build's code. A move can shift what
 the compiler inlines. The relics' and the cards' decision dispatchers
 stay out of line, since the walk inlining them cost 3.9% and 3.4%.
 
-The simulator follows 170,368 of the 729,660 recorded positions, 23%,
-and 54 of 1,500 runs whole. The commonest first splits:
+The simulator follows 298,278 of the 1,340,195 recorded positions, 22%,
+and 57 of 1,500 runs whole. A run that panics counts the positions
+before its panic. `follow_run <file> <index> --diff <dir>` plays a run
+on the game beside the simulator and names the sections where they first
+differ, which a split with no panic needs. The commonest first splits:
 
-- 193 after a travel, and 115 at the start, before any move: where the
-  run's position differs with no panic.
-- 137 at Tunneler's Bite, whose move is unported here.
-- 70 in Dowsing Rod's rule for a run that carries it.
+- 225 after a travel, where the run's position differs with no panic.
+- 141 at Tunneler's Bite, whose move is unported here.
 - End turns that part with no panic, against Ovicopter, Gremlin Merc and
   the Knowledge Demon. A shared rule there answers as v0.107.1's game
   does.
-- Cards whose generated play is unported here: Ricochet, Sword
-  Boomerang and Thunderclap among them.
+- Cards whose generated play is unported here: Ricochet, Thunderclap and
+  Sword Boomerang among them.
+- Ambergris, the potion Neow's Sacrifice gives, and the Ambergris power
+  it applies in a fight. Both are new here, and a potion of the build's
+  own needs an `OwnRules` hook as the relics have.
 - Powers and relics the shared rules answer for v0.107.1 alone: Doom,
   Regen and Pendulum among them.
 - Expect a Fight, Diamond Diadem and the Battleworn Dummy event changed,

@@ -16,6 +16,12 @@ use super::V0_107_1 as V;
 
 impl crate::build::OwnRules for V {
     type OwnEvents = events::OwnEvents;
+    /// Diamond Diadem is this build's own, and its state is shared.
+    type OwnRelic = std::convert::Infallible;
+
+    fn own_relic_state(_relic: <V as sts2_core::ContentVersion>::Relic) -> Option<Self::OwnRelic> {
+        None
+    }
 
     fn own_event_allowed(
         event: <V as sts2_core::ContentVersion>::Event,
