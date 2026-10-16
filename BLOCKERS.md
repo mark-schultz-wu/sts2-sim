@@ -37,46 +37,52 @@ own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
 
-### 2. v0.111.0 is a `Build`
+### 2. Recorded v0.111.0 runs
 
-Every rule is in `sts2_content::behaviour`, generic over `V: Build`.
-`Hooks` and `Rules` are generic functions in `behaviour::rules`, which
-the `rules!` macro in `build.rs` forwards a build's methods to. A rule
-that is only a table read forwards to the build's own tables inside the
-macro. v0.111.0 implements what the shared behaviour asks of a build and
-calls `rules!`, so its `Rules` is the shared one:
+Dump the build and record its runs with the mod built for it. Deploy
+with `STS2_GAME_VERSION=v0.111.0`, and redeploy v0.107.1 after. Its
+recorded runs are the measure for the next item.
+
+### 3. v0.111.0's changed rules
+
+v0.111.0's `Hooks` and `Rules` are the shared ones in
+`sts2_content::behaviour`, which mirror v0.107.1's game code. A rule
+whose game code changed between the builds gets a port of its own,
+chosen by the build through `OwnRules`. Content new in v0.111.0 is
+ported there. The recorded runs from item 2 show which rules split.
+
+What each shared module asks of a build, so a port knows where to go:
 
 - `BuildContent`: the content traits in `sts2_content::ids`, the shared
   vocabulary types, and `Lists`, which a `lists!` macro beside each rule
   writes for the build.
 - `Tables`: the lookups into a row that names content.
 - `OwnRules`: the build's generated move and play scripts, and its own
-  ports of rules that name content another build lacks. v0.107.1's own
-  are Diamond Diadem's and Outbreak's powers, Scare, and Expect a Fight.
-  The Amalgamator, Battleworn Dummy and Tinker Time events are its own
-  too. A shared dispatcher asks the build first and answers
-  itself when the hook passes. v0.111.0 starts from v0.107.1's.
-- The pinned state types, and `Resume = behaviour::Resume<Self>`, which
-  wraps each shared module's own `Resume`.
+  ports of rules that name content another build lacks. A shared
+  dispatcher asks the build first and answers itself when the hook
+  passes.
+- The `rules!` macro, where a method that only reads a table forwards
+  to the build's own tables.
 
 `cargo xtask generic <file>` rewrites a build's rule to be generic, for
 a port that starts from the other build's code. A move can shift what
 the compiler inlines. The relics' and the cards' decision dispatchers
 stay out of line, since the walk inlining them cost 3.9% and 3.4%.
 
-### 3. Recorded v0.111.0 runs
+Known so far, each an `unimplemented!()` where it is reached:
 
-Dump the build and record its runs with the mod built for it. Deploy
-with `STS2_GAME_VERSION=v0.111.0`, and redeploy v0.107.1 after. Its
-recorded runs are the measure for the next item.
+- Expect a Fight, Diamond Diadem and the Battleworn Dummy event changed,
+  and are v0.111.0's own, unported.
+- The rest site's options and their effects.
+- Cards whose generated play is unported here: Thunderclap, Sword
+  Boomerang and Ricochet among them.
+- Powers the shared rules answer for v0.107.1 alone: Doom, Juggling and
+  Pale Blue Dot among them.
 
-### 4. v0.111.0's changed rules
+Forty runs at random, with `random_run` pointed at v0.111.0, all
+stopped on one of these. 31 stopped at the first rest site.
 
-A rule whose game code changed between the builds gets a port of its
-own, chosen by the build through `OwnRules`. Content new in v0.111.0 is
-ported there. The recorded runs from item 3 show which rules split.
-
-### 5. A walk that shares only who listens
+### 4. A walk that shares only who listens
 
 The snapshot copies each walk's listeners. Most walks see none arrive or
 leave: 1.3% of `AfterCardPlayed` walks do, and 28% of `AfterSideTurnEnd`
@@ -86,7 +92,7 @@ A cheaper walk shares only which listeners there are and their order,
 kept apart from what they hold. That is part of the flat-state pass,
 which needs a design first.
 
-### 6. A speed target
+### 5. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.

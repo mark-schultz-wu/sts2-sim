@@ -22,9 +22,9 @@ impl RestKinds<V0_111_0> for RestSiteOption {
 
     /// `HEAL` and `SMITH`, the way `v0.107.1` opens.
     ///
-    /// No rule drives this build yet, so nothing calls this. What
-    /// `TryModifyRestSiteOptions` implements here is unread, and a run that
-    /// reaches a rest site on this build stops rather than guessing.
+    /// What `TryModifyRestSiteOptions` implements in this build is unread, so
+    /// a run that reaches a rest site on this build stops rather than
+    /// guessing.
     fn offered(
         _from_belt: &[RestSiteOption],
         _deck: &[CardIdent<V0_111_0>],

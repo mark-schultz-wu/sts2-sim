@@ -22,6 +22,7 @@
 //! them err the same way, towards computed. Marking a constant as computed
 //! costs one method, and the reverse costs a divergence nobody can see.
 
+mod behaviour;
 mod generated;
 mod keywords;
 mod rest_site;
@@ -39,22 +40,6 @@ use sts2_core::Version;
 /// [`ContentVersion`](sts2_core::ContentVersion).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct V0_111_0;
-
-/// Where a card of this build stops to ask something.
-///
-/// Uninhabited. No card here is ported, so none of them stops, and a build
-/// that ports one grows a variant for it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Resume {}
-
-/// What a card of this build writes on its deck version.
-///
-/// Uninhabited, for the reason [`Resume`] is.
-/// A method of a card's own class in this build.
-///
-/// Uninhabited, for the reason [`Resume`] is.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum CardWrite {}
 
 impl sts2_core::ContentVersion for V0_111_0 {
     const VERSION: Version = VERSION;
@@ -80,8 +65,8 @@ impl sts2_core::ContentVersion for V0_111_0 {
     type Count = u32;
     type Index = u16;
     type CardSerial = u16;
-    type Resume = Resume;
-    type CardWrite = CardWrite;
+    type Resume = crate::behaviour::Resume<Self>;
+    type CardWrite = crate::behaviour::cards::CardWrite;
     type DeckWrite = crate::behaviour::DeckWrite;
 
     type AscensionLevel = generated::ascension::AscensionLevel;
@@ -93,9 +78,7 @@ impl sts2_core::ContentVersion for V0_111_0 {
     type CardVar = generated::cards::CardVar;
     type CardTag = generated::cards::CardTag;
     type Character = generated::characters::Character;
-    /// This build has no behaviour, so no enchantment here keeps a field of
-    /// its own.
-    type EnchantmentState = sts2_core::EnchantmentStatus;
+    type EnchantmentState = crate::behaviour::enchantments::State;
     type Enchantment = generated::enchantments::Enchantment;
     type Encounter = generated::encounters::Encounter;
     type Event = generated::events::Event;
@@ -122,6 +105,9 @@ impl sts2_core::ContentVersion for V0_111_0 {
     type RestSiteOption = generated::restsite::RestSiteOption;
     type TargetType = generated::cards::TargetType;
 }
+
+// `Hooks` and `Rules`, as the shared rules every build forwards to.
+crate::build::rules!(V0_111_0, v0_111_0);
 
 pub const VERSION: Version = Version {
     name: "v0.111.0",
