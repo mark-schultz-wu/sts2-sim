@@ -3,6 +3,7 @@
 # pool <pool> <relic>
 # relic <id> <rarity> <merchantCost> <isUsedUp> <hasUponPickupEffect> <spawnsPets> <isStackable> <addsPet> <isAllowedInShops> <showCounter> <displayAmount> <gatedInRun> <gatedAtNeow>
 # scalecost <relic> <ascension> <merchantCost>
+# var <relic> <name> <base> <calculated> <class>
 # rows above are ascension 0; a scale* row is the level at which a value changes
 pool IRONCLAD_RELIC_POOL BRIMSTONE
 pool IRONCLAD_RELIC_POOL BURNING_BLOOD
@@ -307,304 +308,583 @@ pool SHARED_RELIC_POOL WHITE_BEAST_STATUE
 pool SHARED_RELIC_POOL WHITE_STAR
 pool SHARED_RELIC_POOL WING_CHARM
 relic AKABEKO Uncommon 225 0 0 0 0 0 1 0 0 0 0
+var AKABEKO VigorPower 8 0 PowerVar+VIGOR_POWER
 relic ALCHEMICAL_COFFER Ancient 999999999 0 1 0 0 0 1 0 0 0 0
+var ALCHEMICAL_COFFER PotionSlots 4 0 DynamicVar
 relic AMETHYST_AUBERGINE Common 175 0 0 0 0 0 0 0 0 1 0
+var AMETHYST_AUBERGINE Gold 15 0 GoldVar
 relic ANCHOR Common 175 0 0 0 0 0 1 0 0 0 0
+var ANCHOR Block 10 0 BlockVar+Unpowered
 relic ARCANE_SCROLL Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var ARCANE_SCROLL Cards 1 0 CardsVar
 relic ARCHAIC_TOOTH Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var ARCHAIC_TOOTH AncientCard 0 0 StringVar
+var ARCHAIC_TOOTH StarterCard 0 0 StringVar
 relic ART_OF_WAR Rare 275 0 0 0 0 0 1 0 0 0 0
+var ART_OF_WAR Energy 1 0 EnergyVar
 relic ASTROLABE Ancient 999999999 0 1 0 0 0 1 0 0 0 0
+var ASTROLABE Cards 3 0 CardsVar
 relic BAG_OF_MARBLES Common 175 0 0 0 0 0 1 0 0 0 0
+var BAG_OF_MARBLES VulnerablePower 1 0 PowerVar+VULNERABLE_POWER
 relic BAG_OF_PREPARATION Common 175 0 0 0 0 0 1 0 0 0 0
+var BAG_OF_PREPARATION Cards 2 0 CardsVar
 relic BEATING_REMNANT Rare 275 0 0 0 0 0 1 0 0 0 0
+var BEATING_REMNANT MaxHpLoss 20 0 DynamicVar
 relic BEAUTIFUL_BRACELET Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var BEAUTIFUL_BRACELET Cards 4 0 CardsVar
+var BEAUTIFUL_BRACELET Swift 2 0 DynamicVar
 relic BELLOWS Rare 275 0 0 0 0 0 1 0 0 0 0
 relic BELT_BUCKLE Shop 200 0 0 0 0 0 1 0 0 0 0
+var BELT_BUCKLE DexterityPower 2 0 PowerVar+DEXTERITY_POWER
 relic BIG_HAT Rare 275 0 0 0 0 0 1 0 0 0 0
+var BIG_HAT Cards 2 0 CardsVar
 relic BIG_MUSHROOM Event 999999999 0 1 0 0 0 1 0 0 0 0
+var BIG_MUSHROOM Cards 2 0 CardsVar
+var BIG_MUSHROOM MaxHp 20 0 MaxHpVar
 relic BIIIG_HUG Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var BIIIG_HUG Cards 4 0 CardsVar
 relic BING_BONG Event 999999999 0 0 0 0 0 1 0 0 0 0
 relic BLACK_BLOOD Starter 999999999 0 0 0 0 0 1 0 0 0 0
+var BLACK_BLOOD Heal 12 0 HealVar
 relic BLACK_STAR Ancient 999999999 0 0 0 0 0 1 0 0 0 0
 relic BLESSED_ANTLER Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var BLESSED_ANTLER Cards 3 0 CardsVar
+var BLESSED_ANTLER Energy 1 0 EnergyVar
 relic BLOOD_SOAKED_ROSE Ancient 999999999 0 1 0 0 0 1 0 0 0 0
+var BLOOD_SOAKED_ROSE Energy 1 0 EnergyVar
 relic BLOOD_VIAL Common 175 0 0 0 0 0 1 0 0 0 0
+var BLOOD_VIAL Heal 2 0 HealVar
 relic BONE_FLUTE Common 175 0 0 0 0 0 1 0 0 0 0
+var BONE_FLUTE Block 2 0 BlockVar+Unpowered
 relic BONE_TEA Event 999999999 dynamic 0 0 0 0 1 0 dynamic 0 0
+var BONE_TEA Combats 1 0 DynamicVar
 relic BOOKMARK Rare 275 0 0 0 0 0 1 0 0 0 0
 relic BOOK_OF_FIVE_RINGS Common 175 0 0 0 0 0 1 1 dynamic 1 0
+var BOOK_OF_FIVE_RINGS Cards 5 0 CardsVar
+var BOOK_OF_FIVE_RINGS Heal 20 0 HealVar
 relic BOOK_REPAIR_KNIFE Uncommon 225 0 0 0 0 0 1 0 0 0 0
+var BOOK_REPAIR_KNIFE Heal 3 0 HealVar
 relic BOOMING_CONCH Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var BOOMING_CONCH Cards 2 0 CardsVar
+var BOOMING_CONCH Energy 1 0 EnergyVar
 relic BOUND_PHYLACTERY Starter 999999999 0 0 1 0 0 1 0 0 0 0
+var BOUND_PHYLACTERY Summon 1 0 SummonVar
 relic BOWLER_HAT Uncommon 225 0 0 0 0 0 0 0 0 1 0
+var BOWLER_HAT GoldIncrease 1.25 0 DynamicVar
 relic BREAD Shop 200 0 0 0 0 0 1 0 0 0 0
+var BREAD GainEnergy 1 0 EnergyVar
+var BREAD LoseEnergy 2 0 EnergyVar
 relic BRILLIANT_SCARF Ancient 999999999 0 0 0 0 0 1 dynamic dynamic 0 0
+var BRILLIANT_SCARF Cards 5 0 CardsVar
 relic BRIMSTONE Shop 200 0 0 0 0 0 1 0 0 0 0
+var BRIMSTONE EnemyStrength 1 0 PowerVar+STRENGTH_POWER
+var BRIMSTONE SelfStrength 2 0 PowerVar+STRENGTH_POWER
 relic BRONZE_SCALES Common 175 0 0 0 0 0 1 0 0 0 0
+var BRONZE_SCALES ThornsPower 3 0 PowerVar+THORNS_POWER
 relic BURNING_BLOOD Starter 999999999 0 0 0 0 0 1 0 0 0 0
+var BURNING_BLOOD Heal 6 0 HealVar
 relic BURNING_STICKS Shop 200 0 0 0 0 0 1 0 0 0 0
 relic BYRDPIP Event 999999999 0 1 1 0 1 1 0 0 0 0
 relic CALLING_BELL Ancient 999999999 0 1 0 0 0 1 0 0 0 0
+var CALLING_BELL Relics 3 0 DynamicVar
 relic CANDELABRA Uncommon 225 0 0 0 0 0 1 0 0 0 0
+var CANDELABRA Energy 2 0 EnergyVar
 relic CAPTAINS_WHEEL Rare 275 0 0 0 0 0 1 0 0 0 0
+var CAPTAINS_WHEEL Block 18 0 BlockVar+Unpowered
 relic CAULDRON Shop 200 0 1 0 0 0 1 0 0 0 0
+var CAULDRON Potions 5 0 DynamicVar
 relic CENTENNIAL_PUZZLE Common 175 0 0 0 0 0 1 0 0 0 0
+var CENTENNIAL_PUZZLE Cards 3 0 CardsVar
 relic CHANDELIER Rare 275 0 0 0 0 0 1 0 0 0 0
+var CHANDELIER Energy 3 0 EnergyVar
 relic CHARONS_ASHES Rare 275 0 0 0 0 0 1 0 0 0 0
+var CHARONS_ASHES Damage 3 0 DamageVar+Unpowered
 relic CHEMICAL_X Shop 200 0 0 0 0 0 1 0 0 0 0
+var CHEMICAL_X Increase 2 0 DynamicVar
 relic CHOICES_PARADOX Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var CHOICES_PARADOX Cards 5 0 CardsVar
 relic CHOSEN_CHEESE Event 999999999 0 0 0 0 0 1 0 0 0 0
+var CHOSEN_CHEESE MaxHp 1 0 MaxHpVar
 relic CIRCLET None 1 0 0 0 1 0 1 0 0 0 0
 relic CLAWS Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var CLAWS Cards 6 0 CardsVar
 relic CLOAK_CLASP Rare 275 0 0 0 0 0 1 0 0 0 0
+var CLOAK_CLASP Block 1 0 BlockVar+Unpowered
 relic CRACKED_CORE Starter 999999999 0 0 0 0 0 1 0 0 0 0
+var CRACKED_CORE Lightning 1 0 DynamicVar
 relic CROSSBOW Ancient 999999999 0 0 0 0 0 1 0 0 0 0
 relic CURSED_PEARL Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var CURSED_PEARL Gold 333 0 GoldVar
 relic DARKSTONE_PERIAPT Event 999999999 0 0 0 0 0 1 0 0 0 0
+var DARKSTONE_PERIAPT MaxHp 6 0 MaxHpVar
 relic DATA_DISK Common 175 0 0 0 0 0 1 0 0 0 0
+var DATA_DISK FocusPower 1 0 PowerVar+FOCUS_POWER
 relic DAUGHTER_OF_THE_WIND Event 999999999 0 0 0 0 0 1 0 0 0 0
+var DAUGHTER_OF_THE_WIND Block 1 0 BlockVar+Unpowered
 relic DELICATE_FROND Ancient 999999999 0 0 0 0 0 1 0 0 0 0
 relic DEMON_TONGUE Rare 275 0 0 0 0 0 1 0 0 0 0
 relic DEPRECATED_RELIC None 1 0 0 0 1 0 1 0 0 0 0
 relic DIAMOND_DIADEM Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var DIAMOND_DIADEM Block 20 0 BlockVar+Unpowered
 relic DINGY_RUG Shop 200 0 0 0 0 0 1 0 0 0 0
 relic DISTINGUISHED_CAPE Ancient 999999999 0 1 0 0 0 1 0 0 0 0
+var DISTINGUISHED_CAPE Cards 3 0 CardsVar
+var DISTINGUISHED_CAPE Curses 2 0 DynamicVar
 relic DIVINE_DESTINY Starter 999999999 0 0 0 0 0 1 0 0 0 0
+var DIVINE_DESTINY Stars 7 0 StarsVar
 relic DIVINE_RIGHT Starter 999999999 0 0 0 0 0 1 0 0 0 0
+var DIVINE_RIGHT Stars 3 0 StarsVar
 relic DOLLYS_MIRROR Shop 200 0 1 0 0 0 1 0 0 0 0
 relic DOWSING_ROD Ancient 999999999 0 1 0 0 0 1 0 0 0 0
 relic DRAGON_FRUIT Shop 200 0 0 0 0 0 1 0 0 1 0
+var DRAGON_FRUIT MaxHp 1 0 MaxHpVar
 relic DREAM_CATCHER Event 999999999 0 0 0 0 0 1 0 0 0 0
 relic DRIFTWOOD Ancient 999999999 0 0 0 0 0 1 0 0 0 0
 relic DUSTY_TOME Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var DUSTY_TOME AncientCard 0 0 StringVar
 relic ECTOPLASM Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var ECTOPLASM Energy 1 0 EnergyVar
 relic ELECTRIC_SHRYMP Ancient 999999999 0 1 0 0 0 1 0 0 0 0
 relic EMBER_TEA Event 999999999 dynamic 0 0 0 0 1 1 dynamic 0 0
+var EMBER_TEA Combats 5 0 DynamicVar
+var EMBER_TEA StrengthPower 2 0 PowerVar+STRENGTH_POWER
 relic EMOTION_CHIP Rare 275 0 0 0 0 0 1 0 0 0 0
 relic EMPTY_CAGE Ancient 999999999 0 1 0 0 0 1 0 0 0 0
+var EMPTY_CAGE Cards 2 0 CardsVar
 relic ETERNAL_FEATHER Uncommon 225 0 0 0 0 0 1 0 0 0 0
+var ETERNAL_FEATHER Cards 5 0 CardsVar
+var ETERNAL_FEATHER Heal 3 0 HealVar
 relic FAKE_ANCHOR Event 50 0 0 0 0 0 1 0 0 0 0
+var FAKE_ANCHOR Block 4 0 BlockVar+Unpowered
 relic FAKE_BLOOD_VIAL Event 50 0 0 0 0 0 1 0 0 0 0
+var FAKE_BLOOD_VIAL Heal 1 0 HealVar
 relic FAKE_HAPPY_FLOWER Event 50 0 0 0 0 0 1 1 dynamic 0 0
+var FAKE_HAPPY_FLOWER Energy 1 0 EnergyVar
+var FAKE_HAPPY_FLOWER Turns 5 0 DynamicVar
 relic FAKE_LEES_WAFFLE Event 50 0 1 0 0 0 1 0 0 0 0
+var FAKE_LEES_WAFFLE Heal 10 0 HealVar
 relic FAKE_MANGO Event 50 0 1 0 0 0 1 0 0 0 0
+var FAKE_MANGO MaxHp 3 0 MaxHpVar
 relic FAKE_MERCHANTS_RUG Event 999999999 0 0 0 0 0 1 0 0 0 0
 relic FAKE_ORICHALCUM Event 50 0 0 0 0 0 1 0 0 0 0
+var FAKE_ORICHALCUM Block 3 0 BlockVar+Unpowered
 relic FAKE_SNECKO_EYE Event 50 0 0 0 0 0 1 0 0 0 0
 relic FAKE_STRIKE_DUMMY Event 50 0 0 0 0 0 1 0 0 0 0
+var FAKE_STRIKE_DUMMY ExtraDamage 1 0 DynamicVar
 relic FAKE_VENERABLE_TEA_SET Event 50 0 0 0 0 0 1 0 0 0 0
+var FAKE_VENERABLE_TEA_SET Energy 1 0 EnergyVar
 relic FENCING_MANUAL Common 175 0 0 0 0 0 1 0 0 0 0
+var FENCING_MANUAL Forge 10 0 ForgeVar
 relic FESTIVE_POPPER Common 175 0 0 0 0 0 1 0 0 0 0
+var FESTIVE_POPPER Damage 9 0 DamageVar+Unpowered
 relic FIDDLE Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var FIDDLE Cards 2 0 CardsVar
 relic FISHING_ROD Ancient 999999999 0 0 0 0 0 1 1 dynamic 0 0
+var FISHING_ROD Combats 3 0 DynamicVar
 relic FORGOTTEN_SOUL Event 999999999 0 0 0 0 0 1 0 0 0 0
+var FORGOTTEN_SOUL Damage 1 0 DamageVar+Unpowered
 relic FRAGRANT_MUSHROOM Event 999999999 0 1 0 0 0 1 0 0 0 0
+var FRAGRANT_MUSHROOM Cards 2 0 CardsVar
+var FRAGRANT_MUSHROOM HpLoss 15 0 HpLossVar
 relic FRESNEL_LENS Event 999999999 0 0 0 0 0 1 0 0 0 0
+var FRESNEL_LENS NimbleAmount 2 0 DynamicVar
 relic FROZEN_EGG Rare 275 0 0 0 0 0 1 0 0 1 0
 relic FUNERARY_MASK Uncommon 225 0 0 0 0 0 1 0 0 0 0
+var FUNERARY_MASK Cards 3 0 CardsVar
 relic FUR_COAT Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var FUR_COAT Combats 8 0 DynamicVar
 relic GALACTIC_DUST Uncommon 225 0 0 0 0 0 1 1 dynamic 0 0
+var GALACTIC_DUST Block 10 0 BlockVar+Unpowered
+var GALACTIC_DUST Stars 10 0 StarsVar
 relic GAMBLING_CHIP Rare 275 0 0 0 0 0 1 0 0 0 0
 relic GAME_PIECE Rare 275 0 0 0 0 0 1 0 0 0 0
+var GAME_PIECE Cards 1 0 CardsVar
 relic GHOST_SEED Shop 200 0 0 0 0 0 1 0 0 0 0
 relic GIRYA Rare 275 0 0 0 0 0 1 1 dynamic 1 0
 relic GLASS_EYE Ancient 999999999 0 0 0 0 0 1 0 0 0 0
 relic GLITTER Ancient 999999999 0 0 0 0 0 1 0 0 0 0
 relic GNARLED_HAMMER Shop 200 0 1 0 0 0 1 0 0 0 0
+var GNARLED_HAMMER Cards 3 0 CardsVar
+var GNARLED_HAMMER SharpAmount 3 0 DynamicVar
 relic GOLDEN_COMPASS Ancient 999999999 0 1 0 0 0 1 0 0 0 0
 relic GOLDEN_PEARL Ancient 999999999 0 1 0 0 0 1 0 0 0 0
+var GOLDEN_PEARL Gold 150 0 GoldVar
 relic GOLD_PLATED_CABLES Uncommon 225 0 0 0 0 0 1 0 0 0 0
 relic GORGET Common 175 0 0 0 0 0 1 0 0 0 0
+var GORGET PlatingPower 4 0 PowerVar+PLATING_POWER
 relic GREMLIN_HORN Uncommon 225 0 0 0 0 0 1 0 0 0 0
+var GREMLIN_HORN Cards 1 0 CardsVar
+var GREMLIN_HORN Energy 1 0 EnergyVar
 relic HAND_DRILL Event 999999999 0 0 0 0 0 1 0 0 0 0
+var HAND_DRILL VulnerablePower 2 0 PowerVar+VULNERABLE_POWER
 relic HAPPY_FLOWER Common 175 0 0 0 0 0 1 1 dynamic 0 0
+var HAPPY_FLOWER Energy 1 0 EnergyVar
+var HAPPY_FLOWER Turns 3 0 DynamicVar
 relic HEFTY_TABLET Ancient 999999999 0 1 0 0 0 1 0 0 0 0
+var HEFTY_TABLET Cards 3 0 CardsVar
 relic HELICAL_DART Rare 275 0 0 0 0 0 1 0 0 0 0
+var HELICAL_DART DexterityPower 1 0 PowerVar+DEXTERITY_POWER
 relic HISTORY_COURSE Event 999999999 0 0 0 0 0 1 0 0 0 0
 relic HORN_CLEAT Uncommon 225 0 0 0 0 0 1 0 0 0 0
+var HORN_CLEAT Block 14 0 BlockVar+Unpowered
 relic ICE_CREAM Rare 275 0 0 0 0 0 1 0 0 0 0
 relic INFUSED_CORE Starter 999999999 0 0 0 0 0 1 0 0 0 0
+var INFUSED_CORE ExtraDamage 1 0 DynamicVar
+var INFUSED_CORE Lightning 3 0 DynamicVar
 relic INTIMIDATING_HELMET Rare 275 0 0 0 0 0 1 0 0 0 0
+var INTIMIDATING_HELMET Block 4 0 BlockVar+Unpowered
+var INTIMIDATING_HELMET Energy 2 0 EnergyVar
 relic IRON_CLUB Ancient 999999999 0 0 0 0 0 1 1 dynamic 0 0
+var IRON_CLUB Cards 4 0 CardsVar
 relic IVORY_TILE Rare 275 0 0 0 0 0 1 0 0 0 0
+var IVORY_TILE Energy 1 0 EnergyVar
+var IVORY_TILE EnergyThreshold 3 0 EnergyVar
 relic JEWELED_MASK Ancient 999999999 0 0 0 0 0 1 0 0 0 0
 relic JEWELRY_BOX Ancient 999999999 0 1 0 0 0 1 0 0 0 0
 relic JOSS_PAPER Uncommon 225 0 0 0 0 0 1 1 dynamic 0 0
+var JOSS_PAPER Cards 1 0 CardsVar
+var JOSS_PAPER ExhaustAmount 5 0 DynamicVar
 relic JUZU_BRACELET Common 175 0 0 0 0 0 1 0 0 1 0
 relic KALEIDOSCOPE Ancient 999999999 0 1 0 0 0 1 0 0 0 1
+var KALEIDOSCOPE Cards 2 0 CardsVar
 relic KIFUDA Shop 200 0 1 0 0 0 1 0 0 0 0
+var KIFUDA Cards 3 0 CardsVar
 relic KUNAI Rare 275 0 0 0 0 0 1 dynamic dynamic 0 0
+var KUNAI Cards 3 0 CardsVar
+var KUNAI DexterityPower 1 0 PowerVar+DEXTERITY_POWER
 relic KUSARIGAMA Uncommon 225 0 0 0 0 0 1 dynamic dynamic 0 0
+var KUSARIGAMA Cards 3 0 CardsVar
+var KUSARIGAMA Damage 6 0 DamageVar+Unpowered
 relic LANTERN Common 175 0 0 0 0 0 1 0 0 0 0
+var LANTERN Energy 1 0 EnergyVar
 relic LARGE_CAPSULE Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var LARGE_CAPSULE Relics 2 0 IntVar
 relic LASTING_CANDY Uncommon 225 0 0 0 0 0 1 1 dynamic 1 0
 relic LAVA_LAMP Shop 200 0 0 0 0 0 1 0 0 0 0
 relic LAVA_ROCK Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var LAVA_ROCK Relics 2 0 DynamicVar
 relic LEAD_PAPERWEIGHT Ancient 999999999 0 0 0 0 0 1 0 0 0 0
 relic LEAFY_POULTICE Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var LEAFY_POULTICE MaxHp 12 0 MaxHpVar
 relic LEES_WAFFLE Shop 200 0 1 0 0 0 1 0 0 0 0
+var LEES_WAFFLE MaxHp 7 0 MaxHpVar
 relic LETTER_OPENER Uncommon 225 0 0 0 0 0 1 dynamic dynamic 0 0
+var LETTER_OPENER Cards 3 0 CardsVar
+var LETTER_OPENER Damage 5 0 DamageVar+Unpowered
 relic LIZARD_TAIL Rare 275 dynamic 0 0 0 0 1 0 0 0 0
+var LIZARD_TAIL Heal 50 0 HealVar
 relic LOOMING_FRUIT Ancient 999999999 0 1 0 0 0 1 0 0 0 0
+var LOOMING_FRUIT MaxHp 31 0 MaxHpVar
 relic LORDS_PARASOL Ancient 999999999 0 0 0 0 0 1 0 0 0 0
 relic LOST_COFFER Ancient 999999999 0 1 0 0 0 1 0 0 0 0
 relic LOST_WISP Event 999999999 0 0 0 0 0 1 0 0 0 0
+var LOST_WISP Damage 8 0 DamageVar+Unpowered
 relic LUCKY_FYSH Uncommon 225 0 0 0 0 0 0 0 0 1 0
+var LUCKY_FYSH Gold 15 0 GoldVar
 relic LUNAR_PASTRY Rare 275 0 0 0 0 0 1 0 0 0 0
+var LUNAR_PASTRY Stars 1 0 StarsVar
 relic MANGO Rare 275 0 1 0 0 0 1 0 0 0 0
+var MANGO MaxHp 14 0 MaxHpVar
 relic MASSIVE_SCROLL Ancient 999999999 0 0 0 0 0 1 0 0 1 0
 relic MAW_BANK Event 999999999 dynamic 0 0 0 0 1 0 0 0 0
+var MAW_BANK Gold 12 0 GoldVar
 relic MEAL_TICKET Common 175 0 0 0 0 0 1 0 0 1 0
+var MEAL_TICKET Heal 15 0 HealVar
 relic MEAT_CLEAVER Ancient 999999999 0 0 0 0 0 1 0 0 0 0
 relic MEAT_ON_THE_BONE Rare 275 0 0 0 0 0 1 0 0 0 0
+var MEAT_ON_THE_BONE Heal 12 0 HealVar
+var MEAT_ON_THE_BONE HpThreshold 50 0 DynamicVar
 relic MEMBERSHIP_CARD Shop 200 0 0 0 0 0 1 0 0 0 0
+var MEMBERSHIP_CARD Discount 50 0 DynamicVar
 relic MERCURY_HOURGLASS Uncommon 225 0 0 0 0 0 1 0 0 0 0
+var MERCURY_HOURGLASS Damage 3 0 DamageVar+Unpowered
 relic METRONOME Rare 275 0 0 0 0 0 1 dynamic dynamic 0 0
+var METRONOME Damage 30 0 DamageVar+Unpowered
+var METRONOME OrbCount 7 0 DynamicVar
 relic MINIATURE_CANNON Uncommon 225 0 0 0 0 0 1 0 0 0 0
+var MINIATURE_CANNON ExtraDamage 3 0 DynamicVar
 relic MINIATURE_TENT Shop 200 0 0 0 0 0 1 0 0 0 0
 relic MINI_REGENT Rare 275 0 0 0 0 0 1 0 0 0 0
+var MINI_REGENT StrengthPower 1 0 PowerVar+STRENGTH_POWER
 relic MOLTEN_EGG Rare 275 0 0 0 0 0 1 0 0 1 0
 relic MR_STRUGGLES Event 999999999 0 0 0 0 0 1 0 0 0 0
 relic MUMMIFIED_HAND Rare 275 0 0 0 0 0 1 0 0 0 0
 relic MUSIC_BOX Ancient 999999999 0 0 0 0 0 1 0 0 0 0
 relic MYSTIC_LIGHTER Shop 200 0 0 0 0 0 1 0 0 0 0
+var MYSTIC_LIGHTER Damage 9 0 DamageVar+Unpowered
 relic NEOWS_BONES Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var NEOWS_BONES Curses 1 0 DynamicVar
+var NEOWS_BONES Relics 2 0 DynamicVar
 relic NEOWS_SACRIFICE Ancient 999999999 0 1 0 0 0 1 0 0 0 0
 relic NEOWS_TALISMAN Ancient 999999999 0 1 0 0 0 1 0 0 0 0
 relic NEOWS_TORMENT Ancient 999999999 0 1 0 0 0 1 0 0 0 0
 relic NEW_LEAF Ancient 999999999 0 1 0 0 0 1 0 0 0 0
+var NEW_LEAF Cards 1 0 CardsVar
 relic NINJA_SCROLL Shop 200 0 0 0 0 0 1 0 0 0 0
+var NINJA_SCROLL Shivs 3 0 DynamicVar
 relic NUNCHAKU Uncommon 225 0 0 0 0 0 1 1 dynamic 0 0
+var NUNCHAKU Cards 10 0 CardsVar
+var NUNCHAKU Energy 1 0 EnergyVar
 relic NUTRITIOUS_OYSTER Ancient 999999999 0 1 0 0 0 1 0 0 0 0
+var NUTRITIOUS_OYSTER MaxHp 11 0 MaxHpVar
 relic NUTRITIOUS_SOUP Ancient 999999999 0 0 0 0 0 1 0 0 0 0
 relic ODDLY_SMOOTH_STONE Common 175 0 0 0 0 0 1 0 0 0 0
+var ODDLY_SMOOTH_STONE DexterityPower 1 0 PowerVar+DEXTERITY_POWER
 relic OLD_COIN Rare 275 0 1 0 0 0 0 0 0 1 0
+var OLD_COIN Gold 300 0 GoldVar
 relic ORANGE_DOUGH Rare 275 0 0 0 0 0 1 0 0 0 0
+var ORANGE_DOUGH Cards 2 0 CardsVar
 relic ORICHALCUM Uncommon 225 0 0 0 0 0 1 0 0 0 0
+var ORICHALCUM Block 6 0 BlockVar+Unpowered
 relic ORNAMENTAL_FAN Uncommon 225 0 0 0 0 0 1 dynamic dynamic 0 0
+var ORNAMENTAL_FAN Block 4 0 BlockVar+Unpowered
+var ORNAMENTAL_FAN Cards 3 0 CardsVar
 relic ORRERY Shop 200 0 1 0 0 0 1 0 0 0 0
+var ORRERY Cards 5 0 CardsVar
 relic PAELS_BLOOD Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var PAELS_BLOOD Cards 1 0 CardsVar
 relic PAELS_CLAW Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var PAELS_CLAW Cards 3 0 CardsVar
+var PAELS_CLAW EnchantmentName 0 0 StringVar
 relic PAELS_EYE Ancient 999999999 0 0 0 0 0 1 0 0 0 0
 relic PAELS_FLESH Ancient 999999999 0 0 0 0 0 1 dynamic dynamic 0 0
+var PAELS_FLESH Energy 1 0 EnergyVar
 relic PAELS_GROWTH Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var PAELS_GROWTH EnchantmentName 0 0 StringVar
 relic PAELS_HORN Ancient 999999999 0 0 0 0 0 1 0 0 0 0
 relic PAELS_LEGION Ancient 999999999 0 0 0 0 1 1 dynamic dynamic 0 0
+var PAELS_LEGION Turns 2 0 DynamicVar
 relic PAELS_TEARS Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var PAELS_TEARS Energy 2 0 EnergyVar
 relic PAELS_TOOTH Ancient 999999999 0 1 0 0 0 1 dynamic dynamic 0 0
+var PAELS_TOOTH CardTitles 0 0 StringVar
+var PAELS_TOOTH Cards 5 0 CardsVar
 relic PAELS_WING Ancient 999999999 0 0 0 0 0 1 1 dynamic 0 0
+var PAELS_WING Sacrifices 2 0 DynamicVar
 relic PANDORAS_BOX Ancient 999999999 0 1 0 0 0 1 0 0 0 0
 relic PANTOGRAPH Uncommon 225 0 0 0 0 0 1 0 0 0 0
+var PANTOGRAPH Heal 25 0 HealVar
 relic PAPER_KRANE Rare 275 0 0 0 0 0 1 0 0 0 0
 relic PAPER_PHROG Uncommon 225 0 0 0 0 0 1 0 0 0 0
 relic PARRYING_SHIELD Uncommon 225 0 0 0 0 0 1 0 0 0 0
+var PARRYING_SHIELD Block 10 0 BlockVar+Unpowered
+var PARRYING_SHIELD Damage 6 0 DamageVar+Unpowered
 relic PEAR Uncommon 225 0 1 0 0 0 1 0 0 0 0
+var PEAR MaxHp 10 0 MaxHpVar
 relic PENDULUM Common 175 0 0 0 0 0 1 1 dynamic 0 0
+var PENDULUM Cards 1 0 CardsVar
+var PENDULUM Turns 3 0 DynamicVar
 relic PEN_NIB Uncommon 225 0 0 0 0 0 1 1 dynamic 0 0
 relic PERMAFROST Uncommon 225 0 0 0 0 0 1 0 0 0 0
+var PERMAFROST Block 7 0 BlockVar+Unpowered
 relic PETRIFIED_TOAD Uncommon 225 0 0 0 0 0 1 0 0 0 0
 relic PHIAL_HOLSTER Ancient 999999999 0 1 0 0 0 1 0 0 0 0
+var PHIAL_HOLSTER PotionSlots 1 0 DynamicVar
+var PHIAL_HOLSTER Potions 2 0 DynamicVar
 relic PHILOSOPHERS_STONE Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var PHILOSOPHERS_STONE Energy 1 0 EnergyVar
+var PHILOSOPHERS_STONE StrengthPower 1 0 PowerVar+STRENGTH_POWER
 relic PHYLACTERY_UNBOUND Starter 999999999 0 0 1 0 0 1 0 0 0 0
+var PHYLACTERY_UNBOUND StartOfCombat 5 0 SummonVar
+var PHYLACTERY_UNBOUND StartOfTurn 2 0 SummonVar
 relic PLANISPHERE Uncommon 225 0 0 0 0 0 1 0 0 1 0
+var PLANISPHERE Heal 5 0 HealVar
 relic POCKETWATCH Rare 275 0 0 0 0 0 1 dynamic dynamic 0 0
+var POCKETWATCH CardThreshold 3 0 DynamicVar
+var POCKETWATCH Cards 3 0 CardsVar
 relic POLLINOUS_CORE Event 999999999 0 0 0 0 0 1 1 dynamic 0 0
+var POLLINOUS_CORE Cards 2 0 CardsVar
+var POLLINOUS_CORE Turns 4 0 DynamicVar
 relic POMANDER Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var POMANDER Cards 1 0 CardsVar
 relic POTION_BELT Common 175 0 1 0 0 0 1 0 0 0 0
+var POTION_BELT PotionSlots 2 0 DynamicVar
 relic POWER_CELL Rare 275 0 0 0 0 0 1 0 0 0 0
+var POWER_CELL Cards 2 0 CardsVar
 relic PRAYER_WHEEL Rare 275 0 0 0 0 0 1 0 0 0 0
 relic PRECARIOUS_SHEARS Ancient 999999999 0 1 0 0 0 1 0 0 0 0
+var PRECARIOUS_SHEARS Cards 2 0 CardsVar
+var PRECARIOUS_SHEARS Damage 16 0 DamageVar+Unpowered
 relic PRECISE_SCISSORS Ancient 999999999 0 1 0 0 0 1 0 0 0 0
+var PRECISE_SCISSORS Cards 1 0 CardsVar
 relic PRESERVED_FOG Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var PRESERVED_FOG Cards 3 0 CardsVar
 relic PRISMATIC_GEM Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var PRISMATIC_GEM Energy 1 0 EnergyVar
 relic PUMPKIN_CANDLE Ancient 999999999 0 0 0 0 0 1 1 dynamic 0 0
+var PUMPKIN_CANDLE CombatCount 5 0 DynamicVar
+var PUMPKIN_CANDLE Energy 1 0 EnergyVar
 relic PUNCH_DAGGER Shop 200 0 1 0 0 0 1 0 0 0 0
+var PUNCH_DAGGER Momentum 5 0 DynamicVar
 relic RADIANT_PEARL Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var RADIANT_PEARL Cards 1 0 CardsVar
 relic RAINBOW_RING Rare 275 0 0 0 0 0 1 0 0 0 0
+var RAINBOW_RING DexterityPower 1 0 PowerVar+DEXTERITY_POWER
+var RAINBOW_RING StrengthPower 1 0 PowerVar+STRENGTH_POWER
 relic RAZOR_TOOTH Rare 275 0 0 0 0 0 1 0 0 0 0
 relic RED_MASK Common 175 0 0 0 0 0 1 0 0 0 0
+var RED_MASK WeakPower 1 0 PowerVar+WEAK_POWER
 relic RED_SKULL Common 175 0 0 0 0 0 1 0 0 0 0
+var RED_SKULL HpThreshold 50 0 DynamicVar
+var RED_SKULL StrengthPower 3 0 PowerVar+STRENGTH_POWER
 relic REGALITE Uncommon 225 0 0 0 0 0 1 0 0 0 0
+var REGALITE Block 4 0 BlockVar+Unpowered
 relic REGAL_PILLOW Common 175 0 0 0 0 0 1 0 0 0 0
+var REGAL_PILLOW Heal 15 0 HealVar
 relic REPTILE_TRINKET Uncommon 225 0 0 0 0 0 1 0 0 0 0
+var REPTILE_TRINKET StrengthPower 3 0 PowerVar+STRENGTH_POWER
 relic RINGING_TRIANGLE Shop 200 0 0 0 0 0 1 0 0 0 0
 relic RING_OF_THE_DRAKE Starter 999999999 0 0 0 0 0 1 0 0 0 0
+var RING_OF_THE_DRAKE Cards 2 0 CardsVar
+var RING_OF_THE_DRAKE Turns 3 0 DynamicVar
 relic RING_OF_THE_SNAKE Starter 999999999 0 0 0 0 0 1 0 0 0 0
+var RING_OF_THE_SNAKE Cards 2 0 CardsVar
 relic RIPPLE_BASIN Uncommon 225 0 0 0 0 0 1 0 0 0 0
+var RIPPLE_BASIN Block 4 0 BlockVar+Unpowered
 relic ROYAL_POISON Event 999999999 0 0 0 0 0 1 0 0 0 0
+var ROYAL_POISON Damage 4 0 DamageVar+Unpowered
 relic ROYAL_STAMP Shop 200 0 1 0 0 0 1 0 0 0 0
+var ROYAL_STAMP Cards 1 0 CardsVar
+var ROYAL_STAMP Enchantment 0 0 StringVar
 relic RUINED_HELMET Rare 275 0 0 0 0 0 1 0 0 0 0
 relic RUNIC_CAPACITOR Shop 200 0 0 0 0 0 1 0 0 0 0
+var RUNIC_CAPACITOR Repeat 3 0 RepeatVar
 relic RUNIC_PYRAMID Ancient 999999999 0 0 0 0 0 1 0 0 0 0
 relic SAI Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var SAI Block 7 0 BlockVar+Unpowered
 relic SAND_CASTLE Ancient 999999999 0 1 0 0 0 1 0 0 0 0
+var SAND_CASTLE Cards 6 0 CardsVar
 relic SCREAMING_FLAGON Shop 200 0 0 0 0 0 1 0 0 0 0
+var SCREAMING_FLAGON Damage 20 0 DamageVar+Unpowered
 relic SCROLL_BOXES Ancient 999999999 0 0 0 0 0 1 0 0 0 1
 relic SEAL_OF_GOLD Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var SEAL_OF_GOLD Energy 1 0 EnergyVar
+var SEAL_OF_GOLD Gold 3 0 GoldVar
 relic SEA_GLASS Ancient 999999999 0 1 0 0 0 1 0 0 0 0
+var SEA_GLASS Cards 15 0 CardsVar
+var SEA_GLASS Character 0 0 StringVar
 relic SELF_FORMING_CLAY Uncommon 225 0 0 0 0 0 1 0 0 0 0
+var SELF_FORMING_CLAY BlockNextTurn 3 0 DynamicVar
 relic SERE_TALON Ancient 999999999 0 1 0 0 0 1 0 0 0 0
+var SERE_TALON HpLoss 9 0 HpLossVar
+var SERE_TALON Wishes 3 0 DynamicVar
 relic SHOVEL Rare 275 0 0 0 0 0 1 0 0 1 0
 relic SHURIKEN Rare 275 0 0 0 0 0 1 dynamic dynamic 0 0
+var SHURIKEN Cards 3 0 CardsVar
+var SHURIKEN StrengthPower 1 0 PowerVar+STRENGTH_POWER
 relic SIGNET_RING Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var SIGNET_RING Gold 888 0 GoldVar
 relic SILKEN_TRESS Ancient 999999999 dynamic 0 0 0 0 1 0 0 0 0
 relic SILVER_CRUCIBLE Ancient 999999999 dynamic 0 0 0 0 1 dynamic dynamic 1 0
+var SILVER_CRUCIBLE Cards 3 0 CardsVar
 relic SLING_OF_COURAGE Shop 200 0 0 0 0 0 1 0 0 0 0
+var SLING_OF_COURAGE StrengthPower 2 0 PowerVar+STRENGTH_POWER
 relic SMALL_CAPSULE Ancient 999999999 0 0 0 0 0 1 0 0 0 0
 relic SNECKO_EYE Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var SNECKO_EYE Cards 2 0 CardsVar
 relic SNECKO_SKULL Common 175 0 0 0 0 0 1 0 0 0 0
+var SNECKO_SKULL PoisonPower 1 0 PowerVar+POISON_POWER
 relic SOZU Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var SOZU Energy 1 0 EnergyVar
 relic SPARKLING_ROUGE Uncommon 225 0 0 0 0 0 1 0 0 0 0
+var SPARKLING_ROUGE DexterityPower 1 0 PowerVar+DEXTERITY_POWER
+var SPARKLING_ROUGE StrengthPower 1 0 PowerVar+STRENGTH_POWER
 relic SPIKED_GAUNTLETS Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var SPIKED_GAUNTLETS Energy 1 0 EnergyVar
 relic STONE_CALENDAR Rare 275 0 0 0 0 0 1 dynamic dynamic 0 0
+var STONE_CALENDAR Damage 52 0 DamageVar+Unpowered
+var STONE_CALENDAR DamageTurn 7 0 DynamicVar
 relic STONE_CRACKER Uncommon 225 0 0 0 0 0 1 0 0 0 0
+var STONE_CRACKER Cards 2 0 CardsVar
 relic STONE_HUMIDIFIER Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var STONE_HUMIDIFIER MaxHp 5 0 MaxHpVar
 relic STORYBOOK Ancient 999999999 0 0 0 0 0 1 0 0 0 0
 relic STRAWBERRY Common 175 0 1 0 0 0 1 0 0 0 0
+var STRAWBERRY MaxHp 7 0 MaxHpVar
 relic STRIKE_DUMMY Common 175 0 0 0 0 0 1 0 0 0 0
+var STRIKE_DUMMY ExtraDamage 3 0 DynamicVar
 relic STURDY_CLAMP Rare 275 0 0 0 0 0 1 0 0 0 0
+var STURDY_CLAMP Block 10 0 BlockVar+Unpowered
 relic SWORD_OF_JADE Event 999999999 0 0 0 0 0 1 0 0 0 0
+var SWORD_OF_JADE StrengthPower 3 0 PowerVar+STRENGTH_POWER
 relic SWORD_OF_STONE Event 999999999 0 0 0 0 0 1 1 dynamic 0 0
+var SWORD_OF_STONE Elites 5 0 DynamicVar
 relic SYMBIOTIC_VIRUS Uncommon 225 0 0 0 0 0 1 0 0 0 0
+var SYMBIOTIC_VIRUS Dark 1 0 DynamicVar
 relic TANXS_WHISTLE Ancient 999999999 0 0 0 0 0 1 0 0 0 0
 relic TEA_OF_DISCOURTESY Event 999999999 dynamic 0 0 0 0 1 0 0 0 0
+var TEA_OF_DISCOURTESY Combats 1 0 DynamicVar
+var TEA_OF_DISCOURTESY DazedCount 2 0 DynamicVar
+var TEA_OF_DISCOURTESY Heal 1 0 HealVar
 relic THE_ABACUS Shop 200 0 0 0 0 0 1 0 0 0 0
+var THE_ABACUS Block 6 0 BlockVar+Unpowered
 relic THE_BOOT Event 999999999 0 0 0 0 0 1 0 0 0 0
+var THE_BOOT DamageMinimum 5 0 DynamicVar
+var THE_BOOT DamageThreshold 4 0 DynamicVar
 relic THE_COURIER Rare 275 0 0 0 0 0 0 0 0 0 0
+var THE_COURIER Discount 20 0 DynamicVar
 relic THROWING_AXE Ancient 999999999 0 0 0 0 0 1 0 0 0 0
 relic TINGSHA Uncommon 225 0 0 0 0 0 1 0 0 0 0
+var TINGSHA Damage 3 0 DamageVar+Unpowered
 relic TINY_MAILBOX Uncommon 225 0 0 0 0 0 1 0 0 0 0
 relic TOASTY_MITTENS Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var TOASTY_MITTENS StrengthPower 1 0 PowerVar+STRENGTH_POWER
 relic TOOLBOX Shop 200 0 0 0 0 0 1 0 0 0 0
+var TOOLBOX Cards 3 0 CardsVar
 relic TOUCH_OF_OROBAS Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var TOUCH_OF_OROBAS StarterRelic 0 0 StringVar
+var TOUCH_OF_OROBAS UpgradedRelic 0 0 StringVar
 relic TOUGH_BANDAGES Rare 275 0 0 0 0 0 1 0 0 0 0
+var TOUGH_BANDAGES Block 3 0 BlockVar+Unpowered
 relic TOXIC_EGG Rare 275 0 0 0 0 0 1 0 0 1 0
 relic TOY_BOX Ancient 999999999 dynamic 1 0 0 0 1 dynamic dynamic 0 0
+var TOY_BOX Combats 3 0 DynamicVar
+var TOY_BOX Relics 5 0 DynamicVar
 relic TRI_BOOMERANG Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var TRI_BOOMERANG Cards 3 0 CardsVar
 relic TUNGSTEN_ROD Rare 275 0 0 0 0 0 1 0 0 0 0
+var TUNGSTEN_ROD HpLossReduction 1 0 DynamicVar
 relic TUNING_FORK Uncommon 225 0 0 0 0 0 1 1 dynamic 0 0
+var TUNING_FORK Block 7 0 BlockVar+Unpowered
+var TUNING_FORK Cards 10 0 CardsVar
 relic TWISTED_FUNNEL Uncommon 225 0 0 0 0 0 1 0 0 0 0
+var TWISTED_FUNNEL PoisonPower 4 0 PowerVar+POISON_POWER
 relic UNCEASING_TOP Rare 275 0 0 0 0 0 1 0 0 0 0
 relic UNDYING_SIGIL Shop 200 0 0 0 0 0 1 0 0 0 0
+var UNDYING_SIGIL DamageDecrease 0.5 0 DynamicVar
 relic UNSETTLING_LAMP Rare 275 0 0 0 0 0 1 0 0 0 0
 relic VAJRA Common 175 0 0 0 0 0 1 0 0 0 0
+var VAJRA StrengthPower 1 0 PowerVar+STRENGTH_POWER
 relic VAMBRACE Uncommon 225 0 0 0 0 0 1 0 0 0 0
 relic VELVET_CHOKER Ancient 999999999 0 0 0 0 0 1 dynamic dynamic 0 0
+var VELVET_CHOKER Cards 6 0 CardsVar
+var VELVET_CHOKER Energy 1 0 EnergyVar
 relic VENERABLE_TEA_SET Common 175 0 0 0 0 0 1 0 0 0 0
+var VENERABLE_TEA_SET Energy 2 0 EnergyVar
 relic VERY_HOT_COCOA Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var VERY_HOT_COCOA Energy 4 0 EnergyVar
 relic VEXING_PUZZLEBOX Rare 275 0 0 0 0 0 1 0 0 0 0
 relic VITRUVIAN_MINION Shop 200 0 0 0 0 0 1 0 0 0 0
 relic WAR_HAMMER Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var WAR_HAMMER Cards 4 0 CardsVar
 relic WAR_PAINT Common 175 0 1 0 0 0 1 0 0 0 0
+var WAR_PAINT Cards 2 0 CardsVar
 relic WHETSTONE Common 175 0 1 0 0 0 1 0 0 0 0
+var WHETSTONE Cards 2 0 CardsVar
 relic WHISPERING_EARRING Ancient 999999999 0 0 0 0 0 1 0 0 0 0
+var WHISPERING_EARRING Energy 1 0 EnergyVar
 relic WHITE_BEAST_STATUE Rare 275 0 0 0 0 0 1 0 0 1 0
 relic WHITE_STAR Rare 275 0 0 0 0 0 1 0 0 1 0
 relic WINGED_BOOTS Ancient 999999999 dynamic 0 0 0 0 1 dynamic dynamic 1 0
+var WINGED_BOOTS Rooms 3 0 DynamicVar
 relic WING_CHARM Shop 200 0 0 0 0 0 1 0 0 0 0
+var WING_CHARM SwiftAmount 1 0 DynamicVar
 relic WONGOS_MYSTERY_TICKET Event 999999999 dynamic 0 0 0 0 1 dynamic dynamic 0 0
+var WONGOS_MYSTERY_TICKET RemainingCombats 5 0 DynamicVar
+var WONGOS_MYSTERY_TICKET Repeat 3 0 RepeatVar
 relic WONGO_CUSTOMER_APPRECIATION_BADGE Event 999999999 0 0 0 0 0 1 0 0 0 0
 relic YUMMY_COOKIE Ancient 999999999 0 1 0 0 0 1 0 0 0 0
+var YUMMY_COOKIE Cards 4 0 CardsVar
 # 299 relics
 enum RelicRarity 0 None
 enum RelicRarity 1 Starter

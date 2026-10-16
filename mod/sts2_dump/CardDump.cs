@@ -186,20 +186,7 @@ public static class CardDump
             }));
             output.Append('\n');
 
-            foreach (KeyValuePair<string, DynamicVar> entry in card.DynamicVars
-                .OrderBy(v => v.Key, StringComparer.Ordinal))
-            {
-                output.Append(string.Join(" ", new[]
-                {
-                    "var",
-                    card.Id.Entry,
-                    entry.Key,
-                    entry.Value.BaseValue.ToString(CultureInfo.InvariantCulture),
-                    entry.Value is CalculatedVar ? "1" : "0",
-                    VarClass(entry.Value),
-                }));
-                output.Append('\n');
-            }
+            Vars.Append(output, card.Id.Entry, card.DynamicVars);
         }
 
         output.Append($"# {cards.Count} cards\n");
@@ -223,59 +210,6 @@ public static class CardDump
 
         Log.Info("[carddump] begin\n" + output);
         Log.Info("[carddump] end");
-    }
-
-    /// <summary>
-    /// The <c>DynamicVar</c> subclass this number is, by its own name.
-    /// </summary>
-    /// <remarks>
-    /// The class is what decides the number's rules, and the key it is filed
-    /// under says nothing: <c>SovereignBlade</c>'s block is a
-    /// <c>CalculatedBlockVar</c> named <c>CalculatedBlock</c>, and its preview
-    /// runs the block hooks exactly as a <c>BlockVar</c> named <c>Block</c>
-    /// does.
-    ///
-    /// A generic var prints without the arity C# spells it with, so
-    /// <c>PowerVar`1</c> is dumped as <c>PowerVar</c>.
-    ///
-    /// A <c>CalculatedDamageVar</c> built with <c>FromOsty</c> is dumped as
-    /// <c>CalculatedDamageVar+FromOsty</c>. Its preview runs the damage hooks
-    /// with the owner's Osty dealing, as an <c>OstyDamageVar</c>'s does.
-    ///
-    /// A <c>DamageVar</c> or <c>BlockVar</c> whose <c>Props</c> carry
-    /// <c>Unpowered</c> is dumped with <c>+Unpowered</c> on its class. Its
-    /// preview hands those props to the hooks, and a hook that reads a
-    /// powered attack or block skips it.
-    ///
-    /// A <c>PowerVar</c> is dumped with the power it applies on its class, as
-    /// <c>PowerVar+STRANGLE_POWER</c>. Its preview asks
-    /// <c>Hook.ModifyPowerAmountGiven</c> about that power, and the key it is
-    /// filed under need not name it: Mad Science's Choking is
-    /// <c>ChokingDamage</c>.
-    /// </remarks>
-    private static string VarClass(DynamicVar var)
-    {
-        string name = var.GetType().Name;
-        int arity = name.IndexOf('`');
-        name = arity < 0 ? name : name.Substring(0, arity);
-        if (var is CalculatedDamageVar { IsFromOsty: true })
-        {
-            name += "+FromOsty";
-        }
-        if (var is DamageVar damage && damage.Props.HasFlag(ValueProp.Unpowered))
-        {
-            name += "+Unpowered";
-        }
-        if (var is BlockVar block && block.Props.HasFlag(ValueProp.Unpowered))
-        {
-            name += "+Unpowered";
-        }
-        Type type = var.GetType();
-        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(PowerVar<>))
-        {
-            name += "+" + ModelDb.GetEntry(type.GetGenericArguments()[0]);
-        }
-        return name;
     }
 
     /// <summary>

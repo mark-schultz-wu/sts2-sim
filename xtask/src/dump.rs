@@ -10,13 +10,14 @@ use std::process::Command;
 
 use crate::error::{self, FileError, ProcessError};
 
-use crate::codegen::{version_dir, version_module};
+use crate::codegen::version_dir;
 
 /// Where a mode's output belongs.
 enum Destination {
     /// Beside the other content dumps, named by file.
     Content(&'static str),
-    /// Somewhere else entirely, named from the repository root.
+    /// Somewhere else entirely, named from the repository root: a test
+    /// fixture taken from v0.107.1, which a dump of another build leaves.
     At(&'static str),
     /// Beside the content dumps, read off the decompiled assembly rather than
     /// printed by the game. The reader, then what it says of the table it read.
@@ -128,10 +129,14 @@ pub fn run(args: Args) -> Result<String, Error> {
                 extract(&launch(&game, mode)?, mode)?,
                 version_dir()?.join("dumps").join(name),
             ),
-            At(path) => (
-                extract(&launch(&game, mode)?, mode)?,
-                PathBuf::from(path.replace("{version}", &version_module()?)),
-            ),
+            At(path) => {
+                let version = crate::codegen::version()?;
+                if version != "v0.107.1" {
+                    println!("{mode}: {path} is v0.107.1's, so {version} leaves it");
+                    continue;
+                }
+                (extract(&launch(&game, mode)?, mode)?, PathBuf::from(path))
+            }
         };
         error::write(&path, &table)?;
         println!("{mode} -> {}", path.display());

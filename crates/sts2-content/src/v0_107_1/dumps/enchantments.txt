@@ -2,7 +2,9 @@
 # build v0.107.1 commit 59260271 assembly 1692500715 content 3954186980
 # enchantment <id> <hasExtraCardText> <showAmount> <shouldStartAtBottomOfDrawPile> <isStackable> <refusesSomeCards>
 # enchants <enchantment> <cardType>
+# var <enchantment> <name> <base> <calculated> <class>
 enchantment ADROIT 1 1 0 0 0
+var ADROIT Block 0 0 BlockVar
 enchants ADROIT None
 enchants ADROIT Attack
 enchants ADROIT Skill
@@ -29,6 +31,7 @@ enchants DEPRECATED_ENCHANTMENT Status
 enchants DEPRECATED_ENCHANTMENT Curse
 enchants DEPRECATED_ENCHANTMENT Quest
 enchantment GLAM 0 0 0 0 0
+var GLAM Times 1 0 DynamicVar
 enchants GLAM None
 enchants GLAM Attack
 enchants GLAM Skill
@@ -47,6 +50,8 @@ enchants GOOPY Quest
 enchantment IMBUED 0 0 1 0 0
 enchants IMBUED Skill
 enchantment INKY 1 0 0 0 0
+var INKY Damage 1 0 DamageVar
+var INKY WeakPower 1 0 PowerVar+WEAK_POWER
 enchants INKY None
 enchants INKY Attack
 enchants INKY Skill
@@ -120,6 +125,7 @@ enchants SOWN Status
 enchants SOWN Curse
 enchants SOWN Quest
 enchantment SPIRAL 0 0 0 0 1
+var SPIRAL Times 1 0 IntVar
 enchants SPIRAL None
 enchants SPIRAL Attack
 enchants SPIRAL Skill
@@ -144,6 +150,7 @@ enchants SWIFT Status
 enchants SWIFT Curse
 enchants SWIFT Quest
 enchantment TEZCATARAS_EMBER 0 0 0 0 0
+var TEZCATARAS_EMBER Damage 3 0 DamageVar
 enchants TEZCATARAS_EMBER None
 enchants TEZCATARAS_EMBER Attack
 enchants TEZCATARAS_EMBER Skill

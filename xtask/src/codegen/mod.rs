@@ -39,6 +39,7 @@ mod restsite;
 mod runstate;
 mod sets;
 mod split;
+mod vars;
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -522,6 +523,7 @@ pub fn run(args: Args) -> Result<String, Error> {
     let builds = ids::builds(src)?;
     let mut written = hoist::hoist(src, &builds)?;
     written.push(ids::generate(src)?);
+    written.push(vars::generate(src, &builds)?);
     error::status(
         Command::new("rustfmt")
             .arg("--edition")

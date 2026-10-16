@@ -57,6 +57,7 @@ public static class EnchantmentDump
         output.Append(string.Join(" ", Flags.Select(f => "<" + Lower(f) + ">")));
         output.Append(" <refusesSomeCards>\n");
         output.Append("# enchants <enchantment> <cardType>\n");
+        output.Append(Vars.Header("enchantment"));
 
         List<EnchantmentModel> enchantments = AllEnchantments();
 
@@ -70,6 +71,7 @@ public static class EnchantmentDump
 
             output.Append(string.Join(" ", columns));
             output.Append('\n');
+            Vars.Append(output, id, enchantment.DynamicVars);
 
             // Every card type, offered to the enchantment. `CanEnchantCardType`
             // takes nothing else, so asking it about all of them is the whole

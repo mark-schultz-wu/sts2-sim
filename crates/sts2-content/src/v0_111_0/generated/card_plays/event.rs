@@ -182,8 +182,25 @@ pub fn play_from<F: Fight<V>>(card: EventCard, fight: &mut F, from: u8) -> Resul
             }
             Ok(Played::Done)
         }
-        // `call DamageCmd.Attack`
-        EventCard::RipAndTear => unimplemented!("what {card:?} does when it is played"),
+        EventCard::RipAndTear => {
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    for _ in 0..2 {
+                        let Some(target) = fight.random_target() else {
+                            break;
+                        };
+                        let attack = fight.resolve(Effect::Attack {
+                            dealer: fight.actor(),
+                            target,
+                            damage: Amount::Var(CardVar::Damage),
+                            scaling: Scaling::Dynamic,
+                        });
+                        fight.apply(attack);
+                    }
+                });
+            }
+            Ok(Played::Done)
+        }
         EventCard::Squash => {
             let target = fight.target();
             if from == 0 {

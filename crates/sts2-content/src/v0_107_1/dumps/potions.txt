@@ -2,6 +2,7 @@
 # build v0.107.1 commit 59260271 assembly 1692500715 content 3954186980
 # pool <pool> <index> <potion>
 # potion <id> <rarity> <usage> <target> <canBeGeneratedInCombat> <passesCustomUsabilityCheck>
+# var <potion> <name> <base> <calculated> <class>
 pool DEFECT_POTION_POOL 0 FOCUS_POTION
 pool DEFECT_POTION_POOL 1 ESSENCE_OF_DARKNESS
 pool DEFECT_POTION_POOL 2 POTION_OF_CAPACITY
@@ -70,68 +71,123 @@ pool TOKEN_POTION_POOL 0 POTION_SHAPED_ROCK
 potion ASHWATER Uncommon CombatOnly Self 1 1
 potion ATTACK_POTION Common CombatOnly Self 1 1
 potion BEETLE_JUICE Rare CombatOnly AnyEnemy 1 1
+var BEETLE_JUICE DamageDecrease 30 0 DynamicVar
+var BEETLE_JUICE Repeat 4 0 RepeatVar
 potion BLESSING_OF_THE_FORGE Uncommon CombatOnly Self 1 1
 potion BLOCK_POTION Common CombatOnly AnyPlayer 1 1
+var BLOCK_POTION Block 12 0 BlockVar+Unpowered
 potion BLOOD_POTION Common AnyTime AnyPlayer 1 1
+var BLOOD_POTION HealPercent 20 0 DynamicVar
 potion BONE_BREW Uncommon CombatOnly Self 1 1
+var BONE_BREW Summon 15 0 SummonVar
 potion BOTTLED_POTENTIAL Rare CombatOnly AnyPlayer 1 1
+var BOTTLED_POTENTIAL Cards 5 0 CardsVar
 potion CLARITY Uncommon CombatOnly AnyPlayer 1 1
+var CLARITY Cards 1 0 CardsVar
+var CLARITY ClarityPower 3 0 PowerVar+CLARITY_POWER
 potion COLORLESS_POTION Common CombatOnly Self 1 1
 potion COSMIC_CONCOCTION Rare CombatOnly Self 1 1
+var COSMIC_CONCOCTION Cards 3 0 CardsVar
 potion CUNNING_POTION Uncommon CombatOnly Self 1 1
+var CUNNING_POTION Cards 3 0 CardsVar
 potion CURE_ALL Uncommon CombatOnly AnyPlayer 1 1
+var CURE_ALL Cards 2 0 CardsVar
+var CURE_ALL Energy 1 0 EnergyVar
 potion DEPRECATED_POTION None CombatOnly AnyEnemy 1 1
 potion DEXTERITY_POTION Common CombatOnly AnyPlayer 1 1
+var DEXTERITY_POTION DexterityPower 2 0 PowerVar+DEXTERITY_POWER
 potion DISTILLED_CHAOS Rare CombatOnly Self 1 1
+var DISTILLED_CHAOS Repeat 3 0 RepeatVar
 potion DROPLET_OF_PRECOGNITION Rare CombatOnly Self 1 1
 potion DUPLICATOR Uncommon CombatOnly Self 1 1
 potion ENERGY_POTION Common CombatOnly AnyPlayer 1 1
+var ENERGY_POTION Energy 2 0 EnergyVar
 potion ENTROPIC_BREW Rare AnyTime Self 1 1
 potion ESSENCE_OF_DARKNESS Rare CombatOnly Self 1 1
 potion EXPLOSIVE_AMPOULE Common CombatOnly AllEnemies 1 1
+var EXPLOSIVE_AMPOULE Damage 10 0 DamageVar+Unpowered
 potion FAIRY_IN_A_BOTTLE Rare Automatic Self 0 1
 potion FIRE_POTION Common CombatOnly AnyEnemy 1 1
+var FIRE_POTION Damage 20 0 DamageVar+Unpowered
 potion FLEX_POTION Common CombatOnly AnyPlayer 1 1
+var FLEX_POTION StrengthPower 5 0 PowerVar+STRENGTH_POWER
 potion FOCUS_POTION Common CombatOnly Self 1 1
+var FOCUS_POTION FocusPower 2 0 PowerVar+FOCUS_POWER
 potion FORTIFIER Uncommon CombatOnly AnyPlayer 1 1
 potion FOUL_POTION Event AnyTime dynamic 1 dynamic
+var FOUL_POTION Damage 12 0 DamageVar+Unpowered
+var FOUL_POTION Gold 100 0 GoldVar
 potion FRUIT_JUICE Rare AnyTime AnyPlayer 0 1
+var FRUIT_JUICE MaxHp 5 0 MaxHpVar
 potion FYSH_OIL Uncommon CombatOnly AnyPlayer 1 1
+var FYSH_OIL DexterityPower 1 0 PowerVar+DEXTERITY_POWER
+var FYSH_OIL StrengthPower 1 0 PowerVar+STRENGTH_POWER
 potion GAMBLERS_BREW Uncommon CombatOnly Self 1 1
 potion GHOST_IN_A_JAR Rare CombatOnly AnyPlayer 1 1
+var GHOST_IN_A_JAR IntangiblePower 1 0 PowerVar+INTANGIBLE_POWER
 potion GIGANTIFICATION_POTION Rare CombatOnly AnyPlayer 1 1
+var GIGANTIFICATION_POTION GigantificationPower 1 0 PowerVar+GIGANTIFICATION_POWER
 potion GLOWWATER_POTION Event CombatOnly Self 1 1
+var GLOWWATER_POTION Cards 10 0 CardsVar
 potion HEART_OF_IRON Uncommon CombatOnly AnyPlayer 1 1
+var HEART_OF_IRON PlatingPower 7 0 PowerVar+PLATING_POWER
 potion KINGS_COURAGE Uncommon CombatOnly AnyPlayer 1 1
+var KINGS_COURAGE Forge 15 0 ForgeVar
 potion LIQUID_BRONZE Uncommon CombatOnly AnyPlayer 1 1
+var LIQUID_BRONZE ThornsPower 3 0 PowerVar+THORNS_POWER
 potion LIQUID_MEMORIES Rare CombatOnly Self 1 1
 potion LUCKY_TONIC Rare CombatOnly AnyPlayer 1 1
+var LUCKY_TONIC BufferPower 1 0 PowerVar+BUFFER_POWER
 potion MAZALETHS_GIFT Rare CombatOnly AnyPlayer 1 1
+var MAZALETHS_GIFT RitualPower 1 0 PowerVar+RITUAL_POWER
 potion MOCK_DISCARD_AND_ADD_SHIVS_POTION None CombatOnly Self 1 1
+var MOCK_DISCARD_AND_ADD_SHIVS_POTION Cards 2 0 CardsVar
+var MOCK_DISCARD_AND_ADD_SHIVS_POTION Shivs 2 0 DynamicVar
 potion OROBIC_ACID Rare CombatOnly Self 1 1
 potion POISON_POTION Common CombatOnly AnyEnemy 1 1
+var POISON_POTION PoisonPower 6 0 PowerVar+POISON_POWER
 potion POTION_OF_BINDING Uncommon CombatOnly AllEnemies 1 1
+var POTION_OF_BINDING VulnerablePower 1 0 PowerVar+VULNERABLE_POWER
+var POTION_OF_BINDING WeakPower 1 0 PowerVar+WEAK_POWER
 potion POTION_OF_CAPACITY Uncommon CombatOnly Self 1 1
+var POTION_OF_CAPACITY Repeat 2 0 RepeatVar
 potion POTION_OF_DOOM Common CombatOnly AnyEnemy 1 1
+var POTION_OF_DOOM DoomPower 33 0 PowerVar+DOOM_POWER
 potion POTION_SHAPED_ROCK Token CombatOnly AnyEnemy 1 1
+var POTION_SHAPED_ROCK Damage 15 0 DamageVar+Unpowered
 potion POT_OF_GHOULS Rare CombatOnly Self 1 1
+var POT_OF_GHOULS Cards 2 0 CardsVar
 potion POWDERED_DEMISE Uncommon CombatOnly AnyEnemy 1 1
+var POWDERED_DEMISE Demise 9 0 DynamicVar
 potion POWER_POTION Common CombatOnly Self 1 1
 potion RADIANT_TINCTURE Uncommon CombatOnly AnyPlayer 1 1
+var RADIANT_TINCTURE Energy 1 0 EnergyVar
+var RADIANT_TINCTURE RadiancePower 3 0 PowerVar+RADIANCE_POWER
 potion REGEN_POTION Uncommon CombatOnly AnyPlayer 0 1
+var REGEN_POTION RegenPower 5 0 PowerVar+REGEN_POWER
 potion SHACKLING_POTION Rare CombatOnly AllEnemies 1 1
+var SHACKLING_POTION StrengthPower 7 0 PowerVar+STRENGTH_POWER
 potion SHIP_IN_A_BOTTLE Rare CombatOnly AnyPlayer 1 1
+var SHIP_IN_A_BOTTLE Block 10 0 BlockVar+Unpowered
 potion SKILL_POTION Common CombatOnly Self 1 1
 potion SNECKO_OIL Rare CombatOnly AnyPlayer 1 1
+var SNECKO_OIL Cards 7 0 CardsVar
 potion SOLDIERS_STEW Rare CombatOnly AnyPlayer 1 1
 potion SPEED_POTION Common CombatOnly AnyPlayer 1 1
+var SPEED_POTION DexterityPower 5 0 PowerVar+DEXTERITY_POWER
 potion STABLE_SERUM Uncommon CombatOnly AnyPlayer 1 1
+var STABLE_SERUM Repeat 2 0 RepeatVar
 potion STAR_POTION Common CombatOnly Self 1 1
+var STAR_POTION Stars 3 0 StarsVar
 potion STRENGTH_POTION Common CombatOnly AnyPlayer 1 1
+var STRENGTH_POTION StrengthPower 2 0 PowerVar+STRENGTH_POWER
 potion SWIFT_POTION Common CombatOnly AnyPlayer 1 1
+var SWIFT_POTION Cards 3 0 CardsVar
 potion TOUCH_OF_INSANITY Uncommon CombatOnly Self 1 1
 potion VULNERABLE_POTION Common CombatOnly AnyEnemy 1 1
+var VULNERABLE_POTION VulnerablePower 3 0 PowerVar+VULNERABLE_POWER
 potion WEAK_POTION Common CombatOnly AnyEnemy 1 1
+var WEAK_POTION WeakPower 3 0 PowerVar+WEAK_POWER
 # 65 potions
 enum PotionRarity 0 None
 enum PotionRarity 1 Common

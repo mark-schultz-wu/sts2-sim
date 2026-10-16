@@ -83,7 +83,7 @@ generated:
     #!/usr/bin/env bash
     set -euo pipefail
     cargo run -q -p xtask -- codegen
-    git diff --exit-code -- 'crates/sts2-content/src/*/generated' crates/sts2-content/src/generated crates/sts2-content/src/ids.rs
+    git diff --exit-code -- 'crates/sts2-content/src/*/generated' crates/sts2-content/src/generated crates/sts2-content/src/ids.rs crates/sts2-content/src/vars.rs
     test -z "$(git ls-files --others --exclude-standard -- crates/sts2-content/src)"
 
 # How far the simulator gets through a real run before it disagrees with the

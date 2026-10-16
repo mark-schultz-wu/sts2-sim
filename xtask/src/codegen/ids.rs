@@ -201,7 +201,7 @@ fn cards(generated: &Path) -> Result<Members, DumpError> {
 }
 
 /// An id as a const's name.
-fn const_name(id: &str) -> String {
+pub(super) fn const_name(id: &str) -> String {
     let mut out = String::new();
     let mut prev_lower = false;
     for c in id.chars() {
