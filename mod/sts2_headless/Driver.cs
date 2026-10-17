@@ -127,7 +127,7 @@ public static class Driver
             // testSelector, RewardsSet.Offer takes *every* reward itself -- so
             // installing one does not add a decision point, it takes one away
             // from the game and gives it to the client.
-            CardSelectCmd.UseSelector(new HeadlessCardSelector());
+            GameApi.UseSelector(new HeadlessCardSelector());
             RewardsSet.testSelector = RewardChoice.TakeRewards;
             WatchForWins();
 

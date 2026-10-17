@@ -13,10 +13,25 @@ internal static class GameApi
     /// <remarks>
     /// Not here. This family signals before it counts the cards, undoes an
     /// ended turn first, and has a <c>LocalSelector</c> that takes the screen's
-    /// branch. The patch mirrors the other family's bodies, so this one keeps
-    /// the selector's branch.
+    /// branch. The patch mirrors the other family's bodies, so this one puts
+    /// the selector in that slot instead.
     /// </remarks>
     internal const bool AsksThroughTheScreen = false;
+
+    /// <summary>Whether the selector sits in <c>LocalSelector</c>.</summary>
+    /// <remarks>
+    /// With a <c>Selector</c> set, <c>CardSelectCmd</c> asks it and skips
+    /// <c>SignalPlayerChoiceBegun</c>, so a pick inside a turn-start hook holds
+    /// the turn start until it is answered. In <c>LocalSelector</c> the game's
+    /// own screen branch runs, signal and all, and the turn goes on to
+    /// <c>AfterSideTurnStart</c> before the player is asked, as at the screen.
+    /// <see cref="RewardReadsLocalSelector"/> points card rewards at it too.
+    /// </remarks>
+    internal const bool SelectsLocally = true;
+
+    /// <summary><c>CardSelectCmd.UseSelector</c>, into <c>LocalSelector</c>.</summary>
+    internal static System.IDisposable UseSelector(MegaCrit.Sts2.Core.TestSupport.ICardSelector selector)
+        => MegaCrit.Sts2.Core.Commands.CardSelectCmd.UseSelector(selector, localOnly: true);
 
     /// <summary><c>SignalPlayerChoiceBegun</c>, which this family also names the player for.</summary>
     internal static System.Threading.Tasks.Task SignalChoiceBegun(

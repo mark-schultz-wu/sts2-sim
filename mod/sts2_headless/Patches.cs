@@ -465,6 +465,49 @@ internal static class ChooseACardSkip
     private static void Postfix() => CanSkip = null;
 }
 
+/// <summary>
+/// <c>CardReward.OnSelect</c> reads <c>LocalSelector</c> where it reads
+/// <c>Selector</c>, for the builds that install the selector there.
+/// </summary>
+/// <remarks>
+/// With no screen shown, a card reward asks <c>CardSelectCmd.Selector</c>
+/// which card to take, and throws when none is set. The rest of
+/// <c>CardSelectCmd</c> asks <c>LocalSelector</c> on the screen's branch,
+/// which is where <see cref="GameApi.SelectsLocally"/> puts ours.
+/// </remarks>
+[HarmonyPatch]
+internal static class RewardReadsLocalSelector
+{
+    [HarmonyPrepare]
+    private static bool Prepare() => GameApi.SelectsLocally;
+
+    [HarmonyTargetMethod]
+    private static System.Reflection.MethodBase TargetMethod()
+        => AccessTools.AsyncMoveNext(AccessTools.Method(typeof(CardReward), "OnSelect"));
+
+    [HarmonyTranspiler]
+    private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+    {
+        var selector = AccessTools.PropertyGetter(typeof(CardSelectCmd), nameof(CardSelectCmd.Selector));
+        var local = AccessTools.PropertyGetter(typeof(CardSelectCmd), "LocalSelector")
+            ?? throw new InvalidOperationException("CardSelectCmd has no LocalSelector");
+        var swapped = 0;
+        foreach (var instruction in instructions)
+        {
+            if (instruction.Calls(selector))
+            {
+                instruction.operand = local;
+                swapped++;
+            }
+            yield return instruction;
+        }
+        if (swapped == 0)
+        {
+            throw new InvalidOperationException("CardReward.OnSelect reads no CardSelectCmd.Selector");
+        }
+    }
+}
+
 [HarmonyPatch(typeof(CardSelectCmd))]
 internal static class ScreenPathSelections
 {
