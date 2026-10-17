@@ -70,23 +70,25 @@ a port that starts from the other build's code. A move can shift what
 the compiler inlines. The relics' and the cards' decision dispatchers
 stay out of line, since the walk inlining them cost 3.9% and 3.4%.
 
-The simulator follows 732,647 of the 1,322,920 recorded positions, 55%,
-and 480 of 1,500 runs whole. A run that panics counts the positions
+The simulator follows 766,177 of the 1,322,920 recorded positions, 57%,
+and 523 of 1,500 runs whole. A run that panics counts the positions
 before its panic. `follow_run <file> <index> --diff <dir>` plays a run
 on the game beside the simulator and names the sections where they first
 differ, which a split with no panic needs. The commonest first splits:
 
-- Positions that part with no panic. 48 part at a travel, and 36 at the
-  end of a turn against Axebots. 37 part at a play of Forgotten Ritual,
+- Positions that part with no panic. 52 part at a travel, and 45 at the
+  end of a turn against Axebots. 39 part at a play of Forgotten Ritual,
   and 31 at Tezcatara's Toy Box. Some after a travel open a fight where the game
   plays and exhausts the hand, and the simulator asks for one card.
-- Powers and relics the shared rules answer for v0.107.1 alone. The
-  Echo Form and Void Form powers are two, and Toasty Mittens and the
-  Fiddle two more. Demon Form's power answers `AfterApplied` here, for its look
-  alone.
+- Toasty Mittens, 23 runs. v0.111.0's picks a card of the hand once it
+  is drawn. The oracle installs its card selector as `Selector`, which
+  skips `SignalPlayerChoiceBegun`, so the game asks before
+  `AfterSideTurnStart` where a player at the screen is asked after it.
+  The mod installs it as `LocalSelector` instead, and `CardReward` reads
+  that one too. Then the port lands.
 - Potions new here: Ambergris and the Ambergris power.
-- Diamond Diadem and the Battleworn Dummy event changed, and are
-  v0.111.0's own, unported.
+- Diamond Diadem, the Battleworn Dummy event and Outbreak changed, and
+  are v0.111.0's own, unported.
 - Distinguished Cape adds two curses where it took nine maximum health,
   Sere Talon's curses moved, and Inky lost its damage. Each reads a
   number v0.111.0 lacks, so its shared port holds v0.107.1's.

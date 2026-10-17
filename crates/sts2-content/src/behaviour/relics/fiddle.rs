@@ -18,10 +18,13 @@ pub(super) fn decide_hook<V: crate::Build>(hook: DecisionHook<V>) -> HookRespons
     }
 }
 
-/// `ModifyHandDrawLate`: two more, for its owner.
+/// `ModifyHandDrawLate`, or v0.111.0's `ModifyHandDraw`: two more, for its
+/// owner. Each build's class overrides one of the two.
 pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
     match hook {
-        ModifyHook::HandDrawLate { .. } => Modify::Added(V::Relic::FIDDLE_CARDS),
+        ModifyHook::HandDrawLate { .. } | ModifyHook::HandDraw { .. } => {
+            Modify::Added(V::Relic::FIDDLE_CARDS)
+        }
         hook => unimplemented!("what Fiddle does for {hook:?}"),
     }
 }
