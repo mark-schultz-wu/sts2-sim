@@ -9,6 +9,7 @@
 
 pub(crate) mod cards;
 pub mod events;
+pub(crate) mod monsters;
 pub(crate) mod powers;
 pub(crate) mod relics;
 
@@ -147,6 +148,15 @@ impl crate::build::OwnRules for V {
             Cards::Token(card) => card_plays::token::on_turn_end(card, fight),
             Cards::Deprecated(card) => card_plays::deprecated::on_turn_end(card, fight),
         }
+    }
+
+    fn own_move<F: sts2_core::Fight<V>>(
+        monster: <V as sts2_core::ContentVersion>::Monster,
+        move_id: <V as sts2_core::ContentVersion>::MoveId,
+        step: u8,
+        fight: &mut F,
+    ) -> Option<Option<u8>> {
+        monsters::own_move(monster, move_id, step, fight)
     }
 
     fn generated_move<F: sts2_core::Fight<V>>(

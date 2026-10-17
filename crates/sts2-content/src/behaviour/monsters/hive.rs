@@ -222,34 +222,9 @@ pub(super) fn perform<V: crate::Build, F: Fight<V>>(
                 }
             }
         }
-        // `HatchMove`: Hatch goes, then every other power but Minion, then
-        // `Hatch`: its hit points set to a draw off the niche stream.
+        // `Hatch` draws `NextInt(HatchlingMinHp, HatchlingMaxHp)`.
         (__c0, __c1) if (__c0 == V::Monster::TOUGH_EGG && __c1 == V::MoveId::HATCH_MOVE) => {
-            use sts2_core::{CreatureView as _, Table as _};
-
-            let egg = fight.actor();
-            fight.remove_power(egg, V::Power::HATCH_POWER);
-            let others: Vec<V::Power> = fight
-                .creatures()
-                .find(|creature| creature.id() == egg)
-                .map(|creature| {
-                    V::Power::ALL
-                        .iter()
-                        .copied()
-                        .filter(|&power| power != V::Power::MINION_POWER)
-                        .filter(|&power| creature.power(power).is_some())
-                        .collect()
-                })
-                .unwrap_or_default();
-            for power in others {
-                fight.remove_power(egg, power);
-            }
-            let (min, max) = match fight.ascension().has(AscensionLevel::ToughEnemies) {
-                true => (20, 23),
-                false => (19, 22),
-            };
-            let hp = fight.niche_int(min, max);
-            fight.set_max_and_current_hp(egg, num_traits::cast(hp).expect("a hatchling's health"));
+            hatch::<V, _>(fight, |fight, min, max| fight.niche_int(min, max));
         }
         // `IllusionMove`: `CreatureCmd.Add<Parafright>` into the `illusion`
         // slot while the fight is live.
@@ -739,4 +714,39 @@ pub(super) fn resume<V: crate::Build, F: Fight<V>>(
     let actor = fight.actor();
     fight.apply_power(actor, power, PowerAmount::Counted(amount));
     sts2_core::Played::Done
+}
+
+/// `HatchMove`: Hatch goes, then every other power but Minion, then `Hatch`:
+/// its hit points set to a draw off the niche stream. `draw` takes the bounds
+/// `HatchlingMinHp` and `HatchlingMaxHp`, which each build draws between its
+/// own way.
+pub(crate) fn hatch<V: crate::Build, F: Fight<V>>(
+    fight: &mut F,
+    draw: impl FnOnce(&mut F, i32, i32) -> i32,
+) {
+    use sts2_core::{CreatureView as _, Table as _};
+
+    let egg = fight.actor();
+    fight.remove_power(egg, V::Power::HATCH_POWER);
+    let others: Vec<V::Power> = fight
+        .creatures()
+        .find(|creature| creature.id() == egg)
+        .map(|creature| {
+            V::Power::ALL
+                .iter()
+                .copied()
+                .filter(|&power| power != V::Power::MINION_POWER)
+                .filter(|&power| creature.power(power).is_some())
+                .collect()
+        })
+        .unwrap_or_default();
+    for power in others {
+        fight.remove_power(egg, power);
+    }
+    let (min, max) = match fight.ascension().has(AscensionLevel::ToughEnemies) {
+        true => (20, 23),
+        false => (19, 22),
+    };
+    let hp = draw(fight, min, max);
+    fight.set_max_and_current_hp(egg, num_traits::cast(hp).expect("a hatchling's health"));
 }
