@@ -1,10 +1,8 @@
 //! `BeltBuckle`: Dexterity while a fight's belt holds no potion.
 
 use crate::ids::PowerIds as _;
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect, PowerAmount};
-
-/// `PowerVar<DexterityPower>(2)`.
-const DEXTERITY: i32 = 2;
 
 /// `DexterityApplied`: whether the Dexterity it gave is on its owner.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -35,7 +33,7 @@ pub(super) fn event_hook<V: crate::Build>(
                 state.dexterity_applied = false;
                 asked.push(HookEffect::ApplyToOwner(
                     V::Power::DEXTERITY_POWER,
-                    PowerAmount::Counted(-DEXTERITY),
+                    PowerAmount::Counted(-V::Relic::BELT_BUCKLE_DEXTERITY_POWER),
                 ));
             }
             return;
@@ -58,7 +56,7 @@ pub(super) fn event_hook<V: crate::Build>(
         state.dexterity_applied = true;
         asked.push(HookEffect::ApplyToOwner(
             V::Power::DEXTERITY_POWER,
-            PowerAmount::Counted(DEXTERITY),
+            PowerAmount::Counted(V::Relic::BELT_BUCKLE_DEXTERITY_POWER),
         ));
     }
 }

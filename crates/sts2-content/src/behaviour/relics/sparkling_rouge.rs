@@ -1,10 +1,8 @@
 //! `SparklingRouge`: Strength and Dexterity as the third turn begins.
 
 use crate::ids::PowerIds as _;
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect, PowerAmount};
-
-/// `PowerVar<StrengthPower>(1)` and `PowerVar<DexterityPower>(1)`.
-const ONE: PowerAmount<crate::behaviour::relics::Number> = PowerAmount::Counted(1);
 
 /// `AfterBlockCleared`: Strength then Dexterity on its owner once its block
 /// clears on the third turn.
@@ -21,8 +19,14 @@ pub(super) fn event_hook<V: crate::Build>(
         && turn == 3
     {
         asked.extend([
-            HookEffect::ApplyToOwner(V::Power::STRENGTH_POWER, ONE),
-            HookEffect::ApplyToOwner(V::Power::DEXTERITY_POWER, ONE),
+            HookEffect::ApplyToOwner(
+                V::Power::STRENGTH_POWER,
+                PowerAmount::Counted(V::Relic::SPARKLING_ROUGE_STRENGTH_POWER),
+            ),
+            HookEffect::ApplyToOwner(
+                V::Power::DEXTERITY_POWER,
+                PowerAmount::Counted(V::Relic::SPARKLING_ROUGE_STRENGTH_POWER),
+            ),
         ]);
     }
 }

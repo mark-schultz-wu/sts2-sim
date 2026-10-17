@@ -1,13 +1,11 @@
 //! `Fiddle`: two more cards in each hand, and no draw on the player's own
 //! turn besides it.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{DecisionHook, HookResponse, Modify, ModifyHook};
 
 use crate::behaviour::relics::Number;
 use crate::generated::runstate::CombatSide;
-
-/// `CardsVar(2)`.
-const CARDS: Number = 2;
 
 /// `ShouldDraw`: no for a draw that is not the hand's own while the player's
 /// side takes its turn. A fight here has one player.
@@ -23,7 +21,7 @@ pub(super) fn decide_hook<V: crate::Build>(hook: DecisionHook<V>) -> HookRespons
 /// `ModifyHandDrawLate`: two more, for its owner.
 pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
     match hook {
-        ModifyHook::HandDrawLate { .. } => Modify::Added(CARDS),
+        ModifyHook::HandDrawLate { .. } => Modify::Added(V::Relic::FIDDLE_CARDS),
         hook => unimplemented!("what Fiddle does for {hook:?}"),
     }
 }

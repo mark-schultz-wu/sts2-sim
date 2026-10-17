@@ -1,12 +1,9 @@
 //! `Sai`: block as each of its owner's turns begins.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
 
-use crate::behaviour::relics::Number;
 use crate::generated::runstate::CombatSide;
-
-/// `BlockVar(7, Unpowered)`.
-const BLOCK: Number = 7;
 
 /// `AfterSideTurnStart`: its block on its owner, for the side its owner is
 /// among.
@@ -19,6 +16,6 @@ pub(super) fn event_hook<V: crate::Build>(
         ..
     } = hook
     {
-        asked.push(HookEffect::GainBlock(BLOCK));
+        asked.push(HookEffect::GainBlock(V::Relic::SAI_BLOCK));
     }
 }

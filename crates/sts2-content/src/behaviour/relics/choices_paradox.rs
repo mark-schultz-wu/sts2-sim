@@ -1,11 +1,7 @@
 //! `ChoicesParadox`: one card of five, with Retain, into the first hand.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
-
-use crate::behaviour::relics::Number;
-
-/// `CardsVar(5)`.
-const CARDS: Number = 5;
 
 /// `AfterPlayerTurnStart` on its owner's first turn: five distinct cards of
 /// the character's pool, each with Retain, and the one chosen into hand. A
@@ -16,7 +12,7 @@ pub(super) fn event_hook<V: crate::Build>(
 ) {
     if let EventHook::PlayerTurnStart { turn: 1, .. } = hook {
         asked.push(HookEffect::ChooseFromPoolIntoHand {
-            count: CARDS,
+            count: V::Relic::CHOICES_PARADOX_CARDS,
             writes: V::CHOICES_PARADOX_RETAIN,
         });
     }

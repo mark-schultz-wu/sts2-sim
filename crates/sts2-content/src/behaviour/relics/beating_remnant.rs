@@ -1,12 +1,10 @@
 //! `BeatingRemnant`: no more than twenty hit points lost in a turn.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, Modify, ModifyHook};
 
 use crate::behaviour::relics::Number;
 use crate::generated::runstate::CombatSide;
-
-/// `DynamicVar("MaxHpLoss", 20)`.
-const MAX_HP_LOSS: Number = 20;
 
 /// `DamageReceivedThisTurn`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -42,7 +40,9 @@ pub(super) fn modify_hook<V: crate::Build>(state: &State, hook: ModifyHook<V>) -
             target,
             player,
             in_fight: true,
-        } if target == player => Modify::AtMost(MAX_HP_LOSS - state.damage_received_this_turn),
+        } if target == player => {
+            Modify::AtMost(V::Relic::BEATING_REMNANT_MAX_HP_LOSS - state.damage_received_this_turn)
+        }
         ModifyHook::HpLostAfterOsty { .. } => Modify::Nothing,
         hook => unimplemented!("what BeatingRemnant does for {hook:?}"),
     }

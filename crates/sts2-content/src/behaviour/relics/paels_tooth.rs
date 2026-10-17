@@ -1,15 +1,13 @@
 //! `PaelsTooth`: five upgradable cards taken from the deck as it is picked
 //! up, and one handed back, upgraded, after each fight.
 
+use crate::vars::RelicVars as _;
 use std::sync::Arc;
 
 use sts2_core::{DeckAct, DeckCard, EventHook, HookEffect};
 
 use crate::behaviour::relics::Number;
 use crate::ids::RelicIds as _;
-
-/// `CardsVar(5)`.
-const CARDS: usize = 5;
 
 /// `SerializableCards`, which it saves: the deck cards it keeps, whole.
 ///
@@ -60,7 +58,7 @@ pub(super) fn event_hook<V: crate::Build>(
     match hook {
         EventHook::Obtained { .. } => asked.push(HookEffect::SelectFromDeck {
             act: DeckAct::RemoveOntoRelic(V::Relic::PAELS_TOOTH),
-            count: CARDS,
+            count: (V::Relic::PAELS_TOOTH_CARDS as usize),
         }),
         EventHook::CombatEnd { .. } => {
             if !state.cards.is_empty() {

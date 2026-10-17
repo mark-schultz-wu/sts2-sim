@@ -1,15 +1,10 @@
 //! `PollinousCore`: two more cards in every fourth hand, counted across fights.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, Modify, ModifyHook};
 
 use crate::behaviour::relics::Number;
 use crate::generated::runstate::CombatSide;
-
-/// `CardsVar(2)`.
-const CARDS: Number = 2;
-
-/// `DynamicVar("Turns", 4)`: the turn count that pays.
-const TURNS: Number = 4;
 
 /// `TurnsSeen`, a saved property, so a fight's end leaves it as it is.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -31,7 +26,9 @@ pub(super) fn event_hook<V: crate::Build>(state: &mut State, hook: EventHook<V>)
         } => state.turns_seen += 1,
         // The game hands this hook only to a listener that changed the hand,
         // which this one did on the paying turn alone.
-        EventHook::HandDrawModified if state.turns_seen == TURNS => state.turns_seen = 0,
+        EventHook::HandDrawModified if state.turns_seen == V::Relic::POLLINOUS_CORE_TURNS => {
+            state.turns_seen = 0
+        }
         _ => {}
     }
 }
@@ -39,7 +36,9 @@ pub(super) fn event_hook<V: crate::Build>(state: &mut State, hook: EventHook<V>)
 /// `ModifyHandDraw`: its cards on the paying turn.
 pub(super) fn modify_hook<V: crate::Build>(state: &State, hook: ModifyHook<V>) -> Modify<Number> {
     match hook {
-        ModifyHook::HandDraw { .. } if state.turns_seen == TURNS => Modify::Added(CARDS),
+        ModifyHook::HandDraw { .. } if state.turns_seen == V::Relic::POLLINOUS_CORE_TURNS => {
+            Modify::Added(V::Relic::POLLINOUS_CORE_CARDS)
+        }
         ModifyHook::HandDraw { .. } => Modify::Nothing,
         hook => unimplemented!("what PollinousCore does for {hook:?}"),
     }

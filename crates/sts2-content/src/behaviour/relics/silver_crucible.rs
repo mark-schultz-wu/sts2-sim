@@ -1,15 +1,13 @@
 //! `SilverCrucible`: the first three card rewards upgraded, and the first
 //! chest empty.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{
     CardTable as _, DecisionHook, EventHook, HookEffect, HookResponse, RoomKinds as _,
 };
 
 use crate::behaviour::relics::Number;
 use crate::generated::encounters::RoomType;
-
-/// `Cards`: the card rewards it upgrades.
-const CARDS: u8 = 3;
 
 /// What it saves.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -33,12 +31,14 @@ pub(super) fn event_hook<V: crate::Build>(
         EventHook::CardRewardOption {
             card,
             card_reward: true,
-        } if state.times_used < CARDS && card.upgrade < card.card.max_upgrade() => {
+        } if state.times_used < (V::Relic::SILVER_CRUCIBLE_CARDS as u8)
+            && card.upgrade < card.card.max_upgrade() =>
+        {
             asked.push(HookEffect::UpgradeCard);
         }
         EventHook::CardRewardOption { .. } | EventHook::CardRewardPick { .. } => {}
         EventHook::CardRewardOptionsModified { card_reward: true } => {
-            if state.times_used < CARDS {
+            if state.times_used < (V::Relic::SILVER_CRUCIBLE_CARDS as u8) {
                 state.times_used += 1;
             }
         }
@@ -65,11 +65,11 @@ pub(super) fn decide_hook<V: crate::Build>(
 }
 
 /// `IsUsedUp`: every upgrade given, and a treasure room entered.
-pub(super) fn used_up(state: &State) -> bool {
-    state.times_used >= CARDS && state.treasure_rooms > 0
+pub(super) fn used_up<V: crate::Build>(state: &State) -> bool {
+    state.times_used >= (V::Relic::SILVER_CRUCIBLE_CARDS as u8) && state.treasure_rooms > 0
 }
 
 /// `DisplayAmount`: the card rewards it has left to upgrade.
-pub(super) fn display_amount(state: &State) -> Number {
-    Number::from(CARDS - state.times_used)
+pub(super) fn display_amount<V: crate::Build>(state: &State) -> Number {
+    Number::from((V::Relic::SILVER_CRUCIBLE_CARDS as u8) - state.times_used)
 }

@@ -1,12 +1,10 @@
 //! `BrilliantScarf`: the fifth card its owner plays each turn is free.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, Modify, ModifyHook, Pile};
 
 use crate::behaviour::relics::Number;
 use crate::generated::runstate::CombatSide;
-
-/// `CardsVar(5)`: the play that is free.
-const CARDS: u8 = 5;
 
 /// `CardsPlayedThisTurn`, the plays its owner made by hand.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -40,8 +38,10 @@ pub(super) fn display_amount(state: &State) -> Number {
 /// `TryModifyEnergyCostInCombatLate` and `TryModifyStarCost`: nothing, for a
 /// card in hand or being played once four plays are made this turn.
 pub(super) fn modify_hook<V: crate::Build>(state: &State, hook: ModifyHook<V>) -> Modify<Number> {
-    let free =
-        |pile: Option<Pile>| state.played == CARDS - 1 && matches!(pile, None | Some(Pile::Hand));
+    let free = |pile: Option<Pile>| {
+        state.played == (V::Relic::BRILLIANT_SCARF_CARDS as u8) - 1
+            && matches!(pile, None | Some(Pile::Hand))
+    };
     match hook {
         ModifyHook::EnergyCostLate { pile, .. } | ModifyHook::StarCost { pile, .. }
             if free(pile) =>

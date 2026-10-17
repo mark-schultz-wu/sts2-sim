@@ -1,12 +1,10 @@
 //! `WhisperingEarring`: one more energy each turn, and Vakuu plays the first
 //! turn's hand.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect, Modify, ModifyHook};
 
 use crate::behaviour::relics::Number;
-
-/// `EnergyVar(1)`.
-const ENERGY: Number = 1;
 
 /// `maxCardsToPlay`.
 const PLAYS: u8 = 13;
@@ -28,7 +26,7 @@ pub(super) fn event_hook<V: crate::Build>(
 /// `ModifyMaxEnergy`: its energy, on every turn.
 pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
     match hook {
-        ModifyHook::MaxEnergy { .. } => Modify::Added(ENERGY),
+        ModifyHook::MaxEnergy { .. } => Modify::Added(V::Relic::WHISPERING_EARRING_ENERGY),
         hook => unimplemented!("what WhisperingEarring does for {hook:?}"),
     }
 }

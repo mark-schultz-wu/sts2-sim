@@ -1,5 +1,6 @@
 //! `EmberTea`: Strength as each of its fights opens, for five fights.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect, PowerAmount};
 
 use crate::behaviour::relics::Number;
@@ -8,9 +9,6 @@ use crate::ids::PowerIds as _;
 
 /// `_combatsLeft`, which the relic is picked up with.
 const COMBATS: Number = 5;
-
-/// `PowerVar<StrengthPower>(2)`.
-const STRENGTH: PowerAmount<Number> = PowerAmount::Counted(2);
 
 /// `CombatsLeft`, the one `[SavedProperty]` this relic declares.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -50,7 +48,10 @@ pub(super) fn event_hook<V: crate::Build>(
             room: RoomType::Monster | RoomType::Elite | RoomType::Boss,
             ..
         } if !state.used_up() => {
-            asked.push(HookEffect::ApplyToOwner(V::Power::STRENGTH_POWER, STRENGTH));
+            asked.push(HookEffect::ApplyToOwner(
+                V::Power::STRENGTH_POWER,
+                PowerAmount::Counted(V::Relic::EMBER_TEA_STRENGTH_POWER),
+            ));
             state.combats_left -= 1;
         }
         EventHook::RoomEntered { .. } | EventHook::Obtained { .. } => {}

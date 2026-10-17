@@ -1,16 +1,10 @@
 //! `Pocketwatch`: the cards played in a turn, and the draw the next one gets.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, Modify, ModifyHook};
 
 use crate::behaviour::relics::Number;
 use crate::generated::runstate::CombatSide;
-
-/// `DynamicVar("CardThreshold", 3)`: the most cards a turn plays and is still
-/// paid for.
-const CARD_THRESHOLD: Number = 3;
-
-/// `CardsVar(3)`: what the next turn draws on top of its hand.
-const CARDS: Number = 3;
 
 /// `_cardsPlayedThisTurn` and `_cardsPlayedLastTurn`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -48,9 +42,9 @@ pub(super) fn modify_hook<V: crate::Build>(state: &State, hook: ModifyHook<V>) -
         // A relic's owner is the player, and a fight here has one, so the
         // player drawing is always its own.
         ModifyHook::HandDraw { turn, .. }
-            if turn > 1 && state.played_last_turn <= CARD_THRESHOLD =>
+            if turn > 1 && state.played_last_turn <= V::Relic::POCKETWATCH_CARD_THRESHOLD =>
         {
-            Modify::Added(CARDS)
+            Modify::Added(V::Relic::POCKETWATCH_CARDS)
         }
         ModifyHook::HandDraw { .. } => Modify::Nothing,
         hook => unimplemented!("what Pocketwatch does for {hook:?}"),

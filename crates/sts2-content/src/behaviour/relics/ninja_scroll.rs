@@ -1,12 +1,9 @@
 //! `NinjaScroll`: three Shivs in the first hand of every fight.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
 
-use crate::behaviour::relics::Number;
 use crate::ids::CardIds as _;
-
-/// `DynamicVar("Shivs", 3)`.
-const SHIVS: Number = 3;
 
 /// `BeforeHandDraw` on its owner's first turn: `Shiv.CreateInHand` of its
 /// Shivs, before the draw. A relic's owner is the player, and a fight here
@@ -19,7 +16,7 @@ pub(super) fn event_hook<V: crate::Build>(
         EventHook::BeforeHandDraw { turn: 1, .. } => {
             asked.push(HookEffect::GenerateInHand {
                 card: V::Card::SHIV,
-                count: SHIVS,
+                count: V::Relic::NINJA_SCROLL_SHIVS,
             });
         }
         EventHook::BeforeHandDraw { .. } | EventHook::Obtained { .. } => {}

@@ -1,12 +1,9 @@
 //! `Candelabra`: energy as its owner's second turn starts.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
 
-use crate::behaviour::relics::Number;
 use crate::generated::runstate::CombatSide;
-
-/// `EnergyVar(2)`.
-const ENERGY: Number = 2;
 
 /// `_energyTurn`.
 const TURN: u32 = 2;
@@ -24,6 +21,6 @@ pub(super) fn event_hook<V: crate::Build>(
     } = hook
         && turn == TURN
     {
-        asked.push(HookEffect::GainEnergy(ENERGY));
+        asked.push(HookEffect::GainEnergy(V::Relic::CANDELABRA_ENERGY));
     }
 }

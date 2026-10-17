@@ -1,12 +1,10 @@
 //! `TheBoot`: a powered attack its owner or Osty lands for one to four
 //! takes five.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, Modify, ModifyHook};
 
 use crate::behaviour::relics::Number;
-
-/// `DamageMinimum`.
-const MINIMUM: Number = 5;
 
 /// `ModifyHpLostAfterOstyLate`: a loss of at least one and under five, from
 /// a powered attack its owner or Osty deals to someone else, becomes five.
@@ -19,7 +17,7 @@ pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number
             osty,
             powered: true,
         } if (dealer == player || Some(dealer) == osty) && target != player => Modify::RaisedTo {
-            floor: MINIMUM,
+            floor: V::Relic::THE_BOOT_DAMAGE_MINIMUM,
             from: 1,
         },
         ModifyHook::HpLostAfterOstyLate { .. } => Modify::Nothing,

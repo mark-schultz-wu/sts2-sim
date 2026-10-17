@@ -1,12 +1,10 @@
 //! `FakeStrikeDummy`: one more damage on each powered hit from a Strike.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{CardTable as _, EventHook, Modify, ModifyHook};
 
 use crate::behaviour::relics::Number;
 use crate::generated::cards::CardTag;
-
-/// `DynamicVar("ExtraDamage", 1)`.
-const EXTRA_DAMAGE: Number = 1;
 
 /// `ModifyDamageAdditive`: its extra damage on a powered hit from a card
 /// tagged Strike. A fight here has one player, so every card is its owner's.
@@ -16,7 +14,9 @@ pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number
             card: Some(source),
             powered: true,
             ..
-        } if source.card.tagged(CardTag::Strike) => Modify::Added(EXTRA_DAMAGE),
+        } if source.card.tagged(CardTag::Strike) => {
+            Modify::Added(V::Relic::FAKE_STRIKE_DUMMY_EXTRA_DAMAGE)
+        }
         ModifyHook::DamageAdditive { .. } => Modify::Nothing,
         hook => unimplemented!("what FakeStrikeDummy does for {hook:?}"),
     }

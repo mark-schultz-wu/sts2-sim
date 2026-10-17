@@ -1,12 +1,9 @@
 //! `OrangeDough`: two colorless cards as each fight opens.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
 
-use crate::behaviour::relics::Number;
 use crate::generated::runstate::CombatSide;
-
-/// `CardsVar(2)`.
-const CARDS: Number = 2;
 
 /// `AfterSideTurnStart` on its owner's first turn: `GetDistinctForCombat`
 /// of two colorless cards off `CombatCardGeneration`, into the hand. A fight
@@ -22,6 +19,8 @@ pub(super) fn event_hook<V: crate::Build>(
     } = hook
         && turn <= 1
     {
-        asked.push(HookEffect::GenerateDistinctColorless { count: CARDS });
+        asked.push(HookEffect::GenerateDistinctColorless {
+            count: V::Relic::ORANGE_DOUGH_CARDS,
+        });
     }
 }

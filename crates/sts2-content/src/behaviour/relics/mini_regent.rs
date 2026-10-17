@@ -1,12 +1,9 @@
 //! `MiniRegent`: Strength the first time its owner spends stars in a turn.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect, PowerAmount, SideKinds as _};
 
-use crate::behaviour::relics::Number;
 use crate::ids::PowerIds as _;
-
-/// `PowerVar<StrengthPower>(1)`.
-const STRENGTH: Number = 1;
 
 /// `UsedThisTurn`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -27,7 +24,7 @@ pub(super) fn event_hook<V: crate::Build>(
             state.used = true;
             asked.push(HookEffect::ApplyToOwner(
                 V::Power::STRENGTH_POWER,
-                PowerAmount::Counted(STRENGTH),
+                PowerAmount::Counted(V::Relic::MINI_REGENT_STRENGTH_POWER),
             ));
         }
         EventHook::BeforeSideTurnStart { side, .. }

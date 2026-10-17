@@ -1,17 +1,12 @@
 //! `InfusedCore`: Cracked Core refined, three Lightning as each fight opens
 //! and a stronger Lightning.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect, Modify, ModifyHook, SideKinds};
 
 use crate::behaviour::relics::Number;
 use crate::generated::runstate::CombatSide;
 use crate::ids::OrbIds as _;
-
-/// `DynamicVar("Lightning", 3)`: how many it channels.
-const LIGHTNING: usize = 3;
-
-/// `DynamicVar("ExtraDamage", 1)`.
-const EXTRA_DAMAGE: Number = 1;
 
 /// `AfterSideTurnStart` on its owner's first turn, which channels the
 /// Lightning. A relic's owner is the player, and a fight here has one.
@@ -23,7 +18,10 @@ pub(super) fn event_hook<V: crate::Build>(
         EventHook::SideTurnStart { side, turn, .. }
             if side == <CombatSide as SideKinds>::PLAYER && turn <= 1 =>
         {
-            asked.extend((0..LIGHTNING).map(|_| HookEffect::Channel(V::Orb::LIGHTNING_ORB)));
+            asked.extend(
+                (0..(V::Relic::INFUSED_CORE_LIGHTNING as usize))
+                    .map(|_| HookEffect::Channel(V::Orb::LIGHTNING_ORB)),
+            );
         }
         _ => {}
     }
@@ -34,7 +32,7 @@ pub(super) fn event_hook<V: crate::Build>(
 pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
     match hook {
         ModifyHook::OrbValue { orb: __c0, .. } if __c0 == V::Orb::LIGHTNING_ORB => {
-            Modify::Added(EXTRA_DAMAGE)
+            Modify::Added(V::Relic::INFUSED_CORE_EXTRA_DAMAGE)
         }
         ModifyHook::OrbValue { .. } => Modify::Nothing,
         hook => unimplemented!("what InfusedCore does for {hook:?}"),

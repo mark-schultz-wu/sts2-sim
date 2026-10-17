@@ -1,12 +1,10 @@
 //! `BronzeScales`: Thorns in every fight.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect, PowerAmount};
 
 use crate::generated::encounters::RoomType;
 use crate::ids::PowerIds as _;
-
-/// `PowerVar<ThornsPower>(3)`.
-const THORNS: PowerAmount<crate::behaviour::relics::Number> = PowerAmount::Counted(3);
 
 /// `AfterRoomEntered`: Thorns on its owner as a fight's room opens.
 pub(super) fn event_hook<V: crate::Build>(
@@ -18,6 +16,9 @@ pub(super) fn event_hook<V: crate::Build>(
         ..
     } = hook
     {
-        asked.push(HookEffect::ApplyToOwner(V::Power::THORNS_POWER, THORNS));
+        asked.push(HookEffect::ApplyToOwner(
+            V::Power::THORNS_POWER,
+            PowerAmount::Counted(V::Relic::BRONZE_SCALES_THORNS_POWER),
+        ));
     }
 }

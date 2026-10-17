@@ -2,10 +2,8 @@
 //! with Nimble, where Nimble can enchant it.
 
 use crate::ids::EnchantmentIds as _;
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
-
-/// `NimbleAmount`.
-const NIMBLE: u8 = 2;
 
 /// `TryModifyCardRewardOptionsLate`, `ModifyMerchantCardCreationResults`
 /// and `TryModifyCardBeingAddedToDeck`, each over a card `Nimble.CanEnchant`
@@ -22,7 +20,7 @@ pub(super) fn event_hook<V: crate::Build>(
         {
             asked.push(HookEffect::EnchantCard {
                 enchantment: V::Enchantment::NIMBLE,
-                amount: NIMBLE,
+                amount: (V::Relic::FRESNEL_LENS_NIMBLE_AMOUNT as u8),
             });
         }
         _ => {}

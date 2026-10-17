@@ -1,10 +1,8 @@
 //! `RoyalStamp`: one card enchanted with Royally Approved.
 
 use crate::ids::EnchantmentIds as _;
+use crate::vars::RelicVars as _;
 use sts2_core::{DeckAct, EventHook, HookEffect};
-
-/// `CardsVar(1)`.
-const CARDS: usize = 1;
 
 /// `AfterObtained`: `CardSelectCmd.FromDeckForEnchantment` for one, over the
 /// cards Royally Approved can enchant shuffled off `Rng.Niche`, then
@@ -20,7 +18,7 @@ pub(super) fn event_hook<V: crate::Build>(
                 amount: 1,
                 kind: None,
             },
-            count: CARDS,
+            count: (V::Relic::ROYAL_STAMP_CARDS as usize),
         });
     }
 }

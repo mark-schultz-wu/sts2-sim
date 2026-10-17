@@ -1,11 +1,9 @@
 //! `PreservedFog`: three cards removed, and Folly in the deck.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{DeckAct, EventHook, HookEffect};
 
 use crate::ids::CardIds as _;
-
-/// `CardsVar(3)`.
-const CARDS: usize = 3;
 
 /// `AfterObtained`: `CardSelectCmd.FromDeckForRemoval` for three, each
 /// removed, then `CardPileCmd.AddCurseToDeck<Folly>`.
@@ -17,7 +15,7 @@ pub(super) fn event_hook<V: crate::Build>(
         asked.extend([
             HookEffect::SelectFromDeck {
                 act: DeckAct::Remove,
-                count: CARDS,
+                count: (V::Relic::PRESERVED_FOG_CARDS as usize),
             },
             HookEffect::AddToDeck(V::Card::FOLLY),
         ]);

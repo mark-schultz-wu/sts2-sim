@@ -1,12 +1,9 @@
 //! `RedSkull`: Strength while its owner stands at half health or below.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect, PlayerHealth, PowerAmount};
 
-use crate::behaviour::relics::Number;
 use crate::ids::PowerIds as _;
-
-/// `PowerVar<StrengthPower>(3)`.
-const STRENGTH: Number = 3;
 
 /// `StrengthApplied`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -50,14 +47,14 @@ fn modify_strength<V: crate::Build>(
         (true, true) => {
             asked.push(HookEffect::ApplyToOwner(
                 V::Power::STRENGTH_POWER,
-                PowerAmount::Counted(-STRENGTH),
+                PowerAmount::Counted(-V::Relic::RED_SKULL_STRENGTH_POWER),
             ));
             state.strength_applied = false;
         }
         (false, false) => {
             asked.push(HookEffect::ApplyToOwner(
                 V::Power::STRENGTH_POWER,
-                PowerAmount::Counted(STRENGTH),
+                PowerAmount::Counted(V::Relic::RED_SKULL_STRENGTH_POWER),
             ));
             state.strength_applied = true;
         }

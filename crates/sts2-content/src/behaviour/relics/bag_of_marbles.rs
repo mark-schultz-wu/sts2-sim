@@ -1,12 +1,10 @@
 //! `BagOfMarbles`: Vulnerable on every enemy as a fight opens.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect, PowerAmount};
 
 use crate::generated::runstate::CombatSide;
 use crate::ids::PowerIds as _;
-
-/// `PowerVar<VulnerablePower>(1)`.
-const VULNERABLE: PowerAmount<crate::behaviour::relics::Number> = PowerAmount::Counted(1);
 
 /// `BeforeSideTurnStart`: Vulnerable on every hittable enemy as its owner's
 /// first turn begins.
@@ -23,7 +21,7 @@ pub(super) fn event_hook<V: crate::Build>(
     {
         asked.push(HookEffect::ApplyToOpponents(
             V::Power::VULNERABLE_POWER,
-            VULNERABLE,
+            PowerAmount::Counted(V::Relic::BAG_OF_MARBLES_VULNERABLE_POWER),
         ));
     }
 }

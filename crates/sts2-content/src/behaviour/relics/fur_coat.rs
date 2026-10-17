@@ -1,6 +1,7 @@
 //! `FurCoat`: seven fights of the act it is picked up in, marked, where every
 //! enemy starts at one hit point.
 
+use crate::vars::RelicVars as _;
 use std::sync::Arc;
 
 use sts2_core::{Coord, EventHook, HookEffect};
@@ -8,9 +9,6 @@ use sts2_core::{Coord, EventHook, HookEffect};
 use crate::behaviour::relics::Number;
 use crate::generated::runstate::CombatSide;
 use crate::ids::RelicIds as _;
-
-/// `DynamicVar("Combats", 7)`.
-const COMBATS: usize = 7;
 
 /// The id its own stream is seeded with.
 const NAME: &str = "FUR_COAT";
@@ -52,7 +50,7 @@ pub(super) fn event_hook<V: crate::Build>(
 ) {
     let mark = HookEffect::MarkCombatPoints {
         relic: V::Relic::FUR_COAT,
-        count: COMBATS,
+        count: (V::Relic::FUR_COAT_COMBATS as usize),
         name: NAME,
     };
     match hook {

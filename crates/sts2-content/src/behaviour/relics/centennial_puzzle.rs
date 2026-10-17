@@ -1,12 +1,8 @@
 //! `CentennialPuzzle`: cards drawn the first time its owner loses hit points
 //! in a fight.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
-
-use crate::behaviour::relics::Number;
-
-/// `CardsVar(3)`.
-const CARDS: Number = 3;
 
 /// `UsedThisCombat`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -33,7 +29,7 @@ pub(super) fn event_hook<V: crate::Build>(
             state.used_this_combat = true;
             // One `CardPileCmd.Draw` a card, which draws the same as one for
             // all three.
-            asked.push(HookEffect::Draw(CARDS));
+            asked.push(HookEffect::Draw(V::Relic::CENTENNIAL_PUZZLE_CARDS));
         }
         EventHook::CombatEnd { .. } => state.used_this_combat = false,
         _ => {}

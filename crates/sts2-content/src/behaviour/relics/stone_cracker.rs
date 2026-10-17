@@ -1,9 +1,7 @@
 //! `StoneCracker`: two cards of the draw pile upgraded as every fight opens.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
-
-/// `CardsVar(2)`.
-const CARDS: usize = 2;
 
 /// `AfterRoomEntered` for a fight's room: two of the draw pile's upgradable
 /// cards, stably shuffled off `CombatCardSelection`, upgraded.
@@ -14,6 +12,8 @@ pub(super) fn event_hook<V: crate::Build>(
     if let EventHook::RoomEntered { room, .. } = hook
         && crate::behaviour::relics::combat_room(room)
     {
-        asked.push(HookEffect::UpgradeRandomDrawCards(CARDS));
+        asked.push(HookEffect::UpgradeRandomDrawCards(
+            V::Relic::STONE_CRACKER_CARDS as usize,
+        ));
     }
 }

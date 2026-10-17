@@ -1,17 +1,11 @@
 //! `RainbowRing`: Strength and Dexterity once a turn, for an attack, a skill
 //! and a power played in it.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{CardKind, EventHook, HookEffect, PowerAmount};
 
-use crate::behaviour::relics::Number;
 use crate::generated::runstate::CombatSide;
 use crate::ids::PowerIds as _;
-
-/// `PowerVar<StrengthPower>(1)`.
-const STRENGTH: PowerAmount<Number> = PowerAmount::Counted(1);
-
-/// `PowerVar<DexterityPower>(1)`.
-const DEXTERITY: PowerAmount<Number> = PowerAmount::Counted(1);
 
 /// Whether an attack, a skill and a power have been played this turn, and
 /// `ActivationCountThisTurn`, which is at most one.
@@ -42,8 +36,14 @@ pub(super) fn event_hook<V: crate::Build>(
             }
             if state.attack && state.skill && state.power {
                 asked.extend([
-                    HookEffect::ApplyToOwner(V::Power::STRENGTH_POWER, STRENGTH),
-                    HookEffect::ApplyToOwner(V::Power::DEXTERITY_POWER, DEXTERITY),
+                    HookEffect::ApplyToOwner(
+                        V::Power::STRENGTH_POWER,
+                        PowerAmount::Counted(V::Relic::RAINBOW_RING_STRENGTH_POWER),
+                    ),
+                    HookEffect::ApplyToOwner(
+                        V::Power::DEXTERITY_POWER,
+                        PowerAmount::Counted(V::Relic::RAINBOW_RING_DEXTERITY_POWER),
+                    ),
                 ]);
                 state.activated = true;
             }

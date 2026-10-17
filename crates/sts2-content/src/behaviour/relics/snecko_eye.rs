@@ -1,6 +1,7 @@
 //! `SneckoEye`: Confused as each fight opens, and two more cards in each
 //! hand.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect, Modify, ModifyHook, PowerAmount};
 
 use crate::behaviour::relics::Number;
@@ -8,9 +9,6 @@ use crate::ids::PowerIds as _;
 
 /// `PowerCmd.Apply<ConfusedPower>(…, 1m, …)`.
 const CONFUSED: PowerAmount<Number> = PowerAmount::Counted(1);
-
-/// `CardsVar(2)`.
-const CARDS: Number = 2;
 
 /// `BeforeCombatStart`: Confused on its owner. `AfterObtained` does the same
 /// inside a fight, and a run picks it up only outside one.
@@ -30,7 +28,7 @@ pub(super) fn event_hook<V: crate::Build>(
 /// `ModifyHandDraw`: two more cards on every turn.
 pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
     match hook {
-        ModifyHook::HandDraw { .. } => Modify::Added(CARDS),
+        ModifyHook::HandDraw { .. } => Modify::Added(V::Relic::SNECKO_EYE_CARDS),
         hook => unimplemented!("what SneckoEye does for {hook:?}"),
     }
 }

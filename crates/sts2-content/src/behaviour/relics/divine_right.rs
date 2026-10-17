@@ -1,11 +1,7 @@
 //! `DivineRight`: the stars the Regent opens every fight with.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
-
-use crate::behaviour::relics::Number;
-
-/// `StarsVar(3)`, which is the whole of what it gives.
-const STARS: Number = 3;
 
 /// `AfterRoomEntered`, which pays the stars on the way into a fight.
 pub(super) fn event_hook<V: crate::Build>(
@@ -15,6 +11,6 @@ pub(super) fn event_hook<V: crate::Build>(
     if let EventHook::RoomEntered { room, .. } = hook
         && crate::behaviour::relics::combat_room(room)
     {
-        asked.push(HookEffect::GainStars(STARS));
+        asked.push(HookEffect::GainStars(V::Relic::DIVINE_RIGHT_STARS));
     }
 }

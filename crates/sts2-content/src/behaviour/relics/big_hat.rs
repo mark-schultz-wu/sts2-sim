@@ -1,13 +1,10 @@
 //! `BigHat`: two Ethereal cards into hand as the first turn of a fight
 //! starts.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect, PoolFilter};
 
-use crate::behaviour::relics::Number;
 use crate::generated::runstate::CombatSide;
-
-/// `CardsVar(2)`.
-const CARDS: Number = 2;
 
 /// `AfterSideTurnStart`, for its owner's first turn: `GetDistinctForCombat`
 /// of two of the character's Ethereal cards off `CombatCardGeneration`, into
@@ -24,7 +21,7 @@ pub(super) fn event_hook<V: crate::Build>(
     {
         asked.push(HookEffect::GenerateDistinctFromPool {
             filter: PoolFilter::Ethereal,
-            count: CARDS,
+            count: V::Relic::BIG_HAT_CARDS,
         });
     }
 }

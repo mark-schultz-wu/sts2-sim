@@ -1,12 +1,10 @@
 //! `DataDisk`: Focus in every fight.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect, PowerAmount};
 
 use crate::generated::encounters::RoomType;
 use crate::ids::PowerIds as _;
-
-/// `PowerVar<FocusPower>(1)`.
-const FOCUS: PowerAmount<crate::behaviour::relics::Number> = PowerAmount::Counted(1);
 
 /// `AfterRoomEntered` in a fight's room: its Focus on its owner.
 pub(super) fn event_hook<V: crate::Build>(
@@ -18,6 +16,9 @@ pub(super) fn event_hook<V: crate::Build>(
         ..
     } = hook
     {
-        asked.push(HookEffect::ApplyToOwner(V::Power::FOCUS_POWER, FOCUS));
+        asked.push(HookEffect::ApplyToOwner(
+            V::Power::FOCUS_POWER,
+            PowerAmount::Counted(V::Relic::DATA_DISK_FOCUS_POWER),
+        ));
     }
 }

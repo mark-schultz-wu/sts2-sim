@@ -1,12 +1,10 @@
 //! `PaelsLegion`: a pet that doubles a card's block, then sleeps two turns.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{CardId, EventHook, HookEffect, Modify, ModifyHook, SideKinds as _};
 
 use crate::behaviour::relics::Number;
 use crate::ids::MonsterIds as _;
-
-/// `Turns`: how long it sleeps after doubling a card's block.
-const TURNS: i32 = 2;
 
 /// `Cooldown`, `TriggeredBlockLastTurn` and `AffectedCardPlay`, the play
 /// named by the card it plays. `Skin` draws off its own `Rng`, which no other
@@ -52,7 +50,7 @@ pub(super) fn event_hook<V: crate::Build>(
         }
         EventHook::CardPlayed { id, .. } if state.affected == Some(id) => {
             state.affected = None;
-            state.cooldown = TURNS;
+            state.cooldown = V::Relic::PAELS_LEGION_TURNS;
             state.triggered_block_last_turn = true;
         }
         EventHook::SideTurnStart { side, .. } if side == player => {

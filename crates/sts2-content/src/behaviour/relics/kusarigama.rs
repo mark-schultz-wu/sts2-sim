@@ -1,15 +1,10 @@
 //! `Kusarigama`: damage to a random enemy for every third attack in a turn.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{CardKind, EventHook, HookEffect};
 
 use crate::behaviour::relics::Number;
 use crate::generated::runstate::CombatSide;
-
-/// `CardsVar(3)`.
-const CARDS: u8 = 3;
-
-/// `DamageVar(6, ValueProp.Unpowered)`.
-const DAMAGE: Number = 6;
 
 /// `AttacksPlayedThisTurn`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -30,9 +25,12 @@ pub(super) fn event_hook<V: crate::Build>(
             if <V as sts2_core::Rules>::card_kind(card) == Some(CardKind::Attack) =>
         {
             state.attacks_played_this_turn += 1;
-            if state.attacks_played_this_turn.is_multiple_of(CARDS) {
+            if state
+                .attacks_played_this_turn
+                .is_multiple_of(V::Relic::KUSARIGAMA_CARDS as u8)
+            {
                 asked.push(HookEffect::DamageRandomOpponent {
-                    amount: DAMAGE,
+                    amount: V::Relic::KUSARIGAMA_DAMAGE,
                     unblockable: false,
                     from_owner: true,
                 });
@@ -48,6 +46,6 @@ pub(super) fn event_hook<V: crate::Build>(
 }
 
 /// `DisplayAmount`: the attacks counted towards the next hit.
-pub(super) fn display_amount(state: &State) -> Number {
-    Number::from(state.attacks_played_this_turn % CARDS)
+pub(super) fn display_amount<V: crate::Build>(state: &State) -> Number {
+    Number::from(state.attacks_played_this_turn % (V::Relic::KUSARIGAMA_CARDS as u8))
 }

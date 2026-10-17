@@ -1,16 +1,11 @@
 //! `Metronome`: damage to every enemy on the seventh orb channelled in a
 //! fight.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
 
 use crate::behaviour::relics::Number;
 use crate::generated::encounters::RoomType;
-
-/// `DynamicVar("OrbCount", 7)`.
-const ORB_COUNT: u8 = 7;
-
-/// `DamageVar(30, ValueProp.Unpowered)`.
-const DAMAGE: Number = 30;
 
 /// `OrbsChanneled`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -29,8 +24,8 @@ pub(super) fn event_hook<V: crate::Build>(
     match hook {
         EventHook::OrbChanneled => {
             state.orbs_channeled = state.orbs_channeled.saturating_add(1);
-            if state.orbs_channeled == ORB_COUNT {
-                asked.push(HookEffect::DamageOpponents(DAMAGE));
+            if state.orbs_channeled == (V::Relic::METRONOME_ORB_COUNT as u8) {
+                asked.push(HookEffect::DamageOpponents(V::Relic::METRONOME_DAMAGE));
             }
         }
         EventHook::RoomEntered {
@@ -43,6 +38,10 @@ pub(super) fn event_hook<V: crate::Build>(
 }
 
 /// `DisplayAmount`: the orbs counted, up to its count.
-pub(super) fn display_amount(state: &State) -> Number {
-    Number::from(state.orbs_channeled.min(ORB_COUNT))
+pub(super) fn display_amount<V: crate::Build>(state: &State) -> Number {
+    Number::from(
+        state
+            .orbs_channeled
+            .min(V::Relic::METRONOME_ORB_COUNT as u8),
+    )
 }

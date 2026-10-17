@@ -1,14 +1,9 @@
 //! `GalacticDust`: block for every ten stars its owner spends.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
 
 use crate::behaviour::relics::Number;
-
-/// `StarsVar(10)`.
-const STARS: Number = 10;
-
-/// `BlockVar(10, ValueProp.Unpowered)`.
-const BLOCK: Number = 10;
 
 /// `StarsSpent`, its one `[SavedProperty]`, which carries from one fight to
 /// the next.
@@ -27,9 +22,11 @@ pub(super) fn event_hook<V: crate::Build>(
 ) {
     if let EventHook::StarsSpent { amount, .. } = hook {
         state.stars_spent += amount;
-        if state.stars_spent >= STARS {
-            asked.push(HookEffect::GainBlock(state.stars_spent / STARS * BLOCK));
-            state.stars_spent %= STARS;
+        if state.stars_spent >= V::Relic::GALACTIC_DUST_STARS {
+            asked.push(HookEffect::GainBlock(
+                state.stars_spent / V::Relic::GALACTIC_DUST_STARS * V::Relic::GALACTIC_DUST_BLOCK,
+            ));
+            state.stars_spent %= V::Relic::GALACTIC_DUST_STARS;
         }
     }
 }
@@ -37,6 +34,6 @@ pub(super) fn event_hook<V: crate::Build>(
 /// `DisplayAmount`: the stars counted toward the next payout.
 /// `IsActivating` shows the whole count while the relic's visuals play,
 /// which a run without a screen never does.
-pub(super) fn display_amount(state: &State) -> Number {
-    state.stars_spent % STARS
+pub(super) fn display_amount<V: crate::Build>(state: &State) -> Number {
+    state.stars_spent % V::Relic::GALACTIC_DUST_STARS
 }

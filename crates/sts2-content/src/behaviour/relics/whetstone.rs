@@ -1,11 +1,9 @@
 //! `Whetstone`: two Attacks upgraded, once.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{CardKind, EventHook, HookEffect};
 
 use crate::generated::runstate::RunRngType;
-
-/// `CardsVar(2)`.
-const CARDS: usize = 2;
 
 /// `AfterObtained`: the deck's upgradable Attacks stably shuffled off
 /// `RunState.Rng.Niche`, and the first two upgraded.
@@ -15,7 +13,7 @@ pub(super) fn event_hook<V: crate::Build>(
 ) {
     if let EventHook::Obtained { .. } = hook {
         asked.push(HookEffect::UpgradeRandomDeckCards {
-            count: CARDS,
+            count: (V::Relic::WHETSTONE_CARDS as usize),
             stream: sts2_core::Stream::Run(RunRngType::Niche),
             kind: Some(CardKind::Attack),
         });

@@ -1,11 +1,9 @@
 //! `LavaRock`: two more relics from the first act's boss.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
 
 use crate::generated::encounters::RoomType;
-
-/// `DynamicVar("Relics", 2)`.
-const RELICS: usize = 2;
 
 /// `HasTriggered`, the one `[SavedProperty]` this relic declares.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -28,6 +26,8 @@ pub(super) fn event_hook<V: crate::Build>(
         && !state.triggered
     {
         state.triggered = true;
-        asked.push(HookEffect::AddRelicRewards(RELICS));
+        asked.push(HookEffect::AddRelicRewards(
+            V::Relic::LAVA_ROCK_RELICS as usize,
+        ));
     }
 }

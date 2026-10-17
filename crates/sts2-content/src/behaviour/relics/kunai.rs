@@ -1,16 +1,11 @@
 //! `Kunai`: Dexterity for every third attack in a turn.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{CardKind, EventHook, HookEffect, PowerAmount};
 
 use crate::behaviour::relics::Number;
 use crate::generated::runstate::CombatSide;
 use crate::ids::PowerIds as _;
-
-/// `CardsVar(3)`.
-const CARDS: u8 = 3;
-
-/// `PowerVar<DexterityPower>(1)`.
-const DEXTERITY: PowerAmount<Number> = PowerAmount::Counted(1);
 
 /// `AttacksPlayedThisTurn`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -31,10 +26,13 @@ pub(super) fn event_hook<V: crate::Build>(
             if <V as sts2_core::Rules>::card_kind(card) == Some(CardKind::Attack) =>
         {
             state.attacks_played_this_turn += 1;
-            if state.attacks_played_this_turn.is_multiple_of(CARDS) {
+            if state
+                .attacks_played_this_turn
+                .is_multiple_of(V::Relic::KUNAI_CARDS as u8)
+            {
                 asked.push(HookEffect::ApplyToOwner(
                     V::Power::DEXTERITY_POWER,
-                    DEXTERITY,
+                    PowerAmount::Counted(V::Relic::KUNAI_DEXTERITY_POWER),
                 ));
             }
         }
@@ -48,6 +46,6 @@ pub(super) fn event_hook<V: crate::Build>(
 }
 
 /// `DisplayAmount`: the attacks counted towards the next Dexterity.
-pub(super) fn display_amount(state: &State) -> Number {
-    Number::from(state.attacks_played_this_turn % CARDS)
+pub(super) fn display_amount<V: crate::Build>(state: &State) -> Number {
+    Number::from(state.attacks_played_this_turn % (V::Relic::KUNAI_CARDS as u8))
 }

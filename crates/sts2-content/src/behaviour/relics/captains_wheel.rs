@@ -1,11 +1,7 @@
 //! `CaptainsWheel`: block as the third turn's block clears.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
-
-use crate::behaviour::relics::Number;
-
-/// `BlockVar(18, ValueProp.Unpowered)`.
-const BLOCK: Number = 18;
 
 /// `AfterBlockCleared` for its owner on turn three: `CreatureCmd.GainBlock`.
 pub(super) fn event_hook<V: crate::Build>(
@@ -20,6 +16,6 @@ pub(super) fn event_hook<V: crate::Build>(
         && creature == player
         && turn == 3
     {
-        asked.push(HookEffect::GainBlock(BLOCK));
+        asked.push(HookEffect::GainBlock(V::Relic::CAPTAINS_WHEEL_BLOCK));
     }
 }

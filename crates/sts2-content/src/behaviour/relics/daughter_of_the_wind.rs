@@ -1,11 +1,7 @@
 //! `DaughterOfTheWind`: a point of block after each attack its owner plays.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{CardKind, EventHook, HookEffect};
-
-use crate::behaviour::relics::Number;
-
-/// `BlockVar(1, ValueProp.Unpowered)`.
-const BLOCK: Number = 1;
 
 /// `AfterCardPlayed`: `CreatureCmd.GainBlock` on its owner once an attack's
 /// play is over. A relic's owner is the player, and a fight here has one, so
@@ -17,6 +13,6 @@ pub(super) fn event_hook<V: crate::Build>(
     if let EventHook::CardPlayed { card, .. } = hook
         && V::card_kind(card) == Some(CardKind::Attack)
     {
-        asked.push(HookEffect::GainBlock(BLOCK));
+        asked.push(HookEffect::GainBlock(V::Relic::DAUGHTER_OF_THE_WIND_BLOCK));
     }
 }

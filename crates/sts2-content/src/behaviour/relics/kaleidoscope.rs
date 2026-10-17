@@ -1,9 +1,7 @@
 //! `Kaleidoscope`: card rewards from other characters' pools.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
-
-/// `Cards`: the card rewards it offers.
-const REWARDS: usize = 2;
 
 /// The other characters' pools each reward draws one card from.
 const POOLS: usize = 3;
@@ -16,7 +14,7 @@ pub(super) fn event_hook<V: crate::Build>(
 ) {
     if let EventHook::Obtained { .. } = hook {
         asked.push(HookEffect::OfferOtherPoolCards {
-            rewards: REWARDS,
+            rewards: (V::Relic::KALEIDOSCOPE_CARDS as usize),
             pools: POOLS,
         });
     }
