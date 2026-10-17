@@ -1,16 +1,10 @@
 //! The event pool's potions.
 
+use crate::vars::PotionVars as _;
 use sts2_core::{Amount, CreatureView as _, Effect, Fight, Played, Scaling};
 
-use crate::behaviour::potions::Number;
 use crate::generated::cards::TargetType;
 use crate::ids::PotionIds as _;
-
-/// `FoulPotion`'s `DamageVar(12, ValueProp.Unpowered)`.
-const FOUL: Number = 12;
-
-/// `GlowwaterPotion`'s `CardsVar(10)`.
-const GLOWWATER: Number = 10;
 
 /// Where an event potion stopped on the player's answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -28,7 +22,7 @@ pub(super) fn resume<V: crate::Build, F: Fight<V>>(
 ) -> Played<V> {
     match (at, answer) {
         (Resume::GlowwaterExhausted, sts2_core::Taken::Waited) => {
-            fight.draw(GLOWWATER);
+            fight.draw(V::Potion::GLOWWATER_POTION_CARDS);
             Played::Done
         }
         (at, answer) => unreachable!("{at:?} resumed with {answer:?}"),
@@ -57,7 +51,7 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
                     let hit = fight.resolve(Effect::Attack {
                         dealer: fight.actor(),
                         target,
-                        damage: Amount::Number(FOUL),
+                        damage: Amount::Number(V::Potion::FOUL_POTION_DAMAGE),
                         scaling: Scaling::Static,
                     });
                     fight.apply(hit);
@@ -77,7 +71,7 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
                     at: crate::behaviour::potions::Resume::Event(Resume::GlowwaterExhausted).into(),
                 };
             }
-            fight.draw(GLOWWATER);
+            fight.draw(V::Potion::GLOWWATER_POTION_CARDS);
             Played::Done
         }
         potion => unimplemented!("what {potion:?} does when it is drunk"),

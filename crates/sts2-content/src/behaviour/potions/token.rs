@@ -1,12 +1,9 @@
 //! The token pool's potions, which only a relic or a card makes.
 
+use crate::vars::PotionVars as _;
 use sts2_core::{Amount, Effect, Fight, Played, Scaling};
 
-use crate::behaviour::potions::Number;
 use crate::ids::PotionIds as _;
-
-/// `PotionShapedRock`'s `DamageVar(15, ValueProp.Unpowered)`.
-const ROCK: Number = 15;
 
 /// What a potion does when it is drunk in a fight.
 ///
@@ -21,7 +18,7 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
             let hit = fight.resolve(Effect::Attack {
                 dealer: fight.actor(),
                 target,
-                damage: Amount::Number(ROCK),
+                damage: Amount::Number(V::Potion::POTION_SHAPED_ROCK_DAMAGE),
                 scaling: Scaling::Static,
             });
             fight.apply(hit);

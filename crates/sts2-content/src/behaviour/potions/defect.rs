@@ -1,15 +1,9 @@
 //! The potions only the Defect's pool draws.
 
+use crate::vars::PotionVars as _;
 use sts2_core::{Fight, Played, PowerAmount};
 
-use crate::behaviour::potions::Number;
 use crate::ids::{OrbIds as _, PotionIds as _, PowerIds as _};
-
-/// `FocusPotion`'s `PowerVar<FocusPower>(2)`.
-const FOCUS: Number = 2;
-
-/// `PotionOfCapacity`'s `RepeatVar(2)`: the orb slots it adds.
-const CAPACITY: Number = 2;
 
 /// What one of the Defect's potions does when it is drunk.
 ///
@@ -20,12 +14,15 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
     match potion {
         // On its drinker, whom `Self` names.
         __c0 if __c0 == V::Potion::FOCUS_POTION => {
-            fight.apply_to_actor(V::Power::FOCUS_POWER, PowerAmount::Counted(FOCUS));
+            fight.apply_to_actor(
+                V::Power::FOCUS_POWER,
+                PowerAmount::Counted(V::Potion::FOCUS_POTION_FOCUS_POWER),
+            );
             Played::Done
         }
         // `OrbCmd.AddSlots` for its drinker.
         __c0 if __c0 == V::Potion::POTION_OF_CAPACITY => {
-            fight.add_orb_slots(CAPACITY);
+            fight.add_orb_slots(V::Potion::POTION_OF_CAPACITY_REPEAT);
             Played::Done
         }
         // `OrbCmd.Channel<DarkOrb>` once for each of its drinker's orb slots.
