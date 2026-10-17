@@ -70,13 +70,13 @@ a port that starts from the other build's code. A move can shift what
 the compiler inlines. The relics' and the cards' decision dispatchers
 stay out of line, since the walk inlining them cost 3.9% and 3.4%.
 
-The simulator follows 938,975 of the 1,321,928 recorded positions, 71%,
-and 821 of 1,500 runs whole. A run that panics counts the positions
+The simulator follows 942,137 of the 1,322,464 recorded positions, 71%,
+and 825 of 1,500 runs whole. A run that panics counts the positions
 before its panic. `follow_run <file> <index> --diff <dir>` plays a run
 on the game beside the simulator and names the sections where they first
 differ, which a split with no panic needs. The commonest first splits:
 
-- Positions that part with no panic, which every common split now is. 41
+- Positions that part with no panic, which every common split now is. 33
   part at a travel, and 30 at a play of Haze. 28 part at a play of
   Expertise, and 25 at Tracking.
 - Misery changed in v0.111.0. It adds a temporary power's amount to the

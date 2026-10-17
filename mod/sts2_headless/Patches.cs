@@ -445,15 +445,24 @@ internal static class DivineWithoutAScreen
 /// That branch hands the selector a minimum of none whatever
 /// <c>canSkip</c> says, and a player at the screen sees no skip button
 /// unless it is set. So the selector is told what the screen would offer.
-/// The game asks the selector before its first <c>await</c>, so the prefix
-/// notes it and the postfix clears it on the same thread.
+///
+/// The screen's branch awaits <c>SignalPlayerChoiceBegun</c> before it asks
+/// the selector, by which time the method has returned its task to the
+/// caller. The prefix sets an <see cref="AsyncLocal{T}"/> as the method
+/// starts, which flows into the method's continuation, and the postfix
+/// clears it for the caller alone.
 /// </remarks>
 [HarmonyPatch(typeof(CardSelectCmd), nameof(CardSelectCmd.FromChooseACardScreen))]
 internal static class ChooseACardSkip
 {
+    private static readonly System.Threading.AsyncLocal<bool?> Asked = new();
+
     /// <summary>The <c>canSkip</c> of the screen being asked, if one is.</summary>
-    [ThreadStatic]
-    internal static bool? CanSkip;
+    internal static bool? CanSkip
+    {
+        get => Asked.Value;
+        set => Asked.Value = value;
+    }
 
     [HarmonyPrepare]
     private static bool Prepare() => !GameApi.AsksThroughTheScreen;
