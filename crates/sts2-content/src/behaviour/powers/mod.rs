@@ -6380,6 +6380,10 @@ pub(crate) fn perform_death<V: crate::Build, F: sts2_core::Fight<V>>(
     holder: sts2_core::CombatId,
     fight: &mut F,
 ) {
+    // A power whose death the build ports for itself.
+    if V::own_power_death(power, holder, fight).is_some() {
+        return;
+    }
     match power {
         // `SurprisePower.AfterDeath`: a Sneaky Gremlin, then a Fat Gremlin,
         // which takes a Heist of the gold each Thievery stole. Any gold at all

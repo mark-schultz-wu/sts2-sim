@@ -112,6 +112,7 @@ pub(crate) fn enter<V: Rules>(
         for_run: Vec::new(),
         after_pick: None,
         detached: Vec::new(),
+        created: Vec::new(),
         hook_draws: smallvec::SmallVec::new(),
         drawn_late: None,
         drew: None,

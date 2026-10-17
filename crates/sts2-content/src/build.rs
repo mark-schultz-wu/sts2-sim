@@ -492,6 +492,16 @@ pub trait OwnRules: ContentVersion + Sized {
         rng: &mut R,
     ) -> Option<<Self::OwnEvents as sts2_core::EventBehavior<Self>>::State>;
 
+    /// A power's `AfterDeath` commands, for a power whose death the build
+    /// ports for itself, or nothing for a shared one.
+    fn own_power_death<F: sts2_core::Fight<Self>>(
+        power: Self::Power,
+        holder: sts2_core::CombatId,
+        fight: &mut F,
+    ) -> Option<()>
+    where
+        Self: Build;
+
     /// Whether a power's rule is the build's own.
     fn own_power(power: Self::Power) -> bool;
 

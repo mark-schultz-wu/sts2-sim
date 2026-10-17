@@ -1,8 +1,8 @@
 //! The powers whose rules this build ports for itself, which the shared
 //! powers hand over through [`crate::build::OwnRules`].
 //!
-//! None yet. The two v0.107.1 ports for itself, Diamond Diadem's and
-//! Outbreak's, are gone from this build.
+//! The two v0.107.1 ports for itself, Diamond Diadem's and Outbreak's, are
+//! gone from this build. Surprise's death is this build's own.
 
 use sts2_core::{EventHook, HookEffect, Modify, ModifyHook, PowerAmount};
 
@@ -11,6 +11,43 @@ use super::super::generated::powers::Power;
 use crate::behaviour::powers::{Held, State};
 
 type Number = i32;
+
+/// A power's `AfterDeath` commands, for one this build ports for itself.
+///
+/// `SurprisePower.AfterDeath` makes the Fat Gremlin first, which takes the
+/// next id and rolls its health. It takes a Heist of the gold each Thievery
+/// stole while it stands off the board. The Sneaky Gremlin joins, then the
+/// Fat Gremlin. Any gold at all marks the encounter's gold stolen.
+pub(crate) fn own_power_death<F: sts2_core::Fight<V>>(
+    power: Power,
+    holder: sts2_core::CombatId,
+    fight: &mut F,
+) -> Option<()> {
+    use super::super::generated::monsters::Monster;
+
+    if power != Power::SurprisePower {
+        return None;
+    }
+    let fat = fight.create_monster(Monster::FatGremlin);
+    let mut stolen = None;
+    fight.write_power(holder, Power::ThieveryPower, |state| {
+        stolen = Some(*state.stolen_gold());
+    });
+    if let Some(stolen) = stolen {
+        fight.apply_power_from(
+            fat,
+            Power::HeistPower,
+            PowerAmount::Counted(stolen),
+            Some(holder),
+        );
+    }
+    fight.summon(Monster::SneakyGremlin, usize::MAX);
+    fight.add_created(fat, usize::MAX);
+    if stolen.is_some_and(|stolen| stolen > 0) {
+        fight.write_encounter(crate::behaviour::encounters::State::mark_gold_stolen);
+    }
+    Some(())
+}
 
 /// Whether `power`'s rule is this build's own.
 pub(crate) fn own_power(_power: Power) -> bool {

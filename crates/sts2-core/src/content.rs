@@ -2389,6 +2389,21 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("a monster added into a free slot")
     }
 
+    /// `CombatState.CreateCreature` for an enemy, ahead of
+    /// [`Fight::add_created`]. It takes the next id and rolls its hit points
+    /// against the enemies in the fight, as one that joins does. Until it is
+    /// added nothing targets it and its powers hear nothing, but a power can
+    /// land on it.
+    fn create_monster(&mut self, _monster: V::Monster) -> crate::CombatId {
+        unimplemented!("a monster created before it joins")
+    }
+
+    /// `CreatureCmd.Add(creature)` for one [`Fight::create_monster`] made, at
+    /// `position` among the enemies, with the powers it took meanwhile.
+    fn add_created(&mut self, _created: crate::CombatId, _position: usize) {
+        unimplemented!("a created monster joining")
+    }
+
     /// `CreatureCmd.Add<M>(CombatState, position)`.
     ///
     /// The monster rolls its hit points when it arrives. One that joins on

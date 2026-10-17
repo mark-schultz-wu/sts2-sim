@@ -295,6 +295,7 @@ impl<'a, V: Rules> Board<'a, V> {
             .live
             .creatures
             .iter()
+            .chain(self.live.created.iter().map(|created| &created.fighter))
             .any(|held| held.id == creature && held.alive && held.hp > V::Health::zero());
         !super::listen::any_decides::<V>(
             self.walk(),
@@ -407,6 +408,14 @@ impl<'a, V: Rules> Board<'a, V> {
         if !self.can_receive_powers(at) {
             return;
         }
+        if self
+            .live
+            .created
+            .iter()
+            .any(|created| created.fighter.id == at)
+        {
+            return self.land_on_created(at, power, amount, applier, copy);
+        }
         let id = at;
         let Some(at) = self.at(at) else { return };
 
@@ -466,7 +475,8 @@ impl<'a, V: Rules> Board<'a, V> {
                 }
             }
         };
-        let state = self.apply_fresh(at, power, amount, applier, copy);
+        let carrier = self.live.creatures[at].carrier();
+        let state = self.apply_fresh(carrier, power, amount, applier, copy);
         // The hook can take the creature out of the fight, or kill one that
         // stays in it, and `CanReceivePowers` is asked again.
         let Some(found) = self.at(id) else {
@@ -505,6 +515,64 @@ impl<'a, V: Rules> Board<'a, V> {
         }
     }
 
+    /// [`Board::land_copy`] onto a creature made and not yet in the fight.
+    ///
+    /// `PowerCmd.Apply` runs as it does for one in the fight: the hooks
+    /// around the amount, `BeforeApplied`, and `AfterPowerAmountChanged`. The
+    /// instance waits on the creature, where it hears nothing, until the
+    /// creature joins.
+    ///
+    /// # Panics
+    ///
+    /// A power that stacks there, an endless one, or one whose class answers
+    /// `AfterApplied`, which nothing has needed.
+    fn land_on_created(
+        &mut self,
+        id: CombatId,
+        power: V::Power,
+        amount: PowerAmount<V::Number>,
+        applier: Option<CombatId>,
+        copy: Option<V::PowerState>,
+    ) {
+        use sts2_core::PowerTable as _;
+
+        let created = |live: &Live<V>| {
+            live.created
+                .iter()
+                .position(|created| created.fighter.id == id)
+                .expect("the creature was made")
+        };
+        let at = created(self.live);
+        if self.live.created[at]
+            .powers
+            .iter()
+            .any(|held| held.power() == power)
+        {
+            unimplemented!("{power:?} stacking on a creature not yet in the fight");
+        }
+        let PowerAmount::Counted(amount) = amount else {
+            unimplemented!("an endless {power:?} on a creature not yet in the fight");
+        };
+        if power.overrides_virtual(sts2_core::PowerVirtual::AfterApplied) {
+            unimplemented!("{power:?}'s AfterApplied on a creature not yet in the fight");
+        }
+        let (amount, modifiers) = self.received(id, power, amount, applier);
+        let carrier = self.live.created[at].fighter.carrier();
+        let state = self.apply_fresh(carrier, power, PowerAmount::Counted(amount), applier, copy);
+        if amount.is_zero() {
+            return;
+        }
+        let at = created(self.live);
+        self.live.created[at].powers.push(HeldPower::landing(
+            state,
+            PowerAmount::Counted(amount).into(),
+            applier,
+        ));
+        self.live.history.power_received(power, applier);
+        self.power_received(modifiers, power);
+        self.amount_changed(id, power, amount, applier);
+    }
+
     /// `Hook.ModifyPowerAmountReceived` and the hooks `PowerCmd` asks around
     /// it, before `amount` of `power` lands on `target`.
     ///
@@ -536,8 +604,9 @@ impl<'a, V: Rules> Board<'a, V> {
                 .live
                 .creatures
                 .iter()
+                .chain(self.live.created.iter().map(|created| &created.fighter))
                 .find(|creature| creature.id == target)
-                .expect("a power lands on a creature in the fight")
+                .expect("a power lands on a creature in the fight or made for it")
                 .side;
             let hook = sts2_core::EventHook::PowerAmountChanging {
                 power,
@@ -1342,7 +1411,7 @@ impl<'a, V: Rules> Board<'a, V> {
     /// The instance as `BeforeApplied` left it, which is what attaches.
     fn apply_fresh(
         &mut self,
-        at: usize,
+        carrier: super::live::Carrier<V>,
         power: V::Power,
         amount: PowerAmount<V::Number>,
         applier: Option<CombatId>,
@@ -1357,7 +1426,6 @@ impl<'a, V: Rules> Board<'a, V> {
         // about to have.
         let mut state =
             copy.unwrap_or_else(|| <V::PowerState as sts2_core::PowerModel<V>>::new(power));
-        let carrier = self.live.creatures[at].carrier();
         let fight = super::live::Onlookers {
             creatures: &self.live.creatures,
             powers: &self.live.powers,
@@ -5668,6 +5736,56 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .unwrap_or_else(|| unimplemented!("the keywords of no card being played"))
             .face
             .has_keyword(keyword)
+    }
+
+    fn create_monster(&mut self, monster: V::Monster) -> CombatId {
+        let (id, hp) = super::monster::create::<V>(self.live, monster, self.rngs.niche);
+        self.live.created.push(super::live::Created {
+            fighter: Fighter {
+                id,
+                model: Some(sts2_core::ModelId::Monster(monster)),
+                side: <V::CombatSide as SideKinds>::ENEMY,
+                hp,
+                max_hp: hp,
+                block: V::Number::zero(),
+                alive: true,
+                next_move: None,
+                owner: None,
+            },
+            monster,
+            powers: Vec::new(),
+        });
+        id
+    }
+
+    fn add_created(&mut self, created: CombatId, position: usize) {
+        let at = self
+            .live
+            .created
+            .iter()
+            .position(|held| held.fighter.id == created)
+            .unwrap_or_else(|| panic!("{created:?} was never made"));
+        let super::live::Created {
+            fighter,
+            monster,
+            powers,
+        } = self.live.created.remove(at);
+        super::monster::place::<V>(
+            self.live,
+            monster,
+            None,
+            None,
+            sts2_core::MonsterModel::new(monster),
+            position,
+            created,
+            fighter.hp,
+        );
+        for held in powers {
+            self.live.powers.push(created, held);
+        }
+        self.arrived(created, monster);
+        self.roll_joined(created);
+        self.enemy_added(created);
     }
 
     fn summon(&mut self, monster: V::Monster, position: usize) -> CombatId {
