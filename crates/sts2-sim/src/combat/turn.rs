@@ -1254,6 +1254,12 @@ fn before_turn_end<V: Rules>(
         .and_then(|walking| walking.next(live, relics))
     {
         match (listener, effect) {
+            // `CreatureCmd.Heal` on the creature carrying the power.
+            (Listener::Power { owner, .. }, sts2_core::HookEffect::Heal(amount)) => {
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                sts2_core::Fight::heal(&mut board, owner, amount);
+            }
             (Listener::Power { owner, .. }, sts2_core::HookEffect::GainBlock(amount)) => {
                 super::board::gain_unpowered_block::<V>(
                     live,
@@ -3727,6 +3733,18 @@ fn walk_turn_end<V: Rules>(
                     sts2_core::HookEffect::Escape => TurnEndAsk::Escape(owner),
                     sts2_core::HookEffect::EvokeLast(count) => TurnEndAsk::EvokeLast(count),
                     sts2_core::HookEffect::ClearAffliction(to) => TurnEndAsk::ClearAffliction(to),
+                    // `DoomPower.DoomKill`, from the first doomed creature on
+                    // the owner's side alone.
+                    sts2_core::HookEffect::DoomKill => {
+                        let sts2_core::EventHook::SideTurnEnd { side, .. } = hook else {
+                            unimplemented!("{power:?} killing the doomed at {hook:?}")
+                        };
+                        let doomed = doomed::<V>(live, side);
+                        if doomed.first() != Some(&owner) {
+                            continue;
+                        }
+                        TurnEndAsk::DoomKill(doomed)
+                    }
                     other => unimplemented!("a power asking for {other:?} as a turn ends"),
                 },
                 listener => unimplemented!("{listener:?} asking for {effect:?} as a turn ends"),
@@ -3849,6 +3867,8 @@ enum TurnEndAsk<V: Rules> {
     EvokeLast(V::Number),
     /// `CardCmd.ClearAffliction` on the fight's cards.
     ClearAffliction(sts2_core::Writing<V>),
+    /// `DoomPower.DoomKill` of these creatures.
+    DoomKill(SmallVec<[CombatId; CREATURES]>),
     /// What the relic in a slot asked for, carried out for the player.
     Relic(u8, sts2_core::HookEffect<V>),
 }
@@ -3889,6 +3909,7 @@ fn applied<V: Rules>(
             TurnEndAsk::ClearAffliction(to) => {
                 board.write_cards([sts2_core::HookEffect::ClearAffliction(to)]);
             }
+            TurnEndAsk::DoomKill(doomed) => board.doom_kill(&doomed),
         }
         if let Some(ended) = board.ended() {
             return Some(ended);

@@ -5633,6 +5633,23 @@ pub(crate) fn event_hook<V: crate::Build>(
             unimplemented!("an endless Regen")
         }
         (__c0, _, EventHook::SideTurnEnd { .. }) if __c0 == V::Power::REGEN_POWER => None,
+        // v0.111.0's `RegenPower.BeforeSideTurnEndEarly`, which does the same
+        // earlier in the turn's end. Each build's class overrides one of the
+        // two, so it hears only that one.
+        (__c0, PowerAmount::Counted(amount), EventHook::BeforeSideTurnEndEarly { side, .. })
+            if __c0 == V::Power::REGEN_POWER && (side == owner) =>
+        {
+            asked.extend([HookEffect::Heal(amount), HookEffect::Decrement]);
+            return;
+        }
+        (__c0, PowerAmount::Endless, EventHook::BeforeSideTurnEndEarly { side, .. })
+            if __c0 == V::Power::REGEN_POWER && (side == owner) =>
+        {
+            unimplemented!("an endless Regen")
+        }
+        (__c0, _, EventHook::BeforeSideTurnEndEarly { .. }) if __c0 == V::Power::REGEN_POWER => {
+            None
+        }
         // `RitualPower.AfterSideTurnEnd`: its stack of Strength as its
         // owner's side ends a turn. A monster's skips the turn it was applied
         // in, through `AfterApplied`.
@@ -5697,9 +5714,23 @@ pub(crate) fn event_hook<V: crate::Build>(
         (__c0, _, EventHook::BeforeSideTurnStart { .. }) if __c0 == V::Power::AGGRESSION_POWER => {
             None
         }
-        // `DoomPower.BeforeSideTurnEnd`, for its owner's own side.
+        // `DoomPower.BeforeSideTurnEnd`, for its owner's own side. A class
+        // that also overrides `AfterSideTurnEnd`, as v0.111.0's does, leaves
+        // the player's side to that.
         (__c0, _, EventHook::BeforeSideTurnEnd { side, .. }) if __c0 == V::Power::DOOM_POWER => {
-            match side == owner {
+            use sts2_core::PowerTable as _;
+            let after = power
+                .overrides()
+                .contains(sts2_core::ModelHook::AfterSideTurnEnd);
+            match side == owner && !(after && side == CombatSide::Player) {
+                true => Some(HookEffect::DoomKill),
+                false => None,
+            }
+        }
+        // v0.111.0's `DoomPower.AfterSideTurnEnd`, for its owner's own side
+        // when that is not the enemies'.
+        (__c0, _, EventHook::SideTurnEnd { side, .. }) if __c0 == V::Power::DOOM_POWER => {
+            match side == owner && side != CombatSide::Enemy {
                 true => Some(HookEffect::DoomKill),
                 false => None,
             }
