@@ -70,18 +70,16 @@ a port that starts from the other build's code. A move can shift what
 the compiler inlines. The relics' and the cards' decision dispatchers
 stay out of line, since the walk inlining them cost 3.9% and 3.4%.
 
-The simulator follows 851,905 of the 1,321,928 recorded positions, 64%,
-and 615 of 1,500 runs whole. A run that panics counts the positions
+The simulator follows 858,738 of the 1,321,928 recorded positions, 64%,
+and 627 of 1,500 runs whole. A run that panics counts the positions
 before its panic. `follow_run <file> <index> --diff <dir>` plays a run
 on the game beside the simulator and names the sections where they first
 differ, which a split with no panic needs. The commonest first splits:
 
-- Positions that part with no panic. 55 part at the end of a turn
-  against Axebots, and 38 at a travel. 39 part at a play of Forgotten
+- Positions that part with no panic, which every common split now is. 58
+  part at the end of a turn against Axebots, and 38 at a travel. 39 part at a play of Forgotten
   Ritual, and 32 at Tezcatara's Toy Box. Some after a travel open a fight where the game
   plays and exhausts the hand, and the simulator asks for one card.
-- Diamond Diadem and Outbreak changed, and are v0.111.0's own,
-  unported.
 - Distinguished Cape adds two curses where it took nine maximum health,
   Sere Talon's curses moved, and Inky lost its damage. Each reads a
   number v0.111.0 lacks, so its shared port holds v0.107.1's.
