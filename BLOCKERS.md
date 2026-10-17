@@ -70,17 +70,16 @@ a port that starts from the other build's code. A move can shift what
 the compiler inlines. The relics' and the cards' decision dispatchers
 stay out of line, since the walk inlining them cost 3.9% and 3.4%.
 
-The simulator follows 345,683 of the 1,340,195 recorded positions, 25%,
-and 82 of 1,500 runs whole. A run that panics counts the positions
+The simulator follows 393,010 of the 1,340,195 recorded positions, 29%,
+and 102 of 1,500 runs whole. A run that panics counts the positions
 before its panic. `follow_run <file> <index> --diff <dir>` plays a run
 on the game beside the simulator and names the sections where they first
 differ, which a split with no panic needs. The commonest first splits:
 
-- 250 at Tunneler's Bite, whose move is unported here.
-- End turns that part with no panic, against Ovicopter, Gremlin Merc and
-  the Knowledge Demon. A shared rule there answers as v0.107.1's game
+- End turns that part with no panic: 200 against Ovicopter, 70 against
+  Gremlin Merc and 59 against the Knowledge Demon. A shared rule there answers as v0.107.1's game
   does.
-- 26 after a travel, where the run's position differs with no panic.
+- 31 after a travel, where the run's position differs with no panic.
 - Cards whose generated play is unported here: Thunderclap and
   Deathbringer among them.
 - Ambergris, the potion Neow's Sacrifice gives, and the Ambergris power

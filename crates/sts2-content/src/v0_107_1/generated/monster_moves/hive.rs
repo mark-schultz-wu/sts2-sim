@@ -449,10 +449,7 @@ pub fn perform<F: Fight<V>>(
             });
             fight.apply(block);
         }
-        // `statement`
-        (Monster::Tunneler, MoveId::DizzyMove) => {
-            unimplemented!("what {move_id:?} does when {monster:?} performs it")
-        }
+        (Monster::Tunneler, MoveId::DizzyMove) => {}
         (monster, move_id) => unimplemented!("{monster:?} has no {move_id:?} in the table"),
     }
     None
