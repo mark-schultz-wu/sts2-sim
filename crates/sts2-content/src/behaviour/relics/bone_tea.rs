@@ -29,10 +29,12 @@ impl State {
     }
 }
 
-/// `AfterSideTurnStart`: the opening hand, upgraded once.
+/// The opening hand, upgraded once: in v0.107.1's `AfterSideTurnStart`, and
+/// in v0.111.0's `AfterPlayerTurnStart`. Each build's class overrides one of
+/// the two, so it hears only that one.
 ///
 /// The game returns early for a used-up relic, for a turn after the first, and
-/// for a side turn its owner is not in. Each of those is an arm this does not
+/// for a turn that is not its owner's. Each of those is an arm this does not
 /// match.
 pub(super) fn event_hook<V: crate::Build>(
     state: &mut State,
@@ -45,6 +47,10 @@ pub(super) fn event_hook<V: crate::Build>(
             turn: 1,
             ..
         } if !state.used_up() => {
+            state.combats_left -= 1;
+            asked.push(HookEffect::UpgradeHand)
+        }
+        EventHook::PlayerTurnStart { turn: 1, .. } if !state.used_up() => {
             state.combats_left -= 1;
             asked.push(HookEffect::UpgradeHand)
         }
