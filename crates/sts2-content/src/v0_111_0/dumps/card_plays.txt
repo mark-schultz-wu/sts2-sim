@@ -452,7 +452,8 @@ card DEADLY_POISON
 play DEADLY_POISON power chosen POISON_POWER var PoisonPower
 upgrade DEADLY_POISON raise PoisonPower 2
 card DEATHBRINGER
-unplayed DEATHBRINGER call PowerCmd.Apply
+play DEATHBRINGER power opponents DOOM_POWER var DoomPower
+play DEATHBRINGER power opponents WEAK_POWER var WeakPower
 upgrade DEATHBRINGER raise DoomPower 5
 card DEATHS_DOOR
 unplayed DEATHS_DOOR for
@@ -1066,7 +1067,9 @@ card METAMORPHOSIS
 unplayed METAMORPHOSIS call CardFactory.GetForCombat
 upgrade METAMORPHOSIS raise Cards 2
 card METEOR_SHOWER
-unplayed METEOR_SHOWER call PowerCmd.Apply
+play METEOR_SHOWER attack opponents Damage Move number 1
+play METEOR_SHOWER power opponents WEAK_POWER var WeakPower
+play METEOR_SHOWER power opponents VULNERABLE_POWER var VulnerablePower
 upgrade METEOR_SHOWER raise Damage 7
 card METEOR_STRIKE
 unplayed METEOR_STRIKE for
@@ -1767,7 +1770,8 @@ card THUNDER
 play THUNDER power self THUNDER_POWER var ThunderPower
 upgrade THUNDER raise ThunderPower 3
 card THUNDERCLAP
-unplayed THUNDERCLAP call PowerCmd.Apply
+play THUNDERCLAP attack opponents Damage Move number 1
+play THUNDERCLAP power opponents VULNERABLE_POWER var VulnerablePower
 upgrade THUNDERCLAP raise Damage 3
 card TIMES_UP
 play TIMES_UP attack chosen CalculatedDamage Move number 1

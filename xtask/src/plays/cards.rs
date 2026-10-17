@@ -348,7 +348,10 @@ impl Card<'_> {
         match spell(toks).as_str() {
             "cardPlay.Target" => Some(Target::Chosen),
             "base.Owner.Creature" => Some(Target::Actor),
-            "base.CombatState.HittableEnemies" => Some(Target::Opponents),
+            // `?.` changes nothing in a play, which has a fight to stand in.
+            "base.CombatState.HittableEnemies" | "base.CombatState?.HittableEnemies" => {
+                Some(Target::Opponents)
+            }
             local if locals.held.as_deref() == Some(local) => Some(Target::Held),
             _ => None,
         }
@@ -367,7 +370,11 @@ fn holds(stmt: &Stmt) -> Option<String> {
         return None;
     }
     let value = &toks[assign + 1..toks.len() - 1];
-    (spell(value) == "base.CombatState.HittableEnemies").then_some(())?;
+    matches!(
+        spell(value).as_str(),
+        "base.CombatState.HittableEnemies" | "base.CombatState?.HittableEnemies"
+    )
+    .then_some(())?;
     toks[assign - 1].ident().map(String::from)
 }
 
