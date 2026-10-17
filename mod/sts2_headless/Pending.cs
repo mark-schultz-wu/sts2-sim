@@ -990,6 +990,12 @@ internal sealed class HeadlessCardSelector : ICardSelector
 {
     public Task<IEnumerable<CardModel>> GetSelectedCards(IEnumerable<CardModel> options, int minSelect, int maxSelect)
     {
+        // A choose-a-card screen asks for one, unless it can be skipped.
+        if (ChooseACardSkip.CanSkip is bool canSkip)
+        {
+            minSelect = canSkip ? 0 : 1;
+            ChooseACardSkip.CanSkip = null;
+        }
         return CardSelection.Ask(options.ToList(), minSelect, maxSelect,
             RunManager.Instance.ActionExecutor.CurrentlyRunningAction?.ToString());
     }
