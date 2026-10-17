@@ -61,6 +61,13 @@ pub struct State {
     line: u8,
 }
 
+impl State {
+    /// Whether the one option offered is `PROCEED`, which wins the run.
+    pub(crate) fn proceeding(&self) -> bool {
+        self.line + 1 >= self.lines
+    }
+}
+
 pub struct TheArchitect;
 
 impl<V: crate::Build> EventBehavior<V> for TheArchitect {
