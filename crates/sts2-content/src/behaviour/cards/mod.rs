@@ -644,6 +644,9 @@ pub enum Resume<V: crate::Build> {
     /// A generated play, from the command after the one that left a
     /// question waiting.
     Generated(V::Card, u8),
+    /// A play of the build's own, from the command after the one that left a
+    /// question waiting.
+    Own(V::Card, u8),
 }
 
 /// The cards a play still has to go through once it waited, in the order
@@ -1187,6 +1190,7 @@ pub(crate) fn resume_play<V: crate::Build, F: Fight<V>>(
         Resume::Generated(card, _) => {
             unreachable!("generated {card:?} waits on a question, not a pick")
         }
+        Resume::Own(card, _) => unreachable!("{card:?} waits on a question, not a pick"),
     }
 }
 
@@ -1221,6 +1225,7 @@ pub(crate) fn resume_waited<V: crate::Build, F: Fight<V>>(
         Resume::Silent(at) => silent::resume_waited::<V, _>(fight, at),
         Resume::Token(at) => token::resume_waited::<V, _>(fight, at),
         Resume::Generated(card, from) => generated_from::<V, _>(card, fight, from),
+        Resume::Own(card, from) => V::own_card_play_from(card, fight, from),
     }
 }
 

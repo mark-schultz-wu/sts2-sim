@@ -434,6 +434,20 @@ pub trait OwnRules: ContentVersion + Sized {
     where
         Self: Build;
 
+    /// The rest of a play of the build's own that waited, from the command
+    /// after the one that left a question waiting.
+    fn own_card_play_from<F: sts2_core::Fight<Self>>(
+        card: Self::Card,
+        fight: &mut F,
+        from: u8,
+    ) -> sts2_core::Played<Self>
+    where
+        Self: Build;
+
+    /// What a power of the build's own lends for a turn and `IsPositive`, for
+    /// a temporary power only the build has, or nothing.
+    fn own_lends(power: Self::Power) -> Option<(Self::Power, bool)>;
+
     /// A number a card of the build's own works out, or nothing for a shared
     /// one.
     fn own_card_calculated<P: sts2_core::Printed<Self> + ?Sized>(

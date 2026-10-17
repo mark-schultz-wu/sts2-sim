@@ -5,7 +5,7 @@ use sts2_core::{Amount, Effect, Fight, Played, Scaling};
 
 use super::super::V0_111_0 as V;
 use super::super::generated::cards::{
-    CardVar, Cards, EventCard, IroncladCard, QuestCard, SilentCard,
+    CardVar, Cards, DefectCard, EventCard, IroncladCard, QuestCard, SilentCard,
 };
 use super::super::generated::powers::Power;
 use crate::generated::runstate::MapPointType;
@@ -32,6 +32,9 @@ pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Option<Played<
         Cards::Ironclad(IroncladCard::ForgottenRitual) => Some(
             crate::behaviour::cards::generated_from::<V, _>(card, fight, 0),
         ),
+        // `Hyperbeam`: its damage to every enemy, then its Focus as a
+        // `HyperbeamFocusDownPower` on its owner.
+        Cards::Defect(DefectCard::Hyperbeam) => Some(on_play_from(card, fight, 0)),
         // `Outbreak`: its Poison onto each enemy that can be hit, from its
         // owner, then `PoisonPower.Trigger` on each that carries Poison.
         Cards::Silent(SilentCard::Outbreak) => {
@@ -116,6 +119,44 @@ fn trigger_poison<F: Fight<V>>(fight: &mut F, creature: sts2_core::CombatId) {
         if alive {
             fight.modify_power_amount(creature, Power::PoisonPower, -1, None);
         }
+    }
+}
+
+/// A play of this build's own from the command at `from`, which is past the
+/// first after a wait.
+pub(crate) fn on_play_from<F: Fight<V>>(card: Cards, fight: &mut F, from: u8) -> Played<V> {
+    match (card, from) {
+        (Cards::Defect(DefectCard::Hyperbeam), 0) => {
+            fight.attack(Scaling::Dynamic, |fight| {
+                let targets = fight.opponents();
+                // One `CreatureCmd.Damage` over them all.
+                fight.damage_command(|fight| {
+                    for target in targets {
+                        let hit = fight.resolve(Effect::Attack {
+                            dealer: fight.actor(),
+                            target,
+                            damage: Amount::Var(CardVar::Damage),
+                            scaling: Scaling::Dynamic,
+                        });
+                        fight.apply(hit);
+                    }
+                });
+            });
+            if fight.waiting() {
+                return Played::Waiting {
+                    at: crate::behaviour::cards::Resume::Own(card, 1).into(),
+                };
+            }
+            on_play_from(card, fight, 1)
+        }
+        (Cards::Defect(DefectCard::Hyperbeam), 1) => {
+            fight.apply_to_actor(
+                Power::HyperbeamFocusDownPower,
+                sts2_core::PowerAmount::Counted(fight.var(CardVar::FocusPower)),
+            );
+            Played::Done
+        }
+        (card, from) => unreachable!("{card:?} has no command {from} of its own"),
     }
 }
 

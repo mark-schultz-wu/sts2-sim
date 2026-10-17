@@ -14,6 +14,10 @@ type Number = i32;
 /// `IsPositive` override. None of them overrides anything else, so
 /// [`temporary`] is the whole of each.
 pub(crate) fn lends<V: crate::Build>(power: V::Power) -> Option<(V::Power, bool)> {
+    // A temporary power only the build has.
+    if let Some(lent) = V::own_lends(power) {
+        return Some(lent);
+    }
     Some(match power {
         __c0 if __c0 == V::Power::COORDINATE_POWER
             || __c0 == V::Power::FEEDING_FRENZY_POWER
