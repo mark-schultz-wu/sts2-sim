@@ -685,6 +685,15 @@ pub(crate) fn event_hook<V: crate::Build>(
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
+    // A shared relic whose rule is the build's own, for a hook it answers
+    // itself.
+    let owned = match state {
+        State::ToyBox(_) => V::own_relic(V::Relic::TOY_BOX),
+        _ => false,
+    };
+    if owned && V::own_shared_relic_event_hook(state, hook, asked).is_some() {
+        return;
+    }
     match state {
         State::AlchemicalCoffer => alchemical_coffer::event_hook::<V>(hook, asked),
         State::Anchor => anchor::event_hook::<V>(hook, asked),

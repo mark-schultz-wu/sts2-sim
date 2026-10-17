@@ -70,15 +70,19 @@ a port that starts from the other build's code. A move can shift what
 the compiler inlines. The relics' and the cards' decision dispatchers
 stay out of line, since the walk inlining them cost 3.9% and 3.4%.
 
-The simulator follows 897,398 of the 1,321,928 recorded positions, 67%,
-and 754 of 1,500 runs whole. A run that panics counts the positions
+The simulator follows 930,252 of the 1,321,928 recorded positions, 70%,
+and 803 of 1,500 runs whole. A run that panics counts the positions
 before its panic. `follow_run <file> <index> --diff <dir>` plays a run
 on the game beside the simulator and names the sections where they first
 differ, which a split with no panic needs. The commonest first splits:
 
-- Positions that part with no panic, which every common split now is. 41
-  part at a play of Forgotten Ritual, and 38 at a travel. 32 part at
-  Tezcatara's Toy Box, and 30 at a play of Hyperbeam. Some after a travel open a fight where the game
+- Positions that part with no panic, which every common split now is. 40
+  part at a travel, and 30 at a play of Haze. 28 part at a play of
+  Expertise, and 25 at Tracking.
+- Hyperbeam, 30 runs. v0.111.0's takes its Focus as a
+  `HyperbeamFocusDownPower`, a `TemporaryFocusPower` only v0.111.0 has,
+  which `lends` cannot name. Its play waits on its attack, and the shared
+  resume applies v0.107.1's Focus. Some after a travel open a fight where the game
   plays and exhausts the hand, and the simulator asks for one card.
 - Distinguished Cape adds two curses where it took nine maximum health,
   Sere Talon's curses moved, and Inky lost its damage. Each reads a

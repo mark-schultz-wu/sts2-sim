@@ -26,6 +26,12 @@ pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Option<Played<
             fight.apply(block);
             Some(Played::Done)
         }
+        // `ForgottenRitual`: its energy, every play. v0.107.1's waited on a
+        // card exhausted that turn, which the shared port reads, so this build
+        // plays its generated script.
+        Cards::Ironclad(IroncladCard::ForgottenRitual) => Some(
+            crate::behaviour::cards::generated_from::<V, _>(card, fight, 0),
+        ),
         // `Outbreak`: its Poison onto each enemy that can be hit, from its
         // owner, then `PoisonPower.Trigger` on each that carries Poison.
         Cards::Silent(SilentCard::Outbreak) => {
