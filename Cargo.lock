@@ -1921,6 +1921,7 @@ dependencies = [
  "sts2-content-wire",
  "sts2-core",
  "sts2-headless",
+ "sts2-sim",
  "thiserror 2.0.20",
 ]
 
