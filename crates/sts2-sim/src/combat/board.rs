@@ -3958,7 +3958,12 @@ impl<V: Rules> Board<'_, V> {
             .iter()
             .rposition(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER)
             .map_or(0, |last| last + 1);
-        let initial = V::monster_hp_bounds(monster, self.ascension).max();
+        let initial = V::monster_hp_bounds(
+            monster,
+            &sts2_core::MonsterModel::new(monster),
+            self.ascension,
+        )
+        .max();
         let player = self.live.player().id;
         self.live.creatures.insert(
             at,
@@ -5739,7 +5744,8 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn create_monster(&mut self, monster: V::Monster) -> CombatId {
-        let (id, hp) = super::monster::create::<V>(self.live, monster, self.rngs.niche);
+        let model = sts2_core::MonsterModel::new(monster);
+        let (id, hp) = super::monster::create::<V>(self.live, monster, &model, self.rngs.niche);
         self.live.created.push(super::live::Created {
             fighter: Fighter {
                 id,

@@ -556,6 +556,16 @@ pub trait OwnRules: ContentVersion + Sized {
     where
         Self: Build;
 
+    /// `MinInitialHp` and `MaxInitialHp` for a monster whose build reads its
+    /// model for them, or nothing for one whose row holds them.
+    fn own_monster_hp_bounds(
+        monster: Self::Monster,
+        model: &crate::behaviour::monsters::Model<Self>,
+        ascension: crate::generated::ascension::AscensionLevel,
+    ) -> Option<sts2_core::rng::Interval<i32>>
+    where
+        Self: Build;
+
     /// What a potion of the build's own asks of the run, or nothing for a
     /// shared one.
     fn own_potion_use_on_run(
@@ -1063,9 +1073,10 @@ macro_rules! rules {
 
                 fn monster_hp_bounds(
                     monster: Self::Monster,
+                    model: &Self::MonsterState,
                     ascension: Self::AscensionLevel,
                 ) -> sts2_core::rng::Interval<Self::Health> {
-                    crate::behaviour::rules::monster_hp_bounds::<Self>(monster, ascension)
+                    crate::behaviour::rules::monster_hp_bounds::<Self>(monster, model, ascension)
                 }
 
                 fn roll_monster_move<
