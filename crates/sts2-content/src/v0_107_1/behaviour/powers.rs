@@ -103,3 +103,14 @@ pub(crate) fn own_power_event_hook(
         _ => return None,
     })
 }
+
+/// A yes-or-no hook for a power of this build's own, which none answers.
+pub(crate) fn own_power_decide_hook(
+    _power: Power,
+    _amount: PowerAmount<Number>,
+    _held: Held<'_, V>,
+    _state: &State<V>,
+    _hook: sts2_core::DecisionHook<V>,
+) -> Option<sts2_core::HookResponse<bool>> {
+    None
+}

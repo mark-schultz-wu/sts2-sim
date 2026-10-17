@@ -50,8 +50,8 @@ pub(crate) fn own_power_death<F: sts2_core::Fight<V>>(
 }
 
 /// Whether `power`'s rule is this build's own.
-pub(crate) fn own_power(_power: Power) -> bool {
-    false
+pub(crate) fn own_power(power: Power) -> bool {
+    matches!(power, Power::AmbergrisPower)
 }
 
 /// The state a power of this build's own starts with.
@@ -74,11 +74,40 @@ pub(crate) fn own_power_modify_hook(
 /// `EventHook` for a power of this build's own, or nothing for a hook the
 /// shared powers answer for it.
 pub(crate) fn own_power_event_hook(
-    _power: Power,
+    power: Power,
     _amount: PowerAmount<Number>,
     _held: Held<'_, V>,
     _state: &mut State<V>,
-    _hook: EventHook<V>,
+    hook: EventHook<V>,
 ) -> Option<Option<HookEffect<V>>> {
-    None
+    match (power, hook) {
+        // `AmbergrisPower.AfterTakingExtraTurn`: one off, for its owner's
+        // turn. A fight here has one player, whose turn it is.
+        (Power::AmbergrisPower, EventHook::TakingExtraTurn) => Some(Some(HookEffect::Decrement)),
+        _ => None,
+    }
+}
+
+/// A yes-or-no hook for a power of this build's own, or nothing for a hook
+/// the shared powers answer for it.
+pub(crate) fn own_power_decide_hook(
+    power: Power,
+    amount: PowerAmount<Number>,
+    _held: Held<'_, V>,
+    _state: &State<V>,
+    hook: sts2_core::DecisionHook<V>,
+) -> Option<sts2_core::HookResponse<bool>> {
+    match (power, amount, hook) {
+        // `AmbergrisPower.ShouldTakeExtraTurn`: yes while it has a stack, for
+        // its owner. A fight here has one player.
+        (
+            Power::AmbergrisPower,
+            PowerAmount::Counted(amount),
+            sts2_core::DecisionHook::ShouldTakeExtraTurn { .. },
+        ) => Some(sts2_core::HookResponse::Decision(amount > 0)),
+        (Power::AmbergrisPower, PowerAmount::Endless, _) => {
+            unimplemented!("an endless Ambergris")
+        }
+        _ => None,
+    }
 }

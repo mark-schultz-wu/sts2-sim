@@ -9,6 +9,7 @@
 
 pub(crate) mod cards;
 pub mod events;
+pub(crate) mod potions;
 pub(crate) mod powers;
 pub(crate) mod relics;
 
@@ -217,5 +218,29 @@ impl crate::build::OwnRules for V {
         hook: sts2_core::EventHook<V>,
     ) -> Option<Option<sts2_core::HookEffect<V>>> {
         powers::own_power_event_hook(power, amount, held, state, hook)
+    }
+    fn own_power_decide_hook(
+        power: <V as sts2_core::ContentVersion>::Power,
+        amount: sts2_core::PowerAmount<i32>,
+        held: crate::behaviour::powers::Held<'_, V>,
+        state: &crate::behaviour::powers::State<V>,
+        hook: sts2_core::DecisionHook<V>,
+    ) -> Option<sts2_core::HookResponse<bool>> {
+        powers::own_power_decide_hook(power, amount, held, state, hook)
+    }
+
+    fn own_potion_use<F: sts2_core::Fight<V>>(
+        potion: <V as sts2_core::ContentVersion>::Potion,
+        fight: &mut F,
+    ) -> Option<sts2_core::Played<V>> {
+        potions::own_potion_use(potion, fight)
+    }
+
+    fn own_potion_use_on_run(
+        potion: <V as sts2_core::ContentVersion>::Potion,
+        run: &impl sts2_core::EventView<V>,
+        in_fight: bool,
+    ) -> Option<sts2_core::HookEffects<V>> {
+        potions::own_potion_use_on_run(potion, run, in_fight)
     }
 }

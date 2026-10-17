@@ -79,6 +79,10 @@ pub(crate) fn event_hook<V: crate::Build>(
 ///
 /// A potion from a pool nobody has ported, and a potion its own pool has not.
 pub(crate) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mut F) -> Played<V> {
+    // A potion whose rule is the build's own.
+    if let Some(played) = V::own_potion_use(potion, fight) {
+        return played;
+    }
     match potion.pool() {
         PotionPool::Shared => shared::on_use::<V, _>(potion, fight),
         PotionPool::Silent => silent::on_use::<V, _>(potion, fight),
@@ -104,6 +108,10 @@ pub(crate) fn on_use_on_run<V: crate::Build>(
 ) -> sts2_core::HookEffects<V> {
     use sts2_core::RunStreamKinds as _;
 
+    // A potion whose rule is the build's own.
+    if let Some(effects) = V::own_potion_use_on_run(potion, run, in_fight) {
+        return effects;
+    }
     match (potion, in_fight) {
         // `CreateRandomPotionOutOfCombat` off `CombatPotionGeneration` and
         // `TryToProcure`, while the belt has an open slot.

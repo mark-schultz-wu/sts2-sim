@@ -534,6 +534,35 @@ pub trait OwnRules: ContentVersion + Sized {
     ) -> Option<Option<sts2_core::HookEffect<Self>>>
     where
         Self: Build;
+
+    /// A yes-or-no hook for a power of the build's own, or nothing for a
+    /// hook the shared powers answer for it.
+    fn own_power_decide_hook(
+        power: Self::Power,
+        amount: sts2_core::PowerAmount<i32>,
+        held: crate::behaviour::powers::Held<'_, Self>,
+        state: &crate::behaviour::powers::State<Self>,
+        hook: sts2_core::DecisionHook<Self>,
+    ) -> Option<sts2_core::HookResponse<bool>>
+    where
+        Self: Build;
+
+    /// What a potion of the build's own does when it is drunk in a fight, or
+    /// nothing for a shared one.
+    fn own_potion_use<F: sts2_core::Fight<Self>>(
+        potion: Self::Potion,
+        fight: &mut F,
+    ) -> Option<sts2_core::Played<Self>>
+    where
+        Self: Build;
+
+    /// What a potion of the build's own asks of the run, or nothing for a
+    /// shared one.
+    fn own_potion_use_on_run(
+        potion: Self::Potion,
+        run: &impl sts2_core::EventView<Self>,
+        in_fight: bool,
+    ) -> Option<sts2_core::HookEffects<Self>>;
 }
 
 /// A build the shared behaviour runs in: its content, and its rules, which

@@ -231,8 +231,13 @@ pub(super) fn end_from_flush<V: Rules>(
         next.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::NONE;
         next.switch_side(<V::CombatSide as SideKinds>::PLAYER);
         next.turn = next.turn + num_traits::one();
+        // `PowerCmd.Decrement` of a power asking runs inside the walk.
         let taking = sts2_core::EventHook::TakingExtraTurn;
-        if let Some((listener, effect)) = listen::notify::<V>(next, relics, taking).first() {
+        let mut walking = listen::Walking::begin::<listen::Checked>(next, relics, taking);
+        if let Some((listener, effect)) = walking
+            .as_mut()
+            .and_then(|walking| walking.next(next, relics))
+        {
             unimplemented!("{listener:?} asking for {effect:?} as an extra turn is taken");
         }
         return start_player_turn(
