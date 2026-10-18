@@ -9,6 +9,27 @@ use crate::combat;
 use crate::combat::Error;
 
 impl<V: Rules> State<V> {
+    /// What a pushed selector answers, one question at a time, until the
+    /// fight asks nothing it answers. The player never sees those.
+    fn selector_answered(
+        &mut self,
+        mut ended: Option<combat::Ended>,
+    ) -> Result<Option<combat::Ended>, Error> {
+        while ended.is_none() {
+            let Some(fighting) = self.fighting() else {
+                break;
+            };
+            let Some(picks) = combat::selector_picks(fighting.live) else {
+                break;
+            };
+            ended = match combat::answer(fighting, picks)? {
+                None => self.turn_ended_by_play()?,
+                ended => ended,
+            };
+        }
+        Ok(ended)
+    }
+
     /// Answer the selection on which a card play stopped.
     pub(super) fn answer_fight(&mut self, answer: &Answer) -> Result<Decided, Error> {
         let Answer::Cards(chosen) = *answer else {
@@ -194,6 +215,9 @@ impl<V: Rules> State<V> {
     /// handed back.
     #[tracing::instrument(level = "trace", skip_all)]
     pub(super) fn settle(&mut self, ended: Option<combat::Ended>, since: usize) -> Decided {
+        let ended = self
+            .selector_answered(ended)
+            .unwrap_or_else(|error| unimplemented!("a pushed selector's answer failing: {error}"));
         let ended = ended.or_else(|| self.fighting().and_then(combat::check_win_condition));
         self.asked_by_fight();
         self.forget_detached();

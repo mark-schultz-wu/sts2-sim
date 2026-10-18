@@ -2146,6 +2146,13 @@ pub(crate) fn decide_hook<V: crate::Build>(
         return response;
     }
     match (power, hook) {
+        // v0.111.0's `WellLaidPlansPower.ShouldFlush`: no for its owner, who
+        // keeps the hand. A fight here has one player. v0.107.1's picks cards
+        // to retain in `BeforeFlushLate` instead, and overrides no
+        // `ShouldFlush`.
+        (__c0, DecisionHook::ShouldFlush { .. }) if __c0 == V::Power::WELL_LAID_PLANS_POWER => {
+            HookResponse::Decision(false)
+        }
         // `RingingPower.ShouldPlay`: a card with Ringing waits while its owner
         // has started a play this turn. A fight here has one player, whose
         // cards are its holder's.

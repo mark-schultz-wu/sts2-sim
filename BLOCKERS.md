@@ -70,20 +70,20 @@ a port that starts from the other build's code. A move can shift what
 the compiler inlines. The relics' and the cards' decision dispatchers
 stay out of line, since the walk inlining them cost 3.9% and 3.4%.
 
-The simulator follows 942,137 of the 1,322,464 recorded positions, 71%,
-and 825 of 1,500 runs whole. A run that panics counts the positions
+The simulator follows 980,363 of the 1,322,464 recorded positions, 74%,
+and 882 of 1,500 runs whole. A run that panics counts the positions
 before its panic. `follow_run <file> <index> --diff <dir>` plays a run
 on the game beside the simulator and names the sections where they first
 differ, which a split with no panic needs. The commonest first splits:
 
-- Positions that part with no panic, which every common split now is. 33
-  part at a travel, and 30 at a play of Haze. 28 part at a play of
-  Expertise, and 25 at Tracking.
+- Positions that part with no panic, which every common split now is. 31
+  part at a play of Haze, 30 at Expertise and 26 at Tracking. 25 part
+  at a play of Eidolon, and 23 at the end of a turn against the Mecha
+  Knight.
 - Misery changed in v0.111.0. It adds a temporary power's amount to the
   power it lends before it copies them, and no power has
-  `IgnoreNextInstance` now. The shared port is v0.107.1's. Some after a travel open a fight where the game
-  plays and exhausts the hand, and the simulator asks for one card.
-- Distinguished Cape adds two curses where it took nine maximum health,
+  `IgnoreNextInstance` now. The shared port is v0.107.1's.
+- Distinguished Cape (25 runs) adds two curses where it took nine maximum health,
   Sere Talon's curses moved, and Inky lost its damage. Each reads a
   number v0.111.0 lacks, so its shared port holds v0.107.1's.
 

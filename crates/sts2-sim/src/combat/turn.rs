@@ -2842,7 +2842,10 @@ pub(super) fn pre_play_from<V: Rules>(
                         return None;
                     }
                 }
+                // `CardSelectCmd.PushSelector(new VakuuCardSelector())` around
+                // the plays, which answers every question they ask.
                 sts2_core::HookEffect::AutoPlayHand { mut left } => {
+                    live.selector_answers = true;
                     let start = live.turn;
                     while left > 0 && !live.ending_turn && live.turn == start {
                         let Some(first) = first_playable::<V>(live, relics) else {
@@ -2877,6 +2880,7 @@ pub(super) fn pre_play_from<V: Rules>(
                             return None;
                         }
                     }
+                    live.selector_answers = false;
                 }
                 sts2_core::HookEffect::AutoPlayFromDraw(count) => {
                     let count: usize = num_traits::cast(count)

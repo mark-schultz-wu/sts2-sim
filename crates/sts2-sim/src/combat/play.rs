@@ -895,6 +895,32 @@ pub(super) fn play_count<V: Rules, S: LendsCombat>(
     count
 }
 
+/// What a pushed selector picks for the question the fight parked on, or
+/// nothing where none answers it or nothing is asked.
+///
+/// `VakuuCardSelector.GetSelectedCards` takes the first options, as many as
+/// the most the question allows. A choose-a-card screen hands it one at
+/// most.
+pub(crate) fn selector_picks<V: Rules>(live: &Live<V>) -> Option<sts2_core::Picks> {
+    if !live.selector_answers {
+        return None;
+    }
+    let asking = live.asking.as_ref()?;
+    let most = |selection: &sts2_core::Selection| match *selection {
+        sts2_core::Selection::Exactly(most) | sts2_core::Selection::UpTo(most) => most.get(),
+    };
+    let take = match &asking.question {
+        Asked::Pile { pile, selection } => most(selection).min(live.offered(*pile).len()),
+        Asked::Among { cards, selection } => most(selection).min(cards.len()),
+        Asked::Offered { offered, .. } => offered.len().min(1),
+    };
+    let mut picks = sts2_core::Picks::none();
+    for option in 0..take {
+        picks.push(option);
+    }
+    Some(picks)
+}
+
 /// Resume the card play the fight parked on a selection.
 #[tracing::instrument(level = "trace", skip_all)]
 pub(crate) fn answer<V: Rules>(

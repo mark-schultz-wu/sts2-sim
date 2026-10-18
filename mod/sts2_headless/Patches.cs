@@ -523,6 +523,14 @@ internal static class ScreenPathSelections
     [HarmonyPrepare]
     private static bool Prepare() => GameApi.AsksThroughTheScreen;
 
+    /// <summary>
+    /// Whether a selector other than ours stands on top, which the game's own
+    /// body asks and nothing else. <c>WhisperingEarring</c> pushes a
+    /// <c>VakuuCardSelector</c> while it plays the hand, and the player sees
+    /// none of what it answers.
+    /// </summary>
+    private static bool SelectorPushed => CardSelectCmd.Selector is not HeadlessCardSelector;
+
     [HarmonyPrefix]
     [HarmonyPatch(nameof(CardSelectCmd.FromHand))]
     private static bool FromHand(
@@ -532,6 +540,10 @@ internal static class ScreenPathSelections
         Func<CardModel, bool>? filter,
         ref Task<IEnumerable<CardModel>> __result)
     {
+        if (SelectorPushed)
+        {
+            return true;
+        }
         __result = FromHandAsked(context, player, prefs, filter);
         return false;
     }
@@ -548,6 +560,10 @@ internal static class ScreenPathSelections
         Func<CardModel, bool> filter,
         ref Task<IEnumerable<CardModel>> __result)
     {
+        if (SelectorPushed)
+        {
+            return true;
+        }
         __result = FromCombatPileAsked(context, pile, player, prefs, filter);
         return false;
     }
@@ -561,6 +577,10 @@ internal static class ScreenPathSelections
         bool canSkip,
         ref Task<CardModel?> __result)
     {
+        if (SelectorPushed)
+        {
+            return true;
+        }
         __result = FromChooseACardScreenAsked(context, cards, player, canSkip);
         return false;
     }
@@ -574,6 +594,10 @@ internal static class ScreenPathSelections
         CardSelectorPrefs prefs,
         ref Task<IEnumerable<CardModel>> __result)
     {
+        if (SelectorPushed)
+        {
+            return true;
+        }
         __result = FromSimpleGridForRewardsAsked(context, cards, player, prefs);
         return false;
     }
@@ -587,6 +611,10 @@ internal static class ScreenPathSelections
         CardSelectorPrefs prefs,
         ref Task<IEnumerable<CardModel>> __result)
     {
+        if (SelectorPushed)
+        {
+            return true;
+        }
         __result = FromSimpleGridAsked(context, cardsIn, player, prefs);
         return false;
     }
@@ -598,6 +626,10 @@ internal static class ScreenPathSelections
         Player player,
         ref Task<CardModel?> __result)
     {
+        if (SelectorPushed)
+        {
+            return true;
+        }
         __result = FromHandForUpgradeAsked(context, player);
         return false;
     }
