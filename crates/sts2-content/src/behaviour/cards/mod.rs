@@ -62,7 +62,7 @@ pub(crate) fn upgrade<V: crate::Build>(card: V::Card) -> &'static [sts2_core::Ch
 /// Where `card` stands now, found again by its id, or nothing where no pile
 /// holds it. A card auto-played more than once moves between its plays, and
 /// `CardCmd.AutoPlay` plays it wherever it is.
-pub(super) fn standing<V: crate::Build, F: Fight<V>>(
+pub(crate) fn standing<V: crate::Build, F: Fight<V>>(
     fight: &F,
     card: sts2_core::CardAt<V>,
 ) -> Option<sts2_core::CardAt<V>> {

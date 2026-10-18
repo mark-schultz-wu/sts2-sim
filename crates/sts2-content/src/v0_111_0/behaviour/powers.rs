@@ -51,7 +51,7 @@ pub(crate) fn own_power_death<F: sts2_core::Fight<V>>(
 
 /// Whether `power`'s rule is this build's own.
 pub(crate) fn own_power(power: Power) -> bool {
-    matches!(power, Power::AmbergrisPower)
+    matches!(power, Power::AmbergrisPower | Power::TrackingPower)
 }
 
 /// The state a power of this build's own starts with.
@@ -62,13 +62,36 @@ pub(crate) fn own_power_state(_power: Power) -> Option<State<V>> {
 /// `ModifyHook` for a power of this build's own, or nothing for a hook the
 /// shared powers answer for it.
 pub(crate) fn own_power_modify_hook(
-    _power: Power,
-    _amount: PowerAmount<Number>,
-    _held: Held<'_, V>,
+    power: Power,
+    amount: PowerAmount<Number>,
+    held: Held<'_, V>,
     _state: &State<V>,
-    _hook: ModifyHook<V>,
+    hook: ModifyHook<V>,
 ) -> Option<Modify<Number>> {
-    None
+    match (power, amount, hook) {
+        // `TrackingPower.ModifyDamageMultiplicative`: one and its amount in
+        // hundredths, on a powered hit from a card by its owner or a pet of
+        // its owner's, on a target carrying Weak.
+        (
+            Power::TrackingPower,
+            PowerAmount::Counted(amount),
+            ModifyHook::DamageMultiplicative {
+                target: Some(target),
+                dealer: Some(dealer),
+                card: Some(_),
+                powered: true,
+            },
+        ) if (dealer == held.holder || held.fight.pet_owner(dealer) == Some(held.holder))
+            && held.fight.power(target, Power::WeakPower).is_some() =>
+        {
+            Some(Modify::Scaled(sts2_core::Fixed::new(100 + amount, 2)))
+        }
+        (Power::TrackingPower, PowerAmount::Endless, ModifyHook::DamageMultiplicative { .. }) => {
+            unimplemented!("an endless Tracking")
+        }
+        (Power::TrackingPower, _, ModifyHook::DamageMultiplicative { .. }) => Some(Modify::Nothing),
+        _ => None,
+    }
 }
 
 /// `EventHook` for a power of this build's own, or nothing for a hook the

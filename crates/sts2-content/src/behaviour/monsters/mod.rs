@@ -428,7 +428,7 @@ fn perform_from<V: crate::Build, F: Fight<V>>(
 /// command takes a `ThrowingPlayerChoiceContext`, which throws on a question.
 /// Each move ported by hand attacks first or last, so none needs a step past
 /// 1. The board panics on a command that runs on past an attack that asked.
-fn attack_first<V: crate::Build, F: Fight<V>>(fight: &mut F, step: u8) -> bool {
+pub(crate) fn attack_first<V: crate::Build, F: Fight<V>>(fight: &mut F, step: u8) -> bool {
     if step == 0 {
         fight.attack_opponents();
         return fight.waiting();

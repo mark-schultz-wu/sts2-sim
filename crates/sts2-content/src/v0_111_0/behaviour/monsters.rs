@@ -11,7 +11,7 @@ use super::super::generated::monsters::{Monster, MoveId};
 pub(crate) fn own_move<F: Fight<V>>(
     monster: Monster,
     move_id: MoveId,
-    _step: u8,
+    step: u8,
     fight: &mut F,
 ) -> Option<Option<u8>> {
     match (monster, move_id) {
@@ -21,6 +21,21 @@ pub(crate) fn own_move<F: Fight<V>>(
             crate::behaviour::monsters::hive::hatch::<V, _>(fight, |fight, min, max| {
                 fight.niche_int(min, max + 1)
             });
+            Some(None)
+        }
+        // `FlamethrowerMove`: its hit, then four Burns into the hand of the
+        // one player. v0.107.1's added the Burns alone.
+        (Monster::MechaKnight, MoveId::FlamethrowerMove) => {
+            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
+                return Some(Some(1));
+            }
+            fight.add_generated_cards(
+                sts2_core::CardIdent::new(super::super::generated::cards::Cards::Status(
+                    super::super::generated::cards::StatusCard::Burn,
+                )),
+                sts2_core::Pile::Hand,
+                4,
+            );
             Some(None)
         }
         _ => None,
