@@ -7441,6 +7441,12 @@ pub trait Engine {
         forced: bool,
         next_float: impl FnOnce() -> f32,
     ) -> (bool, f32);
+
+    /// `CardSelectCmd.FromHand` signals the choice before it lists the hand.
+    /// A turn's setup pauses at the signal, and `AfterSideTurnStart` runs on
+    /// meanwhile, so a card added then is among the choices. A build whose
+    /// `FromHand` lists the hand first says no.
+    fn lists_hand_after_pause() -> bool;
 }
 
 /// The rules of one build, as the simulator asks them.

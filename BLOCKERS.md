@@ -70,17 +70,20 @@ a port that starts from the other build's code. A move can shift what
 the compiler inlines. The relics' and the cards' decision dispatchers
 stay out of line, since the walk inlining them cost 3.9% and 3.4%.
 
-The simulator follows 1,294,363 of the 1,322,464 recorded positions,
-97%, and 1,419 of 1,500 runs whole. A run that panics counts the
+The simulator follows 1,303,576 of the 1,322,464 recorded positions,
+98%, and 1,432 of 1,500 runs whole. A run that panics counts the
 positions before its panic. `follow_run <file> <index> --diff <dir>`
 plays a run on the game beside the simulator and names the sections
 where they first differ, which a split with no panic needs. No split
-now holds more than four runs. Most part at the end of a turn against
-one encounter or another, each its own cause. Besides those:
+holds more than four runs. The open causes `--diff` found:
 
-- At the end of a turn against the Knowledge Demon, the player dies, and
-  the game leaves the turn's phase at `None` where the simulator holds
-  `End`. 4 runs part there, at their last position.
+- Ornamental Fan, Nunchaku and Kusarigama count the attack that ends a
+  fight, where the game does not. 13 runs part there. Each relic and
+  `CardModel.OnPlayWrapper` read as v0.107.1's do, so the game's
+  `IsInProgress` must turn false sooner. Where is not yet found.
+- The player dies in the enemy's turn, and the game leaves the turn's
+  phase at `None` where the simulator holds `End`. 10 runs part there,
+  at their last position.
 - 3 runs panic where Eidolon's auto-play waits on a question with more
   cards to play. The rest of its list needs a resume point that holds
   it.
@@ -93,7 +96,9 @@ one encounter or another, each its own cause. Besides those:
 About 60 of the game's engine files changed too, outside the content
 models: its commands, game actions, entities and runs. An engine rule
 whose code changed goes in `sts2_core::Engine`, which each build
-implements in its own `engine` module. `RollWithBaseOdds` is the first.
+implements in its own `engine` module. It holds `RollWithBaseOdds`,
+`PotionRewardOdds.Roll`, and where `CardSelectCmd.FromHand` lists the
+hand.
 
 ### 3. A walk that shares only who listens
 

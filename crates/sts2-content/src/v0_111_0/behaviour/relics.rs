@@ -78,6 +78,7 @@ pub(crate) fn own_relic(relic: Relic) -> bool {
             | Relic::HandDrill
             | Relic::PollinousCore
             | Relic::LastingCandy
+            | Relic::Regalite
     )
 }
 
@@ -170,6 +171,29 @@ pub(crate) fn own_shared_relic_event_hook(
             if encounter && state.combats_seen % 2 == 1 {
                 asked.push(HookEffect::AddCardRewardOption(sts2_core::CardKind::Power));
             }
+            Some(())
+        }
+        // `Regalite.AfterCardGeneratedForCombat`: its block for the first card
+        // its owner makes each turn. v0.107.1's paid for every card.
+        (State::Regalite(state), EventHook::CardGeneratedForCombat { creator, .. }) => {
+            use crate::vars::RelicVars as _;
+
+            if creator.is_some() && !state.used_this_turn {
+                state.used_this_turn = true;
+                asked.push(HookEffect::GainBlock(Relic::REGALITE_BLOCK));
+            }
+            Some(())
+        }
+        // `BeforeSideTurnStart` on its owner's side, and `AfterCombatEnd`,
+        // clear the turn's use.
+        (State::Regalite(state), EventHook::BeforeSideTurnStart { side, .. }) => {
+            if side == CombatSide::Player {
+                state.used_this_turn = false;
+            }
+            Some(())
+        }
+        (State::Regalite(state), EventHook::CombatEnd { .. }) => {
+            state.used_this_turn = false;
             Some(())
         }
         // `DistinguishedCape` and `SereTalon` traded what they cost. The
