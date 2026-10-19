@@ -22,6 +22,11 @@ impl sts2_core::Engine for V0_107_1 {
         false
     }
 
+    /// Every replay is played, however the one before left the fight.
+    fn replays_stop_once_ending() -> bool {
+        false
+    }
+
     /// The draw comes first, and a forced reward pays whatever it drew, with
     /// the odds moved as for a potion paid.
     fn roll_potion_reward(

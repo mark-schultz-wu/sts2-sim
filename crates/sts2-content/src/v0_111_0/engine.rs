@@ -12,6 +12,12 @@ impl sts2_core::Engine for V0_111_0 {
         true
     }
 
+    /// The loop over a card's plays breaks once the fight is over or
+    /// ending. v0.107.1's played every replay.
+    fn replays_stop_once_ending() -> bool {
+        true
+    }
+
     /// A forced reward pays at once, with no draw, and leaves the odds where
     /// they were. v0.107.1's drew first and moved them.
     fn roll_potion_reward(
