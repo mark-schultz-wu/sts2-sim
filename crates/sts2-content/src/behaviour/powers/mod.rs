@@ -2049,6 +2049,12 @@ pub(crate) fn result_pile<V: crate::Build>(
 ) -> sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)> {
     use sts2_core::HookResponse;
 
+    // A power whose rule is the build's own, for a hook it answers itself.
+    if V::own_power(power)
+        && let Some(result) = V::own_power_result_pile(power, amount, holder, state, hook)
+    {
+        return result;
+    }
     let unchanged = HookResponse::Decision((hook.pile, hook.position));
     match (power, amount) {
         // `FeralPower`: a zero-cost attack its owner plays goes back to the

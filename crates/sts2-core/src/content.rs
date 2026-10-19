@@ -5091,6 +5091,8 @@ pub struct ResultPile<V: ContentVersion> {
     pub card: V::Card,
     /// `ResourceInfo.EnergyValue`, what the play cost.
     pub energy: V::Count,
+    /// `IsDupe`: the copy is a dupe, made to be played once.
+    pub dupe: bool,
     /// Where it goes so far. Nothing for a card that leaves the fight.
     pub pile: Option<crate::Pile>,
     pub position: PilePosition,
@@ -6198,6 +6200,15 @@ pub enum HookEffect<V: ContentVersion> {
     /// the fight the event resumes after, once there is any. An event that
     /// resumes asks it.
     OfferRewardsWithRoomExtras(&'static [CustomReward<V>]),
+    /// `CardCmd.Enchant` by `amount` on `count` deck cards the enchantment
+    /// takes. `TakeRandom` off `stream` picks them: it shuffles those cards,
+    /// in deck order, unstably, and takes the first.
+    EnchantRandomDeckCards {
+        enchantment: V::Enchantment,
+        amount: u8,
+        count: usize,
+        stream: Stream<V>,
+    },
 }
 
 /// One build's relic models, which is what a run holds a relic as.

@@ -70,22 +70,22 @@ a port that starts from the other build's code. A move can shift what
 the compiler inlines. The relics' and the cards' decision dispatchers
 stay out of line, since the walk inlining them cost 3.9% and 3.4%.
 
-The simulator follows 1,046,941 of the 1,322,464 recorded positions,
-79%, and 992 of 1,500 runs whole. A run that panics counts the positions
-before its panic. `follow_run <file> <index> --diff <dir>` plays a run
-on the game beside the simulator and names the sections where they first
-differ, which a split with no panic needs. The commonest first splits:
+The simulator follows 1,124,851 of the 1,322,464 recorded positions,
+85%, and 1,138 of 1,500 runs whole. A run that panics counts the
+positions before its panic. `follow_run <file> <index> --diff <dir>`
+plays a run on the game beside the simulator and names the sections
+where they first differ, which a split with no panic needs. The
+commonest first splits:
 
-- Positions that part with no panic, which nearly every common split
-  now is. 22 part at a play of Blade of Ink and 14 at Claw, whose own
-  code is the same in both builds. 18 part at Beautiful Bracelet, and 15
-  at Kaleidoscope at Neow.
+- 15 part at Kaleidoscope at Neow. `CardRarityOdds.RollWithBaseOdds`
+  changed in v0.111.0. A roll under the rare and uncommon odds added
+  together is uncommon. v0.107.1's held it to the uncommon odds alone. That is the engine, which needs the seam below.
+- 10 part at the Brain Leech's Share Knowledge, and 8 at a play of
+  Compact. 15 runs panic on Juggling Power's `CardPlaying`, and 6 on
+  Hand Drill's `BlockBroken`.
 - Misery changed in v0.111.0. It adds a temporary power's amount to the
   power it lends before it copies them, and no power has
   `IgnoreNextInstance` now. The shared port is v0.107.1's.
-- Distinguished Cape (29 runs) adds two curses where it took nine maximum health,
-  Sere Talon's curses moved, and Inky lost its damage. Each reads a
-  number v0.111.0 lacks, so its shared port holds v0.107.1's.
 
 About 60 of the game's engine files changed too, outside the content
 models: its commands, game actions, entities and runs. `sts2-sim`

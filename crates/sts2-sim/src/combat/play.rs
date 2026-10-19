@@ -725,6 +725,7 @@ fn result_pile<V: Rules, S: LendsCombat>(
                 player,
                 card: played,
                 energy,
+                dupe: card.face.dupe(),
                 pile: result.0,
                 position: result.1,
             };

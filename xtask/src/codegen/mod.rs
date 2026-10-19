@@ -443,14 +443,38 @@ fn overrides(
     }
     let mut overrides: BTreeMap<String, Vec<sts2_core::ModelHook>> = BTreeMap::new();
     for row in hooks.of("implements").filter(|row| row[4] == category) {
-        if let Some(hook) = sts2_core::ModelHook::ALL
-            .into_iter()
-            .find(|hook| hook.name() == row[2])
-        {
+        if let Some(hook) = model_hook(&row[2]) {
             overrides.entry(row[1].clone()).or_default().push(hook);
         }
     }
     Ok(overrides)
+}
+
+/// The hooks a later build renamed, by their new name. Each is raised where
+/// it was, and asks the same of its listeners.
+const RENAMED: [(&str, sts2_core::ModelHook); 2] = [
+    (
+        "ModifyCardPlayResultLocation",
+        sts2_core::ModelHook::ModifyCardPlayResultPileTypeAndPosition,
+    ),
+    (
+        "AfterModifyingCardPlayResultLocation",
+        sts2_core::ModelHook::AfterModifyingCardPlayResultPileOrPosition,
+    ),
+];
+
+/// The hook the dump names `name`, under either its own name or a name a
+/// later build gave it.
+fn model_hook(name: &str) -> Option<sts2_core::ModelHook> {
+    sts2_core::ModelHook::ALL
+        .into_iter()
+        .find(|hook| hook.name() == name)
+        .or_else(|| {
+            RENAMED
+                .into_iter()
+                .find(|(renamed, _)| *renamed == name)
+                .map(|(_, hook)| hook)
+        })
 }
 
 /// `static OVERRIDES`, one entry per id in the order given.
