@@ -416,29 +416,42 @@ than measurement.
 
 ## Sharing behaviour across versions
 
-Not yet built. The mechanism is name resolution rather than macros, because the
-compiler checks it.
+Behaviour is written once, in `sts2_content::behaviour`, generic over the
+build. It mirrors v0.107.1's game code. A rule whose game code changed between
+the builds gets a port of its own, which the build chooses through `OwnRules`.
+Content new in a build is ported there too. Every recorded v0.111.0 run
+follows to its end on these, and `recorded.rs` holds them to
+`recorded-v0.111.0.matched`.
 
-The second build to test against now exists. v0.111.0 moved 19 cards in and 1
-out, 12 powers in and 2 out, and 13 encounters in and 3 out. Its hook surface
-went from 181 to 182, and the two that moved are renames of the same shape. The
-monster set did not move at all.
+What each shared module asks of a build, so a port knows where to go:
 
-Behaviour is written against *unqualified* names (`Power::Vulnerable`,
-`Card::Wound`). Each version module includes it under its own prelude:
+- `BuildContent`: the content traits in `sts2_content::ids`, the shared
+  vocabulary types, and `Lists`, which a `lists!` macro beside each rule writes
+  for the build.
+- `Tables`: the lookups into a row that names content.
+- `sts2_content::vars`: the numbers a relic, power, potion or enchantment
+  prints, as consts on the build's enum. A port reads a number there, and a
+  number one build lacks fails to build for it.
+- `OwnRules`: the build's generated move and play scripts, and its own ports of
+  rules that name content another build lacks. A shared dispatcher asks the
+  build first, and answers itself when the build passes. A shared relic or
+  power whose body differs hands over through a constant-time guard,
+  `own_relic` or `own_power`, and its own hook.
+- The `rules!` macro, where a method that only reads a table forwards to the
+  build's own tables.
+- `sts2_core::Engine`, for an engine rule whose code changed outside the
+  content models, in the game's commands, game actions, entities and runs.
+  Each build implements it in its own `engine` module.
 
-```rust
-// v0_108_0/behaviour/mod.rs
-use super::generated::*;
-include!("../../v0_107_1/behaviour/cards/strike.rs");  // unchanged in 108
-mod bash;                                              // 108 rewrote it
-```
+`cargo xtask generic <file>` rewrites a build's rule to be generic, for a port
+that starts from the other build's code. A move can shift what the compiler
+inlines. The relics' and the cards' decision dispatchers stay out of line,
+since the walk inlining them cost 3.9% and 3.4%.
 
-Sharing is one line, and divergence is a real file. If v108 removed
-`Power::Vulnerable`, the include fails to compile. The reuse is verified, not
-assumed. How far it gets depends on how much behaviour names other content
-items. That is a number to measure against the second dump, not to design around
-now.
+`follow_run <file> <index> --diff <dir>` plays a recorded run on the game
+beside the simulator, and names the sections where they first differ. A
+temporary Harmony patch in the mod that logs a stack trace at the model in
+question finds the rest.
 
 ## How a table is known to be right
 

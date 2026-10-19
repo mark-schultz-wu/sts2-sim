@@ -24,7 +24,7 @@ mod curse;
 mod defect;
 pub(crate) mod event;
 mod ironclad;
-mod necrobinder;
+pub(crate) mod necrobinder;
 mod regent;
 mod silent;
 mod status;
@@ -175,7 +175,7 @@ pub(crate) fn result_pile<V: crate::Build>(
 /// `PowerModel.TypeForCurrentAmount == PowerType.Debuff`, which
 /// [`crate::behaviour::powers::debuff_at`] answers. An endless power's amount is the
 /// game's -1.
-pub(super) fn debuff_for_amount<V: crate::Build>(
+pub(crate) fn debuff_for_amount<V: crate::Build>(
     power: V::Power,
     amount: sts2_core::PowerAmount<i32>,
 ) -> bool {

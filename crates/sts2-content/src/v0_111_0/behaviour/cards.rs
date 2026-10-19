@@ -261,6 +261,7 @@ pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Option<Played<
             }
             Some(on_play_from(card, fight, 1, Left::of(&[])))
         }
+        Cards::Necrobinder(NecrobinderCard::Misery) => Some(misery(fight)),
         Cards::Event(EventCard::Abundance) => {
             use sts2_core::{CardKind, Rules as _, RunStreamKinds as _};
 
@@ -417,6 +418,68 @@ pub(crate) fn on_drew_from<F: Fight<V>>(
         }
         (card, from) => on_play_from(card, fight, from, Left::of(&[])),
     }
+}
+
+/// `Misery`: the target's debuffs as they stand, each temporary power's
+/// amount added onto the debuff it lends. Then its damage to the target.
+/// Each other hittable enemy takes each amount that is not zero, from the
+/// debuff's applier. `PowerCmd.ModifyAmount` puts it onto an instance it
+/// stacks with, and `PowerCmd.Apply` puts on a copy otherwise.
+fn misery<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use super::super::generated::powers::PowerInstanceType;
+    use sts2_core::{PowerAmount, Table as _};
+
+    let target = fight.target();
+    let debuffs: Vec<_> = fight
+        .powers_on(target)
+        .into_iter()
+        .filter(|held| crate::behaviour::cards::debuff_for_amount::<V>(held.power, held.amount))
+        .collect();
+    let mut amounts: Vec<Number> = debuffs
+        .iter()
+        .map(|held| match held.amount {
+            PowerAmount::Counted(amount) => amount,
+            PowerAmount::Endless => unimplemented!("Misery copying an endless {:?}", held.power),
+        })
+        .collect();
+    for (at, held) in debuffs.iter().enumerate() {
+        if let Some((lent, _)) = crate::behaviour::powers::lends::<V>(held.power)
+            && let Some(onto) = debuffs.iter().position(|other| other.power == lent)
+        {
+            amounts[onto] += amounts[at];
+        }
+    }
+    crate::behaviour::cards::necrobinder::strike::<V, _>(fight);
+    for enemy in fight.hittable_opponents() {
+        if enemy == target {
+            continue;
+        }
+        for (held, &amount) in debuffs.iter().zip(&amounts) {
+            if amount == 0 {
+                continue;
+            }
+            let power = held.power;
+            // `ClonePreservingMutability` builds its internal data anew,
+            // which is all a noted play is.
+            if !held.fresh && !crate::behaviour::powers::clone_starts_anew::<V>(power) {
+                unimplemented!("Misery copying {power:?}, whose model carries state");
+            }
+            let stacks = |on: &sts2_core::HeldInstance<V>| match power.data().instance {
+                None => on.power == power,
+                Some(PowerInstanceType::InstancedPerApplier) => {
+                    on.power == power && on.applier == held.applier
+                }
+                Some(PowerInstanceType::Instanced) => false,
+            };
+            if fight.powers_on(enemy).iter().any(stacks) {
+                fight.modify_power_amount(enemy, power, amount, held.applier);
+                continue;
+            }
+            let copy = <crate::behaviour::powers::State<V> as sts2_core::PowerModel<V>>::new(power);
+            fight.apply_power_copy(enemy, copy, PowerAmount::Counted(amount), held.applier);
+        }
+    }
+    Played::Done
 }
 
 /// `Eidolon`'s `CardCmd.AutoPlay` of each of `cards`, in order. Each is
