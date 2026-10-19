@@ -9,7 +9,7 @@ use crate::generated::runstate::CombatSide;
 /// `TurnsSeen`, a saved property, so a fight's end leaves it as it is.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct State {
-    turns_seen: Number,
+    pub(crate) turns_seen: Number,
 }
 
 /// `BeforeSideTurnStart` counts its owner's turns, and `AfterModifyingHandDraw`

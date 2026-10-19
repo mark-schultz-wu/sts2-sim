@@ -763,6 +763,10 @@ pub(crate) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
     hook: sts2_core::EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
+    // A card whose hooks are the build's own, for a hook it answers itself.
+    if V::own_card_hooks(card) && V::own_card_event_hook(card, hook, asked).is_some() {
+        return;
+    }
     // The fight asks only a card whose class overrides the hook.
     match card {
         // `Guilty.AfterCombatEnd` counts on the copy in the deck, and a copy

@@ -67,6 +67,18 @@ impl crate::build::OwnRules for V {
         relics::own_relic_event_hook(state, hook, asked);
     }
 
+    fn own_card_hooks(_card: <V as sts2_core::ContentVersion>::Card) -> bool {
+        false
+    }
+
+    fn own_card_event_hook(
+        _card: <V as sts2_core::ContentVersion>::Card,
+        _hook: sts2_core::EventHook<V>,
+        _asked: &mut sts2_core::HookEffects<V>,
+    ) -> Option<()> {
+        None
+    }
+
     fn own_card_play<F: sts2_core::Fight<V>>(
         card: <V as sts2_core::ContentVersion>::Card,
         fight: &mut F,
@@ -279,6 +291,13 @@ impl crate::build::OwnRules for V {
     fn own_enchantment_modify(
         _enchanted: sts2_core::Enchanted<V>,
         _hook: sts2_core::EnchantHook,
+    ) -> Option<sts2_core::Modify<i32>> {
+        None
+    }
+
+    fn own_shared_relic_modify_hook(
+        _state: &crate::behaviour::relics::State<V>,
+        _hook: sts2_core::ModifyHook<V>,
     ) -> Option<sts2_core::Modify<i32>> {
         None
     }

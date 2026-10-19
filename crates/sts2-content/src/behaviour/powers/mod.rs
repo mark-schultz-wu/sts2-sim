@@ -186,6 +186,10 @@ pub enum State<V: crate::Build> {
         power: V::Power,
         ignore_next: bool,
     },
+    /// v0.111.0's `PaleBlueDotPower`: `alreadyActivatedThisTurn`.
+    PaleBlueDot {
+        activated: bool,
+    },
 }
 
 impl<V: crate::Build> State<V> {
@@ -459,6 +463,7 @@ impl<V: crate::Build> sts2_core::PowerModel<V> for State<V> {
             Self::Noted { power, .. } => *power,
             Self::Monologue { .. } => V::Power::MONOLOGUE_POWER,
             Self::Temporary { power, .. } => *power,
+            Self::PaleBlueDot { .. } => V::Power::PALE_BLUE_DOT_POWER,
         }
     }
 

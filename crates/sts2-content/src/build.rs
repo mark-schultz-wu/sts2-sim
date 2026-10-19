@@ -430,12 +430,36 @@ pub trait OwnRules: ContentVersion + Sized {
     where
         Self: Build;
 
+    /// A shared relic's `ModifyHook`, for a relic [`OwnRules::own_relic`]
+    /// names, or nothing for a hook the shared relics answer for it.
+    fn own_shared_relic_modify_hook(
+        state: &crate::behaviour::relics::State<Self>,
+        hook: sts2_core::ModifyHook<Self>,
+    ) -> Option<sts2_core::Modify<i32>>
+    where
+        Self: Build;
+
     /// A relic's `EventHook`, for a relic whose rule is the build's own.
     fn own_relic_event_hook(
         state: &mut crate::behaviour::relics::State<Self>,
         hook: sts2_core::EventHook<Self>,
         asked: &mut sts2_core::HookEffects<Self>,
     ) where
+        Self: Build;
+
+    /// Whether a shared card's in-fight hooks are the build's own for some
+    /// hook.
+    fn own_card_hooks(card: Self::Card) -> bool;
+
+    /// A card's `EventHook` in a fight, for a card
+    /// [`OwnRules::own_card_hooks`] names, or nothing for a hook the shared
+    /// cards answer for it.
+    fn own_card_event_hook(
+        card: Self::Card,
+        hook: sts2_core::EventHook<Self>,
+        asked: &mut sts2_core::HookEffects<Self>,
+    ) -> Option<()>
+    where
         Self: Build;
 
     /// What a card of the build's own does when it is played, or nothing for

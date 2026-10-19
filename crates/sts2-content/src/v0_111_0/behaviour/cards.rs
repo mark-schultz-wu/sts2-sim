@@ -20,6 +20,43 @@ const EIDOLON: Cards = Cards::Necrobinder(NecrobinderCard::Eidolon);
 /// nowhere.
 const TRACKING: Number = 50;
 
+/// Whether a shared card's in-fight hooks are this build's own.
+pub(crate) fn own_card_hooks(card: Cards) -> bool {
+    matches!(card, Cards::Defect(DefectCard::RocketPunch))
+}
+
+/// A card's `EventHook` in a fight, for one this build ports for itself.
+pub(crate) fn own_card_event_hook(
+    card: Cards,
+    hook: sts2_core::EventHook<V>,
+    asked: &mut sts2_core::HookEffects<V>,
+) -> Option<()> {
+    use sts2_core::Rules as _;
+
+    match (card, hook) {
+        // `RocketPunch.AfterCardGeneratedForCombat`: a Status its owner made
+        // takes one off its cost until it is played. v0.107.1's set the cost
+        // to nothing.
+        (
+            Cards::Defect(DefectCard::RocketPunch),
+            sts2_core::EventHook::CardGeneratedForCombat {
+                card,
+                creator: Some(_),
+                ..
+            },
+        ) => {
+            if V::card_kind(card) == Some(sts2_core::CardKind::Status) {
+                asked.push(sts2_core::HookEffect::ModifySelf {
+                    change: sts2_core::Change::ChangeCost(sts2_core::CostPool::Energy, -1),
+                    lasting: sts2_core::Lasting::UntilPlayed,
+                });
+            }
+            Some(())
+        }
+        _ => None,
+    }
+}
+
 /// What a card of this build's own does when it is played, or nothing for a
 /// shared one.
 pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Option<Played<V>> {

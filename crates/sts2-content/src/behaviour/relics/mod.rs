@@ -692,6 +692,7 @@ pub(crate) fn event_hook<V: crate::Build>(
         State::DistinguishedCape => V::own_relic(V::Relic::DISTINGUISHED_CAPE),
         State::BeautifulBracelet => V::own_relic(V::Relic::BEAUTIFUL_BRACELET),
         State::HandDrill => V::own_relic(V::Relic::HAND_DRILL),
+        State::PollinousCore(_) => V::own_relic(V::Relic::POLLINOUS_CORE),
         State::SereTalon => V::own_relic(V::Relic::SERE_TALON),
         _ => false,
     };
@@ -1110,6 +1111,15 @@ pub(crate) fn modify_hook<V: crate::Build>(
     fight: Option<&dyn sts2_core::FightView<V>>,
     hook: ModifyHook<V>,
 ) -> Modify<Number> {
+    // A shared relic whose rule is the build's own, for a hook it answers
+    // itself.
+    let owned = match state {
+        State::PollinousCore(_) => V::own_relic(V::Relic::POLLINOUS_CORE),
+        _ => false,
+    };
+    if owned && let Some(modify) = V::own_shared_relic_modify_hook(state, hook) {
+        return modify;
+    }
     match state {
         State::UndyingSigil => undying_sigil::modify_hook::<V>(fight, hook),
         State::Pocketwatch(state) => pocketwatch::modify_hook::<V>(state, hook),
