@@ -45,9 +45,8 @@ whose game code changed between the builds gets a port of its own,
 chosen by the build through `OwnRules`. Content new in v0.111.0 is
 ported there. `crates/sts2-golden/tests/recorded-v0.111.0.bin` holds the
 census's runs on v0.111.0, and `STS2_GAME_VERSION=v0.111.0 cargo xtask
-coverage` says where they part. Once none of them panics,
-`recorded.rs` follows them as it does v0.107.1's, against a count of
-its own.
+coverage` says where they part. `recorded.rs` follows them as it does
+v0.107.1's, against `recorded-v0.111.0.matched`.
 
 What each shared module asks of a build, so a port knows where to go:
 
@@ -70,12 +69,11 @@ a port that starts from the other build's code. A move can shift what
 the compiler inlines. The relics' and the cards' decision dispatchers
 stay out of line, since the walk inlining them cost 3.9% and 3.4%.
 
-The simulator follows 1,320,294 of the 1,322,464 recorded positions,
-99%, and 1,495 of 1,500 runs whole. `follow_run <file> <index> --diff
-<dir>` plays a run on the game beside the simulator and names the
-sections where they first differ, which a split with no panic needs.
-Each of the five left parts on a cause of its own, not yet traced. One
-more change is known and not yet ported:
+The simulator follows all 1,322,464 recorded positions, and all 1,500
+runs whole. `follow_run <file> <index> --diff <dir>` plays a run on the
+game beside the simulator and names the sections where they first
+differ. One change is known and not yet ported, which no recorded run
+reaches:
 
 - Misery changed in v0.111.0. It adds a temporary power's amount to the
   power it lends before it copies them, and no power has
@@ -85,9 +83,9 @@ About 60 of the game's engine files changed too, outside the content
 models: its commands, game actions, entities and runs. An engine rule
 whose code changed goes in `sts2_core::Engine`, which each build
 implements in its own `engine` module. It holds `RollWithBaseOdds`,
-`PotionRewardOdds.Roll`, where `CardSelectCmd.FromHand` lists the
-hand, and whether `CardModel.OnPlayWrapper` stops a card's replays once
-the fight ends.
+`PotionRewardOdds.Roll`, whether `CardSelectCmd` signals a choice
+before it lists the cards, and whether `CardModel.OnPlayWrapper` stops
+a card's replays once the fight ends.
 
 ### 3. A walk that shares only who listens
 

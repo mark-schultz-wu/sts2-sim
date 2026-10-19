@@ -17,8 +17,8 @@ pub(crate) fn potion_bonus(elite: bool) -> f32 {
 }
 
 impl sts2_core::Engine for V0_107_1 {
-    /// The hand is listed, then the choice is signalled.
-    fn lists_hand_after_pause() -> bool {
+    /// The cards are listed, then the choice is signalled for a question.
+    fn signals_choice_before_listing() -> bool {
         false
     }
 

@@ -516,12 +516,14 @@ pub(crate) fn enter<V: Rules>(
     };
     let asked =
         super::listen::Walking::begin::<super::listen::Checked>(&live, relics, hook).map(Box::new);
+    let mut paused = None;
     let ended = match super::turn::carry_setup(
         &mut live,
         streams.combat(),
         relics,
         ascension,
         super::live::Setup::BeforeHandDraw(asked),
+        true,
     ) {
         // A player who died in the setup has the turn in its end already.
         super::turn::Carried::Done(ended) => {
@@ -534,6 +536,16 @@ pub(crate) fn enter<V: Rules>(
         // any turn's does. `RunAutoPrePlayPhase` waits for the answer, so the
         // turn stays in its start until then.
         super::turn::Carried::Parked => None,
+        // A setup paused on a pick goes on once the turn has started.
+        super::turn::Carried::Paused {
+            pile,
+            selection,
+            act,
+            next,
+        } => {
+            paused = Some((pile, selection, act, next));
+            None
+        }
     };
     if let Some(ended) = ended {
         if ended == super::Ended::Won {
@@ -572,6 +584,27 @@ pub(crate) fn enter<V: Rules>(
         ascension,
         super::turn::OrbMoment::TurnStart,
     );
+    let ended = match (ended, paused) {
+        (None, Some(paused)) => {
+            match super::turn::resume_paused::<V>(
+                &mut live,
+                streams.combat(),
+                relics,
+                ascension,
+                paused,
+            ) {
+                super::turn::Carried::Done(ended) => {
+                    if live.phase == <V::PlayerTurnPhase as TurnPhaseKinds>::START {
+                        live.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY;
+                    }
+                    ended
+                }
+                super::turn::Carried::Parked => None,
+                super::turn::Carried::Paused { .. } => unreachable!("a setup pauses once"),
+            }
+        }
+        (ended, _) => ended,
+    };
     // `RunAutoPrePlayPhase`, which a setup parked on a question waits out.
     let ended = match ended {
         None if live.phase == <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY => {

@@ -82,6 +82,7 @@ pub(crate) fn own_relic(relic: Relic) -> bool {
             | Relic::HistoryCourse
             | Relic::UnsettlingLamp
             | Relic::JeweledMask
+            | Relic::Planisphere
     )
 }
 
@@ -115,6 +116,18 @@ pub(crate) fn own_shared_relic_event_hook(
                 count: Relic::BEAUTIFUL_BRACELET_CARDS as usize,
                 stream: sts2_core::Stream::Run(crate::generated::runstate::RunRngType::Niche),
             });
+            Some(())
+        }
+        // `Planisphere.AfterRoomEntered` heals on an unknown point's first
+        // room alone, `CurrentRoomCount <= 1`, not on a fight its event
+        // opens. v0.107.1's healed on every room there.
+        (State::Planisphere, EventHook::RoomEntered { point, base, .. }) => {
+            use crate::vars::RelicVars as _;
+            use sts2_core::MapPointKinds as _;
+
+            if point == Some(crate::generated::runstate::MapPointType::UNKNOWN) && base {
+                asked.push(HookEffect::Heal(Relic::PLANISPHERE_HEAL));
+            }
             Some(())
         }
         // `JeweledMask.BeforeHandDraw` picks among the Powers that are not
@@ -198,10 +211,16 @@ pub(crate) fn own_shared_relic_event_hook(
             }
             Some(())
         }
-        // `TryModifyCardRewardOptions`: a Power card beside an encounter's
+        // `TryModifyCardRewardOptions`: a Power card beside a won fight's own
         // card reward, on `IsInTriggeringCombat`.
-        (State::LastingCandy(state), EventHook::CardRewardOptions { encounter }) => {
-            if encounter && state.combats_seen % 2 == 1 {
+        (
+            State::LastingCandy(state),
+            EventHook::CardRewardOptions {
+                encounter,
+                from_combat,
+            },
+        ) => {
+            if encounter && from_combat && state.combats_seen % 2 == 1 {
                 asked.push(HookEffect::AddCardRewardOption(sts2_core::CardKind::Power));
             }
             Some(())

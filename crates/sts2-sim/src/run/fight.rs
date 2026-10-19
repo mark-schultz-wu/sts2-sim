@@ -334,7 +334,7 @@ impl<V: Rules> State<V> {
             room if room == <_ as sts2_core::RoomKinds>::BOSS => crate::reward::combat::Room::Boss,
             _ => crate::reward::combat::Room::Monster,
         };
-        let added = self.card_reward_added();
+        let added = self.card_reward_added(true);
         let forced = self.potion_forced(<_ as sts2_core::EncounterTable>::room(encounter));
         let pool = self.reward_pool(room == crate::reward::combat::Room::Elite);
         let (rng, odds) = self.rewarding();
@@ -413,7 +413,7 @@ impl<V: Rules> State<V> {
                     }
                 }
                 combat::ExtraReward::Card => {
-                    let added = self.card_reward_added();
+                    let added = self.card_reward_added(true);
                     let pool = self.reward_pool(room == crate::reward::combat::Room::Elite);
                     let (rng, odds) = self.rewarding();
                     crate::reward::combat::card_reward::<V, _>(

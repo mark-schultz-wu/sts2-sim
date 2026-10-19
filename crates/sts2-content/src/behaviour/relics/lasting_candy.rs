@@ -20,9 +20,9 @@ pub(super) fn event_hook<V: crate::Build>(
     match hook {
         EventHook::CombatEnd { .. } => state.combats_seen += 1,
         // `IsInTriggeringCombat`.
-        EventHook::CardRewardOptions { encounter: true }
-            if state.combats_seen > 0 && state.combats_seen % 2 == 0 =>
-        {
+        EventHook::CardRewardOptions {
+            encounter: true, ..
+        } if state.combats_seen > 0 && state.combats_seen % 2 == 0 => {
             asked.push(HookEffect::AddCardRewardOption(CardKind::Power));
         }
         EventHook::CardRewardOptions { .. } | EventHook::Obtained { .. } => {}
