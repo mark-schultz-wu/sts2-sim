@@ -691,6 +691,7 @@ pub(crate) fn event_hook<V: crate::Build>(
         State::ToyBox(_) => V::own_relic(V::Relic::TOY_BOX),
         State::DistinguishedCape => V::own_relic(V::Relic::DISTINGUISHED_CAPE),
         State::BeautifulBracelet => V::own_relic(V::Relic::BEAUTIFUL_BRACELET),
+        State::HandDrill => V::own_relic(V::Relic::HAND_DRILL),
         State::SereTalon => V::own_relic(V::Relic::SERE_TALON),
         _ => false,
     };

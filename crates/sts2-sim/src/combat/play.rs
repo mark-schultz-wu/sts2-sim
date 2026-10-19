@@ -659,6 +659,25 @@ fn before_played<V: Rules, S: LendsCombat>(
                     super::listen::Listener::Card { id },
                     sts2_core::HookEffect::ModifySelf { change, lasting },
                 ) => live.modify_self(id, change, lasting),
+                // Clones of the card about to play, which stands in the
+                // play pile, into hand: v0.111.0's Juggling.
+                (
+                    super::listen::Listener::Power { .. },
+                    sts2_core::HookEffect::CloneIntoHand {
+                        card,
+                        count,
+                        writes,
+                    },
+                ) => {
+                    let count: usize = num_traits::cast(count)
+                        .unwrap_or_else(|| unimplemented!("{count:?} clones"));
+                    let ascension = live.ascension;
+                    let mut board =
+                        Board::for_card(live, streams.combat(), relics, ascension, None, None);
+                    for _ in 0..count {
+                        board.clone_written(card, sts2_core::Pile::Hand, writes);
+                    }
+                }
                 (_, effect) => rest.push(effect),
             }
         }

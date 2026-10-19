@@ -6,6 +6,7 @@ use sts2_core::{Amount, Effect, Fight, Played, Scaling};
 use super::super::V0_111_0 as V;
 use super::super::generated::cards::{
     CardVar, Cards, DefectCard, EventCard, IroncladCard, NecrobinderCard, QuestCard, SilentCard,
+    TokenCard,
 };
 use super::super::generated::powers::Power;
 use crate::generated::runstate::MapPointType;
@@ -50,6 +51,29 @@ pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Option<Played<
             for enemy in fight.hittable_opponents() {
                 trigger_poison(fight, enemy);
             }
+            Some(Played::Done)
+        }
+        // `Compact`: its block, then each Status of the hand that can be
+        // transformed made into a Fuel, upgraded with it, in one
+        // `CardCmd.Transform`. v0.107.1's transformed each in turn.
+        Cards::Defect(DefectCard::Compact) => {
+            use sts2_core::{CardKind, Pile, Rules as _};
+
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Var(CardVar::Block),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+            let mut fuel = sts2_core::CardIdent::new(Cards::Token(TokenCard::Fuel));
+            fuel.upgrade = u8::from(fight.upgraded());
+            let statuses: Vec<_> = fight
+                .cards_in(Pile::Hand)
+                .into_iter()
+                .filter(|&card| V::card_kind(fight.card_ident(card).card) == Some(CardKind::Status))
+                .map(|card| (card, fuel))
+                .collect();
+            fight.transform_all(&statuses);
             Some(Played::Done)
         }
         // `Haze`: its Poison onto each enemy that can be hit, then its Weak

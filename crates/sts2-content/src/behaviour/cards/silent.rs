@@ -121,7 +121,7 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F
                 .creatures()
                 .find(|creature| creature.id() == target)
                 .map_or(0, |creature| creature.block());
-            fight.lose_block(target, block);
+            fight.lose_block(target, block, Some(fight.actor()));
             fight.remove_power(target, V::Power::ARTIFACT_POWER);
             let amount = fight.var(V::CardVar::POWER);
             fight.apply_power(

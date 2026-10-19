@@ -2490,6 +2490,17 @@ pub trait Fight<V: ContentVersion> {
     /// where it says rather than read the piles through.
     fn transform(&mut self, card: crate::CardAt<V>, into: crate::CardIdent<V>);
 
+    /// `CardCmd.Transform(transformations)`, several at once.
+    ///
+    /// Every original leaves its pile first, in the order given, and each
+    /// notes its index as it leaves. The replacements then go in, sorted by
+    /// that index, each at its noted index. A replacement whose original
+    /// stood behind another one can so land a place early. Each then raises
+    /// its hooks, and `AfterCardGeneratedForCombat` follows once all are in.
+    fn transform_all(&mut self, _cards: &[(crate::CardAt<V>, crate::CardIdent<V>)]) {
+        unimplemented!("transforming several cards at once")
+    }
+
     /// `ForgeCmd.Forge`: `AddDamage(amount)` on every copy of one card.
     ///
     /// Every pile, the exhaust pile included, and one copy is created in hand
@@ -2784,10 +2795,15 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("unblockable damage")
     }
 
-    /// `CreatureCmd.LoseBlock(creature, amount)`: at most the block it holds,
+    /// `CreatureCmd.LoseBlock(creature, amount, remover)`: at most the block it holds,
     /// then `AfterBlockBroken` where that was the last of it. Nothing once
     /// the fight is ending or on a dead creature.
-    fn lose_block(&mut self, _creature: crate::CombatId, _amount: V::Number) {
+    fn lose_block(
+        &mut self,
+        _creature: crate::CombatId,
+        _amount: V::Number,
+        _remover: Option<crate::CombatId>,
+    ) {
         unimplemented!("losing block")
     }
 
@@ -4370,7 +4386,17 @@ pub enum EventHook<V: ContentVersion> {
     BeforeDeath { creature: crate::CombatId },
     /// `Hook.AfterBlockBroken`, carrying the creature whose block a hit has
     /// just taken the last of.
-    BlockBroken { creature: crate::CombatId },
+    BlockBroken {
+        creature: crate::CombatId,
+        /// The creature that broke it: the hit's dealer, or `LoseBlock`'s
+        /// remover. v0.111.0's hook passes it. v0.107.1's passes the
+        /// creature alone.
+        breaker: Option<crate::CombatId>,
+        /// The creature `breaker` is a pet of, where it is one.
+        pet_of: Option<crate::CombatId>,
+        /// The fight's player, which a relic's owner is.
+        player: crate::CombatId,
+    },
     /// `Hook.AfterDeath`, carrying the dead creature and the side it fought
     /// on.
     ///
@@ -7383,6 +7409,19 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + 'static;
 }
 
+/// The engine rules of one build whose game code changed between builds, as
+/// the simulator asks them.
+///
+/// These belong to the game's engine: its commands, odds, actions and
+/// entities, not its content models. Each build implements them in its own
+/// `engine` module. A rule both builds spell the same way stays in the
+/// simulator.
+pub trait Engine {
+    /// `CardRarityOdds.RollWithBaseOdds`, given what `NextFloat` drew and the
+    /// base odds of a rare and of an uncommon for the reward's type.
+    fn roll_with_base_odds(rolled: f32, rare: f32, uncommon: f32) -> RewardRarity;
+}
+
 /// The rules of one build, as the simulator asks them.
 ///
 /// [`ContentVersion`] is the vocabulary a build's tables are written in. This
@@ -7391,7 +7430,7 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
 ///
 /// A build pinned only for its tables implements `ContentVersion` and stops
 /// there. The simulator will not take it, which is the error worth having.
-pub trait Rules: Hooks {
+pub trait Rules: Hooks + Engine {
     /// The relic pool a character drafts from, beside the shared one.
     ///
     /// Here rather than on [`CharacterTable`], because the pool's type belongs
