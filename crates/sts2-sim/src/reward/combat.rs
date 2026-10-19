@@ -64,7 +64,7 @@ pub(crate) fn won<V: Rules, R: GameRng>(
     pool: &card::Pool<V>,
 ) -> (Vec<Offer<V>>, Option<Rarity<V>>) {
     let elite = room == Room::Elite;
-    let pays_potion = potion(rng, odds, elite, modifiers.forced);
+    let pays_potion = potion::<V, R>(rng, odds, elite, modifiers.forced);
     let mut offered: Vec<Offer<V>> = gold
         .into_iter()
         .map(|gold| Offer::Gold {
@@ -196,30 +196,16 @@ fn purse<V: Rules, R: GameRng>(rng: &mut R, gold: Interval<u16>) -> V::Number {
     num_traits::cast(rng.next_int_range(span)).expect("a fight's gold is a game number")
 }
 
-/// `PotionRewardOdds.Roll`, which draws whether or not a potion follows.
-/// A `forced` roll pays one whatever it draws.
+/// `PotionRewardOdds.Roll`, which the build spells.
 ///
 /// The chance moves either way by a tenth, so a run that has gone without one
 /// is likelier to see the next. An elite adds a quarter of a bonus, halved,
 /// to what the draw is held against, for this roll and no later one.
-fn potion<R: GameRng>(rng: &mut R, odds: &mut Odds, elite: bool, forced: bool) -> bool {
-    const STEP: f32 = 0.1;
-    const ELITE_BONUS: f32 = 0.25;
-    let against = match elite {
-        true => odds.potion + ELITE_BONUS * 0.5,
-        false => odds.potion,
-    };
-    let rolled = rng.next_double() as f32;
-    match forced || rolled < against {
-        true => {
-            odds.potion -= STEP;
-            true
-        }
-        false => {
-            odds.potion += STEP;
-            false
-        }
-    }
+fn potion<V: Rules, R: GameRng>(rng: &mut R, odds: &mut Odds, elite: bool, forced: bool) -> bool {
+    let (pays, left) =
+        V::roll_potion_reward(odds.potion, elite, forced, || rng.next_double() as f32);
+    odds.potion = left;
+    pays
 }
 
 /// The rule the two odds share, for the ascension that moves both.

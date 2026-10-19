@@ -7,7 +7,7 @@ use crate::behaviour::relics::Number;
 /// `CombatsSeen`, which it saves.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct State {
-    combats_seen: Number,
+    pub(crate) combats_seen: Number,
 }
 
 /// `AfterCombatEnd` counts the fight. `TryModifyCardRewardOptions`, for a

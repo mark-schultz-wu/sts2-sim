@@ -738,6 +738,7 @@ pub enum ModelHook {
     AfterForge,
     AfterItemPurchased,
     BeforeRoomEntered,
+    BeforeCombatRewardOffered,
     ModifyDamageAdditive,
     ModifyDamageMultiplicative,
     ModifyDamageCap,
@@ -808,7 +809,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 152] = [
+    pub const ALL: [ModelHook; 153] = [
         ModelHook::AfterRoomEntered,
         ModelHook::AfterMapGenerated,
         ModelHook::AfterActEntered,
@@ -894,6 +895,7 @@ impl ModelHook {
         ModelHook::AfterForge,
         ModelHook::AfterItemPurchased,
         ModelHook::BeforeRoomEntered,
+        ModelHook::BeforeCombatRewardOffered,
         ModelHook::ModifyDamageAdditive,
         ModelHook::ModifyDamageMultiplicative,
         ModelHook::ModifyDamageCap,
@@ -995,6 +997,7 @@ impl ModelHook {
             ModelHook::AfterDeath => "AfterDeath",
             ModelHook::AfterPowerAmountChanged => "AfterPowerAmountChanged",
             ModelHook::AfterCardEnteredCombat => "AfterCardEnteredCombat",
+            ModelHook::BeforeCombatRewardOffered => "BeforeCombatRewardOffered",
             ModelHook::ModifyDamageAdditive => "ModifyDamageAdditive",
             ModelHook::ModifyDamageMultiplicative => "ModifyDamageMultiplicative",
             ModelHook::ModifyDamageCap => "ModifyDamageCap",
@@ -4493,6 +4496,12 @@ pub enum EventHook<V: ContentVersion> {
         /// `CurrentRoomCount == 1`: not a room an event opened inside its own.
         base: bool,
     },
+    /// `BeforeCombatRewardOffered`, once a won fight's rewards are made and
+    /// before they are offered. A hook v0.111.0 has and v0.107.1 lacks.
+    CombatRewardOffering {
+        /// Whether a `CardReward` is among them.
+        card_reward: bool,
+    },
 }
 
 impl<V: ContentVersion> EventHook<V> {
@@ -4602,6 +4611,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::AfterDeath { .. } => ModelHook::AfterDeath,
             EventHook::BeforeDeath { .. } => ModelHook::BeforeDeath,
             EventHook::BlockBroken { .. } => ModelHook::AfterBlockBroken,
+            EventHook::CombatRewardOffering { .. } => ModelHook::BeforeCombatRewardOffered,
             EventHook::PowerAmountChanged { .. } => ModelHook::AfterPowerAmountChanged,
             EventHook::CardEnteredCombat { .. } => ModelHook::AfterCardEnteredCombat,
             EventHook::CardGeneratedForCombat { .. } => ModelHook::AfterCardGeneratedForCombat,
@@ -7420,6 +7430,17 @@ pub trait Engine {
     /// `CardRarityOdds.RollWithBaseOdds`, given what `NextFloat` drew and the
     /// base odds of a rare and of an uncommon for the reward's type.
     fn roll_with_base_odds(rolled: f32, rare: f32, uncommon: f32) -> RewardRarity;
+
+    /// `PotionRewardOdds.Roll`: whether a fight's rewards pay a potion, and
+    /// the odds it leaves. `current` is `CurrentValue`, `elite` the room's
+    /// bonus, `forced` what `ShouldForcePotionReward` said, and `next_float`
+    /// the draw, which a build makes or skips.
+    fn roll_potion_reward(
+        current: f32,
+        elite: bool,
+        forced: bool,
+        next_float: impl FnOnce() -> f32,
+    ) -> (bool, f32);
 }
 
 /// The rules of one build, as the simulator asks them.

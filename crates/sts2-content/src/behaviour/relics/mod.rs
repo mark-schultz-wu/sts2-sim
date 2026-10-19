@@ -694,6 +694,7 @@ pub(crate) fn event_hook<V: crate::Build>(
         State::HandDrill => V::own_relic(V::Relic::HAND_DRILL),
         State::PollinousCore(_) => V::own_relic(V::Relic::POLLINOUS_CORE),
         State::SereTalon => V::own_relic(V::Relic::SERE_TALON),
+        State::LastingCandy(_) => V::own_relic(V::Relic::LASTING_CANDY),
         _ => false,
     };
     if owned && V::own_shared_relic_event_hook(state, hook, asked).is_some() {

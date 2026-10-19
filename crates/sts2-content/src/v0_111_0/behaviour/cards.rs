@@ -113,6 +113,38 @@ pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Option<Played<
             fight.transform_all(&statuses);
             Some(Played::Done)
         }
+        // `Scrape`: its damage to the target, then its `Cards` drawn, and
+        // each copy drawn whose cost with every modifier is anything but
+        // nothing discarded. v0.107.1's read the copy's own modifiers alone.
+        Cards::Defect(DefectCard::Scrape) => {
+            use sts2_core::{Cost, PileAct};
+
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            let drew = fight.draw(fight.var(CardVar::Cards));
+            if fight.waiting() {
+                unimplemented!("v0.111.0's Scrape waiting on its draw");
+            }
+            let costly: Vec<_> = drew
+                .iter()
+                .map(|&id| {
+                    fight.find_card(id).unwrap_or_else(|| {
+                        unimplemented!("Scrape discarding {id:?}, which left the fight")
+                    })
+                })
+                .filter(|&card| fight.card_costs(card, true).0 != Cost::fixed(0))
+                .collect();
+            fight.act_on(PileAct::Discard, &costly);
+            Some(Played::Done)
+        }
         // `Haze`: its Poison onto each enemy that can be hit, then its Weak
         // onto each.
         Cards::Silent(SilentCard::Haze) => {
