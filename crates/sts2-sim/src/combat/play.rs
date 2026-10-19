@@ -729,12 +729,12 @@ fn result_pile<V: Rules, S: LendsCombat>(
         false if marked.is_some() || card.face.exhausts() => Some(sts2_core::Pile::Exhaust),
         false => Some(sts2_core::Pile::Discard),
     };
-    let pile = match V::card_result_pile(played, pile) {
-        sts2_core::HookResponse::Decision(pile) => pile,
-        sts2_core::HookResponse::DoesNotImplement => pile,
+    let base = (pile, sts2_core::PilePosition::Bottom);
+    let mut result = match V::card_result_pile(played, base) {
+        sts2_core::HookResponse::Decision(location) => location,
+        sts2_core::HookResponse::DoesNotImplement => base,
     };
     let player = live.player().id;
-    let mut result = (pile, sts2_core::PilePosition::Bottom);
     let mut modifiers: SmallVec<[(CombatId, V::Power); 2]> = SmallVec::new();
     super::listen::each::<V>(
         super::listen::Walk { live, relics },

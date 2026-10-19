@@ -1207,6 +1207,7 @@ static VIRTUALS: [u8; 273] = [
 impl sts2_core::PowerKinds for Power {
     const DIE_FOR_YOU: Power = Power::DieForYouPower;
     const DOOM: Power = Power::DoomPower;
+    const ARTIFACT: Power = Power::ArtifactPower;
 }
 
 /// The hooks each class overrides, from `hooks.txt`, indexed by the power's discriminant.

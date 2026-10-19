@@ -2211,12 +2211,22 @@ pub(crate) fn decide_hook<V: crate::Build>(
         (__c0, DecisionHook::ShouldCountForCombatEnd) if __c0 == V::Power::MINION_POWER => {
             HookResponse::Decision(false)
         }
-        // `ShouldOwnerDeathTriggerFatal`: a Minion's death, and one Reattach
-        // brings back, are not a kill that pays out.
-        (__c0, DecisionHook::ShouldOwnerDeathTriggerFatal)
-            if (__c0 == V::Power::MINION_POWER || __c0 == V::Power::REATTACH_POWER) =>
-        {
+        // `MinionPower.ShouldOwnerDeathTriggerFatal`: a Minion's death is not
+        // a kill that pays out.
+        (__c0, DecisionHook::ShouldOwnerDeathTriggerFatal) if __c0 == V::Power::MINION_POWER => {
             HookResponse::Decision(false)
+        }
+        // `ReattachPower.ShouldOwnerDeathTriggerFatal`: `AreAllOtherSegmentsDead`,
+        // over its owner's teammates that hold Reattach. Its owner fights the
+        // player, so its living teammates are the player's living opponents.
+        (__c0, DecisionHook::ShouldOwnerDeathTriggerFatal) if __c0 == V::Power::REATTACH_POWER => {
+            let fight = held.fight;
+            let others_alive = fight
+                .living_opponents(fight.player())
+                .into_iter()
+                .filter(|&creature| creature != held.holder)
+                .any(|creature| fight.power(creature, V::Power::REATTACH_POWER).is_some());
+            HookResponse::Decision(!others_alive)
         }
         // `ShouldPowerBeRemovedAfterOwnerDeath`. A power that keeps its owner
         // in the fight keeps itself, or the creature would come back without

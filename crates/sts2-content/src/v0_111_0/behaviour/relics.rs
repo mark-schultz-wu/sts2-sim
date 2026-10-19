@@ -79,6 +79,9 @@ pub(crate) fn own_relic(relic: Relic) -> bool {
             | Relic::PollinousCore
             | Relic::LastingCandy
             | Relic::Regalite
+            | Relic::HistoryCourse
+            | Relic::UnsettlingLamp
+            | Relic::JeweledMask
     )
 }
 
@@ -112,6 +115,36 @@ pub(crate) fn own_shared_relic_event_hook(
                 count: Relic::BEAUTIFUL_BRACELET_CARDS as usize,
                 stream: sts2_core::Stream::Run(crate::generated::runstate::RunRngType::Niche),
             });
+            Some(())
+        }
+        // `JeweledMask.BeforeHandDraw` picks among the Powers that are not
+        // Innate, where any are. v0.107.1's picked among them all.
+        (State::JeweledMask, EventHook::BeforeHandDraw { turn, .. }) => {
+            if turn <= 1 {
+                asked.push(HookEffect::FreeRandomFromDraw {
+                    kind: sts2_core::CardKind::Power,
+                    preferring_without: Some(crate::generated::cards::CardKeyword::Innate),
+                });
+            }
+            Some(())
+        }
+        // `UnsettlingLamp.BeforePowerAmountChanged` takes no card whose
+        // debuff lands on a target holding Artifact, where v0.107.1's did.
+        (
+            State::UnsettlingLamp(_),
+            EventHook::PowerAmountChanging {
+                target_artifact: true,
+                ..
+            },
+        ) => Some(()),
+        // `HistoryCourse.AfterAutoPrePlayPhaseEntered` replays the last
+        // Attack alone, where v0.107.1's took a Skill too.
+        (State::HistoryCourse, EventHook::AutoPrePlayPhase { turn }) => {
+            if turn > 1 {
+                asked.push(HookEffect::AutoPlayDupeOfLastPlay {
+                    kinds: &[sts2_core::CardKind::Attack],
+                });
+            }
             Some(())
         }
         // `HandDrill` gives its Vulnerable on `AfterBlockBroken`, where

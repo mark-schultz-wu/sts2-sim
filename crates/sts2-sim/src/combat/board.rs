@@ -608,11 +608,24 @@ impl<'a, V: Rules> Board<'a, V> {
                 .find(|creature| creature.id == target)
                 .expect("a power lands on a creature in the fight or made for it")
                 .side;
+            // A creature made for the fight holds its powers beside it.
+            let artifact =
+                |held: &HeldPower<V>| held.power() == <V::Power as sts2_core::PowerKinds>::ARTIFACT;
+            let target_artifact = match self
+                .live
+                .created
+                .iter()
+                .find(|created| created.fighter.id == target)
+            {
+                Some(created) => created.powers.iter().any(artifact),
+                None => self.live.powers.of(target).any(artifact),
+            };
             let hook = sts2_core::EventHook::PowerAmountChanging {
                 power,
                 amount,
                 target,
                 target_side,
+                target_artifact,
                 applier,
                 player: self.live.player().id,
                 source,

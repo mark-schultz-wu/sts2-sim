@@ -12,6 +12,7 @@ pub(super) fn event_hook<V: crate::Build>(
         EventHook::BeforeHandDraw { turn, .. } if turn <= 1 => {
             asked.push(HookEffect::FreeRandomFromDraw {
                 kind: CardKind::Power,
+                preferring_without: None,
             })
         }
         EventHook::BeforeHandDraw { .. } | EventHook::Obtained { .. } => {}

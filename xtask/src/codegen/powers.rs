@@ -43,8 +43,8 @@ pub enum Error {
         ty: String,
         raw: String,
     },
-    #[error("the dump has no DIE_FOR_YOU_POWER, which the simulator names")]
-    NoDieForYou,
+    #[error("the dump has no {0}, which the simulator names")]
+    NoNamedPower(&'static str),
     #[error("{power}.{flag}: {value} is not a flag")]
     NotAFlag {
         power: String,
@@ -615,13 +615,15 @@ fn emit_powers(
     }
     writeln!(out, "];").unwrap();
 
-    // The one power the simulator applies by name, as it summons Osty.
-    if !powers.iter().any(|row| row[1] == "DIE_FOR_YOU_POWER") {
-        return Err(Error::NoDieForYou);
+    // The powers the simulator names itself.
+    for named in ["DIE_FOR_YOU_POWER", "DOOM_POWER", "ARTIFACT_POWER"] {
+        if !powers.iter().any(|row| row[1] == named) {
+            return Err(Error::NoNamedPower(named));
+        }
     }
     writeln!(
         out,
-        "\nimpl sts2_core::PowerKinds for Power {{\n    const DIE_FOR_YOU: Power = Power::DieForYouPower;\n    const DOOM: Power = Power::DoomPower;\n}}"
+        "\nimpl sts2_core::PowerKinds for Power {{\n    const DIE_FOR_YOU: Power = Power::DieForYouPower;\n    const DOOM: Power = Power::DoomPower;\n    const ARTIFACT: Power = Power::ArtifactPower;\n}}"
     )
     .unwrap();
 

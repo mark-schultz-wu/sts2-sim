@@ -79,6 +79,13 @@ impl crate::build::OwnRules for V {
         cards::own_card_event_hook(card, hook, asked)
     }
 
+    fn own_card_result_pile(
+        card: <V as sts2_core::ContentVersion>::Card,
+        base: (Option<sts2_core::Pile>, sts2_core::PilePosition),
+    ) -> Option<sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)>> {
+        cards::result_pile(card, base)
+    }
+
     fn own_card_play<F: sts2_core::Fight<V>>(
         card: <V as sts2_core::ContentVersion>::Card,
         fight: &mut F,
@@ -90,8 +97,18 @@ impl crate::build::OwnRules for V {
         card: <V as sts2_core::ContentVersion>::Card,
         fight: &mut F,
         from: u8,
+        left: crate::behaviour::cards::Left<V>,
     ) -> sts2_core::Played<V> {
-        cards::on_play_from(card, fight, from)
+        cards::on_play_from(card, fight, from, left)
+    }
+
+    fn own_card_drew_from<F: sts2_core::Fight<V>>(
+        card: <V as sts2_core::ContentVersion>::Card,
+        fight: &mut F,
+        from: u8,
+        drew: &[sts2_core::CardId<V>],
+    ) -> sts2_core::Played<V> {
+        cards::on_drew_from(card, fight, from, drew)
     }
 
     fn own_lends(
