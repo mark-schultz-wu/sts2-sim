@@ -4,7 +4,9 @@
 //! rule moves here once it names content through the build. A rule a later
 //! build changed stays in each build that has it.
 
+pub(crate) mod acts;
 pub(crate) mod enchantments;
+pub(crate) mod encounters;
 pub(crate) mod modifiers;
 pub(crate) mod orbs;
 
