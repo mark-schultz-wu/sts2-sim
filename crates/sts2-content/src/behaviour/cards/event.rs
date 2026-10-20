@@ -1,18 +1,14 @@
 //! The event cards the generator leaves to a hand port.
 
+use crate::ids::{CardIds as _, CardVarIds as _, PowerIds as _};
 use sts2_core::{
     Amount, Change, CostPool, CreatureView as _, Effect, Fight, Lasting, Pile, PileAct, Played,
-    PowerAmount, Rules as _, Scaling, Selection,
+    PowerAmount, Scaling, Selection,
 };
-
-use super::super::super::generated::cards::Cards;
-use super::super::super::generated::cards::{CardVar, EventCard};
-use super::super::super::generated::powers::Power;
-use super::V;
 
 /// Where an event card stopped inside its own play.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Resume {
+pub enum Resume<V: crate::Build> {
     /// `NeowsFury`, after its owner picked the cards to take back.
     NeowsFuryPicks,
     /// `Wish`, after its owner picked the card to take.
@@ -25,23 +21,23 @@ pub enum Resume {
     MaulHit,
     /// A Mad Science attack, after a question inside one of its hits, with
     /// `left` hits still to land.
-    MadScienceHit { card: EventCard, left: u8 },
+    MadScienceHit { card: V::Card, left: u8 },
 }
 
 /// The rest of the play waits at `at`, where a command left a question and
 /// more commands follow.
-fn wait(at: Resume) -> Played<V> {
+fn wait<V: crate::Build>(at: Resume<V>) -> Played<V> {
     Played::Waiting {
-        at: super::super::Resume::Card(super::Resume::Event(at)),
+        at: crate::behaviour::cards::Resume::Event(at).into(),
     }
 }
 
-pub(super) fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
+pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F) -> Played<V> {
     match card {
-        EventCard::NeowsFury => neows_fury(fight),
+        __c0 if __c0 == V::Card::NEOWS_FURY => neows_fury::<V, _>(fight),
         // `Enlightenment`: every card in hand costs at most one, this turn or
         // until played, or for the fight once upgraded.
-        EventCard::Enlightenment => {
+        __c0 if __c0 == V::Card::ENLIGHTENMENT => {
             let lasting = match fight.upgraded() {
                 true => Lasting::ThisFight,
                 false => Lasting::ThisTurnOrUntilPlayed,
@@ -53,65 +49,65 @@ pub(super) fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> 
         }
         // `ToricToughness`: its block, then its `Turns` of Toric Toughness on
         // its owner, set to give the block it gained.
-        EventCard::ToricToughness => {
-            use super::super::super::generated::powers::Power;
+        __c0 if __c0 == V::Card::TORIC_TOUGHNESS => {
             use sts2_core::EffectResolution as _;
 
             let block = fight.resolve(Effect::GainBlock {
                 recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
+                amount: Amount::Var(V::CardVar::BLOCK),
                 scaling: Scaling::Dynamic,
             });
             let gained = block.amount();
             fight.apply(block);
-            let turns = sts2_core::PowerAmount::Counted(fight.var(CardVar::Turns));
-            fight.apply_to_actor(Power::ToricToughnessPower, turns);
-            fight.note_on_power(fight.actor(), Power::ToricToughnessPower, gained);
+            let turns = sts2_core::PowerAmount::Counted(fight.var(V::CardVar::TURNS));
+            fight.apply_to_actor(V::Power::TORIC_TOUGHNESS_POWER, turns);
+            fight.note_on_power(fight.actor(), V::Power::TORIC_TOUGHNESS_POWER, gained);
             Played::Done
         }
-        EventCard::Metamorphosis => metamorphosis(fight),
-        EventCard::Whistle => whistle(fight),
-        EventCard::Apotheosis => apotheosis(fight),
-        EventCard::Maul => maul(fight),
-        EventCard::MadScienceSapping
-        | EventCard::MadScienceViolence
-        | EventCard::MadScienceChoking
-        | EventCard::MadScienceEnergized
-        | EventCard::MadScienceWisdom
-        | EventCard::MadScienceChaos
-        | EventCard::MadScienceExpertise
-        | EventCard::MadScienceCurious
-        | EventCard::MadScienceImprovement => mad_science(card, fight),
+        __c0 if __c0 == V::Card::METAMORPHOSIS => metamorphosis::<V, _>(fight),
+        __c0 if __c0 == V::Card::WHISTLE => whistle::<V, _>(fight),
+        __c0 if __c0 == V::Card::APOTHEOSIS => apotheosis::<V, _>(fight),
+        __c0 if __c0 == V::Card::MAUL => maul::<V, _>(fight),
+        __c0 if __c0 == V::Card::MAD_SCIENCE_SAPPING
+            || __c0 == V::Card::MAD_SCIENCE_VIOLENCE
+            || __c0 == V::Card::MAD_SCIENCE_CHOKING
+            || __c0 == V::Card::MAD_SCIENCE_ENERGIZED
+            || __c0 == V::Card::MAD_SCIENCE_WISDOM
+            || __c0 == V::Card::MAD_SCIENCE_CHAOS
+            || __c0 == V::Card::MAD_SCIENCE_EXPERTISE
+            || __c0 == V::Card::MAD_SCIENCE_CURIOUS
+            || __c0 == V::Card::MAD_SCIENCE_IMPROVEMENT =>
+        {
+            mad_science::<V, _>(card, fight)
+        }
         // `Wish`: one card of the draw pile into hand.
-        EventCard::Wish => Played::Asking {
+        __c0 if __c0 == V::Card::WISH => Played::Asking {
             pile: Pile::Draw,
             selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
-            at: super::super::Resume::Card(super::Resume::Event(Resume::WishPick)),
+            at: crate::behaviour::cards::Resume::Event(Resume::WishPick).into(),
         },
         // `BrightestFlame`: its Energy, its Cards drawn, then its `MaxHp` off
         // its owner's maximum.
-        EventCard::BrightestFlame => {
-            fight.modify_energy(fight.var(CardVar::Energy));
-            fight.draw(fight.var(CardVar::Cards));
+        __c0 if __c0 == V::Card::BRIGHTEST_FLAME => {
+            fight.modify_energy(fight.var(V::CardVar::ENERGY));
+            fight.draw(fight.var(V::CardVar::CARDS));
             // A shuffle inside the draw can ask, and the rest waits for it.
             if fight.waiting() {
                 return Played::Waiting {
-                    at: super::super::Resume::Card(super::Resume::Event(
-                        Resume::BrightestFlameDrew,
-                    )),
+                    at: crate::behaviour::cards::Resume::Event(Resume::BrightestFlameDrew).into(),
                 };
             }
-            fight.lose_max_hp(fight.actor(), fight.var(CardVar::MaxHp));
+            fight.lose_max_hp(fight.actor(), fight.var(V::CardVar::MAX_HP));
             Played::Done
         }
         // Its damage to the target. The Byrdpip pet only animates the hit.
-        EventCard::ByrdSwoop => {
+        __c0 if __c0 == V::Card::BYRD_SWOOP => {
             let target = fight.target();
             fight.attack(Scaling::Dynamic, |fight| {
                 let attack = fight.resolve(Effect::Attack {
                     dealer: fight.actor(),
                     target,
-                    damage: Amount::Var(CardVar::Damage),
+                    damage: Amount::Var(V::CardVar::DAMAGE),
                     scaling: Scaling::Dynamic,
                 });
                 fight.apply(attack);
@@ -120,13 +116,13 @@ pub(super) fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> 
         }
         // `Clash`: its damage to the target. Its `IsPlayable` asks for a
         // hand of Attacks alone.
-        EventCard::Clash => {
+        __c0 if __c0 == V::Card::CLASH => {
             let target = fight.target();
             fight.attack(Scaling::Dynamic, |fight| {
                 let attack = fight.resolve(Effect::Attack {
                     dealer: fight.actor(),
                     target,
-                    damage: Amount::Var(CardVar::Damage),
+                    damage: Amount::Var(V::CardVar::DAMAGE),
                     scaling: Scaling::Dynamic,
                 });
                 fight.apply(attack);
@@ -135,7 +131,7 @@ pub(super) fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> 
         }
         // `Distraction`: a Skill of the character's pool, free this turn,
         // into the hand.
-        EventCard::Distraction => {
+        __c0 if __c0 == V::Card::DISTRACTION => {
             crate::behaviour::free_card_into_hand(
                 fight,
                 |card| V::card_kind(card) == Some(sts2_core::CardKind::Skill),
@@ -145,7 +141,7 @@ pub(super) fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> 
         }
         // `DualWield`: one Attack or Power of the hand, then its `Cards` of
         // clones of it into the hand.
-        EventCard::DualWield => {
+        __c0 if __c0 == V::Card::DUAL_WIELD => {
             let cards = fight
                 .cards_in(Pile::Hand)
                 .into_iter()
@@ -159,11 +155,11 @@ pub(super) fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> 
             Played::AskingAmong {
                 cards,
                 selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
-                at: super::super::Resume::Card(super::Resume::Event(Resume::DualWieldPick)),
+                at: crate::behaviour::cards::Resume::Event(Resume::DualWieldPick).into(),
             }
         }
         // `Entrench`: as much block again as its owner holds, unpowered.
-        EventCard::Entrench => {
+        __c0 if __c0 == V::Card::ENTRENCH => {
             let actor = fight.actor();
             let held = fight
                 .creatures()
@@ -178,29 +174,29 @@ pub(super) fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> 
             Played::Done
         }
         // `FeedingFrenzy`: its `StrengthPower` as Feeding Frenzy on its owner.
-        EventCard::FeedingFrenzy => {
-            let amount = fight.var(CardVar::StrengthPower);
-            fight.apply_to_actor(Power::FeedingFrenzyPower, PowerAmount::Counted(amount));
+        __c0 if __c0 == V::Card::FEEDING_FRENZY => {
+            let amount = fight.var(V::CardVar::STRENGTH_POWER);
+            fight.apply_to_actor(V::Power::FEEDING_FRENZY_POWER, PowerAmount::Counted(amount));
             Played::Done
         }
         // `Stack`: as much block as its `CalculatedBlock`, one more for each
         // card in the discard pile.
-        EventCard::Stack => {
+        __c0 if __c0 == V::Card::STACK => {
             let block = fight.resolve(Effect::GainBlock {
                 recipient: fight.actor(),
-                amount: Amount::Var(CardVar::CalculatedBlock),
+                amount: Amount::Var(V::CardVar::CALCULATED_BLOCK),
                 scaling: Scaling::Dynamic,
             });
             fight.apply(block);
             Played::Done
         }
-        card => super::generated_from(Cards::Event(card), fight, 0),
+        card => crate::behaviour::cards::generated_from::<V, _>(card, fight, 0),
     }
 }
 
-pub(super) fn resume_play<F: Fight<V>>(
+pub(super) fn resume_play<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
-    at: Resume,
+    at: Resume<V>,
     chosen: sts2_core::SelectedCards<V>,
 ) -> Played<V> {
     match at {
@@ -216,7 +212,7 @@ pub(super) fn resume_play<F: Fight<V>>(
         // `AddGeneratedCardToCombat` into the hand.
         Resume::DualWieldPick => {
             if let Some(picked) = chosen.one_or_none() {
-                for _ in 0..fight.var(CardVar::Cards) {
+                for _ in 0..fight.var(V::CardVar::CARDS) {
                     fight.clone_card(picked, Pile::Hand);
                 }
             }
@@ -227,25 +223,25 @@ pub(super) fn resume_play<F: Fight<V>>(
 
 /// `NeowsFury`: its damage to the target, then up to its `Cards` from the
 /// discard pile into hand, as many as the hand has room for.
-fn neows_fury<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn neows_fury<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     let target = fight.target();
     fight.attack(Scaling::Dynamic, |fight| {
         let attack = fight.resolve(Effect::Attack {
             dealer: fight.actor(),
             target,
-            damage: Amount::Var(CardVar::Damage),
+            damage: Amount::Var(V::CardVar::DAMAGE),
             scaling: Scaling::Dynamic,
         });
         fight.apply(attack);
     });
     let cards: usize =
-        num_traits::cast(fight.var(CardVar::Cards)).expect("a count of cards is not negative");
+        num_traits::cast(fight.var(V::CardVar::CARDS)).expect("a count of cards is not negative");
     let room = sts2_core::MAX_CARDS_IN_HAND.saturating_sub(fight.cards_in(Pile::Hand).len());
     match nonmax::NonMaxUsize::new(cards.min(room)) {
         Some(count) if count.get() > 0 => Played::Asking {
             pile: Pile::Discard,
             selection: Selection::UpTo(count),
-            at: super::super::Resume::Card(super::Resume::Event(Resume::NeowsFuryPicks)),
+            at: crate::behaviour::cards::Resume::Event(Resume::NeowsFuryPicks).into(),
         },
         _ => Played::Done,
     }
@@ -254,9 +250,9 @@ fn neows_fury<F: Fight<V>>(fight: &mut F) -> Played<V> {
 /// `Metamorphosis`: its `Cards` attacks from the character's pool, each
 /// `NextItem` off `CombatCardGeneration`, free this fight and into the draw
 /// pile at a random place.
-fn metamorphosis<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn metamorphosis<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     let attacks = crate::behaviour::character_cards(fight, sts2_core::CardKind::Attack);
-    for _ in 0..fight.var(CardVar::Cards) {
+    for _ in 0..fight.var(V::CardVar::CARDS) {
         let Some(card) = fight.generate_card(&attacks) else {
             unimplemented!("a character pool with no attack")
         };
@@ -274,13 +270,13 @@ fn metamorphosis<F: Fight<V>>(fight: &mut F) -> Played<V> {
 }
 
 /// Its damage to `target`, `hits` times, as one attack.
-fn hit<F: Fight<V>>(fight: &mut F, target: sts2_core::CombatId, hits: usize) {
+fn hit<V: crate::Build, F: Fight<V>>(fight: &mut F, target: sts2_core::CombatId, hits: usize) {
     fight.attack(Scaling::Dynamic, |fight| {
         for _ in 0..hits {
             let attack = fight.resolve(Effect::Attack {
                 dealer: fight.actor(),
                 target,
-                damage: Amount::Var(CardVar::Damage),
+                damage: Amount::Var(V::CardVar::DAMAGE),
                 scaling: Scaling::Dynamic,
             });
             fight.apply(attack);
@@ -290,15 +286,18 @@ fn hit<F: Fight<V>>(fight: &mut F, target: sts2_core::CombatId, hits: usize) {
 
 /// A Mad Science attack's `left` hits on the target, each its own attack,
 /// then the power it carries. A question left before the next waits.
-fn mad_science_hits<F: Fight<V>>(card: EventCard, fight: &mut F, left: u8) -> Played<V> {
-    use super::super::super::generated::powers::Power;
+fn mad_science_hits<V: crate::Build, F: Fight<V>>(
+    card: V::Card,
+    fight: &mut F,
+    left: u8,
+) -> Played<V> {
     use sts2_core::PowerAmount;
 
     let target = fight.target();
     for done in 0..left {
-        hit(fight, target, 1);
+        hit::<V, _>(fight, target, 1);
         if fight.waiting() {
-            return wait(Resume::MadScienceHit {
+            return wait::<V>(Resume::MadScienceHit {
                 card,
                 left: left - done - 1,
             });
@@ -306,15 +305,15 @@ fn mad_science_hits<F: Fight<V>>(card: EventCard, fight: &mut F, left: u8) -> Pl
     }
     let counted = |fight: &F, key| PowerAmount::Counted(fight.var(key));
     match card {
-        EventCard::MadScienceSapping => {
-            let weak = counted(fight, CardVar::SappingWeak);
-            fight.apply_power(target, Power::WeakPower, weak);
-            let vulnerable = counted(fight, CardVar::SappingVulnerable);
-            fight.apply_power(target, Power::VulnerablePower, vulnerable);
+        __c0 if __c0 == V::Card::MAD_SCIENCE_SAPPING => {
+            let weak = counted(fight, V::CardVar::SAPPING_WEAK);
+            fight.apply_power(target, V::Power::WEAK_POWER, weak);
+            let vulnerable = counted(fight, V::CardVar::SAPPING_VULNERABLE);
+            fight.apply_power(target, V::Power::VULNERABLE_POWER, vulnerable);
         }
-        EventCard::MadScienceChoking => {
-            let strangle = counted(fight, CardVar::ChokingDamage);
-            fight.apply_power(target, Power::StranglePower, strangle);
+        __c0 if __c0 == V::Card::MAD_SCIENCE_CHOKING => {
+            let strangle = counted(fight, V::CardVar::CHOKING_DAMAGE);
+            fight.apply_power(target, V::Power::STRANGLE_POWER, strangle);
         }
         _ => {}
     }
@@ -328,54 +327,55 @@ fn mad_science_hits<F: Fight<V>>(card: EventCard, fight: &mut F, left: u8) -> Pl
 /// its rider names to its owner. Sapping and Choking then debuff the target,
 /// Energized gives energy, Wisdom draws, and Chaos adds a card of the
 /// character's pool, free this turn.
-fn mad_science<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
-    use super::super::super::generated::powers::Power;
+fn mad_science<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F) -> Played<V> {
     use sts2_core::PowerAmount;
 
     let counted = |fight: &F, key| PowerAmount::Counted(fight.var(key));
     match card {
-        EventCard::MadScienceSapping
-        | EventCard::MadScienceViolence
-        | EventCard::MadScienceChoking => {
+        __c0 if __c0 == V::Card::MAD_SCIENCE_SAPPING
+            || __c0 == V::Card::MAD_SCIENCE_VIOLENCE
+            || __c0 == V::Card::MAD_SCIENCE_CHOKING =>
+        {
             let hits = match card {
-                EventCard::MadScienceViolence => {
-                    num_traits::cast(fight.var(CardVar::ViolenceHits)).expect("a few hits")
+                __c0 if __c0 == V::Card::MAD_SCIENCE_VIOLENCE => {
+                    num_traits::cast(fight.var(V::CardVar::VIOLENCE_HITS)).expect("a few hits")
                 }
                 _ => 1,
             };
-            return mad_science_hits(card, fight, hits);
+            return mad_science_hits::<V, _>(card, fight, hits);
         }
-        EventCard::MadScienceEnergized
-        | EventCard::MadScienceWisdom
-        | EventCard::MadScienceChaos => {
+        __c0 if __c0 == V::Card::MAD_SCIENCE_ENERGIZED
+            || __c0 == V::Card::MAD_SCIENCE_WISDOM
+            || __c0 == V::Card::MAD_SCIENCE_CHAOS =>
+        {
             let block = fight.resolve(Effect::GainBlock {
                 recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
+                amount: Amount::Var(V::CardVar::BLOCK),
                 scaling: Scaling::Dynamic,
             });
             fight.apply(block);
             match card {
-                EventCard::MadScienceEnergized => {
-                    fight.modify_energy(fight.var(CardVar::EnergizedEnergy))
+                __c0 if __c0 == V::Card::MAD_SCIENCE_ENERGIZED => {
+                    fight.modify_energy(fight.var(V::CardVar::ENERGIZED_ENERGY))
                 }
-                EventCard::MadScienceWisdom => {
-                    fight.draw(fight.var(CardVar::WisdomCards));
+                __c0 if __c0 == V::Card::MAD_SCIENCE_WISDOM => {
+                    fight.draw(fight.var(V::CardVar::WISDOM_CARDS));
                 }
                 _ => crate::behaviour::free_card_into_hand(fight, |_| true, false),
             }
         }
-        EventCard::MadScienceExpertise => {
-            let strength = counted(fight, CardVar::ExpertiseStrength);
-            fight.apply_to_actor(Power::StrengthPower, strength);
-            let dexterity = counted(fight, CardVar::ExpertiseDexterity);
-            fight.apply_to_actor(Power::DexterityPower, dexterity);
+        __c0 if __c0 == V::Card::MAD_SCIENCE_EXPERTISE => {
+            let strength = counted(fight, V::CardVar::EXPERTISE_STRENGTH);
+            fight.apply_to_actor(V::Power::STRENGTH_POWER, strength);
+            let dexterity = counted(fight, V::CardVar::EXPERTISE_DEXTERITY);
+            fight.apply_to_actor(V::Power::DEXTERITY_POWER, dexterity);
         }
-        EventCard::MadScienceCurious => {
-            let curious = counted(fight, CardVar::CuriousReduction);
-            fight.apply_to_actor(Power::CuriousPower, curious);
+        __c0 if __c0 == V::Card::MAD_SCIENCE_CURIOUS => {
+            let curious = counted(fight, V::CardVar::CURIOUS_REDUCTION);
+            fight.apply_to_actor(V::Power::CURIOUS_POWER, curious);
         }
-        EventCard::MadScienceImprovement => {
-            fight.apply_to_actor(Power::ImprovementPower, PowerAmount::Counted(1));
+        __c0 if __c0 == V::Card::MAD_SCIENCE_IMPROVEMENT => {
+            fight.apply_to_actor(V::Power::IMPROVEMENT_POWER, PowerAmount::Counted(1));
         }
         card => unreachable!("{card:?} is not a Mad Science"),
     }
@@ -384,9 +384,9 @@ fn mad_science<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
 
 /// `Whistle`: its damage to the target, then `CreatureCmd.Stun` on it with
 /// no move named after.
-fn whistle<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn whistle<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     let target = fight.target();
-    hit(fight, target, 1);
+    hit::<V, _>(fight, target, 1);
     fight.stun(
         target,
         <V as crate::build::Lists>::powers_stunned(),
@@ -397,25 +397,25 @@ fn whistle<F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// `Maul`: its damage to the target twice, then its `Increase` onto the
 /// damage of every Maul its owner holds in the fight, itself included.
-fn maul<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn maul<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     let target = fight.target();
-    hit(fight, target, 2);
+    hit::<V, _>(fight, target, 2);
     if fight.waiting() {
-        return wait(Resume::MaulHit);
+        return wait::<V>(Resume::MaulHit);
     }
-    maul_hit(fight)
+    maul_hit::<V, _>(fight)
 }
 
 /// The rest of `Maul`, once its attack is over: every Maul's damage raised.
-fn maul_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    use super::super::super::generated::cards::Cards;
-
-    let raise = Change::Own(super::CardWrite::BuffFromPlay(fight.var(CardVar::Increase)));
+fn maul_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let raise = Change::Own(crate::behaviour::cards::CardWrite::BuffFromPlay(
+        fight.var(V::CardVar::INCREASE),
+    ));
     // `AllCards`: the hand, the draw, discard and exhaust piles, then the
     // play pile, which holds the Maul being played.
     for pile in [Pile::Hand, Pile::Draw, Pile::Discard, Pile::Exhaust] {
         for card in fight.cards_in(pile) {
-            if fight.card_ident(card).card == Cards::Event(EventCard::Maul) {
+            if fight.card_ident(card).card == V::Card::MAUL {
                 fight.modify_card(card, raise, Lasting::ThisFight);
             }
         }
@@ -426,7 +426,7 @@ fn maul_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// `Apotheosis`: every other card its owner holds in the fight upgraded,
 /// where it can be.
-fn apotheosis<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn apotheosis<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     // `AllCards` less itself: the hand, the draw, discard, exhaust and play
     // piles, where a card that auto-played it stands. `CardCmd.Upgrade`
     // leaves a card at its highest alone.
@@ -449,14 +449,17 @@ fn apotheosis<F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// The rest of an event card's play that stood still on a question its own
 /// command raised.
-pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
+pub(super) fn resume_waited<V: crate::Build, F: Fight<V>>(
+    fight: &mut F,
+    at: Resume<V>,
+) -> Played<V> {
     match at {
         Resume::BrightestFlameDrew => {
-            fight.lose_max_hp(fight.actor(), fight.var(CardVar::MaxHp));
+            fight.lose_max_hp(fight.actor(), fight.var(V::CardVar::MAX_HP));
             Played::Done
         }
-        Resume::MaulHit => maul_hit(fight),
-        Resume::MadScienceHit { card, left } => mad_science_hits(card, fight, left),
+        Resume::MaulHit => maul_hit::<V, _>(fight),
+        Resume::MadScienceHit { card, left } => mad_science_hits::<V, _>(card, fight, left),
         at => unreachable!("{at:?} stops on a pick, not on a question it waited for"),
     }
 }

@@ -18,9 +18,15 @@ use super::V0_107_1 as V;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Resume {
-    Card(cards::Resume),
+    Card(crate::behaviour::cards::Resume<V>),
     Potion(crate::behaviour::potions::Resume),
     Monster(crate::behaviour::monsters::Resume),
+}
+
+impl From<crate::behaviour::cards::Resume<V>> for Resume {
+    fn from(at: crate::behaviour::cards::Resume<V>) -> Self {
+        Resume::Card(at)
+    }
 }
 
 impl From<crate::behaviour::monsters::Resume> for Resume {
@@ -37,10 +43,18 @@ impl From<crate::behaviour::potions::Resume> for Resume {
 
 pub(crate) fn resume<F: Fight<V>>(fight: &mut F, at: Resume, answer: Taken<V>) -> Played<V> {
     match (at, answer) {
-        (Resume::Card(at), Taken::Selected(cards)) => cards::resume_play(fight, at, cards),
-        (Resume::Card(at), Taken::Chosen(card)) => cards::resume_chosen(fight, at, card),
-        (Resume::Card(at), Taken::Waited) => cards::resume_waited(fight, at),
-        (Resume::Card(at), Taken::Drew(drew)) => cards::resume_drew(fight, at, &drew),
+        (Resume::Card(at), Taken::Selected(cards)) => {
+            crate::behaviour::cards::resume_play::<V, _>(fight, at, cards)
+        }
+        (Resume::Card(at), Taken::Chosen(card)) => {
+            crate::behaviour::cards::resume_chosen::<V, _>(fight, at, card)
+        }
+        (Resume::Card(at), Taken::Waited) => {
+            crate::behaviour::cards::resume_waited::<V, _>(fight, at)
+        }
+        (Resume::Card(at), Taken::Drew(drew)) => {
+            crate::behaviour::cards::resume_drew::<V, _>(fight, at, &drew)
+        }
         (Resume::Potion(at), answer) => crate::behaviour::potions::resume(fight, at, answer),
         (Resume::Monster(at), Taken::Chosen(card)) => {
             crate::behaviour::monsters::resume(fight, at, card)
@@ -73,6 +87,91 @@ impl crate::build::OwnRules for V {
         asked: &mut sts2_core::HookEffects<V>,
     ) {
         relics::own_relic_event_hook(state, hook, asked);
+    }
+
+    fn own_card_play<F: sts2_core::Fight<V>>(
+        card: <V as sts2_core::ContentVersion>::Card,
+        fight: &mut F,
+    ) -> Option<sts2_core::Played<V>> {
+        cards::play(card, fight)
+    }
+
+    fn own_card_calculated<P: sts2_core::Printed<V> + ?Sized>(
+        card: <V as sts2_core::ContentVersion>::Card,
+        key: <V as sts2_core::ContentVersion>::CardVar,
+        printed: &P,
+        owner: sts2_core::CardOwner<'_, V>,
+    ) -> Option<i32> {
+        cards::calculated(card, key, printed, owner)
+    }
+
+    fn generated_upgrade(
+        card: <V as sts2_core::ContentVersion>::Card,
+    ) -> &'static [sts2_core::Change<V>] {
+        use super::generated::card_plays;
+        use super::generated::cards::Cards;
+
+        match card {
+            Cards::Ironclad(card) => card_plays::ironclad::upgrade(card),
+            Cards::Silent(card) => card_plays::silent::upgrade(card),
+            Cards::Regent(card) => card_plays::regent::upgrade(card),
+            Cards::Necrobinder(card) => card_plays::necrobinder::upgrade(card),
+            Cards::Defect(card) => card_plays::defect::upgrade(card),
+            Cards::Colorless(card) => card_plays::colorless::upgrade(card),
+            Cards::Curse(card) => card_plays::curse::upgrade(card),
+            Cards::Event(card) => card_plays::event::upgrade(card),
+            Cards::Quest(card) => card_plays::quest::upgrade(card),
+            Cards::Status(card) => card_plays::status::upgrade(card),
+            Cards::Token(card) => card_plays::token::upgrade(card),
+            Cards::Deprecated(card) => card_plays::deprecated::upgrade(card),
+        }
+    }
+
+    fn generated_play_from<F: sts2_core::Fight<V>>(
+        card: <V as sts2_core::ContentVersion>::Card,
+        fight: &mut F,
+        from: u8,
+    ) -> Result<sts2_core::Played<V>, u8> {
+        use super::generated::card_plays;
+        use super::generated::cards::Cards;
+
+        match card {
+            Cards::Ironclad(card) => card_plays::ironclad::play_from(card, fight, from),
+            Cards::Silent(card) => card_plays::silent::play_from(card, fight, from),
+            Cards::Regent(card) => card_plays::regent::play_from(card, fight, from),
+            Cards::Necrobinder(card) => card_plays::necrobinder::play_from(card, fight, from),
+            Cards::Defect(card) => card_plays::defect::play_from(card, fight, from),
+            Cards::Colorless(card) => card_plays::colorless::play_from(card, fight, from),
+            Cards::Curse(card) => card_plays::curse::play_from(card, fight, from),
+            Cards::Event(card) => card_plays::event::play_from(card, fight, from),
+            Cards::Quest(card) => card_plays::quest::play_from(card, fight, from),
+            Cards::Status(card) => card_plays::status::play_from(card, fight, from),
+            Cards::Token(card) => card_plays::token::play_from(card, fight, from),
+            Cards::Deprecated(card) => card_plays::deprecated::play_from(card, fight, from),
+        }
+    }
+
+    fn generated_turn_end<F: sts2_core::Fight<V>>(
+        card: <V as sts2_core::ContentVersion>::Card,
+        fight: &mut F,
+    ) {
+        use super::generated::card_plays;
+        use super::generated::cards::Cards;
+
+        match card {
+            Cards::Ironclad(card) => card_plays::ironclad::on_turn_end(card, fight),
+            Cards::Silent(card) => card_plays::silent::on_turn_end(card, fight),
+            Cards::Regent(card) => card_plays::regent::on_turn_end(card, fight),
+            Cards::Necrobinder(card) => card_plays::necrobinder::on_turn_end(card, fight),
+            Cards::Defect(card) => card_plays::defect::on_turn_end(card, fight),
+            Cards::Colorless(card) => card_plays::colorless::on_turn_end(card, fight),
+            Cards::Curse(card) => card_plays::curse::on_turn_end(card, fight),
+            Cards::Event(card) => card_plays::event::on_turn_end(card, fight),
+            Cards::Quest(card) => card_plays::quest::on_turn_end(card, fight),
+            Cards::Status(card) => card_plays::status::on_turn_end(card, fight),
+            Cards::Token(card) => card_plays::token::on_turn_end(card, fight),
+            Cards::Deprecated(card) => card_plays::deprecated::on_turn_end(card, fight),
+        }
     }
 
     fn generated_move<F: sts2_core::Fight<V>>(

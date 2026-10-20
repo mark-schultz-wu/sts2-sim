@@ -37,51 +37,36 @@ own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
 
-### 2. The behaviour generic over the build
+### 2. v0.111.0's own rules
 
-The v0.107.1 behaviour moves out of its build into
-`sts2_content::behaviour`, generic over `V: Build`, one pool or domain
-at a time. `cargo xtask generic <file>` does the mechanical part. A
-content path becomes a const from `sts2_content::ids`,
-`V::Orb::LIGHTNING_ORB`, and a pattern naming one becomes a guard,
-since a `match` cannot name a generic const. A match left with no
-catch-all gains an `unreachable!()` arm. It lists what it leaves for a
-hand. Each move adds to `BuildContent` the bounds its rules read.
-`Build` is that and `Rules`, which v0.111.0 gains in the next item. A row lookup
-a build spelled as an inherent method becomes a `sts2_core::Table`
-impl in codegen. A spike on the powers' hooks and every card play
-measured 12,264 instructions a step before and 12,184 after. Every
-recorded run still matches after each move.
+Every rule is in `sts2_content::behaviour`, generic over `V: Build`,
+and v0.107.1's `Rules` calls it. v0.111.0's `Rules` uses the same
+behaviour. A rule whose game code changed between the builds gets a
+port of its own, chosen by the build. Content new in v0.111.0 is
+ported there. Dump and record with the mod built for v0.111.0, and its
+recorded runs are the measure.
 
-The orbs, enchantments, modifiers, acts, encounters, potions, relics,
-powers, monsters and events are shared. The rest: the cards, pool by
-pool. A move or play the build's codegen wrote stays the build's, and a
-shared rule reaches it through `OwnRules`, as the monsters' scripts are.
+What the shared behaviour asks of a build:
 
+- `BuildContent`: the content traits in `sts2_content::ids`, the shared
+  vocabulary types, and `Lists`, which a `lists!` macro beside each rule
+  writes for the build.
+- `Tables`: the lookups into a row that names content.
+- `OwnRules`: the build's generated move and play scripts, and its own
+  ports of rules that name content another build lacks. v0.107.1's own
+  are Diamond Diadem's and Outbreak's powers, Scare, and Expect a Fight.
+  The Amalgamator, Battleworn Dummy and Tinker Time events are its own
+  too. A shared dispatcher asks the build first and answers
+  itself when the hook passes.
 - A shared module that waits on a question resumes at its own `Resume`,
-  which the build's wraps through `From`. The build's own `Resume` moves
-  once nothing it wraps is left in the build.
-- A list a rule hands out whole is a const on `Lists`, which the
-  `lists!` macro beside the rule writes for each build.
-- A rule naming content one build lacks stays in that build. The shared
-  dispatcher hands it over through a hook on `OwnRules`, and answers
-  itself when the hook passes. Diamond Diadem's and Outbreak's powers
-  are the first. Amalgamator, Battleworn Dummy and Tinker Time are the
-  build's own events, one `EventBehavior` the shared events hand their
-  states to.
-- A lookup into a row that names content is a method on `Tables`.
-- A move can shift what the compiler inlines. The relics' dispatchers
-  inlined into the walk cost 3.9%, and stay out of line. The powers did
-  better inline, once their hot state-to-power mapping made no call.
+  which the build's wraps through `From`.
 
-### 3. v0.111.0's own rules
+`cargo xtask generic <file>` rewrites a build's rule to be generic, for
+a port that starts from the other build's code. A move can shift what
+the compiler inlines. The relics' and the cards' decision dispatchers
+stay out of line, since the walk inlining them cost 3.9% and 3.4%.
 
-v0.111.0's `Rules` uses the shared behaviour. A rule whose game code
-changed between the builds gets a port of its own, chosen by the build.
-Content new in v0.111.0 is ported there. Dump and record with the
-mod built for v0.111.0, and its recorded runs are the measure.
-
-### 4. A walk that shares only who listens
+### 3. A walk that shares only who listens
 
 The snapshot copies each walk's listeners. Most walks see none arrive or
 leave: 1.3% of `AfterCardPlayed` walks do, and 28% of `AfterSideTurnEnd`
@@ -91,7 +76,7 @@ A cheaper walk shares only which listeners there are and their order,
 kept apart from what they hold. That is part of the flat-state pass,
 which needs a design first.
 
-### 5. A speed target
+### 4. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.

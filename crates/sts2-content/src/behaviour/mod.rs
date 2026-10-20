@@ -5,6 +5,7 @@
 //! build changed stays in each build that has it.
 
 pub(crate) mod acts;
+pub(crate) mod cards;
 pub(crate) mod enchantments;
 pub(crate) mod encounters;
 pub mod events;

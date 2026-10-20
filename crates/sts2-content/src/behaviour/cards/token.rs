@@ -2,10 +2,9 @@
 
 use sts2_core::{Amount, CardVars, CreatureView as _, Effect, Fight, Opponents, Played, Scaling};
 
-use super::super::super::generated::cards::Cards;
-use super::super::super::generated::cards::{CardVar, TargetType, TokenCard};
-use super::super::super::generated::powers::Power;
-use super::{Number, V};
+use crate::behaviour::cards::Number;
+use crate::generated::cards::TargetType;
+use crate::ids::{CardIds as _, CardVarIds as _, PowerIds as _};
 
 /// Where a token card's play stops to ask something.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -16,16 +15,16 @@ pub enum Resume {
 
 /// The rest of a token card's play that stood still on a question its own
 /// command raised.
-pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
+pub(super) fn resume_waited<V: crate::Build, F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
     match at {
-        Resume::SovereignBladeHit => sovereign_blade_hit(fight),
+        Resume::SovereignBladeHit => sovereign_blade_hit::<V, _>(fight),
     }
 }
 
 /// What a card works out from the fight for a number it prints.
-pub(super) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
-    card: TokenCard,
-    key: CardVar,
+pub(super) fn calculated<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
+    card: V::Card,
+    key: V::CardVar,
     printed: &P,
     powers: &[sts2_core::Stack<V>],
 ) -> Number {
@@ -33,17 +32,22 @@ pub(super) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
         // `CalculatedVar.Calculate`: a base, plus an extra for each of
         // whatever the card counts. Sovereign Blade counts the player's Parry,
         // and prints no block without one.
-        (TokenCard::SovereignBlade, CardVar::CalculatedBlock) => {
-            printed.face(CardVar::CalculationBase)
-                + printed.face(CardVar::CalculationExtra) * parry(powers)
+        (__c0, __c1)
+            if (__c0 == V::Card::SOVEREIGN_BLADE && __c1 == V::CardVar::CALCULATED_BLOCK) =>
+        {
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::CALCULATION_EXTRA) * parry::<V>(powers)
         }
         (card, key) => unimplemented!("the {} {card:?} works out", key.name()),
     }
 }
 
 /// `GetOwnerParryAmount`, which is the block a Parry hands a card.
-fn parry(powers: &[sts2_core::Stack<V>]) -> Number {
-    let Some(held) = powers.iter().find(|held| held.power == Power::ParryPower) else {
+fn parry<V: crate::Build>(powers: &[sts2_core::Stack<V>]) -> Number {
+    let Some(held) = powers
+        .iter()
+        .find(|held| held.power == V::Power::PARRY_POWER)
+    else {
         return 0;
     };
     match held.amount {
@@ -53,18 +57,27 @@ fn parry(powers: &[sts2_core::Stack<V>]) -> Number {
 }
 
 /// What a card that works its own target out from the fight names.
-pub(super) fn computed_target(card: TokenCard, powers: &[sts2_core::Stack<V>]) -> TargetType {
+pub(super) fn computed_target<V: crate::Build>(
+    card: V::Card,
+    powers: &[sts2_core::Stack<V>],
+) -> TargetType {
     match card {
         // `SovereignBlade.TargetType`: one enemy, or the lot under Seeking
         // Edge.
-        TokenCard::SovereignBlade => {
-            match powers.iter().any(|h| h.power == Power::SeekingEdgePower) {
+        __c0 if __c0 == V::Card::SOVEREIGN_BLADE => {
+            match powers
+                .iter()
+                .any(|h| h.power == V::Power::SEEKING_EDGE_POWER)
+            {
                 true => TargetType::AllEnemies,
                 false => TargetType::AnyEnemy,
             }
         }
         // `Shiv.TargetType`: the same, under Fan of Knives.
-        TokenCard::Shiv => match powers.iter().any(|h| h.power == Power::FanOfKnivesPower) {
+        __c0 if __c0 == <V::Card as crate::ids::CardIds>::SHIV => match powers
+            .iter()
+            .any(|h| h.power == V::Power::FAN_OF_KNIVES_POWER)
+        {
             true => TargetType::AllEnemies,
             false => TargetType::AnyEnemy,
         },
@@ -72,18 +85,18 @@ pub(super) fn computed_target(card: TokenCard, powers: &[sts2_core::Stack<V>]) -
     }
 }
 
-pub(super) fn on_play<F: Fight<V>>(card: TokenCard, fight: &mut F) -> Played<V> {
+pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F) -> Played<V> {
     match card {
-        TokenCard::SovereignBlade => sovereign_blade(fight),
-        TokenCard::Shiv => shiv(fight),
-        TokenCard::SweepingGaze => sweeping_gaze(fight),
-        card => super::generated_from(Cards::Token(card), fight, 0),
+        __c0 if __c0 == V::Card::SOVEREIGN_BLADE => sovereign_blade::<V, _>(fight),
+        __c0 if __c0 == <V::Card as crate::ids::CardIds>::SHIV => shiv::<V, _>(fight),
+        __c0 if __c0 == V::Card::SWEEPING_GAZE => sweeping_gaze::<V, _>(fight),
+        card => crate::behaviour::cards::generated_from::<V, _>(card, fight, 0),
     }
 }
 
 /// `SweepingGaze`: where Osty stands, its damage from Osty to an enemy drawn
 /// at random.
-fn sweeping_gaze<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn sweeping_gaze<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     let Some(osty) = fight.osty() else {
         return Played::Done;
     };
@@ -94,7 +107,7 @@ fn sweeping_gaze<F: Fight<V>>(fight: &mut F) -> Played<V> {
         let hit = fight.resolve(Effect::Attack {
             dealer: osty,
             target,
-            damage: Amount::Var(CardVar::OstyDamage),
+            damage: Amount::Var(V::CardVar::OSTY_DAMAGE),
             scaling: Scaling::Dynamic,
         });
         fight.apply(hit);
@@ -106,7 +119,7 @@ fn sweeping_gaze<F: Fight<V>>(fight: &mut F) -> Played<V> {
 /// holds `power`, and otherwise the one the card was pointed at.
 ///
 /// `TargetingAllOpponents` takes the list again for each hit.
-fn targets<F: Fight<V>>(fight: &F, power: Power) -> Opponents {
+fn targets<V: crate::Build, F: Fight<V>>(fight: &F, power: V::Power) -> Opponents {
     let actor = fight.actor();
     let widened = fight
         .creatures()
@@ -118,16 +131,16 @@ fn targets<F: Fight<V>>(fight: &F, power: Power) -> Opponents {
 }
 
 /// `Shiv`. Deal its damage once, to every opponent under Fan of Knives.
-fn shiv<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn shiv<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     fight.attack(Scaling::Dynamic, |fight| {
-        let targets = targets(fight, Power::FanOfKnivesPower);
+        let targets = targets::<V, _>(fight, V::Power::FAN_OF_KNIVES_POWER);
         // One `CreatureCmd.Damage` over them all.
         fight.damage_command(|fight| {
             for target in targets {
                 let attack = fight.resolve(Effect::Attack {
                     dealer: fight.actor(),
                     target,
-                    damage: Amount::Var(CardVar::Damage),
+                    damage: Amount::Var(V::CardVar::DAMAGE),
                     scaling: Scaling::Dynamic,
                 });
                 fight.apply(attack);
@@ -143,17 +156,17 @@ fn shiv<F: Fight<V>>(fight: &mut F) -> Played<V> {
 ///
 /// The damage is this copy's own. A forge raises it, and the card that was
 /// forged twice hits for more than the one beside it.
-fn sovereign_blade<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn sovereign_blade<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     fight.attack(Scaling::Dynamic, |fight| {
-        for _ in 0..fight.var(CardVar::Repeat) {
-            let targets = targets(fight, Power::SeekingEdgePower);
+        for _ in 0..fight.var(V::CardVar::REPEAT) {
+            let targets = targets::<V, _>(fight, V::Power::SEEKING_EDGE_POWER);
             // One `CreatureCmd.Damage` over them all.
             fight.damage_command(|fight| {
                 for target in targets {
                     let attack = fight.resolve(Effect::Attack {
                         dealer: fight.actor(),
                         target,
-                        damage: Amount::Var(CardVar::Damage),
+                        damage: Amount::Var(V::CardVar::DAMAGE),
                         scaling: Scaling::Dynamic,
                     });
                     fight.apply(attack);
@@ -163,21 +176,21 @@ fn sovereign_blade<F: Fight<V>>(fight: &mut F) -> Played<V> {
     });
     if fight.waiting() {
         return Played::Waiting {
-            at: super::super::Resume::Card(super::Resume::Token(Resume::SovereignBladeHit)),
+            at: crate::behaviour::cards::Resume::Token(Resume::SovereignBladeHit).into(),
         };
     }
-    sovereign_blade_hit(fight)
+    sovereign_blade_hit::<V, _>(fight)
 }
 
 /// The rest of `SovereignBlade`, once its attack is over: its block where its
 /// owner carries Parry.
-fn sovereign_blade_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn sovereign_blade_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     // `GetOwnerParryAmount(this) > 0`.
     let actor = fight.actor();
     let parried = fight
         .creatures()
         .find(|creature| creature.id() == actor)
-        .and_then(|creature| creature.power(Power::ParryPower))
+        .and_then(|creature| creature.power(V::Power::PARRY_POWER))
         .is_some_and(|amount| match amount {
             sts2_core::PowerAmount::Counted(amount) => amount > 0,
             sts2_core::PowerAmount::Endless => unimplemented!("an endless Parry"),
@@ -185,7 +198,7 @@ fn sovereign_blade_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
     if parried {
         let block = fight.resolve(Effect::GainBlock {
             recipient: actor,
-            amount: Amount::Var(CardVar::CalculatedBlock),
+            amount: Amount::Var(V::CardVar::CALCULATED_BLOCK),
             scaling: Scaling::Dynamic,
         });
         fight.apply(block);

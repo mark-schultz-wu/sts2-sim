@@ -14,17 +14,10 @@
 
 use sts2_core::{CardVars, Fight, Played};
 
-use super::super::V0_107_1;
-use super::super::generated::card_plays;
-use super::super::generated::cards::{
-    CardVar, Cards, ColorlessCard, CurseCard, DefectCard, IroncladCard, NecrobinderCard, QuestCard,
-    RegentCard, SilentCard, TokenCard,
-};
-use super::super::generated::events::Event;
-use super::super::generated::powers::Power;
+use crate::ids::{CardIds as _, CardVarIds as _, EventIds as _, OrbIds as _, PowerIds as _};
 
 /// What the run holds a card's numbers as.
-type Number = <V0_107_1 as sts2_core::ContentVersion>::Number;
+type Number = i32;
 
 mod colorless;
 mod curse;
@@ -37,7 +30,22 @@ mod silent;
 mod status;
 mod token;
 
-type V = V0_107_1;
+/// The pool a card is filed under, which is the `Cards` member holding it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CardFiled {
+    Ironclad,
+    Silent,
+    Regent,
+    Necrobinder,
+    Defect,
+    Colorless,
+    Curse,
+    Event,
+    Quest,
+    Status,
+    Token,
+    Deprecated,
+}
 
 /// What a card's first upgrade writes on the copy being upgraded.
 ///
@@ -47,30 +55,14 @@ type V = V0_107_1;
 ///
 /// Declared rather than applied: an upgrade writes in the same vocabulary any
 /// other effect does, and the fight owns the copy it writes on.
-pub(crate) fn upgrade(card: Cards) -> &'static [Change] {
-    match card {
-        Cards::Ironclad(card) => card_plays::ironclad::upgrade(card),
-        Cards::Silent(card) => card_plays::silent::upgrade(card),
-        Cards::Regent(card) => card_plays::regent::upgrade(card),
-        Cards::Necrobinder(card) => card_plays::necrobinder::upgrade(card),
-        Cards::Defect(card) => card_plays::defect::upgrade(card),
-        Cards::Colorless(card) => card_plays::colorless::upgrade(card),
-        Cards::Curse(card) => card_plays::curse::upgrade(card),
-        Cards::Event(card) => card_plays::event::upgrade(card),
-        Cards::Quest(card) => card_plays::quest::upgrade(card),
-        Cards::Status(card) => card_plays::status::upgrade(card),
-        Cards::Token(card) => card_plays::token::upgrade(card),
-        Cards::Deprecated(card) => card_plays::deprecated::upgrade(card),
-    }
+pub(crate) fn upgrade<V: crate::Build>(card: V::Card) -> &'static [sts2_core::Change<V>] {
+    V::generated_upgrade(card)
 }
-
-/// One thing an effect writes on a copy of a card, as this build spells it.
-pub(crate) type Change = sts2_core::Change<V>;
 
 /// Where `card` stands now, found again by its id, or nothing where no pile
 /// holds it. A card auto-played more than once moves between its plays, and
 /// `CardCmd.AutoPlay` plays it wherever it is.
-pub(super) fn standing<F: Fight<V>>(
+pub(super) fn standing<V: crate::Build, F: Fight<V>>(
     fight: &F,
     card: sts2_core::CardAt<V>,
 ) -> Option<sts2_core::CardAt<V>> {
@@ -87,14 +79,16 @@ pub(super) fn standing<F: Fight<V>>(
 }
 
 /// What a card that works its own target out from the fight names.
-pub(crate) fn computed_target(
-    card: Cards,
-    powers: &[sts2_core::Stack<V0_107_1>],
-) -> super::super::generated::cards::TargetType {
+pub(crate) fn computed_target<V: crate::Build>(
+    card: V::Card,
+    powers: &[sts2_core::Stack<V>],
+) -> crate::generated::cards::TargetType {
     match card {
-        Cards::Token(card) => token::computed_target(card, powers),
+        card if V::card_filed(card) == CardFiled::Token => {
+            token::computed_target::<V>(card, powers)
+        }
         // `Malaise.TargetType`, which names what its constructor does.
-        Cards::Silent(SilentCard::Malaise) => super::super::generated::cards::TargetType::AnyEnemy,
+        __c0 if __c0 == V::Card::MALAISE => crate::generated::cards::TargetType::AnyEnemy,
         card => unimplemented!("what {card:?} points at"),
     }
 }
@@ -107,10 +101,12 @@ const NORMALITY_PLAYS: usize = 3;
 /// # Panics
 ///
 /// A card nobody has ported answering one.
-pub(crate) fn decide_hook(
-    card: Cards,
+/// Out of line: inlined into the walk, it slows every decision the walk asks.
+#[inline(never)]
+pub(crate) fn decide_hook<V: crate::Build>(
+    card: V::Card,
     pile: Option<sts2_core::Pile>,
-    history: sts2_core::History<'_, V0_107_1>,
+    history: sts2_core::History<'_, V>,
     hook: sts2_core::DecisionHook<V>,
 ) -> sts2_core::HookResponse<bool> {
     use sts2_core::{DecisionHook, HookResponse};
@@ -119,7 +115,7 @@ pub(crate) fn decide_hook(
         // `Normality.ShouldPlay`: from the hand, no play once its owner has
         // started three this turn. A fight here has one player, whose plays
         // are all its owner's.
-        (Cards::Curse(CurseCard::Normality), DecisionHook::ShouldPlay { .. }) => {
+        (__c0, DecisionHook::ShouldPlay { .. }) if __c0 == V::Card::NORMALITY => {
             HookResponse::Decision(
                 pile != Some(sts2_core::Pile::Hand)
                     || history.started_this_turn().count() < NORMALITY_PLAYS,
@@ -127,11 +123,9 @@ pub(crate) fn decide_hook(
         }
         // `Enthralled.ShouldPlay`: from the hand, nothing but itself is played
         // by hand. An auto-play goes ahead.
-        (Cards::Curse(CurseCard::Enthralled), DecisionHook::ShouldPlay { card, auto, .. }) => {
+        (__c0, DecisionHook::ShouldPlay { card, auto, .. }) if __c0 == V::Card::ENTHRALLED => {
             HookResponse::Decision(
-                pile != Some(sts2_core::Pile::Hand)
-                    || card == Cards::Curse(CurseCard::Enthralled)
-                    || auto,
+                pile != Some(sts2_core::Pile::Hand) || card == V::Card::ENTHRALLED || auto,
             )
         }
         (card, hook) => unimplemented!("what {card:?} answers for {hook:?}"),
@@ -140,38 +134,34 @@ pub(crate) fn decide_hook(
 
 /// `CardModel.IsPlayable`, which this build's `GrandFinale`, `Clash` and
 /// `HighFive` override.
-pub(crate) fn is_playable(
-    card: Cards,
+pub(crate) fn is_playable<V: crate::Build>(
+    card: V::Card,
     fight: sts2_core::CardLogic,
 ) -> sts2_core::HookResponse<bool> {
     match card {
         // `GrandFinale`: only once its owner's draw pile is empty.
-        Cards::Silent(SilentCard::GrandFinale) => {
+        __c0 if __c0 == V::Card::GRAND_FINALE => {
             sts2_core::HookResponse::Decision(fight.draw_pile == 0)
         }
         // `HighFive`: only while its owner's Osty stands.
-        Cards::Necrobinder(NecrobinderCard::HighFive) => {
-            sts2_core::HookResponse::Decision(fight.osty)
-        }
+        __c0 if __c0 == V::Card::HIGH_FIVE => sts2_core::HookResponse::Decision(fight.osty),
         // `Clash`: only while every card in its owner's hand is an Attack.
-        Cards::Event(super::super::generated::cards::EventCard::Clash) => {
-            sts2_core::HookResponse::Decision(fight.hand_all_attacks)
-        }
+        __c0 if __c0 == V::Card::CLASH => sts2_core::HookResponse::Decision(fight.hand_all_attacks),
         _ => sts2_core::HookResponse::DoesNotImplement,
     }
 }
 
 /// `GetResultPileTypeForCardPlay`, which this build's `ParticleWall` alone
 /// overrides.
-pub(crate) fn result_pile(
-    card: Cards,
+pub(crate) fn result_pile<V: crate::Build>(
+    card: V::Card,
     base: Option<sts2_core::Pile>,
 ) -> sts2_core::HookResponse<Option<sts2_core::Pile>> {
     use sts2_core::{HookResponse, Pile};
 
     match card {
         // `ParticleWall`: back into the hand where the base class discards.
-        Cards::Regent(RegentCard::ParticleWall) => HookResponse::Decision(match base {
+        __c0 if __c0 == V::Card::PARTICLE_WALL => HookResponse::Decision(match base {
             Some(Pile::Discard) => Some(Pile::Hand),
             pile => pile,
         }),
@@ -182,8 +172,8 @@ pub(crate) fn result_pile(
 /// `PowerModel.TypeForCurrentAmount == PowerType.Debuff`, which
 /// [`crate::behaviour::powers::debuff_at`] answers. An endless power's amount is the
 /// game's -1.
-pub(super) fn debuff_for_amount(
-    power: super::super::generated::powers::Power,
+pub(super) fn debuff_for_amount<V: crate::Build>(
+    power: V::Power,
     amount: sts2_core::PowerAmount<i32>,
 ) -> bool {
     let amount = match amount {
@@ -194,17 +184,23 @@ pub(super) fn debuff_for_amount(
 }
 
 /// What a card works out from the fight for a number it prints.
-pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
-    card: Cards,
-    key: CardVar,
+pub(crate) fn calculated<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
+    card: V::Card,
+    key: V::CardVar,
     printed: &P,
-    owner: sts2_core::CardOwner<'_, V0_107_1>,
+    owner: sts2_core::CardOwner<'_, V>,
 ) -> Number {
+    // A card whose number is the build's own.
+    if let Some(number) = V::own_card_calculated(card, key, printed, owner) {
+        return number;
+    }
     match (card, key) {
-        (Cards::Token(card), key) => token::calculated(card, key, printed, owner.powers),
+        (card, key) if V::card_filed(card) == CardFiled::Token => {
+            token::calculated::<V, _>(card, key, printed, owner.powers)
+        }
         // `Rend`: a base, and more for each debuff on its target that is not
         // temporary.
-        (Cards::Colorless(ColorlessCard::Rend), CardVar::CalculatedDamage) => {
+        (__c0, __c1) if (__c0 == V::Card::REND && __c1 == V::CardVar::CALCULATED_DAMAGE) => {
             let debuffs = owner.target.map_or(0, |powers| {
                 powers
                     .iter()
@@ -212,133 +208,140 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
                     // Rend leaves it out whatever it is.
                     .filter(|held| {
                         crate::behaviour::powers::lends::<V>(held.power).is_none()
-                            && debuff_for_amount(held.power, held.amount)
+                            && debuff_for_amount::<V>(held.power, held.amount)
                     })
                     .count()
             });
             let debuffs =
                 Number::try_from(debuffs).expect("a creature's powers fit the game's numbers");
-            printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * debuffs
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::EXTRA_DAMAGE) * debuffs
         }
         // `Unleash`: a base, and one more for each point of health a living
         // Osty has.
-        (Cards::Necrobinder(NecrobinderCard::Unleash), CardVar::CalculatedDamage) => {
-            printed.face(CardVar::CalculationBase)
-                + printed.face(CardVar::ExtraDamage) * owner.osty.map_or(0, Number::from)
+        (__c0, __c1) if (__c0 == V::Card::UNLEASH && __c1 == V::CardVar::CALCULATED_DAMAGE) => {
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::EXTRA_DAMAGE) * owner.osty.map_or(0, Number::from)
         }
         // `Protector`: a base, and more for each point of maximum health a
         // living Osty has.
-        (Cards::Necrobinder(NecrobinderCard::Protector), CardVar::CalculatedDamage) => {
-            printed.face(CardVar::CalculationBase)
-                + printed.face(CardVar::ExtraDamage) * owner.osty_max_hp.map_or(0, Number::from)
+        (__c0, __c1) if (__c0 == V::Card::PROTECTOR && __c1 == V::CardVar::CALCULATED_DAMAGE) => {
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::EXTRA_DAMAGE) * owner.osty_max_hp.map_or(0, Number::from)
         }
         // `Murder`: a base, and more for each card its owner drew this fight.
         // A fight here has one player, who draws every card drawn.
-        (Cards::Silent(SilentCard::Murder), CardVar::CalculatedDamage) => {
+        (__c0, __c1) if (__c0 == V::Card::MURDER && __c1 == V::CardVar::CALCULATED_DAMAGE) => {
             let drawn = Number::try_from(owner.history.drawn_this_fight())
                 .expect("a fight's draws fit the game's numbers");
-            printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * drawn
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::EXTRA_DAMAGE) * drawn
         }
         // `PreciseCut`: a base, and less for each other card in its owner's
         // hand.
-        (Cards::Silent(SilentCard::PreciseCut), CardVar::CalculatedDamage) => {
+        (__c0, __c1) if (__c0 == V::Card::PRECISE_CUT && __c1 == V::CardVar::CALCULATED_DAMAGE) => {
             let others =
                 Number::try_from(owner.hand_besides).expect("a hand fits the game's numbers");
-            printed.face(CardVar::CalculationBase) - printed.face(CardVar::ExtraDamage) * others
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                - printed.face(V::CardVar::EXTRA_DAMAGE) * others
         }
         // `SoulStorm`: a base, and more for each Soul in its owner's exhaust
         // pile.
-        (Cards::Necrobinder(NecrobinderCard::SoulStorm), CardVar::CalculatedDamage) => {
+        (__c0, __c1) if (__c0 == V::Card::SOUL_STORM && __c1 == V::CardVar::CALCULATED_DAMAGE) => {
             let souls = owner
                 .exhaust
                 .iter()
-                .filter(|&&card| card == Cards::Token(TokenCard::Soul))
+                .filter(|&&card| card == V::Card::SOUL)
                 .count();
             let souls = Number::try_from(souls).expect("an exhaust pile fits the game's numbers");
-            printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * souls
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::EXTRA_DAMAGE) * souls
         }
         // `Rattle`: a base, and more for each of one and the attacks Osty made
         // this turn. A fight here has one player, whose Osty every Osty is.
-        (Cards::Necrobinder(NecrobinderCard::Rattle), CardVar::CalculatedHits) => {
+        (__c0, __c1) if (__c0 == V::Card::RATTLE && __c1 == V::CardVar::CALCULATED_HITS) => {
             let attacks = owner
                 .history
                 .attacked_this_turn()
-                .filter(|&monster| {
-                    monster == Some(super::super::generated::monsters::Monster::Osty)
-                })
+                .filter(|&monster| monster == Some(<V::Monster as crate::ids::MonsterIds>::OSTY))
                 .count();
             let hits =
                 Number::try_from(1 + attacks).expect("a turn's attacks fit the game's numbers");
-            printed.face(CardVar::CalculationBase) + printed.face(CardVar::CalculationExtra) * hits
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::CALCULATION_EXTRA) * hits
         }
         // `Sacrifice`: a base, and more for each of twice the maximum health a
         // living Osty has.
-        (Cards::Necrobinder(NecrobinderCard::Sacrifice), CardVar::CalculatedBlock) => {
+        (__c0, __c1) if (__c0 == V::Card::SACRIFICE && __c1 == V::CardVar::CALCULATED_BLOCK) => {
             let twice = owner.osty_max_hp.map_or(0, |hp| Number::from(hp) * 2);
-            printed.face(CardVar::CalculationBase) + printed.face(CardVar::CalculationExtra) * twice
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::CALCULATION_EXTRA) * twice
         }
         // `Stack`: a base, and more for each card in its owner's discard pile.
-        (
-            Cards::Event(super::super::generated::cards::EventCard::Stack),
-            CardVar::CalculatedBlock,
-        ) => {
+        (__c0, __c1) if (__c0 == V::Card::STACK && __c1 == V::CardVar::CALCULATED_BLOCK) => {
             let discard =
                 Number::try_from(owner.discard).expect("a discard pile fits the game's numbers");
-            printed.face(CardVar::CalculationBase)
-                + printed.face(CardVar::CalculationExtra) * discard
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::CALCULATION_EXTRA) * discard
         }
         // `AshenStrike`: a base, and more for each card in its owner's
         // exhaust pile.
-        (Cards::Ironclad(IroncladCard::AshenStrike), CardVar::CalculatedDamage) => {
+        (__c0, __c1)
+            if (__c0 == V::Card::ASHEN_STRIKE && __c1 == V::CardVar::CALCULATED_DAMAGE) =>
+        {
             let exhausted = Number::try_from(owner.exhaust.len())
                 .expect("an exhaust pile fits the game's numbers");
-            printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * exhausted
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::EXTRA_DAMAGE) * exhausted
         }
         // `Mirage`: a base, and one more for each Poison on the living
         // enemies.
-        (Cards::Silent(SilentCard::Mirage), CardVar::CalculatedBlock) => {
+        (__c0, __c1) if (__c0 == V::Card::MIRAGE && __c1 == V::CardVar::CALCULATED_BLOCK) => {
             let poison: Number = owner
                 .enemy_powers
                 .iter()
-                .filter(|stack| stack.power == Power::PoisonPower)
+                .filter(|stack| stack.power == V::Power::POISON_POWER)
                 .map(|stack| match stack.amount {
                     sts2_core::PowerAmount::Counted(amount) => amount,
                     sts2_core::PowerAmount::Endless => unimplemented!("an endless Poison"),
                 })
                 .sum();
-            printed.face(CardVar::CalculationBase)
-                + printed.face(CardVar::CalculationExtra) * poison
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::CALCULATION_EXTRA) * poison
         }
         // `Bully`: a base, and more for each Vulnerable on its target.
-        (Cards::Ironclad(IroncladCard::Bully), CardVar::CalculatedDamage) => {
+        (__c0, __c1) if (__c0 == V::Card::BULLY && __c1 == V::CardVar::CALCULATED_DAMAGE) => {
             let vulnerable = owner
                 .target
                 .and_then(|powers| {
                     powers
                         .iter()
-                        .find(|stack| stack.power == Power::VulnerablePower)
+                        .find(|stack| stack.power == V::Power::VULNERABLE_POWER)
                 })
                 .map_or(0, |stack| match stack.amount {
                     sts2_core::PowerAmount::Counted(amount) => amount,
                     sts2_core::PowerAmount::Endless => unimplemented!("an endless Vulnerable"),
                 });
-            printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * vulnerable
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::EXTRA_DAMAGE) * vulnerable
         }
         // `Normality`: a base, and one fewer card for each play its owner
         // started this turn, up to three.
-        (Cards::Curse(CurseCard::Normality), CardVar::CalculatedCards) => {
+        (__c0, __c1) if (__c0 == V::Card::NORMALITY && __c1 == V::CardVar::CALCULATED_CARDS) => {
             let started = owner
                 .history
                 .started_this_turn()
                 .count()
                 .min(NORMALITY_PLAYS);
             let started = Number::try_from(started).expect("three fits the game's numbers");
-            printed.face(CardVar::CalculationBase)
-                + printed.face(CardVar::CalculationExtra) * started
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::CALCULATION_EXTRA) * started
         }
         // `BeatIntoShape`: a base, and more for each powered hit its owner
         // landed on its target this turn.
-        (Cards::Regent(RegentCard::BeatIntoShape), CardVar::CalculatedForge) => {
+        (__c0, __c1)
+            if (__c0 == V::Card::BEAT_INTO_SHAPE && __c1 == V::CardVar::CALCULATED_FORGE) =>
+        {
             let hits = owner
                 .history
                 .damage_received_this_turn()
@@ -349,39 +352,42 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
                 })
                 .count();
             let hits = Number::try_from(hits).expect("a turn's hits fit the game's numbers");
-            printed.face(CardVar::CalculationBase) + printed.face(CardVar::CalculationExtra) * hits
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::CALCULATION_EXTRA) * hits
         }
         // `KnifeTrap`: a base, and more for each Shiv in its owner's exhaust
         // pile.
-        (Cards::Silent(SilentCard::KnifeTrap), CardVar::CalculatedShivs) => {
+        (__c0, __c1) if (__c0 == V::Card::KNIFE_TRAP && __c1 == V::CardVar::CALCULATED_SHIVS) => {
             let shivs = owner
                 .exhaust
                 .iter()
                 .filter(|&&card| sts2_core::CardTable::tagged(card, sts2_core::CardTagKinds::SHIV))
                 .count();
             let shivs = Number::try_from(shivs).expect("an exhaust pile fits the game's numbers");
-            printed.face(CardVar::CalculationBase) + printed.face(CardVar::CalculationExtra) * shivs
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::CALCULATION_EXTRA) * shivs
         }
         // `TearAsunder`: a base, and more for each of one and the hits this
         // fight that took hit points from its owner.
-        (Cards::Ironclad(IroncladCard::TearAsunder), CardVar::CalculatedHits) => {
+        (__c0, __c1) if (__c0 == V::Card::TEAR_ASUNDER && __c1 == V::CardVar::CALCULATED_HITS) => {
             let hurt = owner
                 .history
                 .damage_received_this_fight()
                 .filter(|received| received.receiver == owner.player && received.unblocked > 0)
                 .count();
             let hits = Number::try_from(1 + hurt).expect("a fight's hits fit the game's numbers");
-            printed.face(CardVar::CalculationBase) + printed.face(CardVar::CalculationExtra) * hits
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::CALCULATION_EXTRA) * hits
         }
         // `BodySlam`: a base, and more for each point of its owner's block.
-        (Cards::Ironclad(IroncladCard::BodySlam), CardVar::CalculatedDamage) => {
-            printed.face(CardVar::CalculationBase)
-                + printed.face(CardVar::ExtraDamage) * owner.block
+        (__c0, __c1) if (__c0 == V::Card::BODY_SLAM && __c1 == V::CardVar::CALCULATED_DAMAGE) => {
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::EXTRA_DAMAGE) * owner.block
         }
         // `Barrage`: a base, and one more hit for each orb its owner holds.
         // `HelixDrill`: a base, and one more hit for each energy its owner
         // spent this turn. In the play pile it leaves out what it costs now.
-        (Cards::Defect(DefectCard::HelixDrill), CardVar::CalculatedHits) => {
+        (__c0, __c1) if (__c0 == V::Card::HELIX_DRILL && __c1 == V::CardVar::CALCULATED_HITS) => {
             let spent = owner.history.energy_spent_this_turn();
             let own = match owner.cost_in_play {
                 None => 0,
@@ -390,50 +396,37 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
             };
             let spent = Number::try_from(spent).expect("a turn's energy fits a game number");
             let energy = spent - Number::from(own);
-            printed.face(CardVar::CalculationBase)
-                + printed.face(CardVar::CalculationExtra) * energy
-        }
-        // `ExpectAFight`: a base, and one more energy for each Attack in its
-        // owner's hand.
-        (Cards::Ironclad(IroncladCard::ExpectAFight), CardVar::CalculatedEnergy) => {
-            let attacks = owner
-                .hand
-                .iter()
-                .filter(|&&card| {
-                    <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Attack)
-                })
-                .count();
-            let attacks = Number::try_from(attacks).expect("a hand fits the game's numbers");
-            printed.face(CardVar::CalculationBase)
-                + printed.face(CardVar::CalculationExtra) * attacks
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::CALCULATION_EXTRA) * energy
         }
         // `Voltaic`: a base, and one more for each Lightning its owner
         // channelled this fight.
-        (Cards::Defect(DefectCard::Voltaic), CardVar::CalculatedChannels) => {
-            use super::super::generated::orbs::Orb;
-
+        (__c0, __c1) if (__c0 == V::Card::VOLTAIC && __c1 == V::CardVar::CALCULATED_CHANNELS) => {
             let lightning =
-                Number::try_from(owner.history.channelled_this_fight(Orb::LightningOrb))
+                Number::try_from(owner.history.channelled_this_fight(V::Orb::LIGHTNING_ORB))
                     .expect("a fight's orbs fit the game's numbers");
-            printed.face(CardVar::CalculationBase)
-                + printed.face(CardVar::CalculationExtra) * lightning
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::CALCULATION_EXTRA) * lightning
         }
         // `FlakCannon`: a base, and one more hit for each status its owner
         // holds outside the exhaust pile.
-        (Cards::Defect(DefectCard::FlakCannon), CardVar::CalculatedHits) => {
+        (__c0, __c1) if (__c0 == V::Card::FLAK_CANNON && __c1 == V::CardVar::CALCULATED_HITS) => {
             let statuses =
                 Number::try_from(owner.statuses).expect("a fight's cards fit the game's numbers");
-            printed.face(CardVar::CalculationBase)
-                + printed.face(CardVar::CalculationExtra) * statuses
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::CALCULATION_EXTRA) * statuses
         }
-        (Cards::Defect(DefectCard::Barrage), CardVar::CalculatedHits) => {
+        (__c0, __c1) if (__c0 == V::Card::BARRAGE && __c1 == V::CardVar::CALCULATED_HITS) => {
             let orbs =
                 Number::try_from(owner.orbs.len()).expect("an orb queue fits the game's numbers");
-            printed.face(CardVar::CalculationBase) + printed.face(CardVar::CalculationExtra) * orbs
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::CALCULATION_EXTRA) * orbs
         }
         // `CompileDriver`: a base, and one more card for each kind of orb its
         // owner holds.
-        (Cards::Defect(DefectCard::CompileDriver), CardVar::CalculatedCards) => {
+        (__c0, __c1)
+            if (__c0 == V::Card::COMPILE_DRIVER && __c1 == V::CardVar::CALCULATED_CARDS) =>
+        {
             let mut kinds: smallvec::SmallVec<[_; 10]> = smallvec::SmallVec::new();
             for held in owner.orbs {
                 if !kinds.contains(&held.orb) {
@@ -442,94 +435,107 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
             }
             let kinds =
                 Number::try_from(kinds.len()).expect("an orb queue fits the game's numbers");
-            printed.face(CardVar::CalculationBase) + printed.face(CardVar::CalculationExtra) * kinds
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::CALCULATION_EXTRA) * kinds
         }
         // `PerfectedStrike`: a base, and more for each of its owner's cards in
         // the fight tagged Strike, itself included.
-        (Cards::Ironclad(IroncladCard::PerfectedStrike), CardVar::CalculatedDamage) => {
+        (__c0, __c1)
+            if (__c0 == V::Card::PERFECTED_STRIKE && __c1 == V::CardVar::CALCULATED_DAMAGE) =>
+        {
             let strikes =
                 Number::try_from(owner.strikes).expect("a fight's cards fit the game's numbers");
-            printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * strikes
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::EXTRA_DAMAGE) * strikes
         }
         // `MindBlast`: a base, and one more for each card in the draw pile.
-        (Cards::Colorless(ColorlessCard::MindBlast), CardVar::CalculatedDamage) => {
+        (__c0, __c1) if (__c0 == V::Card::MIND_BLAST && __c1 == V::CardVar::CALCULATED_DAMAGE) => {
             let draw =
                 Number::try_from(owner.draw).expect("a draw pile's size fits the game's numbers");
-            printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * draw
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::EXTRA_DAMAGE) * draw
         }
         // `LunarBlast`: a base, and one more hit for each Skill its owner's
         // plays finished this turn. A fight here has one player.
-        (Cards::Regent(RegentCard::LunarBlast), CardVar::CalculatedHits) => {
+        (__c0, __c1) if (__c0 == V::Card::LUNAR_BLAST && __c1 == V::CardVar::CALCULATED_HITS) => {
             let skills = owner
                 .history
                 .finished_this_turn()
                 .filter(|&card| {
-                    <V0_107_1 as sts2_core::Rules>::card_kind(card)
-                        == Some(sts2_core::CardKind::Skill)
+                    <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Skill)
                 })
                 .count();
             let skills = Number::try_from(skills).expect("a turn's plays fit the game's numbers");
-            printed.face(CardVar::CalculationBase)
-                + printed.face(CardVar::CalculationExtra) * skills
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::CALCULATION_EXTRA) * skills
         }
         // `Finisher`: a base, and one more hit for each attack its owner's
         // plays finished this turn. A fight here has one player.
-        (Cards::Silent(SilentCard::Finisher), CardVar::CalculatedHits) => {
+        (__c0, __c1) if (__c0 == V::Card::FINISHER && __c1 == V::CardVar::CALCULATED_HITS) => {
             let attacks = owner
                 .history
                 .finished_this_turn()
                 .filter(|&card| {
-                    <V0_107_1 as sts2_core::Rules>::card_kind(card)
-                        == Some(sts2_core::CardKind::Attack)
+                    <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Attack)
                 })
                 .count();
             let attacks = Number::try_from(attacks).expect("a turn's plays fit the game's numbers");
-            printed.face(CardVar::CalculationBase)
-                + printed.face(CardVar::CalculationExtra) * attacks
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::CALCULATION_EXTRA) * attacks
         }
         // `NoEscape`: a base, and more for each whole `DoomThreshold` of Doom
         // on its target.
-        (Cards::Necrobinder(NecrobinderCard::NoEscape), CardVar::CalculatedDoom) => {
+        (__c0, __c1) if (__c0 == V::Card::NO_ESCAPE && __c1 == V::CardVar::CALCULATED_DOOM) => {
             let doom = owner
                 .target
-                .and_then(|powers| powers.iter().find(|stack| stack.power == Power::DoomPower))
+                .and_then(|powers| {
+                    powers
+                        .iter()
+                        .find(|stack| stack.power == V::Power::DOOM_POWER)
+                })
                 .map_or(0, |stack| match stack.amount {
                     sts2_core::PowerAmount::Counted(amount) => amount,
                     sts2_core::PowerAmount::Endless => unimplemented!("an endless Doom"),
                 });
-            printed.face(CardVar::CalculationBase)
-                + printed.face(CardVar::CalculationExtra)
-                    * (doom / printed.face(CardVar::DoomThreshold))
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::CALCULATION_EXTRA)
+                    * (doom / printed.face(V::CardVar::DOOM_THRESHOLD))
         }
         // `Radiate`: a base, and one more hit for each star its owner gained
         // this turn. A fight here has one player.
-        (Cards::Regent(RegentCard::Radiate), CardVar::CalculatedHits) => {
+        (__c0, __c1) if (__c0 == V::Card::RADIATE && __c1 == V::CardVar::CALCULATED_HITS) => {
             let gained: Number = owner
                 .history
                 .stars_modified_this_turn()
                 .filter(|&amount| amount > 0)
                 .sum();
-            printed.face(CardVar::CalculationBase)
-                + printed.face(CardVar::CalculationExtra) * gained
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::CALCULATION_EXTRA) * gained
         }
         // `CrescentSpear`: a base, and more for each of its owner's cards in
         // the fight that prints a star cost, itself included.
-        (Cards::Regent(RegentCard::CrescentSpear), CardVar::CalculatedDamage) => {
+        (__c0, __c1)
+            if (__c0 == V::Card::CRESCENT_SPEAR && __c1 == V::CardVar::CALCULATED_DAMAGE) =>
+        {
             let starred =
                 Number::try_from(owner.star_cards).expect("a fight's cards fit the game's numbers");
-            printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * starred
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::EXTRA_DAMAGE) * starred
         }
         // `GoldAxe`: a base, and more for each card play the fight has
         // finished.
-        (Cards::Colorless(ColorlessCard::GoldAxe), CardVar::CalculatedDamage) => {
+        (__c0, __c1) if (__c0 == V::Card::GOLD_AXE && __c1 == V::CardVar::CALCULATED_DAMAGE) => {
             let plays = owner.history.finished_this_fight().count();
             let plays = Number::try_from(plays).expect("a fight's plays fit the game's numbers");
-            printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * plays
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::EXTRA_DAMAGE) * plays
         }
         // `PullFromBelow`: a base, and one more hit for each of its owner's
         // plays this fight of a card that was Ethereal. A fight here has one
         // player.
-        (Cards::Necrobinder(NecrobinderCard::PullFromBelow), CardVar::CalculatedHits) => {
+        (__c0, __c1)
+            if (__c0 == V::Card::PULL_FROM_BELOW && __c1 == V::CardVar::CALCULATED_HITS) =>
+        {
             let ethereal = owner
                 .history
                 .finished_this_fight()
@@ -537,26 +543,32 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
                 .count();
             let ethereal =
                 Number::try_from(ethereal).expect("a fight's plays fit the game's numbers");
-            printed.face(CardVar::CalculationBase)
-                + printed.face(CardVar::CalculationExtra) * ethereal
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::CALCULATION_EXTRA) * ethereal
         }
         // `Supermassive`: a base, and more for each card its owner made in
         // the fight.
-        (Cards::Regent(RegentCard::Supermassive), CardVar::CalculatedDamage) => {
+        (__c0, __c1)
+            if (__c0 == V::Card::SUPERMASSIVE && __c1 == V::CardVar::CALCULATED_DAMAGE) =>
+        {
             let made = Number::try_from(owner.history.generated_by_player())
                 .expect("a fight's cards fit the game's numbers");
-            printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * made
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::EXTRA_DAMAGE) * made
         }
         // `MementoMori`: a base, and more for each card its owner discarded
         // this turn. A fight here has one player.
-        (Cards::Silent(SilentCard::MementoMori), CardVar::CalculatedDamage) => {
+        (__c0, __c1)
+            if (__c0 == V::Card::MEMENTO_MORI && __c1 == V::CardVar::CALCULATED_DAMAGE) =>
+        {
             let discarded = Number::try_from(owner.history.discarded_this_turn())
                 .expect("a turn's discards fit the game's numbers");
-            printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * discarded
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::EXTRA_DAMAGE) * discarded
         }
         // `Synchronize`: a base, and more Focus for each kind of orb its
         // owner holds.
-        (Cards::Defect(DefectCard::Synchronize), CardVar::CalculatedFocus) => {
+        (__c0, __c1) if (__c0 == V::Card::SYNCHRONIZE && __c1 == V::CardVar::CALCULATED_FOCUS) => {
             let mut kinds: smallvec::SmallVec<[_; 10]> = smallvec::SmallVec::new();
             for held in owner.orbs {
                 if !kinds.contains(&held.orb) {
@@ -565,47 +577,54 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
             }
             let kinds =
                 Number::try_from(kinds.len()).expect("an orb queue fits the game's numbers");
-            printed.face(CardVar::CalculationBase) + printed.face(CardVar::CalculationExtra) * kinds
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::CALCULATION_EXTRA) * kinds
         }
         // `Flechettes`: a base, and one more hit for each Skill in its owner's
         // hand.
-        (Cards::Silent(SilentCard::Flechettes), CardVar::CalculatedHits) => {
+        (__c0, __c1) if (__c0 == V::Card::FLECHETTES && __c1 == V::CardVar::CALCULATED_HITS) => {
             let skills = owner
                 .hand
                 .iter()
                 .filter(|&&card| {
-                    <V0_107_1 as sts2_core::Rules>::card_kind(card)
-                        == Some(sts2_core::CardKind::Skill)
+                    <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Skill)
                 })
                 .count();
             let skills = Number::try_from(skills).expect("a hand fits the game's numbers");
-            printed.face(CardVar::CalculationBase)
-                + printed.face(CardVar::CalculationExtra) * skills
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::CALCULATION_EXTRA) * skills
         }
         // `Squeeze`: a base, and more for each of its owner's other cards in
         // the fight tagged as Osty's attack.
-        (Cards::Necrobinder(NecrobinderCard::Squeeze), CardVar::CalculatedDamage) => {
+        (__c0, __c1) if (__c0 == V::Card::SQUEEZE && __c1 == V::CardVar::CALCULATED_DAMAGE) => {
             let attacks = Number::try_from(owner.osty_attacks_besides)
                 .expect("a fight's cards fit the game's numbers");
-            printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * attacks
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::EXTRA_DAMAGE) * attacks
         }
         // `TimesUp`: a base, and more for each Doom on its target.
-        (Cards::Necrobinder(NecrobinderCard::TimesUp), CardVar::CalculatedDamage) => {
+        (__c0, __c1) if (__c0 == V::Card::TIMES_UP && __c1 == V::CardVar::CALCULATED_DAMAGE) => {
             let doom = owner
                 .target
-                .and_then(|powers| powers.iter().find(|stack| stack.power == Power::DoomPower))
+                .and_then(|powers| {
+                    powers
+                        .iter()
+                        .find(|stack| stack.power == V::Power::DOOM_POWER)
+                })
                 .map_or(0, |stack| match stack.amount {
                     sts2_core::PowerAmount::Counted(amount) => amount,
                     sts2_core::PowerAmount::Endless => unimplemented!("an endless Doom"),
                 });
-            printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * doom
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::EXTRA_DAMAGE) * doom
         }
         // `DeathMarch`: a base, and more for each card its owner drew this
         // turn outside the hand draw. A fight here has one player.
-        (Cards::Necrobinder(NecrobinderCard::DeathMarch), CardVar::CalculatedDamage) => {
+        (__c0, __c1) if (__c0 == V::Card::DEATH_MARCH && __c1 == V::CardVar::CALCULATED_DAMAGE) => {
             let drawn = owner.history.drawn_outside_hand_draw_this_turn();
             let drawn = Number::try_from(drawn).expect("a turn's draws fit the game's numbers");
-            printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * drawn
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::EXTRA_DAMAGE) * drawn
         }
         (card, key) => unimplemented!("the {} {card:?} works out", key.name()),
     }
@@ -613,27 +632,27 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
 
 /// Where a card's own play stops to ask something, under its card grouping.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Resume {
+pub enum Resume<V: crate::Build> {
     Colorless(colorless::Resume),
-    Defect(defect::Resume),
-    Event(event::Resume),
-    Ironclad(ironclad::Resume),
-    Necrobinder(necrobinder::Resume),
-    Regent(regent::Resume),
+    Defect(defect::Resume<V>),
+    Event(event::Resume<V>),
+    Ironclad(ironclad::Resume<V>),
+    Necrobinder(necrobinder::Resume<V>),
+    Regent(regent::Resume<V>),
     Silent(silent::Resume),
     Token(token::Resume),
     /// A generated play, from the command after the one that left a
     /// question waiting.
-    Generated(Cards, u8),
+    Generated(V::Card, u8),
 }
 
 /// The cards a play still has to go through once it waited, in the order
 /// the game's list took them. A card that joined the hand meanwhile is not
 /// one of them. The list is a hand's worth at most.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Left([Option<sts2_core::CardAt<V>>; 10]);
+pub struct Left<V: crate::Build>([Option<sts2_core::CardAt<V>>; 10]);
 
-impl Left {
+impl<V: crate::Build> Left<V> {
     /// `cards`, in order.
     ///
     /// # Panics
@@ -685,60 +704,46 @@ impl Held {
 
 /// A generated play from the command at `from` on, standing still where a
 /// command leaves a question waiting.
-pub(crate) fn generated_from<F: Fight<V>>(card: Cards, fight: &mut F, from: u8) -> Played<V> {
-    let played = match card {
-        Cards::Ironclad(card) => card_plays::ironclad::play_from(card, fight, from),
-        Cards::Silent(card) => card_plays::silent::play_from(card, fight, from),
-        Cards::Regent(card) => card_plays::regent::play_from(card, fight, from),
-        Cards::Necrobinder(card) => card_plays::necrobinder::play_from(card, fight, from),
-        Cards::Defect(card) => card_plays::defect::play_from(card, fight, from),
-        Cards::Colorless(card) => card_plays::colorless::play_from(card, fight, from),
-        Cards::Curse(card) => card_plays::curse::play_from(card, fight, from),
-        Cards::Event(card) => card_plays::event::play_from(card, fight, from),
-        Cards::Quest(card) => card_plays::quest::play_from(card, fight, from),
-        Cards::Status(card) => card_plays::status::play_from(card, fight, from),
-        Cards::Token(card) => card_plays::token::play_from(card, fight, from),
-        Cards::Deprecated(card) => card_plays::deprecated::play_from(card, fight, from),
-    };
+pub(crate) fn generated_from<V: crate::Build, F: Fight<V>>(
+    card: V::Card,
+    fight: &mut F,
+    from: u8,
+) -> Played<V> {
+    let played = V::generated_play_from(card, fight, from);
     played.unwrap_or_else(|next| Played::Waiting {
-        at: super::Resume::Card(Resume::Generated(card, next)),
+        at: Resume::Generated(card, next).into(),
     })
 }
 
 /// What a card does when it is played.
 #[tracing::instrument(level = "trace", skip_all, fields(card = ?card))]
-pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Played<V> {
-    match card {
-        Cards::Ironclad(card) => ironclad::on_play(card, fight),
-        Cards::Silent(card) => silent::on_play(card, fight),
-        Cards::Regent(card) => regent::on_play(card, fight),
-        Cards::Necrobinder(card) => necrobinder::on_play(card, fight),
-        Cards::Defect(card) => defect::on_play(card, fight),
-        Cards::Colorless(card) => colorless::on_play(card, fight),
-        Cards::Curse(_) => generated_from(card, fight, 0),
-        Cards::Event(card) => event::on_play(card, fight),
-        Cards::Quest(_) => generated_from(card, fight, 0),
-        Cards::Status(card) => status::on_play(card, fight),
-        Cards::Token(card) => token::on_play(card, fight),
-        Cards::Deprecated(_) => generated_from(card, fight, 0),
+pub(crate) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F) -> Played<V> {
+    // A card whose rule is the build's own.
+    if let Some(played) = V::own_card_play(card, fight) {
+        return played;
+    }
+    match V::card_filed(card) {
+        CardFiled::Ironclad => ironclad::on_play::<V, _>(card, fight),
+        CardFiled::Silent => silent::on_play::<V, _>(card, fight),
+        CardFiled::Regent => regent::on_play::<V, _>(card, fight),
+        CardFiled::Necrobinder => necrobinder::on_play::<V, _>(card, fight),
+        CardFiled::Defect => defect::on_play::<V, _>(card, fight),
+        CardFiled::Colorless => colorless::on_play::<V, _>(card, fight),
+        CardFiled::Curse | CardFiled::Quest | CardFiled::Deprecated => {
+            generated_from::<V, _>(card, fight, 0)
+        }
+        CardFiled::Event => event::on_play::<V, _>(card, fight),
+        CardFiled::Status => status::on_play::<V, _>(card, fight),
+        CardFiled::Token => token::on_play::<V, _>(card, fight),
     }
 }
 
 /// What a card still in the hand does when its owner's turn ends.
-pub(crate) fn on_turn_end<F: Fight<V>>(card: Cards, fight: &mut F) {
-    match card {
-        Cards::Ironclad(card) => card_plays::ironclad::on_turn_end(card, fight),
-        Cards::Silent(card) => card_plays::silent::on_turn_end(card, fight),
-        Cards::Regent(card) => card_plays::regent::on_turn_end(card, fight),
-        Cards::Necrobinder(card) => card_plays::necrobinder::on_turn_end(card, fight),
-        Cards::Defect(card) => card_plays::defect::on_turn_end(card, fight),
-        Cards::Colorless(card) => card_plays::colorless::on_turn_end(card, fight),
-        Cards::Curse(card) => curse::on_turn_end(card, fight),
-        Cards::Event(card) => card_plays::event::on_turn_end(card, fight),
-        Cards::Quest(card) => card_plays::quest::on_turn_end(card, fight),
-        Cards::Status(card) => status::on_turn_end(card, fight),
-        Cards::Token(card) => card_plays::token::on_turn_end(card, fight),
-        Cards::Deprecated(card) => card_plays::deprecated::on_turn_end(card, fight),
+pub(crate) fn on_turn_end<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F) {
+    match V::card_filed(card) {
+        CardFiled::Curse => curse::on_turn_end::<V, _>(card, fight),
+        CardFiled::Status => status::on_turn_end::<V, _>(card, fight),
+        _ => V::generated_turn_end(card, fight),
     }
 }
 
@@ -746,8 +751,8 @@ pub(crate) fn on_turn_end<F: Fight<V>>(card: Cards, fight: &mut F) {
 ///
 /// `printed` is what this copy of the card shows, which is what the model
 /// reads its own numbers off.
-pub(crate) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
-    card: Cards,
+pub(crate) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
+    card: V::Card,
     id: sts2_core::CardId<V>,
     pile: Option<sts2_core::Pile>,
     printed: &P,
@@ -759,33 +764,41 @@ pub(crate) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
     match card {
         // `Guilty.AfterCombatEnd` counts on the copy in the deck, and a copy
         // in the fight's piles does nothing.
-        Cards::Curse(CurseCard::Guilty)
-            if matches!(hook, sts2_core::EventHook::CombatEnd { .. }) => {}
-        Cards::Status(card) => status::event_hook(card, id, printed, hook, asked),
-        Cards::Curse(card) => curse::event_hook(card, pile, hook, asked),
+        __c0 if __c0 == V::Card::GUILTY
+            && (matches!(hook, sts2_core::EventHook::CombatEnd { .. })) => {}
+        card if V::card_filed(card) == CardFiled::Status => {
+            status::event_hook::<V, _>(card, id, printed, hook, asked)
+        }
+        card if V::card_filed(card) == CardFiled::Curse => {
+            curse::event_hook::<V>(card, pile, hook, asked)
+        }
         // `HowlFromBeyond.AfterAutoPostPlayPhaseEntered`: from the exhaust
         // pile, it plays itself.
-        Cards::Ironclad(IroncladCard::HowlFromBeyond)
-            if matches!(hook, sts2_core::EventHook::AutoPostPlayPhase { .. }) =>
+        __c0 if __c0 == V::Card::HOWL_FROM_BEYOND
+            && (matches!(hook, sts2_core::EventHook::AutoPostPlayPhase { .. })) =>
         {
             if pile == Some(sts2_core::Pile::Exhaust) {
                 asked.push(sts2_core::HookEffect::AutoPlay(id));
             }
         }
-        Cards::Ironclad(card) => ironclad::event_hook(card, id, printed, history, hook, asked),
-        Cards::Colorless(card) => colorless::event_hook(card, id, history, hook, asked),
+        card if V::card_filed(card) == CardFiled::Ironclad => {
+            ironclad::event_hook::<V, _>(card, id, printed, history, hook, asked)
+        }
+        card if V::card_filed(card) == CardFiled::Colorless => {
+            colorless::event_hook::<V>(card, id, history, hook, asked)
+        }
         // `SovereignBlade.AfterCardChangedPiles` plays the forge's effects and
         // removes its node, and its `AfterTransformedFrom` removes the node
         // too. Neither touches the fight.
-        Cards::Token(TokenCard::SovereignBlade)
-            if matches!(hook, sts2_core::EventHook::CardChangedPiles { .. }) => {}
-        Cards::Necrobinder(card) => {
-            necrobinder::event_hook(card, id, printed, history, hook, asked)
+        __c0 if __c0 == V::Card::SOVEREIGN_BLADE
+            && (matches!(hook, sts2_core::EventHook::CardChangedPiles { .. })) => {}
+        card if V::card_filed(card) == CardFiled::Necrobinder => {
+            necrobinder::event_hook::<V, _>(card, id, printed, history, hook, asked)
         }
         // `Bombardment.AfterAutoPrePlayPhaseEnteredEarly`: from the exhaust
         // pile, it plays itself.
-        Cards::Regent(RegentCard::Bombardment)
-            if matches!(hook, sts2_core::EventHook::AutoPrePlayPhaseEarly { .. }) =>
+        __c0 if __c0 == V::Card::BOMBARDMENT
+            && (matches!(hook, sts2_core::EventHook::AutoPrePlayPhaseEarly { .. })) =>
         {
             if pile == Some(sts2_core::Pile::Exhaust) {
                 asked.push(sts2_core::HookEffect::AutoPlay(id));
@@ -793,16 +806,20 @@ pub(crate) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
         }
         // `IAmInvincible.AfterAutoPostPlayPhaseEntered`: on top of the draw
         // pile, it has the top card played, which is itself.
-        Cards::Regent(RegentCard::IAmInvincible)
-            if matches!(hook, sts2_core::EventHook::AutoPostPlayPhase { .. }) =>
+        __c0 if __c0 == V::Card::I_AM_INVINCIBLE
+            && (matches!(hook, sts2_core::EventHook::AutoPostPlayPhase { .. })) =>
         {
             asked.push(sts2_core::HookEffect::AutoPlayFromDrawIfTop(id));
         }
-        Cards::Regent(card) => regent::event_hook(card, id, printed, history, hook, asked),
-        Cards::Silent(card) => silent::event_hook(card, id, history, hook, asked),
+        card if V::card_filed(card) == CardFiled::Regent => {
+            regent::event_hook::<V, _>(card, id, printed, history, hook, asked)
+        }
+        card if V::card_filed(card) == CardFiled::Silent => {
+            silent::event_hook::<V>(card, id, history, hook, asked)
+        }
         // `RocketPunch.AfterCardGeneratedForCombat`: free until played once
         // its owner makes a Status.
-        Cards::Defect(DefectCard::RocketPunch) => match hook {
+        __c0 if __c0 == V::Card::ROCKET_PUNCH => match hook {
             sts2_core::EventHook::CardGeneratedForCombat {
                 card,
                 creator: Some(_),
@@ -839,14 +856,14 @@ pub enum State {
     },
 }
 
-impl sts2_core::CardModel<V> for State {
-    fn new(card: Cards) -> Self {
+impl<V: crate::Build> sts2_core::CardModel<V> for State {
+    fn new(card: V::Card) -> Self {
         match card {
-            Cards::Curse(CurseCard::Guilty) => Self::Guilty { combats_seen: 0 },
-            Cards::Defect(DefectCard::GeneticAlgorithm) => {
+            __c0 if __c0 == V::Card::GUILTY => Self::Guilty { combats_seen: 0 },
+            __c0 if __c0 == V::Card::GENETIC_ALGORITHM => {
                 Self::GeneticAlgorithm { increased_block: 0 }
             }
-            Cards::Necrobinder(NecrobinderCard::TheScythe) => Self::TheScythe {
+            __c0 if __c0 == V::Card::THE_SCYTHE => Self::TheScythe {
                 increased_damage: 0,
             },
             _ => Self::Stateless,
@@ -856,17 +873,18 @@ impl sts2_core::CardModel<V> for State {
     /// `Guilty.CombatsSeen`'s setter prints `Combats` as the fights it has
     /// left. The copy of a Genetic Algorithm or a Scythe keeps what the card
     /// gained, and prints the base and that.
-    fn written(&self) -> Option<Change> {
+    fn written(&self) -> Option<sts2_core::Change<V>> {
         match *self {
-            Self::Guilty { combats_seen } if combats_seen > 0 => {
-                Some(Change::Raise(CardVar::Combats, -Number::from(combats_seen)))
-            }
+            Self::Guilty { combats_seen } if combats_seen > 0 => Some(sts2_core::Change::Raise(
+                V::CardVar::COMBATS,
+                -Number::from(combats_seen),
+            )),
             Self::GeneticAlgorithm {
                 increased_block: gained,
             }
             | Self::TheScythe {
                 increased_damage: gained,
-            } if gained != 0 => Some(Change::Own(CardWrite::BuffFromPlay(gained))),
+            } if gained != 0 => Some(sts2_core::Change::Own(CardWrite::BuffFromPlay(gained))),
             _ => None,
         }
     }
@@ -946,46 +964,44 @@ fn added(field: Field, by: Number) -> Field {
 }
 
 /// The raise that takes `key` from what `printed` holds to `to`.
-fn set<P: sts2_core::Printed<V0_107_1> + ?Sized>(
-    key: CardVar,
+fn set<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
+    key: V::CardVar,
     to: Number,
     printed: &P,
-) -> sts2_core::Change<V0_107_1> {
+) -> sts2_core::Change<V> {
     sts2_core::Change::Raise(key, to - printed.face(key))
 }
 
-impl sts2_core::CardFields<V0_107_1> for Fields {
-    fn new(card: Cards) -> Self {
-        use super::super::generated::cards::EventCard;
+impl<V: crate::Build> sts2_core::CardFields<V> for Fields {
+    fn new(card: V::Card) -> Self {
         let zero = field(0);
         match card {
-            Cards::Defect(DefectCard::Claw) => Self::Claw { extra_damage: zero },
-            Cards::Event(EventCard::Maul) => Self::Maul { extra_damage: zero },
-            Cards::Ironclad(IroncladCard::Rampage) => Self::Rampage { extra_damage: zero },
-            Cards::Regent(RegentCard::KinglyPunch) => Self::KinglyPunch { extra_damage: zero },
-            Cards::Ironclad(IroncladCard::Thrash) => Self::Thrash {
+            __c0 if __c0 == V::Card::CLAW => Self::Claw { extra_damage: zero },
+            __c0 if __c0 == V::Card::MAUL => Self::Maul { extra_damage: zero },
+            __c0 if __c0 == V::Card::RAMPAGE => Self::Rampage { extra_damage: zero },
+            __c0 if __c0 == V::Card::KINGLY_PUNCH => Self::KinglyPunch { extra_damage: zero },
+            __c0 if __c0 == V::Card::THRASH => Self::Thrash {
                 coefficient: zero,
                 scale: 0,
             },
-            Cards::Necrobinder(NecrobinderCard::TheScythe) => Self::TheScythe {
+            __c0 if __c0 == V::Card::THE_SCYTHE => Self::TheScythe {
                 increased_damage: zero,
             },
-            Cards::Defect(DefectCard::GeneticAlgorithm) => Self::GeneticAlgorithm {
+            __c0 if __c0 == V::Card::GENETIC_ALGORITHM => Self::GeneticAlgorithm {
                 increased_block: zero,
             },
-            Cards::Token(TokenCard::SovereignBlade) => Self::SovereignBlade {
+            __c0 if __c0 == V::Card::SOVEREIGN_BLADE => Self::SovereignBlade {
                 current_damage: field(SOVEREIGN_BLADE_DAMAGE),
             },
             _ => Self::Nothing,
         }
     }
 
-    fn write<P: sts2_core::Printed<V0_107_1> + ?Sized>(
+    fn write<P: sts2_core::Printed<V> + ?Sized>(
         &mut self,
         write: CardWrite,
         printed: &P,
-    ) -> sts2_core::Change<V0_107_1> {
-        use sts2_core::Change;
+    ) -> sts2_core::Change<V> {
         match (self, write) {
             (
                 Self::Claw { extra_damage }
@@ -995,13 +1011,13 @@ impl sts2_core::CardFields<V0_107_1> for Fields {
                 CardWrite::BuffFromPlay(by),
             ) => {
                 *extra_damage = added(*extra_damage, by);
-                Change::Raise(CardVar::Damage, by)
+                sts2_core::Change::Raise(V::CardVar::DAMAGE, by)
             }
             // `CurrentDamage = 13 + IncreasedDamage`, whose setter prints it.
             (Self::TheScythe { increased_damage }, CardWrite::BuffFromPlay(by)) => {
                 *increased_damage = added(*increased_damage, by);
-                set(
-                    CardVar::Damage,
+                set::<V, _>(
+                    V::CardVar::DAMAGE,
                     SCYTHE_DAMAGE + read(*increased_damage),
                     printed,
                 )
@@ -1009,8 +1025,8 @@ impl sts2_core::CardFields<V0_107_1> for Fields {
             // `CurrentBlock = 1 + IncreasedBlock`, whose setter prints it.
             (Self::GeneticAlgorithm { increased_block }, CardWrite::BuffFromPlay(by)) => {
                 *increased_block = added(*increased_block, by);
-                set(
-                    CardVar::Block,
+                set::<V, _>(
+                    V::CardVar::BLOCK,
                     GENETIC_ALGORITHM_BLOCK + read(*increased_block),
                     printed,
                 )
@@ -1023,59 +1039,61 @@ impl sts2_core::CardFields<V0_107_1> for Fields {
                     .and_then(sts2_core::Fixed::from_exact);
                 *coefficient = sum.and_then(|sum| field(sum.coefficient()));
                 *scale = sum.map_or(0, sts2_core::Fixed::scale);
-                Change::RaiseExactly(CardVar::Damage, by)
+                sts2_core::Change::RaiseExactly(V::CardVar::DAMAGE, by)
             }
             (fields, write) => unimplemented!("{write:?} on a copy keeping {fields:?}"),
         }
     }
 
-    fn add_damage<P: sts2_core::Printed<V0_107_1> + ?Sized>(
+    fn add_damage<P: sts2_core::Printed<V> + ?Sized>(
         &mut self,
         amount: Number,
         printed: &P,
-    ) -> sts2_core::Change<V0_107_1> {
+    ) -> sts2_core::Change<V> {
         let Self::SovereignBlade { current_damage } = self else {
             unreachable!("AddDamage on a copy keeping {self:?}")
         };
         // `Damage.BaseValue += amount`, then `CurrentDamage` is what it
         // prints.
         *current_damage = printed
-            .face(CardVar::Damage)
+            .face(V::CardVar::DAMAGE)
             .checked_add(amount)
             .and_then(field);
-        sts2_core::Change::Raise(CardVar::Damage, amount)
+        sts2_core::Change::Raise(V::CardVar::DAMAGE, amount)
     }
 
-    fn after_downgraded<P: sts2_core::Printed<V0_107_1> + ?Sized>(
+    fn after_downgraded<P: sts2_core::Printed<V> + ?Sized>(
         &self,
         printed: &P,
-    ) -> Option<sts2_core::Change<V0_107_1>> {
-        use sts2_core::Change;
+    ) -> Option<sts2_core::Change<V>> {
         match *self {
             Self::Nothing => None,
             Self::Claw { extra_damage }
             | Self::Maul { extra_damage }
             | Self::Rampage { extra_damage }
-            | Self::KinglyPunch { extra_damage } => {
-                Some(Change::Raise(CardVar::Damage, read(extra_damage)))
-            }
-            Self::Thrash { coefficient, scale } => Some(Change::RaiseExactly(
-                CardVar::Damage,
+            | Self::KinglyPunch { extra_damage } => Some(sts2_core::Change::Raise(
+                V::CardVar::DAMAGE,
+                read(extra_damage),
+            )),
+            Self::Thrash { coefficient, scale } => Some(sts2_core::Change::RaiseExactly(
+                V::CardVar::DAMAGE,
                 sts2_core::Fixed::new(read(coefficient), scale),
             )),
-            Self::TheScythe { increased_damage } => Some(set(
-                CardVar::Damage,
+            Self::TheScythe { increased_damage } => Some(set::<V, _>(
+                V::CardVar::DAMAGE,
                 SCYTHE_DAMAGE + read(increased_damage),
                 printed,
             )),
-            Self::GeneticAlgorithm { increased_block } => Some(set(
-                CardVar::Block,
+            Self::GeneticAlgorithm { increased_block } => Some(set::<V, _>(
+                V::CardVar::BLOCK,
                 GENETIC_ALGORITHM_BLOCK + read(increased_block),
                 printed,
             )),
-            Self::SovereignBlade { current_damage } => {
-                Some(set(CardVar::Damage, read(current_damage), printed))
-            }
+            Self::SovereignBlade { current_damage } => Some(set::<V, _>(
+                V::CardVar::DAMAGE,
+                read(current_damage),
+                printed,
+            )),
         }
     }
 }
@@ -1087,7 +1105,10 @@ pub use crate::behaviour::DeckWrite;
 /// # Panics
 ///
 /// A write the card's model has no field for.
-pub(crate) fn write_deck_card(card: &mut sts2_core::DeckCard<V>, write: DeckWrite) {
+pub(crate) fn write_deck_card<V: crate::Build>(
+    card: &mut sts2_core::DeckCard<V>,
+    write: DeckWrite,
+) {
     match (&mut card.state, write) {
         (
             State::GeneticAlgorithm {
@@ -1123,8 +1144,8 @@ const GUILTY_COMBATS: u8 = 5;
 /// # Panics
 ///
 /// An override nobody has ported.
-pub(crate) fn deck_event_hook(
-    card: Cards,
+pub(crate) fn deck_event_hook<V: crate::Build>(
+    card: V::Card,
     state: &mut State,
     hook: sts2_core::EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
@@ -1132,11 +1153,9 @@ pub(crate) fn deck_event_hook(
     match (card, state, hook) {
         // `Guilty.AfterCombatEnd`: one more fight seen, and out of the deck at
         // five.
-        (
-            Cards::Curse(CurseCard::Guilty),
-            State::Guilty { combats_seen },
-            sts2_core::EventHook::CombatEnd { .. },
-        ) => {
+        (__c0, State::Guilty { combats_seen }, sts2_core::EventHook::CombatEnd { .. })
+            if __c0 == V::Card::GUILTY =>
+        {
             *combats_seen += 1;
             if *combats_seen >= GUILTY_COMBATS {
                 asked.push(sts2_core::HookEffect::RemoveFromDeck);
@@ -1147,19 +1166,19 @@ pub(crate) fn deck_event_hook(
 }
 
 /// The rest of a play that stopped, once the fight has its answer.
-pub(crate) fn resume_play<F: Fight<V>>(
+pub(crate) fn resume_play<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
-    at: Resume,
+    at: Resume<V>,
     chosen: sts2_core::SelectedCards<V>,
 ) -> Played<V> {
     match at {
-        Resume::Colorless(at) => colorless::resume_play(fight, at, chosen),
-        Resume::Defect(at) => defect::resume_play(fight, at, chosen),
-        Resume::Event(at) => event::resume_play(fight, at, chosen),
-        Resume::Ironclad(at) => ironclad::resume_play(fight, at, chosen),
-        Resume::Necrobinder(at) => necrobinder::resume_play(fight, at, chosen),
-        Resume::Regent(at) => regent::resume_play(fight, at, chosen),
-        Resume::Silent(at) => silent::resume_play(fight, at, chosen),
+        Resume::Colorless(at) => colorless::resume_play::<V, _>(fight, at, chosen),
+        Resume::Defect(at) => defect::resume_play::<V, _>(fight, at, chosen),
+        Resume::Event(at) => event::resume_play::<V, _>(fight, at, chosen),
+        Resume::Ironclad(at) => ironclad::resume_play::<V, _>(fight, at, chosen),
+        Resume::Necrobinder(at) => necrobinder::resume_play::<V, _>(fight, at, chosen),
+        Resume::Regent(at) => regent::resume_play::<V, _>(fight, at, chosen),
+        Resume::Silent(at) => silent::resume_play::<V, _>(fight, at, chosen),
         Resume::Token(at) => unreachable!("{at:?} waits on a question, not a pick"),
         Resume::Generated(card, _) => {
             unreachable!("generated {card:?} waits on a question, not a pick")
@@ -1169,45 +1188,48 @@ pub(crate) fn resume_play<F: Fight<V>>(
 
 /// The rest of a play that waited on its own draw, with every copy the draw
 /// drew. A play that waited on anything else carries on as after a wait.
-pub(crate) fn resume_drew<F: Fight<V>>(
+pub(crate) fn resume_drew<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
-    at: Resume,
+    at: Resume<V>,
     drew: &[sts2_core::CardId<V>],
 ) -> Played<V> {
     match at {
-        Resume::Defect(at) => defect::resume_drew(fight, at, drew),
-        Resume::Ironclad(at) => ironclad::resume_drew(fight, at, drew),
-        Resume::Silent(at) => silent::resume_drew(fight, at, drew),
-        at => resume_waited(fight, at),
+        Resume::Defect(at) => defect::resume_drew::<V, _>(fight, at, drew),
+        Resume::Ironclad(at) => ironclad::resume_drew::<V, _>(fight, at, drew),
+        Resume::Silent(at) => silent::resume_drew::<V, _>(fight, at, drew),
+        at => resume_waited::<V, _>(fight, at),
     }
 }
 
 /// The rest of a play that waited on a question one of its commands left,
 /// once the question is answered.
-pub(crate) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
+pub(crate) fn resume_waited<V: crate::Build, F: Fight<V>>(
+    fight: &mut F,
+    at: Resume<V>,
+) -> Played<V> {
     match at {
-        Resume::Colorless(at) => colorless::resume_waited(fight, at),
-        Resume::Defect(at) => defect::resume_waited(fight, at),
-        Resume::Event(at) => event::resume_waited(fight, at),
-        Resume::Ironclad(at) => ironclad::resume_waited(fight, at),
-        Resume::Necrobinder(at) => necrobinder::resume_waited(fight, at),
-        Resume::Regent(at) => regent::resume_waited(fight, at),
-        Resume::Silent(at) => silent::resume_waited(fight, at),
-        Resume::Token(at) => token::resume_waited(fight, at),
-        Resume::Generated(card, from) => generated_from(card, fight, from),
+        Resume::Colorless(at) => colorless::resume_waited::<V, _>(fight, at),
+        Resume::Defect(at) => defect::resume_waited::<V, _>(fight, at),
+        Resume::Event(at) => event::resume_waited::<V, _>(fight, at),
+        Resume::Ironclad(at) => ironclad::resume_waited::<V, _>(fight, at),
+        Resume::Necrobinder(at) => necrobinder::resume_waited::<V, _>(fight, at),
+        Resume::Regent(at) => regent::resume_waited::<V, _>(fight, at),
+        Resume::Silent(at) => silent::resume_waited::<V, _>(fight, at),
+        Resume::Token(at) => token::resume_waited::<V, _>(fight, at),
+        Resume::Generated(card, from) => generated_from::<V, _>(card, fight, from),
     }
 }
 
 /// The rest of a play that stopped on a choose-a-card screen, once the
 /// player took one or skipped it.
-pub(crate) fn resume_chosen<F: Fight<V>>(
+pub(crate) fn resume_chosen<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
-    at: Resume,
+    at: Resume<V>,
     chosen: Option<sts2_core::CardIdent<V>>,
 ) -> Played<V> {
     match at {
-        Resume::Regent(at) => regent::resume_chosen(fight, at, chosen),
-        Resume::Colorless(at) => colorless::resume_chosen(fight, at, chosen),
+        Resume::Regent(at) => regent::resume_chosen::<V, _>(fight, at, chosen),
+        Resume::Colorless(at) => colorless::resume_chosen::<V, _>(fight, at, chosen),
         at => unimplemented!("{at:?} resumed with a chosen card"),
     }
 }
@@ -1221,9 +1243,9 @@ const LANTERN_KEY_ACT: usize = 2;
 /// # Panics
 ///
 /// Any other card, which the run asks only when its class overrides the hook.
-pub(crate) fn narrows_unknown_rooms(card: Cards, act: usize) -> bool {
+pub(crate) fn narrows_unknown_rooms<V: crate::Build>(card: V::Card, act: usize) -> bool {
     match card {
-        Cards::Quest(QuestCard::LanternKey) => act == LANTERN_KEY_ACT,
+        __c0 if __c0 == V::Card::LANTERN_KEY => act == LANTERN_KEY_ACT,
         card => unimplemented!("what {card:?} does to an unknown room"),
     }
 }
@@ -1240,9 +1262,12 @@ const SPOILS_GOLD: Number = 600;
 /// # Panics
 ///
 /// Any other card, which the run asks only when its class overrides the hook.
-pub(crate) fn modify_generated_map(card: Cards, act: usize) -> Option<sts2_core::ReplacedMap> {
+pub(crate) fn modify_generated_map<V: crate::Build>(
+    card: V::Card,
+    act: usize,
+) -> Option<sts2_core::ReplacedMap> {
     match card {
-        Cards::Quest(QuestCard::SpoilsMap) => {
+        __c0 if __c0 == V::Card::SPOILS_MAP => {
             (act == SPOILS_ACT).then_some(sts2_core::ReplacedMap::Spoils)
         }
         card => unimplemented!("what {card:?} does to a generated map"),
@@ -1257,9 +1282,12 @@ pub(crate) fn modify_generated_map(card: Cards, act: usize) -> Option<sts2_core:
 /// # Panics
 ///
 /// Any other card, which the run asks only when its class overrides the hook.
-pub(crate) fn modify_generated_map_late(card: Cards, act: usize) -> Option<Number> {
+pub(crate) fn modify_generated_map_late<V: crate::Build>(
+    card: V::Card,
+    act: usize,
+) -> Option<Number> {
     match card {
-        Cards::Quest(QuestCard::SpoilsMap) => (act == SPOILS_ACT).then_some(SPOILS_GOLD),
+        __c0 if __c0 == V::Card::SPOILS_MAP => (act == SPOILS_ACT).then_some(SPOILS_GOLD),
         card => unimplemented!("what {card:?} does late in a map's making"),
     }
 }
@@ -1271,9 +1299,9 @@ pub(crate) fn modify_generated_map_late(card: Cards, act: usize) -> Option<Numbe
 /// # Panics
 ///
 /// Any other card, which the run asks only when its class overrides the hook.
-pub(crate) fn after_map_generated(card: Cards, _act: usize) {
+pub(crate) fn after_map_generated<V: crate::Build>(card: V::Card, _act: usize) {
     match card {
-        Cards::Quest(QuestCard::SpoilsMap) => {}
+        __c0 if __c0 == V::Card::SPOILS_MAP => {}
         card => unimplemented!("what {card:?} does once a map is generated"),
     }
 }
@@ -1284,10 +1312,12 @@ pub(crate) fn after_map_generated(card: Cards, _act: usize) {
 /// # Panics
 ///
 /// Any other card, which the run asks only when its class overrides the hook.
-pub(crate) fn next_event(card: Cards, act: usize, event: Event) -> Event {
+pub(crate) fn next_event<V: crate::Build>(card: V::Card, act: usize, event: V::Event) -> V::Event {
     match card {
-        Cards::Quest(QuestCard::LanternKey) if act == LANTERN_KEY_ACT => Event::WarHistorianRepy,
-        Cards::Quest(QuestCard::LanternKey) => event,
+        __c0 if __c0 == V::Card::LANTERN_KEY && (act == LANTERN_KEY_ACT) => {
+            V::Event::WAR_HISTORIAN_REPY
+        }
+        __c0 if __c0 == V::Card::LANTERN_KEY => event,
         card => unimplemented!("what {card:?} does to the next event"),
     }
 }

@@ -53,6 +53,17 @@ struct Content {
 /// Read the consts off `ids.rs`, as the build implements them.
 fn content(build: &str) -> Result<Content, Error> {
     let text = error::read(Path::new("crates/sts2-content/src/ids.rs"))?;
+    // A const a core trait names too is ambiguous on `V::Power`, so those
+    // name their trait.
+    let core = error::read(Path::new("crates/sts2-core/src/content.rs"))?;
+    let core_consts: std::collections::BTreeSet<String> = core
+        .lines()
+        .filter_map(|l| {
+            let rest = l.trim().strip_prefix("const ")?;
+            let (name, ty) = rest.split_once(':')?;
+            (ty.trim() == "Self;").then(|| name.trim().to_owned())
+        })
+        .collect();
     let mut paths = BTreeMap::new();
     let mut types = BTreeMap::new();
     let mut pools = Vec::new();
@@ -105,7 +116,13 @@ fn content(build: &str) -> Result<Content, Error> {
         else {
             continue;
         };
-        let target = format!("V::{assoc}::{konst}");
+        let target = match core_consts.contains(konst) {
+            true => {
+                let trait_name = traits.get(assoc).cloned().unwrap_or_default();
+                format!("<V::{assoc} as crate::ids::{trait_name}>::{konst}")
+            }
+            false => format!("V::{assoc}::{konst}"),
+        };
         let value: String = value.chars().filter(|c| !c.is_whitespace()).collect();
         let value = value.replace(",)", ")");
         let value = value.replace(&format!("{prefix}cards::"), "");
@@ -2277,6 +2294,14 @@ pub fn run(args: Args) -> Result<String, Error> {
             .replace(&format!("<{marker} as"), "<V as")
             .replace(&format!("type V = {marker};\n"), "")
             .replace(&format!("use crate::{}::{marker};\n", args.build), "");
+        // `Stack<V0_107_1>` outside a `use` is `Stack<V>`.
+        let text: String = text
+            .split_inclusive('\n')
+            .map(|line| match line.trim_start().starts_with("use ") {
+                true => line.to_owned(),
+                false => replace_word(line, &marker, "V"),
+            })
+            .collect();
         // `EventOption as Said`: the content type under another name, which
         // this file's paths and types know it by too.
         let mut local = content.clone();

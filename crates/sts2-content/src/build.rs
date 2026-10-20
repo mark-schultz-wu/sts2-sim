@@ -166,6 +166,12 @@ pub trait Tables: ContentVersion {
         at: u8,
     ) -> Result<u8, sts2_core::ContentError>;
 
+    /// The orbs a random channel draws from, in the order a roll reads them.
+    fn rollable_orbs() -> &'static [Self::Orb];
+
+    /// The pool a card is filed under.
+    fn card_filed(card: Self::Card) -> crate::behaviour::cards::CardFiled;
+
     /// Where a monster's moves are filed.
     fn filed(monster: Self::Monster) -> crate::generated::monster_moves::Filed;
 
@@ -204,6 +210,30 @@ macro_rules! tables {
                     })
                     .and_then(|found| u8::try_from(found).ok())
                     .ok_or(sts2_core::ContentError::InvalidMonsterState { index: at })
+            }
+
+            fn rollable_orbs() -> &'static [Self::Orb] {
+                &crate::$module::orbs::ROLLABLE
+            }
+
+            fn card_filed(card: Self::Card) -> crate::behaviour::cards::CardFiled {
+                use crate::$module::cards::Cards;
+                use crate::behaviour::cards::CardFiled;
+
+                match card {
+                    Cards::Ironclad(_) => CardFiled::Ironclad,
+                    Cards::Silent(_) => CardFiled::Silent,
+                    Cards::Regent(_) => CardFiled::Regent,
+                    Cards::Necrobinder(_) => CardFiled::Necrobinder,
+                    Cards::Defect(_) => CardFiled::Defect,
+                    Cards::Colorless(_) => CardFiled::Colorless,
+                    Cards::Curse(_) => CardFiled::Curse,
+                    Cards::Event(_) => CardFiled::Event,
+                    Cards::Quest(_) => CardFiled::Quest,
+                    Cards::Status(_) => CardFiled::Status,
+                    Cards::Token(_) => CardFiled::Token,
+                    Cards::Deprecated(_) => CardFiled::Deprecated,
+                }
             }
 
             fn filed(monster: Self::Monster) -> crate::generated::monster_moves::Filed {
@@ -299,6 +329,46 @@ pub trait OwnRules: ContentVersion + Sized {
     ) where
         Self: Build;
 
+    /// What a card of the build's own does when it is played, or nothing for
+    /// a shared one.
+    fn own_card_play<F: sts2_core::Fight<Self>>(
+        card: Self::Card,
+        fight: &mut F,
+    ) -> Option<sts2_core::Played<Self>>
+    where
+        Self: Build;
+
+    /// A number a card of the build's own works out, or nothing for a shared
+    /// one.
+    fn own_card_calculated<P: sts2_core::Printed<Self> + ?Sized>(
+        card: Self::Card,
+        key: Self::CardVar,
+        printed: &P,
+        owner: sts2_core::CardOwner<'_, Self>,
+    ) -> Option<i32>
+    where
+        Self: Build;
+
+    /// What a card's first upgrade writes, as the build's generated scripts
+    /// have it.
+    fn generated_upgrade(card: Self::Card) -> &'static [sts2_core::Change<Self>];
+
+    /// A card's play from the command at `from` on, as the build's generated
+    /// scripts have it, or the command a question stopped it at.
+    fn generated_play_from<F: sts2_core::Fight<Self>>(
+        card: Self::Card,
+        fight: &mut F,
+        from: u8,
+    ) -> Result<sts2_core::Played<Self>, u8>
+    where
+        Self: Build;
+
+    /// What a card in the hand does as its owner's turn ends, as the build's
+    /// generated scripts have it.
+    fn generated_turn_end<F: sts2_core::Fight<Self>>(card: Self::Card, fight: &mut F)
+    where
+        Self: Build;
+
     /// A move the build's generated scripts perform, from `step`, and the
     /// step to go on from where a command asked the player something.
     fn generated_move<F: sts2_core::Fight<Self>>(
@@ -372,9 +442,14 @@ pub trait Build:
         PowerState = crate::behaviour::powers::State<Self>,
         EncounterState = crate::behaviour::encounters::State,
         MonsterState = crate::behaviour::monsters::Model<Self>,
+        CardState = crate::behaviour::cards::State,
+        CardFields = crate::behaviour::cards::Fields,
     > + OwnRules
     + ContentVersion<
-        Resume: From<crate::behaviour::potions::Resume> + From<crate::behaviour::monsters::Resume>,
+        Resume: From<crate::behaviour::potions::Resume>
+                    + From<crate::behaviour::monsters::Resume>
+                    + From<crate::behaviour::cards::Resume<Self>>,
+        CardWrite = crate::behaviour::cards::CardWrite,
     >
 {
 }
@@ -385,10 +460,14 @@ impl<V> Build for V where
             PowerState = crate::behaviour::powers::State<V>,
             EncounterState = crate::behaviour::encounters::State,
             MonsterState = crate::behaviour::monsters::Model<V>,
+            CardState = crate::behaviour::cards::State,
+            CardFields = crate::behaviour::cards::Fields,
         > + OwnRules
         + ContentVersion<
             Resume: From<crate::behaviour::potions::Resume>
-                        + From<crate::behaviour::monsters::Resume>,
+                        + From<crate::behaviour::monsters::Resume>
+                        + From<crate::behaviour::cards::Resume<V>>,
+            CardWrite = crate::behaviour::cards::CardWrite,
         >
 {
 }
