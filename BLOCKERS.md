@@ -31,10 +31,15 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ### 1. Card waits in the other pools
 
-As the Ironclad's: a resume point after each loss, power, block or
-exhaust that has code after it, and a scenario each. The Silent, the
-Defect, the Necrobinder, the Regent, then the colorless, event and token
-cards. Generated plays already wait.
+As the Ironclad's and the Silent's: a resume point where a command can
+leave a question and a command that runs on follows it. A draw, an
+auto-play and a card's own selection already queue behind a question, so
+none needs one. Thorns and Centennial Puzzle can ask on a hit or a loss.
+Vicious can on Vulnerable, Dark Embrace on an exhaust, Reflex on a
+discard, and Stratagem on a shuffle.
+A scenario for each card one of them reaches. The Defect, the
+Necrobinder, the Regent, then the colorless, event and token cards.
+Generated plays already wait.
 
 ### 2. Every other split the recorded runs find
 

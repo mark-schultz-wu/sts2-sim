@@ -34,14 +34,12 @@ pub enum Resume {
     /// After a question inside the card's loss of health was answered.
     BloodlettingLost,
     OfferingLost,
-    BrandLost,
     HemokinesisLost,
     BreakthroughLost,
     BloodWallLost,
     /// After a question inside the card's attack was answered.
     RampageHit,
     AngerHit,
-    HeadbuttHit,
     ThrashHit,
     UppercutHit,
     MoltenFistHit,
@@ -89,7 +87,6 @@ pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V>
         Resume::PillageDrew => Played::Done,
         Resume::BloodlettingLost => bloodletting_lost(fight),
         Resume::OfferingLost => offering_lost(fight),
-        Resume::BrandLost => brand_lost(),
         Resume::HemokinesisLost => {
             let target = fight.target();
             strike(fight, target);
@@ -105,7 +102,6 @@ pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V>
             fight.clone_this(Pile::Discard);
             Played::Done
         }
-        Resume::HeadbuttHit => headbutt_hit(),
         Resume::ThrashHit => thrash_hit(fight),
         Resume::UppercutHit => uppercut_hit(fight),
         Resume::UppercutWeak => uppercut_weak(fight),
@@ -389,9 +385,6 @@ pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<
         IroncladCard::Headbutt => {
             let target = fight.target();
             strike(fight, target);
-            if fight.waiting() {
-                return wait(Resume::HeadbuttHit);
-            }
             headbutt_hit()
         }
         IroncladCard::Whirlwind => whirlwind(fight),
@@ -424,9 +417,6 @@ pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<
         // the hand exhausted, then its Strength.
         IroncladCard::Brand => {
             fight.damage_unblockable(fight.actor(), fight.var(CardVar::HpLoss));
-            if fight.waiting() {
-                return wait(Resume::BrandLost);
-            }
             brand_lost()
         }
         IroncladCard::PrimalForce => primal_force(fight),
