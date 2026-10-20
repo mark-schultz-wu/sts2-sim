@@ -156,21 +156,22 @@ fn read(output: &std::process::Output) -> Line {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let words: Vec<&str> = stdout.split_whitespace().collect();
     match words.as_slice() {
-        [character, "whole", positions] => Line {
+        [character, positions, "whole"] => Line {
             character: character.to_string(),
             matched: positions.parse().expect("a count"),
             positions: positions.parse().expect("a count"),
             split: None,
         },
-        [character, "parted", step, positions, after @ ..] => Line {
+        [character, positions, "parted", step, after @ ..] => Line {
             character: character.to_string(),
             matched: step.parse().expect("a count"),
             positions: positions.parse().expect("a count"),
             split: Some(after.join(" ")),
         },
-        // The character comes first, so a panic still names it. The panic
+        // The character and the run's length come first, so a panic still
+        // names them, with how many positions agreed before it. The panic
         // prints its message on the line after where it was.
-        [character, ..] => {
+        [character, positions, "panicked", agreed] => {
             let stderr = String::from_utf8_lossy(&output.stderr);
             let why = stderr
                 .lines()
@@ -179,11 +180,15 @@ fn read(output: &std::process::Output) -> Line {
                 .unwrap_or("no word why");
             Line {
                 character: character.to_string(),
-                matched: 0,
-                positions: 0,
+                matched: agreed.parse().expect("a count"),
+                positions: positions.parse().expect("a count"),
                 split: Some(format!("panicked: {why}")),
             }
         }
+        [_, ..] => panic!(
+            "follow_run printed {stdout:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ),
         [] => panic!(
             "follow_run printed nothing: {}",
             String::from_utf8_lossy(&output.stderr)

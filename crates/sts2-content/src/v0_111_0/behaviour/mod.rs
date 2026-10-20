@@ -16,6 +16,11 @@ use super::V0_111_0 as V;
 
 impl crate::build::OwnRules for V {
     type OwnEvents = events::OwnEvents;
+    type OwnRelic = relics::OwnRelic;
+
+    fn own_relic_state(relic: <V as sts2_core::ContentVersion>::Relic) -> Option<Self::OwnRelic> {
+        relics::own_relic_state(relic)
+    }
 
     fn own_event_allowed(
         event: <V as sts2_core::ContentVersion>::Event,

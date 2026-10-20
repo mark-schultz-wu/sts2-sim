@@ -615,14 +615,17 @@ pub const NEOW_FLIPS: [(Relic, Relic); 3] = [
     (Relic::NeowsTalisman, Relic::Pomander),
 ];
 
-/// A curse that takes a blessing off the table with it.
+/// A curse and a blessing it takes off the table with it.
 ///
-/// The two do the same thing, so Neow does not offer both.
-pub const NEOW_PAIRS: [(Relic, Relic); 4] = [
+/// The two do the same thing, so Neow does not offer both. A curse
+/// can take more than one.
+pub const NEOW_PAIRS: [(Relic, Relic); 6] = [
     (Relic::CursedPearl, Relic::GoldenPearl),
     (Relic::HeftyTablet, Relic::ArcaneScroll),
     (Relic::LeafyPoultice, Relic::NewLeaf),
     (Relic::PrecariousShears, Relic::PreciseScissors),
+    (Relic::NeowsSacrifice, Relic::PhialHolster),
+    (Relic::NeowsSacrifice, Relic::LostCoffer),
 ];
 
 /// The curse that suppresses the first of [`NEOW_FLIPS`].

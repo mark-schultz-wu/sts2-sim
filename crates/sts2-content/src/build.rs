@@ -370,6 +370,14 @@ lists!(crate::v0_111_0::V0_111_0);
 /// The rules a build ports for itself, where the game changed one, which a
 /// shared dispatcher hands over.
 pub trait OwnRules: ContentVersion + Sized {
+    /// The relics whose rules the build ports for itself, as the state each
+    /// holds, which the shared relics hold as `State::Own`.
+    type OwnRelic: Clone + std::fmt::Debug + Eq;
+
+    /// The state a relic of the build's own starts with, or nothing for a
+    /// shared one.
+    fn own_relic_state(relic: Self::Relic) -> Option<Self::OwnRelic>;
+
     /// A relic's `EventHook`, for a relic whose rule is the build's own.
     fn own_relic_event_hook(
         state: &mut crate::behaviour::relics::State<Self>,

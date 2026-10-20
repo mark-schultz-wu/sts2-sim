@@ -45,6 +45,12 @@ pub enum Error {
         relic: &'static str,
         list: &'static str,
     },
+    #[error(transparent)]
+    Version(#[from] super::VersionError),
+    #[error(
+        "Neow's pairings in {0} are unread: add them to `neow_pairs` from its `GenerateInitialOptions`"
+    )]
+    NoNeowPairs(String),
     #[error("Neow's {0} is not one option")]
     NotOneOption(String),
     #[error("{0} names an event the dump does not list")]
@@ -586,20 +592,13 @@ fn emit_neow(out: &mut String, neow: &[(String, Vec<String>)]) -> Result<(), Err
             .ok_or_else(|| Error::NoNeowList(name.to_owned()))
     };
 
-    // A curse that takes a positive off the table with it, because the two do
-    // the same thing. `GenerateInitialOptions` spells these four out.
-    const PAIRS: [(&str, &str); 4] = [
-        ("CURSED_PEARL", "GOLDEN_PEARL"),
-        ("HEFTY_TABLET", "ARCANE_SCROLL"),
-        ("LEAFY_POULTICE", "NEW_LEAF"),
-        ("PRECARIOUS_SHEARS", "PRECISE_SCISSORS"),
-    ];
+    let pairs = neow_pairs(&super::version()?)?;
     // The curse that suppresses the first coin flip.
     const SUPPRESSES: &str = "LARGE_CAPSULE";
 
     let curses = list("CurseOptions")?;
     let positives = list("PositiveOptions")?;
-    for (curse, positive) in PAIRS {
+    for &(curse, positive) in pairs {
         if !curses.contains(&curse.to_string()) {
             return Err(Error::NotNeows {
                 relic: curse,
@@ -669,13 +668,19 @@ fn emit_neow(out: &mut String, neow: &[(String, Vec<String>)]) -> Result<(), Err
 
     writeln!(
         out,
-        "/// A curse that takes a blessing off the table with it.\n\
+        "/// A curse and a blessing it takes off the table with it.\n\
          ///\n\
-         /// The two do the same thing, so Neow does not offer both."
+         /// The two do the same thing, so Neow does not offer both. A curse\n\
+         /// can take more than one."
     )
     .unwrap();
-    writeln!(out, "pub const NEOW_PAIRS: [(Relic, Relic); 4] = [").unwrap();
-    for (curse, positive) in PAIRS {
+    writeln!(
+        out,
+        "pub const NEOW_PAIRS: [(Relic, Relic); {}] = [",
+        pairs.len()
+    )
+    .unwrap();
+    for &(curse, positive) in pairs {
         writeln!(
             out,
             "    (Relic::{}, Relic::{}),",
@@ -698,6 +703,32 @@ fn emit_neow(out: &mut String, neow: &[(String, Vec<String>)]) -> Result<(), Err
     )
     .unwrap();
     Ok(())
+}
+
+/// A curse that takes a positive off the table with it, because the two do
+/// the same thing, in the build named. `GenerateInitialOptions` spells these
+/// out as `is` checks, which no dump reflects.
+fn neow_pairs(version: &str) -> Result<&'static [(&'static str, &'static str)], Error> {
+    const V0_107_1: [(&str, &str); 4] = [
+        ("CURSED_PEARL", "GOLDEN_PEARL"),
+        ("HEFTY_TABLET", "ARCANE_SCROLL"),
+        ("LEAFY_POULTICE", "NEW_LEAF"),
+        ("PRECARIOUS_SHEARS", "PRECISE_SCISSORS"),
+    ];
+    // Neow's Sacrifice takes two.
+    const V0_111_0: [(&str, &str); 6] = [
+        ("CURSED_PEARL", "GOLDEN_PEARL"),
+        ("HEFTY_TABLET", "ARCANE_SCROLL"),
+        ("LEAFY_POULTICE", "NEW_LEAF"),
+        ("PRECARIOUS_SHEARS", "PRECISE_SCISSORS"),
+        ("NEOWS_SACRIFICE", "PHIAL_HOLSTER"),
+        ("NEOWS_SACRIFICE", "LOST_COFFER"),
+    ];
+    match version {
+        "v0.107.1" => Ok(&V0_107_1),
+        "v0.111.0" => Ok(&V0_111_0),
+        other => Err(Error::NoNeowPairs(other.to_owned())),
+    }
 }
 
 /// One named list of relics.
