@@ -2,6 +2,7 @@
 //! events hand over through [`crate::build::OwnRules`].
 
 mod amalgamator;
+mod battleworn_dummy;
 mod the_architect;
 mod tinker_time;
 
@@ -16,6 +17,7 @@ use super::super::generated::relics::Relic;
 #[derive(Debug, Clone)]
 pub enum State {
     Amalgamator(amalgamator::State),
+    BattlewornDummy(battleworn_dummy::State),
     TheArchitect(the_architect::State),
     TinkerTime(tinker_time::State),
 }
@@ -27,8 +29,8 @@ pub struct OwnEvents;
 /// `IsAllowed` for an event of the build's own, or nothing for a shared one.
 pub(crate) fn allowed(event: Event, run: &impl EventView<V>) -> Option<bool> {
     match event {
-        // `BattlewornDummy`'s rule changed in this build.
-        Event::BattlewornDummy => unimplemented!("Battleworn Dummy in v0.111.0"),
+        // `BattlewornDummy`'s encounters and rewards changed in this build.
+        Event::BattlewornDummy => Some(battleworn_dummy::BattlewornDummy.allowed(run)),
         Event::TheArchitect => Some(the_architect::TheArchitect.allowed(run)),
         Event::TinkerTime => Some(tinker_time::TinkerTime.allowed(run)),
         _ => None,
@@ -43,7 +45,9 @@ pub(crate) fn enter<R: GameRng>(
 ) -> Option<State> {
     Some(match event {
         Event::Amalgamator => State::Amalgamator(amalgamator::Amalgamator.enter(run, rng)),
-        Event::BattlewornDummy => unimplemented!("Battleworn Dummy in v0.111.0"),
+        Event::BattlewornDummy => {
+            State::BattlewornDummy(battleworn_dummy::BattlewornDummy.enter(run, rng))
+        }
         Event::TheArchitect => State::TheArchitect(the_architect::TheArchitect.enter(run, rng)),
         Event::TinkerTime => State::TinkerTime(tinker_time::TinkerTime.enter(run, rng)),
         _ => return None,
@@ -66,6 +70,9 @@ impl EventBehavior<V> for OwnEvents {
     fn set_up<R: GameRng>(&self, state: &mut State, run: &impl EventView<V>, rewards: &mut R) {
         match state {
             State::Amalgamator(state) => amalgamator::Amalgamator.set_up(state, run, rewards),
+            State::BattlewornDummy(state) => {
+                battleworn_dummy::BattlewornDummy.set_up(state, run, rewards)
+            }
             State::TheArchitect(state) => the_architect::TheArchitect.set_up(state, run, rewards),
             State::TinkerTime(state) => tinker_time::TinkerTime.set_up(state, run, rewards),
         }
@@ -74,6 +81,7 @@ impl EventBehavior<V> for OwnEvents {
     fn stock<R: GameRng>(&self, state: &mut State, shops: &mut R) {
         match state {
             State::Amalgamator(state) => amalgamator::Amalgamator.stock(state, shops),
+            State::BattlewornDummy(state) => battleworn_dummy::BattlewornDummy.stock(state, shops),
             State::TheArchitect(state) => the_architect::TheArchitect.stock(state, shops),
             State::TinkerTime(state) => tinker_time::TinkerTime.stock(state, shops),
         }
@@ -82,6 +90,7 @@ impl EventBehavior<V> for OwnEvents {
     fn buy(&self, state: &mut State, index: u8) -> HookEffects<V> {
         match state {
             State::Amalgamator(state) => amalgamator::Amalgamator.buy(state, index),
+            State::BattlewornDummy(state) => battleworn_dummy::BattlewornDummy.buy(state, index),
             State::TheArchitect(state) => the_architect::TheArchitect.buy(state, index),
             State::TinkerTime(state) => tinker_time::TinkerTime.buy(state, index),
         }
@@ -90,6 +99,7 @@ impl EventBehavior<V> for OwnEvents {
     fn relics_pulled(&self, state: &State) -> &'static [sts2_core::RelicPull<V>] {
         match state {
             State::Amalgamator(state) => amalgamator::Amalgamator.relics_pulled(state),
+            State::BattlewornDummy(state) => battleworn_dummy::BattlewornDummy.relics_pulled(state),
             State::TheArchitect(state) => the_architect::TheArchitect.relics_pulled(state),
             State::TinkerTime(state) => tinker_time::TinkerTime.relics_pulled(state),
         }
@@ -98,6 +108,9 @@ impl EventBehavior<V> for OwnEvents {
     fn hand_pulled_relics(&self, state: &mut State, relics: &[Relic]) {
         match state {
             State::Amalgamator(state) => amalgamator::Amalgamator.hand_pulled_relics(state, relics),
+            State::BattlewornDummy(state) => {
+                battleworn_dummy::BattlewornDummy.hand_pulled_relics(state, relics)
+            }
             State::TheArchitect(state) => {
                 the_architect::TheArchitect.hand_pulled_relics(state, relics)
             }
@@ -108,6 +121,7 @@ impl EventBehavior<V> for OwnEvents {
     fn observe(&self, state: &State, run: &impl EventView<V>) -> Room<V> {
         match state {
             State::Amalgamator(state) => amalgamator::Amalgamator.observe(state, run),
+            State::BattlewornDummy(state) => battleworn_dummy::BattlewornDummy.observe(state, run),
             State::TheArchitect(state) => the_architect::TheArchitect.observe(state, run),
             State::TinkerTime(state) => tinker_time::TinkerTime.observe(state, run),
         }
@@ -122,6 +136,9 @@ impl EventBehavior<V> for OwnEvents {
     ) -> HookEffects<V> {
         match state {
             State::Amalgamator(state) => amalgamator::Amalgamator.choose(state, option, run, rng),
+            State::BattlewornDummy(state) => {
+                battleworn_dummy::BattlewornDummy.choose(state, option, run, rng)
+            }
             State::TheArchitect(state) => {
                 the_architect::TheArchitect.choose(state, option, run, rng)
             }
@@ -132,6 +149,7 @@ impl EventBehavior<V> for OwnEvents {
     fn question(&self, state: &State) -> Option<sts2_core::Question<V>> {
         match state {
             State::Amalgamator(state) => amalgamator::Amalgamator.question(state),
+            State::BattlewornDummy(state) => battleworn_dummy::BattlewornDummy.question(state),
             State::TheArchitect(state) => the_architect::TheArchitect.question(state),
             State::TinkerTime(state) => tinker_time::TinkerTime.question(state),
         }
@@ -140,6 +158,9 @@ impl EventBehavior<V> for OwnEvents {
     fn answer(&self, state: &mut State, answer: &sts2_core::Answer) -> HookEffects<V> {
         match state {
             State::Amalgamator(state) => amalgamator::Amalgamator.answer(state, answer),
+            State::BattlewornDummy(state) => {
+                battleworn_dummy::BattlewornDummy.answer(state, answer)
+            }
             State::TheArchitect(state) => the_architect::TheArchitect.answer(state, answer),
             State::TinkerTime(state) => tinker_time::TinkerTime.answer(state, answer),
         }
@@ -153,6 +174,9 @@ impl EventBehavior<V> for OwnEvents {
     ) -> HookEffects<V> {
         match state {
             State::Amalgamator(state) => amalgamator::Amalgamator.resume(state, run, rng),
+            State::BattlewornDummy(state) => {
+                battleworn_dummy::BattlewornDummy.resume(state, run, rng)
+            }
             State::TheArchitect(state) => the_architect::TheArchitect.resume(state, run, rng),
             State::TinkerTime(state) => tinker_time::TinkerTime.resume(state, run, rng),
         }
@@ -161,6 +185,9 @@ impl EventBehavior<V> for OwnEvents {
     fn resume_from_fight(&self, state: &mut State, escaped: bool) -> HookEffects<V> {
         match state {
             State::Amalgamator(state) => amalgamator::Amalgamator.resume_from_fight(state, escaped),
+            State::BattlewornDummy(state) => {
+                battleworn_dummy::BattlewornDummy.resume_from_fight(state, escaped)
+            }
             State::TheArchitect(state) => {
                 the_architect::TheArchitect.resume_from_fight(state, escaped)
             }
@@ -171,6 +198,7 @@ impl EventBehavior<V> for OwnEvents {
     fn rewards(&self, state: &State) -> Vec<sts2_core::CustomReward<V>> {
         match state {
             State::Amalgamator(state) => amalgamator::Amalgamator.rewards(state),
+            State::BattlewornDummy(state) => battleworn_dummy::BattlewornDummy.rewards(state),
             State::TheArchitect(state) => the_architect::TheArchitect.rewards(state),
             State::TinkerTime(state) => tinker_time::TinkerTime.rewards(state),
         }

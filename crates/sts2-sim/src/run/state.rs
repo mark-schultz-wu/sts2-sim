@@ -111,6 +111,8 @@ pub(super) struct Resuming<V: Rules> {
     pub(super) event: Phase<V>,
     /// Whether an enemy escaped the fight, once it is over.
     pub(super) escaped: bool,
+    /// Whether the fight, won, left anything in `CombatRoom.ExtraRewards`.
+    pub(super) extras: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2044,12 +2046,31 @@ impl<V: Rules> State<V> {
     /// `ProceedFromTerminalRewardsScreen` is `ResumePreviousRoom` there.
     pub(crate) fn proceed(&mut self) -> Result<Decided, Error> {
         if let Some(resuming) = self.resuming.take() {
-            let Resuming { event, escaped } = *resuming;
+            let Resuming {
+                event,
+                escaped,
+                extras,
+            } = *resuming;
             self.phase = event;
             let Phase::Event { state, .. } = &mut self.phase else {
                 unreachable!("only an event resumes after its fight")
             };
-            let effects = V::resume_event_from_fight(state, escaped);
+            let effects: sts2_core::HookEffects<V> = V::resume_event_from_fight(state, escaped)
+                .into_iter()
+                .filter_map(|effect| match effect {
+                    // An empty list offers nothing.
+                    sts2_core::HookEffect::OfferRewardsWithRoomExtras(rewards) => {
+                        match (extras, rewards) {
+                            (true, _) => {
+                                unimplemented!("an event offering its fight's extra rewards")
+                            }
+                            (false, []) => None,
+                            (false, rewards) => Some(sts2_core::HookEffect::OfferRewards(rewards)),
+                        }
+                    }
+                    effect => Some(effect),
+                })
+                .collect();
             return Ok(match self.carry_out(effects) {
                 None => Decided::Resolved,
                 Some(asked) => self.park(asked),
@@ -5574,6 +5595,7 @@ impl<V: Rules> State<V> {
             self.resuming = Some(Box::new(Resuming {
                 event,
                 escaped: false,
+                extras: false,
             }));
         }
         self.arrived(arriving);

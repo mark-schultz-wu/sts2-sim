@@ -6194,6 +6194,10 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CardCmd.TransformTo`, on the deck card asking: it becomes a new
     /// card of this kind.
     TransformTo(V::Card),
+    /// `RewardsCmd.OfferCustom` of these rewards and the `ExtraRewards` of
+    /// the fight the event resumes after, once there is any. An event that
+    /// resumes asks it.
+    OfferRewardsWithRoomExtras(&'static [CustomReward<V>]),
 }
 
 /// One build's relic models, which is what a run holds a relic as.

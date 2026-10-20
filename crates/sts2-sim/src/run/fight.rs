@@ -227,6 +227,7 @@ impl<V: Rules> State<V> {
                 let combat = live.finish(relics);
                 if let Some(resuming) = self.resuming.as_mut() {
                     resuming.escaped = escaped;
+                    resuming.extras = !extra_rewards.is_empty() || !extra.is_empty();
                 }
                 // `AfterCombatEnd` runs before `RewardsCmd.Offer` builds the
                 // rewards. It walks the deck's cards ahead of the fight's
