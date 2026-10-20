@@ -11,15 +11,25 @@ use super::powers::{PowerStore, Powers as _};
 use crate::bounded::Bounded;
 use crate::stream::Streams;
 
+/// The model a spawned monster joins with: what the roster wrote on it, or
+/// a new one.
+fn spawned_model<V: Rules>(spawned: &sts2_core::Spawned<V>) -> V::MonsterState {
+    match spawned.written {
+        Some(written) => sts2_core::MonsterModel::written(spawned.monster, written),
+        None => sts2_core::MonsterModel::new(spawned.monster),
+    }
+}
+
 /// Roll a monster's health, avoiding healths already rolled in this fight
 /// whenever its range leaves another choice.
 fn health<V: Rules>(
     monster: V::Monster,
+    model: &V::MonsterState,
     ascension: V::AscensionLevel,
     used: &[V::Health],
     niche: &mut MegaRng,
 ) -> V::Health {
-    let range = V::monster_hp_bounds(monster, ascension);
+    let range = V::monster_hp_bounds(monster, model, ascension);
     // No monster in either build rolls in a range wider than eleven, so this
     // stays inline.
     let available: SmallVec<[V::Health; 16]> =
@@ -61,7 +71,13 @@ pub(crate) fn roll_layout<V: Rules>(
 ) -> SmallVec<[V::Health; 2]> {
     let mut rolled: SmallVec<[V::Health; 2]> = SmallVec::new();
     for spawned in monsters {
-        let hp = health::<V>(spawned.monster, ascension, &rolled, niche);
+        let hp = health::<V>(
+            spawned.monster,
+            &spawned_model(spawned),
+            ascension,
+            &rolled,
+            niche,
+        );
         rolled.push(hp);
     }
     rolled
@@ -127,16 +143,17 @@ pub(crate) fn initialize<V: Rules>(
             monster,
             opens_on,
             slot,
-            written,
+            written: _,
         },
     ) in monsters.iter().enumerate()
     {
+        let state = spawned_model(&monsters[index]);
         // A fight an event built as it opened rolled its health then.
         let hp = match rolled.get(index) {
             Some(&hp) => hp,
             None => {
                 let used = monster_hps::<V>(&creatures[first..]);
-                health::<V>(monster, ascension, &used, rngs.niche)
+                health::<V>(monster, &state, ascension, &used, rngs.niche)
             }
         };
 
@@ -164,10 +181,6 @@ pub(crate) fn initialize<V: Rules>(
                 .any(|free| monsters.iter().all(|spawned| spawned.slot != Some(free))),
         };
         let mut machine = V::opening_move_machine(monster, opens_on);
-        let state = match written {
-            Some(written) => sts2_core::MonsterModel::written(monster, written),
-            None => sts2_core::MonsterModel::new(monster),
-        };
         let opening = V::roll_monster_move(
             monster,
             ascension,
@@ -341,7 +354,7 @@ pub(super) fn summon_built<V: Rules>(
         slot,
         written: _,
     } = spawned;
-    let (id, hp) = create::<V>(live, monster, niche);
+    let (id, hp) = create::<V>(live, monster, &state, niche);
     place::<V>(live, monster, opens_on, slot, state, position, id, hp)
 }
 
@@ -350,11 +363,15 @@ pub(super) fn summon_built<V: Rules>(
 pub(super) fn create<V: Rules>(
     live: &mut Live<V>,
     monster: V::Monster,
+    model: &V::MonsterState,
     niche: &mut MegaRng,
 ) -> (CombatId, V::Health) {
     let id = live.next_creature();
     let used = monster_hps::<V>(&live.creatures);
-    (id, health::<V>(monster, live.ascension, &used, niche))
+    (
+        id,
+        health::<V>(monster, model, live.ascension, &used, niche),
+    )
 }
 
 /// `CombatState.AddCreature`: a monster [`create`] made, put among the

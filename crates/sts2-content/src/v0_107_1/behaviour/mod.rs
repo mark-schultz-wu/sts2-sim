@@ -236,6 +236,14 @@ impl crate::build::OwnRules for V {
         potions::own_potion_use(potion, fight)
     }
 
+    fn own_monster_hp_bounds(
+        _monster: <V as sts2_core::ContentVersion>::Monster,
+        _model: &crate::behaviour::monsters::Model<V>,
+        _ascension: crate::generated::ascension::AscensionLevel,
+    ) -> Option<sts2_core::rng::Interval<i32>> {
+        None
+    }
+
     fn own_potion_use_on_run(
         potion: <V as sts2_core::ContentVersion>::Potion,
         run: &impl sts2_core::EventView<V>,

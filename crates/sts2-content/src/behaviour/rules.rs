@@ -553,8 +553,12 @@ pub(crate) fn monster_hp_after_added<V: crate::Build>(
 
 pub(crate) fn monster_hp_bounds<V: crate::Build>(
     monster: V::Monster,
+    model: &V::MonsterState,
     ascension: crate::generated::ascension::AscensionLevel,
 ) -> sts2_core::rng::Interval<i32> {
+    if let Some(bounds) = V::own_monster_hp_bounds(monster, model, ascension) {
+        return bounds;
+    }
     let data = sts2_core::Table::data(monster);
     sts2_core::rng::Interval::new(
         data.min_hp.at(ascension as u8).into(),

@@ -7602,8 +7602,11 @@ pub trait Rules: Hooks {
         fight: &mut F,
     );
 
+    /// `MinInitialHp` and `MaxInitialHp`, which a monster's model can move:
+    /// a respawned Axebot's do in v0.111.0.
     fn monster_hp_bounds(
         monster: Self::Monster,
+        model: &Self::MonsterState,
         ascension: Self::AscensionLevel,
     ) -> crate::rng::Interval<Self::Health>;
 

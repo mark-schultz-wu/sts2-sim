@@ -26,3 +26,35 @@ pub(crate) fn own_move<F: Fight<V>>(
         _ => None,
     }
 }
+
+/// `Axebot._respawnMaxHpBonus`: the health each respawn adds to its range.
+const AXEBOT_RESPAWN_MAX_HP_BONUS: i32 = 10;
+
+/// `Axebot._initialStockAmount`: the stock an Axebot nobody wrote on holds.
+const AXEBOT_INITIAL_STOCK: u8 = 2;
+
+/// `MinInitialHp` and `MaxInitialHp` for a monster that reads its model for
+/// them.
+///
+/// `Axebot`: its row's range, and `RespawnMaxHpBonus` on both ends, which is
+/// ten for each stock it has lost. The stock is written before the Axebot
+/// joins, so its roll reads it.
+pub(crate) fn own_hp_bounds(
+    monster: Monster,
+    model: &crate::behaviour::monsters::Model<V>,
+    ascension: crate::generated::ascension::AscensionLevel,
+) -> Option<sts2_core::rng::Interval<i32>> {
+    match (monster, *model) {
+        (Monster::Axebot, crate::behaviour::monsters::Model::Axebot { stock }) => {
+            let respawns = AXEBOT_INITIAL_STOCK - stock.unwrap_or(AXEBOT_INITIAL_STOCK);
+            let bonus = i32::from(respawns) * AXEBOT_RESPAWN_MAX_HP_BONUS;
+            let data = sts2_core::Table::data(monster);
+            Some(sts2_core::rng::Interval::new(
+                i32::from(data.min_hp.at(ascension as u8)) + bonus,
+                i32::from(data.max_hp.at(ascension as u8)) + bonus,
+            ))
+        }
+        (Monster::Axebot, model) => unreachable!("an Axebot holding {model:?}"),
+        _ => None,
+    }
+}
