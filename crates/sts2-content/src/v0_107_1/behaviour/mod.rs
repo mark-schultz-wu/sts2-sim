@@ -74,6 +74,20 @@ impl crate::build::OwnRules for V {
         cards::on_play(card, fight)
     }
 
+    fn own_card_play_from<F: sts2_core::Fight<V>>(
+        card: <V as sts2_core::ContentVersion>::Card,
+        _fight: &mut F,
+        from: u8,
+    ) -> sts2_core::Played<V> {
+        unreachable!("{card:?} waited at {from} in a play this build has none of its own")
+    }
+
+    fn own_lends(
+        _power: <V as sts2_core::ContentVersion>::Power,
+    ) -> Option<(<V as sts2_core::ContentVersion>::Power, bool)> {
+        None
+    }
+
     fn own_card_calculated<P: sts2_core::Printed<V> + ?Sized>(
         card: <V as sts2_core::ContentVersion>::Card,
         key: <V as sts2_core::ContentVersion>::CardVar,
