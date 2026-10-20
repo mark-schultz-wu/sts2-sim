@@ -3821,8 +3821,10 @@ pub enum EventHook<V: ContentVersion> {
     GeneratedMapLate { act: usize },
     /// `ModifyCardRewardCreationOptions`, as a `CardReward` over the
     /// character's pool makes its cards. The run raises it only for one whose
-    /// options take a change to their pools.
-    CardRewardCreationOptions,
+    /// options take a change to their pools. `elite_encounter` is a won
+    /// elite's reward: `Source` is `Encounter` and `RarityOdds` is
+    /// `EliteEncounter`.
+    CardRewardCreationOptions { elite_encounter: bool },
     /// `AfterRoomEntered`, for a room of this type.
     RoomEntered {
         room: V::RoomType,
@@ -4431,7 +4433,9 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::UnknownRoomTypes { .. } => ModelHook::ModifyUnknownMapPointRoomTypes,
             EventHook::GeneratedMap { .. } => ModelHook::ModifyGeneratedMap,
             EventHook::GeneratedMapLate { .. } => ModelHook::ModifyGeneratedMapLate,
-            EventHook::CardRewardCreationOptions => ModelHook::ModifyCardRewardCreationOptions,
+            EventHook::CardRewardCreationOptions { .. } => {
+                ModelHook::ModifyCardRewardCreationOptions
+            }
             EventHook::ModifyRewards { .. } => ModelHook::TryModifyRewards,
             EventHook::ModifyRewardsLate { .. } => ModelHook::TryModifyRewardsLate,
             EventHook::CardRewardAlternatives | EventHook::CardRewardAlternativeChosen(_) => {
@@ -5445,6 +5449,14 @@ pub enum HookEffect<V: ContentVersion> {
     /// Every rest site option of this kind taken off those a rest site
     /// offers.
     WithdrawRestOption(V::RestSiteOption),
+    /// `ModifyGeneratedMap` as Big Game Hunter answers it. The act's map is
+    /// made again over `MapPointTypeCounts(map)`, with this many times its
+    /// elites, rounded. The elites ignore the placement rules.
+    ScaledElitesMap(Fixed),
+    /// `WithCustomPool` of the rare cards among the reward's possible cards,
+    /// or the character's own rares where it has none, at
+    /// `CardRarityOddsType.Uniform`.
+    RaresAtEvenOdds,
     /// `RelicGrabBag.Remove` of this relic from the player's bag and the
     /// shared one, so neither deals it.
     RemoveFromRelicBags(V::Relic),

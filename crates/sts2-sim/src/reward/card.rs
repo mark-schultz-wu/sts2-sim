@@ -32,6 +32,11 @@ impl<V: Rules> Source<V> {
 /// merged, which only a relic's `ModifyCardRewardCreationOptions` asks for.
 pub(crate) enum Pool<V: Rules> {
     Own(V::Character),
+    /// `WithCustomPool` at `CardRarityOddsType.Uniform`: `cards`, each as
+    /// likely as any other, which no rarity roll reads. The hook writes the
+    /// reward's own options, so what `TryModifyCardRewardOptions` adds
+    /// draws from them too.
+    Uniform(Vec<V::Card>),
     Merged {
         common: Vec<V::Card>,
         uncommon: Vec<V::Card>,
@@ -58,9 +63,14 @@ impl<V: Rules> Pool<V> {
     }
 
     /// Each rarity's cards, as a roll reads them.
+    ///
+    /// # Panics
+    ///
+    /// A pool at even odds, which no rarity roll reads.
     pub(crate) fn drafted(&self) -> Drafted<'_, V::Card> {
         match self {
             Pool::Own(character) => V::reward_cards(*character),
+            Pool::Uniform(_) => unimplemented!("a pool at even odds read by rarity"),
             Pool::Merged {
                 common,
                 uncommon,

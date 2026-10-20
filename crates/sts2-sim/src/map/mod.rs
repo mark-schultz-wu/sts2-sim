@@ -110,13 +110,17 @@ impl<V: Rules> ActMap<V> {
     #[inline(never)]
     ///
     /// `second_boss` is the last act's at Double Boss, a row past the first.
+    ///
+    /// `recount` is the counts a modifier set over a map already made, in
+    /// place of the act's own roll.
     pub fn generate<R: GameRng>(
         rng: &mut R,
         layout: Layout,
         ascension: V::AscensionLevel,
         second_boss: bool,
+        recount: Option<Recount>,
     ) -> Result<Self, Error> {
-        Ok(ActMapBuilder::<V>::generate(rng, layout, ascension, second_boss)?.into())
+        Ok(ActMapBuilder::<V>::generate(rng, layout, ascension, second_boss, recount)?.into())
     }
 
     /// Generate the Spoils map, which is `SpoilsActMap`, off the run's
@@ -129,8 +133,9 @@ impl<V: Rules> ActMap<V> {
         rng: &mut R,
         layout: Layout,
         ascension: V::AscensionLevel,
+        recount: Option<Recount>,
     ) -> Result<Self, Error> {
-        Ok(ActMapBuilder::<V>::spoils(rng, layout, ascension)?.into())
+        Ok(ActMapBuilder::<V>::spoils(rng, layout, ascension, recount)?.into())
     }
 
     /// A map of one column down the grid's middle: the ancient, then `rooms`
@@ -207,6 +212,40 @@ impl<V: Rules> sts2_core::ActMap<V> for ActMap<V> {
     }
 }
 
+/// `MapPointTypeCounts(existingMap)` with its elites set, as Big Game Hunter
+/// builds it. It keeps the map's own unknowns and rest sites, and the three
+/// shops every map has. Its `elites` ignore the placement rules.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Recount {
+    pub unknowns: usize,
+    pub rests: usize,
+    pub elites: usize,
+}
+
+/// The counts a map is dealt from: `recount`, or the act's own roll, which
+/// draws.
+fn counts<A: sts2_core::AscensionKinds, R: GameRng>(
+    rng: &mut R,
+    layout: Layout,
+    ascension: A,
+    recount: Option<Recount>,
+) -> types::Counts {
+    match recount {
+        Some(Recount {
+            unknowns,
+            rests,
+            elites,
+        }) => types::Counts {
+            unknowns,
+            rests,
+            elites,
+            shops: 3,
+            elites_ignore_rules: true,
+        },
+        None => types::Counts::roll(rng, layout, ascension),
+    }
+}
+
 /// A map being generated, which is the port of the game's own class.
 ///
 /// The grid holds the rows a path can pass through. The first node and the
@@ -237,8 +276,9 @@ impl<V: Rules> ActMapBuilder<V> {
         layout: Layout,
         ascension: V::AscensionLevel,
         second_boss: bool,
+        recount: Option<Recount>,
     ) -> Result<Self, Error> {
-        let mut map = Self::dealt(rng, layout, ascension);
+        let mut map = Self::dealt(rng, layout, ascension, recount);
         prune::prune_and_repair(&mut map, rng)?;
         tidy::center(&mut map);
         tidy::spread(&mut map);
@@ -258,9 +298,14 @@ impl<V: Rules> ActMapBuilder<V> {
 
     /// Every path walked and every point given a type, which is the map
     /// pruning starts from.
-    fn dealt<R: GameRng>(rng: &mut R, layout: Layout, ascension: V::AscensionLevel) -> Self {
+    fn dealt<R: GameRng>(
+        rng: &mut R,
+        layout: Layout,
+        ascension: V::AscensionLevel,
+        recount: Option<Recount>,
+    ) -> Self {
         let rows = layout.rooms + 1;
-        let counts = types::Counts::roll(rng, layout, ascension);
+        let counts = counts(rng, layout, ascension, recount);
         let mut map = ActMapBuilder {
             points: Vec::new(),
             grid: vec![None; COLS * rows],
@@ -518,7 +563,7 @@ mod tests {
         let seed = Seed::new("0RACLE1").expect("the fixture's seed is a seed");
         let mut rng: MegaRng = sts2_core::rng::named::<V, _>(stream_seed::<V>(&seed), "act_1_map");
         let layout = <V as Rules>::act_layout(sts2_content::v0_107_1::acts::Act::Overgrowth);
-        ActMap::<V>::generate(&mut rng, layout, AscensionLevel::None, false)
+        ActMap::<V>::generate(&mut rng, layout, AscensionLevel::None, false, None)
             .expect("the fixture's map generates")
     }
 

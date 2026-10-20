@@ -37,17 +37,12 @@ own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
 
-### 2. Run modifiers that change the run's own rules
+### 2. Cursed Run
 
-- Cursed Run: `AfterActEntered`, which gets a `ModelHook` of its own. It
-  draws from the curses whose `CanBeGeneratedByModifiers` holds. That is a
-  per-card property no dump carries yet, so the card dump gains a column,
-  for both builds, and the mod is deployed again.
-- Big Game Hunter: `ModifyGeneratedMap` builds the act's map again with
-  two and a half times the elites, which `MapPointTypeCounts` overrides.
-  Its elite card rewards draw from the rares alone, at even odds.
-
-Record 100 runs with each.
+Cursed Run: `AfterActEntered`, which gets a `ModelHook` of its own. It
+draws from the curses whose `CanBeGeneratedByModifiers` holds. That is a
+per-card property no dump carries yet, so the card dump gains a column,
+for both builds, and the mod is deployed again. Record 100 runs with it.
 
 ### 3. Run modifiers in a fight
 

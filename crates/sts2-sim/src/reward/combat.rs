@@ -5,7 +5,7 @@
 //! order is what puts the stream where the next screen finds it.
 
 use sts2_core::rng::{GameRng, Interval, RngInteger, Span};
-use sts2_core::{AscensionKinds, Drafted, Rules};
+use sts2_core::{AscensionKinds, CardIdent, Rules};
 
 use crate::run::Rarity;
 
@@ -61,7 +61,7 @@ pub(crate) fn won<V: Rules, R: GameRng>(
     act: usize,
     room: Room,
     modifiers: Modifiers<'_>,
-    pool: Drafted<'_, V::Card>,
+    pool: &card::Pool<V>,
 ) -> (Vec<Offer<V>>, Option<Rarity<V>>) {
     let elite = room == Room::Elite;
     let pays_potion = potion(rng, odds, elite, modifiers.forced);
@@ -100,11 +100,31 @@ pub(crate) fn card_reward<V: Rules, R: GameRng>(
     rng: &mut R,
     odds: &mut Odds,
     ascension: V::AscensionLevel,
-    pool: Drafted<'_, V::Card>,
+    pool: &card::Pool<V>,
     act: usize,
     room: Room,
     added: &[sts2_core::CardKind],
 ) -> Offer<V> {
+    // At even odds no rarity is rolled, so the room's odds stay where they
+    // were. Each card still rolls its upgrade, and so does each one added.
+    if let card::Pool::Uniform(pool) = pool {
+        let mut cards =
+            card::uniform_rolled::<V, R>(ascension, rng, pool, CARDS_OFFERED, Some(act));
+        for &kind in added {
+            let drawn = of_kind_unoffered::<V>(pool.iter().copied(), &cards, kind);
+            if !drawn.is_empty() {
+                cards.extend(card::uniform_rolled::<V, R>(
+                    ascension,
+                    rng,
+                    &drawn,
+                    1,
+                    Some(act),
+                ));
+            }
+        }
+        return offer(cards, room);
+    }
+    let pool = pool.drafted();
     let mut cards = card::encounter::<V, R>(
         rng,
         odds,
@@ -115,24 +135,11 @@ pub(crate) fn card_reward<V: Rules, R: GameRng>(
         room.card_odds(),
     );
     for &kind in added {
-        // The pool the reward drew, of the kind, less what it offers. Every
-        // card of the kind when it offers them all, and nothing with none.
-        let of_kind: Vec<V::Card> = [pool.common, pool.uncommon, pool.rare]
+        let all = [pool.common, pool.uncommon, pool.rare]
             .into_iter()
             .flatten()
-            .copied()
-            .filter(|&card| V::card_kind(card) == Some(kind))
-            .collect();
-        let unoffered: Vec<V::Card> = of_kind
-            .iter()
-            .copied()
-            .filter(|&card| cards.iter().all(|offered| offered.card != card))
-            .collect();
-        let drawn = if unoffered.is_empty() {
-            of_kind
-        } else {
-            unoffered
-        };
+            .copied();
+        let drawn = of_kind_unoffered::<V>(all, &cards, kind);
         if !drawn.is_empty() {
             cards.push(card::added::<V, R>(
                 ascension,
@@ -143,12 +150,38 @@ pub(crate) fn card_reward<V: Rules, R: GameRng>(
             ));
         }
     }
+    offer(cards, room)
+}
+
+fn offer<V: Rules>(cards: Vec<CardIdent<V>>, room: Room) -> Offer<V> {
     Offer::Card {
         cards,
         rolled: Some(super::Rolled::Room(room)),
         reroll: false,
         sacrifice: false,
         taken: false,
+    }
+}
+
+/// The pool the reward drew, of the kind, less what it offers. Every card of
+/// the kind when it offers them all, and nothing with none.
+fn of_kind_unoffered<V: Rules>(
+    pool: impl Iterator<Item = V::Card>,
+    cards: &[CardIdent<V>],
+    kind: sts2_core::CardKind,
+) -> Vec<V::Card> {
+    let of_kind: Vec<V::Card> = pool
+        .filter(|&card| V::card_kind(card) == Some(kind))
+        .collect();
+    let unoffered: Vec<V::Card> = of_kind
+        .iter()
+        .copied()
+        .filter(|&card| cards.iter().all(|offered| offered.card != card))
+        .collect();
+    if unoffered.is_empty() {
+        of_kind
+    } else {
+        unoffered
     }
 }
 

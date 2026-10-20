@@ -52,7 +52,8 @@ pub(crate) struct Fighting<'a, V: Rules, S = crate::stream::Streams<V>> {
 ///
 /// `CombatManager` keeps the two apart: `IsEnding` asks whether any primary
 /// enemy is alive, and `_pendingLoss` is set when the last player dies. A
-/// decision reaches at most one of them.
+/// decision that reaches both loses, since `CheckWinCondition` reads the
+/// loss first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Ended {
     Won,

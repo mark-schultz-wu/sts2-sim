@@ -303,7 +303,7 @@ impl<V: Rules> State<V> {
         };
         let added = self.card_reward_added();
         let forced = self.potion_forced(<_ as sts2_core::EncounterTable>::room(encounter));
-        let pool = self.reward_pool();
+        let pool = self.reward_pool(room == crate::reward::combat::Room::Elite);
         let (rng, odds) = self.rewarding();
         let (mut offered, rarity) = crate::reward::combat::won::<V, _>(
             rng,
@@ -317,7 +317,7 @@ impl<V: Rules> State<V> {
                 forced,
                 added: &added,
             },
-            pool.drafted(),
+            &pool,
         );
         if let Some(rarity) = rarity {
             // `PullNextRelicFromFront`, which the run's own bookkeeping covers.
@@ -379,16 +379,10 @@ impl<V: Rules> State<V> {
                 }
                 combat::ExtraReward::Card => {
                     let added = self.card_reward_added();
-                    let pool = self.reward_pool();
+                    let pool = self.reward_pool(room == crate::reward::combat::Room::Elite);
                     let (rng, odds) = self.rewarding();
                     crate::reward::combat::card_reward::<V, _>(
-                        rng,
-                        odds,
-                        ascension,
-                        pool.drafted(),
-                        act,
-                        room,
-                        &added,
+                        rng, odds, ascension, &pool, act, room, &added,
                     )
                 }
             });

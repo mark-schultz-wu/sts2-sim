@@ -28,6 +28,9 @@ pub(crate) struct Counts {
     pub(crate) rests: usize,
     pub(crate) elites: usize,
     pub(crate) shops: usize,
+    /// `PointTypesThatIgnoreRules` holds the elite: a deal places one
+    /// wherever it reaches, whatever the placement rules say.
+    pub(crate) elites_ignore_rules: bool,
 }
 
 impl Counts {
@@ -60,6 +63,7 @@ impl Counts {
             rests,
             elites: elites(ascension),
             shops: 3,
+            elites_ignore_rules: false,
         }
     }
 }
@@ -206,7 +210,8 @@ impl<V: Rules> ActMapBuilder<V> {
             let Some(kind) = queue.pop_front() else {
                 break;
             };
-            if self.allows(kind, id) {
+            let ignores = kind == V::MapPointType::ELITE && self.counts.elites_ignore_rules;
+            if ignores || self.allows(kind, id) {
                 return kind;
             }
             queue.push_back(kind);

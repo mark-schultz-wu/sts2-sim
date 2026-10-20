@@ -1,0 +1,12 @@
+# The Waterfall Giant falls on its second turn and comes back about to
+# blow, with fifteen Steam Eruption. Seventy Poison leave the player on
+# ten health. Its Explode kills the player, then the giant kills itself.
+# The fight is lost: the pending loss comes before the win.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"WATERFALL_GIANT_BOSS"}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":500,"target":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"power","power":"POISON_POWER","amount":70,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

@@ -979,7 +979,7 @@ mod tests {
             for ascension in [AscensionLevel::None, AscensionLevel::SwarmingElites] {
                 for seed in 0..50u64 {
                     let mut rng: MegaRng = sts2_core::rng::named::<V, _>(seed, "act_1_map");
-                    let mut map = ActMapBuilder::<V>::dealt(&mut rng, layout, ascension);
+                    let mut map = ActMapBuilder::<V>::dealt(&mut rng, layout, ascension, None);
                     let mut segments = Scratch::default();
                     for _ in 0..3 {
                         let mut found =
