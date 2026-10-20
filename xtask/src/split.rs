@@ -21,6 +21,8 @@ pub enum Error {
     Process(#[from] ProcessError),
     #[error(transparent)]
     File(#[from] FileError),
+    #[error(transparent)]
+    Version(#[from] crate::codegen::VersionError),
 }
 
 #[derive(clap::Args)]
@@ -34,7 +36,7 @@ pub struct Args {
 pub fn run(Args { index, name }: Args) -> Result<String, Error> {
     let root = crate::workspace();
     let follow = error::build_example(&root, "follow_run")?;
-    let file = root.join("crates/sts2-golden/tests/recorded.bin");
+    let file = crate::followed::recorded_file(&root)?;
     let at = index.to_string();
     let followed = error::output(Command::new(&follow).arg(&file).arg(&at))?;
     let spelled = error::output(Command::new(&follow).arg(&file).arg(&at).arg("--scenario"))?;

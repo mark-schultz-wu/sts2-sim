@@ -37,19 +37,17 @@ own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
 
-### 2. Recorded v0.111.0 runs
-
-Dump the build and record its runs with the mod built for it. Deploy
-with `STS2_GAME_VERSION=v0.111.0`, and redeploy v0.107.1 after. Its
-recorded runs are the measure for the next item.
-
-### 3. v0.111.0's changed rules
+### 2. v0.111.0's changed rules
 
 v0.111.0's `Hooks` and `Rules` are the shared ones in
 `sts2_content::behaviour`, which mirror v0.107.1's game code. A rule
 whose game code changed between the builds gets a port of its own,
 chosen by the build through `OwnRules`. Content new in v0.111.0 is
-ported there. The recorded runs from item 2 show which rules split.
+ported there. `crates/sts2-golden/tests/recorded-v0.111.0.bin` holds the
+census's runs on v0.111.0, and `STS2_GAME_VERSION=v0.111.0 cargo xtask
+coverage` says where they part. Once none of them panics,
+`recorded.rs` follows them as it does v0.107.1's, against a count of
+its own.
 
 What each shared module asks of a build, so a port knows where to go:
 
@@ -69,20 +67,28 @@ a port that starts from the other build's code. A move can shift what
 the compiler inlines. The relics' and the cards' decision dispatchers
 stay out of line, since the walk inlining them cost 3.9% and 3.4%.
 
-Known so far, each an `unimplemented!()` where it is reached:
+The simulator follows 14,476 of the 264,153 recorded positions, 5%.
+The commonest first splits, out of 1,500 runs:
 
+- 898 at the first rest site, whose options and effects are unported.
+- 115 at the start, before any move, so the run's opening differs.
+- 70 in Dowsing Rod's rule for a run that carries it.
+- Cards whose generated play is unported here: Thunderclap, Sword
+  Boomerang, Ricochet, Deathbringer and Rip and Tear among them.
+- Powers the shared rules answer for v0.107.1 alone: Doom, Regen,
+  Juggling and Pale Blue Dot among them.
 - Expect a Fight, Diamond Diadem and the Battleworn Dummy event changed,
   and are v0.111.0's own, unported.
-- The rest site's options and their effects.
-- Cards whose generated play is unported here: Thunderclap, Sword
-  Boomerang and Ricochet among them.
-- Powers the shared rules answer for v0.107.1 alone: Doom, Juggling and
-  Pale Blue Dot among them.
+- Positions that part with no panic, after an end turn or a play, where
+  a shared rule answers as v0.107.1's game does.
 
-Forty runs at random, with `random_run` pointed at v0.111.0, all
-stopped on one of these. 31 stopped at the first rest site.
+About 60 of the game's engine files changed too, outside the content
+models: its commands, game actions, entities and runs. `sts2-sim`
+mirrors v0.107.1's engine and has no seam for a build to differ. A
+split that traces to the engine needs that seam, which needs Mark's
+design first.
 
-### 4. A walk that shares only who listens
+### 3. A walk that shares only who listens
 
 The snapshot copies each walk's listeners. Most walks see none arrive or
 leave: 1.3% of `AfterCardPlayed` walks do, and 28% of `AfterSideTurnEnd`
@@ -92,7 +98,7 @@ A cheaper walk shares only which listeners there are and their order,
 kept apart from what they hold. That is part of the flat-state pass,
 which needs a design first.
 
-### 5. A speed target
+### 4. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.

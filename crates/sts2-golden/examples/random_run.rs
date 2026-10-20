@@ -29,7 +29,7 @@ type V = V0_107_1;
 
 #[path = "carried/mod.rs"]
 mod carried;
-use carried::CARRIED;
+use carried::carried;
 
 /// Decisions a run takes before this gives up on it.
 const STEPS: usize = 20_000;
@@ -133,7 +133,7 @@ fn run(cli: Cli) -> Result<(), Error> {
     };
     let mut pick = sts2_golden::random::Pick::for_seed(start.seed.as_str());
     let mut sim = Sim::<V>::begin((), &start).map_err(Error::Begin)?;
-    for (relic, count) in CARRIED {
+    for (relic, count) in carried::<V>() {
         for _ in 0..count {
             sim.construct(&Setup::Grant(Gift::Relic(relic)))
                 .map_err(|source| Error::Grant { relic, source })?

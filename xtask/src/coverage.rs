@@ -25,6 +25,7 @@ use std::path::{Path, PathBuf};
 
 use crate::codegen::{VersionError, camel, version_dir};
 use crate::error::FileError;
+use crate::respell::Spellings;
 
 /// The act pools, in the order a run meets them. The first two are the two
 /// first acts.
@@ -94,13 +95,47 @@ pub enum Error {
 }
 
 /// Every file this reads, by its path under the build's directory.
+///
+/// A path under `behaviour/` is the shared behaviour's, in the build's
+/// spelling, followed by the build's own file of that name if it has one.
 struct Build {
     dir: PathBuf,
+    /// `sts2_content::behaviour`, which every build's rules are.
+    shared: PathBuf,
+    spellings: Spellings,
 }
 
 impl Build {
     fn read(&self, path: impl AsRef<Path>) -> Result<String, FileError> {
-        crate::error::read(&self.dir.join(path))
+        let path = path.as_ref();
+        let Ok(under) = path.strip_prefix("behaviour") else {
+            return crate::error::read(&self.dir.join(path));
+        };
+        let mut text = self
+            .spellings
+            .respell(&crate::error::read(&self.shared.join(under))?);
+        for (_, own) in self.own(under)? {
+            text.push_str(&own);
+        }
+        Ok(text)
+    }
+
+    /// The build's own behaviour beside the shared module at `under`: the
+    /// file named after it, or every file in the directory named after it.
+    fn own(&self, under: &Path) -> Result<Vec<(PathBuf, String)>, FileError> {
+        let module = match under.file_name().and_then(|name| name.to_str()) {
+            Some("mod.rs") => under.parent().unwrap_or(under).to_path_buf(),
+            _ => under.with_extension(""),
+        };
+        let own = self.dir.join("behaviour").join(&module);
+        let file = own.with_extension("rs");
+        if file.is_file() {
+            return Ok(vec![(file.clone(), crate::error::read(&file)?)]);
+        }
+        if own.is_dir() {
+            return self.files(&own);
+        }
+        Ok(Vec::new())
     }
 
     /// The rows of one dump whose first word is `kind`, split into words.
@@ -120,11 +155,25 @@ impl Build {
 
     /// Every `.rs` file under one directory of the build's source, read whole.
     fn sources(&self, path: impl AsRef<Path>) -> Result<Vec<(PathBuf, String)>, FileError> {
+        let path = path.as_ref();
+        let Ok(under) = path.strip_prefix("behaviour") else {
+            return self.files(&self.dir.join(path));
+        };
+        let mut files: Vec<(PathBuf, String)> = self
+            .files(&self.shared.join(under))?
+            .into_iter()
+            .map(|(path, text)| (path, self.spellings.respell(&text)))
+            .collect();
+        files.extend(self.own(under)?);
+        Ok(files)
+    }
+
+    /// Every `.rs` file under `dir`, read whole.
+    fn files(&self, dir: &Path) -> Result<Vec<(PathBuf, String)>, FileError> {
         let mut files = Vec::new();
-        for path in crate::error::entries(&self.dir.join(path))? {
+        for path in crate::error::entries(dir)? {
             if path.is_dir() {
-                let under = path.strip_prefix(&self.dir).unwrap_or(&path).to_path_buf();
-                files.extend(self.sources(under)?);
+                files.extend(self.files(&path)?);
             } else if path.extension().is_some_and(|e| e == "rs") {
                 let text = crate::error::read(&path)?;
                 files.push((path, text));
@@ -261,8 +310,11 @@ impl Ported {
 }
 
 pub fn run(args: Args) -> Result<String, Error> {
+    let ids = crate::error::read(Path::new("crates/sts2-content/src/ids.rs"))?;
     let build = Build {
         dir: version_dir()?,
+        shared: PathBuf::from("crates/sts2-content/src/behaviour"),
+        spellings: Spellings::of(&ids, &crate::codegen::version_module()?),
     };
     let mut out = String::new();
     writeln!(out, "coverage of {}", build.dir.display()).unwrap();
@@ -478,10 +530,10 @@ pub fn run(args: Args) -> Result<String, Error> {
     writeln!(out, "\nrelics, by pool").unwrap();
     let relic_source = build.read("behaviour/relics/mod.rs")?;
     let relic_states = relic_source
-        .find("pub enum State {")
+        .find("pub enum State")
         .map(|at| &relic_source[at..])
         .ok_or(Error::Missing {
-            file: build.dir.join("behaviour/relics/mod.rs"),
+            file: build.shared.join("relics/mod.rs"),
             what: "pub enum State",
         })?;
     let relic_states = &relic_states[..relic_states.find("\n}").unwrap_or(relic_states.len())];
@@ -614,11 +666,10 @@ pub fn run(args: Args) -> Result<String, Error> {
 /// The powers a run can hold without stopping: those the behaviour answers
 /// for, and those that override no hook.
 fn ported_powers(build: &Build) -> Result<BTreeSet<String>, Error> {
-    let behaviour = build.read("behaviour/powers/mod.rs")?;
-    let mut ported: BTreeSet<String> = named(&behaviour, "Power")
-        .into_iter()
-        .map(str::to_owned)
-        .collect();
+    let mut ported: BTreeSet<String> = BTreeSet::new();
+    for (_, source) in build.sources("behaviour/powers")? {
+        ported.extend(named(&source, "Power").into_iter().map(str::to_owned));
+    }
     let overriding: BTreeSet<String> = build
         .rows("hooks.txt", "implements")?
         .into_iter()
@@ -736,9 +787,11 @@ fn pairs(text: &str) -> Vec<(String, String)> {
 }
 
 /// Whether what follows a card's name ends its arm's pattern: `=>` at
-/// once, or after more alternatives, as `A | B =>`.
+/// once, or after more alternatives, as `A | B =>`, past the `)` of a
+/// `Cards::Ironclad(IroncladCard::Bash)`.
 fn leads_to_arm(rest: &str) -> bool {
-    let rest = rest.trim_start();
+    // A card named inside its `Cards` variant closes that first.
+    let rest = rest.trim_start().trim_start_matches(')').trim_start();
     if rest.starts_with("=>") {
         return true;
     }

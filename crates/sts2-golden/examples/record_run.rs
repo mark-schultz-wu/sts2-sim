@@ -10,6 +10,9 @@
 //! simulator's. The run goes to `<out>` as a file of one recorded run. See
 //! `sts2_golden::recorded`.
 //!
+//! The build is `STS2_GAME_VERSION`'s, the setting that chose
+//! `STS2_GAME_DIR`, and v0.107.1 when it is unset.
+//!
 //! It exits 0 with the run written, and 3 when the game closed the connection
 //! or stopped answering, which is worth playing again. It exits 1 for anything
 //! else, which is not. A command
@@ -20,8 +23,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::Parser;
-use sts2_content::v0_107_1::V0_107_1;
-use sts2_content::v0_107_1::characters::Character;
+use sts2_content_wire::WireContentVersion;
 use sts2_core::{Construct as _, Gift, Observed as _, Play as _, Seed, Setup, Start};
 use sts2_golden::recorded::{Ending, Recorded, Run, position};
 use sts2_golden::scenario::Stamp;
@@ -29,9 +31,7 @@ use sts2_headless::{Config, Oracle, game_dir_from_env};
 
 #[path = "carried/mod.rs"]
 mod carried;
-use carried::CARRIED;
-
-type V = V0_107_1;
+use carried::carried;
 
 /// Decisions a run takes before this gives up on it, as the census's runner.
 const STEPS: usize = 20_000;
@@ -43,46 +43,41 @@ struct Cli {
     #[arg(value_parser = seed)]
     seed: Seed,
     /// The character, by id, such as `IRONCLAD`.
-    #[arg(value_parser = character)]
-    character: Character,
+    character: String,
     /// Where to write the run.
     out: PathBuf,
     /// A directory for the game's own profile, so several run at once.
     #[arg(long, value_name = "DIR")]
     data_home: Option<PathBuf>,
     /// The ascension level, by the id the game spells it with.
-    #[arg(long, value_parser = ascension, default_value = "None")]
-    ascension: sts2_content::v0_107_1::ascension::AscensionLevel,
+    #[arg(long, default_value = "None")]
+    ascension: String,
     /// The modifiers the run starts with, by the ids the game spells them
     /// with. Character Cards names its character after a colon, as
     /// `CHARACTER_CARDS:DEFECT`.
-    #[arg(long, value_parser = modifier, value_delimiter = ',')]
-    modifiers: Vec<sts2_core::RunModifier<V>>,
-}
-
-/// A modifier as [`sts2_golden::recorded::spell_modifier`] writes it.
-fn modifier(text: &str) -> Result<sts2_core::RunModifier<V>, serde_json::Error> {
-    sts2_golden::recorded::read_modifier(text)
-}
-
-/// An ascension level by the id the game spells it with.
-fn ascension(
-    id: &str,
-) -> Result<sts2_content::v0_107_1::ascension::AscensionLevel, serde_json::Error> {
-    serde_json::from_value(serde_json::Value::String(id.to_owned()))
+    #[arg(long, value_delimiter = ',')]
+    modifiers: Vec<String>,
 }
 
 fn seed(text: &str) -> Result<Seed, sts2_core::seed::Error> {
     Seed::new(text)
 }
 
-/// A character by the id the game spells it with.
-fn character(id: &str) -> Result<Character, serde_json::Error> {
-    serde_json::from_value(serde_json::Value::String(id.to_owned()))
+/// Content by the id the game spells it with.
+fn parse<V: WireContentVersion, T: serde::de::DeserializeOwned>(id: &str) -> Result<T, Error<V>> {
+    serde_json::from_value(serde_json::Value::String(id.to_owned())).map_err(|source| Error::Id {
+        id: id.to_owned(),
+        source,
+    })
 }
 
 #[derive(Debug, thiserror::Error)]
-enum Error {
+enum Error<V: WireContentVersion> {
+    #[error("{id:?} names nothing: {source}")]
+    Id {
+        id: String,
+        source: serde_json::Error,
+    },
     #[error("STS2_GAME_DIR is unset")]
     NoGame,
     #[error("the game: {0}")]
@@ -101,7 +96,22 @@ enum Error {
 }
 
 fn main() -> ExitCode {
-    match record(Cli::parse()) {
+    let cli = Cli::parse();
+    // One arm per build `sts2-content` compiles.
+    let version = std::env::var("STS2_GAME_VERSION").unwrap_or_else(|_| "v0.107.1".to_string());
+    match version.as_str() {
+        "v0.107.1" => exit(record::<sts2_content::v0_107_1::V0_107_1>(cli)),
+        "v0.111.0" => exit(record::<sts2_content::v0_111_0::V0_111_0>(cli)),
+        other => {
+            eprintln!("error: no build {other:?}; try v0.107.1 or v0.111.0");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// The exit status for how the run went, with the error on stderr.
+fn exit<V: WireContentVersion>(recorded: Result<(), Error<V>>) -> ExitCode {
+    match recorded {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("error: {e}");
@@ -117,7 +127,7 @@ fn main() -> ExitCode {
     }
 }
 
-fn record(cli: Cli) -> Result<(), Error> {
+fn record<V: WireContentVersion + sts2_content::Build>(cli: Cli) -> Result<(), Error<V>> {
     let Cli {
         seed,
         character,
@@ -126,18 +136,26 @@ fn record(cli: Cli) -> Result<(), Error> {
         ascension,
         modifiers,
     } = cli;
-    let mut config = Config::new(game_dir_from_env().ok_or(Error::NoGame)?);
-    config.data_home = data_home;
     let start = Start::<V> {
         wins: sts2_golden::random::wins(seed.as_str()),
         seed,
-        character,
-        ascension,
-        modifiers,
+        character: parse(&character)?,
+        ascension: parse(&ascension)?,
+        modifiers: modifiers
+            .iter()
+            .map(|text| {
+                sts2_golden::recorded::read_modifier(text).map_err(|source| Error::Id {
+                    id: text.clone(),
+                    source,
+                })
+            })
+            .collect::<Result<_, _>>()?,
     };
+    let mut config = Config::new(game_dir_from_env().ok_or(Error::NoGame)?);
+    config.data_home = data_home;
     let mut pick = sts2_golden::random::Pick::for_seed(start.seed.as_str());
     let mut game = Oracle::<V>::begin(config, &start)?;
-    for (relic, count) in CARRIED {
+    for (relic, count) in carried::<V>() {
         for _ in 0..count {
             game.setup(&Setup::Grant(Gift::Relic(relic)))?
                 .map_err(|refusal| Error::Refused {

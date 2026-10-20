@@ -1,16 +1,18 @@
 //! How far the simulator follows the runs the game played, for `coverage`.
 //!
-//! Each recorded run in `crates/sts2-golden/tests/recorded.bin` is followed
+//! Each run in the build's recorded file, [`recorded_file`], is followed
 //! by `sts2-golden`'s `follow_run`, in a process of its own so a panic names
-//! its run. Then the runs' long run, 0RACLE1-REGENT-2, by its `BASELINE`.
+//! its run. Then, for v0.107.1, whose game played it, the long run
+//! 0RACLE1-REGENT-2, by its `BASELINE`.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use crate::codegen::VersionError;
 use crate::coverage::Error;
 
 /// How many of the commonest first splits the report names.
@@ -38,9 +40,19 @@ struct Tally {
     positions: usize,
 }
 
+/// The file of runs recorded on the build `STS2_GAME_VERSION` names.
+/// v0.107.1's has the plain name.
+pub(crate) fn recorded_file(root: &Path) -> Result<PathBuf, VersionError> {
+    let file = match crate::codegen::version()?.as_str() {
+        "v0.107.1" => "recorded.bin".to_owned(),
+        other => format!("recorded-{other}.bin"),
+    };
+    Ok(root.join("crates/sts2-golden/tests").join(file))
+}
+
 pub fn report(root: &Path, out: &mut String) -> Result<(), Error> {
     let follow = crate::error::build_example(root, "follow_run")?;
-    let file = root.join("crates/sts2-golden/tests/recorded.bin");
+    let file = recorded_file(root)?;
     let counted = crate::error::output(Command::new(&follow).arg(&file))?;
     let runs: usize = String::from_utf8_lossy(&counted.stdout)
         .trim()
@@ -106,10 +118,12 @@ pub fn report(root: &Path, out: &mut String) -> Result<(), Error> {
     }
     row(out, "all", &all);
 
-    let golden = root.join("crates/sts2-golden/tests/golden").join(LONG_RUN);
-    let baseline = crate::error::read(&golden.join("BASELINE"))?;
-    let steps = crate::error::read(&golden.join("digests"))?.lines().count();
-    writeln!(out, "  {LONG_RUN}  {} of {steps} steps", baseline.trim()).unwrap();
+    if crate::codegen::version()? == "v0.107.1" {
+        let golden = root.join("crates/sts2-golden/tests/golden").join(LONG_RUN);
+        let baseline = crate::error::read(&golden.join("BASELINE"))?;
+        let steps = crate::error::read(&golden.join("digests"))?.lines().count();
+        writeln!(out, "  {LONG_RUN}  {} of {steps} steps", baseline.trim()).unwrap();
+    }
 
     let mut splits: Vec<(&str, usize)> = splits.into_iter().collect();
     splits.sort_by_key(|(split, count)| (std::cmp::Reverse(*count), *split));
