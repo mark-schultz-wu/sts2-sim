@@ -4777,7 +4777,12 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             cards.iter().map(|_| self.live.card_ids.mint()).collect();
         let mut left = SmallVec::<[_; 4]>::new();
         for (&(card, into), id) in cards.iter().zip(ids) {
-            let at = self.standing(card);
+            // An earlier one's leaving moved it, so it is found by its id.
+            let at = self
+                .live
+                .cards
+                .find(card.pile(), card.id())
+                .unwrap_or_else(|| unimplemented!("transforming a card that left its pile"));
             self.live.cards.remove(card.pile(), at);
             left.push((card.pile(), at, into, id));
         }

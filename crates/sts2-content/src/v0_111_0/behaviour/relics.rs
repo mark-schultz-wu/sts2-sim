@@ -59,6 +59,8 @@ pub(crate) fn own_relic_event_hook(
                 ]);
             }
         }
+        // Obtaining it does nothing of its own.
+        (State::DiamondDiadem(_), EventHook::Obtained { .. }) => {}
         (State::DiamondDiadem(_), hook) => unimplemented!("what DiamondDiadem does for {hook:?}"),
         (state @ State::Own(_), hook) => unimplemented!("what {state:?} does for {hook:?}"),
         (state, _) => unreachable!("{state:?} is a shared relic"),
@@ -74,6 +76,7 @@ pub(crate) fn own_relic(relic: Relic) -> bool {
             | Relic::SereTalon
             | Relic::BeautifulBracelet
             | Relic::HandDrill
+            | Relic::PollinousCore
     )
 }
 
@@ -133,6 +136,23 @@ pub(crate) fn own_shared_relic_event_hook(
             }
             Some(())
         }
+        // `PollinousCore.BeforeHandDraw` counts its owner's turns, where
+        // v0.107.1's counted on `BeforeSideTurnStart`.
+        (State::PollinousCore(state), EventHook::BeforeHandDraw { .. }) => {
+            state.turns_seen += 1;
+            Some(())
+        }
+        // `AfterModifyingHandDraw` starts the count again. The game hands it
+        // only to a listener that changed the hand, which this one did on a
+        // paying turn alone.
+        (State::PollinousCore(state), EventHook::HandDrawModified) => {
+            use crate::vars::RelicVars as _;
+
+            if state.turns_seen >= Relic::POLLINOUS_CORE_TURNS {
+                state.turns_seen = 0;
+            }
+            Some(())
+        }
         // `DistinguishedCape` and `SereTalon` traded what they cost. The
         // Cape adds two curses, each `NextItem` off `Niche` over those not
         // drawn already, then its Apparitions.
@@ -158,6 +178,26 @@ pub(crate) fn own_shared_relic_event_hook(
                 ));
             }
             Some(())
+        }
+        _ => None,
+    }
+}
+
+/// A shared relic's `ModifyHook`, for a hook this build answers itself.
+pub(crate) fn own_shared_relic_modify_hook(
+    state: &State<V>,
+    hook: sts2_core::ModifyHook<V>,
+) -> Option<sts2_core::Modify<i32>> {
+    use crate::vars::RelicVars as _;
+
+    match (state, hook) {
+        // `PollinousCore.ModifyHandDraw`: its cards once it has seen its
+        // turns or more, where v0.107.1's paid on that turn alone.
+        (State::PollinousCore(state), sts2_core::ModifyHook::HandDraw { .. }) => {
+            Some(match state.turns_seen >= Relic::POLLINOUS_CORE_TURNS {
+                true => sts2_core::Modify::Added(Relic::POLLINOUS_CORE_CARDS),
+                false => sts2_core::Modify::Nothing,
+            })
         }
         _ => None,
     }

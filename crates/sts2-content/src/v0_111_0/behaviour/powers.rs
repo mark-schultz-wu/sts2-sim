@@ -53,13 +53,21 @@ pub(crate) fn own_power_death<F: sts2_core::Fight<V>>(
 pub(crate) fn own_power(power: Power) -> bool {
     matches!(
         power,
-        Power::AmbergrisPower | Power::TrackingPower | Power::FeralPower | Power::JugglingPower
+        Power::AmbergrisPower
+            | Power::TrackingPower
+            | Power::FeralPower
+            | Power::JugglingPower
+            | Power::CorruptionPower
+            | Power::PaleBlueDotPower
     )
 }
 
 /// The state a power of this build's own starts with.
-pub(crate) fn own_power_state(_power: Power) -> Option<State<V>> {
-    None
+pub(crate) fn own_power_state(power: Power) -> Option<State<V>> {
+    match power {
+        Power::PaleBlueDotPower => Some(State::PaleBlueDot { activated: false }),
+        _ => None,
+    }
 }
 
 /// `ModifyHook` for a power of this build's own, or nothing for a hook the
@@ -123,11 +131,39 @@ pub(crate) fn own_power_result_pile(
 pub(crate) fn own_power_event_hook(
     power: Power,
     amount: PowerAmount<Number>,
-    _held: Held<'_, V>,
+    held: Held<'_, V>,
     state: &mut State<V>,
     hook: EventHook<V>,
 ) -> Option<Option<HookEffect<V>>> {
     match (power, hook) {
+        // `PaleBlueDotPower.AfterCardPlayed`: once a turn, when its owner
+        // has finished five plays this turn, its stack as
+        // `DrawCardsNextTurnPower` on its owner. A fight here has one
+        // player, whose every card is.
+        (Power::PaleBlueDotPower, EventHook::CardPlayed { .. }) => {
+            let State::PaleBlueDot { activated } = state else {
+                unreachable!("a Pale Blue Dot keeps whether it activated")
+            };
+            if *activated || held.history.finished_this_turn().count() < PALE_BLUE_DOT_PLAYS {
+                return Some(None);
+            }
+            *activated = true;
+            Some(Some(HookEffect::ApplyToOwner(
+                Power::DrawCardsNextTurnPower,
+                amount,
+            )))
+        }
+        // `AfterSideTurnEnd` on its owner's side clears the turn's
+        // activation.
+        (Power::PaleBlueDotPower, EventHook::SideTurnEnd { side, .. }) => {
+            if side == held.owner {
+                *state = State::PaleBlueDot { activated: false };
+            }
+            Some(None)
+        }
+        // `CorruptionPower.AfterModifyingCardPlayResultLocation` flashes
+        // alone. v0.107.1's overrode no such hook.
+        (Power::CorruptionPower, EventHook::ResultPileModified { .. }) => Some(None),
         // `JugglingPower.BeforeCardPlayed`: one more attack, and on the
         // third, its stack of clones of that attack into hand. v0.107.1's
         // counted after the play. A fight here has one player, whose every
@@ -156,6 +192,9 @@ pub(crate) fn own_power_event_hook(
         _ => None,
     }
 }
+
+/// `PaleBlueDotPower`'s `cardPlayThresholdValue`.
+const PALE_BLUE_DOT_PLAYS: usize = 5;
 
 /// `JugglingPower`'s third attack of a turn, which it checks for in its body.
 const JUGGLING_ATTACKS: Number = 3;
