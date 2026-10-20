@@ -437,6 +437,34 @@ internal static class DivineWithoutAScreen
 /// <c>canSkip</c> says, and <c>NChooseACardSelectionScreen</c> hides its skip
 /// button unless <c>canSkip</c> is set.
 /// </remarks>
+/// <summary>
+/// <c>FromChooseACardScreen</c>'s skip, for the builds whose selector branch
+/// <see cref="ScreenPathSelections"/> leaves alone.
+/// </summary>
+/// <remarks>
+/// That branch hands the selector a minimum of none whatever
+/// <c>canSkip</c> says, and a player at the screen sees no skip button
+/// unless it is set. So the selector is told what the screen would offer.
+/// The game asks the selector before its first <c>await</c>, so the prefix
+/// notes it and the postfix clears it on the same thread.
+/// </remarks>
+[HarmonyPatch(typeof(CardSelectCmd), nameof(CardSelectCmd.FromChooseACardScreen))]
+internal static class ChooseACardSkip
+{
+    /// <summary>The <c>canSkip</c> of the screen being asked, if one is.</summary>
+    [ThreadStatic]
+    internal static bool? CanSkip;
+
+    [HarmonyPrepare]
+    private static bool Prepare() => !GameApi.AsksThroughTheScreen;
+
+    [HarmonyPrefix]
+    private static void Prefix(bool canSkip) => CanSkip = canSkip;
+
+    [HarmonyPostfix]
+    private static void Postfix() => CanSkip = null;
+}
+
 [HarmonyPatch(typeof(CardSelectCmd))]
 internal static class ScreenPathSelections
 {
