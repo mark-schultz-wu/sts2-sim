@@ -9,7 +9,6 @@
 
 pub(crate) mod cards;
 pub mod events;
-pub(crate) mod monsters;
 pub(crate) mod powers;
 pub(crate) mod relics;
 
@@ -21,7 +20,13 @@ use super::V0_107_1 as V;
 pub enum Resume {
     Card(cards::Resume),
     Potion(crate::behaviour::potions::Resume),
-    Monster(monsters::Resume),
+    Monster(crate::behaviour::monsters::Resume),
+}
+
+impl From<crate::behaviour::monsters::Resume> for Resume {
+    fn from(at: crate::behaviour::monsters::Resume) -> Self {
+        Resume::Monster(at)
+    }
 }
 
 impl From<crate::behaviour::potions::Resume> for Resume {
@@ -37,7 +42,9 @@ pub(crate) fn resume<F: Fight<V>>(fight: &mut F, at: Resume, answer: Taken<V>) -
         (Resume::Card(at), Taken::Waited) => cards::resume_waited(fight, at),
         (Resume::Card(at), Taken::Drew(drew)) => cards::resume_drew(fight, at, &drew),
         (Resume::Potion(at), answer) => crate::behaviour::potions::resume(fight, at, answer),
-        (Resume::Monster(at), Taken::Chosen(card)) => monsters::resume(fight, at, card),
+        (Resume::Monster(at), Taken::Chosen(card)) => {
+            crate::behaviour::monsters::resume(fight, at, card)
+        }
         (at, answer) => unimplemented!("{at:?} resumed with {answer:?}"),
     }
 }
@@ -49,6 +56,25 @@ impl crate::build::OwnRules for V {
         asked: &mut sts2_core::HookEffects<V>,
     ) {
         relics::own_relic_event_hook(state, hook, asked);
+    }
+
+    fn generated_move<F: sts2_core::Fight<V>>(
+        monster: <V as sts2_core::ContentVersion>::Monster,
+        move_id: <V as sts2_core::ContentVersion>::MoveId,
+        step: u8,
+        fight: &mut F,
+    ) -> Option<u8> {
+        use super::generated::monster_moves;
+        use crate::generated::monster_moves::Filed;
+
+        match monster_moves::filed(monster) {
+            Filed::Glory => monster_moves::glory::perform(monster, move_id, step, fight),
+            Filed::Hive => monster_moves::hive::perform(monster, move_id, step, fight),
+            Filed::Overgrowth => monster_moves::overgrowth::perform(monster, move_id, step, fight),
+            Filed::Shared => monster_moves::shared::perform(monster, move_id, step, fight),
+            Filed::Summoned => monster_moves::summoned::perform(monster, move_id, step, fight),
+            Filed::Underdocks => monster_moves::underdocks::perform(monster, move_id, step, fight),
+        }
     }
 
     fn own_power(power: <V as sts2_core::ContentVersion>::Power) -> bool {

@@ -2,12 +2,9 @@
 
 use sts2_core::{Amount, ContentError, Effect, Fight, MonsterSpawn, PowerAmount, Scaling};
 
-use super::super::super::generated::ascension::AscensionLevel;
-use super::super::super::generated::encounters::Encounter;
-use super::super::super::generated::monster_moves;
-use super::super::super::generated::monsters::{Monster, MoveId};
-use super::super::super::generated::powers::Power;
-use super::{Number, V};
+use crate::behaviour::monsters::Number;
+use crate::generated::ascension::AscensionLevel;
+use crate::ids::{CardIds as _, EncounterIds as _, MonsterIds as _, MoveIds as _, PowerIds as _};
 
 /// `Toadpole.SpikenAmount`, the Thorns Spike Spit takes back off itself.
 const SPIKEN: Number = 2;
@@ -50,10 +47,8 @@ const FYSH_FADE: Number = 2;
 const FYSH_SCREAM: Number = 3;
 
 /// The Beckon the Soul Fysh deals the player.
-fn beckon() -> super::super::super::generated::cards::Cards {
-    use super::super::super::generated::cards::{Cards, StatusCard};
-
-    Cards::Status(StatusCard::Beckon)
+fn beckon<V: crate::Build>() -> V::Card {
+    V::Card::BECKON
 }
 
 /// `LagavulinMatriarch.Sleep`'s Plating and Asleep.
@@ -82,13 +77,13 @@ const EEL_SHRIEK_TOUGH: Number = 75;
 /// The powers an Underdocks monster applies to itself as it spawns.
 ///
 /// Nothing for a monster this act does not port.
-pub(super) fn starting_powers(
-    monster: Monster,
+pub(super) fn starting_powers<V: crate::Build>(
+    monster: V::Monster,
     ascension: AscensionLevel,
-) -> Option<Vec<(Power, PowerAmount<Number>)>> {
+) -> Option<Vec<(V::Power, PowerAmount<Number>)>> {
     Some(match monster {
-        Monster::CorpseSlug => vec![(
-            Power::RavenousPower,
+        __c0 if __c0 == V::Monster::CORPSE_SLUG => vec![(
+            V::Power::RAVENOUS_POWER,
             PowerAmount::Counted(match ascension.has(AscensionLevel::DeadlyEnemies) {
                 true => RAVENOUS_DEADLY,
                 false => RAVENOUS,
@@ -96,40 +91,55 @@ pub(super) fn starting_powers(
         )],
         // Each override calls the base and nothing else. The Waterfall Giant's
         // also sets its Pressure Gun's damage, which its model counts from.
-        Monster::Seapunk | Monster::TwoTailedRat | Monster::WaterfallGiant => Vec::new(),
+        __c0 if __c0 == V::Monster::SEAPUNK
+            || __c0 == V::Monster::TWO_TAILED_RAT
+            || __c0 == V::Monster::WATERFALL_GIANT =>
+        {
+            Vec::new()
+        }
         // `SurprisePower`, then a Thievery aimed at each player, of which a
         // fight here has one.
-        Monster::GremlinMerc => vec![
-            (Power::SurprisePower, PowerAmount::Counted(1)),
-            (Power::ThieveryPower, PowerAmount::Counted(THIEVERY)),
+        __c0 if __c0 == V::Monster::GREMLIN_MERC => vec![
+            (V::Power::SURPRISE_POWER, PowerAmount::Counted(1)),
+            (V::Power::THIEVERY_POWER, PowerAmount::Counted(THIEVERY)),
         ],
-        Monster::SewerClam => vec![(
-            Power::PlatingPower,
+        __c0 if __c0 == V::Monster::SEWER_CLAM => vec![(
+            V::Power::PLATING_POWER,
             PowerAmount::Counted(match ascension.has(AscensionLevel::ToughEnemies) {
                 true => CLAM_PLATING_TOUGH,
                 false => CLAM_PLATING,
             }),
         )],
-        Monster::FossilStalker => vec![(Power::SuckPower, PowerAmount::Counted(STALKER_SUCK))],
-        Monster::GasBomb => vec![(Power::MinionPower, PowerAmount::Counted(1))],
+        __c0 if __c0 == V::Monster::FOSSIL_STALKER => {
+            vec![(V::Power::SUCK_POWER, PowerAmount::Counted(STALKER_SUCK))]
+        }
+        __c0 if __c0 == V::Monster::GAS_BOMB => {
+            vec![(V::Power::MINION_POWER, PowerAmount::Counted(1))]
+        }
         // `Sleep`: Plating, then Asleep.
-        Monster::LagavulinMatriarch => vec![
-            (Power::PlatingPower, PowerAmount::Counted(MATRIARCH_PLATING)),
-            (Power::AsleepPower, PowerAmount::Counted(MATRIARCH_ASLEEP)),
+        __c0 if __c0 == V::Monster::LAGAVULIN_MATRIARCH => vec![
+            (
+                V::Power::PLATING_POWER,
+                PowerAmount::Counted(MATRIARCH_PLATING),
+            ),
+            (
+                V::Power::ASLEEP_POWER,
+                PowerAmount::Counted(MATRIARCH_ASLEEP),
+            ),
         ],
-        Monster::PhantasmalGardener => vec![(
-            Power::SkittishPower,
+        __c0 if __c0 == V::Monster::PHANTASMAL_GARDENER => vec![(
+            V::Power::SKITTISH_POWER,
             PowerAmount::Counted(match ascension.has(AscensionLevel::ToughEnemies) {
                 true => GARDENER_SKITTISH_TOUGH,
                 false => GARDENER_SKITTISH,
             }),
         )],
-        Monster::SkulkingColony => vec![(
-            Power::HardenedShellPower,
+        __c0 if __c0 == V::Monster::SKULKING_COLONY => vec![(
+            V::Power::HARDENED_SHELL_POWER,
             PowerAmount::Counted(COLONY_SHELL),
         )],
-        Monster::TerrorEel => vec![(
-            Power::ShriekPower,
+        __c0 if __c0 == V::Monster::TERROR_EEL => vec![(
+            V::Power::SHRIEK_POWER,
             PowerAmount::Counted(match ascension.has(AscensionLevel::ToughEnemies) {
                 true => EEL_SHRIEK_TOUGH,
                 false => EEL_SHRIEK,
@@ -140,13 +150,13 @@ pub(super) fn starting_powers(
 }
 
 /// Which branch an Underdocks monster's conditional state takes.
-pub(super) fn conditional(
-    monster: Monster,
+pub(super) fn conditional<V: crate::Build>(
+    monster: V::Monster,
     at: u8,
-    spawn: MonsterSpawn<Encounter>,
+    spawn: MonsterSpawn<V::Encounter>,
 ) -> Result<u8, ContentError> {
     match monster {
-        Monster::Toadpole => toadpole_opens(at, spawn),
+        __c0 if __c0 == V::Monster::TOADPOLE => toadpole_opens::<V>(at, spawn),
         monster => unimplemented!("what {monster:?} asks the fight at state {at}"),
     }
 }
@@ -158,145 +168,193 @@ pub(super) fn conditional(
 /// # Panics
 ///
 /// A Toadpole an unported encounter built.
-fn toadpole_opens(at: u8, spawn: MonsterSpawn<Encounter>) -> Result<u8, ContentError> {
-    let state = |wanted| super::state_of(Monster::Toadpole, wanted, at);
+fn toadpole_opens<V: crate::Build>(
+    at: u8,
+    spawn: MonsterSpawn<V::Encounter>,
+) -> Result<u8, ContentError> {
+    let state =
+        |wanted| crate::behaviour::monsters::state_of::<V>(V::Monster::TOADPOLE, wanted, at);
     match (
         spawn.encounter,
         spawn.roster_size.get(),
         spawn.position.get(),
     ) {
-        (Encounter::ToadpolesWeak, 2, 0) => state(MoveId::SpikenMove),
-        (Encounter::ToadpolesWeak, 2, 1) => state(MoveId::WhirlMove),
+        (__c0, 2, 0) if __c0 == V::Encounter::TOADPOLES_WEAK => state(V::MoveId::SPIKEN_MOVE),
+        (__c0, 2, 1) if __c0 == V::Encounter::TOADPOLES_WEAK => state(V::MoveId::WHIRL_MOVE),
         _ => unimplemented!("a Toadpole spawned {spawn:?}"),
     }
 }
 
 /// Perform one of an Underdocks monster's moves, where the generator left it
 /// to a hand port.
-pub(super) fn perform<F: Fight<V>>(
-    monster: Monster,
-    move_id: MoveId,
+pub(super) fn perform<V: crate::Build, F: Fight<V>>(
+    monster: V::Monster,
+    move_id: V::MoveId,
     step: u8,
     fight: &mut F,
 ) -> Option<u8> {
     match (monster, move_id) {
         // `GimmeMove`: the hits, then each Thievery steals.
-        (Monster::GremlinMerc, MoveId::GimmeMove) => {
-            if super::attack_first(fight, step) {
+        (__c0, __c1) if (__c0 == V::Monster::GREMLIN_MERC && __c1 == V::MoveId::GIMME_MOVE) => {
+            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
                 return Some(1);
             }
-            steal(fight);
+            steal::<V, _>(fight);
         }
         // `DoubleSmashMove`: the hits, the steal, then Weak on each target.
-        (Monster::GremlinMerc, MoveId::DoubleSmashMove) => {
-            if super::attack_first(fight, step) {
+        (__c0, __c1)
+            if (__c0 == V::Monster::GREMLIN_MERC && __c1 == V::MoveId::DOUBLE_SMASH_MOVE) =>
+        {
+            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
                 return Some(1);
             }
-            steal(fight);
-            fight.apply_to_opponents(Power::WeakPower, PowerAmount::Counted(MERC_WEAK));
+            steal::<V, _>(fight);
+            fight.apply_to_opponents(V::Power::WEAK_POWER, PowerAmount::Counted(MERC_WEAK));
         }
         // `HeheMove`: the hit, the steal, then Strength on itself.
-        (Monster::GremlinMerc, MoveId::HeheMove) => {
-            if super::attack_first(fight, step) {
+        (__c0, __c1) if (__c0 == V::Monster::GREMLIN_MERC && __c1 == V::MoveId::HEHE_MOVE) => {
+            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
                 return Some(1);
             }
-            steal(fight);
-            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(MERC_STRENGTH));
+            steal::<V, _>(fight);
+            fight.apply_to_actor(
+                V::Power::STRENGTH_POWER,
+                PowerAmount::Counted(MERC_STRENGTH),
+            );
         }
         // `SpawnedMove`: it wakes, which is an animation and `IsAwake`, which
         // nothing reads.
-        (Monster::FatGremlin | Monster::SneakyGremlin, MoveId::SpawnedMove) => {}
+        (__c0, __c1)
+            if ((__c0 == V::Monster::FAT_GREMLIN || __c0 == V::Monster::SNEAKY_GREMLIN)
+                && __c1 == V::MoveId::SPAWNED_MOVE) => {}
         // `FleeMove`: `CreatureCmd.Escape` on itself.
-        (Monster::FatGremlin, MoveId::FleeMove) => fight.escape(),
+        (__c0, __c1) if (__c0 == V::Monster::FAT_GREMLIN && __c1 == V::MoveId::FLEE_MOVE) => {
+            fight.escape()
+        }
         // `DarkStrikeMove`: its hit. `BeforeDamage` plays its sound alone.
-        (Monster::CalcifiedCultist | Monster::DampCultist, MoveId::DarkStrikeMove) => {
+        (__c0, __c1)
+            if ((__c0 == V::Monster::CALCIFIED_CULTIST || __c0 == V::Monster::DAMP_CULTIST)
+                && __c1 == V::MoveId::DARK_STRIKE_MOVE) =>
+        {
             fight.attack_opponents()
         }
         // `ScratchMove` and `DiseaseBiteMove`: a turn off the wait for a
         // summon, then the hit.
-        (Monster::TwoTailedRat, MoveId::ScratchMove | MoveId::DiseaseBiteMove) => {
-            rat_waits(fight);
+        (__c0, __c1)
+            if (__c0 == V::Monster::TWO_TAILED_RAT
+                && (__c1 == V::MoveId::SCRATCH_MOVE || __c1 == V::MoveId::DISEASE_BITE_MOVE)) =>
+        {
+            rat_waits::<V, _>(fight);
             fight.attack_opponents();
         }
-        (Monster::TwoTailedRat, MoveId::ScreechMove) => {
-            rat_waits(fight);
-            fight.apply_to_opponents(Power::FrailPower, PowerAmount::Counted(SCREECH_FRAIL));
+        (__c0, __c1) if (__c0 == V::Monster::TWO_TAILED_RAT && __c1 == V::MoveId::SCREECH_MOVE) => {
+            rat_waits::<V, _>(fight);
+            fight.apply_to_opponents(V::Power::FRAIL_POWER, PowerAmount::Counted(SCREECH_FRAIL));
         }
-        (Monster::TwoTailedRat, MoveId::CallForBackupMove) => call_for_backup(fight),
+        (__c0, __c1)
+            if (__c0 == V::Monster::TWO_TAILED_RAT && __c1 == V::MoveId::CALL_FOR_BACKUP_MOVE) =>
+        {
+            call_for_backup::<V, _>(fight)
+        }
         // `PressurizeMove`: Steam Eruption on itself.
-        (Monster::WaterfallGiant, MoveId::PressurizeMove) => {
+        (__c0, __c1)
+            if (__c0 == V::Monster::WATERFALL_GIANT && __c1 == V::MoveId::PRESSURIZE_MOVE) =>
+        {
             let steam = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
                 true => 20,
                 false => 15,
             };
-            fight.apply_to_actor(Power::SteamEruptionPower, PowerAmount::Counted(steam));
+            fight.apply_to_actor(V::Power::STEAM_ERUPTION_POWER, PowerAmount::Counted(steam));
         }
         // `RamMove` and `PressureUpMove`: the hit, then three Steam Eruption.
-        (Monster::WaterfallGiant, MoveId::RamMove | MoveId::PressureUpMove) => {
-            if super::attack_first(fight, step) {
+        (__c0, __c1)
+            if (__c0 == V::Monster::WATERFALL_GIANT
+                && (__c1 == V::MoveId::RAM_MOVE || __c1 == V::MoveId::PRESSURE_UP_MOVE)) =>
+        {
+            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
                 return Some(1);
             }
-            fight.apply_to_actor(Power::SteamEruptionPower, PowerAmount::Counted(GIANT_STEAM));
+            fight.apply_to_actor(
+                V::Power::STEAM_ERUPTION_POWER,
+                PowerAmount::Counted(GIANT_STEAM),
+            );
         }
         // `StompMove`: the hit, a Weak on each target, then three Steam
         // Eruption.
-        (Monster::WaterfallGiant, MoveId::StompMove) => {
-            if super::attack_first(fight, step) {
+        (__c0, __c1) if (__c0 == V::Monster::WATERFALL_GIANT && __c1 == V::MoveId::STOMP_MOVE) => {
+            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
                 return Some(1);
             }
-            fight.apply_to_opponents(Power::WeakPower, PowerAmount::Counted(1));
-            fight.apply_to_actor(Power::SteamEruptionPower, PowerAmount::Counted(GIANT_STEAM));
+            fight.apply_to_opponents(V::Power::WEAK_POWER, PowerAmount::Counted(1));
+            fight.apply_to_actor(
+                V::Power::STEAM_ERUPTION_POWER,
+                PowerAmount::Counted(GIANT_STEAM),
+            );
         }
         // `SiphonMove`: `SiphonHeal` for each player, of which a fight here
         // has one, then three Steam Eruption.
-        (Monster::WaterfallGiant, MoveId::SiphonMove) => {
+        (__c0, __c1) if (__c0 == V::Monster::WATERFALL_GIANT && __c1 == V::MoveId::SIPHON_MOVE) => {
             let heal = match fight.ascension().has(AscensionLevel::ToughEnemies) {
                 true => 15,
                 false => 10,
             };
             let giant = fight.actor();
             fight.heal(giant, heal);
-            fight.apply_to_actor(Power::SteamEruptionPower, PowerAmount::Counted(GIANT_STEAM));
+            fight.apply_to_actor(
+                V::Power::STEAM_ERUPTION_POWER,
+                PowerAmount::Counted(GIANT_STEAM),
+            );
         }
         // `PressureGunMove`: the hit, five more on the next, then three Steam
         // Eruption.
-        (Monster::WaterfallGiant, MoveId::PressureGunMove) => {
-            if super::attack_first(fight, step) {
+        (__c0, __c1)
+            if (__c0 == V::Monster::WATERFALL_GIANT && __c1 == V::MoveId::PRESSURE_GUN_MOVE) =>
+        {
+            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
                 return Some(1);
             }
             fight.model(|model| {
-                let super::Model::WaterfallGiant { gun_raises, .. } = model else {
+                let crate::behaviour::monsters::Model::WaterfallGiant { gun_raises, .. } = model
+                else {
                     unreachable!("a Waterfall Giant's model is its own")
                 };
                 *gun_raises += 1;
             });
-            fight.apply_to_actor(Power::SteamEruptionPower, PowerAmount::Counted(GIANT_STEAM));
+            fight.apply_to_actor(
+                V::Power::STEAM_ERUPTION_POWER,
+                PowerAmount::Counted(GIANT_STEAM),
+            );
         }
         // `AboutToBlowMove`: the Steam Eruption it built becomes the damage
         // its Explode deals, and comes off.
-        (Monster::WaterfallGiant, MoveId::AboutToBlowMove) => {
+        (__c0, __c1)
+            if (__c0 == V::Monster::WATERFALL_GIANT && __c1 == V::MoveId::ABOUT_TO_BLOW_MOVE) =>
+        {
             use sts2_core::CreatureView as _;
 
             let giant = fight.actor();
             let built = fight
                 .creatures()
                 .find(|creature| creature.id() == giant)
-                .and_then(|creature| creature.power(Power::SteamEruptionPower))
+                .and_then(|creature| creature.power(V::Power::STEAM_ERUPTION_POWER))
                 .map_or(0, |amount| match amount {
                     PowerAmount::Counted(amount) => amount,
                     PowerAmount::Endless => unimplemented!("an endless Steam Eruption"),
                 });
             fight.model(|model| {
-                let super::Model::WaterfallGiant { eruption, .. } = model else {
+                let crate::behaviour::monsters::Model::WaterfallGiant { eruption, .. } = model
+                else {
                     unreachable!("a Waterfall Giant's model is its own")
                 };
                 *eruption = built;
             });
-            fight.remove_power(giant, Power::SteamEruptionPower);
+            fight.remove_power(giant, V::Power::STEAM_ERUPTION_POWER);
         }
         // `ExplodeMove`: the hit, then `CreatureCmd.Kill` on itself.
-        (Monster::WaterfallGiant, MoveId::ExplodeMove) => {
-            if super::attack_first(fight, step) {
+        (__c0, __c1)
+            if (__c0 == V::Monster::WATERFALL_GIANT && __c1 == V::MoveId::EXPLODE_MOVE) =>
+        {
+            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
                 return Some(1);
             }
             let giant = fight.actor();
@@ -304,45 +362,53 @@ pub(super) fn perform<F: Fight<V>>(
         }
         // `BeckonMove`: for the one player, a Beckon into the draw pile at
         // random, then one into the discard pile.
-        (Monster::SoulFysh, MoveId::BeckonMove) => {
-            fight.add_at_random(beckon(), sts2_core::Pile::Draw);
+        (__c0, __c1) if (__c0 == V::Monster::SOUL_FYSH && __c1 == V::MoveId::BECKON_MOVE) => {
+            fight.add_at_random(beckon::<V>(), sts2_core::Pile::Draw);
             fight.add_generated_cards(
-                sts2_core::CardIdent::new(beckon()),
+                sts2_core::CardIdent::new(beckon::<V>()),
                 sts2_core::Pile::Discard,
                 1,
             );
         }
         // `GazeMove`: its hit, then a Beckon into the discard pile.
-        (Monster::SoulFysh, MoveId::GazeMove) => {
-            if super::attack_first(fight, step) {
+        (__c0, __c1) if (__c0 == V::Monster::SOUL_FYSH && __c1 == V::MoveId::GAZE_MOVE) => {
+            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
                 return Some(1);
             }
             fight.add_generated_cards(
-                sts2_core::CardIdent::new(beckon()),
+                sts2_core::CardIdent::new(beckon::<V>()),
                 sts2_core::Pile::Discard,
                 1,
             );
         }
         // `FadeMove`: two Intangible. `IsInvisible` and the music are on
         // screen alone.
-        (Monster::SoulFysh, MoveId::FadeMove) => {
-            fight.apply_to_actor(Power::IntangiblePower, PowerAmount::Counted(FYSH_FADE));
+        (__c0, __c1) if (__c0 == V::Monster::SOUL_FYSH && __c1 == V::MoveId::FADE_MOVE) => {
+            fight.apply_to_actor(V::Power::INTANGIBLE_POWER, PowerAmount::Counted(FYSH_FADE));
         }
         // `ScreamMove`: its hit, then three Vulnerable on each target.
-        (Monster::SoulFysh, MoveId::ScreamMove) => {
-            if super::attack_first(fight, step) {
+        (__c0, __c1) if (__c0 == V::Monster::SOUL_FYSH && __c1 == V::MoveId::SCREAM_MOVE) => {
+            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
                 return Some(1);
             }
-            fight.apply_to_opponents(Power::VulnerablePower, PowerAmount::Counted(FYSH_SCREAM));
+            fight.apply_to_opponents(
+                V::Power::VULNERABLE_POWER,
+                PowerAmount::Counted(FYSH_SCREAM),
+            );
         }
         // The Matriarch's four waking moves. Each first stops its sleeping
         // effect, which is all on screen.
-        (Monster::LagavulinMatriarch, MoveId::SlashMove | MoveId::DisembowelMove) => {
+        (__c0, __c1)
+            if (__c0 == V::Monster::LAGAVULIN_MATRIARCH
+                && (__c1 == V::MoveId::SLASH_MOVE || __c1 == V::MoveId::DISEMBOWEL_MOVE)) =>
+        {
             fight.attack_opponents()
         }
         // `Slash2Move`: its hit, then powered block on itself.
-        (Monster::LagavulinMatriarch, MoveId::Slash2Move) => {
-            if super::attack_first(fight, step) {
+        (__c0, __c1)
+            if (__c0 == V::Monster::LAGAVULIN_MATRIARCH && __c1 == V::MoveId::SLASH2_MOVE) =>
+        {
+            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
                 return Some(1);
             }
             let amount = match fight.ascension().has(AscensionLevel::ToughEnemies) {
@@ -358,48 +424,55 @@ pub(super) fn perform<F: Fight<V>>(
         }
         // `SoulSiphonMove`: Strength and Dexterity off each target, then the
         // Strength on itself.
-        (Monster::LagavulinMatriarch, MoveId::SoulSiphonMove) => {
+        (__c0, __c1)
+            if (__c0 == V::Monster::LAGAVULIN_MATRIARCH && __c1 == V::MoveId::SOUL_SIPHON_MOVE) =>
+        {
             fight.apply_to_opponents(
-                Power::StrengthPower,
+                V::Power::STRENGTH_POWER,
                 PowerAmount::Counted(-MATRIARCH_SIPHON),
             );
             fight.apply_to_opponents(
-                Power::DexterityPower,
+                V::Power::DEXTERITY_POWER,
                 PowerAmount::Counted(-MATRIARCH_SIPHON),
             );
-            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(MATRIARCH_SIPHON));
+            fight.apply_to_actor(
+                V::Power::STRENGTH_POWER,
+                PowerAmount::Counted(MATRIARCH_SIPHON),
+            );
         }
         // `EnlargeMove`: Strength on itself. `EnlargeTriggers` and the scale
         // it sets size it on screen alone.
-        (Monster::PhantasmalGardener, MoveId::EnlargeMove) => {
+        (__c0, __c1)
+            if (__c0 == V::Monster::PHANTASMAL_GARDENER && __c1 == V::MoveId::ENLARGE_MOVE) =>
+        {
             let strength = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
                 true => GARDENER_ENLARGE_DEADLY,
                 false => GARDENER_ENLARGE,
             };
-            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(strength));
+            fight.apply_to_actor(V::Power::STRENGTH_POWER, PowerAmount::Counted(strength));
         }
         // `BloatMove`: a Gas Bomb into the first slot no enemy holds, for each
         // of its `BloatAmount`, which stays at one. Then its hit.
-        (Monster::LivingFog, MoveId::BloatMove) => {
-            fight.summon_into_first_free_slot(Monster::GasBomb);
+        (__c0, __c1) if (__c0 == V::Monster::LIVING_FOG && __c1 == V::MoveId::BLOAT_MOVE) => {
+            fight.summon_into_first_free_slot(V::Monster::GAS_BOMB);
             fight.attack_opponents();
         }
         // `ExplodeMove`: its hit, then `CreatureCmd.Kill` on itself.
         // `HasExploded` picks how it dies on screen alone.
-        (Monster::GasBomb, MoveId::ExplodeMove) => {
-            if super::attack_first(fight, step) {
+        (__c0, __c1) if (__c0 == V::Monster::GAS_BOMB && __c1 == V::MoveId::EXPLODE_MOVE) => {
+            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
                 return Some(1);
             }
             let bomb = fight.actor();
             fight.kill(bomb);
         }
         // `SpikeSpitMove`: the Thorns Spiken gave, taken back, then its hits.
-        (Monster::Toadpole, MoveId::SpikeSpitMove) => {
-            fight.apply_to_actor(Power::ThornsPower, PowerAmount::Counted(-SPIKEN));
+        (__c0, __c1) if (__c0 == V::Monster::TOADPOLE && __c1 == V::MoveId::SPIKE_SPIT_MOVE) => {
+            fight.apply_to_actor(V::Power::THORNS_POWER, PowerAmount::Counted(-SPIKEN));
             fight.attack_opponents();
         }
         (monster, move_id) => {
-            return monster_moves::underdocks::perform(monster, move_id, step, fight);
+            return V::generated_move(monster, move_id, step, fight);
         }
     }
     None
@@ -408,7 +481,7 @@ pub(super) fn perform<F: Fight<V>>(
 /// `TurnsUntilSummonable--`.
 /// `ThieveryPower.Steal` for the Gremlin Merc's one instance: the lesser of
 /// its stack and the player's gold, where the player stands and holds any.
-fn steal<F: Fight<V>>(fight: &mut F) {
+fn steal<V: crate::Build, F: Fight<V>>(fight: &mut F) {
     use sts2_core::CreatureView as _;
 
     if fight.opponents().is_empty() {
@@ -418,7 +491,7 @@ fn steal<F: Fight<V>>(fight: &mut F) {
     let Some(PowerAmount::Counted(amount)) = fight
         .creatures()
         .find(|creature| creature.id() == merc)
-        .and_then(|creature| creature.power(Power::ThieveryPower))
+        .and_then(|creature| creature.power(V::Power::THIEVERY_POWER))
     else {
         return;
     };
@@ -428,14 +501,14 @@ fn steal<F: Fight<V>>(fight: &mut F) {
     }
     let taken = amount.min(gold);
     fight.lose_gold(taken);
-    fight.write_power(merc, Power::ThieveryPower, |state| {
+    fight.write_power(merc, V::Power::THIEVERY_POWER, |state| {
         *state.stolen_gold() += taken
     });
 }
 
-fn rat_waits<F: Fight<V>>(fight: &mut F) {
+fn rat_waits<V: crate::Build, F: Fight<V>>(fight: &mut F) {
     fight.model(|model| {
-        let super::Model::TwoTailedRat { summonable_in, .. } = model else {
+        let crate::behaviour::monsters::Model::TwoTailedRat { summonable_in, .. } = model else {
             unreachable!("a Two-Tailed Rat's model is its own")
         };
         *summonable_in = summonable_in.saturating_sub(1);
@@ -444,16 +517,16 @@ fn rat_waits<F: Fight<V>>(fight: &mut F) {
 
 /// `CallForBackup`: a rat into the last slot no enemy holds. Then every rat,
 /// the new one included, counts one past the highest count any of them held.
-fn call_for_backup<F: Fight<V>>(fight: &mut F) {
-    fight.summon_into_last_free_slot(Monster::TwoTailedRat);
+fn call_for_backup<V: crate::Build, F: Fight<V>>(fight: &mut F) {
+    fight.summon_into_last_free_slot(V::Monster::TWO_TAILED_RAT);
     let mut highest = 0;
     fight.enemy_models(|model| {
-        if let super::Model::TwoTailedRat { backups, .. } = *model {
+        if let crate::behaviour::monsters::Model::TwoTailedRat { backups, .. } = *model {
             highest = highest.max(backups + 1);
         }
     });
     fight.enemy_models(|model| {
-        if let super::Model::TwoTailedRat { backups, .. } = model {
+        if let crate::behaviour::monsters::Model::TwoTailedRat { backups, .. } = model {
             *backups = highest;
         }
     });
@@ -462,13 +535,13 @@ fn call_for_backup<F: Fight<V>>(fight: &mut F) {
 /// A Two-Tailed Rat's `RAND` branches, in the order it adds them. Scratch,
 /// Disease Bite and Screech weigh 1 while it cannot summon and 1/12 while it
 /// can. Call for Backup weighs 0.75 while it can, and nothing otherwise.
-pub(super) fn rat_weight(
+pub(super) fn rat_weight<V: crate::Build>(
     at: usize,
-    spawn: MonsterSpawn<Encounter>,
-    model: &super::Model,
-    advertised: impl Fn(MoveId) -> bool,
+    spawn: MonsterSpawn<V::Encounter>,
+    model: &crate::behaviour::monsters::Model<V>,
+    advertised: impl Fn(V::MoveId) -> bool,
 ) -> f32 {
-    let super::Model::TwoTailedRat {
+    let crate::behaviour::monsters::Model::TwoTailedRat {
         summonable_in,
         backups,
     } = *model
@@ -479,7 +552,7 @@ pub(super) fn rat_weight(
     let can_summon = summonable_in == 0
         && backups < RAT_BACKUPS
         && spawn.next_slot
-        && !advertised(MoveId::CallForBackupMove);
+        && !advertised(V::MoveId::CALL_FOR_BACKUP_MOVE);
     match (at, can_summon) {
         (0..=2, false) => 1.0,
         (0..=2, true) => 1.0 / 12.0,
@@ -493,55 +566,56 @@ pub(super) fn rat_weight(
 ///
 /// `GasBomb.ExplodeDamage`, behind its `DeathBlowIntent`'s lambda: eight, or
 /// nine at `DeadlyEnemies`. The Waterfall Giant reads its own model.
-pub(super) fn computed_damage(
-    monster: Monster,
-    move_id: MoveId,
+pub(super) fn computed_damage<V: crate::Build>(
+    monster: V::Monster,
+    move_id: V::MoveId,
     ascension: u8,
-    model: &super::Model,
+    model: &crate::behaviour::monsters::Model<V>,
 ) -> i32 {
     let deadly = ascension >= AscensionLevel::DeadlyEnemies as u8;
     match (monster, move_id) {
         // `CurrentPressureGunDamage`: its base, and five for each Pressure
         // Gun since.
-        (Monster::WaterfallGiant, MoveId::PressureGunMove) => {
-            let super::Model::WaterfallGiant { gun_raises, .. } = *model else {
+        (__c0, __c1)
+            if (__c0 == V::Monster::WATERFALL_GIANT && __c1 == V::MoveId::PRESSURE_GUN_MOVE) =>
+        {
+            let crate::behaviour::monsters::Model::WaterfallGiant { gun_raises, .. } = *model
+            else {
                 unreachable!("a Waterfall Giant's model is its own")
             };
             (if deadly { 23 } else { 20 }) + GIANT_GUN_RAISE * i32::from(gun_raises)
         }
         // `SteamEruptionDamage`, which About to Blow saved.
-        (Monster::WaterfallGiant, MoveId::ExplodeMove) => {
-            let super::Model::WaterfallGiant { eruption, .. } = *model else {
+        (__c0, __c1)
+            if (__c0 == V::Monster::WATERFALL_GIANT && __c1 == V::MoveId::EXPLODE_MOVE) =>
+        {
+            let crate::behaviour::monsters::Model::WaterfallGiant { eruption, .. } = *model else {
                 unreachable!("a Waterfall Giant's model is its own")
             };
             eruption
         }
-        (Monster::GasBomb, MoveId::ExplodeMove) => match deadly {
-            true => 9,
-            false => 8,
-        },
+        (__c0, __c1) if (__c0 == V::Monster::GAS_BOMB && __c1 == V::MoveId::EXPLODE_MOVE) => {
+            match deadly {
+                true => 9,
+                false => 8,
+            }
+        }
         (monster, move_id) => unimplemented!("the damage {monster:?} works out for {move_id:?}"),
     }
 }
 
 /// The Matriarch's `SLEEP_BRANCH`: asleep while it holds Asleep, and slashing
 /// once it does not.
-pub(super) fn matriarch_branch<P: sts2_core::Printed<V> + ?Sized>(
+pub(super) fn matriarch_branch<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
     at: u8,
     powers: &[sts2_core::Listener<'_, V, P>],
 ) -> Result<u8, ContentError> {
     let asleep = powers.iter().any(|listener| {
-        matches!(
-            listener,
-            sts2_core::Listener::Power {
-                power: Power::AsleepPower,
-                ..
-            }
-        )
+        matches!(listener, sts2_core::Listener::Power { power: __c0, .. } if *__c0 == V::Power::ASLEEP_POWER)
     });
     let wanted = match asleep {
-        true => MoveId::SleepMove,
-        false => MoveId::SlashMove,
+        true => V::MoveId::SLEEP_MOVE,
+        false => V::MoveId::SLASH_MOVE,
     };
-    super::state_of(Monster::LagavulinMatriarch, wanted, at)
+    crate::behaviour::monsters::state_of::<V>(V::Monster::LAGAVULIN_MATRIARCH, wanted, at)
 }

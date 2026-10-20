@@ -110,7 +110,7 @@ impl sts2_core::Hooks for V0_107_1 {
     type RelicState = RelicState;
     type ModifierState = crate::behaviour::modifiers::State;
     type PowerState = crate::behaviour::powers::State<V0_107_1>;
-    type MonsterState = behaviour::monsters::Model;
+    type MonsterState = crate::behaviour::monsters::Model<V0_107_1>;
     type EncounterState = crate::behaviour::encounters::State;
     type CardState = behaviour::cards::State;
     type CardFields = behaviour::cards::Fields;
@@ -359,7 +359,7 @@ impl sts2_core::Hooks for V0_107_1 {
         hook: sts2_core::EventHook<Self>,
         asked: &mut sts2_core::HookEffects<Self>,
     ) {
-        behaviour::monsters::event_hook(monster, model, hook, asked)
+        crate::behaviour::monsters::event_hook::<V0_107_1>(monster, model, hook, asked)
     }
 
     fn enchant_modify(
@@ -687,7 +687,9 @@ impl sts2_core::Rules for V0_107_1 {
         rolled: Self::Health,
         teammates: &[Self::Health],
     ) -> Option<Self::Health> {
-        behaviour::monsters::health_after_added(monster, ascension, rolled, teammates)
+        crate::behaviour::monsters::health_after_added::<V0_107_1>(
+            monster, ascension, rolled, teammates,
+        )
     }
 
     fn encounter_gold_proportion(
@@ -711,7 +713,7 @@ impl sts2_core::Rules for V0_107_1 {
         model: &Self::MonsterState,
         hp: Self::Health,
     ) -> Option<Self::Health> {
-        behaviour::monsters::hp_after_added(monster, model, hp)
+        crate::behaviour::monsters::hp_after_added::<V0_107_1>(monster, model, hp)
     }
 
     fn monster_hp_bounds(
@@ -803,9 +805,10 @@ impl sts2_core::Rules for V0_107_1 {
             return Err(sts2_core::MovePinned);
         }
         let data = sts2_core::Table::data(monster);
-        let at = behaviour::monsters::state_of(monster, move_id, machine.at).unwrap_or_else(|_| {
-            unimplemented!("{monster:?} sent to {move_id:?}, which its graph has no state for")
-        });
+        let at = crate::behaviour::monsters::state_of::<V0_107_1>(monster, move_id, machine.at)
+            .unwrap_or_else(|_| {
+                unimplemented!("{monster:?} sent to {move_id:?}, which its graph has no state for")
+            });
         // `ForceCurrentState`, which does not write the state into the log.
         // The named state takes the place of any state a caller built.
         machine.built = false;
@@ -832,12 +835,14 @@ impl sts2_core::Rules for V0_107_1 {
         // the table says.
         let at = match opens_on {
             None => data.initial,
-            Some(move_id) => behaviour::monsters::state_of(monster, move_id, data.initial)
-                .unwrap_or_else(|_| {
-                    unimplemented!(
-                        "{monster:?} opening on {move_id:?}, which its graph has no state for"
-                    )
-                }),
+            Some(move_id) => {
+                crate::behaviour::monsters::state_of::<V0_107_1>(monster, move_id, data.initial)
+                    .unwrap_or_else(|_| {
+                        unimplemented!(
+                            "{monster:?} opening on {move_id:?}, which its graph has no state for"
+                        )
+                    })
+            }
         };
         // `ShouldAppearInLogs`, which a branch state answers no to. A graph
         // opening on a move has that move in its history already.
@@ -854,14 +859,15 @@ impl sts2_core::Rules for V0_107_1 {
         side: Self::CombatSide,
         model: &Self::MonsterState,
     ) -> impl Iterator<Item = (Self::Power, sts2_core::PowerAmount<Self::Number>)> {
-        behaviour::monsters::starting_powers(monster, ascension, side, model).into_iter()
+        crate::behaviour::monsters::starting_powers::<V0_107_1>(monster, ascension, side, model)
+            .into_iter()
     }
 
     fn monster_starting_opponent_powers(
         monster: Self::Monster,
         _ascension: Self::AscensionLevel,
     ) -> impl Iterator<Item = (Self::Power, sts2_core::PowerAmount<Self::Number>)> {
-        behaviour::monsters::starting_opponent_powers(monster).into_iter()
+        crate::behaviour::monsters::starting_opponent_powers::<V0_107_1>(monster).into_iter()
     }
 
     fn computed_card_target(
@@ -916,7 +922,7 @@ impl sts2_core::Rules for V0_107_1 {
         move_id: Self::MoveId,
         fight: &mut F,
     ) -> sts2_core::Played<Self> {
-        behaviour::monsters::perform(monster, move_id, fight)
+        crate::behaviour::monsters::perform::<V0_107_1, _>(monster, move_id, fight)
     }
 
     fn intent_repeats_now(
@@ -934,9 +940,9 @@ impl sts2_core::Rules for V0_107_1 {
                 _ => None,
             })?;
         match held.intents.attack?.repeats {
-            crate::Field::Computed => Some(behaviour::monsters::computed_repeats(
-                monster, move_id, model,
-            )),
+            crate::Field::Computed => Some(
+                crate::behaviour::monsters::computed_repeats::<V0_107_1>(monster, move_id, model),
+            ),
             crate::Field::Constant(_) => None,
         }
     }
@@ -950,7 +956,7 @@ impl sts2_core::Rules for V0_107_1 {
         let behaviour::Resume::Monster(at) = at else {
             unreachable!("{at:?} resumes no move")
         };
-        behaviour::monsters::resume_move(monster, move_id, at, fight)
+        crate::behaviour::monsters::resume_move::<V0_107_1, _>(monster, move_id, at, fight)
     }
 
     fn random_encounter_monsters<R: sts2_core::rng::GameRng>(
@@ -1196,7 +1202,7 @@ fn roll_monster_move<
     spawn: sts2_core::MonsterSpawn<generated::encounters::Encounter>,
     powers: impl IntoIterator<Item = sts2_core::Listener<'a, V0_107_1, P>>,
     advertised: impl Fn(generated::monsters::MoveId) -> bool,
-    model: &behaviour::monsters::Model,
+    model: &crate::behaviour::monsters::Model<V0_107_1>,
     machine: &mut sts2_core::MoveMachine,
     rng: &mut R,
 ) -> Result<Option<sts2_core::NextMove<V0_107_1>>, sts2_core::ContentError> {
@@ -1230,9 +1236,11 @@ fn roll_monster_move<
             ascension,
             || {
                 read.extend(powers.take().into_iter().flatten());
-                behaviour::monsters::computed_damage(monster, held.id, ascension, &read, model)
+                crate::behaviour::monsters::computed_damage::<V0_107_1, _>(
+                    monster, held.id, ascension, &read, model,
+                )
             },
-            || behaviour::monsters::computed_repeats(monster, held.id, model),
+            || crate::behaviour::monsters::computed_repeats::<V0_107_1>(monster, held.id, model),
         )
         .map(Some);
     }
@@ -1246,11 +1254,19 @@ fn roll_monster_move<
                     FollowUp::Never => unimplemented!("a move with no follow-up"),
                 },
                 State::Random(branches) => branch(branches, machine, rng, |at| {
-                    behaviour::monsters::weight(monster, at, spawn, model, &advertised)
+                    crate::behaviour::monsters::weight::<V0_107_1>(
+                        monster,
+                        at,
+                        spawn,
+                        model,
+                        &advertised,
+                    )
                 })?,
                 State::Conditional(_) => {
                     read.extend(powers.take().into_iter().flatten());
-                    behaviour::monsters::conditional(monster, machine.at, spawn, &read, model)?
+                    crate::behaviour::monsters::conditional::<V0_107_1, _>(
+                        monster, machine.at, spawn, &read, model,
+                    )?
                 }
             };
             machine.enter(next);
@@ -1269,9 +1285,11 @@ fn roll_monster_move<
         ascension,
         || {
             read.extend(powers.take().into_iter().flatten());
-            behaviour::monsters::computed_damage(monster, held.id, ascension, &read, model)
+            crate::behaviour::monsters::computed_damage::<V0_107_1, _>(
+                monster, held.id, ascension, &read, model,
+            )
         },
-        || behaviour::monsters::computed_repeats(monster, held.id, model),
+        || crate::behaviour::monsters::computed_repeats::<V0_107_1>(monster, held.id, model),
     )
     .map(Some)
 }

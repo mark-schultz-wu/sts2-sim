@@ -8,6 +8,7 @@ pub(crate) mod acts;
 pub(crate) mod enchantments;
 pub(crate) mod encounters;
 pub(crate) mod modifiers;
+pub(crate) mod monsters;
 pub(crate) mod orbs;
 pub(crate) mod potions;
 pub(crate) mod powers;

@@ -109,6 +109,8 @@ pub trait Lists: ContentVersion {
     fn powers_revive() -> &'static sts2_core::NextMove<Self>;
     fn powers_spawned() -> &'static sts2_core::NextMove<Self>;
     const POWERS_VALID_ORBS: &'static [Self::Orb];
+    const GLORY_DEFENSE_SPAWNS: &'static [Self::Monster];
+    const GLORY_AGGRO_SPAWNS: &'static [Self::Monster];
 }
 
 /// The lookups into a build's tables a shared rule makes, where the row they
@@ -125,6 +127,19 @@ pub trait Tables: ContentVersion {
         wanted: Self::MoveId,
         at: u8,
     ) -> Result<u8, sts2_core::ContentError>;
+
+    /// Where a monster's moves are filed.
+    fn filed(monster: Self::Monster) -> crate::generated::monster_moves::Filed;
+
+    /// The branches of a monster's conditional state at `at`, or nothing for
+    /// any other state.
+    fn monster_conditional(
+        monster: Self::Monster,
+        at: u8,
+    ) -> Option<&'static [crate::generated::monsters::StateIndex]>;
+
+    /// The bounds a monster's health is rolled between, lowest first.
+    fn monster_hp(monster: Self::Monster) -> (crate::Scaled<u16>, crate::Scaled<u16>);
 }
 
 /// [`Tables`] for one build, off its own generated tables.
@@ -148,6 +163,25 @@ macro_rules! tables {
                     })
                     .and_then(|found| u8::try_from(found).ok())
                     .ok_or(sts2_core::ContentError::InvalidMonsterState { index: at })
+            }
+
+            fn filed(monster: Self::Monster) -> crate::generated::monster_moves::Filed {
+                crate::$module::monster_moves::filed(monster)
+            }
+
+            fn monster_conditional(
+                monster: Self::Monster,
+                at: u8,
+            ) -> Option<&'static [crate::generated::monsters::StateIndex]> {
+                match Table::data(monster).states.get(usize::from(at)) {
+                    Some(crate::$module::monsters::State::Conditional(branches)) => Some(branches),
+                    _ => None,
+                }
+            }
+
+            fn monster_hp(monster: Self::Monster) -> (crate::Scaled<u16>, crate::Scaled<u16>) {
+                let data = Table::data(monster);
+                (data.min_hp, data.max_hp)
             }
         }
     };
@@ -179,6 +213,7 @@ macro_rules! lists {
             crate::behaviour::relics::toy_box::lists!($build);
             crate::behaviour::relics::vexing_puzzlebox::lists!($build);
             crate::behaviour::powers::lists!($build);
+            crate::behaviour::monsters::glory::lists!($build);
         }
     };
 }
@@ -195,6 +230,17 @@ pub trait OwnRules: ContentVersion + Sized {
         hook: sts2_core::EventHook<Self>,
         asked: &mut sts2_core::HookEffects<Self>,
     ) where
+        Self: Build;
+
+    /// A move the build's generated scripts perform, from `step`, and the
+    /// step to go on from where a command asked the player something.
+    fn generated_move<F: sts2_core::Fight<Self>>(
+        monster: Self::Monster,
+        move_id: Self::MoveId,
+        step: u8,
+        fight: &mut F,
+    ) -> Option<u8>
+    where
         Self: Build;
 
     /// Whether a power's rule is the build's own.
@@ -241,8 +287,11 @@ pub trait Build:
     + Rules<
         PowerState = crate::behaviour::powers::State<Self>,
         EncounterState = crate::behaviour::encounters::State,
+        MonsterState = crate::behaviour::monsters::Model<Self>,
     > + OwnRules
-    + ContentVersion<Resume: From<crate::behaviour::potions::Resume>>
+    + ContentVersion<
+        Resume: From<crate::behaviour::potions::Resume> + From<crate::behaviour::monsters::Resume>,
+    >
 {
 }
 
@@ -251,7 +300,11 @@ impl<V> Build for V where
         + Rules<
             PowerState = crate::behaviour::powers::State<V>,
             EncounterState = crate::behaviour::encounters::State,
+            MonsterState = crate::behaviour::monsters::Model<V>,
         > + OwnRules
-        + ContentVersion<Resume: From<crate::behaviour::potions::Resume>>
+        + ContentVersion<
+            Resume: From<crate::behaviour::potions::Resume>
+                        + From<crate::behaviour::monsters::Resume>,
+        >
 {
 }
