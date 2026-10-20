@@ -1234,16 +1234,36 @@ fn generic_fns(s: &str) -> (String, Vec<(String, usize)>) {
                     .iter()
                     .any(|own| params.starts_with(own));
                 made.push((if method { format!(".{name}") } else { name }, others));
-                out.push_str(&s[from..name_end]);
                 match b[name_end] {
-                    b'<' => out.push_str("<V: crate::Build, "),
-                    _ => out.push_str("<V: crate::Build>"),
+                    // After any lifetimes, which come first.
+                    b'<' => {
+                        let mut at = name_end + 1;
+                        while s[at..].trim_start().starts_with('\'') {
+                            let lifetime = at + (s[at..].len() - s[at..].trim_start().len());
+                            let end = (lifetime..b.len())
+                                .find(|&k| b[k] == b',' || b[k] == b'>')
+                                .unwrap_or(b.len());
+                            at = match b[end] {
+                                b',' => end + 1,
+                                _ => end,
+                            };
+                            if b[end] == b'>' {
+                                break;
+                            }
+                        }
+                        out.push_str(&s[from..at]);
+                        match b[at] {
+                            b'>' => out.push_str(", V: crate::Build"),
+                            _ => out.push_str(" V: crate::Build, "),
+                        }
+                        from = at;
+                    }
+                    _ => {
+                        out.push_str(&s[from..name_end]);
+                        out.push_str("<V: crate::Build>");
+                        from = name_end;
+                    }
                 }
-                from = if b[name_end] == b'<' {
-                    name_end + 1
-                } else {
-                    name_end
-                };
             }
             i = name_end;
             continue;

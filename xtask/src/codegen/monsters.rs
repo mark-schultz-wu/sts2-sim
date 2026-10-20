@@ -390,7 +390,7 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
         let literal = machine_literal(id, machine)?;
         writeln!(
             split.body(&bucket(act_of.get(id))),
-            "pub(super) const {id}: MonsterData = {literal};\n"
+            "pub(super) const {id}: MonsterData<MoveId> = {literal};\n"
         )
         .unwrap();
     }
@@ -1096,14 +1096,14 @@ fn emit_shape(out: &mut String, states: usize) {
         out,
         "/// A move the monster can make.\n\
          #[derive(Debug, Clone, Copy, PartialEq, Eq)]\n\
-         pub struct Move {{\n\
+         pub struct Move<M> {{\n\
          \x20   /// The name the game calls this state, which is what an\n\
          \x20   /// observation reports as a monster's intent.\n\
          \x20   ///\n\
          \x20   /// Here so that the intent can be found in the graph: a move is\n\
          \x20   /// a state at a position, the wire names it, and without this\n\
          \x20   /// there is nothing to match the name against.\n\
-         \x20   pub id: MoveId,\n\
+         \x20   pub id: M,\n\
          \x20   pub follow_up: FollowUp,\n\
          \x20   pub intents: Intents,\n\
          }}\n"
@@ -1119,8 +1119,8 @@ fn emit_shape(out: &mut String, states: usize) {
          /// holds. Both are transparent to `StateLog` — the machine loops until\n\
          /// it lands on a `Move`.\n\
          #[derive(Debug, Clone, Copy, PartialEq)]\n\
-         pub enum State {{\n\
-         \x20   Move(Move),\n\
+         pub enum State<M: 'static> {{\n\
+         \x20   Move(Move<M>),\n\
          \x20   Random(&'static [Branch]),\n\
          \x20   /// Targets in order; the predicates are ported by hand.\n\
          \x20   Conditional(&'static [StateIndex]),\n\
@@ -1132,13 +1132,13 @@ fn emit_shape(out: &mut String, states: usize) {
         out,
         "/// What is true of a monster before it is put into a combat.\n\
          #[derive(Debug, Clone, Copy, PartialEq)]\n\
-         pub struct MonsterData {{\n\
+         pub struct MonsterData<M: 'static> {{\n\
          \x20   /// Rolled between inclusive bounds, and both step with ascension\n\
          \x20   /// — 102 of 126 monsters gain HP at `ToughEnemies`.\n\
          \x20   pub min_hp: Scaled<u16>,\n\
          \x20   pub max_hp: Scaled<u16>,\n\
          \x20   pub initial: StateIndex,\n\
-         \x20   pub states: &'static [State],\n\
+         \x20   pub states: &'static [State<M>],\n\
          }}\n"
     )
     .unwrap();
@@ -1255,7 +1255,7 @@ fn emit_monsters(
     .unwrap();
 
     writeln!(out, "impl sts2_core::Table for Monster {{").unwrap();
-    writeln!(out, "    type Data = MonsterData;\n").unwrap();
+    writeln!(out, "    type Data = MonsterData<MoveId>;\n").unwrap();
 
     writeln!(
         out,
@@ -1274,11 +1274,11 @@ fn emit_monsters(
     for id in machines.keys() {
         table.push(format!("{}::{id}", bucket(act_of.get(id))));
     }
-    writeln!(out, "    fn data(self) -> &'static MonsterData {{").unwrap();
+    writeln!(out, "    fn data(self) -> &'static MonsterData<MoveId> {{").unwrap();
     writeln!(out, "        &ROWS[self as usize]").unwrap();
     writeln!(out, "    }}").unwrap();
     writeln!(out, "}}\n").unwrap();
-    super::rows(out, "MonsterData", &table);
+    super::rows(out, "MonsterData<MoveId>", &table);
     super::emit_overrides(
         out,
         "indexed by the monster's place in the enum.",

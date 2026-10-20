@@ -221,9 +221,13 @@ fn references(text: &str) -> BTreeSet<&str> {
                                 .ends_with(|c: char| c.is_alphanumeric() || c == '_')
                     });
                 let leads = word.starts_with(|c: char| c.is_alphabetic() || c == '_');
+                // `cards: Option<..>` declares a field, and names nothing.
+                let after = code[at..].trim_start();
+                let field = after.starts_with(':') && !after.starts_with("::");
                 if leads
                     && !tail
                     && !declares
+                    && !field
                     && let Some(found) = text.find(word)
                 {
                     out.insert(&text[found..found + word.len()]);

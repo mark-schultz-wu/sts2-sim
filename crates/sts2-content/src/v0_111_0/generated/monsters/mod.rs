@@ -5,69 +5,10 @@
 
 use super::acts::Act;
 pub use crate::generated::monsters::{
-    Attack, Branch, FollowUp, IntentKind, IntentList, Repeat, RepeatCount, StateIndex,
+    Attack, Branch, FollowUp, IntentKind, IntentList, Intents, MonsterData, Move, Repeat,
+    RepeatCount, State, StateIndex,
 };
-use crate::{Field, Scaled};
 use serde::{Deserialize, Serialize};
-
-/// Everything a move telegraphs.
-///
-/// The kinds in order, and beside them the numbers the three kinds that
-/// carry any actually carry. Held here rather than one payload per
-/// intent because it saves the slice: a move's telegraph is now inline,
-/// and the whole table lost a separate array of 433 intents.
-///
-/// The two payloads and the kinds agree, which codegen checks: `attack`
-/// is present exactly when the kinds hold `Attack` or `DeathBlow`, and
-/// `cards` exactly when it holds `StatusCard`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Intents {
-    pub kinds: IntentList,
-    /// The numbers for whichever of `Attack` or `DeathBlow` is in
-    /// `kinds`.
-    pub attack: Option<Attack>,
-    /// `StatusIntent.CardCount` — how many cards it will add.
-    pub cards: Option<Field<Scaled<u8>>>,
-}
-
-/// A move the monster can make.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Move {
-    /// The name the game calls this state, which is what an
-    /// observation reports as a monster's intent.
-    ///
-    /// Here so that the intent can be found in the graph: a move is
-    /// a state at a position, the wire names it, and without this
-    /// there is nothing to match the name against.
-    pub id: MoveId,
-    pub follow_up: FollowUp,
-    pub intents: Intents,
-}
-
-/// A node in a monster's move graph.
-///
-/// `Random` takes exactly one RNG draw and walks its branches in order;
-/// `Conditional` takes none and picks the first branch whose predicate
-/// holds. Both are transparent to `StateLog` — the machine loops until
-/// it lands on a `Move`.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum State {
-    Move(Move),
-    Random(&'static [Branch]),
-    /// Targets in order; the predicates are ported by hand.
-    Conditional(&'static [StateIndex]),
-}
-
-/// What is true of a monster before it is put into a combat.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct MonsterData {
-    /// Rolled between inclusive bounds, and both step with ascension
-    /// — 102 of 126 monsters gain HP at `ToughEnemies`.
-    pub min_hp: Scaled<u16>,
-    pub max_hp: Scaled<u16>,
-    pub initial: StateIndex,
-    pub states: &'static [State],
-}
 
 /// The name of a move, as the game and the observation both spell it.
 ///
@@ -1184,7 +1125,7 @@ impl sts2_core::MonsterKinds for Monster {
 }
 
 impl sts2_core::Table for Monster {
-    type Data = MonsterData;
+    type Data = MonsterData<MoveId>;
 
     /// Every monster, so callers can sweep the table without a way to
     /// enumerate an enum.
@@ -1318,14 +1259,14 @@ impl sts2_core::Table for Monster {
     ];
 
     /// The HP range and the move graph.
-    fn data(self) -> &'static MonsterData {
+    fn data(self) -> &'static MonsterData<MoveId> {
         &ROWS[self as usize]
     }
 }
 
 /// Every row, in the order the enum declares its variants, which is
 /// the index a value casts to.
-static ROWS: [MonsterData; 126] = [
+static ROWS: [MonsterData<MoveId>; 126] = [
     glory::AEONGLASS,
     summoned::ARCHITECT,
     overgrowth::ASSASSIN_RUBY_RAIDER,

@@ -12,56 +12,7 @@ pub mod events;
 pub(crate) mod powers;
 pub(crate) mod relics;
 
-use sts2_core::{Fight, Played, Taken};
-
 use super::V0_107_1 as V;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Resume {
-    Card(crate::behaviour::cards::Resume<V>),
-    Potion(crate::behaviour::potions::Resume),
-    Monster(crate::behaviour::monsters::Resume),
-}
-
-impl From<crate::behaviour::cards::Resume<V>> for Resume {
-    fn from(at: crate::behaviour::cards::Resume<V>) -> Self {
-        Resume::Card(at)
-    }
-}
-
-impl From<crate::behaviour::monsters::Resume> for Resume {
-    fn from(at: crate::behaviour::monsters::Resume) -> Self {
-        Resume::Monster(at)
-    }
-}
-
-impl From<crate::behaviour::potions::Resume> for Resume {
-    fn from(at: crate::behaviour::potions::Resume) -> Self {
-        Resume::Potion(at)
-    }
-}
-
-pub(crate) fn resume<F: Fight<V>>(fight: &mut F, at: Resume, answer: Taken<V>) -> Played<V> {
-    match (at, answer) {
-        (Resume::Card(at), Taken::Selected(cards)) => {
-            crate::behaviour::cards::resume_play::<V, _>(fight, at, cards)
-        }
-        (Resume::Card(at), Taken::Chosen(card)) => {
-            crate::behaviour::cards::resume_chosen::<V, _>(fight, at, card)
-        }
-        (Resume::Card(at), Taken::Waited) => {
-            crate::behaviour::cards::resume_waited::<V, _>(fight, at)
-        }
-        (Resume::Card(at), Taken::Drew(drew)) => {
-            crate::behaviour::cards::resume_drew::<V, _>(fight, at, &drew)
-        }
-        (Resume::Potion(at), answer) => crate::behaviour::potions::resume(fight, at, answer),
-        (Resume::Monster(at), Taken::Chosen(card)) => {
-            crate::behaviour::monsters::resume(fight, at, card)
-        }
-        (at, answer) => unimplemented!("{at:?} resumed with {answer:?}"),
-    }
-}
 
 impl crate::build::OwnRules for V {
     type OwnEvents = events::OwnEvents;

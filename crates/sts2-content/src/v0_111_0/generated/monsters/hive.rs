@@ -9,7 +9,7 @@ use super::{
 };
 use crate::{Field, Scaled};
 
-pub(super) const BOWLBUG_EGG: MonsterData = MonsterData {
+pub(super) const BOWLBUG_EGG: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 21u16,
         step: Some((8, 23u16)),
@@ -39,7 +39,7 @@ pub(super) const BOWLBUG_EGG: MonsterData = MonsterData {
     })],
 };
 
-pub(super) const BOWLBUG_NECTAR: MonsterData = MonsterData {
+pub(super) const BOWLBUG_NECTAR: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 35u16,
         step: Some((8, 36u16)),
@@ -98,7 +98,7 @@ pub(super) const BOWLBUG_NECTAR: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const BOWLBUG_ROCK: MonsterData = MonsterData {
+pub(super) const BOWLBUG_ROCK: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 45u16,
         step: Some((8, 46u16)),
@@ -140,7 +140,7 @@ pub(super) const BOWLBUG_ROCK: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const BOWLBUG_SILK: MonsterData = MonsterData {
+pub(super) const BOWLBUG_SILK: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 40u16,
         step: Some((8, 41u16)),
@@ -181,7 +181,7 @@ pub(super) const BOWLBUG_SILK: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const CHOMPER: MonsterData = MonsterData {
+pub(super) const CHOMPER: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 60u16,
         step: Some((8, 63u16)),
@@ -225,7 +225,7 @@ pub(super) const CHOMPER: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const CRUSHER: MonsterData = MonsterData {
+pub(super) const CRUSHER: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 209u16,
         step: Some((8, 219u16)),
@@ -320,7 +320,7 @@ pub(super) const CRUSHER: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const DECIMILLIPEDE_SEGMENT_BACK: MonsterData = MonsterData {
+pub(super) const DECIMILLIPEDE_SEGMENT_BACK: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 40u16,
         step: Some((8, 46u16)),
@@ -423,7 +423,7 @@ pub(super) const DECIMILLIPEDE_SEGMENT_BACK: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const DECIMILLIPEDE_SEGMENT_FRONT: MonsterData = MonsterData {
+pub(super) const DECIMILLIPEDE_SEGMENT_FRONT: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 40u16,
         step: Some((8, 46u16)),
@@ -526,7 +526,7 @@ pub(super) const DECIMILLIPEDE_SEGMENT_FRONT: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const DECIMILLIPEDE_SEGMENT_MIDDLE: MonsterData = MonsterData {
+pub(super) const DECIMILLIPEDE_SEGMENT_MIDDLE: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 40u16,
         step: Some((8, 46u16)),
@@ -629,7 +629,7 @@ pub(super) const DECIMILLIPEDE_SEGMENT_MIDDLE: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const ENTOMANCER: MonsterData = MonsterData {
+pub(super) const ENTOMANCER: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 145u16,
         step: Some((8, 165u16)),
@@ -688,7 +688,7 @@ pub(super) const ENTOMANCER: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const EXOSKELETON: MonsterData = MonsterData {
+pub(super) const EXOSKELETON: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 24u16,
         step: Some((8, 26u16)),
@@ -760,7 +760,7 @@ pub(super) const EXOSKELETON: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const HUNTER_KILLER: MonsterData = MonsterData {
+pub(super) const HUNTER_KILLER: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 121u16,
         step: Some((8, 126u16)),
@@ -831,7 +831,7 @@ pub(super) const HUNTER_KILLER: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const INFESTED_PRISM: MonsterData = MonsterData {
+pub(super) const INFESTED_PRISM: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 161u16,
         step: Some((8, 171u16)),
@@ -917,7 +917,7 @@ pub(super) const INFESTED_PRISM: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const KNOWLEDGE_DEMON: MonsterData = MonsterData {
+pub(super) const KNOWLEDGE_DEMON: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 379u16,
         step: Some((8, 399u16)),
@@ -995,7 +995,7 @@ pub(super) const KNOWLEDGE_DEMON: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const LOUSE_PROGENITOR: MonsterData = MonsterData {
+pub(super) const LOUSE_PROGENITOR: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 134u16,
         step: Some((8, 138u16)),
@@ -1054,7 +1054,7 @@ pub(super) const LOUSE_PROGENITOR: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const MYTE: MonsterData = MonsterData {
+pub(super) const MYTE: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 61u16,
         step: Some((8, 64u16)),
@@ -1117,7 +1117,7 @@ pub(super) const MYTE: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const OVICOPTER: MonsterData = MonsterData {
+pub(super) const OVICOPTER: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 124u16,
         step: Some((8, 126u16)),
@@ -1186,7 +1186,7 @@ pub(super) const OVICOPTER: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const PARAFRIGHT: MonsterData = MonsterData {
+pub(super) const PARAFRIGHT: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 21u16,
         step: None,
@@ -1216,7 +1216,7 @@ pub(super) const PARAFRIGHT: MonsterData = MonsterData {
     })],
 };
 
-pub(super) const ROCKET: MonsterData = MonsterData {
+pub(super) const ROCKET: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 199u16,
         step: Some((8, 209u16)),
@@ -1302,7 +1302,7 @@ pub(super) const ROCKET: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const SLUMBERING_BEETLE: MonsterData = MonsterData {
+pub(super) const SLUMBERING_BEETLE: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 86u16,
         step: Some((8, 89u16)),
@@ -1344,7 +1344,7 @@ pub(super) const SLUMBERING_BEETLE: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const SPINY_TOAD: MonsterData = MonsterData {
+pub(super) const SPINY_TOAD: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 116u16,
         step: Some((8, 121u16)),
@@ -1403,7 +1403,7 @@ pub(super) const SPINY_TOAD: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const THE_INSATIABLE: MonsterData = MonsterData {
+pub(super) const THE_INSATIABLE: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 321u16,
         step: Some((8, 341u16)),
@@ -1492,7 +1492,7 @@ pub(super) const THE_INSATIABLE: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const THE_OBSCURA: MonsterData = MonsterData {
+pub(super) const THE_OBSCURA: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 123u16,
         step: Some((8, 129u16)),
@@ -1577,7 +1577,7 @@ pub(super) const THE_OBSCURA: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const THIEVING_HOPPER: MonsterData = MonsterData {
+pub(super) const THIEVING_HOPPER: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 79u16,
         step: Some((8, 84u16)),
@@ -1663,7 +1663,7 @@ pub(super) const THIEVING_HOPPER: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const TOUGH_EGG: MonsterData = MonsterData {
+pub(super) const TOUGH_EGG: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 14u16,
         step: Some((8, 15u16)),
@@ -1704,7 +1704,7 @@ pub(super) const TOUGH_EGG: MonsterData = MonsterData {
     ],
 };
 
-pub(super) const TUNNELER: MonsterData = MonsterData {
+pub(super) const TUNNELER: MonsterData<MoveId> = MonsterData {
     min_hp: Scaled {
         base: 87u16,
         step: Some((8, 92u16)),

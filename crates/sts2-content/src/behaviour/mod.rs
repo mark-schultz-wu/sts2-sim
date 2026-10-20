@@ -15,8 +15,36 @@ pub(crate) mod orbs;
 pub(crate) mod potions;
 pub(crate) mod powers;
 pub(crate) mod relics;
+pub(crate) mod rules;
 
 use sts2_core::{CardAt, CardKind, Change, CostPool, Fight, Lasting, Pile, RunStreamKinds};
+
+/// Where a rule that waits on a question resumes, under the module whose rule
+/// it is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Resume<V: crate::Build> {
+    Card(crate::behaviour::cards::Resume<V>),
+    Potion(crate::behaviour::potions::Resume),
+    Monster(crate::behaviour::monsters::Resume),
+}
+
+impl<V: crate::Build> From<crate::behaviour::cards::Resume<V>> for Resume<V> {
+    fn from(at: crate::behaviour::cards::Resume<V>) -> Self {
+        Resume::Card(at)
+    }
+}
+
+impl<V: crate::Build> From<crate::behaviour::monsters::Resume> for Resume<V> {
+    fn from(at: crate::behaviour::monsters::Resume) -> Self {
+        Resume::Monster(at)
+    }
+}
+
+impl<V: crate::Build> From<crate::behaviour::potions::Resume> for Resume<V> {
+    fn from(at: crate::behaviour::potions::Resume) -> Self {
+        Resume::Potion(at)
+    }
+}
 
 /// An option an event offers.
 ///

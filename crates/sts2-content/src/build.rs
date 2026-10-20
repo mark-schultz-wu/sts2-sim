@@ -64,7 +64,7 @@ pub trait BuildContent:
         EventOption: EventOptionIds,
         EventOptionId = crate::behaviour::EventOptionId<Self>,
         Modifier: ModifierIds,
-        Monster: MonsterIds,
+        Monster: MonsterIds + Table<Data = crate::generated::monsters::MonsterData<Self::MoveId>>,
         MoveId: MoveIds,
         Orb: OrbIds + Table<Data = OrbData>,
         Potion: PotionIds + PotionTable<Pool = PotionPool> + Table<Data = PotionData>,
@@ -187,6 +187,27 @@ pub trait Tables: ContentVersion {
 
     /// The bounds a monster's health is rolled between, lowest first.
     fn monster_hp(monster: Self::Monster) -> (crate::Scaled<u16>, crate::Scaled<u16>);
+
+    /// A character pool's unlocked cards, in the pool's own order.
+    fn merchant_pool_cards(
+        pool: <Self::Card as sts2_core::CardTable>::Pool,
+    ) -> &'static [Self::Card];
+
+    /// The cards of a character pool a fight can generate.
+    fn combat_pool_cards(pool: <Self::Card as sts2_core::CardTable>::Pool)
+    -> &'static [Self::Card];
+
+    /// The unlocked curses.
+    fn unlocked_curse_cards() -> &'static [Self::Card];
+
+    /// The curses a fight can generate.
+    fn combat_curse_cards() -> &'static [Self::Card];
+
+    /// The unlocked statuses.
+    fn unlocked_status_cards() -> &'static [Self::Card];
+
+    /// The statuses a fight can generate.
+    fn combat_status_cards() -> &'static [Self::Card];
 }
 
 /// [`Tables`] for one build, off its own generated tables.
@@ -257,6 +278,34 @@ macro_rules! tables {
             fn monster_hp(monster: Self::Monster) -> (crate::Scaled<u16>, crate::Scaled<u16>) {
                 let data = Table::data(monster);
                 (data.min_hp, data.max_hp)
+            }
+
+            fn merchant_pool_cards(
+                pool: <Self::Card as sts2_core::CardTable>::Pool,
+            ) -> &'static [Self::Card] {
+                crate::$module::cards::merchant_cards(pool)
+            }
+
+            fn combat_pool_cards(
+                pool: <Self::Card as sts2_core::CardTable>::Pool,
+            ) -> &'static [Self::Card] {
+                crate::$module::cards::combat_cards(pool)
+            }
+
+            fn unlocked_curse_cards() -> &'static [Self::Card] {
+                crate::$module::cards::unlocked_curse_cards()
+            }
+
+            fn combat_curse_cards() -> &'static [Self::Card] {
+                crate::$module::cards::combat_curse_cards()
+            }
+
+            fn unlocked_status_cards() -> &'static [Self::Card] {
+                crate::$module::cards::unlocked_status_cards()
+            }
+
+            fn combat_status_cards() -> &'static [Self::Card] {
+                crate::$module::cards::combat_status_cards()
             }
         }
     };
@@ -435,20 +484,22 @@ pub trait OwnRules: ContentVersion + Sized {
 /// a shared rule calls back into.
 ///
 /// A shared rule that waits on a question names where it resumes as its own
-/// module's `Resume`, which the build's wraps.
+/// module's `Resume`, which [`crate::behaviour::Resume`] wraps.
 pub trait Build:
     BuildContent
     + Rules<
         PowerState = crate::behaviour::powers::State<Self>,
         EncounterState = crate::behaviour::encounters::State,
         MonsterState = crate::behaviour::monsters::Model<Self>,
+        RelicState = crate::behaviour::relics::State<Self>,
+        ModifierState = crate::behaviour::modifiers::State,
+        EventState = crate::behaviour::events::State<Self>,
         CardState = crate::behaviour::cards::State,
         CardFields = crate::behaviour::cards::Fields,
     > + OwnRules
     + ContentVersion<
-        Resume: From<crate::behaviour::potions::Resume>
-                    + From<crate::behaviour::monsters::Resume>
-                    + From<crate::behaviour::cards::Resume<Self>>,
+        Resume = crate::behaviour::Resume<Self>,
+        EnchantmentState = crate::behaviour::enchantments::State,
         CardWrite = crate::behaviour::cards::CardWrite,
     >
 {
@@ -460,14 +511,803 @@ impl<V> Build for V where
             PowerState = crate::behaviour::powers::State<V>,
             EncounterState = crate::behaviour::encounters::State,
             MonsterState = crate::behaviour::monsters::Model<V>,
+            RelicState = crate::behaviour::relics::State<V>,
+            ModifierState = crate::behaviour::modifiers::State,
+            EventState = crate::behaviour::events::State<V>,
             CardState = crate::behaviour::cards::State,
             CardFields = crate::behaviour::cards::Fields,
         > + OwnRules
         + ContentVersion<
-            Resume: From<crate::behaviour::potions::Resume>
-                        + From<crate::behaviour::monsters::Resume>
-                        + From<crate::behaviour::cards::Resume<V>>,
+            Resume = crate::behaviour::Resume<V>,
+            EnchantmentState = crate::behaviour::enchantments::State,
             CardWrite = crate::behaviour::cards::CardWrite,
         >
 {
 }
+
+/// Each build's `Hooks` and `Rules`, as forwards to the functions in
+/// `crate::behaviour::rules`, which do the work for every build.
+///
+/// The impls sit in an anonymous const, whose `use` names the core types the
+/// traits spell their methods with.
+macro_rules! rules {
+    ($build:ty, $module:ident) => {
+        const _: () = {
+            use sts2_core::*;
+
+            impl sts2_core::Hooks for $build {
+                type RelicState = crate::behaviour::relics::State<$build>;
+                type ModifierState = crate::behaviour::modifiers::State;
+                type PowerState = crate::behaviour::powers::State<$build>;
+                type MonsterState = crate::behaviour::monsters::Model<$build>;
+                type EncounterState = crate::behaviour::encounters::State;
+                type CardState = crate::behaviour::cards::State;
+                type CardFields = crate::behaviour::cards::Fields;
+
+                fn power_noted(state: &mut Self::PowerState, note: Self::Number) {
+                    crate::behaviour::rules::power_noted::<Self>(state, note)
+                }
+
+                fn power_kept_card(state: &mut Self::PowerState, kept: sts2_core::CardId<Self>) {
+                    crate::behaviour::rules::power_kept_card::<Self>(state, kept)
+                }
+
+                fn modify_hook<P: Printed<Self> + ?Sized>(
+                    listener: Listener<'_, Self, P>,
+                    hook: ModifyHook<Self>,
+                ) -> Modify<Self::Number> {
+                    crate::behaviour::rules::modify_hook::<Self, P>(listener, hook)
+                }
+
+                fn decide_hook<P: Printed<Self> + ?Sized>(
+                    listener: Listener<'_, Self, P>,
+                    hook: DecisionHook<Self>,
+                ) -> sts2_core::HookResponse<bool> {
+                    crate::behaviour::rules::decide_hook::<Self, P>(listener, hook)
+                }
+
+                fn power_event_hook(
+                    power: EventPower<'_, Self>,
+                    hook: EventHook<Self>,
+                    asked: &mut HookEffects<Self>,
+                ) {
+                    crate::behaviour::rules::power_event_hook::<Self>(power, hook, asked)
+                }
+
+                fn keyword_while_afflicted(
+                    affliction: Self::Affliction,
+                ) -> Option<Self::CardKeyword> {
+                    crate::behaviour::rules::keyword_while_afflicted::<Self>(affliction)
+                }
+
+                fn card_eternal(card: &sts2_core::CardIdent<Self>) -> bool {
+                    crate::behaviour::rules::card_eternal::<Self>(card)
+                }
+
+                fn enchanted_changes(enchantment: Self::Enchantment) -> &'static [Change<Self>] {
+                    crate::behaviour::rules::enchanted_changes::<Self>(enchantment)
+                }
+
+                fn card_result_pile(
+                    card: Self::Card,
+                    base: Option<sts2_core::Pile>,
+                ) -> sts2_core::HookResponse<Option<sts2_core::Pile>> {
+                    crate::behaviour::rules::card_result_pile::<Self>(card, base)
+                }
+
+                fn write_deck_card(card: &mut DeckCard<Self>, write: Self::DeckWrite) {
+                    crate::behaviour::rules::write_deck_card::<Self>(card, write)
+                }
+
+                fn card_is_playable(
+                    card: Self::Card,
+                    fight: CardLogic,
+                ) -> sts2_core::HookResponse<bool> {
+                    crate::behaviour::rules::card_is_playable::<Self>(card, fight)
+                }
+
+                fn result_pile<P: Printed<Self> + ?Sized>(
+                    listener: Listener<'_, Self, P>,
+                    hook: ResultPile<Self>,
+                ) -> sts2_core::HookResponse<(Option<sts2_core::Pile>, PilePosition)> {
+                    crate::behaviour::rules::result_pile::<Self, P>(listener, hook)
+                }
+
+                fn deck_card_event_hook(
+                    card: Self::Card,
+                    state: &mut Self::CardState,
+                    hook: EventHook<Self>,
+                    asked: &mut HookEffects<Self>,
+                ) {
+                    crate::behaviour::rules::deck_card_event_hook::<Self>(card, state, hook, asked)
+                }
+
+                fn modifier_event_hook(
+                    modifier: sts2_core::RunModifier<Self>,
+                    state: &mut Self::ModifierState,
+                    hook: EventHook<Self>,
+                    asked: &mut HookEffects<Self>,
+                ) {
+                    crate::behaviour::rules::modifier_event_hook::<Self>(
+                        modifier, state, hook, asked,
+                    )
+                }
+
+                fn modifier_ported(modifier: Self::Modifier) -> bool {
+                    crate::behaviour::rules::modifier_ported::<Self>(modifier)
+                }
+
+                fn relic_event_hook(
+                    state: &mut Self::RelicState,
+                    belt: &[Self::Relic],
+                    hook: EventHook<Self>,
+                    asked: &mut HookEffects<Self>,
+                ) {
+                    crate::behaviour::rules::relic_event_hook::<Self>(state, belt, hook, asked)
+                }
+
+                fn potion_event_hook(
+                    potion: Self::Potion,
+                    hook: EventHook<Self>,
+                    asked: &mut HookEffects<Self>,
+                ) {
+                    crate::behaviour::rules::potion_event_hook::<Self>(potion, hook, asked)
+                }
+
+                fn monster_event_hook(
+                    monster: Self::Monster,
+                    model: &mut Self::MonsterState,
+                    creature: sts2_core::CombatId,
+                    hook: EventHook<Self>,
+                    asked: &mut HookEffects<Self>,
+                ) {
+                    crate::behaviour::rules::monster_event_hook::<Self>(
+                        monster, model, creature, hook, asked,
+                    )
+                }
+
+                fn enchant_modify(
+                    enchanted: sts2_core::Enchanted<Self>,
+                    state: &Self::EnchantmentState,
+                    hook: EnchantHook,
+                ) -> Modify<Self::Number> {
+                    crate::behaviour::rules::enchant_modify::<Self>(enchanted, state, hook)
+                }
+
+                fn enchantment_event_hook(
+                    enchanted: sts2_core::Enchanted<Self>,
+                    id: sts2_core::CardId<Self>,
+                    hook: EventHook<Self>,
+                    asked: &mut HookEffects<Self>,
+                ) {
+                    crate::behaviour::rules::enchantment_event_hook::<Self>(
+                        enchanted, id, hook, asked,
+                    )
+                }
+
+                fn card_event_hook<P: Printed<Self> + ?Sized>(
+                    card: Self::Card,
+                    id: sts2_core::CardId<Self>,
+                    pile: Option<sts2_core::Pile>,
+                    printed: &P,
+                    history: History<'_, Self>,
+                    hook: EventHook<Self>,
+                    asked: &mut HookEffects<Self>,
+                ) {
+                    crate::behaviour::rules::card_event_hook::<Self, P>(
+                        card, id, pile, printed, history, hook, asked,
+                    )
+                }
+            }
+
+            impl sts2_core::Rules for $build {
+                type EventState = crate::behaviour::events::State<$build>;
+
+                fn relic_pool(character: Self::Character) -> <Self::Relic as RelicTable>::Pool {
+                    Table::data(character).relic_pool
+                }
+
+                fn act_layout(act: Self::Act) -> Layout {
+                    crate::behaviour::rules::act_layout::<Self>(act)
+                }
+
+                fn starting_deck(character: Self::Character) -> Vec<Self::Card> {
+                    Table::data(character).deck.iter().collect()
+                }
+
+                fn ascension_deck(ascension: Self::AscensionLevel) -> Option<Self::Card> {
+                    crate::behaviour::rules::ascension_deck::<Self>(ascension)
+                }
+
+                fn starting_relics(character: Self::Character) -> Vec<Self::Relic> {
+                    Table::data(character).starting_relics.iter().collect()
+                }
+
+                fn starting_hp(character: Self::Character) -> Self::Health {
+                    Table::data(character).starting_hp.into()
+                }
+
+                fn starting_gold(character: Self::Character) -> u16 {
+                    Table::data(character).starting_gold
+                }
+
+                fn max_energy(character: Self::Character) -> u8 {
+                    Table::data(character).max_energy
+                }
+
+                fn orb_slots(character: Self::Character) -> u8 {
+                    Table::data(character).orb_slots
+                }
+
+                fn channelled(orb: Self::Orb) -> sts2_core::Channelled<Self> {
+                    crate::behaviour::rules::channelled::<Self>(orb)
+                }
+
+                fn orb_turn_end<F: Fight<Self>>(
+                    orb: &mut sts2_core::Channelled<Self>,
+                    fight: &mut F,
+                ) {
+                    crate::behaviour::rules::orb_turn_end::<Self, F>(orb, fight)
+                }
+
+                fn orb_turn_start<F: Fight<Self>>(
+                    orb: &mut sts2_core::Channelled<Self>,
+                    fight: &mut F,
+                ) {
+                    crate::behaviour::rules::orb_turn_start::<Self, F>(orb, fight)
+                }
+
+                fn enchantment_on_play<F: Fight<Self>>(
+                    enchanted: sts2_core::Enchanted<Self>,
+                    state: &mut Self::EnchantmentState,
+                    fight: &mut F,
+                ) {
+                    crate::behaviour::rules::enchantment_on_play::<Self, F>(enchanted, state, fight)
+                }
+
+                fn orb_evoke<F: Fight<Self>>(
+                    orb: &sts2_core::Channelled<Self>,
+                    fight: &mut F,
+                ) -> Opponents {
+                    crate::behaviour::rules::orb_evoke::<Self, F>(orb, fight)
+                }
+
+                fn orb_passive<F: Fight<Self>>(
+                    orb: &mut sts2_core::Channelled<Self>,
+                    fight: &mut F,
+                ) {
+                    crate::behaviour::rules::orb_passive::<Self, F>(orb, fight)
+                }
+
+                fn orb_passive_val(
+                    orb: &sts2_core::Channelled<Self>,
+                    modify: impl FnOnce(Self::Number) -> Self::Number,
+                ) -> Self::Number {
+                    crate::behaviour::rules::orb_passive_val::<Self>(orb, modify)
+                }
+
+                fn orb_evoke_val(
+                    orb: &sts2_core::Channelled<Self>,
+                    modify: impl FnOnce(Self::Number) -> Self::Number,
+                ) -> Self::Number {
+                    crate::behaviour::rules::orb_evoke_val::<Self>(orb, modify)
+                }
+
+                fn starting_potion_slots() -> usize {
+                    crate::behaviour::rules::starting_potion_slots()
+                }
+
+                fn neow_event() -> Self::Event {
+                    crate::behaviour::rules::neow_event::<Self>()
+                }
+
+                fn colorless_cards() -> Drafted<'static, Self::Card> {
+                    crate::$module::cards::colorless_cards()
+                }
+
+                fn reward_rarity(card: Self::Card) -> RewardRarity {
+                    crate::behaviour::rules::reward_rarity::<Self>(card)
+                }
+
+                fn lead_paperweight() -> Self::Relic {
+                    crate::behaviour::rules::lead_paperweight::<Self>()
+                }
+
+                fn card_upgrade(card: Self::Card) -> &'static [Change<Self>] {
+                    crate::behaviour::rules::card_upgrade::<Self>(card)
+                }
+
+                fn on_use<F: Fight<Self>>(potion: Self::Potion, fight: &mut F) -> Played<Self> {
+                    crate::behaviour::rules::on_use::<Self, F>(potion, fight)
+                }
+
+                fn on_use_on_run(
+                    potion: Self::Potion,
+                    run: &impl sts2_core::EventView<Self>,
+                    in_fight: bool,
+                ) -> HookEffects<Self> {
+                    crate::behaviour::rules::on_use_on_run::<Self>(potion, run, in_fight)
+                }
+
+                fn on_play<F: Fight<Self>>(card: Self::Card, fight: &mut F) -> Played<Self> {
+                    crate::behaviour::rules::on_play::<Self, F>(card, fight)
+                }
+
+                fn on_card_turn_end<F: Fight<Self>>(card: Self::Card, fight: &mut F) {
+                    crate::behaviour::rules::on_card_turn_end::<Self, F>(card, fight)
+                }
+
+                fn resume_play<F: Fight<Self>>(
+                    fight: &mut F,
+                    at: Self::Resume,
+                    chosen: Taken<Self>,
+                ) -> Played<Self> {
+                    crate::behaviour::rules::resume_play::<Self, F>(fight, at, chosen)
+                }
+
+                fn reward_cards(character: Self::Character) -> Drafted<'static, Self::Card> {
+                    crate::$module::cards::reward_cards(character)
+                }
+
+                fn combat_cards(character: Self::Character) -> &'static [Self::Card] {
+                    crate::$module::cards::combat_cards(Table::data(character).card_pool)
+                }
+
+                fn unlocked_cards(character: Self::Character) -> &'static [Self::Card] {
+                    crate::$module::cards::merchant_cards(Table::data(character).card_pool)
+                }
+
+                fn unlocked_colorless_cards() -> &'static [Self::Card] {
+                    crate::$module::cards::merchant_colorless_cards()
+                }
+
+                fn combat_colorless_cards() -> &'static [Self::Card] {
+                    crate::$module::cards::combat_colorless_cards()
+                }
+
+                fn merchant_cards(
+                    character: Self::Character,
+                    kind: CardKind,
+                    rarity: RewardRarity,
+                ) -> Vec<Self::Card> {
+                    crate::behaviour::rules::merchant_cards::<Self>(character, kind, rarity)
+                }
+
+                fn card_kind(card: Self::Card) -> Option<CardKind> {
+                    use crate::generated::cards::CardType;
+
+                    let crate::Field::Constant(kind) = Table::data(card).kind else {
+                        return None;
+                    };
+                    Some(match kind {
+                        CardType::Attack => CardKind::Attack,
+                        CardType::Skill => CardKind::Skill,
+                        CardType::Power => CardKind::Power,
+                        CardType::Status => CardKind::Status,
+                        CardType::Curse => CardKind::Curse,
+                        CardType::Quest => CardKind::Quest,
+                    })
+                }
+
+                fn merchant_colorless_cards(rarity: RewardRarity) -> Vec<Self::Card> {
+                    crate::behaviour::rules::merchant_colorless_cards::<Self>(rarity)
+                }
+
+                fn transform_options(card: Self::Card, in_combat: bool) -> Vec<Self::Card> {
+                    crate::behaviour::rules::transform_options::<Self>(card, in_combat)
+                }
+
+                fn reward_potions(character: Self::Character) -> Drafted<'static, Self::Potion> {
+                    crate::$module::potions::reward_potions(character)
+                }
+
+                fn unlocked_potions(character: Self::Character) -> &'static [Self::Potion] {
+                    crate::$module::potions::unlocked_potions(character)
+                }
+
+                fn can_enchant(
+                    enchantment: Self::Enchantment,
+                    card: &sts2_core::CardIdent<Self>,
+                ) -> bool {
+                    crate::behaviour::rules::can_enchant::<Self>(enchantment, card)
+                }
+
+                fn enchant(
+                    enchantment: Self::Enchantment,
+                    amount: u8,
+                    card: &mut sts2_core::CardIdent<Self>,
+                ) {
+                    crate::behaviour::rules::enchant::<Self>(enchantment, amount, card)
+                }
+
+                fn should_start_at_bottom_of_draw_pile(
+                    enchantment: Self::Enchantment,
+                ) -> sts2_core::HookResponse<bool> {
+                    crate::behaviour::rules::should_start_at_bottom_of_draw_pile::<Self>(
+                        enchantment,
+                    )
+                }
+
+                fn encounter_gold(
+                    encounter: Self::Encounter,
+                    ascension: Self::AscensionLevel,
+                ) -> sts2_core::rng::Interval<u16> {
+                    let gold = Table::data(encounter).gold;
+                    sts2_core::rng::Interval::new(
+                        gold.min.at(ascension as u8),
+                        gold.max.at(ascension as u8),
+                    )
+                }
+
+                fn monster_health_after_added(
+                    monster: Self::Monster,
+                    ascension: Self::AscensionLevel,
+                    rolled: Self::Health,
+                    teammates: &[Self::Health],
+                ) -> Option<Self::Health> {
+                    crate::behaviour::rules::monster_health_after_added::<Self>(
+                        monster, ascension, rolled, teammates,
+                    )
+                }
+
+                fn encounter_gold_proportion(
+                    encounter: Self::Encounter,
+                    state: &Self::EncounterState,
+                    escaped: &[Self::Monster],
+                ) -> Option<f32> {
+                    crate::behaviour::rules::encounter_gold_proportion::<Self>(
+                        encounter, state, escaped,
+                    )
+                }
+
+                fn perform_power_death<F: Fight<Self>>(
+                    power: Self::Power,
+                    holder: sts2_core::CombatId,
+                    fight: &mut F,
+                ) {
+                    crate::behaviour::rules::perform_power_death::<Self, F>(power, holder, fight)
+                }
+
+                fn monster_hp_after_added(
+                    monster: Self::Monster,
+                    model: &Self::MonsterState,
+                    hp: Self::Health,
+                ) -> Option<Self::Health> {
+                    crate::behaviour::rules::monster_hp_after_added::<Self>(monster, model, hp)
+                }
+
+                fn monster_hp_bounds(
+                    monster: Self::Monster,
+                    ascension: Self::AscensionLevel,
+                ) -> sts2_core::rng::Interval<Self::Health> {
+                    crate::behaviour::rules::monster_hp_bounds::<Self>(monster, ascension)
+                }
+
+                fn roll_monster_move<
+                    'a,
+                    R: sts2_core::rng::GameRng,
+                    P: Printed<Self> + ?Sized + 'a,
+                >(
+                    monster: Self::Monster,
+                    ascension: Self::AscensionLevel,
+                    spawn: MonsterSpawn<Self::Encounter>,
+                    powers: impl IntoIterator<Item = sts2_core::Listener<'a, Self, P>>,
+                    advertised: impl Fn(Self::MoveId) -> bool,
+                    state: &Self::MonsterState,
+                    machine: &mut MoveMachine,
+                    rng: &mut R,
+                ) -> Result<Option<sts2_core::NextMove<Self>>, ContentError> {
+                    crate::behaviour::rules::roll_monster_move::<Self, R, P>(
+                        monster, ascension, spawn, powers, advertised, state, machine, rng,
+                    )
+                }
+
+                fn follow_up(monster: Self::Monster, machine: &MoveMachine) -> u8 {
+                    crate::behaviour::rules::follow_up::<Self>(monster, machine)
+                }
+
+                fn can_leave_current_move(monster: Self::Monster, machine: &MoveMachine) -> bool {
+                    crate::behaviour::rules::can_leave_current_move::<Self>(monster, machine)
+                }
+
+                fn set_move_immediate(
+                    monster: Self::Monster,
+                    ascension: Self::AscensionLevel,
+                    move_id: Self::MoveId,
+                    force: bool,
+                    machine: &mut MoveMachine,
+                ) -> Result<sts2_core::NextMove<Self>, MovePinned> {
+                    crate::behaviour::rules::set_move_immediate::<Self>(
+                        monster, ascension, move_id, force, machine,
+                    )
+                }
+
+                fn opening_move_machine(
+                    monster: Self::Monster,
+                    opens_on: Option<Self::MoveId>,
+                ) -> sts2_core::MoveMachine {
+                    crate::behaviour::rules::opening_move_machine::<Self>(monster, opens_on)
+                }
+
+                fn monster_starting_powers(
+                    monster: Self::Monster,
+                    ascension: Self::AscensionLevel,
+                    side: Self::CombatSide,
+                    model: &Self::MonsterState,
+                ) -> impl Iterator<Item = (Self::Power, PowerAmount<Self::Number>)> {
+                    crate::behaviour::rules::monster_starting_powers::<Self>(
+                        monster, ascension, side, model,
+                    )
+                }
+
+                fn monster_starting_opponent_powers(
+                    monster: Self::Monster,
+                    ascension: Self::AscensionLevel,
+                ) -> impl Iterator<Item = (Self::Power, PowerAmount<Self::Number>)> {
+                    crate::behaviour::rules::monster_starting_opponent_powers::<Self>(
+                        monster, ascension,
+                    )
+                }
+
+                fn computed_card_target(
+                    card: Self::Card,
+                    powers: &[sts2_core::Stack<Self>],
+                ) -> Self::TargetType {
+                    crate::behaviour::rules::computed_card_target::<Self>(card, powers)
+                }
+
+                fn deck_card_narrows_unknown_rooms(card: Self::Card, act: usize) -> bool {
+                    crate::behaviour::rules::deck_card_narrows_unknown_rooms::<Self>(card, act)
+                }
+
+                fn deck_card_modify_generated_map(
+                    card: Self::Card,
+                    act: usize,
+                ) -> Option<ReplacedMap> {
+                    crate::behaviour::rules::deck_card_modify_generated_map::<Self>(card, act)
+                }
+
+                fn deck_card_modify_generated_map_late(
+                    card: Self::Card,
+                    act: usize,
+                ) -> Option<Self::Number> {
+                    crate::behaviour::rules::deck_card_modify_generated_map_late::<Self>(card, act)
+                }
+
+                fn deck_card_after_map_generated(card: Self::Card, act: usize) {
+                    crate::behaviour::rules::deck_card_after_map_generated::<Self>(card, act)
+                }
+
+                fn deck_card_next_event(
+                    card: Self::Card,
+                    act: usize,
+                    event: Self::Event,
+                ) -> Self::Event {
+                    crate::behaviour::rules::deck_card_next_event::<Self>(card, act, event)
+                }
+
+                fn computed_potion_target(
+                    potion: Self::Potion,
+                    in_combat: bool,
+                ) -> Self::TargetType {
+                    crate::behaviour::rules::computed_potion_target::<Self>(potion, in_combat)
+                }
+
+                fn computed_potion_check(potion: Self::Potion, in_combat: bool) -> bool {
+                    crate::behaviour::rules::computed_potion_check::<Self>(potion, in_combat)
+                }
+
+                fn calculated_card_var<P: Printed<Self> + ?Sized>(
+                    card: Self::Card,
+                    key: Self::CardVar,
+                    printed: &P,
+                    owner: CardOwner<'_, Self>,
+                ) -> Self::Number {
+                    crate::behaviour::rules::calculated_card_var::<Self, P>(
+                        card, key, printed, owner,
+                    )
+                }
+
+                fn perform_move<F: Fight<Self>>(
+                    monster: Self::Monster,
+                    move_id: Self::MoveId,
+                    fight: &mut F,
+                ) -> Played<Self> {
+                    crate::behaviour::rules::perform_move::<Self, F>(monster, move_id, fight)
+                }
+
+                fn intent_repeats_now(
+                    monster: Self::Monster,
+                    move_id: Self::MoveId,
+                    model: &Self::MonsterState,
+                ) -> Option<Self::Count> {
+                    crate::behaviour::rules::intent_repeats_now::<Self>(monster, move_id, model)
+                }
+
+                fn resume_move<F: Fight<Self>>(
+                    monster: Self::Monster,
+                    move_id: Self::MoveId,
+                    at: Self::Resume,
+                    fight: &mut F,
+                ) -> Played<Self> {
+                    crate::behaviour::rules::resume_move::<Self, F>(monster, move_id, at, fight)
+                }
+
+                fn random_encounter_monsters<R: sts2_core::rng::GameRng>(
+                    encounter: Self::Encounter,
+                    rng: &mut R,
+                ) -> Result<Vec<sts2_core::Spawned<Self>>, ContentError> {
+                    crate::behaviour::rules::random_encounter_monsters::<Self, R>(encounter, rng)
+                }
+
+                fn encounters(act: Self::Act) -> &'static [Self::Encounter] {
+                    crate::$module::encounters::encounters_of(act)
+                }
+
+                fn events(act: Self::Act) -> &'static [Self::Event] {
+                    crate::$module::events::events_of(act)
+                }
+
+                fn ancients(act: Self::Act) -> &'static [Self::Event] {
+                    crate::$module::events::ancients_of(act)
+                }
+
+                fn shared_events() -> &'static [Self::Event] {
+                    &crate::$module::events::SHARED_EVENTS
+                }
+
+                fn shared_ancients() -> &'static [Self::Event] {
+                    &crate::$module::events::SHARED_ANCIENTS
+                }
+
+                fn the_architect() -> Self::Event {
+                    crate::behaviour::rules::the_architect::<Self>()
+                }
+
+                fn event_allowed(
+                    event: Self::Event,
+                    run: &impl sts2_core::EventView<Self>,
+                ) -> bool {
+                    crate::behaviour::rules::event_allowed::<Self>(event, run)
+                }
+
+                fn enter_event<R: sts2_core::rng::GameRng>(
+                    event: Self::Event,
+                    run: &impl sts2_core::EventView<Self>,
+                    rng: &mut R,
+                ) -> Self::EventState {
+                    crate::behaviour::rules::enter_event::<Self, R>(event, run, rng)
+                }
+
+                fn set_up_event<R: sts2_core::rng::GameRng>(
+                    state: &mut Self::EventState,
+                    run: &impl sts2_core::EventView<Self>,
+                    rewards: &mut R,
+                ) {
+                    crate::behaviour::rules::set_up_event::<Self, R>(state, run, rewards)
+                }
+
+                fn event_relics_pulled(_state: &Self::EventState) -> &'static [RelicPull<Self>] {
+                    crate::behaviour::rules::event_relics_pulled::<Self>(_state)
+                }
+
+                fn hand_event_pulled_relics(
+                    _state: &mut Self::EventState,
+                    _relics: &[Self::Relic],
+                ) {
+                    crate::behaviour::rules::hand_event_pulled_relics::<Self>(_state, _relics)
+                }
+
+                fn event_holds_potions(state: &Self::EventState) -> bool {
+                    crate::behaviour::rules::event_holds_potions::<Self>(state)
+                }
+
+                fn observe_event(
+                    state: &Self::EventState,
+                    run: &impl sts2_core::EventView<Self>,
+                ) -> sts2_core::Room<Self> {
+                    crate::behaviour::rules::observe_event::<Self>(state, run)
+                }
+
+                fn choose_event<R: sts2_core::rng::GameRng>(
+                    state: &mut Self::EventState,
+                    option: u8,
+                    run: &impl sts2_core::EventView<Self>,
+                    rng: &mut R,
+                ) -> sts2_core::HookEffects<Self> {
+                    crate::behaviour::rules::choose_event::<Self, R>(state, option, run, rng)
+                }
+
+                fn stock_event<R: sts2_core::rng::GameRng>(
+                    _state: &mut Self::EventState,
+                    _shops: &mut R,
+                ) {
+                    crate::behaviour::rules::stock_event::<Self, R>(_state, _shops)
+                }
+
+                fn buy_in_event(
+                    _state: &mut Self::EventState,
+                    index: u8,
+                ) -> sts2_core::HookEffects<Self> {
+                    crate::behaviour::rules::buy_in_event::<Self>(_state, index)
+                }
+
+                fn event_question(_state: &Self::EventState) -> Option<sts2_core::Question<Self>> {
+                    crate::behaviour::rules::event_question::<Self>(_state)
+                }
+
+                fn answer_event(
+                    _state: &mut Self::EventState,
+                    answer: &sts2_core::Answer,
+                ) -> sts2_core::HookEffects<Self> {
+                    crate::behaviour::rules::answer_event::<Self>(_state, answer)
+                }
+
+                fn resume_event<R: sts2_core::rng::GameRng>(
+                    _state: &mut Self::EventState,
+                    _run: &impl sts2_core::EventView<Self>,
+                    _rng: &mut R,
+                ) -> sts2_core::HookEffects<Self> {
+                    crate::behaviour::rules::resume_event::<Self, R>(_state, _run, _rng)
+                }
+
+                fn resume_event_from_fight(
+                    _state: &mut Self::EventState,
+                    _escaped: bool,
+                ) -> sts2_core::HookEffects<Self> {
+                    crate::behaviour::rules::resume_event_from_fight::<Self>(_state, _escaped)
+                }
+
+                fn event_rewards(_state: &Self::EventState) -> Vec<CustomReward<Self>> {
+                    crate::behaviour::rules::event_rewards::<Self>(_state)
+                }
+
+                fn neow_curses() -> &'static [Self::Relic] {
+                    &crate::$module::events::NEOW_CURSES
+                }
+
+                fn neow_positives() -> &'static [Self::Relic] {
+                    &crate::$module::events::NEOW_POSITIVES
+                }
+
+                fn neow_flips() -> &'static [(Self::Relic, Self::Relic)] {
+                    &crate::$module::events::NEOW_FLIPS
+                }
+
+                fn neow_options() -> impl Iterator<Item = Self::Relic> {
+                    crate::behaviour::rules::neow_options::<Self>()
+                }
+
+                fn neow_pairs() -> &'static [(Self::Relic, Self::Relic)] {
+                    &crate::$module::events::NEOW_PAIRS
+                }
+
+                fn neow_suppresses_flip() -> Self::Relic {
+                    crate::$module::events::NEOW_SUPPRESSES_FLIP
+                }
+
+                fn allowed_at_neow(relic: Self::Relic, players: usize) -> bool {
+                    crate::behaviour::rules::allowed_at_neow::<Self>(relic, players)
+                }
+
+                fn relic_allowed(relic: Self::Relic, floor: usize, players: usize) -> bool {
+                    crate::behaviour::rules::relic_allowed::<Self>(relic, floor, players)
+                }
+
+                fn run_rng_types() -> &'static [Self::RunRngType] {
+                    crate::behaviour::rules::run_rng_types()
+                }
+
+                fn player_rng_types() -> &'static [Self::PlayerRngType] {
+                    crate::behaviour::rules::player_rng_types()
+                }
+
+                fn enemy_side() -> Self::CombatSide {
+                    crate::behaviour::rules::enemy_side()
+                }
+            }
+        };
+    };
+}
+
+pub(crate) use rules;
