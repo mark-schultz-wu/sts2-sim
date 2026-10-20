@@ -4004,7 +4004,7 @@ fn tick_down<V: Rules>(
         delta: -num_traits::one::<V::Number>(),
         applier: None,
     };
-    if let Some((listener, effect)) = listen::notify::<V>(live, relics, hook).into_iter().next() {
+    if let Some((listener, effect)) = listen::first_answer::<V>(live, relics, hook) {
         unimplemented!("{listener:?} asking for {effect:?} as {power:?} ticks down");
     }
     // `ShouldRemoveDueToAmount`, and `PowerCmd.Remove`.

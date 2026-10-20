@@ -643,8 +643,9 @@ impl<'a, V: Rules> Board<'a, V> {
                 player: self.live.player().id,
                 source,
             };
-            let asked = super::listen::notify::<V>(self.live, self.relics, hook);
-            if let Some((listener, effect)) = asked.into_iter().next() {
+            if let Some((listener, effect)) =
+                super::listen::first_answer::<V>(self.live, self.relics, hook)
+            {
                 unimplemented!("{listener:?} asking for {effect:?} before {power:?} changes");
             }
         }
@@ -2257,7 +2258,7 @@ impl<'a, V: Rules> Board<'a, V> {
             target: Some(saved),
         };
         if let Some((listener, effect)) =
-            super::listen::notify::<V>(self.live, self.relics, hook).first()
+            super::listen::first_answer::<V>(self.live, self.relics, hook)
         {
             unimplemented!("{listener:?} asking for {effect:?} before a potion")
         }
@@ -4055,7 +4056,7 @@ impl<V: Rules> Board<'_, V> {
             point: self.live.point,
         };
         if let Some((listener, effect)) =
-            super::listen::notify::<V>(self.live, self.relics, hook).first()
+            super::listen::first_answer::<V>(self.live, self.relics, hook)
         {
             unimplemented!("{listener:?} asking for {effect:?} as a pet arrives");
         }
@@ -4533,12 +4534,11 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             },
         );
         // `AfterModifyingGoldGained`, which only flashes what answered.
-        let asked = super::listen::notify::<V>(
+        if let Some((listener, effect)) = super::listen::first_answer::<V>(
             self.live,
             self.relics,
             sts2_core::EventHook::GoldGainModified,
-        );
-        if let Some((listener, effect)) = asked.first() {
+        ) {
             unimplemented!("{listener:?} asking for {effect:?} as a gold gain is modified");
         }
         let amount = whole::<V>(gained);
@@ -4631,8 +4631,9 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                         let hook = sts2_core::ModifyHook::EnergyGain { player };
                         let gained = modified_by::<V>(self.walk(), amount, &[hook]);
                         let after = sts2_core::EventHook::EnergyGainModified;
-                        let asked = super::listen::notify::<V>(self.live, self.relics, after);
-                        if let Some((listener, effect)) = asked.first() {
+                        if let Some((listener, effect)) =
+                            super::listen::first_answer::<V>(self.live, self.relics, after)
+                        {
                             unimplemented!(
                                 "{listener:?} asking for {effect:?} once an energy gain is worked out"
                             )
@@ -4819,7 +4820,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             from: None,
         };
         if let Some((listener, effect)) =
-            super::listen::notify::<V>(self.live, self.relics, hook).first()
+            super::listen::first_answer::<V>(self.live, self.relics, hook)
         {
             unimplemented!("{listener:?} asking for {effect:?} as a card changes piles")
         }
@@ -4867,7 +4868,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 from: None,
             };
             if let Some((listener, effect)) =
-                super::listen::notify::<V>(self.live, self.relics, hook).first()
+                super::listen::first_answer::<V>(self.live, self.relics, hook)
             {
                 unimplemented!("{listener:?} asking for {effect:?} as a card changes piles")
             }
@@ -4923,7 +4924,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         if super::listen::heard::<V>(self.live, self.relics, sts2_core::ModelHook::AfterForge) {
             let hook = sts2_core::EventHook::Forged { amount };
             if let Some((listener, effect)) =
-                super::listen::notify::<V>(self.live, self.relics, hook).first()
+                super::listen::first_answer::<V>(self.live, self.relics, hook)
             {
                 unimplemented!("{listener:?} asking for {effect:?} once a blade is forged");
             }
@@ -5043,12 +5044,11 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                     self.live.creatures[at].max_hp = health;
                 }
                 self.heal(id, amount);
-                let asked = super::listen::notify::<V>(
+                if let Some((listener, effect)) = super::listen::first_answer::<V>(
                     self.live,
                     self.relics,
                     sts2_core::EventHook::OstyRevived,
-                );
-                if let Some((listener, effect)) = asked.first() {
+                ) {
                     unimplemented!("{listener:?} asking for {effect:?} as Osty revives")
                 }
             }
@@ -6076,7 +6076,14 @@ pub(super) fn shuffle_asking<V: Rules>(
     // stand in the piles they are shuffled from, so the order they move in
     // is that walk's. Each moves its card in the list once it is shuffled.
     let hook = sts2_core::EventHook::ShuffleOrder { initial: false };
-    let asked = super::listen::notify::<V>(live, relics, hook);
+    let mut asked: SmallVec<[(Listener<V>, HookEffect<V>); 2]> = SmallVec::new();
+    let mut walking = super::listen::Walking::begin::<super::listen::Checked>(live, relics, hook);
+    while let Some(answer) = walking
+        .as_mut()
+        .and_then(|walking| walking.next(live, relics))
+    {
+        asked.push(answer);
+    }
     live.cards.reshuffle(rngs.shuffle);
     for (listener, effect) in asked {
         match (listener, effect) {
@@ -6219,7 +6226,7 @@ impl<V: Rules> Board<'_, V> {
                 .expect("the card making an attack is in the fight");
             (id, card.face.ident.card)
         });
-        let asked = super::listen::notify::<V>(
+        if let Some((listener, effect)) = super::listen::first_answer::<V>(
             self.live,
             self.relics,
             sts2_core::EventHook::BeforeAttack {
@@ -6228,8 +6235,7 @@ impl<V: Rules> Board<'_, V> {
                 source,
                 powered: scaling == Scaling::Dynamic,
             },
-        );
-        if let Some((listener, effect)) = asked.first() {
+        ) {
             unimplemented!("{listener:?} asking for {effect:?} before an attack")
         }
         // A command inside another's hits keeps its own results.
@@ -6894,8 +6900,9 @@ pub(super) fn draw_pausing<V: Rules>(
         }
     }
     if !resumed && super::listen::any_decides::<V>(Walk { live, relics }, hook, false) {
-        let asked = super::listen::notify::<V>(live, relics, sts2_core::EventHook::DrawPrevented);
-        if let Some((listener, effect)) = asked.first() {
+        if let Some((listener, effect)) =
+            super::listen::first_answer::<V>(live, relics, sts2_core::EventHook::DrawPrevented)
+        {
             unimplemented!("{listener:?} asking for {effect:?} after preventing a draw");
         }
         return Drawn::Done(None);

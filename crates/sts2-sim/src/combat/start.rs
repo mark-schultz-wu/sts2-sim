@@ -503,7 +503,7 @@ pub(crate) fn enter<V: Rules>(
     // `RandomizeOrderInternal` raises `ModifyShuffleOrder` before the innate
     // cards move. No listener answers it.
     let hook = sts2_core::EventHook::ShuffleOrder { initial: true };
-    if let Some((listener, effect)) = super::listen::notify::<V>(&mut live, relics, hook).first() {
+    if let Some((listener, effect)) = super::listen::first_answer::<V>(&mut live, relics, hook) {
         unimplemented!("{listener:?} asking for {effect:?} over the opening shuffle")
     }
     // `BeforeHandDraw`, then the hand, then `AfterPlayerTurnStart`: the first
@@ -635,7 +635,7 @@ pub(super) fn after_modifying_hand_draw<V: Rules>(
     relics: &mut Belt<V>,
 ) {
     let hook = sts2_core::EventHook::HandDrawModified;
-    if let Some((listener, effect)) = super::listen::notify::<V>(live, relics, hook).first() {
+    if let Some((listener, effect)) = super::listen::first_answer::<V>(live, relics, hook) {
         unimplemented!("{listener:?} asking for {effect:?} after the hand size is worked out")
     }
 }
