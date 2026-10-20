@@ -1239,6 +1239,10 @@ pub trait AfflictionTable: Copy {
     fn afflicts_unplayable(self) -> bool;
     /// `IsStackable`: whether a second goes onto a card that has this one.
     fn stackable(self) -> bool;
+    /// The hooks this affliction's class overrides, as the hook dump
+    /// measured them. A card carrying it hears them too. See
+    /// [`PowerTable::overrides`].
+    fn overrides(self) -> Overrides;
 }
 
 /// What a table says about an enchantment, beyond its row.
@@ -6674,6 +6678,16 @@ pub trait Hooks: ContentVersion {
     /// overrides the hook.
     fn enchantment_event_hook(
         enchanted: crate::Enchanted<Self>,
+        id: crate::CardId<Self>,
+        hook: EventHook<Self>,
+        asked: &mut HookEffects<Self>,
+    );
+
+    /// [`Hooks::power_event_hook`] for `affliction` on the copy `id`, pushed
+    /// onto `asked`. Asked only of an affliction whose class overrides the
+    /// hook.
+    fn affliction_event_hook(
+        affliction: Self::Affliction,
         id: crate::CardId<Self>,
         hook: EventHook<Self>,
         asked: &mut HookEffects<Self>,

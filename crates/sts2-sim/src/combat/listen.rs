@@ -2,17 +2,13 @@
 //!
 //! `Hook.AfterX` walks `CombatState.IterateHookListeners`: each creature in
 //! turn, allies before enemies, its powers first. A monster's creature then
-//! brings the monster's own model, and the player's its relics and every card
-//! in its five piles. A listener decides for
-//! itself whether an event concerns it, from what the event carries.
+//! brings the monster's own model. The player's brings its relics, its
+//! potions, and every card in its five piles with what each card carries.
+//! The run's modifiers come last. [`listed`] hands that order out.
 //!
-//! A listener whose class does not override a hook inherits
-//! `AbstractModel`'s, which does nothing. So the walk skips it, and only the
-//! listeners that override a hook are ever asked it.
-//!
-//! The game takes the list before anyone is asked. Nothing a listener answers
-//! here adds a listener or takes one away, because every effect is carried out
-//! once all have answered. So a walk asks each listener where it stands.
+//! Only a listener whose class overrides a hook is asked it. The game takes
+//! the list before anyone is asked, and skips one that has left the fight by
+//! the time the walk reaches it.
 
 use smallvec::SmallVec;
 use sts2_core::{
@@ -20,7 +16,7 @@ use sts2_core::{
     MonsterTable as _, Overrides, PowerTable as _, RelicTable as _, Rules,
 };
 
-use super::live::{Heard, Live};
+use super::live::{Fighter, Heard, HeldPower, Live};
 use super::powers::Powers as _;
 use crate::run::Belt;
 
@@ -297,9 +293,197 @@ impl<V: Rules> Cursor<V> for Snapshot<V> {
     }
 }
 
-/// `IterateHookListeners` over the listeners that override `model_hook`, in
-/// its order. That is each creature in turn: its powers, then its monster,
-/// and for the player the belt and the cards.
+/// One listener `IterateHookListeners` lists, as [`listed`] finds it, with
+/// every hook its class overrides.
+pub(crate) enum Found<'a, V: Rules> {
+    /// The power `held`, at `at` among its owner's, on the creature
+    /// `creature` at `creature_at` among the fight's.
+    Power {
+        creature_at: usize,
+        creature: &'a Fighter<V>,
+        at: usize,
+        held: &'a HeldPower<V>,
+        overrides: Overrides,
+    },
+    /// The monster model of `creature`.
+    Monster {
+        creature: &'a Fighter<V>,
+        monster: V::Monster,
+        overrides: Overrides,
+    },
+    /// The relic in belt slot `slot`.
+    Relic { slot: usize, overrides: Overrides },
+    Potion {
+        potion: V::Potion,
+        overrides: Overrides,
+    },
+    /// The copy `id`, with what its card, its affliction and its
+    /// enchantment override together.
+    Card { id: CardId<V>, overrides: Overrides },
+    Modifier {
+        modifier: sts2_core::RunModifier<V>,
+        overrides: Overrides,
+    },
+}
+
+/// What [`listed`] looks for: one hook, as a walk raises, or a set of them,
+/// as a number's phases are asked together. One hook reads the belt's
+/// listening slots for it directly.
+trait Sought: Copy {
+    /// Whether a listener that overrides `overrides` is sought.
+    fn sought_by(self, overrides: Overrides) -> bool;
+    /// The belt's slots whose relic is sought.
+    fn relic_slots<V: Rules>(self, relics: &Belt<V>) -> u64;
+    fn hooks(self) -> Overrides;
+}
+
+/// One hook, beside the set holding it alone.
+#[derive(Clone, Copy)]
+struct OneHook {
+    hook: ModelHook,
+    hooks: Overrides,
+}
+
+impl Sought for OneHook {
+    #[inline(always)]
+    fn sought_by(self, overrides: Overrides) -> bool {
+        overrides.intersects(self.hooks)
+    }
+
+    #[inline(always)]
+    fn relic_slots<V: Rules>(self, relics: &Belt<V>) -> u64 {
+        relics.hearing_hook(self.hook)
+    }
+
+    #[inline(always)]
+    fn hooks(self) -> Overrides {
+        self.hooks
+    }
+}
+
+impl Sought for Overrides {
+    #[inline(always)]
+    fn sought_by(self, overrides: Overrides) -> bool {
+        overrides.intersects(self)
+    }
+
+    #[inline(always)]
+    fn relic_slots<V: Rules>(self, relics: &Belt<V>) -> u64 {
+        relics.hearing(self)
+    }
+
+    #[inline(always)]
+    fn hooks(self) -> Overrides {
+        self
+    }
+}
+
+/// `CombatState.IterateHookListeners`: every listener that overrides what is
+/// `sought`, handed to `found` in the game's order.
+///
+/// That is each creature's powers, then its monster. For the player, its
+/// relics but a melted one, its potions, then its cards in `AllPiles` order.
+/// The run's modifiers come last. A kind `kinds` rules out is not looked
+/// through.
+#[inline(always)]
+fn listed<'a, V: Rules, S: Sought>(
+    live: &'a Live<V>,
+    relics: &Belt<V>,
+    sought: S,
+    kinds: Kinds,
+    mut found: impl FnMut(Found<'a, V>),
+) {
+    let hooks = sought.hooks();
+    for (creature_at, creature) in live.creatures.iter().enumerate() {
+        if kinds.powers {
+            for (at, held) in live.powers.of(creature.id).enumerate() {
+                let overrides = held.power().overrides();
+                if sought.sought_by(overrides) {
+                    found(Found::Power {
+                        creature_at,
+                        creature,
+                        at,
+                        held,
+                        overrides,
+                    });
+                }
+            }
+        }
+        if kinds.monsters
+            && let Some(monster) = creature.carrier().monster
+            && sought.sought_by(monster.overrides())
+        {
+            found(Found::Monster {
+                creature,
+                monster,
+                overrides: monster.overrides(),
+            });
+        }
+        let Some(ModelId::Character(_)) = creature.model else {
+            continue;
+        };
+        if kinds.belt {
+            // The listening slots alone, in slot order.
+            let mut left = sought.relic_slots(relics);
+            while left != 0 {
+                let slot = left.trailing_zeros() as usize;
+                left &= left - 1;
+                found(Found::Relic {
+                    slot,
+                    overrides: relics[slot].relic.overrides(),
+                });
+            }
+        }
+        if kinds.others {
+            listed_potions(live, hooks, &mut found);
+        }
+        if kinds.cards {
+            for (id, overrides) in live.cards.listening(hooks) {
+                found(Found::Card { id, overrides });
+            }
+        }
+    }
+    if kinds.others {
+        listed_modifiers(live, hooks, &mut found);
+    }
+}
+
+/// [`listed`] over the belt's potions that override one of `hooks`. Out of
+/// line, since few fights hold a potion that hears anything.
+#[cold]
+#[inline(never)]
+fn listed_potions<'a, V: Rules>(
+    live: &'a Live<V>,
+    hooks: Overrides,
+    found: &mut impl FnMut(Found<'a, V>),
+) {
+    for &potion in live.potions.held() {
+        let overrides = sts2_core::PotionTable::overrides(potion);
+        if overrides.intersects(hooks) {
+            found(Found::Potion { potion, overrides });
+        }
+    }
+}
+
+/// [`listed`] over the run's modifiers that override one of `hooks`. Out of
+/// line, since few runs carry a modifier a fight asks.
+#[cold]
+#[inline(never)]
+fn listed_modifiers<'a, V: Rules>(
+    live: &'a Live<V>,
+    hooks: Overrides,
+    found: &mut impl FnMut(Found<'a, V>),
+) {
+    for (modifier, overrides) in live.modifiers.hearing(hooks) {
+        found(Found::Modifier {
+            modifier,
+            overrides,
+        });
+    }
+}
+
+/// [`listed`] over the listeners that override `model_hook`, each as a walk
+/// finds it again.
 ///
 /// # Panics
 ///
@@ -311,76 +495,52 @@ fn snapshot<V: Rules>(
 ) -> SmallVec<[Snapped<V>; 8]> {
     let hooks = Overrides::of(model_hook);
     let mut listeners = SmallVec::new();
-    if let Some(kinds) = Kinds::hearing(live, relics, hooks) {
-        for (creature_at, creature) in live.creatures.iter().enumerate() {
-            if kinds.powers {
-                for (at, held) in live.powers.of(creature.id).enumerate() {
-                    if held.power().overrides().contains(model_hook) {
-                        listeners.push(Snapped::Power {
-                            owner: creature.id,
-                            instance: held.instance,
-                            power: held.power(),
-                            creature_at: creature_at as u8,
-                            at: at as u8,
-                        });
-                    }
-                }
-            }
-            if kinds.monsters
-                && let Some(monster) = creature.carrier().monster
-                && monster.overrides().contains(model_hook)
-            {
-                listeners.push(Snapped::Monster {
+    let Some(kinds) = Kinds::hearing(live, relics, hooks) else {
+        return listeners;
+    };
+    listed(
+        live,
+        relics,
+        OneHook {
+            hook: model_hook,
+            hooks,
+        },
+        kinds,
+        #[inline(always)]
+        |found| {
+            listeners.push(match found {
+                Found::Power {
+                    creature_at,
+                    creature,
+                    at,
+                    held,
+                    ..
+                } => Snapped::Power {
+                    owner: creature.id,
+                    instance: held.instance,
+                    power: held.power(),
+                    creature_at: creature_at as u8,
+                    at: at as u8,
+                },
+                Found::Monster {
+                    creature, monster, ..
+                } => Snapped::Monster {
                     creature: creature.id,
                     monster,
-                });
-            }
-            let Some(ModelId::Character(_)) = creature.model else {
-                continue;
-            };
-            if kinds.belt {
-                let mut left = relics.hearing_hook(model_hook);
-                while left != 0 {
-                    let slot = left.trailing_zeros() as usize;
-                    left &= left - 1;
-                    listeners.push(Snapped::Relic {
-                        slot: slot as u8,
-                        relic: relics[slot].relic,
-                    });
+                },
+                Found::Relic { slot, .. } => Snapped::Relic {
+                    slot: slot as u8,
+                    relic: relics[slot].relic,
+                },
+                Found::Potion { potion, .. } => {
+                    unimplemented!("{potion:?} hearing {model_hook:?}")
                 }
-            }
-            if kinds.cards {
-                for (id, _) in live.cards.listening(hooks) {
-                    listeners.push(Snapped::Card { id });
-                }
-            }
-        }
-        if kinds.others {
-            snap_others(live, hooks, &mut listeners);
-        }
-    }
+                Found::Card { id, .. } => Snapped::Card { id },
+                Found::Modifier { modifier, .. } => Snapped::Modifier { modifier },
+            });
+        },
+    );
     listeners
-}
-
-/// The run's modifiers that override one of `hooks`, last in the list. Out
-/// of line, since few runs carry a modifier a fight asks.
-///
-/// # Panics
-///
-/// A potion hearing one of `hooks`, which a fight asks of a potion alone.
-#[cold]
-#[inline(never)]
-fn snap_others<V: Rules>(
-    live: &Live<V>,
-    hooks: Overrides,
-    listeners: &mut SmallVec<[Snapped<V>; 8]>,
-) {
-    if live.potions.hears(hooks) {
-        unimplemented!("a potion hearing {hooks:?}");
-    }
-    for (modifier, _) in live.modifiers.hearing(hooks) {
-        listeners.push(Snapped::Modifier { modifier });
-    }
 }
 
 impl<V: Rules, C: Cursor<V>> Walker<V, C> {
@@ -495,32 +655,8 @@ impl<V: Rules, C: Cursor<V>> Walker<V, C> {
                 Snapped::Card { id } => {
                     // `Contains`: still in the fight, and its owner active for
                     // hooks.
-                    let Some(card) = live.cards.named(id).filter(|_| !live.lost) else {
+                    if live.lost || !ask_card(live, id, hook, asked) {
                         continue;
-                    };
-                    let model_hook = hook
-                        .model_hook()
-                        .unwrap_or_else(|| unreachable!("a walk raises a model's hook"));
-                    // The card's own override, then its enchantment's, which
-                    // is the order the combat state lists them in.
-                    if card.face.ident.card.overrides().contains(model_hook) {
-                        V::card_event_hook(
-                            card.face.ident.card,
-                            id,
-                            live.cards.pile_of(id),
-                            &card,
-                            live.history(),
-                            hook,
-                            asked,
-                        );
-                    }
-                    if let Some(enchanted) = card.face.ident.enchantment
-                        && <V::Enchantment as sts2_core::EnchantmentTable>::overrides(
-                            enchanted.enchantment,
-                        )
-                        .contains(model_hook)
-                    {
-                        V::enchantment_event_hook(enchanted, id, hook, asked);
                     }
                     Listener::Card { id }
                 }
@@ -614,6 +750,52 @@ impl<V: Rules> Walking<V> {
     }
 }
 
+/// `hook` asked of the copy `id` and of what it carries. The card's own
+/// override comes first, then its affliction's, then its enchantment's, as
+/// `IterateHookListeners` lists them. Whether the fight still holds the
+/// copy.
+///
+/// # Panics
+///
+/// A hook that is not one `AbstractModel` declares.
+#[inline(always)]
+fn ask_card<V: Rules>(
+    live: &Live<V>,
+    id: CardId<V>,
+    hook: EventHook<V>,
+    asked: &mut sts2_core::HookEffects<V>,
+) -> bool {
+    let Some(card) = live.cards.named(id) else {
+        return false;
+    };
+    let model_hook = hook
+        .model_hook()
+        .unwrap_or_else(|| unreachable!("{hook:?} is asked of one model, not raised"));
+    let ident = card.face.ident;
+    if ident.card.overrides().contains(model_hook) {
+        V::card_event_hook(
+            ident.card,
+            id,
+            live.cards.pile_of(id),
+            &card,
+            live.history(),
+            hook,
+            asked,
+        );
+    }
+    if let Some(affliction) = ident.affliction
+        && sts2_core::AfflictionTable::overrides(affliction).contains(model_hook)
+    {
+        V::affliction_event_hook(affliction, id, hook, asked);
+    }
+    if let Some(enchanted) = ident.enchantment
+        && sts2_core::EnchantmentTable::overrides(enchanted.enchantment).contains(model_hook)
+    {
+        V::enchantment_event_hook(enchanted, id, hook, asked);
+    }
+    true
+}
+
 /// `PowerCmd.Decrement` of the instance `instance` on `owner`, and its
 /// removal at nothing. What its `AfterRemoved` asks for comes back.
 fn decrement<V: Rules>(
@@ -680,34 +862,32 @@ pub(crate) fn unblocked_damage_target<V: Rules>(
     let Some(kinds) = Kinds::hearing(fight.live, fight.relics, hooks) else {
         return target;
     };
-    if kinds.monsters || kinds.belt || kinds.cards {
+    if kinds.monsters || kinds.belt || kinds.cards || kinds.others {
         unimplemented!("a listener other than a power choosing where a hit lands");
     }
     let mut chosen = target;
-    for creature in fight.live.creatures.iter() {
-        for held in fight.live.powers.of(creature.id) {
-            if !held.power().overrides().intersects(hooks) {
-                continue;
-            }
-            let hook = DecisionHook::TakesUnblockedDamage {
-                target: chosen,
-                powered,
-                pet_of: creature.owner,
-                alive: creature.alive,
-            };
-            let onlookers = super::live::Onlookers {
-                creatures: &fight.live.creatures,
-                powers: &fight.live.powers,
-                kept: &fight.live.kept,
-                relics: Some(fight.relics),
-                attack: &fight.live.attack_results,
-            };
-            let listener = held.listener(creature.carrier(), fight.live.history(), &onlookers);
-            if V::decide_hook(listener, hook).is_decision_and(|takes| takes) {
-                chosen = creature.id;
-            }
+    let onlookers = super::live::Onlookers {
+        creatures: &fight.live.creatures,
+        powers: &fight.live.powers,
+        kept: &fight.live.kept,
+        relics: Some(fight.relics),
+        attack: &fight.live.attack_results,
+    };
+    listed(fight.live, fight.relics, hooks, kinds, |found| {
+        let Found::Power { creature, held, .. } = found else {
+            unreachable!("only powers hear it, as asked above")
+        };
+        let hook = DecisionHook::TakesUnblockedDamage {
+            target: chosen,
+            powered,
+            pet_of: creature.owner,
+            alive: creature.alive,
+        };
+        let listener = held.listener(creature.carrier(), fight.live.history(), &onlookers);
+        if V::decide_hook(listener, hook).is_decision_and(|takes| takes) {
+            chosen = creature.id;
         }
-    }
+    });
     chosen
 }
 
@@ -733,6 +913,7 @@ pub(crate) enum Overrider<V: Rules> {
     Relic(V::Relic),
     Potion(V::Potion),
     Card(sts2_core::CardIdent<V>),
+    Modifier(V::Modifier),
 }
 
 /// Every model in the fight that overrides `hook`, for a panic to name. The
@@ -745,33 +926,25 @@ pub(crate) fn listeners_to<V: Rules>(
 ) -> Vec<Overrider<V>> {
     let hooks = Overrides::of(hook);
     let mut named = Vec::new();
-    for creature in live.creatures.iter() {
-        for held in live.powers.of(creature.id) {
-            if held.power().overrides().intersects(hooks) {
-                named.push(Overrider::Power(held.power(), creature.id));
-            }
-        }
-        if let Some(monster) = creature.carrier().monster
-            && monster.overrides().intersects(hooks)
-        {
-            named.push(Overrider::Monster(monster));
-        }
-    }
-    for held in relics.iter() {
-        if !held.melted && held.relic.overrides().intersects(hooks) {
-            named.push(Overrider::Relic(held.relic));
-        }
-    }
-    for &potion in live.potions.held() {
-        if sts2_core::PotionTable::overrides(potion).intersects(hooks) {
-            named.push(Overrider::Potion(potion));
-        }
-    }
-    for (id, _) in live.cards.listening(hooks) {
-        if let Some(card) = live.cards.named(id) {
-            named.push(Overrider::Card(card.face.ident));
-        }
-    }
+    let Some(kinds) = Kinds::hearing(live, relics, hooks) else {
+        return named;
+    };
+    listed(live, relics, hooks, kinds, |found| {
+        named.push(match found {
+            Found::Power { creature, held, .. } => Overrider::Power(held.power(), creature.id),
+            Found::Monster { monster, .. } => Overrider::Monster(monster),
+            Found::Relic { slot, .. } => Overrider::Relic(relics[slot].relic),
+            Found::Potion { potion, .. } => Overrider::Potion(potion),
+            Found::Card { id, .. } => Overrider::Card(
+                live.cards
+                    .named(id)
+                    .expect("a card the fight lists as listening is in it")
+                    .face
+                    .ident,
+            ),
+            Found::Modifier { modifier, .. } => Overrider::Modifier(modifier.modifier),
+        });
+    });
     named
 }
 
@@ -879,31 +1052,7 @@ fn raise<V: Rules>(
         }
         if cards {
             for (id, _) in live.cards.listening(hooks) {
-                let card = live
-                    .cards
-                    .named(id)
-                    .expect("a card the fight lists as listening is in it");
-                // The card's own override, then its enchantment's, which is
-                // the order the combat state lists them in.
-                if card.face.ident.card.overrides().contains(model_hook) {
-                    V::card_event_hook(
-                        card.face.ident.card,
-                        id,
-                        live.cards.pile_of(id),
-                        &card,
-                        live.history(),
-                        hook,
-                        &mut answer,
-                    );
-                }
-                if let Some(enchanted) = card.face.ident.enchantment
-                    && <V::Enchantment as sts2_core::EnchantmentTable>::overrides(
-                        enchanted.enchantment,
-                    )
-                    .contains(model_hook)
-                {
-                    V::enchantment_event_hook(enchanted, id, hook, &mut answer);
-                }
+                ask_card(live, id, hook, &mut answer);
                 take(
                     &mut asked,
                     &mut decremented,
@@ -1020,14 +1169,7 @@ pub(crate) fn each<V: Rules>(
     mut ask: impl FnMut(Heard<'_, V>, Overrides),
 ) {
     let Walk { live, relics } = fight;
-    let Some(Kinds {
-        powers,
-        monsters,
-        belt,
-        cards,
-        others,
-    }) = Kinds::hearing(live, relics, hooks)
-    else {
+    let Some(kinds) = Kinds::hearing(live, relics, hooks) else {
         return;
     };
     let onlookers = super::live::Onlookers {
@@ -1037,68 +1179,65 @@ pub(crate) fn each<V: Rules>(
         relics: Some(relics),
         attack: &live.attack_results,
     };
-    for creature in live.creatures.iter() {
-        if powers {
-            for held in live.powers.of(creature.id) {
-                let overrides = held.power().overrides();
-                if overrides.intersects(hooks) {
-                    ask(
-                        held.listener(creature.carrier(), live.history(), &onlookers),
-                        overrides,
-                    );
-                }
-            }
-        }
-        if monsters
-            && let Some(monster) = creature.carrier().monster
-            && monster.overrides().intersects(hooks)
-        {
-            let listener = sts2_core::Listener::Monster {
+    listed(
+        live,
+        relics,
+        hooks,
+        kinds,
+        #[inline(always)]
+        |found| match found {
+            Found::Power {
+                creature,
+                held,
+                overrides,
+                ..
+            } => ask(
+                held.listener(creature.carrier(), live.history(), &onlookers),
+                overrides,
+            ),
+            Found::Monster {
+                creature,
                 monster,
-                creature: creature.id,
-            };
-            ask(listener, monster.overrides());
-        }
-        let Some(ModelId::Character(_)) = creature.model else {
-            continue;
-        };
-        if belt {
-            // The listening slots alone, in slot order.
-            let mut left = relics.hearing(hooks);
-            while left != 0 {
-                let held = &relics[left.trailing_zeros() as usize];
-                left &= left - 1;
-                ask(
-                    Heard::<V>::Relic {
-                        state: &held.state,
-                        fight: Some(&onlookers),
-                        belt: relics.relics(),
-                    },
-                    held.relic.overrides(),
-                );
+                overrides,
+            } => ask(
+                sts2_core::Listener::Monster {
+                    monster,
+                    creature: creature.id,
+                },
+                overrides,
+            ),
+            Found::Relic { slot, overrides } => ask(
+                Heard::<V>::Relic {
+                    state: &relics[slot].state,
+                    fight: Some(&onlookers),
+                    belt: relics.relics(),
+                },
+                overrides,
+            ),
+            Found::Potion { potion, overrides } => {
+                ask(sts2_core::Listener::Potion(potion), overrides)
             }
-        }
-        if others {
-            ask_potions(live, hooks, &mut ask);
-        }
-        if cards {
-            for (id, overrides) in live.cards.listening(hooks) {
+            Found::Card { id, overrides } => {
                 let card = live
                     .cards
                     .named(id)
                     .expect("a card the fight lists as listening is in it");
-                // An enchantment is asked only the hooks `raise` raises, so
+                // What a card carries is asked only the hooks a walk raises, so
                 // what the card hears here is its own.
-                if let Some(enchanted) = card.face.ident.enchantment
-                    && <V::Enchantment as sts2_core::EnchantmentTable>::overrides(
-                        enchanted.enchantment,
-                    )
-                    .intersects(hooks)
+                let ident = card.face.ident;
+                if let Some(affliction) = ident.affliction
+                    && sts2_core::AfflictionTable::overrides(affliction).intersects(hooks)
+                {
+                    unimplemented!("what {affliction:?} answers when asked {hooks:?}");
+                }
+                if let Some(enchanted) = ident.enchantment
+                    && sts2_core::EnchantmentTable::overrides(enchanted.enchantment)
+                        .intersects(hooks)
                 {
                     unimplemented!("what {enchanted:?} answers when asked {hooks:?}");
                 }
                 let listener = sts2_core::Listener::Card {
-                    card: card.face.ident.card,
+                    card: ident.card,
                     id,
                     printed: &card,
                     pile: live.cards.pile_of(id),
@@ -1106,40 +1245,12 @@ pub(crate) fn each<V: Rules>(
                 };
                 ask(listener, overrides);
             }
-        }
-    }
-    if others {
-        ask_modifiers(live, hooks, &mut ask);
-    }
-}
-
-/// [`each`] over the belt's potions that override one of `hooks`.
-#[cold]
-#[inline(never)]
-fn ask_potions<V: Rules>(
-    live: &Live<V>,
-    hooks: Overrides,
-    ask: &mut impl FnMut(Heard<'_, V>, Overrides),
-) {
-    for &potion in live.potions.held() {
-        let overrides = sts2_core::PotionTable::overrides(potion);
-        if overrides.intersects(hooks) {
-            ask(sts2_core::Listener::Potion(potion), overrides);
-        }
-    }
-}
-
-/// [`each`] over the run's modifiers that override one of `hooks`, last.
-#[cold]
-#[inline(never)]
-fn ask_modifiers<V: Rules>(
-    live: &Live<V>,
-    hooks: Overrides,
-    ask: &mut impl FnMut(Heard<'_, V>, Overrides),
-) {
-    for (modifier, overrides) in live.modifiers.hearing(hooks) {
-        ask(sts2_core::Listener::Modifier(modifier.modifier), overrides);
-    }
+            Found::Modifier {
+                modifier,
+                overrides,
+            } => ask(sts2_core::Listener::Modifier(modifier.modifier), overrides),
+        },
+    );
 }
 
 /// Whether any listener answers `hook` with `answer`.

@@ -103,6 +103,13 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     emit_flags(&mut out)?;
     emit_shape(&mut out);
     emit_afflictions(&mut out, &afflictions, &types)?;
+    let overrides = super::overrides(&build, "AFFLICTION")?;
+    super::emit_overrides(
+        &mut out,
+        "indexed by the affliction's discriminant.",
+        afflictions.iter().map(|row| row[1].as_str()),
+        &overrides,
+    );
 
     let path = root.join("afflictions.rs");
     error::write(&path, &out)?;
@@ -254,6 +261,10 @@ fn emit_afflictions(
          \n\
          \x20   fn stackable(self) -> bool {{\n\
          \x20       self.data().flags.contains(AfflictionFlag::Stackable)\n\
+         \x20   }}\n\
+         \n\
+         \x20   fn overrides(self) -> sts2_core::Overrides {{\n\
+         \x20       OVERRIDES[self as usize]\n\
          \x20   }}\n\
          }}"
     )

@@ -877,6 +877,15 @@ macro_rules! rules {
                     )
                 }
 
+                fn affliction_event_hook(
+                    affliction: Self::Affliction,
+                    id: sts2_core::CardId<Self>,
+                    hook: EventHook<Self>,
+                    asked: &mut HookEffects<Self>,
+                ) {
+                    crate::behaviour::afflictions::event_hook::<Self>(affliction, id, hook, asked)
+                }
+
                 fn card_event_hook<P: Printed<Self> + ?Sized>(
                     card: Self::Card,
                     id: sts2_core::CardId<Self>,

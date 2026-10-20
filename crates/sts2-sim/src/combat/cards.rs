@@ -485,14 +485,48 @@ impl<V: Rules, P: Piles> Cards<V, P> {
     /// Each state is written once, where it is stored, so every copy in it
     /// changes together. The cost is the number of states, however many
     /// copies share them.
+    ///
+    /// A write that changes what a state hears, as an affliction put on or
+    /// taken off, moves the counts for every copy standing in it.
     pub(crate) fn write_all_cards(
         &mut self,
         pick: impl Fn(&Face<V>) -> bool,
         write: impl Fn(&mut Face<V>),
     ) {
-        for face in self.faces.iter_mut().filter(|face| pick(face)) {
+        let mut moved = false;
+        for (face, heard) in self.faces.iter_mut().zip(self.heard.iter_mut()) {
+            if !pick(face) {
+                continue;
+            }
             write(face);
+            let now = hooks_of(face);
+            if now != *heard {
+                moved = true;
+                *heard = now;
+            }
         }
+        if moved {
+            self.recount();
+        }
+    }
+
+    /// The counts again from every copy standing in a pile, once the hooks
+    /// some state hears have changed where it is stored.
+    #[cold]
+    fn recount(&mut self) {
+        let mut counts = HookCounts::default();
+        for place in [
+            Place::Hand,
+            Place::Draw,
+            Place::Discard,
+            Place::Exhaust,
+            Place::Play,
+        ] {
+            for card in self.piles.iter(place) {
+                counts.add(self.heard[usize::from(self.states[usize::from(card)])]);
+            }
+        }
+        self.counts = counts;
     }
 
     /// Write on every copy in `piles` that `pick` picks, and only those.
@@ -526,6 +560,10 @@ impl<V: Rules, P: Piles> Cards<V, P> {
                         now
                     }
                 };
+                if self.heard[usize::from(was)] != self.heard[usize::from(now)] {
+                    self.counts.remove(self.heard[usize::from(was)]);
+                    self.counts.add(self.heard[usize::from(now)]);
+                }
                 self.set_state(card, now);
             }
         }
@@ -638,15 +676,7 @@ impl<V: Rules, P: Piles> Cards<V, P> {
     /// Store a new state, with the hooks its card overrides.
     fn store_face(&mut self, face: Face<V>) {
         self.faces.push(face);
-        // A card hears what its enchantment's class overrides as well.
-        let enchantment = face
-            .ident
-            .enchantment
-            .map_or_else(sts2_core::Overrides::default, |on| {
-                <V::Enchantment as sts2_core::EnchantmentTable>::overrides(on.enchantment)
-            });
-        self.heard
-            .push(face.ident.card.overrides().union(enchantment));
+        self.heard.push(hooks_of(&face));
     }
 
     /// The hooks the card at number `card` overrides.
@@ -672,6 +702,20 @@ impl<V: Rules, P: Piles> Cards<V, P> {
             .filter(|&at| at != u16::MAX)
             .unwrap_or_else(|| unimplemented!("a fight of {at} card states"))
     }
+}
+
+/// The hooks a copy in state `face` hears: what its card's class overrides,
+/// and its affliction's and its enchantment's.
+fn hooks_of<V: Rules>(face: &Face<V>) -> sts2_core::Overrides {
+    let ident = face.ident;
+    let mut hooks = ident.card.overrides();
+    if let Some(affliction) = ident.affliction {
+        hooks = hooks.union(sts2_core::AfflictionTable::overrides(affliction));
+    }
+    if let Some(on) = ident.enchantment {
+        hooks = hooks.union(sts2_core::EnchantmentTable::overrides(on.enchantment));
+    }
+    hooks
 }
 
 #[cfg(test)]

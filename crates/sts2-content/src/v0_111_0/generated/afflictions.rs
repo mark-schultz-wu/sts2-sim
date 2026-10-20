@@ -201,4 +201,32 @@ impl sts2_core::AfflictionTable for Affliction {
     fn stackable(self) -> bool {
         self.data().flags.contains(AfflictionFlag::Stackable)
     }
+
+    fn overrides(self) -> sts2_core::Overrides {
+        OVERRIDES[self as usize]
+    }
 }
+
+/// The hooks each class overrides, from `hooks.txt`, indexed by the affliction's discriminant.
+static OVERRIDES: [sts2_core::Overrides; 10] = [
+    // BOUND
+    sts2_core::Overrides::NONE,
+    // ENTANGLED
+    sts2_core::Overrides::NONE,
+    // GALVANIZED
+    sts2_core::Overrides::NONE,
+    // HEXED
+    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardEnteredCombat),
+    // MOCK_NO_UNPLAYABLE_AFFLICTION
+    sts2_core::Overrides::NONE,
+    // MOCK_SELF_DAMAGE_AFFLICTION
+    sts2_core::Overrides::NONE,
+    // MOCK_USELESS_AFFLICTION
+    sts2_core::Overrides::NONE,
+    // RINGING
+    sts2_core::Overrides::NONE,
+    // SMOG
+    sts2_core::Overrides::NONE,
+    // TAINTED
+    sts2_core::Overrides::NONE,
+];
