@@ -1,0 +1,26 @@
+# Hyperbeam takes its Focus once its hit lands.
+# The Nibbit's Thorns hits back in `BeforeDamageReceived`, and Centennial
+# Puzzle draws as its owner first loses health. The draw pile is empty, so
+# the draw shuffles, and Stratagem asks. The hit lands once the answer is
+# in, and the rest of the card after it.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"grant","relic":"CENTENNIAL_PUZZLE"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"THORNS_POWER","amount":3,"target":1}
+{"cmd":"power","power":"STRATAGEM_POWER","amount":1,"target":0}
+{"cmd":"grant","card":"ACROBATICS"}
+{"cmd":"play_card","index":5}
+{"cmd":"answer","pick":0}
+{"cmd":"answer","done":true}
+{"cmd":"grant","card":"PREPARED"}
+{"cmd":"play_card","index":7}
+{"cmd":"answer","pick":0}
+{"cmd":"answer","done":true}
+{"cmd":"grant","card":"PREPARED"}
+{"cmd":"play_card","index":7}
+{"cmd":"answer","pick":0}
+{"cmd":"answer","done":true}
+{"cmd":"grant","card":"HYPERBEAM"}
+{"cmd":"play_card","index":7,"target":null}
+{"cmd":"answer","pick":0}
+{"cmd":"answer","done":true}
