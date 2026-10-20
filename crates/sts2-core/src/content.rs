@@ -1593,6 +1593,9 @@ pub trait PowerKinds: std::fmt::Debug + Copy + Eq + 'static {
     const DIE_FOR_YOU: Self;
     /// `DoomPower`, whose holders die together as their side's turn ends.
     const DOOM: Self;
+    /// `ArtifactPower`, which `BeforePowerAmountChanged` reports its target
+    /// holding.
+    const ARTIFACT: Self;
 }
 
 /// The move names the simulator writes itself.
@@ -4345,6 +4348,8 @@ pub enum EventHook<V: ContentVersion> {
         target: crate::CombatId,
         /// The side `target` fights on.
         target_side: V::CombatSide,
+        /// Whether `target` holds Artifact.
+        target_artifact: bool,
         applier: Option<crate::CombatId>,
         /// The player's creature, which a relic reads its owner as.
         player: crate::CombatId,
@@ -5991,9 +5996,11 @@ pub enum HookEffect<V: ContentVersion> {
     ZeroCostFromDraw(usize),
     /// `NextItem` off `CombatCardSelection` over the draw pile's cards of
     /// `kind`, `SetToFreeThisTurn`, then `CardPileCmd.Add` into the hand.
-    /// Nothing where the draw pile holds none.
+    /// Nothing where the draw pile holds none. With `preferring_without`,
+    /// the pick is over those of them without that keyword, where any are.
     FreeRandomFromDraw {
         kind: CardKind,
+        preferring_without: Option<V::CardKeyword>,
     },
     /// `MummifiedHand.AfterCardPlayed`'s pick, off `CombatCardSelection`, and
     /// `SetToFreeThisTurn` on it. `NextItem` over the hand's cards that print
@@ -6689,13 +6696,14 @@ pub trait Hooks: ContentVersion {
     /// enchantment whose `OnEnchant` writes nothing.
     fn enchanted_changes(enchantment: Self::Enchantment) -> &'static [Change<Self>];
 
-    /// `CardModel.GetResultPileTypeForCardPlay`, for a card whose class
-    /// overrides it: where the card goes once its play is over, given what
-    /// the base class answers.
+    /// `CardModel.GetResultPileTypeForCardPlay`, or v0.111.0's
+    /// `GetResultLocationForCardPlay`, for a card whose class overrides it:
+    /// the pile the card goes to once its play is over, and where in it,
+    /// given what the base class answers.
     fn card_result_pile(
         card: Self::Card,
-        base: Option<crate::Pile>,
-    ) -> crate::HookResponse<Option<crate::Pile>>;
+        base: (Option<crate::Pile>, PilePosition),
+    ) -> crate::HookResponse<(Option<crate::Pile>, PilePosition)>;
 
     /// `write` carried out on the deck card a fight's copy came from.
     fn write_deck_card(card: &mut DeckCard<Self>, write: Self::DeckWrite);

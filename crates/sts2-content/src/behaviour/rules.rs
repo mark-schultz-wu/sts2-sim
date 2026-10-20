@@ -169,8 +169,8 @@ pub(crate) fn enchanted_changes<V: crate::Build>(
 
 pub(crate) fn card_result_pile<V: crate::Build>(
     card: V::Card,
-    base: Option<sts2_core::Pile>,
-) -> sts2_core::HookResponse<Option<sts2_core::Pile>> {
+    base: (Option<sts2_core::Pile>, sts2_core::PilePosition),
+) -> sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)> {
     crate::behaviour::cards::result_pile::<V>(card, base)
 }
 

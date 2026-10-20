@@ -295,7 +295,11 @@ fn metamorphosis<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 }
 
 /// Its damage to `target`, `hits` times, as one attack.
-fn hit<V: crate::Build, F: Fight<V>>(fight: &mut F, target: sts2_core::CombatId, hits: usize) {
+pub(crate) fn hit<V: crate::Build, F: Fight<V>>(
+    fight: &mut F,
+    target: sts2_core::CombatId,
+    hits: usize,
+) {
     fight.attack(Scaling::Dynamic, |fight| {
         for _ in 0..hits {
             let attack = fight.resolve(Effect::Attack {

@@ -70,17 +70,13 @@ a port that starts from the other build's code. A move can shift what
 the compiler inlines. The relics' and the cards' decision dispatchers
 stay out of line, since the walk inlining them cost 3.9% and 3.4%.
 
-The simulator follows 1,308,197 of the 1,322,464 recorded positions,
-98%, and 1,456 of 1,500 runs whole. A run that panics counts the
-positions before its panic. `follow_run <file> <index> --diff <dir>`
-plays a run on the game beside the simulator and names the sections
-where they first differ, which a split with no panic needs. No split
-holds more than three runs, and most hold one. The open causes `--diff`
-found:
+The simulator follows 1,319,281 of the 1,322,464 recorded positions,
+99%, and 1,491 of 1,500 runs whole. `follow_run <file> <index> --diff
+<dir>` plays a run on the game beside the simulator and names the
+sections where they first differ, which a split with no panic needs.
+Each of the nine left parts on a cause of its own, not yet traced. One
+more change is known and not yet ported:
 
-- 3 runs panic where Eidolon's auto-play waits on a question with more
-  cards to play. The rest of its list needs a resume point that holds
-  it.
 - Misery changed in v0.111.0. It adds a temporary power's amount to the
   power it lends before it copies them, and no power has
   `IgnoreNextInstance` now. The shared port is v0.107.1's.

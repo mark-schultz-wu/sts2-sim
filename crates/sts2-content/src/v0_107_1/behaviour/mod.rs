@@ -79,6 +79,13 @@ impl crate::build::OwnRules for V {
         None
     }
 
+    fn own_card_result_pile(
+        _card: <V as sts2_core::ContentVersion>::Card,
+        _base: (Option<sts2_core::Pile>, sts2_core::PilePosition),
+    ) -> Option<sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)>> {
+        None
+    }
+
     fn own_card_play<F: sts2_core::Fight<V>>(
         card: <V as sts2_core::ContentVersion>::Card,
         fight: &mut F,
@@ -90,8 +97,18 @@ impl crate::build::OwnRules for V {
         card: <V as sts2_core::ContentVersion>::Card,
         _fight: &mut F,
         from: u8,
+        _left: crate::behaviour::cards::Left<V>,
     ) -> sts2_core::Played<V> {
         unreachable!("{card:?} waited at {from} in a play this build has none of its own")
+    }
+
+    fn own_card_drew_from<F: sts2_core::Fight<V>>(
+        card: <V as sts2_core::ContentVersion>::Card,
+        _fight: &mut F,
+        from: u8,
+        _drew: &[sts2_core::CardId<V>],
+    ) -> sts2_core::Played<V> {
+        unreachable!("{card:?} drew at {from} in a play this build has none of its own")
     }
 
     fn own_lends(

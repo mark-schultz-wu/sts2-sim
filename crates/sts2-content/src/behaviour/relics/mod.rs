@@ -696,6 +696,9 @@ pub(crate) fn event_hook<V: crate::Build>(
         State::SereTalon => V::own_relic(V::Relic::SERE_TALON),
         State::LastingCandy(_) => V::own_relic(V::Relic::LASTING_CANDY),
         State::Regalite(_) => V::own_relic(V::Relic::REGALITE),
+        State::HistoryCourse => V::own_relic(V::Relic::HISTORY_COURSE),
+        State::UnsettlingLamp(_) => V::own_relic(V::Relic::UNSETTLING_LAMP),
+        State::JeweledMask => V::own_relic(V::Relic::JEWELED_MASK),
         _ => false,
     };
     if owned && V::own_shared_relic_event_hook(state, hook, asked).is_some() {

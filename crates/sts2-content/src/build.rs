@@ -462,6 +462,13 @@ pub trait OwnRules: ContentVersion + Sized {
     where
         Self: Build;
 
+    /// Where a played card goes, for a card whose `GetResultLocationForCardPlay`
+    /// is the build's own, or nothing for a shared one.
+    fn own_card_result_pile(
+        card: Self::Card,
+        base: (Option<sts2_core::Pile>, sts2_core::PilePosition),
+    ) -> Option<sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)>>;
+
     /// What a card of the build's own does when it is played, or nothing for
     /// a shared one.
     fn own_card_play<F: sts2_core::Fight<Self>>(
@@ -472,11 +479,24 @@ pub trait OwnRules: ContentVersion + Sized {
         Self: Build;
 
     /// The rest of a play of the build's own that waited, from the command
-    /// after the one that left a question waiting.
+    /// after the one that left a question waiting. `left` is the cards its
+    /// list still has to go through.
     fn own_card_play_from<F: sts2_core::Fight<Self>>(
         card: Self::Card,
         fight: &mut F,
         from: u8,
+        left: crate::behaviour::cards::Left<Self>,
+    ) -> sts2_core::Played<Self>
+    where
+        Self: Build;
+
+    /// The rest of a play of the build's own that waited on its own draw,
+    /// from the command after the draw. `drew` is every copy the draw drew.
+    fn own_card_drew_from<F: sts2_core::Fight<Self>>(
+        card: Self::Card,
+        fight: &mut F,
+        from: u8,
+        drew: &[sts2_core::CardId<Self>],
     ) -> sts2_core::Played<Self>
     where
         Self: Build;
@@ -761,8 +781,9 @@ macro_rules! rules {
 
                 fn card_result_pile(
                     card: Self::Card,
-                    base: Option<sts2_core::Pile>,
-                ) -> sts2_core::HookResponse<Option<sts2_core::Pile>> {
+                    base: (Option<sts2_core::Pile>, sts2_core::PilePosition),
+                ) -> sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)>
+                {
                     crate::behaviour::rules::card_result_pile::<Self>(card, base)
                 }
 

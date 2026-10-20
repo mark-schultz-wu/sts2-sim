@@ -955,10 +955,12 @@ pub(super) enum InHand<V: Rules> {
 }
 
 /// `OnTurnEndInHandWrapper` for each of `cards` still in hand. The card goes
-/// to the play pile, and its effect runs. Then it goes to the exhaust pile
-/// for an ethereal card, or the discard pile for any other. A fight that is ending refuses the second
-/// move, and the card stays in the play pile. An effect that asks a
-/// question stands the rest still behind the answer.
+/// to the play pile and its effect runs. Then it goes to the exhaust pile if
+/// ethereal, or the discard pile if not. A question stands the rest still
+/// behind the answer.
+///
+/// Every effect runs, ending fight or not. `CardPileCmd.Add` refuses a
+/// combat pile once the fight is ending, so the cards stay put from then on.
 fn cards_turn_end<V: Rules>(
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
@@ -966,6 +968,7 @@ fn cards_turn_end<V: Rules>(
     ascension: V::AscensionLevel,
     cards: &[sts2_core::CardId<V>],
 ) -> InHand<V> {
+    let mut ended = None;
     for (at_card, &id) in cards.iter().enumerate() {
         let Some(at) = live.cards.find(Pile::Hand, id) else {
             continue;
@@ -974,15 +977,21 @@ fn cards_turn_end<V: Rules>(
             .cards
             .get(Pile::Hand, at)
             .expect("a card stands where it was found");
-        live.cards.move_to(Pile::Hand, at, Pile::Play);
+        if ended.is_none() {
+            live.cards.move_to(Pile::Hand, at, Pile::Play);
+        }
         let mut board =
             Board::for_card(live, rngs.reborrow(), relics, ascension, None, Some(id)).blocking();
         V::on_card_turn_end(card.face.ident.card, &mut board);
         let skipped = std::mem::take(&mut board.skipped);
-        let ended = board.ended();
+        let this_ended = board.ended();
         super::play::merge::<V>(&mut live.skip_tick, skipped);
-        if ended.is_some() {
-            return InHand::Done(ended);
+        if ended.is_some() || this_ended.is_some() {
+            ended = ended.or(this_ended);
+            if live.asking.is_some() {
+                unimplemented!("a turn-end effect asking once the fight is ending");
+            }
+            continue;
         }
         if live.asking.is_some() {
             return InHand::Parked {
@@ -990,11 +999,9 @@ fn cards_turn_end<V: Rules>(
                 rest: cards[at_card + 1..].iter().copied().collect(),
             };
         }
-        if let Some(ended) = wrapper_end(live, rngs.reborrow(), relics, id) {
-            return InHand::Done(Some(ended));
-        }
+        ended = wrapper_end(live, rngs.reborrow(), relics, id);
     }
-    InHand::Done(None)
+    InHand::Done(ended)
 }
 
 /// The end of `OnTurnEndInHandWrapper` for `id`, once its effect is over:
@@ -1677,7 +1684,10 @@ pub(super) fn carry_setup<V: Rules>(
                         }
                         // A shuffle's question parks the setup, and the rest
                         // of these listeners follow the answer.
-                        sts2_core::HookEffect::FreeRandomFromDraw { kind } => {
+                        sts2_core::HookEffect::FreeRandomFromDraw {
+                            kind,
+                            preferring_without,
+                        } => {
                             let mut board = Board::for_card(
                                 live,
                                 rngs.reborrow(),
@@ -1693,6 +1703,22 @@ pub(super) fn carry_setup<V: Rules>(
                                         == Some(kind)
                                 })
                                 .collect();
+                            let kinds = match preferring_without {
+                                Some(keyword) => {
+                                    let without: Vec<_> = kinds
+                                        .iter()
+                                        .copied()
+                                        .filter(|&at| {
+                                            !sts2_core::Fight::card_keyword(&board, at, keyword)
+                                        })
+                                        .collect();
+                                    match without.is_empty() {
+                                        true => kinds,
+                                        false => without,
+                                    }
+                                }
+                                None => kinds,
+                            };
                             let stream =
                                 <V::RunRngType as sts2_core::RunStreamKinds>::COMBAT_CARD_SELECTION;
                             if let Some(at) =

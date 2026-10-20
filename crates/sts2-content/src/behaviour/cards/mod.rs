@@ -155,15 +155,18 @@ pub(crate) fn is_playable<V: crate::Build>(
 /// overrides.
 pub(crate) fn result_pile<V: crate::Build>(
     card: V::Card,
-    base: Option<sts2_core::Pile>,
-) -> sts2_core::HookResponse<Option<sts2_core::Pile>> {
+    base: (Option<sts2_core::Pile>, sts2_core::PilePosition),
+) -> sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)> {
     use sts2_core::{HookResponse, Pile};
 
+    if let Some(own) = V::own_card_result_pile(card, base) {
+        return own;
+    }
     match card {
         // `ParticleWall`: back into the hand where the base class discards.
         __c0 if __c0 == V::Card::PARTICLE_WALL => HookResponse::Decision(match base {
-            Some(Pile::Discard) => Some(Pile::Hand),
-            pile => pile,
+            (Some(Pile::Discard), position) => (Some(Pile::Hand), position),
+            base => base,
         }),
         _ => HookResponse::DoesNotImplement,
     }
@@ -645,8 +648,8 @@ pub enum Resume<V: crate::Build> {
     /// question waiting.
     Generated(V::Card, u8),
     /// A play of the build's own, from the command after the one that left a
-    /// question waiting.
-    Own(V::Card, u8),
+    /// question waiting. The list holds the cards it still has to go through.
+    Own(V::Card, u8, Left<V>),
 }
 
 /// The cards a play still has to go through once it waited, in the order
@@ -1194,7 +1197,7 @@ pub(crate) fn resume_play<V: crate::Build, F: Fight<V>>(
         Resume::Generated(card, _) => {
             unreachable!("generated {card:?} waits on a question, not a pick")
         }
-        Resume::Own(card, _) => unreachable!("{card:?} waits on a question, not a pick"),
+        Resume::Own(card, ..) => unreachable!("{card:?} waits on a question, not a pick"),
     }
 }
 
@@ -1209,6 +1212,7 @@ pub(crate) fn resume_drew<V: crate::Build, F: Fight<V>>(
         Resume::Defect(at) => defect::resume_drew::<V, _>(fight, at, drew),
         Resume::Ironclad(at) => ironclad::resume_drew::<V, _>(fight, at, drew),
         Resume::Silent(at) => silent::resume_drew::<V, _>(fight, at, drew),
+        Resume::Own(card, from, _) => V::own_card_drew_from(card, fight, from, drew),
         at => resume_waited::<V, _>(fight, at),
     }
 }
@@ -1229,7 +1233,7 @@ pub(crate) fn resume_waited<V: crate::Build, F: Fight<V>>(
         Resume::Silent(at) => silent::resume_waited::<V, _>(fight, at),
         Resume::Token(at) => token::resume_waited::<V, _>(fight, at),
         Resume::Generated(card, from) => generated_from::<V, _>(card, fight, from),
-        Resume::Own(card, from) => V::own_card_play_from(card, fight, from),
+        Resume::Own(card, from, left) => V::own_card_play_from(card, fight, from, left),
     }
 }
 
