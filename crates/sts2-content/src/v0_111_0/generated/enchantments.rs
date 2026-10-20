@@ -265,8 +265,19 @@ static OVERRIDES: [sts2_core::Overrides; 24] = [
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardPlayed),
 ];
 
+/// Every hook some enchantment's class overrides.
+static HEARD_BY_ANY: sts2_core::Overrides = sts2_core::Overrides::NONE
+    .with(sts2_core::ModelHook::AfterCardPlayed)
+    .with(sts2_core::ModelHook::AfterAutoPrePlayPhaseEntered)
+    .with(sts2_core::ModelHook::ModifyShuffleOrder)
+    .with(sts2_core::ModelHook::AfterCardDrawn);
+
 impl sts2_core::EnchantmentTable for Enchantment {
     fn overrides(self) -> sts2_core::Overrides {
         OVERRIDES[self as usize]
+    }
+
+    fn heard_by_any() -> sts2_core::Overrides {
+        HEARD_BY_ANY
     }
 }

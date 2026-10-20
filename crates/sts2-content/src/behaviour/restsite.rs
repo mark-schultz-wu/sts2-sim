@@ -3,9 +3,9 @@
 //! Each build's `RestKinds` impl, beside its generated enum, names the
 //! options and hands these the numbers its game sets.
 
-use sts2_core::{CardIdent, HookEffect};
+use sts2_core::HookEffect;
 
-use crate::ids::{CardIds as _, EnchantmentIds as _, RelicIds as _, RestSiteOptionIds};
+use crate::ids::{EnchantmentIds as _, RelicIds as _, RestSiteOptionIds};
 
 /// `CookRestSiteOption`'s `_cardsToRemove`.
 const COOK_CARDS: usize = 2;
@@ -15,20 +15,12 @@ const COOK_CARDS: usize = 2;
 /// `MEND` is the second player's, and a run here has one player.
 /// `IterateHookListeners` walks the deck ahead of the belt, so each
 /// Byrdonis Egg adds `HATCH` before any relic adds its option.
-pub(crate) fn offered<V: crate::Build>(
-    from_belt: &[V::RestSiteOption],
-    deck: &[CardIdent<V>],
-) -> Vec<V::RestSiteOption> {
+pub(crate) fn offered<V: crate::Build>(added: &[V::RestSiteOption]) -> Vec<V::RestSiteOption> {
     let mut offered = vec![
         <V::RestSiteOption as RestSiteOptionIds>::HEAL,
         <V::RestSiteOption as RestSiteOptionIds>::SMITH,
     ];
-    offered.extend(
-        deck.iter()
-            .filter(|card| card.card == V::Card::BYRDONIS_EGG)
-            .map(|_| <V::RestSiteOption as RestSiteOptionIds>::HATCH),
-    );
-    offered.extend_from_slice(from_belt);
+    offered.extend_from_slice(added);
     offered
 }
 

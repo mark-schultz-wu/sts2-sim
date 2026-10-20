@@ -181,11 +181,12 @@ impl<V: Rules> State<V> {
                 })
                 .unwrap_or_else(|| unimplemented!("an exhausted event queue"));
             // `Hook.ModifyNextEvent`, which a deck card can answer.
-            let event = self
+            let event = (self
                 .deck_hearing(sts2_core::ModelHook::ModifyNextEvent)
-                .fold(event, |event, card| {
-                    V::deck_card_next_event(card, self.act(), event)
-                });
+                .into_iter())
+            .fold(event, |event, card| {
+                V::deck_card_next_event(card, self.act(), event)
+            });
             self.room_entering(point, true);
             let mut event_rng =
                 crate::event::stream::<V, crate::rng::MegaRng>(self.raw_seed(), 0, event);
