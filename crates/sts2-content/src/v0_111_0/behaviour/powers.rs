@@ -51,7 +51,10 @@ pub(crate) fn own_power_death<F: sts2_core::Fight<V>>(
 
 /// Whether `power`'s rule is this build's own.
 pub(crate) fn own_power(power: Power) -> bool {
-    matches!(power, Power::AmbergrisPower | Power::TrackingPower)
+    matches!(
+        power,
+        Power::AmbergrisPower | Power::TrackingPower | Power::FeralPower
+    )
 }
 
 /// The state a power of this build's own starts with.
@@ -90,6 +93,27 @@ pub(crate) fn own_power_modify_hook(
             unimplemented!("an endless Tracking")
         }
         (Power::TrackingPower, _, ModifyHook::DamageMultiplicative { .. }) => Some(Modify::Nothing),
+        _ => None,
+    }
+}
+
+/// `ModifyCardPlayResultLocation` for a power of this build's own, or
+/// nothing for one the shared powers answer.
+///
+/// `FeralPower` leaves a dupe where it goes, where v0.107.1's took it back
+/// to the hand as well.
+pub(crate) fn own_power_result_pile(
+    power: Power,
+    _amount: PowerAmount<Number>,
+    _holder: sts2_core::CombatId,
+    _state: &State<V>,
+    hook: sts2_core::ResultPile<V>,
+) -> Option<sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)>> {
+    match power {
+        Power::FeralPower if hook.dupe => Some(sts2_core::HookResponse::Decision((
+            hook.pile,
+            hook.position,
+        ))),
         _ => None,
     }
 }

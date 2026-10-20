@@ -1380,7 +1380,10 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
         .with(sts2_core::ModelHook::AfterCardDrawn)
         .with(sts2_core::ModelHook::AfterSideTurnEnd),
     // CORRUPTION_POWER
-    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::TryModifyEnergyCostInCombatLate),
+    sts2_core::Overrides::NONE
+        .with(sts2_core::ModelHook::AfterModifyingCardPlayResultPileOrPosition)
+        .with(sts2_core::ModelHook::ModifyCardPlayResultPileTypeAndPosition)
+        .with(sts2_core::ModelHook::TryModifyEnergyCostInCombatLate),
     // COUNTDOWN_POWER
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterSideTurnStart),
     // COVERED_POWER
@@ -1497,7 +1500,10 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
     // FEEL_NO_PAIN_POWER
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardExhausted),
     // FERAL_POWER
-    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterSideTurnStart),
+    sts2_core::Overrides::NONE
+        .with(sts2_core::ModelHook::AfterModifyingCardPlayResultPileOrPosition)
+        .with(sts2_core::ModelHook::AfterSideTurnStart)
+        .with(sts2_core::ModelHook::ModifyCardPlayResultPileTypeAndPosition),
     // FLAME_BARRIER_POWER
     sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterDamageReceived)
@@ -1760,7 +1766,9 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
     // NIGHTMARE_POWER
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::BeforeHandDraw),
     // NOSTALGIA_POWER
-    sts2_core::Overrides::NONE,
+    sts2_core::Overrides::NONE
+        .with(sts2_core::ModelHook::AfterModifyingCardPlayResultPileOrPosition)
+        .with(sts2_core::ModelHook::ModifyCardPlayResultPileTypeAndPosition),
     // NOXIOUS_FUMES_POWER
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterSideTurnStart),
     // NO_BLOCK_POWER
@@ -1859,7 +1867,10 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
         .with(sts2_core::ModelHook::ShouldAllowHitting)
         .with(sts2_core::ModelHook::ShouldCreatureBeRemovedFromCombatAfterDeath),
     // REBOUND_POWER
-    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterSideTurnEnd),
+    sts2_core::Overrides::NONE
+        .with(sts2_core::ModelHook::AfterModifyingCardPlayResultPileOrPosition)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd)
+        .with(sts2_core::ModelHook::ModifyCardPlayResultPileTypeAndPosition),
     // REFLECT_POWER
     sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterDamageReceived)

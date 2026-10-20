@@ -224,6 +224,16 @@ impl crate::build::OwnRules for V {
         powers::own_power_modify_hook(power, amount, held, state, hook)
     }
 
+    fn own_power_result_pile(
+        _power: <V as sts2_core::ContentVersion>::Power,
+        _amount: sts2_core::PowerAmount<i32>,
+        _holder: sts2_core::CombatId,
+        _state: &crate::behaviour::powers::State<V>,
+        _hook: sts2_core::ResultPile<V>,
+    ) -> Option<sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)>> {
+        None
+    }
+
     fn own_power_event_hook(
         power: <V as sts2_core::ContentVersion>::Power,
         amount: sts2_core::PowerAmount<i32>,
@@ -260,6 +270,17 @@ impl crate::build::OwnRules for V {
 
     fn own_relic(_relic: <V as sts2_core::ContentVersion>::Relic) -> bool {
         false
+    }
+
+    fn own_enchantment(_enchantment: <V as sts2_core::ContentVersion>::Enchantment) -> bool {
+        false
+    }
+
+    fn own_enchantment_modify(
+        _enchanted: sts2_core::Enchanted<V>,
+        _hook: sts2_core::EnchantHook,
+    ) -> Option<sts2_core::Modify<i32>> {
+        None
     }
 
     fn own_shared_relic_event_hook(

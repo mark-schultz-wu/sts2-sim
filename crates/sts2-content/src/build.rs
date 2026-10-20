@@ -407,6 +407,19 @@ pub trait OwnRules: ContentVersion + Sized {
     /// Whether a shared relic's rule is the build's own for some hook.
     fn own_relic(relic: Self::Relic) -> bool;
 
+    /// Whether a shared enchantment's rule is the build's own for some hook.
+    fn own_enchantment(enchantment: Self::Enchantment) -> bool;
+
+    /// An enchantment's `EnchantDamageAdditive` and its kin, for an
+    /// enchantment [`OwnRules::own_enchantment`] names, or nothing for a hook
+    /// the shared enchantments answer for it.
+    fn own_enchantment_modify(
+        enchanted: sts2_core::Enchanted<Self>,
+        hook: sts2_core::EnchantHook,
+    ) -> Option<sts2_core::Modify<i32>>
+    where
+        Self: Build;
+
     /// A shared relic's `EventHook`, for a relic [`OwnRules::own_relic`]
     /// names, or nothing for a hook the shared relics answer for it.
     fn own_shared_relic_event_hook(
@@ -547,6 +560,18 @@ pub trait OwnRules: ContentVersion + Sized {
         state: &crate::behaviour::powers::State<Self>,
         hook: sts2_core::ModifyHook<Self>,
     ) -> Option<sts2_core::Modify<i32>>
+    where
+        Self: Build;
+
+    /// `ModifyCardPlayResultPileTypeAndPosition` for a power of the build's
+    /// own, or nothing for one the shared powers answer.
+    fn own_power_result_pile(
+        power: Self::Power,
+        amount: sts2_core::PowerAmount<i32>,
+        holder: sts2_core::CombatId,
+        state: &crate::behaviour::powers::State<Self>,
+        hook: sts2_core::ResultPile<Self>,
+    ) -> Option<sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)>>
     where
         Self: Build;
 

@@ -8,6 +8,7 @@
 //! name as its row.
 
 pub(crate) mod cards;
+pub(crate) mod enchantments;
 pub mod events;
 pub(crate) mod monsters;
 pub(crate) mod potions;
@@ -221,6 +222,16 @@ impl crate::build::OwnRules for V {
         powers::own_power_modify_hook(power, amount, held, state, hook)
     }
 
+    fn own_power_result_pile(
+        power: <V as sts2_core::ContentVersion>::Power,
+        amount: sts2_core::PowerAmount<i32>,
+        holder: sts2_core::CombatId,
+        state: &crate::behaviour::powers::State<V>,
+        hook: sts2_core::ResultPile<V>,
+    ) -> Option<sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)>> {
+        powers::own_power_result_pile(power, amount, holder, state, hook)
+    }
+
     fn own_power_event_hook(
         power: <V as sts2_core::ContentVersion>::Power,
         amount: sts2_core::PowerAmount<i32>,
@@ -257,6 +268,17 @@ impl crate::build::OwnRules for V {
 
     fn own_relic(relic: <V as sts2_core::ContentVersion>::Relic) -> bool {
         relics::own_relic(relic)
+    }
+
+    fn own_enchantment(enchantment: <V as sts2_core::ContentVersion>::Enchantment) -> bool {
+        enchantments::own_enchantment(enchantment)
+    }
+
+    fn own_enchantment_modify(
+        enchanted: sts2_core::Enchanted<V>,
+        hook: sts2_core::EnchantHook,
+    ) -> Option<sts2_core::Modify<i32>> {
+        enchantments::own_modify(enchanted, hook)
     }
 
     fn own_shared_relic_event_hook(

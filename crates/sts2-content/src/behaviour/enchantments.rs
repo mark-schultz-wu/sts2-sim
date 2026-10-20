@@ -255,6 +255,13 @@ pub(crate) fn modify<V: crate::Build>(
     state: &State,
     hook: EnchantHook,
 ) -> Modify<i32> {
+    // An enchantment whose rule is the build's own, for a hook it answers
+    // itself.
+    if V::own_enchantment(enchanted.enchantment)
+        && let Some(modify) = V::own_enchantment_modify(enchanted, hook)
+    {
+        return modify;
+    }
     let amount = i32::from(enchanted.amount);
     let status = state.status;
     match (enchanted.enchantment, hook) {

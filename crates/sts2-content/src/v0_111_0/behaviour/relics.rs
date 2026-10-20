@@ -67,24 +67,79 @@ pub(crate) fn own_relic_event_hook(
 
 /// Whether a shared relic's rule is this build's own for some hook.
 pub(crate) fn own_relic(relic: Relic) -> bool {
-    matches!(relic, Relic::ToyBox)
+    matches!(
+        relic,
+        Relic::ToyBox | Relic::DistinguishedCape | Relic::SereTalon | Relic::BeautifulBracelet
+    )
 }
 
 /// A shared relic's `EventHook`, for a hook this build answers itself.
 ///
-/// `ToyBox.AfterCombatEnd` returns at once here once `IsUsedUp`, where
-/// v0.107.1's counts on. Every other hook it answers as the shared port does.
+/// - `ToyBox.AfterCombatEnd` returns at once here once `IsUsedUp`, where
+///   v0.107.1's counts on. Every other hook it answers as the shared port
+///   does.
+/// - `BeautifulBracelet.AfterObtained` takes its cards at random off
+///   `RunState.Rng.Niche`, of the deck cards Swift can enchant, where
+///   v0.107.1's asked for them. Each is enchanted with two Swift.
+/// - `DistinguishedCape` and `SereTalon` traded what they cost. The Cape's
+///   `AfterObtained` adds two curses, each `NextItem` off `RunState.Rng.Niche`
+///   over those not drawn already, then its Apparitions. The Talon's takes
+///   nine maximum health, then its Wishes.
 pub(crate) fn own_shared_relic_event_hook(
     state: &mut State<V>,
     hook: EventHook<V>,
-    _asked: &mut sts2_core::HookEffects<V>,
+    asked: &mut sts2_core::HookEffects<V>,
 ) -> Option<()> {
+    use crate::build::Lists as _;
+    use crate::ids::CardIds as _;
+    use crate::vars::RelicVars as _;
+
     match (state, hook) {
         (State::ToyBox(state), EventHook::CombatEnd { .. })
             if crate::behaviour::relics::toy_box::used_up::<V>(state) =>
         {
             Some(())
         }
+        (State::BeautifulBracelet, EventHook::Obtained { .. }) => {
+            use crate::ids::EnchantmentIds as _;
+
+            asked.push(HookEffect::EnchantRandomDeckCards {
+                enchantment: <V as sts2_core::ContentVersion>::Enchantment::SWIFT,
+                amount: u8::try_from(Relic::BEAUTIFUL_BRACELET_SWIFT)
+                    .expect("Swift's amount fits a byte"),
+                count: Relic::BEAUTIFUL_BRACELET_CARDS as usize,
+                stream: sts2_core::Stream::Run(crate::generated::runstate::RunRngType::Niche),
+            });
+            Some(())
+        }
+        (State::DistinguishedCape, EventHook::Obtained { .. }) => {
+            asked.push(HookEffect::AddDistinctToDeck {
+                cards: V::RELICS_MODIFIER_CURSES,
+                count: DISTINGUISHED_CAPE_CURSES,
+                stream: crate::generated::runstate::RunRngType::Niche,
+            });
+            for _ in 0..(Relic::DISTINGUISHED_CAPE_CARDS as usize) {
+                asked.push(HookEffect::AddToDeck(
+                    <V as sts2_core::ContentVersion>::Card::APPARITION,
+                ));
+            }
+            Some(())
+        }
+        (State::SereTalon, EventHook::Obtained { .. }) => {
+            asked.push(HookEffect::LoseMaxHp(SERE_TALON_HP_LOSS));
+            for _ in 0..(Relic::SERE_TALON_WISHES as usize) {
+                asked.push(HookEffect::AddToDeck(
+                    <V as sts2_core::ContentVersion>::Card::WISH,
+                ));
+            }
+            Some(())
+        }
         _ => None,
     }
 }
+
+/// `DistinguishedCape`'s `DynamicVar("Curses", 2m)`.
+const DISTINGUISHED_CAPE_CURSES: usize = 2;
+
+/// `SereTalon`'s `HpLossVar(9m)`.
+const SERE_TALON_HP_LOSS: i32 = 9;

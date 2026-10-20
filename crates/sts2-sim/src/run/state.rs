@@ -2684,6 +2684,29 @@ impl<V: Rules> State<V> {
                     }
                     continue;
                 }
+                HookEffect::EnchantRandomDeckCards {
+                    enchantment,
+                    amount,
+                    count,
+                    stream,
+                } => {
+                    use sts2_core::rng::GameRng as _;
+
+                    let mut taken: Vec<usize> = (self.player.deck.iter().enumerate())
+                        .filter(|(_, held)| V::can_enchant(enchantment, &held.ident))
+                        .map(|(at, _)| at)
+                        .collect();
+                    stream_of(&mut self.phase, &mut self.streams, stream)
+                        .unstable_shuffle(&mut taken);
+                    taken.truncate(count);
+                    let act = sts2_core::DeckAct::Enchant {
+                        enchantment,
+                        amount,
+                        kind: None,
+                    };
+                    self.act_on_deck(act, &taken);
+                    continue;
+                }
                 HookEffect::EnchantDeck {
                     enchantment,
                     amount,

@@ -689,6 +689,9 @@ pub(crate) fn event_hook<V: crate::Build>(
     // itself.
     let owned = match state {
         State::ToyBox(_) => V::own_relic(V::Relic::TOY_BOX),
+        State::DistinguishedCape => V::own_relic(V::Relic::DISTINGUISHED_CAPE),
+        State::BeautifulBracelet => V::own_relic(V::Relic::BEAUTIFUL_BRACELET),
+        State::SereTalon => V::own_relic(V::Relic::SERE_TALON),
         _ => false,
     };
     if owned && V::own_shared_relic_event_hook(state, hook, asked).is_some() {
