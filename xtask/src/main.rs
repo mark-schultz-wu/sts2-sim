@@ -19,6 +19,7 @@ mod dump;
 mod error;
 mod followed;
 mod generic;
+mod hunt;
 mod instructions;
 mod neow;
 mod plays;
@@ -59,6 +60,9 @@ enum Command {
     Census(census::Args),
     /// Have the game play the census's runs, and keep them.
     Record(record::Args),
+    /// Play runs on the game and the simulator side by side, and keep the
+    /// ones where the two part.
+    Hunt(hunt::Args),
     /// Count how much of each act's content has code.
     Coverage(coverage::Args),
     /// Find the seeds whose Neow offers a relic.
@@ -100,6 +104,8 @@ enum Error {
     Census(#[from] error::ProcessError),
     #[error("record failed: {0}")]
     Record(record::Error),
+    #[error("hunt failed: {0}")]
+    Hunt(#[from] hunt::Error),
     #[error("coverage failed: {0}")]
     Coverage(#[from] coverage::Error),
     #[error("neow failed: {0}")]
@@ -124,6 +130,7 @@ fn run(command: Command) -> Result<String, Error> {
         Command::Allocations(args) => allocations::run(args)?,
         Command::Census(args) => census::run(args)?,
         Command::Record(args) => record::run(args).map_err(Error::Record)?,
+        Command::Hunt(args) => hunt::run(args)?,
         Command::Coverage(args) => coverage::run(args)?,
         Command::Neow(args) => neow::run(args)?,
         Command::Trace(args) => trace::run(args)?,

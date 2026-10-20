@@ -34,6 +34,9 @@ pub enum Ending {
     Lost,
     /// Stopped after as many steps as a run is allowed.
     Capped,
+    /// Stopped where the simulator, played beside the game, first parted
+    /// from it. The last position is the game's there.
+    Parted,
 }
 
 /// One run the game played.
@@ -270,6 +273,7 @@ impl Recorded {
                 Ending::Won => 0,
                 Ending::Lost => 1,
                 Ending::Capped => 2,
+                Ending::Parted => 3,
             });
             assert_eq!(
                 run.digests.len(),
@@ -323,6 +327,7 @@ impl Recorded {
                 0 => Ending::Won,
                 1 => Ending::Lost,
                 2 => Ending::Capped,
+                3 => Ending::Parted,
                 other => return Err(format!("{other} is no way for a run to end")),
             };
             let steps = read.u32()? as usize;

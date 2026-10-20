@@ -1,8 +1,8 @@
-//! One run the game plays at random, for `cargo xtask record`.
+//! One run the game plays at random, for `cargo xtask record` and `hunt`.
 //!
 //! ```text
 //! record_run <seed> <character> <out> [--data-home <dir>] [--ascension <id>]
-//!     [--modifiers <id>,...]
+//!     [--modifiers <id>,...] [--hunt]
 //! ```
 //!
 //! The game plays the run, carrying what the census's runs carry. It picks
@@ -17,15 +17,18 @@
 //! or stopped answering, which is worth playing again. It exits 1 for anything
 //! else, which is not. A command
 //! the game logged an error on stops the run as well, because what it left
-//! the run holding cannot be trusted.
+//! the run holding cannot be trusted. `--hunt` is [`Outcome`]'s.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
+use std::sync::Mutex;
 
 use clap::Parser;
 use sts2_content_wire::WireContentVersion;
-use sts2_core::{Construct as _, Gift, Observed as _, Play as _, Seed, Setup, Start};
-use sts2_golden::recorded::{Ending, Recorded, Run, position};
+use sts2_core::{
+    Construct as _, Digested as _, Gift, Observed as _, Play as _, Seed, Setup, Start,
+};
+use sts2_golden::recorded::{Ending, Recorded, Run, named, position};
 use sts2_golden::scenario::Stamp;
 use sts2_headless::{Config, Oracle, game_dir_from_env};
 
@@ -57,6 +60,35 @@ struct Cli {
     /// `CHARACTER_CARDS:DEFECT`.
     #[arg(long, value_delimiter = ',')]
     modifiers: Vec<String>,
+    /// Play the simulator beside the game, and keep the run only where the
+    /// two part.
+    #[arg(long)]
+    hunt: bool,
+}
+
+/// The run so far and where it goes, which the panic hook writes when the
+/// simulator panics.
+static PLAYED: Mutex<Option<(PathBuf, Recorded)>> = Mutex::new(None);
+
+/// What [`PLAYED`]'s run does, under its lock.
+fn played<R>(with: impl FnOnce(&mut Run) -> R) -> R {
+    let mut played = PLAYED.lock().expect("no panic holds the run");
+    let (_, recorded) = played.as_mut().expect("a run is being played");
+    with(&mut recorded.runs[0])
+}
+
+/// How the run went. `--hunt` compares the simulator with the game before
+/// each move, and prints a line that starts with the outcome's name.
+enum Outcome {
+    /// Written whole.
+    Kept,
+    /// Not written: the simulator agreed with the game to the end. It exits
+    /// 0.
+    Agreed,
+    /// Written up to the game's position where the simulator first parted
+    /// from it. It exits 2. A simulator that panics has the run written as
+    /// far as the game got, and prints `panicked`, and it exits 101.
+    Parted,
 }
 
 fn seed(text: &str) -> Result<Seed, sts2_core::seed::Error> {
@@ -110,9 +142,10 @@ fn main() -> ExitCode {
 }
 
 /// The exit status for how the run went, with the error on stderr.
-fn exit<V: WireContentVersion>(recorded: Result<(), Error<V>>) -> ExitCode {
+fn exit<V: WireContentVersion>(recorded: Result<Outcome, Error<V>>) -> ExitCode {
     match recorded {
-        Ok(()) => ExitCode::SUCCESS,
+        Ok(Outcome::Kept | Outcome::Agreed) => ExitCode::SUCCESS,
+        Ok(Outcome::Parted) => ExitCode::from(2),
         Err(e) => {
             eprintln!("error: {e}");
             // Only a game that went away is played again. One that answered
@@ -127,7 +160,7 @@ fn exit<V: WireContentVersion>(recorded: Result<(), Error<V>>) -> ExitCode {
     }
 }
 
-fn record<V: WireContentVersion + sts2_content::Build>(cli: Cli) -> Result<(), Error<V>> {
+fn record<V: WireContentVersion + sts2_content::Build>(cli: Cli) -> Result<Outcome, Error<V>> {
     let Cli {
         seed,
         character,
@@ -135,6 +168,7 @@ fn record<V: WireContentVersion + sts2_content::Build>(cli: Cli) -> Result<(), E
         data_home,
         ascension,
         modifiers,
+        hunt,
     } = cli;
     let start = Start::<V> {
         wins: sts2_golden::random::wins(seed.as_str()),
@@ -165,14 +199,50 @@ fn record<V: WireContentVersion + sts2_content::Build>(cli: Cli) -> Result<(), E
         }
     }
 
-    let mut digests = Vec::new();
-    let mut moves = Vec::new();
     // Each move's reply carries where it left the run, so only the start is
     // asked for.
     let mut seen = game.observe()?;
+    let greeting = game.greeting();
+    *PLAYED.lock().expect("no panic holds the run") = Some((
+        out.clone(),
+        Recorded {
+            stamp: Stamp {
+                assembly: greeting.assembly_hash,
+                content: i64::from(greeting.content_hash),
+            },
+            runs: vec![Run {
+                character: id(&start.character),
+                seed: start.seed.as_str().to_owned(),
+                ascension: id(&start.ascension),
+                modifiers: start
+                    .modifiers
+                    .iter()
+                    .map(sts2_golden::recorded::spell_modifier)
+                    .collect(),
+                wins: start.wins,
+                ending: Ending::Parted,
+                digests: vec![position(&seen)],
+                moves: Vec::new(),
+            }],
+        },
+    ));
+    let mut sim = hunt.then(|| simulator::<V>(&start));
+
+    let mut after = String::from("the start");
     let ending = loop {
-        let step = moves.len();
-        digests.push(position(&seen));
+        let step = played(|run| run.moves.len());
+        if let Some(sim) = sim.as_mut() {
+            let simulated = sim
+                .observe()
+                .unwrap_or_else(|e| panic!("observing step {step}: {e}"));
+            if position(&simulated) != position(&seen) {
+                println!(
+                    "parted {step} after {after} in {}",
+                    parted(&simulated, &seen)
+                );
+                break Ending::Parted;
+            }
+        }
         if seen.observation.run_over() {
             break match seen.observation.victory() {
                 Some(true) => Ending::Won,
@@ -188,7 +258,7 @@ fn record<V: WireContentVersion + sts2_content::Build>(cli: Cli) -> Result<(), E
         }
         let at = pick.choose(legal);
         let decision = legal[at];
-        moves.push(u16::try_from(at).expect("a list of moves fits a u16"));
+        after = named(&seen, &decision);
         seen = game
             .play(&decision)?
             .map_err(|refusal| Error::Refused {
@@ -202,32 +272,95 @@ fn record<V: WireContentVersion + sts2_content::Build>(cli: Cli) -> Result<(), E
                 errors: game.logged().to_vec(),
             });
         }
+        // The move and where the game went with it, together, so a panic
+        // below leaves a run that reaches the move it panicked on.
+        played(|run| {
+            run.moves
+                .push(u16::try_from(at).expect("a list of moves fits a u16"));
+            run.digests.push(position(&seen));
+        });
+        if let Some(sim) = sim.as_mut() {
+            sim.play(&decision)
+                .unwrap_or_else(|e| panic!("playing {decision:?} at step {step}: {e}"))
+                .unwrap_or_else(|refusal| panic!("{decision:?} refused at step {step}: {refusal}"));
+        }
     };
 
-    let greeting = game.greeting();
-    let recorded = Recorded {
-        stamp: Stamp {
-            assembly: greeting.assembly_hash,
-            content: i64::from(greeting.content_hash),
-        },
-        runs: vec![Run {
-            character: id(&start.character),
-            seed: start.seed.as_str().to_owned(),
-            ascension: id(&start.ascension),
-            modifiers: start
-                .modifiers
-                .iter()
-                .map(sts2_golden::recorded::spell_modifier)
-                .collect(),
-            wins: start.wins,
-            ending,
-            digests,
-            moves,
-        }],
-    };
+    let (out, mut recorded) = PLAYED
+        .lock()
+        .expect("no panic holds the run")
+        .take()
+        .expect("a run was played");
+    let moves = recorded.runs[0].moves.len();
+    recorded.runs[0].ending = ending;
+    if hunt && ending != Ending::Parted {
+        println!("agreed {ending:?} after {moves} moves");
+        return Ok(Outcome::Agreed);
+    }
     std::fs::write(&out, recorded.encode())?;
-    println!("{ending:?} after {} moves", recorded.runs[0].moves.len());
-    Ok(())
+    Ok(match ending {
+        Ending::Parted => Outcome::Parted,
+        _ => {
+            println!("{ending:?} after {moves} moves");
+            Outcome::Kept
+        }
+    })
+}
+
+/// The simulator on `start`, carrying what the game's run carries. A panic
+/// from here on writes the run as far as the game got.
+fn simulator<V: sts2_content::Build>(start: &Start<V>) -> sts2_sim::Sim<V> {
+    let report = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        if let Ok(mut played) = PLAYED.try_lock()
+            && let Some((out, recorded)) = played.as_mut()
+        {
+            let wrote = std::fs::write(out, recorded.encode());
+            let message = info
+                .payload()
+                .downcast_ref::<&str>()
+                .map(|text| text.to_string())
+                .or_else(|| info.payload().downcast_ref::<String>().cloned())
+                .unwrap_or_default();
+            let step = recorded.runs[0].moves.len();
+            println!("panicked {step} {}", message.lines().next().unwrap_or(""));
+            if let Err(e) = wrote {
+                eprintln!("writing the run: {e}");
+            }
+        }
+        report(info);
+    }));
+    let mut sim = sts2_sim::Sim::<V>::begin((), start).expect("the simulator starts the run");
+    for (relic, count) in carried::<V>() {
+        for _ in 0..count {
+            sim.setup(&Setup::Grant(Gift::Relic(relic)))
+                .expect("the simulator grants")
+                .expect("and does not refuse");
+        }
+    }
+    sim
+}
+
+/// The sections of the observation where the simulator and the game differ,
+/// and the question, if they ask different ones.
+fn parted<V: sts2_core::ContentVersion>(
+    simulated: &sts2_core::Snapshot<V>,
+    seen: &sts2_core::Snapshot<V>,
+) -> String {
+    let mut parts: Vec<String> = simulated
+        .observation
+        .sections()
+        .iter()
+        .zip(seen.observation.sections().iter())
+        .filter(|(a, b)| a != b)
+        .map(|(a, _)| format!("{:?}", a.0))
+        .collect();
+    if sts2_core::Digest::of_question(simulated.asking.as_ref())
+        != sts2_core::Digest::of_question(seen.asking.as_ref())
+    {
+        parts.push("the question".into());
+    }
+    parts.join(", ")
 }
 
 /// An id as the game spells it, which is how serde writes it.

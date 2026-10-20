@@ -29,13 +29,27 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ## Open
 
-### 1. Every other split the recorded runs find
+### 1. The splits a hunt finds
 
-`cargo xtask coverage` lists the commonest first splits, by the move
-that led to each. Each one with more than a handful of runs becomes its
-own item, above this one. `cargo xtask split <index> <name>` writes a
-run, up to its first split, as a scenario, which names what parts. The
-live `unimplemented!()` branches surface this way.
+`cargo xtask hunt` plays fresh seeds on the game and the simulator side
+by side, and keeps only the runs where they part. `--mixed` spreads the
+seeds over every ascension level and modifier. `cargo xtask split --file
+target/hunt/parted-<build>.bin <index> <name>` writes a kept run, up to
+its split, as a scenario. A fix lands with its run in the recorded file,
+and a split that many runs share becomes its own item, above this one.
+
+The first hunts found these:
+
+- Lead Paperweight obtained outside Neow's blessing panics. The fix, and
+  its 15 runs, are on the parked branch `agent/fresh-runs`.
+- The Waterfall Giant's Pressure Gun raises its damage after the hit
+  that kills the player. The intent shows the raised damage in the
+  game, and the simulator does not read it again. Two runs on
+  `agent/fresh-runs`.
+- A turn's end against The Obscura, at the run's last step. One run on
+  `agent/fresh-runs`, not yet diffed.
+- v0.111.0 at Double Boss parts in Creatures after the travel to the
+  second boss: IRONCLAD C000000626, step 799.
 
 ### 2. A speed target
 
