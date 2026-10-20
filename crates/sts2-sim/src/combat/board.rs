@@ -2426,6 +2426,14 @@ impl<'a, V: Rules> Board<'a, V> {
         self.after_hit(asked);
     }
 
+    /// The next answer of `walking`, asked of the fight this board writes on.
+    pub(super) fn next_of(
+        &mut self,
+        walking: &mut super::listen::Walking<V>,
+    ) -> Option<(Listener<V>, HookEffect<V>)> {
+        walking.next(self.live, self.relics)
+    }
+
     /// What the relic in `slot` asked for, carried out for the player. Its
     /// `CardPileCmd.Draw` runs the code after its `await` once the draw is
     /// over, behind a question the draw left.

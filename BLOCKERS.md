@@ -32,9 +32,11 @@ Speed is a goal as well as a guard. The target is still to be set.
 ### 1. Every hook on the walk
 
 Every event hook walks with the snapshot cursor, `listen::Snapshot`, and
-the eager `notify` goes, in batches of call sites. `AfterCardPlayed` and
-the late pass of `AfterCardDrawn` walk already. About 70 call sites are
-left.
+the eager `notify` goes, in batches of call sites. `AfterCardPlayed`, the
+late pass of `AfterCardDrawn` and the plain sites of `turn.rs` walk
+already, at 5.4% a step together. About 55 call sites are left: the rest
+of `turn.rs`, which park their answers, then `board.rs`, `start.rs`,
+`play.rs` and `potion.rs`.
 
 The walk also still asks a power an earlier listener took off, as a model
 on its own. Nemesis takes Intangible off as the enemies' turn ends, and
