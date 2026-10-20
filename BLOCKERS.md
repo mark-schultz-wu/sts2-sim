@@ -29,21 +29,24 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ## Open
 
-### 1. Every other split the recorded runs find
+### 1. A card's code after a listener's question
+
+A listener can ask a question inside a card's own command. A draw inside
+a hit or a loss shuffles, and Stratagem asks for its pick. The game
+awaits the command, so the rest of the card waits for the answer. The
+sim runs on and stops at `an effect of … running on past a question`.
+The Draft census shows it on C000000023 IRONCLAD, at Bloodletting's
+energy after its loss and at Rampage's buff after its hit. A card waits
+the way Battle Trance does, with a resume point after the command. Find
+every card with code after a hit or a loss, and give each one a scenario.
+
+### 2. Every other split the recorded runs find
 
 `cargo xtask coverage` lists the commonest first splits, by the move
 that led to each. Each one with more than a handful of runs becomes its
 own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
-
-### 2. Draft and Sealed Deck at Neow
-
-Both empty the starting deck, and Neow's option for each builds it again
-through repeated picks. Draft asks ten card rewards in a row, each with
-no skip, through the reward questions. Sealed Deck asks the `SelectCards`
-grid for exactly ten, a card at a time and then done. Neow's options
-already queue in `Phase::Neow`. Record 100 runs with each.
 
 ### 3. v0.111.0
 

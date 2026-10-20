@@ -1,0 +1,17 @@
+# Sealed Deck clears the starting deck, and its Neow option makes thirty
+# cards of the character's pool as a reward does, then asks for exactly ten
+# of them, a card at a time and then done. Pandora's Box then leaves both
+# relic bags.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None","modifiers":["SEALED_DECK"]}
+{"cmd":"choose_option","index":0}
+{"cmd":"answer","pick":21}
+{"cmd":"answer","pick":4}
+{"cmd":"answer","pick":26}
+{"cmd":"answer","pick":9}
+{"cmd":"answer","pick":2}
+{"cmd":"answer","pick":29}
+{"cmd":"answer","pick":12}
+{"cmd":"answer","pick":0}
+{"cmd":"answer","pick":1}
+{"cmd":"answer","pick":11}
+{"cmd":"answer","done":true}

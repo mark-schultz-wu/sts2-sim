@@ -1,0 +1,16 @@
+# Draft clears the starting deck, and its Neow option asks ten card rewards
+# of the character's pool in a row, three cards each, none of which can be
+# skipped. The ascension's curse stays. Pandora's Box then leaves both
+# relic bags.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"AscendersBane","modifiers":["DRAFT"]}
+{"cmd":"choose_option","index":0}
+{"cmd":"answer","take":[{"index":0,"card":1}]}
+{"cmd":"answer","take":[{"index":0,"card":0}]}
+{"cmd":"answer","take":[{"index":0,"card":2}]}
+{"cmd":"answer","take":[{"index":0,"card":0}]}
+{"cmd":"answer","take":[{"index":0,"card":2}]}
+{"cmd":"answer","take":[{"index":0,"card":0}]}
+{"cmd":"answer","take":[{"index":0,"card":2}]}
+{"cmd":"answer","take":[{"index":0,"card":0}]}
+{"cmd":"answer","take":[{"index":0,"card":0}]}
+{"cmd":"answer","take":[{"index":0,"card":2}]}

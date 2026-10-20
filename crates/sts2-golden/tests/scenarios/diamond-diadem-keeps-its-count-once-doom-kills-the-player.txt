@@ -1,0 +1,18 @@
+# A player's death ends its hooks with `DeactivateHooks`, and the walk
+# `BeforeSideTurnEnd` is part way through then asks none of them after.
+# Doom kills the Necrobinder as the turn ends, so Diamond Diadem never
+# starts its count again, and keeps the three cards this turn played.
+#
+# A walk that still asks a dead player's relics puts the count back to
+# nothing.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"grant","relic":"DIAMOND_DIADEM"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"SHRUG_IT_OFF"}
+{"cmd":"grant","card":"SHRUG_IT_OFF"}
+{"cmd":"grant","card":"SHRUG_IT_OFF"}
+{"cmd":"play_card","index":5}
+{"cmd":"play_card","index":5}
+{"cmd":"play_card","index":5}
+{"cmd":"power","power":"DOOM_POWER","amount":200,"target":0}
+{"cmd":"end_turn"}

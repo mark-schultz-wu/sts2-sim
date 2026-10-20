@@ -914,3 +914,67 @@ internal static class RemovalRefusedWithoutAScreen
         }
     }
 }
+
+/// <summary>
+/// Asks for a card reward that <c>Reward.SelectUnsynchronized</c> selects
+/// outside any set, before its selection runs.
+/// </summary>
+/// <remarks>
+/// Only <c>Draft</c> does. A set's own rewards go through
+/// <c>RewardsSetSynchronizer</c>, which <see cref="RewardChoice"/> answers
+/// first. The selection itself is the game's, run once the card is known.
+/// </remarks>
+[HarmonyPatch(typeof(Reward), nameof(Reward.SelectUnsynchronized))]
+internal static class LoneCardRewardAsks
+{
+    private static bool _answered;
+
+    private static bool Prefix(Reward __instance, ref Task<bool> __result)
+    {
+        if (_answered || __instance is not CardReward card || __instance.ParentRewardSet != null
+            || RewardPlan.CardInFlight != null || RewardPlan.AlternativeInFlight != null)
+        {
+            return true;
+        }
+
+        __result = Asked(card);
+        return false;
+    }
+
+    private static async Task<bool> Asked(CardReward card)
+    {
+        int? index = await LoneCardReward.Ask(card);
+        try
+        {
+            if (index == null)
+            {
+                return false;
+            }
+
+            RewardPlan.CardInFlight = index;
+            Task<bool> selected;
+            _answered = true;
+            try
+            {
+                selected = card.SelectUnsynchronized();
+            }
+            finally
+            {
+                _answered = false;
+            }
+
+            try
+            {
+                return await selected;
+            }
+            finally
+            {
+                RewardPlan.CardInFlight = null;
+            }
+        }
+        finally
+        {
+            BackgroundWork.Release();
+        }
+    }
+}

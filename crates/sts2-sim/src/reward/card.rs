@@ -325,19 +325,18 @@ const OFFSET_MAX: f32 = 0.4;
 /// Draw distinct cards the way a won fight does.
 ///
 /// `CardRarityOdds.Roll`, which moves the run's own offset: a rare puts it
-/// back where it started, and anything else nudges the next roll towards one.
-/// That is the difference from [`regular`], which reads the base odds and
-/// leaves the run alone.
+/// back, and anything else nudges the next roll towards one. [`regular`]
+/// reads the base odds instead.
 ///
-/// Each card still costs three draws: the rarity, the card at it, and the
-/// upgrade roll.
+/// Each card draws its rarity, the card, then the upgrade roll in the act
+/// `upgrade_in` names. Nothing skips that, as `NoUpgradeRoll` does.
 pub(crate) fn encounter<V: Rules, R: GameRng>(
     rng: &mut R,
     odds: &mut Odds,
     ascension: V::AscensionLevel,
     cards: Drafted<'_, V::Card>,
     count: usize,
-    act: usize,
+    upgrade_in: Option<usize>,
     bands: RarityOdds,
 ) -> Vec<CardIdent<V>> {
     let scarce = scarce::<V>(ascension);
@@ -358,7 +357,10 @@ pub(crate) fn encounter<V: Rules, R: GameRng>(
             .copied()
             .expect("the draw is inside the count");
         drawn.push(card);
-        offered.push(roll_for_upgrade::<V, R>(ascension, rng, card, act));
+        offered.push(match upgrade_in {
+            Some(act) => roll_for_upgrade::<V, R>(ascension, rng, card, act),
+            None => CardIdent::new(card),
+        });
     }
     offered
 }

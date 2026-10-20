@@ -60,6 +60,7 @@ impl EventBehavior<V> for BrainLeech {
                     count: CARDS,
                     min: 1,
                     max: 1,
+                    card_reward: false,
                 },
                 HookEffect::FinishEvent,
             ],

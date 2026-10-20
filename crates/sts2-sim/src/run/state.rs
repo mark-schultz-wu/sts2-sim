@@ -2720,6 +2720,19 @@ impl<V: Rules> State<V> {
                     continue;
                 }
                 // `RewardsSet.Offer` makes nothing for a dead player.
+                HookEffect::AddUniformToDeck {
+                    colorless,
+                    draws,
+                    copies,
+                } => {
+                    self.add_uniform_to_deck(colorless, draws, copies);
+                    continue;
+                }
+                // `RelicGrabBag.Remove`, which counts the relic as dealt.
+                HookEffect::RemoveFromRelicBags(relic) => {
+                    Arc::make_mut(&mut self.dealt_relics).push(relic);
+                    continue;
+                }
                 HookEffect::OfferRewards(_) if self.player.hp == num_traits::zero() => continue,
                 HookEffect::OfferRewards(rewards) => Pickup::Rewards {
                     offered: self.custom_rewards(
@@ -2727,6 +2740,13 @@ impl<V: Rules> State<V> {
                         sts2_core::Stream::Player(V::PlayerRngType::REWARDS),
                     ),
                     skippable: true,
+                },
+                HookEffect::SelectReward(reward) => Pickup::Rewards {
+                    offered: self.filled_rewards(
+                        std::slice::from_ref(&reward),
+                        sts2_core::Stream::Player(V::PlayerRngType::REWARDS),
+                    ),
+                    skippable: false,
                 },
                 // `RewardsSet.WithSkippingDisallowed`, over a `RelicReward` for
                 // each relic, which reports `RelicRarity.None`.
@@ -2881,6 +2901,7 @@ impl<V: Rules> State<V> {
                     count,
                     min,
                     max,
+                    card_reward,
                 } => {
                     let drawn = match draw {
                         sts2_core::CardDraw::Uniform(rarity) => self
@@ -2899,9 +2920,23 @@ impl<V: Rules> State<V> {
                                 None,
                             )
                         }
+                        sts2_core::CardDraw::Encounter => {
+                            self.card_reward_unheard();
+                            let character = self.character();
+                            let ascension = self.ascension();
+                            crate::reward::card::encounter::<V, _>(
+                                self.streams.player(V::PlayerRngType::REWARDS),
+                                &mut self.odds,
+                                ascension,
+                                V::reward_cards(character),
+                                count,
+                                None,
+                                crate::reward::card::RarityOdds::Regular,
+                            )
+                        }
                     };
                     let mut offered: Vec<_> = drawn;
-                    self.reward_options(&mut offered, false);
+                    self.reward_options(&mut offered, card_reward);
                     Pickup::Cards { offered, min, max }
                 }
                 effect => unimplemented!("a run-level relic effect: {effect:?}"),
@@ -3273,6 +3308,19 @@ impl<V: Rules> State<V> {
         rewards: &[sts2_core::CustomReward<V>],
         stream: sts2_core::Stream<V>,
     ) -> Vec<Offer<V>> {
+        let mut offered = self.filled_rewards(rewards, stream);
+        self.modify_rewards(&mut offered, None);
+        crate::reward::sort(&mut offered);
+        offered
+    }
+
+    /// Each of `rewards` made and filled in, in order, off `stream`, with no
+    /// set's hooks or sort over them.
+    fn filled_rewards(
+        &mut self,
+        rewards: &[sts2_core::CustomReward<V>],
+        stream: sts2_core::Stream<V>,
+    ) -> Vec<Offer<V>> {
         use sts2_core::CustomReward;
         use sts2_core::rng::GameRng as _;
 
@@ -3400,8 +3448,6 @@ impl<V: Rules> State<V> {
             });
         }
         self.reward_offers(&mut offered);
-        self.modify_rewards(&mut offered, None);
-        crate::reward::sort(&mut offered);
         offered
     }
 
@@ -5837,49 +5883,43 @@ impl<V: Rules> State<V> {
             sts2_core::EventHook::NeowOptionChosen,
             &mut asked,
         );
-        for effect in asked {
-            match effect {
-                sts2_core::HookEffect::AddUniformToDeck {
-                    colorless,
-                    draws,
-                    copies,
-                } => {
-                    let pool = match colorless {
-                        true => V::unlocked_colorless_cards(),
-                        false => V::unlocked_cards(self.character()),
-                    };
-                    // `Uniform` leaves out the basic and ancient cards, which
-                    // are every rarity a pool holds past the three.
-                    let cards: Vec<V::Card> = pool
-                        .iter()
-                        .copied()
-                        .filter(|&card| V::reward_rarity(card) != sts2_core::RewardRarity::Other)
-                        .collect();
-                    for _ in 0..draws {
-                        // `TryModifyCardRewardOptions` over the one card.
-                        self.card_reward_unheard();
-                        let [card] = crate::reward::card::uniform_rolled::<V, _>(
-                            self.ascension(),
-                            self.streams.player(V::PlayerRngType::REWARDS),
-                            &cards,
-                            1,
-                            None,
-                        )[..] else {
-                            unreachable!("one draw is one card");
-                        };
-                        for _ in 0..copies {
-                            self.add_to_deck(card);
-                        }
-                    }
-                }
-                // `RelicGrabBag.Remove`, which counts the relic as dealt.
-                sts2_core::HookEffect::RemoveFromRelicBags(relic) => {
-                    Arc::make_mut(&mut self.dealt_relics).push(relic);
-                }
-                effect => unimplemented!("{entry:?} asking for {effect:?} as its Neow option"),
+        match self.carry_out(asked) {
+            None => Decided::Resolved,
+            Some(asked) => self.park(asked),
+        }
+    }
+
+    /// `CardFactory.CreateForReward` for one card, `draws` times, at
+    /// `Uniform` odds. Each draws over the unlocked colorless pool or the
+    /// character's own, and `copies` of each card go into the deck.
+    fn add_uniform_to_deck(&mut self, colorless: bool, draws: usize, copies: usize) {
+        let pool = match colorless {
+            true => V::unlocked_colorless_cards(),
+            false => V::unlocked_cards(self.character()),
+        };
+        // `Uniform` leaves out the basic and ancient cards, which
+        // are every rarity a pool holds past the three.
+        let cards: Vec<V::Card> = pool
+            .iter()
+            .copied()
+            .filter(|&card| V::reward_rarity(card) != sts2_core::RewardRarity::Other)
+            .collect();
+        for _ in 0..draws {
+            // `TryModifyCardRewardOptions` over the one card.
+            self.card_reward_unheard();
+            let [card] = crate::reward::card::uniform_rolled::<V, _>(
+                self.ascension(),
+                self.streams.player(V::PlayerRngType::REWARDS),
+                &cards,
+                1,
+                None,
+            )[..] else {
+                unreachable!("one draw is one card");
+            };
+            for _ in 0..copies {
+                self.add_to_deck(card);
             }
         }
-        Decided::Resolved
     }
 
     /// Take from a reward screen a room is parked on. The screen stays up
@@ -7409,11 +7449,25 @@ impl<V: Rules> State<V> {
                 options: neow_options,
                 chosen: neow_chosen,
                 modifier_options,
-                ..
+                asking,
             } => {
-                // Neow shows the next modifier's option alone.
-                if let Some(&at) = modifier_options.first() {
-                    let modifier = self.shared.modifiers[usize::from(at)].modifier;
+                // Neow shows the next modifier's option alone. While one
+                // still runs, its option stays up, chosen.
+                let offering: SmallVec<[usize; 4]> = (self.shared.modifiers.iter())
+                    .enumerate()
+                    .filter(|(_, entry)| {
+                        sts2_core::ModifierTable::offers_neow_option(entry.modifier)
+                    })
+                    .map(|(at, _)| at)
+                    .collect();
+                let running = (asking.is_some() && offering.len() > modifier_options.len())
+                    .then(|| offering[offering.len() - modifier_options.len() - 1]);
+                let shown = match running {
+                    Some(at) => Some((at, true)),
+                    None => modifier_options.first().map(|&at| (usize::from(at), false)),
+                };
+                if let Some((at, chosen)) = shown {
+                    let modifier = self.shared.modifiers[at].modifier;
                     return Some(Room::Event {
                         event: V::neow_event(),
                         finished,
@@ -7429,7 +7483,7 @@ impl<V: Rules> State<V> {
                             text: None,
                             locked: false,
                             proceed: false,
-                            chosen: false,
+                            chosen,
                             relic: None,
                         }],
                     });
