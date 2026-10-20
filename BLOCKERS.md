@@ -29,32 +29,13 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ## Open
 
-### 1. Cursors behind the walk, measured
+### 1. Every hook on the walk
 
-`listen::Cursor` says which listener a walk reaches next. `Walker` checks
-it is still in the fight, asks it, and handles a power's decrement, the
-same for every cursor. `listen::Active` names the cursor in use.
-`Snapshot`, the list taken as the walk begins, is the reference. Measure
-the others behind it, on `AfterCardPlayed` and `AfterCardDrawn` walked:
+Every event hook walks with the snapshot cursor, `listen::Snapshot`, and
+the eager `notify` goes, in batches of call sites. `AfterCardPlayed` walks
+already, at 1.4% a step. About 70 call sites are left.
 
-- Two lists, one the walk reads and one that takes the writes.
-- Copy on write. Adding or removing a listener moves a counter, and a
-  walk copies only when the counter moves under it.
-- The bounded cursor, which measured at 3.9% (memory `walk-cursor-costs`).
-
-The cheapest one that follows every recorded run becomes `Active`.
-
-### 2. Every hook on the walk
-
-Every event hook walks with the cursor, and the eager `notify` goes, in
-batches of call sites. There are 71.
-
-`AfterCardPlayed` needs it most, since every play walks it. A draw inside
-the walk can stop on a question, as Iron Club's does on Stratagem's pick.
-The game has not yet asked the listeners after it, and the sim asked them
-all first. So Pinpoint in hand counts a Defend early.
-
-`AfterCardDrawn` needs it too. Pagestorm draws a card when an Ethereal
+`AfterCardDrawn` needs it next. Pagestorm draws a card when an Ethereal
 one is drawn, and that draw runs before Chains of Binding hears the first.
 So the nested card is Bound first and takes the last of the stack. The sim
 asks Chains about both before either is Bound. Recorded run 2571, a
@@ -62,10 +43,10 @@ Flight run, parts there against the Queen.
 
 The walk also still asks a power an earlier listener took off, as a model
 on its own. Nemesis takes Intangible off as the enemies' turn ends, and
-the game then decrements the Intangible it took off. The read side of the
-walk has to keep that model writable. No recorded run parts on it yet.
+the game then decrements the Intangible it took off. The snapshot has to
+keep that model, and keep it writable. No recorded run parts on it yet.
 
-### 3. Every other split the recorded runs find
+### 2. Every other split the recorded runs find
 
 `cargo xtask coverage` lists the commonest first splits, by the move
 that led to each. Each one with more than a handful of runs becomes its
@@ -73,7 +54,7 @@ own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
 
-### 4. Run modifiers that change the run's own rules
+### 3. Run modifiers that change the run's own rules
 
 - Deadly Events: `AfterRunCreated` sets the odds and takes Juzu Bracelet
   out of the relic bags.
@@ -82,32 +63,42 @@ live `unimplemented!()` branches surface this way.
 
 Record 100 runs with each.
 
-### 5. Run modifiers in a fight
+### 4. Run modifiers in a fight
 
 Murderous and Terminal. `CombatState` lists the modifiers last among its
 listeners, after the cards, so they join the fight's walk there. They
 answer `AfterRoomEntered` and `AfterCreatureAddedToCombat`. This waits
-for item 2. Record 100 runs with each.
+for item 1. Record 100 runs with each.
 
-### 6. Run modifiers that carry data
+### 5. Run modifiers that carry data
 
 Hoarder saves the cards it copied, so it needs state of its own per run.
 Character Cards names a character, which the start command, the run and
-the recorded-run format have to carry. Mark revisits both after item 2.
+the recorded-run format have to carry. Mark revisits both after item 1.
 
-### 7. Run modifiers at Neow
+### 6. Run modifiers at Neow
 
 All Star, Specialized, Draft, Sealed Deck and Insanity. Neow offers each
 modifier's option in turn, and three of them empty the starting deck
 first. Draft and Sealed Deck build that deck through repeated picks. Mark
-revisits the design after item 2. Record 100 runs with each.
+revisits the design after item 1. Record 100 runs with each.
 
-### 8. v0.111.0
+### 7. v0.111.0
 
 Only the generated tables exist. Codegen runs per build as it does now.
 The behaviour is written once, for v0.107.1. A v0.111.0 rule whose game
 code did not change calls that one. The v0.107.1 rule first becomes
 generic over the build. A rule that changed gets one of its own. Then record its runs.
+
+### 8. A walk that shares only who listens
+
+The snapshot copies each walk's listeners. Most walks see none arrive or
+leave: 1.3% of `AfterCardPlayed` walks do, and 28% of `AfterSideTurnEnd`
+ones. Sharing the fight's containers behind `Arc` cost 2.6% a step before
+any walk used them, and listeners write hit points and amounts mid-walk.
+A cheaper walk shares only which listeners there are and their order,
+kept apart from what they hold. That is part of the flat-state pass,
+which needs a design first.
 
 ### 9. A speed target
 

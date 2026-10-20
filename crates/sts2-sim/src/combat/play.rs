@@ -1279,12 +1279,12 @@ fn run_deferred<V: Rules>(
                 ),
                 ended => ended,
             },
-            super::live::Deferred::PlayedLate { card, id, energy } => {
-                if ended.is_none() {
-                    played_late::<V>(fighting.live, fighting.relics, card, id, energy);
-                }
-                ended
-            }
+            super::live::Deferred::Played {
+                walking,
+                card,
+                id,
+                energy,
+            } => walk_played::<V, _>(fighting, ascension, walking, (card, id, energy), ended),
             super::live::Deferred::OwnCommandOver { slot, relic } => {
                 super::relic::own_command_over::<V>(fighting.relics, slot, relic);
                 ended
@@ -1839,200 +1839,230 @@ fn finished<V: Rules, S: LendsCombat>(
     let spent = play.energy;
     let dupe = next.cards.named(id).is_some_and(|held| held.face.dupe());
     next.history.finish(card, id, ethereal, play.auto, dupe);
-    let mut ended = None;
     // The copy stays in the play pile until its play is over.
     let affliction = next
         .cards
         .named(id)
         .and_then(|held| held.face.ident.affliction);
-    let asked = super::listen::notify::<V>(
-        next,
-        relics,
-        sts2_core::EventHook::CardPlayed {
-            card,
-            id,
-            affliction,
-            ethereal,
-            spent,
-            auto: play.auto,
-            last,
+    let hook = sts2_core::EventHook::CardPlayed {
+        card,
+        id,
+        affliction,
+        ethereal,
+        spent,
+        auto: play.auto,
+        last,
+    };
+    let walking = super::listen::Walking::new(super::listen::walk::<V>(next, relics, hook));
+    walk_played::<V, S>(
+        Fighting {
+            live: next,
+            streams,
+            relics,
         },
-    );
-    if !asked.is_empty() {
-        // Each listener acts as the walk reaches it.
-        for (listener, effect) in asked {
-            // `Contains`: one whose creature or card left the fight as an
-            // earlier listener acted does nothing. What it kept leaves with it.
-            if !super::listen::still_in_fight::<V>(next, listener) {
-                continue;
-            }
-            match (listener, effect) {
-                // Written on the card that asked, wherever it stands.
-                (
-                    super::listen::Listener::Card { id },
-                    sts2_core::HookEffect::ModifySelf { change, lasting },
-                ) => next.modify_self(id, change, lasting),
-                // Written on the card wherever it stands. A play can move the
-                // card out of the play pile before it is over, as Shining
-                // Strike does.
-                (
-                    super::listen::Listener::Card { id },
-                    sts2_core::HookEffect::DisableOwnEnchantment,
-                ) => next.cards.write_named(id, |face| {
-                    face.set_enchantment_status(sts2_core::EnchantmentStatus::Disabled)
-                }),
-                (
-                    super::listen::Listener::Card { id },
-                    sts2_core::HookEffect::RaiseOwnEnchantment { by, write },
-                ) => {
-                    next.cards
-                        .write_named(id, |face| face.raise_enchantment(by));
-                    if let Some(card) = next.deck_versions.of(id) {
-                        next.for_run
-                            .push(sts2_core::HookEffect::WriteDeckCard { card, write });
-                    }
-                }
-                // `CreatureCmd.GainBlock`, unpowered, on the power's owner,
-                // then `PowerCmd.Remove(this)`.
-                (
-                    super::listen::Listener::Power { owner, power, .. },
-                    sts2_core::HookEffect::GainBlockAndRemove(amount),
-                ) => {
-                    super::board::gain_unpowered_block::<V>(
-                        next,
-                        streams.combat(),
-                        relics,
-                        next.ascension,
-                        owner,
-                        amount,
-                    );
-                    next.remove_power(owner, power);
-                }
-                // `CreatureCmd.Damage` on the power's owner, unpowered.
-                (
-                    super::listen::Listener::Power { owner, .. },
-                    sts2_core::HookEffect::DamageOwnerInFight {
-                        amount,
-                        unblockable,
-                        self_dealt,
-                    },
-                ) => {
-                    let mut board =
-                        Board::for_card(next, streams.combat(), relics, ascension, None, None);
-                    board.hit_unpowered(self_dealt.then_some(owner), owner, amount, unblockable);
-                    ended = ended.or(board.ended());
-                }
-                // Made by the power's owner, which for a monster's power is
-                // nobody.
-                (
-                    super::listen::Listener::Power { owner, .. },
-                    sts2_core::HookEffect::GenerateInHand { card, count },
-                ) => {
-                    let player = next.player().id;
-                    let count = num_traits::cast(count)
-                        .unwrap_or_else(|| unimplemented!("{count:?} cards generated"));
-                    let mut board =
-                        Board::for_card(next, streams.combat(), relics, ascension, None, None);
-                    board.generate(
-                        sts2_core::CardIdent::new(card),
-                        sts2_core::Pile::Hand,
-                        count,
-                        (owner == player).then_some(player),
-                    );
-                    ended = ended.or(board.ended());
-                }
-                // `PowerCmd.Apply` on the power's owner, from its owner, which
-                // for a monster's power is not the player playing the card.
-                (
-                    super::listen::Listener::Power { owner, .. },
-                    sts2_core::HookEffect::ApplyToOwner(power, amount),
-                ) => {
-                    let mut board =
-                        Board::for_card(next, streams.combat(), relics, ascension, None, None);
-                    board.land(owner, power, amount, Some(owner));
-                    ended = ended.or(board.ended());
-                }
-                // Clones of the card just played, which is still in the
-                // play pile, into hand.
-                (
-                    super::listen::Listener::Power { .. } | super::listen::Listener::Relic { .. },
-                    sts2_core::HookEffect::CloneIntoHand {
-                        card,
-                        count,
-                        writes,
-                    },
-                ) => {
-                    let count: usize = num_traits::cast(count)
-                        .unwrap_or_else(|| unimplemented!("{count:?} clones"));
-                    let mut board =
-                        Board::for_card(next, streams.combat(), relics, ascension, None, None);
-                    for _ in 0..count {
-                        board.clone_written(card, sts2_core::Pile::Hand, writes);
-                    }
-                    ended = ended.or(board.ended());
-                }
-                (
-                    super::listen::Listener::Power { .. },
-                    sts2_core::HookEffect::ApplyPower {
-                        target,
-                        power,
-                        amount,
-                        applier,
-                    },
-                ) => {
-                    let mut board =
-                        Board::for_card(next, streams.combat(), relics, ascension, None, None);
-                    board.land(target, power, amount, applier);
-                    ended = ended.or(board.ended());
-                }
-                // `CardCmd.Upgrade` on a copy wherever it stands, which skips
-                // one at its maximum. A fight that is ending upgrades nothing.
-                (_, sts2_core::HookEffect::UpgradeCopy { card, times }) => {
-                    if ended.is_none() {
-                        next.cards.write_named(card, |face| {
-                            for _ in 0..times {
-                                face.upgrade();
-                            }
-                            true
-                        });
-                    }
-                }
-                // `CardCmd.ApplyKeyword`, on cards wherever they stand.
-                (_, effect @ sts2_core::HookEffect::AddKeyword { .. }) => {
-                    Board::for_card(next, streams.combat(), relics, ascension, None, None)
-                        .write_cards([effect]);
-                }
-                // The play's own choice context, so a shuffle's question
-                // inside a listener's `CardPileCmd.Draw` stands the play still.
-                (_, effect) => {
-                    if next.asking.is_some() {
-                        unimplemented!(
-                            "{effect:?} after a play, behind a question a listener asked"
-                        );
-                    }
-                    let mut board =
-                        Board::for_card(next, streams.combat(), relics, ascension, None, None)
-                            .blocking();
-                    hook::apply::<V, _>(&mut board, [effect]);
-                    ended = ended.or(board.ended());
-                    let skipped = std::mem::take(&mut board.skipped);
-                    merge::<V>(&mut next.skip_tick, skipped);
-                }
-            }
-        }
-    }
-    if ended.is_none() {
+        ascension,
+        walking,
+        (card, id, spent),
+        None,
+    )
+}
+
+/// The `AfterCardPlayed` walk of a play of `card`, from where `walking`
+/// stands, then `AfterCardPlayedLate`. Each listener acts as the walk
+/// reaches it. A question one asks parks the rest of the walk, which goes on
+/// once it is answered.
+pub(super) fn walk_played<V: Rules, S: LendsCombat>(
+    fighting: Fighting<'_, V, S>,
+    ascension: V::AscensionLevel,
+    mut walking: super::listen::Walking<V>,
+    (card, id, spent): (V::Card, sts2_core::CardId<V>, V::Count),
+    mut ended: Option<super::Ended>,
+) -> Option<super::Ended> {
+    let Fighting {
+        live: next,
+        streams,
+        relics,
+    } = fighting;
+    loop {
         if next.asking.is_some() {
-            next.defer(super::live::Deferred::PlayedLate {
+            next.defer(super::live::Deferred::Played {
+                walking,
                 card,
                 id,
                 energy: spent,
             });
-        } else {
-            played_late::<V>(next, relics, card, id, spent);
+            return ended;
         }
+        let Some((listener, effect)) = walking.next(next, relics) else {
+            break;
+        };
+        ended = ended.or(played_effect::<V, S>(
+            next, streams, relics, ascension, listener, effect, ended,
+        ));
+    }
+    if ended.is_none() {
+        played_late::<V>(next, relics, card, id, spent);
     }
     ended
+}
+
+/// What one `AfterCardPlayed` listener asked for, carried out, and how that
+/// ended the fight if it did. `ended` is how the fight stands before it.
+fn played_effect<V: Rules, S: LendsCombat>(
+    next: &mut Live<V>,
+    streams: &mut S,
+    relics: &mut crate::run::Belt<V>,
+    ascension: V::AscensionLevel,
+    listener: super::listen::Listener<V>,
+    effect: sts2_core::HookEffect<V>,
+    ended: Option<super::Ended>,
+) -> Option<super::Ended> {
+    let mut ended_here = None;
+    match (listener, effect) {
+        // Written on the card that asked, wherever it stands.
+        (
+            super::listen::Listener::Card { id },
+            sts2_core::HookEffect::ModifySelf { change, lasting },
+        ) => next.modify_self(id, change, lasting),
+        // Written on the card wherever it stands. A play can move the
+        // card out of the play pile before it is over, as Shining
+        // Strike does.
+        (super::listen::Listener::Card { id }, sts2_core::HookEffect::DisableOwnEnchantment) => {
+            next.cards.write_named(id, |face| {
+                face.set_enchantment_status(sts2_core::EnchantmentStatus::Disabled)
+            })
+        }
+        (
+            super::listen::Listener::Card { id },
+            sts2_core::HookEffect::RaiseOwnEnchantment { by, write },
+        ) => {
+            next.cards
+                .write_named(id, |face| face.raise_enchantment(by));
+            if let Some(card) = next.deck_versions.of(id) {
+                next.for_run
+                    .push(sts2_core::HookEffect::WriteDeckCard { card, write });
+            }
+        }
+        // `CreatureCmd.GainBlock`, unpowered, on the power's owner,
+        // then `PowerCmd.Remove(this)`.
+        (
+            super::listen::Listener::Power { owner, power, .. },
+            sts2_core::HookEffect::GainBlockAndRemove(amount),
+        ) => {
+            super::board::gain_unpowered_block::<V>(
+                next,
+                streams.combat(),
+                relics,
+                next.ascension,
+                owner,
+                amount,
+            );
+            next.remove_power(owner, power);
+        }
+        // `CreatureCmd.Damage` on the power's owner, unpowered.
+        (
+            super::listen::Listener::Power { owner, .. },
+            sts2_core::HookEffect::DamageOwnerInFight {
+                amount,
+                unblockable,
+                self_dealt,
+            },
+        ) => {
+            let mut board = Board::for_card(next, streams.combat(), relics, ascension, None, None);
+            board.hit_unpowered(self_dealt.then_some(owner), owner, amount, unblockable);
+            ended_here = board.ended();
+        }
+        // Made by the power's owner, which for a monster's power is
+        // nobody.
+        (
+            super::listen::Listener::Power { owner, .. },
+            sts2_core::HookEffect::GenerateInHand { card, count },
+        ) => {
+            let player = next.player().id;
+            let count = num_traits::cast(count)
+                .unwrap_or_else(|| unimplemented!("{count:?} cards generated"));
+            let mut board = Board::for_card(next, streams.combat(), relics, ascension, None, None);
+            board.generate(
+                sts2_core::CardIdent::new(card),
+                sts2_core::Pile::Hand,
+                count,
+                (owner == player).then_some(player),
+            );
+            ended_here = board.ended();
+        }
+        // `PowerCmd.Apply` on the power's owner, from its owner, which
+        // for a monster's power is not the player playing the card.
+        (
+            super::listen::Listener::Power { owner, .. },
+            sts2_core::HookEffect::ApplyToOwner(power, amount),
+        ) => {
+            let mut board = Board::for_card(next, streams.combat(), relics, ascension, None, None);
+            board.land(owner, power, amount, Some(owner));
+            ended_here = board.ended();
+        }
+        // Clones of the card just played, which is still in the
+        // play pile, into hand.
+        (
+            super::listen::Listener::Power { .. } | super::listen::Listener::Relic { .. },
+            sts2_core::HookEffect::CloneIntoHand {
+                card,
+                count,
+                writes,
+            },
+        ) => {
+            let count: usize =
+                num_traits::cast(count).unwrap_or_else(|| unimplemented!("{count:?} clones"));
+            let mut board = Board::for_card(next, streams.combat(), relics, ascension, None, None);
+            for _ in 0..count {
+                board.clone_written(card, sts2_core::Pile::Hand, writes);
+            }
+            ended_here = board.ended();
+        }
+        (
+            super::listen::Listener::Power { .. },
+            sts2_core::HookEffect::ApplyPower {
+                target,
+                power,
+                amount,
+                applier,
+            },
+        ) => {
+            let mut board = Board::for_card(next, streams.combat(), relics, ascension, None, None);
+            board.land(target, power, amount, applier);
+            ended_here = board.ended();
+        }
+        // `CardCmd.Upgrade` on a copy wherever it stands, which skips
+        // one at its maximum. A fight that is ending upgrades nothing.
+        (_, sts2_core::HookEffect::UpgradeCopy { card, times }) => {
+            if ended.is_none() {
+                next.cards.write_named(card, |face| {
+                    for _ in 0..times {
+                        face.upgrade();
+                    }
+                    true
+                });
+            }
+        }
+        // `CardCmd.ApplyKeyword`, on cards wherever they stand.
+        (_, effect @ sts2_core::HookEffect::AddKeyword { .. }) => {
+            Board::for_card(next, streams.combat(), relics, ascension, None, None)
+                .write_cards([effect]);
+        }
+        // The play's own choice context, so a shuffle's question
+        // inside a listener's `CardPileCmd.Draw` stands the play still.
+        (_, effect) => {
+            let mut board =
+                Board::for_card(next, streams.combat(), relics, ascension, None, None).blocking();
+            match listener {
+                super::listen::Listener::Relic { slot } => board.relic_asked(slot, effect),
+                _ => hook::apply::<V, _>(&mut board, [effect]),
+            }
+            ended_here = board.ended();
+            let skipped = std::mem::take(&mut board.skipped);
+            merge::<V>(&mut next.skip_tick, skipped);
+        }
+    }
+    ended_here
 }
 
 /// `AfterCardPlayedLate`, with the energy the play's started entry spent.

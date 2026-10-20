@@ -230,9 +230,10 @@ pub(super) enum Deferred<V: Rules> {
         acting: smallvec::SmallVec<[CombatId; CREATURES]>,
         max_energy: V::Count,
     },
-    /// `AfterCardPlayedLate` of a play whose `AfterCardPlayed` listener
-    /// asked a question.
-    PlayedLate {
+    /// The rest of a play's `AfterCardPlayed` walk, which a question a
+    /// listener asked stood still, then `AfterCardPlayedLate`.
+    Played {
+        walking: super::listen::Walking<V>,
         card: V::Card,
         id: CardId<V>,
         energy: V::Count,
