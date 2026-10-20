@@ -50,18 +50,6 @@ const KINDS: &[Kind] = &[
         path: "cards::CardVar",
     },
     Kind {
-        trait_name: "CardKeywordIds",
-        enum_name: "CardKeyword",
-        file: "cards/mod.rs",
-        path: "cards::CardKeyword",
-    },
-    Kind {
-        trait_name: "CardTagIds",
-        enum_name: "CardTag",
-        file: "cards/mod.rs",
-        path: "cards::CardTag",
-    },
-    Kind {
         trait_name: "CharacterIds",
         enum_name: "Character",
         file: "characters.rs",
@@ -86,10 +74,10 @@ const KINDS: &[Kind] = &[
         path: "events::Event",
     },
     Kind {
-        trait_name: "IntentKindIds",
-        enum_name: "IntentKind",
-        file: "monsters/mod.rs",
-        path: "monsters::IntentKind",
+        trait_name: "EventOptionIds",
+        enum_name: "EventOption",
+        file: "events/mod.rs",
+        path: "events::EventOption",
     },
     Kind {
         trait_name: "ModifierIds",
@@ -138,18 +126,6 @@ const KINDS: &[Kind] = &[
         enum_name: "RestSiteOption",
         file: "restsite.rs",
         path: "restsite::RestSiteOption",
-    },
-    Kind {
-        trait_name: "RoomTypeIds",
-        enum_name: "RoomType",
-        file: "encounters/mod.rs",
-        path: "encounters::RoomType",
-    },
-    Kind {
-        trait_name: "TargetTypeIds",
-        enum_name: "TargetType",
-        file: "cards/mod.rs",
-        path: "cards::TargetType",
     },
 ];
 
@@ -243,7 +219,7 @@ fn const_name(id: &str) -> String {
 }
 
 /// Every build `sts2-content` holds, by its module, oldest first.
-fn builds(src: &Path) -> Result<Vec<String>, DumpError> {
+pub(super) fn builds(src: &Path) -> Result<Vec<String>, DumpError> {
     let mut found: Vec<String> = error::entries(src)?
         .into_iter()
         .filter(|path| path.join("generated").is_dir())

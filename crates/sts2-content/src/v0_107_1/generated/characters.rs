@@ -7,16 +7,9 @@ use super::cards::{Cards, DefectCard, IroncladCard, NecrobinderCard, RegentCard,
 use super::potions::PotionPool;
 use super::relics::{Relic, RelicPool};
 use crate::Few;
+pub use crate::generated::characters::CharacterGender;
 use serde::{Deserialize, Serialize};
 use sts2_core::Table;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum CharacterGender {
-    Neutral = 0,
-    Feminine = 1,
-    Masculine = 2,
-}
 
 /// The pools a character's `card_pool` can name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
