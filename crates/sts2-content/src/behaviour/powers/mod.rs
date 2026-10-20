@@ -482,7 +482,7 @@ impl<V: crate::Build> sts2_core::PowerModel<V> for State<V> {
 }
 
 impl<V: crate::Build> State<V> {
-    fn counted(&self) -> Number {
+    pub(crate) fn counted(&self) -> Number {
         match self {
             Self::Slow { counted }
             | Self::Tender { counted }
@@ -523,7 +523,7 @@ impl<V: crate::Build> State<V> {
         }
     }
 
-    fn count(&mut self, amount: Number) {
+    pub(crate) fn count(&mut self, amount: Number) {
         match self {
             Self::Slow { counted }
             | Self::Tender { counted }
@@ -5179,7 +5179,7 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         // `BurrowedPower.AfterBlockBroken`: a Tunneler whose block breaks is
         // stunned, comes back with a bite, and stops burrowing.
-        (__c0, _, EventHook::BlockBroken { creature })
+        (__c0, _, EventHook::BlockBroken { creature, .. })
             if __c0 == V::Power::BURROWED_POWER
                 && (creature == holder && monster == Some(V::Monster::TUNNELER)) =>
         {

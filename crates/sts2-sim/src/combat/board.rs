@@ -1271,7 +1271,12 @@ impl<'a, V: Rules> Board<'a, V> {
                 let walking = super::listen::Walking::begin::<super::listen::Checked>(
                     self.live,
                     self.relics,
-                    sts2_core::EventHook::BlockBroken { creature: target },
+                    sts2_core::EventHook::BlockBroken {
+                        creature: target,
+                        breaker: dealer,
+                        pet_of,
+                        player: self.live.player().id,
+                    },
                 );
                 self.after_hit(walking);
             }
@@ -4763,6 +4768,49 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         );
     }
 
+    fn transform_all(&mut self, cards: &[(CardAt<V>, CardIdent<V>)]) {
+        self.ran_on();
+        // Each replacement is made before the command runs, so takes its id
+        // in the order given. Every original then leaves, each noting where
+        // it stood as it left.
+        let ids: SmallVec<[CardId<V>; 4]> =
+            cards.iter().map(|_| self.live.card_ids.mint()).collect();
+        let mut left = SmallVec::<[_; 4]>::new();
+        for (&(card, into), id) in cards.iter().zip(ids) {
+            let at = self.standing(card);
+            self.live.cards.remove(card.pile(), at);
+            left.push((card.pile(), at, into, id));
+        }
+        if left.windows(2).any(|pair| pair[0].0 != pair[1].0) {
+            unimplemented!("transforming cards from more than one pile at once");
+        }
+        left.sort_by_key(|&(_, at, _, _)| at);
+        for &(pile, at, into, id) in &left {
+            self.live
+                .cards
+                .insert(pile, at, CardInstance::new(into, id));
+            let index = num_traits::NumCast::from(at).expect("a pile's index fits a hand index");
+            self.card_entered_combat(CardAt::new(id, pile, index), into.card, false);
+            let hook = sts2_core::EventHook::CardChangedPiles {
+                card: into.card,
+                id,
+                from: None,
+            };
+            if let Some((listener, effect)) =
+                super::listen::notify::<V>(self.live, self.relics, hook).first()
+            {
+                unimplemented!("{listener:?} asking for {effect:?} as a card changes piles")
+            }
+        }
+        // `AfterCardGeneratedForCombat` for each, once every replacement is
+        // in, made by the card's owner.
+        let player = self.live.player().id;
+        for (pile, at, into, id) in left {
+            let index = num_traits::NumCast::from(at).expect("a pile's index fits a hand index");
+            self.card_generated(CardAt::new(id, pile, index), into.card, Some(player));
+        }
+    }
+
     fn forge(&mut self, card: V::Card, amount: V::Number) {
         self.ran_on();
         // `ForgeCmd.Forge` does nothing in a fight that is over or ending.
@@ -5143,7 +5191,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.hit(dealer, target, damage, false, true, card, false);
     }
 
-    fn lose_block(&mut self, creature: CombatId, amount: V::Number) {
+    fn lose_block(&mut self, creature: CombatId, amount: V::Number, remover: Option<CombatId>) {
         self.ran_on();
         let zero = V::Number::zero();
         if self.over() || amount <= zero {
@@ -5157,10 +5205,19 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         let block = held.block;
         held.block = (block - amount).max(zero);
         if block > zero && held.block <= zero {
+            let pet_of = remover
+                .and_then(|remover| self.at(remover))
+                .and_then(|at| self.live.creatures[at].owner);
+            let player = self.live.player().id;
             let walking = super::listen::Walking::begin::<super::listen::Checked>(
                 self.live,
                 self.relics,
-                sts2_core::EventHook::BlockBroken { creature },
+                sts2_core::EventHook::BlockBroken {
+                    creature,
+                    breaker: remover,
+                    pet_of,
+                    player,
+                },
             );
             self.after_hit(walking);
         }

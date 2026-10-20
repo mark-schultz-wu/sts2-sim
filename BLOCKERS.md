@@ -70,28 +70,24 @@ a port that starts from the other build's code. A move can shift what
 the compiler inlines. The relics' and the cards' decision dispatchers
 stay out of line, since the walk inlining them cost 3.9% and 3.4%.
 
-The simulator follows 1,124,851 of the 1,322,464 recorded positions,
-85%, and 1,138 of 1,500 runs whole. A run that panics counts the
+The simulator follows 1,181,914 of the 1,322,464 recorded positions,
+89%, and 1,220 of 1,500 runs whole. A run that panics counts the
 positions before its panic. `follow_run <file> <index> --diff <dir>`
 plays a run on the game beside the simulator and names the sections
 where they first differ, which a split with no panic needs. The
 commonest first splits:
 
-- 15 part at Kaleidoscope at Neow. `CardRarityOdds.RollWithBaseOdds`
-  changed in v0.111.0. A roll under the rare and uncommon odds added
-  together is uncommon. v0.107.1's held it to the uncommon odds alone. That is the engine, which needs the seam below.
-- 10 part at the Brain Leech's Share Knowledge, and 8 at a play of
-  Compact. 15 runs panic on Juggling Power's `CardPlaying`, and 6 on
-  Hand Drill's `BlockBroken`.
+- 8 part at a travel, and 6 at the end of a turn against the Knowledge
+  Demon. 6 part at a play of Boost Away, and 6 at the Silent's Strike.
+  8 runs panic on Pale Blue Dot's power after its card is played.
 - Misery changed in v0.111.0. It adds a temporary power's amount to the
   power it lends before it copies them, and no power has
   `IgnoreNextInstance` now. The shared port is v0.107.1's.
 
 About 60 of the game's engine files changed too, outside the content
-models: its commands, game actions, entities and runs. `sts2-sim`
-mirrors v0.107.1's engine and has no seam for a build to differ. A
-split that traces to the engine needs that seam, which needs Mark's
-design first.
+models: its commands, game actions, entities and runs. An engine rule
+whose code changed goes in `sts2_core::Engine`, which each build
+implements in its own `engine` module. `RollWithBaseOdds` is the first.
 
 ### 3. A walk that shares only who listens
 

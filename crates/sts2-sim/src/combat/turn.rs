@@ -3587,7 +3587,7 @@ fn clear_block<V: Rules>(
                                 None,
                                 None,
                             );
-                            sts2_core::Fight::lose_block(&mut board, creature, amount);
+                            sts2_core::Fight::lose_block(&mut board, creature, amount, None);
                         }
                         effect => {
                             unimplemented!("{relic:?} asking for {effect:?} as it keeps block")

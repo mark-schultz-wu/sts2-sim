@@ -69,22 +69,15 @@ pub(crate) fn own_relic_event_hook(
 pub(crate) fn own_relic(relic: Relic) -> bool {
     matches!(
         relic,
-        Relic::ToyBox | Relic::DistinguishedCape | Relic::SereTalon | Relic::BeautifulBracelet
+        Relic::ToyBox
+            | Relic::DistinguishedCape
+            | Relic::SereTalon
+            | Relic::BeautifulBracelet
+            | Relic::HandDrill
     )
 }
 
 /// A shared relic's `EventHook`, for a hook this build answers itself.
-///
-/// - `ToyBox.AfterCombatEnd` returns at once here once `IsUsedUp`, where
-///   v0.107.1's counts on. Every other hook it answers as the shared port
-///   does.
-/// - `BeautifulBracelet.AfterObtained` takes its cards at random off
-///   `RunState.Rng.Niche`, of the deck cards Swift can enchant, where
-///   v0.107.1's asked for them. Each is enchanted with two Swift.
-/// - `DistinguishedCape` and `SereTalon` traded what they cost. The Cape's
-///   `AfterObtained` adds two curses, each `NextItem` off `RunState.Rng.Niche`
-///   over those not drawn already, then its Apparitions. The Talon's takes
-///   nine maximum health, then its Wishes.
 pub(crate) fn own_shared_relic_event_hook(
     state: &mut State<V>,
     hook: EventHook<V>,
@@ -95,11 +88,15 @@ pub(crate) fn own_shared_relic_event_hook(
     use crate::vars::RelicVars as _;
 
     match (state, hook) {
+        // `ToyBox.AfterCombatEnd` returns at once once `IsUsedUp`, where
+        // v0.107.1's counts on.
         (State::ToyBox(state), EventHook::CombatEnd { .. })
             if crate::behaviour::relics::toy_box::used_up::<V>(state) =>
         {
             Some(())
         }
+        // `BeautifulBracelet.AfterObtained` takes its cards at random off
+        // `Niche`, of those Swift can enchant, where v0.107.1's asked.
         (State::BeautifulBracelet, EventHook::Obtained { .. }) => {
             use crate::ids::EnchantmentIds as _;
 
@@ -112,6 +109,33 @@ pub(crate) fn own_shared_relic_event_hook(
             });
             Some(())
         }
+        // `HandDrill` gives its Vulnerable on `AfterBlockBroken`, where
+        // v0.107.1's read `WasBlockBroken` off `AfterDamageGiven`.
+        (State::HandDrill, EventHook::DamageGiven { .. }) => Some(()),
+        (
+            State::HandDrill,
+            EventHook::BlockBroken {
+                creature,
+                breaker,
+                pet_of,
+                player,
+            },
+        ) => {
+            use crate::ids::PowerIds as _;
+
+            if (breaker == Some(player) || pet_of == Some(player)) && creature != player {
+                asked.push(HookEffect::ApplyPower {
+                    target: creature,
+                    power: <V as sts2_core::ContentVersion>::Power::VULNERABLE_POWER,
+                    amount: PowerAmount::Counted(Relic::HAND_DRILL_VULNERABLE_POWER),
+                    applier: Some(player),
+                });
+            }
+            Some(())
+        }
+        // `DistinguishedCape` and `SereTalon` traded what they cost. The
+        // Cape adds two curses, each `NextItem` off `Niche` over those not
+        // drawn already, then its Apparitions.
         (State::DistinguishedCape, EventHook::Obtained { .. }) => {
             asked.push(HookEffect::AddDistinctToDeck {
                 cards: V::RELICS_MODIFIER_CURSES,
@@ -125,6 +149,7 @@ pub(crate) fn own_shared_relic_event_hook(
             }
             Some(())
         }
+        // The Talon takes nine maximum health, then its Wishes.
         (State::SereTalon, EventHook::Obtained { .. }) => {
             asked.push(HookEffect::LoseMaxHp(SERE_TALON_HP_LOSS));
             for _ in 0..(Relic::SERE_TALON_WISHES as usize) {

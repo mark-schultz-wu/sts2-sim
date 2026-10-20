@@ -100,17 +100,10 @@ pub(crate) fn regular<V: Rules, R: GameRng>(
     let mut offered = Vec::with_capacity(count);
     let mut drawn = Vec::with_capacity(count);
     for _ in 0..count {
-        // `RollWithBaseOdds`, which holds the roll to the uncommon odds
-        // alone. The offset roll a fight makes adds them to the rare's.
+        // `RollWithBaseOdds`, which the build spells.
         let (rare, uncommon) = RarityOdds::Regular.bands(scarce::<V>(ascension));
         let roll = rng.next_double() as f32;
-        let wanted = if roll < rare {
-            RewardRarity::Rare
-        } else if roll < uncommon {
-            RewardRarity::Uncommon
-        } else {
-            RewardRarity::Common
-        };
+        let wanted = V::roll_with_base_odds(roll, rare, uncommon);
         let choices = available::<V>(cards, &drawn, wanted);
         let left = choices.iter().filter(|card| !drawn.contains(card)).count();
         let left = num_traits::cast(left).expect("an available rarity fits the RNG integer");
@@ -384,13 +377,7 @@ pub(crate) fn added<V: Rules, R: GameRng>(
 ) -> CardIdent<V> {
     let (rare, uncommon) = bands.bands(scarce::<V>(ascension));
     let roll = rng.next_double() as f32;
-    let wanted = if roll < rare {
-        RewardRarity::Rare
-    } else if roll < uncommon {
-        RewardRarity::Uncommon
-    } else {
-        RewardRarity::Common
-    };
+    let wanted = V::roll_with_base_odds(roll, rare, uncommon);
     let at = |rarity| -> Vec<V::Card> {
         pool.iter()
             .copied()

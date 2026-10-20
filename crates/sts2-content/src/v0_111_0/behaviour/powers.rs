@@ -53,7 +53,7 @@ pub(crate) fn own_power_death<F: sts2_core::Fight<V>>(
 pub(crate) fn own_power(power: Power) -> bool {
     matches!(
         power,
-        Power::AmbergrisPower | Power::TrackingPower | Power::FeralPower
+        Power::AmbergrisPower | Power::TrackingPower | Power::FeralPower | Power::JugglingPower
     )
 }
 
@@ -122,18 +122,43 @@ pub(crate) fn own_power_result_pile(
 /// shared powers answer for it.
 pub(crate) fn own_power_event_hook(
     power: Power,
-    _amount: PowerAmount<Number>,
+    amount: PowerAmount<Number>,
     _held: Held<'_, V>,
-    _state: &mut State<V>,
+    state: &mut State<V>,
     hook: EventHook<V>,
 ) -> Option<Option<HookEffect<V>>> {
     match (power, hook) {
+        // `JugglingPower.BeforeCardPlayed`: one more attack, and on the
+        // third, its stack of clones of that attack into hand. v0.107.1's
+        // counted after the play. A fight here has one player, whose every
+        // card is.
+        (Power::JugglingPower, EventHook::CardPlaying { card, id, .. }) => {
+            use sts2_core::Rules as _;
+
+            if V::card_kind(card) != Some(sts2_core::CardKind::Attack) {
+                return Some(None);
+            }
+            let PowerAmount::Counted(amount) = amount else {
+                unimplemented!("an endless Juggling")
+            };
+            state.count(1);
+            Some(
+                (state.counted() == JUGGLING_ATTACKS).then_some(HookEffect::CloneIntoHand {
+                    card: id,
+                    count: amount,
+                    writes: &[],
+                }),
+            )
+        }
         // `AmbergrisPower.AfterTakingExtraTurn`: one off, for its owner's
         // turn. A fight here has one player, whose turn it is.
         (Power::AmbergrisPower, EventHook::TakingExtraTurn) => Some(Some(HookEffect::Decrement)),
         _ => None,
     }
 }
+
+/// `JugglingPower`'s third attack of a turn, which it checks for in its body.
+const JUGGLING_ATTACKS: Number = 3;
 
 /// A yes-or-no hook for a power of this build's own, or nothing for a hook
 /// the shared powers answer for it.
