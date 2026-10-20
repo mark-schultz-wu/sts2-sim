@@ -70,8 +70,8 @@ a port that starts from the other build's code. A move can shift what
 the compiler inlines. The relics' and the cards' decision dispatchers
 stay out of line, since the walk inlining them cost 3.9% and 3.4%.
 
-The simulator follows 563,122 of the 1,322,920 recorded positions, 42%,
-and 301 of 1,500 runs whole. A run that panics counts the positions
+The simulator follows 577,997 of the 1,322,920 recorded positions, 43%,
+and 321 of 1,500 runs whole. A run that panics counts the positions
 before its panic. `follow_run <file> <index> --diff <dir>` plays a run
 on the game beside the simulator and names the sections where they first
 differ, which a split with no panic needs. The commonest first splits:
@@ -79,8 +79,8 @@ differ, which a split with no panic needs. The commonest first splits:
 - Positions that part with no panic. 32 part at a play of Forgotten
   Ritual, 25 at Tezcatara's Toy Box, and 23 at a play of Expertise. Some after a travel open a fight where the game plays and
   exhausts the hand, and the simulator asks for one card.
-- Powers and relics the shared rules answer for v0.107.1 alone: Pendulum,
-  Regen and Doom among them. Demon Form's power answers `AfterApplied`
+- Powers the shared rules answer for v0.107.1 alone: Regen and Doom
+  among them. Demon Form's power answers `AfterApplied`
   here, for its look alone.
 - Cards and potions new here or changed: Abundance, Ambergris and the
   Ambergris power, and Expect a Fight's block.

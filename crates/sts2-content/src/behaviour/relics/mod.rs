@@ -1112,6 +1112,7 @@ pub(crate) fn modify_hook<V: crate::Build>(
         State::PollinousCore(state) => pollinous_core::modify_hook::<V>(state, hook),
         State::RingOfTheSnake => ring_of_the_snake::modify_hook::<V>(hook),
         State::BoomingConch => booming_conch::modify_hook::<V>(hook),
+        State::Pendulum(state) => pendulum::modify_hook::<V>(state, hook),
         State::BagOfPreparation => bag_of_preparation::modify_hook::<V>(hook),
         State::BigMushroom => big_mushroom::modify_hook::<V>(hook),
         State::StrikeDummy => strike_dummy::modify_hook::<V>(hook),
@@ -1261,7 +1262,6 @@ pub(crate) fn modify_hook<V: crate::Build>(
         | State::Nunchaku(_)
         | State::VenerableTeaSet(_)
         | State::TwistedFunnel
-        | State::Pendulum(_)
         | State::RippleBasin(_)
         | State::PrayerWheel
         | State::WhiteStar
