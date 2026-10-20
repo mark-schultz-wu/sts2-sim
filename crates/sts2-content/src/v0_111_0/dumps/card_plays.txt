@@ -1400,13 +1400,13 @@ unplayed RESTLESSNESS if
 upgrade RESTLESSNESS raise Cards 1
 upgrade RESTLESSNESS raise Energy 1
 card RICOCHET
-unplayed RICOCHET call DamageCmd.Attack
+play RICOCHET attack random Damage Move var Repeat
 upgrade RICOCHET raise Repeat 1
 card RIGHT_HAND_HAND
 unplayed RIGHT_HAND_HAND if
 upgrade RIGHT_HAND_HAND raise OstyDamage 2
 card RIP_AND_TEAR
-unplayed RIP_AND_TEAR call DamageCmd.Attack
+play RIP_AND_TEAR attack random Damage Move number 2
 upgrade RIP_AND_TEAR raise Damage 2
 card ROCKET_PUNCH
 play ROCKET_PUNCH attack chosen Damage Move number 1
@@ -1694,7 +1694,7 @@ card SWEEPING_GAZE
 unplayed SWEEPING_GAZE if
 upgrade SWEEPING_GAZE raise OstyDamage 5
 card SWORD_BOOMERANG
-unplayed SWORD_BOOMERANG call DamageCmd.Attack
+play SWORD_BOOMERANG attack random Damage Move var Repeat
 upgrade SWORD_BOOMERANG raise Repeat 1
 card SWORD_SAGE
 play SWORD_SAGE power self SWORD_SAGE_POWER var SwordSagePower

@@ -37,22 +37,26 @@ own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
 
-### 2. Each build's numbers in the shared rules
+### 2. Relics read their numbers from `vars.rs`
 
-Needs Mark's decision. A card's numbers come from its build's dump, as
-`var` rows. A relic's, a power's, a potion's and an enchantment's are
-written into the shared port as constants, such as Seal of Gold's
-`GoldVar(5)`. v0.111.0 changed many of them: Seal of Gold's gold is 3
-there. 47 relics, 72 powers and 27 potions changed between the builds,
-many in their numbers alone. Two ways to carry them:
+`sts2_content::vars` holds every relic's, power's, potion's and
+enchantment's numbers, from each build's `var` rows, as consts on the
+build's enum: `V::Relic::SEAL_OF_GOLD_GOLD`. A shared port reads its
+numbers there, not from a constant of its own. Seal of Gold does. The
+other relic ports hold about 240 numeric constants. Each that mirrors
+a `CanonicalVars` entry moves to its `vars` const. One the game writes
+in code, outside its vars, stays. A var one build lacks has no const,
+so a port that needs it splits by build.
 
-- Dump each model's `CanonicalVars`, as the cards' are, and have the
-  shared ports read the build's table. That changes the dump mod, both
-  builds' dumps, codegen, and every port that holds a constant.
-- Keep the constants, and give a shared port one arm per build where a
-  number differs, as Orobas's and Darv's lists have.
+### 3. Powers read their numbers from `vars.rs`
 
-### 3. v0.111.0's changed rules
+As item 2, for the power ports' constants.
+
+### 4. Potions and enchantments read their numbers from `vars.rs`
+
+As item 2, for the potion and enchantment ports' constants.
+
+### 5. v0.111.0's changed rules
 
 v0.111.0's `Hooks` and `Rules` are the shared ones in
 `sts2_content::behaviour`, which mirror v0.107.1's game code. A rule
@@ -82,8 +86,8 @@ a port that starts from the other build's code. A move can shift what
 the compiler inlines. The relics' and the cards' decision dispatchers
 stay out of line, since the walk inlining them cost 3.9% and 3.4%.
 
-The simulator follows 320,971 of the 1,340,195 recorded positions, 23%,
-and 60 of 1,500 runs whole. A run that panics counts the positions
+The simulator follows 344,804 of the 1,340,195 recorded positions, 25%,
+and 80 of 1,500 runs whole. A run that panics counts the positions
 before its panic. `follow_run <file> <index> --diff <dir>` plays a run
 on the game beside the simulator and names the sections where they first
 differ, which a split with no panic needs. The commonest first splits:
@@ -92,10 +96,9 @@ differ, which a split with no panic needs. The commonest first splits:
 - End turns that part with no panic, against Ovicopter, Gremlin Merc and
   the Knowledge Demon. A shared rule there answers as v0.107.1's game
   does.
-- 57 after a travel. Seal of Gold's gold is one: 5 in v0.107.1 and 3
-  here, which waits on item 2.
-- Cards whose generated play is unported here: Ricochet, Thunderclap and
-  Sword Boomerang among them.
+- 32 after a travel, where the run's position differs with no panic.
+- Cards whose generated play is unported here: Thunderclap and
+  Deathbringer among them.
 - Ambergris, the potion Neow's Sacrifice gives, and the Ambergris power
   it applies in a fight. Both are new here, and a potion of the build's
   own needs an `OwnRules` hook as the relics have.
@@ -110,7 +113,7 @@ mirrors v0.107.1's engine and has no seam for a build to differ. A
 split that traces to the engine needs that seam, which needs Mark's
 design first.
 
-### 4. A walk that shares only who listens
+### 6. A walk that shares only who listens
 
 The snapshot copies each walk's listeners. Most walks see none arrive or
 leave: 1.3% of `AfterCardPlayed` walks do, and 28% of `AfterSideTurnEnd`
@@ -120,7 +123,7 @@ A cheaper walk shares only which listeners there are and their order,
 kept apart from what they hold. That is part of the flat-state pass,
 which needs a design first.
 
-### 5. A speed target
+### 7. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.

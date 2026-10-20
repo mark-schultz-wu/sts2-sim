@@ -31,6 +31,7 @@ pub mod generated;
 pub mod ids;
 pub mod v0_107_1;
 pub mod v0_111_0;
+pub mod vars;
 
 pub use build::Build;
 

@@ -58,7 +58,7 @@ pub trait BuildContent:
         Card: CardIds + CardTable<Rarity = CardRarity, Tag = CardTag>,
         CardVar: CardVarIds,
         Character: CharacterIds,
-        Enchantment: EnchantmentIds,
+        Enchantment: EnchantmentIds + crate::vars::EnchantmentVars,
         Encounter: EncounterIds,
         Event: EventIds,
         EventOption: EventOptionIds,
@@ -67,9 +67,15 @@ pub trait BuildContent:
         Monster: MonsterIds + Table<Data = crate::generated::monsters::MonsterData<Self::MoveId>>,
         MoveId: MoveIds,
         Orb: OrbIds + Table<Data = OrbData>,
-        Potion: PotionIds + PotionTable<Pool = PotionPool> + Table<Data = PotionData>,
-        Power: PowerIds + Table<Data = PowerData>,
-        Relic: RelicIds + Table<Data = RelicData> + RelicTable<Rarity = RelicRarity>,
+        Potion: PotionIds
+                    + crate::vars::PotionVars
+                    + PotionTable<Pool = PotionPool>
+                    + Table<Data = PotionData>,
+        Power: PowerIds + crate::vars::PowerVars + Table<Data = PowerData>,
+        Relic: RelicIds
+                   + crate::vars::RelicVars
+                   + Table<Data = RelicData>
+                   + RelicTable<Rarity = RelicRarity>,
         RestSiteOption: RestSiteOptionIds,
     >
 {

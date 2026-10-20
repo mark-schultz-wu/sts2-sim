@@ -52,6 +52,7 @@ public static class PotionDump
         output.Append("# pool <pool> <index> <potion>\n");
         output.Append("# potion <id> <rarity> <usage> <target> ");
         output.Append("<canBeGeneratedInCombat> <passesCustomUsabilityCheck>\n");
+        output.Append(Vars.Header("potion"));
 
         List<PotionModel> potions = AllPotions();
 
@@ -76,6 +77,7 @@ public static class PotionDump
 
             output.Append(string.Join(" ", columns));
             output.Append('\n');
+            Vars.Append(output, potion.Id.Entry, potion.DynamicVars);
         }
 
         output.Append($"# {potions.Count} potions\n");

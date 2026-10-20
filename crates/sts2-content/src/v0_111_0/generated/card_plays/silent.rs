@@ -565,8 +565,25 @@ pub fn play_from<F: Fight<V>>(card: SilentCard, fight: &mut F, from: u8) -> Resu
             }
             Ok(Played::Done)
         }
-        // `call DamageCmd.Attack`
-        SilentCard::Ricochet => unimplemented!("what {card:?} does when it is played"),
+        SilentCard::Ricochet => {
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    for _ in 0..fight.var(CardVar::Repeat) {
+                        let Some(target) = fight.random_target() else {
+                            break;
+                        };
+                        let attack = fight.resolve(Effect::Attack {
+                            dealer: fight.actor(),
+                            target,
+                            damage: Amount::Var(CardVar::Damage),
+                            scaling: Scaling::Dynamic,
+                        });
+                        fight.apply(attack);
+                    }
+                });
+            }
+            Ok(Played::Done)
+        }
         SilentCard::SerpentForm => {
             if from == 0 {
                 fight.apply_to_actor(

@@ -61,6 +61,7 @@ public static class RelicDump
         output.Append(string.Join(" ", Flags.Select(f => "<" + Lower(f) + ">")));
         output.Append(" <displayAmount> <gatedInRun> <gatedAtNeow>\n");
         output.Append("# scalecost <relic> <ascension> <merchantCost>\n");
+        output.Append(Vars.Header("relic"));
         output.Append("# rows above are ascension 0; a scale* row is the level at which a value changes\n");
 
         List<RelicModel> relics = AllRelics();
@@ -112,6 +113,7 @@ public static class RelicDump
 
             output.Append(string.Join(" ", columns));
             output.Append('\n');
+            Vars.Append(output, id, relic.DynamicVars);
 
             for (int level = 1; level < cost.Length; level++)
             {

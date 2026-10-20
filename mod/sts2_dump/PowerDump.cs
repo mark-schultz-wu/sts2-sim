@@ -52,6 +52,7 @@ public static class PowerDump
         output.Append("# id type instance stack allowNegative removedOnOwnerDeath ");
         output.Append("ownerDeathIsFatal scalesInMultiplayer ownerIsSecondaryEnemy\n");
         output.Append("# virtual <id> <method>\n");
+        output.Append(Vars.Header("power"));
 
         List<PowerModel> powers = ModelDb.AllPowers
             .OrderBy(p => p.Id.Entry, StringComparer.Ordinal)
@@ -73,6 +74,7 @@ public static class PowerDump
                 Cell(power, nameof(PowerModel.OwnerIsSecondaryEnemy)),
             }));
             output.Append('\n');
+            Vars.Append(output, power.Id.Entry, power.DynamicVars);
         }
 
         output.Append($"# {powers.Count} powers\n");

@@ -2,6 +2,7 @@
 # build v0.111.0 commit 41cef1ea assembly 1579942752 content 1568834832
 # id type instance stack allowNegative removedOnOwnerDeath ownerDeathIsFatal scalesInMultiplayer ownerIsSecondaryEnemy
 # virtual <id> <method>
+# var <power> <name> <base> <calculated> <class>
 power ACCELERANT_POWER Buff None Counter 0 1 1 0 0
 power ACCURACY_POWER Buff None Counter 0 1 1 0 0
 power ADAPTABLE_POWER Buff None Single 0 0 1 0 0
@@ -13,9 +14,11 @@ power ARSENAL_POWER Buff None Counter 0 1 1 0 0
 power ARTIFACT_POWER Buff None Counter 0 1 1 1 0
 power ASLEEP_POWER Buff None Counter 0 1 1 0 0
 power AUTOMATION_POWER Buff Instanced Counter 0 1 1 0 0
+var AUTOMATION_POWER BaseCards 10 0 DynamicVar
 power BACK_ATTACK_LEFT_POWER Buff None Single 0 1 1 0 0
 power BACK_ATTACK_RIGHT_POWER Buff None Single 0 1 1 0 0
 power BARRICADE_POWER Buff None Single 0 1 1 0 0
+var BARRICADE_POWER ApplierName 0 0 StringVar
 power BATTLEWORN_DUMMY_TIME_LIMIT_POWER Buff None Counter 0 1 1 0 0
 power BEACON_OF_HOPE_POWER Buff None Single 0 1 1 0 0
 power BIASED_COGNITION_POWER Debuff None Counter 0 1 1 0 0
@@ -27,6 +30,7 @@ power BUFFER_POWER Buff None Counter 0 1 1 0 0
 power BURROWED_POWER Buff None Single 0 1 1 0 0
 power BURST_POWER Buff None Counter 0 1 1 0 0
 power CACOPHONY_POWER Buff Instanced Counter 0 1 1 0 0
+var CACOPHONY_POWER Cards 33 0 CardsVar
 power CALAMITY_POWER Buff None Counter 0 1 1 0 0
 power CALCIFY_POWER Buff None Counter 0 1 1 0 0
 power CALL_OF_THE_VOID_POWER Buff None Counter 0 1 1 0 0
@@ -34,6 +38,7 @@ power CHAINS_OF_BINDING_POWER Debuff None Counter 0 1 1 0 0
 power CHILD_OF_THE_STARS_POWER Buff None Counter 0 1 1 0 0
 power CLARITY_POWER Buff None Counter 0 1 1 0 0
 power COLOSSUS_POWER Buff None Counter 0 1 1 0 0
+var COLOSSUS_POWER DamageDecrease 0.5 0 DynamicVar
 power CONCOCT_POWER Buff None Counter 0 1 1 0 0
 power CONFUSED_POWER Debuff None Single 0 1 1 0 0
 power CONQUEROR_POWER Debuff None Counter 0 1 1 0 0
@@ -45,15 +50,20 @@ power CORROSIVE_WAVE_POWER Buff None Counter 0 1 1 0 0
 power CORRUPTION_POWER Buff None Single 0 1 1 0 0
 power COUNTDOWN_POWER Buff None Counter 0 1 1 0 0
 power COVERED_POWER Buff Instanced Single 0 1 1 0 0
+var COVERED_POWER Applier 0 0 StringVar
 power CRAB_RAGE_POWER Buff None Single 0 1 1 0 0
+var CRAB_RAGE_POWER Block 99 0 BlockVar+Unpowered
+var CRAB_RAGE_POWER StrengthPower 6 0 PowerVar+STRENGTH_POWER
 power CREATIVE_AI_POWER Buff None Counter 0 1 1 0 0
 power CRIMSON_MANTLE_POWER Buff None Counter 0 1 1 0 0
+var CRIMSON_MANTLE_POWER SelfDamage 0 0 DamageVar+Unpowered
 power CRUELTY_POWER Buff None Counter 0 1 1 0 0
 power CRUSH_UNDER_POWER dynamic None Counter 0 1 1 0 0
 power CURIOUS_POWER Buff None Counter 0 1 1 0 0
 power CURL_UP_POWER Buff None Counter 0 1 1 1 0
 power DAMPEN_POWER Debuff None None 0 1 1 0 0
 power DANSE_MACABRE_POWER Buff None Counter 0 1 1 0 0
+var DANSE_MACABRE_POWER Energy 2 0 EnergyVar
 power DARK_EMBRACE_POWER Buff None Counter 0 1 1 0 0
 power DARK_SHACKLES_POWER dynamic None Counter 0 1 1 0 0
 power DEBILITATE_POWER Debuff None Counter 0 1 1 0 0
@@ -84,8 +94,10 @@ power FEEL_NO_PAIN_POWER Buff None Counter 0 1 1 0 0
 power FERAL_POWER Buff None Counter 0 1 1 0 0
 power FLAME_BARRIER_POWER Buff None Counter 0 1 1 0 0
 power FLANKING_POWER Debuff Instanced Counter 0 1 1 0 0
+var FLANKING_POWER Applier 0 0 StringVar
 power FLEX_POTION_POWER dynamic None Counter 0 1 1 0 0
 power FLUTTER_POWER Buff None Counter 0 1 1 1 0
+var FLUTTER_POWER DamageDecrease 50 0 DynamicVar
 power FOCUSED_STRIKE_POWER dynamic None Counter 0 1 1 0 0
 power FOCUS_POWER Buff None Counter 1 1 1 0 0
 power FORBIDDEN_GRIMOIRE_POWER Buff None Counter 0 1 1 0 0
@@ -97,11 +109,15 @@ power FREE_SKILL_POWER Buff None Counter 0 1 1 0 0
 power FRIENDSHIP_POWER Buff None Counter 0 1 1 0 0
 power FURNACE_POWER Buff None Counter 0 1 1 0 0
 power GALVANIC_POWER Buff None Counter 0 1 1 0 0
+var GALVANIC_POWER AfflictionTitle 0 0 StringVar
 power GENESIS_POWER Buff None Counter 0 1 1 0 0
 power GIGANTIFICATION_POWER Buff None Counter 0 1 1 0 0
 power GRAVITY_POWER Buff None Counter 0 1 1 0 0
 power GUARDED_POWER Buff Instanced Single 0 1 1 0 0
+var GUARDED_POWER Applier 0 0 StringVar
+var GUARDED_POWER DamageDecrease 0.5 0 DynamicVar
 power HAILSTORM_POWER Buff None Counter 0 1 1 0 0
+var HAILSTORM_POWER FrostOrbs 1 0 DynamicVar
 power HAMMER_TIME_POWER Buff None Single 0 1 1 0 0
 power HANG_POWER Debuff None Counter 0 1 1 0 0
 power HARDENED_SHELL_POWER Buff None Counter 0 1 1 1 0
@@ -120,16 +136,20 @@ power HYPERBEAM_FOCUS_DOWN_POWER dynamic None Counter 0 1 1 0 0
 power ILLUSION_POWER Buff None Single 0 1 1 0 0
 power IMBALANCED_POWER Debuff None Single 0 1 1 0 0
 power IMITATION_LEARNING_POWER Buff Instanced Counter 0 1 1 0 0
+var IMITATION_LEARNING_POWER TargetPlayer 0 0 StringVar
 power IMPROVEMENT_POWER Buff None Counter 0 1 1 0 0
 power INFERNO_POWER Buff None Counter 0 1 1 0 0
+var INFERNO_POWER SelfDamage 0 0 DamageVar+Unpowered
 power INFESTED_POWER Buff None Single 0 1 1 0 0
 power INFINITE_BLADES_POWER Buff None Counter 0 1 1 0 0
 power INTANGIBLE_POWER Buff None Counter 0 1 1 0 0
 power INTERCEPT_POWER Buff None Single 0 1 1 0 0
+var INTERCEPT_POWER Covering 0 0 StringVar
 power ITERATION_POWER Buff None Counter 0 1 1 0 0
 power JUGGERNAUT_POWER Buff None Counter 0 1 1 0 0
 power JUGGLING_POWER Buff None Counter 0 1 1 0 0
 power KNOCKDOWN_POWER Debuff Instanced Counter 0 1 1 0 0
+var KNOCKDOWN_POWER Applier 0 0 StringVar
 power LEADERSHIP_POWER Buff None Counter 0 1 1 0 0
 power LETHALITY_POWER Buff None Counter 0 1 1 0 0
 power LIGHTNING_ROD_POWER Buff None Counter 0 1 1 0 0
@@ -162,10 +182,13 @@ power MOCK_UNHITTABLE_POWER Buff None Single 0 1 1 0 0
 power MONARCHS_GAZE_POWER Buff None Counter 0 1 1 0 0
 power MONARCHS_GAZE_STRENGTH_DOWN_POWER dynamic None Counter 0 1 1 0 0
 power MONOLOGUE_POWER Buff Instanced dynamic 0 1 1 0 0
+var MONOLOGUE_POWER StrengthApplied 0 0 DynamicVar
+var MONOLOGUE_POWER StrengthPower 1 0 PowerVar+STRENGTH_POWER
 power NECRO_MASTERY_POWER Buff None Counter 0 1 1 0 0
 power NEMESIS_POWER Buff None Single 0 1 1 0 0
 power NEUROSURGE_POWER Debuff None Counter 0 1 1 0 0
 power NIGHTMARE_POWER Buff Instanced Counter 0 1 1 0 0
+var NIGHTMARE_POWER Card 0 0 StringVar
 power NOSTALGIA_POWER Buff None Counter 0 1 1 0 0
 power NOXIOUS_FUMES_POWER Buff None Counter 0 1 1 0 0
 power NO_BLOCK_POWER Debuff None Counter 0 1 1 0 0
@@ -175,10 +198,13 @@ power OBLIVION_POWER Debuff InstancedPerApplier Counter 0 1 1 0 0
 power ONE_FOR_ALL_POWER Buff None Counter 0 1 1 0 0
 power ONE_TWO_PUNCH_POWER Buff None Counter 0 1 1 0 0
 power ORBIT_POWER Buff Instanced Counter 0 1 1 0 0
+var ORBIT_POWER Energy 4 0 EnergyVar
 power PAGESTORM_POWER Buff None Counter 0 1 1 0 0
 power PAINFUL_STABS_POWER Buff None Counter 0 0 1 0 0
 power PALE_BLUE_DOT_POWER Buff None Counter 0 1 1 0 0
+var PALE_BLUE_DOT_POWER CardPlay 5 0 DynamicVar
 power PANACHE_POWER Buff Instanced Counter 0 1 1 0 0
+var PANACHE_POWER CardsLeft 5 0 DynamicVar
 power PAPER_CUTS_POWER Buff None Counter 0 1 1 0 0
 power PARRY_POWER Buff None Counter 0 1 1 0 0
 power PERSONAL_HIVE_POWER Buff None Counter 0 1 1 0 0
@@ -186,6 +212,7 @@ power PHANTOM_BLADES_POWER Buff None Counter 0 1 1 0 0
 power PIERCING_WAIL_POWER dynamic None Counter 0 1 1 0 0
 power PILLAR_OF_CREATION_POWER Buff None Counter 0 1 1 0 0
 power PLATING_POWER Buff None Counter 0 1 1 1 0
+var PLATING_POWER Decrement 1 0 DynamicVar
 power PLOW_POWER Debuff None Counter 0 1 1 1 0
 power POISON_POWER Debuff None Counter 0 1 1 0 0
 power POSSESS_SPEED_POWER Buff None Single 0 1 1 0 0
@@ -193,6 +220,7 @@ power POSSESS_STRENGTH_POWER Buff None Single 0 1 1 0 0
 power PREP_TIME_POWER Buff None Counter 0 1 1 0 0
 power PYRE_POWER Buff None Counter 0 1 1 0 0
 power RADIANCE_POWER Buff None Counter 0 1 1 0 0
+var RADIANCE_POWER Energy 1 0 EnergyVar
 power RAGE_POWER Buff None Counter 0 1 1 0 0
 power RAMPART_POWER Buff None Counter 0 1 1 1 0
 power RAVENOUS_POWER Buff None Counter 0 1 1 0 0
@@ -206,6 +234,7 @@ power RETAIN_HAND_POWER Buff None Counter 0 1 1 0 0
 power RINGING_POWER Debuff None Single 0 1 1 0 0
 power RITUAL_POWER Buff None Counter 0 1 1 0 0
 power ROLLING_BOULDER_POWER Buff Instanced Counter 0 1 1 0 0
+var ROLLING_BOULDER_POWER Damage 5 0 DamageVar+Unpowered
 power ROYALTIES_POWER Buff None Counter 0 1 1 0 0
 power RUPTURE_POWER Buff None Counter 0 1 1 0 0
 power SANDPIT_POWER Buff Instanced Counter 0 1 1 0 0
@@ -219,6 +248,8 @@ power SHADOWMELD_POWER Buff None Counter 0 1 1 0 0
 power SHADOW_STEP_POWER Buff None Counter 0 1 1 0 0
 power SHRIEK_POWER Debuff None Counter 1 1 1 1 0
 power SHRINK_POWER Debuff None dynamic 1 1 1 0 0
+var SHRINK_POWER ApplierName 0 0 StringVar
+var SHRINK_POWER DamageDecrease 30 0 DynamicVar
 power SHROUD_POWER Buff None Counter 0 1 1 0 0
 power SIC_EM_POWER Debuff None Counter 0 1 1 0 0
 power SIGNAL_BOOST_POWER Buff None Counter 0 1 1 0 0
@@ -227,11 +258,14 @@ power SLEIGHT_OF_FLESH_POWER Buff None Counter 0 1 1 0 0
 power SLIPPERY_POWER Buff None Counter 0 1 1 1 0
 power SLOTH_POWER Debuff None Counter 0 1 1 0 0
 power SLOW_POWER Debuff None Counter 0 1 1 0 0
+var SLOW_POWER DisplayAmount 0 0 DynamicVar
+var SLOW_POWER SlowAmount 0 0 DynamicVar
 power SLUMBER_POWER Buff None Counter 0 1 1 0 0
 power SMOGGY_POWER Debuff None Single 0 1 1 0 0
 power SMOKESTACK_POWER Buff None Counter 0 1 1 0 0
 power SNEAKY_POWER Buff None Counter 0 1 1 0 0
 power SOAR_POWER Buff None Single 0 1 1 0 0
+var SOAR_POWER DamageDecrease 50 0 DynamicVar
 power SOULBOUND_POWER Buff None Counter 0 1 1 0 0
 power SPECTRUM_SHIFT_POWER Buff None Counter 0 1 1 0 0
 power SPEEDSTER_POWER Buff None Counter 0 1 1 0 0
@@ -257,18 +291,24 @@ power SYNCHRONIZE_POWER dynamic None Counter 0 1 1 0 0
 power TAG_TEAM_POWER Debuff Instanced Counter 0 1 1 0 0
 power TAINTED_POWER Debuff None Counter 0 1 1 0 0
 power TANGLED_POWER Debuff None Counter 0 1 1 0 0
+var TANGLED_POWER Energy 1 0 EnergyVar
 power TANK_POWER Buff None Single 0 1 1 0 0
+var TANK_POWER DamageDecrease 0.5 0 DynamicVar
+var TANK_POWER DamageIncrease 1.5 0 DynamicVar
 power TENDER_POWER Debuff None Counter 0 1 1 0 0
 power TERRITORIAL_POWER Buff None Counter 0 1 1 0 0
 power THE_BOMB_POWER Buff Instanced Counter 0 1 1 0 0
+var THE_BOMB_POWER Damage 40 0 DamageVar+Unpowered
 power THE_GAMBIT_POWER Debuff None Single 0 1 1 0 0
 power THE_HUNT_POWER Buff None Counter 0 1 1 0 0
 power THE_SEALED_THRONE_POWER Buff None Counter 0 1 1 0 0
 power THIEVERY_POWER Buff Instanced Counter 0 1 1 0 0
+var THIEVERY_POWER Gold 0 0 GoldVar
 power THORNS_POWER Buff None Counter 0 1 1 0 0
 power THUNDER_POWER Buff None Counter 0 1 1 0 0
 power TOOLS_OF_THE_TRADE_POWER Buff None Counter 0 1 1 0 0
 power TORIC_TOUGHNESS_POWER Buff Instanced Counter 0 1 1 0 0
+var TORIC_TOUGHNESS_POWER Block 0 0 BlockVar+Unpowered
 power TRACKING_POWER Buff None Counter 0 1 1 0 0
 power TRASH_TO_TREASURE_POWER Buff None Counter 0 1 1 0 0
 power TYRANNY_POWER Buff None Counter 0 1 1 0 0
@@ -278,12 +318,16 @@ power VEILPIERCER_POWER Buff None Counter 0 1 1 0 0
 power VICIOUS_POWER Buff None Counter 0 1 1 0 0
 power VIGOR_POWER Buff None Counter 0 1 1 0 0
 power VITAL_SPARK_POWER Buff None Counter 0 1 1 0 0
+var VITAL_SPARK_POWER AfflictionTitle 0 0 StringVar
 power VOID_FORM_POWER Buff None Counter 0 1 1 0 0
 power VULNERABLE_POWER Debuff None Counter 0 1 1 0 0
+var VULNERABLE_POWER DamageIncrease 1.5 0 DynamicVar
 power WASTE_AWAY_POWER Debuff None Counter 0 1 1 0 0
 power WEAK_POWER Debuff None Counter 0 1 1 0 0
+var WEAK_POWER DamageDecrease 0.75 0 DynamicVar
 power WELL_LAID_PLANS_POWER Buff None Single 0 1 1 0 0
 power WITHERING_PRESENCE_POWER Buff Instanced Counter 0 1 1 0 0
+var WITHERING_PRESENCE_POWER CardsLeft 6 0 DynamicVar
 power WRAITH_FORM_POWER Debuff None Counter 0 1 1 0 0
 # 283 powers
 virtual ADAPTABLE_POWER InitInternalData
