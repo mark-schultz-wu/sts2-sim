@@ -1,18 +1,9 @@
 //! The potions only the Regent's pool draws.
 
+use crate::vars::PotionVars as _;
 use sts2_core::{Fight, Played};
 
-use crate::behaviour::potions::Number;
 use crate::ids::{CardIds as _, PotionIds as _};
-
-/// `KingsCourage`'s `ForgeVar(15)`.
-const KINGS_COURAGE: Number = 15;
-
-/// `CosmicConcoction`'s `CardsVar(3)`.
-const COSMIC_CARDS: usize = 3;
-
-/// `StarPotion`'s `StarsVar(3)`.
-const STARS: Number = 3;
 
 /// What one of the Regent's potions does when it is drunk.
 ///
@@ -23,12 +14,12 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
     match potion {
         // `PlayerCmd.GainStars` by its `Stars`.
         __c0 if __c0 == V::Potion::STAR_POTION => {
-            fight.gain_stars(STARS);
+            fight.gain_stars(V::Potion::STAR_POTION_STARS);
             Played::Done
         }
         // `AnyPlayer`: `ForgeCmd.Forge` for its `Forge`.
         __c0 if __c0 == V::Potion::KINGS_COURAGE => {
-            fight.forge(V::Card::SOVEREIGN_BLADE, KINGS_COURAGE);
+            fight.forge(V::Card::SOVEREIGN_BLADE, V::Potion::KINGS_COURAGE_FORGE);
             Played::Done
         }
         // `Self`: `GetDistinctForCombat` of three colorless cards off
@@ -37,7 +28,14 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
             use sts2_core::{Change, Lasting, Pile, RunStreamKinds as _};
 
             let mut cards = V::combat_colorless_cards().to_vec();
-            let made: [_; COSMIC_CARDS] = fight
+            // The count is the array's length, which no build's number can
+            // set. The assert holds it to the build's `CardsVar`.
+            assert_eq!(
+                V::Potion::COSMIC_CONCOCTION_CARDS,
+                3,
+                "Cosmic Concoction's cards"
+            );
+            let made: [_; 3] = fight
                 .generate_cards(
                     &mut cards,
                     <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_GENERATION,

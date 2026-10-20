@@ -37,18 +37,7 @@ own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
 
-### 2. Potions and enchantments read their numbers from `vars.rs`
-
-`sts2_content::vars` holds every relic's, power's, potion's and
-enchantment's numbers, from each build's `var` rows, as consts on the
-build's enum: `V::Potion::BLOOD_POTION_HEAL`. The relic and power ports
-read theirs there. Each potion and enchantment port's constant that
-mirrors a `CanonicalVars` entry moves to its `vars` const. Where its doc
-names the var another way, the game's code says whether it reads it. One
-the game writes in code, or keeps in a field, stays. A var one build
-lacks has no const, so a port that needs it splits by build.
-
-### 3. v0.111.0's changed rules
+### 2. v0.111.0's changed rules
 
 v0.111.0's `Hooks` and `Rules` are the shared ones in
 `sts2_content::behaviour`, which mirror v0.107.1's game code. A rule
@@ -66,6 +55,9 @@ What each shared module asks of a build, so a port knows where to go:
   vocabulary types, and `Lists`, which a `lists!` macro beside each rule
   writes for the build.
 - `Tables`: the lookups into a row that names content.
+- `sts2_content::vars`: the numbers a relic, power, potion or
+  enchantment prints, as consts on the build's enum. A port reads a
+  number there, and a number one build lacks fails to build for it.
 - `OwnRules`: the build's generated move and play scripts, and its own
   ports of rules that name content another build lacks. A shared
   dispatcher asks the build first and answers itself when the hook
@@ -99,8 +91,8 @@ differ, which a split with no panic needs. The commonest first splits:
 - Expect a Fight, Diamond Diadem and the Battleworn Dummy event changed,
   and are v0.111.0's own, unported.
 - Distinguished Cape adds two curses where it took nine maximum health,
-  and Sere Talon's curses moved. Both read numbers v0.111.0 lacks, so
-  their shared ports hold v0.107.1's.
+  Sere Talon's curses moved, and Inky lost its damage. Each reads a
+  number v0.111.0 lacks, so its shared port holds v0.107.1's.
 
 About 60 of the game's engine files changed too, outside the content
 models: its commands, game actions, entities and runs. `sts2-sim`
@@ -108,7 +100,7 @@ mirrors v0.107.1's engine and has no seam for a build to differ. A
 split that traces to the engine needs that seam, which needs Mark's
 design first.
 
-### 4. A walk that shares only who listens
+### 3. A walk that shares only who listens
 
 The snapshot copies each walk's listeners. Most walks see none arrive or
 leave: 1.3% of `AfterCardPlayed` walks do, and 28% of `AfterSideTurnEnd`
@@ -118,7 +110,7 @@ A cheaper walk shares only which listeners there are and their order,
 kept apart from what they hold. That is part of the flat-state pass,
 which needs a design first.
 
-### 5. A speed target
+### 4. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.

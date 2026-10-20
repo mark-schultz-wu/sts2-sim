@@ -1,12 +1,10 @@
 //! The potions only the Ironclad's pool draws.
 
+use crate::vars::PotionVars as _;
 use sts2_core::{CreatureView as _, Fight, Pile, PileAct, Played};
 
 use crate::behaviour::potions::Number;
 use crate::ids::PotionIds as _;
-
-/// `BloodPotion`'s `DynamicVar("HealPercent", 20)`.
-pub(super) const HEAL_PERCENT: Number = 20;
 
 /// Where one of the Ironclad's potions stops to ask something.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -46,7 +44,7 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
                 .find(|creature| creature.id() == actor)
                 .map(|creature| Number::from(creature.max_hp()))
                 .expect("the player drinking stands in the fight");
-            fight.heal(actor, max_hp * HEAL_PERCENT / 100);
+            fight.heal(actor, max_hp * V::Potion::BLOOD_POTION_HEAL_PERCENT / 100);
             Played::Done
         }
         // `Self`: any number of cards of the hand, each exhausted.

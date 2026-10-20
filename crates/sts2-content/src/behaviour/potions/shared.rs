@@ -1,5 +1,6 @@
 //! The potions every character's pool draws from.
 
+use crate::vars::PotionVars as _;
 use sts2_core::{
     Amount, CardTable as _, Change, CostPool, CreatureView as _, Effect, Fight, Lasting, Pile,
     PileAct, Played, PowerAmount, RunStreamKinds as _, Scaling,
@@ -9,86 +10,14 @@ use crate::behaviour::potions::Number;
 use crate::ids::{PotionIds as _, PowerIds as _};
 use sts2_core::CardKind;
 
-/// `BeetleJuice`'s `RepeatVar(4)`, the hits Shrink lasts.
-const BEETLE_JUICE: Number = 4;
-/// `BlockPotion`'s `BlockVar(12, ValueProp.Unpowered)`.
-const BLOCK: Number = 12;
-/// `LuckyTonic`'s `PowerVar<BufferPower>(1)`.
-const BUFFER: Number = 1;
-/// `Clarity`'s `CardsVar(1)`.
-const CLARITY_CARDS: Number = 1;
-/// `Clarity`'s `PowerVar<ClarityPower>(3)`.
-const CLARITY: Number = 3;
-/// `CureAll`'s `CardsVar(2)`.
-const CURE_ALL_CARDS: Number = 2;
-/// `CureAll`'s `EnergyVar(1)`.
-const CURE_ALL_ENERGY: Number = 1;
-/// `DexterityPotion`'s `PowerVar<DexterityPower>(2)`.
-const DEXTERITY: Number = 2;
-/// `BottledPotential`'s `CardsVar(5)`.
-const BOTTLED_POTENTIAL: Number = 5;
-
-/// `EnergyPotion`'s `EnergyVar(2)`.
-const ENERGY: Number = 2;
-
-/// `ExplosiveAmpoule`'s `DamageVar(10, ValueProp.Unpowered)`.
-const EXPLOSIVE: Number = 10;
 /// `FairyInABottle`'s heal, three tenths of the maximum.
 const FAIRY_PERCENT: Number = 30;
-/// `FirePotion`'s `DamageVar(20, ValueProp.Unpowered)`.
-const FIRE: Number = 20;
-/// `FlexPotion`'s `PowerVar<StrengthPower>(5)`, lent until the turn ends.
-const FLEX: Number = 5;
-/// `HeartOfIron`'s `PowerVar<PlatingPower>(7)`.
-const HEART_OF_IRON: Number = 7;
-/// `LiquidBronze`'s `PowerVar<ThornsPower>(3)`.
-const LIQUID_BRONZE: Number = 3;
-/// `PowderedDemise`'s `Demise` var.
-const POWDERED_DEMISE: Number = 9;
-/// `GigantificationPotion`'s `PowerVar<GigantificationPower>(1)`.
-const GIGANTIFICATION: Number = 1;
-/// `SpeedPotion`'s `PowerVar<DexterityPower>(5)`, lent until the turn ends.
-const SPEED: Number = 5;
-/// `StableSerum`'s `RepeatVar(2)`, the turns the hand is kept.
-const STABLE_SERUM: Number = 2;
 
-/// `StrengthPotion`'s `PowerVar<StrengthPower>(2)`.
-const STRENGTH: Number = 2;
-/// `SwiftPotion`'s `CardsVar(3)`.
-const SWIFT: Number = 3;
-/// `DistilledChaos`'s `RepeatVar(3)`.
-const DISTILLED_CHAOS: usize = 3;
 /// `Duplicator`'s one stack of `DuplicationPower`.
 const DUPLICATION: Number = 1;
-/// `FyshOil`'s `PowerVar<StrengthPower>(1)` and `PowerVar<DexterityPower>(1)`.
-const FYSH_OIL: Number = 1;
 
-/// `ShipInABottle`'s `BlockVar(10, ValueProp.Unpowered)`, which is also the
-/// Block Next Turn it applies.
-const SHIP_IN_A_BOTTLE: Number = 10;
-
-/// `ShacklingPotion`'s `PowerVar<StrengthPower>(7)`.
-const SHACKLING: Number = 7;
-/// `MazalethsGift`'s `PowerVar<RitualPower>(1)`.
-const MAZALETHS_GIFT: Number = 1;
-/// `PotionOfBinding`'s `PowerVar<WeakPower>(1)` and
-/// `PowerVar<VulnerablePower>(1)`.
-const BINDING: Number = 1;
-/// `RadiantTincture`'s `EnergyVar(1)`.
-const RADIANT_ENERGY: Number = 1;
-/// `RadiantTincture`'s `PowerVar<RadiancePower>(3)`.
-const RADIANCE: Number = 3;
-/// `RegenPotion`'s `PowerVar<RegenPower>(5)`.
-const REGEN: Number = 5;
-/// `SneckoOil`'s `CardsVar(7)`.
-const SNECKO_OIL_CARDS: Number = 7;
 /// `SneckoOil.NextEnergyCost`'s bound: `CombatEnergyCosts.NextInt(4)`.
 const SNECKO_OIL_COSTS: u8 = 4;
-
-/// `VulnerablePotion`'s `PowerVar<VulnerablePower>(3)`.
-const VULNERABLE: Number = 3;
-/// `WeakPotion`'s `PowerVar<WeakPower>(3)`.
-const WEAK: Number = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Resume {
@@ -130,7 +59,7 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
         __c0 if __c0 == V::Potion::BLOCK_POTION => {
             let block = fight.resolve(Effect::GainBlock {
                 recipient: fight.actor(),
-                amount: Amount::Number(BLOCK),
+                amount: Amount::Number(V::Potion::BLOCK_POTION_BLOCK),
                 scaling: Scaling::Static,
             });
             fight.apply(block);
@@ -140,23 +69,32 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
         __c0 if __c0 == V::Potion::GIGANTIFICATION_POTION => {
             fight.apply_to_actor(
                 V::Power::GIGANTIFICATION_POWER,
-                PowerAmount::Counted(GIGANTIFICATION),
+                PowerAmount::Counted(V::Potion::GIGANTIFICATION_POTION_GIGANTIFICATION_POWER),
             );
             Played::Done
         }
         // `AnyPlayer`, which a run with one player points at that player.
         __c0 if __c0 == V::Potion::DEXTERITY_POTION => {
-            fight.apply_to_actor(V::Power::DEXTERITY_POWER, PowerAmount::Counted(DEXTERITY));
+            fight.apply_to_actor(
+                V::Power::DEXTERITY_POWER,
+                PowerAmount::Counted(V::Potion::DEXTERITY_POTION_DEXTERITY_POWER),
+            );
             Played::Done
         }
         // `AnyPlayer` again.
         __c0 if __c0 == V::Potion::STRENGTH_POTION => {
-            fight.apply_to_actor(V::Power::STRENGTH_POWER, PowerAmount::Counted(STRENGTH));
+            fight.apply_to_actor(
+                V::Power::STRENGTH_POWER,
+                PowerAmount::Counted(V::Potion::STRENGTH_POTION_STRENGTH_POWER),
+            );
             Played::Done
         }
         // `AnyPlayer`, and `SpeedPotionPower` lends the Dexterity.
         __c0 if __c0 == V::Potion::SPEED_POTION => {
-            fight.apply_to_actor(V::Power::SPEED_POTION_POWER, PowerAmount::Counted(SPEED));
+            fight.apply_to_actor(
+                V::Power::SPEED_POTION_POWER,
+                PowerAmount::Counted(V::Potion::SPEED_POTION_DEXTERITY_POWER),
+            );
             Played::Done
         }
         // `CreatureCmd.Damage` over `HittableEnemies`, unpowered and from the
@@ -169,7 +107,7 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
                     let hit = fight.resolve(Effect::Attack {
                         dealer: fight.actor(),
                         target,
-                        damage: Amount::Number(EXPLOSIVE),
+                        damage: Amount::Number(V::Potion::EXPLOSIVE_AMPOULE_DAMAGE),
                         scaling: Scaling::Static,
                     });
                     fight.apply(hit);
@@ -181,7 +119,7 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
             fight.apply_power(
                 fight.target(),
                 V::Power::VULNERABLE_POWER,
-                PowerAmount::Counted(VULNERABLE),
+                PowerAmount::Counted(V::Potion::VULNERABLE_POTION_VULNERABLE_POWER),
             );
             Played::Done
         }
@@ -189,13 +127,16 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
             fight.apply_power(
                 fight.target(),
                 V::Power::WEAK_POWER,
-                PowerAmount::Counted(WEAK),
+                PowerAmount::Counted(V::Potion::WEAK_POTION_WEAK_POWER),
             );
             Played::Done
         }
         // `AnyPlayer` again.
         __c0 if __c0 == V::Potion::LUCKY_TONIC => {
-            fight.apply_to_actor(V::Power::BUFFER_POWER, PowerAmount::Counted(BUFFER));
+            fight.apply_to_actor(
+                V::Power::BUFFER_POWER,
+                PowerAmount::Counted(V::Potion::LUCKY_TONIC_BUFFER_POWER),
+            );
             Played::Done
         }
         // `AnyPlayer` again, and a run with one player walks that player's
@@ -231,7 +172,7 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
             let hit = fight.resolve(Effect::Attack {
                 dealer: fight.actor(),
                 target,
-                damage: Amount::Number(FIRE),
+                damage: Amount::Number(V::Potion::FIRE_POTION_DAMAGE),
                 scaling: Scaling::Static,
             });
             fight.apply(hit);
@@ -239,7 +180,7 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
         }
         // `AnyPlayer` again, for each of these.
         __c0 if __c0 == V::Potion::SWIFT_POTION => {
-            fight.draw(SWIFT);
+            fight.draw(V::Potion::SWIFT_POTION_CARDS);
             Played::Done
         }
         // `AnyPlayer`: the whole hand onto the bottom of the draw pile, a
@@ -248,48 +189,60 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
             let hand = fight.cards_in(Pile::Hand);
             fight.act_on(sts2_core::PileAct::IntoDraw, &hand);
             fight.shuffle();
-            fight.draw(BOTTLED_POTENTIAL);
+            fight.draw(V::Potion::BOTTLED_POTENTIAL_CARDS);
             Played::Done
         }
         __c0 if __c0 == V::Potion::ENERGY_POTION => {
-            fight.modify_energy(ENERGY);
+            fight.modify_energy(V::Potion::ENERGY_POTION_ENERGY);
             Played::Done
         }
         __c0 if __c0 == V::Potion::CURE_ALL => {
-            fight.modify_energy(CURE_ALL_ENERGY);
-            fight.draw(CURE_ALL_CARDS);
+            fight.modify_energy(V::Potion::CURE_ALL_ENERGY);
+            fight.draw(V::Potion::CURE_ALL_CARDS);
             Played::Done
         }
         __c0 if __c0 == V::Potion::CLARITY => {
-            fight.draw(CLARITY_CARDS);
-            fight.apply_to_actor(V::Power::CLARITY_POWER, PowerAmount::Counted(CLARITY));
+            fight.draw(V::Potion::CLARITY_CARDS);
+            fight.apply_to_actor(
+                V::Power::CLARITY_POWER,
+                PowerAmount::Counted(V::Potion::CLARITY_CLARITY_POWER),
+            );
             Played::Done
         }
         // `FlexPotionPower` lends the Strength.
         __c0 if __c0 == V::Potion::FLEX_POTION => {
-            fight.apply_to_actor(V::Power::FLEX_POTION_POWER, PowerAmount::Counted(FLEX));
+            fight.apply_to_actor(
+                V::Power::FLEX_POTION_POWER,
+                PowerAmount::Counted(V::Potion::FLEX_POTION_STRENGTH_POWER),
+            );
             Played::Done
         }
         __c0 if __c0 == V::Potion::STABLE_SERUM => {
             fight.apply_to_actor(
                 V::Power::RETAIN_HAND_POWER,
-                PowerAmount::Counted(STABLE_SERUM),
+                PowerAmount::Counted(V::Potion::STABLE_SERUM_REPEAT),
             );
             Played::Done
         }
         __c0 if __c0 == V::Potion::HEART_OF_IRON => {
-            fight.apply_to_actor(V::Power::PLATING_POWER, PowerAmount::Counted(HEART_OF_IRON));
+            fight.apply_to_actor(
+                V::Power::PLATING_POWER,
+                PowerAmount::Counted(V::Potion::HEART_OF_IRON_PLATING_POWER),
+            );
             Played::Done
         }
         __c0 if __c0 == V::Potion::LIQUID_BRONZE => {
-            fight.apply_to_actor(V::Power::THORNS_POWER, PowerAmount::Counted(LIQUID_BRONZE));
+            fight.apply_to_actor(
+                V::Power::THORNS_POWER,
+                PowerAmount::Counted(V::Potion::LIQUID_BRONZE_THORNS_POWER),
+            );
             Played::Done
         }
         __c0 if __c0 == V::Potion::BEETLE_JUICE => {
             fight.apply_power(
                 fight.target(),
                 V::Power::SHRINK_POWER,
-                PowerAmount::Counted(BEETLE_JUICE),
+                PowerAmount::Counted(V::Potion::BEETLE_JUICE_REPEAT),
             );
             Played::Done
         }
@@ -297,7 +250,7 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
             fight.apply_power(
                 fight.target(),
                 V::Power::DEMISE_POWER,
-                PowerAmount::Counted(POWDERED_DEMISE),
+                PowerAmount::Counted(V::Potion::POWDERED_DEMISE_DEMISE),
             );
             Played::Done
         }
@@ -319,26 +272,41 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
         }
         // `AnyPlayer` again, for each of these.
         __c0 if __c0 == V::Potion::FYSH_OIL => {
-            fight.apply_to_actor(V::Power::STRENGTH_POWER, PowerAmount::Counted(FYSH_OIL));
-            fight.apply_to_actor(V::Power::DEXTERITY_POWER, PowerAmount::Counted(FYSH_OIL));
+            fight.apply_to_actor(
+                V::Power::STRENGTH_POWER,
+                PowerAmount::Counted(V::Potion::FYSH_OIL_STRENGTH_POWER),
+            );
+            fight.apply_to_actor(
+                V::Power::DEXTERITY_POWER,
+                PowerAmount::Counted(V::Potion::FYSH_OIL_STRENGTH_POWER),
+            );
             Played::Done
         }
         __c0 if __c0 == V::Potion::MAZALETHS_GIFT => {
-            fight.apply_to_actor(V::Power::RITUAL_POWER, PowerAmount::Counted(MAZALETHS_GIFT));
+            fight.apply_to_actor(
+                V::Power::RITUAL_POWER,
+                PowerAmount::Counted(V::Potion::MAZALETHS_GIFT_RITUAL_POWER),
+            );
             Played::Done
         }
         __c0 if __c0 == V::Potion::RADIANT_TINCTURE => {
-            fight.modify_energy(RADIANT_ENERGY);
-            fight.apply_to_actor(V::Power::RADIANCE_POWER, PowerAmount::Counted(RADIANCE));
+            fight.modify_energy(V::Potion::RADIANT_TINCTURE_ENERGY);
+            fight.apply_to_actor(
+                V::Power::RADIANCE_POWER,
+                PowerAmount::Counted(V::Potion::RADIANT_TINCTURE_RADIANCE_POWER),
+            );
             Played::Done
         }
         __c0 if __c0 == V::Potion::REGEN_POTION => {
-            fight.apply_to_actor(V::Power::REGEN_POWER, PowerAmount::Counted(REGEN));
+            fight.apply_to_actor(
+                V::Power::REGEN_POWER,
+                PowerAmount::Counted(V::Potion::REGEN_POTION_REGEN_POWER),
+            );
             Played::Done
         }
         // The top three cards of the draw pile, auto-played.
         __c0 if __c0 == V::Potion::DISTILLED_CHAOS => {
-            fight.auto_play_from_draw(DISTILLED_CHAOS, false);
+            fight.auto_play_from_draw(V::Potion::DISTILLED_CHAOS_REPEAT as usize, false);
             Played::Done
         }
         __c0 if __c0 == V::Potion::DUPLICATOR => {
@@ -352,7 +320,7 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
         // energy cost is a number gets a cost drawn off `CombatEnergyCosts`
         // for this turn or until played, in hand order.
         __c0 if __c0 == V::Potion::SNECKO_OIL => {
-            fight.draw(SNECKO_OIL_CARDS);
+            fight.draw(V::Potion::SNECKO_OIL_CARDS);
             for card in fight.cards_in(Pile::Hand) {
                 if let sts2_core::Cost::Fixed(_) = fight.card_ident(card).card.cost() {
                     let cost = fight.next_energy_cost(SNECKO_OIL_COSTS);
@@ -413,13 +381,17 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
         __c0 if __c0 == V::Potion::POTION_OF_BINDING => {
             let targets = fight.hittable_opponents();
             for &target in &targets {
-                fight.apply_power(target, V::Power::WEAK_POWER, PowerAmount::Counted(BINDING));
+                fight.apply_power(
+                    target,
+                    V::Power::WEAK_POWER,
+                    PowerAmount::Counted(V::Potion::POTION_OF_BINDING_WEAK_POWER),
+                );
             }
             for &target in &targets {
                 fight.apply_power(
                     target,
                     V::Power::VULNERABLE_POWER,
-                    PowerAmount::Counted(BINDING),
+                    PowerAmount::Counted(V::Potion::POTION_OF_BINDING_WEAK_POWER),
                 );
             }
             Played::Done
@@ -429,13 +401,13 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
         __c0 if __c0 == V::Potion::SHIP_IN_A_BOTTLE => {
             let block = fight.resolve(Effect::GainBlock {
                 recipient: fight.actor(),
-                amount: Amount::Number(SHIP_IN_A_BOTTLE),
+                amount: Amount::Number(V::Potion::SHIP_IN_A_BOTTLE_BLOCK),
                 scaling: Scaling::Static,
             });
             fight.apply(block);
             fight.apply_to_actor(
                 V::Power::BLOCK_NEXT_TURN_POWER,
-                PowerAmount::Counted(SHIP_IN_A_BOTTLE),
+                PowerAmount::Counted(V::Potion::SHIP_IN_A_BOTTLE_BLOCK),
             );
             Played::Done
         }
@@ -445,7 +417,7 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
                 fight.apply_power(
                     target,
                     V::Power::SHACKLING_POTION_POWER,
-                    PowerAmount::Counted(SHACKLING),
+                    PowerAmount::Counted(V::Potion::SHACKLING_POTION_STRENGTH_POWER),
                 );
             }
             Played::Done
@@ -475,7 +447,7 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
         // `CreatureCmd.GainMaxHp` on its target by its `MaxHpVar(5)`. A fight
         // here has one player, who drinks it.
         __c0 if __c0 == V::Potion::FRUIT_JUICE => {
-            fight.gain_max_hp(fight.actor(), crate::behaviour::potions::FRUIT_JUICE);
+            fight.gain_max_hp(fight.actor(), V::Potion::FRUIT_JUICE_MAX_HP);
             Played::Done
         }
         potion => unimplemented!("what {potion:?} does when it is drunk"),

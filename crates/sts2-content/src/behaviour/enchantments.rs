@@ -1,5 +1,6 @@
 //! Which cards an enchantment takes, and what it does on them in a fight.
 
+use crate::vars::EnchantmentVars as _;
 use sts2_core::{
     CardId, CardIdent, CardKind, CardTable as _, Change, Cost, EnchantHook, Enchanted,
     EnchantmentStatus, EventHook, Fight, HookEffect, HookEffects, Modify,
@@ -209,12 +210,6 @@ pub(crate) fn should_start_at_bottom_of_draw_pile<V: crate::Build>(
 /// `Inky`'s `DamageVar(1, ValueProp.Move)`.
 const INKY_DAMAGE: i32 = 1;
 
-/// `TezcatarasEmber`'s `DamageVar(3)`.
-const EMBER_DAMAGE: i32 = 3;
-
-/// `Inky`'s `PowerVar<WeakPower>(1)`.
-const INKY_WEAK: i32 = 1;
-
 /// One enchantment on one copy: its `Status`, and the fields its own class
 /// keeps.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -310,7 +305,7 @@ pub(crate) fn modify<V: crate::Build>(
         (__c0, EnchantHook::DamageAdditive { powered: true })
             if __c0 == V::Enchantment::TEZCATARAS_EMBER =>
         {
-            Modify::Added(EMBER_DAMAGE)
+            Modify::Added(V::Enchantment::TEZCATARAS_EMBER_DAMAGE)
         }
         // Its `Times`, one, until its card is first played in the fight.
         (__c0, EnchantHook::PlayCount)
@@ -438,7 +433,7 @@ pub(crate) fn on_play<V: crate::Build, F: Fight<V>>(
         __c0 if __c0 == V::Enchantment::INKY => {
             use sts2_core::{PowerAmount, TargetKinds as _};
 
-            let weak = PowerAmount::Counted(INKY_WEAK);
+            let weak = PowerAmount::Counted(V::Enchantment::INKY_WEAK_POWER);
             let every = fight.card_target_type(fight.playing_ident())
                 == <V as sts2_core::ContentVersion>::TargetType::ALL_ENEMIES;
             let targets = match every {

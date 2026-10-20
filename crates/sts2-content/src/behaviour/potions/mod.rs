@@ -8,6 +8,7 @@
 //! list of what a run can drink.
 
 use crate::ids::PotionIds as _;
+use crate::vars::PotionVars as _;
 
 mod defect;
 mod event;
@@ -117,19 +118,18 @@ pub(crate) fn on_use_on_run<V: crate::Build>(
         // `SetCurrentHpInternal` truncates.
         (__c0, false) if __c0 == V::Potion::BLOOD_POTION => {
             smallvec::smallvec![sts2_core::HookEffect::Heal(
-                Number::from(run.max_hp()) * ironclad::HEAL_PERCENT / 100
+                Number::from(run.max_hp()) * V::Potion::BLOOD_POTION_HEAL_PERCENT / 100
             )]
         }
         // `CreatureCmd.GainMaxHp` by its `MaxHpVar(5)`.
         (__c0, false) if __c0 == V::Potion::FRUIT_JUICE => {
-            smallvec::smallvec![sts2_core::HookEffect::GainMaxHp(FRUIT_JUICE)]
+            smallvec::smallvec![sts2_core::HookEffect::GainMaxHp(
+                V::Potion::FRUIT_JUICE_MAX_HP
+            )]
         }
         (potion, false) => unimplemented!("what {potion:?} does when it is drunk outside a fight"),
     }
 }
-
-/// `FruitJuice`'s `MaxHpVar(5)`.
-const FRUIT_JUICE: Number = 5;
 
 pub(crate) fn resume<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
