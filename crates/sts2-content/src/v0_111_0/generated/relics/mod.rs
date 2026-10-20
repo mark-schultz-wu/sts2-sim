@@ -1644,7 +1644,9 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // LARGE_CAPSULE
     sts2_core::Overrides::NONE,
     // LASTING_CANDY
-    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::TryModifyCardRewardOptions),
+    sts2_core::Overrides::NONE
+        .with(sts2_core::ModelHook::BeforeCombatRewardOffered)
+        .with(sts2_core::ModelHook::TryModifyCardRewardOptions),
     // LAVA_LAMP
     sts2_core::Overrides::NONE
         .with(sts2_core::ModelHook::AfterDamageReceived)

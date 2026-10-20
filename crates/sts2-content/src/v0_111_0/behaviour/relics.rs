@@ -77,6 +77,7 @@ pub(crate) fn own_relic(relic: Relic) -> bool {
             | Relic::BeautifulBracelet
             | Relic::HandDrill
             | Relic::PollinousCore
+            | Relic::LastingCandy
     )
 }
 
@@ -150,6 +151,24 @@ pub(crate) fn own_shared_relic_event_hook(
 
             if state.turns_seen >= Relic::POLLINOUS_CORE_TURNS {
                 state.turns_seen = 0;
+            }
+            Some(())
+        }
+        // `LastingCandy.BeforeCombatRewardOffered` counts a fight's rewards
+        // that hold a card reward, where v0.107.1's counted on
+        // `AfterCombatEnd`. It runs once they are made, so the reward it
+        // adds to comes on an odd count.
+        (State::LastingCandy(state), EventHook::CombatRewardOffering { card_reward }) => {
+            if card_reward {
+                state.combats_seen += 1;
+            }
+            Some(())
+        }
+        // `TryModifyCardRewardOptions`: a Power card beside an encounter's
+        // card reward, on `IsInTriggeringCombat`.
+        (State::LastingCandy(state), EventHook::CardRewardOptions { encounter }) => {
+            if encounter && state.combats_seen % 2 == 1 {
+                asked.push(HookEffect::AddCardRewardOption(sts2_core::CardKind::Power));
             }
             Some(())
         }

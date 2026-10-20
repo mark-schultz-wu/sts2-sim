@@ -445,6 +445,15 @@ impl<V: Rules> State<V> {
         self.reward_offers(&mut offered);
         let room = Some(<_ as sts2_core::EncounterTable>::room(encounter));
         self.modify_rewards(&mut offered, room);
+        // `CombatRoom.OfferRoomEndRewards`: `BeforeCombatRewardOffered` once
+        // the set is made, before it is offered.
+        let card_reward = offered
+            .iter()
+            .any(|offer| matches!(offer, crate::reward::Offer::Card { .. }));
+        let offering = sts2_core::EventHook::CombatRewardOffering { card_reward };
+        if let Some(effect) = self.notify_run(offering).first() {
+            unimplemented!("a relic asking for {effect:?} before a fight's rewards are offered");
+        }
         offered
     }
 }

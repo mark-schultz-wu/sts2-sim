@@ -20,7 +20,7 @@
 //! costs one method, and the reverse costs a divergence nobody can see.
 
 mod behaviour;
-mod engine;
+pub(crate) mod engine;
 mod generated;
 mod keywords;
 mod rest_site;

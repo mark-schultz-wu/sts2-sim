@@ -70,22 +70,22 @@ a port that starts from the other build's code. A move can shift what
 the compiler inlines. The relics' and the cards' decision dispatchers
 stay out of line, since the walk inlining them cost 3.9% and 3.4%.
 
-The simulator follows 1,255,445 of the 1,322,464 recorded positions,
-94%, and 1,356 of 1,500 runs whole. A run that panics counts the
+The simulator follows 1,294,363 of the 1,322,464 recorded positions,
+97%, and 1,419 of 1,500 runs whole. A run that panics counts the
 positions before its panic. `follow_run <file> <index> --diff <dir>`
 plays a run on the game beside the simulator and names the sections
 where they first differ, which a split with no panic needs. No split
-now holds more than six runs. The commonest:
+now holds more than four runs. Most part at the end of a turn against
+one encounter or another, each its own cause. Besides those:
 
-- Lasting Candy counts card rewards on `BeforeCombatRewardOffered`, a
-  hook new in v0.111.0, which the simulator does not raise yet. Its
-  card reward hook changed as well. Run 330's split at a play of the
-  Silent's Strike traces here.
-- At the end of a turn against the Knowledge Demon, the game leaves the
-  turn's phase at `None` where the simulator holds `End`. 4 runs part
-  there.
+- At the end of a turn against the Knowledge Demon, the player dies, and
+  the game leaves the turn's phase at `None` where the simulator holds
+  `End`. 4 runs part there, at their last position.
 - 3 runs panic where Eidolon's auto-play waits on a question with more
-  cards to play.
+  cards to play. The rest of its list needs a resume point that holds
+  it.
+- Runs 54 and 70 part from their recordings, though `--diff` finds the
+  game and the simulator agreeing at every step. Why is not yet known.
 - Misery changed in v0.111.0. It adds a temporary power's amount to the
   power it lends before it copies them, and no power has
   `IgnoreNextInstance` now. The shared port is v0.107.1's.
