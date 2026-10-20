@@ -4142,20 +4142,25 @@ fn enemy_turn<V: Rules>(
         let played = V::perform_move(monster, next_move.id, &mut board);
         ended = ended.or(board.ended());
         super::play::merge::<V>(skipping, std::mem::take(&mut board.skipped));
-        // An intent that works its hit count out from the model shows the
-        // count the move left, until the next move is drawn. Only a fight
-        // that ends here shows it before then.
+        // An intent that works its hit count or damage out from the model
+        // shows what the move left, until the next move is drawn. Only a
+        // fight that ends here shows it before then.
         if ended.is_some()
-            && let Some(repeats) = live
-                .machines
-                .iter()
-                .find(|held| held.creature == id)
-                .and_then(|held| V::intent_repeats_now(monster, next_move.id, &held.state))
-            && let Some(creature) = live.creatures.iter_mut().find(|c| c.id == id)
-            && let Some(telegraphed) = creature.next_move.as_mut()
-            && telegraphed.id == next_move.id
+            && let Some(held) = live.machines.iter().find(|held| held.creature == id)
         {
-            telegraphed.reread_repeats(repeats);
+            let repeats = V::intent_repeats_now(monster, next_move.id, &held.state);
+            let damage = V::intent_damage_now(monster, next_move.id, ascension, &held.state);
+            if let Some(creature) = live.creatures.iter_mut().find(|c| c.id == id)
+                && let Some(telegraphed) = creature.next_move.as_mut()
+                && telegraphed.id == next_move.id
+            {
+                if let Some(repeats) = repeats {
+                    telegraphed.reread_repeats(repeats);
+                }
+                if let Some(damage) = damage {
+                    telegraphed.reread_damage(damage);
+                }
+            }
         }
         match played {
             sts2_core::Played::Done => {}

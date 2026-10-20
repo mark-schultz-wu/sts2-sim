@@ -35,21 +35,27 @@ Speed is a goal as well as a guard. The target is still to be set.
 by side, and keeps only the runs where they part. `--mixed` spreads the
 seeds over every ascension level and modifier. `cargo xtask split --file
 target/hunt/parted-<build>.bin <index> <name>` writes a kept run, up to
-its split, as a scenario. A fix lands with its run in the recorded file,
-and a split that many runs share becomes its own item, above this one.
+its split, as a scenario. A fix lands with its run, recorded whole, in
+`crates/sts2-golden/tests/hunted.bin`. A split that many runs share
+becomes its own item, above this one.
 
-The first hunts found these:
+Found so far, by build, seed, character and setup:
 
-- Lead Paperweight obtained outside Neow's blessing panics. The fix, and
-  its 15 runs, are on the parked branch `agent/fresh-runs`.
-- The Waterfall Giant's Pressure Gun raises its damage after the hit
-  that kills the player. The intent shows the raised damage in the
-  game, and the simulator does not read it again. Two runs on
-  `agent/fresh-runs`.
-- A turn's end against The Obscura, at the run's last step. One run on
-  `agent/fresh-runs`, not yet diffed.
-- v0.111.0 at Double Boss parts in Creatures after the travel to the
-  second boss: IRONCLAD C000000626, step 799.
+- v0.107.1, IRONCLAD C000001040 at Scarcity: a shuffle that asks for a
+  card inside a draw that cannot pause panics.
+- v0.107.1, IRONCLAD C000001047 with All Star: a duplicate of a Strike
+  the fight no longer holds panics.
+- v0.107.1, SILENT C000001076 with Big Game Hunter: the relics part
+  after a card selection is answered.
+- v0.107.1, REGENT C000001056 with Insanity: the question parts after
+  Divine is answered.
+- v0.107.1, IRONCLAD C000001140 with Insanity: the game logs `Tried to pop
+  action GenericHookGameAction` at a reward, and `sts2-headless` refuses
+  the reply's `gameErrors` on a pending answer.
+- v0.107.1, NECROBINDER C000000407: a turn's end against The Obscura,
+  at the run's last step.
+- v0.111.0, IRONCLAD C000000626 at Double Boss: the creatures part after
+  the travel to the second boss, at step 799.
 
 ### 2. A speed target
 

@@ -8,6 +8,10 @@
 //! `recorded-v0.111.0.matched` for v0.111.0's. A count fails the test if
 //! it falls, and asks to be raised if it rises, the way `BASELINE` does.
 //! `cargo xtask coverage` says where the runs part.
+//!
+//! `hunted.bin` holds the runs `cargo xtask hunt` found the simulator parting
+//! on, each recorded whole once it was fixed. It is followed the same way,
+//! against `hunted.matched`, and holds no census.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -119,6 +123,11 @@ fn matched<V: sts2_content::Build>(run: &Run) -> usize {
 #[test]
 fn the_simulator_follows_the_recorded_runs_no_less_far() {
     follows_no_less_far::<V>("recorded.bin", "recorded.matched");
+}
+
+#[test]
+fn the_simulator_follows_the_hunted_runs_no_less_far() {
+    follows_no_less_far::<V>("hunted.bin", "hunted.matched");
 }
 
 #[test]

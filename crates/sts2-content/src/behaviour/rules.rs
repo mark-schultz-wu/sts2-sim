@@ -373,10 +373,6 @@ pub(crate) fn reward_rarity<V: crate::Build>(card: V::Card) -> sts2_core::Reward
     }
 }
 
-pub(crate) fn lead_paperweight<V: crate::Build>() -> V::Relic {
-    V::Relic::LEAD_PAPERWEIGHT
-}
-
 pub(crate) fn card_upgrade<V: crate::Build>(card: V::Card) -> &'static [sts2_core::Change<V>] {
     crate::behaviour::cards::upgrade::<V>(card)
 }
@@ -775,6 +771,29 @@ pub(crate) fn intent_repeats_now<V: crate::Build>(
         crate::Field::Computed => Some(crate::behaviour::monsters::computed_repeats::<V>(
             monster, move_id, model,
         )),
+        crate::Field::Constant(_) => None,
+    }
+}
+
+pub(crate) fn intent_damage_now<V: crate::Build>(
+    monster: V::Monster,
+    move_id: V::MoveId,
+    ascension: V::AscensionLevel,
+    model: &V::MonsterState,
+) -> Option<i32> {
+    use crate::generated::monsters::State;
+
+    let held = sts2_core::Table::data(monster)
+        .states
+        .iter()
+        .find_map(|state| match state {
+            State::Move(held) if held.id == move_id => Some(held),
+            _ => None,
+        })?;
+    match held.intents.attack?.damage {
+        crate::Field::Computed => {
+            crate::behaviour::monsters::model_damage::<V>(monster, move_id, ascension as u8, model)
+        }
         crate::Field::Constant(_) => None,
     }
 }

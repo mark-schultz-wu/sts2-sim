@@ -3090,6 +3090,23 @@ impl<V: Rules> State<V> {
                     self.reward_options(&mut offered, card_reward);
                     Pickup::Cards { offered, min, max }
                 }
+                HookEffect::ChooseColorlessCards { count } => {
+                    self.card_reward_unheard();
+                    let act = self.act();
+                    let mut offered = crate::reward::card::regular::<V, _>(
+                        self.ascension(),
+                        self.streams.player(V::PlayerRngType::REWARDS),
+                        V::colorless_cards(),
+                        count,
+                        Some(act),
+                    );
+                    self.reward_options(&mut offered, false);
+                    Pickup::Cards {
+                        offered,
+                        min: 0,
+                        max: 1,
+                    }
+                }
                 effect => unimplemented!("a run-level relic effect: {effect:?}"),
             };
             return Some(Asked {
@@ -6102,40 +6119,12 @@ impl<V: Rules> State<V> {
             .get(index as usize)
             .unwrap_or_else(|| unimplemented!("an option the blessing does not offer"));
         *chosen = nonmax::NonMaxU8::new(index);
-        if option != V::lead_paperweight() {
-            // `RelicCmd.Obtain`, and whatever the relic's `AfterObtained`
-            // asks, which Neow's screen parks on.
-            return Ok(match self.obtain(option) {
-                None => Decided::Resolved,
-                Some(asked) => self.park(asked),
-            });
-        }
-
-        // Not through `obtain`. The blessing is the one path that carries out
-        // the paperweight's own `AfterObtained`, which is the colorless offer
-        // below, and the relic's row carries no `UponPickup` besides.
-        self.player
-            .relics
-            .push(HeldRelic::new(V::lead_paperweight()));
-        self.card_reward_unheard();
-        let act = self.act();
-        let mut offered = crate::reward::card::regular::<V, _>(
-            self.ascension(),
-            self.streams.player(V::PlayerRngType::REWARDS),
-            V::colorless_cards(),
-            2,
-            Some(act),
-        );
-        self.reward_options(&mut offered, false);
-        Ok(self.park(Asked {
-            pickup: Pickup::Cards {
-                offered,
-                min: 0,
-                max: 1,
-            },
-            rest: SmallVec::new(),
-            under: None,
-        }))
+        // `RelicCmd.Obtain`, and whatever the relic's `AfterObtained`
+        // asks, which Neow's screen parks on.
+        Ok(match self.obtain(option) {
+            None => Decided::Resolved,
+            Some(asked) => self.park(asked),
+        })
     }
 
     /// What the modifier at `at` among the run's does as its Neow option is

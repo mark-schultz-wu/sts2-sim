@@ -1010,10 +1010,6 @@ macro_rules! rules {
                     crate::behaviour::rules::reward_rarity::<Self>(card)
                 }
 
-                fn lead_paperweight() -> Self::Relic {
-                    crate::behaviour::rules::lead_paperweight::<Self>()
-                }
-
                 fn card_upgrade(card: Self::Card) -> &'static [Change<Self>] {
                     crate::behaviour::rules::card_upgrade::<Self>(card)
                 }
@@ -1302,6 +1298,17 @@ macro_rules! rules {
                     model: &Self::MonsterState,
                 ) -> Option<Self::Count> {
                     crate::behaviour::rules::intent_repeats_now::<Self>(monster, move_id, model)
+                }
+
+                fn intent_damage_now(
+                    monster: Self::Monster,
+                    move_id: Self::MoveId,
+                    ascension: Self::AscensionLevel,
+                    model: &Self::MonsterState,
+                ) -> Option<i32> {
+                    crate::behaviour::rules::intent_damage_now::<Self>(
+                        monster, move_id, ascension, model,
+                    )
                 }
 
                 fn resume_move<F: Fight<Self>>(
