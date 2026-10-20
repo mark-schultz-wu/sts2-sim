@@ -37,17 +37,7 @@ own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
 
-### 2. A walk that shares only who listens
-
-The snapshot copies each walk's listeners. Most walks see none arrive or
-leave: 1.3% of `AfterCardPlayed` walks do, and 28% of `AfterSideTurnEnd`
-ones. Sharing the fight's containers behind `Arc` cost 2.6% a step before
-any walk used them, and listeners write hit points and amounts mid-walk.
-A cheaper walk shares only which listeners there are and their order,
-kept apart from what they hold. That is part of the flat-state pass,
-which needs a design first.
-
-### 3. A speed target
+### 2. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.
