@@ -5459,6 +5459,13 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         // `EchoFormPower.AfterModifyingCardPlayCount` does nothing.
         (__c0, _, EventHook::PlayCountModified { .. }) if __c0 == V::Power::ECHO_FORM_POWER => None,
+        // v0.111.0's `EchoFormPower.AfterCardPlayed` and
+        // `BeforeSideTurnStart`, which turn its look off and on alone.
+        (__c0, _, EventHook::CardPlayed { .. } | EventHook::BeforeSideTurnStart { .. })
+            if __c0 == V::Power::ECHO_FORM_POWER =>
+        {
+            None
+        }
         (__c0, _, EventHook::SideTurnEnd { side, .. })
             if (__c0 == V::Power::BURST_POWER
                 || __c0 == V::Power::SHADOWMELD_POWER
@@ -5553,6 +5560,20 @@ pub(crate) fn event_hook<V: crate::Build>(
             Some(HookEffect::ApplyToOwner(V::Power::STRENGTH_POWER, amount))
         }
         (__c0, _, EventHook::SideTurnStart { .. }) if __c0 == V::Power::DEMON_FORM_POWER => None,
+        // v0.111.0's forms' `AfterApplied` and `AfterRemoved`, which make and
+        // put away their look alone.
+        (__c0, _, EventHook::Applied | EventHook::Removed)
+            if [
+                V::Power::DEMON_FORM_POWER,
+                V::Power::ECHO_FORM_POWER,
+                V::Power::REAPER_FORM_POWER,
+                V::Power::SERPENT_FORM_POWER,
+                V::Power::VOID_FORM_POWER,
+            ]
+            .contains(&__c0) =>
+        {
+            None
+        }
         // `SpiritOfAshPower.BeforeCardPlayed`: its stack as block, unpowered,
         // before each of its owner's Ethereal cards is played.
         (__c0, PowerAmount::Counted(amount), EventHook::CardPlaying { ethereal: true, .. })
