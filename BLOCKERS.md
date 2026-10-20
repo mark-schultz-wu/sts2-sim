@@ -32,14 +32,9 @@ Speed is a goal as well as a guard. The target is still to be set.
 ### 1. Every hook on the walk
 
 Every event hook walks with the snapshot cursor, `listen::Snapshot`, and
-the eager `notify` goes, in batches of call sites. `AfterCardPlayed` walks
-already, at 1.4% a step. About 70 call sites are left.
-
-`AfterCardDrawn` needs it next. Pagestorm draws a card when an Ethereal
-one is drawn, and that draw runs before Chains of Binding hears the first.
-So the nested card is Bound first and takes the last of the stack. The sim
-asks Chains about both before either is Bound. Recorded run 2571, a
-Flight run, parts there against the Queen.
+the eager `notify` goes, in batches of call sites. `AfterCardPlayed` and
+the late pass of `AfterCardDrawn` walk already. About 70 call sites are
+left.
 
 The walk also still asks a power an earlier listener took off, as a model
 on its own. Nemesis takes Intangible off as the enemies' turn ends, and
