@@ -1,21 +1,55 @@
 //! The cards whose rules this build ports for itself, which the shared cards
 //! hand over through [`crate::build::OwnRules`].
 
-use sts2_core::{Fight, Played};
+use sts2_core::{Amount, Effect, Fight, Played, Scaling};
 
 use super::super::V0_111_0 as V;
 use super::super::generated::cards::{CardVar, Cards, EventCard, IroncladCard, QuestCard};
+use super::super::generated::powers::Power;
 use crate::generated::runstate::MapPointType;
 
 type Number = i32;
 
 /// What a card of this build's own does when it is played, or nothing for a
 /// shared one.
-pub(crate) fn on_play<F: Fight<V>>(card: Cards, _fight: &mut F) -> Option<Played<V>> {
+pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Option<Played<V>> {
     match card {
-        // `ExpectAFight` gains its calculated block here.
+        // `ExpectAFight`: as much block as its `CalculatedBlock`, a move's.
         Cards::Ironclad(IroncladCard::ExpectAFight) => {
-            unimplemented!("Expect a Fight's play in v0.111.0")
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Var(CardVar::CalculatedBlock),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+            Some(Played::Done)
+        }
+        // `Abundance`: `GetDistinctForCombat` of three Powers from its
+        // owner's own pool, off `CombatCardGeneration`, each upgraded, and
+        // the one chosen into hand, free this turn.
+        Cards::Event(EventCard::Abundance) => {
+            use sts2_core::{CardKind, Rules as _, RunStreamKinds as _};
+
+            let mut powers: Vec<_> = V::combat_cards(fight.character())
+                .iter()
+                .copied()
+                .filter(|&card| V::card_kind(card) == Some(CardKind::Power))
+                .collect();
+            let stream = <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_GENERATION;
+            let mut offered: [sts2_core::CardIdent<V>; sts2_core::CHOICES] = fight
+                .generate_cards(&mut powers, stream)
+                .unwrap_or_else(|_| unimplemented!("a pool offering fewer than three Powers"));
+            for card in &mut offered {
+                card.upgrade = 1;
+            }
+            Some(Played::Choosing {
+                offered: offered.into_iter().collect(),
+                skippable: false,
+                at: crate::behaviour::cards::Resume::Event(
+                    crate::behaviour::cards::event::Resume::AbundanceChoice,
+                )
+                .into(),
+            })
         }
         _ => None,
     }
@@ -24,14 +58,26 @@ pub(crate) fn on_play<F: Fight<V>>(card: Cards, _fight: &mut F) -> Option<Played
 /// A number a card of this build's own works out, or nothing for a shared one.
 pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
     card: Cards,
-    _key: CardVar,
-    _printed: &P,
-    _owner: sts2_core::CardOwner<'_, V>,
+    key: CardVar,
+    printed: &P,
+    owner: sts2_core::CardOwner<'_, V>,
 ) -> Option<Number> {
-    match card {
-        // `ExpectAFight`: a base, and more for each Strength its owner has.
-        Cards::Ironclad(IroncladCard::ExpectAFight) => {
-            unimplemented!("Expect a Fight's calculated block in v0.111.0")
+    match (card, key) {
+        // `ExpectAFight`: a base, and more for each Strength its owner has,
+        // none for less than none.
+        (Cards::Ironclad(IroncladCard::ExpectAFight), CardVar::CalculatedBlock) => {
+            let strength = owner
+                .powers
+                .iter()
+                .find(|held| held.power == Power::StrengthPower)
+                .map_or(0, |held| match held.amount {
+                    sts2_core::PowerAmount::Counted(amount) => amount,
+                    sts2_core::PowerAmount::Endless => unimplemented!("an endless Strength"),
+                });
+            Some(
+                printed.face(CardVar::CalculationBase)
+                    + printed.face(CardVar::CalculationExtra) * strength.max(0),
+            )
         }
         _ => None,
     }

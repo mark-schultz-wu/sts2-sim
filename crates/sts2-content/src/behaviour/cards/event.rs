@@ -22,6 +22,9 @@ pub enum Resume<V: crate::Build> {
     /// A Mad Science attack, after a question inside one of its hits, with
     /// `left` hits still to land.
     MadScienceHit { card: V::Card, left: u8 },
+    /// v0.111.0's `Abundance`, after the Power chosen from the three it
+    /// offered.
+    AbundanceChoice,
 }
 
 /// The rest of the play waits at `at`, where a command left a question and
@@ -194,6 +197,27 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F
     }
 }
 
+/// The rest of a play that stopped on a choose-a-card screen.
+pub(super) fn resume_chosen<V: crate::Build, F: Fight<V>>(
+    fight: &mut F,
+    at: Resume<V>,
+    chosen: Option<sts2_core::CardIdent<V>>,
+) -> Played<V> {
+    match at {
+        // `SetToFreeThisTurn`, then `CardPileCmd.AddGeneratedCardToCombat`
+        // into hand.
+        Resume::AbundanceChoice => {
+            if let Some(card) = chosen {
+                for at in fight.add_generated_cards(card, Pile::Hand, 1) {
+                    crate::behaviour::free_this_turn(fight, at);
+                }
+            }
+            Played::Done
+        }
+        at => unreachable!("{at:?} stops on a pick of a pile"),
+    }
+}
+
 pub(super) fn resume_play<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
     at: Resume<V>,
@@ -208,6 +232,7 @@ pub(super) fn resume_play<V: crate::Build, F: Fight<V>>(
         Resume::BrightestFlameDrew | Resume::MaulHit | Resume::MadScienceHit { .. } => {
             unreachable!("{at:?} waits on a question, not a pick")
         }
+        Resume::AbundanceChoice => unreachable!("{at:?} chooses, and picks nothing"),
         // `CreateClone` of the card picked, its `Cards` times, each through
         // `AddGeneratedCardToCombat` into the hand.
         Resume::DualWieldPick => {

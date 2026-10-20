@@ -22,7 +22,7 @@ type Number = i32;
 mod colorless;
 mod curse;
 mod defect;
-mod event;
+pub(crate) mod event;
 mod ironclad;
 mod necrobinder;
 mod regent;
@@ -1234,6 +1234,7 @@ pub(crate) fn resume_chosen<V: crate::Build, F: Fight<V>>(
     match at {
         Resume::Regent(at) => regent::resume_chosen::<V, _>(fight, at, chosen),
         Resume::Colorless(at) => colorless::resume_chosen::<V, _>(fight, at, chosen),
+        Resume::Event(at) => event::resume_chosen::<V, _>(fight, at, chosen),
         at => unimplemented!("{at:?} resumed with a chosen card"),
     }
 }
