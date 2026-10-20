@@ -988,7 +988,7 @@ fn tesla_coil_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
         .collect();
     for orb in &lightning {
         for _ in 0..times {
-            super::super::orbs::passive_at(orb, target, fight);
+            crate::behaviour::orbs::passive_at(orb, target, fight);
         }
     }
     Played::Done

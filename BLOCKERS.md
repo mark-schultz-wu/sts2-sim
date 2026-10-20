@@ -37,36 +37,33 @@ own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
 
-### 2. Table lookups through a trait
+### 2. The behaviour generic over the build
 
-A content id's row, `power.data()` or `Cards::pool_cards`, is an
-inherent method of each build's own enum, which a rule generic over the
-build cannot call. Codegen emits a trait for each content type with the
-lookups the behaviour makes, and each build's enum implements it. The
-vocabulary every build spells alike, `CardType`, the flags and rarities,
-is already one type, in `sts2_content::generated`.
+The v0.107.1 behaviour moves out of its build into
+`sts2_content::behaviour`, generic over `V: Build`, one pool or domain
+at a time. `cargo xtask generic <file>` does the mechanical part. A
+content path becomes a const from `sts2_content::ids`,
+`V::Orb::LIGHTNING_ORB`, and a pattern naming one becomes a guard,
+since a `match` cannot name a generic const. A match left with no
+catch-all gains an `unreachable!()` arm. It lists what it leaves for a
+hand. Each move adds to `Build` the bounds its rules read. A row lookup
+a build spelled as an inherent method becomes a `sts2_core::Table`
+impl in codegen. A spike on the powers' hooks and every card play
+measured 12,264 instructions a step before and 12,184 after. Every
+recorded run still matches after each move.
 
-### 3. The behaviour generic over the build
+The orbs are shared. The rest: enchantments, modifiers,
+acts, encounters, potions, relics, powers, monsters, events, and the
+cards, pool by pool.
 
-The v0.107.1 behaviour moves out of its build, generic over `V`, one
-pool or domain at a time. It names content through the consts in
-`sts2_content::ids`, `V::Power::STRENGTH_POWER` rather than
-`Power::StrengthPower`, which name only the ids both builds have. A
-`match` cannot name a generic const, so a content pattern becomes a
-guard, `p if p == V::Power::STRENGTH_POWER`. A `cargo xtask` rewriter
-makes that change and adds the `unreachable!()` arm an exhaustive match
-loses. A spike on the powers' hooks and every card play measured 12,264
-instructions a step before and 12,184 after. Every recorded run still
-matches after each move.
-
-### 4. v0.111.0's own rules
+### 3. v0.111.0's own rules
 
 v0.111.0's `Rules` uses the shared behaviour. A rule whose game code
 changed between the builds gets a port of its own, chosen by the build.
 Content new in v0.111.0 is ported there. Dump and record with the
 mod built for v0.111.0, and its recorded runs are the measure.
 
-### 5. A walk that shares only who listens
+### 4. A walk that shares only who listens
 
 The snapshot copies each walk's listeners. Most walks see none arrive or
 leave: 1.3% of `AfterCardPlayed` walks do, and 28% of `AfterSideTurnEnd`
@@ -76,7 +73,7 @@ A cheaper walk shares only which listeners there are and their order,
 kept apart from what they hold. That is part of the flat-state pass,
 which needs a design first.
 
-### 6. A speed target
+### 5. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.
