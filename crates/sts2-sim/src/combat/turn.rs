@@ -730,7 +730,8 @@ fn before_flush_late<V: Rules>(
     }
     let player = live.player().id;
     let turn = live.turn;
-    let mut walking = listen::walking::<V>(live, relics, sts2_core::EventHook::FlushingLate);
+    let mut walking =
+        listen::Walking::begin::<listen::Checked>(live, relics, sts2_core::EventHook::FlushingLate);
     while let Some((listener, effect)) = walking
         .as_mut()
         .and_then(|walking| walking.next(live, relics))
@@ -1000,7 +1001,7 @@ pub(super) fn before_side_turn_start<V: Rules>(
     }
     let round = live.round;
     let hook = sts2_core::EventHook::BeforeSideTurnStart { side, turn, round };
-    let mut walking = listen::walking::<V>(live, relics, hook);
+    let mut walking = listen::Walking::begin::<listen::Eager>(live, relics, hook);
     while let Some((listener, effect)) = walking
         .as_mut()
         .and_then(|walking| walking.next(live, relics))
@@ -1112,7 +1113,7 @@ fn before_turn_end<V: Rules>(
 ) -> Option<super::Ended> {
     let block = live.player().block;
     let hook = sts2_core::EventHook::BeforeSideTurnEndVeryEarly { side, block };
-    let mut walking = listen::walking::<V>(live, relics, hook);
+    let mut walking = listen::Walking::begin::<listen::Checked>(live, relics, hook);
     while let Some((listener, effect)) = walking
         .as_mut()
         .and_then(|walking| walking.next(live, relics))
@@ -1138,7 +1139,7 @@ fn before_turn_end<V: Rules>(
         plays,
         turn: live.turn,
     };
-    let mut walking = listen::walking::<V>(live, relics, hook);
+    let mut walking = listen::Walking::begin::<listen::Eager>(live, relics, hook);
     while let Some((listener, effect)) = walking
         .as_mut()
         .and_then(|walking| walking.next(live, relics))
@@ -1185,7 +1186,7 @@ fn before_turn_end<V: Rules>(
         hand: live.cards.len(Pile::Hand),
     };
     let mut ended = None;
-    let mut walking = listen::walking::<V>(live, relics, hook);
+    let mut walking = listen::Walking::begin::<listen::Checked>(live, relics, hook);
     while let Some((listener, effect)) = walking
         .as_mut()
         .and_then(|walking| walking.next(live, relics))
@@ -1732,14 +1733,10 @@ pub(super) fn carry_setup<V: Rules>(
                             player,
                             turn: live.turn,
                         };
-                        let heard = listen::heard::<V>(
-                            live,
-                            relics,
-                            sts2_core::ModelHook::AfterPlayerTurnStart,
-                        );
-                        Setup::PlayerTurnStart(heard.then(|| {
-                            Box::new(listen::Walking::new(listen::walk::<V>(live, relics, hook)))
-                        }))
+                        Setup::PlayerTurnStart(
+                            listen::Walking::begin::<listen::Eager>(live, relics, hook)
+                                .map(Box::new),
+                        )
                     }
                     // A card auto-played as it was drawn asked, and the rest
                     // of the draw waits for its play.
@@ -2056,7 +2053,8 @@ pub(super) fn carry_setup<V: Rules>(
                             player,
                             turn: live.turn,
                         };
-                        let mut walking = listen::walking::<V>(live, relics, hook);
+                        let mut walking =
+                            listen::Walking::begin::<listen::Checked>(live, relics, hook);
                         while let Some((listener, effect)) = walking
                             .as_mut()
                             .and_then(|walking| walking.next(live, relics))
@@ -2408,10 +2406,7 @@ pub(super) fn card_discarded<V: Rules>(
     relics: &mut crate::run::Belt<V>,
 ) -> Option<super::Ended> {
     let hook = sts2_core::EventHook::CardDiscarded { side: live.side };
-    if !listen::heard::<V>(live, relics, sts2_core::ModelHook::AfterCardDiscarded) {
-        return None;
-    }
-    let mut walking = listen::Walking::new(listen::walk::<V>(live, relics, hook));
+    let mut walking = listen::Walking::begin::<listen::Checked>(live, relics, hook)?;
     let ascension = live.ascension;
     let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
     while let Some((listener, effect)) = board.next_of(&mut walking) {
@@ -2483,10 +2478,7 @@ pub(super) fn exhausted<V: Rules>(
         id: card.id,
         ethereal,
     };
-    if !listen::heard::<V>(live, relics, sts2_core::ModelHook::AfterCardExhausted) {
-        return None;
-    }
-    let mut walking = listen::Walking::new(listen::walk::<V>(live, relics, hook));
+    let mut walking = listen::Walking::begin::<listen::Checked>(live, relics, hook)?;
     let ascension = live.ascension;
     // Inside an effect, a question a listener's command asks stands the
     // effect still.
@@ -2878,8 +2870,7 @@ fn spend_resources<V: Rules>(
             player: live.player().id,
             amount: spent,
         };
-        if listen::heard::<V>(live, relics, sts2_core::ModelHook::AfterStarsSpent) {
-            let mut walking = listen::Walking::new(listen::walk::<V>(live, relics, hook));
+        if let Some(mut walking) = listen::Walking::begin::<listen::Checked>(live, relics, hook) {
             let ascension = live.ascension;
             let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
             while let Some((_, effect)) = board.next_of(&mut walking) {
@@ -2929,9 +2920,12 @@ pub(super) fn side_turn_started<V: Rules>(
         extra,
     };
     // Each listener acts as the walk reaches it.
-    let mut walk = listen::walk::<V>(live, relics, hook);
+    let mut walk = listen::Walker::begin::<listen::Eager>(live, relics, hook);
     let mut asked = sts2_core::HookEffects::new();
-    while let Some(listener) = walk.next(live, relics, &mut asked) {
+    while let Some(listener) = walk
+        .as_mut()
+        .and_then(|walk| walk.next(live, relics, &mut asked))
+    {
         for effect in asked.drain(..) {
             match effect {
                 // `PowerCmd.Remove(this)`, from a power spent as its side begins.
@@ -3174,7 +3168,7 @@ pub(super) fn side_turn_started<V: Rules>(
     // `Hook.AfterSideTurnStartLate`. A power's `PowerCmd.Decrement(this)`
     // has ticked by the time this hears it.
     let hook = sts2_core::EventHook::SideTurnStartLate { side };
-    let mut walking = listen::walking::<V>(live, relics, hook);
+    let mut walking = listen::Walking::begin::<listen::Checked>(live, relics, hook);
     while let Some((listener, effect)) = walking
         .as_mut()
         .and_then(|walking| walking.next(live, relics))
@@ -3218,11 +3212,10 @@ fn flush_hand<V: Rules>(
         live.cards.sift(Pile::Hand, Pile::Discard, Face::retains);
     }
     // `Hook.AfterFlush`, with what stayed in hand retained.
-    if !listen::heard::<V>(live, relics, sts2_core::ModelHook::AfterFlush) {
-        return;
-    }
     let hook = sts2_core::EventHook::Flushed;
-    let mut walking = listen::Walking::new(listen::walk::<V>(live, relics, hook));
+    let Some(mut walking) = listen::Walking::begin::<listen::Checked>(live, relics, hook) else {
+        return;
+    };
     let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
     while let Some((listener, effect)) = board.next_of(&mut walking) {
         match effect {
@@ -3276,7 +3269,7 @@ pub(super) fn energy_reset<V: Rules>(
         turn: live.turn,
     };
     let mut ended = None;
-    let mut walking = listen::walking::<V>(live, relics, hook);
+    let mut walking = listen::Walking::begin::<listen::Checked>(live, relics, hook);
     while let Some((listener, effect)) = walking
         .as_mut()
         .and_then(|walking| walking.next(live, relics))
@@ -3348,7 +3341,7 @@ pub(super) fn energy_reset_late<V: Rules>(
         player,
         turn: live.turn,
     };
-    let mut walking = listen::walking::<V>(live, relics, hook);
+    let mut walking = listen::Walking::begin::<listen::Checked>(live, relics, hook);
     while let Some((_, effect)) = walking
         .as_mut()
         .and_then(|walking| walking.next(live, relics))
@@ -3434,7 +3427,7 @@ fn clear_block<V: Rules>(
             player,
             turn: live.turn,
         };
-        let mut walking = listen::walking::<V>(live, relics, hook);
+        let mut walking = listen::Walking::begin::<listen::Checked>(live, relics, hook);
         while let Some((listener, effect)) = walking
             .as_mut()
             .and_then(|walking| walking.next(live, relics))
@@ -3519,9 +3512,12 @@ fn walk_turn_end<V: Rules>(
     hook: sts2_core::EventHook<V>,
 ) -> Option<super::Ended> {
     let mut ended = None;
-    let mut walk = listen::walk::<V>(live, relics, hook);
+    let mut walk = listen::Walker::begin::<listen::Checked>(live, relics, hook);
     let mut asked = sts2_core::HookEffects::new();
-    while let Some(listener) = walk.next(live, relics, &mut asked) {
+    while let Some(listener) = walk
+        .as_mut()
+        .and_then(|walk| walk.next(live, relics, &mut asked))
+    {
         for effect in asked.drain(..) {
             // A fight that is ending runs no more commands, though the walk
             // still asks every listener.

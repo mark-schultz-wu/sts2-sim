@@ -209,7 +209,11 @@ pub(crate) fn enter<V: Rules>(
         },
         base: entering.base,
     };
-    for (_, effect) in super::listen::notify::<V>(&mut live, relics, entered) {
+    let mut walking = super::listen::Walking::begin::<super::listen::Eager>(&live, relics, entered);
+    while let Some((_, effect)) = walking
+        .as_mut()
+        .and_then(|walking| walking.next(&mut live, relics))
+    {
         match effect {
             // `PlayerCmd.GainStars`.
             HookEffect::GainStars(gained) => {
@@ -316,7 +320,12 @@ pub(crate) fn enter<V: Rules>(
         holding_potions: !live.potions.is_empty(),
         point: live.point,
     };
-    for (listener, effect) in super::listen::notify::<V>(&mut live, relics, starting) {
+    let mut walking =
+        super::listen::Walking::begin::<super::listen::Checked>(&live, relics, starting);
+    while let Some((listener, effect)) = walking
+        .as_mut()
+        .and_then(|walking| walking.next(&mut live, relics))
+    {
         match (listener, effect) {
             // On the creature carrying the listener, which for a relic is the
             // player.
@@ -394,7 +403,11 @@ pub(crate) fn enter<V: Rules>(
     }
     // `BeforeCombatStartLate`, once every listener has heard the first.
     let late = EventHook::CombatStartingLate { room: live.room() };
-    for (listener, effect) in super::listen::notify::<V>(&mut live, relics, late) {
+    let mut walking = super::listen::Walking::begin::<super::listen::Checked>(&live, relics, late);
+    while let Some((listener, effect)) = walking
+        .as_mut()
+        .and_then(|walking| walking.next(&mut live, relics))
+    {
         match (listener, effect) {
             // The belt is the run's.
             (super::listen::Listener::Relic { .. }, potion @ HookEffect::ProcurePotion(_)) => {
