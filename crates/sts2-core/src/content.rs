@@ -7447,6 +7447,11 @@ pub trait Engine {
     /// meanwhile, so a card added then is among the choices. A build whose
     /// `FromHand` lists the hand first says no.
     fn lists_hand_after_pause() -> bool;
+
+    /// `CardModel.OnPlayWrapper`'s loop over a card's plays stops before a
+    /// replay once the fight is over or ending. A build whose loop plays
+    /// each replay regardless says no.
+    fn replays_stop_once_ending() -> bool;
 }
 
 /// The rules of one build, as the simulator asks them.

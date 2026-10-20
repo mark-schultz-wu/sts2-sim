@@ -1557,6 +1557,14 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                 if effect.plays.done >= effect.plays.count {
                     break;
                 }
+                // The next turn of the loop opens on `IsOverOrEnding`.
+                if V::replays_stop_once_ending()
+                    && (next.won
+                        || next.lost
+                        || super::board::ending::<V>(super::listen::Walk { live: next, relics }))
+                {
+                    break;
+                }
                 if next.asking.is_some() {
                     unimplemented!("a replay waiting behind a question its last play's hook asked");
                 }

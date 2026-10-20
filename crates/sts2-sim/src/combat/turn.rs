@@ -207,8 +207,22 @@ pub(super) fn end_from_flush<V: Rules>(
         <V::CombatSide as SideKinds>::PLAYER,
     ) {
         next.skip_tick = skipping;
-        if ended == super::Ended::Won {
-            listen::combat_ended::<V>(next, relics);
+        match ended {
+            super::Ended::Won => listen::combat_ended::<V>(next, relics),
+            // A loss here is only pending: `SwitchFromPlayerToEnemySide`
+            // and the enemy's `StartTurn` run up to its win check. Every
+            // hook walk yields nothing while the fight is ending, so what
+            // is left is the switch, the phase `StartTurn` opens on, and
+            // `Creature.AfterTurnStart` clearing each enemy's block.
+            super::Ended::Lost => {
+                next.switch_side(<V::CombatSide as SideKinds>::ENEMY);
+                next.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::NONE;
+                for creature in next.creatures.iter_mut() {
+                    if creature.side == <V::CombatSide as SideKinds>::ENEMY {
+                        creature.block = num_traits::zero();
+                    }
+                }
+            }
         }
         return Ok(Some(ended));
     }
