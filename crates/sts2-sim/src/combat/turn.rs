@@ -530,7 +530,7 @@ fn start_player_turn<V: Rules>(
         player,
         turn: next.turn,
     };
-    let asked = listen::notify::<V>(next, relics, hook);
+    let asked = listen::Walking::begin::<listen::Checked>(next, relics, hook).map(Box::new);
     // A setup that stops on a question lets the turn go on around it:
     // `StartTurn` waits for it to finish or to pause. A relic's damage can
     // end the fight, and a fight ended in `SetupPlayerTurn` starts no side
@@ -612,21 +612,10 @@ fn post_play_phase<V: Rules>(
     max_energy: V::Count,
 ) -> bool {
     live.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::AUTO_POST_PLAY;
-    let hook = sts2_core::ModelHook::AfterAutoPostPlayPhaseEntered;
-    let asked: PrePlayRest<V> = match listen::heard::<V>(live, relics, hook) {
-        true => {
-            let turn = live.turn;
-            listen::notify::<V>(
-                live,
-                relics,
-                sts2_core::EventHook::AutoPostPlayPhase { turn },
-            )
-            .into_iter()
-            .collect()
-        }
-        false => SmallVec::new(),
-    };
-    post_play_from::<V>(live, rngs, relics, asked, max_energy)
+    let turn = live.turn;
+    let hook = sts2_core::EventHook::AutoPostPlayPhase { turn };
+    let rest = PassRest::walk(live, relics, hook);
+    post_play_from::<V>(live, rngs, relics, rest, max_energy)
 }
 
 /// The post-play phase from what its listeners asked for. True where an
@@ -635,11 +624,10 @@ pub(super) fn post_play_from<V: Rules>(
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
     relics: &mut crate::run::Belt<V>,
-    asked: PrePlayRest<V>,
+    mut rest: PassRest<V>,
     max_energy: V::Count,
 ) -> bool {
-    let mut effects = asked.into_iter();
-    while let Some((listener, effect)) = effects.next() {
+    while let Some((listener, effect)) = rest.next(live, relics) {
         // A Stampede part-way through puts what it has left back first.
         let mut left_over = None;
         match effect {
@@ -698,11 +686,7 @@ pub(super) fn post_play_from<V: Rules>(
         }
         // `CardCmd.AutoPlay` is awaited, so what is left waits on the answer.
         if live.asking.is_some() {
-            let mut rest: PrePlayRest<V> = SmallVec::new();
-            if let Some(effect) = left_over {
-                rest.push((listener, effect));
-            }
-            rest.extend(effects);
+            rest.first = left_over.map(|effect| (listener, effect));
             live.defer(super::live::Deferred::PostPlay { rest, max_energy });
             return true;
         }
@@ -1408,8 +1392,9 @@ pub(super) fn carry_setup<V: Rules>(
             // `Hook.BeforeHandDraw`, once the energy is reset and before the
             // turn's hand is drawn.
             Setup::BeforeHandDraw(mut rest) => {
-                while !rest.is_empty() {
-                    let (listener, effect) = rest.remove(0);
+                while let Some((listener, effect)) =
+                    rest.as_mut().and_then(|walking| walking.next(live, relics))
+                {
                     match effect {
                         sts2_core::HookEffect::ChooseColorlessIntoHand => {
                             let mut pool = V::combat_colorless_cards().to_vec();
@@ -2594,7 +2579,7 @@ fn pre_play_heard<V: Rules>(
     rngs: CombatRngs<'_>,
     relics: &mut crate::run::Belt<V>,
 ) -> Option<super::Ended> {
-    pre_play_from::<V>(live, rngs, relics, SmallVec::new(), 0)
+    pre_play_from::<V>(live, rngs, relics, PassRest::none(), 0)
 }
 
 /// The pre-play phase from `rest`, what a pass still asked for, then from the
@@ -2654,7 +2639,7 @@ pub(super) fn pre_play_from<V: Rules>(
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
     relics: &mut crate::run::Belt<V>,
-    rest: PrePlayRest<V>,
+    rest: PassRest<V>,
     next: usize,
 ) -> Option<super::Ended> {
     let turn = live.turn;
@@ -2664,10 +2649,9 @@ pub(super) fn pre_play_from<V: Rules>(
         sts2_core::EventHook::AutoPrePlayPhaseLate { turn },
     ];
     let mut pass = next;
-    let mut asked: PrePlayRest<V> = rest;
+    let mut asked = rest;
     loop {
-        let mut effects = asked.into_iter();
-        while let Some((listener, effect)) = effects.next() {
+        while let Some((listener, effect)) = asked.next(live, relics) {
             match effect {
                 // `CardCmd.AutoPlay` of the card, from wherever it stands.
                 sts2_core::HookEffect::AutoPlay(card) => {
@@ -2701,8 +2685,10 @@ pub(super) fn pre_play_from<V: Rules>(
                     // `CardCmd.AutoPlay` is awaited, so what the pass still
                     // asked for waits on the answer.
                     if live.asking.is_some() {
-                        let rest: PrePlayRest<V> = effects.collect();
-                        live.defer(super::live::Deferred::PrePlay { rest, next: pass });
+                        live.defer(super::live::Deferred::PrePlay {
+                            rest: asked,
+                            next: pass,
+                        });
                         return None;
                     }
                 }
@@ -2732,10 +2718,12 @@ pub(super) fn pre_play_from<V: Rules>(
                         // wait on the answer, ahead of what the pass still
                         // asked for.
                         if live.asking.is_some() {
-                            let mut rest: PrePlayRest<V> = SmallVec::new();
-                            rest.push((listener, sts2_core::HookEffect::AutoPlayHand { left }));
-                            rest.extend(effects);
-                            live.defer(super::live::Deferred::PrePlay { rest, next: pass });
+                            asked.first =
+                                Some((listener, sts2_core::HookEffect::AutoPlayHand { left }));
+                            live.defer(super::live::Deferred::PrePlay {
+                                rest: asked,
+                                next: pass,
+                            });
                             return None;
                         }
                     }
@@ -2766,7 +2754,7 @@ pub(super) fn pre_play_from<V: Rules>(
             // the answer.
             if live.asking.is_some() {
                 live.defer(super::live::Deferred::PrePlay {
-                    rest: effects.collect(),
+                    rest: asked,
                     next: pass,
                 });
                 return None;
@@ -2774,7 +2762,7 @@ pub(super) fn pre_play_from<V: Rules>(
         }
         // Past the last pass, the phase is over and the fight goes on.
         let &hook = passes.get(pass)?;
-        asked = listen::notify::<V>(live, relics, hook);
+        asked = PassRest::walk(live, relics, hook);
         pass += 1;
     }
 }
@@ -2884,8 +2872,43 @@ fn spend_resources<V: Rules>(
     (energy, stars)
 }
 
-/// What a pre-play pass asked for and has not yet carried out.
-pub(super) type PrePlayRest<V> = SmallVec<[(Listener<V>, sts2_core::HookEffect<V>); 4]>;
+/// What a pre-play or post-play pass still has to carry out. That is an
+/// answer an auto-play's question stopped part-way through, then the rest
+/// of the pass's walk.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct PassRest<V: Rules> {
+    first: Option<(Listener<V>, sts2_core::HookEffect<V>)>,
+    walking: Option<Box<listen::Walking<V>>>,
+}
+
+impl<V: Rules> PassRest<V> {
+    /// The walk over `hook`'s listeners, where any hears it.
+    fn walk(live: &Live<V>, relics: &crate::run::Belt<V>, hook: sts2_core::EventHook<V>) -> Self {
+        PassRest {
+            first: None,
+            walking: listen::Walking::begin::<listen::Checked>(live, relics, hook).map(Box::new),
+        }
+    }
+
+    /// Nothing left.
+    fn none() -> Self {
+        PassRest {
+            first: None,
+            walking: None,
+        }
+    }
+
+    /// The next answer: the one stopped part-way through, then the walk's.
+    fn next(
+        &mut self,
+        live: &mut Live<V>,
+        relics: &mut crate::run::Belt<V>,
+    ) -> Option<(Listener<V>, sts2_core::HookEffect<V>)> {
+        self.first
+            .take()
+            .or_else(|| self.walking.as_mut()?.next(live, relics))
+    }
+}
 
 /// The phase a player's turn stands in once its pre-play phase has run. That
 /// is the play phase, or still the pre-play one while its question waits.

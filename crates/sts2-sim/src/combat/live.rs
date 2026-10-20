@@ -279,13 +279,13 @@ pub(super) enum Deferred<V: Rules> {
     /// pass at `next`, once an auto-play's question is answered. The phase
     /// turns to the play phase after.
     PrePlay {
-        rest: super::turn::PrePlayRest<V>,
+        rest: super::turn::PassRest<V>,
         next: usize,
     },
     /// The post-play phase from what its listeners still asked for, once an
     /// auto-play's question is answered. The turn's end follows it.
     PostPlay {
-        rest: super::turn::PrePlayRest<V>,
+        rest: super::turn::PassRest<V>,
         max_energy: V::Count,
     },
     /// The player's turn end from the hand's flush on, once a pick before
@@ -375,8 +375,10 @@ pub(super) struct HeldAttack<V: Rules> {
 /// to carry out.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum Setup<V: Rules> {
-    /// Inside `BeforeHandDraw`, before the hand is drawn.
-    BeforeHandDraw(super::listen::Answers<V>),
+    /// Inside `BeforeHandDraw`, before the hand is drawn: the rest of its
+    /// walk, boxed as `PlayerTurnStart`'s is. Nothing where no listener
+    /// hears the hook.
+    BeforeHandDraw(Option<Box<super::listen::Walking<V>>>),
     /// Drawing the hand, with this many cards still to draw. `resumed` for a
     /// draw that a shuffle's question paused.
     Drawing { left: usize, resumed: bool },
@@ -2371,9 +2373,9 @@ pub(crate) struct Live<V: Rules> {
     /// What the fight asked of the run in the middle of a decision, which the
     /// run carries out as the decision settles.
     pub(super) for_run: Vec<sts2_core::HookEffect<V>>,
-    /// What `AfterShuffle` listeners asked for behind one that asked the
+    /// The rest of an `AfterShuffle` walk behind a listener that asked the
     /// player to pick, which waits for the pick.
-    pub(super) after_pick: Vec<sts2_core::HookEffect<V>>,
+    pub(super) after_pick: Option<Box<super::listen::Walking<V>>>,
     /// The draws a listener ran inside another draw, which a question
     /// stopped, with what the listeners after each asked. The outermost comes
     /// first. The draw that resumes finishes them before its own.
@@ -3574,7 +3576,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             exhaust_next: smallvec::SmallVec::new(),
             leaving: Vec::new(),
             for_run: Vec::new(),
-            after_pick: Vec::new(),
+            after_pick: None,
             hook_draws: smallvec::SmallVec::new(),
             drawn_late: None,
             drew: None,

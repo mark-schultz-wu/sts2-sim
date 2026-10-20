@@ -5238,9 +5238,6 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                     return;
                 }
             };
-        if !self.live.after_pick.is_empty() {
-            unimplemented!("listeners behind a shuffle's question outside a draw");
-        }
         match super::turn::select::<V>(
             self.live,
             self.rngs.reborrow(),
@@ -5249,8 +5246,22 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             selection,
             act,
         ) {
-            Ok(ended) => self.ended = self.ended.or(ended),
+            // The pick needed no answer, so the walk goes on.
+            Ok(ended) => {
+                self.ended = self.ended.or(ended);
+                if let Some(waiting) = self.live.after_pick.take()
+                    && let Some(asks) = after_shuffle_walk::<V>(self, *waiting)
+                {
+                    unimplemented!("a second listener asking for {asks:?} after a shuffle");
+                }
+            }
             Err(question) => {
+                // Nothing outside a draw takes the walk up after the answer.
+                if let Some(waiting) = self.live.after_pick.take()
+                    && !waiting.exhausted()
+                {
+                    unimplemented!("listeners behind a shuffle's question outside a draw");
+                }
                 self.live.asking = Some(super::live::Asking {
                     then: super::live::Then::Pick { act },
                     question,
@@ -5667,42 +5678,13 @@ pub(super) fn shuffle_asking<V: Rules>(
         }
     }
     // `Hook.AfterShuffle`.
-    let asked = super::listen::notify::<V>(live, relics, sts2_core::EventHook::Shuffled);
-    if asked.is_empty() {
+    let hook = sts2_core::EventHook::Shuffled;
+    let Some(walking) = super::listen::Walking::begin::<super::listen::Checked>(live, relics, hook)
+    else {
         return Ok(None);
-    }
-    let mut asks = None;
+    };
     let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
-    for (listener, effect) in asked {
-        match effect {
-            // The listeners after one that asked wait for the pick, which
-            // waits for the draw to pause.
-            effect @ HookEffect::AddToDrawAtRandom { .. } if asks.is_some() => {
-                board.live.after_pick.push(effect)
-            }
-            effect @ HookEffect::GainBlock(_)
-                if asks.is_some() && matches!(listener, Listener::Relic { .. }) =>
-            {
-                board.live.after_pick.push(effect)
-            }
-            effect if asks.is_some() => {
-                unimplemented!("{listener:?} asking for {effect:?} after a shuffle's selection")
-            }
-            HookEffect::SelectFromPile {
-                pile,
-                selection,
-                act,
-            } => {
-                asks = Some((pile, selection, act));
-            }
-            effect @ HookEffect::AddToDrawAtRandom { .. } => board.after_shuffle(effect),
-            // `CreatureCmd.GainBlock`, unpowered, on a relic's owner.
-            effect @ HookEffect::GainBlock(_) if matches!(listener, Listener::Relic { .. }) => {
-                super::hook::apply::<V, _>(&mut board, [effect]);
-            }
-            effect => unimplemented!("{listener:?} asking for {effect:?} after a shuffle"),
-        }
-    }
+    let asks = after_shuffle_walk::<V>(&mut board, walking);
     match (board.ended(), asks) {
         (None, asks) => Ok(asks),
         (Some(ended), None) => Err(ended),
@@ -5710,6 +5692,39 @@ pub(super) fn shuffle_asking<V: Rules>(
             unimplemented!("a shuffle asking for {asks:?} in a fight that ended {ended:?}")
         }
     }
+}
+
+/// The rest of an `AfterShuffle` walk, carried out on `board` until a
+/// listener asks the player to pick, and that pick. The listeners after it
+/// wait for the pick in [`Live::after_pick`], unasked, as the game awaits
+/// the selection before it goes on.
+///
+/// # Panics
+///
+/// A listener asking for anything else after a shuffle.
+fn after_shuffle_walk<V: Rules>(
+    board: &mut Board<'_, V>,
+    mut walking: super::listen::Walking<V>,
+) -> Option<ShuffleAsks> {
+    while let Some((listener, effect)) = board.next_of(&mut walking) {
+        match effect {
+            HookEffect::SelectFromPile {
+                pile,
+                selection,
+                act,
+            } => {
+                board.live.after_pick = Some(Box::new(walking));
+                return Some((pile, selection, act));
+            }
+            effect @ HookEffect::AddToDrawAtRandom { .. } => board.after_shuffle(effect),
+            // `CreatureCmd.GainBlock`, unpowered, on a relic's owner.
+            effect @ HookEffect::GainBlock(_) if matches!(listener, Listener::Relic { .. }) => {
+                board.after_shuffle(effect)
+            }
+            effect => unimplemented!("{listener:?} asking for {effect:?} after a shuffle"),
+        }
+    }
+    None
 }
 
 impl<V: Rules> Board<'_, V> {
@@ -6238,11 +6253,10 @@ pub(super) fn auto_play_from_draw<V: Rules>(
     } = from;
     // The `AfterShuffle` listeners that waited for the pick this resumes
     // from.
-    if resumed && !live.after_pick.is_empty() {
-        let waiting = std::mem::take(&mut live.after_pick);
+    if resumed && let Some(waiting) = live.after_pick.take() {
         let mut board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
-        for effect in waiting {
-            board.after_shuffle(effect);
+        if let Some(asks) = after_shuffle_walk::<V>(&mut board, *waiting) {
+            unimplemented!("a second listener asking for {asks:?} after a shuffle");
         }
     }
     for taking in 0..left {
@@ -6352,11 +6366,10 @@ pub(super) fn draw_pausing<V: Rules>(
     };
     // The `AfterShuffle` listeners that waited for the pick this resumes
     // from.
-    if resumed && !live.after_pick.is_empty() {
-        let waiting = std::mem::take(&mut live.after_pick);
+    if resumed && let Some(waiting) = live.after_pick.take() {
         let mut board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
-        for effect in waiting {
-            board.after_shuffle(effect);
+        if let Some(asks) = after_shuffle_walk::<V>(&mut board, *waiting) {
+            unimplemented!("a second listener asking for {asks:?} after a shuffle");
         }
     }
     // The late pass for the card whose auto-play asked, which the draw it
