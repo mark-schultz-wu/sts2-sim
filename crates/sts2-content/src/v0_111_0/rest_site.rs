@@ -1,13 +1,17 @@
-//! What a rest site offers, and the names a rule reaches its options by.
+//! The names a rule reaches this build's rest-site options by, and the
+//! number its Cook gives.
 //!
-//! Hand-written beside the generated enum, the way `event_options` is. The
-//! table says which options exist. This says which of them a rest site opens
-//! with, and that is behaviour rather than a column.
+//! Hand-written beside the generated enum, the way `event_options` is. What
+//! a rest site offers and what an option does are the shared
+//! `behaviour::restsite`.
 
 use sts2_core::{CardIdent, RestKinds};
 
 use super::V0_111_0;
 use super::generated::restsite::RestSiteOption;
+
+/// `CookRestSiteOption`'s `_maxHpGain`.
+const COOK_MAX_HP: i32 = 5;
 
 impl RestKinds<V0_111_0> for RestSiteOption {
     const CLONE: RestSiteOption = RestSiteOption::Clone;
@@ -20,19 +24,11 @@ impl RestKinds<V0_111_0> for RestSiteOption {
     const MEND: RestSiteOption = RestSiteOption::Mend;
     const SMITH: RestSiteOption = RestSiteOption::Smith;
 
-    /// `HEAL` and `SMITH`, the way `v0.107.1` opens.
-    ///
-    /// What `TryModifyRestSiteOptions` implements in this build is unread, so
-    /// a run that reaches a rest site on this build stops rather than
-    /// guessing.
-    fn offered(
-        _from_belt: &[RestSiteOption],
-        _deck: &[CardIdent<V0_111_0>],
-    ) -> Vec<RestSiteOption> {
-        unimplemented!("what a rest site offers on v0.111.0")
+    fn offered(from_belt: &[RestSiteOption], deck: &[CardIdent<V0_111_0>]) -> Vec<RestSiteOption> {
+        crate::behaviour::restsite::offered::<V0_111_0>(from_belt, deck)
     }
 
     fn selected(self) -> Vec<sts2_core::HookEffect<V0_111_0>> {
-        unimplemented!("what choosing {self:?} at a rest site does on v0.111.0")
+        crate::behaviour::restsite::selected::<V0_111_0>(self, COOK_MAX_HP)
     }
 }
