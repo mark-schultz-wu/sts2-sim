@@ -88,7 +88,7 @@ generated:
         builds=$((builds + 1))
     done
     test "$builds" -gt 0
-    git diff --exit-code -- 'crates/sts2-content/src/*/generated'
+    git diff --exit-code -- 'crates/sts2-content/src/*/generated' crates/sts2-content/src/ids.rs
 
 # How far the simulator gets through a real run before it disagrees with the
 # game. The build script takes the game's answers once and keeps them under

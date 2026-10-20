@@ -25,6 +25,7 @@ mod characters;
 mod enchantments;
 mod encounters;
 mod events;
+mod ids;
 mod mad_science;
 mod modifiers;
 mod monster_moves;
@@ -537,6 +538,17 @@ pub fn run() -> Result<String, Error> {
     // included, and matching rustfmt by hand in a `writeln!` is a losing game —
     // it reorders `mod` declarations and rewraps anything past the margin.
     format(&root)?;
+
+    // Every build's tables are written by now, this one's included.
+    let src = dir.parent().unwrap_or(&dir);
+    let ids = ids::generate(src)?;
+    error::status(
+        Command::new("rustfmt")
+            .arg("--edition")
+            .arg("2024")
+            .arg(&ids),
+    )
+    .map_err(DumpError::from)?;
 
     Ok(format!(
         "generated {}/generated/ — {} domains: {}\n  build {build}",

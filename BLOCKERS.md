@@ -37,14 +37,27 @@ own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
 
-### 2. v0.111.0
+### 2. The behaviour generic over the build
 
-Only the generated tables exist. Codegen runs per build as it does now.
-The behaviour is written once, for v0.107.1. A v0.111.0 rule whose game
-code did not change calls that one. The v0.107.1 rule first becomes
-generic over the build. A rule that changed gets one of its own. Then record its runs.
+The v0.107.1 behaviour moves out of its build, generic over `V`, one
+pool or domain at a time. It names content through the consts in
+`sts2_content::ids`, `V::Power::STRENGTH_POWER` rather than
+`Power::StrengthPower`, which name only the ids both builds have. A
+`match` cannot name a generic const, so a content pattern becomes a
+guard, `p if p == V::Power::STRENGTH_POWER`. A `cargo xtask` rewriter
+makes that change and adds the `unreachable!()` arm an exhaustive match
+loses. A spike on the powers' hooks and every card play measured 12,264
+instructions a step before and 12,184 after. Every recorded run still
+matches after each move.
 
-### 3. A walk that shares only who listens
+### 3. v0.111.0's own rules
+
+v0.111.0's `Rules` uses the shared behaviour. A rule whose game code
+changed between the builds gets a port of its own, chosen by the build.
+Content new in v0.111.0 is ported there. Dump and record with the
+mod built for v0.111.0, and its recorded runs are the measure.
+
+### 4. A walk that shares only who listens
 
 The snapshot copies each walk's listeners. Most walks see none arrive or
 leave: 1.3% of `AfterCardPlayed` walks do, and 28% of `AfterSideTurnEnd`
@@ -54,7 +67,7 @@ A cheaper walk shares only which listeners there are and their order,
 kept apart from what they hold. That is part of the flat-state pass,
 which needs a design first.
 
-### 4. A speed target
+### 5. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.

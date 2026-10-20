@@ -25,6 +25,7 @@
 //! exposes a row through an associated type, so what a row is made of is this
 //! crate's business.
 
+pub mod ids;
 pub mod v0_107_1;
 pub mod v0_111_0;
 
