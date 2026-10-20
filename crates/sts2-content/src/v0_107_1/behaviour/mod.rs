@@ -10,14 +10,12 @@
 pub(crate) mod cards;
 pub mod events;
 pub(crate) mod monsters;
-pub(crate) mod potions;
 pub(crate) mod powers;
 pub(crate) mod relics;
 
-use sts2_core::{Fight, Played, Table as _, Taken};
+use sts2_core::{Fight, Played, Taken};
 
 use super::V0_107_1 as V;
-use super::generated::cards::{CardType, Cards, combat_cards};
 
 /// The characters `ModelDb.AllCharacters` lists, in its order, which is
 /// also `UnlockState.CharacterCardPools`' with every character unlocked.
@@ -31,59 +29,17 @@ pub(crate) const ALL_CHARACTERS: [super::generated::characters::Character; 5] = 
     super::generated::characters::Character::Defect,
 ];
 
-/// `CardModel.SetToFreeThisTurn`: energy and stars at nothing this turn or
-/// until played.
-pub(crate) fn free_this_turn<F: Fight<V>>(fight: &mut F, at: sts2_core::CardAt<V>) {
-    for pool in [sts2_core::CostPool::Energy, sts2_core::CostPool::Star] {
-        fight.modify_card(
-            at,
-            sts2_core::Change::SetCost(pool, num_traits::zero()),
-            sts2_core::Lasting::ThisTurnOrUntilPlayed,
-        );
-    }
-}
-
-/// `GetDistinctForCombat` of one card of the character's pool that `keeps`
-/// holds, off `CombatCardGeneration`, then `SetToFreeThisTurn` and into the
-/// hand. Nothing when the pool holds none.
-///
-/// `generated` is `CardPileCmd.AddGeneratedCardToCombat`, which the fight
-/// records and raises `AfterCardGeneratedForCombat` for. Otherwise it is a
-/// plain `CardPileCmd.Add`.
-pub(crate) fn free_card_into_hand<F: Fight<V>>(
-    fight: &mut F,
-    keeps: impl Fn(Cards) -> bool,
-    generated: bool,
-) {
-    let mut pool: Vec<Cards> = <V as sts2_core::Rules>::combat_cards(fight.character())
-        .iter()
-        .copied()
-        .filter(|&card| keeps(card))
-        .collect();
-    if pool.is_empty() {
-        return;
-    }
-    let stream = <<V as sts2_core::ContentVersion>::RunRngType as sts2_core::RunStreamKinds>::COMBAT_CARD_GENERATION;
-    let [made] = fight
-        .generate_cards::<1>(&mut pool, stream)
-        .unwrap_or_else(|_| unreachable!("a pool with a card in it makes one"));
-    let at = match generated {
-        true => fight
-            .add_generated_cards(made, sts2_core::Pile::Hand, 1)
-            .first()
-            .copied(),
-        false => fight.add_card(made, sts2_core::Pile::Hand),
-    };
-    if let Some(at) = at {
-        free_this_turn(fight, at);
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Resume {
     Card(cards::Resume),
-    Potion(potions::Resume),
+    Potion(crate::behaviour::potions::Resume),
     Monster(monsters::Resume),
+}
+
+impl From<crate::behaviour::potions::Resume> for Resume {
+    fn from(at: crate::behaviour::potions::Resume) -> Self {
+        Resume::Potion(at)
+    }
 }
 
 pub(crate) fn resume<F: Fight<V>>(fight: &mut F, at: Resume, answer: Taken<V>) -> Played<V> {
@@ -92,18 +48,8 @@ pub(crate) fn resume<F: Fight<V>>(fight: &mut F, at: Resume, answer: Taken<V>) -
         (Resume::Card(at), Taken::Chosen(card)) => cards::resume_chosen(fight, at, card),
         (Resume::Card(at), Taken::Waited) => cards::resume_waited(fight, at),
         (Resume::Card(at), Taken::Drew(drew)) => cards::resume_drew(fight, at, &drew),
-        (Resume::Potion(at), answer) => potions::resume(fight, at, answer),
+        (Resume::Potion(at), answer) => crate::behaviour::potions::resume(fight, at, answer),
         (Resume::Monster(at), Taken::Chosen(card)) => monsters::resume(fight, at, card),
         (at, answer) => unimplemented!("{at:?} resumed with {answer:?}"),
     }
-}
-
-/// The character's combat pool, narrowed to the cards of `kind`.
-pub(crate) fn character_cards<F: Fight<V>>(fight: &F, kind: CardType) -> Vec<Cards> {
-    let pool = fight.character().data().card_pool;
-    combat_cards(pool)
-        .iter()
-        .copied()
-        .filter(|card| card.data().kind == crate::Field::Constant(kind))
-        .collect()
 }

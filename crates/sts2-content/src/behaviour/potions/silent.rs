@@ -2,11 +2,8 @@
 
 use sts2_core::{CardIdent, Change, Fight, Lasting, Pile, Played, PowerAmount};
 
-use super::super::super::V0_107_1 as V;
-use super::super::super::generated::cards::{Cards, TokenCard};
-use super::super::super::generated::potions::Potion;
-use super::super::super::generated::powers::Power;
-use super::Number;
+use crate::behaviour::potions::Number;
+use crate::ids::{CardIds as _, PotionIds as _, PowerIds as _};
 
 /// `CunningPotion`'s `CardsVar(3)`.
 const CUNNING_SHIVS: usize = 3;
@@ -22,29 +19,32 @@ const POISON: Number = 6;
 /// # Panics
 ///
 /// A potion of this pool nobody has ported.
-pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
+pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mut F) -> Played<V> {
     match potion {
         // `AnyEnemy`.
-        Potion::PoisonPotion => {
+        __c0 if __c0 == V::Potion::POISON_POTION => {
             fight.apply_power(
                 fight.target(),
-                Power::PoisonPower,
+                V::Power::POISON_POWER,
                 PowerAmount::Counted(POISON),
             );
             Played::Done
         }
         // `Shiv.CreateInHand` for three, then `CardCmd.Upgrade` on each,
         // wherever it landed.
-        Potion::CunningPotion => {
-            let shiv = CardIdent::new(Cards::Token(TokenCard::Shiv));
+        __c0 if __c0 == V::Potion::CUNNING_POTION => {
+            let shiv = CardIdent::new(V::Card::SHIV);
             for at in fight.add_generated_cards(shiv, Pile::Hand, CUNNING_SHIVS) {
                 fight.modify_card(at, Change::Upgrade, Lasting::ThisFight);
             }
             Played::Done
         }
         // `AnyPlayer`: its Intangible on the player drinking it.
-        Potion::GhostInAJar => {
-            fight.apply_to_actor(Power::IntangiblePower, PowerAmount::Counted(GHOST_IN_A_JAR));
+        __c0 if __c0 == V::Potion::GHOST_IN_A_JAR => {
+            fight.apply_to_actor(
+                V::Power::INTANGIBLE_POWER,
+                PowerAmount::Counted(GHOST_IN_A_JAR),
+            );
             Played::Done
         }
         potion => unimplemented!("what {potion:?} does when it is drunk"),

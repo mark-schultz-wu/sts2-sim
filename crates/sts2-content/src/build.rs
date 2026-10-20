@@ -5,13 +5,14 @@
 //! `sts2_core::Table`. What every build spells alike is one type, in
 //! [`crate::generated`]. Each bound here is one a shared rule reads.
 
-use sts2_core::{CardTable, ContentVersion, Rules, Table};
+use sts2_core::{CardTable, ContentVersion, PotionTable, Rules, Table};
 
 use crate::generated::ascension::AscensionLevel;
 use crate::generated::cards::{CardKeyword, CardRarity, CardTag, KeywordSet, TargetType};
 use crate::generated::encounters::RoomType;
 use crate::generated::monsters::IntentKind;
 use crate::generated::orbs::OrbData;
+use crate::generated::potions::PotionPool;
 use crate::generated::runstate::{
     CombatSide, MapPointType, PlayerRngType, PlayerTurnPhase, RunRngType, UnplayableReason,
     UnplayableReasons,
@@ -60,7 +61,7 @@ pub trait BuildContent:
         Monster: MonsterIds,
         MoveId: MoveIds,
         Orb: OrbIds + Table<Data = OrbData>,
-        Potion: PotionIds,
+        Potion: PotionIds + PotionTable<Pool = PotionPool>,
         Power: PowerIds,
         Relic: RelicIds,
         RestSiteOption: RestSiteOptionIds,
@@ -110,6 +111,15 @@ card_lists!(crate::v0_111_0::cards::Cards);
 
 /// A build the shared behaviour runs in: its content, and its rules, which
 /// a shared rule calls back into.
-pub trait Build: BuildContent + Rules {}
+///
+/// A shared rule that waits on a question names where it resumes as its own
+/// module's `Resume`, which the build's wraps.
+pub trait Build:
+    BuildContent + Rules + ContentVersion<Resume: From<crate::behaviour::potions::Resume>>
+{
+}
 
-impl<V: BuildContent + Rules> Build for V {}
+impl<V> Build for V where
+    V: BuildContent + Rules + ContentVersion<Resume: From<crate::behaviour::potions::Resume>>
+{
+}

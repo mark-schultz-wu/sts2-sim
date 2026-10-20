@@ -505,7 +505,7 @@ pub(super) fn resume_chosen<F: Fight<V>>(
         Resume::DiscoveryChoice | Resume::SplashChoice => {
             if let Some(card) = chosen {
                 for at in fight.add_generated_cards(card, Pile::Hand, 1) {
-                    super::super::free_this_turn(fight, at);
+                    crate::behaviour::free_this_turn(fight, at);
                 }
             }
             Played::Done

@@ -205,7 +205,9 @@ impl sts2_core::Hooks for V0_107_1 {
             sts2_core::Listener::Relic { state, belt, .. } => {
                 behaviour::relics::decide_hook(state, belt, hook)
             }
-            sts2_core::Listener::Potion(potion) => behaviour::potions::decide_hook(potion, hook),
+            sts2_core::Listener::Potion(potion) => {
+                crate::behaviour::potions::decide_hook(potion, hook)
+            }
             sts2_core::Listener::Modifier(modifier) => {
                 crate::behaviour::modifiers::decide_hook(modifier, hook)
             }
@@ -344,7 +346,7 @@ impl sts2_core::Hooks for V0_107_1 {
         hook: sts2_core::EventHook<Self>,
         asked: &mut sts2_core::HookEffects<Self>,
     ) {
-        behaviour::potions::event_hook(potion, hook, asked)
+        crate::behaviour::potions::event_hook(potion, hook, asked)
     }
 
     fn monster_event_hook(
@@ -521,7 +523,7 @@ impl sts2_core::Rules for V0_107_1 {
         potion: Self::Potion,
         fight: &mut F,
     ) -> sts2_core::Played<Self> {
-        behaviour::potions::on_use(potion, fight)
+        crate::behaviour::potions::on_use(potion, fight)
     }
 
     fn on_use_on_run(
@@ -529,7 +531,7 @@ impl sts2_core::Rules for V0_107_1 {
         run: &impl sts2_core::EventView<Self>,
         in_fight: bool,
     ) -> sts2_core::HookEffects<Self> {
-        behaviour::potions::on_use_on_run(potion, run, in_fight)
+        crate::behaviour::potions::on_use_on_run(potion, run, in_fight)
     }
 
     fn on_play<F: sts2_core::Fight<Self>>(
@@ -890,11 +892,11 @@ impl sts2_core::Rules for V0_107_1 {
     }
 
     fn computed_potion_target(potion: Self::Potion, in_combat: bool) -> Self::TargetType {
-        behaviour::potions::computed_target(potion, in_combat)
+        crate::behaviour::potions::computed_target::<Self>(potion, in_combat)
     }
 
     fn computed_potion_check(potion: Self::Potion, in_combat: bool) -> bool {
-        behaviour::potions::computed_check(potion, in_combat)
+        crate::behaviour::potions::computed_check::<Self>(potion, in_combat)
     }
 
     fn calculated_card_var<P: sts2_core::Printed<Self> + ?Sized>(

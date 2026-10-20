@@ -303,7 +303,7 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
         SilentCard::BulletTime => {
             for at in fight.cards_in(Pile::Hand) {
                 if sts2_core::CardTable::cost(fight.card_ident(at).card) != sts2_core::Cost::X {
-                    super::super::free_this_turn(fight, at);
+                    crate::behaviour::free_this_turn(fight, at);
                 }
             }
             fight.apply_to_actor(Power::NoDrawPower, PowerAmount::Counted(1));

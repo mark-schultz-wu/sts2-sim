@@ -364,7 +364,7 @@ pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<
         // `InfernalBlade`: an Attack of the character's pool, free this turn,
         // into the hand.
         IroncladCard::InfernalBlade => {
-            super::super::free_card_into_hand(
+            crate::behaviour::free_card_into_hand(
                 fight,
                 |card| V::card_kind(card) == Some(CardKind::Attack),
                 true,

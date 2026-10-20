@@ -680,7 +680,11 @@ fn rewrite_lets(s: &str, content: &Content, left: &mut Left) -> String {
 fn rewrite_rest(s: &str, content: &Content, left: &mut Left) -> String {
     let mut out = String::new();
     for (number, line) in s.split_inclusive('\n').enumerate() {
-        if line.starts_with("type ") && line.contains("<V as") {
+        let item = line
+            .trim_start_matches("pub(crate) ")
+            .trim_start_matches("pub(super) ")
+            .trim_start_matches("pub ");
+        if item.starts_with("type ") && line.contains("<V as") {
             left.notes
                 .push((number + 1, "a type alias naming `V`".to_owned()));
         }
@@ -708,7 +712,17 @@ fn rewrite_rest(s: &str, content: &Content, left: &mut Left) -> String {
                 let end = (i..b.len()).find(|&k| !is_ident(b[k])).unwrap_or(b.len());
                 let word = &text[i..end];
                 let path_follows = text[end..].starts_with("::");
-                if let Some(assoc) = content.types.get(word).filter(|_| !path_follows) {
+                // `    Event(event::Resume),` declares a member named so.
+                let declares = text[..i].trim().is_empty()
+                    && (text[end..].starts_with('(')
+                        || text[end..].starts_with(',')
+                        || text[end..].starts_with(" {")
+                        || text[end..].starts_with(" ="));
+                if let Some(assoc) = content
+                    .types
+                    .get(word)
+                    .filter(|_| !path_follows && !declares)
+                {
                     fixed.push_str(assoc);
                 } else {
                     if content.pools.iter().any(|p| p == word)
@@ -771,6 +785,8 @@ fn rewrite_uses(s: &str, content: &Content, build: &str, left: &mut Left) -> Str
         let kept: Vec<String> = names
             .iter()
             .filter(|n| !content.types.contains_key(n.as_str()) || prefix.is_empty())
+            // `Build` is `Rules`, so its methods need no import.
+            .filter(|n| !(prefix == "sts2_core" && *n == "Rules as _"))
             .cloned()
             .collect();
         let prefix = match prefix.strip_prefix(&private) {
@@ -910,7 +926,11 @@ fn generic_fns(s: &str) -> String {
             i = next;
             continue;
         }
-        if at_kw(b, i, "impl") && i >= skip_until {
+        // An impl block starts its line; `impl Trait` in a signature does not.
+        let starts_line = s[s[..i].rfind('\n').map_or(0, |at| at + 1)..i]
+            .trim()
+            .is_empty();
+        if at_kw(b, i, "impl") && starts_line && i >= skip_until {
             let open = scan_to(b, i + 4, |s, k| s[k] == b'{');
             let header = &s[i..open.min(s.len())];
             let names_v = header
@@ -1041,12 +1061,16 @@ fn import_ids(s: &str, content: &Content) -> String {
         [one] => format!("use crate::ids::{one};\n"),
         many => format!("use crate::ids::{{{}}};\n", many.join(", ")),
     };
-    // After the last `use` before any item.
+    // After the last `use` before any item, or after the file's own docs.
     let mut at = 0;
+    let mut docs_end = 0;
     let mut offset = 0;
     let mut in_use = false;
     for l in s.split_inclusive('\n') {
         offset += l.len();
+        if l.starts_with("//!") && docs_end == offset - l.len() {
+            docs_end = offset;
+        }
         if l.starts_with("use ") || in_use {
             in_use = !l.trim_end().ends_with(';');
             at = offset;
@@ -1055,7 +1079,11 @@ fn import_ids(s: &str, content: &Content) -> String {
         }
     }
     let mut out = s.to_owned();
-    out.insert_str(at, &line);
+    let line = match at {
+        0 if docs_end > 0 => format!("\n{line}"),
+        _ => line,
+    };
+    out.insert_str(at.max(docs_end), &line);
     out
 }
 
@@ -1077,14 +1105,98 @@ fn module_of(path: &Path) -> Result<Vec<String>, Error> {
     Ok(parts)
 }
 
+/// A path into the build to what is shared, or is moving there, made the
+/// shared path. A content path from the crate root,
+/// `crate::v0_107_1::generated::orbs::Orb::DarkOrb`, starts at its type.
+fn shared_paths(s: &str, build: &str, moving: &[String], content: &Content) -> String {
+    let mut s = s.to_owned();
+    let root = Path::new("crates/sts2-content/src/behaviour");
+    let mut shared: Vec<String> = moving.to_vec();
+    if let Ok(entries) = error::entries(root) {
+        for entry in entries {
+            if let Some(stem) = entry.file_stem().and_then(|s| s.to_str())
+                && stem != "mod"
+            {
+                shared.push(stem.to_owned());
+            }
+        }
+    }
+    for module in shared {
+        s = s.replace(
+            &format!("crate::{build}::behaviour::{module}::"),
+            &format!("crate::behaviour::{module}::"),
+        );
+    }
+    let prefix = format!("crate::{build}::generated::");
+    let mut out = String::new();
+    let mut rest = s.as_str();
+    while let Some(at) = rest.find(&prefix) {
+        out.push_str(&rest[..at]);
+        let after = &rest[at + prefix.len()..];
+        // `orbs::Orb::DarkOrb`: modules, then a type.
+        let mut parts = after.split("::");
+        let mut skipped = prefix.len();
+        let mut found = None;
+        for part in parts.by_ref() {
+            let word: String = part
+                .chars()
+                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                .collect();
+            if word.starts_with(|c: char| c.is_uppercase()) {
+                if content.types.contains_key(&word) && word.len() == part.len() {
+                    found = Some(skipped);
+                }
+                break;
+            }
+            skipped += part.len() + 2;
+        }
+        match found {
+            Some(skip) => rest = &rest[at + skip..],
+            None => {
+                out.push_str(&prefix);
+                rest = after;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+/// A `use` of a card pool's enum the rewrite left nothing naming.
+fn unused_pools(s: &str, content: &Content) -> String {
+    let mut out = String::new();
+    for line in s.split_inclusive('\n') {
+        let trimmed = line.trim();
+        if let Some(name) = trimmed
+            .strip_prefix("use ")
+            .and_then(|l| l.strip_suffix(';'))
+            .and_then(|l| l.rsplit("::").next())
+            && content.pools.iter().any(|p| p == name)
+            && s.matches(name).count() == 1
+        {
+            continue;
+        }
+        out.push_str(line);
+    }
+    out
+}
+
 pub fn run(args: Args) -> Result<String, Error> {
     let content = content(&args.build)?;
+    // The modules moving, by the name under `behaviour`.
+    let moving: Vec<String> = args
+        .files
+        .iter()
+        .filter_map(|path| module_of(path).ok())
+        .filter_map(|module| module.get(2).cloned())
+        .collect();
     let mut report = String::new();
     for path in &args.files {
         let module = module_of(path)?;
         let text = error::read(path)?;
         let mut left = Left { notes: Vec::new() };
         let text = absolute_paths(&text, &module);
+        let text = shared_paths(&text, &args.build, &moving, &content);
         let text = text.replace(&format!("use crate::{}::V0_107_1 as V;\n", args.build), "");
         let text = rewrite_matches_macro(&text, &content);
         let text = rewrite_matches(&text, &content);
@@ -1094,6 +1206,7 @@ pub fn run(args: Args) -> Result<String, Error> {
         let text = local_consts(&text);
         let text = generic_fns(&text);
         let text = import_ids(&text, &content);
+        let text = unused_pools(&text, &content);
         error::write(path, &text)?;
         left.notes.sort();
         left.notes.dedup();

@@ -2,10 +2,8 @@
 
 use sts2_core::{Fight, Played, PowerAmount};
 
-use super::super::super::V0_107_1 as V;
-use super::super::super::generated::potions::Potion;
-use super::super::super::generated::powers::Power;
-use super::Number;
+use crate::behaviour::potions::Number;
+use crate::ids::{CardIds as _, PotionIds as _, PowerIds as _};
 
 /// `PotOfGhouls`'s `CardsVar(2)`.
 const POT_OF_GHOULS: usize = 2;
@@ -21,23 +19,25 @@ const DOOM: Number = 33;
 /// # Panics
 ///
 /// A potion of this pool nobody has ported.
-pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
+pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mut F) -> Played<V> {
     match potion {
         // `AnyEnemy`.
-        Potion::PotionOfDoom => {
-            fight.apply_power(fight.target(), Power::DoomPower, PowerAmount::Counted(DOOM));
+        __c0 if __c0 == V::Potion::POTION_OF_DOOM => {
+            fight.apply_power(
+                fight.target(),
+                V::Power::DOOM_POWER,
+                PowerAmount::Counted(DOOM),
+            );
             Played::Done
         }
         // `Self`: `OstyCmd.Summon` for its `Summon`.
-        Potion::BoneBrew => {
+        __c0 if __c0 == V::Potion::BONE_BREW => {
             fight.summon_osty(BONE_BREW);
             Played::Done
         }
         // `Self`: `Soul.CreateInHand` for its `Cards`.
-        Potion::PotOfGhouls => {
-            use super::super::super::generated::cards::{Cards, TokenCard};
-
-            let soul = sts2_core::CardIdent::new(Cards::Token(TokenCard::Soul));
+        __c0 if __c0 == V::Potion::POT_OF_GHOULS => {
+            let soul = sts2_core::CardIdent::new(V::Card::SOUL);
             fight.add_generated_cards(soul, sts2_core::Pile::Hand, POT_OF_GHOULS);
             Played::Done
         }
