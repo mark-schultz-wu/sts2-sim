@@ -3242,12 +3242,22 @@ pub(super) fn side_turn_started<V: Rules>(
                     let mut round = num_traits::zero::<V::Number>();
                     while round < times && ended.is_none() {
                         round = round + num_traits::one();
-                        let Some(PowerAmount::Counted(stack)) = live
+                        // The instance keeps its `Amount` once a death took
+                        // it off, and the loop goes on reading it, as where
+                        // the Waterfall Giant comes back.
+                        let on = live
                             .powers
                             .of(owner)
                             .find(|held| held.power() == power)
-                            .map(|held| held.amount.amount())
-                        else {
+                            .map(|held| held.amount.amount());
+                        let detached = || {
+                            live.detached
+                                .iter()
+                                .rev()
+                                .find(|(holder, held)| *holder == owner && held.power() == power)
+                                .map(|(_, held)| held.amount.amount())
+                        };
+                        let Some(PowerAmount::Counted(stack)) = on.or_else(detached) else {
                             break;
                         };
                         let mut board =
@@ -3256,10 +3266,41 @@ pub(super) fn side_turn_started<V: Rules>(
                         let alive = board
                             .at(owner)
                             .is_some_and(|at| board.live.creatures[at].alive);
-                        if alive {
-                            board.modify_amount(owner, power, -num_traits::one::<V::Number>());
-                        }
                         ended = ended.or(board.ended());
+                        // A death inside the hit can take it off, and its
+                        // owner can come back inside the same hit.
+                        let removed = !live.powers.of(owner).any(|held| held.power() == power);
+                        match (alive, removed) {
+                            (true, false) => {
+                                let mut board = Board::for_card(
+                                    live,
+                                    rngs.reborrow(),
+                                    relics,
+                                    ascension,
+                                    None,
+                                    None,
+                                );
+                                board.modify_amount(owner, power, -num_traits::one::<V::Number>());
+                                ended = ended.or(board.ended());
+                            }
+                            (true, true) => {
+                                let mut board = Board::for_card(
+                                    live,
+                                    rngs.reborrow(),
+                                    relics,
+                                    ascension,
+                                    None,
+                                    None,
+                                );
+                                board.modify_detached(
+                                    owner,
+                                    power,
+                                    -num_traits::one::<V::Number>(),
+                                );
+                                ended = ended.or(board.ended());
+                            }
+                            (false, _) => {}
+                        }
                     }
                 }
                 // `PowerCmd.Apply<P>` over `GetOpponentsOf(Owner)` that are

@@ -394,26 +394,36 @@ impl<'a, V: Rules> Board<'a, V> {
         copy: Option<V::PowerState>,
     ) {
         self.ran_on();
-        // The command returns on a zero amount, and on a creature that cannot
-        // hold powers. A monster the fight has taken out is one, because its
-        // combat state is gone with it.
-        if amount == PowerAmount::Counted(V::Number::zero()) {
+        // `PowerCmd.Apply` returns on a zero amount. `Apply<T>` stacks one
+        // onto an instance already there first, so a copy, which comes
+        // through `Apply`, returns here, and any other at the fresh instance.
+        let zero = amount == PowerAmount::Counted(V::Number::zero());
+        if zero && copy.is_some() {
             return;
         }
         // `IsEnding`, and `CanReceivePowers`, which a creature no listener
-        // lets be hit fails.
+        // lets be hit fails. A monster the fight has taken out is one,
+        // because its combat state is gone with it.
         if self.over() {
             return;
         }
         if !self.can_receive_powers(at) {
             return;
         }
-        if self
+        if let Some(created) = self
             .live
             .created
             .iter()
-            .any(|created| created.fighter.id == at)
+            .find(|created| created.fighter.id == at)
         {
+            if zero {
+                if created.powers.iter().any(|held| held.power() == power) {
+                    unimplemented!(
+                        "a zero {power:?} onto one a creature not yet in the fight holds"
+                    );
+                }
+                return;
+            }
             return self.land_on_created(at, power, amount, applier, copy);
         }
         let id = at;
@@ -445,6 +455,9 @@ impl<'a, V: Rules> Board<'a, V> {
             if let PowerAmount::Counted(more) = amount {
                 self.modify_amount_from(id, power, more, applier);
             }
+            return;
+        }
+        if zero {
             return;
         }
 
@@ -838,6 +851,37 @@ impl<'a, V: Rules> Board<'a, V> {
         if spent {
             self.remove_power_carried(id, power);
         }
+    }
+
+    /// `PowerCmd.ModifyAmount` on the instance of `power` a death took off
+    /// `id`, which keeps its own amount in the detached list. The hooks around
+    /// it run as for one still on its creature.
+    ///
+    /// # Panics
+    ///
+    /// No such instance, or one the change leaves spent.
+    pub(super) fn modify_detached(&mut self, id: CombatId, power: V::Power, offset: V::Number) {
+        let (offset, modifiers) = self.received(id, power, offset, None);
+        let (_, held) = self
+            .live
+            .detached
+            .iter_mut()
+            .rev()
+            .find(|(holder, held)| *holder == id && held.power() == power)
+            .unwrap_or_else(|| unimplemented!("{power:?} changed with no instance to change"));
+        let had = held
+            .amount
+            .count()
+            .unwrap_or_else(|| unimplemented!("a count landing on an endless power"));
+        let more: super::live::Amount = num_traits::NumCast::from(offset)
+            .unwrap_or_else(|| unimplemented!("a power stacked by {offset:?}"));
+        held.amount = super::live::Stacked::counted(had + more);
+        if held.amount.spent() {
+            unimplemented!("{power:?} spent on its instance a death took off");
+        }
+        self.live.history.power_received(power, None);
+        self.power_received(modifiers, power);
+        self.amount_changed(id, power, offset, None);
     }
 
     /// `Creature.Stun` builds a state and hands it to `SetMoveImmediate`. So a
@@ -2700,7 +2744,13 @@ impl<'a, V: Rules> Board<'a, V> {
     /// over, behind a question the draw left.
     pub(super) fn relic_asked(&mut self, slot: u8, effect: HookEffect<V>) {
         let HookEffect::Draw(count) = effect else {
-            return super::hook::apply::<V, _>(self, [effect]);
+            // A relic acts for its owner, whoever's command raised the hook,
+            // as a monster's attack does where a fairy saves the player.
+            let player = self.live.player().id;
+            let actor = std::mem::replace(&mut self.actor, player);
+            super::hook::apply::<V, _>(self, [effect]);
+            self.actor = actor;
+            return;
         };
         sts2_core::Fight::draw(self, count);
         let relic = self.relics[usize::from(slot)].relic;
@@ -3304,7 +3354,9 @@ fn afflict<V: Rules>(held: &mut Face<V>, affliction: V::Affliction) -> bool {
         Some(already) if already == affliction && affliction.stackable() => {
             unimplemented!("{affliction:?} stacking onto a card that has it")
         }
-        Some(already) => already == affliction,
+        // `CanAfflict` refuses a card that has an affliction, unless it is
+        // this one and it stacks.
+        Some(_) => false,
     }
 }
 

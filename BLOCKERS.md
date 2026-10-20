@@ -70,11 +70,11 @@ a port that starts from the other build's code. A move can shift what
 the compiler inlines. The relics' and the cards' decision dispatchers
 stay out of line, since the walk inlining them cost 3.9% and 3.4%.
 
-The simulator follows 1,319,281 of the 1,322,464 recorded positions,
-99%, and 1,491 of 1,500 runs whole. `follow_run <file> <index> --diff
+The simulator follows 1,320,294 of the 1,322,464 recorded positions,
+99%, and 1,495 of 1,500 runs whole. `follow_run <file> <index> --diff
 <dir>` plays a run on the game beside the simulator and names the
 sections where they first differ, which a split with no panic needs.
-Each of the nine left parts on a cause of its own, not yet traced. One
+Each of the five left parts on a cause of its own, not yet traced. One
 more change is known and not yet ported:
 
 - Misery changed in v0.111.0. It adds a temporary power's amount to the
