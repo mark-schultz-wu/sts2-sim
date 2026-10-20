@@ -1,5 +1,5 @@
-//! `ToyBox`: four wax relics offered as it is picked up, one melted every
-//! third fight.
+//! `ToyBox`: its `Relics` of wax relics offered as it is picked up, one
+//! melted every third fight.
 
 use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
@@ -13,7 +13,7 @@ pub struct State {
 }
 
 /// `AfterObtained`: `RewardsCmd.OfferCustom` of a `RelicReward` for each of
-/// four relics off the front of the bag, each made wax.
+/// its `Relics` off the front of the bag, each made wax.
 /// `AfterCombatEnd`: one more fight seen, and each third melts the first wax
 /// relic still whole.
 pub(super) fn event_hook<V: crate::Build>(
@@ -38,7 +38,7 @@ pub(super) fn event_hook<V: crate::Build>(
 }
 
 /// `IsUsedUp`: every wax relic's fights seen.
-pub(super) fn used_up<V: crate::Build>(state: &State) -> bool {
+pub(crate) fn used_up<V: crate::Build>(state: &State) -> bool {
     usize::from(state.combats_seen)
         >= usize::from(V::Relic::TOY_BOX_COMBATS as u8) * V::TOY_BOX_WAX_RELICS.len()
 }
@@ -53,7 +53,9 @@ macro_rules! lists {
     ($build:ty) => {
         /// `Relics`: the wax relics it offers.
         const TOY_BOX_WAX_RELICS: &'static [sts2_core::CustomReward<$build>] =
-            &[sts2_core::CustomReward::WaxRelic; 4];
+            &[sts2_core::CustomReward::WaxRelic;
+                <<$build as sts2_core::ContentVersion>::Relic as crate::vars::RelicVars>::TOY_BOX_RELICS
+                as usize];
     };
 }
 

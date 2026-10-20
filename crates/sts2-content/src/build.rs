@@ -404,6 +404,19 @@ pub trait OwnRules: ContentVersion + Sized {
     /// shared one.
     fn own_relic_state(relic: Self::Relic) -> Option<Self::OwnRelic>;
 
+    /// Whether a shared relic's rule is the build's own for some hook.
+    fn own_relic(relic: Self::Relic) -> bool;
+
+    /// A shared relic's `EventHook`, for a relic [`OwnRules::own_relic`]
+    /// names, or nothing for a hook the shared relics answer for it.
+    fn own_shared_relic_event_hook(
+        state: &mut crate::behaviour::relics::State<Self>,
+        hook: sts2_core::EventHook<Self>,
+        asked: &mut sts2_core::HookEffects<Self>,
+    ) -> Option<()>
+    where
+        Self: Build;
+
     /// A relic's `EventHook`, for a relic whose rule is the build's own.
     fn own_relic_event_hook(
         state: &mut crate::behaviour::relics::State<Self>,

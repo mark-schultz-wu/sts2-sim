@@ -244,6 +244,18 @@ impl crate::build::OwnRules for V {
         None
     }
 
+    fn own_relic(_relic: <V as sts2_core::ContentVersion>::Relic) -> bool {
+        false
+    }
+
+    fn own_shared_relic_event_hook(
+        _state: &mut crate::behaviour::relics::State<V>,
+        _hook: sts2_core::EventHook<V>,
+        _asked: &mut sts2_core::HookEffects<V>,
+    ) -> Option<()> {
+        None
+    }
+
     fn own_potion_use_on_run(
         potion: <V as sts2_core::ContentVersion>::Potion,
         run: &impl sts2_core::EventView<V>,

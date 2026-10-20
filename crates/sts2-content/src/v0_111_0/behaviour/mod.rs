@@ -241,6 +241,18 @@ impl crate::build::OwnRules for V {
         monsters::own_hp_bounds(monster, model, ascension)
     }
 
+    fn own_relic(relic: <V as sts2_core::ContentVersion>::Relic) -> bool {
+        relics::own_relic(relic)
+    }
+
+    fn own_shared_relic_event_hook(
+        state: &mut crate::behaviour::relics::State<V>,
+        hook: sts2_core::EventHook<V>,
+        asked: &mut sts2_core::HookEffects<V>,
+    ) -> Option<()> {
+        relics::own_shared_relic_event_hook(state, hook, asked)
+    }
+
     fn own_potion_use_on_run(
         potion: <V as sts2_core::ContentVersion>::Potion,
         run: &impl sts2_core::EventView<V>,

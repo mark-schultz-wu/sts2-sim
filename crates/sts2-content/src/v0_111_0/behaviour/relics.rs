@@ -64,3 +64,27 @@ pub(crate) fn own_relic_event_hook(
         (state, _) => unreachable!("{state:?} is a shared relic"),
     }
 }
+
+/// Whether a shared relic's rule is this build's own for some hook.
+pub(crate) fn own_relic(relic: Relic) -> bool {
+    matches!(relic, Relic::ToyBox)
+}
+
+/// A shared relic's `EventHook`, for a hook this build answers itself.
+///
+/// `ToyBox.AfterCombatEnd` returns at once here once `IsUsedUp`, where
+/// v0.107.1's counts on. Every other hook it answers as the shared port does.
+pub(crate) fn own_shared_relic_event_hook(
+    state: &mut State<V>,
+    hook: EventHook<V>,
+    _asked: &mut sts2_core::HookEffects<V>,
+) -> Option<()> {
+    match (state, hook) {
+        (State::ToyBox(state), EventHook::CombatEnd { .. })
+            if crate::behaviour::relics::toy_box::used_up::<V>(state) =>
+        {
+            Some(())
+        }
+        _ => None,
+    }
+}
