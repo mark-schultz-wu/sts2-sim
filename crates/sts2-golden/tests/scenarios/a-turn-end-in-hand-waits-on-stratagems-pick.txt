@@ -1,0 +1,13 @@
+# Regret hurts its owner at the turn's end, from the hand. Centennial
+# Puzzle draws for the hit, from a draw pile the second turn's draw left
+# dry. The shuffle asks for Stratagem's pick, and the rest of the turn's
+# end waits on the answer: Regret goes to the discard pile, then the hand
+# flushes and the enemies act.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"CENTENNIAL_PUZZLE"}
+{"cmd":"fight","encounter":"BYGONE_EFFIGY_ELITE"}
+{"cmd":"power","power":"STRATAGEM_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"REGRET"}
+{"cmd":"end_turn"}
+{"cmd":"answer","cards":[0]}

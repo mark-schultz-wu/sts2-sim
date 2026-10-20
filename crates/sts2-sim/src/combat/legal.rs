@@ -410,6 +410,11 @@ pub(crate) fn drinks<V: Rules>(
             Some(fight) => aimable::<V>(potion, &fight.creatures),
             None => Targets::new(),
         };
+        // `IsValidTarget` refuses no target for a potion thrown at one other
+        // creature, so with none to throw it at there is nothing to drink.
+        if targets.is_empty() && thrown::<V>(potion) {
+            continue;
+        }
         aimed(belt_index(at), &targets, moves, |index, target| {
             Decision::UsePotion { index, target }
         });
@@ -502,6 +507,16 @@ fn drinking_turn<V: Rules>(fight: &Live<V>) -> bool {
 }
 
 /// The creatures a potion can be pointed at.
+/// Whether `potion` is thrown at one creature other than its drinker, which
+/// `AnyEnemy` and `AnyAlly` are.
+pub(crate) fn thrown<V: Rules>(potion: V::Potion) -> bool {
+    let target = potion
+        .target()
+        .unwrap_or_else(|| V::computed_potion_target(potion, true));
+    target == <V::TargetType as TargetKinds>::ANY_ENEMY
+        || target == <V::TargetType as TargetKinds>::ANY_ALLY
+}
+
 fn aimable<V: Rules>(potion: V::Potion, creatures: &[Fighter<V>]) -> Targets {
     let target = potion
         .target()

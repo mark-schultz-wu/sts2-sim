@@ -294,6 +294,15 @@ pub(super) enum Deferred<V: Rules> {
         max_energy: V::Count,
         skipping: Skips<V>,
     },
+    /// `DoTurnEnd` from the end of `card`'s `OnTurnEndInHandWrapper`, whose
+    /// effect a question stood still. The cards in `rest` run theirs after,
+    /// then the turn's end goes on to the flush.
+    TurnEnd {
+        card: CardId<V>,
+        rest: smallvec::SmallVec<[CardId<V>; super::pile::MAX_CARDS_IN_HAND]>,
+        max_energy: V::Count,
+        skipping: Skips<V>,
+    },
     Hits {
         frame: super::board::Frame<V>,
         attack: HeldAttack<V>,
@@ -2248,12 +2257,63 @@ pub(crate) enum ExtraReward<V: Rules> {
     Gold(V::Number),
 }
 
+/// The modifiers the run was started with, which the fight asks after
+/// every creature's listeners.
+#[derive(Debug)]
+pub(crate) struct RunModifiers<V: Rules> {
+    held: Bounded<V::Modifier, RUN_MODIFIERS>,
+    /// Every hook a held modifier's class overrides, kept with `held`.
+    pub(super) hooks: sts2_core::Overrides,
+}
+
+/// Every modifier the game's custom mode offers, which a run holds at most
+/// once each.
+const RUN_MODIFIERS: usize = 17;
+
+impl<V: Rules> Clone for RunModifiers<V> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<V: Rules> Copy for RunModifiers<V> {}
+
+impl<V: Rules> RunModifiers<V> {
+    pub(super) fn holding(modifiers: &[V::Modifier]) -> Self {
+        Self {
+            held: modifiers.iter().copied().collect(),
+            hooks: modifiers
+                .iter()
+                .fold(sts2_core::Overrides::NONE, |hooks, &modifier| {
+                    hooks.union(sts2_core::ModifierTable::overrides(modifier))
+                }),
+        }
+    }
+
+    /// The held modifiers that override a hook in `hooks`, in the run's
+    /// order, with what each overrides.
+    pub(super) fn hearing(
+        &self,
+        hooks: sts2_core::Overrides,
+    ) -> impl Iterator<Item = (V::Modifier, sts2_core::Overrides)> + '_ {
+        self.held.iter().filter_map(move |&modifier| {
+            let overrides = sts2_core::ModifierTable::overrides(modifier);
+            overrides.intersects(hooks).then_some((modifier, overrides))
+        })
+    }
+}
+
 /// The run's potions, in slot order, as the fight reads and spends them.
 #[derive(Debug)]
 pub(crate) struct PotionBelt<V: Rules> {
     held: Bounded<V::Potion, BELT>,
     /// Every hook a held potion's class overrides, kept with `held`.
     hooks: sts2_core::Overrides,
+    /// Every hook the run's modifiers override, which never changes.
+    modifiers: sts2_core::Overrides,
+    /// `hooks` and `modifiers` together. Neither hears most hooks, and one
+    /// test of this rules both out.
+    either: sts2_core::Overrides,
     /// Where each potion spent since the run last looked stood.
     spent: Bounded<u8, BELT>,
 }
@@ -2267,12 +2327,22 @@ impl<V: Rules> Clone for PotionBelt<V> {
 impl<V: Rules> Copy for PotionBelt<V> {}
 
 impl<V: Rules> PotionBelt<V> {
-    pub(super) fn holding(potions: &[V::Potion]) -> Self {
+    /// `potions`, beside modifiers that override `modifiers`.
+    pub(super) fn holding(potions: &[V::Potion], modifiers: sts2_core::Overrides) -> Self {
+        let hooks = hooks_of::<V>(potions);
         Self {
             held: potions.iter().copied().collect(),
-            hooks: hooks_of::<V>(potions),
+            hooks,
+            modifiers,
+            either: hooks.union(modifiers),
             spent: Bounded::new(),
         }
+    }
+
+    /// Whether a potion or a modifier overrides one of `hooks`.
+    #[inline(always)]
+    pub(super) fn either_hears(&self, hooks: sts2_core::Overrides) -> bool {
+        self.either.intersects(hooks)
     }
 
     pub(super) fn is_empty(&self) -> bool {
@@ -2292,12 +2362,14 @@ impl<V: Rules> PotionBelt<V> {
     /// No potion hears a hook after, as a dead player's potions hear none.
     pub(super) fn deafen(&mut self) {
         self.hooks = sts2_core::Overrides::default();
+        self.either = self.modifiers;
     }
 
     /// `RemoveBeforeUse` on the potion at `at`.
     pub(super) fn spend(&mut self, at: usize) -> V::Potion {
         let potion = self.held.remove(at);
         self.hooks = hooks_of::<V>(&self.held);
+        self.either = self.hooks.union(self.modifiers);
         self.spent
             .push(u8::try_from(at).expect("a belt slot fits a byte"));
         potion
@@ -2330,6 +2402,7 @@ pub(crate) struct Live<V: Rules> {
     /// The player's potions. The belt is the run's, and the run keeps this
     /// in step with it while the fight lasts.
     pub(super) potions: PotionBelt<V>,
+    pub(super) modifiers: RunModifiers<V>,
     pub(super) round: V::Count,
     /// `ICombatState.CurrentSide`: whose turn it is.
     pub(super) side: V::CombatSide,
@@ -2348,6 +2421,9 @@ pub(crate) struct Live<V: Rules> {
     /// `SetReadyToEndTurn`: the player's turn ends once the play in progress
     /// is over.
     pub(super) ending_turn: bool,
+    /// `CombatManager.IsInProgress`, which `StartCombatInternal` sets just
+    /// before `BeforeCombatStart`. `AfterRoomEntered` runs before it.
+    pub(super) in_progress: bool,
     /// `CombatManager`'s card or potion effect depth for the player: how
     /// many plays or potions are between `BeginCardOrPotionEffect` and
     /// `EndCardOrPotionEffect`.
@@ -2708,6 +2784,7 @@ impl<V: Rules> Clone for Live<V> {
             stars,
             gold,
             potions,
+            modifiers,
             round,
             side,
             history,
@@ -2717,6 +2794,7 @@ impl<V: Rules> Clone for Live<V> {
             cards,
             removed_from_deck,
             ending_turn,
+            in_progress,
             effect_depth,
             point,
             deck_versions,
@@ -2755,6 +2833,7 @@ impl<V: Rules> Clone for Live<V> {
         *stars = source.stars;
         *gold = source.gold;
         *potions = source.potions;
+        *modifiers = source.modifiers;
         *round = source.round;
         *side = source.side;
         history.clone_from(&source.history);
@@ -2764,6 +2843,7 @@ impl<V: Rules> Clone for Live<V> {
         cards.clone_from(&source.cards);
         removed_from_deck.clone_from(&source.removed_from_deck);
         *ending_turn = source.ending_turn;
+        *in_progress = source.in_progress;
         *effect_depth = source.effect_depth;
         *point = source.point;
         deck_versions.clone_from(&source.deck_versions);
@@ -2861,7 +2941,7 @@ impl<V: Rules> Live<V> {
 
     /// The run's belt, which now holds `potions`.
     pub(crate) fn hold_potions(&mut self, potions: &[V::Potion]) {
-        self.potions = PotionBelt::holding(potions);
+        self.potions = PotionBelt::holding(potions, self.modifiers.hooks);
     }
 
     /// Where in the belt each potion the fight spent stood, in the order it
@@ -3612,7 +3692,8 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             energy: 3,
             stars: 0,
             gold: 0,
-            potions: PotionBelt::holding(&[]),
+            potions: PotionBelt::holding(&[], sts2_core::Overrides::NONE),
+            modifiers: RunModifiers::holding(&[]),
             round: 1,
             side: CombatSide::Player,
             history: CombatHistory::new(),
@@ -3622,6 +3703,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             cards: super::cards::Cards::with_cards(0),
             removed_from_deck: Vec::new(),
             ending_turn: false,
+            in_progress: true,
             effect_depth: 0,
             point: None,
             deck_versions: DeckVersions::none(),

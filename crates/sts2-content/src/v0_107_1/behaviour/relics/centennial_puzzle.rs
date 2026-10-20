@@ -15,8 +15,9 @@ pub struct State {
     used_this_combat: bool,
 }
 
-/// `AfterDamageReceived` on its owner, for a hit that got past the block: its
-/// cards, once a fight. `AfterCombatEnd` makes it ready again.
+/// `AfterDamageReceived` on its owner in a fight in progress, for a hit that
+/// got past the block: its cards, once a fight. `AfterCombatEnd` makes it
+/// ready again.
 pub(super) fn event_hook(
     state: &mut State,
     hook: EventHook<V>,
@@ -27,6 +28,7 @@ pub(super) fn event_hook(
             target,
             unblocked,
             player,
+            in_progress: true,
             ..
         } if target == player && unblocked > 0 && !state.used_this_combat => {
             state.used_this_combat = true;

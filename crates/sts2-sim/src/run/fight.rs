@@ -96,7 +96,7 @@ impl<V: Rules> State<V> {
         {
             return refused(Reason::NoSuchCreature { id });
         }
-        if !held.targets.is_empty() && target.is_none() {
+        if target.is_none() && crate::combat::thrown::<V>(held.potion) {
             return refused(Reason::WrongPotionTarget {
                 potion: held.potion,
                 target,

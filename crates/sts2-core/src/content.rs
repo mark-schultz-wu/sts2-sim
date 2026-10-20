@@ -4066,6 +4066,9 @@ pub enum EventHook<V: ContentVersion> {
         /// The player's `TurnNumber` as the hit lands, which its history entry
         /// keeps.
         turn: V::Count,
+        /// `CombatManager.IsInProgress`, which `AfterRoomEntered` comes
+        /// before.
+        in_progress: bool,
     },
     /// `AfterDamageGiven`, carrying the creature that dealt the hit.
     DamageGiven {
@@ -5738,6 +5741,11 @@ pub enum HookEffect<V: ContentVersion> {
     /// `PowerCmd.Apply` on every living opponent of the listener's owner,
     /// from nobody. Brimstone's.
     ApplyToLivingOpponents(V::Power, PowerAmount<V::Number>),
+    /// `PowerCmd.Apply` on every creature in the fight, in its order, from
+    /// nobody.
+    ApplyToEveryCreature(V::Power, PowerAmount<V::Number>),
+    /// `PowerCmd.Apply` on each player's creature, from nobody.
+    ApplyToPlayers(V::Power, PowerAmount<V::Number>),
     /// `CardCmd.AutoPlay` of this copy, with no target named: the card plays
     /// for free, and one that targets an enemy picks it off `CombatTargets`.
     AutoPlay(crate::CardId<V>),
@@ -6387,8 +6395,8 @@ pub enum Listener<'a, V: Hooks, P: Printed<V> + ?Sized> {
     },
     /// A potion in the belt, which the fight asks after the relics.
     Potion(V::Potion),
-    /// A modifier the run was started with, which is asked after the
-    /// potions.
+    /// A modifier the run was started with. A fight asks the modifiers last,
+    /// after every creature's listeners.
     Modifier(V::Modifier),
     Relic {
         state: &'a V::RelicState,

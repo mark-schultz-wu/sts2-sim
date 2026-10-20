@@ -1133,7 +1133,7 @@ impl<'a, V: Rules> Board<'a, V> {
             // `History.DamageReceived`, while the fight is in progress. One
             // that is ending plays no card after it, so nothing reads what it
             // records then, and it is not asked.
-            if !self.stopped() {
+            if self.live.in_progress && !self.stopped() {
                 self.live
                     .history
                     .damage_received(sts2_core::DamageReceived {
@@ -1182,6 +1182,7 @@ impl<'a, V: Rules> Board<'a, V> {
                             fully_blocked: aimed && fully_blocked,
                             unblockable,
                             turn: self.live.turn,
+                            in_progress: self.live.in_progress,
                         },
                     );
                     self.after_hit(walking);

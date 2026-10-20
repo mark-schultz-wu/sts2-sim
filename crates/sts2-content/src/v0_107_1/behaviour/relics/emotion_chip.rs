@@ -32,6 +32,7 @@ pub(super) fn event_hook(
             player,
             fully_blocked,
             turn,
+            in_progress: true,
             ..
         } if target == player && !fully_blocked && state.hurt[0] != Some(turn) => {
             state.hurt = [Some(turn), state.hurt[0]];

@@ -49,6 +49,10 @@ pub(crate) enum Listener<V: Rules> {
     Card {
         id: CardId<V>,
     },
+    /// A modifier the run was started with.
+    Modifier {
+        modifier: V::Modifier,
+    },
 }
 
 /// How many of a container's listeners override each hook.
@@ -211,6 +215,9 @@ pub(crate) enum Snapped<V: Rules> {
     Card {
         id: CardId<V>,
     },
+    Modifier {
+        modifier: V::Modifier,
+    },
 }
 
 /// Whether a walk begins: asked before any list is taken.
@@ -305,10 +312,6 @@ fn snapshot<V: Rules>(
     let hooks = Overrides::of(model_hook);
     let mut listeners = SmallVec::new();
     if let Some(kinds) = Kinds::hearing(live, relics, hooks) {
-        // A potion overrides only hooks the fight asks of it alone.
-        if kinds.potions {
-            unimplemented!("a potion hearing {}", model_hook.name());
-        }
         for (creature_at, creature) in live.creatures.iter().enumerate() {
             if kinds.powers {
                 for (at, held) in live.powers.of(creature.id).enumerate() {
@@ -352,8 +355,32 @@ fn snapshot<V: Rules>(
                 }
             }
         }
+        if kinds.others {
+            snap_others(live, hooks, &mut listeners);
+        }
     }
     listeners
+}
+
+/// The run's modifiers that override one of `hooks`, last in the list. Out
+/// of line, since few runs carry a modifier a fight asks.
+///
+/// # Panics
+///
+/// A potion hearing one of `hooks`, which a fight asks of a potion alone.
+#[cold]
+#[inline(never)]
+fn snap_others<V: Rules>(
+    live: &Live<V>,
+    hooks: Overrides,
+    listeners: &mut SmallVec<[Snapped<V>; 8]>,
+) {
+    if live.potions.hears(hooks) {
+        unimplemented!("a potion hearing {hooks:?}");
+    }
+    for (modifier, _) in live.modifiers.hearing(hooks) {
+        listeners.push(Snapped::Modifier { modifier });
+    }
 }
 
 impl<V: Rules, C: Cursor<V>> Walker<V, C> {
@@ -483,6 +510,10 @@ impl<V: Rules, C: Cursor<V>> Walker<V, C> {
                     }
                     Listener::Card { id }
                 }
+                Snapped::Modifier { modifier } => {
+                    V::modifier_event_hook(modifier, hook, asked);
+                    Listener::Modifier { modifier }
+                }
             };
             if asked.is_empty() {
                 continue;
@@ -611,8 +642,10 @@ struct Kinds {
     powers: bool,
     monsters: bool,
     belt: bool,
-    potions: bool,
     cards: bool,
+    /// A potion or a run's modifier, which few fights hold one of that
+    /// hears anything.
+    others: bool,
 }
 
 /// `Hook.ModifyUnblockedDamageTarget`: the creature that takes the damage
@@ -730,15 +763,16 @@ pub(crate) fn listeners_to<V: Rules>(
 
 impl Kinds {
     /// The kinds that hear one of `hooks`, or nothing when none does.
+    #[inline(always)]
     fn hearing<V: Rules>(live: &Live<V>, relics: &Belt<V>, hooks: Overrides) -> Option<Self> {
         let kinds = Self {
             powers: live.powers.hear(hooks),
             monsters: live.creatures.hear(hooks),
             belt: relics.hear(hooks),
-            potions: live.potions.hears(hooks),
             cards: live.cards.hears(hooks),
+            others: live.potions.either_hears(hooks),
         };
-        (kinds.powers || kinds.monsters || kinds.belt || kinds.potions || kinds.cards)
+        (kinds.powers || kinds.monsters || kinds.belt || kinds.cards || kinds.others)
             .then_some(kinds)
     }
 }
@@ -756,13 +790,9 @@ fn raise<V: Rules>(
         powers,
         monsters,
         belt,
-        potions,
         cards,
+        others,
     } = kinds;
-    // A potion overrides only hooks the fight asks of it alone.
-    if potions {
-        unimplemented!("a potion hearing {hook:?}");
-    }
     let hooks = Overrides::of(model_hook);
     let mut answer = sts2_core::HookEffects::new();
     // Returned as it is, so it is built where the caller receives it.
@@ -869,6 +899,9 @@ fn raise<V: Rules>(
             }
         }
     }
+    if others {
+        raise_others(live, hook, hooks, &mut asked, &mut decremented, &mut answer);
+    }
 
     if decremented.is_empty() {
         return asked;
@@ -913,6 +946,30 @@ fn raise<V: Rules>(
     asked
 }
 
+/// [`raise`] over the run's modifiers that override one of `hooks`, last.
+///
+/// # Panics
+///
+/// A potion hearing one of `hooks`, which a fight asks of a potion alone.
+#[cold]
+#[inline(never)]
+fn raise_others<V: Rules>(
+    live: &Live<V>,
+    hook: EventHook<V>,
+    hooks: Overrides,
+    asked: &mut SmallVec<[(Listener<V>, HookEffect<V>); 4]>,
+    decremented: &mut SmallVec<[Listener<V>; 4]>,
+    answer: &mut sts2_core::HookEffects<V>,
+) {
+    if live.potions.hears(hooks) {
+        unimplemented!("a potion hearing {hook:?}");
+    }
+    for (modifier, _) in live.modifiers.hearing(hooks) {
+        V::modifier_event_hook(modifier, hook, answer);
+        take(asked, decremented, Listener::Modifier { modifier }, answer);
+    }
+}
+
 /// Take what `listener` answered, which leaves `answer` empty for the next.
 /// A power's `Decrement` goes to `decremented`, and every other effect goes to
 /// `asked` beside the listener that asked for it. Most listeners answer
@@ -953,8 +1010,8 @@ pub(crate) fn each<V: Rules>(
         powers,
         monsters,
         belt,
-        potions,
         cards,
+        others,
     }) = Kinds::hearing(live, relics, hooks)
     else {
         return;
@@ -1007,13 +1064,8 @@ pub(crate) fn each<V: Rules>(
                 );
             }
         }
-        if potions {
-            for &potion in live.potions.held() {
-                let overrides = sts2_core::PotionTable::overrides(potion);
-                if overrides.intersects(hooks) {
-                    ask(sts2_core::Listener::Potion(potion), overrides);
-                }
-            }
+        if others {
+            ask_potions(live, hooks, &mut ask);
         }
         if cards {
             for (id, overrides) in live.cards.listening(hooks) {
@@ -1041,6 +1093,38 @@ pub(crate) fn each<V: Rules>(
                 ask(listener, overrides);
             }
         }
+    }
+    if others {
+        ask_modifiers(live, hooks, &mut ask);
+    }
+}
+
+/// [`each`] over the belt's potions that override one of `hooks`.
+#[cold]
+#[inline(never)]
+fn ask_potions<V: Rules>(
+    live: &Live<V>,
+    hooks: Overrides,
+    ask: &mut impl FnMut(Heard<'_, V>, Overrides),
+) {
+    for &potion in live.potions.held() {
+        let overrides = sts2_core::PotionTable::overrides(potion);
+        if overrides.intersects(hooks) {
+            ask(sts2_core::Listener::Potion(potion), overrides);
+        }
+    }
+}
+
+/// [`each`] over the run's modifiers that override one of `hooks`, last.
+#[cold]
+#[inline(never)]
+fn ask_modifiers<V: Rules>(
+    live: &Live<V>,
+    hooks: Overrides,
+    ask: &mut impl FnMut(Heard<'_, V>, Overrides),
+) {
+    for (modifier, overrides) in live.modifiers.hearing(hooks) {
+        ask(sts2_core::Listener::Modifier(modifier), overrides);
     }
 }
 

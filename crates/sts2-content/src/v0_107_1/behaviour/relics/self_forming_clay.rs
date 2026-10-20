@@ -8,13 +8,14 @@ use super::super::super::generated::powers::Power;
 /// `DynamicVar("BlockNextTurn", 3)`.
 const BLOCK_NEXT_TURN: PowerAmount<super::Number> = PowerAmount::Counted(3);
 
-/// `AfterDamageReceived` on its owner in a fight, for a hit that took hit
-/// points: its block as Self-Forming Clay.
+/// `AfterDamageReceived` on its owner in a fight in progress, for a hit that
+/// took hit points: its block as Self-Forming Clay.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
     if let EventHook::DamageReceived {
         target,
         unblocked,
         player,
+        in_progress: true,
         ..
     } = hook
         && target == player

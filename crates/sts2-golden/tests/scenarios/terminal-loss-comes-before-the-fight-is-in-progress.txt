@@ -1,0 +1,9 @@
+# Terminal's loss comes as the room opens, before the fight is in
+# progress. At full health the loss is a hit, but the history keeps no
+# record of it, so Spite hits once. Self-Forming Clay hears the hit and
+# gives no block, since the fight is not yet in progress.
+{"cmd":"start","seed":"C000000006","character":"IRONCLAD","ascension":"None","modifiers":["TERMINAL"]}
+{"cmd":"grant","relic":"SELF_FORMING_CLAY"}
+{"cmd":"travel","col":0,"row":1}
+{"cmd":"grant","card":"SPITE"}
+{"cmd":"play_card","index":5,"target":1}

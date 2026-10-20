@@ -30,6 +30,8 @@ pub(crate) struct Entering<'a, V: Rules> {
     pub(crate) gold: V::Number,
     /// The player's potions, in slot order.
     pub(crate) potions: &'a [V::Potion],
+    /// The modifiers the run was started with.
+    pub(crate) modifiers: &'a [V::Modifier],
     pub(crate) alive: bool,
     pub(crate) deck: &'a [sts2_core::DeckCard<V>],
     /// Whether the run reached this room off the map's lines.
@@ -78,6 +80,7 @@ pub(crate) fn enter<V: Rules>(
     let energy: V::Count = num_traits::cast(V::max_energy(character))
         .expect("the starting energy fits the build's count type");
 
+    let modifiers = super::live::RunModifiers::holding(entering.modifiers);
     // Built where it will live, and filled in place.
     let mut live = Box::new(Live {
         character,
@@ -87,7 +90,8 @@ pub(crate) fn enter<V: Rules>(
         energy,
         stars: num_traits::zero(),
         gold: entering.gold,
-        potions: super::live::PotionBelt::holding(entering.potions),
+        potions: super::live::PotionBelt::holding(entering.potions, modifiers.hooks),
+        modifiers,
         round: num_traits::one(),
         side: <V::CombatSide as SideKinds>::PLAYER,
         history: super::live::CombatHistory::new(),
@@ -97,6 +101,7 @@ pub(crate) fn enter<V: Rules>(
         cards: Cards::with_cards(0),
         removed_from_deck: Vec::new(),
         ending_turn: false,
+        in_progress: false,
         effect_depth: 0,
         point: entering.coord,
         deck_versions: super::live::DeckVersions::none(),
@@ -294,6 +299,30 @@ pub(crate) fn enter<V: Rules>(
                     board.land(enemy, power, amount, None);
                 }
             }
+            // `PowerCmd.Apply<P>` on every creature in the fight, from nobody.
+            HookEffect::ApplyToEveryCreature(power, amount) => {
+                let everyone: Vec<CombatId> =
+                    live.creatures.iter().map(|creature| creature.id).collect();
+                let mut board =
+                    Board::for_card(&mut live, streams.combat(), relics, ascension, None, None);
+                for creature in everyone {
+                    board.land(creature, power, amount, None);
+                }
+            }
+            // `PowerCmd.Apply<P>` on the player, from nobody.
+            HookEffect::ApplyToPlayers(power, amount) => {
+                let player = live.player().id;
+                let mut board =
+                    Board::for_card(&mut live, streams.combat(), relics, ascension, None, None);
+                board.land(player, power, amount, None);
+            }
+            // `CreatureCmd.LoseMaxHp` on the player.
+            HookEffect::LoseMaxHp(amount) => {
+                let player = live.player().id;
+                let mut board =
+                    Board::for_card(&mut live, streams.combat(), relics, ascension, None, None);
+                sts2_core::Fight::lose_max_hp(&mut board, player, amount);
+            }
             other => unimplemented!("a listener asking for {other:?} as a room opens"),
         }
     }
@@ -316,6 +345,7 @@ pub(crate) fn enter<V: Rules>(
     let mut afflicting: Vec<HookEffect<V>> = Vec::new();
     let mut shuffled_in: Vec<V::Card> = Vec::new();
     let mut arriving: Vec<HookEffect<V>> = Vec::new();
+    live.in_progress = true;
     let starting = EventHook::CombatStarting {
         room: live.room(),
         holding_potions: !live.potions.is_empty(),
@@ -440,8 +470,10 @@ pub(crate) fn enter<V: Rules>(
             board.add_to_draw_at_random(card, Some(player));
         }
     }
+    // `StartTurn` puts the turn in its start, then raises
     // `BeforeSideTurnStart`, which is where a monster that opens the fight
     // behind block gains it.
+    live.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::START;
     super::turn::before_side_turn_start::<V>(
         &mut live,
         streams.combat(),
@@ -487,14 +519,17 @@ pub(crate) fn enter<V: Rules>(
         ascension,
         super::live::Setup::BeforeHandDraw(asked),
     ) {
-        super::turn::Carried::Done(ended) => ended,
+        // A player who died in the setup has the turn in its end already.
+        super::turn::Carried::Done(ended) => {
+            if live.phase == <V::PlayerTurnPhase as TurnPhaseKinds>::START {
+                live.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY;
+            }
+            ended
+        }
         // A setup that stops on a question lets the fight open around it, as
         // any turn's does. `RunAutoPrePlayPhase` waits for the answer, so the
         // turn stays in its start until then.
-        super::turn::Carried::Parked => {
-            live.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::START;
-            None
-        }
+        super::turn::Carried::Parked => None,
     };
     if let Some(ended) = ended {
         if ended == super::Ended::Won {
