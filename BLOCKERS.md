@@ -53,9 +53,9 @@ impl in codegen. A spike on the powers' hooks and every card play
 measured 12,264 instructions a step before and 12,184 after. Every
 recorded run still matches after each move.
 
-The orbs, enchantments, modifiers, acts, encounters, potions and relics
-are shared, and so are two power helpers, `lends` and `debuff_at`. The
-rest: powers, monsters, events, and the cards, pool by pool.
+The orbs, enchantments, modifiers, acts, encounters, potions, relics and
+powers are shared. The rest: monsters, events, and the cards, pool by
+pool.
 
 - A shared module that waits on a question resumes at its own `Resume`,
   which the build's wraps through `From`. The build's own `Resume` moves
@@ -63,10 +63,13 @@ rest: powers, monsters, events, and the cards, pool by pool.
 - A list a rule hands out whole is a const on `Lists`, which the
   `lists!` macro beside the rule writes for each build.
 - A rule naming content one build lacks stays in that build. The shared
-  dispatcher hands it over through a hook on `OwnRules`. Diamond
-  Diadem's power is the first.
-- A large shared dispatcher stays out of line. Inlined into the walk, the
-  relics' dispatchers cost 3.9%.
+  dispatcher hands it over through a hook on `OwnRules`, and answers
+  itself when the hook passes. Diamond Diadem's and Outbreak's powers
+  are the first.
+- A lookup into a row that names content is a method on `Tables`.
+- A move can shift what the compiler inlines. The relics' dispatchers
+  inlined into the walk cost 3.9%, and stay out of line. The powers did
+  better inline, once their hot state-to-power mapping made no call.
 
 ### 3. v0.111.0's own rules
 

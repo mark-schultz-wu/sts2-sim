@@ -389,7 +389,7 @@ fn whistle<F: Fight<V>>(fight: &mut F) -> Played<V> {
     hit(fight, target, 1);
     fight.stun(
         target,
-        &super::super::powers::STUNNED,
+        <V as crate::build::Lists>::powers_stunned(),
         sts2_core::StunResume::Interrupted,
     );
     Played::Done
