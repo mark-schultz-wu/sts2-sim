@@ -2436,11 +2436,6 @@ impl<V: Rules> PotionBelt<V> {
         &self.held
     }
 
-    /// Whether some potion's class overrides one of `hooks`.
-    pub(super) fn hears(&self, hooks: sts2_core::Overrides) -> bool {
-        self.hooks.intersects(hooks)
-    }
-
     /// No potion hears a hook after, as a dead player's potions hear none.
     pub(super) fn deafen(&mut self) {
         self.hooks = sts2_core::Overrides::default();

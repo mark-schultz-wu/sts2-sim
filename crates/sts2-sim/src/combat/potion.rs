@@ -26,7 +26,7 @@ pub(crate) fn drink<V: Rules>(
     // `Hook.BeforePotionUsed`, which nothing that listens answers with more
     // than what it writes on itself.
     let hook = sts2_core::EventHook::PotionUsing { target };
-    if let Some((listener, effect)) = super::listen::notify::<V>(live, relics, hook).first() {
+    if let Some((listener, effect)) = super::listen::first_answer::<V>(live, relics, hook) {
         unimplemented!("{listener:?} asking for {effect:?} before a potion")
     }
     // `BeginCardOrPotionEffect`.

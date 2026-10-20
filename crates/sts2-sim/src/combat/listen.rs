@@ -20,10 +20,6 @@ use super::live::{Fighter, Heard, HeldPower, Live};
 use super::powers::Powers as _;
 use crate::run::Belt;
 
-/// What the listeners a hook reached asked for, in the order they asked, each
-/// beside the listener that asked it.
-pub(crate) type Answers<V> = SmallVec<[(Listener<V>, HookEffect<V>); 4]>;
-
 /// One listener, by what names it rather than by a borrow of it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Listener<V: Rules> {
@@ -119,30 +115,41 @@ impl<V: Rules> Clone for Walk<'_, V> {
 
 impl<V: Rules> Copy for Walk<'_, V> {}
 
-/// Raise `hook` on every listener in the fight, and gather what they ask for,
-/// in the order they asked.
+/// The first thing a listener asks for when `hook` is raised, and the
+/// listener that asked it, walking the listeners until one asks.
 ///
-/// A power's `Decrement` is its own business, and is carried out here once
-/// every listener has answered. Everything else is the caller's.
+/// For a hook whose listeners write only on themselves, where an answer is a
+/// path nobody has ported. Each listener is asked as the walk reaches it, as
+/// any walk asks, and a power's own decrement is carried out in its turn.
 ///
 /// # Panics
 ///
 /// A hook that is not one `AbstractModel` declares, which is asked of one
 /// model directly rather than raised.
-#[tracing::instrument(level = "trace", skip_all, fields(hook = hook.model_hook().map_or("", ModelHook::name)))]
 #[inline(always)]
-pub(crate) fn notify<V: Rules>(
+pub(crate) fn first_answer<V: Rules>(
     live: &mut Live<V>,
     relics: &mut Belt<V>,
     hook: EventHook<V>,
-) -> Answers<V> {
-    let model_hook = hook
-        .model_hook()
-        .unwrap_or_else(|| unreachable!("{hook:?} is asked of one model, not raised"));
-    match Kinds::hearing(live, relics, Overrides::of(model_hook)) {
-        Some(kinds) => raise(live, relics, hook, model_hook, kinds),
-        None => SmallVec::new(),
+) -> Option<(Listener<V>, HookEffect<V>)> {
+    let walker = Walker::begin::<Checked>(live, relics, hook)?;
+    first_of_walk(live, relics, walker)
+}
+
+/// [`first_answer`] once something hears the hook.
+#[inline(never)]
+fn first_of_walk<V: Rules>(
+    live: &mut Live<V>,
+    relics: &mut Belt<V>,
+    mut walker: Walker<V>,
+) -> Option<(Listener<V>, HookEffect<V>)> {
+    let mut asked = sts2_core::HookEffects::new();
+    while let Some(listener) = walker.next(live, relics, &mut asked) {
+        if let Some(&effect) = asked.first() {
+            return Some((listener, effect));
+        }
     }
+    None
 }
 
 /// How a walk finds its listeners: the list `IterateHookListeners` takes as
@@ -718,6 +725,12 @@ impl<V: Rules> Walking<V> {
         Walker::begin::<S>(live, relics, hook).map(Self::new)
     }
 
+    /// [`Walker::rehook`]: the hook as the listeners still to come are
+    /// handed it.
+    pub(crate) fn rehook(&mut self, hook: EventHook<V>) {
+        self.walker.rehook(hook);
+    }
+
     /// Whether the walk has nothing left: no answer to carry out and no
     /// listener to ask.
     pub(crate) fn exhausted(&self) -> bool {
@@ -964,198 +977,6 @@ impl Kinds {
     }
 }
 
-/// [`notify`] once something hears `hook`.
-#[inline(never)]
-fn raise<V: Rules>(
-    live: &mut Live<V>,
-    relics: &mut Belt<V>,
-    hook: EventHook<V>,
-    model_hook: ModelHook,
-    kinds: Kinds,
-) -> SmallVec<[(Listener<V>, HookEffect<V>); 4]> {
-    let Kinds {
-        powers,
-        monsters,
-        belt,
-        cards,
-        others,
-    } = kinds;
-    let hooks = Overrides::of(model_hook);
-    let mut answer = sts2_core::HookEffects::new();
-    // Returned as it is, so it is built where the caller receives it.
-    let mut asked = SmallVec::new();
-    let mut decremented: SmallVec<[Listener<V>; 4]> = SmallVec::new();
-    for creature in 0..live.creatures.len() {
-        let (id, carrier, model) = {
-            let fighter = &live.creatures[creature];
-            (fighter.id, fighter.carrier(), fighter.model)
-        };
-        if powers {
-            // By position, since asking lends the whole fight and takes the
-            // power's own state back after.
-            for at in 0..live.powers.of(id).count() {
-                let Some((power, instance)) = live
-                    .powers
-                    .of(id)
-                    .nth(at)
-                    .map(|held| (held.power(), held.instance))
-                else {
-                    break;
-                };
-                if power.overrides().contains(model_hook) {
-                    live.ask_power_as(Some(&*relics), carrier, at, hook, &mut answer);
-                    let listener = Listener::Power {
-                        owner: id,
-                        instance,
-                        power,
-                    };
-                    take(&mut asked, &mut decremented, listener, &mut answer);
-                }
-            }
-        }
-        if monsters
-            && let Some(monster) = carrier.monster
-            && monster.overrides().contains(model_hook)
-        {
-            let Some(machine) = live
-                .machines
-                .iter_mut()
-                .find(|machine| machine.creature == id)
-            else {
-                unreachable!("a monster in the fight has its graph")
-            };
-            V::monster_event_hook(monster, &mut machine.state, id, hook, &mut answer);
-            let listener = Listener::Monster {
-                creature: id,
-                monster,
-            };
-            take(&mut asked, &mut decremented, listener, &mut answer);
-        }
-        let Some(ModelId::Character(_)) = model else {
-            continue;
-        };
-        if belt {
-            // The listening slots alone, in slot order.
-            let mut left = relics.hearing_hook(model_hook);
-            while left != 0 {
-                let slot = left.trailing_zeros() as usize;
-                left &= left - 1;
-                let (state, belt) = relics.state_beside(slot);
-                V::relic_event_hook(state, belt, hook, &mut answer);
-                take(
-                    &mut asked,
-                    &mut decremented,
-                    Listener::Relic { slot: slot as u8 },
-                    &mut answer,
-                );
-            }
-        }
-        if cards {
-            for (id, _) in live.cards.listening(hooks) {
-                ask_card(live, id, hook, &mut answer);
-                take(
-                    &mut asked,
-                    &mut decremented,
-                    Listener::Card { id },
-                    &mut answer,
-                );
-            }
-        }
-    }
-    if others {
-        raise_others(live, hook, hooks, &mut asked, &mut decremented, &mut answer);
-    }
-
-    if decremented.is_empty() {
-        return asked;
-    }
-    // `PowerCmd.Decrement` on the instance that asked.
-    for &listener in &decremented {
-        let Listener::Power {
-            owner, instance, ..
-        } = listener
-        else {
-            continue;
-        };
-        if let Some(held) = live
-            .powers
-            .of_mut(owner)
-            .find(|held| held.instance == instance)
-            && held.amount.count().is_some()
-        {
-            held.amount = held.amount.ticked();
-        }
-    }
-    // Then `PowerCmd.Remove` on each at zero, which raises its `AfterRemoved`.
-    // What that asks for goes back beside it. The last place first.
-    let mut places: SmallVec<[(CombatId, usize, Listener<V>); 4]> = (decremented.iter())
-        .filter_map(|&listener| match listener {
-            Listener::Power {
-                owner, instance, ..
-            } => Some((owner, live.powers.place_of(owner, instance)?, listener)),
-            _ => None,
-        })
-        .collect();
-    places.sort_unstable_by_key(|&(owner, at, _)| std::cmp::Reverse((owner, at)));
-    places.dedup_by_key(|&mut (owner, at, _)| (owner, at));
-    for (owner, at, listener) in places {
-        let spent = (live.powers.of(owner).nth(at)).is_some_and(|held| held.amount.spent());
-        if spent {
-            for effect in live.remove_power_at_asking(owner, at) {
-                asked.push((listener, effect));
-            }
-        }
-    }
-    asked
-}
-
-/// [`raise`] over the run's modifiers that override one of `hooks`, last.
-///
-/// # Panics
-///
-/// A potion hearing one of `hooks`, which a fight asks of a potion alone.
-#[cold]
-#[inline(never)]
-fn raise_others<V: Rules>(
-    live: &Live<V>,
-    hook: EventHook<V>,
-    hooks: Overrides,
-    asked: &mut SmallVec<[(Listener<V>, HookEffect<V>); 4]>,
-    decremented: &mut SmallVec<[Listener<V>; 4]>,
-    answer: &mut sts2_core::HookEffects<V>,
-) {
-    if live.potions.hears(hooks) {
-        unimplemented!("a potion hearing {hook:?}");
-    }
-    for (modifier, _) in live.modifiers.hearing(hooks) {
-        ask_modifier(modifier, hook, answer);
-        take(asked, decremented, Listener::Modifier { modifier }, answer);
-    }
-}
-
-/// Take what `listener` answered, which leaves `answer` empty for the next.
-/// A power's `Decrement` goes to `decremented`, and every other effect goes to
-/// `asked` beside the listener that asked for it. Most listeners answer
-/// nothing.
-#[inline(always)]
-fn take<V: Rules>(
-    asked: &mut SmallVec<[(Listener<V>, HookEffect<V>); 4]>,
-    decremented: &mut SmallVec<[Listener<V>; 4]>,
-    listener: Listener<V>,
-    answer: &mut sts2_core::HookEffects<V>,
-) {
-    if answer.is_empty() {
-        return;
-    }
-    for &effect in answer.iter() {
-        match (listener, effect) {
-            (Listener::Power { .. }, HookEffect::Decrement) => decremented.push(listener),
-            (listener, effect) => asked.push((listener, effect)),
-        }
-    }
-    answer.clear();
-}
-
 /// Ask `ask` of every listener that overrides a hook in `hooks`, in the order
 /// the game asks them, with every hook that listener overrides.
 ///
@@ -1380,7 +1201,11 @@ fn decides<V: Rules>(
 pub(crate) fn combat_ended<V: Rules>(live: &mut Live<V>, relics: &mut Belt<V>) {
     // What a listener asks of the run, which carries it out as it leaves.
     let room = live.room();
-    for (_, effect) in notify::<V>(live, relics, EventHook::CombatEnd { room }) {
+    let mut walking = Walking::begin::<Checked>(live, relics, EventHook::CombatEnd { room });
+    while let Some((_, effect)) = walking
+        .as_mut()
+        .and_then(|walking| walking.next(live, relics))
+    {
         match effect {
             // `CreatureCmd.GainMaxHp` on the player's creature, which the
             // fight still holds: the maximum grows, and the health with it.
@@ -1396,7 +1221,7 @@ pub(crate) fn combat_ended<V: Rules>(live: &mut Live<V>, relics: &mut Belt<V>) {
             effect => live.leaving.push(effect),
         }
     }
-    let early = EventHook::CombatVictoryEarly {
+    let early = |live: &mut Live<V>| EventHook::CombatVictoryEarly {
         room,
         player: {
             let player = player_of(live);
@@ -1406,18 +1231,32 @@ pub(crate) fn combat_ended<V: Rules>(live: &mut Live<V>, relics: &mut Belt<V>) {
             }
         },
     };
-    for (_, effect) in notify::<V>(live, relics, early) {
+    let hook = early(live);
+    let mut walking = Walking::begin::<Checked>(live, relics, hook);
+    while let Some((_, effect)) = walking
+        .as_mut()
+        .and_then(|walking| walking.next(live, relics))
+    {
         match effect {
-            // `CreatureCmd.Heal`, which caps at the maximum.
+            // `CreatureCmd.Heal`, which caps at the maximum. The listeners
+            // after it read the health it left.
             HookEffect::Heal(amount) => {
                 let healed = health::<V>(amount);
                 let player = player_of(live);
                 player.hp = (player.hp + healed).min(player.max_hp);
+                let hook = early(live);
+                if let Some(walking) = walking.as_mut() {
+                    walking.rehook(hook);
+                }
             }
             effect => unimplemented!("a listener asking for {effect:?} as a fight is won, early"),
         }
     }
-    for (_, effect) in notify::<V>(live, relics, EventHook::CombatVictory { room }) {
+    let mut walking = Walking::begin::<Checked>(live, relics, EventHook::CombatVictory { room });
+    while let Some((_, effect)) = walking
+        .as_mut()
+        .and_then(|walking| walking.next(live, relics))
+    {
         match effect {
             // `CreatureCmd.Heal`, which caps at the maximum.
             HookEffect::Heal(amount) => {
