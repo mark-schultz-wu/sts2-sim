@@ -9,7 +9,7 @@ use crate::generated::cards::CardKeyword;
 use crate::ids::{CardIds as _, CardVarIds as _, PowerIds as _};
 
 /// Its damage to the target, as one attack.
-fn strike<V: crate::Build, F: Fight<V>>(fight: &mut F) {
+pub(crate) fn strike<V: crate::Build, F: Fight<V>>(fight: &mut F) {
     let target = fight.target();
     fight.attack(Scaling::Dynamic, |fight| {
         let attack = fight.resolve(Effect::Attack {

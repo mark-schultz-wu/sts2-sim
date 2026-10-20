@@ -37,57 +37,7 @@ own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
 
-### 2. v0.111.0's changed rules
-
-v0.111.0's `Hooks` and `Rules` are the shared ones in
-`sts2_content::behaviour`, which mirror v0.107.1's game code. A rule
-whose game code changed between the builds gets a port of its own,
-chosen by the build through `OwnRules`. Content new in v0.111.0 is
-ported there. `crates/sts2-golden/tests/recorded-v0.111.0.bin` holds the
-census's runs on v0.111.0, and `STS2_GAME_VERSION=v0.111.0 cargo xtask
-coverage` says where they part. `recorded.rs` follows them as it does
-v0.107.1's, against `recorded-v0.111.0.matched`.
-
-What each shared module asks of a build, so a port knows where to go:
-
-- `BuildContent`: the content traits in `sts2_content::ids`, the shared
-  vocabulary types, and `Lists`, which a `lists!` macro beside each rule
-  writes for the build.
-- `Tables`: the lookups into a row that names content.
-- `sts2_content::vars`: the numbers a relic, power, potion or
-  enchantment prints, as consts on the build's enum. A port reads a
-  number there, and a number one build lacks fails to build for it.
-- `OwnRules`: the build's generated move and play scripts, and its own
-  ports of rules that name content another build lacks. A shared
-  dispatcher asks the build first and answers itself when the hook
-  passes.
-- The `rules!` macro, where a method that only reads a table forwards
-  to the build's own tables.
-
-`cargo xtask generic <file>` rewrites a build's rule to be generic, for
-a port that starts from the other build's code. A move can shift what
-the compiler inlines. The relics' and the cards' decision dispatchers
-stay out of line, since the walk inlining them cost 3.9% and 3.4%.
-
-The simulator follows all 1,322,464 recorded positions, and all 1,500
-runs whole. `follow_run <file> <index> --diff <dir>` plays a run on the
-game beside the simulator and names the sections where they first
-differ. One change is known and not yet ported, which no recorded run
-reaches:
-
-- Misery changed in v0.111.0. It adds a temporary power's amount to the
-  power it lends before it copies them, and no power has
-  `IgnoreNextInstance` now. The shared port is v0.107.1's.
-
-About 60 of the game's engine files changed too, outside the content
-models: its commands, game actions, entities and runs. An engine rule
-whose code changed goes in `sts2_core::Engine`, which each build
-implements in its own `engine` module. It holds `RollWithBaseOdds`,
-`PotionRewardOdds.Roll`, whether `CardSelectCmd` signals a choice
-before it lists the cards, and whether `CardModel.OnPlayWrapper` stops
-a card's replays once the fight ends.
-
-### 3. A walk that shares only who listens
+### 2. A walk that shares only who listens
 
 The snapshot copies each walk's listeners. Most walks see none arrive or
 leave: 1.3% of `AfterCardPlayed` walks do, and 28% of `AfterSideTurnEnd`
@@ -97,7 +47,7 @@ A cheaper walk shares only which listeners there are and their order,
 kept apart from what they hold. That is part of the flat-state pass,
 which needs a design first.
 
-### 4. A speed target
+### 3. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.
