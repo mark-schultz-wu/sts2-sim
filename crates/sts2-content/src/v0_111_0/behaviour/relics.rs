@@ -1,13 +1,19 @@
 //! The relics whose rules this build ports for itself, which the shared
 //! relics hand over through [`crate::build::OwnRules`].
 
-use sts2_core::{EventHook, HookEffect};
+use sts2_core::{EventHook, HookEffect, PowerAmount};
 
 use super::super::V0_111_0 as V;
 use super::super::generated::cards::{Cards, CurseCard, QuestCard};
 use super::super::generated::potions::Potion;
+use super::super::generated::powers::Power;
 use super::super::generated::relics::Relic;
 use crate::behaviour::relics::State;
+use crate::generated::runstate::CombatSide;
+
+/// `DiamondDiadem`'s `BlockVar(20m, ValueProp.Unpowered)`, which v0.107.1's
+/// Diadem lacks.
+const DIAMOND_DIADEM_BLOCK: i32 = 20;
 
 /// A relic of this build's own, as the run carries it. Neither saves a
 /// field.
@@ -43,8 +49,17 @@ pub(crate) fn own_relic_event_hook(
             asked.push(HookEffect::ProcurePotion(Potion::Ambergris));
             asked.push(HookEffect::AddToDeck(Cards::Curse(CurseCard::Guilty)));
         }
-        // `DiamondDiadem` blocks and blurs on its owner's first turn here.
-        (State::DiamondDiadem(_), _) => unimplemented!("Diamond Diadem in v0.111.0"),
+        // `DiamondDiadem.AfterSideTurnStart`: on its owner's first turn, its
+        // block, unpowered, then one Blur on its owner.
+        (State::DiamondDiadem(_), EventHook::SideTurnStart { side, turn, .. }) => {
+            if side == CombatSide::Player && turn <= 1 {
+                asked.extend([
+                    HookEffect::GainBlock(DIAMOND_DIADEM_BLOCK),
+                    HookEffect::ApplyToOwner(Power::BlurPower, PowerAmount::Counted(1)),
+                ]);
+            }
+        }
+        (State::DiamondDiadem(_), hook) => unimplemented!("what DiamondDiadem does for {hook:?}"),
         (state @ State::Own(_), hook) => unimplemented!("what {state:?} does for {hook:?}"),
         (state, _) => unreachable!("{state:?} is a shared relic"),
     }

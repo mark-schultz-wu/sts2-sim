@@ -4,7 +4,9 @@
 use sts2_core::{Amount, Effect, Fight, Played, Scaling};
 
 use super::super::V0_111_0 as V;
-use super::super::generated::cards::{CardVar, Cards, EventCard, IroncladCard, QuestCard};
+use super::super::generated::cards::{
+    CardVar, Cards, EventCard, IroncladCard, QuestCard, SilentCard,
+};
 use super::super::generated::powers::Power;
 use crate::generated::runstate::MapPointType;
 
@@ -22,6 +24,16 @@ pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Option<Played<
                 scaling: Scaling::Dynamic,
             });
             fight.apply(block);
+            Some(Played::Done)
+        }
+        // `Outbreak`: its Poison onto each enemy that can be hit, from its
+        // owner, then `PoisonPower.Trigger` on each that carries Poison.
+        Cards::Silent(SilentCard::Outbreak) => {
+            let poison = fight.power_var(CardVar::PoisonPower);
+            fight.apply_to_opponents(Power::PoisonPower, sts2_core::PowerAmount::Counted(poison));
+            for enemy in fight.hittable_opponents() {
+                trigger_poison(fight, enemy);
+            }
             Some(Played::Done)
         }
         // `Abundance`: `GetDistinctForCombat` of three Powers from its
@@ -52,6 +64,52 @@ pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Option<Played<
             })
         }
         _ => None,
+    }
+}
+
+/// `PoisonPower.Trigger` on `creature`, where it carries Poison: `TriggerCount`
+/// rounds, its stack or one more than the Accelerant its living opponents
+/// carry, whichever is fewer. Each round hits it, unblockable and
+/// unpowered, for the stack it holds then, and takes one off while it lives.
+fn trigger_poison<F: Fight<V>>(fight: &mut F, creature: sts2_core::CombatId) {
+    use sts2_core::{CreatureView as _, PowerAmount};
+
+    let stack_of = |fight: &F| {
+        fight
+            .creatures()
+            .find(|held| held.id() == creature)
+            .and_then(|held| held.power(Power::PoisonPower))
+    };
+    let amount = match stack_of(fight) {
+        None => return,
+        Some(PowerAmount::Counted(amount)) => amount,
+        Some(PowerAmount::Endless) => unimplemented!("an endless Poison"),
+    };
+    let side = fight
+        .creatures()
+        .find(|held| held.id() == creature)
+        .map(|held| held.side())
+        .expect("a creature with Poison stands in the fight");
+    let accelerant: Number = fight
+        .creatures()
+        .filter(|opponent| opponent.side() != side && opponent.alive())
+        .filter_map(|opponent| match opponent.power(Power::AccelerantPower) {
+            Some(PowerAmount::Counted(amount)) => Some(amount),
+            Some(PowerAmount::Endless) => unimplemented!("an endless Accelerant"),
+            None => None,
+        })
+        .sum();
+    for _ in 0..amount.min(1 + accelerant) {
+        let Some(PowerAmount::Counted(stack)) = stack_of(fight) else {
+            break;
+        };
+        fight.damage_unpowered(None, creature, stack, true);
+        let alive = fight
+            .creatures()
+            .any(|held| held.id() == creature && held.alive());
+        if alive {
+            fight.modify_power_amount(creature, Power::PoisonPower, -1, None);
+        }
     }
 }
 
