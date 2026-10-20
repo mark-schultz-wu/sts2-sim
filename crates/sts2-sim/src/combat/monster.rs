@@ -341,6 +341,35 @@ pub(super) fn summon_built<V: Rules>(
         slot,
         written: _,
     } = spawned;
+    let (id, hp) = create::<V>(live, monster, niche);
+    place::<V>(live, monster, opens_on, slot, state, position, id, hp)
+}
+
+/// `CombatState.CreateCreature` for an enemy: the next id, and hit points
+/// `SetUniqueMonsterHpValue` rolls against the enemies already in the fight.
+pub(super) fn create<V: Rules>(
+    live: &mut Live<V>,
+    monster: V::Monster,
+    niche: &mut MegaRng,
+) -> (CombatId, V::Health) {
+    let id = live.next_creature();
+    let used = monster_hps::<V>(&live.creatures);
+    (id, health::<V>(monster, live.ascension, &used, niche))
+}
+
+/// `CombatState.AddCreature`: a monster [`create`] made, put among the
+/// enemies at `position`, opening where `opens_on` says.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn place<V: Rules>(
+    live: &mut Live<V>,
+    monster: V::Monster,
+    opens_on: Option<V::MoveId>,
+    slot: Option<u8>,
+    state: V::MonsterState,
+    position: usize,
+    id: CombatId,
+    hp: V::Health,
+) -> CombatId {
     let encounter = live.encounter;
     let Some(roster_size) = live
         .machines
@@ -355,9 +384,6 @@ pub(super) fn summon_built<V: Rules>(
     let Some(spawn_position) = u8::try_from(position).ok().and_then(nonmax::NonMaxU8::new) else {
         unreachable!("a position in the bounded roster fits its spawn field");
     };
-    let id = live.next_creature();
-    let used = monster_hps::<V>(&live.creatures);
-    let hp = health::<V>(monster, live.ascension, &used, niche);
     let creature_at = live
         .creatures
         .iter()

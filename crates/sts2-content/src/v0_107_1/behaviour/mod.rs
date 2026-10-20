@@ -180,6 +180,15 @@ impl crate::build::OwnRules for V {
         }
     }
 
+    /// No power's death is its own.
+    fn own_power_death<F: sts2_core::Fight<V>>(
+        _power: <V as sts2_core::ContentVersion>::Power,
+        _holder: sts2_core::CombatId,
+        _fight: &mut F,
+    ) -> Option<()> {
+        None
+    }
+
     fn own_power(power: <V as sts2_core::ContentVersion>::Power) -> bool {
         powers::own_power(power)
     }

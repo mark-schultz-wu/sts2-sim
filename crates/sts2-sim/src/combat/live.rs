@@ -1941,6 +1941,15 @@ impl<V: Rules> Clone for Carrier<V> {
 
 impl<V: Rules> Copy for Carrier<V> {}
 
+/// A monster made and not yet in the fight: what joins when it is added.
+#[derive(Debug, Clone)]
+pub(crate) struct Created<V: Rules> {
+    pub(crate) fighter: Fighter<V>,
+    pub(crate) monster: V::Monster,
+    /// What landed on it meanwhile, which joins with it.
+    pub(crate) powers: Vec<HeldPower<V>>,
+}
+
 /// One power on a creature, with the fields its own model saves.
 ///
 /// [`sts2_core::Stack`] is what a report shows of a power: which one, and the
@@ -2529,6 +2538,10 @@ pub(crate) struct Live<V: Rules> {
     /// that carried it. A walk that took its list before it came off still
     /// asks it, as a model on its own, and what it writes lands here.
     pub(super) detached: Vec<(CombatId, HeldPower<V>)>,
+    /// Each monster `CombatState.CreateCreature` made that has not joined
+    /// yet, which `CreatureCmd.Add` then puts in. None stands here across a
+    /// decision.
+    pub(super) created: Vec<Created<V>>,
     /// The draws a listener ran inside another draw, which a question
     /// stopped, with what the listeners after each asked. The outermost comes
     /// first. The draw that resumes finishes them before its own.
@@ -2839,6 +2852,7 @@ impl<V: Rules> Clone for Live<V> {
             for_run: self.for_run.clone(),
             after_pick: self.after_pick.clone(),
             detached: self.detached.clone(),
+            created: self.created.clone(),
             hook_draws: self.hook_draws.clone(),
             drawn_late: self.drawn_late,
             drew: self.drew.clone(),
@@ -2890,6 +2904,7 @@ impl<V: Rules> Clone for Live<V> {
             for_run,
             after_pick,
             detached,
+            created,
             hook_draws,
             drawn_late,
             drew,
@@ -2941,6 +2956,7 @@ impl<V: Rules> Clone for Live<V> {
         for_run.clone_from(&source.for_run);
         after_pick.clone_from(&source.after_pick);
         detached.clone_from(&source.detached);
+        created.clone_from(&source.created);
         hook_draws.clone_from(&source.hook_draws);
         *drawn_late = source.drawn_late;
         drew.clone_from(&source.drew);
@@ -3828,6 +3844,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             for_run: Vec::new(),
             after_pick: None,
             detached: Vec::new(),
+            created: Vec::new(),
             hook_draws: smallvec::SmallVec::new(),
             drawn_late: None,
             drew: None,
