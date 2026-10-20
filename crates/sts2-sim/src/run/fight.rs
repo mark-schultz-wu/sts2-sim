@@ -336,6 +336,7 @@ impl<V: Rules> State<V> {
                 combat::ExtraReward::SpecialCard(card) => crate::reward::Offer::SpecialCard {
                     card,
                     state: <V::CardState as sts2_core::CardModel<V>>::new(card.card),
+                    returning: None,
                     taken: false,
                 },
                 combat::ExtraReward::Returned(id) => {
@@ -346,6 +347,7 @@ impl<V: Rules> State<V> {
                     crate::reward::Offer::SpecialCard {
                         card: returned.ident,
                         state: returned.state,
+                        returning: Some(returned.id),
                         taken: false,
                     }
                 }

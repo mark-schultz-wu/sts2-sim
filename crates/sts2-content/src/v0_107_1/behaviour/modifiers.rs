@@ -36,6 +36,28 @@ const TERMINAL_PLATING: PowerAmount<i32> = PowerAmount::Counted(5);
 /// `DeadlyEvents.ModifyOddsIncreaseForUnrolledRoomType`, on a treasure's.
 const DEADLY_TREASURE_RISE: sts2_core::Fixed = sts2_core::Fixed::new(2, 0);
 
+/// `Hoarder`'s copies of each card the deck gains.
+const HOARDED_COPIES: usize = 2;
+
+/// What a run modifier's model saves.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum State {
+    /// A modifier whose model saves nothing.
+    Stateless,
+    /// `Hoarder._cardsToSkip`: the copies it made that have not joined the
+    /// deck again from no pile since.
+    Hoarder { skip: Vec<sts2_core::DeckCardId> },
+}
+
+impl sts2_core::ModifierModel<V> for State {
+    fn new(modifier: Modifier) -> Self {
+        match modifier {
+            Modifier::Hoarder => State::Hoarder { skip: Vec::new() },
+            _ => State::Stateless,
+        }
+    }
+}
+
 /// What `modifier` decides for `hook`.
 ///
 /// # Panics
@@ -45,6 +67,10 @@ pub(crate) fn decide_hook(modifier: Modifier, hook: DecisionHook<V>) -> HookResp
     match (modifier, hook) {
         // `Flight.ShouldAllowFreeTravel`.
         (Modifier::Flight, DecisionHook::ShouldAllowFreeTravel) => HookResponse::Decision(true),
+        // `Hoarder.ShouldAllowMerchantCardRemoval`.
+        (Modifier::Hoarder, DecisionHook::ShouldAllowMerchantCardRemoval) => {
+            HookResponse::Decision(false)
+        }
         (modifier, hook) => unimplemented!("what {modifier:?} decides for {hook:?}"),
     }
 }
@@ -79,10 +105,44 @@ pub(crate) fn modify_hook(modifier: Modifier, hook: ModifyHook<V>) -> Modify<i32
 /// A modifier whose override of `hook` is not ported.
 pub(crate) fn event_hook(
     entry: sts2_core::RunModifier<V>,
+    state: &mut State,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     match (entry.modifier, hook) {
+        // `Hoarder.AfterCardChangedPiles`: two copies of a card that joined
+        // the deck from no pile with no `clonedBy`. Its own copies join with
+        // `clonedBy` set, so they stay in `skip`. One that joins again from no
+        // pile, as a stolen card comes back, is taken off and not copied.
+        (
+            Modifier::Hoarder,
+            EventHook::AddedToDeck {
+                id,
+                cloned: false,
+                transformed: false,
+                ..
+            },
+        ) => {
+            let State::Hoarder { skip } = state else {
+                unreachable!("Hoarder's model is its own")
+            };
+            match skip.iter().position(|&held| held == id) {
+                Some(at) => {
+                    skip.remove(at);
+                }
+                None => asked.push(HookEffect::CopyIntoDeck(HOARDED_COPIES)),
+            }
+        }
+        (Modifier::Hoarder, EventHook::AddedToDeck { .. }) => {}
+        // `_cardsToSkip.Add` of the copy its own `CloneCard` made.
+        (Modifier::Hoarder, EventHook::CopyMade { id }) => {
+            let State::Hoarder { skip } = state else {
+                unreachable!("Hoarder's model is its own")
+            };
+            skip.push(id);
+        }
+        // A card a fight moves lands in a combat pile, never the deck.
+        (Modifier::Hoarder, EventHook::CardChangedPiles { .. }) => {}
         // `DeadlyEvents.AfterRunCreated`: no Juzu Bracelet in either bag, and
         // an unknown room can be an elite.
         (Modifier::DeadlyEvents, EventHook::RunCreated) => asked.extend([
@@ -215,6 +275,7 @@ pub(crate) fn ported(modifier: Modifier) -> bool {
             | Modifier::BigGameHunter
             | Modifier::CursedRun
             | Modifier::CharacterCards
+            | Modifier::Hoarder
             | Modifier::Murderous
             | Modifier::Terminal
     )

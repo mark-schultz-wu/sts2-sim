@@ -891,3 +891,26 @@ internal static class DoubleDownWithoutAPopup
         }
     }
 }
+
+/// <summary>
+/// A merchant's card removal, marked used where a listener refuses it.
+/// </summary>
+/// <remarks>
+/// <c>NMerchantCardRemoval.FillSlot</c> asks
+/// <c>Hook.ShouldAllowMerchantCardRemoval</c> as the shop screen fills the
+/// removal's slot, and marks the removal used on a no. Headless there is no
+/// screen, so a Hoarder run sold a removal the game never offers. This asks
+/// as the merchant's stock is made instead, which the screen only shows.
+/// </remarks>
+[HarmonyPatch(typeof(MerchantInventory), nameof(MerchantInventory.CreateForNormalMerchant))]
+internal static class RemovalRefusedWithoutAScreen
+{
+    private static void Postfix(Player player, MerchantInventory __result)
+    {
+        if (__result.CardRemovalEntry is { } removal
+            && !MegaCrit.Sts2.Core.Hooks.Hook.ShouldAllowMerchantCardRemoval(player.RunState, player))
+        {
+            removal.SetUsed();
+        }
+    }
+}

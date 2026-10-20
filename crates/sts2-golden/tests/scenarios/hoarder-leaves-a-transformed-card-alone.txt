@@ -1,0 +1,5 @@
+# Archaic Tooth transforms Bash as it is picked up. `CardCmd.Transform`
+# hands the hook the deck as the old pile, and Hoarder copies only a card
+# that joins from no pile, so the replacement comes alone.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None","modifiers":["HOARDER"]}
+{"cmd":"grant","relic":"ARCHAIC_TOOTH"}

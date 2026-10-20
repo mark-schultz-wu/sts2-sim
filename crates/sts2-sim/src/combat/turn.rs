@@ -746,6 +746,12 @@ pub(super) fn post_play_from<V: Rules>(
                     let Ok(&card) = sts2_core::rng::GameRng::choose(rngs.shuffle, &standing) else {
                         continue;
                     };
+                    // `CardCmd.AutoPlay` returns at once where the fight is
+                    // over or ending, which a card before this one can make
+                    // it. The draw is taken all the same.
+                    if live.lost || super::board::ending::<V>(listen::Walk { live, relics }) {
+                        continue;
+                    }
                     super::play::auto_play::<V>(
                         live,
                         rngs.reborrow(),

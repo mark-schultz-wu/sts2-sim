@@ -1,0 +1,7 @@
+# Hoarder copies each card that joins the deck from no pile twice, at the
+# deck's bottom. Its own copies join the same way, and it skips them, so
+# Inflame comes with two copies and no more. A merchant's card removal is
+# marked used as the shop is stocked, since Hoarder refuses it.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None","modifiers":["HOARDER"]}
+{"cmd":"grant","card":"INFLAME"}
+{"cmd":"enter_room","type":"Shop"}

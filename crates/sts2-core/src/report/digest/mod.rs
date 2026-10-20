@@ -640,7 +640,15 @@ impl Sink {
                     }
                     Answer::Pick(at) => {
                         self.u8(1);
-                        self.u8(*at);
+                        // One byte for every pick a selection of a byte's
+                        // options names, so the digests of those stay put.
+                        match u8::try_from(*at) {
+                            Ok(at) if at < u8::MAX => self.u8(at),
+                            _ => {
+                                self.u8(u8::MAX);
+                                self.len(usize::from(*at));
+                            }
+                        }
                     }
                     Answer::Undo => self.u8(2),
                     Answer::Done => self.u8(3),

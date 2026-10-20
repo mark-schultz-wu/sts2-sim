@@ -1662,6 +1662,16 @@ impl<'a, V: Rules> Board<'a, V> {
         }
     }
 
+    /// Where `id`, whose death is being resolved, stands now.
+    ///
+    /// # Panics
+    ///
+    /// A creature its own death's hooks took out of the fight.
+    fn dying_at(&self, id: CombatId) -> usize {
+        self.at(id)
+            .unwrap_or_else(|| unimplemented!("{id:?} leaving the fight inside its own death"))
+    }
+
     /// `KillWithoutCheckingWinCondition`, including a power's revival hook.
     ///
     /// A player dying takes the run with it. `LoseCombat` files the loss, and
@@ -1741,6 +1751,7 @@ impl<'a, V: Rules> Board<'a, V> {
             if let Some(effect) = self.after_death(id, owner, false).first() {
                 unimplemented!("a power asking for {effect:?} over a player's death")
             }
+            let at = self.dying_at(id);
             self.strip_powers(at);
             // `OrbQueue.Clear`, which leaves no orb and no capacity.
             self.live.orbs = None;
@@ -1780,6 +1791,9 @@ impl<'a, V: Rules> Board<'a, V> {
             false,
         );
         let after_death = self.after_death(id, owner, false);
+        // `AfterDeath`'s listeners can take other creatures out, which moves
+        // where this one stands.
+        let at = self.dying_at(id);
         if kept {
             let ascension = self.live.ascension;
             for effect in after_death {

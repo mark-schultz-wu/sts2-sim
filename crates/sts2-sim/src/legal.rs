@@ -70,8 +70,8 @@ pub(crate) fn picks<V: ContentVersion>(
 /// # Panics
 ///
 /// A selection offering more cards than a pick can name.
-fn pick_index(at: usize) -> u8 {
-    u8::try_from(at).unwrap_or_else(|_| unimplemented!("a pick of option {at}"))
+fn pick_index(at: usize) -> u16 {
+    u16::try_from(at).unwrap_or_else(|_| unimplemented!("a pick of option {at}"))
 }
 
 /// A hand position, as a play names it.

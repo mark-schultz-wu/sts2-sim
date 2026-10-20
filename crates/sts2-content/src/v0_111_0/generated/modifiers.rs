@@ -361,7 +361,9 @@ static OVERRIDES: [sts2_core::Overrides; 17] = [
     // FLIGHT
     sts2_core::Overrides::NONE.with(sts2_core::ModelHook::ShouldAllowFreeTravel),
     // HOARDER
-    sts2_core::Overrides::NONE.with(sts2_core::ModelHook::AfterCardChangedPiles),
+    sts2_core::Overrides::NONE
+        .with(sts2_core::ModelHook::AfterCardChangedPiles)
+        .with(sts2_core::ModelHook::ShouldAllowMerchantCardRemoval),
     // INSANITY
     sts2_core::Overrides::NONE,
     // MIDAS

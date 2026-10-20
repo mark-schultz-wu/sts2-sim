@@ -898,7 +898,7 @@ mod tests {
             Some(Decision::Answer(Answer::Cards([2, 0].into())).into())
         );
         assert!(serde_json::from_str::<Wire>(r#"{"cmd":"answer","cards":[1,1]}"#).is_err());
-        assert!(serde_json::from_str::<Wire>(r#"{"cmd":"answer","cards":[300]}"#).is_err());
+        assert!(serde_json::from_str::<Wire>(r#"{"cmd":"answer","cards":[70000]}"#).is_err());
         let sixteen = r#"{"cmd":"answer","cards":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]}"#;
         assert!(
             serde_json::from_str::<Wire>(sixteen).is_err(),

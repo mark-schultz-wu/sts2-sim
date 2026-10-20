@@ -511,7 +511,7 @@ impl<V: Rules, C: Cursor<V>> Walker<V, C> {
                     Listener::Card { id }
                 }
                 Snapped::Modifier { modifier } => {
-                    V::modifier_event_hook(modifier, hook, asked);
+                    ask_modifier(modifier, hook, asked);
                     Listener::Modifier { modifier }
                 }
             };
@@ -965,7 +965,7 @@ fn raise_others<V: Rules>(
         unimplemented!("a potion hearing {hook:?}");
     }
     for (modifier, _) in live.modifiers.hearing(hooks) {
-        V::modifier_event_hook(modifier, hook, answer);
+        ask_modifier(modifier, hook, answer);
         take(asked, decremented, Listener::Modifier { modifier }, answer);
     }
 }
@@ -1320,6 +1320,26 @@ fn player_of<V: Rules>(live: &mut Live<V>) -> &mut super::live::Fighter<V> {
 /// A game number as a creature's health.
 fn health<V: Rules>(amount: V::Number) -> V::Health {
     num_traits::cast(amount).unwrap_or_else(|| unimplemented!("{amount:?}, which is not a health"))
+}
+
+/// `hook` asked of a run modifier inside a fight. What the modifier saves is
+/// the run's, and no ported modifier writes it in a fight, so it is asked
+/// over a fresh model.
+///
+/// # Panics
+///
+/// A modifier that writes its model in a fight.
+fn ask_modifier<V: Rules>(
+    modifier: sts2_core::RunModifier<V>,
+    hook: EventHook<V>,
+    asked: &mut sts2_core::HookEffects<V>,
+) {
+    let fresh: V::ModifierState = sts2_core::ModifierModel::new(modifier.modifier);
+    let mut state = fresh.clone();
+    V::modifier_event_hook(modifier, &mut state, hook, asked);
+    if state != fresh {
+        unimplemented!("{modifier:?} writing its model in a fight over {hook:?}");
+    }
 }
 
 #[cfg(test)]
