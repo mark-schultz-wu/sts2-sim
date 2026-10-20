@@ -109,8 +109,11 @@ fn pool_three<V: crate::Build>(run: &impl EventView<V>) -> Vec<V::Relic> {
 }
 
 /// `POOL_ONE`, `POOL_TWO`, written for one build's own types.
+///
+/// Each build's game fills them its own way, so the build's module picks the
+/// arm.
 macro_rules! lists {
-    ($build:ty) => {
+    ($build:ty, v0_107_1) => {
         /// `OptionPool1`, before the roll adds a fourth to it.
         const OROBAS_POOL_ONE: &'static [<$build as sts2_core::ContentVersion>::Relic] = &[
             <$build as sts2_core::ContentVersion>::Relic::ELECTRIC_SHRYMP,
@@ -122,6 +125,21 @@ macro_rules! lists {
             <$build as sts2_core::ContentVersion>::Relic::ALCHEMICAL_COFFER,
             <$build as sts2_core::ContentVersion>::Relic::DRIFTWOOD,
             <$build as sts2_core::ContentVersion>::Relic::RADIANT_PEARL,
+        ];
+    };
+    // Sand Castle moved to the second pool.
+    ($build:ty, v0_111_0) => {
+        /// `OptionPool1`, before the roll adds a third to it.
+        const OROBAS_POOL_ONE: &'static [<$build as sts2_core::ContentVersion>::Relic] = &[
+            <$build as sts2_core::ContentVersion>::Relic::ELECTRIC_SHRYMP,
+            <$build as sts2_core::ContentVersion>::Relic::GLASS_EYE,
+        ];
+        /// `OptionPool2`.
+        const OROBAS_POOL_TWO: &'static [<$build as sts2_core::ContentVersion>::Relic] = &[
+            <$build as sts2_core::ContentVersion>::Relic::ALCHEMICAL_COFFER,
+            <$build as sts2_core::ContentVersion>::Relic::DRIFTWOOD,
+            <$build as sts2_core::ContentVersion>::Relic::RADIANT_PEARL,
+            <$build as sts2_core::ContentVersion>::Relic::SAND_CASTLE,
         ];
     };
 }

@@ -737,6 +737,7 @@ pub enum ModelHook {
     AfterEnergySpent,
     AfterForge,
     AfterItemPurchased,
+    BeforeRoomEntered,
     ModifyDamageAdditive,
     ModifyDamageMultiplicative,
     ModifyDamageCap,
@@ -807,7 +808,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 151] = [
+    pub const ALL: [ModelHook; 152] = [
         ModelHook::AfterRoomEntered,
         ModelHook::AfterMapGenerated,
         ModelHook::AfterActEntered,
@@ -892,6 +893,7 @@ impl ModelHook {
         ModelHook::AfterEnergySpent,
         ModelHook::AfterForge,
         ModelHook::AfterItemPurchased,
+        ModelHook::BeforeRoomEntered,
         ModelHook::ModifyDamageAdditive,
         ModelHook::ModifyDamageMultiplicative,
         ModelHook::ModifyDamageCap,
@@ -1129,6 +1131,7 @@ impl ModelHook {
             ModelHook::AfterEnergySpent => "AfterEnergySpent",
             ModelHook::AfterForge => "AfterForge",
             ModelHook::AfterItemPurchased => "AfterItemPurchased",
+            ModelHook::BeforeRoomEntered => "BeforeRoomEntered",
         }
     }
 }
@@ -4441,6 +4444,14 @@ pub enum EventHook<V: ContentVersion> {
         /// `DamageProps.IsPoweredAttack()`.
         powered: bool,
     },
+    /// `BeforeRoomEntered`, once the room is pushed and before it is entered.
+    RoomEntering {
+        /// `RunState.CurrentMapPoint.PointType`, whatever room it rolled. None
+        /// off the map.
+        point: Option<V::MapPointType>,
+        /// `CurrentRoomCount == 1`: not a room an event opened inside its own.
+        base: bool,
+    },
 }
 
 impl<V: ContentVersion> EventHook<V> {
@@ -4479,6 +4490,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::SideTurnStartLate { .. } => ModelHook::AfterSideTurnStartLate,
             EventHook::RoomEntered { .. } => ModelHook::AfterRoomEntered,
             EventHook::ItemPurchased { .. } => ModelHook::AfterItemPurchased,
+            EventHook::RoomEntering { .. } => ModelHook::BeforeRoomEntered,
             EventHook::UnknownRoomTypes { .. } => ModelHook::ModifyUnknownMapPointRoomTypes,
             EventHook::GeneratedMap { .. } => ModelHook::ModifyGeneratedMap,
             EventHook::GeneratedMapLate { .. } => ModelHook::ModifyGeneratedMapLate,
@@ -6164,6 +6176,9 @@ pub enum HookEffect<V: ContentVersion> {
         count: V::Number,
         opening: &'static crate::NextMove<V>,
     },
+    /// `CardCmd.TransformTo`, on the deck card asking: it becomes a new
+    /// card of this kind.
+    TransformTo(V::Card),
 }
 
 /// One build's relic models, which is what a run holds a relic as.

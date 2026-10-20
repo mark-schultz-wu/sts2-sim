@@ -40,7 +40,7 @@ impl<V: crate::Build> EventBehavior<V> for Darv {
             .any(|entry| sts2_core::ModifierTable::clears_deck(entry.modifier));
         let mut source: Vec<V::Relic> = V::DARV_SETS
             .iter()
-            .filter(|(wanted, _)| wanted.is_none_or(|wanted| wanted == act))
+            .filter(|(acts, _)| acts.admits(act))
             .filter(|(_, relics)| !(cleared && relics.contains(&V::Relic::PANDORAS_BOX)))
             .filter_map(|(_, relics)| next_item(rng, relics))
             .collect();
@@ -106,59 +106,140 @@ impl<V: crate::Build> EventBehavior<V> for Darv {
     }
 }
 
+/// The acts a set of Darv's asks for, by index.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Acts {
+    /// No condition.
+    Any,
+    /// `CurrentActIndex == n`.
+    Only(usize),
+    /// `CurrentActIndex >= n`.
+    From(usize),
+}
+
+impl Acts {
+    fn admits(self, act: usize) -> bool {
+        match self {
+            Acts::Any => true,
+            Acts::Only(only) => act == only,
+            Acts::From(from) => act >= from,
+        }
+    }
+}
+
 /// `SETS`, written for one build's own types.
+///
+/// `_validRelicSets`, in order, each with the acts it asks for. The Pandora's
+/// Box set also asks for a run no modifier cleared the deck of. Each build's
+/// game fills them its own way, so the build's module picks the arm.
 macro_rules! lists {
-    ($build:ty) => {
-        /// `_validRelicSets`, in order, each with the act it asks for, where it asks
-        /// for one. The Pandora's Box set also asks for a run no modifier cleared
-        /// the deck of.
+    ($build:ty, v0_107_1) => {
         const DARV_SETS: &'static [(
-            Option<usize>,
+            crate::behaviour::events::darv::Acts,
             &[<$build as sts2_core::ContentVersion>::Relic],
-        )] = &[
-            (
-                None,
-                &[<$build as sts2_core::ContentVersion>::Relic::ASTROLABE],
-            ),
-            (
-                None,
-                &[<$build as sts2_core::ContentVersion>::Relic::BLACK_STAR],
-            ),
-            (
-                None,
-                &[<$build as sts2_core::ContentVersion>::Relic::CALLING_BELL],
-            ),
-            (
-                None,
-                &[<$build as sts2_core::ContentVersion>::Relic::EMPTY_CAGE],
-            ),
-            (
-                None,
-                &[<$build as sts2_core::ContentVersion>::Relic::PANDORAS_BOX],
-            ),
-            (
-                None,
-                &[<$build as sts2_core::ContentVersion>::Relic::RUNIC_PYRAMID],
-            ),
-            (
-                None,
-                &[<$build as sts2_core::ContentVersion>::Relic::SNECKO_EYE],
-            ),
-            (
-                Some(1),
-                &[
-                    <$build as sts2_core::ContentVersion>::Relic::ECTOPLASM,
-                    <$build as sts2_core::ContentVersion>::Relic::SOZU,
-                ],
-            ),
-            (
-                Some(2),
-                &[
-                    <$build as sts2_core::ContentVersion>::Relic::PHILOSOPHERS_STONE,
-                    <$build as sts2_core::ContentVersion>::Relic::VELVET_CHOKER,
-                ],
-            ),
-        ];
+        )] = {
+            use crate::behaviour::events::darv::Acts;
+            &[
+                (
+                    Acts::Any,
+                    &[<$build as sts2_core::ContentVersion>::Relic::ASTROLABE],
+                ),
+                (
+                    Acts::Any,
+                    &[<$build as sts2_core::ContentVersion>::Relic::BLACK_STAR],
+                ),
+                (
+                    Acts::Any,
+                    &[<$build as sts2_core::ContentVersion>::Relic::CALLING_BELL],
+                ),
+                (
+                    Acts::Any,
+                    &[<$build as sts2_core::ContentVersion>::Relic::EMPTY_CAGE],
+                ),
+                (
+                    Acts::Any,
+                    &[<$build as sts2_core::ContentVersion>::Relic::PANDORAS_BOX],
+                ),
+                (
+                    Acts::Any,
+                    &[<$build as sts2_core::ContentVersion>::Relic::RUNIC_PYRAMID],
+                ),
+                (
+                    Acts::Any,
+                    &[<$build as sts2_core::ContentVersion>::Relic::SNECKO_EYE],
+                ),
+                (
+                    Acts::Only(1),
+                    &[
+                        <$build as sts2_core::ContentVersion>::Relic::ECTOPLASM,
+                        <$build as sts2_core::ContentVersion>::Relic::SOZU,
+                    ],
+                ),
+                (
+                    Acts::Only(2),
+                    &[
+                        <$build as sts2_core::ContentVersion>::Relic::PHILOSOPHERS_STONE,
+                        <$build as sts2_core::ContentVersion>::Relic::VELVET_CHOKER,
+                    ],
+                ),
+            ]
+        };
+    };
+    // Each act's pair splits into two sets, and the last act's opens from the
+    // second act on.
+    ($build:ty, v0_111_0) => {
+        const DARV_SETS: &'static [(
+            crate::behaviour::events::darv::Acts,
+            &[<$build as sts2_core::ContentVersion>::Relic],
+        )] = {
+            use crate::behaviour::events::darv::Acts;
+            &[
+                (
+                    Acts::Any,
+                    &[<$build as sts2_core::ContentVersion>::Relic::ASTROLABE],
+                ),
+                (
+                    Acts::Any,
+                    &[<$build as sts2_core::ContentVersion>::Relic::BLACK_STAR],
+                ),
+                (
+                    Acts::Any,
+                    &[<$build as sts2_core::ContentVersion>::Relic::CALLING_BELL],
+                ),
+                (
+                    Acts::Any,
+                    &[<$build as sts2_core::ContentVersion>::Relic::EMPTY_CAGE],
+                ),
+                (
+                    Acts::Any,
+                    &[<$build as sts2_core::ContentVersion>::Relic::PANDORAS_BOX],
+                ),
+                (
+                    Acts::Any,
+                    &[<$build as sts2_core::ContentVersion>::Relic::RUNIC_PYRAMID],
+                ),
+                (
+                    Acts::Any,
+                    &[<$build as sts2_core::ContentVersion>::Relic::SNECKO_EYE],
+                ),
+                (
+                    Acts::Only(1),
+                    &[<$build as sts2_core::ContentVersion>::Relic::ECTOPLASM],
+                ),
+                (
+                    Acts::Only(1),
+                    &[<$build as sts2_core::ContentVersion>::Relic::SOZU],
+                ),
+                (
+                    Acts::From(1),
+                    &[<$build as sts2_core::ContentVersion>::Relic::PHILOSOPHERS_STONE],
+                ),
+                (
+                    Acts::From(1),
+                    &[<$build as sts2_core::ContentVersion>::Relic::VELVET_CHOKER],
+                ),
+            ]
+        };
     };
 }
 

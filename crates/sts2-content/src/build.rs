@@ -116,7 +116,7 @@ pub trait Lists: ContentVersion {
     const COLORFUL_PHILOSOPHERS_COLOR_ORDER: &'static [(Self::Character, Self::EventOption)];
     const COLORFUL_PHILOSOPHERS_REWARDS: &'static [[sts2_core::CustomReward<Self>; 3]];
     const COLOSSAL_FLOWER_PAGES: &'static [[Self::EventOption; 2]];
-    const DARV_SETS: &'static [(Option<usize>, &[Self::Relic])];
+    const DARV_SETS: &'static [(crate::behaviour::events::darv::Acts, &[Self::Relic])];
     const DOLL_ROOM_DOLLS: &'static [Self::Relic];
     const DOLL_ROOM_DOLLS_BY_ID: &'static [Self::Relic];
     const DROWNING_BEACON_BOTTLE: &'static [sts2_core::CustomReward<Self>];
@@ -316,7 +316,7 @@ tables!(crate::v0_111_0::V0_111_0, v0_111_0);
 
 /// Every rule's lists, for one build.
 macro_rules! lists {
-    ($build:ty) => {
+    ($build:ty, $module:ident) => {
         impl Lists for $build {
             crate::behaviour::lists!($build);
             crate::behaviour::relics::archaic_tooth::lists!($build);
@@ -340,14 +340,14 @@ macro_rules! lists {
             crate::behaviour::monsters::glory::lists!($build);
             crate::behaviour::events::colorful_philosophers::lists!($build);
             crate::behaviour::events::colossal_flower::lists!($build);
-            crate::behaviour::events::darv::lists!($build);
+            crate::behaviour::events::darv::lists!($build, $module);
             crate::behaviour::events::doll_room::lists!($build);
             crate::behaviour::events::drowning_beacon::lists!($build);
             crate::behaviour::events::endless_conveyor::lists!($build);
             crate::behaviour::events::fake_merchant::lists!($build);
             crate::behaviour::events::hungry_for_mushrooms::lists!($build);
             crate::behaviour::events::nonupeipe::lists!($build);
-            crate::behaviour::events::orobas::lists!($build);
+            crate::behaviour::events::orobas::lists!($build, $module);
             crate::behaviour::events::pael::lists!($build);
             crate::behaviour::events::potion_courier::lists!($build);
             crate::behaviour::events::relic_trader::lists!($build);
@@ -364,12 +364,32 @@ macro_rules! lists {
     };
 }
 
-lists!(crate::v0_107_1::V0_107_1);
-lists!(crate::v0_111_0::V0_111_0);
+lists!(crate::v0_107_1::V0_107_1, v0_107_1);
+lists!(crate::v0_111_0::V0_111_0, v0_111_0);
 
 /// The rules a build ports for itself, where the game changed one, which a
 /// shared dispatcher hands over.
 pub trait OwnRules: ContentVersion + Sized {
+    /// The deck cards whose rules the build ports for itself, as what each
+    /// saves, which the shared cards hold as `State::Own`.
+    type OwnCard: Copy + std::fmt::Debug + Eq + std::hash::Hash;
+
+    /// What a deck card of the build's own saves as it is made, or nothing
+    /// for a shared one.
+    fn own_card_state(card: Self::Card) -> Option<Self::OwnCard>;
+
+    /// What a deck card of the build's own writes on its fight copy, from
+    /// what it saved.
+    fn own_card_written(own: Self::OwnCard) -> Option<sts2_core::Change<Self>>;
+
+    /// A deck card's `EventHook`, for a card whose rule is the build's own.
+    fn own_deck_card_event_hook(
+        card: Self::Card,
+        own: &mut Self::OwnCard,
+        hook: sts2_core::EventHook<Self>,
+        asked: &mut sts2_core::HookEffects<Self>,
+    );
+
     /// The relics whose rules the build ports for itself, as the state each
     /// holds, which the shared relics hold as `State::Own`.
     type OwnRelic: Clone + std::fmt::Debug + Eq;
@@ -502,7 +522,7 @@ pub trait Build:
         RelicState = crate::behaviour::relics::State<Self>,
         ModifierState = crate::behaviour::modifiers::State,
         EventState = crate::behaviour::events::State<Self>,
-        CardState = crate::behaviour::cards::State,
+        CardState = crate::behaviour::cards::State<Self>,
         CardFields = crate::behaviour::cards::Fields,
     > + OwnRules
     + ContentVersion<
@@ -522,7 +542,7 @@ impl<V> Build for V where
             RelicState = crate::behaviour::relics::State<V>,
             ModifierState = crate::behaviour::modifiers::State,
             EventState = crate::behaviour::events::State<V>,
-            CardState = crate::behaviour::cards::State,
+            CardState = crate::behaviour::cards::State<V>,
             CardFields = crate::behaviour::cards::Fields,
         > + OwnRules
         + ContentVersion<
@@ -549,7 +569,7 @@ macro_rules! rules {
                 type PowerState = crate::behaviour::powers::State<$build>;
                 type MonsterState = crate::behaviour::monsters::Model<$build>;
                 type EncounterState = crate::behaviour::encounters::State;
-                type CardState = crate::behaviour::cards::State;
+                type CardState = crate::behaviour::cards::State<$build>;
                 type CardFields = crate::behaviour::cards::Fields;
 
                 fn power_noted(state: &mut Self::PowerState, note: Self::Number) {

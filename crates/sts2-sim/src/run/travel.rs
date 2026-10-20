@@ -82,6 +82,11 @@ impl<V: Rules> State<V> {
     #[tracing::instrument(level = "trace", skip_all)]
     pub(crate) fn travel(&mut self, moving: Move<V>) -> Result<Decided, crate::combat::Error> {
         let Move { to, destination } = moving;
+        let point = self.point_type(Location::MapPoint(to));
+        // A `?` point picks its room first, and raises this once it has.
+        if !matches!(destination, Destination::Other(kind) if kind == V::MapPointType::UNKNOWN) {
+            self.room_entering(point, true);
+        }
         if let Destination::Other(kind) = destination {
             if kind == V::MapPointType::TREASURE {
                 self.treasure(to, *self.streams());
@@ -133,6 +138,7 @@ impl<V: Rules> State<V> {
             let rolled = self.roll_unknown_room(to, &mut streams);
             let (mut events_used, visited, odds) = self.event_state();
             if let Some(room) = rolled {
+                self.room_entering(point, true);
                 if room == UnknownRoom::Treasure {
                     self.treasure(to, streams);
                     return Ok(Decided::Resolved);
@@ -180,6 +186,7 @@ impl<V: Rules> State<V> {
                 .fold(event, |event, card| {
                     V::deck_card_next_event(card, self.act(), event)
                 });
+            self.room_entering(point, true);
             let mut event_rng =
                 crate::event::stream::<V, crate::rng::MegaRng>(self.raw_seed(), 0, event);
             let floor = sts2_core::EventView::floor(&*self) + num_traits::one();
