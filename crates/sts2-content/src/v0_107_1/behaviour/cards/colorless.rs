@@ -69,10 +69,10 @@ pub(super) fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played
                 });
                 fight.apply(attack);
             });
-            if fatal && results.iter().any(|result| result.killed) {
-                fight.gain_gold(fight.var(CardVar::Gold));
+            if fight.waiting() {
+                return wait(Resume::HandOfGreedHit { fatal });
             }
-            Played::Done
+            hand_of_greed_hit(fight, fatal, &results)
         }
         // `Fisticuffs`: its damage to the target, then as much block as the
         // hit dealt, overkill included.
@@ -89,23 +89,16 @@ pub(super) fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played
                 });
                 fight.apply(attack);
             });
-            let dealt = results
-                .iter()
-                .map(|result| result.total + result.overkill)
-                .sum();
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Number(dealt),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            Played::Done
+            if fight.waiting() {
+                return wait(Resume::FisticuffsHit);
+            }
+            fisticuffs_hit(fight, &results)
         }
         // `SecretTechnique`: one skill of the draw pile picked, into hand.
         // `SeekerStrike`: its damage to the target, then one of three cards of
         // the draw pile, `StableShuffle`d off `CombatCardSelection`, into hand.
         ColorlessCard::SeekerStrike => {
-            use sts2_core::{Amount, Effect, RunStreamKinds as _, Scaling};
+            use sts2_core::{Amount, Effect, Scaling};
 
             let target = fight.target();
             fight.attack(Scaling::Dynamic, |fight| {
@@ -117,21 +110,10 @@ pub(super) fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played
                 });
                 fight.apply(attack);
             });
-            let stream = <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_SELECTION;
-            let mut shuffled = fight.cards_in(Pile::Draw);
-            fight.stable_shuffle_cards(&mut shuffled, stream);
-            let options = usize::try_from(fight.var(CardVar::Cards)).expect("a few cards");
-            shuffled.truncate(options);
-            let cards = fight
-                .cards_in(Pile::Draw)
-                .into_iter()
-                .filter(|card| shuffled.contains(card))
-                .collect();
-            Played::AskingAmong {
-                cards,
-                selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
-                at: super::super::Resume::Card(super::Resume::Colorless(Resume::SeekerStrikeTakes)),
+            if fight.waiting() {
+                return wait(Resume::SeekerStrikeHit);
             }
+            seeker_strike_hit(fight)
         }
         // `Scrawl`: cards drawn until the hand is full.
         ColorlessCard::Scrawl => {
@@ -144,7 +126,7 @@ pub(super) fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played
         // character's pool that cost nothing, each `NextItem` off
         // `CombatCardGeneration` and upgraded where Jackpot is, into hand.
         ColorlessCard::Jackpot => {
-            use sts2_core::{Amount, CardTable as _, Cost, Effect, Scaling};
+            use sts2_core::{Amount, Effect, Scaling};
 
             let target = fight.target();
             fight.attack(Scaling::Dynamic, |fight| {
@@ -156,23 +138,10 @@ pub(super) fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played
                 });
                 fight.apply(hit);
             });
-            let free: Vec<_> = <V as sts2_core::Rules>::combat_cards(fight.character())
-                .iter()
-                .copied()
-                .filter(|card| card.cost() == Cost::fixed(0))
-                .collect();
-            let upgrade = u8::from(fight.upgraded());
-            let made: Vec<_> = (0..cards(fight))
-                .filter_map(|_| fight.generate_card(&free))
-                .collect();
-            for card in made {
-                let card = sts2_core::CardIdent {
-                    upgrade,
-                    ..sts2_core::CardIdent::new(card)
-                };
-                fight.add_generated_cards(card, Pile::Hand, 1);
+            if fight.waiting() {
+                return wait(Resume::JackpotHit);
             }
-            Played::Done
+            jackpot_hit(fight)
         }
         // `TheBomb`: its `Turns` of The Bomb on its owner, then its
         // `BombDamage` written on the instance.
@@ -233,14 +202,8 @@ pub(super) fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played
         // `Shockwave`: its `Power` of Weak, then of Vulnerable, on each enemy
         // that can be hit, one enemy at a time.
         ColorlessCard::Shockwave => {
-            use super::super::super::generated::powers::Power;
-
-            let amount = sts2_core::PowerAmount::Counted(fight.var(CardVar::Power));
-            for target in fight.hittable_opponents() {
-                fight.apply_power(target, Power::WeakPower, amount);
-                fight.apply_power(target, Power::VulnerablePower, amount);
-            }
-            Played::Done
+            let held = super::Held::of(&fight.hittable_opponents());
+            shockwave(fight, held, 0)
         }
         // `Alchemize`: a potion made off `CombatPotionGeneration` among those
         // a fight can make, procured.
@@ -506,6 +469,28 @@ pub enum Resume {
     /// `Catastrophe`, once a card it played has its answer, with this many
     /// cards still to play.
     CatastropheLeft(u8),
+    /// After a question inside the card's attack was answered.
+    FisticuffsHit,
+    SeekerStrikeHit,
+    JackpotHit,
+    /// `HandOfGreed`, whose kill counts where `fatal` says.
+    HandOfGreedHit {
+        fatal: bool,
+    },
+    /// `Shockwave`, after a question inside one target's Vulnerable. `held`
+    /// is the enemies it took, and `at` the one to go on from.
+    Shockwave {
+        held: super::Held,
+        at: u8,
+    },
+}
+
+/// The rest of the play waits at `at`, where a command left a question and
+/// more commands follow.
+fn wait(at: Resume) -> Played<V> {
+    Played::Waiting {
+        at: super::super::Resume::Card(super::Resume::Colorless(at)),
+    }
 }
 
 /// The rest of a play that stopped on a choice, once the player chose.
@@ -530,10 +515,116 @@ pub(super) fn resume_chosen<F: Fight<V>>(
 }
 
 /// The rest of a play that waited on a card it auto-played.
+/// The rest of `HandOfGreed`, once its attack is over: its gold where
+/// `results` killed a target whose death, read before the hit, triggers
+/// Fatal.
+fn hand_of_greed_hit<F: Fight<V>>(
+    fight: &mut F,
+    fatal: bool,
+    results: &sts2_core::AttackResults<V>,
+) -> Played<V> {
+    if fatal && results.iter().any(|result| result.killed) {
+        fight.gain_gold(fight.var(CardVar::Gold));
+    }
+    Played::Done
+}
+
+/// The rest of `Fisticuffs`, once its attack is over: as much block as
+/// `results` dealt.
+fn fisticuffs_hit<F: Fight<V>>(fight: &mut F, results: &sts2_core::AttackResults<V>) -> Played<V> {
+    use sts2_core::{Amount, Effect, Scaling};
+
+    let dealt = results
+        .iter()
+        .map(|result| result.total + result.overkill)
+        .sum();
+    let block = fight.resolve(Effect::GainBlock {
+        recipient: fight.actor(),
+        amount: Amount::Number(dealt),
+        scaling: Scaling::Dynamic,
+    });
+    fight.apply(block);
+    Played::Done
+}
+
+/// The rest of `SeekerStrike`, once its attack is over: its `Cards` of the
+/// draw pile drawn off `CombatCardSelection`, one of them picked.
+fn seeker_strike_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use sts2_core::RunStreamKinds as _;
+
+    let stream = <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_SELECTION;
+    let mut shuffled = fight.cards_in(Pile::Draw);
+    fight.stable_shuffle_cards(&mut shuffled, stream);
+    let options = usize::try_from(fight.var(CardVar::Cards)).expect("a few cards");
+    shuffled.truncate(options);
+    let cards = fight
+        .cards_in(Pile::Draw)
+        .into_iter()
+        .filter(|card| shuffled.contains(card))
+        .collect();
+    Played::AskingAmong {
+        cards,
+        selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
+        at: super::super::Resume::Card(super::Resume::Colorless(Resume::SeekerStrikeTakes)),
+    }
+}
+
+/// The rest of `Jackpot`, once its attack is over: its `Cards` of the
+/// character's free cards into hand, upgraded once Jackpot is.
+fn jackpot_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use sts2_core::{CardTable as _, Cost};
+
+    let free: Vec<_> = <V as sts2_core::Rules>::combat_cards(fight.character())
+        .iter()
+        .copied()
+        .filter(|card| card.cost() == Cost::fixed(0))
+        .collect();
+    let upgrade = u8::from(fight.upgraded());
+    let made: Vec<_> = (0..cards(fight))
+        .filter_map(|_| fight.generate_card(&free))
+        .collect();
+    for card in made {
+        let card = sts2_core::CardIdent {
+            upgrade,
+            ..sts2_core::CardIdent::new(card)
+        };
+        fight.add_generated_cards(card, Pile::Hand, 1);
+    }
+    Played::Done
+}
+
+/// `Shockwave`'s Weak and Vulnerable on each of `held` from the one at `from`
+/// on. A question left before one waits.
+fn shockwave<F: Fight<V>>(fight: &mut F, held: super::Held, from: u8) -> Played<V> {
+    use super::super::super::generated::powers::Power;
+
+    let amount = sts2_core::PowerAmount::Counted(fight.var(CardVar::Power));
+    for (at, target) in held.creatures().enumerate().skip(usize::from(from)) {
+        if fight.waiting() {
+            let at = u8::try_from(at).expect("a fight's creatures fit a u8");
+            return wait(Resume::Shockwave { held, at });
+        }
+        fight.apply_power(target, Power::WeakPower, amount);
+        fight.apply_power(target, Power::VulnerablePower, amount);
+    }
+    Played::Done
+}
+
 pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
     match at {
         Resume::CatastropheLeft(left) => catastrophe(fight, Number::from(left)),
         Resume::BeatDownPlayed => Played::Done,
+        Resume::FisticuffsHit => {
+            let results = fight.waited_attack_results();
+            fisticuffs_hit(fight, &results)
+        }
+        Resume::SeekerStrikeHit => seeker_strike_hit(fight),
+        Resume::JackpotHit => jackpot_hit(fight),
+        Resume::HandOfGreedHit { fatal } => {
+            let results = fight.waited_attack_results();
+            hand_of_greed_hit(fight, fatal, &results)
+        }
+        Resume::Shockwave { held, at } => shockwave(fight, held, at),
         at => unreachable!("{at:?} stops on a pick, not on a card it played"),
     }
 }
@@ -563,6 +654,7 @@ pub(super) fn resume_play<F: Fight<V>>(
             fight.act_on(PileAct::OntoDrawTop, chosen.as_slice());
             Played::Done
         }
+        at => unreachable!("{at:?} waits on a question, not a pick"),
     }
 }
 

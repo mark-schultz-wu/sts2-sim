@@ -29,19 +29,7 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ## Open
 
-### 1. Card waits in the other pools
-
-As the Ironclad's and the Silent's: a resume point where a command can
-leave a question and a command that runs on follows it. A draw, an
-auto-play and a card's own selection already queue behind a question, so
-none needs one. Thorns and Centennial Puzzle can ask on a hit or a loss.
-Vicious can on Vulnerable, Dark Embrace on an exhaust, Reflex on a
-discard, and Stratagem on a shuffle.
-A scenario for each card one of them reaches. The colorless,
-event and token cards are left.
-Generated plays already wait.
-
-### 2. Every other split the recorded runs find
+### 1. Every other split the recorded runs find
 
 `cargo xtask coverage` lists the commonest first splits, by the move
 that led to each. Each one with more than a handful of runs becomes its
@@ -49,14 +37,14 @@ own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
 
-### 3. v0.111.0
+### 2. v0.111.0
 
 Only the generated tables exist. Codegen runs per build as it does now.
 The behaviour is written once, for v0.107.1. A v0.111.0 rule whose game
 code did not change calls that one. The v0.107.1 rule first becomes
 generic over the build. A rule that changed gets one of its own. Then record its runs.
 
-### 4. A walk that shares only who listens
+### 3. A walk that shares only who listens
 
 The snapshot copies each walk's listeners. Most walks see none arrive or
 leave: 1.3% of `AfterCardPlayed` walks do, and 28% of `AfterSideTurnEnd`
@@ -66,7 +54,7 @@ A cheaper walk shares only which listeners there are and their order,
 kept apart from what they hold. That is part of the flat-state pass,
 which needs a design first.
 
-### 5. A speed target
+### 4. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.

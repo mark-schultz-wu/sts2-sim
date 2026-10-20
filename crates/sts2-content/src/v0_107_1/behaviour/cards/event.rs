@@ -21,6 +21,19 @@ pub enum Resume {
     BrightestFlameDrew,
     /// `DualWield`, after its owner picked the card to copy.
     DualWieldPick,
+    /// `Maul`, after a question inside its attack was answered.
+    MaulHit,
+    /// A Mad Science attack, after a question inside one of its hits, with
+    /// `left` hits still to land.
+    MadScienceHit { card: EventCard, left: u8 },
+}
+
+/// The rest of the play waits at `at`, where a command left a question and
+/// more commands follow.
+fn wait(at: Resume) -> Played<V> {
+    Played::Waiting {
+        at: super::super::Resume::Card(super::Resume::Event(at)),
+    }
 }
 
 pub(super) fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
@@ -196,7 +209,9 @@ pub(super) fn resume_play<F: Fight<V>>(
             fight.act_on(PileAct::IntoHand, chosen.as_slice());
             Played::Done
         }
-        Resume::BrightestFlameDrew => unreachable!("{at:?} waits on a question, not a pick"),
+        Resume::BrightestFlameDrew | Resume::MaulHit | Resume::MadScienceHit { .. } => {
+            unreachable!("{at:?} waits on a question, not a pick")
+        }
         // `CreateClone` of the card picked, its `Cards` times, each through
         // `AddGeneratedCardToCombat` into the hand.
         Resume::DualWieldPick => {
@@ -273,6 +288,39 @@ fn hit<F: Fight<V>>(fight: &mut F, target: sts2_core::CombatId, hits: usize) {
     });
 }
 
+/// A Mad Science attack's `left` hits on the target, each its own attack,
+/// then the power it carries. A question left before the next waits.
+fn mad_science_hits<F: Fight<V>>(card: EventCard, fight: &mut F, left: u8) -> Played<V> {
+    use super::super::super::generated::powers::Power;
+    use sts2_core::PowerAmount;
+
+    let target = fight.target();
+    for done in 0..left {
+        hit(fight, target, 1);
+        if fight.waiting() {
+            return wait(Resume::MadScienceHit {
+                card,
+                left: left - done - 1,
+            });
+        }
+    }
+    let counted = |fight: &F, key| PowerAmount::Counted(fight.var(key));
+    match card {
+        EventCard::MadScienceSapping => {
+            let weak = counted(fight, CardVar::SappingWeak);
+            fight.apply_power(target, Power::WeakPower, weak);
+            let vulnerable = counted(fight, CardVar::SappingVulnerable);
+            fight.apply_power(target, Power::VulnerablePower, vulnerable);
+        }
+        EventCard::MadScienceChoking => {
+            let strangle = counted(fight, CardVar::ChokingDamage);
+            fight.apply_power(target, Power::StranglePower, strangle);
+        }
+        _ => {}
+    }
+    Played::Done
+}
+
 /// `MadScience`: what its type does, then its rider.
 ///
 /// An attack hits the target once, or `ViolenceHits` times with Violence,
@@ -289,29 +337,13 @@ fn mad_science<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
         EventCard::MadScienceSapping
         | EventCard::MadScienceViolence
         | EventCard::MadScienceChoking => {
-            let target = fight.target();
             let hits = match card {
                 EventCard::MadScienceViolence => {
                     num_traits::cast(fight.var(CardVar::ViolenceHits)).expect("a few hits")
                 }
                 _ => 1,
             };
-            for _ in 0..hits {
-                hit(fight, target, 1);
-            }
-            match card {
-                EventCard::MadScienceSapping => {
-                    let weak = counted(fight, CardVar::SappingWeak);
-                    fight.apply_power(target, Power::WeakPower, weak);
-                    let vulnerable = counted(fight, CardVar::SappingVulnerable);
-                    fight.apply_power(target, Power::VulnerablePower, vulnerable);
-                }
-                EventCard::MadScienceChoking => {
-                    let strangle = counted(fight, CardVar::ChokingDamage);
-                    fight.apply_power(target, Power::StranglePower, strangle);
-                }
-                _ => {}
-            }
+            return mad_science_hits(card, fight, hits);
         }
         EventCard::MadScienceEnergized
         | EventCard::MadScienceWisdom
@@ -366,10 +398,18 @@ fn whistle<F: Fight<V>>(fight: &mut F) -> Played<V> {
 /// `Maul`: its damage to the target twice, then its `Increase` onto the
 /// damage of every Maul its owner holds in the fight, itself included.
 fn maul<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    use super::super::super::generated::cards::Cards;
-
     let target = fight.target();
     hit(fight, target, 2);
+    if fight.waiting() {
+        return wait(Resume::MaulHit);
+    }
+    maul_hit(fight)
+}
+
+/// The rest of `Maul`, once its attack is over: every Maul's damage raised.
+fn maul_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use super::super::super::generated::cards::Cards;
+
     let raise = Change::Own(super::CardWrite::BuffFromPlay(fight.var(CardVar::Increase)));
     // `AllCards`: the hand, the draw, discard and exhaust piles, then the
     // play pile, which holds the Maul being played.
@@ -415,6 +455,8 @@ pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V>
             fight.lose_max_hp(fight.actor(), fight.var(CardVar::MaxHp));
             Played::Done
         }
+        Resume::MaulHit => maul_hit(fight),
+        Resume::MadScienceHit { card, left } => mad_science_hits(card, fight, left),
         at => unreachable!("{at:?} stops on a pick, not on a question it waited for"),
     }
 }
