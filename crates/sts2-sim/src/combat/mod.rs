@@ -21,6 +21,7 @@ mod relic;
 mod start;
 mod turn;
 pub(crate) use legal::{belt, drinks, moves as legal_moves, thrown};
+pub(crate) use listen::combat_ended;
 pub(crate) use live::{ExtraReward, Heard, Live, printed_costs};
 pub(crate) use observed::Fight;
 pub(crate) use play::{
@@ -75,6 +76,5 @@ pub(crate) fn check_win_condition<V: Rules, S>(fighting: Fighting<'_, V, S>) -> 
     if !board::ending::<V>(listen::Walk { live, relics }) {
         return None;
     }
-    listen::combat_ended::<V>(live, relics);
     Some(Ended::Won)
 }

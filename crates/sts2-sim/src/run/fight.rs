@@ -222,6 +222,11 @@ impl<V: Rules> State<V> {
         self.asked_by_fight();
         self.forget_detached();
         self.lose_cards(since);
+        // `EndCombatInternal` raises the fight's last hooks before
+        // `RewardsCmd.Offer` builds the rewards.
+        if ended == Some(combat::Ended::Won) {
+            self.combat_ended();
+        }
         self.gold_from_fight();
         self.potions_from_fight();
         match ended {
@@ -252,12 +257,6 @@ impl<V: Rules> State<V> {
                 if let Some(resuming) = self.resuming.as_mut() {
                     resuming.escaped = escaped;
                     resuming.extras = !extra_rewards.is_empty() || !extra.is_empty();
-                }
-                // `AfterCombatEnd` runs before `RewardsCmd.Offer` builds the
-                // rewards. It walks the deck's cards ahead of the fight's
-                // listeners.
-                if let Some(encounter) = combat.encounter {
-                    self.deck_combat_ended(sts2_core::EncounterTable::room(encounter));
                 }
                 if let Some(asked) = self.carry_out(leaving) {
                     let pickup = asked.pickup;

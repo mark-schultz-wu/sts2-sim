@@ -141,9 +141,6 @@ pub(crate) fn apply_power<V: Rules>(
     let skipped = std::mem::take(&mut board.skipped);
 
     merge::<V>(&mut live.skip_tick, skipped);
-    if ended == Some(super::Ended::Won) {
-        super::listen::combat_ended::<V>(live, relics);
-    }
     ended
 }
 
@@ -1350,19 +1347,13 @@ fn run_deferred<V: Rules>(
                 super::relic::own_command_over::<V>(fighting.relics, slot, relic);
                 ended
             }
-            super::live::Deferred::PlayOver => {
-                let ended = check_for_empty_hand::<V, _>(
-                    fighting.live,
-                    fighting.streams,
-                    fighting.relics,
-                    ascension,
-                    ended,
-                );
-                if ended == Some(super::Ended::Won) {
-                    super::listen::combat_ended::<V>(fighting.live, fighting.relics);
-                }
-                ended
-            }
+            super::live::Deferred::PlayOver => check_for_empty_hand::<V, _>(
+                fighting.live,
+                fighting.streams,
+                fighting.relics,
+                ascension,
+                ended,
+            ),
             super::live::Deferred::ActOn { act, cards } => match ended {
                 None => {
                     let mut board = Board::for_card(
@@ -1740,9 +1731,6 @@ fn finish_effect<V: Rules, S: LendsCombat>(
             true => check_for_empty_hand::<V, _>(next, streams, relics, ascension, ended),
             false => ended,
         };
-        if outermost && ended == Some(super::Ended::Won) {
-            super::listen::combat_ended::<V>(next, relics);
-        }
         return Ok(ended);
     };
 
@@ -1756,9 +1744,6 @@ fn finish_effect<V: Rules, S: LendsCombat>(
             true => check_for_empty_hand::<V, _>(next, streams, relics, ascension, ended),
             false => ended,
         };
-        if outermost && ended == Some(super::Ended::Won) {
-            super::listen::combat_ended::<V>(next, relics);
-        }
         return Ok(ended);
     }
 
@@ -1811,9 +1796,6 @@ fn finish_effect<V: Rules, S: LendsCombat>(
         false => ended,
     };
 
-    if outermost && ended == Some(super::Ended::Won) {
-        super::listen::combat_ended::<V>(next, relics);
-    }
     Ok(ended)
 }
 

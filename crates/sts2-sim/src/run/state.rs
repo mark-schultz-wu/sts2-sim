@@ -1531,48 +1531,51 @@ impl<V: Rules> State<V> {
         }
     }
 
-    /// `Hook.AfterCombatEnd` for the deck's own cards, each by what it
-    /// saves. A card that asks to leave the deck leaves it.
+    /// `Hook.AfterCombatEnd`, `Hook.AfterCombatVictoryEarly` and
+    /// `Hook.AfterCombatVictory`, for the fight the run stands in, which is
+    /// won. `RunState.IterateHookListeners` lists the deck's cards, each with
+    /// its enchantment, ahead of the fight's listeners. A card that asks to
+    /// leave the deck leaves it before the fight's listeners are asked.
     ///
     /// # Panics
     ///
-    /// A card asking for anything else.
-    pub(super) fn deck_combat_ended(&mut self, room: V::RoomType) {
-        use sts2_core::CardTable as _;
+    /// A deck listener hearing either victory hook, or asking for anything
+    /// but to leave the deck.
+    pub(super) fn combat_ended(&mut self) {
+        use sts2_core::{ModelHook, Overrides};
 
-        let hook = sts2_core::EventHook::CombatEnd { room };
-        let mut at = 0;
-        while at < self.player.deck.len() {
-            let card = self.player.deck[at].ident.card;
-            if !card
-                .overrides()
-                .contains(sts2_core::ModelHook::AfterCombatEnd)
-            {
-                at += 1;
+        let Phase::Combat(live) = &self.phase else {
+            unreachable!("a won fight is the one the run stands in")
+        };
+        let hook = sts2_core::EventHook::CombatEnd { room: live.room() };
+        let mut asked = sts2_core::HookEffects::new();
+        for listener in self.deck_listed(Overrides::of(ModelHook::AfterCombatEnd)) {
+            if !self.ask_run_listener(listener, hook, &mut asked) {
                 continue;
             }
-            let mut asked = sts2_core::HookEffects::new();
-            V::deck_card_event_hook(
-                card,
-                &mut self.player.deck_mut()[at].state,
-                hook,
-                &mut asked,
-            );
-            let mut leaves = false;
-            for effect in asked {
-                match effect {
+            for effect in asked.drain(..) {
+                match (listener, effect) {
                     // `CardPileCmd.RemoveFromDeck`.
-                    sts2_core::HookEffect::RemoveFromDeck => leaves = true,
-                    effect => unimplemented!("{card:?} in the deck asking for {effect:?}"),
+                    (RunListener::DeckCard { id, .. }, sts2_core::HookEffect::RemoveFromDeck) => {
+                        let at = self.player.deck.iter().position(|held| held.id == id);
+                        let at = at.expect("a card the deck held as it was asked");
+                        self.player.deck_mut().remove(at);
+                    }
+                    (listener, effect) => {
+                        unimplemented!("{listener:?} in the deck asking for {effect:?}")
+                    }
                 }
-            }
-            match leaves {
-                true => {
-                    self.player.deck_mut().remove(at);
-                }
-                false => at += 1,
             }
         }
+        let victory = Overrides::of(ModelHook::AfterCombatVictoryEarly)
+            .union(Overrides::of(ModelHook::AfterCombatVictory));
+        if let Some(listener) = self.deck_listed(victory).first() {
+            unimplemented!("{listener:?} in the deck hearing a won fight");
+        }
+        let Phase::Combat(live) = &mut self.phase else {
+            unreachable!("a won fight is the one the run stands in")
+        };
+        crate::combat::combat_ended::<V>(live, &mut self.player.relics);
     }
 
     /// `Hook.BeforeRoomEntered`, which `RunManager.EnterRoom` raises once the
@@ -3947,30 +3950,12 @@ impl<V: Rules> State<V> {
     /// That is the deck's cards, each followed by its enchantment, then the
     /// belt but a melted relic, the potions, and the run's modifiers.
     pub(super) fn run_listed(&self, hook: sts2_core::ModelHook) -> RunListed<V> {
-        use sts2_core::{CardTable as _, EnchantmentTable as _};
-
         let hooks = sts2_core::Overrides::of(hook);
         let mut listed = RunListed {
-            deck: SmallVec::new(),
+            deck: self.deck_listed(hooks),
             relics: self.player.relics.hearing_hook(hook),
             after: SmallVec::new(),
         };
-        // Most hooks no card's or enchantment's class overrides.
-        if V::Card::heard_by_any().intersects(hooks)
-            || V::Enchantment::heard_by_any().intersects(hooks)
-        {
-            for held in self.player.deck.iter() {
-                let (id, card) = (held.id, held.ident.card);
-                if card.overrides().intersects(hooks) {
-                    listed.deck.push(RunListener::DeckCard { id, card });
-                }
-                if let Some(enchanted) = held.ident.enchantment
-                    && enchanted.enchantment.overrides().intersects(hooks)
-                {
-                    listed.deck.push(RunListener::Enchantment { id, enchanted });
-                }
-            }
-        }
         for &potion in self.player.potions.iter() {
             if sts2_core::PotionTable::overrides(potion).intersects(hooks) {
                 listed.after.push(RunListener::Potion { potion });
@@ -3979,6 +3964,33 @@ impl<V: Rules> State<V> {
         for (at, &modifier) in self.shared.modifiers.iter().enumerate() {
             if sts2_core::ModifierTable::overrides(modifier.modifier).intersects(hooks) {
                 listed.after.push(RunListener::Modifier { at, modifier });
+            }
+        }
+        listed
+    }
+
+    /// The deck's part of [`Self::run_listed`]: each card that overrides one
+    /// of `hooks`, then its enchantment if that does.
+    #[inline(always)]
+    fn deck_listed(&self, hooks: sts2_core::Overrides) -> SmallVec<[RunListener<V>; 2]> {
+        use sts2_core::{CardTable as _, EnchantmentTable as _};
+
+        let mut listed = SmallVec::new();
+        // Most hooks no card's or enchantment's class overrides.
+        if !V::Card::heard_by_any().intersects(hooks)
+            && !V::Enchantment::heard_by_any().intersects(hooks)
+        {
+            return listed;
+        }
+        for held in self.player.deck.iter() {
+            let (id, card) = (held.id, held.ident.card);
+            if card.overrides().intersects(hooks) {
+                listed.push(RunListener::DeckCard { id, card });
+            }
+            if let Some(enchanted) = held.ident.enchantment
+                && enchanted.enchantment.overrides().intersects(hooks)
+            {
+                listed.push(RunListener::Enchantment { id, enchanted });
             }
         }
         listed

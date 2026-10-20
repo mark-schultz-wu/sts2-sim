@@ -548,9 +548,6 @@ pub(crate) fn enter<V: Rules>(
         }
     };
     if let Some(ended) = ended {
-        if ended == super::Ended::Won {
-            super::listen::combat_ended::<V>(&mut live, relics);
-        }
         return Ok(Entered {
             live,
             streams,
@@ -566,9 +563,6 @@ pub(crate) fn enter<V: Rules>(
         <V::CombatSide as SideKinds>::PLAYER,
         false,
     ) {
-        if ended == super::Ended::Won {
-            super::listen::combat_ended::<V>(&mut live, relics);
-        }
         return Ok(Entered {
             live,
             streams,
@@ -616,9 +610,6 @@ pub(crate) fn enter<V: Rules>(
         }
         ended => ended,
     };
-    if ended == Some(super::Ended::Won) {
-        super::listen::combat_ended::<V>(&mut live, relics);
-    }
 
     Ok(Entered {
         live,

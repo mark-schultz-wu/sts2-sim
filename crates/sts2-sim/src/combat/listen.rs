@@ -1184,12 +1184,11 @@ fn decides<V: Rules>(
     decided
 }
 
-/// `AfterCombatEnd`, then `AfterCombatVictory`, raised on every listener
-/// once the fight is won.
+/// `AfterCombatEnd`, then `AfterCombatVictory`, raised on the fight's
+/// listeners once the fight is won. The run asks the deck's cards first.
 ///
-/// The listeners that counted something in the fight forget it at the first.
-/// A Max HP gain there lands on the player's creature, and the run carries
-/// out the rest.
+/// A Max HP gain at the first lands on the player's creature, and the run
+/// carries out the rest.
 ///
 /// A heal at the second lands on the player, whom a won fight leaves alive.
 /// The run carries out a deck upgrade there.

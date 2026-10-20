@@ -75,9 +75,6 @@ pub(super) fn end_after_post_play<V: Rules>(
     });
     if let Some(ended) = ended {
         next.skip_tick = skipping;
-        if ended == super::Ended::Won {
-            listen::combat_ended::<V>(next, relics);
-        }
         return Ok(Some(ended));
     }
     // `DoTurnEnd` returns once the fight is over, and a fight an orb ended
@@ -160,9 +157,6 @@ fn after_turn_end_in_hand<V: Rules>(
     };
     if let Some(ended) = ended {
         next.skip_tick = skipping;
-        if ended == super::Ended::Won {
-            listen::combat_ended::<V>(next, relics);
-        }
         return Ok(Some(ended));
     }
     // `Hook.BeforeFlush`'s late pass, whose pick stands the turn's end still
@@ -208,7 +202,7 @@ pub(super) fn end_from_flush<V: Rules>(
     ) {
         next.skip_tick = skipping;
         match ended {
-            super::Ended::Won => listen::combat_ended::<V>(next, relics),
+            super::Ended::Won => {}
             // A loss here is only pending: `SwitchFromPlayerToEnemySide`
             // and the enemy's `StartTurn` run up to its win check. Every
             // hook walk yields nothing while the fight is ending, so what
@@ -304,9 +298,6 @@ pub(super) fn end_from_flush<V: Rules>(
         false,
     ) {
         next.skip_tick = skipping;
-        if ended == super::Ended::Won {
-            listen::combat_ended::<V>(next, relics);
-        }
         return Ok(Some(ended));
     }
     // `Creature.TakeTurn` performs nothing for a monster `SpawnedThisTurn`,
@@ -444,9 +435,6 @@ pub(super) fn after_move<V: Rules>(
     move_performed::<V>(live, actor, move_id);
     if let Some(ended) = ended {
         live.skip_tick = skipping;
-        if ended == super::Ended::Won {
-            listen::combat_ended::<V>(live, relics);
-        }
         return Ok(Some(ended));
     }
     enemies_act(
@@ -496,9 +484,6 @@ fn enemies_act<V: Rules>(
     // nothing below here runs.
     if let Some(ended) = ended {
         next.skip_tick = skipping;
-        if ended == super::Ended::Won {
-            listen::combat_ended::<V>(next, relics);
-        }
         return Ok(Some(ended));
     }
     // `EndEnemyTurnInternal`.
@@ -519,11 +504,8 @@ fn enemies_act<V: Rules>(
             <V::CombatSide as SideKinds>::ENEMY,
         ),
     };
-    if let Some(ended) = ended {
+    if ended.is_some() {
         next.skip_tick = skipping;
-        if ended == super::Ended::Won {
-            listen::combat_ended::<V>(next, relics);
-        }
     }
 
     // `SwitchSides` back. The round and the turn both count up, because this
@@ -598,7 +580,6 @@ fn start_player_turn<V: Rules>(
     if next.won && super::board::ending::<V>(listen::Walk { live: next, relics }) {
         next.energy = max_energy;
         next.skip_tick = skipping;
-        listen::combat_ended::<V>(next, relics);
         return Ok(Some(super::Ended::Won));
     }
     // `ResetEnergy`, to `MaxEnergy`, which runs `Hook.ModifyMaxEnergy`. A
@@ -619,9 +600,6 @@ fn start_player_turn<V: Rules>(
     // relic's damage before the hand does below.
     if let Some(ended) = energy_reset::<V>(next, streams, relics, ascension) {
         next.skip_tick = skipping;
-        if ended == super::Ended::Won {
-            listen::combat_ended::<V>(next, relics);
-        }
         return Ok(Some(ended));
     }
     energy_reset_late::<V>(next, streams.combat(), relics, ascension);
@@ -645,9 +623,6 @@ fn start_player_turn<V: Rules>(
     ) {
         Carried::Done(Some(ended)) => {
             next.skip_tick = skipping;
-            if ended == super::Ended::Won {
-                listen::combat_ended::<V>(next, relics);
-            }
             return Ok(Some(ended));
         }
         Carried::Done(None) => (false, None),
@@ -668,9 +643,6 @@ fn start_player_turn<V: Rules>(
         extra,
     ) {
         next.skip_tick = skipping;
-        if ended == super::Ended::Won {
-            listen::combat_ended::<V>(next, relics);
-        }
         return Ok(Some(ended));
     }
     // `OrbQueue.AfterTurnStart`, once the side's turn has started.
@@ -682,9 +654,6 @@ fn start_player_turn<V: Rules>(
         OrbMoment::TurnStart,
     ) {
         next.skip_tick = skipping;
-        if ended == super::Ended::Won {
-            listen::combat_ended::<V>(next, relics);
-        }
         return Ok(Some(ended));
     }
     // A paused setup goes on once the turn has started around it.
@@ -692,9 +661,6 @@ fn start_player_turn<V: Rules>(
         match resume_paused::<V>(next, streams.combat(), relics, ascension, paused) {
             Carried::Done(Some(ended)) => {
                 next.skip_tick = skipping;
-                if ended == super::Ended::Won {
-                    listen::combat_ended::<V>(next, relics);
-                }
                 return Ok(Some(ended));
             }
             Carried::Done(None) => {}
@@ -708,9 +674,6 @@ fn start_player_turn<V: Rules>(
     if !parked {
         if let Some(ended) = pre_play_phase::<V>(next, streams.combat(), relics) {
             next.skip_tick = skipping;
-            if ended == super::Ended::Won {
-                listen::combat_ended::<V>(next, relics);
-            }
             return Ok(Some(ended));
         }
         next.phase = after_pre_play::<V>(next);
@@ -2826,8 +2789,7 @@ pub(super) fn finish_setup<V: Rules>(
         Carried::Done(ended) => {
             let ended = ended.or_else(|| pre_play_phase::<V>(live, rngs, relics));
             match ended {
-                Some(super::Ended::Won) => listen::combat_ended::<V>(live, relics),
-                Some(super::Ended::Lost) => {}
+                Some(_) => {}
                 None => live.phase = after_pre_play::<V>(live),
             }
             ended
