@@ -188,6 +188,7 @@ impl<V: Rules> State<V> {
     pub(super) fn settle(&mut self, ended: Option<combat::Ended>, since: usize) -> Decided {
         let ended = ended.or_else(|| self.fighting().and_then(combat::check_win_condition));
         self.asked_by_fight();
+        self.forget_detached();
         self.lose_cards(since);
         self.gold_from_fight();
         self.potions_from_fight();

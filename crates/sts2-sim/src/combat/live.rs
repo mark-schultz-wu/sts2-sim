@@ -2376,6 +2376,10 @@ pub(crate) struct Live<V: Rules> {
     /// The rest of an `AfterShuffle` walk behind a listener that asked the
     /// player to pick, which waits for the pick.
     pub(super) after_pick: Option<Box<super::listen::Walking<V>>>,
+    /// Each power taken off since the decision began, beside the creature
+    /// that carried it. A walk that took its list before it came off still
+    /// asks it, as a model on its own, and what it writes lands here.
+    pub(super) detached: Vec<(CombatId, HeldPower<V>)>,
     /// The draws a listener ran inside another draw, which a question
     /// stopped, with what the listeners after each asked. The outermost comes
     /// first. The draw that resumes finishes them before its own.
@@ -2675,6 +2679,7 @@ impl<V: Rules> Clone for Live<V> {
             leaving: self.leaving.clone(),
             for_run: self.for_run.clone(),
             after_pick: self.after_pick.clone(),
+            detached: self.detached.clone(),
             hook_draws: self.hook_draws.clone(),
             drawn_late: self.drawn_late,
             drew: self.drew.clone(),
@@ -2721,6 +2726,7 @@ impl<V: Rules> Clone for Live<V> {
             leaving,
             for_run,
             after_pick,
+            detached,
             hook_draws,
             drawn_late,
             drew,
@@ -2767,6 +2773,7 @@ impl<V: Rules> Clone for Live<V> {
         leaving.clone_from(&source.leaving);
         for_run.clone_from(&source.for_run);
         after_pick.clone_from(&source.after_pick);
+        detached.clone_from(&source.detached);
         hook_draws.clone_from(&source.hook_draws);
         *drawn_late = source.drawn_late;
         drew.clone_from(&source.drew);
@@ -2919,6 +2926,14 @@ impl<V: Rules> Live<V> {
     /// in the order they were added.
     pub(crate) fn extra_rewards(&self) -> &[ExtraReward<V>] {
         &self.extra_rewards
+    }
+
+    /// Forget the powers taken off during the decision, unless a question
+    /// waits, behind which a parked walk can still reach one.
+    pub(crate) fn forget_detached(&mut self) {
+        if self.asking.is_none() {
+            self.detached.clear();
+        }
     }
 
     /// What the fight's end asked of the run, in the order it asked.
@@ -3222,6 +3237,43 @@ impl<V: Rules> Live<V> {
         }
     }
 
+    /// [`Live::ask_power_as`] for the instance `instance` taken off `carrier`
+    /// since the decision began, as a model on its own. False where there is
+    /// none.
+    pub(crate) fn ask_detached_as(
+        &mut self,
+        relics: Option<&crate::run::Belt<V>>,
+        carrier: Carrier<V>,
+        instance: PowerInstance,
+        hook: sts2_core::EventHook<V>,
+        asked: &mut sts2_core::HookEffects<V>,
+    ) -> bool {
+        let owner = carrier.id;
+        let Some(at) = self
+            .detached
+            .iter()
+            .position(|(holder, held)| *holder == owner && held.instance == instance)
+        else {
+            return false;
+        };
+        let held = self.detached[at].1;
+        let mut state = held.state;
+        let fight = Onlookers {
+            creatures: &self.creatures,
+            powers: &self.powers,
+            kept: &self.kept,
+            relics,
+            attack: &self.attack_results,
+        };
+        V::power_event_hook(
+            held.event_power(&mut state, carrier, self.history.view(), &fight),
+            hook,
+            asked,
+        );
+        self.detached[at].1.state = state;
+        true
+    }
+
     /// `PowerCmd.Remove`: `power` off the creature `owner`, if it is still
     /// there to take it off, and then its `AfterRemoved`.
     ///
@@ -3268,7 +3320,7 @@ impl<V: Rules> Live<V> {
         if at >= self.powers.of(owner).count() {
             return left;
         }
-        let held = self.powers.remove(owner, at);
+        let mut held = self.powers.remove(owner, at);
         let power = held.power();
         let mut asked = sts2_core::HookEffects::new();
         // Taken off already, as `AfterRemoved` finds it. No belt is lent here.
@@ -3288,6 +3340,8 @@ impl<V: Rules> Live<V> {
         // What it kept goes with it, once it has read it.
         self.kept
             .retain(|(holder, kept, _)| !(*holder == owner && *kept == power));
+        held.state = state;
+        self.detached.push((owner, held));
         let block = self
             .creatures
             .iter()
@@ -3577,6 +3631,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             leaving: Vec::new(),
             for_run: Vec::new(),
             after_pick: None,
+            detached: Vec::new(),
             hook_draws: smallvec::SmallVec::new(),
             drawn_late: None,
             drew: None,
