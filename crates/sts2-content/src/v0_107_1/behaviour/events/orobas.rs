@@ -11,7 +11,6 @@ use super::super::super::V0_107_1 as V;
 use super::super::super::generated::characters::Character;
 use super::super::super::generated::events::Event;
 use super::super::super::generated::relics::{Relic, RelicRarity};
-use super::super::relics::TRANSCENDENCE;
 use super::ancient::{Offered, next_item};
 
 /// `Orobas._prismaticOdds`, which the Sea Glass takes the other side of.
@@ -48,8 +47,9 @@ impl EventBehavior<V> for Orobas {
     fn enter<R: GameRng>(&self, run: &impl EventView<V>, rng: &mut R) -> State {
         // One of the other characters, drawn whether or not the Sea Glass that
         // names it is offered. The player's own where there is no other.
-        let others: Vec<Character> = super::super::ALL_CHARACTERS
-            .into_iter()
+        let others: Vec<Character> = <V as crate::build::Lists>::ALL_CHARACTERS
+            .iter()
+            .copied()
             .filter(|&other| other != run.character())
             .collect();
         let sea_glass = next_item(rng, &others).unwrap_or(run.character());
@@ -110,11 +110,11 @@ fn pool_three(run: &impl EventView<V>) -> Vec<Relic> {
     {
         pool.push(Relic::TouchOfOrobas);
     }
-    if run
-        .deck()
-        .iter()
-        .any(|held| TRANSCENDENCE.iter().any(|&(from, _)| from == held.card))
-    {
+    if run.deck().iter().any(|held| {
+        <V as crate::build::Lists>::ARCHAIC_TOOTH_TRANSCENDENCE
+            .iter()
+            .any(|&(from, _)| from == held.card)
+    }) {
         pool.push(Relic::ArchaicTooth);
     }
     pool

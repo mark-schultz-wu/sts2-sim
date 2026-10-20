@@ -184,7 +184,7 @@ pub(crate) fn event_hook<V: crate::Build>(
         // `NextItem` off `RunState.Rng.Niche`, into the deck.
         (__c0, EventHook::ActEntered) if __c0 == V::Modifier::CURSED_RUN => {
             asked.push(HookEffect::AddDistinctToDeck {
-                cards: <V::Card as crate::build::CardLists>::MODIFIER_CURSES,
+                cards: V::RELICS_MODIFIER_CURSES,
                 count: 1,
                 stream: RunRngType::Niche,
             });

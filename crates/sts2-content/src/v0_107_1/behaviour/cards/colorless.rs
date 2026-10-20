@@ -400,8 +400,9 @@ fn splash<F: Fight<V>>(fight: &mut F) -> Played<V> {
     use sts2_core::RunStreamKinds as _;
 
     let own = fight.character();
-    let mut attacks: Vec<_> = super::super::ALL_CHARACTERS
-        .into_iter()
+    let mut attacks: Vec<_> = <V as crate::build::Lists>::ALL_CHARACTERS
+        .iter()
+        .copied()
         .filter(|&character| character != own)
         .flat_map(|character| V::combat_cards(character).iter().copied())
         .filter(|&card| V::card_kind(card) == Some(CardKind::Attack))

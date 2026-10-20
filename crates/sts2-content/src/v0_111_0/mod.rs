@@ -37,7 +37,7 @@ use sts2_core::Version;
 /// Zero-sized: it exists to be a type parameter, so that a client or a
 /// simulator names the build once and every id follows. See
 /// [`ContentVersion`](sts2_core::ContentVersion).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct V0_111_0;
 
 /// Where a card of this build stops to ask something.

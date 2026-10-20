@@ -288,6 +288,23 @@ fn content_paths(text: &str, content: &Content) -> Vec<(usize, usize, String)> {
         }
         let starts = s[i].is_ascii_uppercase()
             && (i == 0 || !(is_ident(s[i - 1]) || s[i - 1] == b':' || s[i - 1] == b'.'));
+        // `Cards::Curse(\n    CurseCard::Clumsy,\n)`, as rustfmt breaks it.
+        if starts && s[i..].starts_with(b"Cards::") {
+            let open = (i..s.len()).find(|&k| !is_ident(s[k]) && s[k] != b':');
+            if let Some(open) = open.filter(|&k| s[k] == b'(') {
+                let close = scan_to(s, open + 1, |_, _| false);
+                let inner: String = text[open + 1..close]
+                    .chars()
+                    .filter(|c| !c.is_whitespace())
+                    .collect();
+                let key = format!("{}({})", &text[i..open], inner.trim_end_matches(','));
+                if let Some(konst) = content.paths.get(&key) {
+                    out.push((i, close + 1, konst.clone()));
+                    i = close + 1;
+                    continue;
+                }
+            }
+        }
         if starts {
             let found = content
                 .paths
@@ -668,6 +685,16 @@ fn rewrite_lets(s: &str, content: &Content, left: &mut Left) -> String {
                 _ => format!("({}) ", ors.join(" || ")),
             };
             s.replace_range(start..open, &cond);
+        } else if before.ends_with("if") && alts.len() == 1 {
+            // `if let Some(Orb::X) = e {` to a chain that binds, then compares.
+            let (skeleton, conds) = &alts[0];
+            let cond = format!("let {skeleton} =");
+            let open = scan_to(b, eq + 1, |s, k| {
+                s[k] == b'{' || at_kw(s, k, "else") || at("&&")(s, k)
+            });
+            let expr = s[eq + 1..open].trim_end().to_owned();
+            let chained = format!("{cond}{expr} && {} ", conds.join(" && "));
+            s.replace_range(start..open, &chained);
         } else {
             left.note(&s, start, "a `let` pattern naming content");
         }
@@ -678,6 +705,15 @@ fn rewrite_lets(s: &str, content: &Content, left: &mut Left) -> String {
 /// What is left: a content path is its const, a content type its associated
 /// type.
 fn rewrite_rest(s: &str, content: &Content, left: &mut Left) -> String {
+    // Paths first, over the whole text: rustfmt breaks a long one over lines.
+    let mut whole = s.to_owned();
+    for (start, end, konst) in content_paths(s, content).into_iter().rev() {
+        let line_start = s[..start].rfind('\n').map_or(0, |at| at + 1);
+        if !s[line_start..].trim_start().starts_with("use ") {
+            whole.replace_range(start..end, &konst);
+        }
+    }
+    let s = whole.as_str();
     let mut out = String::new();
     for (number, line) in s.split_inclusive('\n').enumerate() {
         let item = line
@@ -886,24 +922,55 @@ fn local_consts(s: &str) -> String {
 
 /// Relative paths up out of the file, made absolute.
 fn absolute_paths(s: &str, module: &[String]) -> String {
+    // Inline modules, `mod tests { .. }`, each one deeper than the file.
+    let b = s.as_bytes();
+    let mut inline: Vec<(usize, usize, String)> = Vec::new();
+    let mut k = 0;
+    while k < b.len() {
+        if let Some(next) = skip_noise(b, k) {
+            k = next;
+            continue;
+        }
+        if at_kw(b, k, "mod") {
+            let name_end = (k + 4..b.len())
+                .find(|&n| !is_ident(b[n]))
+                .unwrap_or(b.len());
+            let rest = s[name_end..].trim_start();
+            if rest.starts_with('{') {
+                let open = name_end + (s[name_end..].len() - rest.len());
+                let close = scan_to(b, open + 1, |_, _| false);
+                inline.push((open, close, s[k + 4..name_end].to_owned()));
+            }
+        }
+        k += 1;
+    }
     let mut out = String::new();
+    let mut offset = 0;
     let mut rest = s;
     while let Some(at) = rest.find("super::") {
         let before = &rest[..at];
         out.push_str(before);
+        let absolute = offset + at;
         let mut ups = 0;
         let mut tail = &rest[at..];
         while let Some(next) = tail.strip_prefix("super::") {
             ups += 1;
             tail = next;
         }
-        // `module` is the file's own path, so `super` from it is its parent.
-        let keep = module.len().saturating_sub(ups);
+        // `super` from the module this stands in, the file's or an inline one.
+        let mut here: Vec<String> = module.to_vec();
+        for (open, close, name) in &inline {
+            if *open < absolute && absolute < *close {
+                here.push(name.clone());
+            }
+        }
+        let keep = here.len().saturating_sub(ups);
         let mut path = String::from("crate::");
-        for part in &module[..keep] {
+        for part in &here[..keep] {
             write!(path, "{part}::").unwrap();
         }
         out.push_str(&path);
+        offset = s.len() - tail.len();
         rest = tail;
     }
     out.push_str(rest);
@@ -914,7 +981,7 @@ fn absolute_paths(s: &str, module: &[String]) -> String {
 ///
 /// A call in the file to one it made generic names `V` too, since `V` cannot
 /// be read off an argument that only projects it.
-fn generic_fns(s: &str) -> String {
+fn generic_fns(s: &str) -> (String, Vec<(String, usize)>) {
     let b = s.as_bytes();
     let mut made: Vec<(String, usize)> = Vec::new();
     let mut out = String::new();
@@ -936,7 +1003,12 @@ fn generic_fns(s: &str) -> String {
             let names_v = header
                 .split(|c: char| !(c.is_alphanumeric() || c == '_'))
                 .any(|w| w == "V");
-            if names_v {
+            let declares_v =
+                header.starts_with("impl<V") || header.contains(", V:") || header.contains("<V:");
+            if names_v && declares_v {
+                skip_until = scan_to(b, open + 1, |_, _| false);
+            }
+            if names_v && !declares_v {
                 out.push_str(&s[from..i + 4]);
                 match b[i + 4] {
                     b'<' => {
@@ -1000,12 +1072,15 @@ fn generic_fns(s: &str) -> String {
         i += 1;
     }
     out.push_str(&s[from..]);
-    turbofish(&out, &made)
+    (out, made)
 }
 
 /// `f(` to `f::<V, _>(` for each function `made` generic, outside its own
 /// definition and method calls.
-fn turbofish(s: &str, made: &[(String, usize)]) -> String {
+///
+/// `modules` holds what each moving module made generic, by the module's own
+/// name, for a call spelled `throwing_axe::event_hook(`.
+fn turbofish(s: &str, made: &[(String, usize)], modules: &[(String, String, usize)]) -> String {
     let b = s.as_bytes();
     let mut out = String::new();
     let mut from = 0;
@@ -1025,12 +1100,25 @@ fn turbofish(s: &str, made: &[(String, usize)]) -> String {
         let call = b.get(end) == Some(&b'(');
         let before = s[..i].trim_end();
         let defines = before.ends_with("fn");
-        let method = before.ends_with('.');
-        if let Some((_, others)) = made.iter().find(|(name, _)| name == word)
+        // A method the file made generic is called on its own type, so a
+        // method call to one of its names is that one.
+        let own = made.iter().find(|(name, _)| name == word).map(|(_, n)| *n);
+        let pathed = before.strip_suffix("::").and_then(|path| {
+            let module = path
+                .rsplit(|c: char| !(c.is_alphanumeric() || c == '_'))
+                .next()?;
+            modules
+                .iter()
+                .find(|(m, name, _)| m == module && name == word)
+                .map(|(_, _, n)| *n)
+        });
+        // A path names some other module's function, unless it is one that moved.
+        let own = if before.ends_with("::") { None } else { own };
+        if let Some(others) = pathed.or(own)
             && call
             && !defines
-            && !method
         {
+            let others = &others;
             out.push_str(&s[from..end]);
             out.push_str("::<V");
             for _ in 0..*others {
@@ -1087,6 +1175,611 @@ fn import_ids(s: &str, content: &Content) -> String {
     out
 }
 
+/// The number types every build holds alike, which `BuildContent` pins.
+const PINNED: &[(&str, &str)] = &[
+    ("Number", "i32"),
+    ("Health", "i32"),
+    ("Count", "u32"),
+    ("Index", "u16"),
+    ("CardSerial", "u16"),
+    (
+        "AscensionLevel",
+        "crate::generated::ascension::AscensionLevel",
+    ),
+    ("CardKeyword", "crate::generated::cards::CardKeyword"),
+    ("CardKeywordSet", "crate::generated::cards::KeywordSet"),
+    ("CardTag", "crate::generated::cards::CardTag"),
+    ("TargetType", "crate::generated::cards::TargetType"),
+    ("RoomType", "crate::generated::encounters::RoomType"),
+    ("MapPointType", "crate::generated::runstate::MapPointType"),
+    ("CombatSide", "crate::generated::runstate::CombatSide"),
+    (
+        "PlayerTurnPhase",
+        "crate::generated::runstate::PlayerTurnPhase",
+    ),
+    (
+        "UnplayableReason",
+        "crate::generated::runstate::UnplayableReason",
+    ),
+    (
+        "UnplayableReasons",
+        "crate::generated::runstate::UnplayableReasons",
+    ),
+    ("RunRngType", "crate::generated::runstate::RunRngType"),
+    ("PlayerRngType", "crate::generated::runstate::PlayerRngType"),
+    ("IntentKind", "crate::generated::monsters::IntentKind"),
+    ("DeckWrite", "crate::behaviour::DeckWrite"),
+];
+
+/// `<V as sts2_core::ContentVersion>::Count` is `u32` in every build, and
+/// `CombatSide` the one shared type.
+fn pinned(s: &str) -> String {
+    let mut s = s.to_owned();
+    for (name, ty) in PINNED {
+        for spelled in [
+            format!("<V as sts2_core::ContentVersion>::{name}"),
+            format!("<V as ContentVersion>::{name}"),
+            format!("V::{name}"),
+        ] {
+            let b = s.clone();
+            let mut out = String::new();
+            let mut rest = b.as_str();
+            while let Some(at) = rest.find(&spelled) {
+                let end = at + spelled.len();
+                let whole = rest
+                    .as_bytes()
+                    .get(end)
+                    .is_none_or(|&c| !is_ident(c) && c != b':');
+                out.push_str(&rest[..at]);
+                out.push_str(if whole { ty } else { &spelled });
+                rest = &rest[end..];
+            }
+            out.push_str(rest);
+            s = out;
+        }
+    }
+    s
+}
+
+/// One list a file hands out whole, as it moves into the file's `lists!`.
+struct List {
+    /// Its name on `Lists`.
+    name: String,
+    /// Its type there, with `Self` for the build.
+    declared: String,
+}
+
+/// A top-level `const` or `static` cannot name `V`, since an item does not
+/// see a generic. Nor can a list of a generic type live as long as the
+/// program. So each becomes a const on `Lists`. The file's `lists!` macro
+/// writes it for a build, and the file reads it as `V::NAME`.
+fn lists(s: &str, prefix: &str, left: &mut Left) -> (String, Vec<List>) {
+    let mut out = String::new();
+    let mut found: Vec<(String, String, String, String, String)> = Vec::new();
+    let b = s.as_bytes();
+    let mut i = 0;
+    let mut from = 0;
+    while i < b.len() {
+        let line_start = i == 0 || b[i - 1] == b'\n';
+        if !line_start {
+            i += 1;
+            continue;
+        }
+        let rest = &s[i..];
+        let item = rest
+            .trim_start_matches("pub(crate) ")
+            .trim_start_matches("pub(super) ")
+            .trim_start_matches("pub ");
+        let kind = ["const ", "static "]
+            .into_iter()
+            .find(|k| item.starts_with(k));
+        let Some(kind) = kind else {
+            i += 1;
+            continue;
+        };
+        let head = i + (rest.len() - item.len()) + kind.len();
+        let end = scan_to(b, head, |s, k| s[k] == b';');
+        let text = &s[head..end];
+        let names_v = text
+            .split(|c: char| !(c.is_alphanumeric() || c == '_'))
+            .any(|w| w == "V");
+        let Some((name, rest_of)) = text.split_once(':') else {
+            i = end;
+            continue;
+        };
+        let Some((ty, value)) = rest_of.split_once('=') else {
+            i = end;
+            continue;
+        };
+        if !names_v {
+            i = end;
+            continue;
+        }
+        // Its docs, which go with it.
+        let mut doc_start = i;
+        loop {
+            let prev = s[..doc_start.saturating_sub(1)]
+                .rfind('\n')
+                .map_or(0, |at| at + 1);
+            if doc_start == 0 || !s[prev..doc_start].trim_start().starts_with("///") {
+                break;
+            }
+            doc_start = prev;
+        }
+        let name = name.trim().to_owned();
+        let ty = ty.trim().to_owned();
+        // `[T; N]` by value becomes a slice the program keeps.
+        let (ty, value) = match ty
+            .strip_prefix('[')
+            .and_then(|t| t.strip_suffix(']'))
+            .and_then(|t| t.rsplit_once(';'))
+        {
+            Some((element, _)) => (
+                format!("&'static [{}]", element.trim()),
+                format!("&{}", value.trim()),
+            ),
+            None => (ty.replacen("&[", "&'static [", 1), value.trim().to_owned()),
+        };
+        if !ty.starts_with('&') {
+            left.note(s, i, "a `const` naming `V` that is not a list");
+        }
+        found.push((name, ty, value, s[doc_start..i].to_owned(), String::new()));
+        out.push_str(&s[from..doc_start]);
+        from = end + 1;
+        if b.get(from) == Some(&b'\n') {
+            from += 1;
+        }
+        i = from;
+    }
+    out.push_str(&s[from..]);
+    if found.is_empty() {
+        return (out, Vec::new());
+    }
+    // A macro's names resolve where it expands, so each name the file imports
+    // is spelled out.
+    let imported = imports(s);
+    let qualify = |text: &str| {
+        let mut text = text.to_owned();
+        for (name, path) in &imported {
+            text = replace_word(&text, name, path);
+        }
+        text
+    };
+    let mut declared = Vec::new();
+    let mut body = String::new();
+    for (name, ty, value, docs, _) in &found {
+        let ty = qualify(ty);
+        let value = qualify(value);
+        let full = format!("{prefix}{name}");
+        let as_build = |text: &str| {
+            text.replace("<V>", "<$build>")
+                .replace("V::", "<$build as sts2_core::ContentVersion>::")
+        };
+        // `V::Card::BASH` names its trait for a concrete build.
+        let value = as_build(&value);
+        let docs: String = docs
+            .lines()
+            .map(|l| format!("        {}\n", l.trim()))
+            .collect();
+        writeln!(
+            body,
+            "{docs}        const {full}: {} = {value};",
+            as_build(&ty)
+        )
+        .unwrap();
+        declared.push(List {
+            name: full.clone(),
+            declared: ty.replace("<V>", "<Self>").replace("V::", "Self::"),
+        });
+        // The file reads it off the build.
+        out = replace_word(&out, name, &format!("V::{full}"));
+        out = out.replace(&format!("&V::{full}"), &format!("V::{full}"));
+    }
+    // A name only the lists used goes from the file's imports.
+    let listed: String = found.iter().map(|f| format!("{} {}", f.1, f.2)).collect();
+    out = prune_imports(&out, &names(&listed));
+    let names: Vec<&str> = found.iter().map(|f| f.0.as_str()).collect();
+    let mut macro_text = String::new();
+    write!(
+        macro_text,
+        "\n/// {}, written for one build's own types.\nmacro_rules! lists {{\n    ($build:ty) => {{\n{body}    }};\n}}\n\npub(crate) use lists;\n",
+        names.iter().map(|n| format!("`{n}`")).collect::<Vec<_>>().join(", ")
+    )
+    .unwrap();
+    // Above the tests, which clippy wants last.
+    match out.find("\n#[cfg(test)]") {
+        Some(at) => out.insert_str(at + 1, macro_text.trim_start()),
+        None => out.push_str(&macro_text),
+    }
+    (out, declared)
+}
+
+/// The names `text` refers to, outside strings and comments, and not a path's
+/// later segment, a field or a method.
+fn names(text: &str) -> std::collections::BTreeSet<String> {
+    let b = text.as_bytes();
+    let mut out = std::collections::BTreeSet::new();
+    let mut i = 0;
+    while i < b.len() {
+        if let Some(next) = skip_noise(b, i) {
+            i = next;
+            continue;
+        }
+        if is_ident(b[i]) && (i == 0 || !is_ident(b[i - 1])) {
+            let end = (i..b.len()).find(|&k| !is_ident(b[k])).unwrap_or(b.len());
+            let before = text[..i].trim_end();
+            if !before.ends_with("::") && !before.ends_with('.') {
+                out.insert(text[i..end].to_owned());
+            }
+            i = end;
+            continue;
+        }
+        i += 1;
+    }
+    out
+}
+
+/// Each `use` of a name in `gone` that nothing outside the `use` lines still
+/// names, dropped.
+fn prune_imports(s: &str, gone: &std::collections::BTreeSet<String>) -> String {
+    let code: String = s
+        .split_inclusive('\n')
+        .filter(|l| !l.trim_start().starts_with("use "))
+        .collect();
+    let used = names(&code);
+    let b = s.as_bytes();
+    let mut out = String::new();
+    let mut from = 0;
+    let mut at = 0;
+    while let Some(i) = s[at..].find("use ").map(|i| at + i) {
+        let line_start = s[..i].rfind('\n').map_or(0, |n| n + 1);
+        let end = scan_to(b, i, |s, k| s[k] == b';');
+        at = end.max(i + 4);
+        if !s[line_start..i].trim().is_empty() {
+            continue;
+        }
+        let body = s[i + 4..end].trim();
+        let (prefix, names): (&str, Vec<&str>) = match body.split_once("::{") {
+            Some((prefix, names)) => (
+                prefix,
+                names
+                    .trim_end_matches('}')
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|n| !n.is_empty())
+                    .collect(),
+            ),
+            None => match body.rsplit_once("::") {
+                Some((prefix, name)) => (prefix, vec![name]),
+                None => continue,
+            },
+        };
+        let drop = |n: &&str| {
+            let name = n.rsplit(" as ").next().unwrap_or(n);
+            gone.contains(name) && !used.contains(name)
+        };
+        if !names.iter().any(drop) {
+            continue;
+        }
+        let kept: Vec<&str> = names.iter().filter(|n| !drop(n)).copied().collect();
+        out.push_str(&s[from..i]);
+        match kept.as_slice() {
+            [] => {
+                while out.ends_with(' ') {
+                    out.pop();
+                }
+                from = end + 1;
+                if b.get(from) == Some(&b'\n') {
+                    from += 1;
+                }
+            }
+            [one] => {
+                write!(out, "use {prefix}::{one};").unwrap();
+                from = end + 1;
+            }
+            many => {
+                write!(out, "use {prefix}::{{{}}};", many.join(", ")).unwrap();
+                from = end + 1;
+            }
+        }
+    }
+    out.push_str(&s[from..]);
+    out
+}
+
+/// Each name the file's `use` lines import, with its whole path.
+fn imports(s: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    let b = s.as_bytes();
+    let mut at = if s.starts_with("use ") { Some(0) } else { None };
+    let mut i = 0;
+    loop {
+        let start = match at.take() {
+            Some(start) => start,
+            None => match s[i..].find("\nuse ") {
+                Some(found) => i + found + 1,
+                None => return out,
+            },
+        };
+        let end = scan_to(b, start, |s, k| s[k] == b';');
+        let body = s[start + 4..end].trim();
+        let (prefix, names): (&str, Vec<&str>) = match body.split_once("::{") {
+            Some((prefix, names)) => (
+                prefix,
+                names
+                    .trim_end_matches('}')
+                    .split(',')
+                    .map(str::trim)
+                    .collect(),
+            ),
+            None => match body.rsplit_once("::") {
+                Some((prefix, name)) => (prefix, vec![name]),
+                None => ("", vec![]),
+            },
+        };
+        for name in names {
+            if name.is_empty() || name.ends_with(" as _") || name == "self" {
+                continue;
+            }
+            match name.split_once(" as ") {
+                Some((real, alias)) => out.push((alias.to_owned(), format!("{prefix}::{real}"))),
+                None => out.push((name.to_owned(), format!("{prefix}::{name}"))),
+            }
+        }
+        i = end;
+    }
+}
+
+/// `word` as a whole name outside strings and comments, replaced.
+fn replace_word(s: &str, word: &str, with: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = String::new();
+    let mut from = 0;
+    let mut i = 0;
+    while i < b.len() {
+        if let Some(next) = skip_noise(b, i) {
+            i = next;
+            continue;
+        }
+        if b[i..].starts_with(word.as_bytes())
+            && (i == 0 || !(is_ident(b[i - 1]) || b[i - 1] == b':' || b[i - 1] == b'.'))
+            && b.get(i + word.len()).is_none_or(|&c| !is_ident(c))
+        {
+            out.push_str(&s[from..i]);
+            out.push_str(with);
+            i += word.len();
+            from = i;
+            continue;
+        }
+        i += 1;
+    }
+    out.push_str(&s[from..]);
+    out
+}
+
+/// Each `lists!` the run wrote, declared on `Lists` and written for every
+/// build, in `build.rs`.
+fn declare_lists(lists: &[(String, Vec<List>)]) -> Result<(), Error> {
+    if lists.is_empty() {
+        return Ok(());
+    }
+    let path = Path::new("crates/sts2-content/src/build.rs");
+    let mut text = error::read(path)?;
+    let mut decls = String::new();
+    let mut calls = String::new();
+    for (module, declared) in lists {
+        for list in declared {
+            writeln!(decls, "    const {}: {};", list.name, list.declared).unwrap();
+        }
+        writeln!(calls, "            {module}::lists!($build);").unwrap();
+    }
+    let trait_at = text
+        .find("pub trait Lists")
+        .ok_or_else(|| Error::Outside(path.to_path_buf()))?;
+    let open = trait_at + text[trait_at..].find('{').unwrap_or(0);
+    let close = scan_to(text.as_bytes(), open + 1, |_, _| false);
+    text.insert_str(close, &decls);
+    let impl_at = text
+        .find("impl Lists for $build {")
+        .ok_or_else(|| Error::Outside(path.to_path_buf()))?;
+    let open = impl_at + text[impl_at..].find('{').unwrap_or(0);
+    let close = scan_to(text.as_bytes(), open + 1, |_, _| false);
+    let line_start = text[..close].rfind('\n').map_or(close, |at| at + 1);
+    text.insert_str(line_start, &calls);
+    error::write(path, &text)?;
+    Ok(())
+}
+
+/// Whether the name at `at` stands where a type does, as opposed to a
+/// struct literal or a path to a member.
+fn type_position(s: &str, at: usize, end: usize) -> bool {
+    let before = s[..at].trim_end();
+    let after = s[end..].trim_start();
+    if after.starts_with("::") || after.starts_with('<') || after.starts_with('(') {
+        return false;
+    }
+    let keyword = |k: &str| {
+        before.ends_with(k)
+            && !before[..before.len() - k.len()]
+                .ends_with(|c: char| c.is_alphanumeric() || c == '_')
+    };
+    if keyword("impl") || keyword("for") {
+        return true;
+    }
+    if after.starts_with('{') {
+        return before.ends_with("->");
+    }
+    before.ends_with(':') && !before.ends_with("::")
+        || before.ends_with("->")
+        || before.ends_with('&')
+        || keyword("mut")
+        || before.ends_with('<')
+        || before.ends_with(',')
+        || before.ends_with('(')
+        || before.ends_with('[')
+}
+
+/// Each type naming `V` takes it, and so does each type holding one. A use in
+/// another file names it by its module path.
+///
+/// `files` holds each file's module path and text.
+fn generic_types(files: &mut [(Vec<String>, String)]) {
+    let mut generic: Vec<(Vec<String>, String)> = Vec::new();
+    loop {
+        let mut added = false;
+        for (module, text) in files.iter_mut() {
+            // Uses of what is already generic.
+            for (owner, name) in &generic {
+                let qualified = match owner == module {
+                    true => name.clone(),
+                    false => match owner.last() {
+                        Some(last) => format!("{last}::{name}"),
+                        None => continue,
+                    },
+                };
+                let b = text.as_bytes().to_vec();
+                let mut out = String::new();
+                let mut from = 0;
+                let mut i = 0;
+                while i < b.len() {
+                    if let Some(next) = skip_noise(&b, i) {
+                        i = next;
+                        continue;
+                    }
+                    let end = i + qualified.len();
+                    let whole = b[i..].starts_with(qualified.as_bytes())
+                        && (i == 0
+                            || !(is_ident(b[i - 1]) || (owner == module && b[i - 1] == b':')))
+                        && b.get(end).is_none_or(|&c| !is_ident(c));
+                    if whole
+                        && type_position(text, i, end)
+                        && !text[..i].trim_end().ends_with("struct")
+                        && !text[..i].trim_end().ends_with("enum")
+                    {
+                        out.push_str(&text[from..end]);
+                        out.push_str("<V>");
+                        from = end;
+                    }
+                    i += if whole { qualified.len() } else { 1 };
+                }
+                out.push_str(&text[from..]);
+                *text = out;
+            }
+            // Definitions naming `V`.
+            let b = text.as_bytes().to_vec();
+            let mut i = 0;
+            let mut inserts = Vec::new();
+            while i < b.len() {
+                let line_start = i == 0 || b[i - 1] == b'\n';
+                if !line_start {
+                    i += 1;
+                    continue;
+                }
+                let rest = &text[i..];
+                let item = rest
+                    .trim_start_matches("pub(crate) ")
+                    .trim_start_matches("pub(super) ")
+                    .trim_start_matches("pub ");
+                let kind = ["struct ", "enum "]
+                    .into_iter()
+                    .find(|k| item.starts_with(k));
+                let (true, Some(kind)) = (line_start, kind) else {
+                    i += 1;
+                    continue;
+                };
+                let name_at = i + (rest.len() - item.len()) + kind.len();
+                let name_end = (name_at..b.len())
+                    .find(|&k| !is_ident(b[k]))
+                    .unwrap_or(b.len());
+                let name = text[name_at..name_end].to_owned();
+                let end = scan_to(&b, name_end, |s, k| s[k] == b';' || s[k] == b'{');
+                let end = match b.get(end) {
+                    Some(b'{') => scan_to(&b, end + 1, |_, _| false),
+                    _ => end,
+                };
+                let names_v = text[name_end..end.min(text.len())]
+                    .split(|c: char| !(c.is_alphanumeric() || c == '_'))
+                    .any(|w| w == "V");
+                let known = generic.iter().any(|(m, n)| m == module && *n == name);
+                if names_v && !known && b.get(name_end) != Some(&b'<') {
+                    inserts.push(name_end);
+                    generic.push((module.clone(), name));
+                    added = true;
+                }
+                i = end;
+            }
+            for at in inserts.into_iter().rev() {
+                // `Build`, so a derive's bounds on `V` hold for any build.
+                text.insert_str(at, "<V: crate::Build>");
+                derive_default_by_hand(text, at);
+            }
+        }
+        if !added {
+            return;
+        }
+    }
+}
+
+/// A derived `Default` on a type generic over the build asks the same of
+/// each field's type, `V::Power` included, which no build gives. The type
+/// whose name ends at `at` gets one written out instead.
+fn derive_default_by_hand(text: &mut String, at: usize) {
+    let line_start = text[..at].rfind('\n').map_or(0, |n| n + 1);
+    let Some(derive_at) = text[..line_start].rfind("#[derive(") else {
+        return;
+    };
+    // Only the type's own attributes, right above it.
+    if text[derive_at..line_start].matches('\n').count() > 3 {
+        return;
+    }
+    let derive_end = derive_at + text[derive_at..].find(")]").unwrap_or(0);
+    let derives = &text[derive_at + 9..derive_end];
+    if !derives.split(',').any(|d| d.trim() == "Default") {
+        return;
+    }
+    let kept: String = derives
+        .split(',')
+        .map(str::trim)
+        .filter(|d| *d != "Default" && !d.is_empty())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let name_start = text[line_start..at]
+        .rfind(' ')
+        .map_or(line_start, |n| line_start + n + 1);
+    let name = text[name_start..at].to_owned();
+    let b = text.as_bytes().to_vec();
+    let open = scan_to(&b, at, |s, k| s[k] == b'{' || s[k] == b';' || s[k] == b'(');
+    let body = match b.get(open) {
+        Some(b'{') => {
+            let close = scan_to(&b, open + 1, |_, _| false);
+            let fields: Vec<String> = split_top(&text[open + 1..close], b',')
+                .iter()
+                .map(|f| code_of(f))
+                .filter_map(|f| {
+                    let f = f
+                        .trim()
+                        .trim_start_matches("pub(crate) ")
+                        .trim_start_matches("pub ");
+                    let (name, _) = f.split_once(':')?;
+                    Some(format!("{}: Default::default(),", name.trim()))
+                })
+                .collect();
+            Some((close, format!("Self {{ {} }}", fields.join(" "))))
+        }
+        Some(b';') => Some((open, "Self".to_owned())),
+        _ => None,
+    };
+    let Some((end, value)) = body else {
+        return;
+    };
+    let item_end = end + 1;
+    let impl_text = format!(
+        "\n\nimpl<V: crate::Build> Default for {name}<V> {{\n    fn default() -> Self {{\n        {value}\n    }}\n}}"
+    );
+    text.insert_str(item_end, &impl_text);
+    text.replace_range(derive_at + 9..derive_end, &kept);
+}
+
 /// The module path of a file under `crates/sts2-content/src`.
 fn module_of(path: &Path) -> Result<Vec<String>, Error> {
     let root = Path::new("crates/sts2-content/src");
@@ -1128,30 +1821,70 @@ fn shared_paths(s: &str, build: &str, moving: &[String], content: &Content) -> S
         );
     }
     let prefix = format!("crate::{build}::generated::");
+    // A `use` is `rewrite_uses`' to change.
+    let uses: Vec<(usize, usize)> = {
+        let b = s.as_bytes();
+        let mut found = Vec::new();
+        let mut at = 0;
+        while let Some(i) = s[at..].find("use ").map(|i| at + i) {
+            let starts = s[s[..i].rfind('\n').map_or(0, |n| n + 1)..i]
+                .trim()
+                .is_empty();
+            let end = scan_to(b, i, |s, k| s[k] == b';');
+            if starts {
+                found.push((i, end));
+            }
+            at = end.max(i + 4);
+        }
+        found
+    };
+    let in_use = |at: usize| uses.iter().any(|&(from, to)| from <= at && at < to);
     let mut out = String::new();
     let mut rest = s.as_str();
     while let Some(at) = rest.find(&prefix) {
         out.push_str(&rest[..at]);
         let after = &rest[at + prefix.len()..];
+        if in_use(s.len() - rest.len() + at) {
+            out.push_str(&prefix);
+            rest = after;
+            continue;
+        }
         // `orbs::Orb::DarkOrb`: modules, then a type.
-        let mut parts = after.split("::");
         let mut skipped = prefix.len();
         let mut found = None;
-        for part in parts.by_ref() {
+        let mut modules = Vec::new();
+        for part in after.split("::") {
             let word: String = part
                 .chars()
                 .take_while(|c| c.is_alphanumeric() || *c == '_')
                 .collect();
             if word.starts_with(|c: char| c.is_uppercase()) {
-                if content.types.contains_key(&word) && word.len() == part.len() {
-                    found = Some(skipped);
+                let content_type =
+                    content.types.contains_key(&word) || content.pools.contains(&word);
+                let module = modules.join("::");
+                let vocabulary = content
+                    .shared
+                    .get(&module)
+                    .is_some_and(|names| names.contains(&word));
+                if content_type {
+                    found = Some((skipped, String::new()));
+                } else if vocabulary {
+                    found = Some((skipped, format!("crate::generated::{module}::")));
                 }
                 break;
             }
+            // A path's modules are bare lower-case names; anything else ends it.
+            if word.is_empty() || word.len() != part.len() {
+                break;
+            }
+            modules.push(word);
             skipped += part.len() + 2;
         }
         match found {
-            Some(skip) => rest = &rest[at + skip..],
+            Some((skip, path)) => {
+                out.push_str(&path);
+                rest = &rest[at + skip..];
+            }
             None => {
                 out.push_str(&prefix);
                 rest = after;
@@ -1167,16 +1900,44 @@ fn unused_pools(s: &str, content: &Content) -> String {
     let mut out = String::new();
     for line in s.split_inclusive('\n') {
         let trimmed = line.trim();
-        if let Some(name) = trimmed
+        let Some(body) = trimmed
             .strip_prefix("use ")
             .and_then(|l| l.strip_suffix(';'))
-            .and_then(|l| l.rsplit("::").next())
-            && content.pools.iter().any(|p| p == name)
-            && s.matches(name).count() == 1
-        {
+        else {
+            out.push_str(line);
+            continue;
+        };
+        let (prefix, names): (&str, Vec<&str>) = match body.split_once("::{") {
+            Some((prefix, names)) => (
+                prefix,
+                names
+                    .trim_end_matches('}')
+                    .split(',')
+                    .map(str::trim)
+                    .collect(),
+            ),
+            None => match body.rsplit_once("::") {
+                Some((prefix, name)) => (prefix, vec![name]),
+                None => (body, vec![]),
+            },
+        };
+        let unused =
+            |name: &&str| content.pools.iter().any(|p| p == name) && s.matches(*name).count() == 1;
+        if names.is_empty() || !names.iter().any(unused) {
+            out.push_str(line);
             continue;
         }
-        out.push_str(line);
+        let kept: Vec<&str> = names
+            .iter()
+            .filter(|n| !unused(n) && !n.is_empty())
+            .copied()
+            .collect();
+        let indent = &line[..line.len() - line.trim_start().len()];
+        match kept.as_slice() {
+            [] => {}
+            [one] => out.push_str(&format!("{indent}use {prefix}::{one};\n")),
+            many => out.push_str(&format!("{indent}use {prefix}::{{{}}};\n", many.join(", "))),
+        }
     }
     out
 }
@@ -1190,7 +1951,9 @@ pub fn run(args: Args) -> Result<String, Error> {
         .filter_map(|path| module_of(path).ok())
         .filter_map(|module| module.get(2).cloned())
         .collect();
-    let mut report = String::new();
+    let mut lefts = Vec::new();
+    let mut files = Vec::new();
+    let mut declared = Vec::new();
     for path in &args.files {
         let module = module_of(path)?;
         let text = error::read(path)?;
@@ -1203,10 +1966,82 @@ pub fn run(args: Args) -> Result<String, Error> {
         let text = rewrite_lets(&text, &content, &mut left);
         let text = rewrite_rest(&text, &content, &mut left);
         let text = rewrite_uses(&text, &content, &args.build, &mut left);
+        let text = pinned(&text);
+        // Where the module lands, and what its lists are called by.
+        let shared: Vec<String> = module.iter().skip(2).cloned().collect();
+        let stem = shared.last().cloned().unwrap_or_default().to_uppercase();
+        let (text, lists) = lists(&text, &format!("{stem}_"), &mut left);
+        if !lists.is_empty() {
+            declared.push((format!("crate::behaviour::{}", shared.join("::")), lists));
+        }
+        lefts.push(left);
+        // A path from here on is the one the module has once shared.
+        let mut shared_module = vec!["behaviour".to_owned()];
+        shared_module.extend(shared);
+        files.push((shared_module, text));
+    }
+    generic_types(&mut files);
+    declare_lists(&declared)?;
+    let mut report = String::new();
+    let mut written = Vec::new();
+    for ((path, (module, text)), left) in args.files.iter().zip(files).zip(lefts) {
+        // A child whose `lists!` the build reaches is visible to it.
+        let mut text = text;
+        let here = format!("crate::{}::", module.join("::"));
+        for (list_module, _) in &declared {
+            if let Some(child) = list_module.strip_prefix(&here)
+                && !child.contains("::")
+            {
+                text = text.replace(
+                    &format!("\nmod {child};"),
+                    &format!("\npub(crate) mod {child};"),
+                );
+            }
+        }
         let text = local_consts(&text);
-        let text = generic_fns(&text);
+        let (text, made) = generic_fns(&text);
         let text = import_ids(&text, &content);
         let text = unused_pools(&text, &content);
+        written.push((
+            path,
+            text,
+            made,
+            left,
+            module.last().cloned().unwrap_or_default(),
+        ));
+    }
+    // A call names `V` where it cannot be read off an argument: to a function
+    // the file made generic, or one it imports from a module that moved.
+    let all: Vec<(String, usize)> = written.iter().flat_map(|w| w.2.clone()).collect();
+    let modules: Vec<(String, String, usize)> = written
+        .iter()
+        .flat_map(|w| w.2.iter().map(|(name, n)| (w.4.clone(), name.clone(), *n)))
+        .collect();
+    let build = &args.build;
+    for (path, text, made, mut left, _) in written {
+        let mut calls = made.clone();
+        for (name, _) in imports(&text) {
+            if let Some(found) = all.iter().find(|(made, _)| *made == name)
+                && !calls.iter().any(|(own, _)| *own == name)
+            {
+                calls.push(found.clone());
+            }
+        }
+        let text = turbofish(&text, &calls, &modules);
+        // A test names a build, which is the one the rule came from.
+        let text = match text.find("mod tests {\n") {
+            Some(at) if text[at..].contains("<V") || text[at..].contains("V::") => {
+                let mut text = text;
+                let alias = format!(
+                    "    type V = crate::{0}::{1};\n",
+                    build,
+                    build.to_uppercase()
+                );
+                text.insert_str(at + "mod tests {\n".len(), &alias);
+                text
+            }
+            _ => text,
+        };
         error::write(path, &text)?;
         left.notes.sort();
         left.notes.dedup();

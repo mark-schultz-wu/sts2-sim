@@ -24,6 +24,7 @@ use super::super::generated::orbs::Orb;
 use super::super::generated::powers::Power;
 use super::super::generated::relics::Relic;
 use super::super::generated::runstate::CombatSide;
+pub(crate) use crate::behaviour::powers::{debuff_at, lends};
 type Number = <V as sts2_core::ContentVersion>::Number;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -400,7 +401,7 @@ impl sts2_core::PowerModel<V> for State {
                 power,
                 playing: [None; NOTED_AT_ONCE],
             },
-            power if lends(power).is_some() => Self::Temporary {
+            power if lends::<V>(power).is_some() => Self::Temporary {
                 power,
                 ignore_next: false,
             },
@@ -453,7 +454,7 @@ impl sts2_core::PowerModel<V> for State {
         use sts2_core::PowerTable as _;
 
         let power = self.power();
-        match lends(power) {
+        match lends::<V>(power) {
             // `TemporaryStrengthPower.Type`, which is a debuff when it lends
             // a negative amount.
             Some((_, positive)) => !positive,
@@ -466,39 +467,6 @@ impl sts2_core::PowerModel<V> for State {
             }),
         }
     }
-}
-
-/// What a temporary power lends, and `IsPositive`, for the family that lends
-/// Strength, Dexterity or Focus for a turn and takes it back.
-///
-/// Every subclass of `TemporaryStrengthPower`, `TemporaryDexterityPower` and
-/// `TemporaryFocusPower`, which is `InternallyAppliedPower`, and its
-/// `IsPositive` override. None of them overrides anything else, so
-/// [`temporary`] is the whole of each.
-pub(crate) fn lends(power: Power) -> Option<(Power, bool)> {
-    use Power::{DexterityPower as Dexterity, FocusPower as Focus, StrengthPower as Strength};
-
-    Some(match power {
-        Power::CoordinatePower
-        | Power::FeedingFrenzyPower
-        | Power::FlexPotionPower
-        | Power::ReptileTrinketPower
-        | Power::SetupStrikePower => (Strength, true),
-        Power::CrushUnderPower
-        | Power::DarkShacklesPower
-        | Power::DyingStarPower
-        | Power::EnfeeblingTouchPower
-        | Power::ManglePower
-        | Power::MockTemporaryStrengthLossPower
-        | Power::MonarchsGazeStrengthDownPower
-        | Power::PiercingWailPower
-        | Power::ShacklingPotionPower => (Strength, false),
-        Power::AnticipatePower | Power::HelicalDartPower | Power::SpeedPotionPower => {
-            (Dexterity, true)
-        }
-        Power::FocusedStrikePower | Power::HotfixPower | Power::SynchronizePower => (Focus, true),
-        _ => return None,
-    })
 }
 
 impl State {
@@ -1816,7 +1784,7 @@ pub(crate) fn modify_hook(
                 amount,
                 ..
             },
-        ) if target == holder && debuff_at(landing, amount) => Modify::Replaced(0),
+        ) if target == holder && debuff_at::<V>(landing, amount) => Modify::Replaced(0),
         (Power::ArtifactPower, _, ModifyHook::PowerAmountReceived { .. }) => Modify::Nothing,
         // `ModifyHandDraw`: its stack more cards for its owner.
         (
@@ -1917,39 +1885,6 @@ pub(crate) fn modify_hook(
             ModifyHook::HandDraw { .. },
         ) => Modify::Nothing,
         (power, _, hook) => unimplemented!("what {power:?} does for {hook:?}"),
-    }
-}
-
-/// `PowerModel.GetTypeForAmount`: whether `power` is a debuff at `amount`.
-///
-/// A counter that allows negatives is a debuff below zero, and a debuff that
-/// does not allow them is a buff there.
-pub(crate) fn debuff_at(power: Power, amount: Number) -> bool {
-    use sts2_core::PowerTable as _;
-
-    use super::super::generated::powers::{PowerFlag, PowerStackType};
-
-    let data = sts2_core::Table::data(power);
-    let debuff = match lends(power) {
-        Some((_, positive)) => !positive,
-        None => power
-            .debuff()
-            .unwrap_or_else(|| unimplemented!("whether {power:?} is a debuff at {amount}")),
-    };
-    let counter = match data.stack {
-        crate::Field::Constant(stack) => stack == Some(PowerStackType::Counter),
-        // `ShrinkPower.StackType`: a counter, save a negative one, which is
-        // `IsInfinite` and single.
-        crate::Field::Computed if power == Power::ShrinkPower => amount >= 0,
-        crate::Field::Computed => unimplemented!("how {power:?} stacks at {amount}"),
-    };
-    let crate::Field::Constant(negatives) = data.flags.get(PowerFlag::AllowNegative) else {
-        unimplemented!("whether {power:?} allows negatives at {amount}")
-    };
-    match amount < 0 {
-        true if counter && negatives => true,
-        true if !negatives && debuff => false,
-        _ => debuff,
     }
 }
 
@@ -2129,7 +2064,7 @@ pub(crate) fn decide_hook(
         (Power::IllusionPower, DecisionHook::ShouldRemovePowerOnDeath { power, .. }) => {
             use sts2_core::PowerTable as _;
 
-            if lends(power).is_some() {
+            if lends::<V>(power).is_some() {
                 return HookResponse::Decision(false);
             }
             let debuff = power.debuff().unwrap_or_else(|| {
@@ -2252,7 +2187,7 @@ pub(crate) fn event_hook(
 
     // A temporary power asks for two things when a turn ends, and the match
     // below spells one. Its subclasses answer there instead.
-    if let Some((lent, positive)) = lends(power) {
+    if let Some((lent, positive)) = lends::<V>(power) {
         return temporary(lent, positive, amount, held, state, hook, asked);
     }
 
@@ -2729,8 +2664,8 @@ pub(crate) fn event_hook(
         ) if applier == holder
             && creature != fight.player()
             && fight.pet_owner(creature).is_none()
-            && lends(changed).is_none()
-            && debuff_at(changed, delta) =>
+            && lends::<V>(changed).is_none()
+            && debuff_at::<V>(changed, delta) =>
         {
             Some(HookEffect::Damage {
                 target: creature,
@@ -4679,7 +4614,7 @@ pub(crate) fn event_hook(
                     .iter()
                     .copied()
                     .filter(|&lent| {
-                        lends(lent).is_some_and(|(to, _)| to == Power::StrengthPower)
+                        lends::<V>(lent).is_some_and(|(to, _)| to == Power::StrengthPower)
                             && fight.power(holder, lent).is_some()
                     })
                     .map(HookEffect::RemoveFromOwner),
@@ -5854,7 +5789,7 @@ mod tests {
         let unanswered: Vec<Power> = Power::ALL
             .iter()
             .copied()
-            .filter(|&power| power.debuff().is_none() && lends(power).is_none())
+            .filter(|&power| power.debuff().is_none() && lends::<V>(power).is_none())
             .collect();
         assert!(
             unanswered.is_empty(),
