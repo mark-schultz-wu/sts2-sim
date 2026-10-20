@@ -45,9 +45,9 @@ pub enum Resume {
     MoltenFistHit,
     PillageHit,
     CinderHit,
-    /// `Feed`, whose owner gains its `MaxHp` where `gains` says.
+    /// `Feed`, whose kill counts where `fatal` says.
     FeedHit {
-        gains: bool,
+        fatal: bool,
     },
     /// After a question inside the card's power was answered.
     UppercutWeak,
@@ -108,7 +108,10 @@ pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V>
         Resume::MoltenFistHit => molten_fist_hit(fight),
         Resume::PillageHit => pillage_draws(fight),
         Resume::CinderHit => cinder_hit(fight),
-        Resume::FeedHit { gains } => feed_hit(fight, gains),
+        Resume::FeedHit { fatal } => {
+            let results = fight.waited_attack_results();
+            feed_hit(fight, fatal && results.iter().any(|result| result.killed))
+        }
         Resume::DominateApplied => dominate_applied(fight),
         Resume::CrimsonMantleApplied => {
             fight.note_on_power(fight.actor(), Power::CrimsonMantlePower, 1);
@@ -262,11 +265,10 @@ pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<
                 });
                 fight.apply(attack);
             });
-            let gains = fatal && results.iter().any(|result| result.killed);
             if fight.waiting() {
-                return wait(Resume::FeedHit { gains });
+                return wait(Resume::FeedHit { fatal });
             }
-            feed_hit(fight, gains)
+            feed_hit(fight, fatal && results.iter().any(|result| result.killed))
         }
         // `ForgottenRitual`: its energy, where its owner exhausted a card this
         // turn.

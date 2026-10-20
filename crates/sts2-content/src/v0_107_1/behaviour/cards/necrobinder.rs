@@ -242,8 +242,6 @@ fn bone_shards<F: Fight<V>>(fight: &mut F) -> Played<V> {
 /// `BlightStrike`: its damage to the target, then as much Doom on it as the
 /// attack's hits dealt, block included.
 fn blight_strike<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    use super::super::super::generated::powers::Power;
-
     let target = fight.target();
     let results = fight.attack(Scaling::Dynamic, |fight| {
         let attack = fight.resolve(Effect::Attack {
@@ -254,9 +252,23 @@ fn blight_strike<F: Fight<V>>(fight: &mut F) -> Played<V> {
         });
         fight.apply(attack);
     });
+    if fight.waiting() {
+        return wait(Resume::BlightStrikeHit);
+    }
+    blight_strike_hit(fight, &results)
+}
+
+/// The rest of `BlightStrike`, once its attack is over: as much Doom on the
+/// target as `results` dealt.
+fn blight_strike_hit<F: Fight<V>>(
+    fight: &mut F,
+    results: &sts2_core::AttackResults<V>,
+) -> Played<V> {
+    use super::super::super::generated::powers::Power;
+
     let doom = results.iter().map(|result| result.total).sum();
     fight.apply_power(
-        target,
+        fight.target(),
         Power::DoomPower,
         sts2_core::PowerAmount::Counted(doom),
     );
@@ -366,6 +378,15 @@ fn sculpting_strike<F: Fight<V>>(fight: &mut F) -> Played<V> {
         });
         fight.apply(attack);
     });
+    if fight.waiting() {
+        return wait(Resume::SculptingStrikeHit);
+    }
+    sculpting_strike_hit(fight)
+}
+
+/// The rest of `SculptingStrike`, once its attack is over: one card of the
+/// hand that is not Ethereal picked, to become so.
+fn sculpting_strike_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
     let ethereal = CardKeyword::Ethereal;
     let cards = fight
         .cards_in(Pile::Hand)
@@ -421,8 +442,6 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
         // `Hang`: its damage to the target, then Hang on it: as much as it
         // already carries, and at least two.
         NecrobinderCard::Hang => {
-            use sts2_core::CreatureView as _;
-
             let target = fight.target();
             fight.attack(Scaling::Dynamic, |fight| {
                 let hit = fight.resolve(Effect::Attack {
@@ -433,22 +452,10 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
                 });
                 fight.apply(hit);
             });
-            let carried = fight
-                .creatures()
-                .find(|creature| creature.id() == target)
-                .and_then(|creature| creature.power(Power::HangPower));
-            let carried = match carried {
-                Some(sts2_core::PowerAmount::Counted(amount)) => amount,
-                Some(sts2_core::PowerAmount::Endless) => unimplemented!("an endless Hang"),
-                None => 0,
-            };
-            let added = carried.max(HANG_AT_LEAST).min((HANG_MOST - carried).max(0));
-            fight.apply_power(
-                target,
-                Power::HangPower,
-                sts2_core::PowerAmount::Counted(added),
-            );
-            Played::Done
+            if fight.waiting() {
+                return wait(Resume::HangHit);
+            }
+            hang_hit(fight)
         }
         // `TheScythe`: its damage to the target, then `BuffFromPlay` of its
         // `Increase` on this copy and on its deck version.
@@ -463,13 +470,10 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
                 });
                 fight.apply(hit);
             });
-            let increase = fight.var(CardVar::Increase);
-            fight.modify_this(
-                sts2_core::Change::Own(super::CardWrite::BuffFromPlay(increase)),
-                sts2_core::Lasting::ThisFight,
-            );
-            fight.write_deck_version(super::DeckWrite::BuffFromPlay(increase));
-            Played::Done
+            if fight.waiting() {
+                return wait(Resume::TheScytheHit);
+            }
+            the_scythe_hit(fight)
         }
         // `Cleanse`: its `Summon` of Osty, then one card of the draw pile
         // picked, to exhaust.
@@ -532,11 +536,10 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
                     }
                 });
             });
-            let vulnerable = sts2_core::PowerAmount::Counted(fight.var(CardVar::VulnerablePower));
-            for target in fight.hittable_opponents() {
-                fight.apply_power(target, Power::VulnerablePower, vulnerable);
+            if fight.waiting() {
+                return wait(Resume::HighFiveHit);
             }
-            Played::Done
+            high_five_hit(fight)
         }
         NecrobinderCard::Unleash | NecrobinderCard::Protector => {
             osty_attack(fight, CardVar::CalculatedDamage)
@@ -665,14 +668,9 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
         // `Eidolon`: every card of the hand exhausted, one at a time, then one
         // Intangible where that came to nine or more.
         NecrobinderCard::Eidolon => {
-            use super::super::super::generated::powers::Power;
-
             let hand = fight.cards_in(Pile::Hand);
-            fight.act_on(PileAct::Exhaust, &hand);
-            if hand.len() >= EIDOLON_CARDS {
-                fight.apply_to_actor(Power::IntangiblePower, sts2_core::PowerAmount::Counted(1));
-            }
-            Played::Done
+            let count = u8::try_from(hand.len()).expect("a hand's worth fits a u8");
+            eidolon(fight, &hand, count)
         }
         // `CaptureSpirit`: its damage to the target, unblockable and
         // unpowered, then its `Cards` of Souls into the draw pile at random.
@@ -735,12 +733,53 @@ pub enum Resume {
     SnapRetain,
     /// `Transfigure`, after its owner picked the card to replay.
     TransfigureReplay,
+    /// After a question inside the card's attack was answered.
+    HangHit,
+    TheScytheHit,
+    SculptingStrikeHit,
+    BlightStrikeHit,
+    HighFiveHit,
+    /// `HighFive`, after a question inside one of its Vulnerables. `held` is
+    /// the enemies it took after the attack, and `at` the one to go on from.
+    HighFive {
+        held: super::Held,
+        at: u8,
+    },
+    /// `Eidolon`, after a question inside its exhausts was answered, with the
+    /// cards left to exhaust and how many the hand held.
+    Eidolon {
+        left: super::Left,
+        count: u8,
+    },
 }
 
 /// The rest of a Necrobinder card's play that stood still on a question its
 /// own command raised.
-pub(super) fn resume_waited<F: Fight<V>>(_fight: &mut F, at: Resume) -> Played<V> {
-    unreachable!("{at:?} stops on a pick, not on a question it waited for")
+pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
+    match at {
+        Resume::HangHit => hang_hit(fight),
+        Resume::TheScytheHit => the_scythe_hit(fight),
+        Resume::SculptingStrikeHit => sculpting_strike_hit(fight),
+        Resume::BlightStrikeHit => {
+            let results = fight.waited_attack_results();
+            blight_strike_hit(fight, &results)
+        }
+        Resume::HighFiveHit => high_five_hit(fight),
+        Resume::HighFive { held, at } => high_five_vulnerable(fight, held, at),
+        Resume::Eidolon { left, count } => {
+            let left: Vec<_> = left.cards().collect();
+            eidolon(fight, &left, count)
+        }
+        at => unreachable!("{at:?} stops on a pick, not on a question it waited for"),
+    }
+}
+
+/// The rest of the play waits at `at`, where a command left a question and
+/// more commands follow.
+fn wait(at: Resume) -> Played<V> {
+    Played::Waiting {
+        at: super::super::Resume::Card(super::Resume::Necrobinder(at)),
+    }
 }
 
 pub(super) fn resume_play<F: Fight<V>>(
@@ -802,11 +841,85 @@ pub(super) fn resume_play<F: Fight<V>>(
             }
             Played::Done
         }
+        at => unreachable!("{at:?} waits on a question, not a pick"),
     }
 }
 
 /// `Eidolon`'s `_intangibleThreshold`.
 const EIDOLON_CARDS: usize = 9;
+
+/// The rest of `Hang`, once its attack is over: Hang on the target, as much
+/// as it already carries, and at least two.
+fn hang_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use sts2_core::CreatureView as _;
+
+    let target = fight.target();
+    let carried = fight
+        .creatures()
+        .find(|creature| creature.id() == target)
+        .and_then(|creature| creature.power(Power::HangPower));
+    let carried = match carried {
+        Some(sts2_core::PowerAmount::Counted(amount)) => amount,
+        Some(sts2_core::PowerAmount::Endless) => unimplemented!("an endless Hang"),
+        None => 0,
+    };
+    let added = carried.max(HANG_AT_LEAST).min((HANG_MOST - carried).max(0));
+    fight.apply_power(
+        target,
+        Power::HangPower,
+        sts2_core::PowerAmount::Counted(added),
+    );
+    Played::Done
+}
+
+/// The rest of `TheScythe`, once its attack is over: `BuffFromPlay` of its
+/// `Increase` on this copy and on its deck version.
+fn the_scythe_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let increase = fight.var(CardVar::Increase);
+    fight.modify_this(
+        sts2_core::Change::Own(super::CardWrite::BuffFromPlay(increase)),
+        sts2_core::Lasting::ThisFight,
+    );
+    fight.write_deck_version(super::DeckWrite::BuffFromPlay(increase));
+    Played::Done
+}
+
+/// The rest of `HighFive`, once Osty's attack is over: its Vulnerable on each
+/// enemy that can be hit then.
+fn high_five_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let held = super::Held::of(&fight.hittable_opponents());
+    high_five_vulnerable(fight, held, 0)
+}
+
+/// `HighFive`'s Vulnerable on each of `held` from the one at `from` on. A
+/// question left before one waits.
+fn high_five_vulnerable<F: Fight<V>>(fight: &mut F, held: super::Held, from: u8) -> Played<V> {
+    let vulnerable = sts2_core::PowerAmount::Counted(fight.var(CardVar::VulnerablePower));
+    for (at, target) in held.creatures().enumerate().skip(usize::from(from)) {
+        if fight.waiting() {
+            let at = u8::try_from(at).expect("a fight's creatures fit a u8");
+            return wait(Resume::HighFive { held, at });
+        }
+        fight.apply_power(target, Power::VulnerablePower, vulnerable);
+    }
+    Played::Done
+}
+
+/// `Eidolon` over the cards `cards`: each exhausted, then one Intangible
+/// where the hand held nine or more.
+fn eidolon<F: Fight<V>>(fight: &mut F, cards: &[sts2_core::CardAt<V>], count: u8) -> Played<V> {
+    for (at, &card) in cards.iter().enumerate() {
+        fight.act_on(PileAct::Exhaust, &[card]);
+        if fight.waiting() {
+            let left = super::Left::of(&cards[at + 1..]);
+            return wait(Resume::Eidolon { left, count });
+        }
+    }
+    if usize::from(count) >= EIDOLON_CARDS {
+        fight.apply_to_actor(Power::IntangiblePower, sts2_core::PowerAmount::Counted(1));
+    }
+    Played::Done
+}
 
 /// `Dredge`: its `Cards` from the discard pile picked into hand, as many as
 /// the hand has room for.

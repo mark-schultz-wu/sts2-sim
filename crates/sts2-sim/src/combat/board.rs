@@ -4194,6 +4194,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.live.note(playing, note);
     }
 
+    fn waited_attack_results(&mut self) -> sts2_core::AttackResults<V> {
+        self.live
+            .waited_attack
+            .take()
+            .unwrap_or_else(|| unimplemented!("reading an attack's results it never waited on"))
+    }
+
     fn attack_results(&self) -> sts2_core::AttackResults<V> {
         if !self.held.is_empty() {
             unimplemented!("reading an attack's results while its hits wait on a question");
@@ -5999,7 +6006,13 @@ impl<V: Rules> Board<'_, V> {
             });
             return results;
         }
-        self.attack_over(attack, results)
+        let results = self.attack_over(attack, results);
+        // A card waiting behind this attack's question reads them as it
+        // goes on.
+        if self.live.asking.is_some() {
+            self.live.waited_attack = Some(results.clone());
+        }
+        results
     }
 
     /// Whether a hit resolved now waits: inside an attack whose earlier hit
@@ -6300,7 +6313,8 @@ pub(super) fn land_held<V: Rules>(
     }
     let results = board.landed.take().unwrap_or_default();
     if board.held.is_empty() {
-        board.attack_over(attack, results);
+        let results = board.attack_over(attack, results);
+        board.live.waited_attack = Some(results);
     } else {
         let hits = std::mem::take(&mut board.held);
         board.live.defer(super::live::Deferred::Hits {

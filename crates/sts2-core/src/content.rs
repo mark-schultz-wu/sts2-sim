@@ -2122,6 +2122,12 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("an attack from a creature other than the one acting")
     }
 
+    /// The results of the card's own attack, once a question it left is
+    /// answered and its hits have all landed.
+    fn waited_attack_results(&mut self) -> AttackResults<V> {
+        unimplemented!("reading an attack's results after a wait")
+    }
+
     /// The results the attack command under way has gathered so far, which a
     /// hit inside it can read before the command ends.
     fn attack_results(&self) -> AttackResults<V> {

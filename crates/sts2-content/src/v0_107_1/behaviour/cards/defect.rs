@@ -37,10 +37,8 @@ pub enum Resume {
     GunkUpHit,
     MomentumStrikeHit,
     TeslaCoilHit,
-    /// `Sunder`, whose energy comes where `gains` says.
-    SunderHit {
-        gains: bool,
-    },
+    /// `Sunder`, whose energy comes where its attack killed.
+    SunderHit,
     /// `FlakCannon`, after a question inside its exhausts was answered, with
     /// the statuses left to exhaust and this many hits to land.
     FlakCannon {
@@ -85,7 +83,10 @@ pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V>
         Resume::GunkUpHit => gunk_up_hit(fight),
         Resume::MomentumStrikeHit => momentum_strike_hit(fight),
         Resume::TeslaCoilHit => tesla_coil_hit(fight),
-        Resume::SunderHit { gains } => sunder_hit(fight, gains),
+        Resume::SunderHit => {
+            let results = fight.waited_attack_results();
+            sunder_hit(fight, results.iter().any(|result| result.killed))
+        }
         Resume::FlakCannon { left, hits } => {
             let left: Vec<_> = left.cards().collect();
             flak_cannon(fight, &left, hits)
@@ -581,11 +582,10 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
                 });
                 fight.apply(attack);
             });
-            let gains = results.iter().any(|result| result.killed);
             if fight.waiting() {
-                return wait(Resume::SunderHit { gains });
+                return wait(Resume::SunderHit);
             }
-            sunder_hit(fight, gains)
+            sunder_hit(fight, results.iter().any(|result| result.killed))
         }
         // `Capacitor`: its `Repeat` more orb slots.
         DefectCard::Capacitor => {
