@@ -49,7 +49,7 @@ mod tablet_of_truth;
 pub(crate) mod tanx;
 mod tea_master;
 pub(crate) mod tezcatara;
-mod the_architect;
+pub(crate) mod the_architect;
 pub(crate) mod the_future_of_potions;
 pub(crate) mod the_lantern_key;
 mod the_legends_were_true;
