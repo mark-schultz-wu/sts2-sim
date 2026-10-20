@@ -42,7 +42,30 @@ pub enum Resume {
     /// `CrushUnder`, after a question inside its attack or a power. `held`
     /// is the opponents it took before the attack, and `at` the one to go on
     /// from.
-    CrushUnder { held: super::Held, at: u8 },
+    CrushUnder {
+        held: super::Held,
+        at: u8,
+    },
+    /// After a question inside the card's attack was answered.
+    CrashLandingHit,
+    ShiningStrikeHit,
+    HeirloomHammerHit,
+    CollisionCourseHit,
+    BeatIntoShapeHit,
+    KnockoutBlowHit,
+    /// `DyingStar`, after a question inside its attack, with the enemies it
+    /// took before it.
+    DyingStarHit {
+        held: super::Held,
+    },
+}
+
+/// The rest of the play waits at `at`, where a command left a question and
+/// more commands follow.
+pub(super) fn wait(at: Resume) -> Played<V> {
+    Played::Waiting {
+        at: super::super::Resume::Card(super::Resume::Regent(at)),
+    }
 }
 
 /// The rest of `CrushUnder` from the opponent at `from` on: its Crush Under
@@ -67,6 +90,45 @@ fn crush_under_powers<F: Fight<V>>(fight: &mut F, held: super::Held, from: u8) -
     Played::Done
 }
 
+/// The rest of `CrashLanding`, once its attack is over: Debris into every
+/// free place in the hand.
+fn crash_landing_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let room = sts2_core::MAX_CARDS_IN_HAND.saturating_sub(fight.cards_in(Pile::Hand).len());
+    if room > 0 {
+        use super::super::super::generated::cards::StatusCard;
+
+        let debris = CardIdent::new(Cards::Status(StatusCard::Debris));
+        fight.add_generated_cards(debris, Pile::Hand, room);
+    }
+    Played::Done
+}
+
+/// The rest of `DyingStar`, once its attack is over: its Dying Star on each
+/// of `held`.
+fn dying_star_hit<F: Fight<V>>(fight: &mut F, held: super::Held) -> Played<V> {
+    use super::super::super::generated::powers::Power;
+    use sts2_core::PowerAmount;
+
+    let loss = PowerAmount::Counted(fight.var(CardVar::StrengthLoss));
+    for target in held.creatures() {
+        fight.apply_power(target, Power::DyingStarPower, loss);
+    }
+    Played::Done
+}
+
+/// The rest of `ShiningStrike`, once its attack is over: its stars, then
+/// itself onto the draw pile, unless it exhausts.
+fn shining_strike_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use super::super::super::generated::cards::CardKeyword;
+    use sts2_core::{Pile, PilePosition};
+
+    fight.gain_stars(fight.var(CardVar::Stars));
+    if !fight.this_has_keyword(CardKeyword::Exhaust) {
+        fight.add_this(Pile::Draw, PilePosition::Top);
+    }
+    Played::Done
+}
+
 /// `BeatIntoShape`: its damage to the target, then a Forge of its calculated
 /// number, less its extra for each hit of its own attack.
 fn beat_into_shape<F: Fight<V>>(fight: &mut F) -> Played<V> {
@@ -82,6 +144,18 @@ fn beat_into_shape<F: Fight<V>>(fight: &mut F) -> Played<V> {
         });
         fight.apply(attack);
     });
+    if fight.waiting() {
+        return wait(Resume::BeatIntoShapeHit);
+    }
+    beat_into_shape_hit(fight, &results)
+}
+
+/// The rest of `BeatIntoShape`, once its attack is over: a Forge of its
+/// calculated number, less its extra for each of `results`.
+fn beat_into_shape_hit<F: Fight<V>>(
+    fight: &mut F,
+    results: &sts2_core::AttackResults<V>,
+) -> Played<V> {
     let count = |n: usize| super::Number::try_from(n).expect("an attack's hits fit a number");
     let amount = fight.var(CardVar::CalculatedForge)
         - count(results.len()) * fight.var(CardVar::CalculationExtra);
@@ -111,15 +185,10 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
                     }
                 });
             });
-            let room =
-                sts2_core::MAX_CARDS_IN_HAND.saturating_sub(fight.cards_in(Pile::Hand).len());
-            if room > 0 {
-                use super::super::super::generated::cards::StatusCard;
-
-                let debris = CardIdent::new(Cards::Status(StatusCard::Debris));
-                fight.add_generated_cards(debris, Pile::Hand, room);
+            if fight.waiting() {
+                return wait(Resume::CrashLandingHit);
             }
-            Played::Done
+            crash_landing_hit(fight)
         }
         // `Stardust`: its damage once for each star its X spent, each hit at
         // an enemy drawn at random.
@@ -160,10 +229,9 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
         // `StrengthLoss` of Dying Star on each enemy that could be hit as the
         // play began.
         RegentCard::DyingStar => {
-            use super::super::super::generated::powers::Power;
-            use sts2_core::{Amount, Effect, PowerAmount, Scaling};
+            use sts2_core::{Amount, Effect, Scaling};
 
-            let enemies = fight.hittable_opponents();
+            let held = super::Held::of(&fight.hittable_opponents());
             fight.attack(Scaling::Dynamic, |fight| {
                 let targets = fight.opponents();
                 // One `CreatureCmd.Damage` over them all.
@@ -179,11 +247,10 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
                     }
                 });
             });
-            let loss = PowerAmount::Counted(fight.var(CardVar::StrengthLoss));
-            for target in enemies {
-                fight.apply_power(target, Power::DyingStarPower, loss);
+            if fight.waiting() {
+                return wait(Resume::DyingStarHit { held });
             }
-            Played::Done
+            dying_star_hit(fight, held)
         }
         // `VoidForm`: its Void Form on its owner, then `PlayerCmd.EndTurn`.
         RegentCard::VoidForm => {
@@ -288,9 +355,7 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
         // the top of the draw pile unless it exhausts. `ExhaustOnNextPlay`
         // was cleared when its result pile was picked, before the play.
         RegentCard::ShiningStrike => {
-            use sts2_core::{Amount, Effect, Pile, PilePosition, Scaling};
-
-            use super::super::super::generated::cards::CardKeyword;
+            use sts2_core::{Amount, Effect, Scaling};
 
             let target = fight.target();
             fight.attack(Scaling::Dynamic, |fight| {
@@ -302,11 +367,10 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
                 });
                 fight.apply(attack);
             });
-            fight.gain_stars(fight.var(CardVar::Stars));
-            if !fight.this_has_keyword(CardKeyword::Exhaust) {
-                fight.add_this(Pile::Draw, PilePosition::Top);
+            if fight.waiting() {
+                return wait(Resume::ShiningStrikeHit);
             }
-            Played::Done
+            shining_strike_hit(fight)
         }
         // `ParticleWall`: its block. Where it goes after is its own
         // `GetResultPileTypeForCardPlay`.
@@ -361,7 +425,20 @@ fn strike<F: Fight<V>>(fight: &mut F) -> sts2_core::AttackResults<V> {
 /// `KnockoutBlow`: its damage to the target, then its stars where a result
 /// says `WasTargetKilled`, whatever brought the target back after.
 fn knockout_blow<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    if strike(fight).iter().any(|result| result.killed) {
+    let results = strike(fight);
+    if fight.waiting() {
+        return wait(Resume::KnockoutBlowHit);
+    }
+    knockout_blow_hit(fight, &results)
+}
+
+/// The rest of `KnockoutBlow`, once its attack is over: its stars where
+/// `results` killed.
+fn knockout_blow_hit<F: Fight<V>>(
+    fight: &mut F,
+    results: &sts2_core::AttackResults<V>,
+) -> Played<V> {
+    if results.iter().any(|result| result.killed) {
         fight.gain_stars(fight.var(CardVar::Stars));
     }
     Played::Done
@@ -521,7 +598,7 @@ pub(super) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
 /// `HeirloomHammer`: its damage to the target, then one card of the hand
 /// that shows as colorless picked, to be copied.
 fn heirloom_hammer<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    use sts2_core::{Amount, CardTable as _, Effect, Scaling};
+    use sts2_core::{Amount, Effect, Scaling};
 
     let target = fight.target();
     fight.attack(Scaling::Dynamic, |fight| {
@@ -533,6 +610,17 @@ fn heirloom_hammer<F: Fight<V>>(fight: &mut F) -> Played<V> {
         });
         fight.apply(attack);
     });
+    if fight.waiting() {
+        return wait(Resume::HeirloomHammerHit);
+    }
+    heirloom_hammer_hit(fight)
+}
+
+/// The rest of `HeirloomHammer`, once its attack is over: one colorless
+/// card of the hand picked, to copy.
+fn heirloom_hammer_hit<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use sts2_core::CardTable as _;
+
     let cards = fight
         .cards_in(Pile::Hand)
         .into_iter()
@@ -615,7 +703,16 @@ pub(super) fn resume_play<F: Fight<V>>(
             Played::Done
         }
         Resume::QuasarChoice => unreachable!("Quasar stops on a choice, not a pick"),
-        Resume::DecisionsDrew | Resume::DecisionsPlayed { .. } | Resume::CrushUnder { .. } => {
+        Resume::DecisionsDrew
+        | Resume::DecisionsPlayed { .. }
+        | Resume::CrushUnder { .. }
+        | Resume::CrashLandingHit
+        | Resume::ShiningStrikeHit
+        | Resume::HeirloomHammerHit
+        | Resume::CollisionCourseHit
+        | Resume::BeatIntoShapeHit
+        | Resume::KnockoutBlowHit
+        | Resume::DyingStarHit { .. } => {
             unreachable!("{at:?} waits on a question, not a pick")
         }
         Resume::DecisionsPicked => match chosen.as_slice() {
@@ -698,6 +795,19 @@ fn decisions_play<F: Fight<V>>(
 pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
     match at {
         Resume::CrushUnder { held, at } => crush_under_powers(fight, held, at),
+        Resume::CrashLandingHit => crash_landing_hit(fight),
+        Resume::ShiningStrikeHit => shining_strike_hit(fight),
+        Resume::HeirloomHammerHit => heirloom_hammer_hit(fight),
+        Resume::CollisionCourseHit => common::collision_course_hit(fight),
+        Resume::BeatIntoShapeHit => {
+            let results = fight.waited_attack_results();
+            beat_into_shape_hit(fight, &results)
+        }
+        Resume::KnockoutBlowHit => {
+            let results = fight.waited_attack_results();
+            knockout_blow_hit(fight, &results)
+        }
+        Resume::DyingStarHit { held } => dying_star_hit(fight, held),
         Resume::DecisionsDrew => decisions_ask(fight),
         Resume::DecisionsPlayed { card, left } => {
             decisions_play(fight, card, super::Number::from(left))
