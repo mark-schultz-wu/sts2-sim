@@ -5,7 +5,7 @@
 //! a rest site offers and what an option does are the shared
 //! `behaviour::restsite`.
 
-use sts2_core::{CardIdent, RestKinds};
+use sts2_core::RestKinds;
 
 use super::V0_107_1;
 use super::generated::restsite::RestSiteOption;
@@ -24,8 +24,8 @@ impl RestKinds<V0_107_1> for RestSiteOption {
     const MEND: RestSiteOption = RestSiteOption::Mend;
     const SMITH: RestSiteOption = RestSiteOption::Smith;
 
-    fn offered(from_belt: &[RestSiteOption], deck: &[CardIdent<V0_107_1>]) -> Vec<RestSiteOption> {
-        crate::behaviour::restsite::offered::<V0_107_1>(from_belt, deck)
+    fn offered(added: &[RestSiteOption]) -> Vec<RestSiteOption> {
+        crate::behaviour::restsite::offered::<V0_107_1>(added)
     }
 
     fn selected(self) -> Vec<sts2_core::HookEffect<V0_107_1>> {

@@ -572,6 +572,61 @@ impl<V: Rules> Clone for Player<V> {
     }
 }
 
+/// The listeners [`State::run_listed`] found, in the game's order: the deck's,
+/// then the belt's, then the rest.
+pub(super) struct RunListed<V: Rules> {
+    deck: SmallVec<[RunListener<V>; 2]>,
+    /// The listening slots, one bit a slot, the first slot lowest. Many
+    /// relics hear a room's hooks, so the belt stays a set.
+    relics: u64,
+    /// The potions, then the run's modifiers.
+    after: SmallVec<[RunListener<V>; 2]>,
+}
+
+impl<V: Rules> RunListed<V> {
+    /// Each listener, in order.
+    pub(super) fn iter(&self) -> impl Iterator<Item = RunListener<V>> + '_ {
+        let mut relics = self.relics;
+        let belt = std::iter::from_fn(move || {
+            (relics != 0).then(|| {
+                let slot = relics.trailing_zeros() as usize;
+                relics &= relics - 1;
+                RunListener::Relic { slot }
+            })
+        });
+        (self.deck.iter().copied())
+            .chain(belt)
+            .chain(self.after.iter().copied())
+    }
+}
+
+/// One listener `RunState.IterateHookListeners` lists outside a fight.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) enum RunListener<V: Rules> {
+    /// The deck card at `at`.
+    DeckCard {
+        at: usize,
+        card: V::Card,
+    },
+    /// The enchantment on the deck card at `at`.
+    Enchantment {
+        at: usize,
+        enchanted: sts2_core::Enchanted<V>,
+    },
+    /// The relic in belt slot `slot`.
+    Relic {
+        slot: usize,
+    },
+    Potion {
+        potion: V::Potion,
+    },
+    /// The run's modifier at `at`.
+    Modifier {
+        at: usize,
+        modifier: sts2_core::RunModifier<V>,
+    },
+}
+
 impl<V: Rules> Player<V> {
     /// The deck, to write on.
     ///
@@ -987,25 +1042,16 @@ impl<V: Rules> State<V> {
             FixedPath,
         }
         let mut made = Made::Standard;
-        // `IterateHookListeners` walks the deck's cards ahead of the relics.
-        let cards: Vec<V::Card> = self
-            .deck_cards_hearing(sts2_core::ModelHook::ModifyGeneratedMap)
-            .collect();
-        for card in cards {
-            match V::deck_card_modify_generated_map(card, self.act) {
-                Some(sts2_core::ReplacedMap::Spoils) => {
+        let hook = sts2_core::EventHook::GeneratedMap { act: self.act };
+        for effect in self.notify_run(hook) {
+            match effect {
+                sts2_core::HookEffect::SpoilsMap => {
                     let mut rng: MegaRng =
                         sts2_core::rng::named::<V, _>(self.shared.raw_seed, "spoils_map");
                     map = ActMap::<V>::spoils(&mut rng, V::act_layout(act), self.ascension(), None)
                         .expect("a Spoils layout fits a packed map path");
                     made = Made::Spoils;
                 }
-                None => {}
-            }
-        }
-        let hook = sts2_core::EventHook::GeneratedMap { act: self.act };
-        for effect in self.notify_run(hook) {
-            match effect {
                 sts2_core::HookEffect::FixedPathMap(rooms) => {
                     map = ActMap::fixed_path(rooms);
                     made = Made::FixedPath;
@@ -1056,42 +1102,30 @@ impl<V: Rules> State<V> {
         }
         // `ModifyGeneratedMapLate`, over what the first pass left, which
         // `Hook.ModifyGeneratedMap` runs as it returns.
-        let cards: Vec<V::Card> = self
-            .deck_cards_hearing(sts2_core::ModelHook::ModifyGeneratedMapLate)
-            .collect();
-        for card in cards {
-            if let Some(gold) = V::deck_card_modify_generated_map_late(card, self.act) {
-                // `GetAllMapPoints` walks the grid a column at a time.
-                let first = (map.nodes().iter())
-                    .filter(|node| {
-                        node.kind == <V::MapPointType as sts2_core::MapPointKinds>::TREASURE
-                    })
-                    .map(|node| node.at)
-                    .min();
-                if let Some(at) = first {
-                    self.spoils = Some((at, card, gold));
-                }
-            }
-        }
         let hook = sts2_core::EventHook::GeneratedMapLate { act: self.act };
         for effect in self.notify_run(hook) {
             match effect {
+                sts2_core::HookEffect::SpoilsQuest { card, gold } => {
+                    // `GetAllMapPoints` walks the grid a column at a time.
+                    let first = (map.nodes().iter())
+                        .filter(|node| {
+                            node.kind == <V::MapPointType as sts2_core::MapPointKinds>::TREASURE
+                        })
+                        .map(|node| node.at)
+                        .min();
+                    if let Some(at) = first {
+                        self.spoils = Some((at, card, gold));
+                    }
+                }
                 sts2_core::HookEffect::MarkCombatPoints { relic, count, name } => {
                     self.mark_combat_points(&map, relic, count, name);
                 }
                 effect => unimplemented!("a relic asking for {effect:?} late in a map's making"),
             }
         }
-        let cards: Vec<V::Card> = self
-            .deck_cards_hearing(sts2_core::ModelHook::AfterMapGenerated)
-            .collect();
-        for card in cards {
-            V::deck_card_after_map_generated(card, self.act);
-        }
-        if self.player.relics.hear(sts2_core::Overrides::of(
-            sts2_core::ModelHook::AfterMapGenerated,
-        )) {
-            unimplemented!("a relic listening to AfterMapGenerated");
+        let hook = sts2_core::EventHook::MapGenerated { act: self.act };
+        if let Some(effect) = self.notify_run(hook).first() {
+            unimplemented!("a listener asking for {effect:?} once a map is generated");
         }
         map
     }
@@ -1514,17 +1548,18 @@ impl<V: Rules> State<V> {
     ///
     /// # Panics
     ///
-    /// A relic listening to it, or a card asking for anything but its own
-    /// transform.
+    /// A listener other than a deck card, or a card asking for anything but
+    /// its own transform.
     pub(super) fn room_entering(&mut self, point: Option<V::MapPointType>, base: bool) {
         use sts2_core::CardTable as _;
 
-        let heard = sts2_core::Overrides::of(sts2_core::ModelHook::BeforeRoomEntered);
-        if self.player.relics.hear(heard) {
-            unimplemented!("a relic hearing BeforeRoomEntered");
+        let listed = self.run_listed(sts2_core::ModelHook::BeforeRoomEntered);
+        if let Some(listener) =
+            (listed.iter()).find(|listener| !matches!(listener, RunListener::DeckCard { .. }))
+        {
+            unimplemented!("{listener:?} hearing BeforeRoomEntered");
         }
-        // No card of the build hears it, so no deck card can.
-        if !V::Card::heard_by_any().contains(sts2_core::ModelHook::BeforeRoomEntered) {
+        if listed.iter().next().is_none() {
             return;
         }
         let hook = sts2_core::EventHook::RoomEntering { point, base };
@@ -3108,13 +3143,6 @@ impl<V: Rules> State<V> {
         // left to gain, so `AfterGoldGained` runs only after a gain.
         if gained > sts2_core::Decimal::ZERO {
             self.player.gold = self.player.gold + crate::combat::whole::<V>(gained);
-            if self
-                .deck_cards_hearing(sts2_core::ModelHook::AfterGoldGained)
-                .next()
-                .is_some()
-            {
-                unimplemented!("a deck card listening to AfterGoldGained");
-            }
             let asked = self.notify_run(sts2_core::EventHook::GoldGained);
             if let Some(asked) = self.carry_out(asked) {
                 let pickup = asked.pickup;
@@ -3226,43 +3254,39 @@ impl<V: Rules> State<V> {
     ///
     /// # Panics
     ///
-    /// A potion that overrides `ShouldDie`, which outside a fight nothing
-    /// here carries out.
+    /// A listener other than a relic, such as a potion that overrides
+    /// `ShouldDie`, which outside a fight nothing here carries out.
     fn death_preventer(&self) -> Option<usize> {
-        let should_die = sts2_core::Overrides::of(sts2_core::ModelHook::ShouldDie);
-        if let Some(potion) = self
-            .player
-            .potions
-            .iter()
-            .find(|potion| sts2_core::PotionTable::overrides(**potion).intersects(should_die))
-        {
-            unimplemented!("{potion:?} asked whether the player dies outside a fight");
-        }
         let player = sts2_core::CombatId::new(nonmax::NonMaxU8::ZERO);
-        let hook = sts2_core::DecisionHook::ShouldDieLate {
-            creature: player,
-            player,
-        };
-        let hooks = sts2_core::Overrides::of(sts2_core::ModelHook::ShouldDieLate);
-        let mut left = self.player.relics.hearing(hooks);
-        while left != 0 {
-            let slot = left.trailing_zeros() as usize;
-            left &= left - 1;
-            let held = &self.player.relics[slot].state;
-            if V::decide_hook(
-                crate::combat::Heard::<V>::Relic {
-                    state: held,
-                    fight: None,
-                    belt: self.player.relics.relics(),
-                },
-                hook,
-            )
-            .is_decision_and(|dies| !dies)
-            {
-                return Some(slot);
-            }
-        }
-        None
+        let asked = [
+            sts2_core::DecisionHook::ShouldDie {
+                creature: player,
+                player,
+            },
+            sts2_core::DecisionHook::ShouldDieLate {
+                creature: player,
+                player,
+            },
+        ];
+        asked.into_iter().find_map(|hook| {
+            let model_hook = hook.model_hook().expect("a death's questions are raised");
+            let listed = self.run_listed(model_hook);
+            listed.iter().find_map(|listener| match listener {
+                RunListener::Relic { slot } => V::decide_hook(
+                    crate::combat::Heard::<V>::Relic {
+                        state: &self.player.relics[slot].state,
+                        fight: None,
+                        belt: self.player.relics.relics(),
+                    },
+                    hook,
+                )
+                .is_decision_and(|dies| !dies)
+                .then_some(slot),
+                listener => {
+                    unimplemented!("{listener:?} asked whether the player dies outside a fight")
+                }
+            })
+        })
     }
 
     /// `AfterPreventingDeath`, asked of the relic in `slot` alone, once it
@@ -3806,8 +3830,12 @@ impl<V: Rules> State<V> {
     }
 
     /// `AfterCardChangedPiles` for `card`, which just joined the deck with no
-    /// `clonedBy`, and what its listeners ask for: the belt, then the run's
-    /// modifiers.
+    /// `clonedBy`, and what its listeners ask for, each carried out before
+    /// the next is asked.
+    ///
+    /// # Panics
+    ///
+    /// A listener other than a relic or a modifier asking for a copy.
     fn joined_deck(&mut self, card: sts2_core::DeckCard<V>, transformed: bool) {
         let hook = sts2_core::EventHook::AddedToDeck {
             card: card.ident.card,
@@ -3815,36 +3843,21 @@ impl<V: Rules> State<V> {
             cloned: false,
             transformed,
         };
-        let model_hook = sts2_core::ModelHook::AfterCardChangedPiles;
         let mut asked = sts2_core::HookEffects::new();
-        let mut left = self.player.relics.hearing_hook(model_hook);
-        while left != 0 {
-            let slot = left.trailing_zeros() as usize;
-            left &= left - 1;
-            let (state, belt) = self.player.relics.state_beside(slot);
-            V::relic_event_hook(state, belt, hook, &mut asked);
+        let listed = self.run_listed(sts2_core::ModelHook::AfterCardChangedPiles);
+        for listener in listed.iter() {
+            self.ask_run_listener(listener, hook, &mut asked);
             for effect in std::mem::take(&mut asked) {
-                match effect {
-                    sts2_core::HookEffect::CopyIntoDeck(copies) => {
-                        self.copy_into_deck(card, copies, Copier::Relic(slot));
+                match (listener, effect) {
+                    (copier, sts2_core::HookEffect::CopyIntoDeck(copies)) => {
+                        let copier = match copier {
+                            RunListener::Relic { slot } => Copier::Relic(slot),
+                            RunListener::Modifier { at, .. } => Copier::Modifier(at),
+                            copier => unimplemented!("{copier:?} copying a card into the deck"),
+                        };
+                        self.copy_into_deck(card, copies, copier);
                     }
-                    effect => self.card_joined_deck(effect),
-                }
-            }
-        }
-        for at in 0..self.shared.modifiers.len() {
-            let entry = self.shared.modifiers[at];
-            if !sts2_core::ModifierTable::overrides(entry.modifier).contains(model_hook) {
-                continue;
-            }
-            let state = &mut Arc::make_mut(&mut self.modifier_states)[at];
-            V::modifier_event_hook(entry, state, hook, &mut asked);
-            for effect in std::mem::take(&mut asked) {
-                match effect {
-                    sts2_core::HookEffect::CopyIntoDeck(copies) => {
-                        self.copy_into_deck(card, copies, Copier::Modifier(at));
-                    }
-                    effect => self.card_joined_deck(effect),
+                    (_, effect) => self.card_joined_deck(effect),
                 }
             }
         }
@@ -3927,10 +3940,86 @@ impl<V: Rules> State<V> {
         }
     }
 
-    /// `hook`, raised on each relic on the belt that overrides it, in slot
-    /// order, then on each of the run's modifiers that does. Hands back what
-    /// they ask the run for. That is `RunState.IterateHookListeners`, whose
-    /// potions answer none of the hooks raised here.
+    /// `RunState.IterateHookListeners` outside a fight: every listener that
+    /// overrides `hook`, in the game's order.
+    ///
+    /// That is the deck's cards, each followed by its enchantment, then the
+    /// belt but a melted relic, the potions, and the run's modifiers.
+    pub(super) fn run_listed(&self, hook: sts2_core::ModelHook) -> RunListed<V> {
+        use sts2_core::{CardTable as _, EnchantmentTable as _};
+
+        let hooks = sts2_core::Overrides::of(hook);
+        let mut listed = RunListed {
+            deck: SmallVec::new(),
+            relics: self.player.relics.hearing_hook(hook),
+            after: SmallVec::new(),
+        };
+        // Most hooks no card's or enchantment's class overrides.
+        if V::Card::heard_by_any().intersects(hooks)
+            || V::Enchantment::heard_by_any().intersects(hooks)
+        {
+            for (at, held) in self.player.deck.iter().enumerate() {
+                let card = held.ident.card;
+                if card.overrides().intersects(hooks) {
+                    listed.deck.push(RunListener::DeckCard { at, card });
+                }
+                if let Some(enchanted) = held.ident.enchantment
+                    && enchanted.enchantment.overrides().intersects(hooks)
+                {
+                    listed.deck.push(RunListener::Enchantment { at, enchanted });
+                }
+            }
+        }
+        for &potion in self.player.potions.iter() {
+            if sts2_core::PotionTable::overrides(potion).intersects(hooks) {
+                listed.after.push(RunListener::Potion { potion });
+            }
+        }
+        for (at, &modifier) in self.shared.modifiers.iter().enumerate() {
+            if sts2_core::ModifierTable::overrides(modifier.modifier).intersects(hooks) {
+                listed.after.push(RunListener::Modifier { at, modifier });
+            }
+        }
+        listed
+    }
+
+    /// `hook` asked of `listener`, outside a fight, with what it asks for
+    /// pushed onto `asked`.
+    ///
+    /// # Panics
+    ///
+    /// An enchantment on a deck card, which nothing here asks outside a
+    /// fight.
+    #[inline(always)]
+    fn ask_run_listener(
+        &mut self,
+        listener: RunListener<V>,
+        hook: sts2_core::EventHook<V>,
+        asked: &mut sts2_core::HookEffects<V>,
+    ) {
+        match listener {
+            RunListener::DeckCard { at, card } => {
+                let state = &mut self.player.deck_mut()[at].state;
+                V::deck_card_event_hook(card, state, hook, asked);
+            }
+            RunListener::Enchantment { enchanted, .. } => {
+                unimplemented!("{enchanted:?} on a deck card hearing {hook:?}")
+            }
+            RunListener::Relic { slot } => {
+                let (state, belt) = self.player.relics.state_beside(slot);
+                V::relic_event_hook(state, belt, hook, asked);
+            }
+            RunListener::Potion { potion } => V::potion_event_hook(potion, hook, asked),
+            RunListener::Modifier { at, modifier } => {
+                let state = &mut Arc::make_mut(&mut self.modifier_states)[at];
+                V::modifier_event_hook(modifier, state, hook, asked);
+            }
+        }
+    }
+
+    /// `hook` raised on every listener outside a fight, in
+    /// [`Self::run_listed`] order, and what they asked for. The run carries
+    /// it out once all have answered.
     pub(super) fn notify_run(
         &mut self,
         hook: sts2_core::EventHook<V>,
@@ -3939,131 +4028,95 @@ impl<V: Rules> State<V> {
         let Some(model_hook) = hook.model_hook() else {
             return asked;
         };
-        let mut left = self.player.relics.hearing_hook(model_hook);
-        while left != 0 {
-            let slot = left.trailing_zeros() as usize;
-            left &= left - 1;
-            let (state, belt) = self.player.relics.state_beside(slot);
-            V::relic_event_hook(state, belt, hook, &mut asked);
-        }
-        for at in 0..self.shared.modifiers.len() {
-            let entry = self.shared.modifiers[at];
-            if sts2_core::ModifierTable::overrides(entry.modifier).contains(model_hook) {
-                let state = &mut Arc::make_mut(&mut self.modifier_states)[at];
-                V::modifier_event_hook(entry, state, hook, &mut asked);
-            }
+        for listener in self.run_listed(model_hook).iter() {
+            self.ask_run_listener(listener, hook, &mut asked);
         }
         asked
     }
 
-    /// `hook`, asked of each relic on the belt that overrides it, outside a
-    /// fight.
+    /// A question or a number asked of every listener outside a fight that
+    /// overrides `hook`, in [`Self::run_listed`] order, with every
+    /// hook that listener overrides.
     ///
     /// # Panics
     ///
-    /// A relic that changes the value.
-    fn belt_leaves(&self, hook: sts2_core::ModifyHook<V>) {
-        let mut left = self
-            .player
-            .relics
-            .hearing(sts2_core::Overrides::of(hook.model_hook()));
-        while left != 0 {
-            let slot = left.trailing_zeros() as usize;
-            left &= left - 1;
-            let listener: crate::combat::Heard<'_, V> = sts2_core::Listener::Relic {
-                state: &self.player.relics[slot].state,
-                fight: None,
-                belt: self.player.relics.relics(),
-            };
-            match V::modify_hook(listener, hook) {
-                sts2_core::Modify::Nothing => {}
-                answer => {
-                    unimplemented!("a relic answering {hook:?} outside a fight with {answer:?}")
+    /// A deck card or its enchantment, whose answers outside a fight nobody
+    /// has ported.
+    pub(super) fn run_each(
+        &self,
+        hook: sts2_core::ModelHook,
+        mut ask: impl FnMut(crate::combat::Heard<'_, V>, sts2_core::Overrides),
+    ) {
+        use sts2_core::RelicTable as _;
+
+        for listener in self.run_listed(hook).iter() {
+            match listener {
+                RunListener::DeckCard { card, .. } => {
+                    unimplemented!("{card:?} in the deck answering {}", hook.name())
                 }
+                RunListener::Enchantment { enchanted, .. } => {
+                    unimplemented!("{enchanted:?} on a deck card answering {}", hook.name())
+                }
+                RunListener::Relic { slot } => ask(
+                    sts2_core::Listener::Relic {
+                        state: &self.player.relics[slot].state,
+                        fight: None,
+                        belt: self.player.relics.relics(),
+                    },
+                    self.player.relics[slot].relic.overrides(),
+                ),
+                RunListener::Potion { potion } => ask(
+                    sts2_core::Listener::Potion(potion),
+                    sts2_core::PotionTable::overrides(potion),
+                ),
+                RunListener::Modifier { modifier, .. } => ask(
+                    sts2_core::Listener::Modifier(modifier.modifier),
+                    sts2_core::ModifierTable::overrides(modifier.modifier),
+                ),
             }
         }
     }
 
-    /// The deck's cards whose class overrides `hook`, which the run asks
-    /// through its content. A relic listening to it stops by name.
+    /// `hook`, asked of each listener that overrides it, outside a fight.
     ///
     /// # Panics
     ///
-    /// A relic on the belt, or a deck card's enchantment, listening to
-    /// `hook`.
-    pub(super) fn deck_hearing(
-        &self,
-        hook: sts2_core::ModelHook,
-    ) -> impl Iterator<Item = V::Card> + '_ {
-        if self.player.relics.hear(sts2_core::Overrides::of(hook)) {
-            unimplemented!("a relic listening to {} outside a fight", hook.name());
-        }
-        self.deck_cards_hearing(hook)
+    /// A listener that changes the value.
+    fn belt_leaves(&self, hook: sts2_core::ModifyHook<V>) {
+        self.run_each(hook.model_hook(), |listener, _| {
+            match V::modify_hook(listener, hook) {
+                sts2_core::Modify::Nothing => {}
+                answer => {
+                    unimplemented!("a listener answering {hook:?} outside a fight with {answer:?}")
+                }
+            }
+        });
     }
 
-    /// [`Self::deck_hearing`], for a hook the caller also raises on the belt.
+    /// The deck's cards whose class overrides `hook`, in
+    /// [`Self::run_listed`] order, which the run asks through its content.
     ///
     /// # Panics
     ///
-    /// A deck card's enchantment listening to `hook`.
-    fn deck_cards_hearing(&self, hook: sts2_core::ModelHook) -> impl Iterator<Item = V::Card> + '_ {
-        use sts2_core::{CardTable as _, EnchantmentTable as _};
-
-        let hooks = sts2_core::Overrides::of(hook);
-        if self.player.deck.iter().any(|held| {
-            held.ident
-                .enchantment
-                .is_some_and(|enchanted| enchanted.enchantment.overrides().intersects(hooks))
-        }) {
-            unimplemented!(
-                "an enchantment listening to {} outside a fight",
-                hook.name()
-            );
-        }
-        self.player
-            .deck
-            .iter()
-            .map(|held| held.ident.card)
-            .filter(move |card| card.overrides().intersects(hooks))
+    /// Any other listener to `hook`, whose answer nobody has ported.
+    pub(super) fn deck_hearing(&self, hook: sts2_core::ModelHook) -> SmallVec<[V::Card; 2]> {
+        let listed = self.run_listed(hook);
+        (listed.iter())
+            .map(|listener| match listener {
+                RunListener::DeckCard { card, .. } => card,
+                listener => unimplemented!("{listener:?} listening to {}", hook.name()),
+            })
+            .collect()
     }
 
     /// A hook the run raises outside a fight and no ported listener answers.
     ///
     /// # Panics
     ///
-    /// A relic on the belt, a deck card or its enchantment listening to
-    /// `hook`.
+    /// Any listener to `hook`.
     pub(super) fn unheard(&self, hook: sts2_core::ModelHook) {
-        use sts2_core::{CardTable as _, EnchantmentTable as _};
-
-        let hooks = sts2_core::Overrides::of(hook);
-        if self.player.relics.hear(hooks) {
-            unimplemented!("a relic listening to {} outside a fight", hook.name());
-        }
-        // `IterateHookListeners` walks the deck's cards and their
-        // enchantments ahead of the relics. Most hooks no card hears.
-        if !V::Card::heard_by_any().intersects(hooks)
-            && self
-                .player
-                .deck
-                .iter()
-                .all(|held| held.ident.enchantment.is_none())
-        {
-            return;
-        }
-        let heard = self.player.deck.iter().find(|held| {
-            held.ident.card.overrides().intersects(hooks)
-                || held
-                    .ident
-                    .enchantment
-                    .is_some_and(|enchanted| enchanted.enchantment.overrides().intersects(hooks))
-        });
-        if let Some(held) = heard {
-            let card = held.ident.card;
-            unimplemented!(
-                "{card:?} in the deck listening to {} outside a fight",
-                hook.name()
-            );
+        if let Some(listener) = self.run_listed(hook).iter().next() {
+            unimplemented!("{listener:?} listening to {} outside a fight", hook.name());
         }
     }
 
@@ -4402,14 +4455,14 @@ impl<V: Rules> State<V> {
     /// `card_reward` is `CardCreationFlags.IsCardReward`, which only a
     /// `CardReward` sets.
     pub(super) fn reward_options(&mut self, cards: &mut [CardIdent<V>], card_reward: bool) {
-        // Relic by relic, in the belt's order, each over the whole reward:
-        // one relic's card can be another's to enchant or not.
+        // Listener by listener, each over the whole reward: one relic's card
+        // can be another's to enchant or not.
         let hook = sts2_core::ModelHook::TryModifyCardRewardOptionsLate;
-        let mut left = self.player.relics.hearing(sts2_core::Overrides::of(hook));
-        while left != 0 {
-            let slot = left.trailing_zeros() as usize;
-            left &= left - 1;
-            self.reward_options_of(slot, cards, card_reward);
+        for listener in self.run_listed(hook).iter() {
+            match listener {
+                RunListener::Relic { slot } => self.reward_options_of(slot, cards, card_reward),
+                listener => unimplemented!("{listener:?} changing a card reward's options"),
+            }
         }
         let modified = sts2_core::EventHook::CardRewardOptionsModified { card_reward };
         let asked = self.notify_run(modified);
@@ -4832,22 +4885,11 @@ impl<V: Rules> State<V> {
     /// no to.
     fn generates_treasure(&self) -> bool {
         let hook = sts2_core::DecisionHook::ShouldGenerateTreasure;
-        let hooks = sts2_core::Overrides::of(sts2_core::ModelHook::ShouldGenerateTreasure);
-        let mut left = self.player.relics.hearing(hooks);
+        let model_hook = sts2_core::ModelHook::ShouldGenerateTreasure;
         let mut generates = true;
-        while left != 0 {
-            let held = &self.player.relics[left.trailing_zeros() as usize];
-            left &= left - 1;
-            generates &= !V::decide_hook(
-                crate::combat::Heard::<V>::Relic {
-                    state: &held.state,
-                    fight: None,
-                    belt: self.player.relics.relics(),
-                },
-                hook,
-            )
-            .is_decision_and(|generate| !generate);
-        }
+        self.run_each(model_hook, |listener, _| {
+            generates &= !V::decide_hook(listener, hook).is_decision_and(|generate| !generate);
+        });
         generates
     }
 
@@ -5306,20 +5348,18 @@ impl<V: Rules> State<V> {
 
     /// Enter a rest site, with the options this run's belt and deck open it on.
     pub(super) fn enter_rest_site(&mut self, at: Location) {
-        let deck: Vec<CardIdent<V>> = self.player.deck.iter().map(|held| held.ident).collect();
-        // `TryModifyRestSiteOptions`, which the belt answers after the deck,
-        // and the modifiers after the belt.
-        let mut from_belt: Vec<V::RestSiteOption> = Vec::new();
+        // `TryModifyRestSiteOptions`, which the deck answers first, then the
+        // belt, then the modifiers.
+        let mut added: Vec<V::RestSiteOption> = Vec::new();
         let mut withdrawn: Vec<V::RestSiteOption> = Vec::new();
         for effect in self.notify_run(sts2_core::EventHook::RestSiteOptions) {
             match effect {
-                sts2_core::HookEffect::OfferRestOption(option) => from_belt.push(option),
+                sts2_core::HookEffect::OfferRestOption(option) => added.push(option),
                 sts2_core::HookEffect::WithdrawRestOption(option) => withdrawn.push(option),
                 effect => unimplemented!("a listener asking for {effect:?} as a rest site opens"),
             }
         }
-        let mut options =
-            <V::RestSiteOption as sts2_core::RestKinds<V>>::offered(&from_belt, &deck);
+        let mut options = <V::RestSiteOption as sts2_core::RestKinds<V>>::offered(&added);
         options.retain(|option| !withdrawn.contains(option));
         self.enter(
             at,
@@ -5389,14 +5429,13 @@ impl<V: Rules> State<V> {
         use sts2_core::{ActMap as _, MapPointKinds as _};
 
         // `Hook.ModifyUnknownMapPointRoomTypes`, which a deck card can narrow
-        // to an event alone. The roll still draws.
-        let narrowed = self
-            .deck_cards_hearing(sts2_core::ModelHook::ModifyUnknownMapPointRoomTypes)
-            .any(|card| V::deck_card_narrows_unknown_rooms(card, self.act));
-        // The same hook on the belt, where a relic takes a room type out.
+        // to an event alone, and a relic can take a room type out of. The
+        // roll still draws.
+        let mut narrowed = false;
         let mut removed: SmallVec<[V::RoomType; 2]> = SmallVec::new();
         for effect in self.notify_run(sts2_core::EventHook::UnknownRoomTypes { act: self.act }) {
             match effect {
+                sts2_core::HookEffect::EventRoomsOnly => narrowed = true,
                 sts2_core::HookEffect::RemoveRoomType(room) => removed.push(room),
                 effect => unimplemented!("a relic asking for {effect:?} as an unknown room rolls"),
             }
@@ -5453,29 +5492,24 @@ impl<V: Rules> State<V> {
 
     /// `Hook.ModifyOddsIncreaseForUnrolledRoomType` over `base`, how far an
     /// unknown room's odds of being `room` rise when it rolls something
-    /// else. The run's modifiers answer it, in the order it holds them.
+    /// else. Each listener answers it in turn.
     ///
     /// # Panics
     ///
-    /// A relic answering it, or a modifier answering other than by scaling.
+    /// A listener answering other than by scaling.
     fn odds_increase(&self, room: V::RoomType, base: f32) -> f32 {
         let hook = sts2_core::ModifyHook::OddsIncreaseForUnrolledRoomType { room };
-        self.unheard(hook.model_hook());
         let mut rise = base;
-        for modifier in self.shared.modifiers.iter().map(|entry| entry.modifier) {
-            if !sts2_core::ModifierTable::overrides(modifier).contains(hook.model_hook()) {
-                continue;
-            }
-            let listener: crate::combat::Heard<'_, V> = sts2_core::Listener::Modifier(modifier);
+        self.run_each(hook.model_hook(), |listener, _| {
             match V::modify_hook(listener, hook) {
                 sts2_core::Modify::Nothing => {}
                 sts2_core::Modify::Scaled(by) => {
                     rise *= num_traits::ToPrimitive::to_f32(&by.exact())
                         .expect("an odds scale fits a float");
                 }
-                answer => unimplemented!("a modifier answering {hook:?} with {answer:?}"),
+                answer => unimplemented!("a listener answering {hook:?} with {answer:?}"),
             }
-        }
+        });
         rise
     }
 
@@ -6957,23 +6991,13 @@ impl<V: Rules> State<V> {
     /// to. A fight's other listeners never answer it.
     fn procure_refused(&self, potion: V::Potion) -> bool {
         let hook = sts2_core::DecisionHook::ShouldProcurePotion { potion };
-        let hooks = sts2_core::Overrides::of(sts2_core::ModelHook::ShouldProcurePotion);
-        let mut left = self.player.relics.hearing(hooks);
-        while left != 0 {
-            let held = &self.player.relics[left.trailing_zeros() as usize];
-            left &= left - 1;
-            if V::decide_hook(
-                crate::combat::Heard::<V>::Relic {
-                    state: &held.state,
-                    fight: None,
-                    belt: self.player.relics.relics(),
-                },
-                hook,
-            )
-            .is_decision_and(|allowed| !allowed)
-            {
-                return true;
-            }
+        let model_hook = sts2_core::ModelHook::ShouldProcurePotion;
+        let mut refused = false;
+        self.run_each(model_hook, |listener, _| {
+            refused |= V::decide_hook(listener, hook).is_decision_and(|allowed| !allowed);
+        });
+        if refused {
+            return true;
         }
         false
     }
@@ -7014,24 +7038,11 @@ impl<V: Rules> State<V> {
     /// option unless a relic answers no, and then only the chosen one goes.
     fn rest_option_through(&mut self) {
         let hook = sts2_core::DecisionHook::ShouldDisableRemainingRestSiteOptions;
-        let mut left = self
-            .player
-            .relics
-            .hearing_hook(sts2_core::ModelHook::ShouldDisableRemainingRestSiteOptions);
+        let model_hook = sts2_core::ModelHook::ShouldDisableRemainingRestSiteOptions;
         let mut disable = true;
-        while left != 0 {
-            let held = &self.player.relics[left.trailing_zeros() as usize];
-            left &= left - 1;
-            disable &= !V::decide_hook(
-                crate::combat::Heard::<V>::Relic {
-                    state: &held.state,
-                    fight: None,
-                    belt: self.player.relics.relics(),
-                },
-                hook,
-            )
-            .is_decision_and(|disable| !disable);
-        }
+        self.run_each(model_hook, |listener, _| {
+            disable &= !V::decide_hook(listener, hook).is_decision_and(|disable| !disable);
+        });
         let Phase::RestSite {
             options,
             chosen,
@@ -7055,22 +7066,11 @@ impl<V: Rules> State<V> {
     /// answer yes to.
     fn refills(&self) -> bool {
         let hook = sts2_core::DecisionHook::ShouldRefillMerchantEntry;
-        let hooks = sts2_core::Overrides::of(sts2_core::ModelHook::ShouldRefillMerchantEntry);
-        let mut left = self.player.relics.hearing(hooks);
+        let model_hook = sts2_core::ModelHook::ShouldRefillMerchantEntry;
         let mut refills = false;
-        while left != 0 {
-            let held = &self.player.relics[left.trailing_zeros() as usize];
-            left &= left - 1;
-            refills |= V::decide_hook(
-                crate::combat::Heard::<V>::Relic {
-                    state: &held.state,
-                    fight: None,
-                    belt: self.player.relics.relics(),
-                },
-                hook,
-            )
-            .is_decision_and(|refill| refill);
-        }
+        self.run_each(model_hook, |listener, _| {
+            refills |= V::decide_hook(listener, hook).is_decision_and(|refill| refill);
+        });
         refills
     }
 
@@ -7197,22 +7197,11 @@ impl<V: Rules> State<V> {
     /// relic on the belt can answer yes to.
     pub(super) fn potion_forced(&self, room: V::RoomType) -> bool {
         let hook = sts2_core::DecisionHook::ShouldForcePotionReward { room };
-        let hooks = sts2_core::Overrides::of(sts2_core::ModelHook::ShouldForcePotionReward);
-        let mut left = self.player.relics.hearing(hooks);
+        let model_hook = sts2_core::ModelHook::ShouldForcePotionReward;
         let mut forced = false;
-        while left != 0 {
-            let held = &self.player.relics[left.trailing_zeros() as usize];
-            left &= left - 1;
-            forced |= V::decide_hook(
-                crate::combat::Heard::<V>::Relic {
-                    state: &held.state,
-                    fight: None,
-                    belt: self.player.relics.relics(),
-                },
-                hook,
-            )
-            .is_decision_and(|force| force);
-        }
+        self.run_each(model_hook, |listener, _| {
+            forced |= V::decide_hook(listener, hook).is_decision_and(|force| force);
+        });
         forced
     }
 
@@ -7220,28 +7209,11 @@ impl<V: Rules> State<V> {
     /// or any modifier can answer no to.
     fn card_removal_allowed(&self) -> bool {
         let hook = sts2_core::DecisionHook::ShouldAllowMerchantCardRemoval;
-        let hooks = sts2_core::Overrides::of(sts2_core::ModelHook::ShouldAllowMerchantCardRemoval);
-        let mut left = self.player.relics.hearing(hooks);
+        let model_hook = sts2_core::ModelHook::ShouldAllowMerchantCardRemoval;
         let mut allowed = true;
-        while left != 0 {
-            let held = &self.player.relics[left.trailing_zeros() as usize];
-            left &= left - 1;
-            allowed &= !V::decide_hook(
-                crate::combat::Heard::<V>::Relic {
-                    state: &held.state,
-                    fight: None,
-                    belt: self.player.relics.relics(),
-                },
-                hook,
-            )
-            .is_decision_and(|allowed| !allowed);
-        }
-        for modifier in self.shared.modifiers.iter().map(|entry| entry.modifier) {
-            if sts2_core::ModifierTable::overrides(modifier).intersects(hooks) {
-                allowed &= !V::decide_hook(crate::combat::Heard::<V>::Modifier(modifier), hook)
-                    .is_decision_and(|allowed| !allowed);
-            }
-        }
+        self.run_each(model_hook, |listener, _| {
+            allowed &= !V::decide_hook(listener, hook).is_decision_and(|allowed| !allowed);
+        });
         allowed
     }
 
@@ -7249,30 +7221,11 @@ impl<V: Rules> State<V> {
     /// modifier can answer yes to.
     fn free_travel(&self) -> bool {
         let hook = sts2_core::DecisionHook::ShouldAllowFreeTravel;
-        let hooks = sts2_core::Overrides::of(sts2_core::ModelHook::ShouldAllowFreeTravel);
-        let mut left = self.player.relics.hearing(hooks);
+        let model_hook = sts2_core::ModelHook::ShouldAllowFreeTravel;
         let mut free = false;
-        while left != 0 {
-            let held = &self.player.relics[left.trailing_zeros() as usize];
-            left &= left - 1;
-            free |= V::decide_hook(
-                crate::combat::Heard::<V>::Relic {
-                    state: &held.state,
-                    fight: None,
-                    belt: self.player.relics.relics(),
-                },
-                hook,
-            )
-            .is_decision_and(|allowed| allowed);
-        }
-        for modifier in self.shared.modifiers.iter().map(|entry| entry.modifier) {
-            if sts2_core::ModifierTable::overrides(modifier)
-                .contains(sts2_core::ModelHook::ShouldAllowFreeTravel)
-            {
-                free |= V::decide_hook(crate::combat::Heard::<V>::Modifier(modifier), hook)
-                    .is_decision_and(|allowed| allowed);
-            }
-        }
+        self.run_each(model_hook, |listener, _| {
+            free |= V::decide_hook(listener, hook).is_decision_and(|allowed| allowed);
+        });
         free
     }
 

@@ -108,9 +108,27 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
         enchantments.iter().map(|row| row[1].as_str()),
         &overrides,
     );
+    // Every hook some enchantment's class overrides, so a hook none can hear
+    // skips the walk over the deck.
+    let mut heard = String::from("sts2_core::Overrides::NONE");
+    let mut seen: Vec<sts2_core::ModelHook> = Vec::new();
+    for row in &enchantments {
+        for hook in overrides.get(&row[1]).into_iter().flatten() {
+            if !seen.contains(hook) {
+                seen.push(*hook);
+                write!(heard, ".with(sts2_core::ModelHook::{hook:?})").unwrap();
+            }
+        }
+    }
     writeln!(
         out,
-        "\nimpl sts2_core::EnchantmentTable for Enchantment {{\n    fn overrides(self) -> sts2_core::Overrides {{\n        OVERRIDES[self as usize]\n    }}\n}}"
+        "\n/// Every hook some enchantment's class overrides.\n\
+         static HEARD_BY_ANY: sts2_core::Overrides = {heard};"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "\nimpl sts2_core::EnchantmentTable for Enchantment {{\n    fn overrides(self) -> sts2_core::Overrides {{\n        OVERRIDES[self as usize]\n    }}\n\n    fn heard_by_any() -> sts2_core::Overrides {{\n        HEARD_BY_ANY\n    }}\n}}"
     )
     .unwrap();
 

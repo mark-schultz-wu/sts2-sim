@@ -1175,6 +1175,48 @@ pub(crate) fn deck_event_hook<V: crate::Build>(
                 asked.push(sts2_core::HookEffect::RemoveFromDeck);
             }
         }
+        // `SpoilsMap.ModifyGeneratedMap`: a `SpoilsActMap` in place of its
+        // act's own.
+        (__c0, _, sts2_core::EventHook::GeneratedMap { act }) if __c0 == V::Card::SPOILS_MAP => {
+            if act == SPOILS_ACT {
+                asked.push(sts2_core::HookEffect::SpoilsMap);
+            }
+        }
+        // `SpoilsMap.ModifyGeneratedMapLate`: `SpoilsCoord` on the act's first
+        // Treasure point, where `AfterMapGenerated` puts its quest and the
+        // chest pays its `GoldVar(600)`.
+        (__c0, _, sts2_core::EventHook::GeneratedMapLate { act })
+            if __c0 == V::Card::SPOILS_MAP =>
+        {
+            if act == SPOILS_ACT {
+                asked.push(sts2_core::HookEffect::SpoilsQuest {
+                    card,
+                    gold: SPOILS_GOLD,
+                });
+            }
+        }
+        // `SpoilsMap.AfterMapGenerated` puts its quest on `SpoilsCoord`, which
+        // the run keeps.
+        (__c0, _, sts2_core::EventHook::MapGenerated { .. }) if __c0 == V::Card::SPOILS_MAP => {}
+        // `LanternKey.ModifyUnknownMapPointRoomTypes`: nothing but an event in
+        // its act.
+        (__c0, _, sts2_core::EventHook::UnknownRoomTypes { act })
+            if __c0 == V::Card::LANTERN_KEY =>
+        {
+            if act == LANTERN_KEY_ACT {
+                asked.push(sts2_core::HookEffect::EventRoomsOnly);
+            }
+        }
+        // `ByrdonisEgg.TryModifyRestSiteOptions`: the Hatch option.
+        (__c0, _, sts2_core::EventHook::RestSiteOptions) if __c0 == V::Card::BYRDONIS_EGG => {
+            asked.push(sts2_core::HookEffect::OfferRestOption(
+                <V::RestSiteOption as crate::ids::RestSiteOptionIds>::HATCH,
+            ));
+        }
+        // `SovereignBlade.AfterCardChangedPiles` only plays the forge's
+        // effects.
+        (__c0, _, sts2_core::EventHook::AddedToDeck { .. }) if __c0 == V::Card::SOVEREIGN_BLADE => {
+        }
         (card, _, hook) => unimplemented!("what {card:?} in the deck does for {hook:?}"),
     }
 }
@@ -1255,74 +1297,11 @@ pub(crate) fn resume_chosen<V: crate::Build, F: Fight<V>>(
 /// The act, counted from zero, in which the Lantern Key answers.
 const LANTERN_KEY_ACT: usize = 2;
 
-/// `ModifyUnknownMapPointRoomTypes` for a card in the deck. The Lantern Key
-/// leaves nothing but an event in its act.
-///
-/// # Panics
-///
-/// Any other card, which the run asks only when its class overrides the hook.
-pub(crate) fn narrows_unknown_rooms<V: crate::Build>(card: V::Card, act: usize) -> bool {
-    match card {
-        __c0 if __c0 == V::Card::LANTERN_KEY => act == LANTERN_KEY_ACT,
-        card => unimplemented!("what {card:?} does to an unknown room"),
-    }
-}
-
 /// `SpoilsMap.SpoilsActIndex`, which `AfterCreated` sets.
 const SPOILS_ACT: usize = 1;
 
 /// The Spoils Map's `GoldVar(600)`.
 const SPOILS_GOLD: Number = 600;
-
-/// `ModifyGeneratedMap` for a card in the deck. The Spoils Map puts a
-/// `SpoilsActMap` in place of its act's own.
-///
-/// # Panics
-///
-/// Any other card, which the run asks only when its class overrides the hook.
-pub(crate) fn modify_generated_map<V: crate::Build>(
-    card: V::Card,
-    act: usize,
-) -> Option<sts2_core::ReplacedMap> {
-    match card {
-        __c0 if __c0 == V::Card::SPOILS_MAP => {
-            (act == SPOILS_ACT).then_some(sts2_core::ReplacedMap::Spoils)
-        }
-        card => unimplemented!("what {card:?} does to a generated map"),
-    }
-}
-
-/// `ModifyGeneratedMapLate` for a card in the deck: the gold its quest pays,
-/// where it sets `SpoilsCoord`. The Spoils Map sets it to its act's first
-/// Treasure point, where `AfterMapGenerated` puts its quest and the chest pays
-/// its `GoldVar(600)`.
-///
-/// # Panics
-///
-/// Any other card, which the run asks only when its class overrides the hook.
-pub(crate) fn modify_generated_map_late<V: crate::Build>(
-    card: V::Card,
-    act: usize,
-) -> Option<Number> {
-    match card {
-        __c0 if __c0 == V::Card::SPOILS_MAP => (act == SPOILS_ACT).then_some(SPOILS_GOLD),
-        card => unimplemented!("what {card:?} does late in a map's making"),
-    }
-}
-
-/// `AfterMapGenerated` for a card in the deck. The Spoils Map puts its quest
-/// on `SpoilsCoord`, which [`modify_generated_map_late`] sets in its own act
-/// alone. The run keeps that point.
-///
-/// # Panics
-///
-/// Any other card, which the run asks only when its class overrides the hook.
-pub(crate) fn after_map_generated<V: crate::Build>(card: V::Card, _act: usize) {
-    match card {
-        __c0 if __c0 == V::Card::SPOILS_MAP => {}
-        card => unimplemented!("what {card:?} does once a map is generated"),
-    }
-}
 
 /// `ModifyNextEvent` for a card in the deck. The Lantern Key sends its act's
 /// next event to War Historian Repy.

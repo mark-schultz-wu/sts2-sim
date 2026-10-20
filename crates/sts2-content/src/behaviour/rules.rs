@@ -721,28 +721,6 @@ pub(crate) fn computed_card_target<V: crate::Build>(
     crate::behaviour::cards::computed_target::<V>(card, powers)
 }
 
-pub(crate) fn deck_card_narrows_unknown_rooms<V: crate::Build>(card: V::Card, act: usize) -> bool {
-    crate::behaviour::cards::narrows_unknown_rooms::<V>(card, act)
-}
-
-pub(crate) fn deck_card_modify_generated_map<V: crate::Build>(
-    card: V::Card,
-    act: usize,
-) -> Option<sts2_core::ReplacedMap> {
-    crate::behaviour::cards::modify_generated_map::<V>(card, act)
-}
-
-pub(crate) fn deck_card_modify_generated_map_late<V: crate::Build>(
-    card: V::Card,
-    act: usize,
-) -> Option<i32> {
-    crate::behaviour::cards::modify_generated_map_late::<V>(card, act)
-}
-
-pub(crate) fn deck_card_after_map_generated<V: crate::Build>(card: V::Card, act: usize) {
-    crate::behaviour::cards::after_map_generated::<V>(card, act);
-}
-
 pub(crate) fn deck_card_next_event<V: crate::Build>(
     card: V::Card,
     act: usize,

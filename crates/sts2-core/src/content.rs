@@ -1251,6 +1251,9 @@ pub trait EnchantmentTable: Copy {
     /// measured them. A card carrying it hears them too. See
     /// [`PowerTable::overrides`].
     fn overrides(self) -> Overrides;
+
+    /// Every hook some enchantment's class in the build overrides.
+    fn heard_by_any() -> Overrides;
 }
 
 /// What a table says about a run modifier, beyond its row.
@@ -1728,9 +1731,9 @@ pub trait RestKinds<V: ContentVersion>: std::fmt::Debug + Copy + Eq + 'static {
     ///
     /// `RestSiteOption.Generate` opens with `HEAL` and `SMITH`, adds `MEND`
     /// for a second player, and then runs `TryModifyRestSiteOptions`. That
-    /// hook is why the list is the build's answer and not a constant. The
-    /// belt answers it first, with `from_belt`, and then the deck.
-    fn offered(from_belt: &[Self], deck: &[crate::CardIdent<V>]) -> Vec<Self>;
+    /// hook is why the list is the build's answer and not a constant. Its
+    /// listeners add `added`, in the order they answered.
+    fn offered(added: &[Self]) -> Vec<Self>;
 
     /// `RestSiteOption.OnSelect` for an option whose selection is something
     /// the run carries out: `HATCH` obtains Byrdpip.
@@ -4513,6 +4516,11 @@ pub enum EventHook<V: ContentVersion> {
         /// Whether a `CardReward` is among them.
         card_reward: bool,
     },
+    /// `AfterMapGenerated`, once an act's map is made.
+    MapGenerated {
+        /// `RunState.CurrentActIndex`.
+        act: usize,
+    },
 }
 
 impl<V: ContentVersion> EventHook<V> {
@@ -4555,6 +4563,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::UnknownRoomTypes { .. } => ModelHook::ModifyUnknownMapPointRoomTypes,
             EventHook::GeneratedMap { .. } => ModelHook::ModifyGeneratedMap,
             EventHook::GeneratedMapLate { .. } => ModelHook::ModifyGeneratedMapLate,
+            EventHook::MapGenerated { .. } => ModelHook::AfterMapGenerated,
             EventHook::ActEntered => ModelHook::AfterActEntered,
             EventHook::CardRewardCreationOptions { .. } => {
                 ModelHook::ModifyCardRewardCreationOptions
@@ -5189,14 +5198,6 @@ pub enum DeckAct<V: ContentVersion> {
         amount: u8,
         kind: Option<CardKind>,
     },
-}
-
-/// A map a hook puts in place of an act's own.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ReplacedMap {
-    /// `SpoilsActMap`: the paths narrow to one treasure seven rows from the
-    /// top, off the `spoils_map` stream.
-    Spoils,
 }
 
 /// One stream to draw from: one of the run's, one of the player's, or the
@@ -6258,6 +6259,19 @@ pub enum HookEffect<V: ContentVersion> {
         count: usize,
         stream: Stream<V>,
     },
+    /// `ModifyGeneratedMap` putting a `SpoilsActMap` in place of the act's
+    /// own: the paths narrow to one treasure seven rows from the top, off the
+    /// `spoils_map` stream.
+    SpoilsMap,
+    /// `ModifyGeneratedMapLate` setting the Spoils Map's `SpoilsCoord` to the
+    /// map's first Treasure point, where its quest pays `gold`.
+    SpoilsQuest {
+        card: V::Card,
+        gold: V::Number,
+    },
+    /// `ModifyUnknownMapPointRoomTypes` leaving an unknown room nothing but
+    /// an event.
+    EventRoomsOnly,
 }
 
 /// One build's relic models, which is what a run holds a relic as.
@@ -7875,41 +7889,6 @@ pub trait Rules: Hooks + Engine {
     ///
     /// A card whose override nobody has ported.
     fn computed_card_target(card: Self::Card, powers: &[crate::Stack<Self>]) -> Self::TargetType;
-
-    /// `ModifyUnknownMapPointRoomTypes` for a card in the deck, in the act
-    /// counted from zero: whether it leaves an unknown room nothing but an
-    /// event.
-    ///
-    /// # Panics
-    ///
-    /// A card whose override nobody has ported.
-    fn deck_card_narrows_unknown_rooms(card: Self::Card, act: usize) -> bool;
-
-    /// `ModifyGeneratedMap` for a card in the deck, in the act counted from
-    /// zero. The map it puts in place of the act's own, or nothing where it
-    /// leaves that one.
-    ///
-    /// # Panics
-    ///
-    /// A card whose override nobody has ported.
-    fn deck_card_modify_generated_map(card: Self::Card, act: usize) -> Option<ReplacedMap>;
-
-    /// `ModifyGeneratedMapLate` for a card in the deck, in the act counted
-    /// from zero. Where it sets the Spoils Map's `SpoilsCoord`, the map's
-    /// first Treasure point, the gold its `OnQuestComplete` pays there.
-    ///
-    /// # Panics
-    ///
-    /// A card whose override nobody has ported.
-    fn deck_card_modify_generated_map_late(card: Self::Card, act: usize) -> Option<Self::Number>;
-
-    /// `AfterMapGenerated` for a card in the deck, in the act counted from
-    /// zero.
-    ///
-    /// # Panics
-    ///
-    /// A card whose override does something nobody has ported.
-    fn deck_card_after_map_generated(card: Self::Card, act: usize);
 
     /// `ModifyNextEvent` for a card in the deck: the event it puts in place
     /// of `event`, which is `event` where it changes nothing.

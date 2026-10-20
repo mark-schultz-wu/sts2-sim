@@ -1258,28 +1258,6 @@ macro_rules! rules {
                     crate::behaviour::rules::computed_card_target::<Self>(card, powers)
                 }
 
-                fn deck_card_narrows_unknown_rooms(card: Self::Card, act: usize) -> bool {
-                    crate::behaviour::rules::deck_card_narrows_unknown_rooms::<Self>(card, act)
-                }
-
-                fn deck_card_modify_generated_map(
-                    card: Self::Card,
-                    act: usize,
-                ) -> Option<ReplacedMap> {
-                    crate::behaviour::rules::deck_card_modify_generated_map::<Self>(card, act)
-                }
-
-                fn deck_card_modify_generated_map_late(
-                    card: Self::Card,
-                    act: usize,
-                ) -> Option<Self::Number> {
-                    crate::behaviour::rules::deck_card_modify_generated_map_late::<Self>(card, act)
-                }
-
-                fn deck_card_after_map_generated(card: Self::Card, act: usize) {
-                    crate::behaviour::rules::deck_card_after_map_generated::<Self>(card, act)
-                }
-
                 fn deck_card_next_event(
                     card: Self::Card,
                     act: usize,
