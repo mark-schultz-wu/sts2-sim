@@ -22,12 +22,12 @@
 //! them err the same way, towards computed. Marking a constant as computed
 //! costs one method, and the reverse costs a divergence nobody can see.
 
-mod event_options;
 mod generated;
 mod keywords;
 mod rest_site;
 
-pub use event_options::EventOptionId;
+/// An option an event offers, as every build spells it.
+pub type EventOptionId = crate::behaviour::EventOptionId<V0_111_0>;
 pub use generated::*;
 
 use sts2_core::Version;
@@ -72,7 +72,8 @@ impl sts2_core::ContentVersion for V0_111_0 {
         parts
     }
 
-    type EventOptionId = event_options::EventOptionId;
+    type EventOptionId = EventOptionId;
+    type EventOption = generated::events::EventOption;
 
     type Number = i32;
     type Health = i32;

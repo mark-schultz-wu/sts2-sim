@@ -50,6 +50,23 @@ pub(crate) fn resume<F: Fight<V>>(fight: &mut F, at: Resume, answer: Taken<V>) -
 }
 
 impl crate::build::OwnRules for V {
+    type OwnEvents = events::OwnEvents;
+
+    fn own_event_allowed(
+        event: <V as sts2_core::ContentVersion>::Event,
+        run: &impl sts2_core::EventView<V>,
+    ) -> Option<bool> {
+        events::allowed(event, run)
+    }
+
+    fn own_event_enter<R: sts2_core::rng::GameRng>(
+        event: <V as sts2_core::ContentVersion>::Event,
+        run: &impl sts2_core::EventView<V>,
+        rng: &mut R,
+    ) -> Option<events::State> {
+        events::enter(event, run, rng)
+    }
+
     fn own_relic_event_hook(
         state: &mut crate::behaviour::relics::State<V>,
         hook: sts2_core::EventHook<V>,

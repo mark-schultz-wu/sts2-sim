@@ -7,6 +7,7 @@
 pub(crate) mod acts;
 pub(crate) mod enchantments;
 pub(crate) mod encounters;
+pub mod events;
 pub(crate) mod modifiers;
 pub(crate) mod monsters;
 pub(crate) mod orbs;
@@ -15,6 +16,41 @@ pub(crate) mod powers;
 pub(crate) mod relics;
 
 use sts2_core::{CardAt, CardKind, Change, CostPool, Fight, Lasting, Pile, RunStreamKinds};
+
+/// An option an event offers.
+///
+/// An ancient offers relics, and its keys name the relic. The Architect's
+/// lines and a bare `PROCEED` name no page. Every other option is one its
+/// page names, which the localisation table lists.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EventOptionId<V: sts2_core::ContentVersion> {
+    Relic(V::Relic),
+    Said(V::EventOption),
+    /// A line of The Architect's dialogue, `<event>.dialogue.<line>`, which
+    /// moves it on to the next.
+    Dialogue(u8),
+    /// A bare `PROCEED`, which no page names.
+    Proceed,
+    /// The option a run modifier gives Neow, whose key is the modifier's id.
+    Modifier(V::Modifier),
+}
+
+impl<V: sts2_core::ContentVersion> sts2_core::EventOptionKinds<V> for EventOptionId<V> {
+    fn from_relic(relic: V::Relic) -> Self {
+        Self::Relic(relic)
+    }
+
+    fn relic(self) -> Option<V::Relic> {
+        match self {
+            Self::Relic(relic) => Some(relic),
+            Self::Said(_) | Self::Modifier(_) | Self::Dialogue(_) | Self::Proceed => None,
+        }
+    }
+
+    fn from_modifier(modifier: V::Modifier) -> Self {
+        Self::Modifier(modifier)
+    }
+}
 
 /// What a fight's card writes on its deck version.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

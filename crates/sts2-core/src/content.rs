@@ -6979,6 +6979,9 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
 
     type EventOptionId: crate::EventOptionKinds<Self>;
 
+    /// An option an event's page names, as this build generates them.
+    type EventOption: Copy + Eq + std::hash::Hash + std::fmt::Debug + 'static;
+
     /// A signed amount in this build's live game state.
     type Number: num_traits::PrimInt
         + num_traits::Signed

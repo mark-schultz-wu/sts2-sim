@@ -54,7 +54,7 @@ measured 12,264 instructions a step before and 12,184 after. Every
 recorded run still matches after each move.
 
 The orbs, enchantments, modifiers, acts, encounters, potions, relics,
-powers and monsters are shared. The rest: events, and the cards, pool by
+powers, monsters and events are shared. The rest: the cards, pool by
 pool. A move or play the build's codegen wrote stays the build's, and a
 shared rule reaches it through `OwnRules`, as the monsters' scripts are.
 
@@ -66,7 +66,9 @@ shared rule reaches it through `OwnRules`, as the monsters' scripts are.
 - A rule naming content one build lacks stays in that build. The shared
   dispatcher hands it over through a hook on `OwnRules`, and answers
   itself when the hook passes. Diamond Diadem's and Outbreak's powers
-  are the first.
+  are the first. Amalgamator, Battleworn Dummy and Tinker Time are the
+  build's own events, one `EventBehavior` the shared events hand their
+  states to.
 - A lookup into a row that names content is a method on `Tables`.
 - A move can shift what the compiler inlines. The relics' dispatchers
   inlined into the walk cost 3.9%, and stay out of line. The powers did

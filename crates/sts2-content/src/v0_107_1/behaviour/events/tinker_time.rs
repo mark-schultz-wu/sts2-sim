@@ -110,7 +110,7 @@ impl EventBehavior<V> for TinkerTime {
                 .map(|&at| (RIDERS[kind][at].0, false))
                 .collect(),
         };
-        super::page(Event::TinkerTime, &options, state.chosen)
+        crate::behaviour::events::page::<V>(Event::TinkerTime, &options, state.chosen)
     }
 
     /// `ChooseCardType`: two of the types, drawn off the event's stream. A

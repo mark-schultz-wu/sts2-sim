@@ -32,7 +32,7 @@ impl EventBehavior<V> for Amalgamator {
     }
 
     fn observe(&self, state: &State, _run: &impl EventView<V>) -> Room<V> {
-        super::page(
+        crate::behaviour::events::page::<V>(
             Event::Amalgamator,
             &[
                 (Said::AmalgamatorCombineStrikes, false),
