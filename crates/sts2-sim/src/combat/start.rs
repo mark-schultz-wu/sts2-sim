@@ -143,6 +143,7 @@ pub(crate) fn enter<V: Rules>(
         notes: smallvec::SmallVec::new(),
         asking: None,
         deferred: super::live::Deferrals::new(),
+        paused: Vec::new(),
     });
 
     // Id zero, and the enemies from one. `CombatId` counts from the player.

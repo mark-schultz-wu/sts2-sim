@@ -132,6 +132,13 @@ impl<V: Rules> State<V> {
         if self.carry_out(effects).is_some() {
             unimplemented!("a potion drunk in a fight that asks the run a question");
         }
+        // What a death's listener asked inside the potion, as the decision
+        // ends. A play's comes up as `turn_ended_by_play` looks.
+        if ended.is_none()
+            && let Some(fighting) = self.fighting()
+        {
+            fighting.live.ask_paused();
+        }
         Ok(Ok(self.settle(ended, since)))
     }
 
@@ -147,6 +154,7 @@ impl<V: Rules> State<V> {
             let Some(fighting) = self.fighting() else {
                 return Ok(None);
             };
+            fighting.live.ask_paused();
             if !fighting.live.ending_turn() || fighting.live.question().is_some() {
                 return Ok(None);
             }

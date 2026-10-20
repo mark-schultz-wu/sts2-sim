@@ -1,0 +1,27 @@
+# Bash, a generated play, applies Vulnerable before Gremlin Horn's question.
+# Strength lets the hit kill the smallest slime, and Gremlin Horn draws as
+# it dies. The draw pile is empty, so the draw shuffles, and Stratagem
+# asks for a card of it. `Hook.AfterDeath` gives each listener a
+# `HookPlayerChoiceContext` of its own, so the question pauses Gremlin Horn
+# alone. The play runs to its end, and the question comes after it.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"GREMLIN_HORN"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":10,"target":0}
+{"cmd":"power","power":"STRATAGEM_POWER","amount":1,"target":0}
+{"cmd":"grant","card":"ACROBATICS"}
+{"cmd":"play_card","index":5}
+{"cmd":"answer","pick":0}
+{"cmd":"answer","done":true}
+{"cmd":"grant","card":"PREPARED"}
+{"cmd":"play_card","index":7}
+{"cmd":"answer","pick":0}
+{"cmd":"answer","done":true}
+{"cmd":"grant","card":"PREPARED"}
+{"cmd":"play_card","index":7}
+{"cmd":"answer","pick":0}
+{"cmd":"answer","done":true}
+{"cmd":"grant","card":"BASH"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"answer","pick":0}
+{"cmd":"answer","done":true}

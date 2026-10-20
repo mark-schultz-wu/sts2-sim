@@ -29,22 +29,22 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ## Open
 
-### 1. A death's listener asking inside a play
-
-`Hook.AfterDeath` and `AfterDiedToDoom` give each listener a
-`HookPlayerChoiceContext` of its own. A question there pauses only that
-listener. The play that killed runs on to its end, and the question waits
-behind it. The sim stops at `an effect of … running on past a question`.
-The Draft census shows it on C000000023 IRONCLAD: Rampage kills a slime,
-Gremlin Horn draws, the draw shuffles, and Stratagem asks.
-
-### 2. A question before a hit lands
+### 1. A question before a hit lands
 
 `BeforeDamageReceived` hands its listeners the hit's own context. Thorns'
 damage back can draw through Centennial Puzzle, and the draw's shuffle
 asks. The hit then lands once the answer is in, then the attack's other
 hits, then the card's code after it. The sim lands the hit first. The
 Ironclad's waits after an attack get their scenarios once this lands.
+
+### 2. A death's listener's question over a pile that changed
+
+A question a death's listener asks inside a play waits until the play is
+over. `CardSelectCmd` lists the pile's cards as it asks, and the play can
+change the pile before the question comes up. Two deaths in one play do
+it, when Gremlin Horn's second draw takes a card the first one's
+Stratagem listed. The sim keeps the list it asked over and stops where
+the pile changed. It needs a question that offers the cards as listed.
 
 ### 3. Card waits in the other pools
 

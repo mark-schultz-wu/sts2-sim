@@ -147,6 +147,18 @@ pub(super) enum Asked<V: Rules> {
     },
 }
 
+/// A question a death's listener asked inside a play, set aside until the
+/// decision is over.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct Paused<V: Rules> {
+    pub(super) asking: Asking<V>,
+    /// What waits behind it.
+    pub(super) waiting: Vec<Deferred<V>>,
+    /// The cards of the pile it asks about, as they stood when it asked.
+    /// `CardSelectCmd` lists them then.
+    pub(super) listed: Option<Vec<CardId<V>>>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct Asking<V: Rules> {
     pub(super) then: Then<V>,
@@ -343,6 +355,37 @@ impl<V: Rules> Deferrals<V> {
     /// Close the open batch, so what comes next opens one that runs first.
     pub(super) fn close(&mut self) {
         self.batch = None;
+    }
+
+    /// Open a batch of its own at the end, for [`Deferrals::take_fresh`] to
+    /// take back. What comes back is what to hand to that.
+    pub(super) fn open_fresh(&mut self) -> (usize, Option<usize>) {
+        (self.waiting.len(), self.batch.take())
+    }
+
+    /// What was deferred since [`Deferrals::open_fresh`] handed back
+    /// `fresh`, taken out, with the batch that was open then open again.
+    pub(super) fn take_fresh(&mut self, (len, batch): (usize, Option<usize>)) -> Vec<Deferred<V>> {
+        let taken = self.waiting.split_off(len);
+        self.batch = batch;
+        taken
+    }
+
+    /// Back to the batch that was open when [`Deferrals::open_fresh`]
+    /// handed back `fresh`, with nothing deferred since taken.
+    pub(super) fn keep_fresh(&mut self, (_, batch): (usize, Option<usize>)) {
+        self.batch = batch;
+    }
+
+    /// Whether nothing waits.
+    fn is_empty(&self) -> bool {
+        self.waiting.is_empty()
+    }
+
+    /// `taken` to run next, in the order it was deferred in.
+    fn put_back(&mut self, taken: Vec<Deferred<V>>) {
+        self.close();
+        self.waiting.extend(taken);
     }
 
     /// The next entry to run, which closes the open batch first.
@@ -2512,6 +2555,12 @@ pub(crate) struct Live<V: Rules> {
     pub(super) asking: Option<Asking<V>>,
     /// What waits behind that answer.
     pub(super) deferred: Deferrals<V>,
+    /// Questions a death's listener asked inside a play, each with what
+    /// waits behind it, in the order they were asked. `Hook.AfterDeath`
+    /// gives each listener a `HookPlayerChoiceContext`, whose question
+    /// pauses only that listener. The play runs on, and the question is
+    /// asked once the decision is over.
+    pub(super) paused: Vec<Paused<V>>,
 }
 
 /// How many history entries one turn holds before its list reaches the heap:
@@ -2768,6 +2817,7 @@ impl<V: Rules> Clone for Live<V> {
             notes: self.notes.clone(),
             asking: self.asking.clone(),
             deferred: self.deferred.clone(),
+            paused: self.paused.clone(),
             ..*self
         }
     }
@@ -2824,6 +2874,7 @@ impl<V: Rules> Clone for Live<V> {
             notes,
             asking,
             deferred,
+            paused,
         } = self;
         *character = source.character;
         *ascension = source.ascension;
@@ -2873,6 +2924,7 @@ impl<V: Rules> Clone for Live<V> {
         notes.clone_from(&source.notes);
         asking.clone_from(&source.asking);
         deferred.clone_from(&source.deferred);
+        paused.clone_from(&source.paused);
     }
 }
 
@@ -3024,6 +3076,43 @@ impl<V: Rules> Live<V> {
     /// Put `deferred` behind the question asked. See [`Deferrals::push`].
     pub(super) fn defer(&mut self, deferred: Deferred<V>) {
         self.deferred.push(deferred);
+    }
+
+    /// The first question a death's listener asked inside a play, once
+    /// nothing else waits: the paused listener's `GameAction`, which runs
+    /// after the play's own.
+    #[inline]
+    pub(crate) fn ask_paused(&mut self) {
+        if self.paused.is_empty() {
+            return;
+        }
+        self.ask_first_paused();
+    }
+
+    /// [`Live::ask_paused`] once a question waits behind the play.
+    #[cold]
+    fn ask_first_paused(&mut self) {
+        if self.asking.is_some() || !self.deferred.is_empty() {
+            return;
+        }
+        let Paused {
+            asking,
+            waiting,
+            listed,
+        } = self.paused.remove(0);
+        if let (Some(listed), Asked::Pile { pile, .. }) = (&listed, &asking.question)
+            && !self
+                .cards
+                .iter(*pile)
+                .map(|held| held.id)
+                .eq(listed.iter().copied())
+        {
+            unimplemented!(
+                "a question listing its pile as it stood, which changed before it was asked"
+            )
+        }
+        self.asking = Some(asking);
+        self.deferred.put_back(waiting);
     }
 
     /// Whether the fight asked anything of the run since the last decision
@@ -3733,6 +3822,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             notes: smallvec::SmallVec::new(),
             asking: None,
             deferred: Deferrals::new(),
+            paused: Vec::new(),
         }
     }
 }
