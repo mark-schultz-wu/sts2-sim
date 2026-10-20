@@ -572,8 +572,31 @@ impl<V: Rules> Clone for Player<V> {
     }
 }
 
+/// What waits behind a question: an effect still to carry out, or the rest
+/// of a walk whose listener asked it.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) enum Then<V: Rules> {
+    Effect(sts2_core::HookEffect<V>),
+    Walk(RunWalking<V>),
+}
+
+impl<V: Rules> From<sts2_core::HookEffect<V>> for Then<V> {
+    fn from(effect: sts2_core::HookEffect<V>) -> Self {
+        Then::Effect(effect)
+    }
+}
+
+/// A walk outside a fight partway through: the hook, and the listeners the
+/// game listed as it began that it has still to ask.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct RunWalking<V: Rules> {
+    hook: sts2_core::EventHook<V>,
+    listed: RunListed<V>,
+}
+
 /// The listeners [`State::run_listed`] found, in the game's order: the deck's,
 /// then the belt's, then the rest.
+#[derive(Debug, Clone, PartialEq)]
 pub(super) struct RunListed<V: Rules> {
     deck: SmallVec<[RunListener<V>; 2]>,
     /// The listening slots, one bit a slot, the first slot lowest. Many
@@ -584,6 +607,19 @@ pub(super) struct RunListed<V: Rules> {
 }
 
 impl<V: Rules> RunListed<V> {
+    /// The first listener, taken off the list.
+    fn take_first(&mut self) -> Option<RunListener<V>> {
+        if !self.deck.is_empty() {
+            return Some(self.deck.remove(0));
+        }
+        if self.relics != 0 {
+            let slot = self.relics.trailing_zeros() as usize;
+            self.relics &= self.relics - 1;
+            return Some(RunListener::Relic { slot });
+        }
+        (!self.after.is_empty()).then(|| self.after.remove(0))
+    }
+
     /// Each listener, in order.
     pub(super) fn iter(&self) -> impl Iterator<Item = RunListener<V>> + '_ {
         let mut relics = self.relics;
@@ -603,14 +639,14 @@ impl<V: Rules> RunListed<V> {
 /// One listener `RunState.IterateHookListeners` lists outside a fight.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) enum RunListener<V: Rules> {
-    /// The deck card at `at`.
+    /// The deck card `id`.
     DeckCard {
-        at: usize,
+        id: sts2_core::DeckCardId,
         card: V::Card,
     },
-    /// The enchantment on the deck card at `at`.
+    /// The enchantment on the deck card `id`.
     Enchantment {
-        at: usize,
+        id: sts2_core::DeckCardId,
         enchanted: sts2_core::Enchanted<V>,
     },
     /// The relic in belt slot `slot`.
@@ -810,7 +846,7 @@ pub(super) enum Pickup<V: Rules> {
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct Asked<V: Rules> {
     pub(super) pickup: Pickup<V>,
-    pub(super) rest: SmallVec<[sts2_core::HookEffect<V>; 4]>,
+    pub(super) rest: SmallVec<[Then<V>; 4]>,
     /// The question this one interrupted, taken up again once this one and
     /// its rest are done. A relic taken off a reward screen asks from inside
     /// it, as `RewardsSet` awaits the relic's pickup.
@@ -1361,8 +1397,7 @@ impl<V: Rules> State<V> {
     ///
     /// A listener whose answer asks a question.
     fn act_entered(&mut self) {
-        let effects = self.notify_run(sts2_core::EventHook::ActEntered);
-        if self.carry_out(effects).is_some() {
+        if self.walk_run(sts2_core::EventHook::ActEntered).is_some() {
             unimplemented!("a question asked as an act is entered");
         }
     }
@@ -1544,58 +1579,23 @@ impl<V: Rules> State<V> {
     /// room is pushed and before it is entered. `point` is the map point's
     /// type, and `base` is whether the room is the point's first.
     ///
-    /// Only the deck's own cards hear it.
-    ///
     /// # Panics
     ///
-    /// A listener other than a deck card, or a card asking for anything but
-    /// its own transform.
+    /// A listener asking for anything but a deck card's own transform.
     pub(super) fn room_entering(&mut self, point: Option<V::MapPointType>, base: bool) {
-        use sts2_core::CardTable as _;
-
-        let listed = self.run_listed(sts2_core::ModelHook::BeforeRoomEntered);
-        if let Some(listener) =
-            (listed.iter()).find(|listener| !matches!(listener, RunListener::DeckCard { .. }))
-        {
-            unimplemented!("{listener:?} hearing BeforeRoomEntered");
-        }
-        if listed.iter().next().is_none() {
-            return;
-        }
         let hook = sts2_core::EventHook::RoomEntering { point, base };
-        let mut at = 0;
-        while at < self.player.deck.len() {
-            let card = self.player.deck[at].ident.card;
-            if !card
-                .overrides()
-                .contains(sts2_core::ModelHook::BeforeRoomEntered)
-            {
-                at += 1;
-                continue;
-            }
-            let mut asked = sts2_core::HookEffects::new();
-            V::deck_card_event_hook(
-                card,
-                &mut self.player.deck_mut()[at].state,
-                hook,
-                &mut asked,
-            );
-            let mut transformed = false;
-            for effect in asked {
-                match effect {
-                    // `CardCmd.TransformTo`: out of the deck, and the new
-                    // card at its end.
-                    sts2_core::HookEffect::TransformTo(into) => {
-                        self.act_on_deck(sts2_core::DeckAct::TransformInto(into), &[at]);
-                        transformed = true;
-                    }
-                    effect => unimplemented!("{card:?} in the deck asking for {effect:?}"),
+        self.walk_run_landing(hook, |state, listener, effect| match (listener, effect) {
+            // `CardCmd.TransformTo`: out of the deck, and the new card at its
+            // end.
+            (RunListener::DeckCard { id, .. }, sts2_core::HookEffect::TransformTo(into)) => {
+                if let Some(at) = state.player.deck.iter().position(|held| held.id == id) {
+                    state.act_on_deck(sts2_core::DeckAct::TransformInto(into), &[at]);
                 }
             }
-            if !transformed {
-                at += 1;
+            (listener, effect) => {
+                unimplemented!("{listener:?} asking for {effect:?} as a room is entered")
             }
-        }
+        });
     }
 
     /// Carry `act` out on the deck cards at `taken`, in the order they were
@@ -2223,12 +2223,24 @@ impl<V: Rules> State<V> {
     /// answer the way `AfterObtained` awaits it.
     pub(super) fn carry_out(
         &mut self,
-        effects: impl IntoIterator<Item = sts2_core::HookEffect<V>>,
+        effects: impl IntoIterator<Item = impl Into<Then<V>>>,
     ) -> Option<Asked<V>> {
         use sts2_core::HookEffect;
 
-        let mut effects = effects.into_iter();
-        while let Some(effect) = effects.next() {
+        let mut effects = effects.into_iter().map(Into::into);
+        while let Some(then) = effects.next() {
+            let effect = match then {
+                Then::Effect(effect) => effect,
+                // The rest of a walk a question parked, and what came after
+                // it once the walk is done.
+                Then::Walk(walking) => match self.walk_on(walking) {
+                    None => continue,
+                    Some(mut asked) => {
+                        asked.rest.extend(effects);
+                        return Some(asked);
+                    }
+                },
+            };
             let pickup = match effect {
                 // `DeckVersion`'s own setters, on the deck card while it is
                 // still in the deck.
@@ -3143,8 +3155,7 @@ impl<V: Rules> State<V> {
         // left to gain, so `AfterGoldGained` runs only after a gain.
         if gained > sts2_core::Decimal::ZERO {
             self.player.gold = self.player.gold + crate::combat::whole::<V>(gained);
-            let asked = self.notify_run(sts2_core::EventHook::GoldGained);
-            if let Some(asked) = self.carry_out(asked) {
+            if let Some(asked) = self.walk_run(sts2_core::EventHook::GoldGained) {
                 let pickup = asked.pickup;
                 unimplemented!("a relic asking for {pickup:?} as gold is gained");
             }
@@ -3416,13 +3427,12 @@ impl<V: Rules> State<V> {
         self.heal(healed);
         let max_hp =
             num_traits::cast(self.player.max_hp).expect("maximum health fits a game number");
-        let asked = self.notify_run(sts2_core::EventHook::RestSiteHeal { mimicked, max_hp });
-        if let Some(asked) = self.carry_out(asked) {
+        if let Some(asked) = self.walk_run(sts2_core::EventHook::RestSiteHeal { mimicked, max_hp })
+        {
             let pickup = asked.pickup;
             unimplemented!("a rest site's heal asking for {pickup:?}");
         }
-        let rewards = self.notify_run(sts2_core::EventHook::RestSiteHealRewards { mimicked });
-        self.carry_out(rewards)
+        self.walk_run(sts2_core::EventHook::RestSiteHealRewards { mimicked })
     }
 
     /// `RewardsSet.WithCustomRewards` and `GenerateWithoutOffering`, off
@@ -3843,24 +3853,17 @@ impl<V: Rules> State<V> {
             cloned: false,
             transformed,
         };
-        let mut asked = sts2_core::HookEffects::new();
-        let listed = self.run_listed(sts2_core::ModelHook::AfterCardChangedPiles);
-        for listener in listed.iter() {
-            self.ask_run_listener(listener, hook, &mut asked);
-            for effect in std::mem::take(&mut asked) {
-                match (listener, effect) {
-                    (copier, sts2_core::HookEffect::CopyIntoDeck(copies)) => {
-                        let copier = match copier {
-                            RunListener::Relic { slot } => Copier::Relic(slot),
-                            RunListener::Modifier { at, .. } => Copier::Modifier(at),
-                            copier => unimplemented!("{copier:?} copying a card into the deck"),
-                        };
-                        self.copy_into_deck(card, copies, copier);
-                    }
-                    (_, effect) => self.card_joined_deck(effect),
-                }
+        self.walk_run_landing(hook, |state, listener, effect| match effect {
+            sts2_core::HookEffect::CopyIntoDeck(copies) => {
+                let copier = match listener {
+                    RunListener::Relic { slot } => Copier::Relic(slot),
+                    RunListener::Modifier { at, .. } => Copier::Modifier(at),
+                    copier => unimplemented!("{copier:?} copying a card into the deck"),
+                };
+                state.copy_into_deck(card, copies, copier);
             }
-        }
+            effect => state.card_joined_deck(effect),
+        });
     }
 
     /// `RunState.CloneCard` of `card`, and the copy handed to `copier`. Then
@@ -3909,9 +3912,7 @@ impl<V: Rules> State<V> {
                 cloned: true,
                 transformed: false,
             };
-            for effect in self.notify_run(hook) {
-                self.card_joined_deck(effect);
-            }
+            self.walk_run_landing(hook, |state, _, effect| state.card_joined_deck(effect));
         }
     }
 
@@ -3958,15 +3959,15 @@ impl<V: Rules> State<V> {
         if V::Card::heard_by_any().intersects(hooks)
             || V::Enchantment::heard_by_any().intersects(hooks)
         {
-            for (at, held) in self.player.deck.iter().enumerate() {
-                let card = held.ident.card;
+            for held in self.player.deck.iter() {
+                let (id, card) = (held.id, held.ident.card);
                 if card.overrides().intersects(hooks) {
-                    listed.deck.push(RunListener::DeckCard { at, card });
+                    listed.deck.push(RunListener::DeckCard { id, card });
                 }
                 if let Some(enchanted) = held.ident.enchantment
                     && enchanted.enchantment.overrides().intersects(hooks)
                 {
-                    listed.deck.push(RunListener::Enchantment { at, enchanted });
+                    listed.deck.push(RunListener::Enchantment { id, enchanted });
                 }
             }
         }
@@ -3984,7 +3985,9 @@ impl<V: Rules> State<V> {
     }
 
     /// `hook` asked of `listener`, outside a fight, with what it asks for
-    /// pushed onto `asked`.
+    /// pushed onto `asked`. Whether the run still holds it, which is
+    /// `RunState.Contains`: a deck card taken out of the deck, or a potion
+    /// used, is asked nothing.
     ///
     /// # Panics
     ///
@@ -3996,9 +3999,12 @@ impl<V: Rules> State<V> {
         listener: RunListener<V>,
         hook: sts2_core::EventHook<V>,
         asked: &mut sts2_core::HookEffects<V>,
-    ) {
+    ) -> bool {
         match listener {
-            RunListener::DeckCard { at, card } => {
+            RunListener::DeckCard { id, card } => {
+                let Some(at) = self.player.deck.iter().position(|held| held.id == id) else {
+                    return false;
+                };
                 let state = &mut self.player.deck_mut()[at].state;
                 V::deck_card_event_hook(card, state, hook, asked);
             }
@@ -4009,17 +4015,111 @@ impl<V: Rules> State<V> {
                 let (state, belt) = self.player.relics.state_beside(slot);
                 V::relic_event_hook(state, belt, hook, asked);
             }
-            RunListener::Potion { potion } => V::potion_event_hook(potion, hook, asked),
+            RunListener::Potion { potion } => {
+                if !self.player.potions.contains(&potion) {
+                    return false;
+                }
+                V::potion_event_hook(potion, hook, asked);
+            }
             RunListener::Modifier { at, modifier } => {
                 let state = &mut Arc::make_mut(&mut self.modifier_states)[at];
                 V::modifier_event_hook(modifier, state, hook, asked);
             }
         }
+        true
+    }
+
+    /// `hook`'s walk outside a fight, as `Hook` makes it. Each listener the
+    /// run still holds is asked in turn. What it asks for is carried out
+    /// before the next is asked, and a question it asks parks the rest of
+    /// the walk behind it.
+    pub(super) fn walk_run(&mut self, hook: sts2_core::EventHook<V>) -> Option<Asked<V>> {
+        let model_hook = hook.model_hook()?;
+        let walking = RunWalking {
+            hook,
+            listed: self.run_listed(model_hook),
+        };
+        self.walk_on(walking)
+    }
+
+    /// The rest of `walking`.
+    fn walk_on(&mut self, mut walking: RunWalking<V>) -> Option<Asked<V>> {
+        let mut asked = sts2_core::HookEffects::new();
+        loop {
+            let listener = walking.listed.take_first()?;
+            let hook = self.refreshed(walking.hook);
+            if !self.ask_run_listener(listener, hook, &mut asked) || asked.is_empty() {
+                continue;
+            }
+            if let Some(mut question) = self.carry_out(asked.drain(..)) {
+                question.rest.push(Then::Walk(walking));
+                return Some(question);
+            }
+        }
+    }
+
+    /// [`Self::walk_run`] where `land` carries out each listener's answer,
+    /// which asks no question.
+    fn walk_run_landing(
+        &mut self,
+        hook: sts2_core::EventHook<V>,
+        mut land: impl FnMut(&mut Self, RunListener<V>, sts2_core::HookEffect<V>),
+    ) {
+        let Some(model_hook) = hook.model_hook() else {
+            return;
+        };
+        let listed = self.run_listed(model_hook);
+        let mut asked = sts2_core::HookEffects::new();
+        for listener in listed.iter() {
+            let hook = self.refreshed(hook);
+            if !self.ask_run_listener(listener, hook, &mut asked) {
+                continue;
+            }
+            for effect in std::mem::take(&mut asked) {
+                land(self, listener, effect);
+            }
+        }
+    }
+
+    /// `hook` with what it reads off the run as it stands, which a listener
+    /// reads afresh once the one before it has acted.
+    fn refreshed(&self, hook: sts2_core::EventHook<V>) -> sts2_core::EventHook<V> {
+        use sts2_core::EventHook;
+
+        match hook {
+            EventHook::RoomEntered {
+                room,
+                strayed,
+                point,
+                base,
+                ..
+            } => EventHook::RoomEntered {
+                room,
+                strayed,
+                point,
+                deck: self.player.deck.len(),
+                player: self.player_health(),
+                base,
+            },
+            EventHook::PotionUsed { in_fight, .. } => EventHook::PotionUsed {
+                in_fight,
+                holding_potions: self.holding_potions(),
+            },
+            EventHook::RestSiteHeal { mimicked, .. } => EventHook::RestSiteHeal {
+                mimicked,
+                max_hp: num_traits::cast(self.player.max_hp)
+                    .expect("maximum health fits a game number"),
+            },
+            hook => hook,
+        }
     }
 
     /// `hook` raised on every listener outside a fight, in
-    /// [`Self::run_listed`] order, and what they asked for. The run carries
-    /// it out once all have answered.
+    /// [`Self::run_listed`] order, and what they answered, in that order.
+    ///
+    /// For a hook whose listeners change something the run hands them, such
+    /// as a reward set or a map, and change nothing else. A hook whose
+    /// listeners act on the run is walked with [`Self::walk_run`].
     pub(super) fn notify_run(
         &mut self,
         hook: sts2_core::EventHook<V>,
@@ -4657,7 +4757,7 @@ impl<V: Rules> State<V> {
     ///
     /// A relic asking for something the run cannot carry out as it enters.
     fn room_entered(&mut self, room: V::RoomType, strayed: bool, point: Option<V::MapPointType>) {
-        let asked = self.notify_run(sts2_core::EventHook::RoomEntered {
+        let entered = sts2_core::EventHook::RoomEntered {
             room,
             strayed,
             point,
@@ -4665,8 +4765,8 @@ impl<V: Rules> State<V> {
             player: self.player_health(),
             // A room no fight opens in is never one an event opened.
             base: true,
-        });
-        if let Some(asked) = self.carry_out(asked) {
+        };
+        if let Some(asked) = self.walk_run(entered) {
             let pickup = asked.pickup;
             unimplemented!("entering a room asking for {pickup:?}");
         }
@@ -6139,7 +6239,7 @@ impl<V: Rules> State<V> {
     /// The rest of a question once it is answered, then what it interrupted.
     fn done_asking(
         &mut self,
-        rest: impl IntoIterator<Item = sts2_core::HookEffect<V>>,
+        rest: impl IntoIterator<Item = Then<V>>,
         under: Option<Box<Asked<V>>>,
     ) -> Decided {
         if let Some(mut next) = self.carry_out(rest) {
@@ -6380,9 +6480,9 @@ impl<V: Rules> State<V> {
         let asked = asking
             .take()
             .unwrap_or_else(|| unreachable!("the event's question is parked"));
-        let mut effects = V::answer_event(state, answer);
-        effects.extend(asked.rest);
-        match self.carry_out(effects) {
+        let effects = V::answer_event(state, answer);
+        let then = (effects.into_iter().map(Then::Effect)).chain(asked.rest);
+        match self.carry_out(then) {
             Some(next) => self.park(next),
             None => Decided::Resolved,
         }
@@ -6604,8 +6704,7 @@ impl<V: Rules> State<V> {
                 }
                 *taken = true;
                 let chosen = sts2_core::EventHook::CardRewardAlternativeChosen(alternative);
-                let effects = self.notify_run(chosen);
-                return self.carry_out(effects);
+                return self.walk_run(chosen);
             }
             _ => unimplemented!("a reward taken as the wrong kind"),
         }

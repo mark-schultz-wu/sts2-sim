@@ -137,11 +137,11 @@ impl<V: Rules> State<V> {
             if self.carry_out(effects).is_some() {
                 unimplemented!("a potion drunk outside a fight that asks a question");
             }
-            let used = self.notify_run(sts2_core::EventHook::PotionUsed {
+            let used = sts2_core::EventHook::PotionUsed {
                 in_fight: false,
                 holding_potions: self.holding_potions(),
-            });
-            if self.carry_out(used).is_some() {
+            };
+            if self.walk_run(used).is_some() {
                 unimplemented!("a relic asking a question after a potion outside a fight");
             }
             return Ok(Ok(Decided::Resolved));
