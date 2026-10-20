@@ -143,11 +143,21 @@ impl<V: Rules> State<V> {
                     self.enter(Location::MapPoint(to), shop);
                     return Ok(Decided::Resolved);
                 }
-                let encounter = self
-                    .normal_encounter(self.act())
-                    .expect("an act rolled the fights its monster rooms deal");
+                let (encounter, queue) = match room {
+                    // An elite, where a modifier lets the odds reach one.
+                    UnknownRoom::Elite => (
+                        self.elite_encounter(self.act())
+                            .expect("an act rolled the fights its elite rooms deal"),
+                        EncounterQueue::Elite,
+                    ),
+                    _ => (
+                        self.normal_encounter(self.act())
+                            .expect("an act rolled the fights its monster rooms deal"),
+                        EncounterQueue::Normal,
+                    ),
+                };
                 let at = Location::MapPoint(to);
-                let fight = self.create_fight(encounter, EncounterQueue::Normal, at)?;
+                let fight = self.create_fight(encounter, queue, at)?;
                 return self.enter_fight(fight, at);
             }
             // `RoomSet.EnsureNextEventIsValid`, which passes over an event

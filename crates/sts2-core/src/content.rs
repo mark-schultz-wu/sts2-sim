@@ -3301,6 +3301,11 @@ pub enum ModifyHook<V: ContentVersion> {
     RestSiteHealAmount {
         max_hp: V::Number,
     },
+    /// `ModifyOddsIncreaseForUnrolledRoomType`: how far an unknown room's
+    /// odds of being `room` rise when it rolls something else.
+    OddsIncreaseForUnrolledRoomType {
+        room: V::RoomType,
+    },
     /// `ModifyDamageAdditive`. The target is absent for a hit previewed
     /// against nobody.
     DamageAdditive {
@@ -3493,6 +3498,7 @@ impl<V: ContentVersion> ModifyHook<V> {
         match self {
             ModifyHook::GoldGained
             | ModifyHook::RestSiteHealAmount { .. }
+            | ModifyHook::OddsIncreaseForUnrolledRoomType { .. }
             | ModifyHook::DamageAdditive { .. }
             | ModifyHook::DamageMultiplicative { .. }
             | ModifyHook::DamageCap { .. }
@@ -3543,6 +3549,9 @@ impl<V: ContentVersion> ModifyHook<V> {
             ModifyHook::HandDrawLate { .. } => ModelHook::ModifyHandDrawLate,
             ModifyHook::GoldGained => ModelHook::ModifyGoldGained,
             ModifyHook::RestSiteHealAmount { .. } => ModelHook::ModifyRestSiteHealAmount,
+            ModifyHook::OddsIncreaseForUnrolledRoomType { .. } => {
+                ModelHook::ModifyOddsIncreaseForUnrolledRoomType
+            }
             ModifyHook::MaxEnergy { .. } => ModelHook::ModifyMaxEnergy,
             ModifyHook::EnergyGain { .. } => ModelHook::ModifyEnergyGain,
             ModifyHook::StarCost { .. } => ModelHook::TryModifyStarCost,
@@ -3920,6 +3929,10 @@ pub enum EventHook<V: ContentVersion> {
     /// own hook, which the code after the `await` runs on. Asked of that
     /// model alone, even once a question inside the command is answered.
     OwnCommandOver,
+    /// `ModifierModel.OnRunCreated`, once a new run's relic bags are filled:
+    /// `ClearsPlayerDeck`, then `AfterRunCreated`. Asked of each modifier
+    /// alone.
+    RunCreated,
     /// `AfterObtained`, as the run picks the model up. `character` is its
     /// owner's, which a relic reads off `Owner.Character`.
     Obtained {
@@ -4495,6 +4508,7 @@ impl<V: ContentVersion> EventHook<V> {
             }
             EventHook::Obtained { .. }
             | EventHook::OwnCommandOver
+            | EventHook::RunCreated
             | EventHook::CharacterNamed(_)
             | EventHook::Removed
             | EventHook::Applied
@@ -5431,6 +5445,16 @@ pub enum HookEffect<V: ContentVersion> {
     /// Every rest site option of this kind taken off those a rest site
     /// offers.
     WithdrawRestOption(V::RestSiteOption),
+    /// `RelicGrabBag.Remove` of this relic from the player's bag and the
+    /// shared one, so neither deals it.
+    RemoveFromRelicBags(V::Relic),
+    /// `UnknownMapPointOdds`: the odds an unknown room is `room` now, and the
+    /// base they go back to once it is rolled. Negative is never.
+    SetUnknownRoomOdds {
+        room: V::RoomType,
+        odds: Fixed,
+        base: Fixed,
+    },
     /// One more option on a card reward: a card of this kind from the pool
     /// the reward drew, by `CreateForReward` from `CardCreationSource.Other`.
     /// It is one the reward does not offer, unless it offers them all.
