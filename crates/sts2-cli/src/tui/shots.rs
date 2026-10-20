@@ -651,4 +651,44 @@ mod tests {
         assert_ne!(colour('M'), Some(Color::Red));
         assert_ne!(colour('M'), Some(Color::Green));
     }
+
+    /// The screen over the simulator, as `sts2-sim` draws it. A run opens,
+    /// and pressing on takes it past Neow, with every frame drawn.
+    #[test]
+    fn the_simulator_plays_on_the_screen() {
+        use super::super::keys::Action;
+        use sts2_core::Play as _;
+
+        let start = sts2_core::Start::<V> {
+            seed: sts2_core::Seed::new("C000000042").expect("a seed"),
+            character: sts2_content::v0_107_1::characters::Character::Ironclad,
+            ascension: crate::cli::ascension::<V>("None").expect("no ascension"),
+            modifiers: Vec::new(),
+            wins: 0,
+        };
+        let sim = sts2_sim::Sim::<V>::begin((), &start).expect("the run starts");
+        let mut app = App::playing(sim, Options::default());
+        let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("a test terminal");
+        let mut frame = |app: &App<V, sts2_sim::Sim<V>>| {
+            terminal
+                .draw(|frame| super::super::screen::draw(frame, app))
+                .expect("a frame");
+            format!("{:?}", terminal.backend().buffer())
+        };
+        frame(&app);
+        app.look_now();
+        let opening = frame(&app);
+        assert!(opening.contains("Neow"), "{opening}");
+
+        let floor = |app: &App<V, sts2_sim::Sim<V>>| app.observation().map(|seen| seen.floor);
+        let before = floor(&app);
+        for _ in 0..12 {
+            if app.moves().is_empty() {
+                break;
+            }
+            app.press(Action::Confirm);
+            frame(&app);
+        }
+        assert_ne!(floor(&app), before, "the run left Neow's floor");
+    }
 }

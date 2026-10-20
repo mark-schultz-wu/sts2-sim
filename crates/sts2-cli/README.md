@@ -57,6 +57,21 @@ crate's choice, and a second front end can disagree.
 `sts2 show map` draws the whole act. Which room to enter next is the largest decision
 in a run, and you make it from several rows ahead.
 
+## sts2-sim
+
+`sts2-sim` is the same screen as a bare `sts2`, on the simulator. It needs no
+game and no daemon. The run lives in the process that draws it, and the run ends
+when you quit. Pick a character and a seed, and the run starts at once.
+
+```
+$ sts2-sim
+$ sts2-sim --game-version v0.111.0
+```
+
+The default build is v0.107.1, which the simulator plays to the end of each
+recorded run. A path that the simulator has no port for stops the program, and
+the message names that path.
+
 ## sts2-fuzz
 
 A second binary. It starts a run, grants itself a hundred `Gorget`, and takes
