@@ -452,6 +452,18 @@ pub trait OwnRules: ContentVersion + Sized {
     where
         Self: Build;
 
+    /// A move whose rule is the build's own, performed from `step`, or
+    /// nothing for a shared move. It holds the step to go on from where a
+    /// command asked the player something.
+    fn own_move<F: sts2_core::Fight<Self>>(
+        monster: Self::Monster,
+        move_id: Self::MoveId,
+        step: u8,
+        fight: &mut F,
+    ) -> Option<Option<u8>>
+    where
+        Self: Build;
+
     /// A move the build's generated scripts perform, from `step`, and the
     /// step to go on from where a command asked the player something.
     fn generated_move<F: sts2_core::Fight<Self>>(

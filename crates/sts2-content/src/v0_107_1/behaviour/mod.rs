@@ -151,6 +151,16 @@ impl crate::build::OwnRules for V {
         }
     }
 
+    /// No move is its own.
+    fn own_move<F: sts2_core::Fight<V>>(
+        _monster: <V as sts2_core::ContentVersion>::Monster,
+        _move_id: <V as sts2_core::ContentVersion>::MoveId,
+        _step: u8,
+        _fight: &mut F,
+    ) -> Option<Option<u8>> {
+        None
+    }
+
     fn generated_move<F: sts2_core::Fight<V>>(
         monster: <V as sts2_core::ContentVersion>::Monster,
         move_id: <V as sts2_core::ContentVersion>::MoveId,

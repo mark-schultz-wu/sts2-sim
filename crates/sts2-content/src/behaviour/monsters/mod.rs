@@ -18,7 +18,7 @@ use crate::ids::{EncounterIds as _, MonsterIds as _, MoveIds as _, PowerIds as _
 pub(crate) type Number = i32;
 
 pub(crate) mod glory;
-mod hive;
+pub(crate) mod hive;
 mod overgrowth;
 mod shared;
 mod summoned;
@@ -401,13 +401,17 @@ fn perform_from<V: crate::Build, F: Fight<V>>(
     {
         return hive::knowledge_demon::<V, _>(move_id, step, fight);
     }
-    let next = match V::filed(monster) {
-        Filed::Glory => glory::perform::<V, _>(monster, move_id, step, fight),
-        Filed::Hive => hive::perform::<V, _>(monster, move_id, step, fight),
-        Filed::Overgrowth => overgrowth::perform::<V, _>(monster, move_id, step, fight),
-        Filed::Shared => shared::perform::<V, _>(monster, move_id, step, fight),
-        Filed::Summoned => summoned::perform::<V, _>(monster, move_id, step, fight),
-        Filed::Underdocks => underdocks::perform::<V, _>(monster, move_id, step, fight),
+    // A move whose rule is the build's own.
+    let next = match V::own_move(monster, move_id, step, fight) {
+        Some(next) => next,
+        None => match V::filed(monster) {
+            Filed::Glory => glory::perform::<V, _>(monster, move_id, step, fight),
+            Filed::Hive => hive::perform::<V, _>(monster, move_id, step, fight),
+            Filed::Overgrowth => overgrowth::perform::<V, _>(monster, move_id, step, fight),
+            Filed::Shared => shared::perform::<V, _>(monster, move_id, step, fight),
+            Filed::Summoned => summoned::perform::<V, _>(monster, move_id, step, fight),
+            Filed::Underdocks => underdocks::perform::<V, _>(monster, move_id, step, fight),
+        },
     };
     match next {
         Some(step) => Played::Waiting {
