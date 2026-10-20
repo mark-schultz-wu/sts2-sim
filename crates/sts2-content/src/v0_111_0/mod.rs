@@ -50,9 +50,6 @@ pub enum Resume {}
 /// What a card of this build writes on its deck version.
 ///
 /// Uninhabited, for the reason [`Resume`] is.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum DeckWrite {}
-
 /// A method of a card's own class in this build.
 ///
 /// Uninhabited, for the reason [`Resume`] is.
@@ -84,7 +81,7 @@ impl sts2_core::ContentVersion for V0_111_0 {
     type CardSerial = u16;
     type Resume = Resume;
     type CardWrite = CardWrite;
-    type DeckWrite = DeckWrite;
+    type DeckWrite = crate::behaviour::DeckWrite;
 
     type AscensionLevel = generated::ascension::AscensionLevel;
     type Act = generated::acts::Act;

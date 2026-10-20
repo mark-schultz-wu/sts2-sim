@@ -10,8 +10,8 @@ use super::super::super::V0_107_1 as V;
 use super::super::super::generated::enchantments::Enchantment;
 use super::super::super::generated::events::Event;
 use super::super::super::generated::relics::Relic;
-use super::super::enchantments::can_enchant;
 use super::ancient::{Offered, next_item};
+use crate::behaviour::enchantments::can_enchant;
 
 /// `OptionPool1`.
 const POOL_ONE: [Relic; 3] = [Relic::PaelsFlesh, Relic::PaelsHorn, Relic::PaelsTears];
@@ -53,7 +53,7 @@ impl EventBehavior<V> for Pael {
         }
         if deck
             .iter()
-            .filter(|card| !super::super::enchantments::card_eternal(card))
+            .filter(|card| !crate::behaviour::enchantments::card_eternal(card))
             .count()
             >= TOOTH_CARDS
         {

@@ -9,7 +9,6 @@
 
 pub(crate) mod acts;
 pub(crate) mod cards;
-pub(crate) mod enchantments;
 pub(crate) mod encounters;
 pub mod events;
 pub(crate) mod modifiers;

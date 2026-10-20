@@ -6,8 +6,8 @@ use sts2_core::{DeckAct, EventBehavior, EventView, HookEffect, HookEffects, Room
 use super::super::super::V0_107_1 as V;
 use super::super::super::generated::enchantments::Enchantment;
 use super::super::super::generated::events::{Event, EventOption as Said};
-use super::super::enchantments::can_enchant;
 use super::ancient::next_item;
+use crate::behaviour::enchantments::can_enchant;
 
 /// `DynamicVar("DrinkMaxHpGain", 10)`.
 const MAX_HP: i32 = 10;

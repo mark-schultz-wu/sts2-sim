@@ -1080,14 +1080,7 @@ impl sts2_core::CardFields<V0_107_1> for Fields {
     }
 }
 
-/// What a fight's card writes on its deck version.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum DeckWrite {
-    /// `BuffFromPlay(n)` of `GeneticAlgorithm` or `TheScythe`.
-    BuffFromPlay(Number),
-    /// `DeckVersion.Enchantment.Amount += n`, Goopy's.
-    RaiseEnchantment(u8),
-}
+pub use crate::behaviour::DeckWrite;
 
 /// `write` on the deck card `card`.
 ///

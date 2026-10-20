@@ -25,7 +25,7 @@ impl EventBehavior<V> for MorphicGrove {
             && run
                 .deck()
                 .iter()
-                .filter(|card| !super::super::enchantments::card_eternal(card))
+                .filter(|card| !crate::behaviour::enchantments::card_eternal(card))
                 .count()
                 >= 2
     }

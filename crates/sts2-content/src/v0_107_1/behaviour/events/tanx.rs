@@ -10,8 +10,8 @@ use super::super::super::V0_107_1 as V;
 use super::super::super::generated::enchantments::Enchantment;
 use super::super::super::generated::events::Event;
 use super::super::super::generated::relics::Relic;
-use super::super::enchantments::can_enchant;
 use super::ancient::Offered;
+use crate::behaviour::enchantments::can_enchant;
 
 /// `BaseOptionPool`, before `TriBoomerangOption` joins it.
 const POOL: [Relic; 9] = [

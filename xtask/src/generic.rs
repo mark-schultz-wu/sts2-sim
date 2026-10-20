@@ -45,6 +45,8 @@ struct Content {
     pools: Vec<String>,
     /// The associated type to the trait in `ids` whose consts name it.
     traits: BTreeMap<String, String>,
+    /// The types every build shares, by their module under `generated`.
+    shared: BTreeMap<String, Vec<String>>,
 }
 
 /// Read the consts off `ids.rs`, as the build implements them.
@@ -110,7 +112,44 @@ fn content(build: &str) -> Result<Content, Error> {
         types,
         pools,
         traits,
+        shared: shared()?,
     })
+}
+
+/// The types in `sts2_content::generated`, by module.
+fn shared() -> Result<BTreeMap<String, Vec<String>>, Error> {
+    let root = Path::new("crates/sts2-content/src/generated");
+    let mut out: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        for path in error::entries(&dir)? {
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            let rel = path.strip_prefix(root).unwrap_or(&path).with_extension("");
+            let mut parts: Vec<String> = rel
+                .iter()
+                .map(|p| p.to_string_lossy().into_owned())
+                .collect();
+            if parts.last().is_some_and(|p| p == "mod") {
+                parts.pop();
+            }
+            let names = out.entry(parts.join("::")).or_default();
+            for line in error::read(&path)?.lines() {
+                for kind in ["pub enum ", "pub struct ", "pub type "] {
+                    if let Some(rest) = line.strip_prefix(kind) {
+                        let name: String = rest
+                            .chars()
+                            .take_while(|c| c.is_alphanumeric() || *c == '_')
+                            .collect();
+                        names.push(name);
+                    }
+                }
+            }
+        }
+    }
+    Ok(out)
 }
 
 // --- Scanning past strings, chars and comments. ---
@@ -283,16 +322,36 @@ impl Left {
 
 /// One alternative's pattern with each content path bound, and the
 /// comparisons those bindings stand for.
+///
+/// Paths joined by `|` inside a pattern, `(A | B, _)`, are one binding.
 fn bind_paths(alt: &str, content: &Content) -> (String, Vec<String>) {
+    let paths = content_paths(alt, content);
+    // Runs of paths with nothing but `|` between them.
+    let mut runs: Vec<Vec<(usize, usize, String)>> = Vec::new();
+    for path in paths {
+        match runs.last_mut() {
+            Some(run) if code_of(&alt[run[run.len() - 1].1..path.0]).trim() == "|" => {
+                run.push(path)
+            }
+            _ => runs.push(vec![path]),
+        }
+    }
     let mut skeleton = String::new();
     let mut conds = Vec::new();
     let mut from = 0;
-    for (n, (start, end, konst)) in content_paths(alt, content).into_iter().enumerate() {
-        skeleton.push_str(&alt[from..start]);
+    for (n, run) in runs.into_iter().enumerate() {
+        skeleton.push_str(&alt[from..run[0].0]);
         let binding = format!("__c{n}");
-        conds.push(format!("{binding} == {konst}"));
+        let ors: Vec<String> = run
+            .iter()
+            .map(|(_, _, konst)| format!("{binding} == {konst}"))
+            .collect();
+        conds.push(match ors.len() {
+            1 => ors[0].clone(),
+            _ => format!("({})", ors.join(" || ")),
+        });
         skeleton.push_str(&binding);
-        from = end;
+        from = run[run.len() - 1].1;
     }
     skeleton.push_str(&alt[from..]);
     (skeleton, conds)
@@ -615,18 +674,6 @@ fn rewrite_rest(s: &str, content: &Content, left: &mut Left) -> String {
             left.notes
                 .push((number + 1, "a type alias naming `V`".to_owned()));
         }
-        if line.starts_with("use ") && !line.contains('{') {
-            // `use ..::Orb;` names what is now `V::Orb`.
-            let name = line
-                .trim_end()
-                .trim_end_matches(';')
-                .rsplit("::")
-                .next()
-                .unwrap_or("");
-            if content.types.contains_key(name) {
-                continue;
-            }
-        }
         if line.trim_start().starts_with("use ") || line.trim_start().starts_with("//") {
             out.push_str(line);
             continue;
@@ -673,6 +720,87 @@ fn rewrite_rest(s: &str, content: &Content, left: &mut Left) -> String {
     out
 }
 
+/// Each `use`: content types go, since they are `V::Orb` now, and what
+/// every build shares is named where it is shared.
+fn rewrite_uses(s: &str, content: &Content, build: &str, left: &mut Left) -> String {
+    let b = s.as_bytes();
+    let mut out = String::new();
+    let mut from = 0;
+    let mut i = 0;
+    let private = format!("crate::{build}::generated::");
+    while i < b.len() {
+        if let Some(next) = skip_noise(b, i) {
+            i = next;
+            continue;
+        }
+        // Only spaces between it and the line's start.
+        let line_start = s[s[..i].rfind('\n').map_or(0, |at| at + 1)..i]
+            .trim()
+            .is_empty();
+        if !(line_start && at_kw(b, i, "use") && !s[..i].ends_with("pub ")) {
+            i += 1;
+            continue;
+        }
+        let end = scan_to(b, i, |s, k| s[k] == b';');
+        let body = s[i + 4..end].trim();
+        let (prefix, names): (String, Vec<String>) = match body.split_once("::{") {
+            Some((prefix, names)) => (
+                prefix.to_owned(),
+                names
+                    .trim_end_matches('}')
+                    .split(',')
+                    .map(|n| n.trim().to_owned())
+                    .filter(|n| !n.is_empty())
+                    .collect(),
+            ),
+            None => match body.rsplit_once("::") {
+                Some((prefix, name)) => (prefix.to_owned(), vec![name.to_owned()]),
+                None => (String::new(), vec![body.to_owned()]),
+            },
+        };
+        let kept: Vec<String> = names
+            .iter()
+            .filter(|n| !content.types.contains_key(n.as_str()) || prefix.is_empty())
+            .cloned()
+            .collect();
+        let prefix = match prefix.strip_prefix(&private) {
+            Some(module) => {
+                let shared = content.shared.get(module);
+                let all = kept
+                    .iter()
+                    .all(|n| shared.is_some_and(|names| names.iter().any(|s| s == n)));
+                if all {
+                    format!("crate::generated::{module}")
+                } else {
+                    left.note(s, i, "a `use` of what one build keeps");
+                    prefix
+                }
+            }
+            None => prefix,
+        };
+        out.push_str(&s[from..i]);
+        if kept.is_empty() {
+            // The line it stood on goes with it.
+            while out.ends_with(' ') {
+                out.pop();
+            }
+            from = end + 1;
+            if b.get(from) == Some(&b'\n') {
+                from += 1;
+            }
+        } else {
+            match kept.as_slice() {
+                [one] => write!(out, "use {prefix}::{one};").unwrap(),
+                many => write!(out, "use {prefix}::{{{}}};", many.join(", ")).unwrap(),
+            }
+            from = end + 1;
+        }
+        i = end + 1;
+    }
+    out.push_str(&s[from..]);
+    out
+}
+
 /// Relative paths up out of the file, made absolute.
 fn absolute_paths(s: &str, module: &[String]) -> String {
     let mut out = String::new();
@@ -700,14 +828,47 @@ fn absolute_paths(s: &str, module: &[String]) -> String {
 }
 
 /// Each function naming `V` takes it as its first generic.
+///
+/// A call in the file to one it made generic names `V` too, since `V` cannot
+/// be read off an argument that only projects it.
 fn generic_fns(s: &str) -> String {
     let b = s.as_bytes();
+    let mut made: Vec<(String, usize)> = Vec::new();
     let mut out = String::new();
     let mut i = 0;
     let mut from = 0;
+    let mut skip_until = 0;
     while i < b.len() {
         if let Some(next) = skip_noise(b, i) {
             i = next;
+            continue;
+        }
+        if at_kw(b, i, "impl") && i >= skip_until {
+            let open = scan_to(b, i + 4, |s, k| s[k] == b'{');
+            let header = &s[i..open.min(s.len())];
+            let names_v = header
+                .split(|c: char| !(c.is_alphanumeric() || c == '_'))
+                .any(|w| w == "V");
+            if names_v {
+                out.push_str(&s[from..i + 4]);
+                match b[i + 4] {
+                    b'<' => {
+                        out.push_str("<V: crate::Build, ");
+                        from = i + 5;
+                    }
+                    _ => {
+                        out.push_str("<V: crate::Build>");
+                        from = i + 4;
+                    }
+                }
+                // Its methods take `V` from the impl.
+                skip_until = scan_to(b, open + 1, |_, _| false);
+            }
+            i += 4;
+            continue;
+        }
+        if at_kw(b, i, "fn") && i < skip_until {
+            i += 2;
             continue;
         }
         if at_kw(b, i, "fn") {
@@ -723,6 +884,18 @@ fn generic_fns(s: &str) -> String {
                 .split(|c: char| !(c.is_alphanumeric() || c == '_'))
                 .any(|w| w == "V");
             if names_v {
+                let name = s[i + 3..name_end].trim().to_owned();
+                let others = match b[name_end] {
+                    b'<' => {
+                        let close = scan_to(b, name_end + 1, |s, k| s[k] == b'>');
+                        split_top(&s[name_end + 1..close], b',')
+                            .iter()
+                            .filter(|p| !p.trim().is_empty() && !p.trim().starts_with('\''))
+                            .count()
+                    }
+                    _ => 0,
+                };
+                made.push((name, others));
                 out.push_str(&s[from..name_end]);
                 match b[name_end] {
                     b'<' => out.push_str("<V: crate::Build, "),
@@ -738,6 +911,48 @@ fn generic_fns(s: &str) -> String {
             continue;
         }
         i += 1;
+    }
+    out.push_str(&s[from..]);
+    turbofish(&out, &made)
+}
+
+/// `f(` to `f::<V, _>(` for each function `made` generic, outside its own
+/// definition and method calls.
+fn turbofish(s: &str, made: &[(String, usize)]) -> String {
+    let b = s.as_bytes();
+    let mut out = String::new();
+    let mut from = 0;
+    let mut i = 0;
+    while i < b.len() {
+        if let Some(next) = skip_noise(b, i) {
+            i = next;
+            continue;
+        }
+        let starts = is_ident(b[i]) && (i == 0 || !is_ident(b[i - 1]));
+        if !starts {
+            i += 1;
+            continue;
+        }
+        let end = (i..b.len()).find(|&k| !is_ident(b[k])).unwrap_or(b.len());
+        let word = &s[i..end];
+        let call = b.get(end) == Some(&b'(');
+        let before = s[..i].trim_end();
+        let defines = before.ends_with("fn");
+        let method = before.ends_with('.');
+        if let Some((_, others)) = made.iter().find(|(name, _)| name == word)
+            && call
+            && !defines
+            && !method
+        {
+            out.push_str(&s[from..end]);
+            out.push_str("::<V");
+            for _ in 0..*others {
+                out.push_str(", _");
+            }
+            out.push('>');
+            from = end;
+        }
+        i = end;
     }
     out.push_str(&s[from..]);
     out
@@ -808,6 +1023,7 @@ pub fn run(args: Args) -> Result<String, Error> {
         let text = rewrite_matches(&text, &content);
         let text = rewrite_lets(&text, &content, &mut left);
         let text = rewrite_rest(&text, &content, &mut left);
+        let text = rewrite_uses(&text, &content, &args.build, &mut left);
         let text = generic_fns(&text);
         let text = import_ids(&text, &content);
         error::write(path, &text)?;

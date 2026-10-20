@@ -6,7 +6,7 @@ use sts2_core::{DeckAct, EventBehavior, EventView, HookEffect, HookEffects, Room
 use super::super::super::V0_107_1 as V;
 use super::super::super::generated::enchantments::Enchantment;
 use super::super::super::generated::events::{Event, EventOption as Said};
-use super::super::enchantments::can_enchant;
+use crate::behaviour::enchantments::can_enchant;
 
 #[derive(Debug, Clone, Default)]
 pub struct State {
