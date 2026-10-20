@@ -6,6 +6,12 @@ use sts2_core::RewardRarity;
 use super::V0_111_0;
 
 impl sts2_core::Engine for V0_111_0 {
+    /// The choice is signalled, then the hand is listed. v0.107.1's listed
+    /// it first.
+    fn lists_hand_after_pause() -> bool {
+        true
+    }
+
     /// A forced reward pays at once, with no draw, and leaves the odds where
     /// they were. v0.107.1's drew first and moved them.
     fn roll_potion_reward(

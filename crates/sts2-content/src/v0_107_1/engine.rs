@@ -17,6 +17,11 @@ pub(crate) fn potion_bonus(elite: bool) -> f32 {
 }
 
 impl sts2_core::Engine for V0_107_1 {
+    /// The hand is listed, then the choice is signalled.
+    fn lists_hand_after_pause() -> bool {
+        false
+    }
+
     /// The draw comes first, and a forced reward pays whatever it drew, with
     /// the odds moved as for a potion paid.
     fn roll_potion_reward(

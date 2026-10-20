@@ -1481,12 +1481,13 @@ fn park_setup<V: Rules>(
 ) -> Carried {
     // `CardSelectCmd.FromHand` lists the hand as it asks. The setup's task
     // pauses there, and `AfterSideTurnStart` runs on while it waits, so a
-    // card a listener adds then is not among the choices.
+    // card a listener adds then is not among the choices. A build that
+    // lists the hand after the pause keeps the question on the live hand.
     let question = match question {
         super::live::Asked::Pile {
             pile: Pile::Hand,
             selection,
-        } => super::live::Asked::Among {
+        } if !V::lists_hand_after_pause() => super::live::Asked::Among {
             cards: live
                 .cards
                 .iter(Pile::Hand)

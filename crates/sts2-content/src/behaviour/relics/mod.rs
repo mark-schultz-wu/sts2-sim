@@ -548,7 +548,7 @@ pub enum State<V: crate::Build> {
     LastingCandy(lasting_candy::State),
     Candelabra,
     GamePiece,
-    Regalite,
+    Regalite(regalite::State),
     Bellows,
     JossPaper(joss_paper::State),
     MummifiedHand,
@@ -695,6 +695,7 @@ pub(crate) fn event_hook<V: crate::Build>(
         State::PollinousCore(_) => V::own_relic(V::Relic::POLLINOUS_CORE),
         State::SereTalon => V::own_relic(V::Relic::SERE_TALON),
         State::LastingCandy(_) => V::own_relic(V::Relic::LASTING_CANDY),
+        State::Regalite(_) => V::own_relic(V::Relic::REGALITE),
         _ => false,
     };
     if owned && V::own_shared_relic_event_hook(state, hook, asked).is_some() {
@@ -1016,7 +1017,7 @@ pub(crate) fn event_hook<V: crate::Build>(
         State::MummifiedHand => mummified_hand::event_hook::<V>(hook, asked),
         State::JossPaper(state) => joss_paper::event_hook::<V>(state, hook, asked),
         State::Bellows => bellows::event_hook::<V>(hook, asked),
-        State::Regalite => regalite::event_hook::<V>(hook, asked),
+        State::Regalite(_) => regalite::event_hook::<V>(hook, asked),
         State::GamePiece => game_piece::event_hook::<V>(hook, asked),
         State::Candelabra => candelabra::event_hook::<V>(hook, asked),
         State::LastingCandy(state) => lasting_candy::event_hook::<V>(state, hook, asked),
@@ -1345,7 +1346,7 @@ pub(crate) fn modify_hook<V: crate::Build>(
         | State::LastingCandy(_)
         | State::Candelabra
         | State::GamePiece
-        | State::Regalite
+        | State::Regalite(_)
         | State::Bellows
         | State::JossPaper(_)
         | State::MummifiedHand
@@ -1765,7 +1766,7 @@ impl<V: crate::Build> sts2_core::RelicModel<V> for State<V> {
             __c0 if __c0 == V::Relic::MUMMIFIED_HAND => State::MummifiedHand,
             __c0 if __c0 == V::Relic::JOSS_PAPER => State::JossPaper(joss_paper::State::default()),
             __c0 if __c0 == V::Relic::BELLOWS => State::Bellows,
-            __c0 if __c0 == V::Relic::REGALITE => State::Regalite,
+            __c0 if __c0 == V::Relic::REGALITE => State::Regalite(regalite::State::default()),
             __c0 if __c0 == V::Relic::GAME_PIECE => State::GamePiece,
             __c0 if __c0 == V::Relic::CANDELABRA => State::Candelabra,
             __c0 if __c0 == V::Relic::LASTING_CANDY => {

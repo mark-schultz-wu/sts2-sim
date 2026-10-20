@@ -3,6 +3,12 @@
 use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
 
+/// v0.111.0's `UsedThisTurn`. v0.107.1's Regalite keeps nothing.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct State {
+    pub(crate) used_this_turn: bool,
+}
+
 /// `AfterCardGeneratedForCombat`: its block for each card its owner made. A
 /// fight here has one player, the one creator a card can name.
 pub(super) fn event_hook<V: crate::Build>(
