@@ -2139,6 +2139,12 @@ pub(crate) fn decide_hook<V: crate::Build>(
 ) -> sts2_core::HookResponse<bool> {
     use sts2_core::{DecisionHook, HookResponse};
 
+    // A power whose rule is the build's own, for a hook it answers itself.
+    if V::own_power(power)
+        && let Some(response) = V::own_power_decide_hook(power, amount, held, state, hook)
+    {
+        return response;
+    }
     match (power, hook) {
         // `RingingPower.ShouldPlay`: a card with Ringing waits while its owner
         // has started a play this turn. A fight here has one player, whose
