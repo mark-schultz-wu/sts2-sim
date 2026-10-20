@@ -12,6 +12,13 @@ use crate::generated::runstate::MapPointType;
 
 type Number = i32;
 
+/// `Eidolon`, which waits on its last play's question.
+const EIDOLON: Cards = Cards::Necrobinder(NecrobinderCard::Eidolon);
+
+/// `Tracking`'s `PowerCmd.Apply<TrackingPower>(…, 50m, …)`, which it prints
+/// nowhere.
+const TRACKING: Number = 50;
+
 /// What a card of this build's own does when it is played, or nothing for a
 /// shared one.
 pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Option<Played<V>> {
@@ -42,6 +49,78 @@ pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Option<Played<
             fight.apply_to_opponents(Power::PoisonPower, sts2_core::PowerAmount::Counted(poison));
             for enemy in fight.hittable_opponents() {
                 trigger_poison(fight, enemy);
+            }
+            Some(Played::Done)
+        }
+        // `Haze`: its Poison onto each enemy that can be hit, then its Weak
+        // onto each.
+        Cards::Silent(SilentCard::Haze) => {
+            let poison = fight.power_var(CardVar::PoisonPower);
+            for enemy in fight.hittable_opponents() {
+                fight.apply_power(
+                    enemy,
+                    Power::PoisonPower,
+                    sts2_core::PowerAmount::Counted(poison),
+                );
+            }
+            let weak = fight.power_var(CardVar::WeakPower);
+            for enemy in fight.hittable_opponents() {
+                fight.apply_power(
+                    enemy,
+                    Power::WeakPower,
+                    sts2_core::PowerAmount::Counted(weak),
+                );
+            }
+            Some(Played::Done)
+        }
+        // `Expertise`: its `Cards` drawn, each of which retains this turn.
+        Cards::Silent(SilentCard::Expertise) => {
+            let drew = fight.draw(fight.var(CardVar::Cards));
+            let drawn: Vec<_> = drew
+                .into_iter()
+                .filter_map(|id| fight.find_card(id))
+                .collect();
+            fight.act_on(sts2_core::PileAct::RetainThisTurn, &drawn);
+            Some(Played::Done)
+        }
+        // `Tracking`: 50 Tracking on its owner, every play.
+        Cards::Silent(SilentCard::Tracking) => {
+            fight.apply_to_actor(
+                Power::TrackingPower,
+                sts2_core::PowerAmount::Counted(TRACKING),
+            );
+            Some(Played::Done)
+        }
+        // `Eidolon`: `CardCmd.AutoPlay` of each card in the exhaust pile that
+        // is Ethereal and not Unplayable, as the play began, with no target
+        // named.
+        Cards::Necrobinder(NecrobinderCard::Eidolon) => {
+            use crate::generated::cards::CardKeyword;
+            use sts2_core::Pile;
+
+            let ethereal: Vec<_> = fight
+                .cards_in(Pile::Exhaust)
+                .into_iter()
+                .filter(|&at| {
+                    fight.card_keyword(at, CardKeyword::Ethereal)
+                        && !fight.card_keyword(at, CardKeyword::Unplayable)
+                })
+                .collect();
+            let count = ethereal.len();
+            for (played, card) in ethereal.into_iter().enumerate() {
+                let at = crate::behaviour::cards::standing::<V, _>(fight, card)
+                    .unwrap_or_else(|| unimplemented!("Eidolon playing a card no pile holds"));
+                fight.auto_play_card(at);
+                // `CardCmd.AutoPlay` is awaited, so the plays left wait on
+                // the answer.
+                if fight.waiting() {
+                    if played + 1 < count {
+                        unimplemented!("Eidolon's plays waiting on a question with more to play");
+                    }
+                    return Some(Played::Waiting {
+                        at: crate::behaviour::cards::Resume::Own(EIDOLON, 1).into(),
+                    });
+                }
             }
             Some(Played::Done)
         }
@@ -156,6 +235,8 @@ pub(crate) fn on_play_from<F: Fight<V>>(card: Cards, fight: &mut F, from: u8) ->
             );
             Played::Done
         }
+        // `Eidolon` after its last play's question: nothing more.
+        (Cards::Necrobinder(NecrobinderCard::Eidolon), 1) => Played::Done,
         (card, from) => unreachable!("{card:?} has no command {from} of its own"),
     }
 }

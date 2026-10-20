@@ -1,2 +1,8 @@
 [alias]
 xtask = "run --package xtask --"
+
+[build]
+# This machine has 24 cores and 31GB of RAM. With full parallelism, the
+# link steps use too much memory, and systemd-oomd kills tmux panes. Eight
+# jobs keep the peak memory low.
+jobs = 8
