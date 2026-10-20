@@ -320,6 +320,8 @@ pub(super) enum Deferred<V: Rules> {
         attack: HeldAttack<V>,
         /// A hit whose `BeforeDamageReceived` asked, to land first.
         half: Option<HalfHit<V>>,
+        /// The command over many targets that hit was part of.
+        command: Option<Box<HeldCommand<V>>>,
         hits: Vec<sts2_core::Effect<V>>,
         landed: sts2_core::AttackResults<V>,
     },
@@ -422,6 +424,15 @@ pub(super) struct HalfHit<V: Rules> {
     pub(super) unblockable: bool,
     pub(super) card: Option<V::Card>,
     pub(super) attack: bool,
+}
+
+/// A `CreatureCmd.Damage` over many targets that stood still on one hit's
+/// question. `landed` is the hits it landed before that one, whose hooks
+/// wait. `hits` is how many of the held hits after it are its own.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct HeldCommand<V: Rules> {
+    pub(super) landed: Vec<super::board::Landed<V>>,
+    pub(super) hits: usize,
 }
 
 /// The attack command whose hits wait, which `AfterAttack` names once they
@@ -2097,6 +2108,13 @@ impl<V: Rules> Fighter<V> {
         }
     }
 
+    /// `Creature.IsAlive`, which is health left. A command's hits all land
+    /// before any creature they took to nothing is killed. The game reads
+    /// such a creature as dead before then.
+    pub(crate) fn is_alive(&self) -> bool {
+        self.alive && self.hp > num_traits::zero()
+    }
+
     /// What a report shows of it, which is everything but the models.
     ///
     /// The powers and the move are the fight's to give. The fight holds the
@@ -2113,7 +2131,7 @@ impl<V: Rules> Fighter<V> {
             hp: self.hp,
             max_hp: self.max_hp,
             block: self.block,
-            alive: self.alive,
+            alive: self.is_alive(),
             powers: powers.map(HeldPower::stack).collect(),
             next_move,
         }

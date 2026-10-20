@@ -69,6 +69,9 @@ pub(super) struct Board<'a, V: Rules> {
     /// The hit of the attack under way whose `BeforeDamageReceived` asked,
     /// which lands before the rest once the answer is in.
     half: Option<super::live::HalfHit<V>>,
+    /// The command over many targets that hit was part of, which waits
+    /// with it.
+    held_command: Option<Box<super::live::HeldCommand<V>>>,
     /// The model of a monster that left the fight during its own move. The
     /// game's model object outlives the creature, so the rest of the move
     /// still reads and writes it.
@@ -106,7 +109,7 @@ pub(super) enum Choice {
 
 /// What one hit took off one creature's hit points, before its block is
 /// counted in.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 struct Lost<V: Rules> {
     receiver: CombatId,
     lost: V::Number,
@@ -116,7 +119,7 @@ struct Lost<V: Rules> {
 
 /// One hit of a `CreatureCmd.Damage` that has landed, and waits for its
 /// hooks.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub(super) struct Landed<V: Rules> {
     dealer: Option<CombatId>,
     target: CombatId,
@@ -219,6 +222,7 @@ impl<'a, V: Rules> Board<'a, V> {
             choice: Choice::Throwing,
             held: Vec::new(),
             half: None,
+            held_command: None,
             left: None,
             landed: None,
             commanding: false,
@@ -274,6 +278,7 @@ impl<'a, V: Rules> Board<'a, V> {
             choice: Choice::Move { attacking: false },
             held: Vec::new(),
             half: None,
+            held_command: None,
             left: None,
             landed: None,
             commanding: false,
@@ -957,8 +962,17 @@ impl<'a, V: Rules> Board<'a, V> {
         let outer = std::mem::replace(&mut self.commanding, true);
         let asked = std::mem::replace(&mut self.dealer_asked, false);
         let start = self.live.landing.len();
+        let (halved, held) = (self.half.is_some(), self.held.len());
         hits(self);
         self.dealer_asked = asked;
+        // A hit whose `BeforeDamageReceived` asked stands the command still.
+        // What it landed waits for its hooks, and the hits after it wait to
+        // land.
+        if !halved && self.half.is_some() {
+            self.hold_command(start, held);
+            self.commanding = outer;
+            return;
+        }
         // What the hooks run is not this command's. A command they run
         // lands above this one's hits, and takes its own back off.
         self.commanding = false;
@@ -969,6 +983,16 @@ impl<'a, V: Rules> Board<'a, V> {
         }
         self.kill_together(&dying);
         self.commanding = outer;
+    }
+
+    /// Hold the command under way behind its hit that asked: what it landed
+    /// from `start` on, and the hits held from `held` on.
+    #[cold]
+    fn hold_command(&mut self, start: usize, held: usize) {
+        self.held_command = Some(Box::new(super::live::HeldCommand {
+            landed: self.live.landing.drain(start..).collect(),
+            hits: self.held.len() - held,
+        }));
     }
 
     /// `CreatureCmd.Kill` over `dying`, in order, then `CheckWinCondition`
@@ -1040,9 +1064,6 @@ impl<'a, V: Rules> Board<'a, V> {
     /// asked is answered.
     #[cold]
     fn hold_half(&mut self, half: super::live::HalfHit<V>) {
-        if self.commanding {
-            unimplemented!("a question before a hit lands, inside a command over many targets")
-        }
         if self.landed.is_none() || self.half.is_some() {
             unimplemented!("a question before a hit lands, outside an attack's first wait")
         }
@@ -5958,6 +5979,7 @@ impl<V: Rules> Board<'_, V> {
                 frame: self.frame(),
                 attack,
                 half: self.half.take(),
+                command: self.held_command.take(),
                 hits: std::mem::take(&mut self.held),
                 landed: results.clone(),
             });
@@ -6200,6 +6222,7 @@ impl<'a, V: Rules> Board<'a, V> {
             choice,
             held: Vec::new(),
             half: None,
+            held_command: None,
             left: None,
             landed: None,
             commanding: false,
@@ -6222,6 +6245,7 @@ pub(super) fn land_held<V: Rules>(
         frame,
         attack,
         half,
+        command,
         hits,
         landed,
     } = held
@@ -6230,12 +6254,31 @@ pub(super) fn land_held<V: Rules>(
     };
     let mut board = Board::in_frame(live, rngs, relics, ascension, frame);
     board.landed = Some(landed);
-    if let Some(half) = half {
-        let mut dying = SmallVec::<[CombatId; 2]>::new();
-        if let Some(landed) = board.land_rest(half) {
-            board.settle_hit(landed, &mut dying);
+    let mut hits = hits.into_iter();
+    match (half, command) {
+        // The command goes on: what it landed, the hit that waited, and the
+        // rest of its hits. Then its hooks run over all of them.
+        (Some(half), Some(command)) => board.damage_command(|board| {
+            board.dealer_asked = true;
+            board.live.landing.extend(command.landed);
+            board.commanding = false;
+            let landed = board.land_rest(half);
+            board.commanding = true;
+            board.live.landing.extend(landed);
+            for effect in hits.by_ref().take(command.hits) {
+                let hit = Fight::resolve(&*board, effect);
+                Fight::apply(board, hit);
+            }
+        }),
+        (Some(half), None) => {
+            let mut dying = SmallVec::<[CombatId; 2]>::new();
+            if let Some(landed) = board.land_rest(half) {
+                board.settle_hit(landed, &mut dying);
+            }
+            board.kill_together(&dying);
         }
-        board.kill_together(&dying);
+        (None, Some(_)) => unreachable!("a command waits only behind its hit that asked"),
+        (None, None) => {}
     }
     for effect in hits {
         let hit = Fight::resolve(&board, effect);
@@ -6249,7 +6292,8 @@ pub(super) fn land_held<V: Rules>(
         board.live.defer(super::live::Deferred::Hits {
             frame,
             attack,
-            half: None,
+            half: board.half.take(),
+            command: board.held_command.take(),
             hits,
             landed: results,
         });
