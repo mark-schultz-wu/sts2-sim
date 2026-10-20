@@ -135,8 +135,24 @@ pub fn play_from<F: Fight<V>>(
             }
             Ok(Played::Done)
         }
-        // `call PowerCmd.Apply`
-        NecrobinderCard::Deathbringer => unimplemented!("what {card:?} does when it is played"),
+        NecrobinderCard::Deathbringer => {
+            if from == 0 {
+                fight.apply_to_opponents(
+                    Power::DoomPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::DoomPower)),
+                );
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_opponents(
+                    Power::WeakPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
+                );
+            }
+            Ok(Played::Done)
+        }
         // `for`
         NecrobinderCard::DeathsDoor => unimplemented!("what {card:?} does when it is played"),
         NecrobinderCard::DeathMarch => {

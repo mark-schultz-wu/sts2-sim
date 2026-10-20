@@ -598,8 +598,43 @@ pub fn play_from<F: Fight<V>>(card: RegentCard, fight: &mut F, from: u8) -> Resu
         }
         // `call CardFactory.GetDistinctForCombat`
         RegentCard::ManifestAuthority => unimplemented!("what {card:?} does when it is played"),
-        // `call PowerCmd.Apply`
-        RegentCard::MeteorShower => unimplemented!("what {card:?} does when it is played"),
+        RegentCard::MeteorShower => {
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let targets = fight.opponents();
+                    fight.damage_command(|fight| {
+                        for target in targets {
+                            let attack = fight.resolve(Effect::Attack {
+                                dealer: fight.actor(),
+                                target,
+                                damage: Amount::Var(CardVar::Damage),
+                                scaling: Scaling::Dynamic,
+                            });
+                            fight.apply(attack);
+                        }
+                    });
+                });
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_opponents(
+                    Power::WeakPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
+                );
+                if fight.waiting() {
+                    return Err(2);
+                }
+            }
+            if from <= 2 {
+                fight.apply_to_opponents(
+                    Power::VulnerablePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
+                );
+            }
+            Ok(Played::Done)
+        }
         RegentCard::MonarchsGaze => {
             if from == 0 {
                 fight.apply_to_actor(

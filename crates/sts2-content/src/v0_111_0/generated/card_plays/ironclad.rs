@@ -723,8 +723,34 @@ pub fn play_from<F: Fight<V>>(
         IroncladCard::TearAsunder => unimplemented!("what {card:?} does when it is played"),
         // `call PileType.Hand.GetPile`
         IroncladCard::Thrash => unimplemented!("what {card:?} does when it is played"),
-        // `call PowerCmd.Apply`
-        IroncladCard::Thunderclap => unimplemented!("what {card:?} does when it is played"),
+        IroncladCard::Thunderclap => {
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let targets = fight.opponents();
+                    fight.damage_command(|fight| {
+                        for target in targets {
+                            let attack = fight.resolve(Effect::Attack {
+                                dealer: fight.actor(),
+                                target,
+                                damage: Amount::Var(CardVar::Damage),
+                                scaling: Scaling::Dynamic,
+                            });
+                            fight.apply(attack);
+                        }
+                    });
+                });
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_opponents(
+                    Power::VulnerablePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
+                );
+            }
+            Ok(Played::Done)
+        }
         IroncladCard::Tremble => {
             let target = fight.target();
             if from == 0 {
