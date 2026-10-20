@@ -12,6 +12,7 @@ mod lends;
 
 pub(crate) use lends::{debuff_at, lends};
 
+use crate::vars::PowerVars as _;
 use sts2_core::{
     CardTable as _, Fixed, Modify, ModifyHook, PowerAmount, PowerModel as _, PowerTable as _,
 };
@@ -219,9 +220,6 @@ pub(crate) fn clone_starts_anew<V: crate::Build>(power: V::Power) -> bool {
         || power == V::Power::SERPENT_FORM_POWER
 }
 
-/// `TheBombPower`'s `DamageVar(40)`, before `SetDamage` writes its own.
-const THE_BOMB_DAMAGE: Number = 40;
-
 /// `VoidFormPower.HideTemporaryZeroCostVisual`'s count, which leaves no
 /// card free for the rest of the turn.
 const VOID_FORM_SPENT: u32 = 999_999_999;
@@ -381,7 +379,8 @@ impl<V: crate::Build> sts2_core::PowerModel<V> for State<V> {
             __c0 if __c0 == V::Power::FERAL_POWER => Self::Feral { played: 0 },
             __c0 if __c0 == V::Power::VOID_FORM_POWER => Self::VoidForm { played: 0 },
             __c0 if __c0 == V::Power::THE_BOMB_POWER => Self::TheBomb {
-                damage: THE_BOMB_DAMAGE,
+                // Its `DamageVar`, before `SetDamage` writes its own.
+                damage: V::Power::THE_BOMB_POWER_DAMAGE,
             },
             __c0 if __c0 == V::Power::GIGANTIFICATION_POWER => {
                 Self::Gigantification { bound: None }
@@ -679,17 +678,17 @@ pub(crate) fn built<V: crate::build::BuildContent>(
     }
 }
 
-/// `VulnerablePower`'s `DamageIncrease`, in hundredths.
-///
-/// Vulnerable's and Weak's multipliers are sums of the game's decimals, which
-/// are summed here in hundredths.
-const DAMAGE_INCREASE: i32 = 150;
-
-/// `WeakPower`'s `DamageDecrease`, in hundredths.
-const DAMAGE_DECREASE: i32 = 75;
-
 /// `PaperPhrog.ModifyVulnerableMultiplier`'s `0.25m`, in hundredths.
 const PHROG: i32 = 25;
+
+/// A multiplier the game holds as a decimal, such as Vulnerable's `1.5m`, in
+/// hundredths. Vulnerable's and Weak's multipliers are sums of the game's
+/// decimals, which are summed here in hundredths.
+fn hundredths(multiplier: Fixed) -> i32 {
+    let scale = multiplier.scale();
+    assert!(scale <= 2, "{multiplier:?} is finer than hundredths");
+    multiplier.coefficient() * 10_i32.pow(u32::from(2 - scale))
+}
 
 /// `PaperKrane.ModifyWeakMultiplier`'s `0.15m`, in hundredths.
 const KRANE: i32 = 15;
@@ -697,20 +696,8 @@ const KRANE: i32 = 15;
 /// `SurroundedPower`'s `1.5m` on a hit from behind.
 const SURROUNDED: Fixed = Fixed::new(15, 1);
 
-/// `CrabRagePower`'s `PowerVar<StrengthPower>(6m)`.
-const CRAB_RAGE: Number = 6;
-
-/// `CrabRagePower`'s `BlockVar(99m, ValueProp.Unpowered)`.
-const CRAB_BLOCK: Number = 99;
-
-/// `FlutterPower`'s `DamageDecrease` of 50, as the share left.
-const FLUTTER: Fixed = Fixed::new(5, 1);
-
 /// `FrailPower.ModifyBlockMultiplicative`'s `0.75m`.
 const FRAIL: Fixed = Fixed::new(75, 2);
-
-/// `ColossusPower`'s `DamageDecrease`.
-const COLOSSAL: Fixed = Fixed::new(5, 1);
 
 /// `PanachePower._baseCardsLeft`: the plays for each payout.
 const PANACHE_CARDS: u8 = 5;
@@ -739,10 +726,6 @@ const TANKED: Fixed = Fixed::new(2, 0);
 /// `GigantificationPower.ModifyDamageMultiplicative`'s `3m`.
 const GIGANTIFIED: Fixed = Fixed::new(3, 0);
 
-/// `ShrinkPower`'s own `DamageDecrease` of 30, which the power stores as the
-/// percentage taken off, as the share left.
-const SHRUNK: Fixed = Fixed::new(70, 2);
-
 /// What one card played adds to what `SlowPower`'s owner takes, in tenths.
 const SLOW_TENTHS: i32 = 1;
 
@@ -761,15 +744,6 @@ fn frees<V: crate::Build>(power: V::Power, card: V::Card, ethereal: bool) -> boo
     }
 }
 
-/// `RollingBoulderPower`'s `DamageVar(5)`, what each turn adds to it.
-const ROLLING_BOULDER_GROWTH: Number = 5;
-
-/// `DanseMacabrePower`'s `EnergyVar(2)`: the resolved cost it answers from.
-const DANSE_MACABRE_ENERGY: Number = 2;
-
-/// `RadiancePower`'s `EnergyVar(1)`.
-const RADIANCE_ENERGY: Number = 1;
-
 /// What Vulnerable on `holder` multiplies a powered hit from `dealer` by.
 ///
 /// # Panics
@@ -780,7 +754,7 @@ fn vulnerable<V: crate::Build>(
     holder: sts2_core::CombatId,
     dealer: Option<sts2_core::CombatId>,
 ) -> Fixed {
-    let mut by = DAMAGE_INCREASE;
+    let mut by = hundredths(V::Power::VULNERABLE_POWER_DAMAGE_INCREASE);
     // `if (dealer != null)`, and both answer the dealer hitting itself with
     // nothing.
     if let Some(dealer) = dealer
@@ -809,7 +783,7 @@ fn weak<V: crate::Build>(
     holder: sts2_core::CombatId,
     target: Option<sts2_core::CombatId>,
 ) -> Fixed {
-    let mut by = DAMAGE_DECREASE;
+    let mut by = hundredths(V::Power::WEAK_POWER_DAMAGE_DECREASE);
     if target.is_some_and(|target| fight.relic(target, V::Relic::PAPER_KRANE)) {
         by -= KRANE;
     }
@@ -1059,6 +1033,8 @@ pub(crate) fn modify_hook<V: crate::Build>(
                 ..
             },
         ) if __c0 == V::Power::TANK_POWER && (target == Some(holder)) => Modify::Scaled(TANKED),
+        // `ShrinkPower`'s `DamageDecrease` is the percentage taken off, so a hit
+        // keeps the share left.
         (
             __c0,
             _,
@@ -1067,7 +1043,9 @@ pub(crate) fn modify_hook<V: crate::Build>(
                 powered: true,
                 ..
             },
-        ) if __c0 == V::Power::SHRINK_POWER && (dealer == Some(holder)) => Modify::Scaled(SHRUNK),
+        ) if __c0 == V::Power::SHRINK_POWER && (dealer == Some(holder)) => {
+            Modify::Scaled(Fixed::new(100 - V::Power::SHRINK_POWER_DAMAGE_DECREASE, 2))
+        }
         // `TryModifyEnergyCostInCombatLate`: nothing for a card of its kind
         // in its owner's hand or play pile. A card in another pile keeps its
         // cost. A fight here has one player, so its owner's cards are the
@@ -1291,6 +1269,8 @@ pub(crate) fn modify_hook<V: crate::Build>(
         }
         // `FlutterPower.ModifyDamageMultiplicative`: its `DamageDecrease` off
         // a powered attack on its owner.
+        // `FlutterPower`'s `DamageDecrease` is the percentage taken off, so a hit
+        // keeps the share left.
         (
             __c0,
             _,
@@ -1299,7 +1279,9 @@ pub(crate) fn modify_hook<V: crate::Build>(
                 powered: true,
                 ..
             },
-        ) if __c0 == V::Power::FLUTTER_POWER && (target == Some(holder)) => Modify::Scaled(FLUTTER),
+        ) if __c0 == V::Power::FLUTTER_POWER && (target == Some(holder)) => {
+            Modify::Scaled(Fixed::new(100 - V::Power::FLUTTER_POWER_DAMAGE_DECREASE, 2))
+        }
         (__c0, _, ModifyHook::DamageMultiplicative { .. }) if __c0 == V::Power::FLUTTER_POWER => {
             Modify::Nothing
         }
@@ -1518,7 +1500,7 @@ pub(crate) fn modify_hook<V: crate::Build>(
                     fight.power(dealer, V::Power::VULNERABLE_POWER).is_some()
                 })) =>
         {
-            Modify::Scaled(COLOSSAL)
+            Modify::Scaled(V::Power::COLOSSUS_POWER_DAMAGE_DECREASE)
         }
         (__c0, _, ModifyHook::DamageMultiplicative { .. }) if __c0 == V::Power::COLOSSUS_POWER => {
             Modify::Nothing
@@ -4061,8 +4043,11 @@ pub(crate) fn event_hook<V: crate::Build>(
             if __c0 == V::Power::CRAB_RAGE_POWER && (creature != holder && side == owner) =>
         {
             asked.extend([
-                HookEffect::ApplyToOwner(V::Power::STRENGTH_POWER, PowerAmount::Counted(CRAB_RAGE)),
-                HookEffect::GainBlock(CRAB_BLOCK),
+                HookEffect::ApplyToOwner(
+                    V::Power::STRENGTH_POWER,
+                    PowerAmount::Counted(V::Power::CRAB_RAGE_POWER_STRENGTH_POWER),
+                ),
+                HookEffect::GainBlock(V::Power::CRAB_RAGE_POWER_BLOCK),
                 HookEffect::Remove,
             ]);
             return;
@@ -5585,13 +5570,15 @@ pub(crate) fn event_hook<V: crate::Build>(
         // before each of its owner's cards resolved at two or more.
         (__c0, PowerAmount::Counted(amount), EventHook::CardPlaying { resolved, .. })
             if __c0 == V::Power::DANSE_MACABRE_POWER
-                && (owner == CombatSide::Player && resolved >= DANSE_MACABRE_ENERGY) =>
+                && (owner == CombatSide::Player
+                    && resolved >= V::Power::DANSE_MACABRE_POWER_ENERGY) =>
         {
             Some(HookEffect::GainBlock(amount))
         }
         (__c0, PowerAmount::Endless, EventHook::CardPlaying { resolved, .. })
             if __c0 == V::Power::DANSE_MACABRE_POWER
-                && (owner == CombatSide::Player && resolved >= DANSE_MACABRE_ENERGY) =>
+                && (owner == CombatSide::Player
+                    && resolved >= V::Power::DANSE_MACABRE_POWER_ENERGY) =>
         {
             unimplemented!("an endless Danse Macabre")
         }
@@ -5670,7 +5657,7 @@ pub(crate) fn event_hook<V: crate::Build>(
             if __c0 == V::Power::RADIANCE_POWER && (player == holder) =>
         {
             asked.extend([
-                HookEffect::GainEnergy(RADIANCE_ENERGY),
+                HookEffect::GainEnergy(V::Power::RADIANCE_POWER_ENERGY),
                 HookEffect::Decrement,
             ]);
             return;
@@ -6117,7 +6104,7 @@ pub(crate) fn event_hook<V: crate::Build>(
         {
             asked.extend([
                 HookEffect::DamageOpponents(amount),
-                HookEffect::SetAmount(amount + ROLLING_BOULDER_GROWTH),
+                HookEffect::SetAmount(amount + V::Power::ROLLING_BOULDER_POWER_DAMAGE),
             ]);
             return;
         }

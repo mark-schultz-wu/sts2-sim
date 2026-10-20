@@ -37,22 +37,18 @@ own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
 
-### 2. Powers read their numbers from `vars.rs`
+### 2. Potions and enchantments read their numbers from `vars.rs`
 
 `sts2_content::vars` holds every relic's, power's, potion's and
 enchantment's numbers, from each build's `var` rows, as consts on the
-build's enum: `V::Power::COLOSSUS_POWER_DAMAGE_DECREASE`. The relic
-ports read theirs there. Each power port's constant that mirrors a
-`CanonicalVars` entry moves to its `vars` const, checked against the
-game's code where its doc names the var another way. One the game
-writes in code, or keeps in a field, stays. A var one build lacks has
-no const, so a port that needs it splits by build.
+build's enum: `V::Potion::BLOOD_POTION_HEAL`. The relic and power ports
+read theirs there. Each potion and enchantment port's constant that
+mirrors a `CanonicalVars` entry moves to its `vars` const. Where its doc
+names the var another way, the game's code says whether it reads it. One
+the game writes in code, or keeps in a field, stays. A var one build
+lacks has no const, so a port that needs it splits by build.
 
-### 3. Potions and enchantments read their numbers from `vars.rs`
-
-As item 2, for the potion and enchantment ports' constants.
-
-### 4. v0.111.0's changed rules
+### 3. v0.111.0's changed rules
 
 v0.111.0's `Hooks` and `Rules` are the shared ones in
 `sts2_content::behaviour`, which mirror v0.107.1's game code. A rule
@@ -112,7 +108,7 @@ mirrors v0.107.1's engine and has no seam for a build to differ. A
 split that traces to the engine needs that seam, which needs Mark's
 design first.
 
-### 5. A walk that shares only who listens
+### 4. A walk that shares only who listens
 
 The snapshot copies each walk's listeners. Most walks see none arrive or
 leave: 1.3% of `AfterCardPlayed` walks do, and 28% of `AfterSideTurnEnd`
@@ -122,7 +118,7 @@ A cheaper walk shares only which listeners there are and their order,
 kept apart from what they hold. That is part of the flat-state pass,
 which needs a design first.
 
-### 6. A speed target
+### 5. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.
