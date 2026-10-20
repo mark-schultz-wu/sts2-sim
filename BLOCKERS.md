@@ -37,28 +37,21 @@ own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
 
-### 2. Cursed Run
-
-Cursed Run: `AfterActEntered`, which gets a `ModelHook` of its own. It
-draws from the curses whose `CanBeGeneratedByModifiers` holds. That is a
-per-card property no dump carries yet, so the card dump gains a column,
-for both builds, and the mod is deployed again. Record 100 runs with it.
-
-### 3. Run modifiers in a fight
+### 2. Run modifiers in a fight
 
 Murderous and Terminal. `CombatState` lists the modifiers last among its
 listeners, after the cards, so they join the fight's walk there. They
 answer `AfterRoomEntered` and `AfterCreatureAddedToCombat`. Record 100
 runs with each.
 
-### 4. Run modifiers that carry data
+### 3. Run modifiers that carry data
 
 Hoarder saves the cards it copied, so it needs state of its own per run.
 Character Cards names a character, which the start command, the run and
 the recorded-run format have to carry. Both need Mark's design, which he
 meant to revisit once the walk was done.
 
-### 5. Run modifiers at Neow
+### 4. Run modifiers at Neow
 
 All Star, Specialized, Draft, Sealed Deck and Insanity. Neow offers each
 modifier's option in turn, and three of them empty the starting deck
@@ -66,14 +59,14 @@ first. Draft and Sealed Deck build that deck through repeated picks. The
 design is Mark's, which he meant to revisit once the walk was done.
 Record 100 runs with each.
 
-### 6. v0.111.0
+### 5. v0.111.0
 
 Only the generated tables exist. Codegen runs per build as it does now.
 The behaviour is written once, for v0.107.1. A v0.111.0 rule whose game
 code did not change calls that one. The v0.107.1 rule first becomes
 generic over the build. A rule that changed gets one of its own. Then record its runs.
 
-### 7. A walk that shares only who listens
+### 6. A walk that shares only who listens
 
 The snapshot copies each walk's listeners. Most walks see none arrive or
 leave: 1.3% of `AfterCardPlayed` walks do, and 28% of `AfterSideTurnEnd`
@@ -83,7 +76,7 @@ A cheaper walk shares only which listeners there are and their order,
 kept apart from what they hold. That is part of the flat-state pass,
 which needs a design first.
 
-### 8. A speed target
+### 7. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.

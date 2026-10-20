@@ -1,0 +1,10 @@
+# Cursed Run puts a curse in the deck as each act is entered, drawn off
+# the niche stream from the curses a modifier may give. The first comes
+# in Neow's room, and the second once the first boss falls and the run
+# proceeds to the second act.
+{"cmd":"start","seed":"S33D1","character":"IRONCLAD","ascension":"None","modifiers":["CURSED_RUN"]}
+{"cmd":"fight","encounter":"CEREMONIAL_BEAST_BOSS"}
+{"cmd":"power","power":"DEMISE_POWER","amount":999,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"answer","skip":true}
+{"cmd":"proceed"}

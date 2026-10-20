@@ -655,6 +655,7 @@ pub trait PowerTable: Table {
 pub enum ModelHook {
     AfterRoomEntered,
     AfterMapGenerated,
+    AfterActEntered,
     BeforeCombatStart,
     AfterCombatEnd,
     AfterCardPlayed,
@@ -804,9 +805,10 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 148] = [
+    pub const ALL: [ModelHook; 149] = [
         ModelHook::AfterRoomEntered,
         ModelHook::AfterMapGenerated,
+        ModelHook::AfterActEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
         ModelHook::AfterCardPlayed,
@@ -960,6 +962,7 @@ impl ModelHook {
         match self {
             ModelHook::AfterRoomEntered => "AfterRoomEntered",
             ModelHook::AfterMapGenerated => "AfterMapGenerated",
+            ModelHook::AfterActEntered => "AfterActEntered",
             ModelHook::ModifyGeneratedMap => "ModifyGeneratedMap",
             ModelHook::ModifyGeneratedMapLate => "ModifyGeneratedMapLate",
             ModelHook::ModifyCardRewardCreationOptions => "ModifyCardRewardCreationOptions",
@@ -3931,6 +3934,9 @@ pub enum EventHook<V: ContentVersion> {
     /// own hook, which the code after the `await` runs on. Asked of that
     /// model alone, even once a question inside the command is answered.
     OwnCommandOver,
+    /// `AfterActEntered`, once the run stands in the act's first room: Neow's
+    /// for the first act, and the map for each after.
+    ActEntered,
     /// `ModifierModel.OnRunCreated`, once a new run's relic bags are filled:
     /// `ClearsPlayerDeck`, then `AfterRunCreated`. Asked of each modifier
     /// alone.
@@ -4433,6 +4439,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::UnknownRoomTypes { .. } => ModelHook::ModifyUnknownMapPointRoomTypes,
             EventHook::GeneratedMap { .. } => ModelHook::ModifyGeneratedMap,
             EventHook::GeneratedMapLate { .. } => ModelHook::ModifyGeneratedMapLate,
+            EventHook::ActEntered => ModelHook::AfterActEntered,
             EventHook::CardRewardCreationOptions { .. } => {
                 ModelHook::ModifyCardRewardCreationOptions
             }

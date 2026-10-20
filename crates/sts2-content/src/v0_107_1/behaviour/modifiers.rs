@@ -8,6 +8,7 @@ use super::super::generated::encounters::RoomType;
 use super::super::generated::modifiers::Modifier;
 use super::super::generated::relics::Relic;
 use super::super::generated::restsite::RestSiteOption;
+use super::super::generated::runstate::RunRngType;
 
 /// `NightTerrors._maxHpLoss`.
 const NIGHT_TERRORS_LOSS: i32 = 5;
@@ -79,6 +80,15 @@ pub(crate) fn event_hook(
                 base: DEADLY_ELITE_ODDS,
             },
         ]),
+        // `CursedRun.AfterActEntered`: a curse a modifier may give, by
+        // `NextItem` off `RunState.Rng.Niche`, into the deck.
+        (Modifier::CursedRun, EventHook::ActEntered) => {
+            asked.push(HookEffect::AddDistinctToDeck {
+                cards: &super::relics::MODIFIER_CURSES,
+                count: 1,
+                stream: RunRngType::Niche,
+            });
+        }
         // `OnRunCreated` alone, which clears no deck for these.
         (_, EventHook::RunCreated) => {}
         // `BigGameHunter.ModifyGeneratedMap`: the map again, with two and a
@@ -132,5 +142,6 @@ pub(crate) fn ported(modifier: Modifier) -> bool {
             | Modifier::NightTerrors
             | Modifier::DeadlyEvents
             | Modifier::BigGameHunter
+            | Modifier::CursedRun
     )
 }

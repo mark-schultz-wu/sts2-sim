@@ -1566,11 +1566,6 @@ impl<'a, V: Rules> Board<'a, V> {
         }
     }
 
-    /// Resolve a death, then end the fight if it is ending.
-    ///
-    /// A creature a power keeps in the fight is still counted, and still
-    /// dead, so keeping one does not hold the fight open.
-    #[tracing::instrument(level = "trace", skip_all)]
     /// `LoseHpInternal`: what `creature` lost, what went past its health,
     /// and whether this took it from standing to none.
     fn lose_hp(&mut self, creature: CombatId, amount: V::Number) -> (V::Number, V::Number, bool) {
@@ -1591,6 +1586,11 @@ impl<'a, V: Rules> Board<'a, V> {
         (lost, overkill, killed)
     }
 
+    /// Resolve a death, then end the fight if it is ending.
+    ///
+    /// A creature a power keeps in the fight is still counted, and still
+    /// dead, so keeping one does not hold the fight open.
+    #[tracing::instrument(level = "trace", skip_all)]
     fn kill(&mut self, at: usize) {
         self.die(at, false);
         self.end_if_ending();
