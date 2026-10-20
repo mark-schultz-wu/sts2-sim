@@ -1,11 +1,7 @@
 //! `Permafrost`: block for the first power a fight plays.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{CardTable, EventHook, HookEffect};
-
-use crate::behaviour::relics::Number;
-
-/// `BlockVar(7, Unpowered)`, which is all this relic hands out.
-const BLOCK: Number = 7;
 
 /// `_activatedThisCombat`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -39,7 +35,7 @@ pub(super) fn event_hook<V: crate::Build>(
                 false => {}
                 true => {
                     state.activated_this_combat = true;
-                    asked.push(HookEffect::GainBlock(BLOCK))
+                    asked.push(HookEffect::GainBlock(V::Relic::PERMAFROST_BLOCK))
                 }
             }
         }

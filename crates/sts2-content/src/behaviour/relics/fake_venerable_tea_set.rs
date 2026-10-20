@@ -1,12 +1,9 @@
 //! `FakeVenerableTeaSet`: an energy in the fight after a rest site.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
 
-use crate::behaviour::relics::Number;
 use crate::generated::encounters::RoomType;
-
-/// `EnergyVar(1)`.
-const ENERGY: Number = 1;
 
 /// `GainEnergyInNextCombat`, the one `[SavedProperty]` it declares.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -28,7 +25,9 @@ pub(super) fn event_hook<V: crate::Build>(
         } => state.gain_energy = true,
         EventHook::EnergyReset { .. } if state.gain_energy => {
             state.gain_energy = false;
-            asked.push(HookEffect::GainEnergy(ENERGY));
+            asked.push(HookEffect::GainEnergy(
+                V::Relic::FAKE_VENERABLE_TEA_SET_ENERGY,
+            ));
         }
         _ => {}
     }

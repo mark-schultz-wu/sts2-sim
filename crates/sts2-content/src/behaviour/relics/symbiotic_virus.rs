@@ -1,12 +1,10 @@
 //! `SymbioticVirus`: a Dark orb as each fight opens.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
 
 use crate::generated::runstate::CombatSide;
 use crate::ids::OrbIds as _;
-
-/// `DynamicVar("Dark", 1)`: how many it channels.
-const DARK: usize = 1;
 
 /// `AfterSideTurnStart` on its owner's first turn. A fight here has one
 /// player, who owns it.
@@ -21,6 +19,9 @@ pub(super) fn event_hook<V: crate::Build>(
     } = hook
         && turn <= 1
     {
-        asked.extend((0..DARK).map(|_| HookEffect::Channel(V::Orb::DARK_ORB)));
+        asked.extend(
+            (0..(V::Relic::SYMBIOTIC_VIRUS_DARK as usize))
+                .map(|_| HookEffect::Channel(V::Orb::DARK_ORB)),
+        );
     }
 }

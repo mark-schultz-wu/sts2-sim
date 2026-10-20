@@ -1,11 +1,9 @@
 //! `AlchemicalCoffer`: four potion slots, and a potion in each.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
 
 use crate::generated::runstate::RunRngType;
-
-/// `DynamicVar("PotionSlots", 4)`.
-const SLOTS: usize = 4;
 
 /// `AfterObtained`: `PlayerCmd.GainMaxPotionCount`, then as many potions from
 /// `CreateRandomPotionsOutOfCombat` off `RunState.Rng.CombatPotionGeneration`,
@@ -16,10 +14,10 @@ pub(super) fn event_hook<V: crate::Build>(
 ) {
     if let EventHook::Obtained { .. } = hook {
         asked.extend([
-            HookEffect::GainPotionSlots(SLOTS),
+            HookEffect::GainPotionSlots(V::Relic::ALCHEMICAL_COFFER_POTION_SLOTS as usize),
             HookEffect::ProcureRandomPotions {
                 in_combat: false,
-                count: SLOTS,
+                count: (V::Relic::ALCHEMICAL_COFFER_POTION_SLOTS as usize),
                 stream: RunRngType::CombatPotionGeneration,
                 into_gained: true,
             },

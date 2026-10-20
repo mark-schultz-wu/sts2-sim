@@ -1,11 +1,9 @@
 //! `IronClub`: a card drawn for every fourth card played.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
 
 use crate::behaviour::relics::Number;
-
-/// `CardsVar(4)`.
-const CARDS: u32 = 4;
 
 /// `CardsPlayed`, its one `[SavedProperty]`, which carries from one fight to
 /// the next.
@@ -23,13 +21,17 @@ pub(super) fn event_hook<V: crate::Build>(
 ) {
     if let EventHook::CardPlayed { .. } = hook {
         state.cards_played += 1;
-        if state.cards_played.is_multiple_of(CARDS) {
+        if state
+            .cards_played
+            .is_multiple_of(V::Relic::IRON_CLUB_CARDS as u32)
+        {
             asked.push(HookEffect::Draw(1));
         }
     }
 }
 
 /// `DisplayAmount`: the cards counted towards the next draw.
-pub(super) fn display_amount(state: &State) -> Number {
-    Number::try_from(state.cards_played % CARDS).expect("under four fits a game number")
+pub(super) fn display_amount<V: crate::Build>(state: &State) -> Number {
+    Number::try_from(state.cards_played % (V::Relic::IRON_CLUB_CARDS as u32))
+        .expect("under four fits a game number")
 }

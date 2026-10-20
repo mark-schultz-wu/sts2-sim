@@ -1,11 +1,9 @@
 //! `MiniatureCannon`: more damage on each powered hit from an upgraded card.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, Modify, ModifyHook};
 
 use crate::behaviour::relics::Number;
-
-/// `DynamicVar("ExtraDamage", 3)`.
-const EXTRA_DAMAGE: Number = 3;
 
 /// `ModifyDamageAdditive`: its extra damage on a powered hit from an upgraded
 /// card. A fight here has one player, so every card is its owner's.
@@ -15,7 +13,7 @@ pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number
             card: Some(source),
             powered: true,
             ..
-        } if source.upgraded => Modify::Added(EXTRA_DAMAGE),
+        } if source.upgraded => Modify::Added(V::Relic::MINIATURE_CANNON_EXTRA_DAMAGE),
         ModifyHook::DamageAdditive { .. } => Modify::Nothing,
         hook => unimplemented!("what MiniatureCannon does for {hook:?}"),
     }

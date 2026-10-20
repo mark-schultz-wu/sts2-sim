@@ -1,14 +1,9 @@
 //! `BookOfFiveRings`: a heal for every fifth card that joins the deck.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
 
 use crate::behaviour::relics::Number;
-
-/// `CardsVar(5)`.
-const CARDS: u32 = 5;
-
-/// `HealVar(20)`.
-const HEAL: Number = 20;
 
 /// `CardsAdded`, its one `[SavedProperty]`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -25,13 +20,17 @@ pub(super) fn event_hook<V: crate::Build>(
 ) {
     if let EventHook::AddedToDeck { .. } = hook {
         state.cards_added += 1;
-        if state.cards_added.is_multiple_of(CARDS) {
-            asked.push(HookEffect::Heal(HEAL));
+        if state
+            .cards_added
+            .is_multiple_of(V::Relic::BOOK_OF_FIVE_RINGS_CARDS as u32)
+        {
+            asked.push(HookEffect::Heal(V::Relic::BOOK_OF_FIVE_RINGS_HEAL));
         }
     }
 }
 
 /// `DisplayAmount`: the cards counted towards the next heal.
-pub(super) fn display_amount(state: &State) -> Number {
-    Number::try_from(state.cards_added % CARDS).expect("under five fits a game number")
+pub(super) fn display_amount<V: crate::Build>(state: &State) -> Number {
+    Number::try_from(state.cards_added % (V::Relic::BOOK_OF_FIVE_RINGS_CARDS as u32))
+        .expect("under five fits a game number")
 }

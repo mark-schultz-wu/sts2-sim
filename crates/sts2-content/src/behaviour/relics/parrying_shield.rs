@@ -1,16 +1,10 @@
 //! `ParryingShield`: a hit on a random enemy for a turn ended on enough
 //! block.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
 
-use crate::behaviour::relics::Number;
 use crate::generated::runstate::CombatSide;
-
-/// `BlockVar(10, ValueProp.Unpowered)`, the block the turn ends on at least.
-const BLOCK: Number = 10;
-
-/// `DamageVar(6, ValueProp.Unpowered)`.
-const DAMAGE: Number = 6;
 
 /// `AfterSideTurnEnd` on its owner's side, with at least its block held:
 /// `CreatureCmd.Damage` from its owner on an enemy that can be hit, drawn
@@ -23,10 +17,10 @@ pub(super) fn event_hook<V: crate::Build>(
         side: CombatSide::Player,
         block,
     } = hook
-        && block >= BLOCK
+        && block >= V::Relic::PARRYING_SHIELD_BLOCK
     {
         asked.push(HookEffect::DamageRandomOpponent {
-            amount: DAMAGE,
+            amount: V::Relic::PARRYING_SHIELD_DAMAGE,
             unblockable: false,
             from_owner: true,
         });

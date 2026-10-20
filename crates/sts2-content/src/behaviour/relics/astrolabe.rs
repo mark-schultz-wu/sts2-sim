@@ -1,11 +1,9 @@
 //! `Astrolabe`: three cards transformed and upgraded as it is picked up.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{DeckAct, EventHook, HookEffect, Stream};
 
 use crate::generated::runstate::RunRngType;
-
-/// `CardsVar(3)`.
-const CARDS: usize = 3;
 
 /// `AfterObtained`: `CardSelectCmd.FromDeckForTransformation` for three.
 /// Each becomes `CreateRandomCardForTransform` off `RunState.Rng.Niche`,
@@ -17,7 +15,7 @@ pub(super) fn event_hook<V: crate::Build>(
     if let EventHook::Obtained { .. } = hook {
         asked.push(HookEffect::SelectFromDeck {
             act: DeckAct::TransformUpgraded(Stream::Run(RunRngType::Niche)),
-            count: CARDS,
+            count: (V::Relic::ASTROLABE_CARDS as usize),
         });
     }
 }

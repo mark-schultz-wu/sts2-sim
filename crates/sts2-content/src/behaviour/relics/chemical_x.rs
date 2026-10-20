@@ -1,17 +1,15 @@
 //! `ChemicalX`: two more on every X its owner's cards resolve.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, Modify, ModifyHook};
 
 use crate::behaviour::relics::Number;
-
-/// `DynamicVar("Increase", 2)`.
-const INCREASE: Number = 2;
 
 /// `ModifyXValue`: its increase on every X. A fight here has one player, so
 /// every card is its owner's.
 pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
     match hook {
-        ModifyHook::XValue => Modify::Added(INCREASE),
+        ModifyHook::XValue => Modify::Added(V::Relic::CHEMICAL_X_INCREASE),
         hook => unimplemented!("what ChemicalX does for {hook:?}"),
     }
 }

@@ -1,10 +1,8 @@
 //! `PunchDagger`: one card enchanted with Momentum.
 
 use crate::ids::EnchantmentIds as _;
+use crate::vars::RelicVars as _;
 use sts2_core::{DeckAct, EventHook, HookEffect};
-
-/// `Momentum`'s `DynamicVar(5)`.
-const MOMENTUM: u8 = 5;
 
 /// `AfterObtained`: `CardSelectCmd.FromDeckForEnchantment` for one card,
 /// then Momentum at five on it.
@@ -16,7 +14,7 @@ pub(super) fn event_hook<V: crate::Build>(
         asked.push(HookEffect::SelectFromDeck {
             act: DeckAct::Enchant {
                 enchantment: V::Enchantment::MOMENTUM,
-                amount: MOMENTUM,
+                amount: (V::Relic::PUNCH_DAGGER_MOMENTUM as u8),
                 kind: None,
             },
             count: 1,

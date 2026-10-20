@@ -1,12 +1,9 @@
 //! `HandDrill`: Vulnerable on an enemy whose block its owner breaks.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect, PowerAmount};
 
-use crate::behaviour::relics::Number;
 use crate::ids::PowerIds as _;
-
-/// `PowerVar<VulnerablePower>(2)`.
-const VULNERABLE: Number = 2;
 
 /// `AfterDamageGiven`: a hit from its owner, or its owner's pet, that breaks
 /// an enemy's block gives that enemy Vulnerable.
@@ -26,7 +23,7 @@ pub(super) fn event_hook<V: crate::Build>(
             asked.push(HookEffect::ApplyPower {
                 target,
                 power: V::Power::VULNERABLE_POWER,
-                amount: PowerAmount::Counted(VULNERABLE),
+                amount: PowerAmount::Counted(V::Relic::HAND_DRILL_VULNERABLE_POWER),
                 applier: Some(player),
             });
         }

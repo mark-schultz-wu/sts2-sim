@@ -1,12 +1,9 @@
 //! `VeryHotCocoa`: energy on the first turn of each fight.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
 
-use crate::behaviour::relics::Number;
 use crate::generated::runstate::CombatSide;
-
-/// `EnergyVar(4)`.
-const ENERGY: Number = 4;
 
 /// `AfterSideTurnStart`: `PlayerCmd.GainEnergy` while its owner's
 /// `TurnNumber` is at most one. A relic's owner is the player, and a fight
@@ -20,7 +17,7 @@ pub(super) fn event_hook<V: crate::Build>(
             side: CombatSide::Player,
             turn,
             ..
-        } if turn <= 1 => asked.push(HookEffect::GainEnergy(ENERGY)),
+        } if turn <= 1 => asked.push(HookEffect::GainEnergy(V::Relic::VERY_HOT_COCOA_ENERGY)),
         _ => {}
     }
 }

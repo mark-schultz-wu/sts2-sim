@@ -1,13 +1,11 @@
 //! `UndyingSigil`: an enemy whose Doom has caught up with its hit points
 //! deals its owner half damage.
 
-use sts2_core::{EventHook, FightView, Fixed, Modify, ModifyHook, PowerAmount};
+use crate::vars::RelicVars as _;
+use sts2_core::{EventHook, FightView, Modify, ModifyHook, PowerAmount};
 
 use crate::behaviour::relics::Number;
 use crate::ids::PowerIds as _;
-
-/// `DamageDecrease`.
-const DECREASE: Fixed = Fixed::new(5, 1);
 
 /// `ModifyDamageMultiplicative`: half a powered attack on its owner, from
 /// another creature whose hit points are no more than its Doom.
@@ -35,7 +33,7 @@ pub(super) fn modify_hook<V: crate::Build>(
             let hp = fight.current_hp(dealer).expect("a dealer is in the fight");
             match hp > doom {
                 true => Modify::Nothing,
-                false => Modify::Scaled(DECREASE),
+                false => Modify::Scaled(V::Relic::UNDYING_SIGIL_DAMAGE_DECREASE),
             }
         }
         ModifyHook::DamageMultiplicative { .. } => Modify::Nothing,

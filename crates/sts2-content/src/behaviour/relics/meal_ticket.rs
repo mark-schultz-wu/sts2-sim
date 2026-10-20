@@ -1,12 +1,9 @@
 //! `MealTicket`: a heal at each merchant.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
 
-use crate::behaviour::relics::Number;
 use crate::generated::encounters::RoomType;
-
-/// `HealVar(15)`.
-const HEAL: Number = 15;
 
 /// `AfterRoomEntered`: its heal as a merchant's room opens. Outside a fight
 /// its owner is alive.
@@ -19,6 +16,6 @@ pub(super) fn event_hook<V: crate::Build>(
         ..
     } = hook
     {
-        asked.push(HookEffect::Heal(HEAL));
+        asked.push(HookEffect::Heal(V::Relic::MEAL_TICKET_HEAL));
     }
 }

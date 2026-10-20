@@ -1,14 +1,9 @@
 //! `Nunchaku`: an energy for every tenth attack played.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{CardKind, EventHook, HookEffect};
 
 use crate::behaviour::relics::Number;
-
-/// `CardsVar(10)`.
-const CARDS: u32 = 10;
-
-/// `EnergyVar(1)`.
-const ENERGY: Number = 1;
 
 /// `AttacksPlayed`, its one `[SavedProperty]`, which carries from one fight
 /// to the next.
@@ -29,13 +24,17 @@ pub(super) fn event_hook<V: crate::Build>(
         && <V as sts2_core::Rules>::card_kind(card) == Some(CardKind::Attack)
     {
         state.attacks_played += 1;
-        if state.attacks_played.is_multiple_of(CARDS) {
-            asked.push(HookEffect::GainEnergy(ENERGY));
+        if state
+            .attacks_played
+            .is_multiple_of(V::Relic::NUNCHAKU_CARDS as u32)
+        {
+            asked.push(HookEffect::GainEnergy(V::Relic::NUNCHAKU_ENERGY));
         }
     }
 }
 
 /// `DisplayAmount`: the attacks counted towards the next energy.
-pub(super) fn display_amount(state: &State) -> Number {
-    Number::try_from(state.attacks_played % CARDS).expect("under ten fits a game number")
+pub(super) fn display_amount<V: crate::Build>(state: &State) -> Number {
+    Number::try_from(state.attacks_played % (V::Relic::NUNCHAKU_CARDS as u32))
+        .expect("under ten fits a game number")
 }

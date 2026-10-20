@@ -1,12 +1,10 @@
 //! `ToyBox`: four wax relics offered as it is picked up, one melted every
 //! third fight.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
 
 use crate::behaviour::relics::Number;
-
-/// `Combats`: the fights between melts.
-const COMBATS: u8 = 3;
 
 /// `CombatsSeen`, which it saves.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -28,7 +26,10 @@ pub(super) fn event_hook<V: crate::Build>(
         EventHook::CombatEnd { .. } => {
             state.combats_seen = (state.combats_seen.checked_add(1))
                 .unwrap_or_else(|| unimplemented!("more fights than a byte counts"));
-            if state.combats_seen.is_multiple_of(COMBATS) {
+            if state
+                .combats_seen
+                .is_multiple_of(V::Relic::TOY_BOX_COMBATS as u8)
+            {
                 asked.push(HookEffect::MeltFirstWax);
             }
         }
@@ -38,12 +39,13 @@ pub(super) fn event_hook<V: crate::Build>(
 
 /// `IsUsedUp`: every wax relic's fights seen.
 pub(super) fn used_up<V: crate::Build>(state: &State) -> bool {
-    usize::from(state.combats_seen) >= usize::from(COMBATS) * V::TOY_BOX_WAX_RELICS.len()
+    usize::from(state.combats_seen)
+        >= usize::from(V::Relic::TOY_BOX_COMBATS as u8) * V::TOY_BOX_WAX_RELICS.len()
 }
 
 /// `DisplayAmount`: the fights toward the next melt.
-pub(super) fn display_amount(state: &State) -> Number {
-    Number::from(state.combats_seen % COMBATS)
+pub(super) fn display_amount<V: crate::Build>(state: &State) -> Number {
+    Number::from(state.combats_seen % (V::Relic::TOY_BOX_COMBATS as u8))
 }
 
 /// `WAX_RELICS`, written for one build's own types.

@@ -1,17 +1,15 @@
 //! `PrismaticGem`: an energy each turn, and card rewards drawn from every
 //! character's pool.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect, Modify, ModifyHook};
 
 use crate::behaviour::relics::Number;
 
-/// `EnergyVar(1)`.
-const ENERGY: Number = 1;
-
 /// `ModifyMaxEnergy`: one more.
 pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
     match hook {
-        ModifyHook::MaxEnergy { .. } => Modify::Added(ENERGY),
+        ModifyHook::MaxEnergy { .. } => Modify::Added(V::Relic::PRISMATIC_GEM_ENERGY),
         hook => unimplemented!("what PrismaticGem does for {hook:?}"),
     }
 }

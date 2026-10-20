@@ -1,10 +1,8 @@
 //! `PowerCell`: two cards that cost nothing, from the draw pile into the
 //! first hand.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect, SideKinds as _};
-
-/// `CardsVar(2)`.
-const CARDS: usize = 2;
 
 /// `BeforeSideTurnStart` for the player's side on its first turn: the draw
 /// pile's cards that cost nothing, shuffled, and the first two into hand.
@@ -16,6 +14,8 @@ pub(super) fn event_hook<V: crate::Build>(
         && side == <V as sts2_core::ContentVersion>::CombatSide::PLAYER
         && turn <= 1
     {
-        asked.push(HookEffect::ZeroCostFromDraw(CARDS));
+        asked.push(HookEffect::ZeroCostFromDraw(
+            V::Relic::POWER_CELL_CARDS as usize,
+        ));
     }
 }

@@ -1,11 +1,9 @@
 //! `PaelsFlesh`: one more energy from the third turn of each fight.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, Modify, ModifyHook};
 
 use crate::behaviour::relics::Number;
-
-/// `EnergyVar(1)`.
-const ENERGY: Number = 1;
 
 /// The `TurnNumber` from which it adds.
 const FROM_TURN: u32 = 3;
@@ -19,7 +17,9 @@ pub(super) fn event_hook<V: crate::Build>(_hook: EventHook<V>) {}
 /// more. A relic's owner is the player, and a fight here has one.
 pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
     match hook {
-        ModifyHook::MaxEnergy { turn, .. } if turn >= FROM_TURN => Modify::Added(ENERGY),
+        ModifyHook::MaxEnergy { turn, .. } if turn >= FROM_TURN => {
+            Modify::Added(V::Relic::PAELS_FLESH_ENERGY)
+        }
         ModifyHook::MaxEnergy { .. } => Modify::Nothing,
         hook => unimplemented!("what PaelsFlesh does for {hook:?}"),
     }

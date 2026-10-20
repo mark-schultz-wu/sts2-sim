@@ -1,14 +1,9 @@
 //! `MeatOnTheBone`: health back after a fight won at half health or less.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
 
 use crate::behaviour::relics::Number;
-
-/// `DynamicVar("HpThreshold", 50)`, a share of the maximum in hundredths.
-const THRESHOLD: Number = 50;
-
-/// `HealVar(12)`.
-const HEAL: Number = 12;
 
 /// `AfterCombatVictoryEarly`: its heal, when its owner's health is at or
 /// below half their maximum. What it does before a fight and as health
@@ -19,9 +14,10 @@ pub(super) fn event_hook<V: crate::Build>(
 ) {
     match hook {
         EventHook::CombatVictoryEarly { player, .. }
-            if Number::from(player.hp) <= Number::from(player.max_hp) * THRESHOLD / 100 =>
+            if Number::from(player.hp)
+                <= Number::from(player.max_hp) * V::Relic::MEAT_ON_THE_BONE_HP_THRESHOLD / 100 =>
         {
-            asked.push(HookEffect::Heal(HEAL));
+            asked.push(HookEffect::Heal(V::Relic::MEAT_ON_THE_BONE_HEAL));
         }
         EventHook::CombatVictoryEarly { .. }
         | EventHook::CombatStarting { .. }

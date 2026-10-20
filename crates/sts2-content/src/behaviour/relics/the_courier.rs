@@ -1,18 +1,19 @@
 //! `TheCourier`: a fifth off the merchant's prices, and shelves that restock
 //! once bought from.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{DecisionHook, EventHook, HookResponse, Modify, ModifyHook};
 
 use crate::behaviour::relics::Number;
-
-/// `DynamicVar("Discount", 20)`, off every price.
-const DISCOUNT: i32 = 20;
 
 /// `ModifyMerchantPrice`: the price less its discount, for its owner, the one
 /// player a run here has.
 pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
     match hook {
-        ModifyHook::MerchantPrice => Modify::Scaled(sts2_core::Fixed::new(100 - DISCOUNT, 2)),
+        ModifyHook::MerchantPrice => Modify::Scaled(sts2_core::Fixed::new(
+            100 - V::Relic::THE_COURIER_DISCOUNT,
+            2,
+        )),
         _ => Modify::Nothing,
     }
 }

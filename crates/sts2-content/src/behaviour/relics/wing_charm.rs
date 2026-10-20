@@ -1,10 +1,8 @@
 //! `WingCharm`: one card of each set made for a reward enchanted with Swift.
 
 use crate::ids::EnchantmentIds as _;
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
-
-/// `DynamicVar("SwiftAmount", 1)`.
-const SWIFT: u8 = 1;
 
 /// `TryModifyCardRewardOptionsLate` over the whole set of cards made for a
 /// reward, a `CardReward`'s or not. One card Swift can enchant, `NextItem`
@@ -18,7 +16,7 @@ pub(super) fn event_hook<V: crate::Build>(
         EventHook::CardRewardPick { .. } => {
             asked.push(HookEffect::EnchantOneRewardCard {
                 enchantment: V::Enchantment::SWIFT,
-                amount: SWIFT,
+                amount: (V::Relic::WING_CHARM_SWIFT_AMOUNT as u8),
             });
         }
         EventHook::CardRewardOption { .. } | EventHook::Obtained { .. } => {}

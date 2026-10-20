@@ -1,11 +1,7 @@
 //! `RoyalPoison`: damage as the first turn of a fight starts.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
-
-use crate::behaviour::relics::Number;
-
-/// `DamageVar(4, Unblockable | Unpowered)`.
-const DAMAGE: Number = 4;
 
 /// `AfterPlayerTurnStart` on its owner's first turn: its damage to its
 /// owner, from nobody.
@@ -16,7 +12,7 @@ pub(super) fn event_hook<V: crate::Build>(
     match hook {
         EventHook::PlayerTurnStart { turn, .. } if turn <= 1 => {
             asked.push(HookEffect::DamageOwnerInFight {
-                amount: DAMAGE,
+                amount: V::Relic::ROYAL_POISON_DAMAGE,
                 unblockable: true,
                 self_dealt: false,
             })

@@ -1,13 +1,11 @@
 //! `PumpkinCandle`: an energy each turn while it burns, for a few fights at
 //! a time, and a rest site option that rekindles it.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect, Modify, ModifyHook};
 
 use crate::behaviour::relics::Number;
 use crate::ids::RestSiteOptionIds as _;
-
-/// `EnergyVar(1)`.
-const ENERGY: Number = 1;
 
 /// `Rekindle`'s five fights, which is `CombatCount`.
 const KINDLE: Number = 5;
@@ -39,7 +37,9 @@ pub(super) fn event_hook<V: crate::Build>(
 /// `ModifyMaxEnergy`: its energy while it burns.
 pub(super) fn modify_hook<V: crate::Build>(state: &State, hook: ModifyHook<V>) -> Modify<Number> {
     match hook {
-        ModifyHook::MaxEnergy { .. } if state.kindle_count > 0 => Modify::Added(ENERGY),
+        ModifyHook::MaxEnergy { .. } if state.kindle_count > 0 => {
+            Modify::Added(V::Relic::PUMPKIN_CANDLE_ENERGY)
+        }
         ModifyHook::MaxEnergy { .. } => Modify::Nothing,
         hook => unimplemented!("what PumpkinCandle does for {hook:?}"),
     }

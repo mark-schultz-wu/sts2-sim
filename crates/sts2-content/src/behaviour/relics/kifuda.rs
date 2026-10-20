@@ -1,10 +1,8 @@
 //! `Kifuda`: up to three cards enchanted with Adroit.
 
 use crate::ids::EnchantmentIds as _;
+use crate::vars::RelicVars as _;
 use sts2_core::{DeckAct, EventHook, HookEffect};
-
-/// `CardsVar(3)`: how many cards it offers to enchant.
-const CARDS: usize = 3;
 
 /// `_adroitAmount`.
 const ADROIT: u8 = 3;
@@ -23,7 +21,7 @@ pub(super) fn event_hook<V: crate::Build>(
                 kind: None,
             },
             min: 0,
-            max: CARDS,
+            max: (V::Relic::KIFUDA_CARDS as usize),
         });
     }
 }

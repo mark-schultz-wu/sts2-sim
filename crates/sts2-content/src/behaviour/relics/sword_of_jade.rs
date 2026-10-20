@@ -2,10 +2,8 @@
 //! into.
 
 use crate::ids::PowerIds as _;
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect, PowerAmount};
-
-/// `PowerVar<StrengthPower>(3)`.
-const STRENGTH: PowerAmount<crate::behaviour::relics::Number> = PowerAmount::Counted(3);
 
 /// `AfterRoomEntered`: Strength on its owner as a fight's room opens.
 pub(super) fn event_hook<V: crate::Build>(
@@ -15,6 +13,9 @@ pub(super) fn event_hook<V: crate::Build>(
     if let EventHook::RoomEntered { room, .. } = hook
         && crate::behaviour::relics::combat_room(room)
     {
-        asked.push(HookEffect::ApplyToOwner(V::Power::STRENGTH_POWER, STRENGTH));
+        asked.push(HookEffect::ApplyToOwner(
+            V::Power::STRENGTH_POWER,
+            PowerAmount::Counted(V::Relic::SWORD_OF_JADE_STRENGTH_POWER),
+        ));
     }
 }

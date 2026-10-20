@@ -1,11 +1,7 @@
 //! `MawBank`: gold for each room entered, until anything is bought.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
-
-use crate::behaviour::relics::Number;
-
-/// `GoldVar(12)`.
-const GOLD: Number = 12;
 
 /// `HasItemBeenBought`, which it saves.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -27,7 +23,7 @@ pub(super) fn event_hook<V: crate::Build>(
 ) {
     match hook {
         EventHook::RoomEntered { base: true, .. } if !state.bought => {
-            asked.push(HookEffect::GainGold(GOLD));
+            asked.push(HookEffect::GainGold(V::Relic::MAW_BANK_GOLD));
         }
         EventHook::ItemPurchased { gold } if gold > 0 => state.bought = true,
         EventHook::RoomEntered { .. } | EventHook::ItemPurchased { .. } => {}

@@ -1,12 +1,9 @@
 //! `RadiantPearl`: a Luminesce in the first hand of every fight.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
 
-use crate::behaviour::relics::Number;
 use crate::ids::CardIds as _;
-
-/// `CardsVar(1)`.
-const CARDS: Number = 1;
 
 /// `BeforeHandDraw` on its owner's first turn:
 /// `AddGeneratedCardsToCombat` of its Luminesces into hand, before the draw.
@@ -19,7 +16,7 @@ pub(super) fn event_hook<V: crate::Build>(
         EventHook::BeforeHandDraw { turn: 1, .. } => {
             asked.push(HookEffect::GenerateInHand {
                 card: V::Card::LUMINESCE,
-                count: CARDS,
+                count: V::Relic::RADIANT_PEARL_CARDS,
             });
         }
         EventHook::BeforeHandDraw { .. } | EventHook::Obtained { .. } => {}

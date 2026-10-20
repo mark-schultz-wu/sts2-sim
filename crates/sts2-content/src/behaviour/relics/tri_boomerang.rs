@@ -1,10 +1,8 @@
 //! `TriBoomerang`: three attacks enchanted with Instinct.
 
 use crate::ids::EnchantmentIds as _;
+use crate::vars::RelicVars as _;
 use sts2_core::{DeckAct, EventHook, HookEffect};
-
-/// `CardsVar(3)`.
-const CARDS: usize = 3;
 
 /// `AfterObtained`: `CardSelectCmd.FromDeckForEnchantment` for three, each
 /// then `CardCmd.Enchant<Instinct>` by one.
@@ -19,7 +17,7 @@ pub(super) fn event_hook<V: crate::Build>(
                 amount: 1,
                 kind: None,
             },
-            count: CARDS,
+            count: (V::Relic::TRI_BOOMERANG_CARDS as usize),
         });
     }
 }

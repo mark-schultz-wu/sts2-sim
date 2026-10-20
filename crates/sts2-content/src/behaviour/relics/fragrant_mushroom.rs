@@ -1,15 +1,9 @@
 //! `FragrantMushroom`: a cut, and two cards upgraded, as it is picked up.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
 
-use crate::behaviour::relics::Number;
 use crate::generated::runstate::RunRngType;
-
-/// `HpLossVar(15)`, dealt unblockable and unpowered.
-const DAMAGE: Number = 15;
-
-/// `CardsVar(2)`.
-const CARDS: usize = 2;
 
 /// `AfterObtained`: `CreatureCmd.Damage` on its owner, then the deck's
 /// upgradable cards stably shuffled off `RunState.Rng.Niche`, and the first
@@ -20,9 +14,9 @@ pub(super) fn event_hook<V: crate::Build>(
 ) {
     if let EventHook::Obtained { .. } = hook {
         asked.extend([
-            HookEffect::DamageOwner(DAMAGE),
+            HookEffect::DamageOwner(V::Relic::FRAGRANT_MUSHROOM_HP_LOSS),
             HookEffect::UpgradeRandomDeckCards {
-                count: CARDS,
+                count: (V::Relic::FRAGRANT_MUSHROOM_CARDS as usize),
                 stream: sts2_core::Stream::Run(RunRngType::Niche),
                 kind: None,
             },

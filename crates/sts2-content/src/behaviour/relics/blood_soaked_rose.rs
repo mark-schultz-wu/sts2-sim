@@ -1,12 +1,10 @@
 //! `BloodSoakedRose`: one more energy each turn, and Enthralled in the deck.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect, Modify, ModifyHook};
 
 use crate::behaviour::relics::Number;
 use crate::ids::CardIds as _;
-
-/// `EnergyVar(1)`.
-const ENERGY: Number = 1;
 
 /// `AfterObtained`: `CardPileCmd.AddCurseToDeck<Enthralled>`.
 pub(super) fn event_hook<V: crate::Build>(
@@ -22,7 +20,7 @@ pub(super) fn event_hook<V: crate::Build>(
 /// `ModifyMaxEnergy`: its energy, for its owner.
 pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
     match hook {
-        ModifyHook::MaxEnergy { .. } => Modify::Added(ENERGY),
+        ModifyHook::MaxEnergy { .. } => Modify::Added(V::Relic::BLOOD_SOAKED_ROSE_ENERGY),
         hook => unimplemented!("what BloodSoakedRose does for {hook:?}"),
     }
 }

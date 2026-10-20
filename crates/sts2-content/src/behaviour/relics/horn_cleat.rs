@@ -1,11 +1,7 @@
 //! `HornCleat`: block as the second turn begins.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
-
-use crate::behaviour::relics::Number;
-
-/// `BlockVar(14, Unpowered)`.
-const BLOCK: Number = 14;
 
 /// `AfterBlockCleared`: its block once its owner's block clears on the second
 /// turn.
@@ -21,6 +17,6 @@ pub(super) fn event_hook<V: crate::Build>(
         && creature == player
         && turn == 2
     {
-        asked.push(HookEffect::GainBlock(BLOCK));
+        asked.push(HookEffect::GainBlock(V::Relic::HORN_CLEAT_BLOCK));
     }
 }

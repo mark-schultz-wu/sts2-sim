@@ -1,17 +1,15 @@
 //! `Ectoplasm`: an energy each turn, and no gold ever again.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, Modify, ModifyHook};
 
 use crate::behaviour::relics::Number;
-
-/// `EnergyVar(1)`.
-const ENERGY: Number = 1;
 
 /// `ModifyMaxEnergy`: one more. `ModifyGoldGained`: nothing, whatever the
 /// gain was.
 pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
     match hook {
-        ModifyHook::MaxEnergy { .. } => Modify::Added(ENERGY),
+        ModifyHook::MaxEnergy { .. } => Modify::Added(V::Relic::ECTOPLASM_ENERGY),
         ModifyHook::GoldGained => Modify::Replaced(0),
         hook => unimplemented!("what Ectoplasm does for {hook:?}"),
     }

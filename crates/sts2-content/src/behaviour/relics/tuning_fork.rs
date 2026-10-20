@@ -1,14 +1,9 @@
 //! `TuningFork`: block for every tenth skill, counted across fights.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{CardKind, EventHook, HookEffect};
 
 use crate::behaviour::relics::Number;
-
-/// `CardsVar(10)`.
-const CARDS: u8 = 10;
-
-/// `BlockVar(7, Unpowered)`.
-const BLOCK: Number = 7;
 
 /// `SkillsPlayed`, which it saves.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -27,9 +22,9 @@ pub(super) fn event_hook<V: crate::Build>(
         && <V as sts2_core::Rules>::card_kind(card) == Some(CardKind::Skill)
     {
         state.skills_played += 1;
-        if state.skills_played >= CARDS {
-            asked.push(HookEffect::GainBlock(BLOCK));
-            state.skills_played -= CARDS;
+        if state.skills_played >= (V::Relic::TUNING_FORK_CARDS as u8) {
+            asked.push(HookEffect::GainBlock(V::Relic::TUNING_FORK_BLOCK));
+            state.skills_played -= V::Relic::TUNING_FORK_CARDS as u8;
         }
     }
 }

@@ -1,15 +1,10 @@
 //! `FakeHappyFlower`: an energy every fifth turn.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
 
 use crate::behaviour::relics::Number;
 use crate::generated::runstate::CombatSide;
-
-/// `EnergyVar(1)`.
-const ENERGY: Number = 1;
-
-/// `DynamicVar("Turns", 5)`.
-const TURNS: Number = 5;
 
 /// `TurnsSeen`, the one `[SavedProperty]` it declares, which carries from
 /// one fight to the next.
@@ -30,9 +25,9 @@ pub(super) fn event_hook<V: crate::Build>(
         ..
     } = hook
     {
-        state.turns_seen = (state.turns_seen + 1) % TURNS;
+        state.turns_seen = (state.turns_seen + 1) % V::Relic::FAKE_HAPPY_FLOWER_TURNS;
         if state.turns_seen == 0 {
-            asked.push(HookEffect::GainEnergy(ENERGY));
+            asked.push(HookEffect::GainEnergy(V::Relic::FAKE_HAPPY_FLOWER_ENERGY));
         }
     }
 }

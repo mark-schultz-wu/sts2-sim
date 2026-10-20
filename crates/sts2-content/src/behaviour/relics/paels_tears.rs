@@ -1,12 +1,9 @@
 //! `PaelsTears`: energy on a turn after one that ended with some left.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
 
-use crate::behaviour::relics::Number;
 use crate::generated::runstate::CombatSide;
-
-/// `EnergyVar(2)`.
-const ENERGY: Number = 2;
 
 /// `HadLeftoverEnergy`, which it keeps between one turn's end and the next
 /// turn's start.
@@ -34,7 +31,7 @@ pub(super) fn event_hook<V: crate::Build>(
         EventHook::SideTurnStart {
             side: CombatSide::Player,
             ..
-        } if state.had_leftover => asked.push(HookEffect::GainEnergy(ENERGY)),
+        } if state.had_leftover => asked.push(HookEffect::GainEnergy(V::Relic::PAELS_TEARS_ENERGY)),
         EventHook::CombatEnd { .. } => state.had_leftover = false,
         _ => {}
     }

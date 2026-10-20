@@ -1,16 +1,11 @@
 //! `VelvetChoker`: one more energy each turn, and no more than six cards
 //! played a turn.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{DecisionHook, EventHook, HookResponse, Modify, ModifyHook};
 
 use crate::behaviour::relics::Number;
 use crate::generated::runstate::CombatSide;
-
-/// `CardsVar(6)`: the plays a turn allows.
-const CARDS: u8 = 6;
-
-/// `EnergyVar(1)`.
-const ENERGY: Number = 1;
 
 /// `_cardsPlayedThisTurn`, every play of its owner's, auto-plays and replays
 /// among them.
@@ -49,7 +44,9 @@ pub(super) fn decide_hook<V: crate::Build>(
     hook: DecisionHook<V>,
 ) -> HookResponse<bool> {
     match hook {
-        DecisionHook::ShouldPlay { .. } => HookResponse::Decision(state.played < CARDS),
+        DecisionHook::ShouldPlay { .. } => {
+            HookResponse::Decision(state.played < (V::Relic::VELVET_CHOKER_CARDS as u8))
+        }
         hook => unimplemented!("what VelvetChoker decides for {hook:?}"),
     }
 }
@@ -57,7 +54,7 @@ pub(super) fn decide_hook<V: crate::Build>(
 /// `ModifyMaxEnergy`: its energy, for its owner.
 pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
     match hook {
-        ModifyHook::MaxEnergy { .. } => Modify::Added(ENERGY),
+        ModifyHook::MaxEnergy { .. } => Modify::Added(V::Relic::VELVET_CHOKER_ENERGY),
         hook => unimplemented!("what VelvetChoker does for {hook:?}"),
     }
 }

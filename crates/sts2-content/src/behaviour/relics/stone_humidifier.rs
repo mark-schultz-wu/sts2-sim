@@ -1,11 +1,7 @@
 //! `StoneHumidifier`: more maximum health each time the player rests.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
-
-use crate::behaviour::relics::Number;
-
-/// `MaxHpVar(5)`.
-const MAX_HP: Number = 5;
 
 /// `AfterRestSiteHeal`: `CreatureCmd.GainMaxHp` on its owner, the only player.
 pub(super) fn event_hook<V: crate::Build>(
@@ -13,6 +9,6 @@ pub(super) fn event_hook<V: crate::Build>(
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     if let EventHook::RestSiteHeal { .. } = hook {
-        asked.push(HookEffect::GainMaxHp(MAX_HP));
+        asked.push(HookEffect::GainMaxHp(V::Relic::STONE_HUMIDIFIER_MAX_HP));
     }
 }

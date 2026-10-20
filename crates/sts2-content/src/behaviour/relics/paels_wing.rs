@@ -1,12 +1,10 @@
 //! `PaelsWing`: a card reward can be sacrificed, and every second sacrifice
 //! is a relic.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect, RelicPull, RewardAlternative};
 
 use crate::behaviour::relics::Number;
-
-/// `Sacrifices`.
-const SACRIFICES: u8 = 2;
 
 /// `RewardsSacrificed`, which it saves.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -31,7 +29,10 @@ pub(super) fn event_hook<V: crate::Build>(
         EventHook::CardRewardAlternativeChosen(RewardAlternative::Sacrifice) => {
             state.rewards_sacrificed = (state.rewards_sacrificed.checked_add(1))
                 .unwrap_or_else(|| unimplemented!("more sacrifices than a byte counts"));
-            if state.rewards_sacrificed.is_multiple_of(SACRIFICES) {
+            if state
+                .rewards_sacrificed
+                .is_multiple_of(V::Relic::PAELS_WING_SACRIFICES as u8)
+            {
                 asked.push(HookEffect::ObtainNextRelic(RelicPull::Rolled));
             }
         }
@@ -41,6 +42,6 @@ pub(super) fn event_hook<V: crate::Build>(
 }
 
 /// `DisplayAmount`: the sacrifices toward the next relic.
-pub(super) fn display_amount(state: &State) -> Number {
-    Number::from(state.rewards_sacrificed % SACRIFICES)
+pub(super) fn display_amount<V: crate::Build>(state: &State) -> Number {
+    Number::from(state.rewards_sacrificed % (V::Relic::PAELS_WING_SACRIFICES as u8))
 }

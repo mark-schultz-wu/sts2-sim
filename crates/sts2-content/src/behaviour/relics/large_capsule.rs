@@ -1,11 +1,9 @@
 //! `LargeCapsule`: two relics, then a Strike and a Defend.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{CardTable as _, CardTagKinds as _, EventHook, HookEffect, RelicPull};
 
 use crate::generated::cards::{CardRarity, CardTag};
-
-/// Its `Relics`, pulled from the front of the bag.
-const RELICS: usize = 2;
 
 /// `AfterObtained`: `RelicFactory.PullNextRelicFromFront` twice, each
 /// obtained, then the character's basic Strike and Defend into the deck.
@@ -14,7 +12,7 @@ pub(super) fn event_hook<V: crate::Build>(
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     if let EventHook::Obtained { character, .. } = hook {
-        for _ in 0..RELICS {
+        for _ in 0..(V::Relic::LARGE_CAPSULE_RELICS as usize) {
             asked.push(HookEffect::ObtainNextRelic(RelicPull::Rolled));
         }
         asked.push(HookEffect::AddToDeck(basic::<V>(

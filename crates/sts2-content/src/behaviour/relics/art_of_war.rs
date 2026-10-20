@@ -1,11 +1,7 @@
 //! `ArtOfWar`: energy on a turn after one its owner played no Attack in.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{CardKind, EventHook, HookEffect, SideKinds as _};
-
-use crate::behaviour::relics::Number;
-
-/// `EnergyVar(1)`.
-const ENERGY: Number = 1;
 
 /// `AnyAttacksPlayedLastTurn` and `AnyAttacksPlayedThisTurn`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -41,7 +37,7 @@ pub(super) fn event_hook<V: crate::Build>(
         }
         EventHook::EnergyReset { turn, .. } if turn > 1 => {
             if !state.last_turn {
-                asked.push(HookEffect::GainEnergy(ENERGY));
+                asked.push(HookEffect::GainEnergy(V::Relic::ART_OF_WAR_ENERGY));
             }
             *state = State::default();
         }

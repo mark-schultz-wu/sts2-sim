@@ -1,15 +1,10 @@
 //! `OrnamentalFan`: block for every third attack in a turn.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{CardKind, EventHook, HookEffect};
 
 use crate::behaviour::relics::Number;
 use crate::generated::runstate::CombatSide;
-
-/// `CardsVar(3)`.
-const CARDS: u8 = 3;
-
-/// `BlockVar(4, Unpowered)`.
-const BLOCK: Number = 4;
 
 /// `AttacksPlayedThisTurn`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -30,8 +25,11 @@ pub(super) fn event_hook<V: crate::Build>(
             if <V as sts2_core::Rules>::card_kind(card) == Some(CardKind::Attack) =>
         {
             state.attacks_played_this_turn += 1;
-            if state.attacks_played_this_turn.is_multiple_of(CARDS) {
-                asked.push(HookEffect::GainBlock(BLOCK));
+            if state
+                .attacks_played_this_turn
+                .is_multiple_of(V::Relic::ORNAMENTAL_FAN_CARDS as u8)
+            {
+                asked.push(HookEffect::GainBlock(V::Relic::ORNAMENTAL_FAN_BLOCK));
             }
         }
         EventHook::BeforeSideTurnStart {
@@ -43,6 +41,6 @@ pub(super) fn event_hook<V: crate::Build>(
 }
 
 /// `DisplayAmount`: the attacks counted towards the next block.
-pub(super) fn display_amount(state: &State) -> Number {
-    Number::from(state.attacks_played_this_turn % CARDS)
+pub(super) fn display_amount<V: crate::Build>(state: &State) -> Number {
+    Number::from(state.attacks_played_this_turn % (V::Relic::ORNAMENTAL_FAN_CARDS as u8))
 }

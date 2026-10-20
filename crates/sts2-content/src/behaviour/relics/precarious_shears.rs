@@ -1,15 +1,8 @@
 //! `PrecariousShears`: two cards out of the deck, and a cut, as it is picked
 //! up.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{DeckAct, EventHook, HookEffect};
-
-use crate::behaviour::relics::Number;
-
-/// `CardsVar(2)`.
-const CARDS: usize = 2;
-
-/// `DamageVar(16, ValueProp.Unpowered)`.
-const DAMAGE: Number = 16;
 
 /// `AfterObtained`: `CardSelectCmd.FromDeckForRemoval`, each card it takes
 /// out of the deck, then `CreatureCmd.Damage` on its owner.
@@ -21,9 +14,9 @@ pub(super) fn event_hook<V: crate::Build>(
         asked.extend([
             HookEffect::SelectFromDeck {
                 act: DeckAct::Remove,
-                count: CARDS,
+                count: (V::Relic::PRECARIOUS_SHEARS_CARDS as usize),
             },
-            HookEffect::DamageOwner(DAMAGE),
+            HookEffect::DamageOwner(V::Relic::PRECARIOUS_SHEARS_DAMAGE),
         ]);
     }
 }

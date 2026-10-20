@@ -1,13 +1,11 @@
 //! `SwordOfStone`: the elites won, until five of them turn it to jade.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
 
 use crate::behaviour::relics::Number;
 use crate::generated::encounters::RoomType;
 use crate::ids::RelicIds as _;
-
-/// `DynamicVar("Elites", 5)`.
-const ELITES: Number = 5;
 
 /// `ElitesDefeated`, the one `[SavedProperty]` this relic declares.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -27,7 +25,7 @@ pub(super) fn event_hook<V: crate::Build>(
     } = hook
     {
         state.elites_defeated += 1;
-        if state.elites_defeated >= ELITES {
+        if state.elites_defeated >= V::Relic::SWORD_OF_STONE_ELITES {
             asked.push(HookEffect::ReplaceRelic {
                 from: V::Relic::SWORD_OF_STONE,
                 to: V::Relic::SWORD_OF_JADE,

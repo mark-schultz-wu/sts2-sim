@@ -1,12 +1,10 @@
 //! `SneckoSkull`: one more Poison with every Poison its owner applies.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, Modify, ModifyHook};
 
 use crate::behaviour::relics::Number;
 use crate::ids::PowerIds as _;
-
-/// `PowerVar<PoisonPower>(1)`.
-const POISON: Number = 1;
 
 /// `ModifyPowerAmountGivenAdditive`: one more of Poison its owner gives.
 pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
@@ -16,7 +14,9 @@ pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number
             giver,
             player,
             ..
-        } if __c0 == V::Power::POISON_POWER && (giver == player) => Modify::Added(POISON),
+        } if __c0 == V::Power::POISON_POWER && (giver == player) => {
+            Modify::Added(V::Relic::SNECKO_SKULL_POISON_POWER)
+        }
         _ => Modify::Nothing,
     }
 }

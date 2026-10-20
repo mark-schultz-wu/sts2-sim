@@ -1,12 +1,9 @@
 //! `RippleBasin`: block at the end of a turn with no attack played.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{CardKind, EventHook, HookEffect};
 
-use crate::behaviour::relics::Number;
 use crate::generated::runstate::CombatSide;
-
-/// `BlockVar(4, ValueProp.Unpowered)`.
-const BLOCK: Number = 4;
 
 /// Whether one of its owner's attacks finished a play this turn, which
 /// `BeforeSideTurnEnd` reads off `CardPlaysFinished`.
@@ -32,7 +29,7 @@ pub(super) fn event_hook<V: crate::Build>(
         EventHook::BeforeSideTurnEnd {
             side: CombatSide::Player,
             ..
-        } if !state.attacked => asked.push(HookEffect::GainBlock(BLOCK)),
+        } if !state.attacked => asked.push(HookEffect::GainBlock(V::Relic::RIPPLE_BASIN_BLOCK)),
         EventHook::BeforeSideTurnStart {
             side: CombatSide::Player,
             ..

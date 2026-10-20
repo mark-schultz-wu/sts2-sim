@@ -1,12 +1,9 @@
 //! `CursedPearl`: Greed in the deck, and gold for carrying it.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect};
 
-use crate::behaviour::relics::Number;
 use crate::ids::CardIds as _;
-
-/// `GoldVar(333)`.
-const GOLD: Number = 333;
 
 /// `AfterObtained`: `CardPileCmd.AddCurseToDeck<Greed>`, then the gold.
 pub(super) fn event_hook<V: crate::Build>(
@@ -16,7 +13,7 @@ pub(super) fn event_hook<V: crate::Build>(
     if let EventHook::Obtained { .. } = hook {
         asked.extend([
             HookEffect::AddToDeck(V::Card::GREED),
-            HookEffect::GainGold(GOLD),
+            HookEffect::GainGold(V::Relic::CURSED_PEARL_GOLD),
         ]);
     }
 }

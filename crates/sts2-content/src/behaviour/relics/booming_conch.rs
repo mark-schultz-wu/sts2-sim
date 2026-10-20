@@ -1,16 +1,11 @@
 //! `BoomingConch`: two more cards and an energy to open an elite fight.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, HookEffect, Modify, ModifyHook};
 
 use crate::behaviour::relics::Number;
 use crate::generated::encounters::RoomType;
 use crate::generated::runstate::CombatSide;
-
-/// `CardsVar(2)`.
-const CARDS: Number = 2;
-
-/// `EnergyVar(1)`.
-const ENERGY: Number = 1;
 
 /// `ModifyHandDraw`: two more cards on an elite fight's first turn.
 pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
@@ -19,7 +14,7 @@ pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number
             turn,
             room: RoomType::Elite,
             ..
-        } if turn <= 1 => Modify::Added(CARDS),
+        } if turn <= 1 => Modify::Added(V::Relic::BOOMING_CONCH_CARDS),
         ModifyHook::HandDraw { .. } => Modify::Nothing,
         hook => unimplemented!("what BoomingConch does for {hook:?}"),
     }
@@ -38,6 +33,6 @@ pub(super) fn event_hook<V: crate::Build>(
     } = hook
         && turn <= 1
     {
-        asked.push(HookEffect::GainEnergy(ENERGY));
+        asked.push(HookEffect::GainEnergy(V::Relic::BOOMING_CONCH_ENERGY));
     }
 }

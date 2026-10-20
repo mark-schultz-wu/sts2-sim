@@ -1,13 +1,10 @@
 //! `LeafyPoultice`: less maximum health, and the first Basic Strike and Defend
 //! transformed, as it is picked up.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{DeckAct, EventHook, HookEffect, Stream};
 
-use crate::behaviour::relics::Number;
 use crate::generated::runstate::PlayerRngType;
-
-/// `MaxHpVar(12)`.
-const MAX_HP: Number = 12;
 
 /// `AfterObtained`: `CreatureCmd.LoseMaxHp` on its owner, then
 /// `CardCmd.Transform` on the cards it names, off
@@ -18,7 +15,7 @@ pub(super) fn event_hook<V: crate::Build>(
 ) {
     if let EventHook::Obtained { .. } = hook {
         asked.extend([
-            HookEffect::LoseMaxHp(MAX_HP),
+            HookEffect::LoseMaxHp(V::Relic::LEAFY_POULTICE_MAX_HP),
             HookEffect::OnDeckCards {
                 act: DeckAct::TransformTogether(Stream::Player(PlayerRngType::Transformations)),
                 picks: V::LEAFY_POULTICE_PICKS,

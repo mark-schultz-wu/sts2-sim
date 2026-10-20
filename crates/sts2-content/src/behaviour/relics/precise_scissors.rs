@@ -1,9 +1,7 @@
 //! `PreciseScissors`: one card out of the deck as it is picked up.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{DeckAct, EventHook, HookEffect};
-
-/// `CardsVar(1)`.
-const CARDS: usize = 1;
 
 /// `AfterObtained`: `CardSelectCmd.FromDeckForRemoval`, then each card it
 /// takes comes out of the deck.
@@ -14,7 +12,7 @@ pub(super) fn event_hook<V: crate::Build>(
     if let EventHook::Obtained { .. } = hook {
         asked.push(HookEffect::SelectFromDeck {
             act: DeckAct::Remove,
-            count: CARDS,
+            count: (V::Relic::PRECISE_SCISSORS_CARDS as usize),
         });
     }
 }

@@ -1,11 +1,9 @@
 //! `NewLeaf`: one card of the deck transformed as it is picked up.
 
+use crate::vars::RelicVars as _;
 use sts2_core::{DeckAct, EventHook, HookEffect, Stream};
 
 use crate::generated::runstate::RunRngType;
-
-/// `CardsVar(1)`.
-const CARDS: usize = 1;
 
 /// `AfterObtained`: `CardSelectCmd.FromDeckForTransformation`, then
 /// `CardCmd.TransformToRandom` off `RunState.Rng.Niche` for each card it
@@ -17,7 +15,7 @@ pub(super) fn event_hook<V: crate::Build>(
     if let EventHook::Obtained { .. } = hook {
         asked.push(HookEffect::SelectFromDeck {
             act: DeckAct::Transform(Stream::Run(RunRngType::Niche)),
-            count: CARDS,
+            count: (V::Relic::NEW_LEAF_CARDS as usize),
         });
     }
 }
