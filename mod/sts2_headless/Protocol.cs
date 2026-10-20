@@ -618,7 +618,23 @@ internal static class Protocol
         var mods = new List<ModifierModel>();
         foreach (JsonElement m in el.EnumerateArray())
         {
-            string id = m.GetString() ?? "";
+            // An entry is the modifier's id, or `{"id", "character"}` for one
+            // set up with a character, as Character Cards is.
+            string? character = null;
+            string id;
+            if (m.ValueKind == JsonValueKind.Object)
+            {
+                id = m.TryGetProperty("id", out JsonElement idEl) ? idEl.GetString() ?? "" : "";
+                if (m.TryGetProperty("character", out JsonElement charEl))
+                {
+                    character = charEl.GetString();
+                }
+            }
+            else
+            {
+                id = m.GetString() ?? "";
+            }
+
             ModifierModel? found = all.FirstOrDefault(x =>
                 string.Equals(x.Id.Entry, id, StringComparison.OrdinalIgnoreCase));
 
@@ -632,7 +648,34 @@ internal static class Protocol
                 return false;
             }
 
-            mods.Add(found.ToMutable());
+            ModifierModel mutable = found.ToMutable();
+            if (mutable is MegaCrit.Sts2.Core.Models.Modifiers.CharacterCards characterCards)
+            {
+                // The custom run screen offers one per character, and the
+                // modifier throws on use without one.
+                if (character == null)
+                {
+                    malformed = "CHARACTER_CARDS needs a 'character'";
+                    return false;
+                }
+
+                try
+                {
+                    characterCards.CharacterModel = Driver.Character(character).Id;
+                }
+                catch (ArgumentException e)
+                {
+                    malformed = e.Message;
+                    return false;
+                }
+            }
+            else if (character != null)
+            {
+                malformed = $"'{id}' takes no 'character'";
+                return false;
+            }
+
+            mods.Add(mutable);
         }
 
         modifiers = mods.ToArray();

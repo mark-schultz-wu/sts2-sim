@@ -82,7 +82,7 @@ pub use step::Step;
 pub use step::answer::{Answer, Picks, RewardAlternative, TakeReward, Tool, Unpickable};
 pub use step::decision::{BeltIndex, Decision, HandIndex};
 pub use step::setup::{Gift, Setup};
-pub use step::start::Start;
+pub use step::start::{RunModifier, Start};
 
 pub use play::recorder::{Recorder, Tape};
 pub use play::recording::Recording;

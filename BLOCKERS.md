@@ -37,12 +37,13 @@ own item, above this one. `cargo xtask split <index> <name>` writes a
 run, up to its first split, as a scenario, which names what parts. The
 live `unimplemented!()` branches surface this way.
 
-### 2. Run modifiers that carry data
+### 2. Hoarder
 
-Hoarder saves the cards it copied, so it needs state of its own per run.
-Character Cards names a character, which the start command, the run and
-the recorded-run format have to carry. Both need Mark's design, which he
-meant to revisit once the walk was done.
+Hoarder copies each card the deck gains twice, and keeps the copies it
+added so its own hook skips them. Mark chose state per run for it: the
+run's modifiers hold models with state, and Hoarder keeps the deck-card
+ids it still has to skip. It also refuses a merchant's card removal.
+Record 100 runs with it.
 
 ### 3. Run modifiers at Neow
 

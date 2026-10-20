@@ -335,7 +335,7 @@ game.
 
 | cmd | arguments |
 |---|---|
-| `start` | `seed`, `character`, `ascension` — a level name such as `DeadlyEnemies` or a number, default `0`, matched case-insensitively; `modifiers` — an array of modifier entry names, matched case-insensitively |
+| `start` | `seed`, `character`, `ascension` — a level name such as `DeadlyEnemies` or a number, default `0`, matched case-insensitively; `modifiers` — an array of modifier entry names, matched case-insensitively. `CHARACTER_CARDS` is `{"id": "CHARACTER_CARDS", "character": "DEFECT"}`, naming the character whose cards it adds |
 | `start` | `wins` — the character's wins on the profile, default `0` |
 | `fight` | `encounter` — a model entry name such as `BOWLBUGS_WEAK` |
 | `event` | `event` — a model entry name such as `CRYSTAL_SPHERE` |

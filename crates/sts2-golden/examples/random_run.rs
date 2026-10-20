@@ -47,14 +47,15 @@ struct Cli {
     #[arg(long, value_parser = ascension, default_value = "None")]
     ascension: sts2_content::v0_107_1::ascension::AscensionLevel,
     /// The modifiers the run starts with, by the ids the game spells them
-    /// with.
+    /// with. Character Cards names its character after a colon, as
+    /// `CHARACTER_CARDS:DEFECT`.
     #[arg(long, value_parser = modifier, value_delimiter = ',')]
-    modifiers: Vec<sts2_content::v0_107_1::modifiers::Modifier>,
+    modifiers: Vec<sts2_core::RunModifier<V>>,
 }
 
-/// A modifier by the id the game spells it with.
-fn modifier(id: &str) -> Result<sts2_content::v0_107_1::modifiers::Modifier, serde_json::Error> {
-    serde_json::from_value(serde_json::Value::String(id.to_owned()))
+/// A modifier as [`sts2_golden::recorded::spell_modifier`] writes it.
+fn modifier(text: &str) -> Result<sts2_core::RunModifier<V>, serde_json::Error> {
+    sts2_golden::recorded::read_modifier(text)
 }
 
 /// An ascension level by the id the game spells it with.

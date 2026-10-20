@@ -32,6 +32,9 @@ pub(super) struct Merchant<'a, V: Rules> {
     /// `RelicModel.IsAllowed` reads.
     pub(super) floor: usize,
     pub(super) character: V::Character,
+    /// `ModifyMerchantCardPool`'s character, whose cards a character shelf
+    /// offers after its own.
+    pub(super) added: Option<V::Character>,
     /// The saved card rarity offset, which a shop reads and does not move.
     pub(super) offset: f32,
     /// The run's ascension, whose Scarcity halves a card's chance of rare.
@@ -140,13 +143,13 @@ impl<V: Rules> Merchant<'_, V> {
                     Some(&kind) => {
                         let rarity = self.rolled_rarity();
                         let rarity = self.allowed_rarity(kind, rarity, on_shelves);
-                        let card =
-                            self.pick(V::merchant_cards(self.character, kind, rarity), on_shelves);
+                        let card = self.pick(self.shelf(kind, rarity, on_shelves));
                         (card, self.haggled(card_cost(rarity, false), CARD_SPREAD))
                     }
                     None => {
                         let rarity = COLORLESS[index - SHELVES.len()];
-                        let card = self.pick(V::merchant_colorless_cards(rarity), on_shelves);
+                        let card =
+                            self.pick(unpicked(V::merchant_colorless_cards(rarity), on_shelves));
                         (card, self.haggled(card_cost(rarity, true), CARD_SPREAD))
                     }
                 };
@@ -222,7 +225,7 @@ impl<V: Rules> Merchant<'_, V> {
         for (at, kind) in SHELVES.into_iter().enumerate() {
             let rarity = self.rolled_rarity();
             let rarity = self.allowed_rarity(kind, rarity, &picked);
-            let card = self.pick(V::merchant_cards(self.character, kind, rarity), &picked);
+            let card = self.pick(self.shelf(kind, rarity, &picked));
             picked.push(card);
             let base = card_cost(rarity, false);
             let mut cost = self.haggled(base, CARD_SPREAD);
@@ -246,7 +249,7 @@ impl<V: Rules> Merchant<'_, V> {
         let mut stocked = Vec::new();
         let mut picked: Vec<V::Card> = Vec::new();
         for rarity in COLORLESS {
-            let card = self.pick(V::merchant_colorless_cards(rarity), &picked);
+            let card = self.pick(unpicked(V::merchant_colorless_cards(rarity), &picked));
             picked.push(card);
             let cost = self.haggled(card_cost(rarity, true), CARD_SPREAD);
             stocked.push((CardIdent::new(card), cost));
@@ -254,15 +257,24 @@ impl<V: Rules> Merchant<'_, V> {
         stocked
     }
 
-    /// One card off a shelf, and the upgrade roll that follows it.
+    /// What a character shelf of `kind` offers at `rarity`: the character's
+    /// own cards less `picked`, as `Except` leaves them. Then
+    /// `ModifyMerchantCardPool` adds the added character's cards, every one,
+    /// after them.
+    fn shelf(&self, kind: CardKind, rarity: RewardRarity, picked: &[V::Card]) -> Vec<V::Card> {
+        let mut cards = unpicked(V::merchant_cards(self.character, kind, rarity), picked);
+        if let Some(added) = self.added {
+            cards.extend(V::merchant_cards(added, kind, rarity));
+        }
+        cards
+    }
+
+    /// One card off a shelf's `options`, and the upgrade roll that follows
+    /// it.
     ///
     /// `CreateForMerchant` rolls for an upgrade against a chance of minus a
     /// billion, so the draw happens and never lands.
-    fn pick(&mut self, options: Vec<V::Card>, picked: &[V::Card]) -> V::Card {
-        let options: Vec<V::Card> = options
-            .into_iter()
-            .filter(|card| !picked.contains(card))
-            .collect();
+    fn pick(&mut self, options: Vec<V::Card>) -> V::Card {
         let count = num_traits::cast(options.len()).expect("a shelf fits the RNG integer");
         let span = Span::new(num_traits::zero(), count).expect("a shelf has something on it");
         let at: usize = num_traits::cast(self.shops().next_int_range(span))
@@ -302,10 +314,7 @@ impl<V: Rules> Merchant<'_, V> {
     ) -> RewardRarity {
         let mut wanted = rarity;
         for _ in 0..3 {
-            let held = V::merchant_cards(self.character, kind, wanted)
-                .into_iter()
-                .any(|card| !picked.contains(&card));
-            if held {
+            if !self.shelf(kind, wanted, picked).is_empty() {
                 return wanted;
             }
             wanted = match wanted {
@@ -424,4 +433,12 @@ pub(super) fn removal_cost<V: Rules>(used: usize, ascension: V::AscensionLevel) 
 /// other way puts every price on that shelf one gold out.
 fn rounded(value: f32) -> i32 {
     value.round_ties_even() as i32
+}
+
+/// `options` less the cards in `picked`, as `Except` leaves them.
+fn unpicked<C: PartialEq>(options: Vec<C>, picked: &[C]) -> Vec<C> {
+    options
+        .into_iter()
+        .filter(|card| !picked.contains(card))
+        .collect()
 }

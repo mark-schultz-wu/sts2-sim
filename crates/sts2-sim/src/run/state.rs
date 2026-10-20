@@ -161,7 +161,7 @@ struct RunData<V: Rules> {
     /// created.
     unknown_base: [f32; 4],
     /// `RunState.Modifiers`, in the order the run was started with them.
-    modifiers: Vec<V::Modifier>,
+    modifiers: Vec<sts2_core::RunModifier<V>>,
     /// See [`sts2_core::Start::wins`].
     wins: u32,
 }
@@ -1128,7 +1128,7 @@ impl<V: Rules> State<V> {
         seed: &Seed,
         character: V::Character,
         ascension: V::AscensionLevel,
-        modifiers: &[V::Modifier],
+        modifiers: &[sts2_core::RunModifier<V>],
         wins: u32,
     ) -> Self {
         let raw_seed = stream_seed::<V>(seed);
@@ -1164,9 +1164,10 @@ impl<V: Rules> State<V> {
         let mut unknown_base = UNKNOWN_ODDS;
         let mut unknown_odds = UNKNOWN_ODDS;
         let mut out_of_bags = Vec::new();
-        for &modifier in modifiers {
+        for &entry in modifiers {
+            let modifier = entry.modifier;
             let mut asked = sts2_core::HookEffects::new();
-            V::modifier_event_hook(modifier, sts2_core::EventHook::RunCreated, &mut asked);
+            V::modifier_event_hook(entry, sts2_core::EventHook::RunCreated, &mut asked);
             for effect in asked {
                 match effect {
                     sts2_core::HookEffect::RemoveFromRelicBags(relic) => out_of_bags.push(relic),
@@ -1269,7 +1270,7 @@ impl<V: Rules> State<V> {
             .with(sts2_core::ModelHook::ModifyGeneratedMapLate);
         if modifiers
             .iter()
-            .any(|&modifier| sts2_core::ModifierTable::overrides(modifier).intersects(maps))
+            .any(|entry| sts2_core::ModifierTable::overrides(entry.modifier).intersects(maps))
         {
             state.map = Arc::new(state.generate_map(acts[0]));
         }
@@ -3200,7 +3201,7 @@ impl<V: Rules> State<V> {
                 answer => unimplemented!("a relic answering {hook:?} with {answer:?}"),
             }
         }
-        for &modifier in &self.shared.modifiers {
+        for modifier in self.shared.modifiers.iter().map(|entry| entry.modifier) {
             if !sts2_core::ModifierTable::overrides(modifier).contains(hook.model_hook()) {
                 continue;
             }
@@ -3379,6 +3380,17 @@ impl<V: Rules> State<V> {
         use sts2_core::CustomReward;
 
         let (character, act, ascension) = (self.character(), self.act(), self.ascension());
+        // What a pool's hooks leave of a rarity, which they read before the
+        // first card is drawn.
+        let hooked = match reward {
+            CustomReward::CardsOf {
+                pool,
+                rarity,
+                no_pool_modifications: false,
+                ..
+            } => Some(self.cards_of(pool.unwrap_or(character), rarity)),
+            _ => None,
+        };
         let rng = stream_of(&mut self.phase, &mut self.streams, stream);
         match reward {
             CustomReward::CharacterCards {
@@ -3404,10 +3416,14 @@ impl<V: Rules> State<V> {
                 rarity,
                 count,
                 upgrade_roll,
+                ..
             } => crate::reward::card::uniform_rolled::<V, _>(
                 ascension,
                 rng,
-                V::reward_cards(pool.unwrap_or(character)).at(rarity),
+                match &hooked {
+                    Some(cards) => cards,
+                    None => V::reward_cards(pool.unwrap_or(character)).at(rarity),
+                },
                 count,
                 upgrade_roll.then_some(act),
             ),
@@ -3653,9 +3669,9 @@ impl<V: Rules> State<V> {
             let (state, belt) = self.player.relics.state_beside(slot);
             V::relic_event_hook(state, belt, hook, &mut asked);
         }
-        for &modifier in &self.shared.modifiers {
-            if sts2_core::ModifierTable::overrides(modifier).contains(model_hook) {
-                V::modifier_event_hook(modifier, hook, &mut asked);
+        for &entry in &self.shared.modifiers {
+            if sts2_core::ModifierTable::overrides(entry.modifier).contains(model_hook) {
+                V::modifier_event_hook(entry, hook, &mut asked);
             }
         }
         asked
@@ -3919,7 +3935,81 @@ impl<V: Rules> State<V> {
         use crate::reward::card::Source;
 
         let own = self.character();
-        let mut pools: SmallVec<[Source<V>; 6]> = smallvec::smallvec![Source::Character(own)];
+        match self.reward_hooks(Source::Character(own), elite_encounter) {
+            Hooked::Uniform(cards) => crate::reward::card::Pool::Uniform(cards),
+            // `Except` drops a card the pools hold already, so a character
+            // already among them adds nothing.
+            Hooked::Pools { mut pools, concat } => {
+                if let Some(character) = concat
+                    && !pools.contains(&Source::Character(character))
+                {
+                    pools.push(Source::Character(character));
+                }
+                crate::reward::card::Pool::of(&pools)
+            }
+        }
+    }
+
+    /// The cards a reward of one rarity over `character`'s pool draws from,
+    /// at even odds, once `Hook.ModifyCardRewardCreationOptions` has had its
+    /// say. The pools hold the rarity alone. A character `Concat` added
+    /// brings every rarity, since its cards skip the filter. `Uniform` then
+    /// drops basic and ancient cards, and `Except` drops a repeat.
+    ///
+    /// # Panics
+    ///
+    /// A listener asking for rares at even odds, which only a won elite's
+    /// reward asks.
+    fn cards_of(
+        &mut self,
+        character: V::Character,
+        rarity: sts2_core::RewardRarity,
+    ) -> Vec<V::Card> {
+        use crate::reward::card::Source;
+
+        let Hooked::Pools { pools, concat } =
+            self.reward_hooks(Source::Character(character), false)
+        else {
+            unimplemented!("rares at even odds over a reward of one rarity");
+        };
+        let mut cards: Vec<V::Card> = pools
+            .iter()
+            .flat_map(|source| source.drafted().at(rarity).iter().copied())
+            .collect();
+        if let Some(added) = concat {
+            cards.extend(
+                V::unlocked_cards(added)
+                    .iter()
+                    .copied()
+                    .filter(|&card| V::reward_rarity(card) != sts2_core::RewardRarity::Other),
+            );
+        }
+        let mut seen = Vec::with_capacity(cards.len());
+        cards.retain(|&card| {
+            let first = !seen.contains(&card);
+            seen.push(card);
+            first
+        });
+        cards
+    }
+
+    /// `Hook.ModifyCardRewardCreationOptions` over a card reward's options
+    /// that draw from `base`.
+    ///
+    /// # Panics
+    ///
+    /// A listener asking for anything over a pool at even odds, or for
+    /// something no card reward's options carry.
+    fn reward_hooks(
+        &mut self,
+        base: crate::reward::card::Source<V>,
+        elite_encounter: bool,
+    ) -> Hooked<V> {
+        use crate::reward::card::Source;
+
+        let own = self.character();
+        let mut pools: SmallVec<[Source<V>; 6]> = smallvec::smallvec![base];
+        let mut concat = None;
         let hook = sts2_core::EventHook::CardRewardCreationOptions { elite_encounter };
         let mut asked = self.notify_run(hook).into_iter();
         while let Some(effect) = asked.next() {
@@ -3930,6 +4020,11 @@ impl<V: Rules> State<V> {
                     if let Some(effect) = asked.next() {
                         unimplemented!("a listener asking for {effect:?} over a pool at even odds");
                     }
+                    if let Some(character) = concat
+                        && !pools.contains(&Source::Character(character))
+                    {
+                        pools.push(Source::Character(character));
+                    }
                     let possible = crate::reward::card::Pool::of(&pools);
                     let mut cards = possible.drafted().rare.to_vec();
                     if cards.is_empty() {
@@ -3938,11 +4033,14 @@ impl<V: Rules> State<V> {
                             .rare
                             .to_vec();
                     }
-                    return crate::reward::card::Pool::Uniform(cards);
+                    return Hooked::Uniform(cards);
                 }
                 // `Union`: the new pools first, then what was there and is
                 // not among them.
                 sts2_core::HookEffect::AddCharacterPools(added) => {
+                    if concat.is_some() {
+                        unimplemented!("a pool joined to options that hold a custom pool");
+                    }
                     let mut joined: SmallVec<[Source<V>; 6]> = added
                         .iter()
                         .map(|&character| Source::Character(character))
@@ -3957,16 +4055,27 @@ impl<V: Rules> State<V> {
                 }
                 // `Concat` of the colorless pool, where it is not there.
                 sts2_core::HookEffect::AddColorlessPool => {
+                    if concat.is_some() {
+                        unimplemented!("a pool joined to options that hold a custom pool");
+                    }
                     if !pools.contains(&Source::Colorless) {
                         pools.push(Source::Colorless);
                     }
+                }
+                // `WithCustomPool` of the pools' cards, then the character's
+                // unlocked cards, every rarity.
+                sts2_core::HookEffect::ConcatCharacterPool(character) => {
+                    if concat.is_some() {
+                        unimplemented!("a second character's cards after a custom pool");
+                    }
+                    concat = Some(character);
                 }
                 effect => {
                     unimplemented!("a relic asking for {effect:?} over a card reward's pools")
                 }
             }
         }
-        crate::reward::card::Pool::of(&pools)
+        Hooked::Pools { pools, concat }
     }
 
     /// `CardFactory.CreateForReward`'s hooks that no relic here answers: the
@@ -4819,12 +4928,35 @@ impl<V: Rules> State<V> {
         Ok(Decided::Resolved)
     }
 
+    /// `Hook.ModifyMerchantCardPool` over a character shelf: the character
+    /// whose cards a listener adds after the shelf's own. Every card the
+    /// merchant stocks asks it, and the answer is the same each time.
+    ///
+    /// # Panics
+    ///
+    /// A listener asking for anything else, or for two characters.
+    fn merchant_card_pool(&mut self) -> Option<V::Character> {
+        let mut added = None;
+        for effect in self.notify_run(sts2_core::EventHook::MerchantCardPool) {
+            match effect {
+                sts2_core::HookEffect::ConcatCharacterPool(character) if added.is_none() => {
+                    added = Some(character);
+                }
+                effect => {
+                    unimplemented!("a listener asking for {effect:?} over a merchant's cards")
+                }
+            }
+        }
+        added
+    }
+
     /// `MerchantInventory.CreateForNormalMerchant`, which runs as the room
     /// opens. So every draw it takes is paid for on the way in, not at a shelf.
     ///
     /// Built rather than entered, because what a merchant stocks does not
     /// depend on how the run reached it.
     pub(super) fn stocked_shop(&mut self) -> Phase<V> {
+        let added = self.merchant_card_pool();
         let mut streams = self.streams;
         let mut dealt = self.dealt_relics.to_vec();
         let entries = super::shop::Merchant::<V> {
@@ -4835,6 +4967,7 @@ impl<V: Rules> State<V> {
             // room's floor counts.
             floor: num_traits::cast(self.floor + num_traits::one()).expect("a floor fits a usize"),
             character: self.shared.character,
+            added,
             offset: self.odds.rarity,
             ascension: self.ascension(),
             removals_used: self.removals_used,
@@ -5022,7 +5155,7 @@ impl<V: Rules> State<V> {
         let hook = sts2_core::ModifyHook::OddsIncreaseForUnrolledRoomType { room };
         self.unheard(hook.model_hook());
         let mut rise = base;
-        for &modifier in &self.shared.modifiers {
+        for modifier in self.shared.modifiers.iter().map(|entry| entry.modifier) {
             if !sts2_core::ModifierTable::overrides(modifier).contains(hook.model_hook()) {
                 continue;
             }
@@ -6630,6 +6763,7 @@ impl<V: Rules> State<V> {
             })
             .collect();
         let stock = entries[at].stock;
+        let added = self.merchant_card_pool();
         let mut streams = self.streams;
         let mut dealt = self.dealt_relics.to_vec();
         let (stock, cost) = super::shop::Merchant::<V> {
@@ -6638,6 +6772,7 @@ impl<V: Rules> State<V> {
             dealt_relics: &mut dealt,
             floor: num_traits::cast(self.floor).expect("a floor fits a usize"),
             character: self.shared.character,
+            added,
             offset: self.odds.rarity,
             ascension: self.ascension(),
             removals_used: self.removals_used,
@@ -6708,7 +6843,7 @@ impl<V: Rules> State<V> {
             )
             .is_decision_and(|allowed| allowed);
         }
-        for &modifier in &self.shared.modifiers {
+        for modifier in self.shared.modifiers.iter().map(|entry| entry.modifier) {
             if sts2_core::ModifierTable::overrides(modifier)
                 .contains(sts2_core::ModelHook::ShouldAllowFreeTravel)
             {
@@ -7364,6 +7499,19 @@ fn rewrite<V: Rules>(mut card: CardIdent<V>, asked: sts2_core::HookEffects<V>) -
         }
     }
     card
+}
+
+/// What `Hook.ModifyCardRewardCreationOptions` made of a card reward's
+/// options.
+enum Hooked<V: Rules> {
+    /// `WithCustomPool` of these at `CardRarityOddsType.Uniform`.
+    Uniform(Vec<V::Card>),
+    /// The pools the options draw from, and the character whose unlocked
+    /// cards `Concat` put after them.
+    Pools {
+        pools: SmallVec<[crate::reward::card::Source<V>; 6]>,
+        concat: Option<V::Character>,
+    },
 }
 
 #[cfg(test)]

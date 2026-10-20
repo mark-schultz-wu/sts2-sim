@@ -317,7 +317,7 @@ impl sts2_core::Hooks for V0_107_1 {
     }
 
     fn modifier_event_hook(
-        modifier: Self::Modifier,
+        modifier: sts2_core::RunModifier<Self>,
         hook: sts2_core::EventHook<Self>,
         asked: &mut sts2_core::HookEffects<Self>,
     ) {
@@ -555,6 +555,10 @@ impl sts2_core::Rules for V0_107_1 {
 
     fn combat_cards(character: Self::Character) -> &'static [Self::Card] {
         generated::cards::combat_cards(sts2_core::Table::data(character).card_pool)
+    }
+
+    fn unlocked_cards(character: Self::Character) -> &'static [Self::Card] {
+        generated::cards::merchant_cards(sts2_core::Table::data(character).card_pool)
     }
 
     fn combat_colorless_cards() -> &'static [Self::Card] {

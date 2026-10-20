@@ -6,37 +6,43 @@ use sts2_core::{CustomReward, EventHook, HookEffect, RewardRarity};
 use super::super::super::V0_107_1 as V;
 
 /// A `CardReward` of three over the character's pool at one rarity, for each
-/// of Common, Common, Uncommon, Uncommon and Rare.
+/// of Common, Common, Uncommon, Uncommon and Rare. The pool's hooks reach
+/// each.
 const REWARDS: [CustomReward<V>; 5] = [
     CustomReward::CardsOf {
         pool: None,
         rarity: RewardRarity::Common,
         count: 3,
         upgrade_roll: false,
+        no_pool_modifications: false,
     },
     CustomReward::CardsOf {
         pool: None,
         rarity: RewardRarity::Common,
         count: 3,
         upgrade_roll: false,
+        no_pool_modifications: false,
     },
     CustomReward::CardsOf {
         pool: None,
         rarity: RewardRarity::Uncommon,
         count: 3,
         upgrade_roll: false,
+        no_pool_modifications: false,
     },
     CustomReward::CardsOf {
         pool: None,
         rarity: RewardRarity::Uncommon,
         count: 3,
         upgrade_roll: false,
+        no_pool_modifications: false,
     },
     CustomReward::CardsOf {
         pool: None,
         rarity: RewardRarity::Rare,
         count: 3,
         upgrade_roll: false,
+        no_pool_modifications: false,
     },
 ];
 

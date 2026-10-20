@@ -2261,7 +2261,7 @@ pub(crate) enum ExtraReward<V: Rules> {
 /// every creature's listeners.
 #[derive(Debug)]
 pub(crate) struct RunModifiers<V: Rules> {
-    held: Bounded<V::Modifier, RUN_MODIFIERS>,
+    held: Bounded<sts2_core::RunModifier<V>, RUN_MODIFIERS>,
     /// Every hook a held modifier's class overrides, kept with `held`.
     pub(super) hooks: sts2_core::Overrides,
 }
@@ -2279,13 +2279,13 @@ impl<V: Rules> Clone for RunModifiers<V> {
 impl<V: Rules> Copy for RunModifiers<V> {}
 
 impl<V: Rules> RunModifiers<V> {
-    pub(super) fn holding(modifiers: &[V::Modifier]) -> Self {
+    pub(super) fn holding(modifiers: &[sts2_core::RunModifier<V>]) -> Self {
         Self {
             held: modifiers.iter().copied().collect(),
             hooks: modifiers
                 .iter()
-                .fold(sts2_core::Overrides::NONE, |hooks, &modifier| {
-                    hooks.union(sts2_core::ModifierTable::overrides(modifier))
+                .fold(sts2_core::Overrides::NONE, |hooks, entry| {
+                    hooks.union(sts2_core::ModifierTable::overrides(entry.modifier))
                 }),
         }
     }
@@ -2295,10 +2295,10 @@ impl<V: Rules> RunModifiers<V> {
     pub(super) fn hearing(
         &self,
         hooks: sts2_core::Overrides,
-    ) -> impl Iterator<Item = (V::Modifier, sts2_core::Overrides)> + '_ {
-        self.held.iter().filter_map(move |&modifier| {
-            let overrides = sts2_core::ModifierTable::overrides(modifier);
-            overrides.intersects(hooks).then_some((modifier, overrides))
+    ) -> impl Iterator<Item = (sts2_core::RunModifier<V>, sts2_core::Overrides)> + '_ {
+        self.held.iter().filter_map(move |&entry| {
+            let overrides = sts2_core::ModifierTable::overrides(entry.modifier);
+            overrides.intersects(hooks).then_some((entry, overrides))
         })
     }
 }

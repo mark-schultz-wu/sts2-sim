@@ -17,7 +17,7 @@ pub(crate) enum Source<V: Rules> {
 
 impl<V: Rules> Source<V> {
     /// Its cards, a rarity at a time.
-    fn drafted(self) -> Drafted<'static, V::Card> {
+    pub(crate) fn drafted(self) -> Drafted<'static, V::Card> {
         match self {
             Source::Character(character) => V::reward_cards(character),
             Source::Colorless => V::colorless_cards(),
