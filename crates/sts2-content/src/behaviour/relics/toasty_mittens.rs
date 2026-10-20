@@ -1,8 +1,9 @@
-//! `ToastyMittens`: the top card of the draw pile burned, and a point of
-//! Strength, before every hand.
+//! `ToastyMittens`: a card burned and a point of Strength each turn. In
+//! v0.107.1 the top card of the draw pile before every hand, and in
+//! v0.111.0 a card of the hand picked once it is drawn.
 
 use crate::vars::RelicVars as _;
-use sts2_core::{EventHook, HookEffect, PowerAmount};
+use sts2_core::{EventHook, HookEffect, Pile, PileAct, PowerAmount, Selection};
 
 use crate::ids::PowerIds as _;
 
@@ -19,6 +20,21 @@ pub(super) fn event_hook<V: crate::Build>(
             HookEffect::ShuffleIfNecessary,
             HookEffect::ExhaustFromDrawTop {
                 passing_innate: turn == 1,
+            },
+            HookEffect::ApplyToOwner(
+                V::Power::STRENGTH_POWER,
+                PowerAmount::Counted(V::Relic::TOASTY_MITTENS_STRENGTH_POWER),
+            ),
+        ]),
+        // v0.111.0's `AfterPlayerTurnStart`: `CardSelectCmd.FromHand` for
+        // one card, `CardCmd.Exhaust` on it, then its Strength.
+        EventHook::PlayerTurnStart { .. } => asked.extend([
+            HookEffect::SelectFromPile {
+                pile: Pile::Hand,
+                selection: Selection::Exactly(
+                    nonmax::NonMaxUsize::new(1).expect("one is no usize maximum"),
+                ),
+                act: PileAct::Exhaust,
             },
             HookEffect::ApplyToOwner(
                 V::Power::STRENGTH_POWER,

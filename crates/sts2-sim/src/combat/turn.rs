@@ -2149,6 +2149,20 @@ pub(super) fn carry_setup<V: Rules>(
                                 )
                             },
                         ),
+                        // `PowerCmd.Apply` on the player, from a relic.
+                        sts2_core::HookEffect::ApplyToOwner(power, amount)
+                            if matches!(listener, Listener::Relic { .. }) =>
+                        {
+                            let mut board = Board::for_card(
+                                live,
+                                rngs.reborrow(),
+                                relics,
+                                ascension,
+                                None,
+                                None,
+                            );
+                            sts2_core::Fight::apply_to_actor(&mut board, power, amount);
+                        }
                         effect => unimplemented!(
                             "a listener asking for {effect:?} as the player's turn starts"
                         ),
