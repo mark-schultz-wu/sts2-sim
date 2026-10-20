@@ -9,86 +9,94 @@ use sts2_core::{Amount, Change, CostPool, Effect, Fight, Played, PowerAmount, Sc
 
 type V = super::super::super::V0_111_0;
 
-/// `OnPlay`, for every card whose statements the dump matched.
+/// `OnPlay` from the command at `from` on, for every card whose
+/// statements the dump matched. A command that leaves a question
+/// waiting stands the rest still, as the game's `await` does, and
+/// the play comes back as `Err` with the command to go on from.
 ///
 /// Any other card panics, and `behaviour/` ports it by hand.
-pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
+pub fn play_from<F: Fight<V>>(card: RegentCard, fight: &mut F, from: u8) -> Result<Played<V>, u8> {
     match card {
         RegentCard::Alignment => {
-            fight.modify_energy(fight.var(CardVar::Energy));
-            Played::Done
+            if from == 0 {
+                fight.modify_energy(fight.var(CardVar::Energy));
+            }
+            Ok(Played::Done)
         }
         RegentCard::Arsenal => {
-            fight.apply_to_actor(
-                Power::ArsenalPower,
-                PowerAmount::Counted(fight.power_var(CardVar::ArsenalPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::ArsenalPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::ArsenalPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         RegentCard::AstralPulse => {
-            fight.attack(Scaling::Dynamic, |fight| {
-                for _ in 0..2 {
-                    let targets = fight.opponents();
-                    fight.damage_command(|fight| {
-                        for target in targets {
-                            let attack = fight.resolve(Effect::Attack {
-                                dealer: fight.actor(),
-                                target,
-                                damage: Amount::Var(CardVar::Damage),
-                                scaling: Scaling::Dynamic,
-                            });
-                            fight.apply(attack);
-                        }
-                    });
-                }
-            });
-            Played::Done
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    for _ in 0..2 {
+                        let targets = fight.opponents();
+                        fight.damage_command(|fight| {
+                            for target in targets {
+                                let attack = fight.resolve(Effect::Attack {
+                                    dealer: fight.actor(),
+                                    target,
+                                    damage: Amount::Var(CardVar::Damage),
+                                    scaling: Scaling::Dynamic,
+                                });
+                                fight.apply(attack);
+                            }
+                        });
+                    }
+                });
+            }
+            Ok(Played::Done)
         }
         // `call DamageCmd.Attack`
         RegentCard::BeatIntoShape => unimplemented!("what {card:?} does when it is played"),
         // `call CardSelectCmd.FromHand`
         RegentCard::Begone => unimplemented!("what {card:?} does when it is played"),
-        // A command after a draw, which has to wait on the draw's question.
-        RegentCard::BigBang => unimplemented!("what {card:?} does when it is played"),
+        RegentCard::BigBang => {
+            if from == 0 {
+                fight.draw(fight.var(CardVar::Cards));
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.gain_stars(fight.var(CardVar::Stars));
+                if fight.waiting() {
+                    return Err(2);
+                }
+            }
+            if from <= 2 {
+                fight.modify_energy(fight.var(CardVar::Energy));
+                if fight.waiting() {
+                    return Err(3);
+                }
+            }
+            if from <= 3 {
+                fight.forge(
+                    Cards::Token(TokenCard::SovereignBlade),
+                    fight.var(CardVar::Forge),
+                );
+            }
+            Ok(Played::Done)
+        }
         RegentCard::BlackHole => {
-            fight.apply_to_actor(
-                Power::BlackHolePower,
-                PowerAmount::Counted(fight.power_var(CardVar::BlackHolePower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::BlackHolePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::BlackHolePower)),
+                );
+            }
+            Ok(Played::Done)
         }
         RegentCard::Bombardment => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(attack);
-            });
-            Played::Done
-        }
-        RegentCard::Bulwark => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            fight.forge(
-                Cards::Token(TokenCard::SovereignBlade),
-                fight.var(CardVar::Forge),
-            );
-            Played::Done
-        }
-        // `call CardFactory.GetDistinctForCombat`
-        RegentCard::BundleOfJoy => unimplemented!("what {card:?} does when it is played"),
-        RegentCard::CelestialMight => {
-            let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                for _ in 0..fight.var(CardVar::Repeat) {
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
                     let attack = fight.resolve(Effect::Attack {
                         dealer: fight.actor(),
                         target,
@@ -96,99 +104,37 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
                         scaling: Scaling::Dynamic,
                     });
                     fight.apply(attack);
+                });
+            }
+            Ok(Played::Done)
+        }
+        RegentCard::Bulwark => {
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+                if fight.waiting() {
+                    return Err(1);
                 }
-            });
-            Played::Done
+            }
+            if from <= 1 {
+                fight.forge(
+                    Cards::Token(TokenCard::SovereignBlade),
+                    fight.var(CardVar::Forge),
+                );
+            }
+            Ok(Played::Done)
         }
-        // `call CardSelectCmd.FromCombatPile`
-        RegentCard::Charge => unimplemented!("what {card:?} does when it is played"),
-        RegentCard::ChildOfTheStars => {
-            fight.apply_to_actor(
-                Power::ChildOfTheStarsPower,
-                PowerAmount::Counted(fight.power_var(CardVar::BlockForStars)),
-            );
-            Played::Done
-        }
-        RegentCard::CloakOfStars => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            Played::Done
-        }
-        // `call CardPileCmd.AddGeneratedCardToCombat`
-        RegentCard::CollisionCourse => unimplemented!("what {card:?} does when it is played"),
-        RegentCard::Comet => {
+        // `call CardFactory.GetDistinctForCombat`
+        RegentCard::BundleOfJoy => unimplemented!("what {card:?} does when it is played"),
+        RegentCard::CelestialMight => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(attack);
-            });
-            fight.apply_power(
-                target,
-                Power::WeakPower,
-                PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
-            );
-            fight.apply_power(
-                target,
-                Power::VulnerablePower,
-                PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
-            );
-            Played::Done
-        }
-        RegentCard::Conqueror => {
-            let target = fight.target();
-            fight.forge(
-                Cards::Token(TokenCard::SovereignBlade),
-                fight.var(CardVar::Forge),
-            );
-            fight.apply_power(target, Power::ConquerorPower, PowerAmount::Counted(1));
-            Played::Done
-        }
-        // `call CardPileCmd.Draw`
-        RegentCard::Constellation => unimplemented!("what {card:?} does when it is played"),
-        RegentCard::Convergence => {
-            fight.apply_to_actor(Power::RetainHandPower, PowerAmount::Counted(1));
-            fight.apply_to_actor(
-                Power::EnergyNextTurnPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Energy)),
-            );
-            fight.apply_to_actor(
-                Power::StarNextTurnPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Stars)),
-            );
-            Played::Done
-        }
-        // `call CardSelectorPrefs`
-        RegentCard::CosmicIndifference => unimplemented!("what {card:?} does when it is played"),
-        // `call CardPile.GetCards`
-        RegentCard::CrashLanding => unimplemented!("what {card:?} does when it is played"),
-        RegentCard::CrescentSpear => {
-            let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::CalculatedDamage),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(attack);
-            });
-            Played::Done
-        }
-        RegentCard::CrushUnder => {
-            let held = fight.opponents();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let targets = fight.opponents();
-                fight.damage_command(|fight| {
-                    for target in targets {
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    for _ in 0..fight.var(CardVar::Repeat) {
                         let attack = fight.resolve(Effect::Attack {
                             dealer: fight.actor(),
                             target,
@@ -198,224 +144,438 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
                         fight.apply(attack);
                     }
                 });
-            });
-            let amount = PowerAmount::Counted(fight.power_var(CardVar::StrengthLoss));
-            for &target in &held {
-                fight.apply_power(target, Power::CrushUnderPower, amount);
             }
-            Played::Done
+            Ok(Played::Done)
         }
+        // `call CardSelectCmd.FromCombatPile`
+        RegentCard::Charge => unimplemented!("what {card:?} does when it is played"),
+        RegentCard::ChildOfTheStars => {
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::ChildOfTheStarsPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::BlockForStars)),
+                );
+            }
+            Ok(Played::Done)
+        }
+        RegentCard::CloakOfStars => {
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
+            Ok(Played::Done)
+        }
+        // `call CardPileCmd.AddGeneratedCardToCombat`
+        RegentCard::CollisionCourse => unimplemented!("what {card:?} does when it is played"),
+        RegentCard::Comet => {
+            let target = fight.target();
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
+                });
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_power(
+                    target,
+                    Power::WeakPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
+                );
+                if fight.waiting() {
+                    return Err(2);
+                }
+            }
+            if from <= 2 {
+                fight.apply_power(
+                    target,
+                    Power::VulnerablePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
+                );
+            }
+            Ok(Played::Done)
+        }
+        RegentCard::Conqueror => {
+            let target = fight.target();
+            if from == 0 {
+                fight.forge(
+                    Cards::Token(TokenCard::SovereignBlade),
+                    fight.var(CardVar::Forge),
+                );
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_power(target, Power::ConquerorPower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
+        }
+        // `call CardPileCmd.Draw`
+        RegentCard::Constellation => unimplemented!("what {card:?} does when it is played"),
+        RegentCard::Convergence => {
+            if from == 0 {
+                fight.apply_to_actor(Power::RetainHandPower, PowerAmount::Counted(1));
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(
+                    Power::EnergyNextTurnPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Energy)),
+                );
+                if fight.waiting() {
+                    return Err(2);
+                }
+            }
+            if from <= 2 {
+                fight.apply_to_actor(
+                    Power::StarNextTurnPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Stars)),
+                );
+            }
+            Ok(Played::Done)
+        }
+        // `call CardSelectorPrefs`
+        RegentCard::CosmicIndifference => unimplemented!("what {card:?} does when it is played"),
+        // `call CardPile.GetCards`
+        RegentCard::CrashLanding => unimplemented!("what {card:?} does when it is played"),
+        RegentCard::CrescentSpear => {
+            let target = fight.target();
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::CalculatedDamage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
+                });
+            }
+            Ok(Played::Done)
+        }
+        // A list held across a command that can wait on a question.
+        RegentCard::CrushUnder => unimplemented!("what {card:?} does when it is played"),
         // `call CardSelectorPrefs`
         RegentCard::DecisionsDecisions => unimplemented!("what {card:?} does when it is played"),
         RegentCard::Defend => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            Played::Done
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
+            Ok(Played::Done)
         }
         RegentCard::Devastate => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            Played::Done
+            }
+            Ok(Played::Done)
         }
         // `foreach`
         RegentCard::DyingStar => unimplemented!("what {card:?} does when it is played"),
         RegentCard::FallingStar => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.apply_power(
-                target,
-                Power::WeakPower,
-                PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
-            );
-            fight.apply_power(
-                target,
-                Power::VulnerablePower,
-                PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
-            );
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_power(
+                    target,
+                    Power::WeakPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
+                );
+                if fight.waiting() {
+                    return Err(2);
+                }
+            }
+            if from <= 2 {
+                fight.apply_power(
+                    target,
+                    Power::VulnerablePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
+                );
+            }
+            Ok(Played::Done)
         }
         RegentCard::ForegoneConclusion => {
-            fight.apply_to_actor(
-                Power::ForegoneConclusionPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Cards)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::ForegoneConclusionPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Cards)),
+                );
+            }
+            Ok(Played::Done)
         }
         RegentCard::Furnace => {
-            fight.apply_to_actor(
-                Power::FurnacePower,
-                PowerAmount::Counted(fight.power_var(CardVar::Forge)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::FurnacePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Forge)),
+                );
+            }
+            Ok(Played::Done)
         }
         RegentCard::GammaBlast => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.apply_power(
-                target,
-                Power::WeakPower,
-                PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
-            );
-            fight.apply_power(
-                target,
-                Power::VulnerablePower,
-                PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
-            );
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_power(
+                    target,
+                    Power::WeakPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
+                );
+                if fight.waiting() {
+                    return Err(2);
+                }
+            }
+            if from <= 2 {
+                fight.apply_power(
+                    target,
+                    Power::VulnerablePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
+                );
+            }
+            Ok(Played::Done)
         }
         RegentCard::GatherLight => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            fight.gain_stars(fight.var(CardVar::Stars));
-            Played::Done
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.gain_stars(fight.var(CardVar::Stars));
+            }
+            Ok(Played::Done)
         }
         RegentCard::Genesis => {
-            fight.apply_to_actor(
-                Power::GenesisPower,
-                PowerAmount::Counted(fight.power_var(CardVar::StarsPerTurn)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::GenesisPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::StarsPerTurn)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call CardSelectCmd.FromHand`
         RegentCard::Glimmer => unimplemented!("what {card:?} does when it is played"),
         // `call Hook.ModifyBlock`
         RegentCard::Glitterstream => unimplemented!("what {card:?} does when it is played"),
-        // A command after a draw, which has to wait on the draw's question.
-        RegentCard::Glow => unimplemented!("what {card:?} does when it is played"),
+        RegentCard::Glow => {
+            if from == 0 {
+                fight.gain_stars(fight.var(CardVar::Stars));
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.draw(fight.var(CardVar::Cards));
+                if fight.waiting() {
+                    return Err(2);
+                }
+            }
+            if from <= 2 {
+                fight.apply_to_actor(
+                    Power::DrawCardsNextTurnPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Cards)),
+                );
+            }
+            Ok(Played::Done)
+        }
         // `call CardSelectCmd.FromHand`
         RegentCard::Guards => unimplemented!("what {card:?} does when it is played"),
         RegentCard::GuidingStar => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.apply_to_actor(
-                Power::DrawCardsNextTurnPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Cards)),
-            );
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(
+                    Power::DrawCardsNextTurnPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Cards)),
+                );
+            }
+            Ok(Played::Done)
         }
         RegentCard::HammerTime => {
-            fight.apply_to_actor(Power::HammerTimePower, PowerAmount::Counted(1));
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(Power::HammerTimePower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
         }
         // `call ResolveEnergyXValue`
         RegentCard::HeavenlyDrill => unimplemented!("what {card:?} does when it is played"),
         RegentCard::Hegemony => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.apply_to_actor(
-                Power::EnergyNextTurnPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Energy)),
-            );
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(
+                    Power::EnergyNextTurnPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Energy)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call CardSelectCmd.FromHand`
         RegentCard::HeirloomHammer => unimplemented!("what {card:?} does when it is played"),
         RegentCard::HiddenCache => {
-            fight.gain_stars(fight.var(CardVar::Stars));
-            fight.apply_to_actor(
-                Power::StarNextTurnPower,
-                PowerAmount::Counted(fight.power_var(CardVar::StarNextTurnPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.gain_stars(fight.var(CardVar::Stars));
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(
+                    Power::StarNextTurnPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::StarNextTurnPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         RegentCard::IAmInvincible => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            Played::Done
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
+            Ok(Played::Done)
         }
         RegentCard::KinglyKick => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            Played::Done
+            }
+            Ok(Played::Done)
         }
         RegentCard::KinglyPunch => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            Played::Done
+            }
+            Ok(Played::Done)
         }
         // `if`
         RegentCard::KnockoutBlow => unimplemented!("what {card:?} does when it is played"),
         RegentCard::KnowThyPlace => {
             let target = fight.target();
-            fight.apply_power(
-                target,
-                Power::WeakPower,
-                PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
-            );
-            fight.apply_power(
-                target,
-                Power::VulnerablePower,
-                PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_power(
+                    target,
+                    Power::WeakPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::WeakPower)),
+                );
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_power(
+                    target,
+                    Power::VulnerablePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call CardFactory.GetDistinctForCombat`
         RegentCard::Largesse => unimplemented!("what {card:?} does when it is played"),
@@ -423,286 +583,384 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         RegentCard::LunarBlast => unimplemented!("what {card:?} does when it is played"),
         RegentCard::MakeItSo => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            Played::Done
+            }
+            Ok(Played::Done)
         }
         // `call CardFactory.GetDistinctForCombat`
         RegentCard::ManifestAuthority => unimplemented!("what {card:?} does when it is played"),
         // `call PowerCmd.Apply`
         RegentCard::MeteorShower => unimplemented!("what {card:?} does when it is played"),
         RegentCard::MonarchsGaze => {
-            fight.apply_to_actor(
-                Power::MonarchsGazePower,
-                PowerAmount::Counted(fight.power_var(CardVar::StrengthLoss)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::MonarchsGazePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::StrengthLoss)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call PowerCmd.Apply`
         RegentCard::Monologue => unimplemented!("what {card:?} does when it is played"),
         RegentCard::NeutronAegis => {
-            fight.apply_to_actor(
-                Power::PlatingPower,
-                PowerAmount::Counted(fight.power_var(CardVar::PlatingPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::PlatingPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::PlatingPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         RegentCard::Orbit => {
-            fight.apply_to_actor(
-                Power::OrbitPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Energy)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::OrbitPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Energy)),
+                );
+            }
+            Ok(Played::Done)
         }
         RegentCard::PaleBlueDot => {
-            fight.apply_to_actor(
-                Power::PaleBlueDotPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Cards)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::PaleBlueDotPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Cards)),
+                );
+            }
+            Ok(Played::Done)
         }
         RegentCard::Parry => {
-            fight.apply_to_actor(
-                Power::ParryPower,
-                PowerAmount::Counted(fight.power_var(CardVar::ParryPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::ParryPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::ParryPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         RegentCard::ParticleWall => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            Played::Done
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
+            Ok(Played::Done)
         }
         RegentCard::Patter => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            fight.apply_to_actor(
-                Power::VigorPower,
-                PowerAmount::Counted(fight.power_var(CardVar::VigorPower)),
-            );
-            Played::Done
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(
+                    Power::VigorPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::VigorPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call CardPileCmd.Add`
         RegentCard::PhotonCut => unimplemented!("what {card:?} does when it is played"),
         RegentCard::PillarOfCreation => {
-            fight.apply_to_actor(
-                Power::PillarOfCreationPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Block)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::PillarOfCreationPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Block)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call CombatState.GetTeammatesOf`
         RegentCard::Plot => unimplemented!("what {card:?} does when it is played"),
         RegentCard::Prophesize => {
-            fight.draw(fight.var(CardVar::Cards));
-            Played::Done
+            if from == 0 {
+                fight.draw(fight.var(CardVar::Cards));
+            }
+            Ok(Played::Done)
         }
         // `call CardFactory.GetDistinctForCombat`
         RegentCard::Quasar => unimplemented!("what {card:?} does when it is played"),
         // `call DamageCmd.Attack`
         RegentCard::Radiate => unimplemented!("what {card:?} does when it is played"),
         RegentCard::RefineBlade => {
-            fight.forge(
-                Cards::Token(TokenCard::SovereignBlade),
-                fight.var(CardVar::Forge),
-            );
-            fight.apply_to_actor(
-                Power::EnergyNextTurnPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Energy)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.forge(
+                    Cards::Token(TokenCard::SovereignBlade),
+                    fight.var(CardVar::Forge),
+                );
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(
+                    Power::EnergyNextTurnPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Energy)),
+                );
+            }
+            Ok(Played::Done)
         }
         RegentCard::Reflect => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            fight.apply_to_actor(Power::ReflectPower, PowerAmount::Counted(1));
-            Played::Done
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(Power::ReflectPower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
         }
         // `call PowerCmd.Apply`
         RegentCard::Resonance => unimplemented!("what {card:?} does when it is played"),
         RegentCard::Royalties => {
-            fight.apply_to_actor(
-                Power::RoyaltiesPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Gold)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::RoyaltiesPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Gold)),
+                );
+            }
+            Ok(Played::Done)
         }
         RegentCard::RoyalGamble => {
-            fight.gain_stars(fight.var(CardVar::Stars));
-            Played::Done
+            if from == 0 {
+                fight.gain_stars(fight.var(CardVar::Stars));
+            }
+            Ok(Played::Done)
         }
         RegentCard::SeekingEdge => {
-            fight.apply_to_actor(Power::SeekingEdgePower, PowerAmount::Counted(1));
-            fight.forge(
-                Cards::Token(TokenCard::SovereignBlade),
-                fight.var(CardVar::Forge),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(Power::SeekingEdgePower, PowerAmount::Counted(1));
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.forge(
+                    Cards::Token(TokenCard::SovereignBlade),
+                    fight.var(CardVar::Forge),
+                );
+            }
+            Ok(Played::Done)
         }
         RegentCard::SevenStars => {
-            fight.attack(Scaling::Dynamic, |fight| {
-                for _ in 0..fight.var(CardVar::Repeat) {
-                    let targets = fight.opponents();
-                    fight.damage_command(|fight| {
-                        for target in targets {
-                            let attack = fight.resolve(Effect::Attack {
-                                dealer: fight.actor(),
-                                target,
-                                damage: Amount::Var(CardVar::Damage),
-                                scaling: Scaling::Dynamic,
-                            });
-                            fight.apply(attack);
-                        }
-                    });
-                }
-            });
-            Played::Done
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    for _ in 0..fight.var(CardVar::Repeat) {
+                        let targets = fight.opponents();
+                        fight.damage_command(|fight| {
+                            for target in targets {
+                                let attack = fight.resolve(Effect::Attack {
+                                    dealer: fight.actor(),
+                                    target,
+                                    damage: Amount::Var(CardVar::Damage),
+                                    scaling: Scaling::Dynamic,
+                                });
+                                fight.apply(attack);
+                            }
+                        });
+                    }
+                });
+            }
+            Ok(Played::Done)
         }
         RegentCard::ShiningStrike => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.gain_stars(fight.var(CardVar::Stars));
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.gain_stars(fight.var(CardVar::Stars));
+            }
+            Ok(Played::Done)
         }
         RegentCard::SolarStrike => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.gain_stars(fight.var(CardVar::Stars));
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.gain_stars(fight.var(CardVar::Stars));
+            }
+            Ok(Played::Done)
         }
         RegentCard::SpectrumShift => {
-            fight.apply_to_actor(
-                Power::SpectrumShiftPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Cards)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::SpectrumShiftPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Cards)),
+                );
+            }
+            Ok(Played::Done)
         }
         RegentCard::SpoilsOfBattle => {
-            fight.forge(
-                Cards::Token(TokenCard::SovereignBlade),
-                fight.var(CardVar::Forge),
-            );
-            fight.draw(fight.var(CardVar::Cards));
-            Played::Done
+            if from == 0 {
+                fight.forge(
+                    Cards::Token(TokenCard::SovereignBlade),
+                    fight.var(CardVar::Forge),
+                );
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.draw(fight.var(CardVar::Cards));
+            }
+            Ok(Played::Done)
         }
         // `call DamageCmd.Attack`
         RegentCard::Stardust => unimplemented!("what {card:?} does when it is played"),
         RegentCard::Strike => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            Played::Done
+            }
+            Ok(Played::Done)
         }
         // `statement`
         RegentCard::SummonForth => unimplemented!("what {card:?} does when it is played"),
         RegentCard::Supermassive => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::CalculatedDamage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::CalculatedDamage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            Played::Done
+            }
+            Ok(Played::Done)
         }
         RegentCard::SwordSage => {
-            fight.apply_to_actor(
-                Power::SwordSagePower,
-                PowerAmount::Counted(fight.power_var(CardVar::SwordSagePower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::SwordSagePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::SwordSagePower)),
+                );
+            }
+            Ok(Played::Done)
         }
         RegentCard::Terraforming => {
-            fight.apply_to_actor(
-                Power::VigorPower,
-                PowerAmount::Counted(fight.power_var(CardVar::VigorPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::VigorPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::VigorPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         RegentCard::TheSealedThrone => {
-            fight.apply_to_actor(Power::TheSealedThronePower, PowerAmount::Counted(1));
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(Power::TheSealedThronePower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
         }
         RegentCard::TheSmith => {
-            fight.forge(
-                Cards::Token(TokenCard::SovereignBlade),
-                fight.var(CardVar::Forge),
-            );
-            Played::Done
+            if from == 0 {
+                fight.forge(
+                    Cards::Token(TokenCard::SovereignBlade),
+                    fight.var(CardVar::Forge),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call CardSelectCmd.FromCombatPile`
         RegentCard::Tutor => unimplemented!("what {card:?} does when it is played"),
         RegentCard::Tyranny => {
-            fight.apply_to_actor(Power::TyrannyPower, PowerAmount::Counted(1));
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(Power::TyrannyPower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
         }
         RegentCard::Venerate => {
-            fight.gain_stars(fight.var(CardVar::Stars));
-            Played::Done
+            if from == 0 {
+                fight.gain_stars(fight.var(CardVar::Stars));
+            }
+            Ok(Played::Done)
         }
         // `call PlayerCmd.EndTurn`
         RegentCard::VoidForm => unimplemented!("what {card:?} does when it is played"),
         RegentCard::WroughtInWar => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.forge(
-                Cards::Token(TokenCard::SovereignBlade),
-                fight.var(CardVar::Forge),
-            );
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.forge(
+                    Cards::Token(TokenCard::SovereignBlade),
+                    fight.var(CardVar::Forge),
+                );
+            }
+            Ok(Played::Done)
         }
     }
 }

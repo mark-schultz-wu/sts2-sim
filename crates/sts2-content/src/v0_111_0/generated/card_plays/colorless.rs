@@ -9,25 +9,36 @@ use sts2_core::{Amount, Change, CostPool, Effect, Fight, Played, PowerAmount, Sc
 
 type V = super::super::super::V0_111_0;
 
-/// `OnPlay`, for every card whose statements the dump matched.
+/// `OnPlay` from the command at `from` on, for every card whose
+/// statements the dump matched. A command that leaves a question
+/// waiting stands the rest still, as the game's `await` does, and
+/// the play comes back as `Err` with the command to go on from.
 ///
 /// Any other card panics, and `behaviour/` ports it by hand.
-pub fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
+pub fn play_from<F: Fight<V>>(
+    card: ColorlessCard,
+    fight: &mut F,
+    from: u8,
+) -> Result<Played<V>, u8> {
     match card {
         // `call PotionCmd.TryToProcure`
         ColorlessCard::Alchemize => unimplemented!("what {card:?} does when it is played"),
         // `call PileType.Hand.GetPile`
         ColorlessCard::Anointed => unimplemented!("what {card:?} does when it is played"),
         ColorlessCard::Automation => {
-            fight.apply_to_actor(
-                Power::AutomationPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Energy)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::AutomationPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Energy)),
+                );
+            }
+            Ok(Played::Done)
         }
         ColorlessCard::BeaconOfHope => {
-            fight.apply_to_actor(Power::BeaconOfHopePower, PowerAmount::Counted(1));
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(Power::BeaconOfHopePower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
         }
         // `call PileType.Discard.GetPile`
         ColorlessCard::BeatDown => unimplemented!("what {card:?} does when it is played"),
@@ -35,20 +46,24 @@ pub fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
         ColorlessCard::BelieveInYou => unimplemented!("what {card:?} does when it is played"),
         ColorlessCard::Bolas => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            Played::Done
+            }
+            Ok(Played::Done)
         }
         ColorlessCard::Calamity => {
-            fight.apply_to_actor(Power::CalamityPower, PowerAmount::Counted(1));
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(Power::CalamityPower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
         }
         // `for`
         ColorlessCard::Catastrophe => unimplemented!("what {card:?} does when it is played"),
@@ -56,117 +71,152 @@ pub fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
         ColorlessCard::Coordinate => unimplemented!("what {card:?} does when it is played"),
         ColorlessCard::DarkShackles => {
             let target = fight.target();
-            fight.apply_power(
-                target,
-                Power::DarkShacklesPower,
-                PowerAmount::Counted(fight.power_var(CardVar::StrengthLoss)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_power(
+                    target,
+                    Power::DarkShacklesPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::StrengthLoss)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `if`
         ColorlessCard::Discovery => unimplemented!("what {card:?} does when it is played"),
         ColorlessCard::DramaticEntrance => {
-            fight.attack(Scaling::Dynamic, |fight| {
-                let targets = fight.opponents();
-                fight.damage_command(|fight| {
-                    for target in targets {
-                        let attack = fight.resolve(Effect::Attack {
-                            dealer: fight.actor(),
-                            target,
-                            damage: Amount::Var(CardVar::Damage),
-                            scaling: Scaling::Dynamic,
-                        });
-                        fight.apply(attack);
-                    }
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let targets = fight.opponents();
+                    fight.damage_command(|fight| {
+                        for target in targets {
+                            let attack = fight.resolve(Effect::Attack {
+                                dealer: fight.actor(),
+                                target,
+                                damage: Amount::Var(CardVar::Damage),
+                                scaling: Scaling::Dynamic,
+                            });
+                            fight.apply(attack);
+                        }
+                    });
                 });
-            });
-            Played::Done
+            }
+            Ok(Played::Done)
         }
         ColorlessCard::Entropy => {
-            fight.apply_to_actor(
-                Power::EntropyPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Cards)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::EntropyPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Cards)),
+                );
+            }
+            Ok(Played::Done)
         }
         ColorlessCard::Equilibrium => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            fight.apply_to_actor(
-                Power::RetainHandPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Equilibrium)),
-            );
-            Played::Done
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(
+                    Power::RetainHandPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Equilibrium)),
+                );
+            }
+            Ok(Played::Done)
         }
         ColorlessCard::EternalArmor => {
-            fight.apply_to_actor(
-                Power::PlatingPower,
-                PowerAmount::Counted(fight.power_var(CardVar::PlatingPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::PlatingPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::PlatingPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         ColorlessCard::Fasten => {
-            fight.apply_to_actor(
-                Power::FastenPower,
-                PowerAmount::Counted(fight.power_var(CardVar::ExtraBlock)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::FastenPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::ExtraBlock)),
+                );
+            }
+            Ok(Played::Done)
         }
         ColorlessCard::Finesse => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            fight.draw(fight.var(CardVar::Cards));
-            Played::Done
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.draw(fight.var(CardVar::Cards));
+            }
+            Ok(Played::Done)
         }
         // `call DamageCmd.Attack`
         ColorlessCard::Fisticuffs => unimplemented!("what {card:?} does when it is played"),
         ColorlessCard::FlashOfSteel => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.draw(fight.var(CardVar::Cards));
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.draw(fight.var(CardVar::Cards));
+            }
+            Ok(Played::Done)
         }
         ColorlessCard::GangUp => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::CalculatedDamage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::CalculatedDamage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            Played::Done
+            }
+            Ok(Played::Done)
         }
         ColorlessCard::GoldAxe => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::CalculatedDamage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::CalculatedDamage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            Played::Done
+            }
+            Ok(Played::Done)
         }
         // `call cardPlay.Target.Powers.All`
         ColorlessCard::HandOfGreed => unimplemented!("what {card:?} does when it is played"),
@@ -178,14 +228,21 @@ pub fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
         ColorlessCard::Impatience => unimplemented!("what {card:?} does when it is played"),
         ColorlessCard::Intercept => {
             let target = fight.target();
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            fight.apply_power(target, Power::CoveredPower, PowerAmount::Counted(1));
-            Played::Done
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_power(target, Power::CoveredPower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
         }
         // `call CardFactory.GetForCombat`
         ColorlessCard::Jackpot => unimplemented!("what {card:?} does when it is played"),
@@ -193,96 +250,131 @@ pub fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
         ColorlessCard::JackOfAllTrades => unimplemented!("what {card:?} does when it is played"),
         ColorlessCard::Knockdown => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.apply_power(
-                target,
-                Power::KnockdownPower,
-                PowerAmount::Counted(fight.power_var(CardVar::KnockdownPower)),
-            );
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_power(
+                    target,
+                    Power::KnockdownPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::KnockdownPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call CreatureCmd.GainBlock`
         ColorlessCard::Lift => unimplemented!("what {card:?} does when it is played"),
         ColorlessCard::MasterOfStrategy => {
-            fight.draw(fight.var(CardVar::Cards));
-            Played::Done
+            if from == 0 {
+                fight.draw(fight.var(CardVar::Cards));
+            }
+            Ok(Played::Done)
         }
         ColorlessCard::Mayhem => {
-            fight.apply_to_actor(Power::MayhemPower, PowerAmount::Counted(1));
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(Power::MayhemPower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
         }
         // `call CreatureCmd.GainBlock`
         ColorlessCard::Mimic => unimplemented!("what {card:?} does when it is played"),
         ColorlessCard::MindBlast => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::CalculatedDamage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::CalculatedDamage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            Played::Done
+            }
+            Ok(Played::Done)
         }
         ColorlessCard::Nostalgia => {
-            fight.apply_to_actor(Power::NostalgiaPower, PowerAmount::Counted(1));
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(Power::NostalgiaPower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
         }
         // `call AttackCommand.CreateContextAsync`
         ColorlessCard::Omnislice => unimplemented!("what {card:?} does when it is played"),
         ColorlessCard::Panache => {
-            fight.apply_to_actor(
-                Power::PanachePower,
-                PowerAmount::Counted(fight.power_var(CardVar::PanacheDamage)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::PanachePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::PanacheDamage)),
+                );
+            }
+            Ok(Played::Done)
         }
         ColorlessCard::PanicButton => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            fight.apply_to_actor(
-                Power::NoBlockPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Turns)),
-            );
-            Played::Done
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(
+                    Power::NoBlockPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Turns)),
+                );
+            }
+            Ok(Played::Done)
         }
         ColorlessCard::PrepTime => {
-            fight.apply_to_actor(
-                Power::PrepTimePower,
-                PowerAmount::Counted(fight.power_var(CardVar::PrepTimePower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::PrepTimePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::PrepTimePower)),
+                );
+            }
+            Ok(Played::Done)
         }
         ColorlessCard::Production => {
-            fight.modify_energy(fight.var(CardVar::Energy));
-            Played::Done
+            if from == 0 {
+                fight.modify_energy(fight.var(CardVar::Energy));
+            }
+            Ok(Played::Done)
         }
         // `call PowerCmd.Apply`
         ColorlessCard::Prolong => unimplemented!("what {card:?} does when it is played"),
         ColorlessCard::Prowess => {
-            fight.apply_to_actor(
-                Power::StrengthPower,
-                PowerAmount::Counted(fight.power_var(CardVar::StrengthPower)),
-            );
-            fight.apply_to_actor(
-                Power::DexterityPower,
-                PowerAmount::Counted(fight.power_var(CardVar::DexterityPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::StrengthPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::StrengthPower)),
+                );
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(
+                    Power::DexterityPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::DexterityPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `foreach`
         ColorlessCard::Purity => unimplemented!("what {card:?} does when it is played"),
@@ -290,39 +382,50 @@ pub fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
         ColorlessCard::Rally => unimplemented!("what {card:?} does when it is played"),
         ColorlessCard::Rend => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::CalculatedDamage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::CalculatedDamage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            Played::Done
+            }
+            Ok(Played::Done)
         }
         // `if`
         ColorlessCard::Restlessness => unimplemented!("what {card:?} does when it is played"),
         ColorlessCard::RollingBoulder => {
-            fight.apply_to_actor(
-                Power::RollingBoulderPower,
-                PowerAmount::Counted(fight.power_var(CardVar::RollingBoulderPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::RollingBoulderPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::RollingBoulderPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         ColorlessCard::Salvo => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.apply_to_actor(Power::RetainHandPower, PowerAmount::Counted(1));
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(Power::RetainHandPower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
         }
         // `call CardPileCmd.Draw`
         ColorlessCard::Scrawl => unimplemented!("what {card:?} does when it is played"),
@@ -337,73 +440,95 @@ pub fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
         // `if`
         ColorlessCard::Splash => unimplemented!("what {card:?} does when it is played"),
         ColorlessCard::Stratagem => {
-            fight.apply_to_actor(Power::StratagemPower, PowerAmount::Counted(1));
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(Power::StratagemPower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
         }
         ColorlessCard::TagTeam => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.apply_power(target, Power::TagTeamPower, PowerAmount::Counted(1));
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_power(target, Power::TagTeamPower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
         }
         // `statement`
         ColorlessCard::TheBall => unimplemented!("what {card:?} does when it is played"),
         // `call PowerCmd.Apply`
         ColorlessCard::TheBomb => unimplemented!("what {card:?} does when it is played"),
         ColorlessCard::TheGambit => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            fight.apply_to_actor(Power::TheGambitPower, PowerAmount::Counted(1));
-            Played::Done
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(Power::TheGambitPower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
         }
         // `call CardSelectCmd.FromHand`
         ColorlessCard::ThinkingAhead => unimplemented!("what {card:?} does when it is played"),
         ColorlessCard::ThrummingHatchet => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            Played::Done
+            }
+            Ok(Played::Done)
         }
         ColorlessCard::UltimateDefend => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            Played::Done
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
+            Ok(Played::Done)
         }
         ColorlessCard::UltimateStrike => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            Played::Done
+            }
+            Ok(Played::Done)
         }
         // `call DamageCmd.Attack`
         ColorlessCard::Volley => unimplemented!("what {card:?} does when it is played"),

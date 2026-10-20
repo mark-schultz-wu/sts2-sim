@@ -5,7 +5,7 @@ use sts2_core::{
     Scaling, Selection,
 };
 
-use super::super::super::generated::card_plays;
+use super::super::super::generated::cards::Cards;
 use super::super::super::generated::cards::{CardKeyword, CardVar, NecrobinderCard};
 use super::super::super::generated::monsters::Monster;
 use super::super::super::generated::powers::Power;
@@ -381,20 +381,6 @@ fn sculpting_strike<F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
     match card {
-        // `Neurosurge`: its energy, its `Cards` drawn, then its power. A
-        // shuffle inside the draw can ask, and the power waits for it.
-        NecrobinderCard::Neurosurge => {
-            fight.modify_energy(fight.var(CardVar::Energy));
-            fight.draw(fight.var(CardVar::Cards));
-            if fight.waiting() {
-                return Played::Waiting {
-                    at: super::super::Resume::Card(super::Resume::Necrobinder(
-                        Resume::NeurosurgeDrew,
-                    )),
-                };
-            }
-            neurosurge_drew(fight)
-        }
         // `Seance`: its `Cards` of the draw pile picked, to turn into Souls.
         NecrobinderCard::Seance => {
             let count = usize::try_from(fight.var(CardVar::Cards))
@@ -726,7 +712,7 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
             );
             Played::Done
         }
-        card => card_plays::necrobinder::on_play(card, fight),
+        card => super::generated_from(Cards::Necrobinder(card), fight, 0),
     }
 }
 
@@ -749,26 +735,12 @@ pub enum Resume {
     SnapRetain,
     /// `Transfigure`, after its owner picked the card to replay.
     TransfigureReplay,
-    /// `Neurosurge`, after a question inside its draw was answered.
-    NeurosurgeDrew,
 }
 
 /// The rest of a Necrobinder card's play that stood still on a question its
 /// own command raised.
-pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
-    match at {
-        Resume::NeurosurgeDrew => neurosurge_drew(fight),
-        at => unreachable!("{at:?} stops on a pick, not on a question it waited for"),
-    }
-}
-
-/// `Neurosurge`, once its draw is over: its power on its owner.
-fn neurosurge_drew<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    fight.apply_to_actor(
-        Power::NeurosurgePower,
-        sts2_core::PowerAmount::Counted(fight.power_var(CardVar::NeurosurgePower)),
-    );
-    Played::Done
+pub(super) fn resume_waited<F: Fight<V>>(_fight: &mut F, at: Resume) -> Played<V> {
+    unreachable!("{at:?} stops on a pick, not on a question it waited for")
 }
 
 pub(super) fn resume_play<F: Fight<V>>(
@@ -777,7 +749,6 @@ pub(super) fn resume_play<F: Fight<V>>(
     chosen: sts2_core::SelectedCards<V>,
 ) -> Played<V> {
     match at {
-        Resume::NeurosurgeDrew => unreachable!("{at:?} waits on a question, not a pick"),
         // `CardCmd.TransformTo<Soul>` of each one taken.
         Resume::SeanceTransforms => {
             use super::super::super::generated::cards::{Cards, TokenCard};

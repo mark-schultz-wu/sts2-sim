@@ -9,32 +9,39 @@ use sts2_core::{Amount, Change, CostPool, Effect, Fight, Played, PowerAmount, Sc
 
 type V = super::super::super::V0_111_0;
 
-/// `OnPlay`, for every card whose statements the dump matched.
+/// `OnPlay` from the command at `from` on, for every card whose
+/// statements the dump matched. A command that leaves a question
+/// waiting stands the rest still, as the game's `await` does, and
+/// the play comes back as `Err` with the command to go on from.
 ///
 /// Any other card panics, and `behaviour/` ports it by hand.
-pub fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
+pub fn play_from<F: Fight<V>>(card: EventCard, fight: &mut F, from: u8) -> Result<Played<V>, u8> {
     match card {
         // `call CardFactory.GetDistinctForCombat`
         EventCard::Abundance => unimplemented!("what {card:?} does when it is played"),
         // `foreach`
         EventCard::Apotheosis => unimplemented!("what {card:?} does when it is played"),
         EventCard::Apparition => {
-            fight.apply_to_actor(
-                Power::IntangiblePower,
-                PowerAmount::Counted(fight.power_var(CardVar::IntangiblePower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::IntangiblePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::IntangiblePower)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call CreatureCmd.LoseMaxHp`
         EventCard::BrightestFlame => unimplemented!("what {card:?} does when it is played"),
         // `call DamageCmd.Attack`
         EventCard::ByrdSwoop => unimplemented!("what {card:?} does when it is played"),
         EventCard::Caltrops => {
-            fight.apply_to_actor(
-                Power::ThornsPower,
-                PowerAmount::Counted(fight.power_var(CardVar::ThornsPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::ThornsPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::ThornsPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `overrides IsPlayable`
         EventCard::Clash => unimplemented!("what {card:?} does when it is played"),
@@ -47,29 +54,33 @@ pub fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
         // `call CreatureCmd.GainBlock`
         EventCard::Entrench => unimplemented!("what {card:?} does when it is played"),
         EventCard::Exterminate => {
-            fight.attack(Scaling::Dynamic, |fight| {
-                for _ in 0..fight.var(CardVar::Repeat) {
-                    let targets = fight.opponents();
-                    fight.damage_command(|fight| {
-                        for target in targets {
-                            let attack = fight.resolve(Effect::Attack {
-                                dealer: fight.actor(),
-                                target,
-                                damage: Amount::Var(CardVar::Damage),
-                                scaling: Scaling::Dynamic,
-                            });
-                            fight.apply(attack);
-                        }
-                    });
-                }
-            });
-            Played::Done
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    for _ in 0..fight.var(CardVar::Repeat) {
+                        let targets = fight.opponents();
+                        fight.damage_command(|fight| {
+                            for target in targets {
+                                let attack = fight.resolve(Effect::Attack {
+                                    dealer: fight.actor(),
+                                    target,
+                                    damage: Amount::Var(CardVar::Damage),
+                                    scaling: Scaling::Dynamic,
+                                });
+                                fight.apply(attack);
+                            }
+                        });
+                    }
+                });
+            }
+            Ok(Played::Done)
         }
         // `call PowerCmd.Apply`
         EventCard::FeedingFrenzy => unimplemented!("what {card:?} does when it is played"),
         EventCard::HelloWorld => {
-            fight.apply_to_actor(Power::HelloWorldPower, PowerAmount::Counted(1));
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(Power::HelloWorldPower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
         }
         // `switch`
         EventCard::MadScienceSapping => unimplemented!("what {card:?} does when it is played"),
@@ -96,16 +107,35 @@ pub fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
         // `call Math.Min`
         EventCard::NeowsFury => unimplemented!("what {card:?} does when it is played"),
         EventCard::Outmaneuver => {
-            fight.apply_to_actor(
-                Power::EnergyNextTurnPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Energy)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::EnergyNextTurnPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Energy)),
+                );
+            }
+            Ok(Played::Done)
         }
         EventCard::Peck => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                for _ in 0..fight.var(CardVar::Repeat) {
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    for _ in 0..fight.var(CardVar::Repeat) {
+                        let attack = fight.resolve(Effect::Attack {
+                            dealer: fight.actor(),
+                            target,
+                            damage: Amount::Var(CardVar::Damage),
+                            scaling: Scaling::Dynamic,
+                        });
+                        fight.apply(attack);
+                    }
+                });
+            }
+            Ok(Played::Done)
+        }
+        EventCard::Rebound => {
+            let target = fight.target();
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
                     let attack = fight.resolve(Effect::Attack {
                         dealer: fight.actor(),
                         target,
@@ -113,60 +143,71 @@ pub fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
                         scaling: Scaling::Dynamic,
                     });
                     fight.apply(attack);
-                }
-            });
-            Played::Done
-        }
-        EventCard::Rebound => {
-            let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
                 });
-                fight.apply(attack);
-            });
-            fight.apply_to_actor(Power::ReboundPower, PowerAmount::Counted(1));
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(Power::ReboundPower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
         }
         EventCard::Relax => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            fight.apply_to_actor(
-                Power::DrawCardsNextTurnPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Cards)),
-            );
-            fight.apply_to_actor(
-                Power::EnergyNextTurnPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Energy)),
-            );
-            Played::Done
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(
+                    Power::DrawCardsNextTurnPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Cards)),
+                );
+                if fight.waiting() {
+                    return Err(2);
+                }
+            }
+            if from <= 2 {
+                fight.apply_to_actor(
+                    Power::EnergyNextTurnPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Energy)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call DamageCmd.Attack`
         EventCard::RipAndTear => unimplemented!("what {card:?} does when it is played"),
         EventCard::Squash => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.apply_power(
-                target,
-                Power::VulnerablePower,
-                PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
-            );
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_power(
+                    target,
+                    Power::VulnerablePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call CreatureCmd.GainBlock`
         EventCard::Stack => unimplemented!("what {card:?} does when it is played"),

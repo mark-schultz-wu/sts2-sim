@@ -84,6 +84,11 @@ pub(super) struct Board<'a, V: Rules> {
     /// began. `DamageCmd.Attack` takes its numbers as the command is built,
     /// so a hit later in it reads them as they were.
     attacking_as: Option<CardInstance<V>>,
+    /// Whether the question waiting came from a death's listener.
+    /// `Hook.AfterDeath` gives each listener a `HookPlayerChoiceContext` of
+    /// its own, whose question pauses only that listener, so the effect
+    /// that killed does not wait on it.
+    death_asked: bool,
 }
 
 /// The game's `PlayerChoiceContext`, as far as it decides what a question
@@ -219,6 +224,7 @@ impl<'a, V: Rules> Board<'a, V> {
             landed: None,
             commanding: false,
             dealer_asked: false,
+            death_asked: false,
             attacking_as: None,
         }
     }
@@ -273,6 +279,7 @@ impl<'a, V: Rules> Board<'a, V> {
             landed: None,
             commanding: false,
             dealer_asked: false,
+            death_asked: false,
             attacking_as: None,
         }
     }
@@ -2110,6 +2117,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 Some(sts2_core::ModelId::Monster(monster)) => Some(monster),
                 _ => None,
             });
+        let asked_before = self.live.asking.is_some();
         let mut walking = super::listen::Walking::begin::<super::listen::Checked>(
             self.live,
             self.relics,
@@ -2168,6 +2176,9 @@ impl<'a, V: Rules> Board<'a, V> {
                     unimplemented!("{listener:?} asking for {effect:?} over another's death")
                 }
             }
+        }
+        if !asked_before && self.live.asking.is_some() {
+            self.death_asked = true;
         }
         own
     }
@@ -4515,7 +4526,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn waiting(&self) -> bool {
-        self.live.asking.is_some()
+        self.live.asking.is_some() && !self.death_asked
     }
 
     fn playing_ident(&self) -> CardIdent<V> {
@@ -6122,6 +6133,7 @@ impl<'a, V: Rules> Board<'a, V> {
             landed: None,
             commanding: false,
             dealer_asked: false,
+            death_asked: false,
             attacking_as: None,
         }
     }

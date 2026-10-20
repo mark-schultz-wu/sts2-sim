@@ -9,14 +9,23 @@ use sts2_core::{Amount, Change, CostPool, Effect, Fight, Played, PowerAmount, Sc
 
 type V = super::super::super::V0_107_1;
 
-/// `OnPlay`, for every card whose statements the dump matched.
+/// `OnPlay` from the command at `from` on, for every card whose
+/// statements the dump matched. A command that leaves a question
+/// waiting stands the rest still, as the game's `await` does, and
+/// the play comes back as `Err` with the command to go on from.
 ///
 /// Any other card panics, and `behaviour/` ports it by hand.
-pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
+pub fn play_from<F: Fight<V>>(
+    card: IroncladCard,
+    fight: &mut F,
+    from: u8,
+) -> Result<Played<V>, u8> {
     match card {
         IroncladCard::Aggression => {
-            fight.apply_to_actor(Power::AggressionPower, PowerAmount::Counted(1));
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(Power::AggressionPower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
         }
         // `call CreateClone`
         IroncladCard::Anger => unimplemented!("what {card:?} does when it is played"),
@@ -24,105 +33,139 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
         IroncladCard::Armaments => unimplemented!("what {card:?} does when it is played"),
         IroncladCard::AshenStrike => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::CalculatedDamage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::CalculatedDamage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            Played::Done
+            }
+            Ok(Played::Done)
         }
         IroncladCard::Barricade => {
-            fight.apply_to_actor(Power::BarricadePower, PowerAmount::Counted(1));
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(Power::BarricadePower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
         }
         IroncladCard::Bash => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.apply_power(
-                target,
-                Power::VulnerablePower,
-                PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
-            );
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_power(
+                    target,
+                    Power::VulnerablePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
+                );
+            }
+            Ok(Played::Done)
         }
-        // A command after a draw, which has to wait on the draw's question.
-        IroncladCard::BattleTrance => unimplemented!("what {card:?} does when it is played"),
+        IroncladCard::BattleTrance => {
+            if from == 0 {
+                fight.draw(fight.var(CardVar::Cards));
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(Power::NoDrawPower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
+        }
         // `call CreatureCmd.Damage`
         IroncladCard::Bloodletting => unimplemented!("what {card:?} does when it is played"),
         // `call CreatureCmd.Damage`
         IroncladCard::BloodWall => unimplemented!("what {card:?} does when it is played"),
         IroncladCard::Bludgeon => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            Played::Done
+            }
+            Ok(Played::Done)
         }
         IroncladCard::BodySlam => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::CalculatedDamage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::CalculatedDamage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            Played::Done
+            }
+            Ok(Played::Done)
         }
         // `call CreatureCmd.Damage`
         IroncladCard::Brand => unimplemented!("what {card:?} does when it is played"),
         IroncladCard::Break => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.apply_power(
-                target,
-                Power::VulnerablePower,
-                PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
-            );
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_power(
+                    target,
+                    Power::VulnerablePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call CreatureCmd.Damage`
         IroncladCard::Breakthrough => unimplemented!("what {card:?} does when it is played"),
         IroncladCard::Bully => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::CalculatedDamage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::CalculatedDamage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            Played::Done
+            }
+            Ok(Played::Done)
         }
         // `call CardSelectCmd.FromHand`
         IroncladCard::BurningPact => unimplemented!("what {card:?} does when it is played"),
@@ -131,21 +174,194 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
         // `call PileType.Hand.GetPile`
         IroncladCard::Cinder => unimplemented!("what {card:?} does when it is played"),
         IroncladCard::Colossus => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            fight.apply_to_actor(
-                Power::ColossusPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Colossus)),
-            );
-            Played::Done
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(
+                    Power::ColossusPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Colossus)),
+                );
+            }
+            Ok(Played::Done)
         }
         IroncladCard::Conflagration => {
-            fight.attack(Scaling::Dynamic, |fight| {
-                for _ in 0..fight.var(CardVar::Repeat) {
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    for _ in 0..fight.var(CardVar::Repeat) {
+                        let targets = fight.opponents();
+                        fight.damage_command(|fight| {
+                            for target in targets {
+                                let attack = fight.resolve(Effect::Attack {
+                                    dealer: fight.actor(),
+                                    target,
+                                    damage: Amount::Var(CardVar::Damage),
+                                    scaling: Scaling::Dynamic,
+                                });
+                                fight.apply(attack);
+                            }
+                        });
+                    }
+                });
+            }
+            Ok(Played::Done)
+        }
+        IroncladCard::Corruption => {
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::CorruptionPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Power)),
+                );
+            }
+            Ok(Played::Done)
+        }
+        // `call PowerCmd.Apply`
+        IroncladCard::CrimsonMantle => unimplemented!("what {card:?} does when it is played"),
+        IroncladCard::Cruelty => {
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::CrueltyPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::CrueltyPower)),
+                );
+            }
+            Ok(Played::Done)
+        }
+        IroncladCard::DarkEmbrace => {
+            if from == 0 {
+                fight.apply_to_actor(Power::DarkEmbracePower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
+        }
+        IroncladCard::Defend => {
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
+            Ok(Played::Done)
+        }
+        // `call CreatureCmd.Damage`
+        IroncladCard::DemonicShield => unimplemented!("what {card:?} does when it is played"),
+        IroncladCard::DemonForm => {
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::DemonFormPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::StrengthPower)),
+                );
+            }
+            Ok(Played::Done)
+        }
+        // `call cardPlay.Target.HasPower`
+        IroncladCard::Dismantle => unimplemented!("what {card:?} does when it is played"),
+        // `call cardPlay.Target.GetPower`
+        IroncladCard::Dominate => unimplemented!("what {card:?} does when it is played"),
+        IroncladCard::DrumOfBattle => {
+            if from == 0 {
+                fight.draw(fight.var(CardVar::Cards));
+            }
+            Ok(Played::Done)
+        }
+        // `for`
+        IroncladCard::EvilEye => unimplemented!("what {card:?} does when it is played"),
+        // `call PlayerCmd.GainEnergy`
+        IroncladCard::ExpectAFight => unimplemented!("what {card:?} does when it is played"),
+        // `call cardPlay.Target.Powers.All`
+        IroncladCard::Feed => unimplemented!("what {card:?} does when it is played"),
+        IroncladCard::FeelNoPain => {
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::FeelNoPainPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Power)),
+                );
+            }
+            Ok(Played::Done)
+        }
+        // `call PileType.Hand.GetPile`
+        IroncladCard::FiendFire => unimplemented!("what {card:?} does when it is played"),
+        IroncladCard::FightMe => {
+            let target = fight.target();
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    for _ in 0..fight.var(CardVar::Repeat) {
+                        let attack = fight.resolve(Effect::Attack {
+                            dealer: fight.actor(),
+                            target,
+                            damage: Amount::Var(CardVar::Damage),
+                            scaling: Scaling::Dynamic,
+                        });
+                        fight.apply(attack);
+                    }
+                });
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(
+                    Power::StrengthPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::StrengthPower)),
+                );
+                if fight.waiting() {
+                    return Err(2);
+                }
+            }
+            if from <= 2 {
+                fight.apply_power(
+                    target,
+                    Power::StrengthPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::EnemyStrength)),
+                );
+            }
+            Ok(Played::Done)
+        }
+        IroncladCard::FlameBarrier => {
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(
+                    Power::FlameBarrierPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::DamageBack)),
+                );
+            }
+            Ok(Played::Done)
+        }
+        // `if`
+        IroncladCard::ForgottenRitual => unimplemented!("what {card:?} does when it is played"),
+        // `call CardPileCmd.AutoPlayFromDrawPile`
+        IroncladCard::Havoc => unimplemented!("what {card:?} does when it is played"),
+        // `call CardSelectCmd.FromCombatPile`
+        IroncladCard::Headbutt => unimplemented!("what {card:?} does when it is played"),
+        IroncladCard::Hellraiser => {
+            if from == 0 {
+                fight.apply_to_actor(Power::HellraiserPower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
+        }
+        // `call CreatureCmd.Damage`
+        IroncladCard::Hemokinesis => unimplemented!("what {card:?} does when it is played"),
+        IroncladCard::HowlFromBeyond => {
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
                     let targets = fight.opponents();
                     fight.damage_command(|fight| {
                         for target in targets {
@@ -158,75 +374,49 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
                             fight.apply(attack);
                         }
                     });
-                }
-            });
-            Played::Done
+                });
+            }
+            Ok(Played::Done)
         }
-        IroncladCard::Corruption => {
-            fight.apply_to_actor(
-                Power::CorruptionPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Power)),
-            );
-            Played::Done
+        IroncladCard::Impervious => {
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
+            Ok(Played::Done)
         }
+        // `call CardFactory.GetDistinctForCombat`
+        IroncladCard::InfernalBlade => unimplemented!("what {card:?} does when it is played"),
         // `call PowerCmd.Apply`
-        IroncladCard::CrimsonMantle => unimplemented!("what {card:?} does when it is played"),
-        IroncladCard::Cruelty => {
-            fight.apply_to_actor(
-                Power::CrueltyPower,
-                PowerAmount::Counted(fight.power_var(CardVar::CrueltyPower)),
-            );
-            Played::Done
+        IroncladCard::Inferno => unimplemented!("what {card:?} does when it is played"),
+        IroncladCard::Inflame => {
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::StrengthPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::StrengthPower)),
+                );
+            }
+            Ok(Played::Done)
         }
-        IroncladCard::DarkEmbrace => {
-            fight.apply_to_actor(Power::DarkEmbracePower, PowerAmount::Counted(1));
-            Played::Done
-        }
-        IroncladCard::Defend => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            Played::Done
-        }
-        // `call CreatureCmd.Damage`
-        IroncladCard::DemonicShield => unimplemented!("what {card:?} does when it is played"),
-        IroncladCard::DemonForm => {
-            fight.apply_to_actor(
-                Power::DemonFormPower,
-                PowerAmount::Counted(fight.power_var(CardVar::StrengthPower)),
-            );
-            Played::Done
-        }
-        // `call cardPlay.Target.HasPower`
-        IroncladCard::Dismantle => unimplemented!("what {card:?} does when it is played"),
-        // `call cardPlay.Target.GetPower`
-        IroncladCard::Dominate => unimplemented!("what {card:?} does when it is played"),
-        IroncladCard::DrumOfBattle => {
-            fight.draw(fight.var(CardVar::Cards));
-            Played::Done
-        }
-        // `for`
-        IroncladCard::EvilEye => unimplemented!("what {card:?} does when it is played"),
-        // `call PlayerCmd.GainEnergy`
-        IroncladCard::ExpectAFight => unimplemented!("what {card:?} does when it is played"),
-        // `call cardPlay.Target.Powers.All`
-        IroncladCard::Feed => unimplemented!("what {card:?} does when it is played"),
-        IroncladCard::FeelNoPain => {
-            fight.apply_to_actor(
-                Power::FeelNoPainPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Power)),
-            );
-            Played::Done
-        }
-        // `call PileType.Hand.GetPile`
-        IroncladCard::FiendFire => unimplemented!("what {card:?} does when it is played"),
-        IroncladCard::FightMe => {
+        IroncladCard::IronWave => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                for _ in 0..fight.var(CardVar::Repeat) {
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.attack(Scaling::Dynamic, |fight| {
                     let attack = fight.resolve(Effect::Attack {
                         dealer: fight.actor(),
                         target,
@@ -234,128 +424,49 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
                         scaling: Scaling::Dynamic,
                     });
                     fight.apply(attack);
-                }
-            });
-            fight.apply_to_actor(
-                Power::StrengthPower,
-                PowerAmount::Counted(fight.power_var(CardVar::StrengthPower)),
-            );
-            fight.apply_power(
-                target,
-                Power::StrengthPower,
-                PowerAmount::Counted(fight.power_var(CardVar::EnemyStrength)),
-            );
-            Played::Done
-        }
-        IroncladCard::FlameBarrier => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            fight.apply_to_actor(
-                Power::FlameBarrierPower,
-                PowerAmount::Counted(fight.power_var(CardVar::DamageBack)),
-            );
-            Played::Done
-        }
-        // `if`
-        IroncladCard::ForgottenRitual => unimplemented!("what {card:?} does when it is played"),
-        // `call CardPileCmd.AutoPlayFromDrawPile`
-        IroncladCard::Havoc => unimplemented!("what {card:?} does when it is played"),
-        // `call CardSelectCmd.FromCombatPile`
-        IroncladCard::Headbutt => unimplemented!("what {card:?} does when it is played"),
-        IroncladCard::Hellraiser => {
-            fight.apply_to_actor(Power::HellraiserPower, PowerAmount::Counted(1));
-            Played::Done
-        }
-        // `call CreatureCmd.Damage`
-        IroncladCard::Hemokinesis => unimplemented!("what {card:?} does when it is played"),
-        IroncladCard::HowlFromBeyond => {
-            fight.attack(Scaling::Dynamic, |fight| {
-                let targets = fight.opponents();
-                fight.damage_command(|fight| {
-                    for target in targets {
-                        let attack = fight.resolve(Effect::Attack {
-                            dealer: fight.actor(),
-                            target,
-                            damage: Amount::Var(CardVar::Damage),
-                            scaling: Scaling::Dynamic,
-                        });
-                        fight.apply(attack);
-                    }
                 });
-            });
-            Played::Done
-        }
-        IroncladCard::Impervious => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            Played::Done
-        }
-        // `call CardFactory.GetDistinctForCombat`
-        IroncladCard::InfernalBlade => unimplemented!("what {card:?} does when it is played"),
-        // `call PowerCmd.Apply`
-        IroncladCard::Inferno => unimplemented!("what {card:?} does when it is played"),
-        IroncladCard::Inflame => {
-            fight.apply_to_actor(
-                Power::StrengthPower,
-                PowerAmount::Counted(fight.power_var(CardVar::StrengthPower)),
-            );
-            Played::Done
-        }
-        IroncladCard::IronWave => {
-            let target = fight.target();
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(attack);
-            });
-            Played::Done
+            }
+            Ok(Played::Done)
         }
         IroncladCard::Juggernaut => {
-            fight.apply_to_actor(
-                Power::JuggernautPower,
-                PowerAmount::Counted(fight.power_var(CardVar::JuggernautPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::JuggernautPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::JuggernautPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         IroncladCard::Juggling => {
-            fight.apply_to_actor(Power::JugglingPower, PowerAmount::Counted(1));
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(Power::JugglingPower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
         }
         IroncladCard::Mangle => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.apply_power(
-                target,
-                Power::ManglePower,
-                PowerAmount::Counted(fight.power_var(CardVar::StrengthLoss)),
-            );
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_power(
+                    target,
+                    Power::ManglePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::StrengthLoss)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call cardPlay.Target.GetPowerAmount`
         IroncladCard::MoltenFist => unimplemented!("what {card:?} does when it is played"),
@@ -364,11 +475,13 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
         // `call CreatureCmd.Damage`
         IroncladCard::Offering => unimplemented!("what {card:?} does when it is played"),
         IroncladCard::OneTwoPunch => {
-            fight.apply_to_actor(
-                Power::OneTwoPunchPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Attacks)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::OneTwoPunchPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Attacks)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `if`
         IroncladCard::PactsEnd => unimplemented!("what {card:?} does when it is played"),
@@ -378,88 +491,162 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
         IroncladCard::Pillage => unimplemented!("what {card:?} does when it is played"),
         IroncladCard::PommelStrike => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.draw(fight.var(CardVar::Cards));
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.draw(fight.var(CardVar::Cards));
+            }
+            Ok(Played::Done)
         }
         // `call PileType.Hand.GetPile`
         IroncladCard::PrimalForce => unimplemented!("what {card:?} does when it is played"),
         IroncladCard::Pyre => {
-            fight.apply_to_actor(
-                Power::PyrePower,
-                PowerAmount::Counted(fight.power_var(CardVar::Energy)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::PyrePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Energy)),
+                );
+            }
+            Ok(Played::Done)
         }
         IroncladCard::Rage => {
-            fight.apply_to_actor(
-                Power::RagePower,
-                PowerAmount::Counted(fight.power_var(CardVar::Power)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::RagePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Power)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `statement`
         IroncladCard::Rampage => unimplemented!("what {card:?} does when it is played"),
         IroncladCard::Rupture => {
-            fight.apply_to_actor(
-                Power::RupturePower,
-                PowerAmount::Counted(fight.power_var(CardVar::StrengthPower)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::RupturePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::StrengthPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `foreach`
         IroncladCard::SecondWind => unimplemented!("what {card:?} does when it is played"),
         IroncladCard::SetupStrike => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
                 });
-                fight.apply(attack);
-            });
-            fight.apply_to_actor(
-                Power::SetupStrikePower,
-                PowerAmount::Counted(fight.power_var(CardVar::StrengthPower)),
-            );
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(
+                    Power::SetupStrikePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::StrengthPower)),
+                );
+            }
+            Ok(Played::Done)
         }
         IroncladCard::ShrugItOff => {
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            fight.draw(fight.var(CardVar::Cards));
-            Played::Done
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.draw(fight.var(CardVar::Cards));
+            }
+            Ok(Played::Done)
         }
         // `call LostHpThisTurn`
         IroncladCard::Spite => unimplemented!("what {card:?} does when it is played"),
         IroncladCard::Stampede => {
-            fight.apply_to_actor(
-                Power::StampedePower,
-                PowerAmount::Counted(fight.power_var(CardVar::Power)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::StampedePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Power)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call PileType.Hand.GetPile`
         IroncladCard::Stoke => unimplemented!("what {card:?} does when it is played"),
         IroncladCard::Stomp => {
-            fight.attack(Scaling::Dynamic, |fight| {
-                let targets = fight.opponents();
-                fight.damage_command(|fight| {
-                    for target in targets {
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let targets = fight.opponents();
+                    fight.damage_command(|fight| {
+                        for target in targets {
+                            let attack = fight.resolve(Effect::Attack {
+                                dealer: fight.actor(),
+                                target,
+                                damage: Amount::Var(CardVar::Damage),
+                                scaling: Scaling::Dynamic,
+                            });
+                            fight.apply(attack);
+                        }
+                    });
+                });
+            }
+            Ok(Played::Done)
+        }
+        IroncladCard::StoneArmor => {
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::PlatingPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::PlatingPower)),
+                );
+            }
+            Ok(Played::Done)
+        }
+        IroncladCard::Strike => {
+            let target = fight.target();
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
+                });
+            }
+            Ok(Played::Done)
+        }
+        IroncladCard::SwordBoomerang => {
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    for _ in 0..fight.var(CardVar::Repeat) {
+                        let Some(target) = fight.random_target() else {
+                            break;
+                        };
                         let attack = fight.resolve(Effect::Attack {
                             dealer: fight.actor(),
                             target,
@@ -469,74 +656,87 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
                         fight.apply(attack);
                     }
                 });
-            });
-            Played::Done
-        }
-        IroncladCard::StoneArmor => {
-            fight.apply_to_actor(
-                Power::PlatingPower,
-                PowerAmount::Counted(fight.power_var(CardVar::PlatingPower)),
-            );
-            Played::Done
-        }
-        IroncladCard::Strike => {
-            let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(attack);
-            });
-            Played::Done
-        }
-        IroncladCard::SwordBoomerang => {
-            fight.attack(Scaling::Dynamic, |fight| {
-                for _ in 0..fight.var(CardVar::Repeat) {
-                    let Some(target) = fight.random_target() else {
-                        break;
-                    };
-                    let attack = fight.resolve(Effect::Attack {
-                        dealer: fight.actor(),
-                        target,
-                        damage: Amount::Var(CardVar::Damage),
-                        scaling: Scaling::Dynamic,
-                    });
-                    fight.apply(attack);
-                }
-            });
-            Played::Done
+            }
+            Ok(Played::Done)
         }
         IroncladCard::Tank => {
-            fight.apply_to_actor(Power::TankPower, PowerAmount::Counted(1));
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(Power::TankPower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
         }
         IroncladCard::Taunt => {
             let target = fight.target();
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Var(CardVar::Block),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
-            fight.apply_power(
-                target,
-                Power::VulnerablePower,
-                PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
-            );
-            Played::Done
+            if from == 0 {
+                let block = fight.resolve(Effect::GainBlock {
+                    recipient: fight.actor(),
+                    amount: Amount::Var(CardVar::Block),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(block);
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_power(
+                    target,
+                    Power::VulnerablePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call DamageCmd.Attack`
         IroncladCard::TearAsunder => unimplemented!("what {card:?} does when it is played"),
         // `call PileType.Hand.GetPile`
         IroncladCard::Thrash => unimplemented!("what {card:?} does when it is played"),
         IroncladCard::Thunderclap => {
-            fight.attack(Scaling::Dynamic, |fight| {
-                let targets = fight.opponents();
-                fight.damage_command(|fight| {
-                    for target in targets {
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let targets = fight.opponents();
+                    fight.damage_command(|fight| {
+                        for target in targets {
+                            let attack = fight.resolve(Effect::Attack {
+                                dealer: fight.actor(),
+                                target,
+                                damage: Amount::Var(CardVar::Damage),
+                                scaling: Scaling::Dynamic,
+                            });
+                            fight.apply(attack);
+                        }
+                    });
+                });
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_opponents(
+                    Power::VulnerablePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
+                );
+            }
+            Ok(Played::Done)
+        }
+        IroncladCard::Tremble => {
+            let target = fight.target();
+            if from == 0 {
+                fight.apply_power(
+                    target,
+                    Power::VulnerablePower,
+                    PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
+                );
+            }
+            Ok(Played::Done)
+        }
+        // `if`
+        IroncladCard::TrueGrit => unimplemented!("what {card:?} does when it is played"),
+        IroncladCard::TwinStrike => {
+            let target = fight.target();
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
+                    for _ in 0..2 {
                         let attack = fight.resolve(Effect::Attack {
                             dealer: fight.actor(),
                             target,
@@ -546,28 +746,19 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
                         fight.apply(attack);
                     }
                 });
-            });
-            fight.apply_to_opponents(
-                Power::VulnerablePower,
-                PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
-            );
-            Played::Done
+            }
+            Ok(Played::Done)
         }
-        IroncladCard::Tremble => {
-            let target = fight.target();
-            fight.apply_power(
-                target,
-                Power::VulnerablePower,
-                PowerAmount::Counted(fight.power_var(CardVar::VulnerablePower)),
-            );
-            Played::Done
+        IroncladCard::Unmovable => {
+            if from == 0 {
+                fight.apply_to_actor(Power::UnmovablePower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
         }
-        // `if`
-        IroncladCard::TrueGrit => unimplemented!("what {card:?} does when it is played"),
-        IroncladCard::TwinStrike => {
+        IroncladCard::Unrelenting => {
             let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                for _ in 0..2 {
+            if from == 0 {
+                fight.attack(Scaling::Dynamic, |fight| {
                     let attack = fight.resolve(Effect::Attack {
                         dealer: fight.actor(),
                         target,
@@ -575,36 +766,26 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
                         scaling: Scaling::Dynamic,
                     });
                     fight.apply(attack);
-                }
-            });
-            Played::Done
-        }
-        IroncladCard::Unmovable => {
-            fight.apply_to_actor(Power::UnmovablePower, PowerAmount::Counted(1));
-            Played::Done
-        }
-        IroncladCard::Unrelenting => {
-            let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
                 });
-                fight.apply(attack);
-            });
-            fight.apply_to_actor(Power::FreeAttackPower, PowerAmount::Counted(1));
-            Played::Done
+                if fight.waiting() {
+                    return Err(1);
+                }
+            }
+            if from <= 1 {
+                fight.apply_to_actor(Power::FreeAttackPower, PowerAmount::Counted(1));
+            }
+            Ok(Played::Done)
         }
         // `call PowerCmd.Apply`
         IroncladCard::Uppercut => unimplemented!("what {card:?} does when it is played"),
         IroncladCard::Vicious => {
-            fight.apply_to_actor(
-                Power::ViciousPower,
-                PowerAmount::Counted(fight.power_var(CardVar::Cards)),
-            );
-            Played::Done
+            if from == 0 {
+                fight.apply_to_actor(
+                    Power::ViciousPower,
+                    PowerAmount::Counted(fight.power_var(CardVar::Cards)),
+                );
+            }
+            Ok(Played::Done)
         }
         // `call ResolveEnergyXValue`
         IroncladCard::Whirlwind => unimplemented!("what {card:?} does when it is played"),

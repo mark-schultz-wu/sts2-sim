@@ -8,27 +8,32 @@ use sts2_core::{Change, Fight, Played};
 
 type V = super::super::super::V0_111_0;
 
-/// `OnPlay`, for every card whose statements the dump matched.
+/// `OnPlay` from the command at `from` on, for every card whose
+/// statements the dump matched. A command that leaves a question
+/// waiting stands the rest still, as the game's `await` does, and
+/// the play comes back as `Err` with the command to go on from.
 ///
 /// Any other card panics, and `behaviour/` ports it by hand.
-pub fn on_play<F: Fight<V>>(card: StatusCard, fight: &mut F) -> Played<V> {
+pub fn play_from<F: Fight<V>>(card: StatusCard, fight: &mut F, from: u8) -> Result<Played<V>, u8> {
     match card {
-        StatusCard::Beckon => Played::Done,
-        StatusCard::Burn => Played::Done,
-        StatusCard::Dazed => Played::Done,
-        StatusCard::Debris => Played::Done,
+        StatusCard::Beckon => Ok(Played::Done),
+        StatusCard::Burn => Ok(Played::Done),
+        StatusCard::Dazed => Ok(Played::Done),
+        StatusCard::Debris => Ok(Played::Done),
         // `call GetSandpitEnemy`
         StatusCard::FranticEscape => unimplemented!("what {card:?} does when it is played"),
-        StatusCard::Infection => Played::Done,
+        StatusCard::Infection => Ok(Played::Done),
         StatusCard::Slimed => {
-            fight.draw(fight.var(CardVar::Cards));
-            Played::Done
+            if from == 0 {
+                fight.draw(fight.var(CardVar::Cards));
+            }
+            Ok(Played::Done)
         }
-        StatusCard::Soot => Played::Done,
-        StatusCard::Toxic => Played::Done,
-        StatusCard::Void => Played::Done,
-        StatusCard::Wither => Played::Done,
-        StatusCard::Wound => Played::Done,
+        StatusCard::Soot => Ok(Played::Done),
+        StatusCard::Toxic => Ok(Played::Done),
+        StatusCard::Void => Ok(Played::Done),
+        StatusCard::Wither => Ok(Played::Done),
+        StatusCard::Wound => Ok(Played::Done),
     }
 }
 

@@ -621,6 +621,87 @@ pub enum Resume {
     Necrobinder(necrobinder::Resume),
     Regent(regent::Resume),
     Silent(silent::Resume),
+    /// A generated play, from the command after the one that left a
+    /// question waiting.
+    Generated(Cards, u8),
+}
+
+/// The cards a play still has to go through once it waited, in the order
+/// the game's list took them. A card that joined the hand meanwhile is not
+/// one of them. The list is a hand's worth at most.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Left([Option<sts2_core::CardAt<V>>; 10]);
+
+impl Left {
+    /// `cards`, in order.
+    ///
+    /// # Panics
+    ///
+    /// More cards than a hand holds.
+    pub(crate) fn of(cards: &[sts2_core::CardAt<V>]) -> Self {
+        let mut left = [None; 10];
+        assert!(cards.len() <= left.len(), "a list longer than a hand");
+        for (at, &card) in cards.iter().enumerate() {
+            left[at] = Some(card);
+        }
+        Left(left)
+    }
+
+    /// The cards, in order.
+    pub(crate) fn cards(self) -> impl Iterator<Item = sts2_core::CardAt<V>> {
+        self.0.into_iter().flatten()
+    }
+}
+
+/// The creatures a play took before a command that can wait, which it reads
+/// after. A fight holds ten at most.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Held([Option<sts2_core::CombatId>; 10]);
+
+impl Held {
+    /// `creatures`, in order.
+    ///
+    /// # Panics
+    ///
+    /// More creatures than a fight holds.
+    pub(crate) fn of(creatures: &[sts2_core::CombatId]) -> Self {
+        let mut held = [None; 10];
+        assert!(
+            creatures.len() <= held.len(),
+            "more creatures than a fight holds"
+        );
+        for (at, &creature) in creatures.iter().enumerate() {
+            held[at] = Some(creature);
+        }
+        Held(held)
+    }
+
+    /// The creatures, in order.
+    pub(crate) fn creatures(self) -> impl Iterator<Item = sts2_core::CombatId> {
+        self.0.into_iter().flatten()
+    }
+}
+
+/// A generated play from the command at `from` on, standing still where a
+/// command leaves a question waiting.
+pub(crate) fn generated_from<F: Fight<V>>(card: Cards, fight: &mut F, from: u8) -> Played<V> {
+    let played = match card {
+        Cards::Ironclad(card) => card_plays::ironclad::play_from(card, fight, from),
+        Cards::Silent(card) => card_plays::silent::play_from(card, fight, from),
+        Cards::Regent(card) => card_plays::regent::play_from(card, fight, from),
+        Cards::Necrobinder(card) => card_plays::necrobinder::play_from(card, fight, from),
+        Cards::Defect(card) => card_plays::defect::play_from(card, fight, from),
+        Cards::Colorless(card) => card_plays::colorless::play_from(card, fight, from),
+        Cards::Curse(card) => card_plays::curse::play_from(card, fight, from),
+        Cards::Event(card) => card_plays::event::play_from(card, fight, from),
+        Cards::Quest(card) => card_plays::quest::play_from(card, fight, from),
+        Cards::Status(card) => card_plays::status::play_from(card, fight, from),
+        Cards::Token(card) => card_plays::token::play_from(card, fight, from),
+        Cards::Deprecated(card) => card_plays::deprecated::play_from(card, fight, from),
+    };
+    played.unwrap_or_else(|next| Played::Waiting {
+        at: super::Resume::Card(Resume::Generated(card, next)),
+    })
 }
 
 /// What a card does when it is played.
@@ -633,12 +714,12 @@ pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Played<V> {
         Cards::Necrobinder(card) => necrobinder::on_play(card, fight),
         Cards::Defect(card) => defect::on_play(card, fight),
         Cards::Colorless(card) => colorless::on_play(card, fight),
-        Cards::Curse(card) => card_plays::curse::on_play(card, fight),
+        Cards::Curse(_) => generated_from(card, fight, 0),
         Cards::Event(card) => event::on_play(card, fight),
-        Cards::Quest(card) => card_plays::quest::on_play(card, fight),
+        Cards::Quest(_) => generated_from(card, fight, 0),
         Cards::Status(card) => status::on_play(card, fight),
         Cards::Token(card) => token::on_play(card, fight),
-        Cards::Deprecated(card) => card_plays::deprecated::on_play(card, fight),
+        Cards::Deprecated(_) => generated_from(card, fight, 0),
     }
 }
 
@@ -1085,11 +1166,12 @@ pub(crate) fn resume_play<F: Fight<V>>(
         Resume::Necrobinder(at) => necrobinder::resume_play(fight, at, chosen),
         Resume::Regent(at) => regent::resume_play(fight, at, chosen),
         Resume::Silent(at) => silent::resume_play(fight, at, chosen),
+        Resume::Generated(card, _) => {
+            unreachable!("generated {card:?} waits on a question, not a pick")
+        }
     }
 }
 
-/// The rest of a play that waited on a card it auto-played, whose play is
-/// over.
 /// The rest of a play that waited on its own draw, with every copy the draw
 /// drew. A play that waited on anything else carries on as after a wait.
 pub(crate) fn resume_drew<F: Fight<V>>(
@@ -1105,6 +1187,8 @@ pub(crate) fn resume_drew<F: Fight<V>>(
     }
 }
 
+/// The rest of a play that waited on a question one of its commands left,
+/// once the question is answered.
 pub(crate) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
     match at {
         Resume::Colorless(at) => colorless::resume_waited(fight, at),
@@ -1114,6 +1198,7 @@ pub(crate) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V>
         Resume::Necrobinder(at) => necrobinder::resume_waited(fight, at),
         Resume::Regent(at) => regent::resume_waited(fight, at),
         Resume::Silent(at) => silent::resume_waited(fight, at),
+        Resume::Generated(card, from) => generated_from(card, fight, from),
     }
 }
 

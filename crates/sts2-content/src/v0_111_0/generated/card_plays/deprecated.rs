@@ -8,10 +8,17 @@ use sts2_core::{Change, Fight, Played};
 
 type V = super::super::super::V0_111_0;
 
-/// `OnPlay`, for every card whose statements the dump matched.
+/// `OnPlay` from the command at `from` on, for every card whose
+/// statements the dump matched. A command that leaves a question
+/// waiting stands the rest still, as the game's `await` does, and
+/// the play comes back as `Err` with the command to go on from.
 ///
 /// Any other card panics, and `behaviour/` ports it by hand.
-pub fn on_play<F: Fight<V>>(card: DeprecatedCard, _fight: &mut F) -> Played<V> {
+pub fn play_from<F: Fight<V>>(
+    card: DeprecatedCard,
+    _fight: &mut F,
+    _from: u8,
+) -> Result<Played<V>, u8> {
     match card {
         // `if`
         DeprecatedCard::DeprecatedCard => unimplemented!("what {card:?} does when it is played"),

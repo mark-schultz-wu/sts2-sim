@@ -316,19 +316,22 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
         writeln!(out, "type V = super::super::super::{version};\n").unwrap();
 
         // A pool with nothing generated reads nothing from the fight.
-        let fight = match members
+        let (fight, from) = match members
             .iter()
             .any(|(_, card)| card.play.blocked.is_none() && !card.play.rows.is_empty())
         {
-            true => "fight",
-            false => "_fight",
+            true => ("fight", "from"),
+            false => ("_fight", "_from"),
         };
         writeln!(
             out,
-            "/// `OnPlay`, for every card whose statements the dump matched.\n\
+            "/// `OnPlay` from the command at `from` on, for every card whose\n\
+             /// statements the dump matched. A command that leaves a question\n\
+             /// waiting stands the rest still, as the game's `await` does, and\n\
+             /// the play comes back as `Err` with the command to go on from.\n\
              ///\n\
              /// Any other card panics, and `behaviour/` ports it by hand.\n\
-             pub fn on_play<F: Fight<V>>(card: {enum_name}, {fight}: &mut F) -> Played<V> {{\n\
+             pub fn play_from<F: Fight<V>>(card: {enum_name}, {fight}: &mut F, {from}: u8) -> Result<Played<V>, u8> {{\n\
              match card {{"
         )
         .unwrap();
@@ -342,18 +345,33 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
                 .unwrap();
                 continue;
             }
-            // A draw can stand still on a shuffle's question, and a generated
-            // play has no way to wait. So what comes after one is ported by
-            // hand.
-            let draws = card
+            // A list nothing reads is a list the C# only animates over.
+            let read = card
                 .play
                 .rows
                 .iter()
-                .position(|row| row.first().is_some_and(|w| w == "draw"));
-            if draws.is_some_and(|at| at + 1 < card.play.rows.len()) {
+                .any(|row| row.get(1).is_some_and(|t| t == "held"));
+            let rows: Vec<&Vec<String>> = card
+                .play
+                .rows
+                .iter()
+                .filter(|row| read || row.as_slice() != ["hold", "opponents"])
+                .collect();
+            // A list taken before a command that can wait, and read after it,
+            // would be taken again when the play goes on. So it is ported by
+            // hand.
+            let held = rows
+                .iter()
+                .position(|row| row.as_slice() == ["hold", "opponents"]);
+            let reads = rows
+                .iter()
+                .rposition(|row| row.get(1).is_some_and(|t| t == "held"));
+            if let (Some(held), Some(reads)) = (held, reads)
+                && reads > held
+            {
                 writeln!(
                     out,
-                    "// A command after a draw, which has to wait on the draw's question."
+                    "// A list held across a command that can wait on a question."
                 )
                 .unwrap();
                 writeln!(
@@ -372,22 +390,33 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
             {
                 writeln!(out, "let target = fight.target();").unwrap();
             }
-            // A list nothing reads is a list the C# only animates over.
-            let read = card
-                .play
-                .rows
-                .iter()
-                .any(|row| row.get(1).is_some_and(|t| t == "held"));
-            for row in &card.play.rows {
-                if row == &["hold", "opponents"] && !read {
-                    continue;
+            // Each command runs where the play has not yet gone past it. One
+            // that leaves a question waiting hands back the next to go on
+            // from, and the last has nothing after it to wait.
+            let last = rows.len().saturating_sub(1);
+            for (at, row) in rows.iter().enumerate() {
+                let step = u8::try_from(at).map_err(|_| Error::In {
+                    at: variant.to_string(),
+                    source: Box::new(Error::Unread {
+                        what: "a play this long",
+                        words: Vec::new(),
+                    }),
+                })?;
+                match step {
+                    0 => writeln!(out, "if from == 0 {{"),
+                    _ => writeln!(out, "if from <= {step} {{"),
                 }
+                .unwrap();
                 command(out, row).map_err(|source| Error::In {
                     at: variant.to_string(),
                     source: Box::new(source),
                 })?;
+                if at < last {
+                    writeln!(out, "if fight.waiting() {{\nreturn Err({});\n}}", step + 1).unwrap();
+                }
+                writeln!(out, "}}").unwrap();
             }
-            writeln!(out, "Played::Done\n}}").unwrap();
+            writeln!(out, "Ok(Played::Done)\n}}").unwrap();
         }
         writeln!(out, "}}\n}}\n").unwrap();
 

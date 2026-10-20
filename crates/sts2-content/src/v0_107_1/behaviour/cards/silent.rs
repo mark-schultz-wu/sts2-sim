@@ -5,7 +5,6 @@ use sts2_core::{
     HookEffect, Lasting, Pile, Played, PowerAmount, Rules as _, Scaling, Selection,
 };
 
-use super::super::super::generated::card_plays;
 use super::super::super::generated::cards::{CardKeyword, CardVar, Cards, SilentCard, TokenCard};
 use super::super::super::generated::powers::Power;
 use super::V;
@@ -362,7 +361,7 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
             }
             Played::Done
         }
-        card => card_plays::silent::on_play(card, fight),
+        card => super::generated_from(Cards::Silent(card), fight, 0),
     }
 }
 
