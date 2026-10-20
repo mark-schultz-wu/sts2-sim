@@ -1,0 +1,5 @@
+# Insanity clears the starting deck as the run is created, and the
+# ascension's curse goes in after. Its Neow option draws thirty cards of
+# the character's pool at even odds, each on its own.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"AscendersBane","modifiers":["INSANITY"]}
+{"cmd":"choose_option","index":0}

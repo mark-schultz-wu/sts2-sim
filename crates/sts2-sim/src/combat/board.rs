@@ -76,6 +76,10 @@ pub(super) struct Board<'a, V: Rules> {
     /// Whether a hit lands inside a [`Board::damage_command`], to wait for
     /// the command's last before its hooks run.
     commanding: bool,
+    /// Whether the [`Board::damage_command`] under way has asked whether its
+    /// dealer stands. `CreatureCmd.Damage` asks once, before its first
+    /// target.
+    dealer_asked: bool,
     /// The card making the attack under way, as it stood when the attack
     /// began. `DamageCmd.Attack` takes its numbers as the command is built,
     /// so a hit later in it reads them as they were.
@@ -214,6 +218,7 @@ impl<'a, V: Rules> Board<'a, V> {
             left: None,
             landed: None,
             commanding: false,
+            dealer_asked: false,
             attacking_as: None,
         }
     }
@@ -267,6 +272,7 @@ impl<'a, V: Rules> Board<'a, V> {
             left: None,
             landed: None,
             commanding: false,
+            dealer_asked: false,
             attacking_as: None,
         }
     }
@@ -944,8 +950,10 @@ impl<'a, V: Rules> Board<'a, V> {
     /// nothing still stands, though `IsEnding` counts it dead.
     pub(super) fn damage_command(&mut self, hits: impl FnOnce(&mut Self)) {
         let outer = std::mem::replace(&mut self.commanding, true);
+        let asked = std::mem::replace(&mut self.dealer_asked, false);
         let start = self.live.landing.len();
         hits(self);
+        self.dealer_asked = asked;
         // What the hooks run is not this command's. A command they run
         // lands above this one's hits, and takes its own back off.
         self.commanding = false;
@@ -3273,7 +3281,7 @@ pub(crate) fn resolve<V: Rules>(
                         card_hit::<V>(fight, Some(dealer), Some(target), held, key, powered)
                     }
                     (damage, _) => {
-                        let damage = carried::<V>(playing, fight.live, damage, Some(target));
+                        let damage = carried::<V>(playing, fight, damage, Some(target));
                         modified::<V>(fight, Some(dealer), Some(target), playing, damage, powered)
                     }
                 }
@@ -3286,7 +3294,7 @@ pub(crate) fn resolve<V: Rules>(
         } => {
             // A block effect names who gains it, and no creature the card
             // points at.
-            let amount = carried::<V>(playing, fight.live, amount, None);
+            let amount = carried::<V>(playing, fight, amount, None);
             // `Hook.ModifyBlock` asks the played card's enchantment whatever
             // the block's props, since `GainBlock` always runs it.
             let amount = match playing.and_then(|held| {
@@ -3344,10 +3352,10 @@ pub(crate) fn card_hit<V: Rules>(
     powered: bool,
 ) -> V::Number {
     if !held.face.fractional() {
-        let damage = var::<V>(held, key, fight.live, target);
+        let damage = var::<V>(held, key, fight, target);
         return modified::<V>(fight, dealer, target, Some(held), damage, powered);
     }
-    let damage = exact_var::<V>(held, key, fight.live, target);
+    let damage = exact_var::<V>(held, key, fight, target);
     whole::<V>(modified_exactly::<V>(
         fight,
         dealer,
@@ -3362,21 +3370,21 @@ pub(crate) fn card_hit<V: Rules>(
 pub(crate) fn exact_var<V: Rules>(
     held: &CardInstance<V>,
     key: V::CardVar,
-    live: &Live<V>,
+    fight: Walk<'_, V>,
     target: Option<CombatId>,
 ) -> Decimal {
     let calculated =
         (held.face.ident.card.vars().iter()).any(|number| number.id == key && number.calculated);
     match calculated {
         false => held.face.exact(key),
-        true => exact::<V>(var::<V>(held, key, live, target)),
+        true => exact::<V>(var::<V>(held, key, fight, target)),
     }
 }
 
 /// The number an effect carries, before any hook of its own runs.
 fn carried<V: Rules>(
     playing: Option<&CardInstance<V>>,
-    live: &Live<V>,
+    fight: Walk<'_, V>,
     amount: Amount<V>,
     target: Option<CombatId>,
 ) -> V::Number {
@@ -3386,7 +3394,7 @@ fn carried<V: Rules>(
             playing
                 .unwrap_or_else(|| unimplemented!("a card's variable with no card being played")),
             key,
-            live,
+            fight,
             target,
         ),
     }
@@ -3400,9 +3408,10 @@ fn carried<V: Rules>(
 pub(crate) fn var<V: Rules>(
     held: &CardInstance<V>,
     key: V::CardVar,
-    live: &Live<V>,
+    fight: Walk<'_, V>,
     target: Option<CombatId>,
 ) -> V::Number {
+    let live = fight.live;
     let number = held.face.number(key);
     match number.calculated {
         false => number.base,
@@ -3462,7 +3471,12 @@ pub(crate) fn var<V: Rules>(
                     .iter()
                     .find(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER)
                     .map_or_else(num_traits::zero, |player| player.block),
-                playing: live.cards.in_play(held.id),
+                // `GetWithModifiers(CostModifiers.All)`, where the play pile
+                // holds it.
+                cost_in_play: live
+                    .cards
+                    .in_play(held.id)
+                    .then(|| super::legal::costs::<V>(held, None, fight).0),
                 statuses: {
                     let status = |face: &Face<V>| {
                         V::card_kind(face.ident.card) == Some(sts2_core::CardKind::Status)
@@ -3701,7 +3715,10 @@ impl<V: Rules> Board<'_, V> {
         }) else {
             return;
         };
+        // An orb's commands name no `cardSource`, even inside a card's play.
+        let playing = self.playing.take();
         let targets = V::orb_evoke(&orb, self);
+        self.playing = playing;
         let hook = sts2_core::EventHook::OrbEvoked { orb: orb.orb };
         let mut walking =
             super::listen::Walking::begin::<super::listen::Checked>(self.live, self.relics, hook);
@@ -3905,11 +3922,14 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         match effect.effect {
             // `AttackCommand.Execute` stops before any hit whose attacker is
             // dead. A Spectral Knight that Thorns kills on its second hit
-            // lands no third.
+            // lands no third. One `CreatureCmd.Damage` over several targets
+            // asks only before its first, so Thorns on one does not spare
+            // the rest.
             Resolved::Attack { dealer, .. }
-                if self
-                    .at(dealer)
-                    .is_none_or(|at| !self.live.creatures[at].alive) => {}
+                if !(self.commanding && std::mem::replace(&mut self.dealer_asked, true))
+                    && self
+                        .at(dealer)
+                        .is_none_or(|at| !self.live.creatures[at].alive) => {}
             Resolved::Attack {
                 dealer,
                 target,
@@ -4475,14 +4495,14 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 key.name()
             );
         }
-        var::<V>(&held, key, self.live, self.target)
+        var::<V>(&held, key, self.walk(), self.target)
     }
 
     fn power_var(&self, key: V::CardVar) -> V::Number {
         let held = self
             .acting()
             .unwrap_or_else(|| unimplemented!("a number printed by no card being played"));
-        var::<V>(&held, key, self.live, self.target)
+        var::<V>(&held, key, self.walk(), self.target)
     }
 
     fn history(&self) -> sts2_core::History<'_, V> {
@@ -4958,7 +4978,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .cards
             .get(card.pile(), at)
             .expect("a card stands where it was found");
-        exact_var::<V>(&held, key, self.live, None)
+        exact_var::<V>(&held, key, self.walk(), None)
     }
 
     fn card_damage(&self, card: CardAt<V>, damage: Decimal) -> Decimal {
@@ -5327,7 +5347,9 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         else {
             return;
         };
+        let playing = self.playing.take();
         V::orb_passive(&mut orb, self);
+        self.playing = playing;
         if let Some(held) = self
             .live
             .orbs
@@ -5753,6 +5775,7 @@ impl<V: Rules> Board<'_, V> {
     /// then the block, then `Hook.AfterBlockGained`. Nothing once the fight
     /// is over.
     pub(super) fn gain_unpowered(&mut self, owner: CombatId, amount: V::Number) {
+        let playing = self.playing.take();
         let block = Fight::resolve(
             self,
             Effect::GainBlock {
@@ -5762,6 +5785,7 @@ impl<V: Rules> Board<'_, V> {
             },
         );
         Fight::apply(self, block);
+        self.playing = playing;
     }
 
     /// Stop a command that starts while a question waits, where nothing
@@ -6097,6 +6121,7 @@ impl<'a, V: Rules> Board<'a, V> {
             left: None,
             landed: None,
             commanding: false,
+            dealer_asked: false,
             attacking_as: None,
         }
     }

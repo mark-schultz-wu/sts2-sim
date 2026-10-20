@@ -94,6 +94,9 @@ mod tests {
         fn wins(&self) -> u32 {
             unreachable!("Tea Master does not inspect the profile")
         }
+        fn modifiers(&self) -> &[sts2_core::RunModifier<V>] {
+            unreachable!("Tea Master does not read the run's modifiers")
+        }
         fn hp(&self) -> i32 {
             unreachable!("Tea Master does not inspect HP")
         }

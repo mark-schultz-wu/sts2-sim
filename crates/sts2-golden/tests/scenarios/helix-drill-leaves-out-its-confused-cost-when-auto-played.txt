@@ -1,0 +1,16 @@
+# `HelixDrill` counts the energy spent this turn, less what it costs now while
+# it stands in the play pile. Whispering Earring spends each card's cost
+# before it plays it, and Fake Snecko Eye's Confused gives each Helix Drill
+# drawn a cost of its own, so an auto-played Helix Drill leaves out the
+# energy just spent on it.
+#
+# A count that leaves out only a manual play's spend gives it one more hit
+# for each energy it cost.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"grant","relic":"WHISPERING_EARRING"}
+{"cmd":"grant","relic":"FAKE_SNECKO_EYE"}
+{"cmd":"grant","card":"HELIX_DRILL"}
+{"cmd":"grant","card":"HELIX_DRILL"}
+{"cmd":"grant","card":"HELIX_DRILL"}
+{"cmd":"grant","card":"HELIX_DRILL"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}

@@ -1248,6 +1248,12 @@ pub trait ModifierTable: Copy {
     /// The hooks this modifier's class overrides, as the hook dump measured
     /// them. See [`PowerTable::overrides`].
     fn overrides(self) -> Overrides;
+
+    /// `ClearsPlayerDeck`: `OnRunCreated` empties the starting deck.
+    fn clears_deck(self) -> bool;
+
+    /// `GenerateNeowOption` gives Neow an option for it.
+    fn offers_neow_option(self) -> bool;
 }
 
 /// `EnchantmentStatus`: whether an enchantment still acts, which its own
@@ -3992,6 +3998,9 @@ pub enum EventHook<V: ContentVersion> {
         /// `oldPileType`. Any other card came from no pile.
         transformed: bool,
     },
+    /// The option `GenerateNeowOption` gave Neow for the modifier, chosen.
+    /// Asked of that modifier alone.
+    NeowOptionChosen,
     /// The copy `id` that the listener's own `CloneCard` made, before
     /// `CardPileCmd.Add` puts it in the deck. Asked of that listener alone.
     CopyMade { id: crate::DeckCardId },
@@ -4549,6 +4558,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::Obtained { .. }
             | EventHook::OwnCommandOver
             | EventHook::CopyMade { .. }
+            | EventHook::NeowOptionChosen
             | EventHook::RunCreated
             | EventHook::CharacterNamed(_)
             | EventHook::Removed
@@ -4841,25 +4851,15 @@ impl<V: ContentVersion> History<'_, V> {
         })
     }
 
-    /// `EnergySpentEntry` where `HappenedThisTurn`, summed, and the energy
-    /// the latest play started this turn spent. A play spends as it begins,
-    /// and a replay spends nothing of its own.
-    pub fn energy_spent_this_turn(&self) -> (V::Count, V::Count) {
-        let mut spent = num_traits::zero::<V::Count>();
-        let mut latest = num_traits::zero::<V::Count>();
-        for entry in self.this_turn {
-            match entry {
-                HistoryEntry::EnergySpent(amount) => spent = spent + *amount,
-                HistoryEntry::Started(started) => {
-                    latest = match started.auto {
-                        true => num_traits::zero(),
-                        false => started.energy,
-                    };
-                }
-                _ => {}
-            }
-        }
-        (spent, latest)
+    /// `EnergySpentEntry` where `HappenedThisTurn`, summed.
+    pub fn energy_spent_this_turn(&self) -> V::Count {
+        self.this_turn
+            .iter()
+            .filter_map(|entry| match entry {
+                HistoryEntry::EnergySpent(amount) => Some(*amount),
+                _ => None,
+            })
+            .fold(num_traits::zero(), |spent, amount| spent + amount)
     }
 
     /// Each `PowerReceivedEntry` where `HappenedThisTurn`, by the power and
@@ -5402,6 +5402,16 @@ pub enum HookEffect<V: ContentVersion> {
     ReplaceStarterRelic {
         upgrades: &'static [(V::Relic, V::Relic)],
         fallback: V::Relic,
+    },
+    /// `CardFactory.CreateForReward` of one card at `CardRarityOddsType.Uniform`
+    /// off the rewards stream, from the colorless pool or the character's
+    /// own, with no upgrade roll. Then `CardPileCmd.Add` to the deck of
+    /// `copies` of it, each its own `CloneCard`. `draws` times over, with no
+    /// card kept out of a later draw.
+    AddUniformToDeck {
+        colorless: bool,
+        draws: usize,
+        copies: usize,
     },
     /// `RunState.CloneCard` of the card that just joined the deck, then
     /// `CardPileCmd.Add` of the copy to the deck's bottom with `clonedBy` the
@@ -6365,9 +6375,9 @@ pub struct CardOwner<'a, V: ContentVersion> {
     pub history: History<'a, V>,
     /// `Owner.Creature.Block`.
     pub block: V::Number,
-    /// Whether the card stands in the play pile, which it does while it is
-    /// played.
-    pub playing: bool,
+    /// `EnergyCost.GetWithModifiers(CostModifiers.All)`, while the card
+    /// stands in the play pile, which it does while it is played.
+    pub cost_in_play: Option<crate::Cost>,
     /// How many of the owner's cards in the fight are statuses, the exhaust
     /// pile left out.
     pub statuses: usize,
@@ -7441,6 +7451,10 @@ pub trait Rules: Hooks {
     /// The character's pool narrowed by `CardFactory.FilterForCombat`, in the
     /// order a combat generation effect shuffles it.
     fn combat_cards(character: Self::Character) -> &'static [Self::Card];
+
+    /// The colorless pool's `GetUnlockedCards` for a one-player run, every
+    /// rarity, in the pool's order.
+    fn unlocked_colorless_cards() -> &'static [Self::Card];
 
     /// `Character.CardPool.GetUnlockedCards` for a one-player run, every
     /// rarity, in the pool's order.

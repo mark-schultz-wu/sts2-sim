@@ -14,8 +14,8 @@ use super::super::relics::TRANSCENDENCE;
 use super::ancient::{Offered, next_item};
 
 /// `_validRelicSets`, in order, each with the act it asks for, where it asks
-/// for one. No run here plays a modifier that clears the deck, so the
-/// Pandora's Box set always qualifies.
+/// for one. The Pandora's Box set also asks for a run no modifier cleared
+/// the deck of.
 const SETS: [(Option<usize>, &[Relic]); 9] = [
     (None, &[Relic::Astrolabe]),
     (None, &[Relic::BlackStar]),
@@ -54,9 +54,12 @@ impl EventBehavior<V> for Darv {
     /// takes two and the Dusty Tome, or three.
     fn enter<R: GameRng>(&self, run: &impl EventView<V>, rng: &mut R) -> State {
         let act: usize = num_traits::cast(run.act()).expect("an act index fits a usize");
+        let cleared = (run.modifiers().iter())
+            .any(|entry| sts2_core::ModifierTable::clears_deck(entry.modifier));
         let mut source: Vec<Relic> = SETS
             .iter()
             .filter(|(wanted, _)| wanted.is_none_or(|wanted| wanted == act))
+            .filter(|(_, relics)| !(cleared && relics.contains(&Relic::PandorasBox)))
             .filter_map(|(_, relics)| next_item(rng, relics))
             .collect();
         rng.unstable_shuffle(&mut source);

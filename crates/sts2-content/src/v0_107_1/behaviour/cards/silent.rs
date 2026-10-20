@@ -31,6 +31,8 @@ pub enum Resume {
     Nightmare,
     /// `EscapePlan`, after a question inside its draw was answered.
     EscapePlanDrew,
+    /// `ShadowStep`, once a card its discard played has finished.
+    ShadowStepDiscarded,
 }
 
 pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
@@ -332,11 +334,19 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
         }
         // `ShadowStep`: the whole hand discarded, then one Shadow Step on its
         // owner.
+        // `ShadowStep`: the hand discarded, which a Sly card it holds can
+        // stand still behind a question. Then its power.
         SilentCard::ShadowStep => {
             let hand = fight.cards_in(Pile::Hand);
             fight.act_on(sts2_core::PileAct::Discard, &hand);
-            fight.apply_to_actor(Power::ShadowStepPower, PowerAmount::Counted(1));
-            Played::Done
+            if fight.waiting() {
+                return Played::Waiting {
+                    at: super::super::Resume::Card(super::Resume::Silent(
+                        Resume::ShadowStepDiscarded,
+                    )),
+                };
+            }
+            shadow_step_discarded(fight)
         }
         // `TheHunt`: its damage to the target. Where a result says
         // `WasTargetKilled` of a target whose death, read before the hit,
@@ -453,6 +463,9 @@ pub(super) fn resume_play<F: Fight<V>>(
             unreachable!("Hidden Daggers' Shivs wait on a card, not a pick")
         }
         Resume::EscapePlanDrew => unreachable!("Escape Plan waits on its draw, not a pick"),
+        Resume::ShadowStepDiscarded => {
+            unreachable!("Shadow Step waits on a card, not a pick")
+        }
     }
 }
 
@@ -497,10 +510,17 @@ pub(super) fn resume_drew<F: Fight<V>>(
 pub(super) fn resume_waited<F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
     match at {
         Resume::HiddenDaggersShivs => hidden_daggers_shivs(fight),
+        Resume::ShadowStepDiscarded => shadow_step_discarded(fight),
         // A draw that never ran, as the fight ended, drew nothing.
         Resume::EscapePlanDrew => escape_plan_drew(fight, &[]),
         at => unimplemented!("{at:?} resumed after waiting"),
     }
+}
+
+/// `ShadowStep`'s power on its owner, once its discard is over.
+fn shadow_step_discarded<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    fight.apply_to_actor(Power::ShadowStepPower, PowerAmount::Counted(1));
+    Played::Done
 }
 
 /// `HiddenDaggers`' Shivs into the hand, upgraded where it is.

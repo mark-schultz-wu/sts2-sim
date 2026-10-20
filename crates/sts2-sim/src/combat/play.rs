@@ -1724,7 +1724,13 @@ fn finish_effect<V: Rules, S: LendsCombat>(
         Some(sts2_core::Pile::Exhaust) => next.cards.named(play.id),
         _ => None,
     };
-    next.cards.leave_play(play.id, to, play.position);
+    // `CardCmd.Exhaust` puts the card at the exhaust pile's bottom, whatever
+    // position the result pile's listeners left.
+    let position = match to {
+        Some(sts2_core::Pile::Exhaust) => sts2_core::PilePosition::Bottom,
+        _ => play.position,
+    };
+    next.cards.leave_play(play.id, to, position);
     // `CardCmd.Exhaust` for a card that exhausts as it is played, whose hook
     // follows the card into the pile. A fight already over exhausts nothing.
     let ended = match (ended, exhausting) {

@@ -563,6 +563,10 @@ impl sts2_core::Rules for V0_107_1 {
         generated::cards::merchant_cards(sts2_core::Table::data(character).card_pool)
     }
 
+    fn unlocked_colorless_cards() -> &'static [Self::Card] {
+        generated::cards::merchant_colorless_cards()
+    }
+
     fn combat_colorless_cards() -> &'static [Self::Card] {
         generated::cards::combat_colorless_cards()
     }

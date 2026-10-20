@@ -81,6 +81,12 @@ macro_rules! wire_options {
                 if key == PROCEED {
                     return Some(Id::Proceed);
                 }
+                // A modifier's Neow option, whose key is the modifier's id.
+                if let Ok(modifier) =
+                    serde_json::from_value(serde_json::Value::String(key.to_owned()))
+                {
+                    return Some(Id::Modifier(modifier));
+                }
                 key.strip_prefix(&spelled(&event))?
                     .strip_prefix(".dialogue.")?
                     .parse()
@@ -96,6 +102,7 @@ macro_rules! wire_options {
                 match option {
                     Id::Dialogue(line) => Some(format!("{}.dialogue.{line}", spelled(&event))),
                     Id::Proceed => Some(PROCEED.to_owned()),
+                    Id::Modifier(modifier) => Some(spelled(&modifier)),
                     Id::Said(_) | Id::Relic(_) => None,
                 }
             }
@@ -107,7 +114,7 @@ macro_rules! wire_options {
                 use sts2_content::$module::EventOptionId as Id;
                 match option {
                     Id::Said(option) => Some(option.spelled(locked)),
-                    Id::Relic(_) | Id::Dialogue(_) | Id::Proceed => None,
+                    Id::Relic(_) | Id::Modifier(_) | Id::Dialogue(_) | Id::Proceed => None,
                 }
             }
         }

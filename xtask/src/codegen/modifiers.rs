@@ -111,7 +111,7 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     );
     writeln!(
         out,
-        "\nimpl sts2_core::ModifierTable for Modifier {{\n    fn overrides(self) -> sts2_core::Overrides {{\n        OVERRIDES[self as usize]\n    }}\n}}"
+        "\nimpl sts2_core::ModifierTable for Modifier {{\n    fn overrides(self) -> sts2_core::Overrides {{\n        OVERRIDES[self as usize]\n    }}\n\n    fn clears_deck(self) -> bool {{\n        self.data().flags.contains(ModifierFlag::ClearsDeck)\n    }}\n\n    fn offers_neow_option(self) -> bool {{\n        self.data().flags.contains(ModifierFlag::OffersNeowOption)\n    }}\n}}"
     )
     .unwrap();
 

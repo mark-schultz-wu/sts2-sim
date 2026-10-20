@@ -1,0 +1,8 @@
+# A run with All Star and Specialized is offered no blessing. Neow shows
+# All Star's option alone, and once it is chosen, Specialized's. All Star
+# draws five colorless cards at even odds, each on its own, so one can come
+# twice. Specialized draws one card of the character's pool and puts five
+# copies of it in the deck.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None","modifiers":["ALL_STAR","SPECIALIZED"]}
+{"cmd":"choose_option","index":0}
+{"cmd":"choose_option","index":0}

@@ -64,8 +64,9 @@ impl EventBehavior<V> for DenseVegetation {
     }
 
     /// `TrudgeOn`: the damage, then the gold, which finishes the event.
-    /// `Rest`: `PlayerCmd.MimicRestSiteHeal`, then the page that offers the
-    /// fight. `Fight`: the event's encounter, fought in its room.
+    /// `Rest`: `PlayerCmd.MimicRestSiteHeal`, whose rewards the first page
+    /// stands behind, then [`Self::resume`]. `Fight`: the event's
+    /// encounter, fought in its room.
     fn choose<R: sts2_core::rng::GameRng>(
         &self,
         state: &mut State,
@@ -83,9 +84,8 @@ impl EventBehavior<V> for DenseVegetation {
                 ]
             }
             (Page::Initial, _) => {
-                state.page = Page::Rest;
-                state.chosen = None;
-                smallvec::smallvec![HookEffect::MimicRestSiteHeal]
+                state.chosen = NonMaxU8::new(option);
+                smallvec::smallvec![HookEffect::MimicRestSiteHeal, HookEffect::ResumeEvent]
             }
             (Page::Rest, _) => {
                 state.chosen = NonMaxU8::new(option);
@@ -97,5 +97,18 @@ impl EventBehavior<V> for DenseVegetation {
                 }]
             }
         }
+    }
+
+    /// The rest of `Rest`: `SetEventState` to the page that offers the
+    /// fight.
+    fn resume<R: sts2_core::rng::GameRng>(
+        &self,
+        state: &mut State,
+        _run: &impl EventView<V>,
+        _rng: &mut R,
+    ) -> HookEffects<V> {
+        state.page = Page::Rest;
+        state.chosen = None;
+        HookEffects::new()
     }
 }

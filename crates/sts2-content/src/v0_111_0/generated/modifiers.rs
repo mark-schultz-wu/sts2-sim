@@ -392,4 +392,12 @@ impl sts2_core::ModifierTable for Modifier {
     fn overrides(self) -> sts2_core::Overrides {
         OVERRIDES[self as usize]
     }
+
+    fn clears_deck(self) -> bool {
+        self.data().flags.contains(ModifierFlag::ClearsDeck)
+    }
+
+    fn offers_neow_option(self) -> bool {
+        self.data().flags.contains(ModifierFlag::OffersNeowOption)
+    }
 }
