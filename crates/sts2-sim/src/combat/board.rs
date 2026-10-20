@@ -2251,19 +2251,33 @@ impl<'a, V: Rules> Board<'a, V> {
             }
             if let Some(fresh) = fresh {
                 match self.live.asking.take() {
-                    Some(asking) => {
+                    Some(mut asking) => {
                         let waiting = self.live.deferred.take_fresh(fresh);
-                        let listed = match asking.question {
-                            super::live::Asked::Pile { pile, .. } => {
-                                Some(self.live.cards.iter(pile).map(|held| held.id).collect())
-                            }
-                            _ => None,
-                        };
-                        self.live.paused.push(super::live::Paused {
-                            asking,
-                            waiting,
-                            listed,
-                        });
+                        // `CardSelectCmd` lists the pile as it asks. The play
+                        // can change the pile before the question comes up,
+                        // and the list stays as it was.
+                        if let super::live::Asked::Pile { pile, selection } = asking.question {
+                            let cards = self
+                                .live
+                                .offered(pile)
+                                .into_iter()
+                                .map(|at| {
+                                    let held = self
+                                        .live
+                                        .cards
+                                        .get(pile, at)
+                                        .expect("an offered card stands in its pile");
+                                    let at = num_traits::NumCast::from(at).unwrap_or_else(|| {
+                                        unimplemented!("a pile deeper than a fight can number")
+                                    });
+                                    CardAt::new(held.id, pile, at)
+                                })
+                                .collect();
+                            asking.question = super::live::Asked::Among { cards, selection };
+                        }
+                        self.live
+                            .paused
+                            .push(super::live::Paused { asking, waiting });
                         paused = Some(listener);
                     }
                     None => self.live.deferred.keep_fresh(fresh),

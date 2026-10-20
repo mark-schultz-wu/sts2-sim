@@ -154,9 +154,6 @@ pub(super) struct Paused<V: Rules> {
     pub(super) asking: Asking<V>,
     /// What waits behind it.
     pub(super) waiting: Vec<Deferred<V>>,
-    /// The cards of the pile it asks about, as they stood when it asked.
-    /// `CardSelectCmd` lists them then.
-    pub(super) listed: Option<Vec<CardId<V>>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -3128,22 +3125,7 @@ impl<V: Rules> Live<V> {
         if self.asking.is_some() || !self.deferred.is_empty() {
             return;
         }
-        let Paused {
-            asking,
-            waiting,
-            listed,
-        } = self.paused.remove(0);
-        if let (Some(listed), Asked::Pile { pile, .. }) = (&listed, &asking.question)
-            && !self
-                .cards
-                .iter(*pile)
-                .map(|held| held.id)
-                .eq(listed.iter().copied())
-        {
-            unimplemented!(
-                "a question listing its pile as it stood, which changed before it was asked"
-            )
-        }
+        let Paused { asking, waiting } = self.paused.remove(0);
         self.asking = Some(asking);
         self.deferred.put_back(waiting);
     }
