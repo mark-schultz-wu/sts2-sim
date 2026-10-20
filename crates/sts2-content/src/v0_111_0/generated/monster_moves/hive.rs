@@ -437,22 +437,26 @@ pub fn perform<F: Fight<V>>(
         (Monster::ToughEgg, MoveId::NibbleMove) => {
             fight.attack_opponents();
         }
-        // `statement`
         (Monster::Tunneler, MoveId::BelowMove) => {
-            unimplemented!("what {move_id:?} does when {monster:?} performs it")
+            fight.attack_opponents();
         }
-        // `statement`
         (Monster::Tunneler, MoveId::BiteMove) => {
-            unimplemented!("what {move_id:?} does when {monster:?} performs it")
+            fight.attack_opponents();
         }
-        // `statement`
         (Monster::Tunneler, MoveId::BurrowMove) => {
-            unimplemented!("what {move_id:?} does when {monster:?} performs it")
+            fight.apply_to_actor(Power::BurrowedPower, PowerAmount::Counted(1));
+            let amount = match fight.ascension().has(AscensionLevel::ToughEnemies) {
+                true => 37,
+                false => 32,
+            };
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Number(amount),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
         }
-        // `statement`
-        (Monster::Tunneler, MoveId::DizzyMove) => {
-            unimplemented!("what {move_id:?} does when {monster:?} performs it")
-        }
+        (Monster::Tunneler, MoveId::DizzyMove) => {}
         (monster, move_id) => unimplemented!("{monster:?} has no {move_id:?} in the table"),
     }
     None

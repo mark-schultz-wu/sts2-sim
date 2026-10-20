@@ -416,9 +416,6 @@ pub(super) fn perform<V: crate::Build, F: Fight<V>>(
                 state.set_off_balance(false)
             });
         }
-        // `StillDizzyMove`: `IsStunned` cleared, which picks its animations
-        // alone.
-        (__c0, __c1) if (__c0 == V::Monster::TUNNELER && __c1 == V::MoveId::DIZZY_MOVE) => {}
         (__c0, __c1)
             if (__c0 == V::Monster::SLUMBERING_BEETLE && __c1 == V::MoveId::ROLL_OUT_MOVE) =>
         {

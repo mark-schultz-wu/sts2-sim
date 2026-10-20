@@ -491,6 +491,14 @@ fn presentation(stmt: &Stmt, locals: &mut Locals) -> bool {
             {
                 return true;
             }
+            // Tunneler's `IsStunned`, which only its animator reads, to pick
+            // its hit animation. v0.111.0 clears it in every move.
+            if matches!(
+                spell(toks).as_str(),
+                "IsStunned = false" | "IsStunned = true"
+            ) {
+                return true;
+            }
             // A declaration, `Type name = value` or `Type name`.
             let assign = toks.iter().position(|tok| tok.is("="));
             let named = assign.unwrap_or(toks.len());
