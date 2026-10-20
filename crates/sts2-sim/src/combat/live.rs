@@ -2525,6 +2525,10 @@ pub(crate) struct Live<V: Rules> {
     /// The copies whose `ExhaustOnNextPlay` is set, which their next play
     /// clears and so does the end of the turn.
     pub(super) exhaust_next: smallvec::SmallVec<[CardId<V>; 2]>,
+    /// Whether a pushed card selector answers what the fight asks, which
+    /// `WhisperingEarring` pushes as its `VakuuCardSelector` while it plays
+    /// the hand. A question that comes up meanwhile never reaches the player.
+    pub(super) selector_answers: bool,
     /// What `AfterCombatEnd` asked of the run, which carries it out as it
     /// takes the fight's rewards.
     pub(super) leaving: Vec<sts2_core::HookEffect<V>>,
@@ -2846,6 +2850,7 @@ impl<V: Rules> Clone for Live<V> {
             taken_from_deck: self.taken_from_deck.clone(),
             extra_rewards: self.extra_rewards.clone(),
             exhaust_next: self.exhaust_next.clone(),
+            selector_answers: self.selector_answers,
             history: self.history.clone(),
             kept: self.kept.clone(),
             leaving: self.leaving.clone(),
@@ -2926,6 +2931,7 @@ impl<V: Rules> Clone for Live<V> {
             deferred,
             paused,
             waited_attack,
+            selector_answers,
         } = self;
         *character = source.character;
         *ascension = source.ascension;
@@ -2952,6 +2958,7 @@ impl<V: Rules> Clone for Live<V> {
         taken_from_deck.clone_from(&source.taken_from_deck);
         extra_rewards.clone_from(&source.extra_rewards);
         exhaust_next.clone_from(&source.exhaust_next);
+        *selector_answers = source.selector_answers;
         leaving.clone_from(&source.leaving);
         for_run.clone_from(&source.for_run);
         after_pick.clone_from(&source.after_pick);
@@ -3840,6 +3847,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             taken_from_deck: Vec::new(),
             extra_rewards: Vec::new(),
             exhaust_next: smallvec::SmallVec::new(),
+            selector_answers: false,
             leaving: Vec::new(),
             for_run: Vec::new(),
             after_pick: None,

@@ -5,7 +5,7 @@ use sts2_core::{Amount, Effect, Fight, Played, Scaling};
 
 use super::super::V0_111_0 as V;
 use super::super::generated::cards::{
-    CardVar, Cards, DefectCard, EventCard, IroncladCard, QuestCard, SilentCard,
+    CardVar, Cards, DefectCard, EventCard, IroncladCard, NecrobinderCard, QuestCard, SilentCard,
 };
 use super::super::generated::powers::Power;
 use crate::generated::runstate::MapPointType;
@@ -170,6 +170,15 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
     match (card, key) {
         // `ExpectAFight`: a base, and more for each Strength its owner has,
         // none for less than none.
+        // `Sacrifice`: a base, and more for each of three times the maximum
+        // health a living Osty has. v0.107.1's counts twice it.
+        (Cards::Necrobinder(NecrobinderCard::Sacrifice), CardVar::CalculatedBlock) => {
+            let thrice = owner.osty_max_hp.map_or(0, |hp| hp * 3);
+            Some(
+                printed.face(CardVar::CalculationBase)
+                    + printed.face(CardVar::CalculationExtra) * thrice,
+            )
+        }
         (Cards::Ironclad(IroncladCard::ExpectAFight), CardVar::CalculatedBlock) => {
             let strength = owner
                 .powers

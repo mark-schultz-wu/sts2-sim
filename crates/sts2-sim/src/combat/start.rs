@@ -108,6 +108,7 @@ pub(crate) fn enter<V: Rules>(
         taken_from_deck: Vec::new(),
         extra_rewards: Vec::new(),
         exhaust_next: smallvec::SmallVec::new(),
+        selector_answers: false,
         leaving: Vec::new(),
         for_run: Vec::new(),
         after_pick: None,
