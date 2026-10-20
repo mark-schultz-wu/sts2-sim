@@ -6,9 +6,9 @@ use sts2_core::RewardRarity;
 use super::V0_111_0;
 
 impl sts2_core::Engine for V0_111_0 {
-    /// The choice is signalled, then the hand is listed. v0.107.1's listed
-    /// it first.
-    fn lists_hand_after_pause() -> bool {
+    /// The choice is signalled, then the cards are listed. v0.107.1's
+    /// listed them first.
+    fn signals_choice_before_listing() -> bool {
         true
     }
 

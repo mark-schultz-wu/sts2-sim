@@ -3478,7 +3478,7 @@ impl<V: Rules> State<V> {
         // reward reads the same way.
         let added =
             match (rewards.iter()).any(|reward| matches!(reward, CustomReward::MonsterRoomCards)) {
-                true => self.card_reward_added(),
+                true => self.card_reward_added(false),
                 false => Vec::new(),
             };
         let ascension = self.ascension();
@@ -3725,9 +3725,8 @@ impl<V: Rules> State<V> {
                     let ascension = self.ascension();
                     let act = self.act();
                     // `CardCreationOptions.ForRoom`, whose source is an
-                    // encounter, so the options a won fight's reward gains it
-                    // gains too.
-                    let added = self.card_reward_added();
+                    // encounter, with no `IsFromCombat`.
+                    let added = self.card_reward_added(false);
                     let pool = self.reward_pool(room == Room::Elite);
                     let (rng, odds) = self.rewarding();
                     let Offer::Card { mut cards, .. } = crate::reward::combat::card_reward::<V, _>(
@@ -3738,7 +3737,10 @@ impl<V: Rules> State<V> {
                     self.reward_options(&mut cards, true);
                     Offer::Card {
                         cards,
-                        rolled: Some(crate::reward::Rolled::Room(room)),
+                        rolled: Some(crate::reward::Rolled::Room {
+                            room,
+                            from_combat: false,
+                        }),
                         reroll,
                         sacrifice: false,
                         taken: false,
@@ -4365,24 +4367,31 @@ impl<V: Rules> State<V> {
     pub(super) fn card_reward_unheard(&mut self) {
         self.unheard(sts2_core::ModelHook::ModifyCardRewardUpgradeOdds);
         if let Some(effect) = self
-            .notify_run(sts2_core::EventHook::CardRewardOptions { encounter: false })
+            .notify_run(sts2_core::EventHook::CardRewardOptions {
+                encounter: false,
+                from_combat: false,
+            })
             .first()
         {
             unimplemented!("a relic asking for {effect:?} over a card reward");
         }
     }
 
-    /// `TryModifyCardRewardOptions` over a won fight's card reward: the kind
-    /// of each option the belt adds.
-    pub(super) fn card_reward_added(&mut self) -> Vec<sts2_core::CardKind> {
+    /// `TryModifyCardRewardOptions` over a card reward at a room's odds: the
+    /// kind of each option the belt adds. `from_combat` is whether a won
+    /// fight made it.
+    pub(super) fn card_reward_added(&mut self, from_combat: bool) -> Vec<sts2_core::CardKind> {
         self.unheard(sts2_core::ModelHook::ModifyCardRewardUpgradeOdds);
-        self.notify_run(sts2_core::EventHook::CardRewardOptions { encounter: true })
-            .into_iter()
-            .map(|effect| match effect {
-                sts2_core::HookEffect::AddCardRewardOption(kind) => kind,
-                effect => unimplemented!("a relic asking for {effect:?} over a card reward"),
-            })
-            .collect()
+        self.notify_run(sts2_core::EventHook::CardRewardOptions {
+            encounter: true,
+            from_combat,
+        })
+        .into_iter()
+        .map(|effect| match effect {
+            sts2_core::HookEffect::AddCardRewardOption(kind) => kind,
+            effect => unimplemented!("a relic asking for {effect:?} over a card reward"),
+        })
+        .collect()
     }
 
     /// `TryModifyCardRewardOptionsLate` over each card a reward offers, then
@@ -4429,9 +4438,17 @@ impl<V: Rules> State<V> {
             } = offer
             {
                 if early {
-                    let encounter = matches!(rolled, Some(crate::reward::Rolled::Room(_)));
+                    let (encounter, from_combat) = match rolled {
+                        Some(crate::reward::Rolled::Room { from_combat, .. }) => {
+                            (true, *from_combat)
+                        }
+                        _ => (false, false),
+                    };
                     let mut asked = sts2_core::HookEffects::new();
-                    let options = sts2_core::EventHook::CardRewardOptions { encounter };
+                    let options = sts2_core::EventHook::CardRewardOptions {
+                        encounter,
+                        from_combat,
+                    };
                     let (state, belt) = self.player.relics.state_beside(slot);
                     V::relic_event_hook(state, belt, options, &mut asked);
                     if let Some(effect) = asked.first() {
@@ -6518,10 +6535,10 @@ impl<V: Rules> State<V> {
                     rolled.unwrap_or_else(|| unimplemented!("a reroll of a pack set by hand"));
                 *reroll = false;
                 *cards = match how {
-                    crate::reward::Rolled::Room(room) => {
+                    crate::reward::Rolled::Room { room, from_combat } => {
                         let pool = self.reward_pool(room == crate::reward::combat::Room::Elite);
                         let (ascension, act) = (self.ascension(), self.act());
-                        let added = self.card_reward_added();
+                        let added = self.card_reward_added(from_combat);
                         let (rng, odds) = self.rewarding();
                         let Offer::Card { cards, .. } = crate::reward::combat::card_reward::<V, _>(
                             rng, odds, ascension, &pool, act, room, &added,

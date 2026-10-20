@@ -4370,9 +4370,11 @@ pub enum EventHook<V: ContentVersion> {
     /// with each option it adds.
     RestSiteOptions,
     /// `TryModifyCardRewardOptions`, once a card reward has drawn its cards.
-    /// `encounter` is whether a won fight made it, which is
-    /// `CardCreationSource.Encounter`.
-    CardRewardOptions { encounter: bool },
+    /// `encounter` is `CardCreationSource.Encounter`, which a reward at a
+    /// room's odds has. `from_combat` is v0.111.0's
+    /// `CardCreationFlags.IsFromCombat`, which only a won fight's own rewards
+    /// carry.
+    CardRewardOptions { encounter: bool, from_combat: bool },
     /// The rest site option a relic offers, taken: the relic's own method,
     /// which the option's `OnSelect` calls.
     RestOptionTaken,
@@ -7450,11 +7452,12 @@ pub trait Engine {
         next_float: impl FnOnce() -> f32,
     ) -> (bool, f32);
 
-    /// `CardSelectCmd.FromHand` signals the choice before it lists the hand.
-    /// A turn's setup pauses at the signal, and `AfterSideTurnStart` runs on
-    /// meanwhile, so a card added then is among the choices. A build whose
-    /// `FromHand` lists the hand first says no.
-    fn lists_hand_after_pause() -> bool;
+    /// `CardSelectCmd.FromHand` and `FromCombatPile` signal the choice before
+    /// they list the cards, even where nothing is left to ask. A turn's setup
+    /// pauses at the signal, and `AfterSideTurnStart` runs on meanwhile, so a
+    /// card added then is among the choices. A build whose commands list the
+    /// cards first, and signal only for a question, says no.
+    fn signals_choice_before_listing() -> bool;
 
     /// `CardModel.OnPlayWrapper`'s loop over a card's plays stops before a
     /// replay once the fight is over or ending. A build whose loop plays

@@ -635,12 +635,13 @@ fn start_player_turn<V: Rules>(
     // `StartTurn` waits for it to finish or to pause. A relic's damage can
     // end the fight, and a fight ended in `SetupPlayerTurn` starts no side
     // turn after it.
-    let parked = match carry_setup(
+    let (mut parked, paused) = match carry_setup(
         next,
         streams.combat(),
         relics,
         ascension,
         Setup::BeforeHandDraw(asked),
+        true,
     ) {
         Carried::Done(Some(ended)) => {
             next.skip_tick = skipping;
@@ -649,8 +650,14 @@ fn start_player_turn<V: Rules>(
             }
             return Ok(Some(ended));
         }
-        Carried::Done(None) => false,
-        Carried::Parked => true,
+        Carried::Done(None) => (false, None),
+        Carried::Parked => (true, None),
+        Carried::Paused {
+            pile,
+            selection,
+            act,
+            next,
+        } => (false, Some((pile, selection, act, next))),
     };
     if let Some(ended) = side_turn_started::<V>(
         next,
@@ -679,6 +686,21 @@ fn start_player_turn<V: Rules>(
             listen::combat_ended::<V>(next, relics);
         }
         return Ok(Some(ended));
+    }
+    // A paused setup goes on once the turn has started around it.
+    if let Some(paused) = paused {
+        match resume_paused::<V>(next, streams.combat(), relics, ascension, paused) {
+            Carried::Done(Some(ended)) => {
+                next.skip_tick = skipping;
+                if ended == super::Ended::Won {
+                    listen::combat_ended::<V>(next, relics);
+                }
+                return Ok(Some(ended));
+            }
+            Carried::Done(None) => {}
+            Carried::Parked => parked = true,
+            Carried::Paused { .. } => unreachable!("a setup pauses once"),
+        }
     }
 
     // `RunAutoPrePlayPhase` waits for the setup, so a parked one keeps the
@@ -1487,9 +1509,18 @@ fn doomed<V: Rules>(live: &Live<V>, side: V::CombatSide) -> SmallVec<[CombatId; 
 /// What part of `SetupPlayerTurn` came to: the end of it, and how the fight
 /// ended if it did, or a question it stopped on. The rest of a stopped
 /// setup waits in [`Live::deferred`].
-pub(super) enum Carried {
+pub(super) enum Carried<V: Rules> {
     Done(Option<super::Ended>),
     Parked,
+    /// `CardSelectCmd` signalled its choice, which pauses the setup before it
+    /// lists the cards. The turn goes on around it, then the
+    /// pick runs and the setup carries on from `next`.
+    Paused {
+        pile: Pile,
+        selection: sts2_core::Selection,
+        act: sts2_core::PileAct,
+        next: Setup<V>,
+    },
 }
 
 /// Stop `SetupPlayerTurn` on `question`, which picks cards to `act` on, with
@@ -1499,16 +1530,16 @@ fn park_setup<V: Rules>(
     act: sts2_core::PileAct,
     stage: Setup<V>,
     question: super::live::Asked<V>,
-) -> Carried {
+) -> Carried<V> {
     // `CardSelectCmd.FromHand` lists the hand as it asks. The setup's task
     // pauses there, and `AfterSideTurnStart` runs on while it waits, so a
     // card a listener adds then is not among the choices. A build that
-    // lists the hand after the pause keeps the question on the live hand.
+    // signals before it lists keeps the question on the live hand.
     let question = match question {
         super::live::Asked::Pile {
             pile: Pile::Hand,
             selection,
-        } if !V::lists_hand_after_pause() => super::live::Asked::Among {
+        } if !V::signals_choice_before_listing() => super::live::Asked::Among {
             cards: live
                 .cards
                 .iter(Pile::Hand)
@@ -1531,11 +1562,36 @@ fn park_setup<V: Rules>(
     Carried::Parked
 }
 
+/// Whether a pick pauses the setup before it lists the cards. A build's
+/// `CardSelectCmd` that signals first does, unless the fight is ending,
+/// where it returns before signalling.
+fn pauses<V: Rules>(live: &Live<V>, relics: &crate::run::Belt<V>) -> bool {
+    V::signals_choice_before_listing() && !super::board::ending::<V>(listen::Walk { live, relics })
+}
+
+/// A setup [`Carried::Paused`] on a pick, once the turn went on around it:
+/// the pick on the hand as it stands, then the rest of the setup.
+pub(super) fn resume_paused<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    ascension: V::AscensionLevel,
+    (pile, selection, act, next): (Pile, sts2_core::Selection, sts2_core::PileAct, Setup<V>),
+) -> Carried<V> {
+    match select::<V>(live, rngs.reborrow(), relics, pile, selection, act) {
+        Err(question) => park_setup(live, act, next, question),
+        Ok(Some(ended)) => Carried::Done(Some(ended)),
+        Ok(None) => carry_setup(live, rngs, relics, ascension, next, false),
+    }
+}
+
 /// Carry `SetupPlayerTurn` on from `stage` to its end: what the hook it
 /// stands in still has to carry out, then everything after that hook.
 ///
 /// A selection that is not taken without asking parks the setup, and the
-/// answer comes back to [`resume_setup`].
+/// answer comes back to [`resume_setup`]. Until the side's turn has started
+/// around it, while `pausing`, a pick that signals first stops as
+/// [`Carried::Paused`].
 #[tracing::instrument(level = "trace", skip_all)]
 pub(super) fn carry_setup<V: Rules>(
     live: &mut Live<V>,
@@ -1543,7 +1599,8 @@ pub(super) fn carry_setup<V: Rules>(
     relics: &mut crate::run::Belt<V>,
     ascension: V::AscensionLevel,
     mut stage: Setup<V>,
-) -> Carried {
+    pausing: bool,
+) -> Carried<V> {
     let player = live.player().id;
     loop {
         stage = match stage {
@@ -1773,6 +1830,14 @@ pub(super) fn carry_setup<V: Rules>(
                                 Ok(None) => continue,
                                 Err(ended) => return Carried::Done(Some(ended)),
                             };
+                            if pausing && pauses::<V>(live, relics) {
+                                return Carried::Paused {
+                                    pile,
+                                    selection,
+                                    act,
+                                    next: Setup::BeforeHandDraw(rest),
+                                };
+                            }
                             match select::<V>(live, rngs.reborrow(), relics, pile, selection, act) {
                                 Err(question) => {
                                     return park_setup(
@@ -1791,6 +1856,14 @@ pub(super) fn carry_setup<V: Rules>(
                             selection,
                             act,
                         } => {
+                            if pausing && pauses::<V>(live, relics) {
+                                return Carried::Paused {
+                                    pile,
+                                    selection,
+                                    act,
+                                    next: Setup::BeforeHandDraw(rest),
+                                };
+                            }
                             match select::<V>(live, rngs.reborrow(), relics, pile, selection, act) {
                                 Err(question) => {
                                     return park_setup(
@@ -1917,6 +1990,14 @@ pub(super) fn carry_setup<V: Rules>(
                             left,
                             resumed: true,
                         };
+                        if pausing && pauses::<V>(live, relics) {
+                            return Carried::Paused {
+                                pile,
+                                selection,
+                                act,
+                                next: rest,
+                            };
+                        }
                         match select::<V>(live, rngs.reborrow(), relics, pile, selection, act) {
                             Err(question) => {
                                 return park_setup(live, act, rest, question);
@@ -2003,6 +2084,14 @@ pub(super) fn carry_setup<V: Rules>(
                             selection,
                             act,
                         } => {
+                            if pausing && pauses::<V>(live, relics) {
+                                return Carried::Paused {
+                                    pile,
+                                    selection,
+                                    act,
+                                    next: Setup::PlayerTurnStart(rest),
+                                };
+                            }
                             match select::<V>(live, rngs.reborrow(), relics, pile, selection, act) {
                                 Err(question) => {
                                     return park_setup(
@@ -2291,6 +2380,14 @@ pub(super) fn carry_setup<V: Rules>(
                         resumed: true,
                         rest,
                     };
+                    if pausing && pauses::<V>(live, relics) {
+                        return Carried::Paused {
+                            pile,
+                            selection,
+                            act,
+                            next,
+                        };
+                    }
                     match select::<V>(live, rngs.reborrow(), relics, pile, selection, act) {
                         Err(question) => {
                             return park_setup(live, act, next, question);
@@ -2721,10 +2818,11 @@ pub(super) fn finish_setup<V: Rules>(
     let mut rngs = rngs;
     let carried = match ended {
         Some(ended) => Carried::Done(Some(ended)),
-        None => carry_setup(live, rngs.reborrow(), relics, ascension, stage),
+        None => carry_setup(live, rngs.reborrow(), relics, ascension, stage, false),
     };
     match carried {
         Carried::Parked => None,
+        Carried::Paused { .. } => unreachable!("an answered setup does not pause"),
         Carried::Done(ended) => {
             let ended = ended.or_else(|| pre_play_phase::<V>(live, rngs, relics));
             match ended {

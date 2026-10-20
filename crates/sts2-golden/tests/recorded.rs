@@ -2,9 +2,10 @@
 //!
 //! `cargo xtask record` writes them, one per build, on purpose and never in
 //! CI. This holds each to what the recorder plays: every census seed for
-//! every character, each run whole, on its own build. Then it follows
-//! v0.107.1's runs on the simulator, and holds the positions that agree to
-//! `recorded.matched`. That count fails the test if
+//! every character, each run whole, on its own build. Then it follows each
+//! build's runs on the simulator, and holds the positions that agree to a
+//! count of the build's own. That is `recorded.matched` for v0.107.1's, and
+//! `recorded-v0.111.0.matched` for v0.111.0's. A count fails the test if
 //! it falls, and asks to be raised if it rises, the way `BASELINE` does.
 //! `cargo xtask coverage` says where the runs part.
 
@@ -14,6 +15,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use sts2_content::v0_107_1::V0_107_1;
+use sts2_content::v0_111_0::V0_111_0;
 use sts2_core::{Construct as _, Gift, Play as _, Setup};
 use sts2_golden::recorded::{Followed, Recorded, Run, follow};
 use sts2_sim::Sim;
@@ -99,7 +101,7 @@ fn holds_every_census_run(recorded: &Recorded, build: &sts2_core::Version) {
 }
 
 /// The positions of `run` the simulator agrees with, from the start.
-fn matched(run: &Run) -> usize {
+fn matched<V: sts2_content::Build>(run: &Run) -> usize {
     let mut sim = Sim::<V>::begin((), &run.start()).expect("the run starts");
     for (relic, count) in carried::<V>() {
         for _ in 0..count {
@@ -116,8 +118,19 @@ fn matched(run: &Run) -> usize {
 
 #[test]
 fn the_simulator_follows_the_recorded_runs_no_less_far() {
-    let recorded = recorded("recorded.bin");
-    let path = here("recorded.matched");
+    follows_no_less_far::<V>("recorded.bin", "recorded.matched");
+}
+
+#[test]
+fn the_simulator_follows_the_v0_111_0_runs_no_less_far() {
+    follows_no_less_far::<V0_111_0>("recorded-v0.111.0.bin", "recorded-v0.111.0.matched");
+}
+
+/// Follows every run of `file` on `B`, and holds the positions that agree to
+/// the count in `count`.
+fn follows_no_less_far<B: sts2_content::Build>(file: &str, count: &str) {
+    let recorded = recorded(file);
+    let path = here(count);
     let floor: usize = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("reading {}: {e}", path.display()))
         .trim()
@@ -135,7 +148,8 @@ fn the_simulator_follows_the_recorded_runs_no_less_far() {
                 while let Some(run) = recorded.runs.get(next.fetch_add(1, Ordering::Relaxed)) {
                     // A panic names the run, then fails the test once every
                     // other run is done.
-                    let followed = std::thread::scope(|inner| inner.spawn(|| matched(run)).join());
+                    let followed =
+                        std::thread::scope(|inner| inner.spawn(|| matched::<B>(run)).join());
                     match followed {
                         Ok(steps) => {
                             total.fetch_add(steps, Ordering::Relaxed);

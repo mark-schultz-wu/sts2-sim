@@ -88,8 +88,11 @@ pub(crate) enum Offer<V: Rules> {
 /// `RerollOptions` repeat.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Rolled<V: Rules> {
-    /// At the odds of a room of this kind.
-    Room(combat::Room),
+    /// At the odds of a room of this kind, and whether a won fight made it.
+    Room {
+        room: combat::Room,
+        from_combat: bool,
+    },
     /// As a custom reward of this kind, off this stream.
     Custom {
         reward: sts2_core::CustomReward<V>,

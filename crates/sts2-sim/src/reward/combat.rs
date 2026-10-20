@@ -156,7 +156,10 @@ pub(crate) fn card_reward<V: Rules, R: GameRng>(
 fn offer<V: Rules>(cards: Vec<CardIdent<V>>, room: Room) -> Offer<V> {
     Offer::Card {
         cards,
-        rolled: Some(super::Rolled::Room(room)),
+        rolled: Some(super::Rolled::Room {
+            room,
+            from_combat: true,
+        }),
         reroll: false,
         sacrifice: false,
         taken: false,

@@ -699,6 +699,7 @@ pub(crate) fn event_hook<V: crate::Build>(
         State::HistoryCourse => V::own_relic(V::Relic::HISTORY_COURSE),
         State::UnsettlingLamp(_) => V::own_relic(V::Relic::UNSETTLING_LAMP),
         State::JeweledMask => V::own_relic(V::Relic::JEWELED_MASK),
+        State::Planisphere => V::own_relic(V::Relic::PLANISPHERE),
         _ => false,
     };
     if owned && V::own_shared_relic_event_hook(state, hook, asked).is_some() {
