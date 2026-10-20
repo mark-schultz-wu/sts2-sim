@@ -16,7 +16,11 @@ use crate::generated::runstate::{
     CombatSide, MapPointType, PlayerRngType, PlayerTurnPhase, RunRngType, UnplayableReason,
     UnplayableReasons,
 };
-use crate::ids::{CardIds, EnchantmentIds, OrbIds, PowerIds};
+use crate::ids::{
+    ActIds, AfflictionIds, CardIds, CardVarIds, CharacterIds, EnchantmentIds, EncounterIds,
+    EventIds, ModifierIds, MonsterIds, MoveIds, OrbIds, PotionIds, PowerIds, RelicIds,
+    RestSiteOptionIds,
+};
 
 /// The content a shared rule reads, which every build has.
 ///
@@ -44,10 +48,22 @@ pub trait BuildContent:
         RunRngType = RunRngType,
         PlayerRngType = PlayerRngType,
         IntentKind = IntentKind,
-        Card: CardIds + CardTable<Rarity = CardRarity, Tag = CardTag>,
+        Act: ActIds,
+        Affliction: AfflictionIds,
+        Card: CardIds + CardLists + CardTable<Rarity = CardRarity, Tag = CardTag>,
+        CardVar: CardVarIds,
+        Character: CharacterIds,
         Enchantment: EnchantmentIds,
+        Encounter: EncounterIds,
+        Event: EventIds,
+        Modifier: ModifierIds,
+        Monster: MonsterIds,
+        MoveId: MoveIds,
         Orb: OrbIds + Table<Data = OrbData>,
+        Potion: PotionIds,
         Power: PowerIds,
+        Relic: RelicIds,
+        RestSiteOption: RestSiteOptionIds,
     >
 {
 }
@@ -55,6 +71,42 @@ pub trait BuildContent:
 impl BuildContent for crate::v0_107_1::V0_107_1 {}
 
 impl BuildContent for crate::v0_111_0::V0_111_0 {}
+
+/// The lists of cards a shared rule hands out whole.
+///
+/// A list a rule hands out lives as long as the program, and a list of a
+/// generic type cannot. So each build holds its own, of its own cards, and
+/// [`card_lists`] names what is in them once.
+pub trait CardLists: Sized + 'static {
+    /// `CurseCardPool`'s cards whose `CanBeGeneratedByModifiers` holds,
+    /// ordered by id. Ascender's Bane, Bad Luck, Curse of the Bell,
+    /// Enthralled, Folly, Greed, Poor Sleep and Spore Mind override it to
+    /// refuse.
+    const MODIFIER_CURSES: &'static [Self];
+}
+
+/// Every [`CardLists`] list, for one build's cards.
+macro_rules! card_lists {
+    ($card:ty) => {
+        impl CardLists for $card {
+            const MODIFIER_CURSES: &'static [Self] = &[
+                <$card as CardIds>::CLUMSY,
+                <$card as CardIds>::DEBT,
+                <$card as CardIds>::DECAY,
+                <$card as CardIds>::DOUBT,
+                <$card as CardIds>::GUILTY,
+                <$card as CardIds>::INJURY,
+                <$card as CardIds>::NORMALITY,
+                <$card as CardIds>::REGRET,
+                <$card as CardIds>::SHAME,
+                <$card as CardIds>::WRITHE,
+            ];
+        }
+    };
+}
+
+card_lists!(crate::v0_107_1::cards::Cards);
+card_lists!(crate::v0_111_0::cards::Cards);
 
 /// A build the shared behaviour runs in: its content, and its rules, which
 /// a shared rule calls back into.

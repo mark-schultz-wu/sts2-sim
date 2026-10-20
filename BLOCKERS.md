@@ -53,7 +53,7 @@ impl in codegen. A spike on the powers' hooks and every card play
 measured 12,264 instructions a step before and 12,184 after. Every
 recorded run still matches after each move.
 
-The orbs and enchantments are shared. The rest: modifiers,
+The orbs, enchantments and modifiers are shared. The rest:
 acts, encounters, potions, relics, powers, monsters, events, and the
 cards, pool by pool.
 

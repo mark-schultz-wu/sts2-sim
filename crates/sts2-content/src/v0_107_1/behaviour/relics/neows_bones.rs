@@ -22,7 +22,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
             except: Relic::NeowsBones,
         });
         asked.push(HookEffect::AddDistinctToDeck {
-            cards: &super::MODIFIER_CURSES,
+            cards: <<V as sts2_core::ContentVersion>::Card as crate::build::CardLists>::MODIFIER_CURSES,
             count: CURSES,
             stream: RunRngType::Niche,
         });
