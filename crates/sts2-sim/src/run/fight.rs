@@ -154,12 +154,12 @@ impl<V: Rules> State<V> {
             unimplemented!("a potion drunk in a fight that asks the run a question");
         }
         // What a death's listener asked inside the potion, as the decision
-        // ends. A play's comes up as `turn_ended_by_play` looks.
-        if ended.is_none()
-            && let Some(fighting) = self.fighting()
-        {
-            fighting.live.ask_paused();
-        }
+        // ends, and a card the potion played that ends the turn, as Void
+        // Form under Distilled Chaos does.
+        let ended = match ended {
+            None => self.turn_ended_by_play()?,
+            ended => ended,
+        };
         Ok(Ok(self.settle(ended, since)))
     }
 
