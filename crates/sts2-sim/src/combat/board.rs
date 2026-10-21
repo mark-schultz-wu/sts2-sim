@@ -1677,9 +1677,44 @@ impl<'a, V: Rules> Board<'a, V> {
         added
     }
 
+    /// [`Board::generate`] of copies that `writes` lands on before they
+    /// enter the fight, as `SetToFreeThisTurn` does before
+    /// `AddGeneratedCardsToCombat`. A card's own `AfterCardEnteredCombat`
+    /// then writes after them.
+    pub(super) fn generate_written(
+        &mut self,
+        card: CardIdent<V>,
+        pile: Pile,
+        count: usize,
+        writes: &[(sts2_core::Change<V>, sts2_core::Lasting)],
+    ) -> Vec<CardAt<V>> {
+        self.ran_on();
+        let creator = self.creator();
+        if self.stopped() {
+            return Vec::new();
+        }
+        let mut added = Vec::with_capacity(count);
+        for _ in 0..count {
+            let at = self.put_written(card, pile, writes);
+            added.push(at);
+            self.card_generated(at, card.card, creator);
+        }
+        added
+    }
+
     /// `CardPileCmd.Add` of a new copy of `card` into `pile`, and the
     /// `AfterCardEnteredCombat` it raises as it lands.
     fn put(&mut self, card: CardIdent<V>, pile: Pile) -> CardAt<V> {
+        self.put_written(card, pile, &[])
+    }
+
+    /// [`Board::put`], with `writes` on the copy before it lands.
+    fn put_written(
+        &mut self,
+        card: CardIdent<V>,
+        pile: Pile,
+        writes: &[(sts2_core::Change<V>, sts2_core::Lasting)],
+    ) -> CardAt<V> {
         let id = self.live.card_ids.mint();
         // A full hand sends the card to the discard pile instead.
         let full =
@@ -1689,6 +1724,9 @@ impl<'a, V: Rules> Board<'a, V> {
             .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
         self.live.cards.push(pile, CardInstance::new(card, id));
         let at = CardAt::new(id, pile, index);
+        for &(change, lasting) in writes {
+            sts2_core::Fight::modify_card(self, at, change, lasting);
+        }
         self.card_entered_combat(at, card.card, false);
         at
     }

@@ -2543,11 +2543,7 @@ fn generate_from_pool<V: Rules>(
         ) else {
             return;
         };
-        for at in sts2_core::Fight::add_generated_cards(&mut board, card, Pile::Hand, 1) {
-            for &(change, lasting) in writes {
-                sts2_core::Fight::modify_card(&mut board, at, change, lasting);
-            }
-        }
+        board.generate_written(card, Pile::Hand, 1, writes);
     }
 }
 
