@@ -6272,6 +6272,12 @@ pub enum HookEffect<V: ContentVersion> {
     /// `ModifyUnknownMapPointRoomTypes` leaving an unknown room nothing but
     /// an event.
     EventRoomsOnly,
+    /// `CardFactory.CreateForReward` for `count` cards of the colorless pool
+    /// at `RegularEncounter` odds, the upgrade roll included. A
+    /// `FromChooseACardScreen` then takes one or none into the deck.
+    ChooseColorlessCards {
+        count: usize,
+    },
 }
 
 /// One build's relic models, which is what a run holds a relic as.
@@ -7587,9 +7593,6 @@ pub trait Rules: Hooks + Engine {
     /// A card rarity reduced to the three-way reward rule.
     fn reward_rarity(card: Self::Card) -> RewardRarity;
 
-    /// The relic whose pickup opens the two-card colorless choice.
-    fn lead_paperweight() -> Self::Relic;
-
     /// What a card's `OnUpgrade` writes, as the list of changes it is.
     ///
     /// Declared rather than applied: the fight owns the copy, and an upgrade
@@ -7952,6 +7955,17 @@ pub trait Rules: Hooks + Engine {
         move_id: Self::MoveId,
         model: &Self::MonsterState,
     ) -> Option<Self::Count>;
+
+    /// The damage `move_id`'s attack intent reads off its monster's model
+    /// now, as the intent's lambda does each time it is shown:
+    /// `WaterfallGiant.CurrentPressureGunDamage`. Nothing for damage the
+    /// table prints, or that the monster reads off its powers.
+    fn intent_damage_now(
+        monster: Self::Monster,
+        move_id: Self::MoveId,
+        ascension: Self::AscensionLevel,
+        model: &Self::MonsterState,
+    ) -> Option<i32>;
 
     /// The rest of a move that handed back [`Played::Waiting`], from `at`,
     /// once what it waited on is over.

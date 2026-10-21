@@ -1826,6 +1826,20 @@ impl<V: Rules> Telegraphed<V> {
         }
     }
 
+    /// Its attack's damage read again, as an intent that works its damage
+    /// out reads it each time it is shown.
+    pub(crate) fn reread_damage(&mut self, damage: i32) {
+        let damage = i16::try_from(damage)
+            .ok()
+            .and_then(NonMaxI16::new)
+            .unwrap_or_else(|| unimplemented!("an attack dealing {damage}"));
+        for intent in self.intents.iter_mut().flatten() {
+            if let Some(attack) = intent.attack.as_mut() {
+                attack.damage = damage;
+            }
+        }
+    }
+
     /// What a report shows of it.
     pub(crate) fn telegraph(&self) -> sts2_core::NextMove<V> {
         sts2_core::NextMove {

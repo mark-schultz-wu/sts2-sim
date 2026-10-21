@@ -143,11 +143,24 @@ pub(crate) fn computed_damage<V: crate::Build, P: sts2_core::Printed<V> + ?Sized
     powers: &[sts2_core::Listener<'_, V, P>],
     model: &Model<V>,
 ) -> i32 {
+    model_damage::<V>(monster, move_id, ascension, model)
+        .unwrap_or_else(|| glory::computed_damage::<V, _>(monster, move_id, ascension, powers))
+}
+
+/// A move's attack damage that the monster works out from its own model,
+/// which its intent reads again each time it is shown. Nothing for damage it
+/// reads off its powers.
+pub(crate) fn model_damage<V: crate::Build>(
+    monster: V::Monster,
+    move_id: V::MoveId,
+    ascension: u8,
+    model: &Model<V>,
+) -> Option<i32> {
     match monster {
-        __c0 if __c0 == V::Monster::GAS_BOMB || __c0 == V::Monster::WATERFALL_GIANT => {
-            underdocks::computed_damage::<V>(monster, move_id, ascension, model)
-        }
-        _ => glory::computed_damage::<V, _>(monster, move_id, ascension, powers),
+        __c0 if __c0 == V::Monster::GAS_BOMB || __c0 == V::Monster::WATERFALL_GIANT => Some(
+            underdocks::computed_damage::<V>(monster, move_id, ascension, model),
+        ),
+        _ => None,
     }
 }
 

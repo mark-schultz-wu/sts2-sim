@@ -744,7 +744,7 @@ pub(crate) fn event_hook<V: crate::Build>(
         State::GremlinHorn => gremlin_horn::event_hook::<V>(hook, asked),
         State::HeftyTablet => hefty_tablet::event_hook::<V>(hook, asked),
         State::LavaRock(state) => lava_rock::event_hook::<V>(state, hook, asked),
-        State::LeadPaperweight => lead_paperweight::event_hook::<V>(hook),
+        State::LeadPaperweight => lead_paperweight::event_hook::<V>(hook, asked),
         State::LeafyPoultice => leafy_poultice::event_hook::<V>(hook, asked),
         State::LostCoffer => lost_coffer::event_hook::<V>(hook, asked),
         State::LostWisp => lost_wisp::event_hook::<V>(hook, asked),
