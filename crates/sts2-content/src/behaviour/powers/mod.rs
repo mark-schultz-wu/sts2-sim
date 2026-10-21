@@ -1213,8 +1213,10 @@ pub(crate) fn modify_hook<V: crate::Build>(
             Modify::Nothing
         }
         // `CuriousPower.TryModifyEnergyCostInCombat`: its stack off a Power
-        // its owner holds. A cost it would take below nothing is nothing,
-        // which the fold's own clamp gives.
+        // its owner holds, and no lower than nothing in its own step. A
+        // listener after it, such as Spiked Gauntlets, adds to the floored
+        // cost. It leaves a cost of nothing alone, which the floor does too:
+        // no listener before it lowers a cost.
         (
             __c0,
             PowerAmount::Counted(amount),
@@ -1226,7 +1228,7 @@ pub(crate) fn modify_hook<V: crate::Build>(
                 && <V as sts2_core::Rules>::card_kind(card)
                     == Some(sts2_core::CardKind::Power)) =>
         {
-            Modify::Added(-amount)
+            Modify::Less(amount)
         }
         (__c0, PowerAmount::Endless, ModifyHook::EnergyCost { .. })
             if __c0 == V::Power::CURIOUS_POWER =>
