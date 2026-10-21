@@ -1285,6 +1285,13 @@ fn run_deferred<V: Rules>(
                 }
                 ended => ended,
             },
+            super::live::Deferred::AfterTurnEnd {
+                walk,
+                max_energy,
+                skipping,
+            } => super::turn::resume_after_turn_end(
+                fighting, ascension, *walk, max_energy, skipping, ended,
+            )?,
             super::live::Deferred::Flush {
                 max_energy,
                 skipping,

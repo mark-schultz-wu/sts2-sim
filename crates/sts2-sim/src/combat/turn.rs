@@ -191,15 +191,99 @@ pub(super) fn end_from_flush<V: Rules>(
     } = fighting;
     flush_hand(next, streams.combat(), relics, ascension);
     end_of_turn_cleanup(next);
-    // `AfterTurnEnd` for the side that just ended.
-    if let Some(ended) = after_turn_end::<V>(
+    // `AfterTurnEnd` for the side that just ended, which a question a draw
+    // it asks for raises stands still.
+    let walked = after_turn_end_from::<V>(
         next,
         streams.combat(),
         relics,
         ascension,
         &mut skipping,
         <V::CombatSide as SideKinds>::PLAYER,
-    ) {
+        None,
+        true,
+    );
+    after_player_turn_end(
+        Fighting {
+            live: next,
+            streams,
+            relics,
+        },
+        ascension,
+        max_energy,
+        skipping,
+        walked,
+    )
+}
+
+/// The player's `AfterTurnEnd` from where a question stood it still, then the
+/// rest of the turn end. `ended` is how the fight stood once the question's
+/// command was over.
+pub(super) fn resume_after_turn_end<V: Rules>(
+    fighting: Fighting<'_, V>,
+    ascension: V::AscensionLevel,
+    mut walk: TurnEndWalk<V>,
+    max_energy: V::Count,
+    mut skipping: Skips<V>,
+    ended: Option<super::Ended>,
+) -> Result<Option<super::Ended>, Error> {
+    let Fighting {
+        live: next,
+        streams,
+        relics,
+    } = fighting;
+    walk.ended = walk.ended.or(ended);
+    let side = walk.side;
+    let walked = after_turn_end_from::<V>(
+        next,
+        streams.combat(),
+        relics,
+        ascension,
+        &mut skipping,
+        side,
+        Some(walk),
+        true,
+    );
+    after_player_turn_end(
+        Fighting {
+            live: next,
+            streams,
+            relics,
+        },
+        ascension,
+        max_energy,
+        skipping,
+        walked,
+    )
+}
+
+/// The player's turn end once `AfterTurnEnd` came to `walked`. A question
+/// stands it still, and an ended fight stops it. Otherwise it goes on to the
+/// enemies' turn and the player's next.
+fn after_player_turn_end<V: Rules>(
+    fighting: Fighting<'_, V>,
+    ascension: V::AscensionLevel,
+    max_energy: V::Count,
+    skipping: Skips<V>,
+    walked: Walked<V>,
+) -> Result<Option<super::Ended>, Error> {
+    let Fighting {
+        live: next,
+        streams,
+        relics,
+    } = fighting;
+    let ended = match walked {
+        Walked::Parked(walk) => {
+            next.defer(super::live::Deferred::AfterTurnEnd {
+                walk,
+                max_energy,
+                skipping,
+            });
+            return Ok(None);
+        }
+        Walked::Done(ended) => ended,
+    };
+    if let Some(ended) = ended {
         next.skip_tick = skipping;
         match ended {
             super::Ended::Won => {}
@@ -2780,7 +2864,10 @@ pub(super) fn finish_setup<V: Rules>(
 ) -> Option<super::Ended> {
     let mut rngs = rngs;
     let carried = match ended {
-        Some(ended) => Carried::Done(Some(ended)),
+        Some(ended) => {
+            ask_out_setup::<V>(live, relics, stage);
+            Carried::Done(Some(ended))
+        }
         None => carry_setup(live, rngs.reborrow(), relics, ascension, stage, false),
     };
     match carried {
@@ -2793,6 +2880,29 @@ pub(super) fn finish_setup<V: Rules>(
                 None => live.phase = after_pre_play::<V>(live),
             }
             ended
+        }
+    }
+}
+
+/// The rest of the walk a setup stood still in, once the answer ended the
+/// fight. The game's `foreach` goes on over the list it took, so every
+/// listener left in it is asked. Nothing they ask for is carried out, as
+/// an ending fight runs no commands, though a relic's code after its
+/// `CardPileCmd.Draw` still runs.
+fn ask_out_setup<V: Rules>(live: &mut Live<V>, relics: &mut crate::run::Belt<V>, stage: Setup<V>) {
+    let walking = match stage {
+        Setup::BeforeHandDraw(walking)
+        | Setup::PlayerTurnStart(walking)
+        | Setup::TurnStartDrawing { rest: walking, .. } => walking,
+        Setup::Drawing { .. } => None,
+    };
+    let Some(mut walking) = walking else {
+        return;
+    };
+    while let Some((listener, effect)) = walking.next(live, relics) {
+        if let (Listener::Relic { slot }, sts2_core::HookEffect::Draw(_)) = (listener, effect) {
+            let relic = relics[usize::from(slot)].relic;
+            super::relic::own_command_over::<V>(relics, slot, relic);
         }
     }
 }
@@ -2846,7 +2956,7 @@ fn pre_play_heard<V: Rules>(
 ///
 /// # Panics
 ///
-/// A card the fight no longer holds. An X-cost dupe captures the energy on
+/// A card the fight never held. An X-cost dupe captures the energy on
 /// hand as it plays, as any auto-play does, since `AutoPlay` skips no
 /// capture.
 fn auto_play_dupe_of_last_play<V: Rules>(
@@ -2863,8 +2973,10 @@ fn auto_play_dupe_of_last_play<V: Rules>(
             !finished.dupe && V::card_kind(finished.card).is_some_and(|kind| kinds.contains(&kind))
         })
         .last()?;
-    let Some(original) = live.cards.named(last.id) else {
-        unimplemented!("a dupe of {:?}, which the fight no longer holds", last.card);
+    // `CreateDupe` clones the card's model, which outlives its leaving the
+    // fight, as a transform's original does.
+    let Some(original) = live.cards.last_state(last.id) else {
+        unimplemented!("a dupe of {:?}, which the fight never held", last.card);
     };
     let id = live.card_ids.mint();
     let index = num_traits::NumCast::from(live.cards.len(Pile::Play))
@@ -3811,33 +3923,77 @@ fn clear_block<V: Rules>(
     }
 }
 
+/// How far a turn end's walk got. `Done` carries how a listener ended the
+/// fight, if one did. `Parked` is a question a draw it asked for raised.
+pub(super) enum Walked<V: Rules> {
+    Done(Option<super::Ended>),
+    Parked(Box<TurnEndWalk<V>>),
+}
+
+/// `AfterTurnEnd` stood still behind a question.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct TurnEndWalk<V: Rules> {
+    /// The side whose turn ended.
+    side: V::CombatSide,
+    /// Whether the walk is `AfterSideTurnEndLate`'s.
+    late: bool,
+    hook: sts2_core::EventHook<V>,
+    walk: Option<listen::Walker<V>>,
+    /// The listener whose asks the walk stopped among, and those still to
+    /// land.
+    listener: Listener<V>,
+    rest: SmallVec<[sts2_core::HookEffect<V>; 2]>,
+    /// How the fight stood.
+    ended: Option<super::Ended>,
+}
+
 /// `hook`, `AfterSideTurnEnd` or its late pass, raised on every listener once a
-/// side's turn ends. Each listener acts as the walk reaches it, and how the
-/// fight ended comes back if one ended it. The walk goes on past that, and
-/// what the listeners after it ask for is not carried out.
-///
-/// Which side's turn ending counts a power down is the power's own rule.
+/// side's turn ends, from `walk`. `current`'s listener and its asks still to
+/// land go first. Each listener acts as the walk reaches it. A fight that
+/// ends comes back ended, and the walk goes on past that, carrying out
+/// nothing more. With `pausing`, a question a draw raises stands it still.
 ///
 /// # Panics
 ///
 /// A listener asking for something no turn end carries out.
 #[tracing::instrument(level = "trace", skip_all)]
-fn walk_turn_end<V: Rules>(
+#[allow(clippy::type_complexity)]
+fn walk_turn_end_from<V: Rules>(
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
     relics: &mut crate::run::Belt<V>,
     ascension: V::AscensionLevel,
     skipping: &mut Skips<V>,
-    hook: sts2_core::EventHook<V>,
-) -> Option<super::Ended> {
-    let mut ended = None;
-    let mut walk = listen::Walker::begin::<listen::Checked>(live, relics, hook);
+    (hook, walk, current, mut ended): (
+        sts2_core::EventHook<V>,
+        &mut Option<listen::Walker<V>>,
+        Option<(Listener<V>, SmallVec<[sts2_core::HookEffect<V>; 2]>)>,
+        Option<super::Ended>,
+    ),
+    pausing: bool,
+) -> Walked<V> {
     let mut asked = sts2_core::HookEffects::new();
-    while let Some(listener) = walk
-        .as_mut()
-        .and_then(|walk| walk.next(live, relics, &mut asked))
-    {
-        for effect in asked.drain(..) {
+    let mut resumed = current.map(|(listener, rest)| {
+        asked.extend(rest);
+        listener
+    });
+    loop {
+        let listener = match resumed.take() {
+            Some(listener) => listener,
+            None => {
+                let Some(listener) = walk
+                    .as_mut()
+                    .and_then(|walk| walk.next(live, relics, &mut asked))
+                else {
+                    return Walked::Done(ended);
+                };
+                listener
+            }
+        };
+        let mut at = 0;
+        while at < asked.len() {
+            let effect = asked[at];
+            at += 1;
             // A fight that is ending runs no more commands, though the walk
             // still asks every listener. `CardPileCmd.Draw` returns at once
             // there, and a relic's code after it still runs.
@@ -3920,10 +4076,22 @@ fn walk_turn_end<V: Rules>(
                 relics,
                 ascension,
                 [ask].into_iter().collect(),
+                pausing,
             );
+            // Only a draw a pausing walk asked for stands still.
+            if pausing && live.asking.is_some() {
+                return Walked::Parked(Box::new(TurnEndWalk {
+                    side: <V::CombatSide as SideKinds>::PLAYER,
+                    late: false,
+                    hook,
+                    walk: walk.take(),
+                    listener,
+                    rest: asked[at..].iter().copied().collect(),
+                    ended,
+                }));
+            }
         }
     }
-    ended
 }
 
 /// `PowerModel.TickDownDuration` of `power` on `owner`: one off it, unless its
@@ -3984,27 +4152,79 @@ fn tick_down<V: Rules>(
 #[tracing::instrument(level = "trace", skip_all)]
 fn after_turn_end<V: Rules>(
     live: &mut Live<V>,
-    mut rngs: CombatRngs<'_>,
+    rngs: CombatRngs<'_>,
     relics: &mut crate::run::Belt<V>,
     ascension: V::AscensionLevel,
     skipping: &mut Skips<V>,
     side: V::CombatSide,
 ) -> Option<super::Ended> {
-    let hooks = [
-        sts2_core::EventHook::SideTurnEnd {
-            side,
-            block: live.player().block,
-        },
-        sts2_core::EventHook::SideTurnEndLate { side },
-    ];
-    for hook in hooks {
-        if let Some(ended) =
-            walk_turn_end::<V>(live, rngs.reborrow(), relics, ascension, skipping, hook)
-        {
-            return Some(ended);
+    match after_turn_end_from::<V>(live, rngs, relics, ascension, skipping, side, None, false) {
+        Walked::Done(ended) => ended,
+        Walked::Parked(_) => unreachable!("a turn end that cannot pause stood still"),
+    }
+}
+
+/// [`after_turn_end`] from where `from` stood still, or from its start. With
+/// `pausing`, a question a draw raises stands it still again.
+#[allow(clippy::too_many_arguments)]
+fn after_turn_end_from<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    ascension: V::AscensionLevel,
+    skipping: &mut Skips<V>,
+    side: V::CombatSide,
+    from: Option<TurnEndWalk<V>>,
+    pausing: bool,
+) -> Walked<V> {
+    let (mut late, mut hook, mut walk, mut current, mut ended) = match from {
+        Some(from) => {
+            let TurnEndWalk {
+                late,
+                hook,
+                walk,
+                listener,
+                rest,
+                ended,
+                ..
+            } = from;
+            (late, hook, walk, Some((listener, rest)), ended)
+        }
+        None => {
+            let hook = sts2_core::EventHook::SideTurnEnd {
+                side,
+                block: live.player().block,
+            };
+            let walk = listen::Walker::begin::<listen::Checked>(live, relics, hook);
+            (false, hook, walk, None, None)
+        }
+    };
+    loop {
+        let from = (hook, &mut walk, current.take(), ended);
+        match walk_turn_end_from::<V>(
+            live,
+            rngs.reborrow(),
+            relics,
+            ascension,
+            skipping,
+            from,
+            pausing,
+        ) {
+            Walked::Parked(mut parked) => {
+                parked.side = side;
+                parked.late = late;
+                return Walked::Parked(parked);
+            }
+            Walked::Done(Some(ended)) => return Walked::Done(Some(ended)),
+            Walked::Done(None) if late => return Walked::Done(None),
+            Walked::Done(None) => {
+                late = true;
+                hook = sts2_core::EventHook::SideTurnEndLate { side };
+                walk = listen::Walker::begin::<listen::Checked>(live, relics, hook);
+                ended = None;
+            }
         }
     }
-    None
 }
 
 /// What a turn end's listeners asked for on the creature carrying them,
@@ -4039,7 +4259,8 @@ enum TurnEndAsk<V: Rules> {
 }
 
 /// What a turn end's listener asked for, carried out in order, and whatever
-/// that ended. A fight that ends runs no more of them.
+/// that ended. A fight that ends runs no more of them. With `pausing`, a
+/// question a draw raises stands it still, with the rest deferred.
 #[tracing::instrument(level = "trace", skip_all)]
 fn applied<V: Rules>(
     live: &mut Live<V>,
@@ -4047,9 +4268,14 @@ fn applied<V: Rules>(
     relics: &mut crate::run::Belt<V>,
     ascension: V::AscensionLevel,
     asked: Applying<V>,
+    pausing: bool,
 ) -> Option<super::Ended> {
     for ask in asked {
-        let mut board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+        let board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+        let mut board = match (pausing, &ask) {
+            (true, TurnEndAsk::Draw(_)) => board.blocking(),
+            _ => board,
+        };
         match ask {
             TurnEndAsk::Apply(at, power, amount) => {
                 sts2_core::Fight::apply_power(&mut board, at, power, amount);

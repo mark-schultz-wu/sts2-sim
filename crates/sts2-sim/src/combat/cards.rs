@@ -179,6 +179,15 @@ impl<V: Rules, P: Piles> Cards<V, P> {
         self.piles.place(card).map(|_| self.card(card))
     }
 
+    /// The copy `id` names as it last stood, whether the fight still holds it
+    /// or not. A card that left keeps the state it left in, as the game's
+    /// `CardModel` does once it is out of every pile. Nothing for an id the
+    /// fight never held.
+    pub(crate) fn last_state(&self, id: CardId<V>) -> Option<CardInstance<V>> {
+        let card = number(id);
+        (usize::from(card) < self.states.len()).then(|| self.card(card))
+    }
+
     /// Whether any card the fight holds overrides a hook in `hooks`.
     pub(crate) fn hears(&self, hooks: sts2_core::Overrides) -> bool {
         self.counts.hears(hooks)

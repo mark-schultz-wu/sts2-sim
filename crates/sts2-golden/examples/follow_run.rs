@@ -4,6 +4,7 @@
 //! follow_run <file> [index]
 //! follow_run <file> <index> --scenario
 //! follow_run <file> <index> --diff <dir>
+//! follow_run <file> <index> --at <step>
 //! ```
 //!
 //! It prints one of these, where `after` names the move that led to the
@@ -56,6 +57,9 @@ struct Cli {
     /// where they first differ, to this directory.
     #[arg(long, requires = "index", value_name = "DIR")]
     diff: Option<PathBuf>,
+    /// Print the simulator's position before this move of the run.
+    #[arg(long, requires = "index", value_name = "STEP")]
+    at: Option<usize>,
 }
 
 fn main() -> ExitCode {
@@ -64,6 +68,7 @@ fn main() -> ExitCode {
         index,
         scenario,
         diff,
+        at,
     } = Cli::parse();
     let bytes = std::fs::read(&file).unwrap_or_else(|e| panic!("reading {}: {e}", file.display()));
     let recorded = Recorded::decode(&bytes).unwrap_or_else(|e| panic!("{}: {e}", file.display()));
@@ -76,10 +81,10 @@ fn main() -> ExitCode {
     // per build `sts2-content` compiles.
     match recorded.stamp.assembly {
         hash if hash == sts2_content::v0_107_1::VERSION.assembly_hash => {
-            followed::<sts2_content::v0_107_1::V0_107_1>(run, index, scenario, diff.as_deref());
+            followed::<sts2_content::v0_107_1::V0_107_1>(run, index, scenario, diff.as_deref(), at);
         }
         hash if hash == sts2_content::v0_111_0::VERSION.assembly_hash => {
-            followed::<sts2_content::v0_111_0::V0_111_0>(run, index, scenario, diff.as_deref());
+            followed::<sts2_content::v0_111_0::V0_111_0>(run, index, scenario, diff.as_deref(), at);
         }
         hash => {
             eprintln!("{}: no build has assembly {hash}", file.display());
@@ -96,7 +101,27 @@ fn followed<V: sts2_content::Build + sts2_content_wire::WireContentVersion>(
     index: usize,
     scenario: bool,
     diff: Option<&std::path::Path>,
+    at: Option<usize>,
 ) {
+    if let Some(step) = at {
+        let mut sim = begun::<V>(run);
+        for &chosen in &run.moves[..step.min(run.moves.len())] {
+            let seen = sim.observe().expect("the simulator observes");
+            let decision = seen.observation.moves[usize::from(chosen)];
+            sim.play(&decision)
+                .expect("the move plays")
+                .expect("and is not refused");
+        }
+        let seen = sim.observe().expect("the simulator observes");
+        println!("{seen:#?}");
+        if let Some(&chosen) = run.moves.get(step) {
+            println!(
+                "move {step}: {:?}",
+                seen.observation.moves[usize::from(chosen)]
+            );
+        }
+        return;
+    }
     if let Some(dir) = diff {
         beside_the_game::<V>(run, index, dir);
         return;

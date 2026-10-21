@@ -146,9 +146,10 @@ impl<V: Rules> Offer<V> {
     }
 }
 
-/// `RewardsSet`'s sort, once every reward is filled in.
+/// `RewardsSet`'s sort, once every reward is filled in. `List.Sort` is
+/// .NET's unstable introsort, so two rewards at one index can swap.
 pub(crate) fn sort<V: Rules>(offered: &mut [Offer<V>]) {
-    offered.sort_by_key(Offer::set_index);
+    sts2_core::rng::dotnet_sort_by_key(offered, Offer::set_index);
 }
 
 /// The two pity counters a run carries between reward screens.

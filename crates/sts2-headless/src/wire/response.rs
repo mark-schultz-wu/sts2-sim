@@ -63,6 +63,10 @@ pub enum Response {
         /// attached to a pending exactly as they are to an observation.
         digest: String,
         state: Value,
+        /// Errors the game logged while running the command up to the
+        /// question, as an observation carries them.
+        #[serde(rename = "gameErrors", default)]
+        game_errors: Option<Vec<String>>,
         /// Flattened, because the mod writes a question's fields beside the
         /// envelope's rather than under a key.
         ///
@@ -96,12 +100,13 @@ impl Response {
     ///
     /// Never suppressed and never an error on its own. The command can have
     /// half-happened, and only the caller decides whether to trust the state
-    /// that came back. Empty for a pending and for a `Bye`, neither of which
-    /// reports one.
+    /// that came back. Empty for a `Bye`, which reports none.
     pub fn game_errors(&self) -> &[String] {
         match self {
-            Self::Observation { game_errors, .. } => game_errors.as_deref().unwrap_or(&[]),
-            Self::Pending { .. } | Self::Bye => &[],
+            Self::Observation { game_errors, .. } | Self::Pending { game_errors, .. } => {
+                game_errors.as_deref().unwrap_or(&[])
+            }
+            Self::Bye => &[],
         }
     }
 
@@ -209,6 +214,19 @@ mod tests {
         };
         assert!(!resolved);
         assert_eq!(game_errors.as_deref(), Some(&["boom".to_string()][..]));
+    }
+
+    /// Regression. A pending the game logged errors on refused to parse, as
+    /// the flattened question met a field it does not know.
+    #[test]
+    fn game_errors_survive_a_pending() {
+        let r = parse(
+            r#"{"type":"pending","seq":711,"cmd":"answer","kind":"rewards",
+                "skippable":true,"rewards":[],"digest":"BB","state":{},
+                "gameErrors":["boom"]}"#,
+        );
+        assert!(matches!(r, Response::Pending { .. }));
+        assert_eq!(r.game_errors(), ["boom".to_string()]);
     }
 
     /// Regression. `Pending` had no fields for `digest` or `state`, and serde
