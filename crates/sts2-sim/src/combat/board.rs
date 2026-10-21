@@ -5696,13 +5696,8 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                     unimplemented!("a second listener asking for {asks:?} after a shuffle");
                 }
             }
+            // The listeners behind the pick wait for its answer.
             Err(question) => {
-                // Nothing outside a draw takes the walk up after the answer.
-                if let Some(waiting) = self.live.after_pick.take()
-                    && !waiting.exhausted()
-                {
-                    unimplemented!("listeners behind a shuffle's question outside a draw");
-                }
                 self.live.asking = Some(super::live::Asking {
                     then: super::live::Then::Pick { act },
                     question,
@@ -6774,6 +6769,26 @@ pub(super) struct AutoPlayFromDraw<V: Rules> {
     pub(super) left: usize,
     pub(super) taken: SmallVec<[CardId<V>; 4]>,
     pub(super) force_exhaust: bool,
+}
+
+/// The rest of an `AfterShuffle` walk once its pick is made, and how it
+/// ended the fight.
+///
+/// # Panics
+///
+/// A second listener asking the player to pick.
+pub(super) fn after_pick_walk<V: Rules>(
+    live: &mut Live<V>,
+    rngs: CombatRngs<'_>,
+    relics: &mut Belt<V>,
+    waiting: super::listen::Walking<V>,
+) -> Option<super::Ended> {
+    let ascension = live.ascension;
+    let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
+    if let Some(asks) = after_shuffle_walk::<V>(&mut board, waiting) {
+        unimplemented!("a second listener asking for {asks:?} after a shuffle");
+    }
+    board.ended()
 }
 
 /// `CardPileCmd.AutoPlayFromDrawPile` from the top, carried on from `from`.

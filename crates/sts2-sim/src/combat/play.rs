@@ -1101,6 +1101,14 @@ pub(crate) fn answer<V: Rules>(
             );
             let ended = ended
                 .or_else(|| super::turn::play_sly::<V>(live, streams.combat(), relics, sly, true));
+            // The `AfterShuffle` listeners that waited for the pick, before
+            // what the shuffle stood still.
+            let ended = match live.after_pick.take() {
+                Some(waiting) if ended.is_none() => {
+                    super::board::after_pick_walk::<V>(live, streams.combat(), relics, *waiting)
+                }
+                _ => ended,
+            };
             return run_deferred(
                 Fighting {
                     live,
