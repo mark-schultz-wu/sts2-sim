@@ -5554,6 +5554,9 @@ pub enum HookEffect<V: ContentVersion> {
     /// `Concat` of this character's unlocked cards after the pool's own. A
     /// card reward drops repeats as it draws, and a merchant keeps them.
     ConcatCharacterPool(V::Character),
+    /// `WithCardPools` over the reward's pools with this character's after
+    /// them, as `Union` joins them. The reward's filter stays.
+    UnionCharacterPool(V::Character),
     /// `RunManager.GenerateMap` for the act the run stands in, which the
     /// hooks can replace.
     RegenerateMap,

@@ -4531,6 +4531,16 @@ impl<V: Rules> State<V> {
                     }
                     concat = Some(character);
                 }
+                // `Union`: the character's pool after the rest, where it is
+                // not there. The reward's filter stays on it.
+                sts2_core::HookEffect::UnionCharacterPool(character) => {
+                    if concat.is_some() {
+                        unimplemented!("a pool joined to options that hold a custom pool");
+                    }
+                    if !pools.contains(&Source::Character(character)) {
+                        pools.push(Source::Character(character));
+                    }
+                }
                 effect => {
                     unimplemented!("a relic asking for {effect:?} over a card reward's pools")
                 }

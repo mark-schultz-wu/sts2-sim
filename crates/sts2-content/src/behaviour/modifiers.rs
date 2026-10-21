@@ -305,12 +305,20 @@ pub(crate) fn event_hook<V: crate::Build>(
         ) if __c0 == V::Modifier::BIG_GAME_HUNTER => asked.push(HookEffect::RaresAtEvenOdds),
         (__c0, EventHook::CardRewardCreationOptions { .. })
             if __c0 == V::Modifier::BIG_GAME_HUNTER => {}
-        // `CharacterCards.ModifyCardRewardCreationOptions` and
-        // `ModifyMerchantCardPool`: its character's unlocked cards after the
-        // pool's own. A merchant's colorless shelves are never asked.
-        (__c0, EventHook::CardRewardCreationOptions { .. } | EventHook::MerchantCardPool)
+        // `CharacterCards.ModifyCardRewardCreationOptions`: its character's
+        // cards joined to the reward's, as the build joins them.
+        (__c0, EventHook::CardRewardCreationOptions { .. })
             if __c0 == V::Modifier::CHARACTER_CARDS =>
         {
+            let character = entry
+                .character
+                .unwrap_or_else(|| unreachable!("Character Cards is started with its character"));
+            asked.push((V::CHARACTER_CARDS_REWARD_POOL)(character));
+        }
+        // `CharacterCards.ModifyMerchantCardPool`: its character's unlocked
+        // cards after the shelf's own. A merchant's colorless shelves are
+        // never asked.
+        (__c0, EventHook::MerchantCardPool) if __c0 == V::Modifier::CHARACTER_CARDS => {
             let character = entry
                 .character
                 .unwrap_or_else(|| unreachable!("Character Cards is started with its character"));
@@ -368,3 +376,22 @@ pub(crate) fn ported<V: crate::Build>(modifier: V::Modifier) -> bool {
         || modifier == V::Modifier::MURDEROUS
         || modifier == V::Modifier::TERMINAL
 }
+
+/// The build's choices for the rules above.
+macro_rules! lists {
+    ($build:ty, v0_107_1) => {
+        /// Character Cards' reward hook: `WithCustomPool` of the reward's
+        /// cards, then every card of the character's.
+        const CHARACTER_CARDS_REWARD_POOL: fn(
+            <$build as sts2_core::ContentVersion>::Character,
+        ) -> sts2_core::HookEffect<$build> = sts2_core::HookEffect::ConcatCharacterPool;
+    };
+    ($build:ty, v0_111_0) => {
+        /// Character Cards' reward hook: `WithCardPools` of the reward's
+        /// pools `Union` the character's.
+        const CHARACTER_CARDS_REWARD_POOL: fn(
+            <$build as sts2_core::ContentVersion>::Character,
+        ) -> sts2_core::HookEffect<$build> = sts2_core::HookEffect::UnionCharacterPool;
+    };
+}
+pub(crate) use lists;

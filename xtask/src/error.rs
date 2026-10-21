@@ -153,11 +153,18 @@ pub fn spawned(command: &mut Command) -> Result<Output, ProcessError> {
 }
 
 /// Build one of `sts2-golden`'s examples in release, and where it landed.
+///
+/// The build leaves out `STS2_GAME_DIR` and `STS2_GAME_VERSION`. The examples
+/// read them as they run. `sts2-golden`'s build script reads them too, and
+/// with another build's game named, it asks that game for every v0.107.1
+/// scenario.
 pub fn build_example(root: &Path, name: &str) -> Result<PathBuf, ProcessError> {
     status(
         Command::new("cargo")
             .args(["build", "-q", "--release", "-p", "sts2-golden", "--example"])
             .arg(name)
+            .env_remove("STS2_GAME_DIR")
+            .env_remove("STS2_GAME_VERSION")
             .current_dir(root),
     )?;
     Ok(root.join("target/release/examples").join(name))
