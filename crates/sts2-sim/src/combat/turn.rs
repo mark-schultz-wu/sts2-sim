@@ -800,8 +800,16 @@ pub(super) fn post_play_from<V: Rules>(
         // A Stampede part-way through puts what it has left back first.
         let mut left_over = None;
         match effect {
-            // `CardCmd.AutoPlay` of the card, from wherever it stands.
+            // `CardCmd.AutoPlay` of the card, from wherever it stands. It
+            // returns at once where the fight is over or ending, which a
+            // card before this one can make it, or its owner is dead.
             sts2_core::HookEffect::AutoPlay(card) => {
+                if live.lost
+                    || !live.player().alive
+                    || super::board::ending::<V>(listen::Walk { live, relics })
+                {
+                    continue;
+                }
                 let Some(from) = live.cards.pile_of(card) else {
                     unimplemented!("auto-playing {card:?}, which stands in no pile");
                 };
