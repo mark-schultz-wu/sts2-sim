@@ -445,8 +445,10 @@ impl<V: Rules> State<V> {
                         taken: false,
                     }
                 }
+                // `CardReward` over `ForRoom`, which carries no `IsFromCombat`:
+                // only the room's own card reward does.
                 combat::ExtraReward::Card => {
-                    let added = self.card_reward_added(true);
+                    let added = self.card_reward_added(false);
                     let pool = self.reward_pool(room == crate::reward::combat::Room::Elite);
                     let (rng, odds) = self.rewarding();
                     crate::reward::combat::card_reward::<V, _>(

@@ -51,15 +51,18 @@ its split, as a scenario. A fix lands with its run, recorded whole, in
 `hunted-v0.111.0.bin`. A split that many runs share becomes its own item, above this
 one.
 
-A mixed hunt of 7,000 runs on v0.111.0 parted 258. Of those, 6 are still open:
+A mixed hunt of 7,000 runs on v0.111.0 parted 258. Of those, 5 are still open:
 
 - A block gain's decimal, which `CreatureCmd.GainBlock` hands back
   before `GainBlockInternal` floors it. Dodge and Roll applies Block Next
   Turn of 0.75, and the power stands at 0. The simulator works in whole
   numbers. This needs Mark's decision on how a fraction reaches a power.
   1 run.
-- 5 runs that each part in their own place, in fights, card plays,
-  travel and potions.
+- 4 runs that each part in a fight. Three are in the Knights elite. In
+  one a relic bag parted earlier, unseen. One draws once more from
+  `CombatCardSelection`, and one differs by 2 HP at a turn's end. The
+  last is Whirlwind with Miniature Cannon, where a death mid-attack
+  lifts Dampen.
 
 Clear these before the next hunt.
 

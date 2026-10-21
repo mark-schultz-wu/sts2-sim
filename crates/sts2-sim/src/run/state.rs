@@ -4674,8 +4674,8 @@ impl<V: Rules> State<V> {
     }
 
     /// `TryModifyCardRewardOptions` over a card reward at a room's odds: the
-    /// kind of each option the belt adds. `from_combat` is whether a won
-    /// fight made it.
+    /// kind of each option the belt adds. `from_combat` is `IsFromCombat`,
+    /// which a won fight's own card reward carries and an extra one does not.
     pub(super) fn card_reward_added(&mut self, from_combat: bool) -> Vec<sts2_core::CardKind> {
         self.unheard(sts2_core::ModelHook::ModifyCardRewardUpgradeOdds);
         self.notify_run(sts2_core::EventHook::CardRewardOptions {
