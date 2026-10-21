@@ -158,8 +158,8 @@ enum Resolved<V: Rules> {
     GainBlock {
         recipient: CombatId,
         amount: V::Number,
-        /// `IsPoweredCardOrMonsterMoveBlock`.
-        powered: bool,
+        /// `IsCardOrMonsterMove`.
+        moved: bool,
         /// The play that gives it.
         play: Option<sts2_core::PlayAt>,
         /// `cardSource`: which copy gives it.
@@ -3283,13 +3283,18 @@ pub(crate) fn orb_value<V: Rules>(fight: Walk<'_, V>, orb: V::Orb, base: V::Numb
 /// is `Hook.ModifyBlock`.
 ///
 /// The same hook whether the block is previewed or gained, as damage's is.
-/// `powered` is `IsPoweredCardOrMonsterMoveBlock`, and `card` is the card
-/// whose own play gives it. `play` is that play, while one is under way.
+/// `powered` is `IsPoweredCardOrMonsterMoveBlock`, `moved` is
+/// `IsCardOrMonsterMove`, and `card` is the card whose own play gives it. `play` is that play, while one is under way.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the fields `Hook.ModifyBlock` hands its listeners"
+)]
 pub(super) fn blocked<V: Rules>(
     fight: Walk<'_, V>,
     recipient: CombatId,
     amount: V::Number,
     powered: bool,
+    moved: bool,
     card: Option<V::Card>,
     play: Option<sts2_core::PlayAt>,
     source: Option<CardId<V>>,
@@ -3303,6 +3308,7 @@ pub(super) fn blocked<V: Rules>(
         ModifyHook::BlockMultiplicative {
             target: recipient,
             powered,
+            moved,
             card,
             play,
             source,
@@ -3588,6 +3594,7 @@ pub(crate) fn resolve<V: Rules>(
                 recipient,
                 amount,
                 powered,
+                scaling != Scaling::Static,
                 playing.map(|held| held.face.ident.card),
                 play,
                 source,
@@ -3595,7 +3602,7 @@ pub(crate) fn resolve<V: Rules>(
             Resolved::GainBlock {
                 recipient,
                 amount,
-                powered,
+                moved: scaling != Scaling::Static,
                 play,
                 source,
                 modifying,
@@ -4211,7 +4218,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             Resolved::GainBlock {
                 recipient,
                 amount,
-                powered,
+                moved,
                 play,
                 source,
                 modifying,
@@ -4235,7 +4242,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                     self.live.creatures[at].block = self.live.creatures[at].block + amount;
                     self.live.history.block_gained(sts2_core::BlockGained {
                         receiver: recipient,
-                        powered,
+                        moved,
                         play,
                     });
                 }

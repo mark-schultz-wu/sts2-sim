@@ -3278,16 +3278,19 @@ pub enum Effect<V: ContentVersion> {
 
 /// Whether the powers that scale a number act on this one.
 ///
-/// The game keeps this as `ValueProp`, a set of flags. It asks the same
-/// question of a hit and of a block: `IsPoweredAttack` and
+/// The game keeps this as `ValueProp`, a set of flags. `IsPoweredAttack` and
 /// `IsPoweredCardOrMonsterMoveBlock` are both the `Move` flag without the
-/// `Unpowered` one. So one answer serves both.
+/// `Unpowered` one, so one answer serves a hit and a block.
 ///
 /// A card or a monster move prints `Move`, and a relic prints `Unpowered`.
+/// Entrench prints both.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Scaling {
     /// A relic's number, which lands as it reads.
     Static,
+    /// A card's number printed `Unpowered | Move`: it lands as it reads, and
+    /// `IsCardOrMonsterMove` still says yes.
+    StaticMove,
     /// A card's number or a monster move's, which Strength and Dexterity
     /// move.
     Dynamic,
@@ -3420,6 +3423,8 @@ pub enum ModifyHook<V: ContentVersion> {
         target: crate::CombatId,
         /// `props.IsPoweredCardOrMonsterMoveBlock()`.
         powered: bool,
+        /// `props.IsCardOrMonsterMove()`, the `Move` flag alone.
+        moved: bool,
         /// `cardSource`, as [`ModifyHook::BlockAdditive`] carries it.
         card: Option<V::Card>,
         /// `cardPlay`, as the play's [`PlayAt`].
@@ -4830,8 +4835,8 @@ pub struct DamageReceived<V: ContentVersion> {
 pub struct BlockGained {
     /// `Receiver`.
     pub receiver: crate::CombatId,
-    /// `Props.IsPoweredCardOrMonsterMoveBlock()`.
-    pub powered: bool,
+    /// `Props.IsCardOrMonsterMove()`, the `Move` flag alone.
+    pub moved: bool,
     /// `CardPlay`, as the play's [`PlayAt`].
     pub play: Option<PlayAt>,
 }

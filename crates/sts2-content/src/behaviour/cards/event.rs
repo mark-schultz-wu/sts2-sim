@@ -171,7 +171,7 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F
             let block = fight.resolve(Effect::GainBlock {
                 recipient: actor,
                 amount: Amount::Number(held),
-                scaling: Scaling::Static,
+                scaling: Scaling::StaticMove,
             });
             fight.apply(block);
             Played::Done

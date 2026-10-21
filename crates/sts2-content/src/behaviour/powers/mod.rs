@@ -1761,22 +1761,21 @@ pub(crate) fn modify_hook<V: crate::Build>(
         // `UnmovablePower.ModifyBlockMultiplicative`: double a card's or a
         // move's block on its owner, while fewer such gains than its stack
         // came this turn from other plays. A fight here has one player, who
-        // alone plays Unmovable. The entry's `powered` stands for
-        // `IsCardOrMonsterMove`: the two part only on a Move block that is
-        // Unpowered, which no block here is.
+        // alone plays Unmovable. It reads `IsCardOrMonsterMove`, on the gain
+        // and on the turn's entries.
         (
             __c0,
             PowerAmount::Counted(amount),
             ModifyHook::BlockMultiplicative {
                 target,
-                powered: true,
+                moved: true,
                 play,
                 ..
             },
         ) if __c0 == V::Power::UNMOVABLE_POWER && (target == holder) => {
             let gained = history
                 .block_gained_this_turn()
-                .filter(|entry| entry.receiver == target && entry.powered && entry.play != play)
+                .filter(|entry| entry.receiver == target && entry.moved && entry.play != play)
                 .count();
             match gained >= usize::try_from(amount).unwrap_or(0) {
                 true => Modify::Nothing,
@@ -1788,7 +1787,7 @@ pub(crate) fn modify_hook<V: crate::Build>(
             PowerAmount::Endless,
             ModifyHook::BlockMultiplicative {
                 target,
-                powered: true,
+                moved: true,
                 ..
             },
         ) if __c0 == V::Power::UNMOVABLE_POWER && (target == holder) => {
