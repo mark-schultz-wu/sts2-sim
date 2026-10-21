@@ -377,7 +377,16 @@ pub(super) fn auto_play_capturing<V: Rules>(
     };
     // `CardPileCmd.Add` to the play pile, where it stands while it runs.
     let card = live.cards.play(from, at);
-    auto_play_in_play::<V>(live, rngs, relics, card, named, pausable, captured)
+    auto_play_in_play::<V>(
+        live,
+        rngs,
+        relics,
+        card,
+        Some(from),
+        named,
+        pausable,
+        captured,
+    )
 }
 
 /// A deferred `CardCmd.AutoPlay` of `id` wherever it stands, at an enemy
@@ -422,18 +431,25 @@ pub(super) fn auto_play_taken<V: Rules>(
     let Some(card) = live.cards.named(id) else {
         unimplemented!("auto-playing {id:?}, which left the fight first");
     };
-    auto_play_in_play::<V>(live, rngs, relics, card, None, pausable, None)
+    auto_play_in_play::<V>(live, rngs, relics, card, None, None, pausable, None)
 }
 
 /// `CardCmd.AutoPlay` for a card already in the play pile. `named` is the
 /// target the caller names, which an enemy-targeting card plays at in place of
 /// one drawn off `CombatTargets`. `captured` is the energy and stars a
-/// payment spent, which `skipXCapture` keeps.
+/// payment spent, which `skipXCapture` keeps. `stood` is the pile the card
+/// stood in before the play pile, which its cost reads. It is nothing for a
+/// card that stood in the play pile already.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "auto_play's own, and the pile its cost reads"
+)]
 pub(super) fn auto_play_in_play<V: Rules>(
     live: &mut Live<V>,
     mut rngs: crate::stream::CombatRngs<'_>,
     relics: &mut crate::run::Belt<V>,
     card: super::live::CardInstance<V>,
+    stood: Option<sts2_core::Pile>,
     named: Option<CombatId>,
     pausable: bool,
     captured: Option<(V::Count, V::Count)>,
@@ -477,9 +493,11 @@ pub(super) fn auto_play_in_play<V: Rules>(
     super::turn::unheard::<V>(live, relics, sts2_core::ModelHook::BeforeCardAutoPlayed);
 
     // `EnergyValue` is `GetAmountToSpend`: what the card costs, though an
-    // auto-play spends none of it.
+    // auto-play spends none of it. `AutoPlay` takes a card into the play pile
+    // only where it stood in none, so the cost reads the pile it stood in.
+    let stood = stood.filter(|&pile| pile != sts2_core::Pile::Play);
     let (cost, star_cost) =
-        super::legal::costs::<V>(&card, None, super::listen::Walk { live, relics });
+        super::legal::costs::<V>(&card, stood, super::listen::Walk { live, relics });
     let energy = super::legal::spend(cost, live.energy)
         .unwrap_or_else(|| unimplemented!("an energy cost the count cannot hold"));
     let (pile, position) = result_pile::<V, _>(live, &mut rngs, relics, &card, energy);
