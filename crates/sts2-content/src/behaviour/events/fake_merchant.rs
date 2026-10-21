@@ -101,14 +101,16 @@ impl<V: crate::Build> EventBehavior<V> for FakeMerchant {
         unimplemented!("option {option} of a Fake Merchant, which offers none")
     }
 
-    /// `MerchantRelicEntry.OnTryPurchase`: the price, then the relic. Outside
-    /// a merchant's room no entry refills, so the shelf is left empty.
+    /// `MerchantEntry.OnTryPurchaseWrapper` over a `MerchantRelicEntry`: the
+    /// price, then the relic, then `AfterItemPurchased`. Outside a merchant's
+    /// room no entry refills, so the shelf is left empty.
     fn buy(&self, state: &mut State<V>, index: u8) -> HookEffects<V> {
         let shelf = &mut state.shelves[usize::from(index)];
         shelf.stocked = false;
         smallvec::smallvec![
             HookEffect::LoseGold(shelf.cost),
-            HookEffect::ObtainRelic(shelf.relic)
+            HookEffect::ObtainRelic(shelf.relic),
+            HookEffect::ItemPurchased(shelf.cost),
         ]
     }
 }

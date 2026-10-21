@@ -2326,6 +2326,10 @@ impl<V: Rules> State<V> {
                     self.purchase_everything(None);
                     continue;
                 }
+                HookEffect::ItemPurchased(gold) => {
+                    self.item_purchased(gold);
+                    continue;
+                }
                 HookEffect::MarkCombatPoints { relic, count, name } => {
                     let map = Arc::clone(&self.map);
                     self.mark_combat_points(&map, relic, count, name);
