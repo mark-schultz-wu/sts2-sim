@@ -858,9 +858,12 @@ impl<'a, V: Rules> Board<'a, V> {
     /// `id`, which keeps its own amount in the detached list. The hooks around
     /// it run as for one still on its creature.
     ///
+    /// A change that leaves it spent is `PowerCmd.Remove` again, which takes
+    /// nothing off and runs `AfterRemoved` once more.
+    ///
     /// # Panics
     ///
-    /// No such instance, or one the change leaves spent.
+    /// No such instance, or one spent whose power overrides `AfterRemoved`.
     pub(super) fn modify_detached(&mut self, id: CombatId, power: V::Power, offset: V::Number) {
         let (offset, modifiers) = self.received(id, power, offset, None);
         let (_, held) = self
@@ -877,12 +880,18 @@ impl<'a, V: Rules> Board<'a, V> {
         let more: super::live::Amount = num_traits::NumCast::from(offset)
             .unwrap_or_else(|| unimplemented!("a power stacked by {offset:?}"));
         held.amount = super::live::Stacked::counted(had + more);
-        if held.amount.spent() {
-            unimplemented!("{power:?} spent on its instance a death took off");
-        }
+        let spent = held.amount.spent();
         self.live.history.power_received(power, None);
         self.power_received(modifiers, power);
         self.amount_changed(id, power, offset, None);
+        if spent
+            && sts2_core::PowerTable::overrides_virtual(
+                power,
+                sts2_core::PowerVirtual::AfterRemoved,
+            )
+        {
+            unimplemented!("{power:?} spent on its instance a death took off");
+        }
     }
 
     /// `Creature.Stun` builds a state and hands it to `SetMoveImmediate`. So a

@@ -51,9 +51,8 @@ its split, as a scenario. A fix lands with its run, recorded whole, in
 `hunted-v0.111.0.bin`. A split that many runs share becomes its own item, above this
 one.
 
-A mixed hunt of 7,000 runs on v0.111.0 parted 258. Of those, 8 are still open:
+A mixed hunt of 7,000 runs on v0.111.0 parted 258. Of those, 7 are still open:
 
-- A Poison stack a death took off, spent. 1 run.
 - A shuffle's question outside a draw, with listeners behind it. 1 run.
 - A block gain's decimal, which `CreatureCmd.GainBlock` hands back
   before `GainBlockInternal` floors it. Dodge and Roll applies Block Next
