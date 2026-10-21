@@ -9,9 +9,9 @@
 //! it falls, and asks to be raised if it rises, the way `BASELINE` does.
 //! `cargo xtask coverage` says where the runs part.
 //!
-//! `hunted.bin` holds the runs `cargo xtask hunt` found the simulator parting
-//! on, each recorded whole once it was fixed. It is followed the same way,
-//! against `hunted.matched`, and holds no census.
+//! `hunted.bin` and `hunted-v0.111.0.bin` hold the runs `cargo xtask hunt`
+//! found the simulator parting on, recorded whole once fixed. Each is
+//! followed against its own `.matched`, and holds no census.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -128,6 +128,11 @@ fn the_simulator_follows_the_recorded_runs_no_less_far() {
 #[test]
 fn the_simulator_follows_the_hunted_runs_no_less_far() {
     follows_no_less_far::<V>("hunted.bin", "hunted.matched");
+}
+
+#[test]
+fn the_simulator_follows_the_v0_111_0_hunted_runs_no_less_far() {
+    follows_no_less_far::<V0_111_0>("hunted-v0.111.0.bin", "hunted-v0.111.0.matched");
 }
 
 #[test]
