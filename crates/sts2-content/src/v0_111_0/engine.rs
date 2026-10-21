@@ -18,6 +18,12 @@ impl sts2_core::Engine for V0_111_0 {
         true
     }
 
+    /// `Math.Clamp(amount, 0m, 999999999m)`: a loss below nothing loses
+    /// nothing. v0.107.1's healed.
+    fn hp_loss_floors_at_nothing() -> bool {
+        true
+    }
+
     /// A forced reward pays at once, with no draw, and leaves the odds where
     /// they were. v0.107.1's drew first and moved them.
     fn roll_potion_reward(

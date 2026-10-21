@@ -1787,7 +1787,12 @@ impl<'a, V: Rules> Board<'a, V> {
         let hp = self.live.creatures[at].hp;
         let health_zero = V::Health::zero();
         let killed = hp > health_zero && amount >= V::Number::from(hp);
-        // A loss below nothing heals, past the creature's maximum too.
+        // A loss below nothing heals, past the creature's maximum too, where
+        // the build does not floor it.
+        let amount = match V::hp_loss_floors_at_nothing() {
+            true => amount.max(zero),
+            false => amount,
+        };
         self.live.creatures[at].hp = (hp - V::Health::from(amount)).max(health_zero);
         let lost = V::Number::from(hp - self.live.creatures[at].hp);
         let overkill = match killed {
@@ -2917,7 +2922,7 @@ pub(super) fn modified_by<V: Rules>(
 }
 
 /// `Hook.ModifyHpLost` over `phases`, which floors nothing. A loss a cap takes
-/// below nothing heals, as `LoseHpInternal` takes it.
+/// below nothing heals where the build's `LoseHpInternal` takes it so.
 pub(super) fn hp_lost_by<V: Rules>(
     fight: Walk<'_, V>,
     amount: V::Number,

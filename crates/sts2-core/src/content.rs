@@ -7503,6 +7503,11 @@ pub trait Engine {
     /// replay once the fight is over or ending. A build whose loop plays
     /// each replay regardless says no.
     fn replays_stop_once_ending() -> bool;
+
+    /// `Creature.LoseHpInternal` takes a loss below nothing as nothing. A
+    /// build that takes it as it stands, so that a cap a hit went past
+    /// heals, says no.
+    fn hp_loss_floors_at_nothing() -> bool;
 }
 
 /// The rules of one build, as the simulator asks them.
