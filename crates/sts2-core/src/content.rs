@@ -7528,6 +7528,12 @@ pub trait Engine {
     /// it enters the phase, before the phase's own hooks. A build that waits
     /// for a play or a potion to empty it says no.
     fn checks_empty_hand_entering_pre_play() -> bool;
+
+    /// `CardSelectCmd`'s selections call `UndoEndTurnIfNecessary`, which takes
+    /// back a player's ended turn and lifts `PlayerActionsDisabled`. So a
+    /// selection asked while the turn ends leaves potions drinkable. A build
+    /// whose selections leave the ended turn alone says no.
+    fn selection_undoes_ended_turn() -> bool;
 }
 
 /// The rules of one build, as the simulator asks them.

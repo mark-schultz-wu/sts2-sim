@@ -493,17 +493,19 @@ fn undrinkable<V: Rules>(
 }
 
 /// Whether the player's side holds the turn, with actions not disabled:
-/// from the turn's start until the player ends it.
+/// from the turn's start until the player ends it. Where a build's selection
+/// takes back an ended turn, a question asked as the turn ends lifts it too.
 fn drinking_turn<V: Rules>(fight: &Live<V>) -> bool {
     use sts2_core::TurnPhaseKinds as _;
     type Phase<V> = <V as sts2_core::ContentVersion>::PlayerTurnPhase;
     fight.side == <V::CombatSide as SideKinds>::PLAYER
-        && [
+        && ([
             Phase::<V>::START,
             Phase::<V>::AUTO_PRE_PLAY,
             Phase::<V>::PLAY,
         ]
         .contains(&fight.phase)
+            || V::selection_undoes_ended_turn() && fight.asking.is_some())
 }
 
 /// The creatures a potion can be pointed at.

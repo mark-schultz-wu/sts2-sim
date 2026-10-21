@@ -30,6 +30,12 @@ impl sts2_core::Engine for V0_111_0 {
         true
     }
 
+    /// `UndoEndTurnIfNecessary` as each selection begins. v0.107.1's
+    /// selections had none.
+    fn selection_undoes_ended_turn() -> bool {
+        true
+    }
+
     /// A forced reward pays at once, with no draw, and leaves the odds where
     /// they were. v0.107.1's drew first and moved them.
     fn roll_potion_reward(

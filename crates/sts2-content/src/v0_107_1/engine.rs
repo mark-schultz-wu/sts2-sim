@@ -37,6 +37,11 @@ impl sts2_core::Engine for V0_107_1 {
         false
     }
 
+    /// A selection leaves the ended turn ended.
+    fn selection_undoes_ended_turn() -> bool {
+        false
+    }
+
     /// The draw comes first, and a forced reward pays whatever it drew, with
     /// the odds moved as for a potion paid.
     fn roll_potion_reward(
