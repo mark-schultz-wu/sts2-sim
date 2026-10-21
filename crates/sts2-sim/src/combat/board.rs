@@ -2429,8 +2429,12 @@ impl<'a, V: Rules> Board<'a, V> {
                         let waiting = self.live.deferred.take_fresh(fresh);
                         // `CardSelectCmd` lists the pile as it asks. The play
                         // can change the pile before the question comes up,
-                        // and the list stays as it was.
-                        if let super::live::Asked::Pile { pile, selection } = asking.question {
+                        // and the list stays as it was. A build that signals
+                        // the choice before it lists reads the pile once the
+                        // question comes up.
+                        if let super::live::Asked::Pile { pile, selection } = asking.question
+                            && !V::signals_choice_before_listing()
+                        {
                             let cards = self
                                 .live
                                 .offered(pile)
