@@ -2781,12 +2781,16 @@ impl<'a, V: Rules> Board<'a, V> {
                 sts2_core::Fight::heal(self, player, amount);
                 continue;
             }
-            // `PowerCmd.Apply` on the relic's owner, the player.
+            // `PowerCmd.Apply` on the relic's owner, the player. Every relic
+            // answering a hit gives it no `cardSource`, even inside a card's
+            // play.
             if let (Listener::Relic { .. }, HookEffect::ApplyToOwner(power, amount)) =
                 (listener, effect)
             {
                 let player = self.live.player().id;
+                let playing = self.playing.take();
                 self.land(player, power, amount, Some(player));
+                self.playing = playing;
                 continue;
             }
             if let (
@@ -2799,7 +2803,9 @@ impl<'a, V: Rules> Board<'a, V> {
                 },
             ) = (listener, effect)
             {
+                let playing = self.playing.take();
                 self.land(target, power, amount, applier);
+                self.playing = playing;
                 continue;
             }
             let Listener::Power {
