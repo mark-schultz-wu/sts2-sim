@@ -266,12 +266,6 @@ fn record<V: WireContentVersion + sts2_content::Build>(cli: Cli) -> Result<Outco
                 refusal,
             })?
             .snapshot();
-        if !game.logged().is_empty() {
-            return Err(Error::Logged {
-                step,
-                errors: game.logged().to_vec(),
-            });
-        }
         // The move and where the game went with it, together, so a panic
         // below leaves a run that reaches the move it panicked on.
         played(|run| {
@@ -279,6 +273,22 @@ fn record<V: WireContentVersion + sts2_content::Build>(cli: Cli) -> Result<Outco
                 .push(u16::try_from(at).expect("a list of moves fits a u16"));
             run.digests.push(position(&seen));
         });
+        if !game.logged().is_empty() {
+            // A hunt keeps the run up to the move the game logged on, so the
+            // move can be found again.
+            if hunt {
+                let (out, recorded) = PLAYED
+                    .lock()
+                    .expect("no panic holds the run")
+                    .take()
+                    .expect("a run is being played");
+                std::fs::write(&out, recorded.encode())?;
+            }
+            return Err(Error::Logged {
+                step,
+                errors: game.logged().to_vec(),
+            });
+        }
         if let Some(sim) = sim.as_mut() {
             sim.play(&decision)
                 .unwrap_or_else(|e| panic!("playing {decision:?} at step {step}: {e}"))

@@ -15,6 +15,14 @@ moves. The recorded runs cover:
 - both builds, v0.107.1 and v0.111.0;
 - the long run 0RACLE1-REGENT-2.
 
+Two more checks say when that is enough:
+
+- `cargo xtask hunt --mixed` plays 3,000 runs in a row on each build with
+  no split. Then fewer than one run in 1,000 splits, with 95% confidence.
+- `cargo xtask reached` shows no rules code that play can reach and no
+  run reaches. A scenario covers each gap, or the gap is noted as
+  unreachable.
+
 Speed is a goal as well as a guard. The target is still to be set.
 
 ## How the list changes
@@ -41,17 +49,12 @@ becomes its own item, above this one.
 
 Found so far, by build, seed, character and setup:
 
-- v0.107.1, IRONCLAD C000001040 at Scarcity: a shuffle that asks for a
-  card inside a draw that cannot pause panics.
-- v0.107.1, IRONCLAD C000001047 with All Star: a duplicate of a Strike
-  the fight no longer holds panics.
-- v0.107.1, SILENT C000001076 with Big Game Hunter: the relics part
-  after a card selection is answered.
-- v0.107.1, REGENT C000001056 with Insanity: the question parts after
-  Divine is answered.
-- v0.107.1, IRONCLAD C000001140 with Insanity: the game logs `Tried to pop
-  action GenericHookGameAction` at a reward, and `sts2-headless` refuses
-  the reply's `gameErrors` on a pending answer.
+- v0.107.1, IRONCLAD C000001140 with Insanity: answering Headbutt's pick
+  inside Stampede's auto-play at a turn's end kills the last enemy. The
+  game then logs `Tried to pop action GenericHookGameAction ... but we
+  didn't find it in any queue`, so the run stops. Whether the game or
+  the mod's way of running actions leaves the hook's action behind is not
+  yet known. The hunt keeps the run up to that move.
 - v0.107.1, NECROBINDER C000000407: a turn's end against The Obscura,
   at the run's last step.
 - v0.111.0, IRONCLAD C000000626 at Double Boss: the creatures part after

@@ -34,7 +34,7 @@ pub use bounds::{Bound, Choices, Error, Interval, RngInteger, Span};
 /// Rust's stable sort and pdqsort make different choices for equal elements.
 /// This is the relevant part of CoreCLR's `ArraySortHelper<T>` introsort. The
 /// depth fallback is included even though gameplay lists are ordinarily small.
-fn dotnet_sort_by_key<T, K: Ord>(items: &mut [T], mut key: impl FnMut(&T) -> K) {
+pub fn dotnet_sort_by_key<T, K: Ord>(items: &mut [T], mut key: impl FnMut(&T) -> K) {
     fn swap_if_greater<T>(
         items: &mut [T],
         a: usize,

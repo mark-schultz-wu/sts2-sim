@@ -200,6 +200,13 @@ pub(super) enum Then<V: Rules> {
 /// goes on past the question does that part early.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum Deferred<V: Rules> {
+    /// The player's `AfterTurnEnd`, stood still by a question a draw it asked
+    /// for raised, and the rest of the turn end behind it.
+    AfterTurnEnd {
+        walk: Box<super::turn::TurnEndWalk<V>>,
+        max_energy: V::Count,
+        skipping: Skips<V>,
+    },
     /// The rest of an effect, from where its own code handed back `played`.
     Resume {
         effect: Resuming<V>,
