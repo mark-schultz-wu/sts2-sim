@@ -2920,11 +2920,18 @@ fn ask_out_setup<V: Rules>(live: &mut Live<V>, relics: &mut crate::run::Belt<V>,
 /// A listener asking for anything but an auto-play of a card.
 pub(super) fn pre_play_phase<V: Rules>(
     live: &mut Live<V>,
-    rngs: CombatRngs<'_>,
+    mut rngs: CombatRngs<'_>,
     relics: &mut crate::run::Belt<V>,
 ) -> Option<super::Ended> {
     use sts2_core::{ModelHook, Overrides};
 
+    // `Phase = PlayerTurnPhase.AutoPrePlay`, which what the passes play reads.
+    live.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::AUTO_PRE_PLAY;
+    if V::checks_empty_hand_entering_pre_play()
+        && let Some(ended) = empty_hand_entering_pre_play::<V>(live, rngs.reborrow(), relics)
+    {
+        return Some(ended);
+    }
     // Most fights hold nothing that hears any of the three passes.
     let hooks = Overrides::of(ModelHook::AfterAutoPrePlayPhaseEnteredEarly)
         .with(ModelHook::AfterAutoPrePlayPhaseEntered)
@@ -2933,6 +2940,28 @@ pub(super) fn pre_play_phase<V: Rules>(
         return None;
     }
     pre_play_heard::<V>(live, rngs, relics)
+}
+
+/// `CheckForEmptyHand` as the phase turns to `AutoPrePlay`: an empty hand
+/// raises `AfterHandEmptied`, where the player's turn is in progress. How
+/// what it asked for ended the fight.
+fn empty_hand_entering_pre_play<V: Rules>(
+    live: &mut Live<V>,
+    rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+) -> Option<super::Ended> {
+    if live.cards.len(Pile::Hand) != 0 || live.won || live.lost {
+        return None;
+    }
+    let hook = sts2_core::EventHook::HandEmptied {
+        player: live.player().id,
+        phase: <V::PlayerTurnPhase as TurnPhaseKinds>::AUTO_PRE_PLAY,
+    };
+    let walking = listen::Walking::begin::<listen::Checked>(live, relics, hook);
+    let ascension = live.ascension;
+    let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
+    board.carry_out_walk(walking);
+    board.ended()
 }
 
 /// [`pre_play_phase`] once something hears one of its passes.

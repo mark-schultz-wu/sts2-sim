@@ -32,6 +32,11 @@ impl sts2_core::Engine for V0_107_1 {
         false
     }
 
+    /// Only a play or a potion that empties the hand asks.
+    fn checks_empty_hand_entering_pre_play() -> bool {
+        false
+    }
+
     /// The draw comes first, and a forced reward pays whatever it drew, with
     /// the odds moved as for a potion paid.
     fn roll_potion_reward(

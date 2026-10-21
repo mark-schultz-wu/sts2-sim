@@ -24,6 +24,12 @@ impl sts2_core::Engine for V0_111_0 {
         true
     }
 
+    /// `CheckForEmptyHand` as `RunAutoPrePlayPhase` sets the phase.
+    /// v0.107.1's entered the phase without it.
+    fn checks_empty_hand_entering_pre_play() -> bool {
+        true
+    }
+
     /// A forced reward pays at once, with no draw, and leaves the odds where
     /// they were. v0.107.1's drew first and moved them.
     fn roll_potion_reward(

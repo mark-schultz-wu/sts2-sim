@@ -7520,6 +7520,11 @@ pub trait Engine {
     /// build that takes it as it stands, so that a cap a hit went past
     /// heals, says no.
     fn hp_loss_floors_at_nothing() -> bool;
+
+    /// `RunAutoPrePlayPhase` raises `AfterHandEmptied` for an empty hand as
+    /// it enters the phase, before the phase's own hooks. A build that waits
+    /// for a play or a potion to empty it says no.
+    fn checks_empty_hand_entering_pre_play() -> bool;
 }
 
 /// The rules of one build, as the simulator asks them.
