@@ -111,8 +111,9 @@ pub(super) struct Resuming<V: Rules> {
     pub(super) event: Phase<V>,
     /// Whether an enemy escaped the fight, once it is over.
     pub(super) escaped: bool,
-    /// Whether the fight, won, left anything in `CombatRoom.ExtraRewards`.
-    pub(super) extras: bool,
+    /// What the fight, won, left in `CombatRoom.ExtraRewards`, where it left
+    /// anything.
+    pub(super) extras: Option<Box<super::fight::Extras<V>>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2067,6 +2068,49 @@ impl<V: Rules> State<V> {
             .is_some_and(|here| here.kind == V::MapPointType::BOSS && !here.to.is_empty())
     }
 
+    /// `effects` from an event resuming after its fight, where the one at
+    /// `at` offers its rewards and then the fight's `extras`. `OfferCustom`
+    /// fills them in that order, so the extras draw after the event's own.
+    ///
+    /// # Panics
+    ///
+    /// An effect before the offer asking a question.
+    fn offer_with_extras(
+        &mut self,
+        effects: &[sts2_core::HookEffect<V>],
+        at: usize,
+        extras: &super::fight::Extras<V>,
+    ) -> Decided {
+        let (before, after) = effects.split_at(at);
+        if let Some(asked) = self.carry_out(before.iter().copied()) {
+            let pickup = asked.pickup;
+            unimplemented!("an event asking for {pickup:?} before it offers its rewards");
+        }
+        let sts2_core::HookEffect::OfferRewardsWithRoomExtras(rewards) = after[0] else {
+            unreachable!("the offer stands at {at}")
+        };
+        let rest: SmallVec<[Then<V>; 4]> = after[1..].iter().map(|&effect| effect.into()).collect();
+        if self.player.hp == num_traits::zero() {
+            return match self.carry_out(rest) {
+                None => Decided::Resolved,
+                Some(asked) => self.park(asked),
+            };
+        }
+        let stream = sts2_core::Stream::Player(V::PlayerRngType::REWARDS);
+        let mut offered = self.filled_rewards(rewards, stream);
+        offered.extend(self.extra_offers(extras));
+        self.modify_rewards(&mut offered, None);
+        crate::reward::sort(&mut offered);
+        self.park(Asked {
+            pickup: Pickup::Rewards {
+                offered,
+                skippable: true,
+            },
+            rest,
+            under: None,
+        })
+    }
+
     /// `CurrentActIndex >= Acts.Count - 1`: whether the run stands in its
     /// last act.
     pub(super) fn in_last_act(&self) -> bool {
@@ -2093,18 +2137,20 @@ impl<V: Rules> State<V> {
             let Phase::Event { state, .. } = &mut self.phase else {
                 unreachable!("only an event resumes after its fight")
             };
-            let effects: sts2_core::HookEffects<V> = V::resume_event_from_fight(state, escaped)
+            let effects = V::resume_event_from_fight(state, escaped);
+            let offering = effects.iter().position(|effect| {
+                matches!(effect, sts2_core::HookEffect::OfferRewardsWithRoomExtras(_))
+            });
+            if let (Some(at), Some(extras)) = (offering, extras) {
+                return Ok(self.offer_with_extras(&effects, at, &extras));
+            }
+            let effects: sts2_core::HookEffects<V> = effects
                 .into_iter()
                 .filter_map(|effect| match effect {
                     // An empty list offers nothing.
+                    sts2_core::HookEffect::OfferRewardsWithRoomExtras([]) => None,
                     sts2_core::HookEffect::OfferRewardsWithRoomExtras(rewards) => {
-                        match (extras, rewards) {
-                            (true, _) => {
-                                unimplemented!("an event offering its fight's extra rewards")
-                            }
-                            (false, []) => None,
-                            (false, rewards) => Some(sts2_core::HookEffect::OfferRewards(rewards)),
-                        }
+                        Some(sts2_core::HookEffect::OfferRewards(rewards))
                     }
                     effect => Some(effect),
                 })
@@ -5808,7 +5854,7 @@ impl<V: Rules> State<V> {
             self.resuming = Some(Box::new(Resuming {
                 event,
                 escaped: false,
-                extras: false,
+                extras: None,
             }));
         }
         self.arrived(arriving);

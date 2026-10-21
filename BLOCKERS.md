@@ -48,10 +48,8 @@ its split, as a scenario. A fix lands with its run, recorded whole, in
 `hunted-v0.111.0.bin`. A split that many runs share becomes its own item, above this
 one.
 
-A mixed hunt of 7,000 runs on v0.111.0 parted 258. These are still open:
+A mixed hunt of 7,000 runs on v0.111.0 parted 258. Of those, 37 are still open:
 
-- Battleworn Dummy offers its fight's extra rewards after its own on
-  v0.111.0. The simulator panics there. 4 runs.
 - A Poison stack a death took off, spent. 1 run.
 - A shuffle's question outside a draw, with listeners behind it. 1 run.
 - 35 runs that each part in their own place, in fights, card plays,
