@@ -49,12 +49,6 @@ becomes its own item, above this one.
 
 Found so far, by build, seed, character and setup:
 
-- v0.107.1, IRONCLAD C000001140 with Insanity: answering Headbutt's pick
-  inside Stampede's auto-play at a turn's end kills the last enemy. The
-  game then logs `Tried to pop action GenericHookGameAction ... but we
-  didn't find it in any queue`, so the run stops. Whether the game or
-  the mod's way of running actions leaves the hook's action behind is not
-  yet known. The hunt keeps the run up to that move.
 - v0.107.1, NECROBINDER C000000407: a turn's end against The Obscura,
   at the run's last step.
 - v0.111.0, IRONCLAD C000000626 at Double Boss: the creatures part after

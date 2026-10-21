@@ -27,6 +27,8 @@ using MegaCrit.Sts2.Core.Entities.RestSite;
 using MegaCrit.Sts2.Core.Entities.Merchant;
 using MegaCrit.Sts2.Core.Rewards;
 using MegaCrit.Sts2.Core.Saves;
+using MegaCrit.Sts2.Core.Saves.Managers;
+using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Events.Custom.CrystalSphereEvent;
 using MegaCrit.Sts2.Core.Nodes.Events.Custom.CrystalSphere;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
@@ -1083,6 +1085,57 @@ internal static class LoneCardRewardAsks
             {
                 RewardPlan.CardInFlight = null;
             }
+        }
+        finally
+        {
+            BackgroundWork.Release();
+        }
+    }
+}
+
+/// <summary>
+/// Yields where a player's game yields to save the run.
+/// </summary>
+/// <remarks>
+/// A player's run saves through <c>RunSaveManager.SaveRun</c>, whose write is
+/// <c>Stream.WriteAsync</c> on a stream that does not override it, so it
+/// finishes on the thread pool and the save resumes on a later frame. A
+/// headless run starts through <c>SetUpTest</c> with saving off, and the
+/// method returns at once instead.
+///
+/// The order of the game's own code depends on that yield. A won fight saves
+/// in <c>EndCombatInternal</c>, before <c>CombatEnded</c> cancels the actions
+/// still queued. When a hook's action is what ends the fight, its finish
+/// resumes the turn's end on the same stack, and the fight ends before the
+/// action pops itself off its queue. Without the yield, <c>CombatEnded</c>
+/// removes the finished action, and its pop throws "didn't find it in any
+/// queue". IRONCLAD C000001140 with Insanity does this, when Stampede
+/// auto-plays Headbutt at a turn's end.
+///
+/// Nothing is written. The yield is the whole of what the save does here.
+/// It counts as background work, so the driver does not read a position
+/// while the code after the save is still to run. A won fight clears
+/// <c>IsInProgress</c> before it saves, and offers its rewards after.
+/// </remarks>
+[HarmonyPatch(typeof(RunSaveManager), nameof(RunSaveManager.SaveRun), typeof(AbstractRoom))]
+internal static class SaveYields
+{
+    private static bool Prefix(ref Task __result)
+    {
+        if (RunManager.Instance.ShouldSave)
+        {
+            return true;
+        }
+        __result = Yielded();
+        return false;
+    }
+
+    private static async Task Yielded()
+    {
+        BackgroundWork.Hold();
+        try
+        {
+            await Task.Yield();
         }
         finally
         {
