@@ -29,6 +29,20 @@ pub type Pool<V> = <<V as ContentVersion>::Relic as RelicTable>::Pool;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RelicBag<V: Rules> {
     deques: IndexMap<Rarity<V>, Vec<V::Relic>>,
+    /// `_originalRelics`: what the bag was filled with, in the order it was
+    /// filled, before the shuffle.
+    originals: Vec<V::Relic>,
+}
+
+/// The rarity `GetAvailableDeque` walks up to from `rarity` once its deque
+/// holds nothing: shop, common, uncommon, rare, then nothing.
+pub fn rarity_above<V: Rules>(rarity: Rarity<V>) -> Option<Rarity<V>> {
+    match rarity {
+        r if r == <Rarity<V> as RarityKinds>::SHOP => Some(<Rarity<V> as RarityKinds>::COMMON),
+        r if r == <Rarity<V> as RarityKinds>::COMMON => Some(<Rarity<V> as RarityKinds>::UNCOMMON),
+        r if r == <Rarity<V> as RarityKinds>::UNCOMMON => Some(<Rarity<V> as RarityKinds>::RARE),
+        _ => None,
+    }
 }
 
 /// `RelicModel.IsAllowed` for a run of one player, `floor` floors in.
@@ -159,14 +173,8 @@ impl<V: Rules> RelicBag<V> {
             if let Some(Some(relic)) = held {
                 return relic;
             }
-            rarity = match rarity {
-                r if r == <Rarity<V> as RarityKinds>::SHOP => <Rarity<V> as RarityKinds>::COMMON,
-                r if r == <Rarity<V> as RarityKinds>::COMMON => {
-                    <Rarity<V> as RarityKinds>::UNCOMMON
-                }
-                r if r == <Rarity<V> as RarityKinds>::UNCOMMON => <Rarity<V> as RarityKinds>::RARE,
-                _ => unimplemented!("a relic bag with nothing left to deal"),
-            };
+            rarity = rarity_above::<V>(rarity)
+                .unwrap_or_else(|| unimplemented!("a relic bag with nothing left to deal"));
         }
     }
 
@@ -178,18 +186,40 @@ impl<V: Rules> RelicBag<V> {
     /// Group by rarity and shuffle each group, which is the body both
     /// overloads share.
     fn populate<R: GameRng>(rng: &mut R, relics: Vec<V::Relic>, drafted_only: bool) -> Self {
+        let originals: Vec<V::Relic> = relics
+            .into_iter()
+            .filter(|relic| !drafted_only || Rarity::<V>::DRAFTED.contains(&relic.rarity()))
+            .collect();
         let mut deques: IndexMap<Rarity<V>, Vec<V::Relic>> = IndexMap::new();
-        for relic in relics {
-            let rarity = relic.rarity();
-            if !drafted_only || Rarity::<V>::DRAFTED.contains(&rarity) {
-                deques.entry(rarity).or_default().push(relic);
-            }
+        for &relic in &originals {
+            deques.entry(relic.rarity()).or_default().push(relic);
         }
 
         for relics in deques.values_mut() {
             rng.unstable_shuffle(relics);
         }
-        RelicBag { deques }
+        RelicBag { deques, originals }
+    }
+
+    /// The first relic left at `rarity` alone, read from the front of the
+    /// shuffled deque. A `refilled` deque is `RefreshRarity`'s instead: the
+    /// originals of that rarity, in the order the bag was filled. A relic
+    /// `gone` says left, or `IsAllowed` fails at `floor`, is passed over.
+    pub fn first_at(
+        &self,
+        rarity: Rarity<V>,
+        refilled: bool,
+        floor: usize,
+        gone: impl Fn(V::Relic) -> bool,
+    ) -> Option<V::Relic> {
+        let left = |relic: &V::Relic| !gone(*relic) && allowed_now::<V>(*relic, floor);
+        match refilled {
+            true => (self.originals.iter())
+                .filter(|relic| relic.rarity() == rarity)
+                .copied()
+                .find(left),
+            false => self.deques.get(&rarity)?.iter().copied().find(left),
+        }
     }
 }
 

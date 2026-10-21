@@ -91,6 +91,10 @@ pub(crate) struct State<V: Rules> {
     /// pulls from. The player's own bag still holds them, until one is
     /// obtained.
     shared_dealt: Arc<Vec<V::Relic>>,
+    /// Each time the shared bag refilled a spent rarity, which only it does:
+    /// the rarity, and how far `dealt_relics` and `shared_dealt` stood then.
+    /// What left after that left the refilled deque.
+    shared_refills: Arc<Vec<(Rarity<V>, usize, usize)>>,
     /// `PlayerCombatState.TurnNumber` as the last fight left it. A fight's
     /// state outlives it until the next one starts.
     last_turn: Option<V::Count>,
@@ -471,6 +475,7 @@ impl<V: Rules> Clone for State<V> {
             visited_events: Arc::clone(&self.visited_events),
             dealt_relics: Arc::clone(&self.dealt_relics),
             shared_dealt: Arc::clone(&self.shared_dealt),
+            shared_refills: Arc::clone(&self.shared_refills),
             phase: self.phase.clone(),
             resuming: self.resuming.clone(),
             ..*self
@@ -501,6 +506,7 @@ impl<V: Rules> Clone for State<V> {
             odds,
             dealt_relics,
             shared_dealt,
+            shared_refills,
             last_turn,
             removals_used,
             phase,
@@ -524,6 +530,7 @@ impl<V: Rules> Clone for State<V> {
         *odds = source.odds;
         dealt_relics.clone_from(&source.dealt_relics);
         shared_dealt.clone_from(&source.shared_dealt);
+        shared_refills.clone_from(&source.shared_refills);
         *last_turn = source.last_turn;
         *removals_used = source.removals_used;
         resuming.clone_from(&source.resuming);
@@ -1356,6 +1363,7 @@ impl<V: Rules> State<V> {
             odds: Odds::default(),
             dealt_relics: Arc::new(out_of_bags),
             shared_dealt: Arc::new(Vec::new()),
+            shared_refills: Arc::new(Vec::new()),
             last_turn: None,
             removals_used: 0,
             streams,
@@ -2025,18 +2033,52 @@ impl<V: Rules> State<V> {
         relic
     }
 
-    /// The next relic in the shared bag, without dealing it yet. What left
-    /// either bag has left this one.
-    pub(super) fn next_shared_relic(&self, rarity: Rarity<V>) -> V::Relic {
-        let gone: Vec<V::Relic> = (self.dealt_relics.iter())
-            .chain(self.shared_dealt.iter())
-            .copied()
-            .collect();
-        self.shared.opening.shared_relics.front(
-            rarity,
-            &gone,
-            num_traits::cast(self.floor).expect("a floor fits a usize"),
-        )
+    /// `SharedRelicGrabBag.PullFromFront`: the next relic in the shared bag,
+    /// dealt. What left either bag has left this one.
+    ///
+    /// The shared bag refreshes. A rarity with nothing left is laid back in
+    /// the order the bag was filled, then dealt from. A rarity above it is
+    /// walked to only where that leaves nothing too.
+    ///
+    /// # Panics
+    ///
+    /// A bag with nothing left at the rarity or above, where the game falls
+    /// back to a relic of its own.
+    pub(super) fn deal_shared_relic(&mut self, rarity: Rarity<V>) -> V::Relic {
+        let mut relic = self.shared_front_at(rarity);
+        if relic.is_none() {
+            let mark = (rarity, self.dealt_relics.len(), self.shared_dealt.len());
+            Arc::make_mut(&mut self.shared_refills).push(mark);
+            relic = self.shared_front_at(rarity);
+        }
+        let mut at = rarity;
+        while relic.is_none() {
+            at = super::setup::rarity_above::<V>(at)
+                .unwrap_or_else(|| unimplemented!("a shared relic bag with nothing left"));
+            relic = self.shared_front_at(at);
+        }
+        let relic = relic.expect("the walk stops on a relic");
+        Arc::make_mut(&mut self.shared_dealt).push(relic);
+        relic
+    }
+
+    /// The first relic the shared bag holds at `rarity` alone, as its deque
+    /// stands since its last refill, if it had one.
+    fn shared_front_at(&self, rarity: Rarity<V>) -> Option<V::Relic> {
+        let floor = num_traits::cast(self.floor).expect("a floor fits a usize");
+        let refill = self
+            .shared_refills
+            .iter()
+            .rev()
+            .find(|mark| mark.0 == rarity);
+        let (dealt, shared) = refill.map_or((0, 0), |&(_, dealt, shared)| (dealt, shared));
+        let (dealt, shared) = (&self.dealt_relics[dealt..], &self.shared_dealt[shared..]);
+        self.shared
+            .opening
+            .shared_relics
+            .first_at(rarity, refill.is_some(), floor, |relic| {
+                dealt.contains(&relic) || shared.contains(&relic)
+            })
     }
 
     /// `Player.CanRemovePotions` off: an event that holds the potions while it
@@ -2232,8 +2274,10 @@ impl<V: Rules> State<V> {
     ) -> Option<Asked<V>> {
         use sts2_core::RelicTable as _;
 
-        // Out of both bags, unless a run can hold more than one.
-        if !relic.stackable() && !self.dealt_relics.contains(&relic) {
+        // Out of both bags, unless a run can hold more than one. Noted again
+        // where it was dealt already, since a refilled shared bag holds it
+        // again until it is obtained.
+        if !relic.stackable() {
             Arc::make_mut(&mut self.dealt_relics).push(relic);
         }
         let mut held = HeldRelic {
@@ -5005,9 +5049,7 @@ impl<V: Rules> State<V> {
             // `SharedRelicGrabBag.PullFromFront`, which leaves the player's
             // bag holding it. Taking it from the chest obtains it, which
             // takes it out of both.
-            let relic = self.next_shared_relic(rarity);
-            Arc::make_mut(&mut self.shared_dealt).push(relic);
-            relic
+            self.deal_shared_relic(rarity)
         });
         if let Phase::Treasure {
             relic: chest,
