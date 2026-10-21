@@ -27,9 +27,8 @@ pub(crate) fn end<V: Rules>(
     ascension: V::AscensionLevel,
     max_energy: V::Count,
 ) -> Result<Option<super::Ended>, Error> {
-    // `EndPlayerTurnPhaseOne` opens on the post-play phase, and its win check
-    // waits for the turn-end hooks. An auto-play there that asks stands the
-    // turn's end still behind the answer.
+    // `EndPlayerTurnPhaseOne` opens on the post-play phase. An auto-play
+    // there that asks stands the turn's end still behind the answer.
     let parked = post_play_phase::<V>(
         fighting.live,
         fighting.streams.combat(),
@@ -57,6 +56,15 @@ pub(super) fn end_after_post_play<V: Rules>(
     } = fighting;
     let skipping = std::mem::take(&mut next.skip_tick);
 
+    // The post-play hooks run as an action, and `ActionExecutor` checks the
+    // win after each. So an auto-play there that killed the last enemy ends
+    // the fight before the turn-end hooks, which hear nothing.
+    let mut board = Board::for_card(next, streams.combat(), relics, ascension, None, None);
+    board.end_if_ending();
+    if let Some(ended) = board.ended() {
+        next.skip_tick = skipping;
+        return Ok(Some(ended));
+    }
     // `EndPlayerTurnPhaseOne`: the turn-end hooks, and the win check they can
     // end the fight for, come before the orbs and the hand.
     let ended = before_turn_end::<V>(
