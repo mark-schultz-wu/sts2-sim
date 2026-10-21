@@ -5936,6 +5936,9 @@ pub enum HookEffect<V: ContentVersion> {
     AttacksFromDiscard(V::Number),
     /// `PlayerCmd.GainGold`, which a run carries out between rooms.
     GainGold(V::Number),
+    /// `PlayerCmd.GainGold` of a `decimal` with a fraction. The gold hooks
+    /// scale it whole, and `(int)` drops the fraction after them.
+    GainGoldExact(Decimal),
     /// `CombatRoom.AddExtraReward` with a `GoldReward` of this much, which
     /// the fight's rewards offer beside its own.
     AddGoldReward(V::Number),

@@ -2355,6 +2355,10 @@ impl<V: Rules> State<V> {
                     self.gain_gold(amount);
                     continue;
                 }
+                HookEffect::GainGoldExact(amount) => {
+                    self.gain_gold_exact(amount);
+                    continue;
+                }
                 // `CardFactory.CreateForReward`, then `CardPileCmd.Add` of
                 // each card to the deck.
                 HookEffect::AddRolledToDeck(reward) => {
@@ -3237,8 +3241,14 @@ impl<V: Rules> State<V> {
     ///
     /// A relic answering one of the hooks in a way nothing here carries out.
     fn gain_gold(&mut self, amount: V::Number) {
+        self.gain_gold_exact(crate::combat::exact::<V>(amount));
+    }
+
+    /// [`State::gain_gold`] of a `decimal`, which the hooks scale before the
+    /// fraction is dropped.
+    fn gain_gold_exact(&mut self, amount: sts2_core::Decimal) {
         let hook = sts2_core::ModifyHook::GoldGained;
-        let mut gained = crate::combat::exact::<V>(amount);
+        let mut gained = amount;
         let mut left = self
             .player
             .relics
