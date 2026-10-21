@@ -23,6 +23,7 @@ mod hunt;
 mod instructions;
 mod neow;
 mod plays;
+mod reached;
 mod record;
 mod respell;
 mod scenario_diff;
@@ -65,6 +66,8 @@ enum Command {
     Hunt(hunt::Args),
     /// Count how much of each act's content has code.
     Coverage(coverage::Args),
+    /// Count which of the rules' code the runs the game played reach.
+    Reached(reached::Args),
     /// Find the seeds whose Neow offers a relic.
     Neow(neow::Args),
     /// Show where a replayed step's instructions go, span by span.
@@ -108,6 +111,8 @@ enum Error {
     Hunt(#[from] hunt::Error),
     #[error("coverage failed: {0}")]
     Coverage(#[from] coverage::Error),
+    #[error("reached failed: {0}")]
+    Reached(#[from] reached::Error),
     #[error("neow failed: {0}")]
     Neow(#[from] neow::Error),
     #[error("trace failed: {0}")]
@@ -132,6 +137,7 @@ fn run(command: Command) -> Result<String, Error> {
         Command::Record(args) => record::run(args).map_err(Error::Record)?,
         Command::Hunt(args) => hunt::run(args)?,
         Command::Coverage(args) => coverage::run(args)?,
+        Command::Reached(args) => reached::run(args)?,
         Command::Neow(args) => neow::run(args)?,
         Command::Trace(args) => trace::run(args)?,
         Command::Unknown(args) => unknown::run(args).map_err(Error::Unknown)?,
