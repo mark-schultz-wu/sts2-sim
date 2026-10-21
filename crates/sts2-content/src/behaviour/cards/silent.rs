@@ -416,7 +416,7 @@ fn hand_trick<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
         .into_iter()
         .filter(|&card| {
             V::card_kind(fight.card_ident(card).card) == Some(CardKind::Skill)
-                && !fight.card_keyword(card, CardKeyword::Sly)
+                && !fight.card_keyword_this_turn(card, CardKeyword::Sly)
         })
         .collect();
     Played::AskingAmong {

@@ -2247,6 +2247,13 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("reading a card's keywords")
     }
 
+    /// `ShouldRetainThisTurn` or `IsSlyThisTurn` for one card: the keyword,
+    /// or the single turn's flag `GiveSingleTurnRetain` or `GiveSingleTurnSly`
+    /// set.
+    fn card_keyword_this_turn(&self, _card: crate::CardAt<V>, _keyword: V::CardKeyword) -> bool {
+        unimplemented!("reading a card's keywords for the turn")
+    }
+
     /// `GetKeywordsWithSources(KeywordSources.Local).Contains(keyword)`: the
     /// words the card itself carries, without what a power grants it for the
     /// fight, as Hex grants Ethereal.

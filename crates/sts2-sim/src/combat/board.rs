@@ -5223,6 +5223,16 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .has_keyword(keyword)
     }
 
+    fn card_keyword_this_turn(&self, card: CardAt<V>, keyword: V::CardKeyword) -> bool {
+        let at = self.standing(card);
+        self.live
+            .cards
+            .get(card.pile(), at)
+            .expect("a card stands where it was found")
+            .face
+            .has_keyword_this_turn(keyword)
+    }
+
     fn card_local_keyword(&self, card: CardAt<V>, keyword: V::CardKeyword) -> bool {
         let at = self.standing(card);
         self.live

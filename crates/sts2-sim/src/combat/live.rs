@@ -1125,11 +1125,11 @@ impl<V: Rules> Face<V> {
     /// `Keywords.Contains(keyword)` for this copy: what the table prints, as
     /// `printed` says, and what has been written on, less what was taken off.
     /// Then what a power gives it for the affliction it carries, which
-    /// `TryModifyKeywordsInCombat` adds after the rest.
+    /// `TryModifyKeywordsInCombat` adds after the rest. A word set for the
+    /// turn alone is a flag beside the set, not in it.
     fn keyword(&self, printed: bool, keyword: V::CardKeyword) -> bool {
         (printed || sts2_core::FlagSet::contains(self.added_keywords, keyword))
             && !sts2_core::FlagSet::contains(self.removed_keywords, keyword)
-            || sts2_core::FlagSet::contains(self.turn_keywords, keyword)
             || self
                 .ident
                 .affliction
@@ -1145,6 +1145,12 @@ impl<V: Rules> Face<V> {
     /// A word the table does not answer for.
     pub(super) fn has_keyword(&self, keyword: V::CardKeyword) -> bool {
         self.keyword(self.prints(keyword), keyword)
+    }
+
+    /// `ShouldRetainThisTurn` and `IsSlyThisTurn`: the keyword, or the flag
+    /// `GiveSingleTurnRetain` or `GiveSingleTurnSly` set for the turn.
+    pub(super) fn has_keyword_this_turn(&self, keyword: V::CardKeyword) -> bool {
+        self.has_keyword(keyword) || sts2_core::FlagSet::contains(self.turn_keywords, keyword)
     }
 
     /// `LocalKeywords.Contains(keyword)`: what the table prints and the fight
@@ -1223,25 +1229,19 @@ impl<V: Rules> Face<V> {
     }
 
     /// `IsSlyThisTurn` for this copy, the keyword the way [`Face::innate`]
-    /// reads Innate, or Sly written on for the turn.
+    /// reads Innate, or Sly given for the turn.
     pub(super) fn sly(&self) -> bool {
-        use sts2_core::{CardTable as _, KeywordKinds};
+        use sts2_core::KeywordKinds;
 
-        self.keyword(
-            self.ident.card.sly(),
-            <V::CardKeyword as KeywordKinds<V>>::SLY,
-        )
+        self.has_keyword_this_turn(<V::CardKeyword as KeywordKinds<V>>::SLY)
     }
 
-    /// `Keywords.Contains(Retain)` for this copy, the way [`Face::innate`]
-    /// reads Innate.
+    /// `ShouldRetainThisTurn` for this copy, the keyword the way
+    /// [`Face::innate`] reads Innate, or Retain given for the turn.
     pub(super) fn retains(&self) -> bool {
-        use sts2_core::{CardTable as _, KeywordKinds};
+        use sts2_core::KeywordKinds;
 
-        self.keyword(
-            self.ident.card.retains(),
-            <V::CardKeyword as KeywordKinds<V>>::RETAIN,
-        )
+        self.has_keyword_this_turn(<V::CardKeyword as KeywordKinds<V>>::RETAIN)
     }
 
     /// Append one cost modifier, which is what every `Set` and `Add` on
