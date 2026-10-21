@@ -29,8 +29,13 @@ pub(super) fn starting_powers<V: crate::Build>(
         __c0 if __c0 == V::Monster::LIVING_SHIELD => {
             vec![(V::Power::RAMPART_POWER, PowerAmount::Counted(25))]
         }
+        // `GalvanicPowerAmount`, which a build may raise from Deadly Enemies.
         __c0 if __c0 == V::Monster::GLOBE_HEAD => {
-            vec![(V::Power::GALVANIC_POWER, PowerAmount::Counted(6))]
+            let amount = match ascension.has(AscensionLevel::DeadlyEnemies) {
+                true => V::GLOBE_HEAD_DEADLY_GALVANIC,
+                false => 6,
+            };
+            vec![(V::Power::GALVANIC_POWER, PowerAmount::Counted(amount))]
         }
         __c0 if __c0 == V::Monster::MECHA_KNIGHT => {
             vec![(V::Power::ARTIFACT_POWER, PowerAmount::Counted(3))]
@@ -662,6 +667,17 @@ pub(super) fn hp_after_added<V: crate::Build>(
 
 /// `DEFENSE_SPAWNS`, `AGGRO_SPAWNS`, written for one build's own types.
 macro_rules! lists {
+    ($build:ty, v0_107_1) => {
+        crate::behaviour::monsters::glory::lists!($build);
+        /// Globe Head's Galvanic from Deadly Enemies on, which this build
+        /// leaves at its base.
+        const GLOBE_HEAD_DEADLY_GALVANIC: crate::behaviour::monsters::Number = 6;
+    };
+    ($build:ty, v0_111_0) => {
+        crate::behaviour::monsters::glory::lists!($build);
+        /// Globe Head's `GalvanicPowerAmount` from Deadly Enemies on.
+        const GLOBE_HEAD_DEADLY_GALVANIC: crate::behaviour::monsters::Number = 8;
+    };
     ($build:ty) => {
         /// `Fabricator.defenseSpawns`, in the order the set lists them.
         const GLORY_DEFENSE_SPAWNS: &'static [<$build as sts2_core::ContentVersion>::Monster] = &[

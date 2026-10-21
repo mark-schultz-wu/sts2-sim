@@ -44,15 +44,11 @@ by side, and keeps only the runs where they part. `--mixed` spreads the
 seeds over every ascension level and modifier. `cargo xtask split --file
 target/hunt/parted-<build>.bin <index> <name>` writes a kept run, up to
 its split, as a scenario. A fix lands with its run, recorded whole, in
-`crates/sts2-golden/tests/hunted.bin`. A split that many runs share
-becomes its own item, above this one.
+`crates/sts2-golden/tests/hunted.bin`. A v0.111.0 run goes in
+`hunted-v0.111.0.bin`. A split that many runs share becomes its own item, above this
+one.
 
-Found so far, by build, seed, character and setup:
-
-- v0.107.1, NECROBINDER C000000407: a turn's end against The Obscura,
-  at the run's last step.
-- v0.111.0, IRONCLAD C000000626 at Double Boss: the creatures part after
-  the travel to the second boss, at step 799.
+No split found so far is open. The next hunt is a mixed one on v0.111.0.
 
 ### 2. A speed target
 

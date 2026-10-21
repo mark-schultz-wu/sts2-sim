@@ -402,7 +402,9 @@ fn listed<'a, V: Rules, S: Sought>(
 ) {
     let hooks = sought.hooks();
     for (creature_at, creature) in live.creatures.iter().enumerate() {
-        if kinds.powers {
+        // `Contains`: a dead player's `DeactivateHooks` takes its own powers
+        // out, as it does its relics, potions and cards.
+        if kinds.powers && !(live.lost && matches!(creature.model, Some(ModelId::Character(_)))) {
             for (at, held) in live.powers.of(creature.id).enumerate() {
                 let overrides = held.power().overrides();
                 if sought.sought_by(overrides) {
