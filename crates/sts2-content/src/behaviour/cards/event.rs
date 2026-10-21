@@ -441,10 +441,18 @@ fn maul_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
         fight.var(V::CardVar::INCREASE),
     ));
     // `AllCards`: the hand, the draw, discard and exhaust piles, then the
-    // play pile, which holds the Maul being played.
-    for pile in [Pile::Hand, Pile::Draw, Pile::Discard, Pile::Exhaust] {
+    // play pile. That holds the Maul being played, and any other an
+    // auto-play from the draw pile took there to play after it.
+    let this = fight.playing();
+    for pile in [
+        Pile::Hand,
+        Pile::Draw,
+        Pile::Discard,
+        Pile::Exhaust,
+        Pile::Play,
+    ] {
         for card in fight.cards_in(pile) {
-            if fight.card_ident(card).card == V::Card::MAUL {
+            if card.id() != this && fight.card_ident(card).card == V::Card::MAUL {
                 fight.modify_card(card, raise, Lasting::ThisFight);
             }
         }
