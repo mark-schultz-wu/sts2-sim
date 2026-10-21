@@ -4037,13 +4037,29 @@ fn walk_turn_end_from<V: Rules>(
             at += 1;
             // A fight that is ending runs no more commands, though the walk
             // still asks every listener. `CardPileCmd.Draw` returns at once
-            // there, and a relic's code after it still runs.
+            // there, and a relic's code after it still runs. `PowerCmd.Remove`
+            // checks nothing, so a power still takes itself off.
             if ended.is_some() {
-                if let (Listener::Relic { slot }, sts2_core::HookEffect::Draw(_)) =
-                    (listener, effect)
-                {
-                    let relic = relics[usize::from(slot)].relic;
-                    super::relic::own_command_over::<V>(relics, slot, relic);
+                match (listener, effect) {
+                    (Listener::Relic { slot }, sts2_core::HookEffect::Draw(_)) => {
+                        let relic = relics[usize::from(slot)].relic;
+                        super::relic::own_command_over::<V>(relics, slot, relic);
+                    }
+                    (
+                        Listener::Power {
+                            owner,
+                            instance,
+                            power,
+                        },
+                        sts2_core::HookEffect::Remove,
+                    ) => {
+                        if let Some(at) = live.powers.place_of(owner, instance)
+                            && let Some(effect) = live.remove_power_at_asking(owner, at).first()
+                        {
+                            unimplemented!("{power:?} asking for {effect:?} as it comes off")
+                        }
+                    }
+                    _ => {}
                 }
                 continue;
             }
