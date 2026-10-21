@@ -750,14 +750,17 @@ fn frees<V: crate::Build>(power: V::Power, card: V::Card, ethereal: bool) -> boo
 }
 
 /// What Vulnerable on `holder` multiplies a powered hit from `dealer` by.
+/// `pet_owners` says whether a dealer without Cruelty reads its pet
+/// owner's.
 ///
 /// # Panics
 ///
 /// An endless Cruelty.
-fn vulnerable<V: crate::Build>(
+pub(crate) fn vulnerable<V: crate::Build>(
     fight: &dyn sts2_core::FightView<V>,
     holder: sts2_core::CombatId,
     dealer: Option<sts2_core::CombatId>,
+    pet_owners: bool,
 ) -> Fixed {
     let mut by = hundredths(V::Power::VULNERABLE_POWER_DAMAGE_INCREASE);
     // `if (dealer != null)`, and both answer the dealer hitting itself with
@@ -768,7 +771,11 @@ fn vulnerable<V: crate::Build>(
         if fight.relic(dealer, V::Relic::PAPER_PHROG) {
             by += PHROG;
         }
-        match fight.power(dealer, V::Power::CRUELTY_POWER) {
+        let cruelty = fight.power(dealer, V::Power::CRUELTY_POWER).or_else(|| {
+            let owner = fight.pet_owner(dealer).filter(|_| pet_owners)?;
+            fight.power(owner, V::Power::CRUELTY_POWER)
+        });
+        match cruelty {
             // `Amount / 100m`, which is its stack in hundredths.
             Some(PowerAmount::Counted(amount)) => by += amount,
             Some(PowerAmount::Endless) => unimplemented!("an endless Cruelty"),
@@ -927,7 +934,7 @@ pub(crate) fn modify_hook<V: crate::Build>(
         }
         // `VulnerablePower.ModifyDamageMultiplicative`: its `DamageIncrease`,
         // raised by the dealer's Paper Phrog and Cruelty, then by the
-        // holder's own Debilitate.
+        // holder's own Debilitate. A pet's hit reads the pet's Cruelty alone.
         (
             __c0,
             _,
@@ -938,7 +945,7 @@ pub(crate) fn modify_hook<V: crate::Build>(
                 ..
             },
         ) if __c0 == V::Power::VULNERABLE_POWER && (target == Some(holder)) => {
-            Modify::Scaled(vulnerable::<V>(fight, holder, dealer))
+            Modify::Scaled(vulnerable::<V>(fight, holder, dealer, false))
         }
         // `WeakPower.ModifyDamageMultiplicative`: its `DamageDecrease`,
         // lowered by the target's Paper Krane, then by the holder's own
