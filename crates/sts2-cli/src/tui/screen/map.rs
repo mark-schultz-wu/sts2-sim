@@ -36,11 +36,18 @@ where
     where_to(frame, choices, map, &moves, app.ui.at);
 }
 
-/// The whole act, as a grid.
+/// Columns of screen per column of the act. Two hold the room's letter and
+/// digit, and two more give a path to the next column a cell to sit in.
+const PITCH: usize = 4;
+/// The row number in front of each row of rooms.
+const GUTTER: usize = 4;
+
+/// The whole act, as a grid, with the paths between its rooms.
 ///
-/// Draws the far end of the act at the top. Colour marks room type. Shape marks
-/// state. `@` is the current room, a digit is its travel key, and visited rooms
-/// are dim. The function adds no heading because overlays supply one.
+/// The far end of the act is at the top. Colour marks room type, and shape
+/// marks state. `@` is the current room, a digit is its travel key, and
+/// visited rooms are dim. A screen too short for every row of paths draws the
+/// ones from the current room up. Overlays supply the heading.
 pub fn grid_of<V: sts2_content_wire::WireContentVersion>(
     frame: &mut Frame,
     inner: Rect,
@@ -51,64 +58,156 @@ pub fn grid_of<V: sts2_content_wire::WireContentVersion>(
         return;
     }
 
-    let cols = map.points.iter().map(|p| p.at.col).max().unwrap_or(0);
+    let cols = map.points.iter().map(|p| p.at.col).max().unwrap_or(0) as usize;
     let rows = map.points.iter().map(|p| p.at.row).max().unwrap_or(0);
     let reachable: Vec<Coord> = map.travelable.iter().map(|r| r.at).collect();
 
+    // Every row of rooms always shows, and the legend under them when there
+    // is a row for it. The rows left over go to paths, the nearest first:
+    // from the room the run stands in, upward, which is the way it can go.
+    let height = usize::from(inner.height);
+    let legend_rows = usize::from(usize::from(rows) + 2 <= height);
+    let spare = height.saturating_sub(usize::from(rows) + 1 + legend_rows);
+    let first = match spare >= usize::from(rows) {
+        true => 0,
+        false => map.at.map_or(0, |here| here.row),
+    };
+    let drawn = |row: u8| row >= first && usize::from(row - first) < spare;
+
     let mut lines = Vec::new();
     for row in (0..=rows).rev() {
-        let mut spans = vec![Span::styled(format!("{row:>3} "), theme::dim())];
-        for col in 0..=cols {
-            let here = Coord::new(col, row);
-            let Some(node) = map.points.iter().find(|p| p.at == here) else {
-                spans.push(Span::raw("  "));
-                continue;
-            };
-
-            let kind = spelling(&node.kind);
-            let mark = crate::map_point::mark(&kind).glyph;
-            let tint = theme::room(&kind);
-
-            // Where the run is standing. `@` rather than the room's letter,
-            // because the question the eye asks first is "where am I".
-            if map.at == Some(here) {
-                spans.push(Span::styled("@ ", theme::cursor()));
-                continue;
-            }
-
-            match reachable.iter().position(|r| *r == here) {
-                // Somewhere the run can go: the room's own colour, bold, with
-                // the digit that goes there. The colour is kept rather than
-                // replaced — which room it is matters more than that it is
-                // reachable, and the digit already says the latter.
-                Some(n) => {
-                    let digit = match n == at {
-                        true => theme::cursor(),
-                        false => theme::label().bold(),
-                    };
-                    spans.push(Span::styled(mark.to_string(), tint.bold()));
-                    spans.push(Span::styled((n + 1).to_string(), digit));
-                }
-                None => {
-                    let walked = map.visited.contains(&here);
-                    let style = match walked {
-                        true => tint.add_modifier(ratatui::style::Modifier::DIM),
-                        false => tint,
-                    };
-                    spans.push(Span::styled(format!("{mark} "), style));
-                }
-            }
+        if row < rows && drawn(row) {
+            lines.push(paths(map, row, cols));
         }
-        lines.push(Line::from(spans));
+        lines.push(rooms(map, row, cols, &reachable, at));
     }
-
     // The letters are learnable in one line, and a map nobody can read is a
     // map that gets ignored in favour of the room list under it.
-    if (lines.len() as u16) < inner.height {
+    if legend_rows == 1 {
         lines.push(Line::from(legend()));
     }
 
     frame.render_widget(Paragraph::new(lines), inner);
+}
+
+/// One row of rooms.
+fn rooms<V: sts2_content_wire::WireContentVersion>(
+    map: &Map<V>,
+    row: u8,
+    cols: usize,
+    reachable: &[Coord],
+    at: usize,
+) -> Line<'static> {
+    let mut spans = vec![Span::styled(format!("{row:>3} "), theme::dim())];
+    for col in 0..=cols {
+        let here = Coord::new(col as u8, row);
+        let Some(node) = map.points.iter().find(|p| p.at == here) else {
+            spans.push(Span::raw(" ".repeat(PITCH)));
+            continue;
+        };
+
+        let kind = spelling(&node.kind);
+        let mark = crate::map_point::mark(&kind).glyph;
+        let tint = theme::room(&kind);
+        let gap = " ".repeat(PITCH - 2);
+
+        // Where the run is standing. `@` rather than the room's letter,
+        // because the question the eye asks first is "where am I".
+        if map.at == Some(here) {
+            spans.push(Span::styled("@ ", theme::cursor()));
+            spans.push(Span::raw(gap));
+            continue;
+        }
+
+        match reachable.iter().position(|r| *r == here) {
+            // Somewhere the run can go: the room's own colour, bold, with
+            // the digit that goes there. The colour is kept rather than
+            // replaced — which room it is matters more than that it is
+            // reachable, and the digit already says the latter.
+            Some(n) => {
+                let digit = match n == at {
+                    true => theme::cursor(),
+                    false => theme::label().bold(),
+                };
+                spans.push(Span::styled(mark.to_string(), tint.bold()));
+                spans.push(Span::styled((n + 1).to_string(), digit));
+                spans.push(Span::raw(gap));
+            }
+            None => {
+                let style = match map.visited.contains(&here) {
+                    true => tint.add_modifier(ratatui::style::Modifier::DIM),
+                    false => tint,
+                };
+                spans.push(Span::styled(format!("{mark} "), style));
+                spans.push(Span::raw(gap));
+            }
+        }
+    }
+    Line::from(spans)
+}
+
+/// How a path between two rooms is drawn.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Trail {
+    /// A path no run has reason to look at yet.
+    Faint,
+    /// A path the run has walked.
+    Walked,
+    /// A path out of the room the run is standing in.
+    Open,
+}
+
+/// The paths from one row of rooms to the row above it.
+///
+/// `│` goes straight on, `╱` and `╲` go to a neighbouring column, and `╳` is
+/// two crossing. Paths out of the current room are bright, walked paths are
+/// dim, and the rest are faint. A path that skips a column has no cell, so
+/// it is left out. Only the first room and the boss have one.
+fn paths<V: sts2_content_wire::WireContentVersion>(
+    map: &Map<V>,
+    row: u8,
+    cols: usize,
+) -> Line<'static> {
+    let width = GUTTER + PITCH * (cols + 1);
+    let mut cells: Vec<Option<(char, Trail)>> = vec![None; width];
+    for node in map.points.iter().filter(|p| p.at.row == row) {
+        for to in node.to.iter().filter(|to| to.row == row + 1) {
+            let trail = match (map.at == Some(node.at), map.visited.contains(&node.at)) {
+                (true, _) => Trail::Open,
+                (false, true) if map.visited.contains(to) => Trail::Walked,
+                _ => Trail::Faint,
+            };
+            let from = GUTTER + PITCH * usize::from(node.at.col);
+            let (x, glyph) = match i16::from(to.col) - i16::from(node.at.col) {
+                0 => (from, '│'),
+                1 => (from + PITCH / 2, '╱'),
+                -1 => (from - PITCH / 2, '╲'),
+                _ => continue,
+            };
+            let crossed = match (cells[x], glyph) {
+                (Some(('╱', _)), '╲') | (Some(('╲', _)), '╱') => '╳',
+                _ => glyph,
+            };
+            let trail = cells[x].map_or(trail, |(_, was)| was.max(trail));
+            cells[x] = Some((crossed, trail));
+        }
+    }
+
+    let spans = cells
+        .into_iter()
+        .map(|cell| match cell {
+            None => Span::raw(" "),
+            Some((glyph, trail)) => Span::styled(
+                glyph.to_string(),
+                match trail {
+                    Trail::Open => theme::label().bold(),
+                    Trail::Walked => theme::dim(),
+                    Trail::Faint => theme::faint(),
+                },
+            ),
+        })
+        .collect::<Vec<_>>();
+    Line::from(spans)
 }
 
 /// What each letter means, in the colour it is drawn in.

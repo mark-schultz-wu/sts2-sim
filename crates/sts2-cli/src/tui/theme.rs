@@ -21,6 +21,12 @@ pub fn dim() -> Style {
     Style::new().add_modifier(Modifier::DIM)
 }
 
+/// Quieter than [`dim`]: scenery for the eye to pass over, such as a path on
+/// the map that leads nowhere the run can go yet.
+pub fn faint() -> Style {
+    Style::new().fg(Color::DarkGray)
+}
+
 /// The thing the cursor is on.
 pub fn cursor() -> Style {
     Style::new()

@@ -445,6 +445,45 @@ mod tests {
         );
     }
 
+    /// Between two rows of rooms, the paths: `╲` and `╱` to the next column
+    /// over, `│` straight on.
+    #[test]
+    fn the_map_draws_the_paths_between_rooms() {
+        let out = shot(a_map(), 90, 40, |_| {});
+        let lines: Vec<&str> = out.lines().collect();
+        let row = |n: &str| {
+            (lines.iter())
+                .position(|line| line.trim_start().starts_with(n))
+                .unwrap_or_else(|| panic!("no row {n}: {out}"))
+        };
+        // From the shop at 1,2 out to both rooms of row 3, and from both of
+        // those into the elite at 1,4.
+        assert_eq!(lines[row("3 ") + 1].trim_end(), "      ╲   ╱", "{out}");
+        assert_eq!(lines[row("4 ") + 1].trim_end(), "      ╱   ╲", "{out}");
+        assert_eq!(lines[row("2 ") + 1].trim_end(), "        │", "{out}");
+    }
+
+    /// An option the game gave no title reads as the last part of its key,
+    /// and the relic it names is not said twice.
+    #[test]
+    fn an_untitled_option_reads_as_its_name() {
+        let out = shot(
+            fixture::applied(json!({
+                "room": {
+                    "type": "Event", "id": "NEOW", "title": null, "text": null,
+                    "options": [{"index": 0, "key": "NEOW.pages.INITIAL.options.WINGED_BOOTS",
+                                 "title": null, "relic": "WINGED_BOOTS"}]
+                },
+                "moves": [{"cmd": "choose_option", "index": 0}]
+            })),
+            90,
+            20,
+            |_| {},
+        );
+        assert!(out.contains(" 1  Winged Boots\n"), "{out}");
+        assert!(!out.contains("pages"), "{out}");
+    }
+
     fn an_event() -> Applied<V> {
         fixture::applied(json!({
             "floor": 4, "hp": 48,
@@ -690,5 +729,90 @@ mod tests {
             frame(&app);
         }
         assert_ne!(floor(&app), before, "the run left Neow's floor");
+    }
+
+    /// Every kind of screen a run reaches, drawn off the simulator and
+    /// printed. A tool for working on the screens rather than a check:
+    ///
+    /// ```text
+    /// cargo test -p sts2-cli screens_of_a_run -- --ignored --nocapture
+    /// SHOTS_SEED=C000000042 SHOTS_SIZE=80x24 cargo test ...
+    /// ```
+    ///
+    /// The run takes legal moves at random, from a fixed generator, and the
+    /// first two of each kind of screen are printed.
+    #[test]
+    #[ignore = "prints screens to look at; asserts nothing"]
+    fn screens_of_a_run() {
+        use sts2_core::Play as _;
+
+        let seed = std::env::var("SHOTS_SEED").unwrap_or_else(|_| "C000000077".into());
+        let (w, h) = std::env::var("SHOTS_SIZE")
+            .ok()
+            .and_then(|size| {
+                let (w, h) = size.split_once('x')?;
+                Some((w.parse().ok()?, h.parse().ok()?))
+            })
+            .unwrap_or((100, 30));
+        let start = sts2_core::Start::<V> {
+            seed: sts2_core::Seed::new(&seed).expect("a seed"),
+            character: sts2_content::v0_107_1::characters::Character::Silent,
+            ascension: crate::cli::ascension::<V>("None").expect("no ascension"),
+            modifiers: Vec::new(),
+            wins: 0,
+        };
+        let mut sim = sts2_sim::Sim::<V>::begin((), &start).expect("the run starts");
+        let mut printed: std::collections::BTreeMap<String, usize> = Default::default();
+        // xorshift, so the run is the same each time without a dependency.
+        let mut x: u64 = 0x9E37_79B9_7F4A_7C15;
+        for step in 0..2000 {
+            let standing = sim.observe().expect("the simulator answers");
+            let seen = standing.view();
+            let kind = match (&seen.asking, &seen.room) {
+                (Some(question), _) => format!("{:?}", question.kind()),
+                _ if seen.run_over => "over".into(),
+                _ if seen.fight().is_some() => "fight".into(),
+                (None, Some(room)) => format!("{room:?}")
+                    .split([' ', '{'])
+                    .next()
+                    .unwrap_or("room")
+                    .into(),
+                (None, None) => "map".into(),
+            };
+            let count = printed.entry(kind.clone()).or_default();
+            *count += 1;
+            if *count <= 2 {
+                let mut app = App::playing(sim.clone(), Options::default());
+                let mut terminal = Terminal::new(TestBackend::new(w, h)).expect("a test terminal");
+                terminal
+                    .draw(|frame| super::super::screen::draw(frame, &app))
+                    .expect("a frame");
+                app.look_now();
+                terminal
+                    .draw(|frame| super::super::screen::draw(frame, &app))
+                    .expect("a frame");
+                let buffer = terminal.backend().buffer();
+                let text = (0..buffer.area.height)
+                    .map(|y| {
+                        (0..buffer.area.width)
+                            .map(|x| buffer[(x, y)].symbol())
+                            .collect::<String>()
+                            .trim_end()
+                            .to_string()
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                println!("===== step {step}: {kind} #{count}\n{text}\n");
+            }
+            if seen.run_over || seen.moves.is_empty() {
+                break;
+            }
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            let pick = &seen.moves[(x % seen.moves.len() as u64) as usize];
+            let answered = sim.play(pick).expect("the simulator answers");
+            assert!(answered.is_ok(), "the simulator refused a move it listed");
+        }
     }
 }

@@ -142,30 +142,32 @@ where
             let moves = app.moves();
             let choices = options
                 .iter()
-                .map(|option| Choice {
+                .map(|option| {
+                    // With no title, the last part of the option's key, which
+                    // is its name: `NEOW.pages.INITIAL.options.WINGED_BOOTS`
+                    // reads as *Winged Boots*.
+                    let what = option.title.as_deref().map_or_else(
+                        || {
+                            let key = crate::render::option_key(option);
+                            names::pretty(key.rsplit('.').next().unwrap_or(&key))
+                        },
+                        crate::render::prose::plain,
+                    );
+                    (option, what)
+                })
+                .map(|(option, what)| Choice {
                     key: chose(&moves, option.index),
-                    what: option
-                        .title
-                        .clone()
-                        .map(|t| crate::render::prose::plain(&t))
-                        .unwrap_or_else(|| names::pretty(&crate::render::option_key(option))),
                     // The relic an option hands over, *unless* the option's
-                    // own title already names it — which at Neow every one of
+                    // own name already says it — which at Neow every one of
                     // them does, and "Golden Pearl   Golden Pearl" is not a
                     // second fact.
                     note: option
                         .relic
                         .as_ref()
                         .map(|r| names::pretty(&spelling(r)))
-                        .filter(|named| {
-                            option
-                                .title
-                                .as_deref()
-                                .map(crate::render::prose::plain)
-                                .as_deref()
-                                != Some(named.as_str())
-                        })
+                        .filter(|named| *named != what)
                         .map(|named| (named, theme::better())),
+                    what,
                     words: option
                         .text
                         .as_deref()
