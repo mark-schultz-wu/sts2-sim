@@ -16,6 +16,7 @@ pub mod render;
 pub mod runs;
 #[cfg(test)]
 pub(crate) mod scripted;
+pub mod text;
 pub mod tui;
 
 pub use render::Readable;

@@ -23,6 +23,7 @@ mod generic;
 mod hunt;
 mod instructions;
 mod neow;
+mod pck;
 mod plays;
 mod reached;
 mod record;

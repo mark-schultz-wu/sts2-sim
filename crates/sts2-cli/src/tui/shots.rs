@@ -124,7 +124,7 @@ mod tests {
         assert!(out.contains("61/80"), "the player's hit points");
         assert!(out.contains("Bowlbug Rock"), "who is being fought");
         assert!(out.contains("energy 2"), "the energy left");
-        assert!(out.contains("Strike Ironclad"), "the hand, by name");
+        assert!(out.contains("Strike"), "the hand, by name");
 
         // The player belongs under `you`, not among the creatures being
         // fought. Split on the two headings and check which side it lands.
@@ -179,7 +179,7 @@ mod tests {
         // And the whole fight is still on it, which is the thing the gap was
         // pushing off the bottom.
         assert!(out.contains("Bowlbug Rock"), "{out}");
-        assert!(out.contains("Strike Ironclad"), "{out}");
+        assert!(out.contains("Strike"), "{out}");
         assert!(out.contains("draw 2"), "{out}");
     }
 
@@ -380,6 +380,20 @@ mod tests {
         });
         println!("\n{out}\n");
 
+        assert!(out.contains("Burning Blood"), "{out}");
+        assert!(out.contains("At the end of combat, heal 6 HP."), "{out}");
+    }
+
+    /// The simulator's run carries no words. A relic still says what it does,
+    /// from the game's text table with the dumped number filled in.
+    #[test]
+    fn a_relic_with_no_words_reads_from_the_text_table() {
+        let out = shot(
+            fixture::applied(json!({"relics": ["BURNING_BLOOD"]})),
+            100,
+            34,
+            |app| app.press(super::super::keys::Action::ShowRelics),
+        );
         assert!(out.contains("Burning Blood"), "{out}");
         assert!(out.contains("At the end of combat, heal 6 HP."), "{out}");
     }
@@ -655,7 +669,7 @@ mod tests {
         let left = column(top, '╭').expect("and a top-left corner");
         let listed = out
             .lines()
-            .find(|l| l.contains("Strike Ironclad"))
+            .find(|l| l.contains("Strike"))
             .expect("the deck is listed");
         assert!(
             column(listed, '│').is_some_and(|at| at == left),

@@ -271,7 +271,7 @@ where
                 .iter()
                 .enumerate()
                 .map(|(at, option)| {
-                    let mut face = card::Face::plain(&option.card);
+                    let mut face = card::Face::printed(&option.card);
                     face.key = Some(at);
                     face.picked = at == app.ui.at;
                     face.marked = app.marked().contains(&at);

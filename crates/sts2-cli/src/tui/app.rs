@@ -756,7 +756,9 @@ where
     /// Takes where the run now stands, and resets the log when the screen
     /// behind it changes.
     fn arrive(&mut self, standing: Snapshot<V>) {
-        let seen = standing.view();
+        let mut seen = standing.view();
+        // The game's words, for whatever the run did not say itself.
+        crate::text::fill(&mut seen);
         // A run this screen did not start, such as one the daemon already
         // held, says its character first in a fight, on the player's model.
         let player = (seen.fight().into_iter())

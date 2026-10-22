@@ -265,6 +265,7 @@ where
             .map(|(n, c)| {
                 Line::from(vec![
                     Span::styled(format!("{:>3} ", n + 1), theme::dim()),
+                    Span::styled(format!("{:<4}", card::Face::printed_cost(c)), theme::gold()),
                     Span::raw(card::ident(c)),
                 ])
             })
@@ -280,7 +281,7 @@ where
 fn counted<V: crate::tui::Build>(cards: &[CardIdent<V>]) -> Vec<Line<'static>> {
     let mut tally: Vec<(String, usize)> = Vec::new();
     for card in cards {
-        let name = card::ident(card);
+        let name = format!("{:<4}{}", card::Face::printed_cost(card), card::ident(card));
         match tally.iter_mut().find(|(n, _)| *n == name) {
             Some((_, count)) => *count += 1,
             None => tally.push((name, 1)),

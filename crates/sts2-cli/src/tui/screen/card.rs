@@ -52,10 +52,13 @@ pub fn height(rows: u16) -> u16 {
 /// shown in full rather than as a mark, because a player who has never seen the
 /// affliction cannot look up a symbol.
 pub fn ident<V: crate::tui::Build>(card: &CardIdent<V>) -> String {
-    let mut out = names::pretty(&spelling(&card.card));
-    if card.upgrade > 0 {
-        out.push_str(&format!("+{}", card.upgrade));
-    }
+    let mut out = crate::text::card_title(card).unwrap_or_else(|| {
+        let mut name = names::pretty(&spelling(&card.card));
+        if card.upgrade > 0 {
+            name.push_str(&format!("+{}", card.upgrade));
+        }
+        name
+    });
     if let Some(affliction) = &card.affliction {
         out.push_str(&format!(" ({})", names::pretty(&spelling(affliction))));
     }
@@ -194,10 +197,23 @@ impl Face {
 
     /// A card priced at what its own table prints.
     ///
-    /// For a reward, where no fight has had a say and the game reports no
-    /// price. An upgrade moves a price, and no reward offers an upgraded card.
+    /// For a reward or a selection, where no fight has had a say and the game
+    /// reports no price. An upgrade can move a price, and the tables do not
+    /// say how, so an upgraded card shows no price rather than an old one.
     pub fn printed<V: crate::tui::Build>(card: &CardIdent<V>) -> Face {
-        Self::plain_with_cost(card, card.card.cost(), card.card.star_cost())
+        match card.upgrade {
+            0 => Self::plain_with_cost(card, card.card.cost(), card.card.star_cost()),
+            _ => Self::plain(card),
+        }
+    }
+
+    /// The printed cost, for a line in a list: `(1)`. Blank for an upgraded
+    /// card, or one with no price.
+    pub fn printed_cost<V: crate::tui::Build>(card: &CardIdent<V>) -> String {
+        match (card.upgrade, cost(card.card.cost(), card.card.star_cost())) {
+            (0, Some(cost)) => format!("({cost})"),
+            _ => String::new(),
+        }
     }
 
     /// A card with nothing computed about it: a pile listing, a reward.
