@@ -423,6 +423,7 @@ impl<V: Rules> Belt<V> {
     /// hear none.
     pub(crate) fn deafen(&mut self) {
         self.heard = sts2_core::Overrides::default();
+        self.slots = [0; sts2_core::ModelHook::ALL.len()];
     }
 
     /// The slots of the relics that override `hook`, one bit a slot, the
@@ -462,6 +463,9 @@ struct Player<V: Rules> {
     max_hp: V::Health,
     gold: V::Number,
     potion_slots: V::Count,
+    /// `IsActiveForHooks` off: the player died, and their deck, relics and
+    /// potions hear no hook after.
+    deaf: bool,
 }
 
 impl<V: Rules> Clone for State<V> {
@@ -553,6 +557,7 @@ impl<V: Rules> Clone for Player<V> {
             max_hp: self.max_hp,
             gold: self.gold,
             potion_slots: self.potion_slots,
+            deaf: self.deaf,
         }
     }
 
@@ -567,6 +572,7 @@ impl<V: Rules> Clone for Player<V> {
             max_hp,
             gold,
             potion_slots,
+            deaf,
         } = self;
         relics.copy_from(&source.relics);
         potions.copy_from(&source.potions);
@@ -577,6 +583,7 @@ impl<V: Rules> Clone for Player<V> {
         *max_hp = source.max_hp;
         *gold = source.gold;
         *potion_slots = source.potion_slots;
+        *deaf = source.deaf;
     }
 }
 
@@ -1312,6 +1319,7 @@ impl<V: Rules> State<V> {
                 .expect("starting gold fits the build's game-number type"),
             potion_slots: num_traits::cast(V::starting_potion_slots())
                 .expect("starting potion slots fit the build's count type"),
+            deaf: false,
         };
         // `AscensionManager.ApplyEffectsTo`: a slot fewer, and the curse on
         // the end of the deck.
@@ -3481,8 +3489,13 @@ impl<V: Rules> State<V> {
             self.unheard(ModelHook::BeforeDeath);
             let preventer = self.death_preventer();
             self.unheard(ModelHook::AfterDeath);
-            if let Some(slot) = preventer {
-                self.death_prevented(slot);
+            match preventer {
+                Some(slot) => self.death_prevented(slot),
+                // `DeactivateHooks`, once the death has gone through.
+                None => {
+                    self.player.relics.deafen();
+                    self.player.deaf = true;
+                }
             }
         }
     }
@@ -4182,13 +4195,18 @@ impl<V: Rules> State<V> {
     pub(super) fn run_listed(&self, hook: sts2_core::ModelHook) -> RunListed<V> {
         let hooks = sts2_core::Overrides::of(hook);
         let mut listed = RunListed {
-            deck: self.deck_listed(hooks),
+            deck: SmallVec::new(),
             relics: self.player.relics.hearing_hook(hook),
             after: SmallVec::new(),
         };
-        for &potion in self.player.potions.iter() {
-            if sts2_core::PotionTable::overrides(potion).intersects(hooks) {
-                listed.after.push(RunListener::Potion { potion });
+        // `IsActiveForHooks`, which a dead player's deck and potions fail. A
+        // dead player's belt is deafened.
+        if !self.player.deaf {
+            listed.deck = self.deck_listed(hooks);
+            for &potion in self.player.potions.iter() {
+                if sts2_core::PotionTable::overrides(potion).intersects(hooks) {
+                    listed.after.push(RunListener::Potion { potion });
+                }
             }
         }
         for (at, &modifier) in self.shared.modifiers.iter().enumerate() {

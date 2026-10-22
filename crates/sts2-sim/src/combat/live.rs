@@ -1538,7 +1538,7 @@ impl<V: Rules> Face<V> {
 
     /// `RecalculateForUpgradeOrEnchant`, which gives a calculated number the
     /// base its `CalculationBase` now prints.
-    fn recalculate(&mut self) {
+    pub(super) fn recalculate(&mut self) {
         let from = *self;
         self.calculate_from(&from);
     }

@@ -4055,7 +4055,13 @@ impl<V: Rules> Board<'_, V> {
     }
 
     /// A clone of `face` into `pile`, marked a clone and generated.
-    fn clone_face(&mut self, face: Face<V>, pile: Pile) -> Option<CardAt<V>> {
+    ///
+    /// `DynamicVarSet.Clone` gives each of the clone's numbers its owner,
+    /// and `CalculatedVar.SetOwner` gives a calculated number the base its
+    /// `CalculationBase` prints. The card's own base can be older, as after
+    /// Dampen downgrades it.
+    fn clone_face(&mut self, mut face: Face<V>, pile: Pile) -> Option<CardAt<V>> {
+        face.recalculate();
         let id = self.live.card_ids.mint();
         // A full hand sends the card to the discard pile instead.
         let full =
