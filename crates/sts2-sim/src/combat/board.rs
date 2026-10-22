@@ -990,6 +990,9 @@ impl<'a, V: Rules> Board<'a, V> {
                 // `CardCmd.Upgrade` on a copy that has left the fight writes on
                 // a model the fight no longer holds.
                 HookEffect::UpgradeCopy { card, .. } if self.live.cards.named(card).is_none() => {}
+                // `CardCmd.Upgrade` does nothing once the fight is ending, as
+                // when the caster that died was the last enemy.
+                HookEffect::UpgradeCopy { .. } if self.over() => {}
                 HookEffect::UpgradeCopy { card, times } => {
                     self.live.cards.write_named(card, |face| {
                         for _ in 0..times {
@@ -3299,12 +3302,19 @@ fn hit_phases<V: Rules>(
     card: Option<&CardInstance<V>>,
     powered: bool,
 ) -> [ModifyHook<V>; 3] {
-    let card = card.map(|held| sts2_core::CardSource {
-        id: held.id,
-        card: held.face.ident.card,
-        playing: fight.live.cards.in_play(held.id),
-        upgraded: held.face.ident.upgrade > 0,
-        enchanted: held.face.ident.enchantment.is_some(),
+    // `cardSource` is the model as it stands now. An attack's own numbers
+    // are the ones it was built with, but a listener reads the card live, as
+    // after Dampen comes off in the middle of the hits.
+    let card = card.map(|held| {
+        let (playing, ident) =
+            (fight.live.cards.standing_ident(held.id)).unwrap_or((false, &held.face.ident));
+        sts2_core::CardSource {
+            id: held.id,
+            card: ident.card,
+            playing,
+            upgraded: ident.upgrade > 0,
+            enchanted: ident.enchantment.is_some(),
+        }
     });
     [
         ModifyHook::DamageAdditive {

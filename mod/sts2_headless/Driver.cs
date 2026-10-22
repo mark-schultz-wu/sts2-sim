@@ -115,7 +115,9 @@ public static class Driver
             // PatchAll throws when Harmony cannot patch -- and Run is started
             // with `_ = Driver.Run(...)`, so an escaping exception becomes an
             // unobserved faulted task and the process hangs with no message.
-            new Harmony("sts2_headless").PatchAll(Assembly.GetExecutingAssembly());
+            var harmony = new Harmony("sts2_headless");
+            harmony.PatchAll(Assembly.GetExecutingAssembly());
+            Trace.Arm(harmony);
 
             // Once per process, and here rather than in whichever body happens
             // to run. These used to sit inside Protocol.Serve, so selftest --

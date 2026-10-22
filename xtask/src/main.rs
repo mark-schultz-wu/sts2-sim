@@ -18,6 +18,7 @@ mod coverage;
 mod dump;
 mod error;
 mod followed;
+mod game_trace;
 mod generic;
 mod hunt;
 mod instructions;
@@ -78,6 +79,8 @@ enum Command {
     ScenarioDiff(scenario_diff::Args),
     /// Write a recorded run, up to its first split, as a scenario.
     Split(split::Args),
+    /// Show the game's own calls in the moves before a run parts.
+    GameTrace(game_trace::Args),
     /// Rewrite a build's behaviour to be generic over the build.
     Generic(generic::Args),
 }
@@ -123,6 +126,8 @@ enum Error {
     ScenarioDiff(error::ProcessError),
     #[error("split failed: {0}")]
     Split(#[from] split::Error),
+    #[error("game-trace failed: {0}")]
+    GameTrace(#[from] game_trace::Error),
 }
 
 fn run(command: Command) -> Result<String, Error> {
@@ -143,6 +148,7 @@ fn run(command: Command) -> Result<String, Error> {
         Command::Unknown(args) => unknown::run(args).map_err(Error::Unknown)?,
         Command::ScenarioDiff(args) => scenario_diff::run(args).map_err(Error::ScenarioDiff)?,
         Command::Split(args) => split::run(args)?,
+        Command::GameTrace(args) => game_trace::run(args)?,
     })
 }
 

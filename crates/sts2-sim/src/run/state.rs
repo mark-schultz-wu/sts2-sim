@@ -1994,19 +1994,30 @@ impl<V: Rules> State<V> {
 
     /// `RelicFactory.PullNextRelicFromFront` at `rarity`, through the shop
     /// filter for a stocked pull. [`pulled_rarity`] is the rarity it deals at.
+    ///
+    /// `floor` is `TotalFloor`, which `IsAllowed` reads. An event's room
+    /// counts already as its options pull, while the run's own floor moves
+    /// only once it enters.
     pub(super) fn pull_relic_as(
         &mut self,
         pull: sts2_core::RelicPull<V>,
         rarity: Rarity<V>,
+        floor: V::Count,
     ) -> V::Relic {
         use sts2_core::RelicTable as _;
 
+        let floor = num_traits::cast(floor).expect("a floor fits a usize");
         let relic = match pull {
-            sts2_core::RelicPull::Rolled => return self.pull_relic(rarity),
+            sts2_core::RelicPull::Rolled => {
+                self.shared
+                    .opening
+                    .player_relics
+                    .front(rarity, &self.dealt_relics, floor)
+            }
             sts2_core::RelicPull::Stocked(_) => self.shared.opening.player_relics.front_where(
                 rarity,
                 &self.dealt_relics,
-                num_traits::cast(self.floor).expect("a floor fits a usize"),
+                floor,
                 V::Relic::allowed_in_shops,
             ),
         };
@@ -2498,7 +2509,7 @@ impl<V: Rules> State<V> {
                         HookEffect::ObtainNextRelic(pull) => {
                             let rarity =
                                 pulled_rarity(pull, self.streams.player(V::PlayerRngType::REWARDS));
-                            self.pull_relic_as(pull, rarity)
+                            self.pull_relic_as(pull, rarity, self.floor)
                         }
                         _ => unreachable!("matched above"),
                     };
@@ -4968,7 +4979,7 @@ impl<V: Rules> State<V> {
             .iter()
             .map(|&pull| {
                 let rarity = pulled_rarity(pull, streams.player(V::PlayerRngType::REWARDS));
-                self.pull_relic_as(pull, rarity)
+                self.pull_relic_as(pull, rarity, floor)
             })
             .collect();
         if !pulled.is_empty() {

@@ -1406,17 +1406,19 @@ fn before_turn_end<V: Rules>(
             (_, effect) => unimplemented!("a listener asking for {effect:?} before a turn ends"),
         }
     }
-    let hook = sts2_core::EventHook::BeforeSideTurnEnd {
+    // What a listener reads is the hand and energy as its turn comes. One
+    // before it can draw, as Regret counts its pile then.
+    let now = |live: &Live<V>| sts2_core::EventHook::BeforeSideTurnEnd {
         side,
         energy: live.energy,
         hand: live.cards.len(Pile::Hand),
     };
     let mut ended = None;
-    let mut walking = listen::Walking::begin::<listen::Checked>(live, relics, hook);
-    while let Some((listener, effect)) = walking
-        .as_mut()
-        .and_then(|walking| walking.next(live, relics))
-    {
+    let mut walking = listen::Walking::begin::<listen::Checked>(live, relics, now(live));
+    while let Some((listener, effect)) = walking.as_mut().and_then(|walking| {
+        walking.rehook(now(live));
+        walking.next(live, relics)
+    }) {
         match (listener, effect) {
             // `CreatureCmd.Damage` over `HittableEnemies`, unpowered, from the
             // power's owner.

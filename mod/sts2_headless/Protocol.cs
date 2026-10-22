@@ -129,6 +129,7 @@ internal static class Protocol
 
             cmd = cmdEl.GetString()!;
             GameErrors.Drain();
+            Trace.Command(line);
 
             // While the game is stopped mid-action, the only things that make
             // sense are answering it, looking at it, starting over, and
