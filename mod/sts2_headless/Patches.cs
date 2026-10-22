@@ -477,6 +477,53 @@ internal static class ChooseACardSkip
 }
 
 /// <summary>
+/// Whether the card selection being asked can be backed out of, which only
+/// its prefs say.
+/// </summary>
+/// <remarks>
+/// The selector is handed the cards and the bounds, never the prefs, and
+/// <c>CardSelectorPrefs.Cancelable</c> is what puts a back button on Smith,
+/// Cook, the shop's card removal and the card-removal reward. So every
+/// <c>CardSelectCmd</c> method that takes prefs notes it as it starts, the
+/// way <see cref="ChooseACardSkip"/> notes a skip, and clears it for the
+/// caller as it returns.
+/// </remarks>
+[HarmonyPatch]
+internal static class CancelableSelection
+{
+    private static readonly System.Threading.AsyncLocal<bool?> Asked = new();
+
+    /// <summary>The <c>Cancelable</c> of the selection being asked, if one is.</summary>
+    internal static bool? Cancelable
+    {
+        get => Asked.Value;
+        set => Asked.Value = value;
+    }
+
+    [HarmonyTargetMethods]
+    private static IEnumerable<System.Reflection.MethodBase> TargetMethods() =>
+        typeof(CardSelectCmd)
+            .GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+            .Where(m => !m.IsGenericMethodDefinition
+                && m.GetParameters().Any(p => p.ParameterType == typeof(CardSelectorPrefs)));
+
+    [HarmonyPrefix]
+    private static void Prefix(object[] __args)
+    {
+        foreach (object? arg in __args)
+        {
+            if (arg is CardSelectorPrefs prefs)
+            {
+                Cancelable = prefs.Cancelable;
+            }
+        }
+    }
+
+    [HarmonyPostfix]
+    private static void Postfix() => Cancelable = null;
+}
+
+/// <summary>
 /// <c>CardReward.OnSelect</c> reads <c>LocalSelector</c> where it reads
 /// <c>Selector</c>, for the builds that install the selector there.
 /// </summary>

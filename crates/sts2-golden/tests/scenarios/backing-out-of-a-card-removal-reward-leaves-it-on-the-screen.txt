@@ -1,0 +1,12 @@
+# Forbidden Grimoire's power adds a card removal to the fight's rewards.
+# Its selection has a back button, and backing out leaves the reward
+# untaken on the screen.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"FORBIDDEN_GRIMOIRE_POWER","amount":1,"target":0}
+{"cmd":"power","power":"STRENGTH_POWER","amount":300,"target":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"answer","take":[{"index":2}]}
+{"cmd":"answer","cancel":true}
+{"cmd":"answer","take":[{"index":2}]}
+{"cmd":"answer","cards":[0]}

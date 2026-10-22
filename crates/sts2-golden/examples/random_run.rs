@@ -162,7 +162,19 @@ fn run(cli: Cli) -> Result<(), Error> {
         if legal.is_empty() {
             return Err(Error::NothingLegal);
         }
-        let at = pick.choose(&legal);
+        // The question is built only where a discard could make room, which
+        // a full belt on a reward screen is.
+        let (held, slots) = (run.potions().len(), run.potion_slots());
+        let full = num_traits::ToPrimitive::to_usize(&slots).is_some_and(|slots| held >= slots);
+        let room = full
+            && legal
+                .iter()
+                .any(|decision| matches!(decision, Decision::DiscardPotion { .. }))
+            && {
+                let asking = sim.observe().map(|seen| seen.asking).unwrap_or(None);
+                sts2_golden::random::making_room(asking.as_ref(), held, slots)
+            };
+        let at = pick.choose(&legal, room);
         writeln!(out, "step {step} {at} {}", legal.len())?;
         out.flush()?;
         let decision = legal[at];

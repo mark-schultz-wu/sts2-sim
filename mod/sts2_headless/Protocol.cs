@@ -85,7 +85,7 @@ internal static class Protocol
             // content change invalidates them. The game uses this exact value
             // to refuse a replay recorded against different content.
             ["contentHash"] = ModelIdSerializationCache.Hash,
-            ["commands"] = new[] { "start", "fight", "event", "power", "enchant", "hp", "travel", "play_card", "end_turn", "use_potion", "answer", "grant", "enter_room", "choose_option", "buy", "proceed", "observe", "quit" },
+            ["commands"] = new[] { "start", "fight", "event", "power", "enchant", "hp", "travel", "play_card", "end_turn", "use_potion", "answer", "grant", "enter_room", "choose_option", "buy", "proceed", "discard_potion", "observe", "quit" },
         });
 
         while (true)
@@ -137,7 +137,11 @@ internal static class Protocol
             // noticed the game is waiting, and the pending must survive the
             // refusal. A start abandons the run, and Restart cancels what it
             // was waiting on.
-            if (Pending.Current != null && cmd is not ("answer" or "observe" or "start" or "quit"))
+            // A reward screen leaves the belt open, and a full belt is where
+            // discarding matters most, so a discard is the one other command
+            // it takes.
+            if (Pending.Current != null && cmd is not ("answer" or "observe" or "start" or "quit")
+                && !(cmd == "discard_potion" && Pending.Current.Kind == "rewards"))
             {
                 await Error(cmd, Refusals.Pending(Pending.Current.Kind));
                 return false;
@@ -221,6 +225,10 @@ internal static class Protocol
 
                 case "end_turn":
                     await EndTurn(req);
+                    return false;
+
+                case "discard_potion":
+                    await DiscardPotion(req);
                     return false;
 
                 case "use_potion":
@@ -1282,6 +1290,46 @@ internal static class Protocol
         RunManager.Instance.ActionQueueSet.EnqueueWithoutSynchronizing(action);
         bool resolved = await Driver.Quiesce(action);
         await Observe(req, "use_potion", resolved);
+    }
+
+    /// <summary>Discards the potion at a belt index, as the potion's popup does.</summary>
+    /// <remarks>
+    /// <c>NPotionPopup.OnDiscardButtonPressed</c> enqueues a
+    /// <c>DiscardPotionGameAction</c>, which runs <c>PotionCmd.Discard</c> and
+    /// <c>Hook.AfterPotionDiscarded</c>. The popup's button is disabled for a
+    /// potion already queued, or an owner who is dead, and so is this. The
+    /// index is into the belt as an observation reports it, which skips empty
+    /// slots. The action takes the slot.
+    /// </remarks>
+    private static async Task DiscardPotion(JsonElement req)
+    {
+        Player me = _state.Players[0];
+
+        if (!req.TryGetProperty("index", out JsonElement idxEl) || !idxEl.TryGetInt32(out int index))
+        {
+            await Error("discard_potion", Refusals.Malformed("discard_potion requires an integer 'index'"));
+            return;
+        }
+
+        List<PotionModel> belt = me.Potions.ToList();
+        if (index < 0 || index >= belt.Count)
+        {
+            await Error("discard_potion", Refusals.OutOfRange(index, belt.Count));
+            return;
+        }
+
+        PotionModel potion = belt[index];
+        if (Moves.Discardable(potion, me) is { } why)
+        {
+            await Error("discard_potion", Refusals.Undrinkable(potion, why));
+            return;
+        }
+
+        int slot = me.PotionSlots.ToList().IndexOf(potion);
+        var action = new DiscardPotionGameAction(me, (uint)slot, CombatManager.Instance.IsInProgress);
+        RunManager.Instance.ActionQueueSet.EnqueueWithoutSynchronizing(action);
+        bool resolved = await Driver.Quiesce(action);
+        await Observe(req, "discard_potion", resolved);
     }
 
     private static async Task EndTurn(JsonElement req)

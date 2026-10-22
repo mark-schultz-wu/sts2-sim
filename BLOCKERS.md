@@ -60,6 +60,18 @@ fixed. A fresh mixed hunt of 3,000 on v0.111.0, from seed 10000, parted
 are Regent runs and two are ALL_STAR. Fix those, then hunt both builds
 again toward 3,000 runs in a row with no split.
 
+Two v0.107.1 runs in `recorded.bin` part since the potion discard came in.
+That change sent 128 runs down new paths, and these two are on them.
+Before it, every recorded run agreed to its end.
+
+- Run 588, SILENT C000000288, at step 1307, after a Dual Wield from an
+  event. The simulator shows Precise Cut's base damage as 16, and the game
+  shows 13.
+- Run 2859, REGENT C000000019, at step 994, the run's last. This or That's
+  Plain option kills the player. The game gains no gold after the death,
+  and the simulator gains it. `CreatureCmd.Kill` skips its game-over block
+  under TestMode, so the cause is not yet known.
+
 ### 2. Game logic that runs only in a screen
 
 Some of the game's rules live in `Nodes.*` screen code, which never runs
@@ -67,14 +79,14 @@ headless. The oracle and the simulator agree to leave them out, so no
 hunt finds them. A sweep of the screens found these, each to become a
 move the mod offers and the simulator ports:
 
-- Discarding a potion, which `NPotionPopup` enqueues as
-  `DiscardPotionGameAction`, in a fight or out. Mark chose to list it as
-  a legal move and digest it, so every stored recorded and hunted run
-  is recorded again with it.
-- Backing out of a selection that can be cancelled: Smith, Cook, the
-  shop's card removal and the card-removal reward.
 - Throwing a Foul Potion at the shop's merchant, for 100 gold.
+  `PassesCustomUsabilityCheck` reads the merchant's button, which headless
+  is null, so the mod patches the check. `OnUse` already gains the gold
+  without the screen. `NMerchantRoom.FoulPotionThrown` is sound and a line
+  of dialogue, drawn from `Rng.Chaotic`.
 - Throwing a Foul Potion at the Fake Merchant, which starts its fight.
+  `OnUse` needs `NFakeMerchant` as the event's node, so the mod calls
+  `FakeMerchant.FoulPotionThrown` itself.
 - An empty chest, which the game closes by itself and the mod turns into
   a skip.
 

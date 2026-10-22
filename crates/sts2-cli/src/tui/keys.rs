@@ -47,6 +47,8 @@ pub enum Action {
     Inspect,
     ScrollBack,
     ScrollOn,
+    /// Throw away the potion under the cursor, in the belt.
+    Discard,
 }
 
 /// The keys, as the help panel lists them.
@@ -58,7 +60,10 @@ pub const HELP: &[(&str, &str)] = &[
     ("↑/↓  k/j", "move the cursor, and scroll a list"),
     ("1-9", "take the nth option — or point at the nth card"),
     ("enter", "play the card, take the option"),
-    ("esc", "put it down, close the panel"),
+    (
+        "esc",
+        "put it down, close the panel, back out of a selection",
+    ),
     ("space", "mark a card, where several are wanted"),
     ("e", "end the turn"),
     ("s", "skip — a reward set, or a rest"),
@@ -66,6 +71,7 @@ pub const HELP: &[(&str, &str)] = &[
     ("d / w / f / x", "deck, draw pile, discard, exhaust"),
     ("m", "the act's map"),
     ("p", "your potions — and drink one"),
+    ("backspace", "in the belt: throw that potion away"),
     ("v", "your relics, and what they do"),
     ("[ / ]", "scroll the log"),
     ("r", "ask the game where it is"),
@@ -106,6 +112,7 @@ pub fn map(key: Key) -> Option<Action> {
         KeyCode::Char('m') => Action::ShowMap,
         KeyCode::Char('p') => Action::ShowPotions,
         KeyCode::Char('v') => Action::ShowRelics,
+        KeyCode::Backspace => Action::Discard,
         KeyCode::Char('[') => Action::ScrollBack,
         KeyCode::Char(']') => Action::ScrollOn,
         // `1` is the first, so the digits line up with what is drawn beside
@@ -132,7 +139,7 @@ mod tests {
     #[test]
     fn a_key_with_no_meaning_is_no_action() {
         assert_eq!(press(KeyCode::Char('§')), None);
-        assert_eq!(press(KeyCode::Backspace), None);
+        assert_eq!(press(KeyCode::Tab), None);
     }
 
     #[test]

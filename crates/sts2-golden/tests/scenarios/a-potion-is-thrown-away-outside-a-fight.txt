@@ -1,0 +1,6 @@
+# The potion's popup throws a potion away, out of a fight as in one:
+# `DiscardPotionGameAction`, then `PotionCmd.Discard`. The belt empties
+# and nothing else moves.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","potion":"FIRE_POTION"}
+{"cmd":"discard_potion","index":0}

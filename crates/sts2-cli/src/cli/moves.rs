@@ -92,7 +92,9 @@ pub fn describe<V: sts2_content_wire::WireContentVersion>(decision: &Decision<V>
         Decision::Answer(Answer::Divine { x, y, .. }) => format!("divined {x},{y}"),
         Decision::Answer(Answer::Confirm(true)) => "confirmed".into(),
         Decision::Answer(Answer::Confirm(false)) => "cancelled".into(),
+        Decision::Answer(Answer::Cancel) => "backed out".into(),
         Decision::EnterRoom { room } => format!("entered {}", crate::render::spelling(room)),
+        Decision::DiscardPotion { index } => format!("threw away potion {index}"),
     }
 }
 

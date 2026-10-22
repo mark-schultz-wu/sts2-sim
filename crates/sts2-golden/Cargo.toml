@@ -15,6 +15,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 # What reading the recorded runs finds wrong.
 thiserror = { workspace = true }
+# A build's counts as a length, for whether the belt is full.
+num-traits = { workspace = true }
 
 [build-dependencies]
 sts2-core = { workspace = true }

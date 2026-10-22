@@ -287,6 +287,28 @@ where
                 let at = self.ui.at;
                 return self.aim_or_drink(at);
             }
+            // Only where the run lists the discard: the game's popup shuts
+            // its button for a dead owner, and some screens take no move.
+            Action::Discard => {
+                let Some(index) = u8::try_from(self.ui.at)
+                    .ok()
+                    .and_then(|at| BeltIndex::try_new(at).ok())
+                else {
+                    return Intent::Nothing;
+                };
+                let discard = Decision::DiscardPotion { index };
+                let listed = self
+                    .view()
+                    .is_some_and(|view| view.moves.contains(&discard));
+                if !listed {
+                    self.ui
+                        .say(Tone::Cannot, "that potion cannot be thrown away here");
+                    return Intent::Nothing;
+                }
+                self.ui.overlay = None;
+                self.ui.at = 0;
+                return Intent::Send(discard);
+            }
             // Anything else closes it, the way the read-only panels do.
             _ => {
                 self.ui.overlay = None;
@@ -560,6 +582,15 @@ where
             Action::Up | Action::Left => self.ui.step(-1, len),
             Action::Down | Action::Right => self.ui.step(1, len),
             Action::Nth(n) if n < len => self.ui.at = n,
+            // Esc puts the marks down first. With none, it is the screen's
+            // back button, where the selection has one.
+            Action::Cancel if marked.is_empty() => {
+                let cancel = Decision::Answer(Answer::Cancel);
+                if self.view().is_some_and(|view| view.moves.contains(&cancel)) {
+                    self.ui.aim = Aim::Idle;
+                    return Intent::Send(cancel);
+                }
+            }
             Action::Cancel => marked.clear(),
             Action::Mark => {
                 let at = self.ui.at;
@@ -930,6 +961,63 @@ mod tests {
     use serde_json::json;
     use sts2_content::v0_107_1::V0_107_1;
     use sts2_core::{Applied, Decision};
+
+    /// Esc with nothing marked is a selection's back button, where the run
+    /// lists one. With a card marked it puts the mark down first.
+    #[test]
+    fn esc_backs_out_of_a_selection_that_has_a_back_button() {
+        let applied = fixture::answered(json!({
+            "type": "pending", "seq": 9, "cmd": "choose_option", "digest": "AA",
+            "kind": "select_cards", "min": 1, "max": 1, "asker": null,
+            "options": [{"index": 0, "card": "BASH", "text": null}],
+            "picked": [], "pile": null,
+            "state": {"moves": [
+                {"cmd": "answer", "pick": 0},
+                {"cmd": "answer", "cancel": true}
+            ]}
+        }));
+        let game = Scripted::saying(applied);
+        let sent = game.sent();
+        let mut app = App::playing(game, Options::default());
+        app.look_now();
+        app.press(Action::Mark);
+        app.press(Action::Cancel);
+        assert!(sent.all().is_empty(), "the first esc puts the mark down");
+        app.press(Action::Cancel);
+        assert_eq!(
+            sent.all().last(),
+            Some(&Decision::Answer(sts2_core::Answer::Cancel)),
+        );
+    }
+
+    /// Backspace in the belt throws the potion under the cursor away, where
+    /// the run lists that, and says why not where it does not.
+    #[test]
+    fn backspace_in_the_belt_throws_a_potion_away() {
+        let belt = |moves: serde_json::Value| {
+            let game = Scripted::saying(fixture::applied(json!({
+                "potions": ["FIRE_POTION"],
+                "moves": moves,
+            })));
+            let sent = game.sent();
+            let mut app = App::playing(game, Options::default());
+            app.look_now();
+            app.press(Action::ShowPotions);
+            app.press(Action::Discard);
+            sent.all()
+        };
+        let listed = belt(json!([{"cmd": "discard_potion", "index": 0}]));
+        assert_eq!(
+            listed.last(),
+            Some(&Decision::DiscardPotion {
+                index: sts2_core::BeltIndex::try_new(0).expect("a belt index"),
+            }),
+        );
+        assert!(
+            belt(json!([])).is_empty(),
+            "nothing sent where none is listed"
+        );
+    }
 
     /// A choice out of the draw pile is listed sorted, as the game's screen
     /// lists one. The answer names the card picked by its own index, not by

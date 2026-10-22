@@ -173,6 +173,9 @@ internal sealed class CardSelection : Pending
     private readonly int _max;
     private readonly string? _asker;
 
+    /// <summary>Whether a back button closes the selection, handing the game no cards.</summary>
+    private readonly bool _cancelable;
+
     /// <summary>The options picked so far, in the order they were picked.</summary>
     /// <remarks>
     /// The game's screens take a selection a click at a time, and hand the
@@ -188,6 +191,8 @@ internal sealed class CardSelection : Pending
         _min = min;
         _max = max;
         _asker = asker;
+        _cancelable = CancelableSelection.Cancelable == true;
+        CancelableSelection.Cancelable = null;
     }
 
     public override string Kind => "select_cards";
@@ -280,6 +285,11 @@ internal sealed class CardSelection : Pending
             answers.Add(Answering("done", true));
         }
 
+        if (_cancelable)
+        {
+            answers.Add(Answering("cancel", true));
+        }
+
         return answers;
     }
 
@@ -292,6 +302,22 @@ internal sealed class CardSelection : Pending
     /// </remarks>
     public override Dictionary<string, object?>? Accept(JsonElement req)
     {
+        // The back button: the screen closes, and the game gets no cards.
+        if (req.TryGetProperty("cancel", out JsonElement cancel))
+        {
+            if (cancel.ValueKind != JsonValueKind.True)
+            {
+                return Refusals.Malformed("'cancel' is only an answer when it is true");
+            }
+            if (!_cancelable)
+            {
+                return Refusals.Malformed("this selection cannot be cancelled");
+            }
+            Release();
+            _answer.SetResult(Array.Empty<CardModel>());
+            return null;
+        }
+
         if (req.TryGetProperty("undo", out JsonElement undo))
         {
             if (undo.ValueKind != JsonValueKind.True)

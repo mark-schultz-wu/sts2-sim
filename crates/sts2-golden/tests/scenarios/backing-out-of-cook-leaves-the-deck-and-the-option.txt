@@ -1,0 +1,10 @@
+# Meat Cleaver adds Cook, which removes two cards for nine max HP. Its
+# selection has a back button, and backing out removes nothing, gains
+# nothing, and leaves Cook on offer.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"MEAT_CLEAVER"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"choose_option","index":2}
+{"cmd":"answer","cancel":true}
+{"cmd":"choose_option","index":2}
+{"cmd":"answer","cards":[0,1]}

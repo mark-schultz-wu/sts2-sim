@@ -1766,6 +1766,98 @@ impl<V: Rules> State<V> {
         self.belt_to_fight();
     }
 
+    /// Whether the card selection parked here has a back button, which its
+    /// `CardSelectorPrefs.Cancelable` puts there. Smith, Cook, the shop's
+    /// paid card removal and the card-removal reward each set it. Lord's
+    /// Parasol's free removal does not.
+    fn cancelable(&self) -> bool {
+        match &self.phase {
+            Phase::RestSite {
+                upgrading: true, ..
+            } => true,
+            // Cook, which is the one rest site option that removes cards.
+            Phase::RestSite {
+                asking: Some(asked),
+                ..
+            } => {
+                asked.under.is_none()
+                    && matches!(
+                        asked.pickup,
+                        Pickup::FromDeck {
+                            act: sts2_core::DeckAct::Remove,
+                            ..
+                        }
+                    )
+            }
+            Phase::Shop {
+                unfinished: Some(Unfinished::Removal { free: false }),
+                ..
+            } => true,
+            Phase::Rewards {
+                removing: Some(_), ..
+            } => true,
+            _ => false,
+        }
+    }
+
+    /// The back button on a cancelable card selection: the game gets no
+    /// cards, and what opened the selection is left undone. Smith and Cook
+    /// return false from `OnSelect`, so the option stays and the rest site
+    /// is as it was. The shop's removal is not bought, and the removal
+    /// reward is not taken.
+    fn cancel(&mut self) -> Settled<V> {
+        if !self.cancelable() {
+            return Err(sts2_core::Refusal {
+                what: "answer".into(),
+                reason: sts2_core::Reason::Malformed {
+                    message: "this selection cannot be cancelled".into(),
+                },
+            });
+        }
+        self.picked = sts2_core::Picks::none();
+        match &mut self.phase {
+            Phase::RestSite {
+                upgrading,
+                asking,
+                chosen,
+                ..
+            } => {
+                *upgrading = false;
+                *asking = None;
+                *chosen = None;
+            }
+            Phase::Shop { unfinished, .. } => *unfinished = None,
+            Phase::Rewards { removing, .. } => *removing = None,
+            _ => unreachable!("only a cancelable selection is cancelled"),
+        }
+        Ok(self.decided())
+    }
+
+    /// `DiscardPotionGameAction`, which the potion's popup enqueues:
+    /// `PotionCmd.Discard`, so the potion leaves the belt and
+    /// `AfterPotionDiscarded` is raised, in a fight or out.
+    pub(crate) fn discard_potion(
+        &mut self,
+        index: sts2_core::BeltIndex,
+    ) -> Result<super::Settled<V>, Error> {
+        let at = usize::from(index.get());
+        if at >= self.player.potions.len() {
+            return Ok(Err(sts2_core::Refusal {
+                what: "discard_potion".into(),
+                reason: sts2_core::Reason::OutOfRange {
+                    index: i64::from(index.get()),
+                    count: self.player.potions.len(),
+                },
+            }));
+        }
+        self.drank(at);
+        self.belt_changed(sts2_core::EventHook::PotionDiscarded {
+            in_fight: matches!(self.phase, Phase::Combat(_)),
+            holding_potions: self.holding_potions(),
+        });
+        Ok(Ok(Decided::Resolved))
+    }
+
     /// `Owner.Potions.Any()`.
     pub(super) fn holding_potions(&self) -> bool {
         !self.player.potions.is_empty()
@@ -6463,6 +6555,9 @@ impl<V: Rules> State<V> {
     /// the selection takes more. The picks go to the question once it is
     /// done.
     pub(crate) fn respond(&mut self, answer: &Answer) -> Result<Settled<V>, Error> {
+        if let Answer::Cancel = answer {
+            return Ok(self.cancel());
+        }
         let Some((min, max, offered)) = self.selecting() else {
             if let Answer::Pick(_) | Answer::Undo | Answer::Done = answer {
                 unimplemented!("{answer:?} to a question that selects no cards");
@@ -6954,15 +7049,20 @@ impl<V: Rules> State<V> {
         {
             let mut moves = Legal::new();
             crate::legal::picks(min, max, offered, &self.picked, &mut moves);
+            if self.cancelable() {
+                moves.push(Decision::Answer(Answer::Cancel));
+            }
             return moves;
         }
         if let Phase::Combat(live) = &self.phase {
-            return crate::combat::legal_moves::<V>(
+            let mut moves = crate::combat::legal_moves::<V>(
                 live,
                 &self.player.relics,
                 &self.player.potions,
                 alive,
             );
+            self.discards(alive, &mut moves);
+            return moves;
         }
 
         // `IsGameOver`: a run whose player is dead takes nothing more.
@@ -6971,6 +7071,9 @@ impl<V: Rules> State<V> {
             return moves;
         }
         if self.answers(&mut moves) {
+            if self.pending() == Some(sts2_core::QuestionKind::Rewards) {
+                self.discards(alive, &mut moves);
+            }
             return moves;
         }
         // No fight is live here, so a drink names no creature.
@@ -6991,7 +7094,25 @@ impl<V: Rules> State<V> {
                     .map(|point| Decision::Travel { to: point.at }),
             );
         }
+        self.discards(alive, &mut moves);
         moves
+    }
+
+    /// A discard for each potion in the belt, last in every list, as the
+    /// mod's `Moves.Discards` lists them. The popup's button is shut for a
+    /// dead owner, and no potion is queued at a decision.
+    fn discards(&self, alive: bool, moves: &mut Legal<V>) {
+        if !alive {
+            return;
+        }
+        moves.extend((0..self.player.potions.len()).map(|at| {
+            Decision::DiscardPotion {
+                index: u8::try_from(at)
+                    .ok()
+                    .and_then(|at| sts2_core::BeltIndex::try_new(at).ok())
+                    .expect("a belt fits a byte"),
+            }
+        }));
     }
 
     /// Whether the room the run stands in lets it go to the map.

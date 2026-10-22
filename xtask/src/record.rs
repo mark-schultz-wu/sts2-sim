@@ -9,6 +9,7 @@
 //! cargo xtask record --runs 10 --character SILENT --width 8
 //! cargo xtask record --runs 50 --ascension DoubleBoss --append
 //! STS2_GAME_VERSION=v0.111.0 cargo xtask record
+//! cargo xtask record --again crates/sts2-golden/tests/hunted.bin
 //! ```
 //!
 //! The build is `STS2_GAME_VERSION`'s, and its runs go to its own file, which
@@ -59,6 +60,15 @@ pub struct Args {
     /// Both have to come from one build of the game.
     #[arg(long)]
     append: bool,
+    /// Play the runs this file holds again, rather than new seeds.
+    ///
+    /// Each run keeps its seed, character, ascension and modifiers, and the
+    /// runs go back in their order, to this file unless `--out` names
+    /// another. A run's moves are the game's random picks from its seed, so
+    /// it picks the same moves while the lists are the same. This records a
+    /// new kind of move into the runs already kept.
+    #[arg(long, value_name = "FILE", conflicts_with_all = ["runs", "characters", "ascension", "modifiers", "append"])]
+    again: Option<PathBuf>,
 }
 
 /// One run that did not come back.
@@ -85,18 +95,36 @@ pub fn run(args: Args) -> Result<String, Error> {
         ascension,
         modifiers,
         append,
+        again,
     } = args;
-    let setup = setup(ascension, &modifiers);
     if characters.is_empty() {
         characters = CHARACTERS.iter().map(|c| c.to_string()).collect();
     }
     let root = crate::workspace();
-    let out = match out {
-        Some(out) => out,
-        None => crate::followed::recorded_file(&root)?,
+    let out = match (out, &again) {
+        (Some(out), _) => out,
+        (None, Some(again)) => again.clone(),
+        (None, None) => crate::followed::recorded_file(&root)?,
     };
     let recorder = crate::error::build_example(&root, "record_run")?;
     let merger = crate::error::build_example(&root, "merge_runs")?;
+
+    // Each run to play: its seed, its character and the runner's setup flags.
+    let jobs: Vec<(String, String, Vec<String>)> = match &again {
+        Some(file) => listed(&root, file)?,
+        None => {
+            let setup = setup(ascension, &modifiers);
+            characters
+                .iter()
+                .flat_map(|character| {
+                    (0..runs).map({
+                        let setup = setup.clone();
+                        move |at| (format!("C{at:09}"), character.clone(), setup.clone())
+                    })
+                })
+                .collect()
+        }
+    };
 
     let scratch = root.join("target/record");
     // Rewritten from nothing, so a run kept from another build of the mod
@@ -109,21 +137,21 @@ pub fn run(args: Args) -> Result<String, Error> {
         }
     })?;
 
-    let jobs: Vec<(String, String)> = characters
-        .iter()
-        .flat_map(|character| (0..runs).map(move |at| (format!("C{at:09}"), character.clone())))
-        .collect();
     let next = AtomicUsize::new(0);
     let retried = AtomicUsize::new(0);
     let failed = Mutex::new(Vec::new());
     std::thread::scope(|scope| {
         for worker in 0..width.max(1) {
             let home = scratch.join(format!("home{worker}"));
-            let (jobs, next, retried, failed, recorder, scratch, setup) =
-                (&jobs, &next, &retried, &failed, &recorder, &scratch, &setup);
+            let (jobs, next, retried, failed, recorder, scratch) =
+                (&jobs, &next, &retried, &failed, &recorder, &scratch);
             scope.spawn(move || {
-                while let Some((seed, character)) = jobs.get(next.fetch_add(1, Ordering::Relaxed)) {
-                    let at = run_file(scratch, character, seed);
+                loop {
+                    let index = next.fetch_add(1, Ordering::Relaxed);
+                    let Some((seed, character, setup)) = jobs.get(index) else {
+                        break;
+                    };
+                    let at = run_file(scratch, index, character, seed);
                     let run = (seed.as_str(), character.as_str(), setup.as_slice());
                     if let Err(why) = record_one(recorder, run, &at, &home, retried) {
                         failed.lock().expect("no thread panics").push(Failed {
@@ -140,7 +168,8 @@ pub fn run(args: Args) -> Result<String, Error> {
     let failed = failed.into_inner().expect("no thread panics");
     let kept: Vec<PathBuf> = jobs
         .iter()
-        .map(|(seed, character)| run_file(&scratch, character, seed))
+        .enumerate()
+        .map(|(index, (seed, character, _))| run_file(&scratch, index, character, seed))
         .filter(|file| file.is_file())
         .collect();
     let target = root.join(&out);
@@ -175,9 +204,36 @@ pub fn run(args: Args) -> Result<String, Error> {
     Ok(report)
 }
 
-/// Where one run is written before the runs are merged.
-fn run_file(scratch: &Path, character: &str, seed: &str) -> PathBuf {
-    scratch.join("runs").join(format!("{character}-{seed}.bin"))
+/// Where one run is written before the runs are merged. The index keeps two
+/// runs of one seed and character apart, as a file played `--again` can
+/// hold at two setups.
+fn run_file(scratch: &Path, index: usize, character: &str, seed: &str) -> PathBuf {
+    scratch
+        .join("runs")
+        .join(format!("{index:06}-{character}-{seed}.bin"))
+}
+
+/// The runs a file holds, as `list_runs` lists them, each with its setup.
+fn listed(root: &Path, file: &Path) -> Result<Vec<(String, String, Vec<String>)>, Error> {
+    let lister = crate::error::build_example(root, "list_runs")?;
+    let listed = crate::error::output(Command::new(&lister).arg(root.join(file)))?;
+    Ok(String::from_utf8_lossy(&listed.stdout)
+        .lines()
+        .filter_map(|line| {
+            let mut parts = line.split('\t');
+            let (seed, character, ascension, modifiers) =
+                (parts.next()?, parts.next()?, parts.next()?, parts.next()?);
+            let modifiers: Vec<String> = match modifiers {
+                "-" => Vec::new(),
+                listed => listed.split(',').map(str::to_owned).collect(),
+            };
+            Some((
+                seed.to_owned(),
+                character.to_owned(),
+                setup(ascension.to_owned(), &modifiers),
+            ))
+        })
+        .collect())
 }
 
 /// The runner's flags for a run at `ascension` with `modifiers`, which

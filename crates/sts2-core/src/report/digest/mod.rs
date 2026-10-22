@@ -646,6 +646,10 @@ impl Sink {
                 self.u8(7);
                 self.u8(*index);
             }
+            Decision::DiscardPotion { index } => {
+                self.u8(9);
+                self.u8(index.get());
+            }
             Decision::Answer(answer) => {
                 self.u8(8);
                 match answer {
@@ -703,6 +707,7 @@ impl Sink {
                         self.u8(7);
                         self.bool(*yes);
                     }
+                    Answer::Cancel => self.u8(8),
                 }
             }
         }

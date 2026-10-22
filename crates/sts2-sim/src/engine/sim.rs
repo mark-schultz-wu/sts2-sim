@@ -86,8 +86,12 @@ impl<V: Rules> Sim<V> {
     #[tracing::instrument(level = "trace", skip_all, fields(decision = name(decision)))]
     pub fn decide(&mut self, decision: &Decision<V>) -> Result<Settled<V>, Error> {
         let pending = self.state.pending();
+        // A reward screen leaves the belt open, so a discard is the one
+        // other decision it takes.
         if let Some(kind) = pending
             && !matches!(decision, Decision::Answer(_))
+            && !(matches!(decision, Decision::DiscardPotion { .. })
+                && kind == sts2_core::QuestionKind::Rewards)
         {
             return Ok(Err(Refusal {
                 what: name(decision).into(),
@@ -108,6 +112,7 @@ impl<V: Rules> Sim<V> {
             Decision::UsePotion { index, target } => self.state.use_potion(*index, *target),
             Decision::Proceed => self.state.proceed().map(Ok),
             Decision::Buy { index } => self.state.buy(*index).map(Ok),
+            Decision::DiscardPotion { index } => self.state.discard_potion(*index),
             Decision::EnterRoom { room } => self.state.enter_room(*room).map(Ok),
             Decision::Travel { to } => match self.state.resolve(*to) {
                 Err(reason) => Ok(Err(Refusal {
@@ -182,5 +187,6 @@ fn name<V: Rules>(decision: &Decision<V>) -> &'static str {
         Decision::ChooseOption { .. } => "choose_option",
         Decision::Buy { .. } => "buy",
         Decision::Answer(_) => "answer",
+        Decision::DiscardPotion { .. } => "discard_potion",
     }
 }
