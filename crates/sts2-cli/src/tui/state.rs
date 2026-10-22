@@ -14,8 +14,6 @@ use std::path::PathBuf;
 pub struct Options {
     /// Where the run is being written, for the header to say so.
     pub recording: Option<PathBuf>,
-    /// Show the RNG stream counters, as `--rng` does for the subcommands.
-    pub rng: bool,
 }
 
 /// Which pile the pile viewer is showing.

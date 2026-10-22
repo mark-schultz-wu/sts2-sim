@@ -31,10 +31,6 @@ struct Cli {
     /// Which build's rules to play, as its lock under `mod/games/` names it.
     #[arg(long, default_value = "v0.107.1")]
     game_version: String,
-
-    /// Also show the RNG stream counters.
-    #[arg(long)]
-    rng: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -49,8 +45,8 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
     // One arm per build `sts2-content` compiles.
     let played = match cli.game_version.as_str() {
-        "v0.107.1" => play::<sts2_content::v0_107_1::V0_107_1>(cli.rng),
-        "v0.111.0" => play::<sts2_content::v0_111_0::V0_111_0>(cli.rng),
+        "v0.107.1" => play::<sts2_content::v0_107_1::V0_107_1>(),
+        "v0.111.0" => play::<sts2_content::v0_111_0::V0_111_0>(),
         other => Err(Error::NoBuild(other.to_owned())),
     };
     match played {
@@ -63,7 +59,7 @@ fn main() -> ExitCode {
 }
 
 /// The setup screen, then a run on it, until the player quits.
-fn play<V: sts2_content_wire::WireContentVersion + Rules>(rng: bool) -> Result<(), Error> {
+fn play<V: sts2_content_wire::WireContentVersion + Rules>() -> Result<(), Error> {
     ratatui::run(|terminal| {
         let mut screen = tui::setup::Screen::<V>::default();
         loop {
@@ -77,10 +73,7 @@ fn play<V: sts2_content_wire::WireContentVersion + Rules>(rng: bool) -> Result<(
                     continue;
                 }
             };
-            let options = tui::Options {
-                recording: None,
-                rng,
-            };
+            let options = tui::Options { recording: None };
             if tui::play(terminal, game, options)? == tui::Ended::Quit {
                 return Ok(());
             }

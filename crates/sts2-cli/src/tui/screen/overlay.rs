@@ -35,7 +35,7 @@ where
             // showing down each side reads as a torn panel rather than as
             // something lying on top of something else.
             let area = centred(body, body.width, body.height);
-            let Some(observed) = app.observation() else {
+            let Some(observed) = app.view() else {
                 return;
             };
             frame.render_widget(Clear, area);
@@ -113,7 +113,7 @@ where
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
-    let Some(observed) = app.observation() else {
+    let Some(observed) = app.view() else {
         return;
     };
     let potions = &observed.potions;
@@ -187,7 +187,7 @@ where
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
-    let Some(observed) = app.observation() else {
+    let Some(observed) = app.view() else {
         return;
     };
     let relics = &observed.relics;
@@ -234,7 +234,7 @@ where
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
-    let Some(observed) = app.observation() else {
+    let Some(observed) = app.view() else {
         return;
     };
     let combat = observed.fight();

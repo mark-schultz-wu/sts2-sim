@@ -354,7 +354,7 @@ fn drive<V: sts2_content_wire::WireContentVersion>(cli: Cli) -> Result<(), V> {
     let held: Host<V> = Held::new(serving);
 
     let Some(top) = cli.command else {
-        return play(&held, show);
+        return play(&held);
     };
 
     match grouped(top) {
@@ -418,7 +418,7 @@ fn start<V: sts2_content_wire::WireContentVersion>(
 /// which is one line and says what it does. Bringing the game up on a bare
 /// `sts2` means twenty seconds of nothing, followed by a screen with no run in
 /// it. It also gives the player no way to say which seed they wanted.
-fn play<V: sts2_content_wire::WireContentVersion>(held: &Host<V>, show: Show) -> Result<(), V> {
+fn play<V: sts2_content_wire::WireContentVersion>(held: &Host<V>) -> Result<(), V> {
     // The daemon comes up. The *game* does not, so a bare `sts2` opens on the
     // setup screen straight away and the game boots while the player is picking
     // a character.
@@ -427,7 +427,6 @@ fn play<V: sts2_content_wire::WireContentVersion>(held: &Host<V>, show: Show) ->
     let game = held.attached();
     let options = tui::Options {
         recording: game.status().ok().and_then(|status| status.recording),
-        rng: show.rng,
     };
     // What run to draw, and what to do when one ends, is this front end's
     // business rather than the screen's. The screen draws a run and says how it

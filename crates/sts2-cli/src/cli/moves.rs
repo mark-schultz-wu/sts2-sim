@@ -14,12 +14,12 @@ pub fn legal<V: sts2_content_wire::WireContentVersion>(snapshot: &Snapshot<V>) -
     snapshot.observation.moves.clone()
 }
 
-/// The ordinary numbered choices shared by terminal and automation frontends.
+/// The ordinary numbered choices shared by terminal and automation frontends,
+/// out of every legal move.
 pub fn navigation<V: sts2_content_wire::WireContentVersion>(
-    snapshot: &Snapshot<V>,
+    legal: &[Decision<V>],
 ) -> Vec<Decision<V>> {
-    legal(snapshot)
-        .into_iter()
+    (legal.iter())
         .filter(|decision| {
             matches!(
                 decision,
@@ -29,6 +29,7 @@ pub fn navigation<V: sts2_content_wire::WireContentVersion>(
                     | Decision::Proceed
             )
         })
+        .cloned()
         .collect()
 }
 
@@ -166,7 +167,7 @@ mod tests {
         }));
 
         assert_eq!(
-            navigation(&applied.snapshot()),
+            navigation(&applied.observation.moves),
             vec![Decision::ChooseOption { index: 6 }]
         );
     }

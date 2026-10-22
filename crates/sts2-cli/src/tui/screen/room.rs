@@ -206,7 +206,7 @@ where
     G::Error: std::error::Error + Send + Sync + 'static,
 {
     let travelable = app
-        .observation()
+        .view()
         .map(|o| o.map.travelable.clone())
         .unwrap_or_default();
 

@@ -680,7 +680,7 @@ mod tests {
         let opening = frame(&app);
         assert!(opening.contains("Neow"), "{opening}");
 
-        let floor = |app: &App<V, sts2_sim::Sim<V>>| app.observation().map(|seen| seen.floor);
+        let floor = |app: &App<V, sts2_sim::Sim<V>>| app.view().map(|seen| seen.floor);
         let before = floor(&app);
         for _ in 0..12 {
             if app.moves().is_empty() {

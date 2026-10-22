@@ -1,8 +1,8 @@
 //! The loop: draw, wait for a key, turn it into a move, send it, draw again.
 //!
 //! Everything the game is asked is a `Decision<V>`, and everything drawn comes
-//! out of the `Applied<V>` that came back. So this module is the only one that
-//! knows both. The screens read, and this decides.
+//! out of the view of the `Applied<V>` that came back. So this module is the
+//! only one that knows both. The screens read, and this decides.
 //!
 //! Two rules it holds to. A key that cannot mean anything here does nothing and
 //! says nothing, because a beep on every stray press is worse than silence. And
@@ -13,8 +13,8 @@ use super::Error;
 use ratatui::DefaultTerminal;
 use ratatui::crossterm::event::{self, Event, KeyEvent, KeyEventKind};
 use sts2_core::{
-    Answer, BeltIndex, CombatId, Cost, Decided, Decision, HandIndex, Observation, Picks, Play,
-    Question, Room, Snapshot, TakeReward,
+    Answer, BeltIndex, CombatId, Cost, Decided, Decision, HandIndex, Picks, Play, Question, Room,
+    Snapshot, TakeReward, View,
 };
 
 use super::keys::{self, Action};
@@ -106,8 +106,12 @@ pub struct App<V: sts2_content_wire::WireContentVersion, G: Play<V>> {
     game: G,
     /// Why the loop will stop, read once it has.
     ended: Ended,
-    /// The most recent thing the game said. `None` only before the first look.
-    seen: Option<Snapshot<V>>,
+    /// What the player can see of where the game last stood. `None` only
+    /// before the first look.
+    ///
+    /// The view and never the snapshot, so nothing the game keeps off its
+    /// own screen can reach one of these.
+    seen: Option<View<V>>,
     stage: Stage,
     /// The run being set up, when there is no run.
     ///
@@ -138,13 +142,9 @@ where
         }
     }
 
-    /// What the game last said, for the screens to draw.
-    pub fn seen(&self) -> Option<&Snapshot<V>> {
+    /// What the player can see, for the screens to draw.
+    pub fn view(&self) -> Option<&View<V>> {
         self.seen.as_ref()
-    }
-
-    pub fn observation(&self) -> Option<&Observation<V>> {
-        self.seen.as_ref().map(|a| &a.observation)
     }
 
     /// One look, for a caller that draws its own frames.
@@ -289,7 +289,7 @@ where
     /// This is not a second opinion about drinkability. No rule about when a
     /// potion can be drunk lives in this crate.
     fn in_belt(&mut self, action: Action) -> Intent<V> {
-        let belt = self.observation().map(|o| o.potions.len()).unwrap_or(0);
+        let belt = self.view().map(|o| o.potions.len()).unwrap_or(0);
 
         match action {
             Action::Cancel | Action::ShowPotions => {
@@ -321,7 +321,7 @@ where
     /// legal target still goes through aiming, because aiming is when the
     /// screen shows which creature it is about to land on.
     fn aim_or_drink(&mut self, at: usize) -> Intent<V> {
-        let Some(potion) = self.observation().and_then(|o| o.potions.get(at)) else {
+        let Some(potion) = self.view().and_then(|o| o.potions.get(at)) else {
             return Intent::Nothing;
         };
 
@@ -407,7 +407,7 @@ where
     // -----------------------------------------------------------------------
 
     fn in_fight(&mut self, action: Action) -> Intent<V> {
-        let Some(combat) = self.observation().and_then(|o| o.fight()) else {
+        let Some(combat) = self.view().and_then(|o| o.fight()) else {
             return Intent::Nothing;
         };
         let hand = combat.legal.len();
@@ -426,7 +426,7 @@ where
                 at,
             )),
             Aim::Drinking { potion, at } => Some((
-                self.observation()
+                self.view()
                     .and_then(|o| o.potions.get(potion))
                     .map(|p| p.targets.clone())
                     .unwrap_or_default(),
@@ -499,7 +499,7 @@ where
     /// computed effect on the creature, including changes from Strength or
     /// Vulnerable. Only a card with no target plays immediately.
     fn aim_or_play(&mut self) -> Intent<V> {
-        let Some(combat) = self.observation().and_then(|o| o.fight()) else {
+        let Some(combat) = self.view().and_then(|o| o.fight()) else {
             return Intent::Nothing;
         };
         let at = self.ui.at;
@@ -672,7 +672,7 @@ where
     pub fn moves(&self) -> Vec<Decision<V>> {
         self.seen
             .as_ref()
-            .map(crate::cli::moves::navigation)
+            .map(|seen| crate::cli::moves::navigation(&seen.moves))
             .unwrap_or_default()
     }
 
@@ -706,14 +706,14 @@ where
     pub fn aimed_at(&self) -> Option<CombatId> {
         let (targets, at) = match self.ui.aim {
             Aim::Targeting { card, at } => (
-                self.observation()
+                self.view()
                     .and_then(|o| o.fight())
                     .and_then(|c| c.legal.get(card))
                     .map(|c| c.targets.as_slice())?,
                 at,
             ),
             Aim::Drinking { potion, at } => (
-                self.observation()
+                self.view()
                     .and_then(|o| o.potions.get(potion))
                     .map(|p| p.targets.as_slice())?,
                 at,
@@ -775,12 +775,13 @@ where
     /// Takes where the run now stands, and resets the log when the screen
     /// behind it changes.
     fn arrive(&mut self, standing: Snapshot<V>) {
-        let stage = stage_of(&standing);
+        let seen = standing.view();
+        let stage = stage_of(&seen);
         if stage != self.stage {
             self.ui.reset();
             self.stage = stage;
         }
-        self.seen = Some(standing);
+        self.seen = Some(seen);
     }
 
     fn accept(&mut self, answered: sts2_core::Answered<V>, said: Option<String>) -> bool {
@@ -821,7 +822,7 @@ where
 
     /// Puts the card under the cursor into the detail panel.
     fn inspect_card(&mut self) {
-        let Some(combat) = self.observation().and_then(|o| o.fight()) else {
+        let Some(combat) = self.view().and_then(|o| o.fight()) else {
             return;
         };
         let Some(card) = combat.legal.get(self.ui.at) else {
@@ -892,7 +893,7 @@ fn drink<V: sts2_content_wire::WireContentVersion>(
 }
 
 /// Which kind of screen this is.
-fn stage_of<V: sts2_content_wire::WireContentVersion>(standing: &Snapshot<V>) -> Stage {
+fn stage_of<V: sts2_content_wire::WireContentVersion>(standing: &View<V>) -> Stage {
     if let Some(question) = &standing.asking {
         return match question {
             Question::SelectCards { .. } => Stage::AskingCards,
@@ -903,7 +904,7 @@ fn stage_of<V: sts2_content_wire::WireContentVersion>(standing: &Snapshot<V>) ->
         };
     }
 
-    let observed = &standing.observation;
+    let observed = standing;
     if observed.run_over {
         return Stage::Over;
     }
@@ -938,6 +939,44 @@ mod tests {
     use serde_json::json;
     use sts2_content::v0_107_1::V0_107_1;
     use sts2_core::{Applied, Decision};
+
+    /// The draw pile is listed the way the game's pile screen lists it, by
+    /// rarity and then id. Two runs with the same cards in another order show
+    /// the same pile, so the screen cannot say which card comes next.
+    #[test]
+    fn the_draw_pile_hides_its_order() {
+        let pile = |draw: serde_json::Value| {
+            let snapshot = fixture::snapshot(json!({
+                "inCombat": true,
+                "combat": fixture::combat(json!({"draw": draw})),
+            }));
+            let view = snapshot.view();
+            (view.combat.expect("in a fight").draw.iter())
+                .map(crate::render::ident)
+                .collect::<Vec<_>>()
+        };
+        let drawn = [
+            "INFLAME",
+            "STRIKE_IRONCLAD+1",
+            "ANGER",
+            "STRIKE_IRONCLAD",
+            "BASH",
+        ];
+        let mut reversed = drawn;
+        reversed.reverse();
+        let listed = pile(json!(drawn));
+        assert_eq!(listed, pile(json!(reversed)));
+        assert_eq!(
+            listed,
+            [
+                "BASH",
+                "STRIKE_IRONCLAD",
+                "STRIKE_IRONCLAD+1",
+                "ANGER",
+                "INFLAME"
+            ],
+        );
+    }
 
     type V = V0_107_1;
 

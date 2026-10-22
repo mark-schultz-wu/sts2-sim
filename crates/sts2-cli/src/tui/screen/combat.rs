@@ -23,7 +23,7 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph};
-use sts2_core::{Combat, CombatId, Creature, Play};
+use sts2_core::{CombatId, Play, SeenCreature, SeenFight};
 
 use crate::render::spelling;
 use crate::tui::app::App;
@@ -47,7 +47,7 @@ const YOU_ROWS: u16 = 3;
 /// the fight beside the log, not between related combatants.
 const AIR_MAX: u16 = 8;
 
-pub fn draw<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>, combat: &Combat<V>)
+pub fn draw<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>, combat: &SeenFight<V>)
 where
     V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
@@ -109,8 +109,8 @@ where
 /// model category. The player gets a separate row and appears in neither list.
 /// If no player exists, every creature is treated as an enemy.
 fn sides<V: sts2_content_wire::WireContentVersion>(
-    combat: &Combat<V>,
-) -> (Vec<&Creature<V>>, Vec<&Creature<V>>) {
+    combat: &SeenFight<V>,
+) -> (Vec<&SeenCreature<V>>, Vec<&SeenCreature<V>>) {
     let Some(you) = combat.creatures.iter().find(|c| is_player(c)) else {
         return (Vec::new(), combat.creatures.iter().collect());
     };
@@ -127,7 +127,7 @@ fn creature_row<V: sts2_content_wire::WireContentVersion>(
     frame: &mut Frame,
     area: Rect,
     title: &str,
-    them: &[&Creature<V>],
+    them: &[&SeenCreature<V>],
     aimed: Option<CombatId>,
 ) {
     let block = titled(title);
@@ -154,7 +154,7 @@ fn creature_row<V: sts2_content_wire::WireContentVersion>(
 fn enemy<V: sts2_content_wire::WireContentVersion>(
     frame: &mut Frame,
     area: Rect,
-    creature: &Creature<V>,
+    creature: &SeenCreature<V>,
     aimed: bool,
 ) {
     let style = match (aimed, creature.alive) {
@@ -170,7 +170,7 @@ fn enemy<V: sts2_content_wire::WireContentVersion>(
     }
 
     let width = inner.width as usize;
-    let mut lines = vec![intent_line(creature, width)];
+    let mut lines = vec![intent_line(creature)];
 
     let name = match &creature.model {
         Some(model) => names::pretty(&crate::render::entry(model)),
@@ -198,18 +198,12 @@ fn enemy<V: sts2_content_wire::WireContentVersion>(
 /// What the creature has told the player it will do.
 ///
 /// The numbers first, because that is what the turn is planned against. The
-/// move's name comes after in grey, so a name nobody recognises is not
-/// competing with the damage.
+/// move's name is not shown, because the game does not show it.
 fn intent_line<V: sts2_content_wire::WireContentVersion>(
-    creature: &Creature<V>,
-    width: usize,
+    creature: &SeenCreature<V>,
 ) -> Line<'static> {
-    let Some(next) = &creature.next_move else {
-        return Line::styled("??", theme::dim());
-    };
-
     let mut spans: Vec<Span> = Vec::new();
-    for intent in &next.intents {
+    for intent in &creature.intents {
         if !spans.is_empty() {
             spans.push(Span::raw("  "));
         }
@@ -244,13 +238,6 @@ fn intent_line<V: sts2_content_wire::WireContentVersion>(
         spans.push(Span::styled("??", theme::dim()));
     }
 
-    let used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
-    let move_name = names::move_id(&spelling(&next.id));
-    if used + move_name.chars().count() + 2 <= width {
-        let gap = width - used - move_name.chars().count();
-        spans.push(Span::raw(" ".repeat(gap)));
-        spans.push(Span::styled(move_name, theme::dim()));
-    }
     Line::from(spans)
 }
 
@@ -269,7 +256,7 @@ fn kind_of<T: serde::Serialize + std::fmt::Debug>(kind: &T) -> String {
 /// Uses the game.s power table rather than a hardcoded list of debuffs. Powers
 /// marked `dynamic` decide at runtime and remain neutral here.
 fn powers<V: sts2_content_wire::WireContentVersion>(
-    creature: &Creature<V>,
+    creature: &SeenCreature<V>,
     width: usize,
 ) -> Line<'static> {
     let made = creature
@@ -293,7 +280,7 @@ fn powers<V: sts2_content_wire::WireContentVersion>(
 fn you_row<V: sts2_content_wire::WireContentVersion>(
     frame: &mut Frame,
     area: Rect,
-    combat: &Combat<V>,
+    combat: &SeenFight<V>,
 ) {
     let block = titled("you");
     let inner = block.inner(area);
@@ -335,7 +322,7 @@ fn you_row<V: sts2_content_wire::WireContentVersion>(
 // The hand.
 // ---------------------------------------------------------------------------
 
-fn hand_row<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>, combat: &Combat<V>)
+fn hand_row<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>, combat: &SeenFight<V>)
 where
     V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
@@ -393,7 +380,7 @@ where
 fn pile_bar<V: sts2_content_wire::WireContentVersion>(
     frame: &mut Frame,
     area: Rect,
-    combat: &Combat<V>,
+    combat: &SeenFight<V>,
 ) {
     let spans = vec![
         Span::raw(" "),
@@ -412,7 +399,7 @@ fn pile_bar<V: sts2_content_wire::WireContentVersion>(
 /// Side alone is insufficient because a charmed monster can fight for you. A
 /// missing model is also insufficient because real players have character model
 /// ids. The model category identifies the player.
-fn is_player<V: sts2_content_wire::WireContentVersion>(creature: &Creature<V>) -> bool {
+fn is_player<V: sts2_content_wire::WireContentVersion>(creature: &SeenCreature<V>) -> bool {
     match &creature.model {
         Some(model) => matches!(model, sts2_core::ModelId::Character(_)),
         // A creature that is neither a monster nor a player. Nothing in this

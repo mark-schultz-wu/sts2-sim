@@ -11,9 +11,10 @@
 //! `main.rs`, and a simulator goes in the same slot.
 //!
 //! Nothing here decides anything about the run. Every move goes through
-//! `Decision<V>`, and every screen is drawn from the `Observation<V>` that came
-//! back. The TUI cannot show a state the game did not report. The failure mode
-//! is a blank panel, never an invented number.
+//! `Decision<V>`, and every screen is drawn from the [`View`](sts2_core::View)
+//! of what came back. The TUI cannot show a state the game did not report, nor
+//! one the game keeps off its own screen. The failure mode is a blank panel,
+//! never an invented number.
 
 pub mod app;
 pub mod check;

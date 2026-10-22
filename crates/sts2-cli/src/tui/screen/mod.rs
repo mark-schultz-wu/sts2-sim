@@ -23,7 +23,7 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
-use sts2_core::{Observation, Play, Question};
+use sts2_core::{Play, Question, View};
 
 use super::app::App;
 use super::names;
@@ -62,9 +62,9 @@ where
     ])
     .areas(whole);
 
-    match app.observation() {
+    match app.view() {
         Some(observed) => {
-            run_strip(frame, strip, observed, app.options.rng);
+            run_strip(frame, strip, observed);
             body_of(frame, body, app, observed);
         }
         // Not "there is no run" — that is the setup screen above. This is the
@@ -86,8 +86,7 @@ where
 fn run_strip<V: sts2_content_wire::WireContentVersion>(
     frame: &mut Frame,
     area: Rect,
-    observed: &Observation<V>,
-    rng: bool,
+    observed: &View<V>,
 ) {
     let mut spans = vec![
         Span::styled(
@@ -143,28 +142,16 @@ fn run_strip<V: sts2_content_wire::WireContentVersion>(
         spans.push(Span::styled(potions.join(" · "), theme::dim()));
     }
 
-    if rng {
-        let draws: u32 = observed.rng.run.values().map(|at| at.counter).sum::<u32>()
-            + observed
-                .rng
-                .player
-                .values()
-                .map(|at| at.counter)
-                .sum::<u32>();
-        spans.push(Span::raw("   "));
-        spans.push(Span::styled(format!("rng {draws}"), theme::dim()));
-    }
-
     frame.render_widget(Line::from(spans), area);
 }
 
-fn body_of<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>, observed: &Observation<V>)
+fn body_of<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>, observed: &View<V>)
 where
     V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
-    if let Some(question) = app.seen().and_then(|a| a.asking.as_ref()) {
+    if let Some(question) = app.view().and_then(|a| a.asking.as_ref()) {
         return room::asking(frame, area, app, question);
     }
     if observed.run_over {
@@ -186,7 +173,7 @@ where
 fn over<V: sts2_content_wire::WireContentVersion>(
     frame: &mut Frame,
     area: Rect,
-    observed: &Observation<V>,
+    observed: &View<V>,
 ) {
     let (word, style) = match observed.victory {
         Some(true) => ("the spire is yours", theme::better()),
@@ -262,7 +249,7 @@ where
     G::Error: std::error::Error + Send + Sync + 'static,
 {
     let at = app.drinking()?;
-    let potion = app.observation()?.potions.get(at)?;
+    let potion = app.view()?.potions.get(at)?;
     Some(
         potion
             .title
@@ -285,11 +272,8 @@ where
         return;
     }
 
-    let asking = app.seen().and_then(|a| a.asking.as_ref());
-    let in_fight = app
-        .observation()
-        .map(|o| o.fight().is_some())
-        .unwrap_or(false);
+    let asking = app.view().and_then(|a| a.asking.as_ref());
+    let in_fight = app.view().map(|o| o.fight().is_some()).unwrap_or(false);
     let aiming = app.aimed_at().is_some();
 
     match (asking, in_fight, aiming) {

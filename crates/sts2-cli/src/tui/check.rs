@@ -475,7 +475,7 @@ where
 {
     // Worked out from the room, not from `App::moves` — a numbering that is
     // both the expectation and the thing under test is never wrong.
-    let Some(room) = app.observation().and_then(|o| o.room.as_ref()) else {
+    let Some(room) = app.view().and_then(|o| o.room.as_ref()) else {
         return Outcome::Unreachable("there is no room here".into());
     };
     let open = still_open(room);
@@ -535,7 +535,7 @@ where
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
-    let Some(Question::Rewards { rewards, .. }) = app.seen().and_then(|a| a.asking.as_ref()) else {
+    let Some(Question::Rewards { rewards, .. }) = app.view().and_then(|a| a.asking.as_ref()) else {
         return Outcome::Unreachable("the game is not offering rewards".into());
     };
     let Some(first) = rewards
@@ -666,7 +666,7 @@ where
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
-    app.observation()?
+    app.view()?
         .fight()?
         .legal
         .iter()
@@ -714,7 +714,7 @@ where
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
-    app.observation()?
+    app.view()?
         .potions
         .iter()
         .enumerate()
@@ -729,10 +729,7 @@ where
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
-    app.observation()?
-        .potions
-        .iter()
-        .position(|p| p.reason.is_some())
+    app.view()?.potions.iter().position(|p| p.reason.is_some())
 }
 
 fn first_unplayable<V, G>(app: &App<V, G>) -> Option<usize>
@@ -741,7 +738,7 @@ where
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
-    app.observation()?
+    app.view()?
         .fight()?
         .legal
         .iter()
