@@ -8,7 +8,7 @@
 //! and on a shop entry it is a purchase. What a key *means* is here. What it
 //! does is `app`, which is the only place that knows what the game is showing.
 
-use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use super::input::{Key, KeyCode};
 
 /// What a key asked for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -77,8 +77,8 @@ pub const HELP: &[(&str, &str)] = &[
 ///
 /// `ctrl-c` is quit as well as `q`, because a terminal program that ignores it
 /// is a terminal program somebody has to kill.
-pub fn map(key: KeyEvent) -> Option<Action> {
-    if key.modifiers.contains(KeyModifiers::CONTROL) {
+pub fn map(key: Key) -> Option<Action> {
+    if key.ctrl {
         return match key.code {
             KeyCode::Char('c') => Some(Action::Quit),
             _ => None,
@@ -118,15 +118,9 @@ pub fn map(key: KeyEvent) -> Option<Action> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ratatui::crossterm::event::KeyEventKind;
 
     fn press(code: KeyCode) -> Option<Action> {
-        map(KeyEvent {
-            code,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            state: ratatui::crossterm::event::KeyEventState::NONE,
-        })
+        map(Key::from(code))
     }
 
     #[test]
@@ -138,18 +132,16 @@ mod tests {
     #[test]
     fn a_key_with_no_meaning_is_no_action() {
         assert_eq!(press(KeyCode::Char('§')), None);
-        assert_eq!(press(KeyCode::F(7)), None);
+        assert_eq!(press(KeyCode::Backspace), None);
     }
 
     #[test]
     fn control_c_leaves() {
-        let event = KeyEvent {
+        let key = Key {
             code: KeyCode::Char('c'),
-            modifiers: KeyModifiers::CONTROL,
-            kind: KeyEventKind::Press,
-            state: ratatui::crossterm::event::KeyEventState::NONE,
+            ctrl: true,
         };
-        assert_eq!(map(event), Some(Action::Quit));
+        assert_eq!(map(key), Some(Action::Quit));
     }
 
     /// The help panel is the only documentation of the keymap, so a key that

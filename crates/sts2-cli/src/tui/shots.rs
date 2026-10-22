@@ -445,6 +445,27 @@ mod tests {
         );
     }
 
+    /// The screen needs no terminal: keys of its own go in, and it draws into
+    /// whatever backend it is handed. An ssh session or a browser drives it
+    /// this way.
+    #[test]
+    fn the_screen_plays_on_any_backend_with_its_own_keys() {
+        use crate::tui::input::{Key, KeyCode};
+
+        let mut app = App::playing(Scripted::saying(a_fight()), Options::default());
+        app.look_now();
+        let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("a test terminal");
+        app.key(Key::from(KeyCode::Char('d')))
+            .expect("the key is read");
+        terminal.draw(|frame| app.draw(frame)).expect("a frame");
+        let buffer = terminal.backend().buffer();
+        let text: String = (0..buffer.area.height)
+            .flat_map(|y| (0..buffer.area.width).map(move |x| (x, y)))
+            .map(|at| buffer[at].symbol())
+            .collect();
+        assert!(text.contains("Deck (3)"), "the deck panel opened: {text}");
+    }
+
     /// A card's frame says what kind it is: an attack is red, a skill blue,
     /// and a power yellow.
     #[test]

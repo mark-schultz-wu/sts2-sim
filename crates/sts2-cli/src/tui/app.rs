@@ -10,15 +10,13 @@
 //! refusal is the game answering, and the run carries on.
 
 use super::Error;
-use ratatui::DefaultTerminal;
-use ratatui::crossterm::event::{self, Event, KeyEvent, KeyEventKind};
 use sts2_core::{
     Answer, BeltIndex, CombatId, Cost, Decided, Decision, HandIndex, Picks, Play, Question, Room,
     Snapshot, TakeReward, View,
 };
 
+use super::input::Key;
 use super::keys::{self, Action};
-use super::screen;
 use super::state::{Aim, Options, Overlay, Pile, Tone, Ui};
 use crate::cli::{choose, moves};
 use crate::render::{self, Amount, Pool};
@@ -147,6 +145,17 @@ where
         self.seen.as_ref()
     }
 
+    /// Draws the screen into a frame of any backend, for a driver other than
+    /// the local terminal's.
+    pub fn draw(&self, frame: &mut ratatui::Frame) {
+        super::screen::draw(frame, self);
+    }
+
+    /// Why the screen stopped, once it has.
+    pub fn ended(&self) -> Ended {
+        self.ended
+    }
+
     /// One look, for a caller that draws its own frames.
     ///
     /// Public because `check` drives the front end without a terminal under it.
@@ -167,7 +176,7 @@ where
     /// One key press.
     ///
     /// Raw rather than an [`Action`], for a caller that has one.
-    pub fn key(&mut self, key: KeyEvent) -> Result<(), Error> {
+    pub fn key(&mut self, key: Key) -> Result<(), Error> {
         // A toast lasts until the next key, which has read it or moved on.
         self.ui.toast = None;
         let intent = self.decide(key);
@@ -179,7 +188,7 @@ where
     /// Every handler it reaches is a state transition, and none of them can
     /// fail. Asking the game is [`App::perform`]'s, and happens after the
     /// screen has finished changing.
-    pub fn decide(&mut self, key: KeyEvent) -> Intent<V> {
+    pub fn decide(&mut self, key: Key) -> Intent<V> {
         match keys::map(key) {
             Some(action) => self.act(action),
             None => Intent::Nothing,
@@ -196,37 +205,6 @@ where
             Intent::Look => self.look(),
             Intent::Send(decision) => self.send(decision).map(drop),
         }
-    }
-
-    /// Draws and reads keys until the player leaves, or the run goes away.
-    ///
-    /// The daemon's game can idle out from under a live screen. What comes back
-    /// says which happened, because a run that is gone wants the setup screen
-    /// rather than a window onto nothing.
-    pub fn run(mut self, terminal: &mut DefaultTerminal) -> Result<Ended, Error> {
-        // One look before the first frame, so the screen is the run rather than
-        // an empty shape waiting for a key.
-        self.look()?;
-
-        while !self.ui.leaving {
-            terminal
-                .draw(|frame| screen::draw(frame, &self))
-                .map_err(|source| Error::Draw {
-                    screen: "screen",
-                    source,
-                })?;
-
-            // Blocked on, not polled. A player thinking about a card sends
-            // nothing, and nothing is what should happen: the daemon keeps the
-            // game alive on its own, so the screen has no clock to answer to.
-            match event::read().map_err(Error::Key)? {
-                Event::Key(key) if key.kind == KeyEventKind::Press => self.key(key)?,
-                // A resize repaints on the next pass round the loop, which is
-                // the next statement. Nothing else to do.
-                _ => {}
-            }
-        }
-        Ok(self.ended)
     }
 
     // -----------------------------------------------------------------------
@@ -746,7 +724,7 @@ where
     // Talking to the game.
     // -----------------------------------------------------------------------
 
-    fn look(&mut self) -> Result<(), Error> {
+    pub(super) fn look(&mut self) -> Result<(), Error> {
         let standing = self
             .game
             .observe()
