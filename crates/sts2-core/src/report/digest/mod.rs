@@ -110,6 +110,24 @@ impl Digest {
         sink.option(&question, |sink, question| sink.question(question));
         Digest(sink.finish())
     }
+
+    /// [`Digest::of_question`], and the pile a card selection's options
+    /// share, which a front end sorts a draw pile by.
+    ///
+    /// Apart from `of_question` because the pile is newer than the digests
+    /// recorded runs keep. A suite recorded with it compares it.
+    pub fn of_question_and_pile<V: ContentVersion>(
+        question: Option<&crate::Question<V>>,
+    ) -> Digest {
+        let mut sink = Sink::rules();
+        sink.option(&question, |sink, question| {
+            sink.question(question);
+            if let crate::Question::SelectCards { pile, .. } = question {
+                sink.option(pile, |sink, pile| sink.u8(*pile as u8));
+            }
+        });
+        Digest(sink.finish())
+    }
 }
 
 impl std::fmt::Display for Digest {
@@ -926,6 +944,9 @@ impl Sink {
                 asker,
                 options,
                 picked,
+                // Presentation, as the asker is, and left out so the digests
+                // recorded before the mod reported it still compare.
+                pile: _,
             } => {
                 self.u8(0);
                 self.u32(*min);

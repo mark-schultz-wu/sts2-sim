@@ -219,7 +219,38 @@ internal sealed class CardSelection : Pending
             ["text"] = Observation.Text(c),
         }).ToList(),
         ["picked"] = _picked.ToList(),
+        ["pile"] = SharedPile(),
     };
+
+    /// <summary>
+    /// The fight's pile every option stands in, when they all stand in one,
+    /// and null otherwise.
+    /// </summary>
+    /// <remarks>
+    /// The selector is never told the pile, but each card knows its own. A
+    /// front end reads this to list a draw pile the way
+    /// <c>NCombatPileCardSelectScreen</c> does: sorted, so the order of the
+    /// draws does not show. The run's deck is not a fight's pile, so a deck
+    /// selection reports none.
+    /// </remarks>
+    private string? SharedPile()
+    {
+        PileType? shared = null;
+        foreach (CardModel card in _options)
+        {
+            PileType? pile = card.Pile?.Type;
+            if (pile is null or PileType.None or PileType.Deck)
+            {
+                return null;
+            }
+            if (shared != null && shared != pile)
+            {
+                return null;
+            }
+            shared = pile;
+        }
+        return shared?.ToString();
+    }
 
     /// <summary>
     /// Each card not yet picked while the selection takes more, then taking

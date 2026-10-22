@@ -527,6 +527,34 @@ public static class Driver
         return null;
     }
 
+    /// <summary>Sets a creature's hit points through <c>CreatureCmd.SetCurrentHp</c>.</summary>
+    /// <remarks>
+    /// The player when <paramref name="target"/> is null, in a fight or out.
+    /// Otherwise the creature in the fight with that <c>CombatId</c>.
+    /// </remarks>
+    public static async Task<string?> SetHp(RunState state, int hp, uint? target)
+    {
+        Stage = "setting hit points";
+        Creature creature = state.Players[0].Creature;
+        if (target is uint id)
+        {
+            CombatState? combat = (state.CurrentRoom as CombatRoom)?.CombatState;
+            if (combat == null)
+            {
+                return "This doesn't appear to be a combat!";
+            }
+            Creature? found = combat.Creatures.FirstOrDefault(c => c.CombatId == id);
+            if (found == null)
+            {
+                return $"No creature {id} in this combat.";
+            }
+            creature = found;
+        }
+
+        await CreatureCmd.SetCurrentHp(creature, hp);
+        return null;
+    }
+
     /// <summary>Enchants the card at a hand index.</summary>
     /// <remarks>
     /// Through <c>EnchantConsoleCmd</c>, which is <c>CardCmd.Enchant</c> on the

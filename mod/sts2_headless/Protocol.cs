@@ -85,7 +85,7 @@ internal static class Protocol
             // content change invalidates them. The game uses this exact value
             // to refuse a replay recorded against different content.
             ["contentHash"] = ModelIdSerializationCache.Hash,
-            ["commands"] = new[] { "start", "fight", "event", "power", "enchant", "travel", "play_card", "end_turn", "use_potion", "answer", "grant", "enter_room", "choose_option", "buy", "proceed", "observe", "quit" },
+            ["commands"] = new[] { "start", "fight", "event", "power", "enchant", "hp", "travel", "play_card", "end_turn", "use_potion", "answer", "grant", "enter_room", "choose_option", "buy", "proceed", "observe", "quit" },
         });
 
         while (true)
@@ -185,6 +185,10 @@ internal static class Protocol
 
                 case "enchant":
                     await Enchant(req);
+                    return false;
+
+                case "hp":
+                    await Hp(req);
                     return false;
 
                 case "enter_room":
@@ -500,6 +504,49 @@ internal static class Protocol
 
         bool resolved = await Driver.WaitForDecisionPoint();
         await Observe(req, "power", resolved);
+    }
+
+    /// <summary>Sets the hit points of the player, or of a creature in the fight.</summary>
+    /// <remarks>
+    /// Scenario construction, like <see cref="Power"/>. A position at three hit
+    /// points is a fight's worth of damage away, and every hit on the way
+    /// wakes the relics that count them. This sets them through
+    /// <c>CreatureCmd.SetCurrentHp</c>, which raises
+    /// <c>AfterCurrentHpChanged</c> and nothing else, in a fight or out.
+    ///
+    /// Without a <c>target</c> it is the player, which is the only creature
+    /// outside a fight.
+    /// </remarks>
+    private static async Task Hp(JsonElement req)
+    {
+        if (!req.TryGetProperty("hp", out JsonElement hpEl)
+            || !hpEl.TryGetInt32(out int hp)
+            || hp < 1)
+        {
+            await Error("hp", Refusals.Malformed("hp requires a positive integer 'hp'"));
+            return;
+        }
+
+        uint? target = null;
+        if (req.TryGetProperty("target", out JsonElement targetEl))
+        {
+            if (!targetEl.TryGetUInt32(out uint id))
+            {
+                await Error("hp", Refusals.Malformed("hp takes a creature id in 'target'"));
+                return;
+            }
+            target = id;
+        }
+
+        string? refused = await Driver.SetHp(_state, hp, target);
+        if (refused != null)
+        {
+            await Error("hp", Refusals.Console(refused));
+            return;
+        }
+
+        bool resolved = await Driver.WaitForDecisionPoint();
+        await Observe(req, "hp", resolved);
     }
 
     private static async Task Grant(JsonElement req)

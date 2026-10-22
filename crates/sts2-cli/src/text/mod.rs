@@ -38,6 +38,11 @@ struct Build {
     text: HashMap<&'static str, HashMap<String, String>>,
     /// Each model's dumped numbers, by table and then id.
     numbers: HashMap<&'static str, HashMap<String, Values>>,
+    /// Each card's numbers once upgraded, by id.
+    upgraded: HashMap<String, Values>,
+    /// Each card's energy and star costs once upgraded, by id. A star cost
+    /// below zero is none.
+    upgraded_costs: HashMap<String, (i32, i32)>,
 }
 
 macro_rules! build {
@@ -119,10 +124,28 @@ impl Build {
                 (*table, read)
             })
             .collect();
-        let numbers = (TABLES.iter().zip(numbers))
-            .map(|(table, dump)| (*table, vars(dump)))
+        let upgraded = vars(numbers[0], "upvar");
+        let upgraded_costs = (numbers[0].lines())
+            .filter_map(|line| {
+                let mut words = line.split(' ');
+                if words.next() != Some("upgraded") {
+                    return None;
+                }
+                let card = words.next()?;
+                let cost = words.next()?.parse().ok()?;
+                let stars = words.next()?.parse().ok()?;
+                Some((card.to_owned(), (cost, stars)))
+            })
             .collect();
-        Build { text, numbers }
+        let numbers = (TABLES.iter().zip(numbers))
+            .map(|(table, dump)| (*table, vars(dump, "var")))
+            .collect();
+        Build {
+            text,
+            numbers,
+            upgraded,
+            upgraded_costs,
+        }
     }
 
     fn of<V: ContentVersion>() -> Option<&'static Build> {
@@ -147,12 +170,13 @@ impl Build {
     }
 }
 
-/// The `var <model> <name> <base> ...` lines of a dump, by model.
-fn vars(dump: &str) -> HashMap<String, Values> {
+/// The `<kind> <model> <name> <base> ...` lines of a dump, by model: `var`
+/// for the numbers as printed, `upvar` for a card's once upgraded.
+fn vars(dump: &str, kind: &str) -> HashMap<String, Values> {
     let mut out: HashMap<String, Values> = HashMap::new();
     for line in dump.lines() {
         let mut words = line.split(' ');
-        if words.next() != Some("var") {
+        if words.next() != Some(kind) {
             continue;
         }
         let (Some(model), Some(name), Some(base)) = (words.next(), words.next(), words.next())
@@ -206,6 +230,13 @@ where
         let printed = number.base.to_f64().unwrap_or(0.0);
         values.insert(number.id.name().to_owned(), Value::number(printed));
     }
+    // Upgraded once, the numbers the dump took off an upgraded copy.
+    let upgraded = (card.upgrade == 1)
+        .then(|| build.upgraded.get(&id))
+        .flatten();
+    if let Some(upgraded) = upgraded {
+        values.extend(upgraded.iter().map(|(k, v)| (k.clone(), v.clone())));
+    }
     if let Some((now, printed)) = numbers {
         for (key, value) in now.iter() {
             let base = printed.get(key).copied().unwrap_or(*value);
@@ -224,10 +255,17 @@ where
     values.insert("InCombat".into(), Value::Flag(numbers.is_some()));
 
     let mut said = format::fill(template, &values);
-    if card.upgrade > 0 && numbers.is_none() {
+    if card.upgrade > 0 && numbers.is_none() && upgraded.is_none() {
         said.push_str("\n[gold](numbers before the upgrade)[/gold]");
     }
     Some(said)
+}
+
+/// What a card costs once upgraded, energy and stars, where the dump says.
+/// A star cost below zero is none.
+pub fn upgraded_cost<V: ContentVersion>(card: &CardIdent<V>) -> Option<(i32, i32)> {
+    let build = Build::of::<V>()?;
+    build.upgraded_costs.get(&spelling(&card.card)).copied()
 }
 
 /// A relic's title and words, with the number it shows.
@@ -395,12 +433,17 @@ mod tests {
         );
     }
 
-    /// Outside a fight, an upgraded card's numbers are not known, and the
-    /// words say so rather than print the old ones as if they were.
+    /// Upgraded once, a card reads with the numbers the dump took off an
+    /// upgraded copy. Upgraded twice, which only a few cards can be, the
+    /// numbers are not known, and the words say so.
     #[test]
-    fn an_upgraded_card_out_of_a_fight_says_its_numbers_are_old() {
+    fn an_upgraded_card_reads_its_upgraded_numbers() {
         assert_eq!(card_title(&ident("BASH", 1)).as_deref(), Some("Bash+"));
-        let said = card(&ident("BASH", 1), None).expect("Bash has words");
+        assert_eq!(
+            card(&ident("BASH", 1), None).as_deref(),
+            Some("Deal 10 damage.\nApply 3 [gold]Vulnerable[/gold].")
+        );
+        let said = card(&ident("BASH", 2), None).expect("Bash has words");
         assert!(
             said.ends_with("(numbers before the upgrade)[/gold]"),
             "{said}"

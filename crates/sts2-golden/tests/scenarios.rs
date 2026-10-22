@@ -55,7 +55,7 @@ where
                 Play::<V>::observe(driven).unwrap_or_else(|e| panic!("{name}: observing: {e}"));
             Seen {
                 sections: seen.observation.sections().to_vec(),
-                question: sts2_core::Digest::of_question(seen.asking.as_ref()),
+                question: sts2_core::Digest::of_question_and_pile(seen.asking.as_ref()),
             }
         })
         .collect()

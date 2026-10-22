@@ -123,7 +123,7 @@ impl<V: ContentVersion> View<V> {
             room: observed.room.clone(),
             combat: observed.combat.as_ref().map(SeenFight::of),
             moves: observed.moves.clone(),
-            asking: asking.cloned(),
+            asking: asking.cloned().map(as_the_screen_asks),
         }
     }
 }
@@ -163,6 +163,29 @@ impl<V: ContentVersion> SeenCreature<V> {
                 .unwrap_or_default(),
         }
     }
+}
+
+/// A question as the game's screen shows it: a choice out of the draw pile
+/// sorted as `NCombatPileCardSelectScreen` sorts one, by rarity and then id.
+/// Each option keeps its own index, which is what an answer names.
+fn as_the_screen_asks<V: ContentVersion>(mut question: Question<V>) -> Question<V> {
+    if let Question::SelectCards {
+        options,
+        pile: Some(crate::Pile::Draw),
+        ..
+    } = &mut question
+    {
+        options.sort_by_cached_key(|option| {
+            let card = option.card;
+            (
+                card.card.rarity(),
+                card.card.order(),
+                card.upgrade,
+                format!("{card:?}"),
+            )
+        });
+    }
+    question
 }
 
 /// A pile in the order `NCardPileScreen` shows the draw pile: by rarity, then

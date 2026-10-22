@@ -6003,6 +6003,47 @@ impl<V: Rules> State<V> {
         Ok(Decided::Resolved)
     }
 
+    /// Set the hit points of the player, or of the creature `at` in the
+    /// fight, which is `CreatureCmd.SetCurrentHp`.
+    ///
+    /// In a fight it raises `AfterCurrentHpChanged` there. Outside one the
+    /// run's relics hear it, as they hear damage outside a fight.
+    pub(crate) fn set_hp(
+        &mut self,
+        at: Option<sts2_core::CombatId>,
+        hp: V::Health,
+    ) -> Result<Decided, Error> {
+        if let Some(fighting) = self.fighting() {
+            let at = at.unwrap_or(sts2_core::CombatId::new(nonmax::NonMaxU8::ZERO));
+            crate::combat::set_hp(fighting, at, hp);
+            return Ok(Decided::Resolved);
+        }
+        if at.is_some() {
+            unimplemented!("hit points set on a creature outside a fight");
+        }
+        let before = self.player.hp;
+        self.player.hp = hp.min(self.player.max_hp);
+        if self.player.hp != before {
+            let delta = num_traits::cast::<_, V::Number>(self.player.hp)
+                .expect("a health fits a game number")
+                - num_traits::cast::<_, V::Number>(before).expect("a health fits a game number");
+            let hook = sts2_core::EventHook::CurrentHpChanged {
+                creature: sts2_core::CombatId::new(nonmax::NonMaxU8::ZERO),
+                monster: None,
+                pet_of: None,
+                delta,
+                in_fight: false,
+                player: self.player_health(),
+            };
+            if let Some(effect) = self.notify_run(hook).first() {
+                unimplemented!(
+                    "a relic asking for {effect:?} as hit points are set outside a fight"
+                );
+            }
+        }
+        Ok(Decided::Resolved)
+    }
+
     /// Enchant the fight's copy of the card at `index` in hand, which is
     /// `EnchantConsoleCmd`.
     pub(crate) fn enchant(
@@ -7629,6 +7670,7 @@ impl<V: Rules> State<V> {
                         })
                         .collect(),
                     picked: sts2_core::Picks::none(),
+                    pile: None,
                 }
             }),
             Phase::Combat(live) => live.question(),
@@ -7651,6 +7693,7 @@ impl<V: Rules> State<V> {
                     })
                     .collect(),
                 picked: sts2_core::Picks::none(),
+                pile: None,
             }),
             Phase::Rewards { offered, .. } => offered
                 .iter()
@@ -7674,6 +7717,7 @@ impl<V: Rules> State<V> {
                     })
                     .collect(),
                 picked: sts2_core::Picks::none(),
+                pile: None,
             }),
             // Each selection offers a different list. The removal reads the
             // deck less its `Eternal` cards, curses first, and a pickup reads
@@ -7712,6 +7756,7 @@ impl<V: Rules> State<V> {
                         })
                         .collect(),
                     picked: sts2_core::Picks::none(),
+                    pile: None,
                 })
             }
             // An act opens on its map, which is no room and asks nothing.

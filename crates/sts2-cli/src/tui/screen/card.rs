@@ -97,6 +97,30 @@ pub struct Face {
     pub rarity: Option<String>,
 }
 
+/// What a card's table prints it costs, energy and stars: as printed, or as
+/// the dump took them off an upgraded copy. Nothing for a card upgraded more
+/// than once, or one the dump has no upgrade for.
+fn printed_costs<V: crate::tui::Build>(card: &CardIdent<V>) -> Option<(Cost, Cost)> {
+    let (energy, stars) = (card.card.cost(), card.card.star_cost());
+    match card.upgrade {
+        0 => Some((energy, stars)),
+        1 => {
+            let (upgraded, upgraded_stars) = crate::text::upgraded_cost(card)?;
+            let energy = match energy {
+                Cost::X | Cost::None => energy,
+                _ => Cost::fixed(u8::try_from(upgraded).ok()?),
+            };
+            let stars = match (stars, upgraded_stars) {
+                (Cost::X, _) => Cost::X,
+                (_, n) if n < 0 => Cost::None,
+                (_, n) => Cost::fixed(u8::try_from(n).ok()?),
+            };
+            Some((energy, stars))
+        }
+        _ => None,
+    }
+}
+
 /// The two pools a card is priced in, or nothing when it is priced in neither.
 ///
 /// Two values rather than a sum. Energy and stars are separate pools, spent
@@ -201,18 +225,18 @@ impl Face {
     /// reports no price. An upgrade can move a price, and the tables do not
     /// say how, so an upgraded card shows no price rather than an old one.
     pub fn printed<V: crate::tui::Build>(card: &CardIdent<V>) -> Face {
-        match card.upgrade {
-            0 => Self::plain_with_cost(card, card.card.cost(), card.card.star_cost()),
-            _ => Self::plain(card),
+        match printed_costs(card) {
+            Some((energy, stars)) => Self::plain_with_cost(card, energy, stars),
+            None => Self::plain(card),
         }
     }
 
-    /// The printed cost, for a line in a list: `(1)`. Blank for an upgraded
-    /// card, or one with no price.
+    /// The printed cost, for a line in a list: `(1)`. Blank where it is not
+    /// known, or the card has none.
     pub fn printed_cost<V: crate::tui::Build>(card: &CardIdent<V>) -> String {
-        match (card.upgrade, cost(card.card.cost(), card.card.star_cost())) {
-            (0, Some(cost)) => format!("({cost})"),
-            _ => String::new(),
+        match printed_costs(card).and_then(|(energy, stars)| cost(energy, stars)) {
+            Some(cost) => format!("({cost})"),
+            None => String::new(),
         }
     }
 

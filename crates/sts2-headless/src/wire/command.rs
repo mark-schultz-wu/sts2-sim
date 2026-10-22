@@ -64,6 +64,12 @@ pub enum Command<V: sts2_content_wire::WireContentVersion> {
         amount: u8,
         index: sts2_core::HandIndex,
     },
+    /// `CreatureCmd.SetCurrentHp` on the player, or on the creature `target`.
+    Hp {
+        hp: u32,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<sts2_core::CombatId>,
+    },
     /// `type` is a Rust keyword, so this is the one field a derive has to
     /// rename. The generated id says `"Shop"`, which is the game enum's actual
     /// name. A hand-written `"SHOP"` used to work only because the mod parses
@@ -174,6 +180,11 @@ impl<V: sts2_content_wire::WireContentVersion> From<&Setup<V>> for Command<V> {
                 index: *index,
             },
             Setup::Grant(gift) => Self::Grant(gift.into()),
+            Setup::Hp { at, hp } => Self::Hp {
+                hp: num_traits::ToPrimitive::to_u32(hp)
+                    .expect("hit points fit the width the game sends"),
+                target: *at,
+            },
         }
     }
 }
@@ -263,6 +274,12 @@ impl<V: sts2_content_wire::WireContentVersion> Command<V> {
             }
             .into(),
             Self::Grant(gift) => Setup::Grant(gift.into_domain()).into(),
+            Self::Hp { hp, target } => Setup::Hp {
+                at: target,
+                hp: num_traits::NumCast::from(hp)
+                    .unwrap_or_else(|| unimplemented!("hit points this build cannot hold")),
+            }
+            .into(),
             Self::Observe | Self::Quit => return None,
         })
     }

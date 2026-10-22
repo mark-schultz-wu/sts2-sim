@@ -340,6 +340,7 @@ game.
 | `fight` | `encounter` — a model entry name such as `BOWLBUGS_WEAK` |
 | `event` | `event` — a model entry name such as `CRYSTAL_SPHERE` |
 | `power` | `power` — a model entry name such as `WEAK_POWER`; `amount` — an integer; `target` — a creature's `CombatId` |
+| `hp` | `hp` — a positive integer; `target` — a creature's `CombatId`, or absent for the player |
 | `enter_room` | `type` — a `RoomType` name, case-insensitive |
 | `travel` | `col`, `row` — integers |
 | `play_card` | `index` — into the hand; `target` — a creature's `CombatId`, or absent |
@@ -413,6 +414,16 @@ named.
 It exists because a position with two debuffs already on the player is an hour
 of play away. The alternative is a recording of a run that reaches one.
 
+### `hp` is scenario construction too
+
+It sets the hit points of the player, or of the creature `target` names in the
+fight, through `CreatureCmd.SetCurrentHp`. That raises `AfterCurrentHpChanged`
+and no damage hook, so no relic that counts hits wakes. Without a `target` it
+is the player, in a fight or out. A `target` needs a fight.
+
+It exists because a position at three hit points is a fight's worth of damage
+away. On the way, the relics that count each hit change the position.
+
 ### `event` is scenario construction too
 
 The same shape as `fight`, through the game's own `EventConsoleCmd`. It appends a
@@ -439,8 +450,14 @@ replaces the reply to whatever command was issued.
  "min":1,"max":1,"asker":"DiscardAction",
  "options":[{"index":0,"card":"STRIKE","text":"Deal 6 damage."},
             {"index":1,"card":"BASH+1","text":"Deal 10 damage.\nApply 3 Vulnerable."}],
- "picked":[]}
+ "picked":[],"pile":"Draw"}
 ```
+
+`pile` is the `PileType` of the fight's pile every option stands in, when they
+all stand in one. It is `null` outside a fight, for the deck, and for cards made
+to be chosen between. The game never tells the selector the pile, so the
+mod reads each card's own. A front end lists a draw pile sorted, as the game's screen
+does, so the order of the draws does not show.
 
 `asker` is the running action, not the game's own prompt text. `ICardSelector`
 receives only options and bounds. So this is the best attribution available, and

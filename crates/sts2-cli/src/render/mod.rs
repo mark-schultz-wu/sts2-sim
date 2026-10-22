@@ -142,6 +142,7 @@ fn question_of<V: sts2_content_wire::WireContentVersion>(
             asker,
             options,
             picked,
+            pile: _,
         } => {
             let who = match asker.as_deref() {
                 Some(asker) => format!(" for {}", who_asked(asker)),

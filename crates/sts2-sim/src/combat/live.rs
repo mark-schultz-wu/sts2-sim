@@ -3215,6 +3215,17 @@ impl<V: Rules> Live<V> {
     pub(crate) fn question(&self) -> Option<sts2_core::Question<V>> {
         let asked = self.asking.as_ref()?;
         let (min, max, _) = self.selecting()?;
+        // The pile every option stands in, where they share one.
+        let pile = match &asked.question {
+            Asked::Pile { pile, .. } => Some(*pile),
+            Asked::Among { cards, .. } => {
+                let mut piles =
+                    (cards.iter()).map(|card| self.cards.find_any(card.id()).map(|at| at.pile()));
+                let first = piles.next().flatten();
+                piles.all(|pile| pile == first).then_some(first).flatten()
+            }
+            Asked::Offered { .. } => None,
+        };
         let options: Vec<_> = match &asked.question {
             Asked::Pile { pile, .. } => self
                 .offered(*pile)
@@ -3256,6 +3267,7 @@ impl<V: Rules> Live<V> {
                 })
                 .collect(),
             picked: sts2_core::Picks::none(),
+            pile,
         })
     }
 

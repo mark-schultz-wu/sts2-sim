@@ -135,6 +135,7 @@ impl<V: Rules> Sim<V> {
                 index,
             } => self.state.enchant(*enchantment, *amount, *index),
             Setup::Event { event } => self.state.event_here(*event).map(Ok),
+            Setup::Hp { at, hp } => self.state.set_hp(*at, *hp).map(Ok),
         }
     }
 

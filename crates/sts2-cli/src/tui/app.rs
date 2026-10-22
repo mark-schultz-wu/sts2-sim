@@ -547,6 +547,9 @@ where
             return Intent::Nothing;
         };
         let (min, max, len) = (*min as usize, *max as usize, options.len());
+        // The list on screen may be sorted, as a draw pile is, so a place in
+        // it is not the option's own index. The answer names the option.
+        let indices: Vec<usize> = options.iter().map(|option| option.index).collect();
 
         let mut marked = match &self.ui.aim {
             Aim::Selecting(marked) => marked.clone(),
@@ -588,7 +591,7 @@ where
                 } else {
                     self.ui.aim = Aim::Idle;
                     return Intent::Send(Decision::Answer(Answer::Cards(
-                        marked.into_iter().collect(),
+                        marked.into_iter().map(|at| indices[at]).collect(),
                     )));
                 }
             }
@@ -927,6 +930,42 @@ mod tests {
     use serde_json::json;
     use sts2_content::v0_107_1::V0_107_1;
     use sts2_core::{Applied, Decision};
+
+    /// A choice out of the draw pile is listed sorted, as the game's screen
+    /// lists one. The answer names the card picked by its own index, not by
+    /// its place in the sorted list.
+    #[test]
+    fn a_draw_pile_choice_is_sorted_and_answered_by_index() {
+        let applied = fixture::answered(json!({
+            "type": "pending", "seq": 9, "cmd": "play_card", "digest": "AA",
+            "kind": "select_cards", "min": 1, "max": 1, "asker": null,
+            "options": [
+                {"index": 0, "card": "INFLAME", "text": null},
+                {"index": 1, "card": "BASH", "text": null}
+            ],
+            "picked": [], "pile": "Draw",
+            "state": {}
+        }));
+        let game = Scripted::saying(applied);
+        let sent = game.sent();
+        let mut app = App::playing(game, Options::default());
+        app.look_now();
+        let Some(sts2_core::Question::SelectCards { options, .. }) =
+            app.view().and_then(|view| view.asking.as_ref())
+        else {
+            panic!("a selection is asked");
+        };
+        // Bash is Basic and Inflame Uncommon, so Bash is listed first.
+        assert_eq!(options.iter().map(|o| o.index).collect::<Vec<_>>(), [1, 0]);
+
+        app.press(Action::Confirm);
+        assert_eq!(
+            sent.all().last(),
+            Some(&Decision::Answer(sts2_core::Answer::Cards(
+                [1].into_iter().collect()
+            ))),
+        );
+    }
 
     /// The draw pile is listed the way the game's pile screen lists it, by
     /// rarity and then id. Two runs with the same cards in another order show

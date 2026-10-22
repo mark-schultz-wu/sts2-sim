@@ -144,6 +144,25 @@ pub(crate) fn apply_power<V: Rules>(
     ended
 }
 
+/// `CreatureCmd.SetCurrentHp` on a creature in the fight.
+///
+/// Scenario construction, as [`apply_power`] is.
+pub(crate) fn set_hp<V: Rules>(fighting: Fighting<'_, V>, at: CombatId, hp: V::Health) {
+    let Fighting {
+        live,
+        streams,
+        relics,
+    } = fighting;
+    let ascension = live.ascension;
+    let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
+    board.set_current_hp(at, V::Number::from(hp));
+    if let Some(ended) = board.ended() {
+        unimplemented!("a fight that ends {ended:?} as hit points are set");
+    }
+    let skipped = std::mem::take(&mut board.skipped);
+    merge::<V>(&mut live.skip_tick, skipped);
+}
+
 /// `hook` raised in a fight for a change the run made to its belt, and what
 /// its listeners ask for carried out there.
 ///

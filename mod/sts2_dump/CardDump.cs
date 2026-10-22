@@ -62,6 +62,8 @@ public static class CardDump
         output.Append(Stamp.Header("card"));
         output.Append("# card <id> <pool> <type> <rarity> <target> <cost> <costsX> <starCost> <starCostsX> <maxUpgrade> <keywords> <tags> <gainsBlock> <visuallyColorless> <turnEndInHand>\n");
         output.Append("# var <card> <name> <base> <calculated> <class>\n");
+        output.Append("# upgraded <card> <cost> <starCost> -- once upgraded, for a card that upgrades\n");
+        output.Append("# upvar <card> <name> <base> -- each number once upgraded\n");
         output.Append("# pool <pool> <index> <card>\n");
         output.Append("# combatpool <pool> <index> <card>\n");
         output.Append("# rewardpool <character> <index> <card>\n");
@@ -187,6 +189,7 @@ public static class CardDump
             output.Append('\n');
 
             Vars.Append(output, card.Id.Entry, card.DynamicVars);
+            Upgraded(output, card);
         }
 
         output.Append($"# {cards.Count} cards\n");
@@ -223,5 +226,47 @@ public static class CardDump
             ?.GetGetMethod();
 
         return getter != null && getter.DeclaringType != typeof(CardModel);
+    }
+
+    /// <summary>
+    /// What a card prints once upgraded: its cost and its numbers.
+    /// </summary>
+    /// <remarks>
+    /// <c>CardModel.UpgradeInternal</c> on a mutable copy, then
+    /// <c>FinalizeUpgradeInternal</c>, the path an upgrade takes in a run. A
+    /// front end reads these to show an upgraded card's words outside a fight,
+    /// where no preview has worked them out. A card whose upgrade needs a run
+    /// to run in is left out, and says so in a comment.
+    /// </remarks>
+    private static void Upgraded(StringBuilder output, CardModel card)
+    {
+        if (card.MaxUpgradeLevel < 1)
+        {
+            return;
+        }
+        CardModel copy;
+        try
+        {
+            copy = card.ToMutable();
+            copy.UpgradeInternal();
+            copy.FinalizeUpgradeInternal();
+        }
+        catch (Exception e)
+        {
+            output.Append($"# upgraded {card.Id.Entry}: {e.GetType().Name}\n");
+            return;
+        }
+        output.Append(string.Join(" ", new[]
+        {
+            "upgraded",
+            card.Id.Entry,
+            copy.EnergyCost.GetWithModifiers(CostModifiers.None).ToString(CultureInfo.InvariantCulture),
+            copy.BaseStarCost.ToString(CultureInfo.InvariantCulture),
+        }));
+        output.Append('\n');
+        foreach (KeyValuePair<string, DynamicVar> entry in copy.DynamicVars.OrderBy(v => v.Key, StringComparer.Ordinal))
+        {
+            output.Append($"upvar {card.Id.Entry} {entry.Key} {entry.Value.BaseValue.ToString(CultureInfo.InvariantCulture)}\n");
+        }
     }
 }
