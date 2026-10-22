@@ -166,6 +166,8 @@ enum Resolved<V: Rules> {
         source: Option<CardId<V>>,
         /// The relics whose block hooks changed it.
         modifying: SmallVec<[V::Relic; 1]>,
+        /// Whether the decimal was above nothing before the floor.
+        positive: bool,
     },
     /// A hit inside an attack while a question an earlier hit raised waits.
     /// It lands after the answer, resolved then.
@@ -177,6 +179,16 @@ impl<V: Rules> EffectResolution<V> for ResolvedEffect<V> {
         match self.effect {
             Resolved::Attack { damage, .. } => damage,
             Resolved::GainBlock { amount, .. } => amount,
+            Resolved::Held(effect) => {
+                unimplemented!("reading what {effect:?} comes to while it waits on a question")
+            }
+        }
+    }
+
+    fn positive(&self) -> bool {
+        match self.effect {
+            Resolved::Attack { damage, .. } => damage > V::Number::zero(),
+            Resolved::GainBlock { positive, .. } => positive,
             Resolved::Held(effect) => {
                 unimplemented!("reading what {effect:?} comes to while it waits on a question")
             }
@@ -393,11 +405,25 @@ impl<'a, V: Rules> Board<'a, V> {
         applier: Option<CombatId>,
         copy: Option<V::PowerState>,
     ) {
+        self.land_fresh(at, power, amount, applier, copy, false);
+    }
+
+    /// [`Board::land_copy`], where `fraction` says the zero amount is a
+    /// fraction below one the game passes the zero check with.
+    fn land_fresh(
+        &mut self,
+        at: CombatId,
+        power: V::Power,
+        amount: PowerAmount<V::Number>,
+        applier: Option<CombatId>,
+        copy: Option<V::PowerState>,
+        fraction: bool,
+    ) {
         self.ran_on();
         // `PowerCmd.Apply` returns on a zero amount. `Apply<T>` stacks one
         // onto an instance already there first, so a copy, which comes
         // through `Apply`, returns here, and any other at the fresh instance.
-        let zero = amount == PowerAmount::Counted(V::Number::zero());
+        let zero = amount == PowerAmount::Counted(V::Number::zero()) && !fraction;
         if zero && copy.is_some() {
             return;
         }
@@ -509,8 +535,9 @@ impl<'a, V: Rules> Board<'a, V> {
         {
             unimplemented!("{power:?} landing during its own `BeforeApplied`")
         }
-        // `ApplyInternal`, which puts nothing on for an amount of zero.
-        let landed = amount != PowerAmount::Counted(V::Number::zero());
+        // `ApplyInternal`, which puts nothing on for an amount of zero. A
+        // fraction below one is not zero there, and floors to it after.
+        let landed = fraction || amount != PowerAmount::Counted(V::Number::zero());
         if landed {
             self.live
                 .powers
@@ -3006,6 +3033,17 @@ fn scaled_by<V: Rules>(
     scale: Option<Decimal>,
     phases: &[ModifyHook<V>],
 ) -> V::Number {
+    scaled_by_signed::<V>(fight, amount, scale, phases).0
+}
+
+/// [`scaled_by`], and whether the decimal was above nothing before the floor.
+#[inline(always)]
+fn scaled_by_signed<V: Rules>(
+    fight: Walk<'_, V>,
+    amount: V::Number,
+    scale: Option<Decimal>,
+    phases: &[ModifyHook<V>],
+) -> (V::Number, bool) {
     // Its own walk rather than [`answers`], which keeps the walk inlined on
     // this, the hot path.
     let mut answers = Answers::new();
@@ -3040,12 +3078,13 @@ fn scaled_by<V: Rules>(
             at += 1;
         }
         if at == answers.len() {
-            return number;
+            return (number, number > V::Number::zero());
         }
     }
     let number = exact::<V>(number);
     let number = scale.map_or(number, |scale| number * scale);
-    whole::<V>(worked_out::<V>(number, &answers[at..]))
+    let number = worked_out::<V>(number, &answers[at..]);
+    (whole::<V>(number), number > Decimal::ZERO)
 }
 
 /// [`scaled_by`] before the floor, which is the decimal the game's hook
@@ -3349,7 +3388,7 @@ pub(super) fn blocked<V: Rules>(
     card: Option<V::Card>,
     play: Option<sts2_core::PlayAt>,
     source: Option<CardId<V>>,
-) -> (V::Number, SmallVec<[V::Relic; 1]>) {
+) -> (V::Number, bool, SmallVec<[V::Relic; 1]>) {
     let phases = [
         ModifyHook::BlockAdditive {
             target: recipient,
@@ -3365,7 +3404,8 @@ pub(super) fn blocked<V: Rules>(
             source,
         },
     ];
-    let amount = modified_by::<V>(fight, amount, &phases);
+    let (amount, positive) = scaled_by_signed::<V>(fight, amount, None, &phases);
+    let amount = amount.max(V::Number::zero());
     // The `modifiers` `Hook.ModifyBlock` hands `AfterModifyingBlockAmount`:
     // the listeners whose answer moved the number. Only a relic acts on it.
     let mut modifying = SmallVec::new();
@@ -3394,7 +3434,7 @@ pub(super) fn blocked<V: Rules>(
             });
         }
     }
-    (amount, modifying)
+    (amount, positive, modifying)
 }
 
 /// `CardCmd.Afflict` on one copy, once `AfflictionModel.CanAfflict` lets it.
@@ -3640,7 +3680,7 @@ pub(crate) fn resolve<V: Rules>(
             let source = playing.map(|held| held.id);
             // `CreatureCmd.GainBlock` always runs `Hook.ModifyBlock`. A card's
             // block and a monster move's are the powered ones.
-            let (amount, modifying) = blocked::<V>(
+            let (amount, positive, modifying) = blocked::<V>(
                 fight,
                 recipient,
                 amount,
@@ -3657,6 +3697,7 @@ pub(crate) fn resolve<V: Rules>(
                 play,
                 source,
                 modifying,
+                positive,
             }
         }
     };
@@ -3930,12 +3971,16 @@ pub(super) fn player<V: Rules>(creatures: &[Fighter<V>]) -> CombatId {
 impl<V: Rules> Board<'_, V> {
     /// `Hook.AfterBlockGained`, once `CreatureCmd.GainBlock` gave `creature`
     /// `amount`. The game raises it for a gain the modifiers left at none.
-    pub(super) fn block_gained(&mut self, creature: CombatId, amount: V::Number) {
+    pub(super) fn block_gained(&mut self, creature: CombatId, amount: V::Number, positive: bool) {
         let gained = sts2_core::ModelHook::AfterBlockGained;
         if !super::listen::heard::<V>(self.live, self.relics, gained) {
             return;
         }
-        let hook = sts2_core::EventHook::BlockGained { creature, amount };
+        let hook = sts2_core::EventHook::BlockGained {
+            creature,
+            amount,
+            positive,
+        };
         let mut walking =
             super::listen::Walking::begin::<super::listen::Checked>(self.live, self.relics, hook);
         while let Some((listener, effect)) =
@@ -4273,6 +4318,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 play,
                 source,
                 modifying,
+                positive,
             } => {
                 // `CreatureCmd.GainBlock` gives nothing once the fight is over
                 // or ending, as after a hit that killed the player.
@@ -4289,7 +4335,8 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                     }
                 }
                 let Some(at) = self.at(recipient) else { return };
-                if amount > V::Number::zero() {
+                // A fraction below one gains, and adds nothing to the block.
+                if positive {
                     self.live.creatures[at].block = self.live.creatures[at].block + amount;
                     self.live.history.block_gained(sts2_core::BlockGained {
                         receiver: recipient,
@@ -4297,7 +4344,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                         play,
                     });
                 }
-                self.block_gained(recipient, amount.max(V::Number::zero()));
+                self.block_gained(recipient, amount.max(V::Number::zero()), positive);
             }
         }
     }
@@ -5002,6 +5049,11 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn apply_to_actor(&mut self, power: V::Power, amount: PowerAmount<V::Number>) {
         self.land(self.actor, power, amount, Some(self.actor));
+    }
+
+    fn apply_fraction_to_actor(&mut self, power: V::Power) {
+        let zero = PowerAmount::Counted(V::Number::zero());
+        self.land_fresh(self.actor, power, zero, Some(self.actor), None, true);
     }
 
     /// `OrbCmd.Channel`, which does nothing once the fight is ending.

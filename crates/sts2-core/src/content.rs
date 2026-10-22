@@ -2947,6 +2947,11 @@ pub trait Fight<V: ContentVersion> {
     /// a card saying "gain" means.
     fn apply_to_actor(&mut self, power: V::Power, amount: PowerAmount<V::Number>);
 
+    /// `PowerCmd.Apply` of a fraction below one onto the actor. A fresh
+    /// instance lands and holds nothing, since `ApplyInternal` floors the
+    /// amount only after the zero check.
+    fn apply_fraction_to_actor(&mut self, power: V::Power);
+
     /// `CreatureCmd.Heal(at, amount)`, which no power modifies.
     ///
     /// The health is capped at the recipient's maximum, and a dead creature
@@ -3325,6 +3330,10 @@ pub trait EffectResolution<V: ContentVersion> {
     /// such as Glitterstream's block, resolves the gain and stores this rather
     /// than hand it to [`Fight::apply`].
     fn amount(&self) -> V::Number;
+
+    /// Whether the game's decimal was above nothing, before the floor. A
+    /// fraction below one is, though [`EffectResolution::amount`] is nothing.
+    fn positive(&self) -> bool;
 }
 
 /// What a power does to a number a fight works out.
@@ -3885,6 +3894,9 @@ pub enum EventHook<V: ContentVersion> {
     BlockGained {
         creature: crate::CombatId,
         amount: V::Number,
+        /// Whether the game's decimal was above nothing. A fraction below one
+        /// is, though `amount` floors it to nothing.
+        positive: bool,
     },
     /// `AfterPreventingDraw`, once a listener answered no to `ShouldDraw`.
     DrawPrevented,

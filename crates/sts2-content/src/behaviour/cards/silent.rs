@@ -131,28 +131,24 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F
             );
             Played::Done
         }
-        // `DodgeAndRoll`: its block, then as much as it gave as Block Next
-        // Turn.
+        // `DodgeAndRoll`: its block, then the decimal `GainBlock` hands back
+        // as Block Next Turn. A fraction below one lands a power of nothing.
         __c0 if __c0 == V::Card::DODGE_AND_ROLL => {
-            let actor = fight.actor();
-            let held = |fight: &F| {
-                fight
-                    .creatures()
-                    .find(|creature| creature.id() == actor)
-                    .map_or(0, |creature| creature.block())
-            };
-            let before = held(fight);
             let block = fight.resolve(Effect::GainBlock {
-                recipient: actor,
+                recipient: fight.actor(),
                 amount: Amount::Var(V::CardVar::BLOCK),
                 scaling: Scaling::Dynamic,
             });
+            use sts2_core::EffectResolution as _;
+            let (gained, positive) = (block.amount(), block.positive());
             fight.apply(block);
-            let gained = held(fight) - before;
-            fight.apply_to_actor(
-                V::Power::BLOCK_NEXT_TURN_POWER,
-                PowerAmount::Counted(gained),
-            );
+            match gained == 0 && positive {
+                true => fight.apply_fraction_to_actor(V::Power::BLOCK_NEXT_TURN_POWER),
+                false => fight.apply_to_actor(
+                    V::Power::BLOCK_NEXT_TURN_POWER,
+                    PowerAmount::Counted(gained),
+                ),
+            }
             Played::Done
         }
         // `EscapePlan`: a card drawn, then its block where that card is a

@@ -51,22 +51,25 @@ its split, as a scenario. A fix lands with its run, recorded whole, in
 `hunted-v0.111.0.bin`. A split that many runs share becomes its own item, above this
 one.
 
-A mixed hunt of 7,000 runs on v0.111.0 parted 258. Of those, 5 are still open:
-
-- A block gain's decimal, which `CreatureCmd.GainBlock` hands back
-  before `GainBlockInternal` floors it. Dodge and Roll applies Block Next
-  Turn of 0.75, and the power stands at 0. The simulator works in whole
-  numbers. This needs Mark's decision on how a fraction reaches a power.
-  1 run.
-- 4 runs that each part in a fight. Three are in the Knights elite. In
-  one a relic bag parted earlier, unseen. One draws once more from
-  `CombatCardSelection`, and one differs by 2 HP at a turn's end. The
-  last is Whirlwind with Miniature Cannon, where a death mid-attack
-  lifts Dampen.
+A mixed hunt of 7,000 runs on v0.111.0 parted 258. Of those, 4 are still
+open. Each parts in a fight. Three are in the Knights elite. In one a
+relic bag parted earlier, unseen. One draws once more from
+`CombatCardSelection`, and one differs by 2 HP at a turn's end. The last
+is Whirlwind with Miniature Cannon, where a death mid-attack lifts
+Dampen. These wait on item 2, since the action log does not show the
+order of the game's steps inside one action.
 
 Clear these before the next hunt.
 
-### 2. Game logic that runs only in a screen
+### 2. Tracing the game's steps
+
+The mod can log each call of the game's rules methods in a run, when a
+run asks for it. A `cargo xtask` subcommand plays a kept run with the
+trace on and prints the calls around its split. Tracing is off by
+default, so recorded transcripts stay the same. The method hooks it adds
+are the ones item 4 counts with.
+
+### 3. Game logic that runs only in a screen
 
 Some of the game's rules live in `Nodes.*` screen code, which never runs
 headless. Throwing a Foul Potion at a merchant, and the Fake Merchant
@@ -74,7 +77,7 @@ fight it starts, are two. The oracle and the simulator agree to leave
 them out, so no hunt finds them. Sweep the game for such logic, make
 the mod offer each as a move, and port it.
 
-### 3. Coverage of the game's own code
+### 4. Coverage of the game's own code
 
 The mod counts which methods of the game's rules code a hunt enters:
 models, commands, hooks and combat, not screens. Each build keeps a
@@ -83,7 +86,7 @@ entered. Counting is per method at first. Each gap gets a scenario, a
 hunt that starts from a built position, or a note that play cannot
 reach it.
 
-### 4. A speed target
+### 5. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.

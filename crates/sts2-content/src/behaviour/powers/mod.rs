@@ -2787,10 +2787,9 @@ pub(crate) fn event_hook<V: crate::Build>(
             __c0,
             PowerAmount::Counted(amount),
             EventHook::BlockGained {
-                creature,
-                amount: gained,
+                creature, positive, ..
             },
-        ) if __c0 == V::Power::JUGGERNAUT_POWER && (creature == holder && gained > 0) => {
+        ) if __c0 == V::Power::JUGGERNAUT_POWER && (creature == holder && positive) => {
             Some(HookEffect::DamageRandomOpponent {
                 amount,
                 unblockable: false,
