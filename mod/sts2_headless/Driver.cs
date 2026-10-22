@@ -179,6 +179,7 @@ public static class Driver
 
     private static void Quit()
     {
+        Trace.Finish();
         Log.Info($"[headless] quitting after {Clock.Elapsed.TotalSeconds:F1}s with {ExitCode}");
 
         // Nothing else can stop this process. Environment.Exit does not work

@@ -55,25 +55,39 @@ one.
 prints the game's own calls in the moves before a kept run's split.
 
 A mixed hunt of 7,000 runs on v0.111.0 parted 258, and all 258 are
-fixed. Next is a fresh mixed hunt on each build, toward 3,000 runs in a
-row with no split.
+fixed. A fresh mixed hunt of 3,000 on v0.111.0, from seed 10000, parted
+9. Six are splits and three are panics, two of them unported paths. Four
+are Regent runs and two are ALL_STAR. Fix those, then hunt both builds
+again toward 3,000 runs in a row with no split.
 
 ### 2. Game logic that runs only in a screen
 
 Some of the game's rules live in `Nodes.*` screen code, which never runs
-headless. Throwing a Foul Potion at a merchant, and the Fake Merchant
-fight it starts, are two. The oracle and the simulator agree to leave
-them out, so no hunt finds them. Sweep the game for such logic, make
-the mod offer each as a move, and port it.
+headless. The oracle and the simulator agree to leave them out, so no
+hunt finds them. A sweep of the screens found these, each to become a
+move the mod offers and the simulator ports:
+
+- Discarding a potion, which `NPotionPopup` enqueues as
+  `DiscardPotionGameAction`, in a fight or out. Mark chose to list it as
+  a legal move and digest it, so every stored recorded and hunted run
+  is recorded again with it.
+- Backing out of a selection that can be cancelled: Smith, Cook, the
+  shop's card removal and the card-removal reward.
+- Throwing a Foul Potion at the shop's merchant, for 100 gold.
+- Throwing a Foul Potion at the Fake Merchant, which starts its fight.
+- An empty chest, which the game closes by itself and the mod turns into
+  a skip.
 
 ### 3. Coverage of the game's own code
 
-The mod counts which methods of the game's rules code a hunt enters:
-models, commands, hooks and combat, not screens. Each build keeps a
-total, and a `cargo xtask` subcommand lists the methods no hunt
-entered. Counting is per method at first. Each gap gets a scenario, a
-hunt that starts from a built position, or a note that play cannot
-reach it.
+`cargo xtask hunt --coverage` has the mod count which methods of the
+game's rules code each run enters: models, commands, hooks and combat,
+not screens. `cargo xtask game-coverage` adds the counts up by area and
+lists the methods no run entered. Twenty runs entered 7,023 of 15,756
+methods. Counting makes a hunt about four times slower.
+
+Each gap gets a scenario, a hunt that starts from a built position, or a
+note that play cannot reach it.
 
 ### 4. A speed target
 

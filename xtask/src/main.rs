@@ -18,6 +18,7 @@ mod coverage;
 mod dump;
 mod error;
 mod followed;
+mod game_coverage;
 mod game_trace;
 mod generic;
 mod hunt;
@@ -82,6 +83,8 @@ enum Command {
     Split(split::Args),
     /// Show the game's own calls in the moves before a run parts.
     GameTrace(game_trace::Args),
+    /// Count which of the game's rules methods the hunts entered.
+    GameCoverage(game_coverage::Args),
     /// Rewrite a build's behaviour to be generic over the build.
     Generic(generic::Args),
 }
@@ -129,6 +132,8 @@ enum Error {
     Split(#[from] split::Error),
     #[error("game-trace failed: {0}")]
     GameTrace(#[from] game_trace::Error),
+    #[error("game-coverage failed: {0}")]
+    GameCoverage(#[from] game_coverage::Error),
 }
 
 fn run(command: Command) -> Result<String, Error> {
@@ -150,6 +155,7 @@ fn run(command: Command) -> Result<String, Error> {
         Command::ScenarioDiff(args) => scenario_diff::run(args).map_err(Error::ScenarioDiff)?,
         Command::Split(args) => split::run(args)?,
         Command::GameTrace(args) => game_trace::run(args)?,
+        Command::GameCoverage(args) => game_coverage::run(args)?,
     })
 }
 
