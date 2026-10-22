@@ -361,7 +361,7 @@ pub(crate) fn moves<V: Rules>(
     alive: bool,
 ) -> Legal<V> {
     let mut moves = Legal::new();
-    drinks::<V>(potions, Some(live), alive, false, &mut moves);
+    drinks::<V>(potions, Some(live), false, alive, false, &mut moves);
 
     let asks = asks_should_play::<V>(Walk { live, relics });
     for (at, card) in live.cards.iter(Pile::Hand).enumerate() {
@@ -398,12 +398,13 @@ pub(crate) fn moves<V: Rules>(
 pub(crate) fn drinks<V: Rules>(
     potions: &[V::Potion],
     fight: Option<&Live<V>>,
+    merchant: bool,
     alive: bool,
     stuck: bool,
     moves: &mut Legal<V>,
 ) {
     for (at, &potion) in potions.iter().enumerate() {
-        if undrinkable::<V>(potion, fight, alive, stuck).is_some() {
+        if undrinkable::<V>(potion, fight, merchant, alive, stuck).is_some() {
             continue;
         }
         let targets = match fight {
@@ -426,14 +427,17 @@ pub(crate) fn drinks<V: Rules>(
 /// The order `NPotionPopup.RefreshButtons` asks in, minus the questions this
 /// slice cannot raise. Nothing is queued, because a decision resolves whole.
 /// `stuck` is `CanRemovePotions` off, which an event sets while it runs.
+/// `merchant` is whether the room has a merchant a Foul Potion can be
+/// thrown at, which [`Rules::computed_potion_check`] reads.
 pub(crate) fn belt<'a, V: Rules>(
     potions: &'a [V::Potion],
     fight: Option<&'a Live<V>>,
+    merchant: bool,
     alive: bool,
     stuck: bool,
 ) -> impl ExactSizeIterator<Item = Held<V>> + 'a {
     potions.iter().map(move |&potion| {
-        let reason = undrinkable::<V>(potion, fight, alive, stuck);
+        let reason = undrinkable::<V>(potion, fight, merchant, alive, stuck);
         Held {
             potion,
             // The game reads both out of its localisation tables, which
@@ -462,6 +466,7 @@ pub(crate) fn belt<'a, V: Rules>(
 fn undrinkable<V: Rules>(
     potion: V::Potion,
     fight: Option<&Live<V>>,
+    merchant: bool,
     alive: bool,
     stuck: bool,
 ) -> Option<Undrinkable> {
@@ -488,7 +493,7 @@ fn undrinkable<V: Rules>(
     }
     let passes = potion
         .passes_own_check()
-        .unwrap_or_else(|| V::computed_potion_check(potion, fight.is_some()));
+        .unwrap_or_else(|| V::computed_potion_check(potion, fight.is_some(), merchant));
     (!passes).then_some(Undrinkable::ItsOwnCheck)
 }
 

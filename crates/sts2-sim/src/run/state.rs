@@ -3766,6 +3766,12 @@ impl<V: Rules> State<V> {
                         taken: false,
                     }
                 }
+                CustomReward::SpecificRelic(relic) => Offer::Relic {
+                    relic,
+                    rarity: <_ as sts2_core::RarityKinds>::UNDRAFTED,
+                    wax: false,
+                    taken: false,
+                },
                 CustomReward::Gold(amount) => Offer::Gold {
                     amount: crate::reward::fixed_gold::<V, _>(rng, amount),
                     taken: false,
@@ -5018,6 +5024,45 @@ impl<V: Rules> State<V> {
         }
     }
 
+    /// `RunState.CurrentRoom`'s `RoomType`, for a room no fight opens in.
+    /// Nothing on the map, and in or after a fight, as
+    /// [`Rules::computed_potion_check`] takes it.
+    pub(super) fn quiet_room(&self) -> Option<V::RoomType> {
+        use sts2_core::RoomKinds as _;
+
+        match &self.phase {
+            Phase::Neow { .. } | Phase::Event { .. } | Phase::Won { .. } => {
+                Some(V::RoomType::EVENT)
+            }
+            Phase::Shop { .. } => Some(V::RoomType::SHOP),
+            Phase::Treasure { .. } => Some(V::RoomType::TREASURE),
+            Phase::RestSite { .. } => Some(V::RoomType::REST_SITE),
+            Phase::Map | Phase::Combat(_) | Phase::Rewards { .. } | Phase::Lost { .. } => None,
+        }
+    }
+
+    /// `FoulPotion.GetFoulPotionMerchantTarget` finding a merchant's button:
+    /// a shop's, whose inventory a run with no screen never opens, or the
+    /// one an event shows.
+    pub(super) fn merchant(&self) -> bool {
+        match &self.phase {
+            Phase::Shop { .. } => true,
+            Phase::Event { state, .. } => V::event_merchant(state),
+            _ => false,
+        }
+    }
+
+    /// [`Rules::event_potion_thrown`] on the event the run stands in.
+    pub(super) fn potion_thrown_at_event(
+        &mut self,
+        potion: V::Potion,
+    ) -> sts2_core::HookEffects<V> {
+        let Phase::Event { state, .. } = &mut self.phase else {
+            unreachable!("only an event's merchant is thrown at")
+        };
+        V::event_potion_thrown(state, potion)
+    }
+
     /// The type of the map point at `at`. None off the map.
     pub(super) fn point_type(&self, at: Location) -> Option<V::MapPointType> {
         use sts2_core::ActMap as _;
@@ -5956,16 +6001,24 @@ impl<V: Rules> State<V> {
     ///
     /// `EnterRoomWithoutExitingCurrentRoom` adds a room to the point the run
     /// stands on rather than a point, so the floor stays where it is. The
-    /// room stack is two deep, so `MarkRoomVisited` counts nothing. The fight
-    /// is won to the rewards a monster room gives. The run then travels on
-    /// from the event's point, or with `resume` goes back to the event.
-    fn fight_in_event(
+    /// room stack is two deep, so `MarkRoomVisited` counts nothing.
+    ///
+    /// The fight is won to a monster room's rewards, then `rewards`, then
+    /// any `own_rewards`. The run then travels on, or with `resume` goes back
+    /// to the event.
+    pub(super) fn fight_in_event(
         &mut self,
         encounter: V::Encounter,
         rewards: &[sts2_core::CustomReward<V>],
         roster: &[V::Monster],
         resume: bool,
+        own_rewards: bool,
     ) -> Result<Decided, Error> {
+        let own = match (own_rewards, &self.phase) {
+            (true, Phase::Event { state, .. }) => V::event_rewards(state),
+            (true, _) => unreachable!("only an event has rewards of its own"),
+            (false, _) => Vec::new(),
+        };
         let CreatedFight {
             live,
             streams,
@@ -5997,12 +6050,15 @@ impl<V: Rules> State<V> {
         };
         let mut live = live;
         // `AddExtraReward`, as the room is built and before the fight opens.
-        for &reward in rewards {
+        for &reward in rewards.iter().chain(&own) {
             live.add_extra_reward(match reward {
                 sts2_core::CustomReward::SpecialCard(card) => {
                     crate::combat::ExtraReward::SpecialCard(CardIdent::new(card))
                 }
                 sts2_core::CustomReward::RolledRelic => crate::combat::ExtraReward::Relic,
+                sts2_core::CustomReward::SpecificRelic(relic) => {
+                    crate::combat::ExtraReward::SpecificRelic(relic)
+                }
                 sts2_core::CustomReward::Potion => crate::combat::ExtraReward::Potion,
                 reward => unimplemented!("{reward:?} among a fight's extra rewards"),
             });
@@ -6344,10 +6400,11 @@ impl<V: Rules> State<V> {
                     rewards,
                     roster,
                     resume,
+                    own_rewards,
                 },
             ] = effects.as_slice()
             {
-                return self.fight_in_event(*encounter, rewards, roster, *resume);
+                return self.fight_in_event(*encounter, rewards, roster, *resume, *own_rewards);
             }
             return Ok(match self.carry_out(effects) {
                 None => Decided::Resolved,
@@ -7030,6 +7087,7 @@ impl<V: Rules> State<V> {
         crate::combat::belt::<V>(
             &self.player.potions,
             self.fight(),
+            self.merchant(),
             self.standing().alive,
             self.potions_held(),
         )
@@ -7080,6 +7138,7 @@ impl<V: Rules> State<V> {
         crate::combat::drinks::<V>(
             &self.player.potions,
             None,
+            self.merchant(),
             alive,
             self.potions_held(),
             &mut moves,
@@ -8138,6 +8197,10 @@ impl<V: Rules> sts2_core::EventView<V> for State<V> {
 
     fn deck(&self) -> Vec<CardIdent<V>> {
         self.player.deck.iter().map(|held| held.ident).collect()
+    }
+
+    fn room(&self) -> Option<V::RoomType> {
+        self.quiet_room()
     }
 
     fn relics_left(&self) -> bool {

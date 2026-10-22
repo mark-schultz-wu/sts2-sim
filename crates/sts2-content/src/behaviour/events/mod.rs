@@ -821,7 +821,27 @@ pub(crate) fn resume_from_fight<V: crate::Build>(
 pub(crate) fn rewards<V: crate::Build>(state: &State<V>) -> Vec<sts2_core::CustomReward<V>> {
     match state {
         State::CrystalSphere(state) => crystal_sphere::CrystalSphere.rewards(state),
+        State::FakeMerchant(state) => fake_merchant::FakeMerchant.rewards(state),
         state => unimplemented!("rewards of {state:?}'s own"),
+    }
+}
+
+/// [`EventBehavior::merchant`] for the event entered.
+pub(crate) fn merchant<V: crate::Build>(state: &State<V>) -> bool {
+    match state {
+        State::FakeMerchant(state) => fake_merchant::FakeMerchant.merchant(state),
+        _ => false,
+    }
+}
+
+/// [`EventBehavior::potion_thrown`] for the event entered.
+pub(crate) fn potion_thrown<V: crate::Build>(
+    state: &mut State<V>,
+    potion: V::Potion,
+) -> HookEffects<V> {
+    match state {
+        State::FakeMerchant(state) => fake_merchant::FakeMerchant.potion_thrown(state, potion),
+        state => unimplemented!("{potion:?} thrown at {state:?}"),
     }
 }
 

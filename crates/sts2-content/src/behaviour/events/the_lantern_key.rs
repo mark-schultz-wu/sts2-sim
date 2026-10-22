@@ -78,6 +78,7 @@ impl<V: crate::Build> EventBehavior<V> for TheLanternKey {
                     rewards: V::THE_LANTERN_KEY_REWARDS,
                     roster: &[],
                     resume: false,
+                    own_rewards: false,
                 }]
             }
         }

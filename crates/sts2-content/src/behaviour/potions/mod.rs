@@ -135,6 +135,24 @@ pub(crate) fn on_use_on_run<V: crate::Build>(
                 V::Potion::FRUIT_JUICE_MAX_HP
             )]
         }
+        // Thrown at a merchant, the one place outside a fight its check
+        // passes: `PlayerCmd.GainGold` of its `GoldVar` in a shop, and the
+        // Fake Merchant's `FoulPotionThrown` in its event.
+        (__c0, false) if __c0 == V::Potion::FOUL_POTION => {
+            use sts2_core::RoomKinds as _;
+
+            match run.room() {
+                Some(room) if room == V::RoomType::SHOP => {
+                    smallvec::smallvec![sts2_core::HookEffect::GainGold(
+                        V::Potion::FOUL_POTION_GOLD
+                    )]
+                }
+                Some(room) if room == V::RoomType::EVENT => {
+                    smallvec::smallvec![sts2_core::HookEffect::PotionThrownAtEvent(potion)]
+                }
+                room => unimplemented!("a Foul Potion thrown in {room:?}"),
+            }
+        }
         (potion, false) => unimplemented!("what {potion:?} does when it is drunk outside a fight"),
     }
 }
@@ -164,6 +182,10 @@ pub(crate) fn computed_target<V: crate::Build>(potion: V::Potion, in_combat: boo
 
 /// [`sts2_core::Rules::computed_potion_check`]. Only an event potion answers
 /// from the run.
-pub(crate) fn computed_check<V: crate::Build>(potion: V::Potion, in_combat: bool) -> bool {
-    event::computed_check::<V>(potion, in_combat)
+pub(crate) fn computed_check<V: crate::Build>(
+    potion: V::Potion,
+    in_combat: bool,
+    merchant: bool,
+) -> bool {
+    event::computed_check::<V>(potion, in_combat, merchant)
 }

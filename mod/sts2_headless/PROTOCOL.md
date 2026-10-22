@@ -345,7 +345,7 @@ game.
 | `travel` | `col`, `row` — integers |
 | `play_card` | `index` — into the hand; `target` — a creature's `CombatId`, or absent |
 | `end_turn` | — |
-| `use_potion` | `index` — into the belt as `potions` reports it; `target` — a creature's `CombatId`, or absent |
+| `use_potion` | `index` — into the belt as `potions` reports it; `target` — a creature's `CombatId`, or absent. Out of a fight a Foul Potion is thrown at a merchant: see below |
 | `discard_potion` | `index` — into the belt as `potions` reports it. The one command a reward screen takes besides `answer`: see below |
 | `choose_option` | `index` — into the options the last observation reported |
 | `buy` | `index` — into the shop entries |
@@ -356,6 +356,16 @@ game.
 
 `"full": true` is honoured on any command, since every one of them answers with an
 observation.
+
+### A Foul Potion thrown at a merchant
+
+Out of a fight, a Foul Potion can be thrown only at a merchant's button.
+Headless there is no button, so the mod passes the potion's check in a
+`MerchantRoom`, and in the Fake Merchant's event until its fight starts. No
+inventory is ever open headless. At a shop the throw gains the potion's 100
+gold. At the Fake Merchant the mod calls `FakeMerchant.FoulPotionThrown`,
+which `OnUse` calls only through the event's `NFakeMerchant` node. The
+throw starts the event's fight.
 
 ### `fight` is scenario construction, not a move
 

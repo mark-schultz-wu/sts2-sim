@@ -5296,6 +5296,8 @@ pub enum CustomReward<V: ContentVersion> {
         kind: CardKind,
         count: usize,
     },
+    /// `RelicReward(relic, player)` for this relic.
+    SpecificRelic(V::Relic),
 }
 
 /// How `RelicFactory.PullNextRelicFromFront` picks the next relic from the
@@ -6019,6 +6021,9 @@ pub enum HookEffect<V: ContentVersion> {
         rewards: &'static [CustomReward<V>],
         roster: &'static [V::Monster],
         resume: bool,
+        /// The event's own rewards follow `rewards`, which
+        /// [`crate::EventBehavior::rewards`] lists from what the event holds.
+        own_rewards: bool,
     },
     /// `CardPileCmd.Add(card, PileType.Deck)`, a new card into the run's deck.
     AddToDeck(V::Card),
@@ -6311,6 +6316,10 @@ pub enum HookEffect<V: ContentVersion> {
     ChooseColorlessCards {
         count: usize,
     },
+    /// A potion thrown at the event's merchant, which
+    /// [`crate::EventBehavior::potion_thrown`] carries out. It is the whole
+    /// of the potion's use.
+    PotionThrownAtEvent(V::Potion),
 }
 
 /// One build's relic models, which is what a run holds a relic as.
@@ -7958,12 +7967,15 @@ pub trait Rules: Hooks + Engine {
     /// A potion whose override nobody has ported.
     fn computed_potion_target(potion: Self::Potion, in_combat: bool) -> Self::TargetType;
 
-    /// `PotionModel.PassesCustomUsabilityCheck`, overridden, the same way.
+    /// `PotionModel.PassesCustomUsabilityCheck`, overridden. `in_combat` is
+    /// whether a fight is in progress. `merchant` is whether
+    /// `FoulPotion.GetFoulPotionMerchantTarget` finds a merchant's button in
+    /// the room.
     ///
     /// # Panics
     ///
     /// A potion whose override nobody has ported.
-    fn computed_potion_check(potion: Self::Potion, in_combat: bool) -> bool;
+    fn computed_potion_check(potion: Self::Potion, in_combat: bool, merchant: bool) -> bool;
 
     /// What a card works out from the fight for a number it prints.
     ///
@@ -8142,6 +8154,19 @@ pub trait Rules: Hooks + Engine {
     /// [`crate::EventBehavior::rewards`] for the event entered.
     fn event_rewards(_state: &Self::EventState) -> Vec<CustomReward<Self>> {
         unimplemented!("an event with rewards of its own")
+    }
+
+    /// [`crate::EventBehavior::merchant`] for the event entered.
+    fn event_merchant(_state: &Self::EventState) -> bool {
+        false
+    }
+
+    /// [`crate::EventBehavior::potion_thrown`] for the event entered.
+    fn event_potion_thrown(
+        _state: &mut Self::EventState,
+        potion: Self::Potion,
+    ) -> crate::HookEffects<Self> {
+        unimplemented!("{potion:?} thrown at an event")
     }
 
     /// The curses Neow offers, in the game's own order.

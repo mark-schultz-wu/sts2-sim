@@ -91,6 +91,7 @@ impl<V: crate::Build> EventBehavior<V> for DenseVegetation {
                     rewards: &[],
                     roster: &[],
                     resume: false,
+                    own_rewards: false,
                 }]
             }
         }

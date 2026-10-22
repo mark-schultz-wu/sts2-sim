@@ -92,6 +92,9 @@ mod tests {
         fn wins(&self) -> u32 {
             unreachable!("Tea Master does not inspect the profile")
         }
+        fn room(&self) -> Option<<V as sts2_core::ContentVersion>::RoomType> {
+            unreachable!("Tea Master does not inspect the room")
+        }
         fn modifiers(&self) -> &[sts2_core::RunModifier<V>] {
             unreachable!("Tea Master does not read the run's modifiers")
         }

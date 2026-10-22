@@ -86,6 +86,7 @@ impl<V: crate::Build> EventBehavior<V> for PunchOff {
                     rewards: &[CustomReward::RolledRelic, CustomReward::Potion],
                     roster: &[],
                     resume: false,
+                    own_rewards: false,
                 }]
             }
         }

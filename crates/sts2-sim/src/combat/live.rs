@@ -2358,6 +2358,8 @@ pub(crate) enum ExtraReward<V: Rules> {
     Potion,
     /// `GoldReward(amount)`.
     Gold(V::Number),
+    /// `RelicReward(relic, player)` for this relic.
+    SpecificRelic(V::Relic),
 }
 
 /// The modifiers the run was started with, which the fight asks after

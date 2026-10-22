@@ -93,16 +93,19 @@ pub(super) fn computed_target<V: crate::Build>(potion: V::Potion, in_combat: boo
 }
 
 /// `PassesCustomUsabilityCheck`, for Foul Potion: always in a fight, and
-/// outside one only at a merchant whose screen is closed. The simulator has
-/// no screen, as a headless game has none, so outside a fight it is never
-/// usable.
+/// outside one only where `GetFoulPotionMerchantTarget` finds a merchant's
+/// button, which `merchant` says.
 ///
 /// # Panics
 ///
 /// Any other potion, which answers from its row.
-pub(super) fn computed_check<V: crate::Build>(potion: V::Potion, in_combat: bool) -> bool {
+pub(super) fn computed_check<V: crate::Build>(
+    potion: V::Potion,
+    in_combat: bool,
+    merchant: bool,
+) -> bool {
     match potion {
-        __c0 if __c0 == V::Potion::FOUL_POTION => in_combat,
+        __c0 if __c0 == V::Potion::FOUL_POTION => in_combat || merchant,
         potion => unimplemented!("{potion:?} checking whether it can be drunk"),
     }
 }

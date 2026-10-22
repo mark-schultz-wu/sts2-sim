@@ -1274,8 +1274,14 @@ macro_rules! rules {
                     crate::behaviour::rules::computed_potion_target::<Self>(potion, in_combat)
                 }
 
-                fn computed_potion_check(potion: Self::Potion, in_combat: bool) -> bool {
-                    crate::behaviour::rules::computed_potion_check::<Self>(potion, in_combat)
+                fn computed_potion_check(
+                    potion: Self::Potion,
+                    in_combat: bool,
+                    merchant: bool,
+                ) -> bool {
+                    crate::behaviour::rules::computed_potion_check::<Self>(
+                        potion, in_combat, merchant,
+                    )
                 }
 
                 fn calculated_card_var<P: Printed<Self> + ?Sized>(
@@ -1452,6 +1458,17 @@ macro_rules! rules {
 
                 fn event_rewards(_state: &Self::EventState) -> Vec<CustomReward<Self>> {
                     crate::behaviour::rules::event_rewards::<Self>(_state)
+                }
+
+                fn event_merchant(state: &Self::EventState) -> bool {
+                    crate::behaviour::events::merchant::<Self>(state)
+                }
+
+                fn event_potion_thrown(
+                    state: &mut Self::EventState,
+                    potion: Self::Potion,
+                ) -> sts2_core::HookEffects<Self> {
+                    crate::behaviour::events::potion_thrown::<Self>(state, potion)
                 }
 
                 fn neow_curses() -> &'static [Self::Relic] {

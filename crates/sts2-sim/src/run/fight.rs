@@ -134,9 +134,21 @@ impl<V: Rules> State<V> {
         let Some(fighting) = self.fighting() else {
             // What it asks the run for.
             let effects = V::on_use_on_run(potion, &*self, false);
-            if self.carry_out(effects).is_some() {
-                unimplemented!("a potion drunk outside a fight that asks a question");
-            }
+            // Thrown at an event's merchant: what the event does with it,
+            // which starts a fight. `EnterRoomWithoutExitingCurrentRoom`
+            // runs on as its own task, and `AfterPotionUsed` goes ahead of
+            // it with no fight in progress.
+            let thrown = match effects.as_slice() {
+                [sts2_core::HookEffect::PotionThrownAtEvent(potion)] => {
+                    Some(self.potion_thrown_at_event(*potion))
+                }
+                _ => {
+                    if self.carry_out(effects).is_some() {
+                        unimplemented!("a potion drunk outside a fight that asks a question");
+                    }
+                    None
+                }
+            };
             let used = sts2_core::EventHook::PotionUsed {
                 in_fight: false,
                 holding_potions: self.holding_potions(),
@@ -144,7 +156,28 @@ impl<V: Rules> State<V> {
             if self.walk_run(used).is_some() {
                 unimplemented!("a relic asking a question after a potion outside a fight");
             }
-            return Ok(Ok(Decided::Resolved));
+            let Some(thrown) = thrown else {
+                return Ok(Ok(Decided::Resolved));
+            };
+            let [
+                sts2_core::HookEffect::FightInEvent {
+                    encounter,
+                    rewards,
+                    roster,
+                    resume,
+                    own_rewards,
+                },
+            ] = thrown.as_slice()
+            else {
+                unimplemented!("a potion thrown at an event doing {thrown:?}")
+            };
+            return Ok(Ok(self.fight_in_event(
+                *encounter,
+                rewards,
+                roster,
+                *resume,
+                *own_rewards,
+            )?));
         };
         let since = fighting.live.removed_from_deck().len();
         let ended = combat::drink(fighting, potion, target)?;
@@ -429,6 +462,12 @@ impl<V: Rules> State<V> {
                         taken: false,
                     }
                 }
+                combat::ExtraReward::SpecificRelic(relic) => crate::reward::Offer::Relic {
+                    relic,
+                    rarity: <_ as sts2_core::RarityKinds>::UNDRAFTED,
+                    wax: false,
+                    taken: false,
+                },
                 // `GoldReward.Populate`, which draws even between one
                 // amount's two bounds.
                 combat::ExtraReward::Gold(amount) => {

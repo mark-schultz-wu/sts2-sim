@@ -1,0 +1,8 @@
+# A Foul Potion thrown at a merchant gains its gold through
+# `PlayerCmd.GainGold`, so Ectoplasm's `ShouldGainGold` stops it. The
+# potion is still gone.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","relic":"ECTOPLASM"}
+{"cmd":"grant","potion":"FOUL_POTION"}
+{"cmd":"enter_room","type":"Shop"}
+{"cmd":"use_potion","index":0}
