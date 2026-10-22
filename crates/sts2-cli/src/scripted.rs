@@ -19,7 +19,7 @@ use crate::tui::check::Sent;
 /// The error type is [`std::convert::Infallible`]: a scripted game has no
 /// socket to lose. A refusal is not an error, and is written into the script
 /// like any other answer.
-pub struct Scripted<V: sts2_content_wire::WireContentVersion> {
+pub struct Scripted<V: crate::tui::Build> {
     /// The answers still to give, in order.
     answers: VecDeque<Answered<V>>,
     /// What it goes on saying once those run out.
@@ -32,7 +32,7 @@ pub struct Scripted<V: sts2_content_wire::WireContentVersion> {
     looked: usize,
 }
 
-impl<V: sts2_content_wire::WireContentVersion> Scripted<V> {
+impl<V: crate::tui::Build> Scripted<V> {
     /// A game that says one thing, forever.
     ///
     /// Enough to draw a screen against, and enough for a claim about what the
@@ -99,7 +99,7 @@ impl<V: sts2_content_wire::WireContentVersion> Scripted<V> {
     }
 }
 
-impl<V: sts2_content_wire::WireContentVersion> Play<V> for Scripted<V> {
+impl<V: crate::tui::Build> Play<V> for Scripted<V> {
     /// Itself. A script is what it is before a run starts, and starting one
     /// changes nothing about what it will say.
     type Host = Scripted<V>;
@@ -128,7 +128,7 @@ impl<V: sts2_content_wire::WireContentVersion> Play<V> for Scripted<V> {
     }
 }
 
-impl<V: sts2_content_wire::WireContentVersion> Construct<V> for Scripted<V> {
+impl<V: crate::tui::Build> Construct<V> for Scripted<V> {
     fn setup(&mut self, step: &Setup<V>) -> Result<Answered<V>, Self::Error> {
         self.constructed.push(step.clone());
         Ok(self.next("reach a position"))

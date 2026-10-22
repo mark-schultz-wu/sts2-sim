@@ -445,6 +445,48 @@ mod tests {
         );
     }
 
+    /// A card's frame says what kind it is: an attack is red, a skill blue,
+    /// and a power yellow.
+    #[test]
+    fn a_cards_frame_is_coloured_by_its_kind() {
+        use ratatui::style::Color;
+
+        let buffer = painted(a_fight(), 100, 30, |_| {});
+        let row = (0..buffer.area.height)
+            .find(|&y| {
+                let line: String = (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect();
+                line.contains("╭(1)")
+            })
+            .expect("a hand of cards");
+        // The hand in the fixture: Strike, Bash, Armaments, Defend, Inflame.
+        // The cursor is on Strike and Armaments cannot be played, so those
+        // two frames say that instead.
+        let frames: Vec<Option<Color>> = (0..buffer.area.width)
+            .filter(|&x| buffer[(x, row)].symbol() == "╭")
+            .map(|x| buffer[(x, row)].fg.into())
+            .collect();
+        assert_eq!(
+            [frames[1], frames[3], frames[4]],
+            [Color::Red, Color::Blue, Color::Yellow].map(Some),
+            "{frames:?}"
+        );
+    }
+
+    /// A refusal pops up over the screen, even one too short for a log.
+    #[test]
+    fn a_refusal_pops_up_over_a_short_screen() {
+        let out = shot(a_fight(), 80, 22, |app| {
+            app.ui
+                .say(super::super::state::Tone::Refused, "not enough energy");
+        });
+        let line = (out.lines())
+            .find(|line| line.contains("not enough energy"))
+            .unwrap_or_else(|| panic!("no toast: {out}"));
+        assert!(line.trim_end().ends_with('│'), "boxed at the right: {line}");
+    }
+
     /// Between two rows of rooms, the paths: `╲` and `╱` to the next column
     /// over, `│` straight on.
     #[test]
@@ -589,7 +631,7 @@ mod tests {
             .lines()
             .find(|l| l.contains("Deck (10)"))
             .expect("the panel has a title");
-        let left = column(top, '┌').expect("and a top-left corner");
+        let left = column(top, '╭').expect("and a top-left corner");
         let listed = out
             .lines()
             .find(|l| l.contains("Strike Ironclad"))

@@ -19,7 +19,7 @@ use super::titled;
 
 pub fn draw<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>, map: &Map<V>)
 where
-    V: sts2_content_wire::WireContentVersion,
+    V: crate::tui::Build,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -48,12 +48,7 @@ const GUTTER: usize = 4;
 /// marks state. `@` is the current room, a digit is its travel key, and
 /// visited rooms are dim. A screen too short for every row of paths draws the
 /// ones from the current room up. Overlays supply the heading.
-pub fn grid_of<V: sts2_content_wire::WireContentVersion>(
-    frame: &mut Frame,
-    inner: Rect,
-    map: &Map<V>,
-    at: usize,
-) {
+pub fn grid_of<V: crate::tui::Build>(frame: &mut Frame, inner: Rect, map: &Map<V>, at: usize) {
     if map.points.is_empty() || inner.height == 0 {
         return;
     }
@@ -91,7 +86,7 @@ pub fn grid_of<V: sts2_content_wire::WireContentVersion>(
 }
 
 /// One row of rooms.
-fn rooms<V: sts2_content_wire::WireContentVersion>(
+fn rooms<V: crate::tui::Build>(
     map: &Map<V>,
     row: u8,
     cols: usize,
@@ -163,11 +158,7 @@ enum Trail {
 /// two crossing. Paths out of the current room are bright, walked paths are
 /// dim, and the rest are faint. A path that skips a column has no cell, so
 /// it is left out. Only the first room and the boss have one.
-fn paths<V: sts2_content_wire::WireContentVersion>(
-    map: &Map<V>,
-    row: u8,
-    cols: usize,
-) -> Line<'static> {
+fn paths<V: crate::tui::Build>(map: &Map<V>, row: u8, cols: usize) -> Line<'static> {
     let width = GUTTER + PITCH * (cols + 1);
     let mut cells: Vec<Option<(char, Trail)>> = vec![None; width];
     for node in map.points.iter().filter(|p| p.at.row == row) {
@@ -237,7 +228,7 @@ fn legend() -> Vec<Span<'static>> {
 ///
 /// Numbered off the same list the keys act on. The digit beside a room is the
 /// digit that goes there, whatever else is on the screen.
-fn where_to<V: sts2_content_wire::WireContentVersion>(
+fn where_to<V: crate::tui::Build>(
     frame: &mut Frame,
     area: Rect,
     map: &Map<V>,

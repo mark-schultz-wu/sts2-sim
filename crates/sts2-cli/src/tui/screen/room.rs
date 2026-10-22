@@ -36,7 +36,7 @@ struct Choice {
 
 pub fn draw<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>, room: &Room<V>)
 where
-    V: sts2_content_wire::WireContentVersion,
+    V: crate::tui::Build,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -188,10 +188,7 @@ where
 }
 
 /// Where a room's option sits in the list the keys act on.
-fn chose<V: sts2_content_wire::WireContentVersion>(
-    moves: &[Decision<V>],
-    index: u8,
-) -> Option<usize> {
+fn chose<V: crate::tui::Build>(moves: &[Decision<V>], index: u8) -> Option<usize> {
     moves
         .iter()
         .position(|m| m == &Decision::ChooseOption { index })
@@ -203,7 +200,7 @@ fn chose<V: sts2_content_wire::WireContentVersion>(
 /// the same time.
 fn leaving<V, G>(app: &App<V, G>, moves: &[Decision<V>]) -> Vec<Choice>
 where
-    V: sts2_content_wire::WireContentVersion,
+    V: crate::tui::Build,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -248,7 +245,7 @@ where
 
 pub fn asking<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>, question: &Question<V>)
 where
-    V: sts2_content_wire::WireContentVersion,
+    V: crate::tui::Build,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -406,7 +403,7 @@ where
     }
 }
 
-fn reward_name<V: sts2_content_wire::WireContentVersion>(reward: &RewardKind<V>) -> String {
+fn reward_name<V: crate::tui::Build>(reward: &RewardKind<V>) -> String {
     match reward {
         RewardKind::Gold { amount } => format!("{amount} gold"),
         RewardKind::Card { .. } => "a card".into(),

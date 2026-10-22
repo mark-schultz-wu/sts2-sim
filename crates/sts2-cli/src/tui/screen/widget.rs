@@ -62,10 +62,14 @@ pub fn vitals<N: PrimInt + ToPrimitive + std::fmt::Display>(
     block: N,
     width: usize,
 ) -> Line<'static> {
+    let left = match max_hp.to_f64() {
+        Some(max) if max > 0.0 => hp.to_f64().unwrap_or(0.0) / max,
+        _ => 0.0,
+    };
     let mut spans = vec![
-        Span::styled(format!("{hp}/{max_hp}"), theme::hurt()),
+        Span::styled(format!("{hp}/{max_hp}"), theme::health(left)),
         Span::raw(" "),
-        Span::styled(bar(hp, max_hp, width), theme::hurt()),
+        Span::styled(bar(hp, max_hp, width), theme::health(left)),
     ];
     if block > N::zero() {
         spans.push(Span::styled(format!("  B{block}"), theme::guard()));

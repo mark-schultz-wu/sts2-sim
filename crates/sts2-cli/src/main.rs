@@ -349,7 +349,7 @@ fn exit(done: std::result::Result<(), impl Display>) -> ExitCode {
     }
 }
 
-fn drive<V: sts2_content_wire::WireContentVersion>(cli: Cli) -> Result<(), V> {
+fn drive<V: tui::Build>(cli: Cli) -> Result<(), V> {
     let show = Show { rng: cli.rng };
     let held: Host<V> = Held::new(serving);
 
@@ -418,7 +418,7 @@ fn start<V: sts2_content_wire::WireContentVersion>(
 /// which is one line and says what it does. Bringing the game up on a bare
 /// `sts2` means twenty seconds of nothing, followed by a screen with no run in
 /// it. It also gives the player no way to say which seed they wanted.
-fn play<V: sts2_content_wire::WireContentVersion>(held: &Host<V>) -> Result<(), V> {
+fn play<V: tui::Build>(held: &Host<V>) -> Result<(), V> {
     // The daemon comes up. The *game* does not, so a bare `sts2` opens on the
     // setup screen straight away and the game boots while the player is picking
     // a character.

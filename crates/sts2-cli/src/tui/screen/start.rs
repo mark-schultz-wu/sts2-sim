@@ -7,7 +7,7 @@
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Paragraph};
+use ratatui::widgets::Paragraph;
 
 use crate::render::spelling;
 use crate::tui::names;
@@ -16,7 +16,7 @@ use crate::tui::theme;
 
 use super::{centred, widget};
 
-pub fn draw<V: sts2_content_wire::WireContentVersion>(
+pub fn draw<V: crate::tui::Build>(
     frame: &mut Frame,
     area: Rect,
     roster: &[V::Character],
@@ -30,7 +30,7 @@ pub fn draw<V: sts2_content_wire::WireContentVersion>(
         52.min(area.width),
         (roster.len() as u16 + 8).min(area.height),
     );
-    let block = Block::bordered()
+    let block = super::boxed()
         .border_style(theme::label())
         .title(Span::styled(" a new run ", theme::heading()));
     let inner = block.inner(panel);

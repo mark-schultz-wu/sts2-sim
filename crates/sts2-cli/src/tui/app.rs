@@ -55,7 +55,7 @@ enum Stage {
 /// keyboard can be driven with no game behind it, and a fault part way through
 /// a handler cannot leave the screen half-changed.
 #[derive(Debug, Clone, PartialEq)]
-pub enum Intent<V: sts2_content_wire::WireContentVersion> {
+pub enum Intent<V: crate::tui::Build> {
     /// The key moved a cursor, opened a panel, or meant nothing here.
     Nothing,
     /// A fresh look, which advances nothing.
@@ -102,7 +102,7 @@ pub enum Ended {
     NoRun,
 }
 
-pub struct App<V: sts2_content_wire::WireContentVersion, G: Play<V>> {
+pub struct App<V: crate::tui::Build, G: Play<V>> {
     game: G,
     /// Why the loop will stop, read once it has.
     ended: Ended,
@@ -123,7 +123,7 @@ pub struct App<V: sts2_content_wire::WireContentVersion, G: Play<V>> {
 
 impl<V, G> App<V, G>
 where
-    V: sts2_content_wire::WireContentVersion,
+    V: crate::tui::Build,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -158,6 +158,7 @@ where
 
     /// One action, for a caller that has no keyboard.
     pub fn press(&mut self, action: Action) {
+        self.ui.toast = None;
         let intent = self.act(action);
         self.perform(intent)
             .expect("the game answered the decision");
@@ -167,6 +168,8 @@ where
     ///
     /// Raw rather than an [`Action`], for a caller that has one.
     pub fn key(&mut self, key: KeyEvent) -> Result<(), Error> {
+        // A toast lasts until the next key, which has read it or moved on.
+        self.ui.toast = None;
         let intent = self.decide(key);
         self.perform(intent)
     }
@@ -776,6 +779,17 @@ where
     /// behind it changes.
     fn arrive(&mut self, standing: Snapshot<V>) {
         let seen = standing.view();
+        // A run this screen did not start, such as one the daemon already
+        // held, says its character first in a fight, on the player's model.
+        let player = (seen.fight().into_iter())
+            .flat_map(|fight| &fight.creatures)
+            .find_map(|creature| match &creature.model {
+                Some(sts2_core::ModelId::Character(character)) => Some(*character),
+                _ => None,
+            });
+        if let Some(player) = player {
+            super::theme::accent_for(&crate::render::spelling(&player));
+        }
         let stage = stage_of(&seen);
         if stage != self.stage {
             self.ui.reset();
@@ -855,10 +869,7 @@ where
 }
 
 /// The card at an index in the hand, played at a creature or at nothing.
-fn play_card<V: sts2_content_wire::WireContentVersion>(
-    index: usize,
-    target: Option<CombatId>,
-) -> Intent<V> {
+fn play_card<V: crate::tui::Build>(index: usize, target: Option<CombatId>) -> Intent<V> {
     // A hand that long is no hand the game deals, so the key meant nothing.
     let Some(index) = hand_index(index) else {
         return Intent::Nothing;
@@ -881,10 +892,7 @@ fn belt_index(index: usize) -> Option<BeltIndex> {
 }
 
 /// The potion at an index in the belt, drunk at a creature or at nothing.
-fn drink<V: sts2_content_wire::WireContentVersion>(
-    index: usize,
-    target: Option<CombatId>,
-) -> Intent<V> {
+fn drink<V: crate::tui::Build>(index: usize, target: Option<CombatId>) -> Intent<V> {
     // As in [`play_card`]: a belt that long is no belt the game gives.
     let Some(index) = belt_index(index) else {
         return Intent::Nothing;
@@ -893,7 +901,7 @@ fn drink<V: sts2_content_wire::WireContentVersion>(
 }
 
 /// Which kind of screen this is.
-fn stage_of<V: sts2_content_wire::WireContentVersion>(standing: &View<V>) -> Stage {
+fn stage_of<V: crate::tui::Build>(standing: &View<V>) -> Stage {
     if let Some(question) = &standing.asking {
         return match question {
             Question::SelectCards { .. } => Stage::AskingCards,

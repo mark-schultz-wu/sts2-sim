@@ -52,6 +52,12 @@ pub enum Error {
 }
 pub use state::Options;
 
+/// What the TUI needs of a build: the spellings it draws with, and the rules
+/// a card's type is read from.
+pub trait Build: sts2_content_wire::WireContentVersion + sts2_core::Rules {}
+
+impl<V: sts2_content_wire::WireContentVersion + sts2_core::Rules> Build for V {}
+
 /// Draws a run and reads keys, until the player leaves or the run goes away.
 ///
 /// A window onto a run that has already started. What run that is, and what to
@@ -63,7 +69,7 @@ pub fn play<V, G>(
     options: Options,
 ) -> Result<app::Ended, Error>
 where
-    V: sts2_content_wire::WireContentVersion,
+    V: crate::tui::Build,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
