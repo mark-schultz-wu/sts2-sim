@@ -1,0 +1,18 @@
+# Neutralize first, then a Strike that kills: the Weak landed on the giant
+# that fell, and the giant that rises starts without it.
+#
+# Three turns first, so the giant has Steam Eruption to rise with.
+#
+# From RiptideLab's "YOUR Weird Spire Mechanics (and lies)".
+{"cmd":"start","seed":"S33D1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"WATERFALL_GIANT_BOSS"}
+{"cmd":"power","power":"PLATING_POWER","amount":200,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"NEUTRALIZE"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"power","power":"STRENGTH_POWER","amount":300,"target":0}
+{"cmd":"grant","card":"STRIKE_SILENT"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"end_turn"}
