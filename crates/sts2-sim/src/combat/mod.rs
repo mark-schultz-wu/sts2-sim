@@ -25,7 +25,8 @@ pub(crate) use listen::combat_ended;
 pub(crate) use live::{ExtraReward, Heard, Live, printed_costs};
 pub(crate) use observed::Fight;
 pub(crate) use play::{
-    answer, apply_power, belt_changed, enchant, grant_card, play, resolve, selector_picks, set_hp,
+    answer, apply_power, belt_changed, come_up, enchant, grant_card, play, resolve, selector_picks,
+    set_hp, signalled,
 };
 pub(crate) use potion::drink;
 pub(crate) use relic::obtained;

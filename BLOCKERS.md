@@ -40,28 +40,14 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ## Open
 
-### 1. Pause boundaries in hooks
+### 1. Pause boundaries on the enemies' turn end
 
-The game runs some calls under a pause boundary,
-`AssignTaskAndWaitForPauseOrCompletion`. A choice signalled under it
-pauses the task there, and the caller runs on to a join that waits for
-the task. The simulator sets a paused task aside with `Live::set_aside`
-and puts it back with `Live::rejoin`. A turn's setup does this, and the
-join is `RunAutoPrePlayPhase`.
-
-Each listener of these hooks has a boundary of its own:
-`BeforeSideTurnStart`, `BeforeSideTurnEnd` and its two early passes,
-`AfterSideTurnEnd` and its late pass, `BeforeFlush` and its late pass, and
-`AfterDiedToDoom`. A listener that pauses lets the later listeners and
-passes run first. The hook waits for every task at its end. The
-simulator stops the hook on the first question, and the listeners after
-it run late or not at all. `before_flush_late` drops them. In v0.111.0, a
-choice with nothing to ask signals as well, and the simulator does not
-stop on it.
-
-`OrbQueue.AfterTurnStart` has a boundary with no join, as `AfterDeath`
-has. Its task goes on as a queued action, which `Live::paused` holds for
-`AfterDeath`.
+The game runs each listener of `BeforeSideTurnEnd` and `AfterSideTurnEnd`
+under a pause boundary of its own, on either side's turn end. A listener
+that pauses lets the later ones run first, and the hook waits for it at
+its end. `Listening` does this for the player's turn end, which defers
+the rest of the turn behind the join. The enemies' turn end has no such
+continuation, so a listener that pauses there panics.
 
 ### 2. Pause sites from the game's code
 

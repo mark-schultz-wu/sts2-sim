@@ -956,6 +956,12 @@ fn signal_pauses<V: Rules>(live: &Live<V>) -> bool {
     live.pause_boundary && V::signals_choice_before_listing()
 }
 
+/// Whether the fight stands on a choice that signalled under a pause
+/// boundary and has not listed yet, which [`come_up`] lists.
+pub(crate) fn signalled<V: Rules>(live: &Live<V>) -> bool {
+    live.asking.as_ref().is_some_and(|asking| asking.signalled)
+}
+
 /// What a pushed selector picks for the question the fight parked on, or
 /// nothing where none answers it or nothing is asked.
 ///
@@ -1068,13 +1074,7 @@ pub(crate) fn answer<V: Rules>(
 /// A choice signalled under a pause boundary, once the caller has run on.
 /// It lists the cards now, and takes them unasked where its count allows.
 /// One that needs the player stays as the question.
-///
-/// `hand` is the hand's size as the caller ran on. A filtered choice listed
-/// the hand as it stopped, and cannot list a changed one.
-pub(super) fn come_up<V: Rules>(
-    fighting: Fighting<'_, V>,
-    hand: usize,
-) -> Result<Option<super::Ended>, Error> {
+pub(crate) fn come_up<V: Rules>(fighting: Fighting<'_, V>) -> Result<Option<super::Ended>, Error> {
     let Fighting {
         live,
         streams,
@@ -1098,9 +1098,6 @@ pub(super) fn come_up<V: Rules>(
                 selection.validate_automatic(sts2_core::Picked::new())
             }
             Asked::Pile { pile, selection } => taken::<V>(live, *pile, *selection),
-            Asked::Among { cards, .. } if live.cards.len(sts2_core::Pile::Hand) != hand => {
-                unimplemented!("a filtered choice over {cards:?} whose hand changed as it paused")
-            }
             Asked::Among { cards, selection } => {
                 selection.validate_automatic(cards.iter().copied().collect())
             }
@@ -1371,6 +1368,16 @@ fn run_deferred<V: Rules>(
                 effect.ended = effect.ended.or(ended);
                 finish_effect(fighting, ascension, effect, outermost)?
             }
+            super::live::Deferred::Rejoin(task) => {
+                fighting.live.rejoin(*task);
+                ended
+            }
+            super::live::Deferred::TurnEndHooksOver {
+                max_energy,
+                skipping,
+            } => super::turn::after_turn_end_hooks::<V>(
+                fighting, ascension, max_energy, skipping, ended,
+            )?,
             parked @ super::live::Deferred::Move { .. } => {
                 let resumed = match ended {
                     None => super::turn::resume_move::<V>(

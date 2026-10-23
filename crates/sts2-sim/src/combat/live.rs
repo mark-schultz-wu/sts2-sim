@@ -148,13 +148,134 @@ pub(super) enum Asked<V: Rules> {
 }
 
 /// A task a pause boundary set aside, with the question it paused on. The
-/// boundary's caller runs on without it. A death's listener inside a play
-/// is one, and a turn's setup is another.
+/// boundary's caller runs on without it. A turn's setup is one, and so is
+/// each listener of the hooks the game runs under a boundary per listener.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct Paused<V: Rules> {
     pub(super) asking: Asking<V>,
     /// What waits behind it.
     pub(super) waiting: Vec<Deferred<V>>,
+    /// How many cards the hand held as it was set aside.
+    pub(super) hand: usize,
+}
+
+/// The listeners of one hook that the game runs each under a pause boundary
+/// of its own, `AssignTaskAndWaitForPauseOrCompletion`. A listener that
+/// pauses is set aside, and the next one runs.
+pub(super) struct Listening<V: Rules> {
+    aside: Vec<Paused<V>>,
+    /// The listeners set aside, each of which asks nothing more until it
+    /// goes on.
+    listeners: Vec<super::listen::Listener<V>>,
+}
+
+/// The boundary [`Listening::enter`] opened for one listener.
+#[must_use]
+pub(super) struct Boundary<V: Rules> {
+    /// Nothing for a task that is not one listener's.
+    listener: Option<super::listen::Listener<V>>,
+    fresh: (usize, Option<usize>),
+    boundary: bool,
+}
+
+impl<V: Rules> Listening<V> {
+    pub(super) fn new() -> Self {
+        Listening {
+            aside: Vec::new(),
+            listeners: Vec::new(),
+        }
+    }
+
+    /// Open `listener`'s boundary, before what it asked for runs.
+    ///
+    /// # Panics
+    ///
+    /// A listener asking for more while its own task waits.
+    #[inline]
+    pub(super) fn enter(
+        &self,
+        live: &mut Live<V>,
+        listener: super::listen::Listener<V>,
+    ) -> Boundary<V> {
+        if !self.listeners.is_empty() && self.listeners.contains(&listener) {
+            unimplemented!("{listener:?} asking for more behind its own pause");
+        }
+        Boundary {
+            listener: Some(listener),
+            fresh: live.deferred.open_fresh(),
+            boundary: std::mem::replace(&mut live.pause_boundary, true),
+        }
+    }
+
+    /// Open a boundary for a task that is not one listener's, such as
+    /// `OrbQueue.AfterTurnStart`.
+    pub(super) fn enter_task(&self, live: &mut Live<V>) -> Boundary<V> {
+        Boundary {
+            listener: None,
+            fresh: live.deferred.open_fresh(),
+            boundary: std::mem::replace(&mut live.pause_boundary, true),
+        }
+    }
+
+    /// Close the boundary [`Listening::enter`] opened, and set the listener
+    /// aside where it paused.
+    #[inline]
+    pub(super) fn leave(&mut self, live: &mut Live<V>, entered: Boundary<V>) {
+        live.pause_boundary = entered.boundary;
+        match live.asking.is_some() {
+            true => self.set_aside(live, entered),
+            false => live.deferred.keep_fresh(entered.fresh),
+        }
+    }
+
+    /// The listener [`Listening::leave`] found paused, set aside.
+    #[cold]
+    fn set_aside(&mut self, live: &mut Live<V>, entered: Boundary<V>) {
+        self.aside.push(live.set_aside(entered.fresh));
+        self.listeners.extend(entered.listener);
+    }
+
+    /// Whether no listener paused.
+    pub(super) fn none_paused(&self) -> bool {
+        self.aside.is_empty()
+    }
+
+    /// `Task.WhenAll` over the listeners' tasks: each that paused goes on in
+    /// the order it paused, then `then`. False where none paused, and the
+    /// caller goes on itself.
+    pub(super) fn join(self, live: &mut Live<V>, then: Deferred<V>) -> bool {
+        let mut aside = self.aside.into_iter();
+        let Some(first) = aside.next() else {
+            return false;
+        };
+        for task in aside {
+            live.defer(Deferred::Rejoin(Box::new(task)));
+        }
+        live.defer(then);
+        live.rejoin(first);
+        true
+    }
+
+    /// The listeners' tasks with no join: each that paused goes on as a
+    /// queued action, once the decision is over.
+    #[inline]
+    pub(super) fn queue(self, live: &mut Live<V>) {
+        if !self.aside.is_empty() {
+            live.paused.extend(self.aside);
+        }
+    }
+
+    /// The listeners' tasks where the caller has no way yet to wait for
+    /// them.
+    ///
+    /// # Panics
+    ///
+    /// Any listener that paused.
+    pub(super) fn none_waits(self, hook: &str) {
+        if let Some(task) = self.aside.first() {
+            unimplemented!("{task:?} pausing in {hook}, which goes on without waiting");
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -205,8 +326,8 @@ pub(super) enum Then<V: Rules> {
 /// goes on past the question does that part early.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum Deferred<V: Rules> {
-    /// The player's `AfterTurnEnd`, stood still by a question a draw it asked
-    /// for raised, and the rest of the turn end behind it.
+    /// The player's `AfterTurnEnd` from the pass after one whose listeners
+    /// paused, once they are over, and the rest of the turn end behind it.
     AfterTurnEnd {
         walk: Box<super::turn::TurnEndWalk<V>>,
         max_energy: V::Count,
@@ -296,6 +417,15 @@ pub(super) enum Deferred<V: Rules> {
     /// still until the answer comes.
     /// `SetupPlayerTurn` from `stage`, which a hook stopped on its selection.
     Setup(Setup<V>),
+    /// A listener's task a pause boundary set aside, which goes on here
+    /// where its caller waits for it.
+    Rejoin(Box<Paused<V>>),
+    /// The player's turn end once every `BeforeSideTurnEnd` listener that
+    /// paused is over. `skipping` is what this turn's tick skips.
+    TurnEndHooksOver {
+        max_energy: V::Count,
+        skipping: Skips<V>,
+    },
     /// `RunAutoPrePlayPhase` from what a pass still asked for, then from the
     /// pass at `next`, once an auto-play's question is answered. The phase
     /// turns to the play phase after.
@@ -3174,6 +3304,7 @@ impl<V: Rules> Live<V> {
         Paused {
             asking,
             waiting: self.deferred.take_fresh(fresh),
+            hand: self.cards.len(sts2_core::Pile::Hand),
         }
     }
 
@@ -3182,10 +3313,25 @@ impl<V: Rules> Live<V> {
     ///
     /// # Panics
     ///
-    /// Where the caller asked a question of its own as it ran on.
-    pub(super) fn rejoin(&mut self, Paused { asking, waiting }: Paused<V>) {
+    /// Where the caller asked a question of its own as it ran on. Where a
+    /// filtered choice signalled and the hand changed since: the choice
+    /// listed the hand as it stopped, and the game lists it now.
+    pub(super) fn rejoin(
+        &mut self,
+        Paused {
+            asking,
+            waiting,
+            hand,
+        }: Paused<V>,
+    ) {
         if let Some(other) = &self.asking {
             unimplemented!("{other:?} asked while a paused task waited to rejoin");
+        }
+        if let Asked::Among { cards, .. } = &asking.question
+            && asking.signalled
+            && self.cards.len(sts2_core::Pile::Hand) != hand
+        {
+            unimplemented!("a filtered choice over {cards:?} whose hand changed as it paused");
         }
         self.asking = Some(asking);
         self.deferred.put_back(waiting);
@@ -3213,9 +3359,8 @@ impl<V: Rules> Live<V> {
         if self.asking.is_some() || !self.deferred.is_empty() {
             return;
         }
-        let Paused { asking, waiting } = self.paused.remove(0);
-        self.asking = Some(asking);
-        self.deferred.put_back(waiting);
+        let task = self.paused.remove(0);
+        self.rejoin(task);
     }
 
     /// Whether the fight asked anything of the run since the last decision

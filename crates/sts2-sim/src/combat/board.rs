@@ -2681,14 +2681,20 @@ impl<'a, V: Rules> Board<'a, V> {
             self.relics,
             sts2_core::EventHook::DiedToDoom { fatal },
         );
+        // Each listener runs under a pause boundary of its own, and nothing
+        // waits for one that paused: it goes on as a queued action.
+        let mut listening = super::live::Listening::new();
         while let Some((listener, effect)) =
             walking.as_mut().and_then(|walking| self.next_of(walking))
         {
+            let boundary = listening.enter(self.live, listener);
             match listener {
                 Listener::Relic { slot } => self.relic_asked(slot, effect),
                 listener => unimplemented!("{listener:?} asking for {effect:?} after Doom kills"),
             }
+            listening.leave(self.live, boundary);
         }
+        listening.queue(self.live);
     }
 
     /// `CreatureCmd.Kill`: the creature loses what hit points it has, and

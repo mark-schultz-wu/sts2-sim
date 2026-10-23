@@ -550,7 +550,6 @@ pub(crate) fn enter<V: Rules>(
         }
     };
     let parked = setup.is_some();
-    let hand = live.cards.len(sts2_core::Pile::Hand);
     if let Some(ended) = ended {
         return Ok(Entered {
             live,
@@ -569,13 +568,7 @@ pub(crate) fn enter<V: Rules>(
     )
     // `OrbQueue.AfterTurnStart`, which a fight's opening turn runs too.
     .or_else(|| {
-        super::turn::orb_triggers::<V>(
-            &mut live,
-            streams.combat(),
-            relics,
-            ascension,
-            super::turn::OrbMoment::TurnStart,
-        )
+        super::turn::orbs_at_turn_start::<V>(&mut live, streams.combat(), relics, ascension)
     });
     // A setup paused on a signal goes on once the turn has started, and
     // runs the pre-play phase itself where it runs to its end.
@@ -583,14 +576,11 @@ pub(crate) fn enter<V: Rules>(
         live.rejoin(setup);
     }
     let ended = match ended {
-        None if parked => super::play::come_up(
-            super::Fighting {
-                live: &mut live,
-                streams: &mut streams,
-                relics: &mut *relics,
-            },
-            hand,
-        )?,
+        None if parked => super::play::come_up(super::Fighting {
+            live: &mut live,
+            streams: &mut streams,
+            relics: &mut *relics,
+        })?,
         ended => ended,
     };
     // `RunAutoPrePlayPhase`, which a setup parked on a question waits out.

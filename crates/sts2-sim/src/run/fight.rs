@@ -10,7 +10,9 @@ use crate::combat::Error;
 
 impl<V: Rules> State<V> {
     /// What a pushed selector answers, one question at a time, until the
-    /// fight asks nothing it answers. The player never sees those.
+    /// fight asks nothing it answers. A choice that signalled lists then,
+    /// and takes its cards unasked where it can. The player never sees
+    /// those.
     fn selector_answered(
         &mut self,
         mut ended: Option<combat::Ended>,
@@ -19,10 +21,18 @@ impl<V: Rules> State<V> {
             let Some(fighting) = self.fighting() else {
                 break;
             };
-            let Some(picks) = combat::selector_picks(fighting.live) else {
-                break;
+            // A choice that signalled under a pause boundary lists once the
+            // task goes on, and takes its cards unasked where it can.
+            let answered = match combat::signalled(fighting.live) {
+                true => combat::come_up(fighting)?,
+                false => {
+                    let Some(picks) = combat::selector_picks(fighting.live) else {
+                        break;
+                    };
+                    combat::answer(fighting, picks)?
+                }
             };
-            ended = match combat::answer(fighting, picks)? {
+            ended = match answered {
                 None => self.turn_ended_by_play()?,
                 ended => ended,
             };
