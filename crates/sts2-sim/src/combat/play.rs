@@ -949,6 +949,13 @@ pub(super) fn play_count<V: Rules, S: LendsCombat>(
     count
 }
 
+/// Whether a `CardSelectCmd` run now pauses its task on its signal. A build
+/// that signals before it lists does, under a pause boundary. The play
+/// stops there even where it takes the cards unasked.
+fn signal_pauses<V: Rules>(live: &Live<V>) -> bool {
+    live.pause_boundary && V::signals_choice_before_listing()
+}
+
 /// What a pushed selector picks for the question the fight parked on, or
 /// nothing where none answers it or nothing is asked.
 ///
@@ -990,8 +997,6 @@ pub(crate) fn answer<V: Rules>(
         .asking
         .take()
         .unwrap_or_else(|| unimplemented!("an answer to a fight that asked nothing"));
-    // What this answer's play defers runs ahead of what already waits.
-    live.deferred.close();
     let taken =
         match &asking.question {
             Asked::Pile {
@@ -1049,8 +1054,92 @@ pub(crate) fn answer<V: Rules>(
                 sts2_core::Taken::Chosen(chosen)
             }
         };
+    resume_answered(
+        Fighting {
+            live,
+            streams,
+            relics,
+        },
+        asking.then,
+        taken,
+    )
+}
 
-    let (mut effect, at, outermost) = match asking.then {
+/// A choice signalled under a pause boundary, once the caller has run on.
+/// It lists the cards now, and takes them unasked where its count allows.
+/// One that needs the player stays as the question.
+///
+/// `hand` is the hand's size as the caller ran on. A filtered choice listed
+/// the hand as it stopped, and cannot list a changed one.
+pub(super) fn come_up<V: Rules>(
+    fighting: Fighting<'_, V>,
+    hand: usize,
+) -> Result<Option<super::Ended>, Error> {
+    let Fighting {
+        live,
+        streams,
+        relics,
+    } = fighting;
+    loop {
+        match &mut live.asking {
+            Some(asking) if asking.signalled => asking.signalled = false,
+            _ => return Ok(None),
+        }
+        let ending = super::board::ending::<V>(super::listen::Walk {
+            live: &*live,
+            relics: &*relics,
+        });
+        let Some(asking) = &live.asking else {
+            unreachable!("a signalled choice stands");
+        };
+        // A choice made once the fight is ending takes nothing.
+        let picked = match &asking.question {
+            Asked::Pile { selection, .. } | Asked::Among { selection, .. } if ending => {
+                selection.validate_automatic(sts2_core::Picked::new())
+            }
+            Asked::Pile { pile, selection } => taken::<V>(live, *pile, *selection),
+            Asked::Among { cards, .. } if live.cards.len(sts2_core::Pile::Hand) != hand => {
+                unimplemented!("a filtered choice over {cards:?} whose hand changed as it paused")
+            }
+            Asked::Among { cards, selection } => {
+                selection.validate_automatic(cards.iter().copied().collect())
+            }
+            Asked::Offered { .. } => unimplemented!("a choose-a-card screen that signalled"),
+        };
+        let Some(picked) = picked else {
+            return Ok(None);
+        };
+        let then = live.asking.take().expect("a signalled choice stands").then;
+        let ended = resume_answered(
+            Fighting {
+                live: &mut *live,
+                streams: &mut *streams,
+                relics: &mut *relics,
+            },
+            then,
+            sts2_core::Taken::Selected(picked),
+        )?;
+        if ended.is_some() {
+            return Ok(ended);
+        }
+    }
+}
+
+/// Carry on what stopped on a question, with `taken` for its answer, then
+/// whatever waits behind it.
+fn resume_answered<V: Rules>(
+    fighting: Fighting<'_, V>,
+    then: Then<V>,
+    taken: sts2_core::Taken<V>,
+) -> Result<Option<super::Ended>, Error> {
+    let Fighting {
+        live,
+        streams,
+        relics,
+    } = fighting;
+    // What this answer's play defers runs ahead of what already waits.
+    live.deferred.close();
+    let (mut effect, at, outermost) = match then {
         Then::Play {
             effect,
             at,
@@ -1533,6 +1622,9 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
             merge::<V>(&mut next.skip_tick, skipped);
             continue;
         }
+        // A choice `CardSelectCmd` signalled before it listed, which pauses
+        // the task up to the boundary and lists once it goes on.
+        let mut signalled = false;
         let (at, question, answer) = match played {
             // One turn of `GeneratePlayCount`'s loop is over. A card carrying
             // replays runs its own effect again, from the top.
@@ -1639,11 +1731,13 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                 selection,
                 at,
             } => {
-                let taken =
-                    match super::board::ending::<V>(super::listen::Walk { live: next, relics }) {
-                        true => selection.validate_automatic(sts2_core::Picked::new()),
-                        false => taken::<V>(next, pile, selection),
-                    };
+                let ending = super::board::ending::<V>(super::listen::Walk { live: next, relics });
+                signalled = !ending && signal_pauses::<V>(next);
+                let taken = match (ending, signalled) {
+                    (true, _) => selection.validate_automatic(sts2_core::Picked::new()),
+                    (false, true) => None,
+                    (false, false) => taken::<V>(next, pile, selection),
+                };
                 (
                     at,
                     Asked::Pile { pile, selection },
@@ -1661,6 +1755,8 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
 
                 if super::board::ending::<V>(super::listen::Walk { live: next, relics }) {
                     cards.clear();
+                } else {
+                    signalled = signal_pauses::<V>(next);
                 }
                 // `FromCombatPile` hands a draw pile's cards over sorted by
                 // rarity and then by id, a stable sort.
@@ -1679,9 +1775,12 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                         (card.rarity(), card.order())
                     });
                 }
-                let taken = selection
-                    .validate_automatic(cards.iter().copied().collect())
-                    .map(sts2_core::Taken::Selected);
+                let taken = match signalled {
+                    true => None,
+                    false => selection
+                        .validate_automatic(cards.iter().copied().collect())
+                        .map(sts2_core::Taken::Selected),
+                };
                 (at, Asked::Among { cards, selection }, taken)
             }
             sts2_core::Played::Choosing {
@@ -1700,6 +1799,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                     outermost,
                 },
                 question,
+                signalled,
             });
             return Ok(ended);
         };

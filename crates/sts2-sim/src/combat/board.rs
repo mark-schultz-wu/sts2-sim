@@ -2463,15 +2463,15 @@ impl<'a, V: Rules> Board<'a, V> {
                 }
             }
             if let Some(fresh) = fresh {
-                match self.live.asking.take() {
-                    Some(mut asking) => {
-                        let waiting = self.live.deferred.take_fresh(fresh);
+                match self.live.asking.is_some() {
+                    true => {
+                        let mut task = self.live.set_aside(fresh);
                         // `CardSelectCmd` lists the pile as it asks. The play
                         // can change the pile before the question comes up,
                         // and the list stays as it was. A build that signals
                         // the choice before it lists reads the pile once the
                         // question comes up.
-                        if let super::live::Asked::Pile { pile, selection } = asking.question
+                        if let super::live::Asked::Pile { pile, selection } = task.asking.question
                             && !V::signals_choice_before_listing()
                         {
                             let cards = self
@@ -2490,14 +2490,12 @@ impl<'a, V: Rules> Board<'a, V> {
                                     CardAt::new(held.id, pile, at)
                                 })
                                 .collect();
-                            asking.question = super::live::Asked::Among { cards, selection };
+                            task.asking.question = super::live::Asked::Among { cards, selection };
                         }
-                        self.live
-                            .paused
-                            .push(super::live::Paused { asking, waiting });
+                        self.live.paused.push(task);
                         paused = Some(listener);
                     }
-                    None => self.live.deferred.keep_fresh(fresh),
+                    false => self.live.deferred.keep_fresh(fresh),
                 }
             }
         }
@@ -5774,6 +5772,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 self.live.asking = Some(super::live::Asking {
                     then: super::live::Then::Pick { act },
                     question,
+                    signalled: false,
                 });
             }
         }
@@ -6790,6 +6789,7 @@ pub(super) fn draw_in_effect<V: Rules>(
                         live.asking = Some(super::live::Asking {
                             then: super::live::Then::Pick { act },
                             question,
+                            signalled: false,
                         });
                         live.defer(super::live::Deferred::Draw {
                             count: left,
@@ -6911,6 +6911,7 @@ pub(super) fn auto_play_from_draw<V: Rules>(
                     live.asking = Some(super::live::Asking {
                         then: super::live::Then::Pick { act },
                         question,
+                        signalled: false,
                     });
                     live.defer(super::live::Deferred::AutoPlayFromDraw(AutoPlayFromDraw {
                         left: left - taking,

@@ -109,6 +109,7 @@ pub(crate) fn enter<V: Rules>(
         extra_rewards: Vec::new(),
         exhaust_next: smallvec::SmallVec::new(),
         selector_answers: false,
+        pause_boundary: false,
         leaving: Vec::new(),
         for_run: Vec::new(),
         after_pick: None,
@@ -518,15 +519,17 @@ pub(crate) fn enter<V: Rules>(
     };
     let asked =
         super::listen::Walking::begin::<super::listen::Checked>(&live, relics, hook).map(Box::new);
-    let mut paused = None;
-    let ended = match super::turn::carry_setup(
+    let fresh = live.deferred.open_fresh();
+    live.pause_boundary = true;
+    let carried = super::turn::carry_setup(
         &mut live,
         streams.combat(),
         relics,
         ascension,
         super::live::Setup::BeforeHandDraw(asked),
-        true,
-    ) {
+    );
+    live.pause_boundary = false;
+    let ended = match carried {
         // A player who died in the setup has the turn in its end already.
         super::turn::Carried::Done(ended) => {
             if live.phase == <V::PlayerTurnPhase as TurnPhaseKinds>::START {
@@ -538,17 +541,16 @@ pub(crate) fn enter<V: Rules>(
         // any turn's does. `RunAutoPrePlayPhase` waits for the answer, so the
         // turn stays in its start until then.
         super::turn::Carried::Parked => None,
-        // A setup paused on a pick goes on once the turn has started.
-        super::turn::Carried::Paused {
-            pile,
-            selection,
-            act,
-            next,
-        } => {
-            paused = Some((pile, selection, act, next));
+    };
+    let setup = match live.asking {
+        Some(_) => Some(live.set_aside(fresh)),
+        None => {
+            live.deferred.keep_fresh(fresh);
             None
         }
     };
+    let parked = setup.is_some();
+    let hand = live.cards.len(sts2_core::Pile::Hand);
     if let Some(ended) = ended {
         return Ok(Entered {
             live,
@@ -557,53 +559,43 @@ pub(crate) fn enter<V: Rules>(
             arriving,
         });
     }
-    if let Some(ended) = super::turn::side_turn_started::<V>(
+    let ended = super::turn::side_turn_started::<V>(
         &mut live,
         streams.combat(),
         relics,
         ascension,
         <V::CombatSide as SideKinds>::PLAYER,
         false,
-    ) {
-        return Ok(Entered {
-            live,
-            streams,
-            ended: Some(ended),
-            arriving,
-        });
-    }
+    )
     // `OrbQueue.AfterTurnStart`, which a fight's opening turn runs too.
-    let ended = super::turn::orb_triggers::<V>(
-        &mut live,
-        streams.combat(),
-        relics,
-        ascension,
-        super::turn::OrbMoment::TurnStart,
-    );
-    let ended = match (ended, paused) {
-        (None, Some(paused)) => {
-            match super::turn::resume_paused::<V>(
-                &mut live,
-                streams.combat(),
-                relics,
-                ascension,
-                paused,
-            ) {
-                super::turn::Carried::Done(ended) => {
-                    if live.phase == <V::PlayerTurnPhase as TurnPhaseKinds>::START {
-                        live.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY;
-                    }
-                    ended
-                }
-                super::turn::Carried::Parked => None,
-                super::turn::Carried::Paused { .. } => unreachable!("a setup pauses once"),
-            }
-        }
-        (ended, _) => ended,
+    .or_else(|| {
+        super::turn::orb_triggers::<V>(
+            &mut live,
+            streams.combat(),
+            relics,
+            ascension,
+            super::turn::OrbMoment::TurnStart,
+        )
+    });
+    // A setup paused on a signal goes on once the turn has started, and
+    // runs the pre-play phase itself where it runs to its end.
+    if let Some(setup) = setup {
+        live.rejoin(setup);
+    }
+    let ended = match ended {
+        None if parked => super::play::come_up(
+            super::Fighting {
+                live: &mut live,
+                streams: &mut streams,
+                relics: &mut *relics,
+            },
+            hand,
+        )?,
+        ended => ended,
     };
     // `RunAutoPrePlayPhase`, which a setup parked on a question waits out.
     let ended = match ended {
-        None if live.phase == <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY => {
+        None if !parked && live.phase == <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY => {
             let ended = super::turn::pre_play_phase::<V>(&mut live, streams.combat(), relics);
             if ended.is_none() {
                 live.phase = super::turn::after_pre_play::<V>(&live);

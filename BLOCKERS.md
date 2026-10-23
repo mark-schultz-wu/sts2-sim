@@ -40,7 +40,37 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ## Open
 
-### 1. The splits a hunt finds
+### 1. Pause boundaries in hooks
+
+The game runs some calls under a pause boundary,
+`AssignTaskAndWaitForPauseOrCompletion`. A choice signalled under it
+pauses the task there, and the caller runs on to a join that waits for
+the task. The simulator sets a paused task aside with `Live::set_aside`
+and puts it back with `Live::rejoin`. A turn's setup does this, and the
+join is `RunAutoPrePlayPhase`.
+
+Each listener of these hooks has a boundary of its own:
+`BeforeSideTurnStart`, `BeforeSideTurnEnd` and its two early passes,
+`AfterSideTurnEnd` and its late pass, `BeforeFlush` and its late pass, and
+`AfterDiedToDoom`. A listener that pauses lets the later listeners and
+passes run first. The hook waits for every task at its end. The
+simulator stops the hook on the first question, and the listeners after
+it run late or not at all. `before_flush_late` drops them. In v0.111.0, a
+choice with nothing to ask signals as well, and the simulator does not
+stop on it.
+
+`OrbQueue.AfterTurnStart` has a boundary with no join, as `AfterDeath`
+has. Its task goes on as a queued action, which `Live::paused` holds for
+`AfterDeath`.
+
+### 2. Pause sites from the game's code
+
+A pause point the simulator does not know about shows up only when a hunt
+reaches it. A tool in `xtask` lists, from the game's own code, each
+method that can reach `SignalPlayerChoiceBegun` or a question. Then it
+checks that the simulator's matching code has a resume point there.
+
+### 3. The splits a hunt finds
 
 `cargo xtask hunt` plays fresh seeds on the game and the simulator side
 by side, and keeps only the runs where they part. `--mixed` spreads the
@@ -62,13 +92,13 @@ from seed 10000.
 - One v0.107.1 run, IRONCLAD C000010510 with DoubleBoss, stopped on a
   game error at step 1304. The game tried to pop Stampede Power off a
   hook's choice context while Breakthrough was on top of it.
-- v0.111.0 parted 9. Two are fixed. Seven are left: four splits and three
+- v0.111.0 parted 9. Four are fixed. Five are left: two splits and three
   panics.
 
 Fix those, then hunt both builds again toward 3,000 runs in a row with no
 split.
 
-### 2. Coverage of the game's own code
+### 4. Coverage of the game's own code
 
 `cargo xtask hunt --coverage` has the mod count which methods of the
 game's rules code each run enters: models, commands, hooks and combat,
@@ -79,7 +109,7 @@ methods. Counting makes a hunt about four times slower.
 Each gap gets a scenario, a hunt that starts from a built position, or a
 note that play cannot reach it.
 
-### 3. A speed target
+### 5. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.

@@ -101,6 +101,11 @@ pub(crate) struct State<V: Rules> {
     /// `PlayerExtraFields.CardShopRemovalsUsed`, which every merchant's
     /// removal price climbs with. It counts over the run, not the room.
     removals_used: usize,
+    /// Card rewards that left their set without being offered or skipped,
+    /// as Vintage swaps a relic in for one. Each still hears
+    /// `RelicObtained`, which only its own selection or skip turns off, for
+    /// the rest of the run.
+    unheld_card_rewards: Arc<Vec<Offer<V>>>,
     phase: Phase<V>,
     /// The event a fight was entered from, which the rewards' proceed goes
     /// back to: the room under the fight in `RunState`'s room stack. Only a
@@ -480,6 +485,7 @@ impl<V: Rules> Clone for State<V> {
             dealt_relics: Arc::clone(&self.dealt_relics),
             shared_dealt: Arc::clone(&self.shared_dealt),
             shared_refills: Arc::clone(&self.shared_refills),
+            unheld_card_rewards: Arc::clone(&self.unheld_card_rewards),
             phase: self.phase.clone(),
             resuming: self.resuming.clone(),
             ..*self
@@ -513,6 +519,7 @@ impl<V: Rules> Clone for State<V> {
             shared_refills,
             last_turn,
             removals_used,
+            unheld_card_rewards,
             phase,
             resuming,
         } = self;
@@ -537,6 +544,7 @@ impl<V: Rules> Clone for State<V> {
         shared_refills.clone_from(&source.shared_refills);
         *last_turn = source.last_turn;
         *removals_used = source.removals_used;
+        unheld_card_rewards.clone_from(&source.unheld_card_rewards);
         resuming.clone_from(&source.resuming);
         match (phase, &source.phase) {
             (Phase::Combat(live), Phase::Combat(from)) => live.clone_from(from),
@@ -1374,6 +1382,7 @@ impl<V: Rules> State<V> {
             shared_refills: Arc::new(Vec::new()),
             last_turn: None,
             removals_used: 0,
+            unheld_card_rewards: Arc::new(Vec::new()),
             streams,
             resuming: None,
             phase: Phase::Neow {
@@ -2409,8 +2418,16 @@ impl<V: Rules> State<V> {
             }
         }
         self.player.relics.push(held);
-        let (character, act, turn) = (self.character(), self.act, self.player_turn());
         let slot = self.player.relics.len() - 1;
+        // `AddRelicInternal` raises `RelicObtained` before `AfterObtained`.
+        // The card rewards that never left it hear it first, in the order
+        // they were made.
+        if !self.unheld_card_rewards.is_empty() {
+            let mut unheld = std::mem::take(Arc::make_mut(&mut self.unheld_card_rewards));
+            self.reward_options_on_obtained(slot, &mut unheld);
+            *Arc::make_mut(&mut self.unheld_card_rewards) = unheld;
+        }
+        let (character, act, turn) = (self.character(), self.act, self.player_turn());
         let effects = crate::combat::obtained::<V>(
             self.player.relics.state_beside(slot),
             character,
@@ -3983,13 +4000,30 @@ impl<V: Rules> State<V> {
                         }
                     }
                 }
-                // `new RelicReward(player)` where each card reward stood.
+                // `new RelicReward(player)` where each card reward stood. The
+                // card reward is neither offered nor skipped, so it goes on
+                // hearing `RelicObtained`. One a listener added is not
+                // populated yet, and holds no cards.
                 sts2_core::HookEffect::RelicRewardsForCardRewards => {
                     for filling in set.iter_mut() {
-                        if let Filling::Filled(Offer::Card { .. }) | Filling::Card { .. } = filling
-                        {
-                            *filling = Filling::Relic;
-                        }
+                        let unheld = match std::mem::replace(filling, Filling::Relic) {
+                            Filling::Filled(offer @ Offer::Card { .. }) => offer,
+                            Filling::Card { room, reroll } => Offer::Card {
+                                cards: Vec::new(),
+                                rolled: Some(crate::reward::Rolled::Room {
+                                    room,
+                                    from_combat: false,
+                                }),
+                                reroll,
+                                sacrifice: false,
+                                taken: false,
+                            },
+                            other => {
+                                *filling = other;
+                                continue;
+                            }
+                        };
+                        Arc::make_mut(&mut self.unheld_card_rewards).push(unheld);
                     }
                 }
                 effect => unimplemented!("a listener modifying rewards late with {effect:?}"),
@@ -4856,7 +4890,7 @@ impl<V: Rules> State<V> {
     /// `CardReward.OnRelicObtained` for the relic in `slot`, over each card
     /// reward in `offered` not yet taken. The relic answers its own
     /// `TryModifyCardRewardOptions` and `TryModifyCardRewardOptionsLate`,
-    /// then `AfterModifyingRewards`.
+    /// then `AfterModifyingRewards` where they changed anything.
     fn reward_options_on_obtained(&mut self, slot: usize, offered: &mut [Offer<V>]) {
         let hears = |state: &Self, hook| {
             state.player.relics.hearing(sts2_core::Overrides::of(hook)) & (1 << slot) != 0
@@ -4889,19 +4923,18 @@ impl<V: Rules> State<V> {
                         unimplemented!("a relic obtained over a card reward asking for {effect:?}");
                     }
                 }
-                if !late {
-                    continue;
-                }
-                self.reward_options_of(slot, cards, true);
-                let mut asked = sts2_core::HookEffects::new();
-                let modified =
-                    sts2_core::EventHook::CardRewardOptionsModified { card_reward: true };
-                let (state, belt) = self.player.relics.state_beside(slot);
-                V::relic_event_hook(state, belt, modified, &mut asked);
-                if let Some(effect) = asked.first() {
-                    unimplemented!("a relic asking for {effect:?} once a card reward was modified");
+                if late {
+                    self.reward_options_of(slot, cards, true);
                 }
             }
+        }
+        // `AfterModifyingRewards`, for a relic whose hooks changed the cards.
+        // `Hook.AfterModifyingCardRewardOptions` is not raised here, so Silver
+        // Crucible counts no use.
+        if (early || late) && hears(self, sts2_core::ModelHook::AfterModifyingRewards) {
+            unimplemented!(
+                "a relic changing a card reward's options that hears AfterModifyingRewards"
+            );
         }
     }
 

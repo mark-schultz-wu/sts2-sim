@@ -1,0 +1,12 @@
+# Vintage swaps a relic reward in for a fight's card reward after the card
+# reward is made and filled. That card reward is neither offered nor
+# skipped, so it never stops hearing `RelicObtained`. Wing Charm, obtained
+# later, picks one of its cards to enchant off the Niche stream.
+#
+# A card reward that stops hearing once swapped out leaves Niche alone.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None","modifiers":["VINTAGE"]}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"DEMISE_POWER","amount":99,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"answer","skip":true}
+{"cmd":"grant","relic":"WING_CHARM"}

@@ -147,8 +147,9 @@ pub(super) enum Asked<V: Rules> {
     },
 }
 
-/// A question a death's listener asked inside a play, set aside until the
-/// decision is over.
+/// A task a pause boundary set aside, with the question it paused on. The
+/// boundary's caller runs on without it. A death's listener inside a play
+/// is one, and a turn's setup is another.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct Paused<V: Rules> {
     pub(super) asking: Asking<V>,
@@ -160,6 +161,10 @@ pub(super) struct Paused<V: Rules> {
 pub(super) struct Asking<V: Rules> {
     pub(super) then: Then<V>,
     pub(super) question: Asked<V>,
+    /// `CardSelectCmd` signalled the choice under a pause boundary and has
+    /// not listed it yet. It lists once its task goes on, and takes the
+    /// cards without asking where its count allows.
+    pub(super) signalled: bool,
 }
 
 /// What an answer resumes.
@@ -2547,6 +2552,10 @@ pub(crate) struct Live<V: Rules> {
     /// `WhisperingEarring` pushes as its `VakuuCardSelector` while it plays
     /// the hand. A question that comes up meanwhile never reaches the player.
     pub(super) selector_answers: bool,
+    /// Whether the code running sits under a `WaitForPauseOrCompletion` that
+    /// has not returned: `StartTurn`'s on `SetupPlayerTurn`. A choice
+    /// signalled under it pauses the task there, and the caller runs on.
+    pub(super) pause_boundary: bool,
     /// What `AfterCombatEnd` asked of the run, which carries it out as it
     /// takes the fight's rewards.
     pub(super) leaving: Vec<sts2_core::HookEffect<V>>,
@@ -2869,6 +2878,7 @@ impl<V: Rules> Clone for Live<V> {
             extra_rewards: self.extra_rewards.clone(),
             exhaust_next: self.exhaust_next.clone(),
             selector_answers: self.selector_answers,
+            pause_boundary: self.pause_boundary,
             history: self.history.clone(),
             kept: self.kept.clone(),
             leaving: self.leaving.clone(),
@@ -2950,6 +2960,7 @@ impl<V: Rules> Clone for Live<V> {
             paused,
             waited_attack,
             selector_answers,
+            pause_boundary,
         } = self;
         *character = source.character;
         *ascension = source.ascension;
@@ -2977,6 +2988,7 @@ impl<V: Rules> Clone for Live<V> {
         extra_rewards.clone_from(&source.extra_rewards);
         exhaust_next.clone_from(&source.exhaust_next);
         *selector_answers = source.selector_answers;
+        *pause_boundary = source.pause_boundary;
         leaving.clone_from(&source.leaving);
         for_run.clone_from(&source.for_run);
         after_pick.clone_from(&source.after_pick);
@@ -3149,6 +3161,34 @@ impl<V: Rules> Live<V> {
     /// What the fight's end asked of the run, in the order it asked.
     pub(crate) fn leaving(&self) -> &[sts2_core::HookEffect<V>] {
         &self.leaving
+    }
+
+    /// The task a pause boundary waited on, which paused on the question
+    /// asked: the question, and what it deferred since `fresh` was opened.
+    /// The boundary's caller runs on without it.
+    pub(super) fn set_aside(&mut self, fresh: (usize, Option<usize>)) -> Paused<V> {
+        let asking = self
+            .asking
+            .take()
+            .unwrap_or_else(|| unreachable!("a task set aside paused on a question"));
+        Paused {
+            asking,
+            waiting: self.deferred.take_fresh(fresh),
+        }
+    }
+
+    /// A task [`Live::set_aside`] took, back where its caller waits for it:
+    /// its question stands again, and what waits behind it runs next.
+    ///
+    /// # Panics
+    ///
+    /// Where the caller asked a question of its own as it ran on.
+    pub(super) fn rejoin(&mut self, Paused { asking, waiting }: Paused<V>) {
+        if let Some(other) = &self.asking {
+            unimplemented!("{other:?} asked while a paused task waited to rejoin");
+        }
+        self.asking = Some(asking);
+        self.deferred.put_back(waiting);
     }
 
     /// Put `deferred` behind the question asked. See [`Deferrals::push`].
@@ -3878,6 +3918,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             extra_rewards: Vec::new(),
             exhaust_next: smallvec::SmallVec::new(),
             selector_answers: false,
+            pause_boundary: false,
             leaving: Vec::new(),
             for_run: Vec::new(),
             after_pick: None,
