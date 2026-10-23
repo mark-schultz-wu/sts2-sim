@@ -694,7 +694,10 @@ fn anointed<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 /// time, then its `Energy`. It stands in the play pile as it runs.
 fn restlessness<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     if fight.cards_in(Pile::Hand).is_empty() {
-        for _ in 0..fight.var(V::CardVar::CARDS) {
+        // The game's loop reads its count before each pass.
+        let mut pass = 0;
+        while pass < fight.var(V::CardVar::CARDS) {
+            pass += 1;
             fight.draw(1);
         }
         fight.modify_energy(fight.var(V::CardVar::ENERGY));

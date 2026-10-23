@@ -15,6 +15,9 @@ pub enum Resume<V: crate::Build> {
     WishPick,
     /// `BrightestFlame`, after a question inside its draw was answered.
     BrightestFlameDrew,
+    /// `BrightestFlame`, after a question inside its maximum health loss's
+    /// hit was answered, with the maximum still to set.
+    BrightestFlameHit { max_hp: V::Health },
     /// `DualWield`, after its owner picked the card to copy.
     DualWieldPick,
     /// `Maul`, after a question inside its attack was answered.
@@ -100,8 +103,7 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F
                     at: crate::behaviour::cards::Resume::Event(Resume::BrightestFlameDrew).into(),
                 };
             }
-            fight.lose_max_hp(fight.actor(), fight.var(V::CardVar::MAX_HP));
-            Played::Done
+            brightest_flame_loses::<V, _>(fight)
         }
         // Its damage to the target. The Byrdpip pet only animates the hit.
         __c0 if __c0 == V::Card::BYRD_SWOOP => {
@@ -229,7 +231,10 @@ pub(super) fn resume_play<V: crate::Build, F: Fight<V>>(
             fight.act_on(PileAct::IntoHand, chosen.as_slice());
             Played::Done
         }
-        Resume::BrightestFlameDrew | Resume::MaulHit | Resume::MadScienceHit { .. } => {
+        Resume::BrightestFlameDrew
+        | Resume::BrightestFlameHit { .. }
+        | Resume::MaulHit
+        | Resume::MadScienceHit { .. } => {
             unreachable!("{at:?} waits on a question, not a pick")
         }
         Resume::AbundanceChoice => unreachable!("{at:?} chooses, and picks nothing"),
@@ -237,7 +242,10 @@ pub(super) fn resume_play<V: crate::Build, F: Fight<V>>(
         // `AddGeneratedCardToCombat` into the hand.
         Resume::DualWieldPick => {
             if let Some(picked) = chosen.one_or_none() {
-                for _ in 0..fight.var(V::CardVar::CARDS) {
+                // The game's loop reads its count before each pass.
+                let mut pass = 0;
+                while pass < fight.var(V::CardVar::CARDS) {
+                    pass += 1;
                     fight.clone_card(picked, Pile::Hand);
                 }
             }
@@ -484,6 +492,16 @@ fn apotheosis<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     Played::Done
 }
 
+/// `BrightestFlame`'s `MaxHp` off its owner's maximum. The hit that takes
+/// the health down with it can ask, as Centennial Puzzle's draw does, and the
+/// new maximum waits for the answer.
+fn brightest_flame_loses<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+    match fight.lose_max_hp(fight.actor(), fight.var(V::CardVar::MAX_HP)) {
+        Some(max_hp) => wait(Resume::BrightestFlameHit { max_hp }),
+        None => Played::Done,
+    }
+}
+
 /// The rest of an event card's play that stood still on a question its own
 /// command raised.
 pub(super) fn resume_waited<V: crate::Build, F: Fight<V>>(
@@ -491,8 +509,9 @@ pub(super) fn resume_waited<V: crate::Build, F: Fight<V>>(
     at: Resume<V>,
 ) -> Played<V> {
     match at {
-        Resume::BrightestFlameDrew => {
-            fight.lose_max_hp(fight.actor(), fight.var(V::CardVar::MAX_HP));
+        Resume::BrightestFlameDrew => brightest_flame_loses::<V, _>(fight),
+        Resume::BrightestFlameHit { max_hp } => {
+            fight.set_max_hp(fight.actor(), max_hp);
             Played::Done
         }
         Resume::MaulHit => maul_hit::<V, _>(fight),

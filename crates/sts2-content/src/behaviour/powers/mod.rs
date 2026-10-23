@@ -1415,15 +1415,21 @@ pub(crate) fn modify_hook<V: crate::Build>(
             unimplemented!("an endless {power:?}")
         }
         // `VoidFormPower.TryModifyEnergyCostInCombatLate` and
-        // `TryModifyStarCost`: nothing for its owner's cards while fewer than
-        // its stack have been played this turn. A fight here has one player,
-        // whose cards are all its holder's, and every cost read is of a card
-        // in hand or in play.
+        // `TryModifyStarCost`: nothing for its owner's cards in hand or in
+        // play while fewer than its stack have been played this turn. A fight
+        // here has one player, whose cards are all its holder's. A Sly card
+        // auto-played from the discard pile pays its cost in full.
         (
             __c0,
             PowerAmount::Counted(amount),
-            ModifyHook::EnergyCostLate { .. } | ModifyHook::StarCost { .. },
-        ) if __c0 == V::Power::VOID_FORM_POWER && (owner == CombatSide::Player) => {
+            ModifyHook::EnergyCostLate { pile, .. } | ModifyHook::StarCost { pile, .. },
+        ) if __c0 == V::Power::VOID_FORM_POWER
+            && (owner == CombatSide::Player)
+            && matches!(
+                pile,
+                None | Some(sts2_core::Pile::Hand | sts2_core::Pile::Play)
+            ) =>
+        {
             let State::VoidForm { played } = *state else {
                 unreachable!("Void Form counts its plays")
             };

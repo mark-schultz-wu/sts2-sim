@@ -69,4 +69,9 @@ impl sts2_core::Engine for V0_107_1 {
             RewardRarity::Common
         }
     }
+
+    /// `WithCardPools` clears `_cardPools`, then adds what it was handed.
+    fn card_pools_cleared_before_read() -> bool {
+        true
+    }
 }

@@ -2952,7 +2952,9 @@ impl<'a, V: Rules> Board<'a, V> {
                     self.playing = playing;
                 }
                 HookEffect::LoseMaxHpOf { target, amount } => {
-                    sts2_core::Fight::lose_max_hp(self, target, amount)
+                    if sts2_core::Fight::lose_max_hp(self, target, amount).is_some() {
+                        unimplemented!("a question inside a power's maximum health loss");
+                    }
                 }
                 // `CreatureCmd.Damage`, unpowered, from the power's owner. A
                 // command of its own, so its results are not the attack's.
@@ -4617,22 +4619,25 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.heal(creature, amount);
     }
 
-    fn lose_max_hp(&mut self, creature: CombatId, amount: V::Number) {
+    fn lose_max_hp(&mut self, creature: CombatId, amount: V::Number) -> Option<V::Health> {
         self.ran_on();
-        let Some(at) = self.at(creature) else { return };
+        let at = self.at(creature)?;
         let held = &self.live.creatures[at];
         let max_hp = V::Number::from(held.max_hp) - amount;
         let hp = V::Number::from(held.hp);
+        // `SetMaxHp` at one or more.
+        let max: V::Health = num_traits::cast(max_hp.max(num_traits::one()))
+            .expect("a maximum health fits the build's health");
         if max_hp < hp {
             self.hit_unpowered(None, creature, hp - max_hp, true);
+            if sts2_core::Fight::waiting(self) {
+                return Some(max);
+            }
         }
-        let Some(at) = self.at(creature) else { return };
         // `SetMaxHpInternal` takes the health down to the new maximum, which
         // a hit Buffer stopped leaves above it.
-        let held = &mut self.live.creatures[at];
-        held.max_hp = num_traits::cast(max_hp.max(num_traits::one()))
-            .expect("a maximum health fits the build's health");
-        held.hp = held.hp.min(held.max_hp);
+        sts2_core::Fight::set_max_hp(self, creature, max);
+        None
     }
 
     fn gold(&self) -> V::Number {

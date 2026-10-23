@@ -2744,7 +2744,11 @@ pub trait Fight<V: ContentVersion> {
     /// `CreatureCmd.LoseMaxHp`: unblockable, unpowered damage from nobody for
     /// what the new maximum leaves above the current, then that maximum, at
     /// one or more.
-    fn lose_max_hp(&mut self, _creature: crate::CombatId, _amount: V::Number) {
+    ///
+    /// A hit that parks a question leaves the maximum as it was, and hands
+    /// back the new one. `SetMaxHp` waits behind the answer, and
+    /// [`Fight::set_max_hp`] is what sets it then.
+    fn lose_max_hp(&mut self, _creature: crate::CombatId, _amount: V::Number) -> Option<V::Health> {
         unimplemented!("maximum health lost in a fight")
     }
 
@@ -3538,8 +3542,8 @@ pub enum ModifyHook<V: ContentVersion> {
         turn: V::Count,
     },
     /// `TryModifyEnergyCostInCombat`, over a card's cost once its own
-    /// modifiers are folded in. Every cost the fight reads is of a card in
-    /// hand or being played.
+    /// modifiers are folded in. Most costs the fight reads are of a card in
+    /// hand or being played. An auto-play reads the pile the card stood in.
     EnergyCost {
         card: (crate::CardId<V>, V::Card),
         /// `Keywords.Contains(Ethereal)` for the copy.
@@ -7555,6 +7559,13 @@ pub trait Engine {
     /// selection asked while the turn ends leaves potions drinkable. A build
     /// whose selections leave the ended turn alone says no.
     fn selection_undoes_ended_turn() -> bool;
+
+    /// `CardCreationOptions.WithCardPools` clears its pools before it reads
+    /// the ones it is handed. Prismatic Gem hands it a `Union` over those same
+    /// pools, which then finds only the character pools it has just added. So
+    /// a pool an earlier listener added, as Dingy Rug adds the colorless one,
+    /// is lost. A build that copies the pools before it clears them says no.
+    fn card_pools_cleared_before_read() -> bool;
 }
 
 /// The rules of one build, as the simulator asks them.

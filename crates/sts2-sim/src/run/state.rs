@@ -3488,7 +3488,17 @@ impl<V: Rules> State<V> {
         if killed {
             self.unheard(ModelHook::BeforeDeath);
             let preventer = self.death_preventer();
-            self.unheard(ModelHook::AfterDeath);
+            let hook = sts2_core::EventHook::AfterDeath {
+                creature: sts2_core::CombatId::new(nonmax::NonMaxU8::ZERO),
+                side: <V::CombatSide as sts2_core::SideKinds>::PLAYER,
+                monster: None,
+                removal_prevented: preventer.is_some(),
+            };
+            if let Some(effect) = self.notify_run(hook).first() {
+                unimplemented!(
+                    "a listener asking for {effect:?} as the player dies outside a fight"
+                );
+            }
             match preventer {
                 Some(slot) => self.death_prevented(slot),
                 // `DeactivateHooks`, once the death has gone through.
@@ -4728,7 +4738,7 @@ impl<V: Rules> State<V> {
                     return Hooked::Uniform(cards);
                 }
                 // `Union`: the new pools first, then what was there and is
-                // not among them.
+                // not among them, in a build that kept it.
                 sts2_core::HookEffect::AddCharacterPools(added) => {
                     if concat.is_some() {
                         unimplemented!("a pool joined to options that hold a custom pool");
@@ -4737,12 +4747,14 @@ impl<V: Rules> State<V> {
                         .iter()
                         .map(|&character| Source::Character(character))
                         .collect();
-                    let rest: SmallVec<[Source<V>; 6]> = pools
-                        .iter()
-                        .copied()
-                        .filter(|held| !joined.contains(held))
-                        .collect();
-                    joined.extend(rest);
+                    if !V::card_pools_cleared_before_read() {
+                        let rest: SmallVec<[Source<V>; 6]> = pools
+                            .iter()
+                            .copied()
+                            .filter(|held| !joined.contains(held))
+                            .collect();
+                        joined.extend(rest);
+                    }
                     pools = joined;
                 }
                 // `Concat` of the colorless pool, where it is not there.
@@ -4841,12 +4853,11 @@ impl<V: Rules> State<V> {
         }
     }
 
-    /// `CardReward.OnRelicObtained` for the relic in the last slot, over
-    /// each card reward in `offered` not yet taken. The relic answers its own
+    /// `CardReward.OnRelicObtained` for the relic in `slot`, over each card
+    /// reward in `offered` not yet taken. The relic answers its own
     /// `TryModifyCardRewardOptions` and `TryModifyCardRewardOptionsLate`,
     /// then `AfterModifyingRewards`.
-    fn reward_options_on_obtained(&mut self, offered: &mut [Offer<V>]) {
-        let slot = self.player.relics.len() - 1;
+    fn reward_options_on_obtained(&mut self, slot: usize, offered: &mut [Offer<V>]) {
         let hears = |state: &Self, hook| {
             state.player.relics.hearing(sts2_core::Overrides::of(hook)) & (1 << slot) != 0
         };
@@ -6980,7 +6991,7 @@ impl<V: Rules> State<V> {
                 let (relic, wax) = (*relic, *wax);
                 *taken = true;
                 let asked = self.obtain_as(relic, wax);
-                self.reward_options_on_obtained(offered);
+                self.reward_options_on_obtained(self.player.relics.len() - 1, offered);
                 return asked;
             }
             // `CardReward.Reroll`: `CanReroll` goes, and the pack is rolled
@@ -7026,9 +7037,7 @@ impl<V: Rules> State<V> {
             }
             // The alternative's `OnSelect`, which completes the reward.
             (
-                Offer::Card {
-                    sacrifice, taken, ..
-                },
+                Offer::Card { sacrifice, .. },
                 TakeReward::Alternative {
                     alternative: alternative @ sts2_core::RewardAlternative::Sacrifice,
                     ..
@@ -7037,9 +7046,19 @@ impl<V: Rules> State<V> {
                 if !*sacrifice {
                     unimplemented!("a sacrifice of a card reward that offers none");
                 }
-                *taken = true;
+                let before = self.player.relics.len();
                 let chosen = sts2_core::EventHook::CardRewardAlternativeChosen(alternative);
-                return self.walk_run(chosen);
+                let asked = self.walk_run(chosen);
+                // The reward leaves `RelicObtained` only as its selection
+                // completes. So a relic the sacrifice gives, as Pael's Wing's
+                // does, reaches this reward's cards as well as the others'.
+                for slot in before..self.player.relics.len() {
+                    self.reward_options_on_obtained(slot, offered);
+                }
+                if let Some(Offer::Card { taken, .. }) = offered.get_mut(take.index()) {
+                    *taken = true;
+                }
+                return asked;
             }
             _ => unimplemented!("a reward taken as the wrong kind"),
         }

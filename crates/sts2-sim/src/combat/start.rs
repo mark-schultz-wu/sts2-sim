@@ -325,7 +325,9 @@ pub(crate) fn enter<V: Rules>(
                 let player = live.player().id;
                 let mut board =
                     Board::for_card(&mut live, streams.combat(), relics, ascension, None, None);
-                sts2_core::Fight::lose_max_hp(&mut board, player, amount);
+                if sts2_core::Fight::lose_max_hp(&mut board, player, amount).is_some() {
+                    unimplemented!("a question inside a maximum health loss as a room opens");
+                }
             }
             other => unimplemented!("a listener asking for {other:?} as a room opens"),
         }

@@ -1217,6 +1217,8 @@ pub(crate) fn deck_event_hook<V: crate::Build>(
         // effects.
         (__c0, _, sts2_core::EventHook::AddedToDeck { .. }) if __c0 == V::Card::SOVEREIGN_BLADE => {
         }
+        // `Melancholy.AfterDeath` changes its cost only in a combat pile.
+        (__c0, _, sts2_core::EventHook::AfterDeath { .. }) if __c0 == V::Card::MELANCHOLY => {}
         (card, _, hook) => unimplemented!("what {card:?} in the deck does for {hook:?}"),
     }
 }

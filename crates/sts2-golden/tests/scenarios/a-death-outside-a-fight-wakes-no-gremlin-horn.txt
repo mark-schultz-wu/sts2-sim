@@ -1,0 +1,10 @@
+# `CreatureCmd.Kill` raises `AfterDeath` for the player outside a fight too.
+# Gremlin Horn pays only for a creature on the other side, and Melancholy
+# changes its cost only in a combat pile. So This or That's Plain option,
+# killing a player at 4 HP, gives neither energy, a draw nor a cheaper card.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"grant","relic":"GREMLIN_HORN"}
+{"cmd":"grant","card":"MELANCHOLY"}
+{"cmd":"hp","hp":4}
+{"cmd":"event","event":"THIS_OR_THAT"}
+{"cmd":"choose_option","index":0}

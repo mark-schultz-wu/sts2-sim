@@ -1,0 +1,11 @@
+# Glitterstream runs its Block Next Turn through `ModifyBlock` itself. At
+# Dexterity -4 and Frail, its 5 comes to 0.75, which is above nothing. So the
+# power lands, with an amount of nothing, as Dodge and Roll's fraction does.
+#
+# A Glitterstream that lands only a whole amount leaves the power off.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"DEXTERITY_POWER","amount":-4,"target":0}
+{"cmd":"power","power":"FRAIL_POWER","amount":1,"target":0}
+{"cmd":"grant","card":"GLITTERSTREAM"}
+{"cmd":"play_card","index":5}

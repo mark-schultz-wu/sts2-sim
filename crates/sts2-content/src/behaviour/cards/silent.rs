@@ -237,7 +237,10 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F
         // its `Repeat` times.
         __c0 if __c0 == V::Card::BOUNCING_FLASK => {
             let poison = PowerAmount::Counted(fight.var(V::CardVar::POISON_POWER));
-            for _ in 0..fight.var(V::CardVar::REPEAT) {
+            // The game's loop reads its count before each pass.
+            let mut pass = 0;
+            while pass < fight.var(V::CardVar::REPEAT) {
+                pass += 1;
                 if let Some(target) = fight.random_opponent() {
                     fight.apply_power(target, V::Power::POISON_POWER, poison);
                 }
@@ -649,7 +652,10 @@ fn leading_strike<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 /// The rest of `LeadingStrike`, once its attack is over: its `Shivs` into
 /// hand one at a time.
 fn leading_strike_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
-    for _ in 0..fight.var(V::CardVar::SHIVS) {
+    // The game's loop reads its count before each pass.
+    let mut pass = 0;
+    while pass < fight.var(V::CardVar::SHIVS) {
+        pass += 1;
         fight.add_generated_cards(
             CardIdent::new(<V::Card as crate::ids::CardIds>::SHIV),
             Pile::Hand,
