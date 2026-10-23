@@ -1660,6 +1660,11 @@ impl<'a, V: Rules> Board<'a, V> {
     fn card_generated(&mut self, at: CardAt<V>, card: V::Card, creator: Option<CombatId>) {
         let by_player = creator == Some(self.live.player().id);
         self.live.history.generated(by_player);
+        // `IterateCombatHookListeners` hands a fight that is ending no
+        // listeners, as for a card made after an orb it channelled won.
+        if self.over() {
+            return;
+        }
         let mut walking = super::listen::Walking::begin::<super::listen::Checked>(
             self.live,
             self.relics,

@@ -4416,8 +4416,11 @@ fn applied<V: Rules>(
 ) -> Option<super::Ended> {
     for ask in asked {
         let board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+        // A draw, a power's or a relic's, can stop on a shuffle's pick.
         let mut board = match (pausing, &ask) {
-            (true, TurnEndAsk::Draw(_)) => board.blocking(),
+            (true, TurnEndAsk::Draw(_) | TurnEndAsk::Relic(_, sts2_core::HookEffect::Draw(_))) => {
+                board.blocking()
+            }
             _ => board,
         };
         match ask {

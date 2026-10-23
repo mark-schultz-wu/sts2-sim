@@ -3699,7 +3699,34 @@ impl<V: Rules> State<V> {
             let pickup = asked.pickup;
             unimplemented!("a rest site's heal asking for {pickup:?}");
         }
-        self.walk_run(sts2_core::EventHook::RestSiteHealRewards { mimicked })
+        self.rest_site_heal_rewards(mimicked)
+    }
+
+    /// `Hook.ModifyRestSiteHealRewards`, then `RewardsCmd.OfferCustom`. Each
+    /// listener adds to one list, and the list is offered once, as one set.
+    fn rest_site_heal_rewards(&mut self, mimicked: bool) -> Option<Asked<V>> {
+        let mut rewards: Vec<sts2_core::CustomReward<V>> = Vec::new();
+        let hook = sts2_core::EventHook::RestSiteHealRewards { mimicked };
+        self.walk_run_landing(hook, |_, listener, effect| match effect {
+            sts2_core::HookEffect::OfferRewards(added) => rewards.extend_from_slice(added),
+            effect => unimplemented!("{listener:?} adding {effect:?} to a rest site's rewards"),
+        });
+        // `RewardsSet.Offer` makes nothing for a dead player.
+        if rewards.is_empty() || self.player.hp == num_traits::zero() {
+            return None;
+        }
+        let offered = self.custom_rewards(
+            &rewards,
+            sts2_core::Stream::Player(V::PlayerRngType::REWARDS),
+        );
+        Some(Asked {
+            pickup: Pickup::Rewards {
+                offered,
+                skippable: true,
+            },
+            rest: SmallVec::new(),
+            under: None,
+        })
     }
 
     /// `RewardsSet.WithCustomRewards` and `GenerateWithoutOffering`, off

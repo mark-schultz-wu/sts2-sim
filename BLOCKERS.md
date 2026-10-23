@@ -40,16 +40,7 @@ Speed is a goal as well as a guard. The target is still to be set.
 
 ## Open
 
-### 1. Pause boundaries on the enemies' turn end
-
-The game runs each listener of `BeforeSideTurnEnd` and `AfterSideTurnEnd`
-under a pause boundary of its own, on either side's turn end. A listener
-that pauses lets the later ones run first, and the hook waits for it at
-its end. `Listening` does this for the player's turn end, which defers
-the rest of the turn behind the join. The enemies' turn end has no such
-continuation, so a listener that pauses there panics.
-
-### 2. The splits a hunt finds
+### 1. The splits a hunt finds
 
 `cargo xtask hunt` plays fresh seeds on the game and the simulator side
 by side, and keeps only the runs where they part. `--mixed` spreads the
@@ -73,13 +64,12 @@ from seed 10000.
 - One v0.107.1 run, IRONCLAD C000010510 with DoubleBoss, stopped on a
   game error at step 1304. The game tried to pop Stampede Power off a
   hook's choice context while Breakthrough was on top of it.
-- v0.111.0 parted 9. Four are fixed. Five are left: two splits and three
-  panics.
+- v0.111.0 parted 9, and all 9 are fixed.
 
-Fix those, then hunt both builds again toward 3,000 runs in a row with no
-split.
+Next, look into the game error, then hunt both builds again toward 3,000
+runs in a row with no split.
 
-### 3. Coverage of the game's own code
+### 2. Coverage of the game's own code
 
 `cargo xtask hunt --coverage` has the mod count which methods of the
 game's rules code each run enters: models, commands, hooks and combat,
@@ -90,7 +80,7 @@ methods. Counting makes a hunt about four times slower.
 Each gap gets a scenario, a hunt that starts from a built position, or a
 note that play cannot reach it.
 
-### 4. A speed target
+### 3. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.

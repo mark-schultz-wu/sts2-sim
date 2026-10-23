@@ -652,21 +652,27 @@ pub enum Resume<V: crate::Build> {
     Own(V::Card, u8, Left<V>),
 }
 
+/// How many cards [`Left`] holds. Most lists are a hand's worth, but
+/// Eidolon's is every Ethereal card in the exhaust pile.
+const LEFT: usize = 24;
+
 /// The cards a play still has to go through once it waited, in the order
-/// the game's list took them. A card that joined the hand meanwhile is not
-/// one of them. The list is a hand's worth at most.
+/// the game's list took them. A card that joined the pile meanwhile is not
+/// one of them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Left<V: crate::Build>([Option<sts2_core::CardAt<V>>; 10]);
+pub struct Left<V: crate::Build>([Option<sts2_core::CardAt<V>>; LEFT]);
 
 impl<V: crate::Build> Left<V> {
     /// `cards`, in order.
     ///
     /// # Panics
     ///
-    /// More cards than a hand holds.
+    /// More cards than [`LEFT`].
     pub(crate) fn of(cards: &[sts2_core::CardAt<V>]) -> Self {
-        let mut left = [None; 10];
-        assert!(cards.len() <= left.len(), "a list longer than a hand");
+        let mut left = [None; LEFT];
+        if cards.len() > LEFT {
+            unimplemented!("a play going through {} cards after a wait", cards.len());
+        }
         for (at, &card) in cards.iter().enumerate() {
             left[at] = Some(card);
         }

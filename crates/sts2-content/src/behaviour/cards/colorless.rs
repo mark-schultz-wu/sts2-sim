@@ -463,6 +463,11 @@ pub enum Resume {
     /// `Catastrophe`, once a card it played has its answer, with this many
     /// cards still to play.
     CatastropheLeft(u8),
+    /// `Restlessness`, once the question inside its draw on `pass` is
+    /// answered.
+    RestlessnessDrew {
+        pass: u8,
+    },
     /// After a question inside the card's attack was answered.
     FisticuffsHit,
     SeekerStrikeHit,
@@ -612,6 +617,7 @@ fn shockwave<V: crate::Build, F: Fight<V>>(
 pub(super) fn resume_waited<V: crate::Build, F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
     match at {
         Resume::CatastropheLeft(left) => catastrophe::<V, _>(fight, Number::from(left)),
+        Resume::RestlessnessDrew { pass } => restlessness_draws::<V, _>(fight, pass),
         Resume::BeatDownPlayed => Played::Done,
         Resume::FisticuffsHit => {
             let results = fight.waited_attack_results();
@@ -693,15 +699,24 @@ fn anointed<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 /// `Restlessness`: with no other card in hand, its `Cards` drawn one at a
 /// time, then its `Energy`. It stands in the play pile as it runs.
 fn restlessness<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
-    if fight.cards_in(Pile::Hand).is_empty() {
-        // The game's loop reads its count before each pass.
-        let mut pass = 0;
-        while pass < fight.var(V::CardVar::CARDS) {
-            pass += 1;
-            fight.draw(1);
-        }
-        fight.modify_energy(fight.var(V::CardVar::ENERGY));
+    if !fight.cards_in(Pile::Hand).is_empty() {
+        return Played::Done;
     }
+    restlessness_draws::<V, _>(fight, 0)
+}
+
+/// `Restlessness` from its draw after `pass`, then its energy. The game's
+/// loop reads its count before each pass. A shuffle inside a draw can ask,
+/// and the rest waits for it.
+fn restlessness_draws<V: crate::Build, F: Fight<V>>(fight: &mut F, mut pass: u8) -> Played<V> {
+    while Number::from(pass) < fight.var(V::CardVar::CARDS) {
+        pass += 1;
+        fight.draw(1);
+        if fight.waiting() {
+            return wait::<V>(Resume::RestlessnessDrew { pass });
+        }
+    }
+    fight.modify_energy(fight.var(V::CardVar::ENERGY));
     Played::Done
 }
 
