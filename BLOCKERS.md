@@ -49,14 +49,7 @@ its end. `Listening` does this for the player's turn end, which defers
 the rest of the turn behind the join. The enemies' turn end has no such
 continuation, so a listener that pauses there panics.
 
-### 2. Pause sites from the game's code
-
-A pause point the simulator does not know about shows up only when a hunt
-reaches it. A tool in `xtask` lists, from the game's own code, each
-method that can reach `SignalPlayerChoiceBegun` or a question. Then it
-checks that the simulator's matching code has a resume point there.
-
-### 3. The splits a hunt finds
+### 2. The splits a hunt finds
 
 `cargo xtask hunt` plays fresh seeds on the game and the simulator side
 by side, and keeps only the runs where they part. `--mixed` spreads the
@@ -69,6 +62,8 @@ one.
 
 `cargo xtask game-trace <index> --file <parted file> <pattern>...`
 prints the game's own calls in the moves before a kept run's split.
+`cargo xtask pause-sites --why <method>` prints a chain of calls from a
+game method to a pause.
 
 A mixed hunt of 7,000 runs on v0.111.0 parted 258, and all 258 are
 fixed. Then both builds were hunted again with 3,000 mixed runs each,
@@ -84,7 +79,7 @@ from seed 10000.
 Fix those, then hunt both builds again toward 3,000 runs in a row with no
 split.
 
-### 4. Coverage of the game's own code
+### 3. Coverage of the game's own code
 
 `cargo xtask hunt --coverage` has the mod count which methods of the
 game's rules code each run enters: models, commands, hooks and combat,
@@ -95,7 +90,7 @@ methods. Counting makes a hunt about four times slower.
 Each gap gets a scenario, a hunt that starts from a built position, or a
 note that play cannot reach it.
 
-### 5. A speed target
+### 4. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.

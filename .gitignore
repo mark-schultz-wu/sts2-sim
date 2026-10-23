@@ -17,3 +17,5 @@ mutants.out.old/
 # game directory; nothing here is an input to anything.
 mod/*/bin/
 mod/*/obj/
+tools/pause_sites/bin/
+tools/pause_sites/obj/
