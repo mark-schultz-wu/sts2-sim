@@ -486,9 +486,12 @@ fn misery<F: Fight<V>>(fight: &mut F) -> Played<V> {
 /// awaited, so the plays after one that asks wait on the answer.
 fn eidolon_plays<F: Fight<V>>(fight: &mut F, cards: &[sts2_core::CardAt<V>]) -> Played<V> {
     for (played, &card) in cards.iter().enumerate() {
-        let at = crate::behaviour::cards::standing::<V, _>(fight, card)
-            .unwrap_or_else(|| unimplemented!("Eidolon playing a card no pile holds"));
-        fight.auto_play_card(at);
+        // A power card an earlier play took out of the fight stands in no
+        // pile, and does not play again.
+        match crate::behaviour::cards::standing::<V, _>(fight, card) {
+            Some(at) => fight.auto_play_card(at),
+            None => fight.auto_play_departed(card.id()),
+        }
         if fight.waiting() {
             let left = Left::of(&cards[played + 1..]);
             return Played::Waiting {

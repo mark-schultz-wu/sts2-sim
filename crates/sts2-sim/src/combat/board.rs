@@ -2419,10 +2419,19 @@ impl<'a, V: Rules> Board<'a, V> {
             if paused == Some(listener) {
                 unimplemented!("{listener:?} asking for {effect:?} behind its own question")
             }
-            // Inside a play, a question this listener asks pauses it alone,
-            // and the play runs on. What it deferred waits with the question.
-            let fresh = (matches!(self.choice, Choice::Blocking) && self.live.asking.is_none())
+            // Each listener runs under a pause boundary of its own, with a
+            // context that blocks on a question. A question it asks pauses it
+            // alone, and the caller runs on. What it deferred waits with the
+            // question.
+            let fresh = self
+                .live
+                .asking
+                .is_none()
                 .then(|| self.live.deferred.open_fresh());
+            let choice = match fresh {
+                Some(_) => std::mem::replace(&mut self.choice, Choice::Blocking),
+                None => self.choice,
+            };
             match (listener, effect) {
                 (
                     Listener::Relic { .. },
@@ -2467,6 +2476,7 @@ impl<'a, V: Rules> Board<'a, V> {
                     unimplemented!("{listener:?} asking for {effect:?} over another's death")
                 }
             }
+            self.choice = choice;
             if let Some(fresh) = fresh {
                 match self.live.asking.is_some() {
                     true => {
@@ -2475,9 +2485,13 @@ impl<'a, V: Rules> Board<'a, V> {
                         // can change the pile before the question comes up,
                         // and the list stays as it was. A build that signals
                         // the choice before it lists reads the pile once the
-                        // question comes up.
+                        // listener's queued action starts. Inside a play that
+                        // waits for the play's own action. Outside one the
+                        // queue runs it at once, so the list is read now.
+                        let listed_now = !V::signals_choice_before_listing()
+                            || !matches!(choice, Choice::Blocking);
                         if let super::live::Asked::Pile { pile, selection } = task.asking.question
-                            && !V::signals_choice_before_listing()
+                            && listed_now
                         {
                             let cards = self
                                 .live
@@ -2664,23 +2678,36 @@ impl<'a, V: Rules> Board<'a, V> {
     /// `DoomPower.DoomKill`: each creature in `doomed` loses what hit points
     /// it has and dies, in order, then `AfterDiedToDoom`.
     ///
-    /// Whether each death triggers Fatal is read before the first. The
-    /// powers that answer it outlive their owner, so the answer is the same.
+    /// Whether each death triggers Fatal is read once all of them are dead,
+    /// as each listener reads it. Reattach answers yes only once every other
+    /// segment is dead.
     ///
     /// # Panics
     ///
     /// A listener other than a relic to `AfterDiedToDoom`.
     pub(super) fn doom_kill(&mut self, doomed: &[CombatId]) {
         let player = self.live.player().id;
-        let fatal = doomed
+        let triggers = |board: &Self, creature: CombatId| {
+            creature != player && sts2_core::Fight::death_triggers_fatal(board, creature)
+        };
+        let before: SmallVec<[bool; 4]> = doomed
             .iter()
-            .filter(|&&creature| {
-                creature != player && sts2_core::Fight::death_triggers_fatal(self, creature)
-            })
-            .count();
+            .map(|&creature| triggers(self, creature))
+            .collect();
         for &creature in doomed {
             self.kill_outright(creature, false);
         }
+        let fatal = doomed
+            .iter()
+            .zip(before)
+            // The game's dead creature keeps the powers that answer. One the
+            // fight drops here takes its powers with it, so its answer is
+            // the one from before the deaths.
+            .filter(|&(&creature, before)| match self.at(creature) {
+                Some(_) => triggers(self, creature),
+                None => before,
+            })
+            .count();
         let mut walking = super::listen::Walking::begin::<super::listen::Checked>(
             self.live,
             self.relics,
@@ -5507,6 +5534,50 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             card.pile(),
             None,
             pausable,
+        );
+    }
+
+    fn auto_play_departed(&mut self, id: CardId<V>) {
+        use sts2_core::{CardTable as _, TargetKinds as _};
+
+        if self.over() || !self.live.player().alive {
+            return;
+        }
+        let Some(card) = self.live.cards.last_state(id) else {
+            unimplemented!("auto-playing {id:?}, which the fight never held");
+        };
+        let ident = card.face.ident;
+        if ident.card.unplayable() {
+            unimplemented!("auto-playing {ident:?}, unplayable, after it left the fight");
+        }
+        // `Hook.ShouldPlay`, with the auto-play's type.
+        if super::listen::first_deciding::<V>(
+            super::listen::Walk {
+                live: self.live,
+                relics: self.relics,
+            },
+            sts2_core::DecisionHook::ShouldPlay {
+                card: ident.card,
+                affliction: ident.affliction,
+                auto: true,
+            },
+            false,
+        )
+        .is_some()
+        {
+            unimplemented!("{ident:?} refused an auto-play after it left the fight");
+        }
+        let kind = super::legal::target_type::<V>(ident, self.live);
+        if kind == V::TargetType::ANY_ENEMY || kind == V::TargetType::ANY_ALLY {
+            unimplemented!("auto-playing {ident:?}, which takes a target, after it left the fight");
+        }
+        // `CardPileCmd.RemoveFromCombat` ends on `RemoveFromState`, so
+        // `CardPileCmd.Add` refuses the card. With no pile it has no combat
+        // state, and `OnPlayWrapper` returns before it plays.
+        super::turn::unheard::<V>(
+            self.live,
+            self.relics,
+            sts2_core::ModelHook::BeforeCardAutoPlayed,
         );
     }
 

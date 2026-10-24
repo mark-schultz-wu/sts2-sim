@@ -2889,6 +2889,13 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("auto-playing a named card")
     }
 
+    /// `CardCmd.AutoPlay` of a card that left the fight, as a power card one
+    /// play already took out has, with no target named. The card is removed
+    /// from the fight's state, so it does not play.
+    fn auto_play_departed(&mut self, _card: crate::CardId<V>) {
+        unimplemented!("auto-playing a card no pile holds")
+    }
+
     /// `StableShuffle` over `cards` off the named run stream: put in the
     /// game's card order, then shuffled.
     fn stable_shuffle_cards(&mut self, _cards: &mut [crate::CardAt<V>], _stream: V::RunRngType) {
