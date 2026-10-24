@@ -136,17 +136,19 @@ pub(crate) fn decide_hook<V: crate::Build>(
 /// `HighFive` override.
 pub(crate) fn is_playable<V: crate::Build>(
     card: V::Card,
-    fight: sts2_core::CardLogic,
+    fight: &impl sts2_core::CardLogic,
 ) -> sts2_core::HookResponse<bool> {
     match card {
         // `GrandFinale`: only once its owner's draw pile is empty.
         __c0 if __c0 == V::Card::GRAND_FINALE => {
-            sts2_core::HookResponse::Decision(fight.draw_pile == 0)
+            sts2_core::HookResponse::Decision(fight.draw_pile() == 0)
         }
         // `HighFive`: only while its owner's Osty stands.
-        __c0 if __c0 == V::Card::HIGH_FIVE => sts2_core::HookResponse::Decision(fight.osty),
+        __c0 if __c0 == V::Card::HIGH_FIVE => sts2_core::HookResponse::Decision(fight.osty()),
         // `Clash`: only while every card in its owner's hand is an Attack.
-        __c0 if __c0 == V::Card::CLASH => sts2_core::HookResponse::Decision(fight.hand_all_attacks),
+        __c0 if __c0 == V::Card::CLASH => {
+            sts2_core::HookResponse::Decision(fight.hand_all_attacks())
+        }
         _ => sts2_core::HookResponse::DoesNotImplement,
     }
 }

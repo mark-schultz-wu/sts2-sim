@@ -2778,11 +2778,11 @@ const ENTRIES_INLINE: usize = 24;
 /// `CombatManager.History`: the turn the fight stands in, and the turns
 /// before it.
 ///
-/// A turn is frozen into the shared chain as the sides switch. Copying a
+/// A turn joins the shared past as the sides switch. Copying a
 /// fight copies this turn's few entries and one pointer.
 pub(crate) struct CombatHistory<V: Rules> {
     this_turn: smallvec::SmallVec<[sts2_core::HistoryEntry<V>; ENTRIES_INLINE]>,
-    before: Option<std::sync::Arc<sts2_core::TurnHistory<V>>>,
+    before: Option<std::sync::Arc<sts2_core::PastTurns<V>>>,
 }
 
 impl<V: Rules> CombatHistory<V> {
@@ -2928,19 +2928,13 @@ impl<V: Rules> CombatHistory<V> {
     }
 
     /// The turn at `round` on `side`, in the player's turn `player_turn`, is
-    /// over. Its entries join the chain, unless it had none.
+    /// over. Its entries join the past turns, unless it had none.
     fn end_turn(&mut self, round: V::Count, side: V::CombatSide, player_turn: V::Count) {
         if self.this_turn.is_empty() {
             return;
         }
-        let turn = sts2_core::TurnHistory {
-            round,
-            side,
-            player_turn,
-            entries: self.this_turn.drain(..).collect(),
-            before: self.before.take(),
-        };
-        self.before = Some(std::sync::Arc::new(turn));
+        let past = self.before.get_or_insert_with(Default::default);
+        std::sync::Arc::make_mut(past).end_turn(round, side, player_turn, self.this_turn.drain(..));
     }
 
     pub(super) fn view(&self) -> sts2_core::History<'_, V> {
@@ -3846,7 +3840,7 @@ impl<V: Rules> Live<V> {
     }
 
     /// Consume a won fight into the report that remains on its reward screen.
-    pub(crate) fn finish(mut self, relics: &crate::run::Belt<V>) -> Combat<V> {
+    pub(crate) fn finish(&mut self, relics: &crate::run::Belt<V>) -> Combat<V> {
         self.phase = <V::PlayerTurnPhase as sts2_core::TurnPhaseKinds>::NONE;
         self.cards.clear();
         let player = self

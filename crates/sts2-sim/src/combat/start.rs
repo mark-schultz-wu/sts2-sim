@@ -220,7 +220,7 @@ pub(crate) fn enter<V: Rules>(
         },
         base: entering.base,
     };
-    let mut walking = super::listen::Walking::begin::<super::listen::Eager>(&live, relics, entered);
+    let mut walking = super::listen::Walking::begin(&live, relics, entered);
     while let Some((_, effect)) = walking
         .as_mut()
         .and_then(|walking| walking.next(&mut live, relics))
@@ -358,8 +358,7 @@ pub(crate) fn enter<V: Rules>(
         holding_potions: !live.potions.is_empty(),
         point: live.point,
     };
-    let mut walking =
-        super::listen::Walking::begin::<super::listen::Checked>(&live, relics, starting);
+    let mut walking = super::listen::Walking::begin(&live, relics, starting);
     while let Some((listener, effect)) = walking
         .as_mut()
         .and_then(|walking| walking.next(&mut live, relics))
@@ -441,7 +440,7 @@ pub(crate) fn enter<V: Rules>(
     }
     // `BeforeCombatStartLate`, once every listener has heard the first.
     let late = EventHook::CombatStartingLate { room: live.room() };
-    let mut walking = super::listen::Walking::begin::<super::listen::Checked>(&live, relics, late);
+    let mut walking = super::listen::Walking::begin(&live, relics, late);
     while let Some((listener, effect)) = walking
         .as_mut()
         .and_then(|walking| walking.next(&mut live, relics))
@@ -517,8 +516,7 @@ pub(crate) fn enter<V: Rules>(
         player,
         turn: live.turn,
     };
-    let asked =
-        super::listen::Walking::begin::<super::listen::Checked>(&live, relics, hook).map(Box::new);
+    let asked = super::listen::Walking::begin(&live, relics, hook).map(Box::new);
     let fresh = live.deferred.open_fresh();
     live.pause_boundary = true;
     let carried = super::turn::carry_setup(

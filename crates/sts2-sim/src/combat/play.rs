@@ -174,8 +174,7 @@ pub(crate) fn belt_changed<V: Rules>(fighting: Fighting<'_, V>, hook: sts2_core:
         streams,
         relics,
     } = fighting;
-    let Some(walking) = super::listen::Walking::begin::<super::listen::Checked>(live, relics, hook)
-    else {
+    let Some(walking) = super::listen::Walking::begin(live, relics, hook) else {
         return;
     };
     let ascension = live.ascension;
@@ -678,8 +677,7 @@ fn before_played<V: Rules, S: LendsCombat>(
         }
     };
     // Each listener acts as the walk reaches it.
-    let mut walk =
-        super::listen::Walker::begin::<super::listen::Eager>(live, relics, hook(live, relics));
+    let mut walk = super::listen::Walker::begin(live, relics, hook(live, relics));
     let mut asked = sts2_core::HookEffects::new();
     while let Some(listener) = walk
         .as_mut()
@@ -1870,7 +1868,7 @@ fn finish_effect<V: Rules, S: LendsCombat>(
         // `Hook.AfterPotionUsed`, once the potion is done, for a fight still
         // in progress.
         if ended.is_none() {
-            let walking = super::listen::Walking::begin::<super::listen::Checked>(
+            let walking = super::listen::Walking::begin(
                 next,
                 relics,
                 sts2_core::EventHook::PotionUsed {
@@ -1972,7 +1970,7 @@ fn stars_spent<V: Rules>(
         player: live.player().id,
         amount: spent,
     };
-    let walking = super::listen::Walking::begin::<super::listen::Checked>(live, relics, hook);
+    let walking = super::listen::Walking::begin(live, relics, hook);
     if walking.is_some() {
         let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
         board.carry_out_walk(walking);
@@ -2012,7 +2010,7 @@ fn hand_emptied<V: Rules, S: LendsCombat>(
         player: next.player().id,
         phase: next.phase,
     };
-    let mut walking = super::listen::Walking::begin::<super::listen::Checked>(next, relics, hook)?;
+    let mut walking = super::listen::Walking::begin(next, relics, hook)?;
     // The play's own choice context, so a shuffle's question inside Unceasing
     // Top's `CardPileCmd.Draw` stands the play still.
     let mut board =
@@ -2065,7 +2063,7 @@ fn finished<V: Rules, S: LendsCombat>(
         auto: play.auto,
         last,
     };
-    let walking = super::listen::Walking::begin::<super::listen::Checked>(next, relics, hook);
+    let walking = super::listen::Walking::begin(next, relics, hook);
     walk_played::<V, S>(
         Fighting {
             live: next,
@@ -2289,7 +2287,7 @@ fn played_late<V: Rules>(
     energy: V::Count,
 ) {
     let late = sts2_core::EventHook::CardPlayedLate { card, id, energy };
-    let mut walking = super::listen::Walking::begin::<super::listen::Checked>(next, relics, late);
+    let mut walking = super::listen::Walking::begin(next, relics, late);
     while let Some((listener, effect)) = walking
         .as_mut()
         .and_then(|walking| walking.next(next, relics))

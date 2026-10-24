@@ -4730,14 +4730,16 @@ pub struct HeldInstance<V: ContentVersion> {
 }
 
 /// What a card's own `IsPlayable` reads of the fight it is in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CardLogic {
+///
+/// Asked, not handed over, because the few cards that override `IsPlayable`
+/// are the only readers. A hand of other cards reads none of it.
+pub trait CardLogic {
     /// How many cards its owner's draw pile holds.
-    pub draw_pile: usize,
+    fn draw_pile(&self) -> usize;
     /// Whether its owner's Osty stands, which `IsOstyMissing` negates.
-    pub osty: bool,
+    fn osty(&self) -> bool;
     /// Whether every card in its owner's hand is an Attack.
-    pub hand_all_attacks: bool,
+    fn hand_all_attacks(&self) -> bool;
 }
 
 /// Which cards a hook writes on, for [`HookEffect::AddReplays`] and
@@ -4877,11 +4879,7 @@ pub struct BlockGained {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PlayAt(pub u32);
 
-/// The entries of one turn now over, and the turns before it.
-///
-/// Each turn is written once, as the sides switch, and never again. Every
-/// copy of a fight shares the same chain, so copying one costs a pointer
-/// however long the fight has run. A turn with no entries has no node.
+/// One turn now over that had entries, in a fight's [`PastTurns`].
 #[derive(Debug)]
 pub struct TurnHistory<V: ContentVersion> {
     /// `RoundNumber` of that turn.
@@ -4892,11 +4890,101 @@ pub struct TurnHistory<V: ContentVersion> {
     /// player's side takes a turn, so the enemies' turn after a player's
     /// shares its number.
     pub player_turn: V::Count,
-    /// Its entries, oldest first. The player's alone, because a fight here
-    /// has one player.
-    pub entries: Box<[HistoryEntry<V>]>,
-    /// The turn with entries before this one.
-    pub before: Option<std::sync::Arc<TurnHistory<V>>>,
+    /// Where its entries end among the fight's. They start where the turn
+    /// before it ends them.
+    end: u32,
+}
+
+impl<V: ContentVersion> Clone for TurnHistory<V> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<V: ContentVersion> Copy for TurnHistory<V> {}
+
+/// The turns of a fight now over that had entries, and their entries. The
+/// player's entries alone, because a fight here has one player.
+///
+/// A turn is written onto it as the sides switch. Copies of a fight share
+/// it, and a copy copies it only to end a turn. A fight that runs on alone
+/// writes onto it in place.
+#[derive(Debug)]
+pub struct PastTurns<V: ContentVersion> {
+    turns: Vec<TurnHistory<V>>,
+    entries: Vec<HistoryEntry<V>>,
+}
+
+/// How many more turns, and entries, a fight's past makes room for at once.
+/// A fight averages about a hundred entries over a dozen turns, and growing
+/// a list a step at a time copies it each time.
+const TURNS_AHEAD: usize = 32;
+const ENTRIES_AHEAD: usize = 256;
+
+impl<V: ContentVersion> Clone for PastTurns<V> {
+    /// With room to write on, since a copy is made to end a turn on.
+    fn clone(&self) -> Self {
+        let mut turns = Vec::with_capacity(self.turns.len() + TURNS_AHEAD);
+        turns.extend_from_slice(&self.turns);
+        let mut entries = Vec::with_capacity(self.entries.len() + ENTRIES_AHEAD);
+        entries.extend_from_slice(&self.entries);
+        Self { turns, entries }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.turns.clone_from(&source.turns);
+        self.entries.clone_from(&source.entries);
+    }
+}
+
+impl<V: ContentVersion> Default for PastTurns<V> {
+    fn default() -> Self {
+        Self {
+            turns: Vec::with_capacity(TURNS_AHEAD),
+            entries: Vec::with_capacity(ENTRIES_AHEAD),
+        }
+    }
+}
+
+impl<V: ContentVersion> PastTurns<V> {
+    /// The turn at `round` on `side`, in the player's turn `player_turn`, is
+    /// over, with `entries`, oldest first.
+    ///
+    /// # Panics
+    ///
+    /// A fight with more entries than a `u32` counts.
+    pub fn end_turn(
+        &mut self,
+        round: V::Count,
+        side: V::CombatSide,
+        player_turn: V::Count,
+        entries: impl IntoIterator<Item = HistoryEntry<V>>,
+    ) {
+        self.entries.extend(entries);
+        self.turns.push(TurnHistory {
+            round,
+            side,
+            player_turn,
+            end: u32::try_from(self.entries.len()).expect("a fight's entries fit a u32"),
+        });
+    }
+
+    /// Each turn, latest first, with its entries, oldest first.
+    pub fn latest_first(&self) -> impl Iterator<Item = (&TurnHistory<V>, &[HistoryEntry<V>])> {
+        (0..self.turns.len()).rev().map(move |at| {
+            let turn = &self.turns[at];
+            let start = match at {
+                0 => 0,
+                _ => self.turns[at - 1].end,
+            };
+            (turn, &self.entries[start as usize..turn.end as usize])
+        })
+    }
+
+    /// Every entry, the latest turn's first, each turn's oldest first.
+    pub fn entries(&self) -> impl Iterator<Item = &HistoryEntry<V>> {
+        self.latest_first().flat_map(|(_, entries)| entries.iter())
+    }
 }
 
 /// `CombatManager.History`, as far as a listener reads it.
@@ -4904,8 +4992,8 @@ pub struct TurnHistory<V: ContentVersion> {
 pub struct History<'a, V: ContentVersion> {
     /// The turn the fight stands in, oldest first.
     pub this_turn: &'a [HistoryEntry<V>],
-    /// The turns before it that had entries, latest first.
-    pub before: Option<&'a TurnHistory<V>>,
+    /// The turns before it that had entries.
+    pub before: Option<&'a PastTurns<V>>,
 }
 
 impl<V: ContentVersion> History<'_, V> {
@@ -4926,10 +5014,12 @@ impl<V: ContentVersion> History<'_, V> {
         turn: V::Count,
     ) -> impl Iterator<Item = PlayFinished<V>> + '_ {
         let last = turn - num_traits::one::<V::Count>();
-        std::iter::successors(self.before, |before| before.before.as_deref())
-            .take_while(move |before| before.player_turn >= last)
-            .filter(move |before| before.player_turn == last)
-            .flat_map(|before| before.entries.iter())
+        self.before
+            .into_iter()
+            .flat_map(PastTurns::latest_first)
+            .take_while(move |(before, _)| before.player_turn >= last)
+            .filter(move |(before, _)| before.player_turn == last)
+            .flat_map(|(_, entries)| entries.iter())
             .filter_map(|entry| match entry {
                 HistoryEntry::Finished(finished) => Some(*finished),
                 _ => None,
@@ -4939,8 +5029,7 @@ impl<V: ContentVersion> History<'_, V> {
     /// Every `CardPlaysFinished` entry of the fight, the turn it stands in
     /// first and then the turns before it, latest first.
     pub fn finished_this_fight(&self) -> impl Iterator<Item = PlayFinished<V>> + '_ {
-        let before = std::iter::successors(self.before, |before| before.before.as_deref())
-            .flat_map(|before| before.entries.iter());
+        let before = self.before.into_iter().flat_map(PastTurns::entries);
         self.this_turn
             .iter()
             .chain(before)
@@ -4999,8 +5088,7 @@ impl<V: ContentVersion> History<'_, V> {
 
     /// How many `OrbChanneledEntry` of `orb` the fight holds.
     pub fn channelled_this_fight(&self, orb: V::Orb) -> usize {
-        let before = std::iter::successors(self.before, |before| before.before.as_deref())
-            .flat_map(|before| before.entries.iter());
+        let before = self.before.into_iter().flat_map(PastTurns::entries);
         self.this_turn
             .iter()
             .chain(before)
@@ -5012,8 +5100,7 @@ impl<V: ContentVersion> History<'_, V> {
 
     /// How many `CardDrawnEntry` the fight holds.
     pub fn drawn_this_fight(&self) -> usize {
-        let before = std::iter::successors(self.before, |before| before.before.as_deref())
-            .flat_map(|before| before.entries.iter());
+        let before = self.before.into_iter().flat_map(PastTurns::entries);
         self.this_turn
             .iter()
             .chain(before)
@@ -5073,8 +5160,7 @@ impl<V: ContentVersion> History<'_, V> {
     /// How many `CardGeneratedEntry` of the fight name the player as their
     /// `Creator`.
     pub fn generated_by_player(&self) -> usize {
-        let before = std::iter::successors(self.before, |before| before.before.as_deref())
-            .flat_map(|before| before.entries.iter());
+        let before = self.before.into_iter().flat_map(PastTurns::entries);
         self.this_turn
             .iter()
             .chain(before)
@@ -5085,8 +5171,7 @@ impl<V: ContentVersion> History<'_, V> {
     /// Every `DamageReceivedEntry` of the fight, the turn it stands in first
     /// and then the turns before it, latest first.
     pub fn damage_received_this_fight(&self) -> impl Iterator<Item = DamageReceived<V>> + '_ {
-        let before = std::iter::successors(self.before, |before| before.before.as_deref())
-            .flat_map(|before| before.entries.iter());
+        let before = self.before.into_iter().flat_map(PastTurns::entries);
         self.this_turn
             .iter()
             .chain(before)
@@ -6799,7 +6884,7 @@ pub trait Hooks: ContentVersion {
 
     /// `CardModel.IsPlayable`, for a card whose class overrides it: whether
     /// its own logic lets it be played in the fight `fight` shows.
-    fn card_is_playable(card: Self::Card, fight: CardLogic) -> crate::HookResponse<bool>;
+    fn card_is_playable(card: Self::Card, fight: &impl CardLogic) -> crate::HookResponse<bool>;
 
     /// `ModifyCardPlayResultPileTypeAndPosition`: where a played card goes
     /// once its play is over, given where it goes so far.
