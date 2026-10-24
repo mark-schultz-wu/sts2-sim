@@ -1,0 +1,11 @@
+# An Iron Wave enchanted with Nimble kills the Rocket, and the Crusher's
+# Crab Rage gains its ninety-nine block from no card. So the Nimble on the
+# card whose hit killed the Rocket adds nothing to that block.
+#
+# A block that takes the attacking card as its source gains two more.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"KAISER_CRAB_BOSS"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":300,"target":0}
+{"cmd":"grant","card":"IRON_WAVE"}
+{"cmd":"enchant","enchantment":"NIMBLE","amount":2,"index":5}
+{"cmd":"play_card","index":5,"target":2}

@@ -18,6 +18,24 @@ impl sts2_core::Engine for V0_111_0 {
         true
     }
 
+    /// `Math.Clamp(amount, 0m, 999999999m)`: a loss below nothing loses
+    /// nothing. v0.107.1's healed.
+    fn hp_loss_floors_at_nothing() -> bool {
+        true
+    }
+
+    /// `CheckForEmptyHand` as `RunAutoPrePlayPhase` sets the phase.
+    /// v0.107.1's entered the phase without it.
+    fn checks_empty_hand_entering_pre_play() -> bool {
+        true
+    }
+
+    /// `UndoEndTurnIfNecessary` as each selection begins. v0.107.1's
+    /// selections had none.
+    fn selection_undoes_ended_turn() -> bool {
+        true
+    }
+
     /// A forced reward pays at once, with no draw, and leaves the odds where
     /// they were. v0.107.1's drew first and moved them.
     fn roll_potion_reward(
@@ -49,5 +67,11 @@ impl sts2_core::Engine for V0_111_0 {
         } else {
             RewardRarity::Common
         }
+    }
+
+    /// `WithCardPools` copies what it was handed before it clears
+    /// `_cardPools`.
+    fn card_pools_cleared_before_read() -> bool {
+        false
     }
 }

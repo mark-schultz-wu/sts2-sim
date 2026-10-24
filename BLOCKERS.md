@@ -22,6 +22,9 @@ Two more checks say when that is enough:
 - `cargo xtask reached` shows no rules code that play can reach and no
   run reaches. A scenario covers each gap, or the gap is noted as
   unreachable.
+- The game's own rules code shows no method that play can reach and no
+  hunt enters. This finds what the simulator never ported, which
+  `reached` cannot see.
 
 Speed is a goal as well as a guard. The target is still to be set.
 
@@ -48,9 +51,34 @@ its split, as a scenario. A fix lands with its run, recorded whole, in
 `hunted-v0.111.0.bin`. A split that many runs share becomes its own item, above this
 one.
 
-No split found so far is open. The next hunt is a mixed one on v0.111.0.
+`cargo xtask game-trace <index> --file <parted file> <pattern>...`
+prints the game's own calls in the moves before a kept run's split.
+`cargo xtask pause-sites --why <method>` prints a chain of calls from a
+game method to a pause.
 
-### 2. A speed target
+A mixed hunt of 7,000 runs on v0.111.0 parted 258, and all 258 are
+fixed. A second round of 3,000 mixed runs on each build started from
+seed 10000. It parted 8 runs on v0.107.1 and 9 on v0.111.0, and one
+v0.107.1 run stopped on a game error. All of these are fixed.
+
+A third round, from seed 20000, parted 1 run on v0.107.1 and 3 on
+v0.111.0. All 4 are fixed. A fourth round, from seed 30000, parted 3 on
+v0.107.1 and 2 on v0.111.0, and all 5 are fixed.
+
+Next, hunt both builds again toward 3,000 runs in a row with no split.
+
+### 2. Coverage of the game's own code
+
+`cargo xtask hunt --coverage` has the mod count which methods of the
+game's rules code each run enters: models, commands, hooks and combat,
+not screens. `cargo xtask game-coverage` adds the counts up by area and
+lists the methods no run entered. Twenty runs entered 7,023 of 15,756
+methods. Counting makes a hunt about four times slower.
+
+Each gap gets a scenario, a hunt that starts from a built position, or a
+note that play cannot reach it.
+
+### 3. A speed target
 
 Mark sets the target. It is measured by `cargo xtask instructions`,
 per replayed step.

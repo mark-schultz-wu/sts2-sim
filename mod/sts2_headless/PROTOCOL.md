@@ -340,11 +340,13 @@ game.
 | `fight` | `encounter` — a model entry name such as `BOWLBUGS_WEAK` |
 | `event` | `event` — a model entry name such as `CRYSTAL_SPHERE` |
 | `power` | `power` — a model entry name such as `WEAK_POWER`; `amount` — an integer; `target` — a creature's `CombatId` |
+| `hp` | `hp` — a positive integer; `target` — a creature's `CombatId`, or absent for the player |
 | `enter_room` | `type` — a `RoomType` name, case-insensitive |
 | `travel` | `col`, `row` — integers |
 | `play_card` | `index` — into the hand; `target` — a creature's `CombatId`, or absent |
 | `end_turn` | — |
-| `use_potion` | `index` — into the belt as `potions` reports it; `target` — a creature's `CombatId`, or absent |
+| `use_potion` | `index` — into the belt as `potions` reports it; `target` — a creature's `CombatId`, or absent. Out of a fight a Foul Potion is thrown at a merchant: see below |
+| `discard_potion` | `index` — into the belt as `potions` reports it. The one command a reward screen takes besides `answer`: see below |
 | `choose_option` | `index` — into the options the last observation reported |
 | `buy` | `index` — into the shop entries |
 | `grant` | `card`, `relic` or `potion` — one entry name each, and one command can carry all three. It can park a question: see below |
@@ -354,6 +356,16 @@ game.
 
 `"full": true` is honoured on any command, since every one of them answers with an
 observation.
+
+### A Foul Potion thrown at a merchant
+
+Out of a fight, a Foul Potion can be thrown only at a merchant's button.
+Headless there is no button, so the mod passes the potion's check in a
+`MerchantRoom`, and in the Fake Merchant's event until its fight starts. No
+inventory is ever open headless. At a shop the throw gains the potion's 100
+gold. At the Fake Merchant the mod calls `FakeMerchant.FoulPotionThrown`,
+which `OnUse` calls only through the event's `NFakeMerchant` node. The
+throw starts the event's fight.
 
 ### `fight` is scenario construction, not a move
 
@@ -413,6 +425,28 @@ named.
 It exists because a position with two debuffs already on the player is an hour
 of play away. The alternative is a recording of a run that reaches one.
 
+### `discard_potion` throws a potion away
+
+It is the discard button on a potion's popup. `NPotionPopup` enqueues a
+`DiscardPotionGameAction`, which runs `PotionCmd.Discard` and raises
+`AfterPotionDiscarded`, so Belt Buckle hears it. The popup offers it in a fight
+or out, so every list of moves ends with a discard for each potion. The button is
+disabled for a potion already queued, or an owner who is dead, and so is this.
+
+A reward screen leaves the belt open, and a full belt is where a player discards
+to make room. So while a `rewards` pending is parked, `discard_potion` is
+accepted beside `answer`, and its reply asks the rewards again.
+
+### `hp` is scenario construction too
+
+It sets the hit points of the player, or of the creature `target` names in the
+fight, through `CreatureCmd.SetCurrentHp`. That raises `AfterCurrentHpChanged`
+and no damage hook, so no relic that counts hits wakes. Without a `target` it
+is the player, in a fight or out. A `target` needs a fight.
+
+It exists because a position at three hit points is a fight's worth of damage
+away. On the way, the relics that count each hit change the position.
+
 ### `event` is scenario construction too
 
 The same shape as `fight`, through the game's own `EventConsoleCmd`. It appends a
@@ -439,8 +473,14 @@ replaces the reply to whatever command was issued.
  "min":1,"max":1,"asker":"DiscardAction",
  "options":[{"index":0,"card":"STRIKE","text":"Deal 6 damage."},
             {"index":1,"card":"BASH+1","text":"Deal 10 damage.\nApply 3 Vulnerable."}],
- "picked":[]}
+ "picked":[],"pile":"Draw"}
 ```
+
+`pile` is the `PileType` of the fight's pile every option stands in, when they
+all stand in one. It is `null` outside a fight, for the deck, and for cards made
+to be chosen between. The game never tells the selector the pile, so the
+mod reads each card's own. A front end lists a draw pile sorted, as the game's screen
+does, so the order of the draws does not show.
 
 `asker` is the running action, not the game's own prompt text. `ICardSelector`
 receives only options and bounds. So this is the best attribution available, and
@@ -464,6 +504,14 @@ The game hands the cards back in click order, and Purity exhausts them in it.
 
 `{"cmd":"answer","cards":[0,2]}` picks each of its options in turn after any
 picks so far, then hands them over, in one answer.
+
+`{"cmd":"answer","cancel":true}` is the screen's back button, on a selection
+whose `CardSelectorPrefs` are `Cancelable`: Smith, Cook, the merchant's card
+removal and the card-removal reward. The game gets no cards, so nothing that
+opened the selection goes through. A rest site option stays, nobody buys the
+removal, and the reward stays on its screen. The selector never sees the prefs, so a
+patch on `CardSelectCmd` notes the flag for it. A selection that has no back
+button refuses `cancel`, and only one that has one lists it.
 
 Refusals leave the picks as they were:
 

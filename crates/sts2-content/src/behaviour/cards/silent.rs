@@ -131,28 +131,24 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F
             );
             Played::Done
         }
-        // `DodgeAndRoll`: its block, then as much as it gave as Block Next
-        // Turn.
+        // `DodgeAndRoll`: its block, then the decimal `GainBlock` hands back
+        // as Block Next Turn. A fraction below one lands a power of nothing.
         __c0 if __c0 == V::Card::DODGE_AND_ROLL => {
-            let actor = fight.actor();
-            let held = |fight: &F| {
-                fight
-                    .creatures()
-                    .find(|creature| creature.id() == actor)
-                    .map_or(0, |creature| creature.block())
-            };
-            let before = held(fight);
             let block = fight.resolve(Effect::GainBlock {
-                recipient: actor,
+                recipient: fight.actor(),
                 amount: Amount::Var(V::CardVar::BLOCK),
                 scaling: Scaling::Dynamic,
             });
+            use sts2_core::EffectResolution as _;
+            let (gained, positive) = (block.amount(), block.positive());
             fight.apply(block);
-            let gained = held(fight) - before;
-            fight.apply_to_actor(
-                V::Power::BLOCK_NEXT_TURN_POWER,
-                PowerAmount::Counted(gained),
-            );
+            match gained == 0 && positive {
+                true => fight.apply_fraction_to_actor(V::Power::BLOCK_NEXT_TURN_POWER),
+                false => fight.apply_to_actor(
+                    V::Power::BLOCK_NEXT_TURN_POWER,
+                    PowerAmount::Counted(gained),
+                ),
+            }
             Played::Done
         }
         // `EscapePlan`: a card drawn, then its block where that card is a
@@ -241,7 +237,10 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F
         // its `Repeat` times.
         __c0 if __c0 == V::Card::BOUNCING_FLASK => {
             let poison = PowerAmount::Counted(fight.var(V::CardVar::POISON_POWER));
-            for _ in 0..fight.var(V::CardVar::REPEAT) {
+            // The game's loop reads its count before each pass.
+            let mut pass = 0;
+            while pass < fight.var(V::CardVar::REPEAT) {
+                pass += 1;
                 if let Some(target) = fight.random_opponent() {
                     fight.apply_power(target, V::Power::POISON_POWER, poison);
                 }
@@ -416,7 +415,7 @@ fn hand_trick<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
         .into_iter()
         .filter(|&card| {
             V::card_kind(fight.card_ident(card).card) == Some(CardKind::Skill)
-                && !fight.card_keyword(card, CardKeyword::Sly)
+                && !fight.card_keyword_this_turn(card, CardKeyword::Sly)
         })
         .collect();
     Played::AskingAmong {
@@ -653,7 +652,10 @@ fn leading_strike<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 /// The rest of `LeadingStrike`, once its attack is over: its `Shivs` into
 /// hand one at a time.
 fn leading_strike_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
-    for _ in 0..fight.var(V::CardVar::SHIVS) {
+    // The game's loop reads its count before each pass.
+    let mut pass = 0;
+    while pass < fight.var(V::CardVar::SHIVS) {
+        pass += 1;
         fight.add_generated_cards(
             CardIdent::new(<V::Card as crate::ids::CardIds>::SHIV),
             Pile::Hand,

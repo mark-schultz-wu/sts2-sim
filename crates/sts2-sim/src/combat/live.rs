@@ -147,19 +147,145 @@ pub(super) enum Asked<V: Rules> {
     },
 }
 
-/// A question a death's listener asked inside a play, set aside until the
-/// decision is over.
+/// A task a pause boundary set aside, with the question it paused on. The
+/// boundary's caller runs on without it. A turn's setup is one, and so is
+/// each listener of the hooks the game runs under a boundary per listener.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct Paused<V: Rules> {
     pub(super) asking: Asking<V>,
     /// What waits behind it.
     pub(super) waiting: Vec<Deferred<V>>,
+    /// How many cards the hand held as it was set aside.
+    pub(super) hand: usize,
+}
+
+/// The listeners of one hook that the game runs each under a pause boundary
+/// of its own, `AssignTaskAndWaitForPauseOrCompletion`. A listener that
+/// pauses is set aside, and the next one runs.
+pub(super) struct Listening<V: Rules> {
+    aside: Vec<Paused<V>>,
+    /// The listeners set aside, each of which asks nothing more until it
+    /// goes on.
+    listeners: Vec<super::listen::Listener<V>>,
+}
+
+/// The boundary [`Listening::enter`] opened for one listener.
+#[must_use]
+pub(super) struct Boundary<V: Rules> {
+    /// Nothing for a task that is not one listener's.
+    listener: Option<super::listen::Listener<V>>,
+    fresh: (usize, Option<usize>),
+    boundary: bool,
+}
+
+impl<V: Rules> Listening<V> {
+    pub(super) fn new() -> Self {
+        Listening {
+            aside: Vec::new(),
+            listeners: Vec::new(),
+        }
+    }
+
+    /// Open `listener`'s boundary, before what it asked for runs.
+    ///
+    /// # Panics
+    ///
+    /// A listener asking for more while its own task waits.
+    #[inline]
+    pub(super) fn enter(
+        &self,
+        live: &mut Live<V>,
+        listener: super::listen::Listener<V>,
+    ) -> Boundary<V> {
+        if !self.listeners.is_empty() && self.listeners.contains(&listener) {
+            unimplemented!("{listener:?} asking for more behind its own pause");
+        }
+        Boundary {
+            listener: Some(listener),
+            fresh: live.deferred.open_fresh(),
+            boundary: std::mem::replace(&mut live.pause_boundary, true),
+        }
+    }
+
+    /// Open a boundary for a task that is not one listener's, such as
+    /// `OrbQueue.AfterTurnStart`.
+    pub(super) fn enter_task(&self, live: &mut Live<V>) -> Boundary<V> {
+        Boundary {
+            listener: None,
+            fresh: live.deferred.open_fresh(),
+            boundary: std::mem::replace(&mut live.pause_boundary, true),
+        }
+    }
+
+    /// Close the boundary [`Listening::enter`] opened, and set the listener
+    /// aside where it paused.
+    #[inline]
+    pub(super) fn leave(&mut self, live: &mut Live<V>, entered: Boundary<V>) {
+        live.pause_boundary = entered.boundary;
+        match live.asking.is_some() {
+            true => self.set_aside(live, entered),
+            false => live.deferred.keep_fresh(entered.fresh),
+        }
+    }
+
+    /// The listener [`Listening::leave`] found paused, set aside.
+    #[cold]
+    fn set_aside(&mut self, live: &mut Live<V>, entered: Boundary<V>) {
+        self.aside.push(live.set_aside(entered.fresh));
+        self.listeners.extend(entered.listener);
+    }
+
+    /// Whether no listener paused.
+    pub(super) fn none_paused(&self) -> bool {
+        self.aside.is_empty()
+    }
+
+    /// `Task.WhenAll` over the listeners' tasks: each that paused goes on in
+    /// the order it paused, then `then`. False where none paused, and the
+    /// caller goes on itself.
+    pub(super) fn join(self, live: &mut Live<V>, then: Deferred<V>) -> bool {
+        let mut aside = self.aside.into_iter();
+        let Some(first) = aside.next() else {
+            return false;
+        };
+        for task in aside {
+            live.defer(Deferred::Rejoin(Box::new(task)));
+        }
+        live.defer(then);
+        live.rejoin(first);
+        true
+    }
+
+    /// The listeners' tasks with no join: each that paused goes on as a
+    /// queued action, once the decision is over.
+    #[inline]
+    pub(super) fn queue(self, live: &mut Live<V>) {
+        if !self.aside.is_empty() {
+            live.paused.extend(self.aside);
+        }
+    }
+
+    /// The listeners' tasks where the caller has no way yet to wait for
+    /// them.
+    ///
+    /// # Panics
+    ///
+    /// Any listener that paused.
+    pub(super) fn none_waits(self, hook: &str) {
+        if let Some(task) = self.aside.first() {
+            unimplemented!("{task:?} pausing in {hook}, which goes on without waiting");
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct Asking<V: Rules> {
     pub(super) then: Then<V>,
     pub(super) question: Asked<V>,
+    /// `CardSelectCmd` signalled the choice under a pause boundary and has
+    /// not listed it yet. It lists once its task goes on, and takes the
+    /// cards without asking where its count allows.
+    pub(super) signalled: bool,
 }
 
 /// What an answer resumes.
@@ -200,8 +326,8 @@ pub(super) enum Then<V: Rules> {
 /// goes on past the question does that part early.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum Deferred<V: Rules> {
-    /// The player's `AfterTurnEnd`, stood still by a question a draw it asked
-    /// for raised, and the rest of the turn end behind it.
+    /// The player's `AfterTurnEnd` from the pass after one whose listeners
+    /// paused, once they are over, and the rest of the turn end behind it.
     AfterTurnEnd {
         walk: Box<super::turn::TurnEndWalk<V>>,
         max_energy: V::Count,
@@ -291,6 +417,15 @@ pub(super) enum Deferred<V: Rules> {
     /// still until the answer comes.
     /// `SetupPlayerTurn` from `stage`, which a hook stopped on its selection.
     Setup(Setup<V>),
+    /// A listener's task a pause boundary set aside, which goes on here
+    /// where its caller waits for it.
+    Rejoin(Box<Paused<V>>),
+    /// The player's turn end once every `BeforeSideTurnEnd` listener that
+    /// paused is over. `skipping` is what this turn's tick skips.
+    TurnEndHooksOver {
+        max_energy: V::Count,
+        skipping: Skips<V>,
+    },
     /// `RunAutoPrePlayPhase` from what a pass still asked for, then from the
     /// pass at `next`, once an auto-play's question is answered. The phase
     /// turns to the play phase after.
@@ -1125,11 +1260,11 @@ impl<V: Rules> Face<V> {
     /// `Keywords.Contains(keyword)` for this copy: what the table prints, as
     /// `printed` says, and what has been written on, less what was taken off.
     /// Then what a power gives it for the affliction it carries, which
-    /// `TryModifyKeywordsInCombat` adds after the rest.
+    /// `TryModifyKeywordsInCombat` adds after the rest. A word set for the
+    /// turn alone is a flag beside the set, not in it.
     fn keyword(&self, printed: bool, keyword: V::CardKeyword) -> bool {
         (printed || sts2_core::FlagSet::contains(self.added_keywords, keyword))
             && !sts2_core::FlagSet::contains(self.removed_keywords, keyword)
-            || sts2_core::FlagSet::contains(self.turn_keywords, keyword)
             || self
                 .ident
                 .affliction
@@ -1145,6 +1280,12 @@ impl<V: Rules> Face<V> {
     /// A word the table does not answer for.
     pub(super) fn has_keyword(&self, keyword: V::CardKeyword) -> bool {
         self.keyword(self.prints(keyword), keyword)
+    }
+
+    /// `ShouldRetainThisTurn` and `IsSlyThisTurn`: the keyword, or the flag
+    /// `GiveSingleTurnRetain` or `GiveSingleTurnSly` set for the turn.
+    pub(super) fn has_keyword_this_turn(&self, keyword: V::CardKeyword) -> bool {
+        self.has_keyword(keyword) || sts2_core::FlagSet::contains(self.turn_keywords, keyword)
     }
 
     /// `LocalKeywords.Contains(keyword)`: what the table prints and the fight
@@ -1223,25 +1364,19 @@ impl<V: Rules> Face<V> {
     }
 
     /// `IsSlyThisTurn` for this copy, the keyword the way [`Face::innate`]
-    /// reads Innate, or Sly written on for the turn.
+    /// reads Innate, or Sly given for the turn.
     pub(super) fn sly(&self) -> bool {
-        use sts2_core::{CardTable as _, KeywordKinds};
+        use sts2_core::KeywordKinds;
 
-        self.keyword(
-            self.ident.card.sly(),
-            <V::CardKeyword as KeywordKinds<V>>::SLY,
-        )
+        self.has_keyword_this_turn(<V::CardKeyword as KeywordKinds<V>>::SLY)
     }
 
-    /// `Keywords.Contains(Retain)` for this copy, the way [`Face::innate`]
-    /// reads Innate.
+    /// `ShouldRetainThisTurn` for this copy, the keyword the way
+    /// [`Face::innate`] reads Innate, or Retain given for the turn.
     pub(super) fn retains(&self) -> bool {
-        use sts2_core::{CardTable as _, KeywordKinds};
+        use sts2_core::KeywordKinds;
 
-        self.keyword(
-            self.ident.card.retains(),
-            <V::CardKeyword as KeywordKinds<V>>::RETAIN,
-        )
+        self.has_keyword_this_turn(<V::CardKeyword as KeywordKinds<V>>::RETAIN)
     }
 
     /// Append one cost modifier, which is what every `Set` and `Add` on
@@ -1538,7 +1673,7 @@ impl<V: Rules> Face<V> {
 
     /// `RecalculateForUpgradeOrEnchant`, which gives a calculated number the
     /// base its `CalculationBase` now prints.
-    fn recalculate(&mut self) {
+    pub(super) fn recalculate(&mut self) {
         let from = *self;
         self.calculate_from(&from);
     }
@@ -2358,6 +2493,8 @@ pub(crate) enum ExtraReward<V: Rules> {
     Potion,
     /// `GoldReward(amount)`.
     Gold(V::Number),
+    /// `RelicReward(relic, player)` for this relic.
+    SpecificRelic(V::Relic),
 }
 
 /// The modifiers the run was started with, which the fight asks after
@@ -2545,6 +2682,10 @@ pub(crate) struct Live<V: Rules> {
     /// `WhisperingEarring` pushes as its `VakuuCardSelector` while it plays
     /// the hand. A question that comes up meanwhile never reaches the player.
     pub(super) selector_answers: bool,
+    /// Whether the code running sits under a `WaitForPauseOrCompletion` that
+    /// has not returned: `StartTurn`'s on `SetupPlayerTurn`. A choice
+    /// signalled under it pauses the task there, and the caller runs on.
+    pub(super) pause_boundary: bool,
     /// What `AfterCombatEnd` asked of the run, which carries it out as it
     /// takes the fight's rewards.
     pub(super) leaving: Vec<sts2_core::HookEffect<V>>,
@@ -2867,6 +3008,7 @@ impl<V: Rules> Clone for Live<V> {
             extra_rewards: self.extra_rewards.clone(),
             exhaust_next: self.exhaust_next.clone(),
             selector_answers: self.selector_answers,
+            pause_boundary: self.pause_boundary,
             history: self.history.clone(),
             kept: self.kept.clone(),
             leaving: self.leaving.clone(),
@@ -2948,6 +3090,7 @@ impl<V: Rules> Clone for Live<V> {
             paused,
             waited_attack,
             selector_answers,
+            pause_boundary,
         } = self;
         *character = source.character;
         *ascension = source.ascension;
@@ -2975,6 +3118,7 @@ impl<V: Rules> Clone for Live<V> {
         extra_rewards.clone_from(&source.extra_rewards);
         exhaust_next.clone_from(&source.exhaust_next);
         *selector_answers = source.selector_answers;
+        *pause_boundary = source.pause_boundary;
         leaving.clone_from(&source.leaving);
         for_run.clone_from(&source.for_run);
         after_pick.clone_from(&source.after_pick);
@@ -3149,6 +3293,50 @@ impl<V: Rules> Live<V> {
         &self.leaving
     }
 
+    /// The task a pause boundary waited on, which paused on the question
+    /// asked: the question, and what it deferred since `fresh` was opened.
+    /// The boundary's caller runs on without it.
+    pub(super) fn set_aside(&mut self, fresh: (usize, Option<usize>)) -> Paused<V> {
+        let asking = self
+            .asking
+            .take()
+            .unwrap_or_else(|| unreachable!("a task set aside paused on a question"));
+        Paused {
+            asking,
+            waiting: self.deferred.take_fresh(fresh),
+            hand: self.cards.len(sts2_core::Pile::Hand),
+        }
+    }
+
+    /// A task [`Live::set_aside`] took, back where its caller waits for it:
+    /// its question stands again, and what waits behind it runs next.
+    ///
+    /// # Panics
+    ///
+    /// Where the caller asked a question of its own as it ran on. Where a
+    /// filtered choice signalled and the hand changed since: the choice
+    /// listed the hand as it stopped, and the game lists it now.
+    pub(super) fn rejoin(
+        &mut self,
+        Paused {
+            asking,
+            waiting,
+            hand,
+        }: Paused<V>,
+    ) {
+        if let Some(other) = &self.asking {
+            unimplemented!("{other:?} asked while a paused task waited to rejoin");
+        }
+        if let Asked::Among { cards, .. } = &asking.question
+            && asking.signalled
+            && self.cards.len(sts2_core::Pile::Hand) != hand
+        {
+            unimplemented!("a filtered choice over {cards:?} whose hand changed as it paused");
+        }
+        self.asking = Some(asking);
+        self.deferred.put_back(waiting);
+    }
+
     /// Put `deferred` behind the question asked. See [`Deferrals::push`].
     pub(super) fn defer(&mut self, deferred: Deferred<V>) {
         self.deferred.push(deferred);
@@ -3171,9 +3359,8 @@ impl<V: Rules> Live<V> {
         if self.asking.is_some() || !self.deferred.is_empty() {
             return;
         }
-        let Paused { asking, waiting } = self.paused.remove(0);
-        self.asking = Some(asking);
-        self.deferred.put_back(waiting);
+        let task = self.paused.remove(0);
+        self.rejoin(task);
     }
 
     /// Whether the fight asked anything of the run since the last decision
@@ -3215,6 +3402,17 @@ impl<V: Rules> Live<V> {
     pub(crate) fn question(&self) -> Option<sts2_core::Question<V>> {
         let asked = self.asking.as_ref()?;
         let (min, max, _) = self.selecting()?;
+        // The pile every option stands in, where they share one.
+        let pile = match &asked.question {
+            Asked::Pile { pile, .. } => Some(*pile),
+            Asked::Among { cards, .. } => {
+                let mut piles =
+                    (cards.iter()).map(|card| self.cards.find_any(card.id()).map(|at| at.pile()));
+                let first = piles.next().flatten();
+                piles.all(|pile| pile == first).then_some(first).flatten()
+            }
+            Asked::Offered { .. } => None,
+        };
         let options: Vec<_> = match &asked.question {
             Asked::Pile { pile, .. } => self
                 .offered(*pile)
@@ -3256,6 +3454,7 @@ impl<V: Rules> Live<V> {
                 })
                 .collect(),
             picked: sts2_core::Picks::none(),
+            pile,
         })
     }
 
@@ -3864,6 +4063,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             extra_rewards: Vec::new(),
             exhaust_next: smallvec::SmallVec::new(),
             selector_answers: false,
+            pause_boundary: false,
             leaving: Vec::new(),
             for_run: Vec::new(),
             after_pick: None,

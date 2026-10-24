@@ -1,0 +1,13 @@
+# A Strike, then Crash Landing's hit, leave the big slime low, and Crash
+# Landing fills the hand with Debris. Trash to Treasure channels an orb for
+# each, which evokes the last one, until an evoke kills the slime. The
+# fight is ending then, so `AfterCardGeneratedForCombat` has no listeners
+# for the Debris after, and Trash to Treasure draws no orb for them.
+#
+# A hook that still reaches its listeners rolls an orb off `CombatOrbs`.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"TRASH_TO_TREASURE_POWER","amount":1,"target":0}
+{"cmd":"grant","card":"CRASH_LANDING"}
+{"cmd":"play_card","index":0,"target":2}
+{"cmd":"play_card","index":4}

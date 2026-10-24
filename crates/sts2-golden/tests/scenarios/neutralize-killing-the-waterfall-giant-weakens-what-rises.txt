@@ -1,0 +1,16 @@
+# Neutralize's damage kills the Waterfall Giant, and its Weak lands after,
+# on the giant that rises. The killing blow carries the debuff across.
+#
+# Three turns first, so the giant has Steam Eruption to rise with.
+#
+# From RiptideLab's "YOUR Weird Spire Mechanics (and lies)".
+{"cmd":"start","seed":"S33D1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"WATERFALL_GIANT_BOSS"}
+{"cmd":"power","power":"PLATING_POWER","amount":200,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":300,"target":0}
+{"cmd":"grant","card":"NEUTRALIZE"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"end_turn"}

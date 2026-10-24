@@ -1,0 +1,6 @@
+# `hp` with a target sets that creature's hit points, through
+# `CreatureCmd.SetCurrentHp`. A Strike then takes the rest.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"hp","hp":10,"target":1}
+{"cmd":"play_card","index":0,"target":1}

@@ -358,7 +358,8 @@ pub(super) fn perform<V: crate::Build, F: Fight<V>>(
             fight.apply_to_actor(V::Power::THORNS_POWER, PowerAmount::Counted(-SPINES));
         }
         // `CurlAndGrowMove`: `CreatureCmd.GainBlock` of its `CurlBlock` as a
-        // move, then Strength at five on itself.
+        // move, then Strength of its `GrowStrength` on itself, which a build
+        // may raise from Deadly Enemies.
         (__c0, __c1)
             if (__c0 == V::Monster::LOUSE_PROGENITOR && __c1 == V::MoveId::CURL_AND_GROW_MOVE) =>
         {
@@ -368,7 +369,11 @@ pub(super) fn perform<V: crate::Build, F: Fight<V>>(
                 scaling: Scaling::Dynamic,
             });
             fight.apply(block);
-            fight.apply_to_actor(V::Power::STRENGTH_POWER, PowerAmount::Counted(5));
+            let grow = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
+                true => V::LOUSE_PROGENITOR_DEADLY_GROW,
+                false => 5,
+            };
+            fight.apply_to_actor(V::Power::STRENGTH_POWER, PowerAmount::Counted(grow));
         }
         // `FlutterMove`: `IsHovering`, which picks its sounds, then
         // `PowerCmd.Apply<FlutterPower>` of five on itself.
@@ -750,3 +755,17 @@ pub(crate) fn hatch<V: crate::Build, F: Fight<V>>(
     let hp = draw(fight, min, max);
     fight.set_max_and_current_hp(egg, num_traits::cast(hp).expect("a hatchling's health"));
 }
+
+/// The build's numbers for the rules above.
+macro_rules! lists {
+    ($build:ty, v0_107_1) => {
+        /// Louse Progenitor's Grow from Deadly Enemies on, which this build
+        /// leaves at its base.
+        const LOUSE_PROGENITOR_DEADLY_GROW: crate::behaviour::monsters::Number = 5;
+    };
+    ($build:ty, v0_111_0) => {
+        /// Louse Progenitor's `GrowStrength` from Deadly Enemies on.
+        const LOUSE_PROGENITOR_DEADLY_GROW: crate::behaviour::monsters::Number = 7;
+    };
+}
+pub(crate) use lists;

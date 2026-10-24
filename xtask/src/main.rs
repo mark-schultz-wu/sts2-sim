@@ -18,10 +18,14 @@ mod coverage;
 mod dump;
 mod error;
 mod followed;
+mod game_coverage;
+mod game_trace;
 mod generic;
 mod hunt;
 mod instructions;
 mod neow;
+mod pause_sites;
+mod pck;
 mod plays;
 mod reached;
 mod record;
@@ -78,6 +82,12 @@ enum Command {
     ScenarioDiff(scenario_diff::Args),
     /// Write a recorded run, up to its first split, as a scenario.
     Split(split::Args),
+    /// Show the game's own calls in the moves before a run parts.
+    GameTrace(game_trace::Args),
+    /// Count which of the game's rules methods the hunts entered.
+    GameCoverage(game_coverage::Args),
+    /// List where the game's own code can pause on a choice.
+    PauseSites(pause_sites::Args),
     /// Rewrite a build's behaviour to be generic over the build.
     Generic(generic::Args),
 }
@@ -123,6 +133,12 @@ enum Error {
     ScenarioDiff(error::ProcessError),
     #[error("split failed: {0}")]
     Split(#[from] split::Error),
+    #[error("game-trace failed: {0}")]
+    GameTrace(#[from] game_trace::Error),
+    #[error("game-coverage failed: {0}")]
+    GameCoverage(#[from] game_coverage::Error),
+    #[error("pause-sites failed: {0}")]
+    PauseSites(#[from] pause_sites::Error),
 }
 
 fn run(command: Command) -> Result<String, Error> {
@@ -143,6 +159,9 @@ fn run(command: Command) -> Result<String, Error> {
         Command::Unknown(args) => unknown::run(args).map_err(Error::Unknown)?,
         Command::ScenarioDiff(args) => scenario_diff::run(args).map_err(Error::ScenarioDiff)?,
         Command::Split(args) => split::run(args)?,
+        Command::GameTrace(args) => game_trace::run(args)?,
+        Command::GameCoverage(args) => game_coverage::run(args)?,
+        Command::PauseSites(args) => pause_sites::run(args)?,
     })
 }
 

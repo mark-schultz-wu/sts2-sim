@@ -33,6 +33,10 @@ pub(crate) enum WireQuestion {
         options: Vec<WireCardOption>,
         /// The options picked so far, in the order they were picked.
         picked: Vec<usize>,
+        /// `PileType` of the pile every option stands in, when they share
+        /// one. Absent from transcripts recorded before the mod reported it.
+        #[serde(default)]
+        pile: Option<String>,
     },
     Rewards {
         skippable: bool,
@@ -138,10 +142,28 @@ impl WireQuestion {
                 asker,
                 options,
                 picked,
+                pile,
             } => Question::SelectCards {
                 min,
                 max,
                 asker,
+                pile: match pile.as_deref() {
+                    None => None,
+                    Some("Hand") => Some(sts2_core::Pile::Hand),
+                    Some("Draw") => Some(sts2_core::Pile::Draw),
+                    Some("Discard") => Some(sts2_core::Pile::Discard),
+                    Some("Exhaust") => Some(sts2_core::Pile::Exhaust),
+                    Some("Play") => Some(sts2_core::Pile::Play),
+                    Some(other) => {
+                        return Err(at(
+                            "question.pile",
+                            Why::OutOfRange {
+                                what: "a selection's pile",
+                                value: other.to_owned(),
+                            },
+                        ));
+                    }
+                },
                 picked: sts2_core::Picks::try_from(&picked[..]).map_err(|why| {
                     at(
                         "question.picked",

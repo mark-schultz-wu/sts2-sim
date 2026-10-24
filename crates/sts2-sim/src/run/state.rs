@@ -91,12 +91,21 @@ pub(crate) struct State<V: Rules> {
     /// pulls from. The player's own bag still holds them, until one is
     /// obtained.
     shared_dealt: Arc<Vec<V::Relic>>,
+    /// Each time the shared bag refilled a spent rarity, which only it does:
+    /// the rarity, and how far `dealt_relics` and `shared_dealt` stood then.
+    /// What left after that left the refilled deque.
+    shared_refills: Arc<Vec<(Rarity<V>, usize, usize)>>,
     /// `PlayerCombatState.TurnNumber` as the last fight left it. A fight's
     /// state outlives it until the next one starts.
     last_turn: Option<V::Count>,
     /// `PlayerExtraFields.CardShopRemovalsUsed`, which every merchant's
     /// removal price climbs with. It counts over the run, not the room.
     removals_used: usize,
+    /// Card rewards that left their set without being offered or skipped,
+    /// as Vintage swaps a relic in for one. Each still hears
+    /// `RelicObtained`, which only its own selection or skip turns off, for
+    /// the rest of the run.
+    unheld_card_rewards: Arc<Vec<Offer<V>>>,
     phase: Phase<V>,
     /// The event a fight was entered from, which the rewards' proceed goes
     /// back to: the room under the fight in `RunState`'s room stack. Only a
@@ -111,8 +120,9 @@ pub(super) struct Resuming<V: Rules> {
     pub(super) event: Phase<V>,
     /// Whether an enemy escaped the fight, once it is over.
     pub(super) escaped: bool,
-    /// Whether the fight, won, left anything in `CombatRoom.ExtraRewards`.
-    pub(super) extras: bool,
+    /// What the fight, won, left in `CombatRoom.ExtraRewards`, where it left
+    /// anything.
+    pub(super) extras: Option<Box<super::fight::Extras<V>>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -418,6 +428,7 @@ impl<V: Rules> Belt<V> {
     /// hear none.
     pub(crate) fn deafen(&mut self) {
         self.heard = sts2_core::Overrides::default();
+        self.slots = [0; sts2_core::ModelHook::ALL.len()];
     }
 
     /// The slots of the relics that override `hook`, one bit a slot, the
@@ -457,6 +468,9 @@ struct Player<V: Rules> {
     max_hp: V::Health,
     gold: V::Number,
     potion_slots: V::Count,
+    /// `IsActiveForHooks` off: the player died, and their deck, relics and
+    /// potions hear no hook after.
+    deaf: bool,
 }
 
 impl<V: Rules> Clone for State<V> {
@@ -470,6 +484,8 @@ impl<V: Rules> Clone for State<V> {
             visited_events: Arc::clone(&self.visited_events),
             dealt_relics: Arc::clone(&self.dealt_relics),
             shared_dealt: Arc::clone(&self.shared_dealt),
+            shared_refills: Arc::clone(&self.shared_refills),
+            unheld_card_rewards: Arc::clone(&self.unheld_card_rewards),
             phase: self.phase.clone(),
             resuming: self.resuming.clone(),
             ..*self
@@ -500,8 +516,10 @@ impl<V: Rules> Clone for State<V> {
             odds,
             dealt_relics,
             shared_dealt,
+            shared_refills,
             last_turn,
             removals_used,
+            unheld_card_rewards,
             phase,
             resuming,
         } = self;
@@ -523,8 +541,10 @@ impl<V: Rules> Clone for State<V> {
         *odds = source.odds;
         dealt_relics.clone_from(&source.dealt_relics);
         shared_dealt.clone_from(&source.shared_dealt);
+        shared_refills.clone_from(&source.shared_refills);
         *last_turn = source.last_turn;
         *removals_used = source.removals_used;
+        unheld_card_rewards.clone_from(&source.unheld_card_rewards);
         resuming.clone_from(&source.resuming);
         match (phase, &source.phase) {
             (Phase::Combat(live), Phase::Combat(from)) => live.clone_from(from),
@@ -545,6 +565,7 @@ impl<V: Rules> Clone for Player<V> {
             max_hp: self.max_hp,
             gold: self.gold,
             potion_slots: self.potion_slots,
+            deaf: self.deaf,
         }
     }
 
@@ -559,6 +580,7 @@ impl<V: Rules> Clone for Player<V> {
             max_hp,
             gold,
             potion_slots,
+            deaf,
         } = self;
         relics.copy_from(&source.relics);
         potions.copy_from(&source.potions);
@@ -569,6 +591,7 @@ impl<V: Rules> Clone for Player<V> {
         *max_hp = source.max_hp;
         *gold = source.gold;
         *potion_slots = source.potion_slots;
+        *deaf = source.deaf;
     }
 }
 
@@ -1304,6 +1327,7 @@ impl<V: Rules> State<V> {
                 .expect("starting gold fits the build's game-number type"),
             potion_slots: num_traits::cast(V::starting_potion_slots())
                 .expect("starting potion slots fit the build's count type"),
+            deaf: false,
         };
         // `AscensionManager.ApplyEffectsTo`: a slot fewer, and the curse on
         // the end of the deck.
@@ -1355,8 +1379,10 @@ impl<V: Rules> State<V> {
             odds: Odds::default(),
             dealt_relics: Arc::new(out_of_bags),
             shared_dealt: Arc::new(Vec::new()),
+            shared_refills: Arc::new(Vec::new()),
             last_turn: None,
             removals_used: 0,
+            unheld_card_rewards: Arc::new(Vec::new()),
             streams,
             resuming: None,
             phase: Phase::Neow {
@@ -1757,6 +1783,98 @@ impl<V: Rules> State<V> {
         self.belt_to_fight();
     }
 
+    /// Whether the card selection parked here has a back button, which its
+    /// `CardSelectorPrefs.Cancelable` puts there. Smith, Cook, the shop's
+    /// paid card removal and the card-removal reward each set it. Lord's
+    /// Parasol's free removal does not.
+    fn cancelable(&self) -> bool {
+        match &self.phase {
+            Phase::RestSite {
+                upgrading: true, ..
+            } => true,
+            // Cook, which is the one rest site option that removes cards.
+            Phase::RestSite {
+                asking: Some(asked),
+                ..
+            } => {
+                asked.under.is_none()
+                    && matches!(
+                        asked.pickup,
+                        Pickup::FromDeck {
+                            act: sts2_core::DeckAct::Remove,
+                            ..
+                        }
+                    )
+            }
+            Phase::Shop {
+                unfinished: Some(Unfinished::Removal { free: false }),
+                ..
+            } => true,
+            Phase::Rewards {
+                removing: Some(_), ..
+            } => true,
+            _ => false,
+        }
+    }
+
+    /// The back button on a cancelable card selection: the game gets no
+    /// cards, and what opened the selection is left undone. Smith and Cook
+    /// return false from `OnSelect`, so the option stays and the rest site
+    /// is as it was. The shop's removal is not bought, and the removal
+    /// reward is not taken.
+    fn cancel(&mut self) -> Settled<V> {
+        if !self.cancelable() {
+            return Err(sts2_core::Refusal {
+                what: "answer".into(),
+                reason: sts2_core::Reason::Malformed {
+                    message: "this selection cannot be cancelled".into(),
+                },
+            });
+        }
+        self.picked = sts2_core::Picks::none();
+        match &mut self.phase {
+            Phase::RestSite {
+                upgrading,
+                asking,
+                chosen,
+                ..
+            } => {
+                *upgrading = false;
+                *asking = None;
+                *chosen = None;
+            }
+            Phase::Shop { unfinished, .. } => *unfinished = None,
+            Phase::Rewards { removing, .. } => *removing = None,
+            _ => unreachable!("only a cancelable selection is cancelled"),
+        }
+        Ok(self.decided())
+    }
+
+    /// `DiscardPotionGameAction`, which the potion's popup enqueues:
+    /// `PotionCmd.Discard`, so the potion leaves the belt and
+    /// `AfterPotionDiscarded` is raised, in a fight or out.
+    pub(crate) fn discard_potion(
+        &mut self,
+        index: sts2_core::BeltIndex,
+    ) -> Result<super::Settled<V>, Error> {
+        let at = usize::from(index.get());
+        if at >= self.player.potions.len() {
+            return Ok(Err(sts2_core::Refusal {
+                what: "discard_potion".into(),
+                reason: sts2_core::Reason::OutOfRange {
+                    index: i64::from(index.get()),
+                    count: self.player.potions.len(),
+                },
+            }));
+        }
+        self.drank(at);
+        self.belt_changed(sts2_core::EventHook::PotionDiscarded {
+            in_fight: matches!(self.phase, Phase::Combat(_)),
+            holding_potions: self.holding_potions(),
+        });
+        Ok(Ok(Decided::Resolved))
+    }
+
     /// `Owner.Potions.Any()`.
     pub(super) fn holding_potions(&self) -> bool {
         !self.player.potions.is_empty()
@@ -1985,19 +2103,30 @@ impl<V: Rules> State<V> {
 
     /// `RelicFactory.PullNextRelicFromFront` at `rarity`, through the shop
     /// filter for a stocked pull. [`pulled_rarity`] is the rarity it deals at.
+    ///
+    /// `floor` is `TotalFloor`, which `IsAllowed` reads. An event's room
+    /// counts already as its options pull, while the run's own floor moves
+    /// only once it enters.
     pub(super) fn pull_relic_as(
         &mut self,
         pull: sts2_core::RelicPull<V>,
         rarity: Rarity<V>,
+        floor: V::Count,
     ) -> V::Relic {
         use sts2_core::RelicTable as _;
 
+        let floor = num_traits::cast(floor).expect("a floor fits a usize");
         let relic = match pull {
-            sts2_core::RelicPull::Rolled => return self.pull_relic(rarity),
+            sts2_core::RelicPull::Rolled => {
+                self.shared
+                    .opening
+                    .player_relics
+                    .front(rarity, &self.dealt_relics, floor)
+            }
             sts2_core::RelicPull::Stocked(_) => self.shared.opening.player_relics.front_where(
                 rarity,
                 &self.dealt_relics,
-                num_traits::cast(self.floor).expect("a floor fits a usize"),
+                floor,
                 V::Relic::allowed_in_shops,
             ),
         };
@@ -2024,18 +2153,52 @@ impl<V: Rules> State<V> {
         relic
     }
 
-    /// The next relic in the shared bag, without dealing it yet. What left
-    /// either bag has left this one.
-    pub(super) fn next_shared_relic(&self, rarity: Rarity<V>) -> V::Relic {
-        let gone: Vec<V::Relic> = (self.dealt_relics.iter())
-            .chain(self.shared_dealt.iter())
-            .copied()
-            .collect();
-        self.shared.opening.shared_relics.front(
-            rarity,
-            &gone,
-            num_traits::cast(self.floor).expect("a floor fits a usize"),
-        )
+    /// `SharedRelicGrabBag.PullFromFront`: the next relic in the shared bag,
+    /// dealt. What left either bag has left this one.
+    ///
+    /// The shared bag refreshes. A rarity with nothing left is laid back in
+    /// the order the bag was filled, then dealt from. A rarity above it is
+    /// walked to only where that leaves nothing too.
+    ///
+    /// # Panics
+    ///
+    /// A bag with nothing left at the rarity or above, where the game falls
+    /// back to a relic of its own.
+    pub(super) fn deal_shared_relic(&mut self, rarity: Rarity<V>) -> V::Relic {
+        let mut relic = self.shared_front_at(rarity);
+        if relic.is_none() {
+            let mark = (rarity, self.dealt_relics.len(), self.shared_dealt.len());
+            Arc::make_mut(&mut self.shared_refills).push(mark);
+            relic = self.shared_front_at(rarity);
+        }
+        let mut at = rarity;
+        while relic.is_none() {
+            at = super::setup::rarity_above::<V>(at)
+                .unwrap_or_else(|| unimplemented!("a shared relic bag with nothing left"));
+            relic = self.shared_front_at(at);
+        }
+        let relic = relic.expect("the walk stops on a relic");
+        Arc::make_mut(&mut self.shared_dealt).push(relic);
+        relic
+    }
+
+    /// The first relic the shared bag holds at `rarity` alone, as its deque
+    /// stands since its last refill, if it had one.
+    fn shared_front_at(&self, rarity: Rarity<V>) -> Option<V::Relic> {
+        let floor = num_traits::cast(self.floor).expect("a floor fits a usize");
+        let refill = self
+            .shared_refills
+            .iter()
+            .rev()
+            .find(|mark| mark.0 == rarity);
+        let (dealt, shared) = refill.map_or((0, 0), |&(_, dealt, shared)| (dealt, shared));
+        let (dealt, shared) = (&self.dealt_relics[dealt..], &self.shared_dealt[shared..]);
+        self.shared
+            .opening
+            .shared_relics
+            .first_at(rarity, refill.is_some(), floor, |relic| {
+                dealt.contains(&relic) || shared.contains(&relic)
+            })
     }
 
     /// `Player.CanRemovePotions` off: an event that holds the potions while it
@@ -2067,6 +2230,49 @@ impl<V: Rules> State<V> {
             .is_some_and(|here| here.kind == V::MapPointType::BOSS && !here.to.is_empty())
     }
 
+    /// `effects` from an event resuming after its fight, where the one at
+    /// `at` offers its rewards and then the fight's `extras`. `OfferCustom`
+    /// fills them in that order, so the extras draw after the event's own.
+    ///
+    /// # Panics
+    ///
+    /// An effect before the offer asking a question.
+    fn offer_with_extras(
+        &mut self,
+        effects: &[sts2_core::HookEffect<V>],
+        at: usize,
+        extras: &super::fight::Extras<V>,
+    ) -> Decided {
+        let (before, after) = effects.split_at(at);
+        if let Some(asked) = self.carry_out(before.iter().copied()) {
+            let pickup = asked.pickup;
+            unimplemented!("an event asking for {pickup:?} before it offers its rewards");
+        }
+        let sts2_core::HookEffect::OfferRewardsWithRoomExtras(rewards) = after[0] else {
+            unreachable!("the offer stands at {at}")
+        };
+        let rest: SmallVec<[Then<V>; 4]> = after[1..].iter().map(|&effect| effect.into()).collect();
+        if self.player.hp == num_traits::zero() {
+            return match self.carry_out(rest) {
+                None => Decided::Resolved,
+                Some(asked) => self.park(asked),
+            };
+        }
+        let stream = sts2_core::Stream::Player(V::PlayerRngType::REWARDS);
+        let mut offered = self.filled_rewards(rewards, stream);
+        offered.extend(self.extra_offers(extras));
+        self.modify_rewards(&mut offered, None);
+        crate::reward::sort(&mut offered);
+        self.park(Asked {
+            pickup: Pickup::Rewards {
+                offered,
+                skippable: true,
+            },
+            rest,
+            under: None,
+        })
+    }
+
     /// `CurrentActIndex >= Acts.Count - 1`: whether the run stands in its
     /// last act.
     pub(super) fn in_last_act(&self) -> bool {
@@ -2093,18 +2299,20 @@ impl<V: Rules> State<V> {
             let Phase::Event { state, .. } = &mut self.phase else {
                 unreachable!("only an event resumes after its fight")
             };
-            let effects: sts2_core::HookEffects<V> = V::resume_event_from_fight(state, escaped)
+            let effects = V::resume_event_from_fight(state, escaped);
+            let offering = effects.iter().position(|effect| {
+                matches!(effect, sts2_core::HookEffect::OfferRewardsWithRoomExtras(_))
+            });
+            if let (Some(at), Some(extras)) = (offering, extras) {
+                return Ok(self.offer_with_extras(&effects, at, &extras));
+            }
+            let effects: sts2_core::HookEffects<V> = effects
                 .into_iter()
                 .filter_map(|effect| match effect {
                     // An empty list offers nothing.
+                    sts2_core::HookEffect::OfferRewardsWithRoomExtras([]) => None,
                     sts2_core::HookEffect::OfferRewardsWithRoomExtras(rewards) => {
-                        match (extras, rewards) {
-                            (true, _) => {
-                                unimplemented!("an event offering its fight's extra rewards")
-                            }
-                            (false, []) => None,
-                            (false, rewards) => Some(sts2_core::HookEffect::OfferRewards(rewards)),
-                        }
+                        Some(sts2_core::HookEffect::OfferRewards(rewards))
                     }
                     effect => Some(effect),
                 })
@@ -2186,8 +2394,10 @@ impl<V: Rules> State<V> {
     ) -> Option<Asked<V>> {
         use sts2_core::RelicTable as _;
 
-        // Out of both bags, unless a run can hold more than one.
-        if !relic.stackable() && !self.dealt_relics.contains(&relic) {
+        // Out of both bags, unless a run can hold more than one. Noted again
+        // where it was dealt already, since a refilled shared bag holds it
+        // again until it is obtained.
+        if !relic.stackable() {
             Arc::make_mut(&mut self.dealt_relics).push(relic);
         }
         let mut held = HeldRelic {
@@ -2208,8 +2418,16 @@ impl<V: Rules> State<V> {
             }
         }
         self.player.relics.push(held);
-        let (character, act, turn) = (self.character(), self.act, self.player_turn());
         let slot = self.player.relics.len() - 1;
+        // `AddRelicInternal` raises `RelicObtained` before `AfterObtained`.
+        // The card rewards that never left it hear it first, in the order
+        // they were made.
+        if !self.unheld_card_rewards.is_empty() {
+            let mut unheld = std::mem::take(Arc::make_mut(&mut self.unheld_card_rewards));
+            self.reward_options_on_obtained(slot, &mut unheld);
+            *Arc::make_mut(&mut self.unheld_card_rewards) = unheld;
+        }
+        let (character, act, turn) = (self.character(), self.act, self.player_turn());
         let effects = crate::combat::obtained::<V>(
             self.player.relics.state_beside(slot),
             character,
@@ -2265,6 +2483,10 @@ impl<V: Rules> State<V> {
                     self.gain_gold(amount);
                     continue;
                 }
+                HookEffect::GainGoldExact(amount) => {
+                    self.gain_gold_exact(amount);
+                    continue;
+                }
                 // `CardFactory.CreateForReward`, then `CardPileCmd.Add` of
                 // each card to the deck.
                 HookEffect::AddRolledToDeck(reward) => {
@@ -2278,6 +2500,10 @@ impl<V: Rules> State<V> {
                 }
                 HookEffect::PurchaseEverything => {
                     self.purchase_everything(None);
+                    continue;
+                }
+                HookEffect::ItemPurchased(gold) => {
+                    self.item_purchased(gold);
                     continue;
                 }
                 HookEffect::MarkCombatPoints { relic, count, name } => {
@@ -2400,7 +2626,7 @@ impl<V: Rules> State<V> {
                         HookEffect::ObtainNextRelic(pull) => {
                             let rarity =
                                 pulled_rarity(pull, self.streams.player(V::PlayerRngType::REWARDS));
-                            self.pull_relic_as(pull, rarity)
+                            self.pull_relic_as(pull, rarity, self.floor)
                         }
                         _ => unreachable!("matched above"),
                     };
@@ -3143,8 +3369,14 @@ impl<V: Rules> State<V> {
     ///
     /// A relic answering one of the hooks in a way nothing here carries out.
     fn gain_gold(&mut self, amount: V::Number) {
+        self.gain_gold_exact(crate::combat::exact::<V>(amount));
+    }
+
+    /// [`State::gain_gold`] of a `decimal`, which the hooks scale before the
+    /// fraction is dropped.
+    fn gain_gold_exact(&mut self, amount: sts2_core::Decimal) {
         let hook = sts2_core::ModifyHook::GoldGained;
-        let mut gained = crate::combat::exact::<V>(amount);
+        let mut gained = amount;
         let mut left = self
             .player
             .relics
@@ -3273,9 +3505,24 @@ impl<V: Rules> State<V> {
         if killed {
             self.unheard(ModelHook::BeforeDeath);
             let preventer = self.death_preventer();
-            self.unheard(ModelHook::AfterDeath);
-            if let Some(slot) = preventer {
-                self.death_prevented(slot);
+            let hook = sts2_core::EventHook::AfterDeath {
+                creature: sts2_core::CombatId::new(nonmax::NonMaxU8::ZERO),
+                side: <V::CombatSide as sts2_core::SideKinds>::PLAYER,
+                monster: None,
+                removal_prevented: preventer.is_some(),
+            };
+            if let Some(effect) = self.notify_run(hook).first() {
+                unimplemented!(
+                    "a listener asking for {effect:?} as the player dies outside a fight"
+                );
+            }
+            match preventer {
+                Some(slot) => self.death_prevented(slot),
+                // `DeactivateHooks`, once the death has gone through.
+                None => {
+                    self.player.relics.deafen();
+                    self.player.deaf = true;
+                }
             }
         }
     }
@@ -3452,7 +3699,34 @@ impl<V: Rules> State<V> {
             let pickup = asked.pickup;
             unimplemented!("a rest site's heal asking for {pickup:?}");
         }
-        self.walk_run(sts2_core::EventHook::RestSiteHealRewards { mimicked })
+        self.rest_site_heal_rewards(mimicked)
+    }
+
+    /// `Hook.ModifyRestSiteHealRewards`, then `RewardsCmd.OfferCustom`. Each
+    /// listener adds to one list, and the list is offered once, as one set.
+    fn rest_site_heal_rewards(&mut self, mimicked: bool) -> Option<Asked<V>> {
+        let mut rewards: Vec<sts2_core::CustomReward<V>> = Vec::new();
+        let hook = sts2_core::EventHook::RestSiteHealRewards { mimicked };
+        self.walk_run_landing(hook, |_, listener, effect| match effect {
+            sts2_core::HookEffect::OfferRewards(added) => rewards.extend_from_slice(added),
+            effect => unimplemented!("{listener:?} adding {effect:?} to a rest site's rewards"),
+        });
+        // `RewardsSet.Offer` makes nothing for a dead player.
+        if rewards.is_empty() || self.player.hp == num_traits::zero() {
+            return None;
+        }
+        let offered = self.custom_rewards(
+            &rewards,
+            sts2_core::Stream::Player(V::PlayerRngType::REWARDS),
+        );
+        Some(Asked {
+            pickup: Pickup::Rewards {
+                offered,
+                skippable: true,
+            },
+            rest: SmallVec::new(),
+            under: None,
+        })
     }
 
     /// `RewardsSet.WithCustomRewards` and `GenerateWithoutOffering`, off
@@ -3559,6 +3833,12 @@ impl<V: Rules> State<V> {
                         taken: false,
                     }
                 }
+                CustomReward::SpecificRelic(relic) => Offer::Relic {
+                    relic,
+                    rarity: <_ as sts2_core::RarityKinds>::UNDRAFTED,
+                    wax: false,
+                    taken: false,
+                },
                 CustomReward::Gold(amount) => Offer::Gold {
                     amount: crate::reward::fixed_gold::<V, _>(rng, amount),
                     taken: false,
@@ -3747,13 +4027,30 @@ impl<V: Rules> State<V> {
                         }
                     }
                 }
-                // `new RelicReward(player)` where each card reward stood.
+                // `new RelicReward(player)` where each card reward stood. The
+                // card reward is neither offered nor skipped, so it goes on
+                // hearing `RelicObtained`. One a listener added is not
+                // populated yet, and holds no cards.
                 sts2_core::HookEffect::RelicRewardsForCardRewards => {
                     for filling in set.iter_mut() {
-                        if let Filling::Filled(Offer::Card { .. }) | Filling::Card { .. } = filling
-                        {
-                            *filling = Filling::Relic;
-                        }
+                        let unheld = match std::mem::replace(filling, Filling::Relic) {
+                            Filling::Filled(offer @ Offer::Card { .. }) => offer,
+                            Filling::Card { room, reroll } => Offer::Card {
+                                cards: Vec::new(),
+                                rolled: Some(crate::reward::Rolled::Room {
+                                    room,
+                                    from_combat: false,
+                                }),
+                                reroll,
+                                sacrifice: false,
+                                taken: false,
+                            },
+                            other => {
+                                *filling = other;
+                                continue;
+                            }
+                        };
+                        Arc::make_mut(&mut self.unheld_card_rewards).push(unheld);
                     }
                 }
                 effect => unimplemented!("a listener modifying rewards late with {effect:?}"),
@@ -3969,13 +4266,18 @@ impl<V: Rules> State<V> {
     pub(super) fn run_listed(&self, hook: sts2_core::ModelHook) -> RunListed<V> {
         let hooks = sts2_core::Overrides::of(hook);
         let mut listed = RunListed {
-            deck: self.deck_listed(hooks),
+            deck: SmallVec::new(),
             relics: self.player.relics.hearing_hook(hook),
             after: SmallVec::new(),
         };
-        for &potion in self.player.potions.iter() {
-            if sts2_core::PotionTable::overrides(potion).intersects(hooks) {
-                listed.after.push(RunListener::Potion { potion });
+        // `IsActiveForHooks`, which a dead player's deck and potions fail. A
+        // dead player's belt is deafened.
+        if !self.player.deaf {
+            listed.deck = self.deck_listed(hooks);
+            for &potion in self.player.potions.iter() {
+                if sts2_core::PotionTable::overrides(potion).intersects(hooks) {
+                    listed.after.push(RunListener::Potion { potion });
+                }
             }
         }
         for (at, &modifier) in self.shared.modifiers.iter().enumerate() {
@@ -4497,7 +4799,7 @@ impl<V: Rules> State<V> {
                     return Hooked::Uniform(cards);
                 }
                 // `Union`: the new pools first, then what was there and is
-                // not among them.
+                // not among them, in a build that kept it.
                 sts2_core::HookEffect::AddCharacterPools(added) => {
                     if concat.is_some() {
                         unimplemented!("a pool joined to options that hold a custom pool");
@@ -4506,12 +4808,14 @@ impl<V: Rules> State<V> {
                         .iter()
                         .map(|&character| Source::Character(character))
                         .collect();
-                    let rest: SmallVec<[Source<V>; 6]> = pools
-                        .iter()
-                        .copied()
-                        .filter(|held| !joined.contains(held))
-                        .collect();
-                    joined.extend(rest);
+                    if !V::card_pools_cleared_before_read() {
+                        let rest: SmallVec<[Source<V>; 6]> = pools
+                            .iter()
+                            .copied()
+                            .filter(|held| !joined.contains(held))
+                            .collect();
+                        joined.extend(rest);
+                    }
                     pools = joined;
                 }
                 // `Concat` of the colorless pool, where it is not there.
@@ -4530,6 +4834,16 @@ impl<V: Rules> State<V> {
                         unimplemented!("a second character's cards after a custom pool");
                     }
                     concat = Some(character);
+                }
+                // `Union`: the character's pool after the rest, where it is
+                // not there. The reward's filter stays on it.
+                sts2_core::HookEffect::UnionCharacterPool(character) => {
+                    if concat.is_some() {
+                        unimplemented!("a pool joined to options that hold a custom pool");
+                    }
+                    if !pools.contains(&Source::Character(character)) {
+                        pools.push(Source::Character(character));
+                    }
                 }
                 effect => {
                     unimplemented!("a relic asking for {effect:?} over a card reward's pools")
@@ -4560,8 +4874,8 @@ impl<V: Rules> State<V> {
     }
 
     /// `TryModifyCardRewardOptions` over a card reward at a room's odds: the
-    /// kind of each option the belt adds. `from_combat` is whether a won
-    /// fight made it.
+    /// kind of each option the belt adds. `from_combat` is `IsFromCombat`,
+    /// which a won fight's own card reward carries and an extra one does not.
     pub(super) fn card_reward_added(&mut self, from_combat: bool) -> Vec<sts2_core::CardKind> {
         self.unheard(sts2_core::ModelHook::ModifyCardRewardUpgradeOdds);
         self.notify_run(sts2_core::EventHook::CardRewardOptions {
@@ -4600,12 +4914,11 @@ impl<V: Rules> State<V> {
         }
     }
 
-    /// `CardReward.OnRelicObtained` for the relic in the last slot, over
-    /// each card reward in `offered` not yet taken. The relic answers its own
+    /// `CardReward.OnRelicObtained` for the relic in `slot`, over each card
+    /// reward in `offered` not yet taken. The relic answers its own
     /// `TryModifyCardRewardOptions` and `TryModifyCardRewardOptionsLate`,
-    /// then `AfterModifyingRewards`.
-    fn reward_options_on_obtained(&mut self, offered: &mut [Offer<V>]) {
-        let slot = self.player.relics.len() - 1;
+    /// then `AfterModifyingRewards` where they changed anything.
+    fn reward_options_on_obtained(&mut self, slot: usize, offered: &mut [Offer<V>]) {
         let hears = |state: &Self, hook| {
             state.player.relics.hearing(sts2_core::Overrides::of(hook)) & (1 << slot) != 0
         };
@@ -4637,19 +4950,18 @@ impl<V: Rules> State<V> {
                         unimplemented!("a relic obtained over a card reward asking for {effect:?}");
                     }
                 }
-                if !late {
-                    continue;
-                }
-                self.reward_options_of(slot, cards, true);
-                let mut asked = sts2_core::HookEffects::new();
-                let modified =
-                    sts2_core::EventHook::CardRewardOptionsModified { card_reward: true };
-                let (state, belt) = self.player.relics.state_beside(slot);
-                V::relic_event_hook(state, belt, modified, &mut asked);
-                if let Some(effect) = asked.first() {
-                    unimplemented!("a relic asking for {effect:?} once a card reward was modified");
+                if late {
+                    self.reward_options_of(slot, cards, true);
                 }
             }
+        }
+        // `AfterModifyingRewards`, for a relic whose hooks changed the cards.
+        // `Hook.AfterModifyingCardRewardOptions` is not raised here, so Silver
+        // Crucible counts no use.
+        if (early || late) && hears(self, sts2_core::ModelHook::AfterModifyingRewards) {
+            unimplemented!(
+                "a relic changing a card reward's options that hears AfterModifyingRewards"
+            );
         }
     }
 
@@ -4801,6 +5113,45 @@ impl<V: Rules> State<V> {
         }
     }
 
+    /// `RunState.CurrentRoom`'s `RoomType`, for a room no fight opens in.
+    /// Nothing on the map, and in or after a fight, as
+    /// [`Rules::computed_potion_check`] takes it.
+    pub(super) fn quiet_room(&self) -> Option<V::RoomType> {
+        use sts2_core::RoomKinds as _;
+
+        match &self.phase {
+            Phase::Neow { .. } | Phase::Event { .. } | Phase::Won { .. } => {
+                Some(V::RoomType::EVENT)
+            }
+            Phase::Shop { .. } => Some(V::RoomType::SHOP),
+            Phase::Treasure { .. } => Some(V::RoomType::TREASURE),
+            Phase::RestSite { .. } => Some(V::RoomType::REST_SITE),
+            Phase::Map | Phase::Combat(_) | Phase::Rewards { .. } | Phase::Lost { .. } => None,
+        }
+    }
+
+    /// `FoulPotion.GetFoulPotionMerchantTarget` finding a merchant's button:
+    /// a shop's, whose inventory a run with no screen never opens, or the
+    /// one an event shows.
+    pub(super) fn merchant(&self) -> bool {
+        match &self.phase {
+            Phase::Shop { .. } => true,
+            Phase::Event { state, .. } => V::event_merchant(state),
+            _ => false,
+        }
+    }
+
+    /// [`Rules::event_potion_thrown`] on the event the run stands in.
+    pub(super) fn potion_thrown_at_event(
+        &mut self,
+        potion: V::Potion,
+    ) -> sts2_core::HookEffects<V> {
+        let Phase::Event { state, .. } = &mut self.phase else {
+            unreachable!("only an event's merchant is thrown at")
+        };
+        V::event_potion_thrown(state, potion)
+    }
+
     /// The type of the map point at `at`. None off the map.
     pub(super) fn point_type(&self, at: Location) -> Option<V::MapPointType> {
         use sts2_core::ActMap as _;
@@ -4854,7 +5205,7 @@ impl<V: Rules> State<V> {
             .iter()
             .map(|&pull| {
                 let rarity = pulled_rarity(pull, streams.player(V::PlayerRngType::REWARDS));
-                self.pull_relic_as(pull, rarity)
+                self.pull_relic_as(pull, rarity, floor)
             })
             .collect();
         if !pulled.is_empty() {
@@ -4945,9 +5296,7 @@ impl<V: Rules> State<V> {
             // `SharedRelicGrabBag.PullFromFront`, which leaves the player's
             // bag holding it. Taking it from the chest obtains it, which
             // takes it out of both.
-            let relic = self.next_shared_relic(rarity);
-            Arc::make_mut(&mut self.shared_dealt).push(relic);
-            relic
+            self.deal_shared_relic(rarity)
         });
         if let Phase::Treasure {
             relic: chest,
@@ -5741,16 +6090,24 @@ impl<V: Rules> State<V> {
     ///
     /// `EnterRoomWithoutExitingCurrentRoom` adds a room to the point the run
     /// stands on rather than a point, so the floor stays where it is. The
-    /// room stack is two deep, so `MarkRoomVisited` counts nothing. The fight
-    /// is won to the rewards a monster room gives. The run then travels on
-    /// from the event's point, or with `resume` goes back to the event.
-    fn fight_in_event(
+    /// room stack is two deep, so `MarkRoomVisited` counts nothing.
+    ///
+    /// The fight is won to a monster room's rewards, then `rewards`, then
+    /// any `own_rewards`. The run then travels on, or with `resume` goes back
+    /// to the event.
+    pub(super) fn fight_in_event(
         &mut self,
         encounter: V::Encounter,
         rewards: &[sts2_core::CustomReward<V>],
         roster: &[V::Monster],
         resume: bool,
+        own_rewards: bool,
     ) -> Result<Decided, Error> {
+        let own = match (own_rewards, &self.phase) {
+            (true, Phase::Event { state, .. }) => V::event_rewards(state),
+            (true, _) => unreachable!("only an event has rewards of its own"),
+            (false, _) => Vec::new(),
+        };
         let CreatedFight {
             live,
             streams,
@@ -5782,12 +6139,15 @@ impl<V: Rules> State<V> {
         };
         let mut live = live;
         // `AddExtraReward`, as the room is built and before the fight opens.
-        for &reward in rewards {
+        for &reward in rewards.iter().chain(&own) {
             live.add_extra_reward(match reward {
                 sts2_core::CustomReward::SpecialCard(card) => {
                     crate::combat::ExtraReward::SpecialCard(CardIdent::new(card))
                 }
                 sts2_core::CustomReward::RolledRelic => crate::combat::ExtraReward::Relic,
+                sts2_core::CustomReward::SpecificRelic(relic) => {
+                    crate::combat::ExtraReward::SpecificRelic(relic)
+                }
                 sts2_core::CustomReward::Potion => crate::combat::ExtraReward::Potion,
                 reward => unimplemented!("{reward:?} among a fight's extra rewards"),
             });
@@ -5798,7 +6158,7 @@ impl<V: Rules> State<V> {
             self.resuming = Some(Box::new(Resuming {
                 event,
                 escaped: false,
-                extras: false,
+                extras: None,
             }));
         }
         self.arrived(arriving);
@@ -5877,6 +6237,47 @@ impl<V: Rules> State<V> {
             unimplemented!("a power applied outside a fight");
         };
         crate::combat::apply_power(fighting, at, power, amount);
+        Ok(Decided::Resolved)
+    }
+
+    /// Set the hit points of the player, or of the creature `at` in the
+    /// fight, which is `CreatureCmd.SetCurrentHp`.
+    ///
+    /// In a fight it raises `AfterCurrentHpChanged` there. Outside one the
+    /// run's relics hear it, as they hear damage outside a fight.
+    pub(crate) fn set_hp(
+        &mut self,
+        at: Option<sts2_core::CombatId>,
+        hp: V::Health,
+    ) -> Result<Decided, Error> {
+        if let Some(fighting) = self.fighting() {
+            let at = at.unwrap_or(sts2_core::CombatId::new(nonmax::NonMaxU8::ZERO));
+            crate::combat::set_hp(fighting, at, hp);
+            return Ok(Decided::Resolved);
+        }
+        if at.is_some() {
+            unimplemented!("hit points set on a creature outside a fight");
+        }
+        let before = self.player.hp;
+        self.player.hp = hp.min(self.player.max_hp);
+        if self.player.hp != before {
+            let delta = num_traits::cast::<_, V::Number>(self.player.hp)
+                .expect("a health fits a game number")
+                - num_traits::cast::<_, V::Number>(before).expect("a health fits a game number");
+            let hook = sts2_core::EventHook::CurrentHpChanged {
+                creature: sts2_core::CombatId::new(nonmax::NonMaxU8::ZERO),
+                monster: None,
+                pet_of: None,
+                delta,
+                in_fight: false,
+                player: self.player_health(),
+            };
+            if let Some(effect) = self.notify_run(hook).first() {
+                unimplemented!(
+                    "a relic asking for {effect:?} as hit points are set outside a fight"
+                );
+            }
+        }
         Ok(Decided::Resolved)
     }
 
@@ -6088,10 +6489,11 @@ impl<V: Rules> State<V> {
                     rewards,
                     roster,
                     resume,
+                    own_rewards,
                 },
             ] = effects.as_slice()
             {
-                return self.fight_in_event(*encounter, rewards, roster, *resume);
+                return self.fight_in_event(*encounter, rewards, roster, *resume, *own_rewards);
             }
             return Ok(match self.carry_out(effects) {
                 None => Decided::Resolved,
@@ -6299,6 +6701,9 @@ impl<V: Rules> State<V> {
     /// the selection takes more. The picks go to the question once it is
     /// done.
     pub(crate) fn respond(&mut self, answer: &Answer) -> Result<Settled<V>, Error> {
+        if let Answer::Cancel = answer {
+            return Ok(self.cancel());
+        }
         let Some((min, max, offered)) = self.selecting() else {
             if let Answer::Pick(_) | Answer::Undo | Answer::Done = answer {
                 unimplemented!("{answer:?} to a question that selects no cards");
@@ -6646,7 +7051,7 @@ impl<V: Rules> State<V> {
                 let (relic, wax) = (*relic, *wax);
                 *taken = true;
                 let asked = self.obtain_as(relic, wax);
-                self.reward_options_on_obtained(offered);
+                self.reward_options_on_obtained(self.player.relics.len() - 1, offered);
                 return asked;
             }
             // `CardReward.Reroll`: `CanReroll` goes, and the pack is rolled
@@ -6692,9 +7097,7 @@ impl<V: Rules> State<V> {
             }
             // The alternative's `OnSelect`, which completes the reward.
             (
-                Offer::Card {
-                    sacrifice, taken, ..
-                },
+                Offer::Card { sacrifice, .. },
                 TakeReward::Alternative {
                     alternative: alternative @ sts2_core::RewardAlternative::Sacrifice,
                     ..
@@ -6703,9 +7106,19 @@ impl<V: Rules> State<V> {
                 if !*sacrifice {
                     unimplemented!("a sacrifice of a card reward that offers none");
                 }
-                *taken = true;
+                let before = self.player.relics.len();
                 let chosen = sts2_core::EventHook::CardRewardAlternativeChosen(alternative);
-                return self.walk_run(chosen);
+                let asked = self.walk_run(chosen);
+                // The reward leaves `RelicObtained` only as its selection
+                // completes. So a relic the sacrifice gives, as Pael's Wing's
+                // does, reaches this reward's cards as well as the others'.
+                for slot in before..self.player.relics.len() {
+                    self.reward_options_on_obtained(slot, offered);
+                }
+                if let Some(Offer::Card { taken, .. }) = offered.get_mut(take.index()) {
+                    *taken = true;
+                }
+                return asked;
             }
             _ => unimplemented!("a reward taken as the wrong kind"),
         }
@@ -6771,6 +7184,7 @@ impl<V: Rules> State<V> {
         crate::combat::belt::<V>(
             &self.player.potions,
             self.fight(),
+            self.merchant(),
             self.standing().alive,
             self.potions_held(),
         )
@@ -6790,15 +7204,20 @@ impl<V: Rules> State<V> {
         {
             let mut moves = Legal::new();
             crate::legal::picks(min, max, offered, &self.picked, &mut moves);
+            if self.cancelable() {
+                moves.push(Decision::Answer(Answer::Cancel));
+            }
             return moves;
         }
         if let Phase::Combat(live) = &self.phase {
-            return crate::combat::legal_moves::<V>(
+            let mut moves = crate::combat::legal_moves::<V>(
                 live,
                 &self.player.relics,
                 &self.player.potions,
                 alive,
             );
+            self.discards(alive, &mut moves);
+            return moves;
         }
 
         // `IsGameOver`: a run whose player is dead takes nothing more.
@@ -6807,12 +7226,16 @@ impl<V: Rules> State<V> {
             return moves;
         }
         if self.answers(&mut moves) {
+            if self.pending() == Some(sts2_core::QuestionKind::Rewards) {
+                self.discards(alive, &mut moves);
+            }
             return moves;
         }
         // No fight is live here, so a drink names no creature.
         crate::combat::drinks::<V>(
             &self.player.potions,
             None,
+            self.merchant(),
             alive,
             self.potions_held(),
             &mut moves,
@@ -6827,7 +7250,25 @@ impl<V: Rules> State<V> {
                     .map(|point| Decision::Travel { to: point.at }),
             );
         }
+        self.discards(alive, &mut moves);
         moves
+    }
+
+    /// A discard for each potion in the belt, last in every list, as the
+    /// mod's `Moves.Discards` lists them. The popup's button is shut for a
+    /// dead owner, and no potion is queued at a decision.
+    fn discards(&self, alive: bool, moves: &mut Legal<V>) {
+        if !alive {
+            return;
+        }
+        moves.extend((0..self.player.potions.len()).map(|at| {
+            Decision::DiscardPotion {
+                index: u8::try_from(at)
+                    .ok()
+                    .and_then(|at| sts2_core::BeltIndex::try_new(at).ok())
+                    .expect("a belt fits a byte"),
+            }
+        }));
     }
 
     /// Whether the room the run stands in lets it go to the map.
@@ -7506,6 +7947,7 @@ impl<V: Rules> State<V> {
                         })
                         .collect(),
                     picked: sts2_core::Picks::none(),
+                    pile: None,
                 }
             }),
             Phase::Combat(live) => live.question(),
@@ -7528,6 +7970,7 @@ impl<V: Rules> State<V> {
                     })
                     .collect(),
                 picked: sts2_core::Picks::none(),
+                pile: None,
             }),
             Phase::Rewards { offered, .. } => offered
                 .iter()
@@ -7551,6 +7994,7 @@ impl<V: Rules> State<V> {
                     })
                     .collect(),
                 picked: sts2_core::Picks::none(),
+                pile: None,
             }),
             // Each selection offers a different list. The removal reads the
             // deck less its `Eternal` cards, curses first, and a pickup reads
@@ -7589,6 +8033,7 @@ impl<V: Rules> State<V> {
                         })
                         .collect(),
                     picked: sts2_core::Picks::none(),
+                    pile: None,
                 })
             }
             // An act opens on its map, which is no room and asks nothing.
@@ -7849,6 +8294,10 @@ impl<V: Rules> sts2_core::EventView<V> for State<V> {
 
     fn deck(&self) -> Vec<CardIdent<V>> {
         self.player.deck.iter().map(|held| held.ident).collect()
+    }
+
+    fn room(&self) -> Option<V::RoomType> {
+        self.quiet_room()
     }
 
     fn relics_left(&self) -> bool {

@@ -173,6 +173,9 @@ internal sealed class CardSelection : Pending
     private readonly int _max;
     private readonly string? _asker;
 
+    /// <summary>Whether a back button closes the selection, handing the game no cards.</summary>
+    private readonly bool _cancelable;
+
     /// <summary>The options picked so far, in the order they were picked.</summary>
     /// <remarks>
     /// The game's screens take a selection a click at a time, and hand the
@@ -188,6 +191,8 @@ internal sealed class CardSelection : Pending
         _min = min;
         _max = max;
         _asker = asker;
+        _cancelable = CancelableSelection.Cancelable == true;
+        CancelableSelection.Cancelable = null;
     }
 
     public override string Kind => "select_cards";
@@ -219,7 +224,38 @@ internal sealed class CardSelection : Pending
             ["text"] = Observation.Text(c),
         }).ToList(),
         ["picked"] = _picked.ToList(),
+        ["pile"] = SharedPile(),
     };
+
+    /// <summary>
+    /// The fight's pile every option stands in, when they all stand in one,
+    /// and null otherwise.
+    /// </summary>
+    /// <remarks>
+    /// The selector is never told the pile, but each card knows its own. A
+    /// front end reads this to list a draw pile the way
+    /// <c>NCombatPileCardSelectScreen</c> does: sorted, so the order of the
+    /// draws does not show. The run's deck is not a fight's pile, so a deck
+    /// selection reports none.
+    /// </remarks>
+    private string? SharedPile()
+    {
+        PileType? shared = null;
+        foreach (CardModel card in _options)
+        {
+            PileType? pile = card.Pile?.Type;
+            if (pile is null or PileType.None or PileType.Deck)
+            {
+                return null;
+            }
+            if (shared != null && shared != pile)
+            {
+                return null;
+            }
+            shared = pile;
+        }
+        return shared?.ToString();
+    }
 
     /// <summary>
     /// Each card not yet picked while the selection takes more, then taking
@@ -249,6 +285,11 @@ internal sealed class CardSelection : Pending
             answers.Add(Answering("done", true));
         }
 
+        if (_cancelable)
+        {
+            answers.Add(Answering("cancel", true));
+        }
+
         return answers;
     }
 
@@ -261,6 +302,22 @@ internal sealed class CardSelection : Pending
     /// </remarks>
     public override Dictionary<string, object?>? Accept(JsonElement req)
     {
+        // The back button: the screen closes, and the game gets no cards.
+        if (req.TryGetProperty("cancel", out JsonElement cancel))
+        {
+            if (cancel.ValueKind != JsonValueKind.True)
+            {
+                return Refusals.Malformed("'cancel' is only an answer when it is true");
+            }
+            if (!_cancelable)
+            {
+                return Refusals.Malformed("this selection cannot be cancelled");
+            }
+            Release();
+            _answer.SetResult(Array.Empty<CardModel>());
+            return null;
+        }
+
         if (req.TryGetProperty("undo", out JsonElement undo))
         {
             if (undo.ValueKind != JsonValueKind.True)

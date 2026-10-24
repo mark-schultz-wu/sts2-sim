@@ -725,7 +725,10 @@ pub(super) fn resume_play<V: crate::Build, F: Fight<V>>(
         // Its `Repeat` of clones of the one picked, each into hand.
         Resume::HeirloomHammerCopy => {
             if let Some(card) = chosen.one_or_none() {
-                for _ in 0..fight.var(V::CardVar::REPEAT) {
+                // The game's loop reads its count before each pass.
+                let mut pass = 0;
+                while pass < fight.var(V::CardVar::REPEAT) {
+                    pass += 1;
                     fight.clone_card(card, Pile::Hand);
                 }
             }

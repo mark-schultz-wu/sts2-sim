@@ -67,16 +67,15 @@ pub(super) fn event_hook<V: crate::Build>(
 }
 
 /// `ModifyBlockMultiplicative`: twice the block its owner's card gives
-/// while it is awake. A fight here has one player, whose every card is its
-/// owner's. The entry's `powered` stands for `IsCardOrMonsterMove`, as
-/// Vambrace reads it.
+/// while it is awake, where the block is `IsCardOrMonsterMove`. A fight
+/// here has one player, whose every card is its owner's.
 pub(super) fn modify_hook<V: crate::Build>(
     state: &State<V>,
     hook: ModifyHook<V>,
 ) -> Modify<Number> {
     match hook {
         ModifyHook::BlockMultiplicative {
-            powered: true,
+            moved: true,
             source: Some(_),
             ..
         } if state.cooldown <= 0 => Modify::Scaled(sts2_core::Fixed::new(2, 0)),

@@ -10,7 +10,9 @@ use crate::combat::Error;
 
 impl<V: Rules> State<V> {
     /// What a pushed selector answers, one question at a time, until the
-    /// fight asks nothing it answers. The player never sees those.
+    /// fight asks nothing it answers. A choice that signalled lists then,
+    /// and takes its cards unasked where it can. The player never sees
+    /// those.
     fn selector_answered(
         &mut self,
         mut ended: Option<combat::Ended>,
@@ -19,10 +21,18 @@ impl<V: Rules> State<V> {
             let Some(fighting) = self.fighting() else {
                 break;
             };
-            let Some(picks) = combat::selector_picks(fighting.live) else {
-                break;
+            // A choice that signalled under a pause boundary lists once the
+            // task goes on, and takes its cards unasked where it can.
+            let answered = match combat::signalled(fighting.live) {
+                true => combat::come_up(fighting)?,
+                false => {
+                    let Some(picks) = combat::selector_picks(fighting.live) else {
+                        break;
+                    };
+                    combat::answer(fighting, picks)?
+                }
             };
-            ended = match combat::answer(fighting, picks)? {
+            ended = match answered {
                 None => self.turn_ended_by_play()?,
                 ended => ended,
             };
@@ -134,9 +144,21 @@ impl<V: Rules> State<V> {
         let Some(fighting) = self.fighting() else {
             // What it asks the run for.
             let effects = V::on_use_on_run(potion, &*self, false);
-            if self.carry_out(effects).is_some() {
-                unimplemented!("a potion drunk outside a fight that asks a question");
-            }
+            // Thrown at an event's merchant: what the event does with it,
+            // which starts a fight. `EnterRoomWithoutExitingCurrentRoom`
+            // runs on as its own task, and `AfterPotionUsed` goes ahead of
+            // it with no fight in progress.
+            let thrown = match effects.as_slice() {
+                [sts2_core::HookEffect::PotionThrownAtEvent(potion)] => {
+                    Some(self.potion_thrown_at_event(*potion))
+                }
+                _ => {
+                    if self.carry_out(effects).is_some() {
+                        unimplemented!("a potion drunk outside a fight that asks a question");
+                    }
+                    None
+                }
+            };
             let used = sts2_core::EventHook::PotionUsed {
                 in_fight: false,
                 holding_potions: self.holding_potions(),
@@ -144,7 +166,28 @@ impl<V: Rules> State<V> {
             if self.walk_run(used).is_some() {
                 unimplemented!("a relic asking a question after a potion outside a fight");
             }
-            return Ok(Ok(Decided::Resolved));
+            let Some(thrown) = thrown else {
+                return Ok(Ok(Decided::Resolved));
+            };
+            let [
+                sts2_core::HookEffect::FightInEvent {
+                    encounter,
+                    rewards,
+                    roster,
+                    resume,
+                    own_rewards,
+                },
+            ] = thrown.as_slice()
+            else {
+                unimplemented!("a potion thrown at an event doing {thrown:?}")
+            };
+            return Ok(Ok(self.fight_in_event(
+                *encounter,
+                rewards,
+                roster,
+                *resume,
+                *own_rewards,
+            )?));
         };
         let since = fighting.live.removed_from_deck().len();
         let ended = combat::drink(fighting, potion, target)?;
@@ -154,12 +197,12 @@ impl<V: Rules> State<V> {
             unimplemented!("a potion drunk in a fight that asks the run a question");
         }
         // What a death's listener asked inside the potion, as the decision
-        // ends. A play's comes up as `turn_ended_by_play` looks.
-        if ended.is_none()
-            && let Some(fighting) = self.fighting()
-        {
-            fighting.live.ask_paused();
-        }
+        // ends, and a card the potion played that ends the turn, as Void
+        // Form under Distilled Chaos does.
+        let ended = match ended {
+            None => self.turn_ended_by_play()?,
+            ended => ended,
+        };
         Ok(Ok(self.settle(ended, since)))
     }
 
@@ -256,7 +299,17 @@ impl<V: Rules> State<V> {
                 let combat = live.finish(relics);
                 if let Some(resuming) = self.resuming.as_mut() {
                     resuming.escaped = escaped;
-                    resuming.extras = !extra_rewards.is_empty() || !extra.is_empty();
+                    if !extra_rewards.is_empty() || !extra.is_empty() {
+                        let encounter = combat.encounter.unwrap_or_else(|| {
+                            unimplemented!("a fight with no encounter behind it")
+                        });
+                        resuming.extras = Some(Box::new(Extras {
+                            rewards: extra_rewards.clone(),
+                            ending: extra.clone(),
+                            taken: taken.clone(),
+                            room: reward_room::<V>(encounter),
+                        }));
+                    }
                 }
                 if let Some(asked) = self.carry_out(leaving) {
                     let pickup = asked.pickup;
@@ -326,13 +379,7 @@ impl<V: Rules> State<V> {
         // `GenerateRewardsFor` switches on the room, which is what adds a
         // relic, moves the potion odds, and prices the card reward's
         // rarities. The encounter carries the room it belongs to.
-        let room = match <_ as sts2_core::EncounterTable>::room(encounter) {
-            room if room == <_ as sts2_core::RoomKinds>::ELITE => {
-                crate::reward::combat::Room::Elite
-            }
-            room if room == <_ as sts2_core::RoomKinds>::BOSS => crate::reward::combat::Room::Boss,
-            _ => crate::reward::combat::Room::Monster,
-        };
+        let room = reward_room::<V>(encounter);
         let added = self.card_reward_added(true);
         let forced = self.potion_forced(<_ as sts2_core::EncounterTable>::room(encounter));
         let pool = self.reward_pool(room == crate::reward::combat::Room::Elite);
@@ -361,9 +408,38 @@ impl<V: Rules> State<V> {
                 taken: false,
             });
         }
+        offered.extend(self.extra_offers(&Extras {
+            rewards: extra_rewards.to_vec(),
+            ending: ending.to_vec(),
+            taken: taken.to_vec(),
+            room,
+        }));
+        self.reward_offers(&mut offered);
+        let room = Some(<_ as sts2_core::EncounterTable>::room(encounter));
+        self.modify_rewards(&mut offered, room);
+        // `CombatRoom.OfferRoomEndRewards`: `BeforeCombatRewardOffered` once
+        // the set is made, before it is offered.
+        let card_reward = offered
+            .iter()
+            .any(|offer| matches!(offer, crate::reward::Offer::Card { .. }));
+        let offering = sts2_core::EventHook::CombatRewardOffering { card_reward };
+        if let Some(effect) = self.notify_run(offering).first() {
+            unimplemented!("a relic asking for {effect:?} before a fight's rewards are offered");
+        }
+        offered
+    }
+
+    /// `CombatRoom.ExtraRewards` filled in, in order, after whatever was
+    /// filled before them.
+    pub(super) fn extra_offers(&mut self, extras: &Extras<V>) -> Vec<crate::reward::Offer<V>> {
+        let ascension = self.ascension();
+        let character = self.character();
+        let act = self.act();
+        let room = extras.room;
+        let mut offered = Vec::new();
         // `CombatRoom.ExtraRewards`, which `Populate` reaches after the
         // room's own.
-        for extra in extra_rewards {
+        for extra in &extras.rewards {
             offered.push(match *extra {
                 combat::ExtraReward::SpecialCard(card) => crate::reward::Offer::SpecialCard {
                     card,
@@ -372,7 +448,8 @@ impl<V: Rules> State<V> {
                     taken: false,
                 },
                 combat::ExtraReward::Returned(id) => {
-                    let returned = taken
+                    let returned = extras
+                        .taken
                         .iter()
                         .find(|card| card.id == id)
                         .unwrap_or_else(|| unreachable!("a card handed back was taken"));
@@ -395,6 +472,12 @@ impl<V: Rules> State<V> {
                         taken: false,
                     }
                 }
+                combat::ExtraReward::SpecificRelic(relic) => crate::reward::Offer::Relic {
+                    relic,
+                    rarity: <_ as sts2_core::RarityKinds>::UNDRAFTED,
+                    wax: false,
+                    taken: false,
+                },
                 // `GoldReward.Populate`, which draws even between one
                 // amount's two bounds.
                 combat::ExtraReward::Gold(amount) => {
@@ -411,8 +494,10 @@ impl<V: Rules> State<V> {
                         taken: false,
                     }
                 }
+                // `CardReward` over `ForRoom`, which carries no `IsFromCombat`:
+                // only the room's own card reward does.
                 combat::ExtraReward::Card => {
-                    let added = self.card_reward_added(true);
+                    let added = self.card_reward_added(false);
                     let pool = self.reward_pool(room == crate::reward::combat::Room::Elite);
                     let (rng, odds) = self.rewarding();
                     crate::reward::combat::card_reward::<V, _>(
@@ -426,7 +511,7 @@ impl<V: Rules> State<V> {
         // rewards stream even for a gold reward whose two bounds are the one
         // amount, and a card removal's draws nothing. `ModifyRewards` comes
         // after them all.
-        for effect in ending {
+        for effect in &extras.ending {
             offered.push(match *effect {
                 sts2_core::HookEffect::AddGoldReward(amount) => {
                     let (rng, _) = self.rewarding();
@@ -441,18 +526,27 @@ impl<V: Rules> State<V> {
                 _ => unreachable!("the extra rewards are gold and card removals"),
             });
         }
-        self.reward_offers(&mut offered);
-        let room = Some(<_ as sts2_core::EncounterTable>::room(encounter));
-        self.modify_rewards(&mut offered, room);
-        // `CombatRoom.OfferRoomEndRewards`: `BeforeCombatRewardOffered` once
-        // the set is made, before it is offered.
-        let card_reward = offered
-            .iter()
-            .any(|offer| matches!(offer, crate::reward::Offer::Card { .. }));
-        let offering = sts2_core::EventHook::CombatRewardOffering { card_reward };
-        if let Some(effect) = self.notify_run(offering).first() {
-            unimplemented!("a relic asking for {effect:?} before a fight's rewards are offered");
-        }
         offered
     }
+}
+
+/// The kind of room `encounter` belongs to, which `GenerateRewardsFor`
+/// switches on.
+pub(super) fn reward_room<V: Rules>(encounter: V::Encounter) -> crate::reward::combat::Room {
+    match <_ as sts2_core::EncounterTable>::room(encounter) {
+        room if room == <_ as sts2_core::RoomKinds>::ELITE => crate::reward::combat::Room::Elite,
+        room if room == <_ as sts2_core::RoomKinds>::BOSS => crate::reward::combat::Room::Boss,
+        _ => crate::reward::combat::Room::Monster,
+    }
+}
+
+/// What a won fight left in `CombatRoom.ExtraRewards`: what the fight added,
+/// then what `AfterCombatEnd` added, and the deck cards a card handed back
+/// came from.
+#[derive(Debug, Clone)]
+pub(super) struct Extras<V: Rules> {
+    pub(super) rewards: Vec<combat::ExtraReward<V>>,
+    pub(super) ending: Vec<sts2_core::HookEffect<V>>,
+    pub(super) taken: Vec<sts2_core::DeckCard<V>>,
+    pub(super) room: crate::reward::combat::Room,
 }

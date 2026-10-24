@@ -1,0 +1,18 @@
+# `LoseMaxHp` hits for the health above the new maximum, then sets it. Here
+# the hit wakes Centennial Puzzle, whose draw finds the draw pile empty and
+# shuffles, and Stratagem asks for a card. Brightest Flame waits for the
+# answer, so the maximum is still 75 while it asks.
+#
+# A loss that sets the maximum before its hit's question shows 74.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"grant","relic":"CENTENNIAL_PUZZLE"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"STRATAGEM_POWER","amount":1,"target":0}
+{"cmd":"grant","card":"SKIM"}
+{"cmd":"play_card","index":5}
+{"cmd":"play_card","index":3}
+{"cmd":"play_card","index":3}
+{"cmd":"grant","card":"BRIGHTEST_FLAME"}
+{"cmd":"play_card","index":6}
+{"cmd":"answer","pick":0}
+{"cmd":"answer","done":true}

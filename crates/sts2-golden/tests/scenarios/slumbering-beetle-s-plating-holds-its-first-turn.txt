@@ -1,0 +1,10 @@
+# The Slumbering Beetle's Plating does not wear off on its first turn, and
+# then loses a point each turn after.
+#
+# From RiptideLab's "YOUR Weird Spire Mechanics (and lies)".
+{"cmd":"start","seed":"S33D1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"SLUMBERING_BEETLE_NORMAL"}
+{"cmd":"power","power":"PLATING_POWER","amount":200,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

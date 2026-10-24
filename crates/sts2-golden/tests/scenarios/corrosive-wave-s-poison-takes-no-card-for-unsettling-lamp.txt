@@ -1,0 +1,12 @@
+# Backflip draws two cards, and Corrosive Wave poisons each enemy for each.
+# Its Poison comes from no card, so Unsettling Lamp takes no card to double,
+# and the Nibbit has six Poison.
+#
+# A Poison that takes the drawn card as its source lets the Lamp double the
+# first, for nine.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","relic":"UNSETTLING_LAMP"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"CORROSIVE_WAVE_POWER","amount":3,"target":0}
+{"cmd":"grant","card":"BACKFLIP"}
+{"cmd":"play_card","index":7,"target":null}

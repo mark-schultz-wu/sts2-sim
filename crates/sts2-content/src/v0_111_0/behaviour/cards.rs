@@ -179,12 +179,14 @@ pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Option<Played<
         // `Expertise`: its `Cards` drawn, each of which retains this turn.
         Cards::Silent(SilentCard::Expertise) => {
             let drew = fight.draw(fight.var(CardVar::Cards));
-            let drawn: Vec<_> = drew
-                .into_iter()
-                .filter_map(|id| fight.find_card(id))
-                .collect();
-            fight.act_on(sts2_core::PileAct::RetainThisTurn, &drawn);
-            Some(Played::Done)
+            // A shuffle inside the draw can ask, and the retain waits for the
+            // cards the draw goes on to draw.
+            if fight.waiting() {
+                return Some(Played::Waiting {
+                    at: crate::behaviour::cards::Resume::Own(card, 1, Left::of(&[])).into(),
+                });
+            }
+            Some(on_drew_from(card, fight, 1, &drew))
         }
         // `Tracking`: 50 Tracking on its owner, every play.
         Cards::Silent(SilentCard::Tracking) => {
@@ -416,6 +418,12 @@ pub(crate) fn on_drew_from<F: Fight<V>>(
             fight.act_on(PileAct::Discard, &costly);
             Played::Done
         }
+        // `Expertise` once its draw is over: what it drew retains this turn.
+        (Cards::Silent(SilentCard::Expertise), 1) => {
+            let drawn: Vec<_> = drew.iter().filter_map(|&id| fight.find_card(id)).collect();
+            fight.act_on(PileAct::RetainThisTurn, &drawn);
+            Played::Done
+        }
         (card, from) => on_play_from(card, fight, from, Left::of(&[])),
     }
 }
@@ -486,9 +494,12 @@ fn misery<F: Fight<V>>(fight: &mut F) -> Played<V> {
 /// awaited, so the plays after one that asks wait on the answer.
 fn eidolon_plays<F: Fight<V>>(fight: &mut F, cards: &[sts2_core::CardAt<V>]) -> Played<V> {
     for (played, &card) in cards.iter().enumerate() {
-        let at = crate::behaviour::cards::standing::<V, _>(fight, card)
-            .unwrap_or_else(|| unimplemented!("Eidolon playing a card no pile holds"));
-        fight.auto_play_card(at);
+        // A power card an earlier play took out of the fight stands in no
+        // pile, and does not play again.
+        match crate::behaviour::cards::standing::<V, _>(fight, card) {
+            Some(at) => fight.auto_play_card(at),
+            None => fight.auto_play_departed(card.id()),
+        }
         if fight.waiting() {
             let left = Left::of(&cards[played + 1..]);
             return Played::Waiting {

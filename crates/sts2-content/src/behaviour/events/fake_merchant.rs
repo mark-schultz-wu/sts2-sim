@@ -1,7 +1,10 @@
 //! Fake Merchant: a shop of six fake relics inside an event.
 
+use crate::ids::{EncounterIds as _, RelicIds as _};
 use sts2_core::rng::{GameRng, Interval};
-use sts2_core::{EventBehavior, EventView, HookEffect, HookEffects, RelicTable as _, Room, Stock};
+use sts2_core::{
+    CustomReward, EventBehavior, EventView, HookEffect, HookEffects, RelicTable as _, Room, Stock,
+};
 
 type Number = i32;
 
@@ -23,6 +26,9 @@ struct Shelf<V: crate::Build> {
 pub struct State<V: crate::Build> {
     /// `Inventory.RelicEntries`, in the order they were added.
     shelves: Vec<Shelf<V>>,
+    /// `StartedFight`: a Foul Potion was thrown, and the merchant's button
+    /// is hidden.
+    started: bool,
 }
 
 pub struct FakeMerchant;
@@ -50,6 +56,7 @@ impl<V: crate::Build> EventBehavior<V> for FakeMerchant {
                     stocked: true,
                 })
                 .collect(),
+            started: false,
         }
     }
 
@@ -101,14 +108,50 @@ impl<V: crate::Build> EventBehavior<V> for FakeMerchant {
         unimplemented!("option {option} of a Fake Merchant, which offers none")
     }
 
-    /// `MerchantRelicEntry.OnTryPurchase`: the price, then the relic. Outside
-    /// a merchant's room no entry refills, so the shelf is left empty.
+    /// `MerchantEntry.OnTryPurchaseWrapper` over a `MerchantRelicEntry`: the
+    /// price, then the relic, then `AfterItemPurchased`. Outside a merchant's
+    /// room no entry refills, so the shelf is left empty.
+    /// `NFakeMerchant` hides its button once the fight has started, and
+    /// shows it until then. Its inventory is never open in a run with no
+    /// screen.
+    fn merchant(&self, state: &State<V>) -> bool {
+        !state.started
+    }
+
+    /// `FoulPotionThrown`: `StartedFight`, then the fight inside the event,
+    /// which goes on to the map once it is won. Its rewards are the
+    /// fight's own and [`EventBehavior::rewards`].
+    fn potion_thrown(&self, state: &mut State<V>, _potion: V::Potion) -> HookEffects<V> {
+        state.started = true;
+        smallvec::smallvec![HookEffect::FightInEvent {
+            encounter: V::Encounter::FAKE_MERCHANT_EVENT_ENCOUNTER,
+            rewards: &[],
+            roster: &[],
+            resume: false,
+            own_rewards: true,
+        }]
+    }
+
+    /// The fight's extra rewards: a `RelicReward` of the Fake Merchant's Rug,
+    /// then one of each relic still on a shelf, in shelf order.
+    fn rewards(&self, state: &State<V>) -> Vec<CustomReward<V>> {
+        std::iter::once(V::Relic::FAKE_MERCHANTS_RUG)
+            .chain(
+                (state.shelves.iter())
+                    .filter(|shelf| shelf.stocked)
+                    .map(|shelf| shelf.relic),
+            )
+            .map(CustomReward::SpecificRelic)
+            .collect()
+    }
+
     fn buy(&self, state: &mut State<V>, index: u8) -> HookEffects<V> {
         let shelf = &mut state.shelves[usize::from(index)];
         shelf.stocked = false;
         smallvec::smallvec![
             HookEffect::LoseGold(shelf.cost),
-            HookEffect::ObtainRelic(shelf.relic)
+            HookEffect::ObtainRelic(shelf.relic),
+            HookEffect::ItemPurchased(shelf.cost),
         ]
     }
 }

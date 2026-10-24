@@ -59,7 +59,12 @@ public static class Moves
 
         if (pending != null)
         {
-            return pending.Answers();
+            List<Dictionary<string, object?>> answers = pending.Answers();
+            if (pending.Kind == "rewards")
+            {
+                answers.AddRange(Discards(me));
+            }
+            return answers;
         }
 
         List<Dictionary<string, object?>> moves = Drinks(me, state);
@@ -78,6 +83,7 @@ public static class Moves
             }));
         }
 
+        moves.AddRange(Discards(me));
         return moves;
     }
 
@@ -111,7 +117,43 @@ public static class Moves
         }
 
         moves.Add(Command("end_turn"));
+        moves.AddRange(Discards(me));
         return moves;
+    }
+
+    /// <summary>Each potion the belt would let be thrown away, last in every list.</summary>
+    private static IEnumerable<Dictionary<string, object?>> Discards(Player me)
+    {
+        List<PotionModel> belt = me.Potions.ToList();
+        for (int i = 0; i < belt.Count; i++)
+        {
+            if (Discardable(belt[i], me) == null)
+            {
+                yield return new Dictionary<string, object?>
+                {
+                    ["cmd"] = "discard_potion",
+                    ["index"] = i,
+                };
+            }
+        }
+    }
+
+    /// <summary>
+    /// Why the potion's popup leaves its discard button disabled, or null when
+    /// it does not: <c>NPotionPopup</c> disables it for a potion already
+    /// queued, and for an owner who is dead.
+    /// </summary>
+    public static string? Discardable(PotionModel potion, Player me)
+    {
+        if (potion.IsQueued)
+        {
+            return "queued";
+        }
+        if (me.Creature.IsDead)
+        {
+            return "dead";
+        }
+        return null;
     }
 
     /// <summary>Each potion the belt would let be drunk, at each creature it can be thrown at.</summary>

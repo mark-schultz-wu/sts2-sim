@@ -1,0 +1,10 @@
+# Misery on the Slumbering Beetle spreads its Weak to the two Bowlbugs, and
+# leaves its Slumber and Plating, which are buffs, where they are.
+#
+# From RiptideLab's "YOUR Weird Spire Mechanics (and lies)".
+{"cmd":"start","seed":"S33D1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"SLUMBERING_BEETLE_NORMAL"}
+{"cmd":"power","power":"WEAK_POWER","amount":2,"target":3}
+{"cmd":"grant","card":"MISERY"}
+{"cmd":"play_card","index":5,"target":3}
+{"cmd":"end_turn"}

@@ -64,6 +64,12 @@ pub enum Command<V: sts2_content_wire::WireContentVersion> {
         amount: u8,
         index: sts2_core::HandIndex,
     },
+    /// `CreatureCmd.SetCurrentHp` on the player, or on the creature `target`.
+    Hp {
+        hp: u32,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<sts2_core::CombatId>,
+    },
     /// `type` is a Rust keyword, so this is the one field a derive has to
     /// rename. The generated id says `"Shop"`, which is the game enum's actual
     /// name. A hand-written `"SHOP"` used to work only because the mod parses
@@ -98,6 +104,10 @@ pub enum Command<V: sts2_content_wire::WireContentVersion> {
     },
     Grant(WireGift<V>),
     Answer(WireAnswer),
+    /// The potion at `index` in the belt, thrown away.
+    DiscardPotion {
+        index: sts2_core::BeltIndex,
+    },
     /// No domain counterpart: the state without advancing.
     Observe,
     /// No domain counterpart: ends the session, not the run.
@@ -142,6 +152,7 @@ impl<V: sts2_content_wire::WireContentVersion> From<&Decision<V>> for Command<V>
             Decision::ChooseOption { index } => Self::ChooseOption { index: *index },
             Decision::Buy { index } => Self::Buy { index: *index },
             Decision::Answer(a) => Self::Answer(WireAnswer(*a)),
+            Decision::DiscardPotion { index } => Self::DiscardPotion { index: *index },
         }
     }
 }
@@ -174,6 +185,11 @@ impl<V: sts2_content_wire::WireContentVersion> From<&Setup<V>> for Command<V> {
                 index: *index,
             },
             Setup::Grant(gift) => Self::Grant(gift.into()),
+            Setup::Hp { at, hp } => Self::Hp {
+                hp: num_traits::ToPrimitive::to_u32(hp)
+                    .expect("hit points fit the width the game sends"),
+                target: *at,
+            },
         }
     }
 }
@@ -233,6 +249,7 @@ impl<V: sts2_content_wire::WireContentVersion> Command<V> {
             Self::ChooseOption { index } => Decision::ChooseOption { index }.into(),
             Self::Buy { index } => Decision::Buy { index }.into(),
             Self::Answer(WireAnswer(a)) => Decision::Answer(a).into(),
+            Self::DiscardPotion { index } => Decision::DiscardPotion { index }.into(),
             Self::Fight { encounter } => Setup::Fight { encounter }.into(),
             Self::Event { event } => Setup::Event { event }.into(),
             Self::Power {
@@ -263,6 +280,12 @@ impl<V: sts2_content_wire::WireContentVersion> Command<V> {
             }
             .into(),
             Self::Grant(gift) => Setup::Grant(gift.into_domain()).into(),
+            Self::Hp { hp, target } => Setup::Hp {
+                at: target,
+                hp: num_traits::NumCast::from(hp)
+                    .unwrap_or_else(|| unimplemented!("hit points this build cannot hold")),
+            }
+            .into(),
             Self::Observe | Self::Quit => return None,
         })
     }
@@ -301,6 +324,7 @@ impl Serialize for WireAnswer {
                 },
             )?,
             Answer::Confirm(yes) => map.serialize_entry("confirm", yes)?,
+            Answer::Cancel => map.serialize_entry("cancel", &true)?,
         }
         map.end()
     }
@@ -320,7 +344,7 @@ impl<'de> Deserialize<'de> for WireAnswer {
 
             fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.write_str(
-                    "an answer carrying one of 'cards', 'pick', 'undo', 'done', 'skip', 'take', 'divine' or 'confirm'",
+                    "an answer carrying one of 'cards', 'pick', 'undo', 'done', 'skip', 'take', 'divine', 'confirm' or 'cancel'",
                 )
             }
 
@@ -372,12 +396,20 @@ impl<'de> Deserialize<'de> for WireAnswer {
                                 ));
                             }
                         },
+                        "cancel" => match map.next_value::<bool>()? {
+                            true => Answer::Cancel,
+                            false => {
+                                return Err(serde::de::Error::custom(
+                                    "'cancel' is only an answer when it is true",
+                                ));
+                            }
+                        },
                         other => {
                             return Err(serde::de::Error::unknown_field(
                                 other,
                                 &[
                                     "cards", "pick", "undo", "done", "skip", "take", "divine",
-                                    "confirm",
+                                    "confirm", "cancel",
                                 ],
                             ));
                         }
@@ -385,7 +417,7 @@ impl<'de> Deserialize<'de> for WireAnswer {
 
                     if answer.is_some() {
                         return Err(serde::de::Error::custom(
-                            "an answer carries exactly one of 'cards', 'pick', 'undo', 'done', 'skip', 'take', 'divine' and 'confirm'",
+                            "an answer carries exactly one of 'cards', 'pick', 'undo', 'done', 'skip', 'take', 'divine', 'confirm' and 'cancel'",
                         ));
                     }
                     answer = Some(found);
@@ -393,7 +425,7 @@ impl<'de> Deserialize<'de> for WireAnswer {
 
                 answer.map(WireAnswer).ok_or_else(|| {
                     serde::de::Error::custom(
-                        "an answer needs one of 'cards', 'pick', 'undo', 'done', 'skip', 'take', 'divine' or 'confirm'",
+                        "an answer needs one of 'cards', 'pick', 'undo', 'done', 'skip', 'take', 'divine', 'confirm' or 'cancel'",
                     )
                 })
             }

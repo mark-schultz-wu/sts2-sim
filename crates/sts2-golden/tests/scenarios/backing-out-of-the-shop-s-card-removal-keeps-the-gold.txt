@@ -1,0 +1,9 @@
+# The merchant's card removal opens a selection with a back button. Backing
+# out spends no gold and leaves the removal on the shelf, where buying it
+# again removes the first card.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"enter_room","type":"Shop"}
+{"cmd":"buy","index":13}
+{"cmd":"answer","cancel":true}
+{"cmd":"buy","index":13}
+{"cmd":"answer","cards":[0]}

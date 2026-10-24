@@ -732,8 +732,12 @@ pub(crate) fn computed_potion_target<V: crate::Build>(
     crate::behaviour::potions::computed_target::<V>(potion, in_combat)
 }
 
-pub(crate) fn computed_potion_check<V: crate::Build>(potion: V::Potion, in_combat: bool) -> bool {
-    crate::behaviour::potions::computed_check::<V>(potion, in_combat)
+pub(crate) fn computed_potion_check<V: crate::Build>(
+    potion: V::Potion,
+    in_combat: bool,
+    merchant: bool,
+) -> bool {
+    crate::behaviour::potions::computed_check::<V>(potion, in_combat, merchant)
 }
 
 pub(crate) fn calculated_card_var<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(

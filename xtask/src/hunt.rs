@@ -15,6 +15,10 @@
 //!
 //! With none parted, `n` agreed runs put the rate at which a run parts below
 //! 3 in `n`, at 95% confidence.
+//!
+//! `--coverage` has the game count which of its rules methods each run
+//! enters, into `target/game-coverage/<build>/`, one file for each run.
+//! `cargo xtask game-coverage` adds them up.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -97,6 +101,9 @@ pub struct Args {
     /// then each modifier.
     #[arg(long)]
     mixed: bool,
+    /// Count the game's rules methods each run enters.
+    #[arg(long)]
+    coverage: bool,
 }
 
 /// One run to play.
@@ -135,6 +142,7 @@ pub fn run(args: Args) -> Result<String, Error> {
         ascension,
         modifiers,
         mixed,
+        coverage,
     } = args;
     if characters.is_empty() {
         characters = CHARACTERS.iter().map(|c| c.to_string()).collect();
@@ -174,6 +182,10 @@ pub fn run(args: Args) -> Result<String, Error> {
     let scratch = root.join("target/hunt").join(&version);
     let _ = std::fs::remove_dir_all(&scratch);
     crate::error::create_dir(&scratch.join("runs"))?;
+    let counts = coverage.then(|| crate::game_coverage::dir(&root, &version));
+    if let Some(counts) = &counts {
+        crate::error::create_dir(counts)?;
+    }
 
     let next = AtomicUsize::new(0);
     let retried = AtomicUsize::new(0);
@@ -181,14 +193,27 @@ pub fn run(args: Args) -> Result<String, Error> {
     std::thread::scope(|scope| {
         for worker in 0..width.max(1) {
             let home = scratch.join(format!("home{worker}"));
-            let (jobs, next, retried, went, recorder, scratch) =
-                (&jobs, &next, &retried, &went, &recorder, &scratch);
+            let (jobs, next, retried, went, recorder, scratch, counts) =
+                (&jobs, &next, &retried, &went, &recorder, &scratch, &counts);
             scope.spawn(move || {
                 while let Some(at) =
                     Some(next.fetch_add(1, Ordering::Relaxed)).filter(|&at| at < jobs.len())
                 {
                     let out = run_file(scratch, &jobs[at]);
-                    let result = hunt_one(recorder, &jobs[at], &out, &home, retried);
+                    // Named for the run, so a run played again writes over
+                    // its own counts and never adds them twice.
+                    let counted = counts.as_ref().map(|dir| {
+                        let name = out.file_stem().expect("a run file has a name");
+                        dir.join(name).with_extension("cov")
+                    });
+                    let result = hunt_one(
+                        recorder,
+                        &jobs[at],
+                        &out,
+                        &home,
+                        counted.as_deref(),
+                        retried,
+                    );
                     went.lock().expect("no thread panics").push((at, result));
                 }
             });
@@ -235,12 +260,23 @@ fn run_file(scratch: &Path, job: &Job) -> PathBuf {
 }
 
 /// Plays one run beside the simulator, again after a crash.
-fn hunt_one(recorder: &Path, job: &Job, out: &Path, home: &Path, retried: &AtomicUsize) -> Went {
+fn hunt_one(
+    recorder: &Path,
+    job: &Job,
+    out: &Path,
+    home: &Path,
+    counted: Option<&Path>,
+    retried: &AtomicUsize,
+) -> Went {
     for attempt in 0..TRIES {
         if attempt > 0 {
             retried.fetch_add(1, Ordering::Relaxed);
         }
-        let output = match Command::new(recorder)
+        let mut command = Command::new(recorder);
+        if let Some(counted) = counted {
+            command.env("STS2_HEADLESS_COVERAGE", counted);
+        }
+        let output = match command
             .args([&job.seed, &job.character])
             .arg(out)
             .args(&job.setup.1)

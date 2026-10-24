@@ -37,17 +37,17 @@ pub(super) fn event_hook<V: crate::Build>(state: &mut State<V>, hook: EventHook<
     }
 }
 
-/// `ModifyBlockMultiplicative`: twice the block a card gives, while
-/// that card is the one it took or it took none, and nothing spent it. A
-/// fight here has one player, whose every card is its owner's. The entry's
-/// `powered` stands for `IsCardOrMonsterMove`, as Unmovable reads it.
+/// `ModifyBlockMultiplicative`: twice the block a card gives, while that
+/// card is the one it took or it took none, and nothing spent it. The block
+/// must be `IsCardOrMonsterMove`. A fight here has one player, whose every
+/// card is its owner's.
 pub(super) fn modify_hook<V: crate::Build>(
     state: &State<V>,
     hook: ModifyHook<V>,
 ) -> Modify<Number> {
     match hook {
         ModifyHook::BlockMultiplicative {
-            powered: true,
+            moved: true,
             source: Some(card),
             ..
         } if state.triggering.is_none_or(|taken| taken == card) && !state.gained => {

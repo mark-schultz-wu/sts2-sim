@@ -1,0 +1,15 @@
+# From the turn after it lands, Void Form makes its owner's cards free, but
+# only in hand or in play. Prepared
+# discards Untouchable, which is Sly, so it plays from the discard pile.
+# There its cost is its own two, so Intimidating Helmet gives its block.
+#
+# A Void Form that frees every card leaves the Helmet's block out.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","relic":"INTIMIDATING_HELMET"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"VOID_FORM_POWER","amount":2,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"UNTOUCHABLE"}
+{"cmd":"grant","card":"PREPARED"}
+{"cmd":"play_card","index":6}
+{"cmd":"answer","cards":[5]}

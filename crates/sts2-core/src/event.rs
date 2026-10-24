@@ -44,6 +44,10 @@ pub trait EventView<V: ContentVersion> {
     /// `RelicGrabBag.HasAvailableRelics` on the player's own bag: whether a
     /// relic reward still has a relic to deal.
     fn relics_left(&self) -> bool;
+    /// `RunState.CurrentRoom`'s `RoomType`, for a room no fight opens in: a
+    /// shop, an event, a treasure room or a rest site. Nothing on the map,
+    /// and in or after a fight.
+    fn room(&self) -> Option<V::RoomType>;
 }
 
 /// One event's eligibility, state, observation, and choices.
@@ -140,5 +144,17 @@ pub trait EventBehavior<V: ContentVersion> {
     /// offers, in the order the game makes them.
     fn rewards(&self, _state: &Self::State) -> Vec<crate::CustomReward<V>> {
         unimplemented!("an event with rewards of its own")
+    }
+
+    /// Whether `FoulPotion.GetFoulPotionMerchantTarget` finds a merchant's
+    /// button on the event's screen, which a Foul Potion can be thrown at.
+    fn merchant(&self, _state: &Self::State) -> bool {
+        false
+    }
+
+    /// What a potion thrown at the event's merchant does, in the order the
+    /// game does it.
+    fn potion_thrown(&self, _state: &mut Self::State, potion: V::Potion) -> crate::HookEffects<V> {
+        unimplemented!("{potion:?} thrown at an event")
     }
 }

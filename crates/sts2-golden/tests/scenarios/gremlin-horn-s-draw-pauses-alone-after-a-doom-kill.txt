@@ -1,0 +1,15 @@
+# Doom kills one slime as the enemy turn ends, with the draw pile empty.
+# Gremlin Horn draws for the death, the draw shuffles, and Stratagem asks
+# for a card of the draw pile. `AfterDeath` runs each listener under a
+# pause boundary of its own, so the question pauses Gremlin Horn alone.
+# The enemy turn ends and the next turn starts around it, and the
+# question waits for the player.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"GREMLIN_HORN"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"STRATAGEM_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"DOOM_POWER","amount":99,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"answer","pick":0}
+{"cmd":"answer","done":true}

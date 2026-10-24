@@ -1,0 +1,12 @@
+# Dingy Rug, then Prismatic Gem. The Rug puts the colorless pool after the
+# character's. The Gem hands `WithCardPools` a `Union` over the options' own
+# pools, which it clears before it reads them. So the union finds only the
+# five character pools, and a fight's card reward offers no colorless card.
+#
+# A union that keeps the Rug's pool draws other cards.
+{"cmd":"start","seed":"S33D1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"grant","relic":"DINGY_RUG"}
+{"cmd":"grant","relic":"PRISMATIC_GEM"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"DEMISE_POWER","amount":99,"target":1}
+{"cmd":"end_turn"}

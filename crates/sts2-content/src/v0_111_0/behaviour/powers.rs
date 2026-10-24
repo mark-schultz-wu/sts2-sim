@@ -59,6 +59,7 @@ pub(crate) fn own_power(power: Power) -> bool {
             | Power::JugglingPower
             | Power::CorruptionPower
             | Power::PaleBlueDotPower
+            | Power::VulnerablePower
     )
 }
 
@@ -101,6 +102,21 @@ pub(crate) fn own_power_modify_hook(
             unimplemented!("an endless Tracking")
         }
         (Power::TrackingPower, _, ModifyHook::DamageMultiplicative { .. }) => Some(Modify::Nothing),
+        // `VulnerablePower.ModifyDamageMultiplicative` reads the Cruelty of a
+        // pet's owner where the pet has none. v0.107.1's read the dealer's
+        // alone.
+        (
+            Power::VulnerablePower,
+            _,
+            ModifyHook::DamageMultiplicative {
+                target: Some(target),
+                dealer,
+                powered: true,
+                ..
+            },
+        ) if target == held.holder => Some(Modify::Scaled(
+            crate::behaviour::powers::vulnerable::<V>(held.fight, held.holder, dealer, true),
+        )),
         _ => None,
     }
 }

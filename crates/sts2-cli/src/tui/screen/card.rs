@@ -1,12 +1,12 @@
 //! Cards, drawn as cards.
 //!
 //! ```text
-//! ┌(1)──────────┐   the cost, in the corner the game puts it in
+//! ╭(1)──────────╮   the cost, in the corner the game puts it in
 //! │ Strike      │   the name
 //! │ ✗ no energy │   why it will not go, when it will not
 //! │ Deal 9      │   what it would do *now* — the game's own numbers,
 //! │ damage.     │   recomputed against this board and coloured where
-//! └─────[1]─────┘   the game recoloured them
+//! ╰─────[1]─────╯   the game recoloured them
 //! ```
 //!
 //! A hand read as a list of ids is a hand nobody reads. The box is what makes
@@ -17,7 +17,7 @@
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Paragraph, Wrap};
+use ratatui::widgets::{Paragraph, Wrap};
 use sts2_core::CardTable as _;
 use sts2_core::Cost;
 use sts2_core::{CardIdent, CombatId, Playable};
@@ -51,11 +51,14 @@ pub fn height(rows: u16) -> u16 {
 /// `Bash+1`, the name and then what has been done to it. Anything attached is
 /// shown in full rather than as a mark, because a player who has never seen the
 /// affliction cannot look up a symbol.
-pub fn ident<V: sts2_content_wire::WireContentVersion>(card: &CardIdent<V>) -> String {
-    let mut out = names::pretty(&spelling(&card.card));
-    if card.upgrade > 0 {
-        out.push_str(&format!("+{}", card.upgrade));
-    }
+pub fn ident<V: crate::tui::Build>(card: &CardIdent<V>) -> String {
+    let mut out = crate::text::card_title(card).unwrap_or_else(|| {
+        let mut name = names::pretty(&spelling(&card.card));
+        if card.upgrade > 0 {
+            name.push_str(&format!("+{}", card.upgrade));
+        }
+        name
+    });
     if let Some(affliction) = &card.affliction {
         out.push_str(&format!(" ({})", names::pretty(&spelling(affliction))));
     }
@@ -86,6 +89,36 @@ pub struct Face {
     pub picked: bool,
     /// Chosen, in a selection that takes several.
     pub marked: bool,
+    /// What kind of card it is, which colours its frame. Nothing for a face
+    /// that is not a card, and for the one card that works its kind out in a
+    /// fight.
+    pub kind: Option<sts2_core::CardKind>,
+    /// Its rarity as the build spells it, which colours its name.
+    pub rarity: Option<String>,
+}
+
+/// What a card's table prints it costs, energy and stars: as printed, or as
+/// the dump took them off an upgraded copy. Nothing for a card upgraded more
+/// than once, or one the dump has no upgrade for.
+fn printed_costs<V: crate::tui::Build>(card: &CardIdent<V>) -> Option<(Cost, Cost)> {
+    let (energy, stars) = (card.card.cost(), card.card.star_cost());
+    match card.upgrade {
+        0 => Some((energy, stars)),
+        1 => {
+            let (upgraded, upgraded_stars) = crate::text::upgraded_cost(card)?;
+            let energy = match energy {
+                Cost::X | Cost::None => energy,
+                _ => Cost::fixed(u8::try_from(upgraded).ok()?),
+            };
+            let stars = match (stars, upgraded_stars) {
+                (Cost::X, _) => Cost::X,
+                (_, n) if n < 0 => Cost::None,
+                (_, n) => Cost::fixed(u8::try_from(n).ok()?),
+            };
+            Some((energy, stars))
+        }
+        _ => None,
+    }
 }
 
 /// The two pools a card is priced in, or nothing when it is priced in neither.
@@ -111,7 +144,7 @@ impl Face {
     /// `aimed` is the creature it is currently pointed at, which decides which
     /// of the previews is shown. The game computes one per creature the card
     /// reaches, because that is where the numbers differ.
-    pub fn playable<V: sts2_content_wire::WireContentVersion>(
+    pub fn playable<V: crate::tui::Build>(
         card: &Playable<V>,
         at: usize,
         aimed: Option<CombatId>,
@@ -154,6 +187,8 @@ impl Face {
             key: Some(at),
             picked: false,
             marked: false,
+            kind: V::card_kind(card.card.card),
+            rarity: Some(spelling(&card.card.card.rarity())),
         }
     }
 
@@ -168,11 +203,13 @@ impl Face {
             key: None,
             picked: false,
             marked: false,
+            kind: None,
+            rarity: None,
         }
     }
 
     /// A card with the printed cost shown by a reward screen.
-    pub fn plain_with_cost<V: sts2_content_wire::WireContentVersion>(
+    pub fn plain_with_cost<V: crate::tui::Build>(
         card: &CardIdent<V>,
         energy: Cost,
         stars: Cost,
@@ -184,14 +221,27 @@ impl Face {
 
     /// A card priced at what its own table prints.
     ///
-    /// For a reward, where no fight has had a say and the game reports no
-    /// price. An upgrade moves a price, and no reward offers an upgraded card.
-    pub fn printed<V: sts2_content_wire::WireContentVersion>(card: &CardIdent<V>) -> Face {
-        Self::plain_with_cost(card, card.card.cost(), card.card.star_cost())
+    /// For a reward or a selection, where no fight has had a say and the game
+    /// reports no price. An upgrade can move a price, and the tables do not
+    /// say how, so an upgraded card shows no price rather than an old one.
+    pub fn printed<V: crate::tui::Build>(card: &CardIdent<V>) -> Face {
+        match printed_costs(card) {
+            Some((energy, stars)) => Self::plain_with_cost(card, energy, stars),
+            None => Self::plain(card),
+        }
+    }
+
+    /// The printed cost, for a line in a list: `(1)`. Blank where it is not
+    /// known, or the card has none.
+    pub fn printed_cost<V: crate::tui::Build>(card: &CardIdent<V>) -> String {
+        match printed_costs(card).and_then(|(energy, stars)| cost(energy, stars)) {
+            Some(cost) => format!("({cost})"),
+            None => String::new(),
+        }
     }
 
     /// A card with nothing computed about it: a pile listing, a reward.
-    pub fn plain<V: sts2_content_wire::WireContentVersion>(card: &CardIdent<V>) -> Face {
+    pub fn plain<V: crate::tui::Build>(card: &CardIdent<V>) -> Face {
         Face {
             cost: None,
             name: ident(card),
@@ -201,6 +251,8 @@ impl Face {
             key: None,
             picked: false,
             marked: false,
+            kind: V::card_kind(card.card),
+            rarity: Some(spelling(&card.card.rarity())),
         }
     }
 }
@@ -211,13 +263,14 @@ pub fn draw(frame: &mut Frame, area: Rect, face: &Face) {
         return;
     }
 
-    let border = match (face.picked, face.faded) {
-        (true, _) => theme::cursor(),
-        (false, true) => theme::dim(),
-        (false, false) => theme::TEXT,
+    let border = match (face.picked, face.faded, face.kind) {
+        (true, _, _) => theme::cursor(),
+        (false, true, _) => theme::faint(),
+        (false, false, Some(kind)) => theme::kind(kind),
+        (false, false, None) => theme::border(),
     };
 
-    let mut block = Block::bordered().border_style(border);
+    let mut block = super::boxed().border_style(border);
     if let Some(cost) = &face.cost {
         block = block.title(Span::styled(format!("({cost})"), theme::gold()));
     }
@@ -239,15 +292,24 @@ pub fn draw(frame: &mut Frame, area: Rect, face: &Face) {
         block = block.title_bottom(Line::from(Span::styled(mark, style)).centered());
     }
 
+    // The kind in words, bottom left, where a box is wide enough to hold it
+    // beside the key. Colour alone does not say it to everyone.
+    if let Some(kind) = face.kind.filter(|_| area.width >= 18) {
+        block = block.title_bottom(
+            Line::from(Span::styled(format!("{kind:?}"), theme::dim())).left_aligned(),
+        );
+    }
+
     let inner = block.inner(area);
     frame.render_widget(block, area);
     if inner.height == 0 {
         return;
     }
 
-    let name = match face.faded {
-        true => Span::styled(face.name.clone(), theme::dim()),
-        false => Span::styled(face.name.clone(), theme::heading()),
+    let name = match (face.faded, &face.rarity) {
+        (true, _) => Span::styled(face.name.clone(), theme::dim()),
+        (false, Some(rarity)) => Span::styled(face.name.clone(), theme::rarity(rarity)),
+        (false, None) => Span::styled(face.name.clone(), theme::heading()),
     };
 
     let mut lines = vec![Line::from(name)];

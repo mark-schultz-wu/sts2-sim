@@ -1,0 +1,9 @@
+# Royal Poison deals four as a fight starts, and Blood Vial heals two. At
+# four hit points the poison goes first and kills, and the vial never heals.
+#
+# From RiptideLab's "5 Slightly Unusual Slay the Spire Facts".
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"ROYAL_POISON"}
+{"cmd":"grant","relic":"BLOOD_VIAL"}
+{"cmd":"hp","hp":4}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}

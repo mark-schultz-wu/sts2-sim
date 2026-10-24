@@ -8,7 +8,7 @@
 //! and on a shop entry it is a purchase. What a key *means* is here. What it
 //! does is `app`, which is the only place that knows what the game is showing.
 
-use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use super::input::{Key, KeyCode};
 
 /// What a key asked for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,6 +47,8 @@ pub enum Action {
     Inspect,
     ScrollBack,
     ScrollOn,
+    /// Throw away the potion under the cursor, in the belt.
+    Discard,
 }
 
 /// The keys, as the help panel lists them.
@@ -58,7 +60,10 @@ pub const HELP: &[(&str, &str)] = &[
     ("↑/↓  k/j", "move the cursor, and scroll a list"),
     ("1-9", "take the nth option — or point at the nth card"),
     ("enter", "play the card, take the option"),
-    ("esc", "put it down, close the panel"),
+    (
+        "esc",
+        "put it down, close the panel, back out of a selection",
+    ),
     ("space", "mark a card, where several are wanted"),
     ("e", "end the turn"),
     ("s", "skip — a reward set, or a rest"),
@@ -66,6 +71,7 @@ pub const HELP: &[(&str, &str)] = &[
     ("d / w / f / x", "deck, draw pile, discard, exhaust"),
     ("m", "the act's map"),
     ("p", "your potions — and drink one"),
+    ("backspace", "in the belt: throw that potion away"),
     ("v", "your relics, and what they do"),
     ("[ / ]", "scroll the log"),
     ("r", "ask the game where it is"),
@@ -77,8 +83,8 @@ pub const HELP: &[(&str, &str)] = &[
 ///
 /// `ctrl-c` is quit as well as `q`, because a terminal program that ignores it
 /// is a terminal program somebody has to kill.
-pub fn map(key: KeyEvent) -> Option<Action> {
-    if key.modifiers.contains(KeyModifiers::CONTROL) {
+pub fn map(key: Key) -> Option<Action> {
+    if key.ctrl {
         return match key.code {
             KeyCode::Char('c') => Some(Action::Quit),
             _ => None,
@@ -106,6 +112,7 @@ pub fn map(key: KeyEvent) -> Option<Action> {
         KeyCode::Char('m') => Action::ShowMap,
         KeyCode::Char('p') => Action::ShowPotions,
         KeyCode::Char('v') => Action::ShowRelics,
+        KeyCode::Backspace => Action::Discard,
         KeyCode::Char('[') => Action::ScrollBack,
         KeyCode::Char(']') => Action::ScrollOn,
         // `1` is the first, so the digits line up with what is drawn beside
@@ -118,15 +125,9 @@ pub fn map(key: KeyEvent) -> Option<Action> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ratatui::crossterm::event::KeyEventKind;
 
     fn press(code: KeyCode) -> Option<Action> {
-        map(KeyEvent {
-            code,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            state: ratatui::crossterm::event::KeyEventState::NONE,
-        })
+        map(Key::from(code))
     }
 
     #[test]
@@ -138,18 +139,16 @@ mod tests {
     #[test]
     fn a_key_with_no_meaning_is_no_action() {
         assert_eq!(press(KeyCode::Char('§')), None);
-        assert_eq!(press(KeyCode::F(7)), None);
+        assert_eq!(press(KeyCode::Tab), None);
     }
 
     #[test]
     fn control_c_leaves() {
-        let event = KeyEvent {
+        let key = Key {
             code: KeyCode::Char('c'),
-            modifiers: KeyModifiers::CONTROL,
-            kind: KeyEventKind::Press,
-            state: ratatui::crossterm::event::KeyEventState::NONE,
+            ctrl: true,
         };
-        assert_eq!(map(event), Some(Action::Quit));
+        assert_eq!(map(key), Some(Action::Quit));
     }
 
     /// The help panel is the only documentation of the keymap, so a key that

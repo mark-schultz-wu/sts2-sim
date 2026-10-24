@@ -1,0 +1,17 @@
+# Restlessness, the one card left in hand, draws its cards one at a time.
+# The first takes the draw pile's last card, and the second shuffles, where
+# Stratagem asks for its pick. The rest of the draw and the energy wait for
+# the answer.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","card":"RESTLESSNESS"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"STRATAGEM_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"grant","potion":"ENERGY_POTION"}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":1}
+{"cmd":"play_card","index":1,"target":1}
+{"cmd":"play_card","index":1,"target":1}
+{"cmd":"play_card","index":0}
+{"cmd":"answer","cards":[0]}

@@ -68,12 +68,6 @@ pub fn undrinkable(why: Undrinkable) -> &'static str {
     }
 }
 
-/// A monster move, without the `_MOVE` most of them end in.
-pub fn move_id(id: &str) -> String {
-    let entry = id.rsplit('/').next().unwrap_or(id);
-    words(entry.strip_suffix("_MOVE").unwrap_or(entry))
-}
-
 /// `SPOILS_OF_BATTLE` to *Spoils of Battle*.
 ///
 /// The small words stay small, which is what makes the result read as a name
@@ -130,7 +124,6 @@ mod tests {
     #[test]
     fn a_suffix_the_column_already_says_goes() {
         assert_eq!(power("VULNERABLE_POWER"), "Vulnerable");
-        assert_eq!(move_id("NOTHING_MOVE"), "Nothing");
         // Only as a suffix: a power actually called that keeps its word.
         assert_eq!(power("POWER_THROUGH"), "Power Through");
     }

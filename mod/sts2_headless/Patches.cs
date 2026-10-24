@@ -477,6 +477,53 @@ internal static class ChooseACardSkip
 }
 
 /// <summary>
+/// Whether the card selection being asked can be backed out of, which only
+/// its prefs say.
+/// </summary>
+/// <remarks>
+/// The selector is handed the cards and the bounds, never the prefs, and
+/// <c>CardSelectorPrefs.Cancelable</c> is what puts a back button on Smith,
+/// Cook, the shop's card removal and the card-removal reward. So every
+/// <c>CardSelectCmd</c> method that takes prefs notes it as it starts, the
+/// way <see cref="ChooseACardSkip"/> notes a skip, and clears it for the
+/// caller as it returns.
+/// </remarks>
+[HarmonyPatch]
+internal static class CancelableSelection
+{
+    private static readonly System.Threading.AsyncLocal<bool?> Asked = new();
+
+    /// <summary>The <c>Cancelable</c> of the selection being asked, if one is.</summary>
+    internal static bool? Cancelable
+    {
+        get => Asked.Value;
+        set => Asked.Value = value;
+    }
+
+    [HarmonyTargetMethods]
+    private static IEnumerable<System.Reflection.MethodBase> TargetMethods() =>
+        typeof(CardSelectCmd)
+            .GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+            .Where(m => !m.IsGenericMethodDefinition
+                && m.GetParameters().Any(p => p.ParameterType == typeof(CardSelectorPrefs)));
+
+    [HarmonyPrefix]
+    private static void Prefix(object[] __args)
+    {
+        foreach (object? arg in __args)
+        {
+            if (arg is CardSelectorPrefs prefs)
+            {
+                Cancelable = prefs.Cancelable;
+            }
+        }
+    }
+
+    [HarmonyPostfix]
+    private static void Postfix() => Cancelable = null;
+}
+
+/// <summary>
 /// <c>CardReward.OnSelect</c> reads <c>LocalSelector</c> where it reads
 /// <c>Selector</c>, for the builds that install the selector there.
 /// </summary>
@@ -1140,6 +1187,116 @@ internal static class SaveYields
         finally
         {
             BackgroundWork.Release();
+        }
+    }
+}
+
+/// <summary>
+/// Lets a Foul Potion be thrown at a merchant without the merchant's screen.
+/// </summary>
+/// <remarks>
+/// <c>FoulPotion.PassesCustomUsabilityCheck</c> passes outside a fight only
+/// when <c>GetFoulPotionMerchantTarget</c> finds the merchant's button: on an
+/// <c>NMerchantRoom</c>, or the Fake Merchant's <c>NFakeMerchant</c>, whose
+/// inventory is closed. Headless neither node exists, so the button is always
+/// null and the throw is never offered.
+///
+/// Headless no inventory is ever open, so the button would be there in a
+/// <c>MerchantRoom</c>, and in the Fake Merchant's event until its fight
+/// starts. <c>NFakeMerchant</c> hides its button once
+/// <c>StartedFight</c> is set.
+/// </remarks>
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Models.Potions.FoulPotion),
+    nameof(MegaCrit.Sts2.Core.Models.Potions.FoulPotion.PassesCustomUsabilityCheck),
+    MethodType.Getter)]
+internal static class FoulPotionAtTheMerchant
+{
+    private static void Postfix(MegaCrit.Sts2.Core.Models.Potions.FoulPotion __instance, ref bool __result)
+    {
+        if (__result || CombatManager.Instance.IsInProgress)
+        {
+            return;
+        }
+
+        switch (__instance.Owner.RunState.CurrentRoom)
+        {
+            case MegaCrit.Sts2.Core.Rooms.MerchantRoom:
+                __result = true;
+                break;
+            case MegaCrit.Sts2.Core.Rooms.EventRoom { LocalMutableEvent: FakeMerchant { StartedFight: false } }:
+                __result = true;
+                break;
+        }
+    }
+}
+
+/// <summary>
+/// Throws a Foul Potion at the Fake Merchant as <c>OnUse</c> does with the
+/// event's node in place.
+/// </summary>
+/// <remarks>
+/// <c>OnUse</c> returns without doing anything unless the event's
+/// <c>Node</c> is an <c>NFakeMerchant</c>, and headless it is null. The
+/// node is read for the throw's effect and nothing else, so this runs the
+/// rest: <c>FoulPotionThrown</c> on each player's event, which skips its
+/// own node and starts the fight. A merchant's room needs no help, since
+/// its <c>OnUse</c> reads <c>NRun.Instance</c> with <c>?.</c> and then
+/// gains the gold.
+/// </remarks>
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Models.Potions.FoulPotion), "OnUse")]
+internal static class ThrownAtTheFakeMerchant
+{
+    private static bool Prefix(MegaCrit.Sts2.Core.Models.Potions.FoulPotion __instance, ref Task __result)
+    {
+        if (CombatManager.Instance.IsInProgress
+            || __instance.Owner.RunState.CurrentRoom is not MegaCrit.Sts2.Core.Rooms.EventRoom { CanonicalEvent: FakeMerchant } room
+            || room.LocalMutableEvent?.Node != null)
+        {
+            return true;
+        }
+
+        __result = Task.WhenAll(__instance.Owner.RunState.Players.Select(player =>
+            ((FakeMerchant)RunManager.Instance.EventSynchronizer.GetEventForPlayer(player))
+                .FoulPotionThrown(__instance)));
+        return false;
+    }
+}
+
+/// <summary>
+/// Pops the cards a dead player's plays left on a choice context.
+/// </summary>
+/// <remarks>
+/// <c>CardModel.OnPlayWrapper</c> pushes its card onto the choice context's
+/// model stack, and pops it at the end. Once its owner is dead it returns
+/// early, before that pop, so the card stays on the stack. Stampede shows it:
+/// its post-play hook auto-plays Breakthrough, whose loss of HP kills the
+/// player. The hook's own pop then finds the card on top, logs "Tried to pop
+/// model", and leaves both on the stack. The fight is lost by then, and
+/// nothing reads the stack again.
+///
+/// This pops the dead player's cards off the top first, in place of the pops
+/// each wrapper skipped, so the pop that follows finds its own model. Any
+/// other mismatch still logs.
+/// </remarks>
+[HarmonyPatch(typeof(PlayerChoiceContext), nameof(PlayerChoiceContext.PopModel))]
+internal static class PopCardsADeathLeft
+{
+    private static readonly AccessTools.FieldRef<PlayerChoiceContext, Stack<AbstractModel>?> ModelStack =
+        AccessTools.FieldRefAccess<PlayerChoiceContext, Stack<AbstractModel>?>("_modelStack");
+
+    private static void Prefix(PlayerChoiceContext __instance, AbstractModel model)
+    {
+        var stack = ModelStack(__instance);
+        if (stack == null || !stack.Contains(model))
+        {
+            return;
+        }
+        while (stack.TryPeek(out var top)
+            && top != model
+            && top is CardModel card
+            && card.Owner?.Creature?.IsDead == true)
+        {
+            stack.Pop();
         }
     }
 }

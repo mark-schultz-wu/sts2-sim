@@ -19,7 +19,7 @@ use super::{card, centred, map, widget};
 
 pub fn draw<V, G>(frame: &mut Frame, body: Rect, app: &App<V, G>)
 where
-    V: sts2_content_wire::WireContentVersion,
+    V: crate::tui::Build,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -35,7 +35,7 @@ where
             // showing down each side reads as a torn panel rather than as
             // something lying on top of something else.
             let area = centred(body, body.width, body.height);
-            let Some(observed) = app.observation() else {
+            let Some(observed) = app.view() else {
                 return;
             };
             frame.render_widget(Clear, area);
@@ -49,7 +49,7 @@ where
 }
 
 fn panel(title: &str) -> Block<'static> {
-    Block::bordered()
+    super::boxed()
         .border_style(theme::label())
         .title(Span::styled(format!(" {title} "), theme::heading()))
         .title_bottom(Line::from(Span::styled(" esc ", theme::dim())).right_aligned())
@@ -109,11 +109,11 @@ fn detail(frame: &mut Frame, body: Rect, lines: &[String]) {
 /// reason beside it.
 fn belt<V, G>(frame: &mut Frame, body: Rect, app: &App<V, G>)
 where
-    V: sts2_content_wire::WireContentVersion,
+    V: crate::tui::Build,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
-    let Some(observed) = app.observation() else {
+    let Some(observed) = app.view() else {
         return;
     };
     let potions = &observed.potions;
@@ -183,11 +183,11 @@ where
 /// does, either before it was picked up or after.
 fn relics<V, G>(frame: &mut Frame, body: Rect, app: &App<V, G>)
 where
-    V: sts2_content_wire::WireContentVersion,
+    V: crate::tui::Build,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
-    let Some(observed) = app.observation() else {
+    let Some(observed) = app.view() else {
         return;
     };
     let relics = &observed.relics;
@@ -230,11 +230,11 @@ where
 /// looks, and an alphabetical sort throws it away.
 fn pile<V, G>(frame: &mut Frame, body: Rect, app: &App<V, G>, which: Pile)
 where
-    V: sts2_content_wire::WireContentVersion,
+    V: crate::tui::Build,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
-    let Some(observed) = app.observation() else {
+    let Some(observed) = app.view() else {
         return;
     };
     let combat = observed.fight();
@@ -265,6 +265,7 @@ where
             .map(|(n, c)| {
                 Line::from(vec![
                     Span::styled(format!("{:>3} ", n + 1), theme::dim()),
+                    Span::styled(format!("{:<4}", card::Face::printed_cost(c)), theme::gold()),
                     Span::raw(card::ident(c)),
                 ])
             })
@@ -277,10 +278,10 @@ where
 }
 
 /// The same card several times is one line and a count.
-fn counted<V: sts2_content_wire::WireContentVersion>(cards: &[CardIdent<V>]) -> Vec<Line<'static>> {
+fn counted<V: crate::tui::Build>(cards: &[CardIdent<V>]) -> Vec<Line<'static>> {
     let mut tally: Vec<(String, usize)> = Vec::new();
     for card in cards {
-        let name = card::ident(card);
+        let name = format!("{:<4}{}", card::Face::printed_cost(card), card::ident(card));
         match tally.iter_mut().find(|(n, _)| *n == name) {
             Some((_, count)) => *count += 1,
             None => tally.push((name, 1)),

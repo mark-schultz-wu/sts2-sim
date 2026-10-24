@@ -1,0 +1,9 @@
+# Belt Buckle gives two Dexterity while the belt is empty. Throwing the
+# only potion away in a fight empties it, and the Dexterity arrives
+# through `AfterPotionDiscarded`.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","potion":"FIRE_POTION"}
+{"cmd":"grant","relic":"BELT_BUCKLE"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"discard_potion","index":0}
+{"cmd":"end_turn"}

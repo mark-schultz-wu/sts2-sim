@@ -120,6 +120,8 @@ pub trait Lists: ContentVersion {
     const GLORY_DEFENSE_SPAWNS: &'static [Self::Monster];
     const GLORY_AGGRO_SPAWNS: &'static [Self::Monster];
     const GLOBE_HEAD_DEADLY_GALVANIC: crate::behaviour::monsters::Number;
+    const LOUSE_PROGENITOR_DEADLY_GROW: crate::behaviour::monsters::Number;
+    const CHARACTER_CARDS_REWARD_POOL: fn(Self::Character) -> sts2_core::HookEffect<Self>;
     const COLORFUL_PHILOSOPHERS_COLOR_ORDER: &'static [(Self::Character, Self::EventOption)];
     const COLORFUL_PHILOSOPHERS_REWARDS: &'static [[sts2_core::CustomReward<Self>; 3]];
     const COLOSSAL_FLOWER_PAGES: &'static [[Self::EventOption; 2]];
@@ -345,6 +347,8 @@ macro_rules! lists {
             crate::behaviour::relics::vexing_puzzlebox::lists!($build);
             crate::behaviour::powers::lists!($build);
             crate::behaviour::monsters::glory::lists!($build, $module);
+            crate::behaviour::monsters::hive::lists!($build, $module);
+            crate::behaviour::modifiers::lists!($build, $module);
             crate::behaviour::events::colorful_philosophers::lists!($build);
             crate::behaviour::events::colossal_flower::lists!($build);
             crate::behaviour::events::darv::lists!($build, $module);
@@ -1270,8 +1274,14 @@ macro_rules! rules {
                     crate::behaviour::rules::computed_potion_target::<Self>(potion, in_combat)
                 }
 
-                fn computed_potion_check(potion: Self::Potion, in_combat: bool) -> bool {
-                    crate::behaviour::rules::computed_potion_check::<Self>(potion, in_combat)
+                fn computed_potion_check(
+                    potion: Self::Potion,
+                    in_combat: bool,
+                    merchant: bool,
+                ) -> bool {
+                    crate::behaviour::rules::computed_potion_check::<Self>(
+                        potion, in_combat, merchant,
+                    )
                 }
 
                 fn calculated_card_var<P: Printed<Self> + ?Sized>(
@@ -1448,6 +1458,17 @@ macro_rules! rules {
 
                 fn event_rewards(_state: &Self::EventState) -> Vec<CustomReward<Self>> {
                     crate::behaviour::rules::event_rewards::<Self>(_state)
+                }
+
+                fn event_merchant(state: &Self::EventState) -> bool {
+                    crate::behaviour::events::merchant::<Self>(state)
+                }
+
+                fn event_potion_thrown(
+                    state: &mut Self::EventState,
+                    potion: Self::Potion,
+                ) -> sts2_core::HookEffects<Self> {
+                    crate::behaviour::events::potion_thrown::<Self>(state, potion)
                 }
 
                 fn neow_curses() -> &'static [Self::Relic] {

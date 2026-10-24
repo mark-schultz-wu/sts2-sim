@@ -72,6 +72,7 @@ impl EventBehavior<V> for BattlewornDummy {
             rewards: &[],
             roster,
             resume: true,
+            own_rewards: false,
         }]
     }
 

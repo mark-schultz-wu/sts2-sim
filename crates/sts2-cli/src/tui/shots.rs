@@ -124,7 +124,7 @@ mod tests {
         assert!(out.contains("61/80"), "the player's hit points");
         assert!(out.contains("Bowlbug Rock"), "who is being fought");
         assert!(out.contains("energy 2"), "the energy left");
-        assert!(out.contains("Strike Ironclad"), "the hand, by name");
+        assert!(out.contains("Strike"), "the hand, by name");
 
         // The player belongs under `you`, not among the creatures being
         // fought. Split on the two headings and check which side it lands.
@@ -179,7 +179,7 @@ mod tests {
         // And the whole fight is still on it, which is the thing the gap was
         // pushing off the bottom.
         assert!(out.contains("Bowlbug Rock"), "{out}");
-        assert!(out.contains("Strike Ironclad"), "{out}");
+        assert!(out.contains("Strike"), "{out}");
         assert!(out.contains("draw 2"), "{out}");
     }
 
@@ -384,6 +384,20 @@ mod tests {
         assert!(out.contains("At the end of combat, heal 6 HP."), "{out}");
     }
 
+    /// The simulator's run carries no words. A relic still says what it does,
+    /// from the game's text table with the dumped number filled in.
+    #[test]
+    fn a_relic_with_no_words_reads_from_the_text_table() {
+        let out = shot(
+            fixture::applied(json!({"relics": ["BURNING_BLOOD"]})),
+            100,
+            34,
+            |app| app.press(super::super::keys::Action::ShowRelics),
+        );
+        assert!(out.contains("Burning Blood"), "{out}");
+        assert!(out.contains("At the end of combat, heal 6 HP."), "{out}");
+    }
+
     /// The run strip names relics and potions the way the game does, so the
     /// name on the strip is the name in the panel.
     #[test]
@@ -443,6 +457,108 @@ mod tests {
             out.contains("a fire"),
             "spelled out under the picture: {out}"
         );
+    }
+
+    /// The screen needs no terminal: keys of its own go in, and it draws into
+    /// whatever backend it is handed. An ssh session or a browser drives it
+    /// this way.
+    #[test]
+    fn the_screen_plays_on_any_backend_with_its_own_keys() {
+        use crate::tui::input::{Key, KeyCode};
+
+        let mut app = App::playing(Scripted::saying(a_fight()), Options::default());
+        app.look_now();
+        let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("a test terminal");
+        app.key(Key::from(KeyCode::Char('d')))
+            .expect("the key is read");
+        terminal.draw(|frame| app.draw(frame)).expect("a frame");
+        let buffer = terminal.backend().buffer();
+        let text: String = (0..buffer.area.height)
+            .flat_map(|y| (0..buffer.area.width).map(move |x| (x, y)))
+            .map(|at| buffer[at].symbol())
+            .collect();
+        assert!(text.contains("Deck (3)"), "the deck panel opened: {text}");
+    }
+
+    /// A card's frame says what kind it is: an attack is red, a skill blue,
+    /// and a power yellow.
+    #[test]
+    fn a_cards_frame_is_coloured_by_its_kind() {
+        use ratatui::style::Color;
+
+        let buffer = painted(a_fight(), 100, 30, |_| {});
+        let row = (0..buffer.area.height)
+            .find(|&y| {
+                let line: String = (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect();
+                line.contains("╭(1)")
+            })
+            .expect("a hand of cards");
+        // The hand in the fixture: Strike, Bash, Armaments, Defend, Inflame.
+        // The cursor is on Strike and Armaments cannot be played, so those
+        // two frames say that instead.
+        let frames: Vec<Option<Color>> = (0..buffer.area.width)
+            .filter(|&x| buffer[(x, row)].symbol() == "╭")
+            .map(|x| buffer[(x, row)].fg.into())
+            .collect();
+        assert_eq!(
+            [frames[1], frames[3], frames[4]],
+            [Color::Red, Color::Blue, Color::Yellow].map(Some),
+            "{frames:?}"
+        );
+    }
+
+    /// A refusal pops up over the screen, even one too short for a log.
+    #[test]
+    fn a_refusal_pops_up_over_a_short_screen() {
+        let out = shot(a_fight(), 80, 22, |app| {
+            app.ui
+                .say(super::super::state::Tone::Refused, "not enough energy");
+        });
+        let line = (out.lines())
+            .find(|line| line.contains("not enough energy"))
+            .unwrap_or_else(|| panic!("no toast: {out}"));
+        assert!(line.trim_end().ends_with('│'), "boxed at the right: {line}");
+    }
+
+    /// Between two rows of rooms, the paths: `╲` and `╱` to the next column
+    /// over, `│` straight on.
+    #[test]
+    fn the_map_draws_the_paths_between_rooms() {
+        let out = shot(a_map(), 90, 40, |_| {});
+        let lines: Vec<&str> = out.lines().collect();
+        let row = |n: &str| {
+            (lines.iter())
+                .position(|line| line.trim_start().starts_with(n))
+                .unwrap_or_else(|| panic!("no row {n}: {out}"))
+        };
+        // From the shop at 1,2 out to both rooms of row 3, and from both of
+        // those into the elite at 1,4.
+        assert_eq!(lines[row("3 ") + 1].trim_end(), "      ╲   ╱", "{out}");
+        assert_eq!(lines[row("4 ") + 1].trim_end(), "      ╱   ╲", "{out}");
+        assert_eq!(lines[row("2 ") + 1].trim_end(), "        │", "{out}");
+    }
+
+    /// An option the game gave no title reads as the last part of its key,
+    /// and the relic it names is not said twice.
+    #[test]
+    fn an_untitled_option_reads_as_its_name() {
+        let out = shot(
+            fixture::applied(json!({
+                "room": {
+                    "type": "Event", "id": "NEOW", "title": null, "text": null,
+                    "options": [{"index": 0, "key": "NEOW.pages.INITIAL.options.WINGED_BOOTS",
+                                 "title": null, "relic": "WINGED_BOOTS"}]
+                },
+                "moves": [{"cmd": "choose_option", "index": 0}]
+            })),
+            90,
+            20,
+            |_| {},
+        );
+        assert!(out.contains(" 1  Winged Boots\n"), "{out}");
+        assert!(!out.contains("pages"), "{out}");
     }
 
     fn an_event() -> Applied<V> {
@@ -550,10 +666,10 @@ mod tests {
             .lines()
             .find(|l| l.contains("Deck (10)"))
             .expect("the panel has a title");
-        let left = column(top, '┌').expect("and a top-left corner");
+        let left = column(top, '╭').expect("and a top-left corner");
         let listed = out
             .lines()
-            .find(|l| l.contains("Strike Ironclad"))
+            .find(|l| l.contains("Strike"))
             .expect("the deck is listed");
         assert!(
             column(listed, '│').is_some_and(|at| at == left),
@@ -680,7 +796,7 @@ mod tests {
         let opening = frame(&app);
         assert!(opening.contains("Neow"), "{opening}");
 
-        let floor = |app: &App<V, sts2_sim::Sim<V>>| app.observation().map(|seen| seen.floor);
+        let floor = |app: &App<V, sts2_sim::Sim<V>>| app.view().map(|seen| seen.floor);
         let before = floor(&app);
         for _ in 0..12 {
             if app.moves().is_empty() {
@@ -690,5 +806,90 @@ mod tests {
             frame(&app);
         }
         assert_ne!(floor(&app), before, "the run left Neow's floor");
+    }
+
+    /// Every kind of screen a run reaches, drawn off the simulator and
+    /// printed. A tool for working on the screens rather than a check:
+    ///
+    /// ```text
+    /// cargo test -p sts2-cli screens_of_a_run -- --ignored --nocapture
+    /// SHOTS_SEED=C000000042 SHOTS_SIZE=80x24 cargo test ...
+    /// ```
+    ///
+    /// The run takes legal moves at random, from a fixed generator, and the
+    /// first two of each kind of screen are printed.
+    #[test]
+    #[ignore = "prints screens to look at; asserts nothing"]
+    fn screens_of_a_run() {
+        use sts2_core::Play as _;
+
+        let seed = std::env::var("SHOTS_SEED").unwrap_or_else(|_| "C000000077".into());
+        let (w, h) = std::env::var("SHOTS_SIZE")
+            .ok()
+            .and_then(|size| {
+                let (w, h) = size.split_once('x')?;
+                Some((w.parse().ok()?, h.parse().ok()?))
+            })
+            .unwrap_or((100, 30));
+        let start = sts2_core::Start::<V> {
+            seed: sts2_core::Seed::new(&seed).expect("a seed"),
+            character: sts2_content::v0_107_1::characters::Character::Silent,
+            ascension: crate::cli::ascension::<V>("None").expect("no ascension"),
+            modifiers: Vec::new(),
+            wins: 0,
+        };
+        let mut sim = sts2_sim::Sim::<V>::begin((), &start).expect("the run starts");
+        let mut printed: std::collections::BTreeMap<String, usize> = Default::default();
+        // xorshift, so the run is the same each time without a dependency.
+        let mut x: u64 = 0x9E37_79B9_7F4A_7C15;
+        for step in 0..2000 {
+            let standing = sim.observe().expect("the simulator answers");
+            let seen = standing.view();
+            let kind = match (&seen.asking, &seen.room) {
+                (Some(question), _) => format!("{:?}", question.kind()),
+                _ if seen.run_over => "over".into(),
+                _ if seen.fight().is_some() => "fight".into(),
+                (None, Some(room)) => format!("{room:?}")
+                    .split([' ', '{'])
+                    .next()
+                    .unwrap_or("room")
+                    .into(),
+                (None, None) => "map".into(),
+            };
+            let count = printed.entry(kind.clone()).or_default();
+            *count += 1;
+            if *count <= 2 {
+                let mut app = App::playing(sim.clone(), Options::default());
+                let mut terminal = Terminal::new(TestBackend::new(w, h)).expect("a test terminal");
+                terminal
+                    .draw(|frame| super::super::screen::draw(frame, &app))
+                    .expect("a frame");
+                app.look_now();
+                terminal
+                    .draw(|frame| super::super::screen::draw(frame, &app))
+                    .expect("a frame");
+                let buffer = terminal.backend().buffer();
+                let text = (0..buffer.area.height)
+                    .map(|y| {
+                        (0..buffer.area.width)
+                            .map(|x| buffer[(x, y)].symbol())
+                            .collect::<String>()
+                            .trim_end()
+                            .to_string()
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                println!("===== step {step}: {kind} #{count}\n{text}\n");
+            }
+            if seen.run_over || seen.moves.is_empty() {
+                break;
+            }
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            let pick = &seen.moves[(x % seen.moves.len() as u64) as usize];
+            let answered = sim.play(pick).expect("the simulator answers");
+            assert!(answered.is_ok(), "the simulator refused a move it listed");
+        }
     }
 }
