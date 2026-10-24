@@ -5425,6 +5425,9 @@ pub enum HookEffect<V: ContentVersion> {
     /// for nothing, in the shelves' order, then its card removal, which the
     /// player cannot cancel.
     PurchaseEverything,
+    /// `Hook.AfterItemPurchased` for an entry bought outside a merchant's
+    /// room, with the gold it spent.
+    ItemPurchased(V::Number),
     /// `CreatureCmd.GainMaxHp` on the owner: the maximum grows, and the
     /// health with it.
     GainMaxHp(V::Number),
