@@ -798,7 +798,7 @@ macro_rules! rules {
 
                 fn card_is_playable(
                     card: Self::Card,
-                    fight: CardLogic,
+                    fight: &impl CardLogic,
                 ) -> sts2_core::HookResponse<bool> {
                     crate::behaviour::rules::card_is_playable::<Self>(card, fight)
                 }

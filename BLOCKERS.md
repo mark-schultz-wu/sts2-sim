@@ -84,13 +84,15 @@ The target is spire-mentor's W1 workload at its cost or less. W1 plays
 random legal moves for the Ironclad, with the starter deck, against the
 22 Act 1 Overgrowth encounters in turn. Its engine costs about 7,400
 instructions per action on this machine. `cargo run --release -p sts2-sim
---example fight_bench` plays the same workload here, and it costs 11,389.
+--example fight_bench` plays the same workload here, and it costs 9,872.
 Count it under callgrind at 3 reps and at 1, and divide the difference by
 the actions between them.
 
-The easy savings come first. The design work after them is a flat fight
-state that copies cheaply. `cargo xtask instructions` still guards each
-PR, per replayed step.
+The easy savings are taken. What is left is spread over the hook walks and
+the turn's bookkeeping. The design work for it is a flat fight state that
+copies cheaply, and a cheaper walk. Both hold a player per seat, so they
+come after co-op. `cargo xtask instructions` still guards each PR, per replayed
+step.
 
 ### 4. Co-op
 

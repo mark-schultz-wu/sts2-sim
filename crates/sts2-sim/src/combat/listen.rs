@@ -132,7 +132,7 @@ pub(crate) fn first_answer<V: Rules>(
     relics: &mut Belt<V>,
     hook: EventHook<V>,
 ) -> Option<(Listener<V>, HookEffect<V>)> {
-    let walker = Walker::begin::<Checked>(live, relics, hook)?;
+    let walker = Walker::begin(live, relics, hook)?;
     first_of_walk(live, relics, walker)
 }
 
@@ -220,53 +220,21 @@ pub(crate) enum Snapped<V: Rules> {
     },
 }
 
-/// Whether a walk begins: asked before any list is taken.
-///
-/// `Hook` hands a hook nobody hears no listeners, and a walk over them asks
-/// nothing. [`Checked`] asks the fight's counts first and builds no walk
-/// then. [`Eager`] builds the walk unasked, for a hook nearly always heard,
-/// where the question costs more than it saves.
-pub(crate) trait Start {
-    /// Whether to begin a walk over the listeners to `hook`.
-    fn begins<V: Rules>(live: &Live<V>, relics: &Belt<V>, hook: ModelHook) -> bool;
-}
-
-/// Begins a walk only where some listener hears the hook.
-pub(crate) struct Checked;
-
-impl Start for Checked {
-    #[inline(always)]
-    fn begins<V: Rules>(live: &Live<V>, relics: &Belt<V>, hook: ModelHook) -> bool {
-        Kinds::hearing(live, relics, Overrides::of(hook)).is_some()
-    }
-}
-
-/// Begins every walk, without asking who hears.
-pub(crate) struct Eager;
-
-impl Start for Eager {
-    fn begins<V: Rules>(_: &Live<V>, _: &Belt<V>, _: ModelHook) -> bool {
-        true
-    }
-}
-
 impl<V: Rules> Walker<V> {
     /// The walk `Hook` makes over the listeners to `hook`, as the fight
-    /// stands, where `S` begins one.
+    /// stands. `Hook` hands a hook nobody hears no listeners, and then there
+    /// is no walk. The fight's counts say so before any list is taken.
     ///
     /// # Panics
     ///
     /// A hook that is not one `AbstractModel` declares.
     #[inline(always)]
-    pub(crate) fn begin<S: Start>(
-        live: &Live<V>,
-        relics: &Belt<V>,
-        hook: EventHook<V>,
-    ) -> Option<Self> {
+    pub(crate) fn begin(live: &Live<V>, relics: &Belt<V>, hook: EventHook<V>) -> Option<Self> {
         let model_hook = hook
             .model_hook()
             .unwrap_or_else(|| unreachable!("{hook:?} is asked of one model, not raised"));
-        S::begins(live, relics, model_hook).then(|| Walker {
+        let heard = Kinds::hearing(live, relics, Overrides::of(model_hook)).is_some();
+        heard.then(|| Walker {
             hook,
             cursor: Active::begin(live, relics, model_hook),
             pending: Vec::new(),
@@ -712,12 +680,8 @@ pub(crate) struct Walking<V: Rules> {
 impl<V: Rules> Walking<V> {
     /// [`Walker::begin`], to carry out one effect at a time.
     #[inline(always)]
-    pub(crate) fn begin<S: Start>(
-        live: &Live<V>,
-        relics: &Belt<V>,
-        hook: EventHook<V>,
-    ) -> Option<Self> {
-        Walker::begin::<S>(live, relics, hook).map(Self::new)
+    pub(crate) fn begin(live: &Live<V>, relics: &Belt<V>, hook: EventHook<V>) -> Option<Self> {
+        Walker::begin(live, relics, hook).map(Self::new)
     }
 
     /// [`Walker::rehook`]: the hook as the listeners still to come are
@@ -1189,7 +1153,7 @@ fn decides<V: Rules>(
 pub(crate) fn combat_ended<V: Rules>(live: &mut Live<V>, relics: &mut Belt<V>) {
     // What a listener asks of the run, which carries it out as it leaves.
     let room = live.room();
-    let mut walking = Walking::begin::<Checked>(live, relics, EventHook::CombatEnd { room });
+    let mut walking = Walking::begin(live, relics, EventHook::CombatEnd { room });
     while let Some((_, effect)) = walking
         .as_mut()
         .and_then(|walking| walking.next(live, relics))
@@ -1220,7 +1184,7 @@ pub(crate) fn combat_ended<V: Rules>(live: &mut Live<V>, relics: &mut Belt<V>) {
         },
     };
     let hook = early(live);
-    let mut walking = Walking::begin::<Checked>(live, relics, hook);
+    let mut walking = Walking::begin(live, relics, hook);
     while let Some((_, effect)) = walking
         .as_mut()
         .and_then(|walking| walking.next(live, relics))
@@ -1240,7 +1204,7 @@ pub(crate) fn combat_ended<V: Rules>(live: &mut Live<V>, relics: &mut Belt<V>) {
             effect => unimplemented!("a listener asking for {effect:?} as a fight is won, early"),
         }
     }
-    let mut walking = Walking::begin::<Checked>(live, relics, EventHook::CombatVictory { room });
+    let mut walking = Walking::begin(live, relics, EventHook::CombatVictory { room });
     while let Some((_, effect)) = walking
         .as_mut()
         .and_then(|walking| walking.next(live, relics))

@@ -548,6 +548,24 @@ impl<V: Rules> Clone for State<V> {
         resuming.clone_from(&source.resuming);
         match (phase, &source.phase) {
             (Phase::Combat(live), Phase::Combat(from)) => live.clone_from(from),
+            (
+                phase @ (Phase::Rewards {
+                    spent: Spent(Some(_)),
+                    ..
+                }
+                | Phase::Lost {
+                    spent: Spent(Some(_)),
+                    ..
+                }),
+                Phase::Combat(from),
+            ) => {
+                let (Phase::Rewards { spent, .. } | Phase::Lost { spent, .. }) = phase else {
+                    unreachable!("the arm matched a phase holding a spent fight")
+                };
+                let mut live = spent.0.take().expect("the arm matched a spent fight");
+                live.clone_from(from);
+                *phase = Phase::Combat(live);
+            }
             (phase, from) => *phase = from.clone(),
         }
     }
@@ -737,6 +755,22 @@ pub(super) struct EnteredEvent<V: Rules> {
     pub unknown_odds: [f32; 4],
 }
 
+/// The storage of a fight that is over. A reused node writes its next fight
+/// into it, and allocates none. A copy of the run holds none.
+pub(super) struct Spent<V: Rules>(Option<Box<crate::combat::Live<V>>>);
+
+impl<V: Rules> Clone for Spent<V> {
+    fn clone(&self) -> Self {
+        Spent(None)
+    }
+}
+
+impl<V: Rules> std::fmt::Debug for Spent<V> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Spent")
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(super) enum Phase<V: Rules> {
     Neow {
@@ -763,6 +797,7 @@ pub(super) enum Phase<V: Rules> {
         /// The card removal taken and waiting on the card to remove, by its
         /// place on the screen.
         removing: Option<usize>,
+        spent: Spent<V>,
     },
     Event {
         state: V::EventState,
@@ -804,7 +839,7 @@ pub(super) enum Phase<V: Rules> {
     /// `ProcessPendingLoss` ends the combat and the run with it. The room is
     /// still the one it was fought in, so the fight is still reported. Nothing
     /// is offered, because a dead run takes nothing.
-    Lost { combat: Combat<V> },
+    Lost { combat: Combat<V>, spent: Spent<V> },
     /// The run won: The Architect's `PROCEED`, which is `RunManager.WinRun`.
     /// `WinRun` kills every player, which leaves nothing to decide.
     ///
@@ -2053,7 +2088,13 @@ impl<V: Rules> State<V> {
     /// What the fight did to the player comes out with it. The creature was
     /// built from the run's own numbers and is where they stood while the
     /// fight lasted.
-    pub(super) fn won(&mut self, combat: Combat<V>, offered: Vec<Offer<V>>) {
+    /// `spent` is the fight's own storage.
+    pub(super) fn won(
+        &mut self,
+        combat: Combat<V>,
+        offered: Vec<Offer<V>>,
+        spent: Box<crate::combat::Live<V>>,
+    ) {
         self.last_turn = Some(combat.turn);
         if let Some(player) = combat
             .creatures
@@ -2067,6 +2108,7 @@ impl<V: Rules> State<V> {
             combat,
             offered,
             removing: None,
+            spent: Spent(Some(spent)),
         };
     }
 
@@ -2075,9 +2117,14 @@ impl<V: Rules> State<V> {
     /// The creature was built from the run's own numbers, and where it fell is
     /// where they stayed. Nothing writes them back, because a run that is over
     /// has nowhere to carry them to.
-    pub(super) fn lost(&mut self, combat: Combat<V>) {
+    ///
+    /// `spent` is the fight's own storage, where there is one.
+    pub(super) fn lost(&mut self, combat: Combat<V>, spent: Option<Box<crate::combat::Live<V>>>) {
         self.last_turn = Some(combat.turn);
-        self.phase = Phase::Lost { combat };
+        self.phase = Phase::Lost {
+            combat,
+            spent: Spent(spent),
+        };
     }
 
     /// The player's own creature in a fight.
@@ -7141,7 +7188,7 @@ impl<V: Rules> State<V> {
             }
             // The player fell in the fight, and the fight is where its own
             // numbers stayed.
-            Phase::Lost { combat } => {
+            Phase::Lost { combat, .. } => {
                 let player = combat
                     .creatures
                     .iter()
@@ -7866,7 +7913,7 @@ impl<V: Rules> State<V> {
             // room it was fought in is still the room the run is standing in.
             // A won fight is still reported for the same reason: the run has
             // not left the room it was fought in.
-            Phase::Lost { combat } => Some(combat.clone()),
+            Phase::Lost { combat, .. } => Some(combat.clone()),
             // The player's creature is the run's own, so what happens to it
             // between the fight and leaving the room shows on it.
             Phase::Rewards { combat, .. } => {
@@ -8544,7 +8591,7 @@ mod tests {
             .expect("a fight has the player in it");
         player.hp = 0;
         player.alive = false;
-        run.lost(combat);
+        run.lost(combat, None);
 
         let seen = run.report().observation;
         assert!(!seen.alive, "the player is dead");

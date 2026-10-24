@@ -183,7 +183,7 @@ pub(crate) fn write_deck_card<V: crate::Build>(
 
 pub(crate) fn card_is_playable<V: crate::Build>(
     card: V::Card,
-    fight: sts2_core::CardLogic,
+    fight: &impl sts2_core::CardLogic,
 ) -> sts2_core::HookResponse<bool> {
     crate::behaviour::cards::is_playable::<V>(card, fight)
 }

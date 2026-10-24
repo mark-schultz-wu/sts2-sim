@@ -47,13 +47,14 @@ pub use content::{
     HookEffect, HookEffects, Hooks, Kept, KeywordKinds, Lasting, Layout, Listener,
     MAX_CARDS_IN_HAND, MapPointKinds, ModelHook, ModifierModel, ModifierTable, Modify, ModifyHook,
     MonsterKinds, MonsterModel, MonsterSpawn, MonsterTable, MonsterVirtual, MoveKinds, MoveLog,
-    MoveMachine, MovePinned, Offered, Opponents, Overrides, Picked, PileAct, PilePosition, PlayAt,
-    PlayFinished, PlayStarted, Played, PlayerHealth, PlayerStreamKinds, PoolFilter, PotionTable,
-    PotionUsage, PowerAmount, PowerKinds, PowerModel, PowerTable, PowerVirtual, Printed,
-    RarityKinds, RelicModel, RelicPoolKinds, RelicPull, RelicTable, RestKinds, Rests, ResultPile,
-    RewardRarity, RoomKinds, RosterEntry, Rules, RunStreamKinds, Scaling, SelectedCards, Selection,
-    SideKinds, SideTurnEnd, Spawned, Stream, StreamKinds, StunResume, Table, Taken, TargetKinds,
-    Temporary, TurnHistory, TurnPhaseKinds, UnplayableReasonKinds, Version, Writing,
+    MoveMachine, MovePinned, Offered, Opponents, Overrides, PastTurns, Picked, PileAct,
+    PilePosition, PlayAt, PlayFinished, PlayStarted, Played, PlayerHealth, PlayerStreamKinds,
+    PoolFilter, PotionTable, PotionUsage, PowerAmount, PowerKinds, PowerModel, PowerTable,
+    PowerVirtual, Printed, RarityKinds, RelicModel, RelicPoolKinds, RelicPull, RelicTable,
+    RestKinds, Rests, ResultPile, RewardRarity, RoomKinds, RosterEntry, Rules, RunStreamKinds,
+    Scaling, SelectedCards, Selection, SideKinds, SideTurnEnd, Spawned, Stream, StreamKinds,
+    StunResume, Table, Taken, TargetKinds, Temporary, TurnHistory, TurnPhaseKinds,
+    UnplayableReasonKinds, Version, Writing,
 };
 pub use event::{CarriedRelic, EventBehavior, EventView};
 pub use hook_response::HookResponse;

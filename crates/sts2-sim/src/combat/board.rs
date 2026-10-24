@@ -1022,7 +1022,7 @@ impl<'a, V: Rules> Board<'a, V> {
         if delta.is_zero() {
             return;
         }
-        let mut walking = super::listen::Walking::begin::<super::listen::Checked>(
+        let mut walking = super::listen::Walking::begin(
             self.live,
             self.relics,
             sts2_core::EventHook::PowerAmountChanged {
@@ -1195,7 +1195,7 @@ impl<'a, V: Rules> Board<'a, V> {
         if !self.live.creatures[at].alive {
             return None;
         }
-        let walking = super::listen::Walking::begin::<super::listen::Checked>(
+        let walking = super::listen::Walking::begin(
             self.live,
             self.relics,
             sts2_core::EventHook::DamageReceiving {
@@ -1365,7 +1365,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 });
             }
             if aimed && block_broken {
-                let walking = super::listen::Walking::begin::<super::listen::Checked>(
+                let walking = super::listen::Walking::begin(
                     self.live,
                     self.relics,
                     sts2_core::EventHook::BlockBroken {
@@ -1393,7 +1393,7 @@ impl<'a, V: Rules> Board<'a, V> {
                         powered,
                     });
             }
-            let walking = super::listen::Walking::begin::<super::listen::Checked>(
+            let walking = super::listen::Walking::begin(
                 self.live,
                 self.relics,
                 sts2_core::EventHook::DamageGiven {
@@ -1414,7 +1414,7 @@ impl<'a, V: Rules> Board<'a, V> {
             // for.
             match killed {
                 false => {
-                    let walking = super::listen::Walking::begin::<super::listen::Checked>(
+                    let walking = super::listen::Walking::begin(
                         self.live,
                         self.relics,
                         sts2_core::EventHook::DamageReceived {
@@ -1629,7 +1629,7 @@ impl<'a, V: Rules> Board<'a, V> {
             .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
         let afflicted = (self.live.cards.idents(at.pile()).nth(index))
             .is_some_and(|ident| ident.affliction.is_some());
-        let mut walking = super::listen::Walking::begin::<super::listen::Checked>(
+        let mut walking = super::listen::Walking::begin(
             self.live,
             self.relics,
             sts2_core::EventHook::CardEnteredCombat {
@@ -1665,7 +1665,7 @@ impl<'a, V: Rules> Board<'a, V> {
         if self.over() {
             return;
         }
-        let mut walking = super::listen::Walking::begin::<super::listen::Checked>(
+        let mut walking = super::listen::Walking::begin(
             self.live,
             self.relics,
             sts2_core::EventHook::CardGeneratedForCombat { at, card, creator },
@@ -1983,7 +1983,7 @@ impl<'a, V: Rules> Board<'a, V> {
         let id = self.live.creatures[at].id;
         // `Hook.BeforeDeath`, once its hit points are gone and before
         // anything decides whether it dies.
-        let mut walking = super::listen::Walking::begin::<super::listen::Checked>(
+        let mut walking = super::listen::Walking::begin(
             self.live,
             self.relics,
             sts2_core::EventHook::BeforeDeath { creature: id },
@@ -2362,8 +2362,7 @@ impl<'a, V: Rules> Board<'a, V> {
             in_fight: true,
             holding_potions: !self.live.potions.is_empty(),
         };
-        let walking =
-            super::listen::Walking::begin::<super::listen::Checked>(self.live, self.relics, hook);
+        let walking = super::listen::Walking::begin(self.live, self.relics, hook);
         self.carry_out_walk(walking);
         if self.ended().is_some() || self.live.cards.len(Pile::Hand) != 0 {
             return;
@@ -2372,8 +2371,7 @@ impl<'a, V: Rules> Board<'a, V> {
             player: self.live.player().id,
             phase: self.live.phase,
         };
-        let walking =
-            super::listen::Walking::begin::<super::listen::Checked>(self.live, self.relics, hook);
+        let walking = super::listen::Walking::begin(self.live, self.relics, hook);
         self.carry_out_walk(walking);
     }
 
@@ -2399,7 +2397,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 Some(sts2_core::ModelId::Monster(monster)) => Some(monster),
                 _ => None,
             });
-        let mut walking = super::listen::Walking::begin::<super::listen::Checked>(
+        let mut walking = super::listen::Walking::begin(
             self.live,
             self.relics,
             sts2_core::EventHook::AfterDeath {
@@ -2705,7 +2703,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 None => before,
             })
             .count();
-        let mut walking = super::listen::Walking::begin::<super::listen::Checked>(
+        let mut walking = super::listen::Walking::begin(
             self.live,
             self.relics,
             sts2_core::EventHook::DiedToDoom { fatal },
@@ -2791,8 +2789,7 @@ impl<'a, V: Rules> Board<'a, V> {
             side: <V::CombatSide as SideKinds>::ENEMY,
             point: self.live.point,
         };
-        let mut walking =
-            super::listen::Walking::begin::<super::listen::Checked>(self.live, self.relics, hook);
+        let mut walking = super::listen::Walking::begin(self.live, self.relics, hook);
         while let Some((listener, effect)) =
             walking.as_mut().and_then(|walking| self.next_of(walking))
         {
@@ -2833,8 +2830,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 max_hp: player.max_hp,
             },
         };
-        let walking =
-            super::listen::Walking::begin::<super::listen::Checked>(self.live, self.relics, hook);
+        let walking = super::listen::Walking::begin(self.live, self.relics, hook);
         self.after_hit(walking);
     }
 
@@ -4048,8 +4044,7 @@ impl<V: Rules> Board<'_, V> {
             amount,
             positive,
         };
-        let mut walking =
-            super::listen::Walking::begin::<super::listen::Checked>(self.live, self.relics, hook);
+        let mut walking = super::listen::Walking::begin(self.live, self.relics, hook);
         while let Some((listener, effect)) =
             walking.as_mut().and_then(|walking| self.next_of(walking))
         {
@@ -4161,8 +4156,7 @@ impl<V: Rules> Board<'_, V> {
         let targets = V::orb_evoke(&orb, self);
         self.playing = playing;
         let hook = sts2_core::EventHook::OrbEvoked { orb: orb.orb };
-        let mut walking =
-            super::listen::Walking::begin::<super::listen::Checked>(self.live, self.relics, hook);
+        let mut walking = super::listen::Walking::begin(self.live, self.relics, hook);
         while let Some((listener, effect)) =
             walking.as_mut().and_then(|walking| self.next_of(walking))
         {
@@ -4740,11 +4734,8 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.live.gold = self.live.gold + amount;
         // `AfterGoldGained`, once the gold has landed.
         let player = self.live.player().id;
-        let mut walking = super::listen::Walking::begin::<super::listen::Checked>(
-            self.live,
-            self.relics,
-            sts2_core::EventHook::GoldGained,
-        );
+        let mut walking =
+            super::listen::Walking::begin(self.live, self.relics, sts2_core::EventHook::GoldGained);
         while let Some((listener, effect)) =
             walking.as_mut().and_then(|walking| self.next_of(walking))
         {
@@ -4778,8 +4769,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             return;
         }
         let hook = sts2_core::EventHook::StarsGained { amount };
-        let mut walking =
-            super::listen::Walking::begin::<super::listen::Checked>(self.live, self.relics, hook);
+        let mut walking = super::listen::Walking::begin(self.live, self.relics, hook);
         while let Some((listener, effect)) =
             walking.as_mut().and_then(|walking| self.next_of(walking))
         {
@@ -5169,7 +5159,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         };
         orbs.queue.push(V::channelled(orb));
         self.live.history.channelled(orb);
-        let mut walking = super::listen::Walking::begin::<super::listen::Checked>(
+        let mut walking = super::listen::Walking::begin(
             self.live,
             self.relics,
             sts2_core::EventHook::OrbChanneled,
@@ -5486,7 +5476,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 .and_then(|remover| self.at(remover))
                 .and_then(|at| self.live.creatures[at].owner);
             let player = self.live.player().id;
-            let walking = super::listen::Walking::begin::<super::listen::Checked>(
+            let walking = super::listen::Walking::begin(
                 self.live,
                 self.relics,
                 sts2_core::EventHook::BlockBroken {
@@ -6281,11 +6271,8 @@ pub(super) fn energy_spent<V: Rules>(
     if !super::listen::heard::<V>(live, relics, sts2_core::ModelHook::AfterEnergySpent) {
         return None;
     }
-    let walking = super::listen::Walking::begin::<super::listen::Checked>(
-        live,
-        relics,
-        sts2_core::EventHook::EnergySpent { amount },
-    );
+    let walking =
+        super::listen::Walking::begin(live, relics, sts2_core::EventHook::EnergySpent { amount });
     let ascension = live.ascension;
     let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
     board.carry_out_walk(walking);
@@ -6324,7 +6311,7 @@ pub(super) fn shuffle_asking<V: Rules>(
     // is that walk's. Each moves its card in the list once it is shuffled.
     let hook = sts2_core::EventHook::ShuffleOrder { initial: false };
     let mut asked: SmallVec<[(Listener<V>, HookEffect<V>); 2]> = SmallVec::new();
-    let mut walking = super::listen::Walking::begin::<super::listen::Checked>(live, relics, hook);
+    let mut walking = super::listen::Walking::begin(live, relics, hook);
     while let Some(answer) = walking
         .as_mut()
         .and_then(|walking| walking.next(live, relics))
@@ -6348,8 +6335,7 @@ pub(super) fn shuffle_asking<V: Rules>(
     }
     // `Hook.AfterShuffle`.
     let hook = sts2_core::EventHook::Shuffled;
-    let Some(walking) = super::listen::Walking::begin::<super::listen::Checked>(live, relics, hook)
-    else {
+    let Some(walking) = super::listen::Walking::begin(live, relics, hook) else {
         return Ok(None);
     };
     let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
@@ -6554,7 +6540,7 @@ impl<V: Rules> Board<'_, V> {
         // The results stand on the fight while each listener reads them, as
         // the command itself is handed to each in the game. An earlier
         // listener's own commands leave them as they were.
-        let Some(mut walking) = super::listen::Walking::begin::<super::listen::Checked>(
+        let Some(mut walking) = super::listen::Walking::begin(
             self.live,
             self.relics,
             sts2_core::EventHook::AfterAttack {
@@ -7219,8 +7205,7 @@ pub(super) fn draw_pausing<V: Rules>(
             id: drawn.id,
             hand_draw,
         };
-        let mut walking =
-            super::listen::Walking::begin::<super::listen::Checked>(live, relics, hook);
+        let mut walking = super::listen::Walking::begin(live, relics, hook);
         while let Some((listener, effect)) = walking
             .as_mut()
             .and_then(|walking| walking.next(live, relics))
@@ -7299,7 +7284,7 @@ fn card_drawn_late<V: Rules>(
         hand_draw,
         side: live.side,
     };
-    match super::listen::Walking::begin::<super::listen::Checked>(live, relics, hook) {
+    match super::listen::Walking::begin(live, relics, hook) {
         Some(walking) => {
             carry_out_drawn::<V>(live, rngs, relics, ascension, drawn.id, walking, ended)
         }

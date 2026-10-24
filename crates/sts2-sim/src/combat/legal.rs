@@ -31,25 +31,35 @@ pub(super) struct HandFacts<V: Rules> {
     stars: V::Count,
     /// Whether anything in the fight answers `ShouldPlay`.
     asks: bool,
-    /// What each card's own `IsPlayable` reads.
-    logic: sts2_core::CardLogic,
 }
 
 impl<V: Rules> HandFacts<V> {
+    #[inline(always)]
     pub(super) fn of(fight: Walk<'_, V>) -> Self {
         let live = fight.live;
         Self {
             energy: live.energy,
             stars: live.stars,
             asks: asks_should_play::<V>(fight),
-            logic: sts2_core::CardLogic {
-                draw_pile: live.cards.len(Pile::Draw),
-                osty: super::board::osty::<V>(&live.creatures).is_some_and(|osty| osty.alive),
-                hand_all_attacks: live.cards.iter(Pile::Hand).all(|held| {
-                    V::card_kind(held.face.ident.card) == Some(sts2_core::CardKind::Attack)
-                }),
-            },
         }
+    }
+}
+
+/// The fight as a card's own `IsPlayable` reads it.
+struct Logic<'a, V: Rules>(&'a Live<V>);
+
+impl<V: Rules> sts2_core::CardLogic for Logic<'_, V> {
+    fn draw_pile(&self) -> usize {
+        self.0.cards.len(Pile::Draw)
+    }
+
+    fn osty(&self) -> bool {
+        super::board::osty::<V>(&self.0.creatures).is_some_and(|osty| osty.alive)
+    }
+
+    fn hand_all_attacks(&self) -> bool {
+        (self.0.cards.iter(Pile::Hand))
+            .all(|held| V::card_kind(held.face.ident.card) == Some(sts2_core::CardKind::Attack))
     }
 }
 
@@ -77,6 +87,7 @@ pub(super) fn first_playable<V: Rules>(
 }
 
 /// What a card names as its target.
+#[inline(always)]
 pub(super) fn target_type<V: Rules>(card: CardIdent<V>, live: &Live<V>) -> V::TargetType {
     // One of the four cards that work their target out from the fight, which
     // they do by reading the player's own powers.
@@ -95,6 +106,7 @@ fn asks_should_play<V: Rules>(fight: Walk<'_, V>) -> bool {
 /// runs `Hook.ModifyEnergyCostInCombat` over its own modifiers: every
 /// listener's `TryModifyEnergyCostInCombat`, then every one's `Late`. `pile`
 /// is where the copy stands, or nothing for the play pile.
+#[inline(always)]
 pub(super) fn costs<V: Rules>(
     held: &CardInstance<V>,
     pile: Option<Pile>,
@@ -148,6 +160,7 @@ pub(super) fn costs<V: Rules>(
 ///
 /// Beside it, the model that answered `ShouldPlay` with no, which is
 /// `preventer`. `target` is the card's [`target_type`].
+#[inline(always)]
 pub(super) fn reasons<V: Rules>(
     card: CardIdent<V>,
     target: V::TargetType,
@@ -159,7 +172,6 @@ pub(super) fn reasons<V: Rules>(
         energy,
         stars,
         asks,
-        logic,
     } = *facts;
     let creatures = &fight.live.creatures;
     let mut why = None;
@@ -216,7 +228,9 @@ pub(super) fn reasons<V: Rules>(
         );
     }
     // `IsPlayable`, the card's own logic.
-    if let sts2_core::HookResponse::Decision(false) = V::card_is_playable(card.card, logic) {
+    if let sts2_core::HookResponse::Decision(false) =
+        V::card_is_playable(card.card, &Logic(fight.live))
+    {
         why = refused::<V>(
             why,
             <V::UnplayableReason as UnplayableReasonKinds>::BLOCKED_BY_CARD_LOGIC,
@@ -240,6 +254,7 @@ fn refused<V: Rules>(
 ///
 /// Empty for a card that cannot be played at all, because the game stops
 /// asking once a rule has refused it.
+#[inline(always)]
 pub(super) fn targets<V: Rules>(
     target: V::TargetType,
     creatures: &[Fighter<V>],

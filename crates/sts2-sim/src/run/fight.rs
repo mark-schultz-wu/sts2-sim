@@ -279,10 +279,10 @@ impl<V: Rules> State<V> {
             Some(combat::Ended::Lost) => {
                 let (live, relics) = self.left_fight();
                 let combat = live.report(relics);
-                self.lost(combat);
+                self.lost(combat, Some(live));
             }
             Some(combat::Ended::Won) => {
-                let (live, relics) = self.left_fight();
+                let (mut live, relics) = self.left_fight();
                 let extra_rewards = live.extra_rewards().to_vec();
                 let taken = live.taken_from_deck().to_vec();
                 // `AddExtraReward`, which the room's own rewards come before.
@@ -325,7 +325,7 @@ impl<V: Rules> State<V> {
                     if self.resuming.is_none() {
                         unimplemented!("a fight that gives no rewards outside an event");
                     }
-                    self.won(combat, Vec::new());
+                    self.won(combat, Vec::new(), live);
                     return self
                         .proceed()
                         .unwrap_or_else(|e| unreachable!("an event resumes after its fight: {e}"));
@@ -337,13 +337,13 @@ impl<V: Rules> State<V> {
                     sts2_core::EncounterTable::room(encounter) == <_ as sts2_core::RoomKinds>::BOSS
                 }) && self.in_last_act();
                 if last_boss {
-                    self.won(combat, Vec::new());
+                    self.won(combat, Vec::new(), live);
                     return self.decided();
                 }
                 let mut offered =
                     self.combat_rewards(&combat, proportion, &extra_rewards, &extra, &taken);
                 crate::reward::sort(&mut offered);
-                self.won(combat, offered);
+                self.won(combat, offered, live);
             }
         }
         // A decision the end of a fight cut short is `Decided::Abandoned`. The
