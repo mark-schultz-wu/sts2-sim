@@ -18,12 +18,39 @@ use super::live::{CardInstance, Fighter, Live};
 pub(super) fn hand<V: Rules>(
     hand: impl ExactSizeIterator<Item = CardInstance<V>>,
     fight: Walk<'_, V>,
+) -> Vec<Playable<V>> {
+    let facts = HandFacts::of(fight);
+    hand.map(|card| InHand::new(card, fight, &facts).playable())
+        .collect()
+}
+
+/// What `CanPlay` reads off the fight rather than the card, which is the same
+/// for every card in hand. Worked out once a hand.
+pub(super) struct HandFacts<V: Rules> {
     energy: V::Count,
     stars: V::Count,
-) -> Vec<Playable<V>> {
-    let asks = asks_should_play::<V>(fight);
-    hand.map(|card| InHand::new(card, fight, energy, stars, asks).playable())
-        .collect()
+    /// Whether anything in the fight answers `ShouldPlay`.
+    asks: bool,
+    /// What each card's own `IsPlayable` reads.
+    logic: sts2_core::CardLogic,
+}
+
+impl<V: Rules> HandFacts<V> {
+    pub(super) fn of(fight: Walk<'_, V>) -> Self {
+        let live = fight.live;
+        Self {
+            energy: live.energy,
+            stars: live.stars,
+            asks: asks_should_play::<V>(fight),
+            logic: sts2_core::CardLogic {
+                draw_pile: live.cards.len(Pile::Draw),
+                osty: super::board::osty::<V>(&live.creatures).is_some_and(|osty| osty.alive),
+                hand_all_attacks: live.cards.iter(Pile::Hand).all(|held| {
+                    V::card_kind(held.face.ident.card) == Some(sts2_core::CardKind::Attack)
+                }),
+            },
+        }
+    }
 }
 
 /// A card in hand that `CanPlay`, as an auto-play that pays for it reads it.
@@ -38,11 +65,9 @@ pub(super) struct Payable<V: Rules> {
 pub(super) fn first_playable<V: Rules>(
     hand: impl Iterator<Item = CardInstance<V>>,
     fight: Walk<'_, V>,
-    energy: V::Count,
-    stars: V::Count,
 ) -> Option<Payable<V>> {
-    let asks = asks_should_play::<V>(fight);
-    hand.map(|held| InHand::new(held, fight, energy, stars, asks))
+    let facts = HandFacts::of(fight);
+    hand.map(|held| InHand::new(held, fight, &facts))
         .find(|card| card.reason.is_none())
         .map(|card| Payable {
             held: card.held,
@@ -62,7 +87,7 @@ pub(super) fn target_type<V: Rules>(card: CardIdent<V>, live: &Live<V>) -> V::Ta
 
 /// Whether anything in the fight answers `ShouldPlay`, asked once for a hand
 /// rather than once for each card in it.
-pub(super) fn asks_should_play<V: Rules>(fight: Walk<'_, V>) -> bool {
+fn asks_should_play<V: Rules>(fight: Walk<'_, V>) -> bool {
     super::listen::heard::<V>(fight.live, fight.relics, sts2_core::ModelHook::ShouldPlay)
 }
 
@@ -122,18 +147,21 @@ pub(super) fn costs<V: Rules>(
 /// report.
 ///
 /// Beside it, the model that answered `ShouldPlay` with no, which is
-/// `preventer`. `asks` is [`asks_should_play`].
+/// `preventer`. `target` is the card's [`target_type`].
 pub(super) fn reasons<V: Rules>(
     card: CardIdent<V>,
+    target: V::TargetType,
     fight: Walk<'_, V>,
     (cost, star_cost): (Cost, Cost),
-    energy: V::Count,
-    stars: V::Count,
-    asks: bool,
+    facts: &HandFacts<V>,
 ) -> (Option<V::UnplayableReasons>, Option<sts2_core::ModelId<V>>) {
-    let live = fight.live;
-    let creatures = &live.creatures;
-    let target = target_type::<V>(card, live);
+    let HandFacts {
+        energy,
+        stars,
+        asks,
+        logic,
+    } = *facts;
+    let creatures = &fight.live.creatures;
     let mut why = None;
     if card.card.unplayable() {
         why = refused::<V>(
@@ -188,14 +216,6 @@ pub(super) fn reasons<V: Rules>(
         );
     }
     // `IsPlayable`, the card's own logic.
-    let logic = sts2_core::CardLogic {
-        draw_pile: live.cards.len(Pile::Draw),
-        osty: super::board::osty::<V>(creatures).is_some_and(|osty| osty.alive),
-        hand_all_attacks: live
-            .cards
-            .iter(Pile::Hand)
-            .all(|held| V::card_kind(held.face.ident.card) == Some(sts2_core::CardKind::Attack)),
-    };
     if let sts2_core::HookResponse::Decision(false) = V::card_is_playable(card.card, logic) {
         why = refused::<V>(
             why,
@@ -251,24 +271,12 @@ pub(crate) struct InHand<'a, V: Rules> {
 }
 
 impl<'a, V: Rules> InHand<'a, V> {
-    pub(super) fn new(
-        held: CardInstance<V>,
-        fight: Walk<'a, V>,
-        energy: V::Count,
-        stars: V::Count,
-        asks: bool,
-    ) -> Self {
+    pub(super) fn new(held: CardInstance<V>, fight: Walk<'a, V>, facts: &HandFacts<V>) -> Self {
         let creatures = &fight.live.creatures;
         let target = target_type::<V>(held.face.ident, fight.live);
         let (cost, star_cost) = costs::<V>(&held, Some(Pile::Hand), fight);
-        let (reason, preventer) = reasons::<V>(
-            held.face.ident,
-            fight,
-            (cost, star_cost),
-            energy,
-            stars,
-            asks,
-        );
+        let (reason, preventer) =
+            reasons::<V>(held.face.ident, target, fight, (cost, star_cost), facts);
         Self {
             held,
             fight,
@@ -353,42 +361,40 @@ pub(super) type Previews<V> = SmallVec<[Preview<V>; 4]>;
 /// What [`sts2_core::legal::implied`] reads off the report, read from the
 /// fight instead. The rules are the ones the report runs: the belt's reasons,
 /// and each card's reasons and targets. Nothing computes a preview, and
-/// nothing is collected but the moves.
+/// nothing is collected but the moves, which go on the end of `moves`.
 pub(crate) fn moves<V: Rules>(
     live: &Live<V>,
     relics: &crate::run::Belt<V>,
     potions: &[V::Potion],
     alive: bool,
-) -> Legal<V> {
-    let mut moves = Legal::new();
-    drinks::<V>(potions, Some(live), false, alive, false, &mut moves);
+    moves: &mut Legal<V>,
+) {
+    drinks::<V>(potions, Some(live), false, alive, false, moves);
 
-    let asks = asks_should_play::<V>(Walk { live, relics });
+    let facts = HandFacts::of(Walk { live, relics });
     for (at, card) in live.cards.iter(Pile::Hand).enumerate() {
         let costs = costs::<V>(&card, Some(Pile::Hand), Walk { live, relics });
+        let target = target_type::<V>(card.face.ident, live);
         let (refused, _) = reasons::<V>(
             card.face.ident,
+            target,
             Walk { live, relics },
             costs,
-            live.energy,
-            live.stars,
-            asks,
+            &facts,
         );
         if refused.is_none() {
-            let target = target_type::<V>(card.face.ident, live);
             let targets = targets::<V>(target, &live.creatures, false);
             // A card that names a creature has nothing to be played at while
             // none is alive to name.
             if targets.is_empty() && names_creature::<V>(target) {
                 continue;
             }
-            aimed(hand_index(at), &targets, &mut moves, |index, target| {
+            aimed(hand_index(at), &targets, moves, |index, target| {
                 Decision::PlayCard { index, target }
             });
         }
     }
     moves.push(Decision::EndTurn);
-    moves
 }
 
 /// Every drink the belt allows, aimed at each creature it can be.
@@ -797,13 +803,11 @@ mod tests {
         energy: <V as sts2_core::ContentVersion>::Count,
         stars: <V as sts2_core::ContentVersion>::Count,
     ) -> Playable<V> {
-        let fight = live(fight());
-        let mut plays = super::hand::<V>(
-            hand.iter().copied(),
-            walk(&fight, &crate::run::Belt::new()),
-            energy,
-            stars,
-        );
+        let mut fight = live(fight());
+        fight.energy = energy;
+        fight.stars = stars;
+        let mut plays =
+            super::hand::<V>(hand.iter().copied(), walk(&fight, &crate::run::Belt::new()));
         assert_eq!(plays.len(), 1);
         plays.remove(0)
     }
@@ -926,13 +930,10 @@ mod tests {
         let mut creatures = fight();
         creatures[1].alive = false;
 
-        let fight = live(creatures);
-        let plays = super::hand::<V>(
-            [strike].into_iter(),
-            walk(&fight, &crate::run::Belt::new()),
-            3,
-            0,
-        );
+        let mut fight = live(creatures);
+        fight.energy = 3;
+        fight.stars = 0;
+        let plays = super::hand::<V>([strike].into_iter(), walk(&fight, &crate::run::Belt::new()));
 
         assert!(plays[0].targets.is_empty());
         // Nothing to hit is not a reason the card cannot be played. The game

@@ -3024,12 +3024,28 @@ impl<'a, V: Rules> Board<'a, V> {
 /// number. Each listener in a phase is handed what the one before it left. The
 /// result is floored at zero, unlike [`hp_lost_by`]'s.
 ///
+/// Inlined, so the hooks `phases` name are known where it is called, and a
+/// number nothing listens to costs a lookup.
+#[inline(always)]
+pub(super) fn modified_by<V: Rules>(
+    fight: Walk<'_, V>,
+    amount: V::Number,
+    phases: &[ModifyHook<V>],
+) -> V::Number {
+    match super::listen::heard_any::<V>(fight.live, fight.relics, hooks_of(phases)) {
+        true => modified_by_listeners::<V>(fight, amount, phases),
+        false => amount.max(V::Number::zero()),
+    }
+}
+
+/// [`modified_by`] once something listens.
+///
 /// One walk asks every phase a listener overrides. An answer never reads the
 /// number it is handed, so the phases need no walk each.
 ///
 /// A run of shares multiplies together before it lands.
 #[tracing::instrument(level = "trace", skip_all)]
-pub(super) fn modified_by<V: Rules>(
+fn modified_by_listeners<V: Rules>(
     fight: Walk<'_, V>,
     amount: V::Number,
     phases: &[ModifyHook<V>],
@@ -3082,13 +3098,19 @@ fn scaled_by_signed<V: Rules>(
     scale: Option<Decimal>,
     phases: &[ModifyHook<V>],
 ) -> (V::Number, bool) {
+    let hooks = hooks_of(phases);
+    // A number nothing listens to and nothing scales is the number itself.
+    // Most energy costs are asked this way, once a card for every `legal`.
+    if scale.is_none() && !super::listen::heard_any::<V>(fight.live, fight.relics, hooks) {
+        return (amount, amount > V::Number::zero());
+    }
     // Its own walk rather than [`answers`], which keeps the walk inlined on
     // this, the hot path.
     let mut answers = Answers::new();
     // `IterateCombatHookListeners` hands a fight that is over no listeners,
     // so what an observation reads after the win is the number alone.
     if !(fight.live.won && phases.iter().all(ModifyHook::combat_listeners)) {
-        super::listen::each::<V>(fight, hooks_of(phases), |listener, overrides| {
+        super::listen::each::<V>(fight, hooks, |listener, overrides| {
             answer::<V>(listener, overrides, phases, &mut answers)
         });
     }

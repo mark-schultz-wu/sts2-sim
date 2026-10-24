@@ -74,11 +74,10 @@ pub(crate) fn resolve<V: Rules>(
     let fight = super::listen::Walk { live, relics };
     let (refused, preventer) = legal::reasons::<V>(
         card,
+        takes,
         fight,
         (cost, star_cost),
-        live.energy,
-        live.stars,
-        legal::asks_should_play::<V>(fight),
+        &legal::HandFacts::of(fight),
     );
     if let Some(why) = refused {
         return Err(Reason::Unplayable {

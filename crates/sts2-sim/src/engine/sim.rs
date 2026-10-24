@@ -79,6 +79,14 @@ impl<V: Rules> Sim<V> {
         self.state.legal()
     }
 
+    /// [`Sim::legal`], written over `moves`. A search that asks at every node
+    /// keeps one list for this. A returned list is copied out, and it is over
+    /// a kilobyte.
+    pub fn legal_into(&self, moves: &mut crate::Legal<V>) {
+        moves.clear();
+        self.state.legal_into(moves);
+    }
+
     /// Plays one decision and reports what it decided, and nothing more.
     ///
     /// A search steps through here. Building the observation costs more than

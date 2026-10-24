@@ -3840,8 +3840,6 @@ impl<V: Rules> Live<V> {
             legal: super::legal::hand::<V>(
                 self.cards.iter(Pile::Hand),
                 super::listen::Walk { live: self, relics },
-                self.energy,
-                self.stars,
             ),
             orbs: self.reported_orbs(relics).map(std::borrow::Cow::into_owned),
         }
