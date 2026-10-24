@@ -2088,6 +2088,16 @@ pub(super) fn carry_setup<V: Rules>(
                         ),
                     }
                 }
+                // `IterateCombatHookListeners` hands an ending fight no
+                // listeners, and `IsOverOrEnding` draws nothing. So a fight a
+                // listener here ended, as Forgotten Soul's damage on the card
+                // Toasty Mittens exhausts can, hears nothing more of the setup.
+                if live.lost {
+                    return Carried::Done(Some(super::Ended::Lost));
+                }
+                if live.won {
+                    return Carried::Done(Some(super::Ended::Won));
+                }
                 let mut drawn = hand_size::<V>(listen::Walk { live, relics }, live.turn);
                 super::start::after_modifying_hand_draw::<V>(live, relics);
                 // On turn one a card whose enchantment says

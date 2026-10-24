@@ -57,18 +57,28 @@ prints the game's own calls in the moves before a kept run's split.
 game method to a pause.
 
 A mixed hunt of 7,000 runs on v0.111.0 parted 258, and all 258 are
-fixed. Then both builds were hunted again with 3,000 mixed runs each,
-from seed 10000.
+fixed. A second round of 3,000 mixed runs on each build started from
+seed 10000. It parted 8 runs on v0.107.1 and 9 on v0.111.0, and one
+v0.107.1 run stopped on a game error. All of these are fixed.
 
-- v0.107.1 parted 8, and all 8 are fixed.
-- One v0.107.1 run, IRONCLAD C000010510 with DoubleBoss, stopped on a
-  game error at step 1304, and it is fixed. Stampede auto-played
-  Breakthrough, which killed the player. The game left the card on its
-  choice context and logged an error, which the mod now patches. The
-  simulator played on past the death, and now ends the fight there.
-- v0.111.0 parted 9, and all 9 are fixed.
+A third round, from seed 20000, parted 1 run on v0.107.1 and 3 on
+v0.111.0.
 
-Next, hunt both builds again toward 3,000 runs in a row with no split.
+- v0.107.1: DEFECT C000020519 with NIGHT_TERRORS, at step 586. It is
+  fixed. Toasty Mittens exhausted a card before the hand draw, and
+  Forgotten Soul's damage for it killed an enemy at 1 HP. The simulator
+  drew the hand anyway, and Happy Flower counted the turn.
+- v0.111.0, 0: NECROBINDER C000020409 with SPECIALIZED panics at step
+  957. Eidolon plays a card that no pile holds.
+- v0.111.0, 1: NECROBINDER C000020500 with Scarcity parts at step 622,
+  in the run and the creatures. The step before it ends a turn against
+  the Decimillipede elite.
+- v0.111.0, 2: DEFECT C000020454 with CHARACTER_CARDS:NECROBINDER
+  panics at step 573. A shuffle asks for a card into the hand, inside a
+  draw that cannot pause.
+
+Next, fix the three v0.111.0 runs, then hunt both builds again toward
+3,000 runs in a row with no split.
 
 ### 2. Coverage of the game's own code
 
