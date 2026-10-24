@@ -1,0 +1,11 @@
+{
+  "id": "sts2_fixes",
+  "name": "STS2 Fixes",
+  "author": "sts",
+  "description": "Patches game bugs the simulator models as fixed. Each patch changes the game, so it is kept apart from the headless driver.",
+  "version": "0.1.0",
+  "has_dll": true,
+  "has_pck": false,
+  "affects_gameplay": true,
+  "min_game_version": "0.107.1"
+}

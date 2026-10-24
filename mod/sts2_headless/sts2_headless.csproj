@@ -33,22 +33,28 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The mod that adds the setup commands registers them with the protocol
+         and replies through its helpers. -->
+    <InternalsVisibleTo Include="sts2_setup" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- One coherent upstream-assembly adapter, selected by the game lock. -->
     <Compile Remove="Compat/**/*.cs" />
     <Compile Include="Compat/$(Sts2GameAbi).cs" />
   </ItemGroup>
 
   <!--
-    The mod's identity, compiled in. `identity.sh` hashes this directory's
-    sources; the Rust client hashes them the same way at its own build time and
-    refuses a greeting that disagrees, so a mod that was not redeployed is
-    caught at the handshake rather than mid-run.
+    The oracle's identity, compiled in. `../identity.sh` hashes the sources of
+    every mod the oracle loads; the Rust client hashes them the same way at its
+    own build time and refuses a greeting that disagrees, so a mod that was not
+    redeployed is caught at the handshake rather than mid-run.
 
     Generated into obj/ so it sits outside the *.cs glob the script hashes:
     a generated file that fed its own hash would never settle.
   -->
   <Target Name="StampIdentity" BeforeTargets="BeforeCompile">
-    <Exec Command="sh &quot;$(MSBuildProjectDirectory)/identity.sh&quot;"
+    <Exec Command="sh &quot;$(MSBuildProjectDirectory)/../identity.sh&quot;"
           ConsoleToMSBuild="true" StandardOutputImportance="low">
       <Output TaskParameter="ConsoleOutput" PropertyName="ModIdentity" />
     </Exec>

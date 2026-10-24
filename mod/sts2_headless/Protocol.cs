@@ -50,6 +50,33 @@ internal static class Protocol
 
     private static Channel _channel = null!;
     private static RunState _state = null!;
+
+    /// <summary>The run this process serves, for a command another mod registers.</summary>
+    internal static RunState State => _state;
+
+    /// <summary>The commands this mod answers itself, in the greeting's order.</summary>
+    private static readonly string[] BuiltIn =
+    {
+        "start", "travel", "play_card", "end_turn", "use_potion", "answer", "choose_option", "buy",
+        "proceed", "discard_potion", "observe", "quit",
+    };
+
+    /// <summary>Commands another mod answers, by name, as <see cref="Register"/> adds them.</summary>
+    private static readonly Dictionary<string, Func<JsonElement, Task>> Registered = new();
+
+    /// <summary>
+    /// Answers <paramref name="cmd"/> with <paramref name="handler"/>, which
+    /// replies through <see cref="Observe"/> or <see cref="Error"/> as this
+    /// mod's own commands do. For a mod that adds commands, from its
+    /// initializer, before the first command arrives.
+    /// </summary>
+    internal static void Register(string cmd, Func<JsonElement, Task> handler)
+    {
+        if (BuiltIn.Contains(cmd) || !Registered.TryAdd(cmd, handler))
+        {
+            throw new InvalidOperationException($"the command '{cmd}' is answered already");
+        }
+    }
     private static int _seq;
 
     public static async Task Serve(RunState state)
@@ -85,7 +112,7 @@ internal static class Protocol
             // content change invalidates them. The game uses this exact value
             // to refuse a replay recorded against different content.
             ["contentHash"] = ModelIdSerializationCache.Hash,
-            ["commands"] = new[] { "start", "fight", "event", "power", "enchant", "hp", "travel", "play_card", "end_turn", "use_potion", "answer", "grant", "enter_room", "choose_option", "buy", "proceed", "discard_potion", "observe", "quit" },
+            ["commands"] = BuiltIn.Concat(Registered.Keys).ToArray(),
         });
 
         while (true)
@@ -129,7 +156,7 @@ internal static class Protocol
 
             cmd = cmdEl.GetString()!;
             GameErrors.Drain();
-            Trace.Command(line);
+            Driver.Received(line);
 
             // While the game is stopped mid-action, the only things that make
             // sense are answering it, looking at it, starting over, and
@@ -175,40 +202,12 @@ internal static class Protocol
                     await Start(req);
                     return false;
 
-                case "fight":
-                    await Fight(req);
-                    return false;
-
-                case "event":
-                    await Event(req);
-                    return false;
-
-                case "power":
-                    await Power(req);
-                    return false;
-
-                case "enchant":
-                    await Enchant(req);
-                    return false;
-
-                case "hp":
-                    await Hp(req);
-                    return false;
-
-                case "enter_room":
-                    await EnterRoom(req);
-                    return false;
-
                 case "choose_option":
                     await ChooseOption(req);
                     return false;
 
                 case "buy":
                     await Buy(req);
-                    return false;
-
-                case "grant":
-                    await Grant(req);
                     return false;
 
                 case "travel":
@@ -244,6 +243,11 @@ internal static class Protocol
                     return true;
 
                 default:
+                    if (Registered.TryGetValue(cmd, out var handler))
+                    {
+                        await handler(req);
+                        return false;
+                    }
                     await Error(cmd, Refusals.Malformed($"unknown command '{cmd}'"));
                     return false;
             }
@@ -356,299 +360,6 @@ internal static class Protocol
         SaveManager.Instance.Progress
             .GetOrCreateCharacterStats(_state.Players[0].Character.Id).TotalWins = wins;
         await Observe(req, "start");
-    }
-
-    /// <summary>
-    /// Puts a named card or relic into the run (H6).
-    /// </summary>
-    /// <remarks>
-    /// Through the game's own commands — <c>CardPileCmd.Add</c> and
-    /// <c>RelicCmd.Obtain</c> — never by pushing onto a collection. The load
-    /// path skips <c>AfterObtained</c>, so a poked-in relic produces a state the
-    /// game never produces, and the divergence surfaces later as a simulator
-    /// bug that is not one.
-    /// </remarks>
-    /// <summary>
-    /// Jumps into a named encounter (H6).
-    /// </summary>
-    /// <remarks>
-    /// The encounter is a model entry name, refused by the game rather than
-    /// validated here: this mod has no list to check against, and the console
-    /// command already answers "Encounter 'X' not found" better than a guess
-    /// would.
-    /// </remarks>
-    private static async Task Fight(JsonElement req)
-    {
-        string? encounter = Str(req, "encounter");
-        if (encounter == null)
-        {
-            await Error("fight", Refusals.Malformed("fight requires an 'encounter' entry name"));
-            return;
-        }
-
-        string? refused = await Driver.EnterFight(_state, encounter);
-        if (refused != null)
-        {
-            await Error("fight", Refusals.Console(refused));
-            return;
-        }
-
-        bool resolved = await Driver.WaitForDecisionPoint();
-        await Observe(req, "fight", resolved);
-    }
-
-    /// <summary>Jumps the run to a named event, off the map.</summary>
-    /// <remarks>
-    /// The same shape as <see cref="Fight"/>, and refused by the game for the
-    /// same reason: <c>EventConsoleCmd</c> answers "Event 'X' not found" over a
-    /// list this mod does not hold.
-    ///
-    /// The run lands at an appended map point, so map and room disagree by
-    /// construction -- as they do after a <c>fight</c>.
-    /// </remarks>
-    private static async Task Event(JsonElement req)
-    {
-        string? entry = Str(req, "event");
-        if (entry == null)
-        {
-            await Error("event", Refusals.Malformed("event requires an 'event' entry name"));
-            return;
-        }
-
-        string? refused = await Driver.EnterEvent(_state, entry);
-        if (refused != null)
-        {
-            await Error("event", Refusals.Console(refused));
-            return;
-        }
-
-        bool resolved = await Driver.WaitForDecisionPoint();
-        await Observe(req, "event", resolved);
-    }
-
-    /// <summary>Enchants the card at a hand index in the fight.</summary>
-    /// <remarks>
-    /// Scenario construction, like <see cref="Power"/>. Refused by the console
-    /// command, which knows the enchantments and which cards each takes.
-    /// </remarks>
-    private static async Task Enchant(JsonElement req)
-    {
-        string? enchantment = Str(req, "enchantment");
-        if (enchantment == null)
-        {
-            await Error("enchant", Refusals.Malformed("enchant requires an 'enchantment' entry name"));
-            return;
-        }
-
-        if (!req.TryGetProperty("amount", out JsonElement amountEl)
-            || !amountEl.TryGetInt32(out int amount))
-        {
-            await Error("enchant", Refusals.Malformed("enchant requires an integer 'amount'"));
-            return;
-        }
-
-        if (!req.TryGetProperty("index", out JsonElement indexEl)
-            || !indexEl.TryGetInt32(out int index))
-        {
-            await Error("enchant", Refusals.Malformed("enchant requires a hand 'index'"));
-            return;
-        }
-
-        string? refused = Driver.Enchant(_state, enchantment, amount, index);
-        if (refused != null)
-        {
-            await Error("enchant", Refusals.Console(refused));
-            return;
-        }
-
-        bool resolved = await Driver.WaitForDecisionPoint();
-        await Observe(req, "enchant", resolved);
-    }
-
-    /// <summary>Puts a power on a creature in the fight.</summary>
-    /// <remarks>
-    /// Scenario construction, like <see cref="Fight"/>. A position with two
-    /// debuffs already on the player is an hour of play away, and four lines
-    /// here.
-    ///
-    /// The amount is the game's own overloaded number: a count for most
-    /// powers, and below zero a single endless instance for the one power that
-    /// decides its stacking at the time. The client spells what it means; this
-    /// passes the number through.
-    ///
-    /// Refused by the console command rather than validated here, for the
-    /// reason <see cref="Fight"/> gives: it knows the power list and this does
-    /// not.
-    /// </remarks>
-    private static async Task Power(JsonElement req)
-    {
-        string? power = Str(req, "power");
-        if (power == null)
-        {
-            await Error("power", Refusals.Malformed("power requires a 'power' entry name"));
-            return;
-        }
-
-        if (!req.TryGetProperty("amount", out JsonElement amountEl)
-            || !amountEl.TryGetInt32(out int amount))
-        {
-            await Error("power", Refusals.Malformed("power requires an integer 'amount'"));
-            return;
-        }
-
-        if (!req.TryGetProperty("target", out JsonElement targetEl)
-            || !targetEl.TryGetUInt32(out uint target))
-        {
-            await Error("power", Refusals.Malformed("power requires a creature id in 'target'"));
-            return;
-        }
-
-        string? refused = await Driver.ApplyPower(_state, power, amount, target);
-        if (refused != null)
-        {
-            await Error("power", Refusals.Console(refused));
-            return;
-        }
-
-        bool resolved = await Driver.WaitForDecisionPoint();
-        await Observe(req, "power", resolved);
-    }
-
-    /// <summary>Sets the hit points of the player, or of a creature in the fight.</summary>
-    /// <remarks>
-    /// Scenario construction, like <see cref="Power"/>. A position at three hit
-    /// points is a fight's worth of damage away, and every hit on the way
-    /// wakes the relics that count them. This sets them through
-    /// <c>CreatureCmd.SetCurrentHp</c>, which raises
-    /// <c>AfterCurrentHpChanged</c> and nothing else, in a fight or out.
-    ///
-    /// Without a <c>target</c> it is the player, which is the only creature
-    /// outside a fight.
-    /// </remarks>
-    private static async Task Hp(JsonElement req)
-    {
-        if (!req.TryGetProperty("hp", out JsonElement hpEl)
-            || !hpEl.TryGetInt32(out int hp)
-            || hp < 1)
-        {
-            await Error("hp", Refusals.Malformed("hp requires a positive integer 'hp'"));
-            return;
-        }
-
-        uint? target = null;
-        if (req.TryGetProperty("target", out JsonElement targetEl))
-        {
-            if (!targetEl.TryGetUInt32(out uint id))
-            {
-                await Error("hp", Refusals.Malformed("hp takes a creature id in 'target'"));
-                return;
-            }
-            target = id;
-        }
-
-        string? refused = await Driver.SetHp(_state, hp, target);
-        if (refused != null)
-        {
-            await Error("hp", Refusals.Console(refused));
-            return;
-        }
-
-        bool resolved = await Driver.WaitForDecisionPoint();
-        await Observe(req, "hp", resolved);
-    }
-
-    private static async Task Grant(JsonElement req)
-    {
-        Player me = _state.Players[0];
-        string? card = Str(req, "card");
-        string? relic = Str(req, "relic");
-        string? potion = Str(req, "potion");
-
-        if (card == null && relic == null && potion == null)
-        {
-            await Error("grant", Refusals.Malformed("grant requires 'card', 'relic' or 'potion'"));
-            return;
-        }
-
-        // Tracked, never awaited. Obtaining a relic runs its AfterObtained, and
-        // an AfterObtained may park a question: Royal Stamp opens a one-card
-        // selection to enchant. The serve loop cannot read the answer until this
-        // handler returns, so awaiting here waits for something only this
-        // handler's return can produce -- the same deadlock `choose_option` on
-        // SMITH had, and it hung for the same reason.
-        //
-        // Measured before the fix: `grant` with ROYAL_STAMP never replied and
-        // the client timed out. Granting a card was unaffected, which is why
-        // this looked fine.
-        //
-        // WaitForDecisionPoint handles both halves. For a relic nothing hangs
-        // off it waits on BackgroundWork.InFlight until the obtain lands; for
-        // Royal Stamp it returns as soon as the selection parks.
-        // Both looked up before either is granted, so a request naming a good
-        // card and a bad relic grants neither. Half a grant is a state no
-        // client asked for and none can undo.
-        CardModel? grantCard = null;
-        if (card != null && (grantCard = Lookup<CardModel>(card, out string missing)) == null)
-        {
-            await Error("grant", Refusals.Malformed(missing));
-            return;
-        }
-
-        RelicModel? grantRelic = null;
-        if (relic != null && (grantRelic = Lookup<RelicModel>(relic, out string absent)) == null)
-        {
-            await Error("grant", Refusals.Malformed(absent));
-            return;
-        }
-
-        PotionModel? grantPotion = null;
-        if (potion != null && (grantPotion = Lookup<PotionModel>(potion, out string nothing)) == null)
-        {
-            await Error("grant", Refusals.Malformed(nothing));
-            return;
-        }
-
-        if (grantCard != null)
-        {
-            BackgroundWork.Track(Driver.GrantCard(_state, grantCard));
-        }
-
-        if (grantRelic != null)
-        {
-            BackgroundWork.Track(RelicCmd.Obtain(grantRelic.ToMutable(), me));
-        }
-
-        // The same procure the game runs when a potion is picked up, so a full
-        // belt refuses this exactly as it refuses a reward — reported through
-        // the observation, where `potions` will simply not have grown.
-        if (grantPotion != null)
-        {
-            BackgroundWork.Track(PotionCmd.TryToProcure(grantPotion.ToMutable(), me));
-        }
-
-        bool resolved = await Driver.WaitForDecisionPoint();
-        await Observe(req, "grant", resolved);
-    }
-
-    /// <summary>Finds a canonical model by its id entry, or says what exists.</summary>
-    /// <remarks>
-    /// Null and a message rather than an exception. Naming something that does
-    /// not exist is a client bug and the client has to be told so, but it is a
-    /// <em>refusal</em> -- the request was not a request -- and throwing filed
-    /// it as a fault, which is the mod admitting it fell over. Granting nothing
-    /// silently would be worse than either: it hides the bug behind a
-    /// divergence three steps later.
-    /// </remarks>
-    private static T? Lookup<T>(string id, out string missing) where T : AbstractModel
-    {
-        List<T> all = ModelDb.AllAbstractModelSubtypes
-            .Where(t => t.IsSubclassOf(typeof(T)))
-            .Select(t => ModelDb.GetById<T>(ModelDb.GetId(t)))
-            .ToList();
-
-        T? found = all.FirstOrDefault(x => string.Equals(x.Id.Entry, id, StringComparison.OrdinalIgnoreCase));
-        missing = found == null ? $"no {typeof(T).Name} with id '{id}' ({all.Count} known)" : "";
-        return found;
     }
 
     private static bool Modifiers(JsonElement req, out ModifierModel[] modifiers, out string malformed)
@@ -771,56 +482,6 @@ internal static class Protocol
         // fight; the same wait decides which, so nesting needs no special case.
         bool resolved = await Driver.WaitForDecisionPoint();
         await Observe(req, "answer", resolved);
-    }
-
-    /// <summary>
-    /// Enters a room of a given type directly, without walking the map to one.
-    /// </summary>
-    /// <remarks>
-    /// Scenario construction (H6): reaching a shop by travelling means finding a
-    /// seed that puts one on floor 2, which is the seed-hunting this project
-    /// exists to avoid.
-    ///
-    /// <c>EnterRoomDebug</c> directly rather than through <c>RoomConsoleCmd</c>.
-    /// The stated reason used to be that the console path reseeds from the wall
-    /// clock, and that was never true of this one: <c>RoomConsoleCmd</c> calls
-    /// the same <c>EnterRoomDebug</c> and never touched
-    /// <c>DebugRandomizeRng</c> — that was <c>FightConsoleCmd</c>, which
-    /// <c>fight</c> now uses. Adopting it would buy the game's own argument
-    /// parsing and refusal message; it simply has not been done.
-    /// </remarks>
-    private static async Task EnterRoom(JsonElement req)
-    {
-        // Unassigned is a RoomType the enum carries and nothing can usefully be
-        // jumped to: it is the "no map point" placeholder `fight` lands on. The
-        // game's own `room` command filters it out of its completions for the
-        // same reason. Listing it as an option and then accepting it would be
-        // offering a state with no meaning.
-        string[] jumpable = Enum.GetNames(typeof(RoomType))
-            .Where(n => n != nameof(RoomType.Unassigned))
-            .ToArray();
-
-        string? want = Str(req, "type");
-        if (want == null
-            || !Enum.TryParse(want, ignoreCase: true, out RoomType type)
-            || !jumpable.Contains(type.ToString()))
-        {
-            await Error("enter_room", Refusals.Malformed(
-                $"enter_room requires a 'type' from: {string.Join(" ", jumpable)}"));
-            return;
-        }
-
-        // The game's `room` command guards this and ours did not, so entering a
-        // room before `start` reached EnterRoomDebug with no run behind it.
-        if (!RunManager.Instance.IsInProgress)
-        {
-            await Error("enter_room", Refusals.NoRun());
-            return;
-        }
-
-        await RunManager.Instance.EnterRoomDebug(type);
-        bool resolved = await Driver.WaitForDecisionPoint();
-        await Observe(req, "enter_room", resolved);
     }
 
     /// <summary>
@@ -1360,7 +1021,7 @@ internal static class Protocol
     /// than smoothed over, because a simulator that resolved it fully has
     /// diverged even though the resulting state may look agreeable.
     /// </remarks>
-    private static async Task Observe(JsonElement req, string cmd, bool resolved = true)
+    internal static async Task Observe(JsonElement req, string cmd, bool resolved = true)
     {
         bool full = Driver.FullObservations
             || (req.TryGetProperty("full", out JsonElement f) && f.ValueKind == JsonValueKind.True);
@@ -1430,7 +1091,7 @@ internal static class Protocol
     /// and the log line below serialises the same object, which is as readable
     /// as the sentence was and has one source. See <see cref="Refusals"/>.
     /// </remarks>
-    private static async Task Error(string cmd, Dictionary<string, object?> reason)
+    internal static async Task Error(string cmd, Dictionary<string, object?> reason)
     {
         Log.Warn($"[headless] rejecting {cmd}: {JsonSerializer.Serialize(reason, Json)}");
         await Send(new Dictionary<string, object?>
@@ -1465,7 +1126,7 @@ internal static class Protocol
     private static async Task Send(Dictionary<string, object?> msg) =>
         await _channel.WriteLine(JsonSerializer.Serialize(msg, Json));
 
-    private static string? Str(JsonElement req, string name) =>
+    internal static string? Str(JsonElement req, string name) =>
         req.TryGetProperty(name, out JsonElement el) && el.ValueKind == JsonValueKind.String
             ? el.GetString()
             : null;

@@ -117,7 +117,7 @@ public static class Driver
             // unobserved faulted task and the process hangs with no message.
             var harmony = new Harmony("sts2_headless");
             harmony.PatchAll(Assembly.GetExecutingAssembly());
-            Trace.Arm(harmony);
+            Loaded?.Invoke();
 
             // Once per process, and here rather than in whichever body happens
             // to run. These used to sit inside Protocol.Serve, so selftest --
@@ -177,9 +177,24 @@ public static class Driver
     /// </remarks>
     public static int ExitCode { get; set; }
 
+    /// <summary>
+    /// Raised once the game has loaded and this mod's patches are in, before
+    /// the first command. A mod that patches the game for its own reasons
+    /// patches here.
+    /// </summary>
+    public static event Action? Loaded;
+
+    /// <summary>Raised with each protocol command as it arrives, before it runs.</summary>
+    public static event Action<string>? CommandReceived;
+
+    /// <summary>Raised as the process is about to quit.</summary>
+    public static event Action? Quitting;
+
+    internal static void Received(string line) => CommandReceived?.Invoke(line);
+
     private static void Quit()
     {
-        Trace.Finish();
+        Quitting?.Invoke();
         Log.Info($"[headless] quitting after {Clock.Elapsed.TotalSeconds:F1}s with {ExitCode}");
 
         // Nothing else can stop this process. Environment.Exit does not work
@@ -194,7 +209,7 @@ public static class Driver
         NGame.Instance.GetTree().Quit(ExitCode);
     }
 
-    private static string Stage = "start";
+    internal static string Stage = "start";
 
     /// <summary>The seed the current process was started at, for restarts.</summary>
     private static string _seed = "ORACLE1";
@@ -424,204 +439,6 @@ public static class Driver
     }
 
     /// <summary>
-    /// Enters one fight and plays it out, greedily, to measure a decision.
-    /// </summary>
-    /// <remarks>
-    /// Uses <c>EnterRoomDebug</c> rather than the <c>fight</c> console command:
-    /// that command calls <c>EncounterModel.DebugRandomizeRng()</c>, which
-    /// reseeds from the wall clock at one-second granularity and would make
-    /// every scenario built on it intermittently irreproducible.
-    ///
-    /// The policy here is "play the first legal card, else end turn". It is not
-    /// meant to play well — the oracle never chooses. It exists to drive enough
-    /// decisions to time one.
-    /// </remarks>
-    /// <summary>
-    /// Jumps into a named encounter, through the game's own console command.
-    /// </summary>
-    /// <remarks>
-    /// This used to hardcode <c>BowlbugsWeak</c> and call
-    /// <c>EnterRoomDebug</c> directly, because <c>FightConsoleCmd</c> calls
-    /// <c>DebugRandomizeRng</c> and H6 concluded the command should therefore be
-    /// avoided. <c>sts2_determinism</c> patches that to nothing now, so the
-    /// command is deterministic and there is no reason to reimplement it.
-    ///
-    /// It still lands at <c>MapPointType.Unassigned</c> — the console command
-    /// does that itself — so the run reaches combat off the map. For scenario
-    /// construction that is the point: reaching a chosen fight by travelling
-    /// means seed-hunting for a seed that puts one where you want it, which is
-    /// what H6 exists to avoid.
-    ///
-    /// Returns the console's own refusal message when it declines, rather than a
-    /// message of ours: it knows why better than we do.
-    /// </remarks>
-    public static async Task<string?> EnterFight(RunState state, string encounter)
-    {
-        Stage = "entering fight";
-        CmdResult result = new FightConsoleCmd().Process(state.Players[0], new[] { encounter });
-        if (!result.success)
-        {
-            return result.msg;
-        }
-
-        if (result.task != null)
-        {
-            await result.task;
-        }
-
-        return null;
-    }
-
-    /// <summary>Puts a power on a creature in the fight.</summary>
-    /// <remarks>
-    /// Through <c>ApplyPowerConsoleCmd</c>, which goes to <c>PowerCmd.Apply</c>
-    /// or <c>ModifyAmount</c> the way a card does. So a constructed debuff gets
-    /// its <c>SkipNextDurationTick</c> set, and the state reached is a state the
-    /// game reaches -- which is the whole reason to hold a simulator to it.
-    ///
-    /// The console command addresses a creature by its position in the combat
-    /// state's list, and an observation addresses one by <c>CombatId</c>. The
-    /// translation belongs here, so a scenario names the creature the
-    /// observation named.
-    /// </remarks>
-    public static async Task<string?> ApplyPower(RunState state, string power, int amount, uint target)
-    {
-        Stage = "applying power";
-        CombatState? combat = (state.CurrentRoom as CombatRoom)?.CombatState;
-        if (combat == null)
-        {
-            return "This doesn't appear to be a combat!";
-        }
-
-        int at = -1;
-        for (int i = 0; i < combat.Creatures.Count; i++)
-        {
-            if (combat.Creatures[i].CombatId == target)
-            {
-                at = i;
-                break;
-            }
-        }
-        if (at < 0)
-        {
-            return $"No creature {target} in this combat.";
-        }
-
-        CmdResult result = new ApplyPowerConsoleCmd().Process(
-            state.Players[0],
-            new[]
-            {
-                power,
-                amount.ToString(CultureInfo.InvariantCulture),
-                at.ToString(CultureInfo.InvariantCulture),
-            });
-        if (!result.success)
-        {
-            return result.msg;
-        }
-
-        if (result.task != null)
-        {
-            await result.task;
-        }
-
-        return null;
-    }
-
-    /// <summary>Sets a creature's hit points through <c>CreatureCmd.SetCurrentHp</c>.</summary>
-    /// <remarks>
-    /// The player when <paramref name="target"/> is null, in a fight or out.
-    /// Otherwise the creature in the fight with that <c>CombatId</c>.
-    /// </remarks>
-    public static async Task<string?> SetHp(RunState state, int hp, uint? target)
-    {
-        Stage = "setting hit points";
-        Creature creature = state.Players[0].Creature;
-        if (target is uint id)
-        {
-            CombatState? combat = (state.CurrentRoom as CombatRoom)?.CombatState;
-            if (combat == null)
-            {
-                return "This doesn't appear to be a combat!";
-            }
-            Creature? found = combat.Creatures.FirstOrDefault(c => c.CombatId == id);
-            if (found == null)
-            {
-                return $"No creature {id} in this combat.";
-            }
-            creature = found;
-        }
-
-        await CreatureCmd.SetCurrentHp(creature, hp);
-        return null;
-    }
-
-    /// <summary>Enchants the card at a hand index.</summary>
-    /// <remarks>
-    /// Through <c>EnchantConsoleCmd</c>, which is <c>CardCmd.Enchant</c> on the
-    /// fight's copy. <c>CardCmd.Enchant</c> throws on a card the enchantment
-    /// does not take, and that comes back as the console's refusal.
-    /// </remarks>
-    public static string? Enchant(RunState state, string enchantment, int amount, int index)
-    {
-        Stage = "enchanting";
-        try
-        {
-            CmdResult result = new EnchantConsoleCmd().Process(
-                state.Players[0],
-                new[]
-                {
-                    enchantment,
-                    amount.ToString(CultureInfo.InvariantCulture),
-                    index.ToString(CultureInfo.InvariantCulture),
-                });
-            return result.success ? null : result.msg;
-        }
-        catch (InvalidOperationException e)
-        {
-            return e.Message;
-        }
-    }
-
-    /// <summary>Jumps the run to a named event, off the map.</summary>
-    /// <remarks>
-    /// The same shape as <see cref="EnterFight"/>, and through the game's own
-    /// <c>EventConsoleCmd</c> for the same reason: it is what
-    /// <c>AppendToMapPointHistory</c> and <c>EnterRoom(new EventRoom(...))</c>
-    /// are called from, so the room the run lands in is the one the game builds
-    /// rather than one assembled here.
-    ///
-    /// It exists because one event cannot be reached any other way worth
-    /// testing. <c>enter_room</c> takes a <c>RoomType</c>, so `Event` rolls
-    /// whichever event the seed offers, and reaching the Crystal Sphere that way
-    /// meant 515 recorded steps to floor 29.
-    /// </remarks>
-    public static async Task<string?> EnterEvent(RunState state, string entry)
-    {
-        Stage = "entering event";
-        if (entry == ModelDb.Event<TheArchitect>().Id.Entry)
-        {
-            // The console's list leaves out the run's last event, which the
-            // game enters from EnterNextAct with no map point of its own.
-            await RunManager.Instance.EnterRoom(new EventRoom(ModelDb.Event<TheArchitect>()));
-            return null;
-        }
-
-        CmdResult result = new EventConsoleCmd().Process(state.Players[0], new[] { entry });
-        if (!result.success)
-        {
-            return result.msg;
-        }
-
-        if (result.task != null)
-        {
-            await result.task;
-        }
-
-        return null;
-    }
-
-    /// <summary>
     /// Plays one card through the real action queue, for tests that need a
     /// card to have been played this turn.
     /// </summary>
@@ -663,77 +480,6 @@ public static class Driver
         return true;
     }
 
-
-    /// <summary>
-    /// Waits until our decision has fully resolved and the game wants another.
-    /// </summary>
-    /// <remarks>
-    /// Two phases, because an empty queue is ambiguous. <c>ActionExecutor</c>
-    /// reports <c>IsRunning == false</c> and <c>FinishedExecutingActions()</c>
-    /// hands back <c>Task.CompletedTask</c> both when the queue has drained and
-    /// when it has not yet picked our action up, so waiting on those alone
-    /// returns immediately and lets the caller run ahead of the game. An
-    /// earlier version did exactly that: 300 decisions "executed" in 70ms while
-    /// only five actions actually ran.
-    ///
-    /// So phase one waits on the action we issued, via its own completion
-    /// source, which cannot be satisfied early. Phase two then drains the
-    /// cascade it triggered — enemy turns, triggers, draws.
-    ///
-    /// **Draining is still not enough, and the protocol is what proved it.**
-    /// <c>EndPlayerTurnAction.ExecuteAction</c> calls <c>PlayerCmd.EndTurn</c>
-    /// and returns <c>Task.CompletedTask</c> immediately, so the action reports
-    /// itself finished while the turn transition — enemy turn, next draw — has
-    /// not begun. The queue is genuinely empty in that gap. The in-process
-    /// driver never noticed because it re-read the live model on the next
-    /// iteration; over the protocol the observation is authoritative, and a
-    /// client acting on it was found a whole turn behind the oracle (it believed
-    /// turn 2 while the game was on turn 3) with no command in between.
-    ///
-    /// So phase three waits for the game to say it wants input again, using its
-    /// own notion rather than a settling delay: actions re-enabled and the turn
-    /// phase back to <c>Play</c>. For a turn-ending decision that is still
-    /// ambiguous — those hold at the moment of issue too — so the caller passes
-    /// the turn number it is leaving and the wait requires the counter to have
-    /// advanced past it. A monotonic counter cannot be faked by a transient.
-    /// </remarks>
-    /// <param name="turnMustAdvancePast">
-    /// For decisions that end the turn: the turn number being left. Quiescence
-    /// then requires a strictly greater turn number, not merely a drained queue.
-    /// </param>
-    /// <summary>
-    /// Puts a card into the run, where the game would put it.
-    /// </summary>
-    /// <remarks>
-    /// Hand while a fight is on, deck otherwise: granting to hand out of combat
-    /// would put the card somewhere the game has no pile for.
-    ///
-    /// Registration first, and it is not optional. <c>CardPileCmd.Add</c> only
-    /// rejects an unregistered card when it already believes itself in combat,
-    /// so adding to the hand appears to succeed — and the card then throws
-    /// "must be added to a CombatState before playing it" when played, several
-    /// commands later.
-    ///
-    /// <c>CreateCard</c> registers it, as the game's own <c>card</c> console
-    /// command does, and then runs <c>AfterCreated</c>. A card built and only
-    /// registered skips that, which leaves Spoils Map's act at -1.
-    /// </remarks>
-    public static async Task GrantCard(RunState state, CardModel canonical)
-    {
-        Player me = state.Players[0];
-        CombatState? combat = (state.CurrentRoom as CombatRoom)?.CombatState;
-
-        if (combat != null && CombatManager.Instance.IsInProgress)
-        {
-            CardModel card = combat.CreateCard(canonical, me);
-            await CardPileCmd.Add(card, PileType.Hand.GetPile(me));
-        }
-        else
-        {
-            CardModel card = state.CreateCard(canonical, me);
-            await CardPileCmd.Add(card, me.Deck);
-        }
-    }
 
     /// <summary>
     /// Ends the player's turn, and waits for the next one to actually begin.

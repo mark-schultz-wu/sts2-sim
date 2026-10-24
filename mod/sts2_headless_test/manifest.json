@@ -11,6 +11,9 @@
   "dependencies": [
     {
       "id": "sts2_headless"
+    },
+    {
+      "id": "sts2_setup"
     }
   ]
 }

@@ -471,9 +471,9 @@ Four layers, each catching what the one before cannot.
    Codegen refuses to generate when two dumps disagree on any of it.
 
    Neither hash says anything about **the mod**, because redeploying one moves
-   neither. So the greeting carries a third identity: the first 8 bytes of a
-   SHA-256 over the mod's own sources, produced by
-   `mod/sts2_headless/identity.sh`. That script is run by the mod's build and
+   neither. So the greeting carries a third identity. It is the first 8 bytes
+   of a SHA-256 over the sources of every mod the oracle loads, produced by
+   `mod/identity.sh`. That script is run by the headless mod's build and
    again by `sts2-headless`'s `build.rs`, so one script answers for both ends.
    The client refuses a mismatch at the handshake.
    It replaced a hand-maintained `protocol` integer, which had the same job and

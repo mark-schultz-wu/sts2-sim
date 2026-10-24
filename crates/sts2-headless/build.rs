@@ -1,7 +1,7 @@
 //! Works out which mod build this client expects to talk to.
 //!
-//! The answer is a hash of the mod's source, produced by
-//! `mod/sts2_headless/identity.sh`. That is the same script the mod's own build
+//! The answer is a hash of the mods' source, produced by `mod/identity.sh`.
+//! That is the same script the headless mod's own build
 //! runs to compile the value into its greeting. One hasher invoked twice, rather
 //! than one here and another in MSBuild. Two implementations of "the same hash"
 //! are two things that can disagree, and the symptom of disagreeing is that
@@ -14,18 +14,30 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// The mods whose source the identity hashes, as `mod/identity.sh` lists them.
+const MODS: [&str; 5] = [
+    "sts2_determinism",
+    "sts2_fixes",
+    "sts2_headless",
+    "sts2_setup",
+    "sts2_observe",
+];
+
 fn main() {
-    let mod_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../mod/sts2_headless")
+    let mod_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../mod")
         .canonicalize()
-        .expect("the mod's source should sit beside this crate in the workspace");
+        .expect("the mods' source should sit beside this crate in the workspace");
 
     // Per file rather than on the directory: a directory's mtime does not move
     // when a file inside it is edited in place, so cargo would cache a stale
     // identity through exactly the edit that changed it.
-    watch(&mod_dir);
+    for name in MODS {
+        watch(&mod_root.join(name));
+    }
 
-    let script = mod_dir.join("identity.sh");
+    let script = mod_root.join("identity.sh");
+    println!("cargo:rerun-if-changed={}", script.display());
     let out = Command::new("sh")
         .arg(&script)
         .output()
@@ -53,12 +65,20 @@ fn main() {
     .unwrap_or_else(|e| panic!("writing {}: {e}", dest.display()));
 }
 
-/// Rebuild when any of the mod's sources change, the script included.
+/// Rebuild when any of a mod's sources change, in any directory below it but
+/// its build output.
 fn watch(dir: &Path) {
     println!("cargo:rerun-if-changed={}", dir.display());
-    for entry in std::fs::read_dir(dir).expect("the mod's source should be readable") {
+    for entry in std::fs::read_dir(dir).expect("a mod's source should be readable") {
         let path = entry.expect("a readable directory entry").path();
-        if let Some("cs" | "sh") = path.extension().and_then(|e| e.to_str()) {
+        let name = path.file_name().and_then(|n| n.to_str());
+        if path.is_dir() {
+            if !matches!(name, Some("bin" | "obj")) {
+                watch(&path);
+            }
+        } else if path.extension().and_then(|e| e.to_str()) == Some("cs")
+            || name == Some("manifest.json")
+        {
             println!("cargo:rerun-if-changed={}", path.display());
         }
     }

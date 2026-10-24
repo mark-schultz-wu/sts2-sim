@@ -53,9 +53,9 @@ so a client that checks them checks something real. `game`, `commit` and
 `assemblyHash` come from the game's own `ReleaseInfo`. A build without one
 reports `"UNRELEASED"`, `"UNKNOWN"` and `0`.
 
-**`mod` says which build of *this mod* answers**, as the first 8 bytes of a
-SHA-256 over its own sources. That is `identity.sh`, run by the mod's build and
-by the Rust client's `build.rs`. Both derive it from the same files with the same
+**`mod` says which build of the oracle's mods answers**, as the first 8 bytes of
+a SHA-256 over the sources of every mod it loads. That is `mod/identity.sh`, run
+by this mod's build and by the Rust client's `build.rs`. Both derive it from the same files with the same
 script. A client refuses a mismatch at the handshake.
 
 This is what catches a mod that was edited and never redeployed, and nothing else

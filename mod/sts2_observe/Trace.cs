@@ -12,7 +12,7 @@ using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Random;
 using MegaCrit.Sts2.Core.Runs;
 
-namespace Sts2Headless;
+namespace Sts2Observe;
 
 /// <summary>
 /// The game's own calls, method by method, when a run asks for them.
