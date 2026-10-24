@@ -22,8 +22,8 @@ use num_traits::{One, ToPrimitive};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
-use sts2_core::{Observation, Play, Question};
+use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Wrap};
+use sts2_core::{Play, Question, View};
 
 use super::app::App;
 use super::names;
@@ -47,7 +47,7 @@ pub(crate) fn log_rows(height: u16) -> u16 {
 
 pub fn draw<V, G>(frame: &mut Frame, app: &App<V, G>)
 where
-    V: sts2_content_wire::WireContentVersion,
+    V: crate::tui::Build,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -62,9 +62,9 @@ where
     ])
     .areas(whole);
 
-    match app.observation() {
+    match app.view() {
         Some(observed) => {
-            run_strip(frame, strip, observed, app.options.rng);
+            run_strip(frame, strip, observed);
             body_of(frame, body, app, observed);
         }
         // Not "there is no run" — that is the setup screen above. This is the
@@ -80,15 +80,46 @@ where
     key_bar(frame, keys, app);
 
     overlay::draw(frame, body, app);
+    toast(frame, body, app);
+}
+
+/// The last thing that went wrong, in a box at the bottom right of the body.
+fn toast<V, G>(frame: &mut Frame, body: Rect, app: &App<V, G>)
+where
+    V: crate::tui::Build,
+    G: Play<V>,
+    G::Error: std::error::Error + Send + Sync + 'static,
+{
+    let Some(note) = &app.ui.toast else {
+        return;
+    };
+    let style = match note.tone {
+        Tone::Refused => theme::refused(),
+        Tone::Cannot | Tone::Warned => theme::gold(),
+        Tone::Did => theme::TEXT,
+    };
+    let width = (Line::raw(note.text.as_str()).width() as u16 + 4).min(body.width);
+    if width < 8 || body.height < 3 {
+        return;
+    }
+    let area = Rect {
+        x: body.right() - width,
+        y: body.bottom() - 3,
+        width,
+        height: 3,
+    };
+    let block = boxed().border_style(style);
+    let inner = block.inner(area);
+    frame.render_widget(ratatui::widgets::Clear, area);
+    frame.render_widget(block, area);
+    frame.render_widget(
+        Paragraph::new(Line::styled(format!(" {}", note.text), style)),
+        inner,
+    );
 }
 
 /// What the run is carrying, on one line, always in the same order.
-fn run_strip<V: sts2_content_wire::WireContentVersion>(
-    frame: &mut Frame,
-    area: Rect,
-    observed: &Observation<V>,
-    rng: bool,
-) {
+fn run_strip<V: crate::tui::Build>(frame: &mut Frame, area: Rect, observed: &View<V>) {
     let mut spans = vec![
         Span::styled(
             format!(" act {} ", observed.act + V::Count::one()),
@@ -143,28 +174,16 @@ fn run_strip<V: sts2_content_wire::WireContentVersion>(
         spans.push(Span::styled(potions.join(" · "), theme::dim()));
     }
 
-    if rng {
-        let draws: u32 = observed.rng.run.values().map(|at| at.counter).sum::<u32>()
-            + observed
-                .rng
-                .player
-                .values()
-                .map(|at| at.counter)
-                .sum::<u32>();
-        spans.push(Span::raw("   "));
-        spans.push(Span::styled(format!("rng {draws}"), theme::dim()));
-    }
-
     frame.render_widget(Line::from(spans), area);
 }
 
-fn body_of<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>, observed: &Observation<V>)
+fn body_of<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>, observed: &View<V>)
 where
-    V: sts2_content_wire::WireContentVersion,
+    V: crate::tui::Build,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
-    if let Some(question) = app.seen().and_then(|a| a.asking.as_ref()) {
+    if let Some(question) = app.view().and_then(|a| a.asking.as_ref()) {
         return room::asking(frame, area, app, question);
     }
     if observed.run_over {
@@ -183,11 +202,7 @@ where
     }
 }
 
-fn over<V: sts2_content_wire::WireContentVersion>(
-    frame: &mut Frame,
-    area: Rect,
-    observed: &Observation<V>,
-) {
+fn over<V: crate::tui::Build>(frame: &mut Frame, area: Rect, observed: &View<V>) {
     let (word, style) = match observed.victory {
         Some(true) => ("the spire is yours", theme::better()),
         _ => ("the run ends here", theme::hurt()),
@@ -211,13 +226,13 @@ fn over<V: sts2_content_wire::WireContentVersion>(
 /// What has just happened, oldest at the top.
 fn scrollback<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>)
 where
-    V: sts2_content_wire::WireContentVersion,
+    V: crate::tui::Build,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
     let block = Block::new()
         .borders(Borders::TOP)
-        .border_style(theme::dim());
+        .border_style(theme::border());
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
@@ -257,12 +272,12 @@ where
 /// The name of the potion being aimed, for the bar to say what it drinks.
 fn drinking<V, G>(app: &App<V, G>) -> Option<String>
 where
-    V: sts2_content_wire::WireContentVersion,
+    V: crate::tui::Build,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
     let at = app.drinking()?;
-    let potion = app.observation()?.potions.get(at)?;
+    let potion = app.view()?.potions.get(at)?;
     Some(
         potion
             .title
@@ -273,7 +288,7 @@ where
 
 fn key_bar<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>)
 where
-    V: sts2_content_wire::WireContentVersion,
+    V: crate::tui::Build,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -285,11 +300,8 @@ where
         return;
     }
 
-    let asking = app.seen().and_then(|a| a.asking.as_ref());
-    let in_fight = app
-        .observation()
-        .map(|o| o.fight().is_some())
-        .unwrap_or(false);
+    let asking = app.view().and_then(|a| a.asking.as_ref());
+    let in_fight = app.view().map(|o| o.fight().is_some()).unwrap_or(false);
     let aiming = app.aimed_at().is_some();
 
     match (asking, in_fight, aiming) {
@@ -371,10 +383,16 @@ pub fn centred(area: Rect, w: u16, h: u16) -> Rect {
     }
 }
 
+/// A box with rounded corners, which every bordered panel on these screens
+/// is drawn in.
+pub fn boxed() -> Block<'static> {
+    Block::bordered().border_type(BorderType::Rounded)
+}
+
 /// A heading over a panel: the words, then a rule to the edge.
 pub fn titled(text: &str) -> Block<'static> {
     Block::new()
         .borders(Borders::TOP)
-        .border_style(theme::dim())
+        .border_style(theme::border())
         .title(Span::styled(format!(" {text} "), theme::label()))
 }

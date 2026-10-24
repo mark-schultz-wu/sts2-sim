@@ -27,6 +27,21 @@ impl sts2_core::Engine for V0_107_1 {
         false
     }
 
+    /// A loss below nothing heals, past the creature's maximum too.
+    fn hp_loss_floors_at_nothing() -> bool {
+        false
+    }
+
+    /// Only a play or a potion that empties the hand asks.
+    fn checks_empty_hand_entering_pre_play() -> bool {
+        false
+    }
+
+    /// A selection leaves the ended turn ended.
+    fn selection_undoes_ended_turn() -> bool {
+        false
+    }
+
     /// The draw comes first, and a forced reward pays whatever it drew, with
     /// the odds moved as for a potion paid.
     fn roll_potion_reward(
@@ -53,5 +68,10 @@ impl sts2_core::Engine for V0_107_1 {
         } else {
             RewardRarity::Common
         }
+    }
+
+    /// `WithCardPools` clears `_cardPools`, then adds what it was handed.
+    fn card_pools_cleared_before_read() -> bool {
+        true
     }
 }

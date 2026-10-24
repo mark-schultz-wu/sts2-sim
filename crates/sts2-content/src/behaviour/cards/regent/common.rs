@@ -39,7 +39,8 @@ pub(super) fn collision_course_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) 
 ///
 /// The number the power carries runs through `Hook.ModifyBlock` first, which
 /// this card does itself rather than leave to the gain. It reads the hook
-/// before the block it gains lands, as the game's own order does.
+/// before the block it gains lands, as the game's own order does. A fraction
+/// below one lands a power of nothing, as Dodge and Roll's does.
 pub(super) fn glitterstream<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     let next_turn = fight.resolve(Effect::GainBlock {
         recipient: fight.actor(),
@@ -52,10 +53,13 @@ pub(super) fn glitterstream<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Play
         scaling: Scaling::Dynamic,
     });
     fight.apply(block);
-    fight.apply_to_actor(
-        V::Power::BLOCK_NEXT_TURN_POWER,
-        PowerAmount::Counted(next_turn.amount()),
-    );
+    match next_turn.amount() == 0 && next_turn.positive() {
+        true => fight.apply_fraction_to_actor(V::Power::BLOCK_NEXT_TURN_POWER),
+        false => fight.apply_to_actor(
+            V::Power::BLOCK_NEXT_TURN_POWER,
+            PowerAmount::Counted(next_turn.amount()),
+        ),
+    }
     Played::Done
 }
 

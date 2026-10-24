@@ -34,6 +34,13 @@ pub enum Answer {
     Divine { x: u8, y: u8, tool: Tool },
     /// Yes or no, to a popup that asks for confirmation.
     Confirm(bool),
+    /// Backs out of a card selection that can be cancelled, as its screen's
+    /// back button does. The game gets no cards, and whatever opened the
+    /// selection is left undone. Smith, Cook, a shop's card removal and the
+    /// card-removal reward open one.
+    ///
+    /// Last, because a digest hashes an answer by its place in this list.
+    Cancel,
 }
 
 /// Which of a question's options a card selection takes, in the order it took

@@ -68,6 +68,10 @@ $ sts2-sim
 $ sts2-sim --game-version v0.111.0
 ```
 
+The screen draws in 24-bit colour when `COLORTERM` says the terminal can, and
+in the terminal's own sixteen colours otherwise. `STS2_COLOR=16` or
+`STS2_COLOR=truecolor` overrides that guess.
+
 The default build is v0.107.1, which the simulator plays to the end of each
 recorded run. A path that the simulator has no port for stops the program, and
 the message names that path.

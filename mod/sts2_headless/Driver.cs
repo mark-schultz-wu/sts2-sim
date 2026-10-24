@@ -115,7 +115,9 @@ public static class Driver
             // PatchAll throws when Harmony cannot patch -- and Run is started
             // with `_ = Driver.Run(...)`, so an escaping exception becomes an
             // unobserved faulted task and the process hangs with no message.
-            new Harmony("sts2_headless").PatchAll(Assembly.GetExecutingAssembly());
+            var harmony = new Harmony("sts2_headless");
+            harmony.PatchAll(Assembly.GetExecutingAssembly());
+            Trace.Arm(harmony);
 
             // Once per process, and here rather than in whichever body happens
             // to run. These used to sit inside Protocol.Serve, so selftest --
@@ -177,6 +179,7 @@ public static class Driver
 
     private static void Quit()
     {
+        Trace.Finish();
         Log.Info($"[headless] quitting after {Clock.Elapsed.TotalSeconds:F1}s with {ExitCode}");
 
         // Nothing else can stop this process. Environment.Exit does not work
@@ -522,6 +525,34 @@ public static class Driver
             await result.task;
         }
 
+        return null;
+    }
+
+    /// <summary>Sets a creature's hit points through <c>CreatureCmd.SetCurrentHp</c>.</summary>
+    /// <remarks>
+    /// The player when <paramref name="target"/> is null, in a fight or out.
+    /// Otherwise the creature in the fight with that <c>CombatId</c>.
+    /// </remarks>
+    public static async Task<string?> SetHp(RunState state, int hp, uint? target)
+    {
+        Stage = "setting hit points";
+        Creature creature = state.Players[0].Creature;
+        if (target is uint id)
+        {
+            CombatState? combat = (state.CurrentRoom as CombatRoom)?.CombatState;
+            if (combat == null)
+            {
+                return "This doesn't appear to be a combat!";
+            }
+            Creature? found = combat.Creatures.FirstOrDefault(c => c.CombatId == id);
+            if (found == null)
+            {
+                return $"No creature {id} in this combat.";
+            }
+            creature = found;
+        }
+
+        await CreatureCmd.SetCurrentHp(creature, hp);
         return null;
     }
 

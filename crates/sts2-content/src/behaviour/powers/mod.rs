@@ -750,14 +750,17 @@ fn frees<V: crate::Build>(power: V::Power, card: V::Card, ethereal: bool) -> boo
 }
 
 /// What Vulnerable on `holder` multiplies a powered hit from `dealer` by.
+/// `pet_owners` says whether a dealer without Cruelty reads its pet
+/// owner's.
 ///
 /// # Panics
 ///
 /// An endless Cruelty.
-fn vulnerable<V: crate::Build>(
+pub(crate) fn vulnerable<V: crate::Build>(
     fight: &dyn sts2_core::FightView<V>,
     holder: sts2_core::CombatId,
     dealer: Option<sts2_core::CombatId>,
+    pet_owners: bool,
 ) -> Fixed {
     let mut by = hundredths(V::Power::VULNERABLE_POWER_DAMAGE_INCREASE);
     // `if (dealer != null)`, and both answer the dealer hitting itself with
@@ -768,7 +771,11 @@ fn vulnerable<V: crate::Build>(
         if fight.relic(dealer, V::Relic::PAPER_PHROG) {
             by += PHROG;
         }
-        match fight.power(dealer, V::Power::CRUELTY_POWER) {
+        let cruelty = fight.power(dealer, V::Power::CRUELTY_POWER).or_else(|| {
+            let owner = fight.pet_owner(dealer).filter(|_| pet_owners)?;
+            fight.power(owner, V::Power::CRUELTY_POWER)
+        });
+        match cruelty {
             // `Amount / 100m`, which is its stack in hundredths.
             Some(PowerAmount::Counted(amount)) => by += amount,
             Some(PowerAmount::Endless) => unimplemented!("an endless Cruelty"),
@@ -927,7 +934,7 @@ pub(crate) fn modify_hook<V: crate::Build>(
         }
         // `VulnerablePower.ModifyDamageMultiplicative`: its `DamageIncrease`,
         // raised by the dealer's Paper Phrog and Cruelty, then by the
-        // holder's own Debilitate.
+        // holder's own Debilitate. A pet's hit reads the pet's Cruelty alone.
         (
             __c0,
             _,
@@ -938,7 +945,7 @@ pub(crate) fn modify_hook<V: crate::Build>(
                 ..
             },
         ) if __c0 == V::Power::VULNERABLE_POWER && (target == Some(holder)) => {
-            Modify::Scaled(vulnerable::<V>(fight, holder, dealer))
+            Modify::Scaled(vulnerable::<V>(fight, holder, dealer, false))
         }
         // `WeakPower.ModifyDamageMultiplicative`: its `DamageDecrease`,
         // lowered by the target's Paper Krane, then by the holder's own
@@ -1206,8 +1213,10 @@ pub(crate) fn modify_hook<V: crate::Build>(
             Modify::Nothing
         }
         // `CuriousPower.TryModifyEnergyCostInCombat`: its stack off a Power
-        // its owner holds. A cost it would take below nothing is nothing,
-        // which the fold's own clamp gives.
+        // its owner holds, and no lower than nothing in its own step. A
+        // listener after it, such as Spiked Gauntlets, adds to the floored
+        // cost. It leaves a cost of nothing alone, which the floor does too:
+        // no listener before it lowers a cost.
         (
             __c0,
             PowerAmount::Counted(amount),
@@ -1219,7 +1228,7 @@ pub(crate) fn modify_hook<V: crate::Build>(
                 && <V as sts2_core::Rules>::card_kind(card)
                     == Some(sts2_core::CardKind::Power)) =>
         {
-            Modify::Added(-amount)
+            Modify::Less(amount)
         }
         (__c0, PowerAmount::Endless, ModifyHook::EnergyCost { .. })
             if __c0 == V::Power::CURIOUS_POWER =>
@@ -1406,15 +1415,21 @@ pub(crate) fn modify_hook<V: crate::Build>(
             unimplemented!("an endless {power:?}")
         }
         // `VoidFormPower.TryModifyEnergyCostInCombatLate` and
-        // `TryModifyStarCost`: nothing for its owner's cards while fewer than
-        // its stack have been played this turn. A fight here has one player,
-        // whose cards are all its holder's, and every cost read is of a card
-        // in hand or in play.
+        // `TryModifyStarCost`: nothing for its owner's cards in hand or in
+        // play while fewer than its stack have been played this turn. A fight
+        // here has one player, whose cards are all its holder's. A Sly card
+        // auto-played from the discard pile pays its cost in full.
         (
             __c0,
             PowerAmount::Counted(amount),
-            ModifyHook::EnergyCostLate { .. } | ModifyHook::StarCost { .. },
-        ) if __c0 == V::Power::VOID_FORM_POWER && (owner == CombatSide::Player) => {
+            ModifyHook::EnergyCostLate { pile, .. } | ModifyHook::StarCost { pile, .. },
+        ) if __c0 == V::Power::VOID_FORM_POWER
+            && (owner == CombatSide::Player)
+            && matches!(
+                pile,
+                None | Some(sts2_core::Pile::Hand | sts2_core::Pile::Play)
+            ) =>
+        {
             let State::VoidForm { played } = *state else {
                 unreachable!("Void Form counts its plays")
             };
@@ -1761,22 +1776,21 @@ pub(crate) fn modify_hook<V: crate::Build>(
         // `UnmovablePower.ModifyBlockMultiplicative`: double a card's or a
         // move's block on its owner, while fewer such gains than its stack
         // came this turn from other plays. A fight here has one player, who
-        // alone plays Unmovable. The entry's `powered` stands for
-        // `IsCardOrMonsterMove`: the two part only on a Move block that is
-        // Unpowered, which no block here is.
+        // alone plays Unmovable. It reads `IsCardOrMonsterMove`, on the gain
+        // and on the turn's entries.
         (
             __c0,
             PowerAmount::Counted(amount),
             ModifyHook::BlockMultiplicative {
                 target,
-                powered: true,
+                moved: true,
                 play,
                 ..
             },
         ) if __c0 == V::Power::UNMOVABLE_POWER && (target == holder) => {
             let gained = history
                 .block_gained_this_turn()
-                .filter(|entry| entry.receiver == target && entry.powered && entry.play != play)
+                .filter(|entry| entry.receiver == target && entry.moved && entry.play != play)
                 .count();
             match gained >= usize::try_from(amount).unwrap_or(0) {
                 true => Modify::Nothing,
@@ -1788,7 +1802,7 @@ pub(crate) fn modify_hook<V: crate::Build>(
             PowerAmount::Endless,
             ModifyHook::BlockMultiplicative {
                 target,
-                powered: true,
+                moved: true,
                 ..
             },
         ) if __c0 == V::Power::UNMOVABLE_POWER && (target == holder) => {
@@ -2779,10 +2793,9 @@ pub(crate) fn event_hook<V: crate::Build>(
             __c0,
             PowerAmount::Counted(amount),
             EventHook::BlockGained {
-                creature,
-                amount: gained,
+                creature, positive, ..
             },
-        ) if __c0 == V::Power::JUGGERNAUT_POWER && (creature == holder && gained > 0) => {
+        ) if __c0 == V::Power::JUGGERNAUT_POWER && (creature == holder && positive) => {
             Some(HookEffect::DamageRandomOpponent {
                 amount,
                 unblockable: false,

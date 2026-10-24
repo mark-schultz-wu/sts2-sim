@@ -8,8 +8,10 @@ Two of its commands build content. `instructions`, `trace`, `allocations` and
 `dump` runs the game's dump modes and files what each one prints. Most modes
 describe content and land under `crates/sts2-content/src/<version>/dumps/`. Two
 are ground truth for tests, which is not content, and land beside those tests.
-Two modes, `cardplaydump` and `monstermovedump`, launch nothing: they read the
-decompiled assembly.
+Three modes launch nothing. `cardplaydump` and `monstermovedump` read the
+decompiled assembly. `textdump` copies the English text tables out of the
+build's `SlayTheSpire2.pck` into `dumps/text/`. The front end reads them to say
+what a card, relic or power does.
 
 `codegen` turns those dumps into `sts2-content`'s tables, one domain per dump,
 and fails the build if two dumps came from different builds.

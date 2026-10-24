@@ -14,8 +14,6 @@ use std::path::PathBuf;
 pub struct Options {
     /// Where the run is being written, for the header to say so.
     pub recording: Option<PathBuf>,
-    /// Show the RNG stream counters, as `--rng` does for the subcommands.
-    pub rng: bool,
 }
 
 /// Which pile the pile viewer is showing.
@@ -138,6 +136,9 @@ pub struct Ui {
     /// How far back the log is scrolled, in lines from the newest.
     pub scrolled: usize,
     pub leaving: bool,
+    /// The last thing that went wrong, shown over the screen until the next
+    /// key. A screen too short for a log shows nothing else of it.
+    pub toast: Option<Note>,
 }
 
 /// How much scrollback is kept. Enough to see a whole fight's worth of moves
@@ -146,10 +147,16 @@ const KEPT: usize = 500;
 
 impl Ui {
     pub fn say(&mut self, tone: Tone, text: impl Into<String>) {
-        self.log.push_back(Note {
+        let note = Note {
             text: text.into(),
             tone,
-        });
+        };
+        // A move that happened is in the log and on the screen. One that did
+        // not is news, and a player looking at the hand misses a log line.
+        if tone != Tone::Did {
+            self.toast = Some(note.clone());
+        }
+        self.log.push_back(note);
         while self.log.len() > KEPT {
             self.log.pop_front();
         }
@@ -214,6 +221,19 @@ mod tests {
         }
         assert_eq!(ui.log.len(), KEPT);
         assert_eq!(ui.log.front().map(|n| n.text.as_str()), Some("10"));
+    }
+
+    /// A refusal pops up, and a move that worked does not.
+    #[test]
+    fn only_news_is_toasted() {
+        let mut ui = Ui::default();
+        ui.say(Tone::Did, "played Bash");
+        assert!(ui.toast.is_none());
+        ui.say(Tone::Refused, "not enough energy");
+        assert_eq!(
+            ui.toast.map(|note| note.text).as_deref(),
+            Some("not enough energy")
+        );
     }
 
     #[test]

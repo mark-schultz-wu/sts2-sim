@@ -192,6 +192,12 @@ pub fn named<V: sts2_core::ContentVersion>(seen: &Snapshot<V>, decision: &Decisi
         Decision::Travel { .. } => "travel".into(),
         Decision::EnterRoom { room } => format!("enter {room:?}"),
         Decision::Proceed => "proceed".into(),
+        Decision::DiscardPotion { index } => {
+            match observation.potions.get(usize::from(index.get())) {
+                Some(held) => format!("discard {:?}", held.potion),
+                None => "discard".into(),
+            }
+        }
     }
 }
 

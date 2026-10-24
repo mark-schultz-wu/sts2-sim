@@ -74,6 +74,7 @@ pub use report::question::{
     BundleOption, CardOption, Cell, FoundItem, Question, QuestionKind, RewardCard, RewardDetail,
     RewardKind,
 };
+pub use report::view::{SeenCreature, SeenFight, View};
 
 #[cfg(feature = "fixture")]
 pub mod fixture;

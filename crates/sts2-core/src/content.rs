@@ -2247,6 +2247,13 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("reading a card's keywords")
     }
 
+    /// `ShouldRetainThisTurn` or `IsSlyThisTurn` for one card: the keyword,
+    /// or the single turn's flag `GiveSingleTurnRetain` or `GiveSingleTurnSly`
+    /// set.
+    fn card_keyword_this_turn(&self, _card: crate::CardAt<V>, _keyword: V::CardKeyword) -> bool {
+        unimplemented!("reading a card's keywords for the turn")
+    }
+
     /// `GetKeywordsWithSources(KeywordSources.Local).Contains(keyword)`: the
     /// words the card itself carries, without what a power grants it for the
     /// fight, as Hex grants Ethereal.
@@ -2737,7 +2744,11 @@ pub trait Fight<V: ContentVersion> {
     /// `CreatureCmd.LoseMaxHp`: unblockable, unpowered damage from nobody for
     /// what the new maximum leaves above the current, then that maximum, at
     /// one or more.
-    fn lose_max_hp(&mut self, _creature: crate::CombatId, _amount: V::Number) {
+    ///
+    /// A hit that parks a question leaves the maximum as it was, and hands
+    /// back the new one. `SetMaxHp` waits behind the answer, and
+    /// [`Fight::set_max_hp`] is what sets it then.
+    fn lose_max_hp(&mut self, _creature: crate::CombatId, _amount: V::Number) -> Option<V::Health> {
         unimplemented!("maximum health lost in a fight")
     }
 
@@ -2878,6 +2889,13 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("auto-playing a named card")
     }
 
+    /// `CardCmd.AutoPlay` of a card that left the fight, as a power card one
+    /// play already took out has, with no target named. The card is removed
+    /// from the fight's state, so it does not play.
+    fn auto_play_departed(&mut self, _card: crate::CardId<V>) {
+        unimplemented!("auto-playing a card no pile holds")
+    }
+
     /// `StableShuffle` over `cards` off the named run stream: put in the
     /// game's card order, then shuffled.
     fn stable_shuffle_cards(&mut self, _cards: &mut [crate::CardAt<V>], _stream: V::RunRngType) {
@@ -2939,6 +2957,11 @@ pub trait Fight<V: ContentVersion> {
     /// The player for a card and the monster for a move, which is the creature
     /// a card saying "gain" means.
     fn apply_to_actor(&mut self, power: V::Power, amount: PowerAmount<V::Number>);
+
+    /// `PowerCmd.Apply` of a fraction below one onto the actor. A fresh
+    /// instance lands and holds nothing, since `ApplyInternal` floors the
+    /// amount only after the zero check.
+    fn apply_fraction_to_actor(&mut self, power: V::Power);
 
     /// `CreatureCmd.Heal(at, amount)`, which no power modifies.
     ///
@@ -3278,16 +3301,19 @@ pub enum Effect<V: ContentVersion> {
 
 /// Whether the powers that scale a number act on this one.
 ///
-/// The game keeps this as `ValueProp`, a set of flags. It asks the same
-/// question of a hit and of a block: `IsPoweredAttack` and
+/// The game keeps this as `ValueProp`, a set of flags. `IsPoweredAttack` and
 /// `IsPoweredCardOrMonsterMoveBlock` are both the `Move` flag without the
-/// `Unpowered` one. So one answer serves both.
+/// `Unpowered` one, so one answer serves a hit and a block.
 ///
 /// A card or a monster move prints `Move`, and a relic prints `Unpowered`.
+/// Entrench prints both.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Scaling {
     /// A relic's number, which lands as it reads.
     Static,
+    /// A card's number printed `Unpowered | Move`: it lands as it reads, and
+    /// `IsCardOrMonsterMove` still says yes.
+    StaticMove,
     /// A card's number or a monster move's, which Strength and Dexterity
     /// move.
     Dynamic,
@@ -3315,6 +3341,10 @@ pub trait EffectResolution<V: ContentVersion> {
     /// such as Glitterstream's block, resolves the gain and stores this rather
     /// than hand it to [`Fight::apply`].
     fn amount(&self) -> V::Number;
+
+    /// Whether the game's decimal was above nothing, before the floor. A
+    /// fraction below one is, though [`EffectResolution::amount`] is nothing.
+    fn positive(&self) -> bool;
 }
 
 /// What a power does to a number a fight works out.
@@ -3420,6 +3450,8 @@ pub enum ModifyHook<V: ContentVersion> {
         target: crate::CombatId,
         /// `props.IsPoweredCardOrMonsterMoveBlock()`.
         powered: bool,
+        /// `props.IsCardOrMonsterMove()`, the `Move` flag alone.
+        moved: bool,
         /// `cardSource`, as [`ModifyHook::BlockAdditive`] carries it.
         card: Option<V::Card>,
         /// `cardPlay`, as the play's [`PlayAt`].
@@ -3517,8 +3549,8 @@ pub enum ModifyHook<V: ContentVersion> {
         turn: V::Count,
     },
     /// `TryModifyEnergyCostInCombat`, over a card's cost once its own
-    /// modifiers are folded in. Every cost the fight reads is of a card in
-    /// hand or being played.
+    /// modifiers are folded in. Most costs the fight reads are of a card in
+    /// hand or being played. An auto-play reads the pile the card stood in.
     EnergyCost {
         card: (crate::CardId<V>, V::Card),
         /// `Keywords.Contains(Ethereal)` for the copy.
@@ -3873,6 +3905,9 @@ pub enum EventHook<V: ContentVersion> {
     BlockGained {
         creature: crate::CombatId,
         amount: V::Number,
+        /// Whether the game's decimal was above nothing. A fraction below one
+        /// is, though `amount` floors it to nothing.
+        positive: bool,
     },
     /// `AfterPreventingDraw`, once a listener answered no to `ShouldDraw`.
     DrawPrevented,
@@ -4830,8 +4865,8 @@ pub struct DamageReceived<V: ContentVersion> {
 pub struct BlockGained {
     /// `Receiver`.
     pub receiver: crate::CombatId,
-    /// `Props.IsPoweredCardOrMonsterMoveBlock()`.
-    pub powered: bool,
+    /// `Props.IsCardOrMonsterMove()`, the `Move` flag alone.
+    pub moved: bool,
     /// `CardPlay`, as the play's [`PlayAt`].
     pub play: Option<PlayAt>,
 }
@@ -5272,6 +5307,8 @@ pub enum CustomReward<V: ContentVersion> {
         kind: CardKind,
         count: usize,
     },
+    /// `RelicReward(relic, player)` for this relic.
+    SpecificRelic(V::Relic),
 }
 
 /// How `RelicFactory.PullNextRelicFromFront` picks the next relic from the
@@ -5924,6 +5961,9 @@ pub enum HookEffect<V: ContentVersion> {
     AttacksFromDiscard(V::Number),
     /// `PlayerCmd.GainGold`, which a run carries out between rooms.
     GainGold(V::Number),
+    /// `PlayerCmd.GainGold` of a `decimal` with a fraction. The gold hooks
+    /// scale it whole, and `(int)` drops the fraction after them.
+    GainGoldExact(Decimal),
     /// `CombatRoom.AddExtraReward` with a `GoldReward` of this much, which
     /// the fight's rewards offer beside its own.
     AddGoldReward(V::Number),
@@ -5992,6 +6032,9 @@ pub enum HookEffect<V: ContentVersion> {
         rewards: &'static [CustomReward<V>],
         roster: &'static [V::Monster],
         resume: bool,
+        /// The event's own rewards follow `rewards`, which
+        /// [`crate::EventBehavior::rewards`] lists from what the event holds.
+        own_rewards: bool,
     },
     /// `CardPileCmd.Add(card, PileType.Deck)`, a new card into the run's deck.
     AddToDeck(V::Card),
@@ -6284,6 +6327,10 @@ pub enum HookEffect<V: ContentVersion> {
     ChooseColorlessCards {
         count: usize,
     },
+    /// A potion thrown at the event's merchant, which
+    /// [`crate::EventBehavior::potion_thrown`] carries out. It is the whole
+    /// of the potion's use.
+    PotionThrownAtEvent(V::Potion),
 }
 
 /// One build's relic models, which is what a run holds a relic as.
@@ -7503,6 +7550,29 @@ pub trait Engine {
     /// replay once the fight is over or ending. A build whose loop plays
     /// each replay regardless says no.
     fn replays_stop_once_ending() -> bool;
+
+    /// `Creature.LoseHpInternal` takes a loss below nothing as nothing. A
+    /// build that takes it as it stands, so that a cap a hit went past
+    /// heals, says no.
+    fn hp_loss_floors_at_nothing() -> bool;
+
+    /// `RunAutoPrePlayPhase` raises `AfterHandEmptied` for an empty hand as
+    /// it enters the phase, before the phase's own hooks. A build that waits
+    /// for a play or a potion to empty it says no.
+    fn checks_empty_hand_entering_pre_play() -> bool;
+
+    /// `CardSelectCmd`'s selections call `UndoEndTurnIfNecessary`, which takes
+    /// back a player's ended turn and lifts `PlayerActionsDisabled`. So a
+    /// selection asked while the turn ends leaves potions drinkable. A build
+    /// whose selections leave the ended turn alone says no.
+    fn selection_undoes_ended_turn() -> bool;
+
+    /// `CardCreationOptions.WithCardPools` clears its pools before it reads
+    /// the ones it is handed. Prismatic Gem hands it a `Union` over those same
+    /// pools, which then finds only the character pools it has just added. So
+    /// a pool an earlier listener added, as Dingy Rug adds the colorless one,
+    /// is lost. A build that copies the pools before it clears them says no.
+    fn card_pools_cleared_before_read() -> bool;
 }
 
 /// The rules of one build, as the simulator asks them.
@@ -7915,12 +7985,15 @@ pub trait Rules: Hooks + Engine {
     /// A potion whose override nobody has ported.
     fn computed_potion_target(potion: Self::Potion, in_combat: bool) -> Self::TargetType;
 
-    /// `PotionModel.PassesCustomUsabilityCheck`, overridden, the same way.
+    /// `PotionModel.PassesCustomUsabilityCheck`, overridden. `in_combat` is
+    /// whether a fight is in progress. `merchant` is whether
+    /// `FoulPotion.GetFoulPotionMerchantTarget` finds a merchant's button in
+    /// the room.
     ///
     /// # Panics
     ///
     /// A potion whose override nobody has ported.
-    fn computed_potion_check(potion: Self::Potion, in_combat: bool) -> bool;
+    fn computed_potion_check(potion: Self::Potion, in_combat: bool, merchant: bool) -> bool;
 
     /// What a card works out from the fight for a number it prints.
     ///
@@ -8099,6 +8172,19 @@ pub trait Rules: Hooks + Engine {
     /// [`crate::EventBehavior::rewards`] for the event entered.
     fn event_rewards(_state: &Self::EventState) -> Vec<CustomReward<Self>> {
         unimplemented!("an event with rewards of its own")
+    }
+
+    /// [`crate::EventBehavior::merchant`] for the event entered.
+    fn event_merchant(_state: &Self::EventState) -> bool {
+        false
+    }
+
+    /// [`crate::EventBehavior::potion_thrown`] for the event entered.
+    fn event_potion_thrown(
+        _state: &mut Self::EventState,
+        potion: Self::Potion,
+    ) -> crate::HookEffects<Self> {
+        unimplemented!("{potion:?} thrown at an event")
     }
 
     /// The curses Neow offers, in the game's own order.

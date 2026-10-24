@@ -65,6 +65,13 @@ pub enum Decision<V: ContentVersion> {
     },
     /// Responds to a question a parked game asked.
     Answer(Answer),
+    /// Throws away the potion at `index` in the belt, as its popup's discard
+    /// button does: `DiscardPotionGameAction`, which runs `PotionCmd.Discard`.
+    ///
+    /// Last, because a digest hashes a decision by its place in this list.
+    DiscardPotion {
+        index: BeltIndex,
+    },
 }
 
 /// Where a card sits in the hand, left to right.

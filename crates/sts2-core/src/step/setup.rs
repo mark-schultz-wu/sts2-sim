@@ -51,6 +51,14 @@ pub enum Setup<V: ContentVersion> {
         amount: u8,
         index: crate::HandIndex,
     },
+    /// Sets the hit points of the player, or of the creature `at` in the
+    /// fight.
+    ///
+    /// `CreatureCmd.SetCurrentHp`, which raises `AfterCurrentHpChanged` and
+    /// no damage hook. So a position at three hit points is reached without
+    /// waking every relic that counts hits. `None` is the player, and the
+    /// only creature there is outside a fight.
+    Hp { at: Option<CombatId>, hp: V::Health },
 }
 
 /// What a [`Setup::Grant`] puts into the run.

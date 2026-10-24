@@ -424,6 +424,15 @@ impl<V: Rules, P: Piles> Cards<V, P> {
         self.piles.place(number(id)) == Some(Place::Play)
     }
 
+    /// Whether the copy `id` names stands in play, and what it is now, for a
+    /// copy the fight holds. One lookup, and no copy of the card.
+    pub(crate) fn standing_ident(&self, id: CardId<V>) -> Option<(bool, &sts2_core::CardIdent<V>)> {
+        let card = number(id);
+        let place = self.piles.place(card)?;
+        let face = &self.faces[usize::from(self.states[usize::from(card)])];
+        Some((place == Place::Play, &face.ident))
+    }
+
     /// Write on the card being played that `id` names.
     ///
     /// # Panics

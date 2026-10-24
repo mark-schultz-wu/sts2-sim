@@ -1,0 +1,16 @@
+# Five Dazed exhaust as turn two ends, and Joss Paper counts them once the
+# hand is flushed, which makes five, so it draws. Turn two's hand draw left
+# the draw pile dry, so the draw shuffles and Stratagem asks for its pick.
+# Joss Paper's listener pauses there, and the turn's end waits for it.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"JOSS_PAPER"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"STRATAGEM_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"DAZED"}
+{"cmd":"grant","card":"DAZED"}
+{"cmd":"grant","card":"DAZED"}
+{"cmd":"grant","card":"DAZED"}
+{"cmd":"grant","card":"DAZED"}
+{"cmd":"end_turn"}
+{"cmd":"answer","cards":[0]}

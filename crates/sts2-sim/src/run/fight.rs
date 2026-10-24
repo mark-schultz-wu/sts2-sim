@@ -10,7 +10,9 @@ use crate::combat::Error;
 
 impl<V: Rules> State<V> {
     /// What a pushed selector answers, one question at a time, until the
-    /// fight asks nothing it answers. The player never sees those.
+    /// fight asks nothing it answers. A choice that signalled lists then,
+    /// and takes its cards unasked where it can. The player never sees
+    /// those.
     fn selector_answered(
         &mut self,
         mut ended: Option<combat::Ended>,
@@ -19,10 +21,18 @@ impl<V: Rules> State<V> {
             let Some(fighting) = self.fighting() else {
                 break;
             };
-            let Some(picks) = combat::selector_picks(fighting.live) else {
-                break;
+            // A choice that signalled under a pause boundary lists once the
+            // task goes on, and takes its cards unasked where it can.
+            let answered = match combat::signalled(fighting.live) {
+                true => combat::come_up(fighting)?,
+                false => {
+                    let Some(picks) = combat::selector_picks(fighting.live) else {
+                        break;
+                    };
+                    combat::answer(fighting, picks)?
+                }
             };
-            ended = match combat::answer(fighting, picks)? {
+            ended = match answered {
                 None => self.turn_ended_by_play()?,
                 ended => ended,
             };
@@ -134,9 +144,21 @@ impl<V: Rules> State<V> {
         let Some(fighting) = self.fighting() else {
             // What it asks the run for.
             let effects = V::on_use_on_run(potion, &*self, false);
-            if self.carry_out(effects).is_some() {
-                unimplemented!("a potion drunk outside a fight that asks a question");
-            }
+            // Thrown at an event's merchant: what the event does with it,
+            // which starts a fight. `EnterRoomWithoutExitingCurrentRoom`
+            // runs on as its own task, and `AfterPotionUsed` goes ahead of
+            // it with no fight in progress.
+            let thrown = match effects.as_slice() {
+                [sts2_core::HookEffect::PotionThrownAtEvent(potion)] => {
+                    Some(self.potion_thrown_at_event(*potion))
+                }
+                _ => {
+                    if self.carry_out(effects).is_some() {
+                        unimplemented!("a potion drunk outside a fight that asks a question");
+                    }
+                    None
+                }
+            };
             let used = sts2_core::EventHook::PotionUsed {
                 in_fight: false,
                 holding_potions: self.holding_potions(),
@@ -144,7 +166,28 @@ impl<V: Rules> State<V> {
             if self.walk_run(used).is_some() {
                 unimplemented!("a relic asking a question after a potion outside a fight");
             }
-            return Ok(Ok(Decided::Resolved));
+            let Some(thrown) = thrown else {
+                return Ok(Ok(Decided::Resolved));
+            };
+            let [
+                sts2_core::HookEffect::FightInEvent {
+                    encounter,
+                    rewards,
+                    roster,
+                    resume,
+                    own_rewards,
+                },
+            ] = thrown.as_slice()
+            else {
+                unimplemented!("a potion thrown at an event doing {thrown:?}")
+            };
+            return Ok(Ok(self.fight_in_event(
+                *encounter,
+                rewards,
+                roster,
+                *resume,
+                *own_rewards,
+            )?));
         };
         let since = fighting.live.removed_from_deck().len();
         let ended = combat::drink(fighting, potion, target)?;
@@ -154,12 +197,12 @@ impl<V: Rules> State<V> {
             unimplemented!("a potion drunk in a fight that asks the run a question");
         }
         // What a death's listener asked inside the potion, as the decision
-        // ends. A play's comes up as `turn_ended_by_play` looks.
-        if ended.is_none()
-            && let Some(fighting) = self.fighting()
-        {
-            fighting.live.ask_paused();
-        }
+        // ends, and a card the potion played that ends the turn, as Void
+        // Form under Distilled Chaos does.
+        let ended = match ended {
+            None => self.turn_ended_by_play()?,
+            ended => ended,
+        };
         Ok(Ok(self.settle(ended, since)))
     }
 
@@ -429,6 +472,12 @@ impl<V: Rules> State<V> {
                         taken: false,
                     }
                 }
+                combat::ExtraReward::SpecificRelic(relic) => crate::reward::Offer::Relic {
+                    relic,
+                    rarity: <_ as sts2_core::RarityKinds>::UNDRAFTED,
+                    wax: false,
+                    taken: false,
+                },
                 // `GoldReward.Populate`, which draws even between one
                 // amount's two bounds.
                 combat::ExtraReward::Gold(amount) => {
@@ -445,8 +494,10 @@ impl<V: Rules> State<V> {
                         taken: false,
                     }
                 }
+                // `CardReward` over `ForRoom`, which carries no `IsFromCombat`:
+                // only the room's own card reward does.
                 combat::ExtraReward::Card => {
-                    let added = self.card_reward_added(true);
+                    let added = self.card_reward_added(false);
                     let pool = self.reward_pool(room == crate::reward::combat::Room::Elite);
                     let (rng, odds) = self.rewarding();
                     crate::reward::combat::card_reward::<V, _>(

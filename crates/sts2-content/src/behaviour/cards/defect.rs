@@ -132,7 +132,10 @@ fn resume_picked<V: crate::Build, F: Fight<V>>(
 
 /// The rest of `IceLance`, once its attack is over: its Frosts channelled.
 fn ice_lance_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
-    for _ in 0..fight.var(V::CardVar::REPEAT) {
+    // The game's loop reads its count before each pass.
+    let mut pass = 0;
+    while pass < fight.var(V::CardVar::REPEAT) {
+        pass += 1;
         fight.channel(V::Orb::FROST_ORB);
     }
     Played::Done
@@ -189,7 +192,10 @@ fn all_for_one_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 /// The rest of `Refract`, once its attack is over: its Glass orbs
 /// channelled.
 fn refract_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
-    for _ in 0..fight.var(V::CardVar::REPEAT) {
+    // The game's loop reads its count before each pass.
+    let mut pass = 0;
+    while pass < fight.var(V::CardVar::REPEAT) {
+        pass += 1;
         fight.channel(V::Orb::GLASS_ORB);
     }
     Played::Done
@@ -410,7 +416,10 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F
         // `Chaos`: a random orb off `CombatOrbGeneration` for each of its
         // `Repeat`.
         __c0 if __c0 == V::Card::CHAOS => {
-            for _ in 0..fight.var(V::CardVar::REPEAT) {
+            // The game's loop reads its count before each pass.
+            let mut pass = 0;
+            while pass < fight.var(V::CardVar::REPEAT) {
+                pass += 1;
                 if let Some(orb) = fight.random_orb(V::rollable_orbs()) {
                     fight.channel(orb);
                 }
@@ -531,8 +540,13 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F
         }
         // `ConsumingShadow`: a Dark orb for each of its `Repeat`, then its
         // power on its owner.
+        // `ConsumingShadow`: its loop reads `Repeat` before each pass, so a
+        // Dampen that comes off mid-play, as an evoke kills its caster, adds
+        // the upgrade's channel.
         __c0 if __c0 == V::Card::CONSUMING_SHADOW => {
-            for _ in 0..fight.var(V::CardVar::REPEAT) {
+            let mut pass = 0;
+            while pass < fight.var(V::CardVar::REPEAT) {
+                pass += 1;
                 fight.channel(V::Orb::DARK_ORB);
             }
             fight.apply_to_actor(

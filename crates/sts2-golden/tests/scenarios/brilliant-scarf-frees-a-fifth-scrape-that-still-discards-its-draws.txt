@@ -1,0 +1,20 @@
+# Brilliant Scarf makes the fifth card played from the hand free. In
+# v0.107.1 a fifth Scrape costs nothing, and still discards the four cards
+# it draws, which cost one each. The video says they all cost nothing until
+# Scrape has finished, so it keeps them. That build does not.
+#
+# From RiptideLab's "'5' Weird Slay the Spire 2 Mechanics".
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"grant","relic":"BRILLIANT_SCARF"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"CLAW"}
+{"cmd":"grant","card":"CLAW"}
+{"cmd":"grant","card":"CLAW"}
+{"cmd":"grant","card":"CLAW"}
+{"cmd":"grant","card":"SCRAPE"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"end_turn"}

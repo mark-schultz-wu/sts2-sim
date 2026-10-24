@@ -1,0 +1,12 @@
+# The Fake Merchant's fight. It opens with Swipe, then picks at random
+# among Swipe, Spew Coins, Throw Relic and Enrage, never the same move
+# twice in a row. Throw Relic applies Frail, and Enrage gains Strength.
+# Four turns are passed.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","potion":"FOUL_POTION"}
+{"cmd":"event","event":"FAKE_MERCHANT"}
+{"cmd":"use_potion","index":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

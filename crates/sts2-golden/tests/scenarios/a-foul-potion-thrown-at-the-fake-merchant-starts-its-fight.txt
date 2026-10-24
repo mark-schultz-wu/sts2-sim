@@ -1,0 +1,12 @@
+# A Foul Potion thrown at the Fake Merchant starts its fight. The Fake
+# Merchant's Rug and each relic still on a shelf join the fight's
+# rewards after its gold, and a shelf already bought from adds nothing.
+# The fight is won here at 5 HP, and the Rug is taken.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","potion":"FOUL_POTION"}
+{"cmd":"event","event":"FAKE_MERCHANT"}
+{"cmd":"buy","index":3}
+{"cmd":"use_potion","index":0}
+{"cmd":"hp","hp":5,"target":1}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"answer","take":[{"index":1}]}

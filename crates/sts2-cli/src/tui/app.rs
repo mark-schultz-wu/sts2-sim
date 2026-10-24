@@ -1,8 +1,8 @@
 //! The loop: draw, wait for a key, turn it into a move, send it, draw again.
 //!
 //! Everything the game is asked is a `Decision<V>`, and everything drawn comes
-//! out of the `Applied<V>` that came back. So this module is the only one that
-//! knows both. The screens read, and this decides.
+//! out of the view of the `Applied<V>` that came back. So this module is the
+//! only one that knows both. The screens read, and this decides.
 //!
 //! Two rules it holds to. A key that cannot mean anything here does nothing and
 //! says nothing, because a beep on every stray press is worse than silence. And
@@ -10,15 +10,13 @@
 //! refusal is the game answering, and the run carries on.
 
 use super::Error;
-use ratatui::DefaultTerminal;
-use ratatui::crossterm::event::{self, Event, KeyEvent, KeyEventKind};
 use sts2_core::{
-    Answer, BeltIndex, CombatId, Cost, Decided, Decision, HandIndex, Observation, Picks, Play,
-    Question, Room, Snapshot, TakeReward,
+    Answer, BeltIndex, CombatId, Cost, Decided, Decision, HandIndex, Picks, Play, Question, Room,
+    Snapshot, TakeReward, View,
 };
 
+use super::input::Key;
 use super::keys::{self, Action};
-use super::screen;
 use super::state::{Aim, Options, Overlay, Pile, Tone, Ui};
 use crate::cli::{choose, moves};
 use crate::render::{self, Amount, Pool};
@@ -55,7 +53,7 @@ enum Stage {
 /// keyboard can be driven with no game behind it, and a fault part way through
 /// a handler cannot leave the screen half-changed.
 #[derive(Debug, Clone, PartialEq)]
-pub enum Intent<V: sts2_content_wire::WireContentVersion> {
+pub enum Intent<V: crate::tui::Build> {
     /// The key moved a cursor, opened a panel, or meant nothing here.
     Nothing,
     /// A fresh look, which advances nothing.
@@ -102,12 +100,16 @@ pub enum Ended {
     NoRun,
 }
 
-pub struct App<V: sts2_content_wire::WireContentVersion, G: Play<V>> {
+pub struct App<V: crate::tui::Build, G: Play<V>> {
     game: G,
     /// Why the loop will stop, read once it has.
     ended: Ended,
-    /// The most recent thing the game said. `None` only before the first look.
-    seen: Option<Snapshot<V>>,
+    /// What the player can see of where the game last stood. `None` only
+    /// before the first look.
+    ///
+    /// The view and never the snapshot, so nothing the game keeps off its
+    /// own screen can reach one of these.
+    seen: Option<View<V>>,
     stage: Stage,
     /// The run being set up, when there is no run.
     ///
@@ -119,7 +121,7 @@ pub struct App<V: sts2_content_wire::WireContentVersion, G: Play<V>> {
 
 impl<V, G> App<V, G>
 where
-    V: sts2_content_wire::WireContentVersion,
+    V: crate::tui::Build,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -138,13 +140,20 @@ where
         }
     }
 
-    /// What the game last said, for the screens to draw.
-    pub fn seen(&self) -> Option<&Snapshot<V>> {
+    /// What the player can see, for the screens to draw.
+    pub fn view(&self) -> Option<&View<V>> {
         self.seen.as_ref()
     }
 
-    pub fn observation(&self) -> Option<&Observation<V>> {
-        self.seen.as_ref().map(|a| &a.observation)
+    /// Draws the screen into a frame of any backend, for a driver other than
+    /// the local terminal's.
+    pub fn draw(&self, frame: &mut ratatui::Frame) {
+        super::screen::draw(frame, self);
+    }
+
+    /// Why the screen stopped, once it has.
+    pub fn ended(&self) -> Ended {
+        self.ended
     }
 
     /// One look, for a caller that draws its own frames.
@@ -158,6 +167,7 @@ where
 
     /// One action, for a caller that has no keyboard.
     pub fn press(&mut self, action: Action) {
+        self.ui.toast = None;
         let intent = self.act(action);
         self.perform(intent)
             .expect("the game answered the decision");
@@ -166,7 +176,9 @@ where
     /// One key press.
     ///
     /// Raw rather than an [`Action`], for a caller that has one.
-    pub fn key(&mut self, key: KeyEvent) -> Result<(), Error> {
+    pub fn key(&mut self, key: Key) -> Result<(), Error> {
+        // A toast lasts until the next key, which has read it or moved on.
+        self.ui.toast = None;
         let intent = self.decide(key);
         self.perform(intent)
     }
@@ -176,7 +188,7 @@ where
     /// Every handler it reaches is a state transition, and none of them can
     /// fail. Asking the game is [`App::perform`]'s, and happens after the
     /// screen has finished changing.
-    pub fn decide(&mut self, key: KeyEvent) -> Intent<V> {
+    pub fn decide(&mut self, key: Key) -> Intent<V> {
         match keys::map(key) {
             Some(action) => self.act(action),
             None => Intent::Nothing,
@@ -193,37 +205,6 @@ where
             Intent::Look => self.look(),
             Intent::Send(decision) => self.send(decision).map(drop),
         }
-    }
-
-    /// Draws and reads keys until the player leaves, or the run goes away.
-    ///
-    /// The daemon's game can idle out from under a live screen. What comes back
-    /// says which happened, because a run that is gone wants the setup screen
-    /// rather than a window onto nothing.
-    pub fn run(mut self, terminal: &mut DefaultTerminal) -> Result<Ended, Error> {
-        // One look before the first frame, so the screen is the run rather than
-        // an empty shape waiting for a key.
-        self.look()?;
-
-        while !self.ui.leaving {
-            terminal
-                .draw(|frame| screen::draw(frame, &self))
-                .map_err(|source| Error::Draw {
-                    screen: "screen",
-                    source,
-                })?;
-
-            // Blocked on, not polled. A player thinking about a card sends
-            // nothing, and nothing is what should happen: the daemon keeps the
-            // game alive on its own, so the screen has no clock to answer to.
-            match event::read().map_err(Error::Key)? {
-                Event::Key(key) if key.kind == KeyEventKind::Press => self.key(key)?,
-                // A resize repaints on the next pass round the loop, which is
-                // the next statement. Nothing else to do.
-                _ => {}
-            }
-        }
-        Ok(self.ended)
     }
 
     // -----------------------------------------------------------------------
@@ -289,7 +270,7 @@ where
     /// This is not a second opinion about drinkability. No rule about when a
     /// potion can be drunk lives in this crate.
     fn in_belt(&mut self, action: Action) -> Intent<V> {
-        let belt = self.observation().map(|o| o.potions.len()).unwrap_or(0);
+        let belt = self.view().map(|o| o.potions.len()).unwrap_or(0);
 
         match action {
             Action::Cancel | Action::ShowPotions => {
@@ -306,6 +287,28 @@ where
                 let at = self.ui.at;
                 return self.aim_or_drink(at);
             }
+            // Only where the run lists the discard: the game's popup shuts
+            // its button for a dead owner, and some screens take no move.
+            Action::Discard => {
+                let Some(index) = u8::try_from(self.ui.at)
+                    .ok()
+                    .and_then(|at| BeltIndex::try_new(at).ok())
+                else {
+                    return Intent::Nothing;
+                };
+                let discard = Decision::DiscardPotion { index };
+                let listed = self
+                    .view()
+                    .is_some_and(|view| view.moves.contains(&discard));
+                if !listed {
+                    self.ui
+                        .say(Tone::Cannot, "that potion cannot be thrown away here");
+                    return Intent::Nothing;
+                }
+                self.ui.overlay = None;
+                self.ui.at = 0;
+                return Intent::Send(discard);
+            }
             // Anything else closes it, the way the read-only panels do.
             _ => {
                 self.ui.overlay = None;
@@ -321,7 +324,7 @@ where
     /// legal target still goes through aiming, because aiming is when the
     /// screen shows which creature it is about to land on.
     fn aim_or_drink(&mut self, at: usize) -> Intent<V> {
-        let Some(potion) = self.observation().and_then(|o| o.potions.get(at)) else {
+        let Some(potion) = self.view().and_then(|o| o.potions.get(at)) else {
             return Intent::Nothing;
         };
 
@@ -407,7 +410,7 @@ where
     // -----------------------------------------------------------------------
 
     fn in_fight(&mut self, action: Action) -> Intent<V> {
-        let Some(combat) = self.observation().and_then(|o| o.fight()) else {
+        let Some(combat) = self.view().and_then(|o| o.fight()) else {
             return Intent::Nothing;
         };
         let hand = combat.legal.len();
@@ -426,7 +429,7 @@ where
                 at,
             )),
             Aim::Drinking { potion, at } => Some((
-                self.observation()
+                self.view()
                     .and_then(|o| o.potions.get(potion))
                     .map(|p| p.targets.clone())
                     .unwrap_or_default(),
@@ -499,7 +502,7 @@ where
     /// computed effect on the creature, including changes from Strength or
     /// Vulnerable. Only a card with no target plays immediately.
     fn aim_or_play(&mut self) -> Intent<V> {
-        let Some(combat) = self.observation().and_then(|o| o.fight()) else {
+        let Some(combat) = self.view().and_then(|o| o.fight()) else {
             return Intent::Nothing;
         };
         let at = self.ui.at;
@@ -566,6 +569,9 @@ where
             return Intent::Nothing;
         };
         let (min, max, len) = (*min as usize, *max as usize, options.len());
+        // The list on screen may be sorted, as a draw pile is, so a place in
+        // it is not the option's own index. The answer names the option.
+        let indices: Vec<usize> = options.iter().map(|option| option.index).collect();
 
         let mut marked = match &self.ui.aim {
             Aim::Selecting(marked) => marked.clone(),
@@ -576,6 +582,15 @@ where
             Action::Up | Action::Left => self.ui.step(-1, len),
             Action::Down | Action::Right => self.ui.step(1, len),
             Action::Nth(n) if n < len => self.ui.at = n,
+            // Esc puts the marks down first. With none, it is the screen's
+            // back button, where the selection has one.
+            Action::Cancel if marked.is_empty() => {
+                let cancel = Decision::Answer(Answer::Cancel);
+                if self.view().is_some_and(|view| view.moves.contains(&cancel)) {
+                    self.ui.aim = Aim::Idle;
+                    return Intent::Send(cancel);
+                }
+            }
             Action::Cancel => marked.clear(),
             Action::Mark => {
                 let at = self.ui.at;
@@ -607,7 +622,7 @@ where
                 } else {
                     self.ui.aim = Aim::Idle;
                     return Intent::Send(Decision::Answer(Answer::Cards(
-                        marked.into_iter().collect(),
+                        marked.into_iter().map(|at| indices[at]).collect(),
                     )));
                 }
             }
@@ -672,7 +687,7 @@ where
     pub fn moves(&self) -> Vec<Decision<V>> {
         self.seen
             .as_ref()
-            .map(crate::cli::moves::navigation)
+            .map(|seen| crate::cli::moves::navigation(&seen.moves))
             .unwrap_or_default()
     }
 
@@ -706,14 +721,14 @@ where
     pub fn aimed_at(&self) -> Option<CombatId> {
         let (targets, at) = match self.ui.aim {
             Aim::Targeting { card, at } => (
-                self.observation()
+                self.view()
                     .and_then(|o| o.fight())
                     .and_then(|c| c.legal.get(card))
                     .map(|c| c.targets.as_slice())?,
                 at,
             ),
             Aim::Drinking { potion, at } => (
-                self.observation()
+                self.view()
                     .and_then(|o| o.potions.get(potion))
                     .map(|p| p.targets.as_slice())?,
                 at,
@@ -743,7 +758,7 @@ where
     // Talking to the game.
     // -----------------------------------------------------------------------
 
-    fn look(&mut self) -> Result<(), Error> {
+    pub(super) fn look(&mut self) -> Result<(), Error> {
         let standing = self
             .game
             .observe()
@@ -775,12 +790,26 @@ where
     /// Takes where the run now stands, and resets the log when the screen
     /// behind it changes.
     fn arrive(&mut self, standing: Snapshot<V>) {
-        let stage = stage_of(&standing);
+        let mut seen = standing.view();
+        // The game's words, for whatever the run did not say itself.
+        crate::text::fill(&mut seen);
+        // A run this screen did not start, such as one the daemon already
+        // held, says its character first in a fight, on the player's model.
+        let player = (seen.fight().into_iter())
+            .flat_map(|fight| &fight.creatures)
+            .find_map(|creature| match &creature.model {
+                Some(sts2_core::ModelId::Character(character)) => Some(*character),
+                _ => None,
+            });
+        if let Some(player) = player {
+            super::theme::accent_for(&crate::render::spelling(&player));
+        }
+        let stage = stage_of(&seen);
         if stage != self.stage {
             self.ui.reset();
             self.stage = stage;
         }
-        self.seen = Some(standing);
+        self.seen = Some(seen);
     }
 
     fn accept(&mut self, answered: sts2_core::Answered<V>, said: Option<String>) -> bool {
@@ -821,7 +850,7 @@ where
 
     /// Puts the card under the cursor into the detail panel.
     fn inspect_card(&mut self) {
-        let Some(combat) = self.observation().and_then(|o| o.fight()) else {
+        let Some(combat) = self.view().and_then(|o| o.fight()) else {
             return;
         };
         let Some(card) = combat.legal.get(self.ui.at) else {
@@ -854,10 +883,7 @@ where
 }
 
 /// The card at an index in the hand, played at a creature or at nothing.
-fn play_card<V: sts2_content_wire::WireContentVersion>(
-    index: usize,
-    target: Option<CombatId>,
-) -> Intent<V> {
+fn play_card<V: crate::tui::Build>(index: usize, target: Option<CombatId>) -> Intent<V> {
     // A hand that long is no hand the game deals, so the key meant nothing.
     let Some(index) = hand_index(index) else {
         return Intent::Nothing;
@@ -880,10 +906,7 @@ fn belt_index(index: usize) -> Option<BeltIndex> {
 }
 
 /// The potion at an index in the belt, drunk at a creature or at nothing.
-fn drink<V: sts2_content_wire::WireContentVersion>(
-    index: usize,
-    target: Option<CombatId>,
-) -> Intent<V> {
+fn drink<V: crate::tui::Build>(index: usize, target: Option<CombatId>) -> Intent<V> {
     // As in [`play_card`]: a belt that long is no belt the game gives.
     let Some(index) = belt_index(index) else {
         return Intent::Nothing;
@@ -892,7 +915,7 @@ fn drink<V: sts2_content_wire::WireContentVersion>(
 }
 
 /// Which kind of screen this is.
-fn stage_of<V: sts2_content_wire::WireContentVersion>(standing: &Snapshot<V>) -> Stage {
+fn stage_of<V: crate::tui::Build>(standing: &View<V>) -> Stage {
     if let Some(question) = &standing.asking {
         return match question {
             Question::SelectCards { .. } => Stage::AskingCards,
@@ -903,7 +926,7 @@ fn stage_of<V: sts2_content_wire::WireContentVersion>(standing: &Snapshot<V>) ->
         };
     }
 
-    let observed = &standing.observation;
+    let observed = standing;
     if observed.run_over {
         return Stage::Over;
     }
@@ -938,6 +961,137 @@ mod tests {
     use serde_json::json;
     use sts2_content::v0_107_1::V0_107_1;
     use sts2_core::{Applied, Decision};
+
+    /// Esc with nothing marked is a selection's back button, where the run
+    /// lists one. With a card marked it puts the mark down first.
+    #[test]
+    fn esc_backs_out_of_a_selection_that_has_a_back_button() {
+        let applied = fixture::answered(json!({
+            "type": "pending", "seq": 9, "cmd": "choose_option", "digest": "AA",
+            "kind": "select_cards", "min": 1, "max": 1, "asker": null,
+            "options": [{"index": 0, "card": "BASH", "text": null}],
+            "picked": [], "pile": null,
+            "state": {"moves": [
+                {"cmd": "answer", "pick": 0},
+                {"cmd": "answer", "cancel": true}
+            ]}
+        }));
+        let game = Scripted::saying(applied);
+        let sent = game.sent();
+        let mut app = App::playing(game, Options::default());
+        app.look_now();
+        app.press(Action::Mark);
+        app.press(Action::Cancel);
+        assert!(sent.all().is_empty(), "the first esc puts the mark down");
+        app.press(Action::Cancel);
+        assert_eq!(
+            sent.all().last(),
+            Some(&Decision::Answer(sts2_core::Answer::Cancel)),
+        );
+    }
+
+    /// Backspace in the belt throws the potion under the cursor away, where
+    /// the run lists that, and says why not where it does not.
+    #[test]
+    fn backspace_in_the_belt_throws_a_potion_away() {
+        let belt = |moves: serde_json::Value| {
+            let game = Scripted::saying(fixture::applied(json!({
+                "potions": ["FIRE_POTION"],
+                "moves": moves,
+            })));
+            let sent = game.sent();
+            let mut app = App::playing(game, Options::default());
+            app.look_now();
+            app.press(Action::ShowPotions);
+            app.press(Action::Discard);
+            sent.all()
+        };
+        let listed = belt(json!([{"cmd": "discard_potion", "index": 0}]));
+        assert_eq!(
+            listed.last(),
+            Some(&Decision::DiscardPotion {
+                index: sts2_core::BeltIndex::try_new(0).expect("a belt index"),
+            }),
+        );
+        assert!(
+            belt(json!([])).is_empty(),
+            "nothing sent where none is listed"
+        );
+    }
+
+    /// A choice out of the draw pile is listed sorted, as the game's screen
+    /// lists one. The answer names the card picked by its own index, not by
+    /// its place in the sorted list.
+    #[test]
+    fn a_draw_pile_choice_is_sorted_and_answered_by_index() {
+        let applied = fixture::answered(json!({
+            "type": "pending", "seq": 9, "cmd": "play_card", "digest": "AA",
+            "kind": "select_cards", "min": 1, "max": 1, "asker": null,
+            "options": [
+                {"index": 0, "card": "INFLAME", "text": null},
+                {"index": 1, "card": "BASH", "text": null}
+            ],
+            "picked": [], "pile": "Draw",
+            "state": {}
+        }));
+        let game = Scripted::saying(applied);
+        let sent = game.sent();
+        let mut app = App::playing(game, Options::default());
+        app.look_now();
+        let Some(sts2_core::Question::SelectCards { options, .. }) =
+            app.view().and_then(|view| view.asking.as_ref())
+        else {
+            panic!("a selection is asked");
+        };
+        // Bash is Basic and Inflame Uncommon, so Bash is listed first.
+        assert_eq!(options.iter().map(|o| o.index).collect::<Vec<_>>(), [1, 0]);
+
+        app.press(Action::Confirm);
+        assert_eq!(
+            sent.all().last(),
+            Some(&Decision::Answer(sts2_core::Answer::Cards(
+                [1].into_iter().collect()
+            ))),
+        );
+    }
+
+    /// The draw pile is listed the way the game's pile screen lists it, by
+    /// rarity and then id. Two runs with the same cards in another order show
+    /// the same pile, so the screen cannot say which card comes next.
+    #[test]
+    fn the_draw_pile_hides_its_order() {
+        let pile = |draw: serde_json::Value| {
+            let snapshot = fixture::snapshot(json!({
+                "inCombat": true,
+                "combat": fixture::combat(json!({"draw": draw})),
+            }));
+            let view = snapshot.view();
+            (view.combat.expect("in a fight").draw.iter())
+                .map(crate::render::ident)
+                .collect::<Vec<_>>()
+        };
+        let drawn = [
+            "INFLAME",
+            "STRIKE_IRONCLAD+1",
+            "ANGER",
+            "STRIKE_IRONCLAD",
+            "BASH",
+        ];
+        let mut reversed = drawn;
+        reversed.reverse();
+        let listed = pile(json!(drawn));
+        assert_eq!(listed, pile(json!(reversed)));
+        assert_eq!(
+            listed,
+            [
+                "BASH",
+                "STRIKE_IRONCLAD",
+                "STRIKE_IRONCLAD+1",
+                "ANGER",
+                "INFLAME"
+            ],
+        );
+    }
 
     type V = V0_107_1;
 

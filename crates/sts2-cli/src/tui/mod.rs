@@ -11,12 +11,14 @@
 //! `main.rs`, and a simulator goes in the same slot.
 //!
 //! Nothing here decides anything about the run. Every move goes through
-//! `Decision<V>`, and every screen is drawn from the `Observation<V>` that came
-//! back. The TUI cannot show a state the game did not report. The failure mode
-//! is a blank panel, never an invented number.
+//! `Decision<V>`, and every screen is drawn from the [`View`](sts2_core::View)
+//! of what came back. The TUI cannot show a state the game did not report, nor
+//! one the game keeps off its own screen. The failure mode is a blank panel,
+//! never an invented number.
 
 pub mod app;
 pub mod check;
+pub mod input;
 mod keys;
 mod names;
 mod screen;
@@ -24,10 +26,8 @@ pub mod setup;
 #[cfg(test)]
 mod shots;
 mod state;
+mod term;
 mod theme;
-
-use ratatui::DefaultTerminal;
-use sts2_core::Play;
 
 pub use app::Ended;
 
@@ -50,21 +50,10 @@ pub enum Error {
     },
 }
 pub use state::Options;
+pub use term::play;
 
-/// Draws a run and reads keys, until the player leaves or the run goes away.
-///
-/// A window onto a run that has already started. What run that is, and what to
-/// do once this returns, belong to the caller: this draws one and reports how
-/// it ended.
-pub fn play<V, G>(
-    terminal: &mut DefaultTerminal,
-    game: G,
-    options: Options,
-) -> Result<app::Ended, Error>
-where
-    V: sts2_content_wire::WireContentVersion,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
-{
-    app::App::playing(game, options).run(terminal)
-}
+/// What the TUI needs of a build: the spellings it draws with, and the rules
+/// a card's type is read from.
+pub trait Build: sts2_content_wire::WireContentVersion + sts2_core::Rules {}
+
+impl<V: sts2_content_wire::WireContentVersion + sts2_core::Rules> Build for V {}

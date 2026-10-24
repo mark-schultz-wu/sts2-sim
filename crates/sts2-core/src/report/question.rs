@@ -30,6 +30,14 @@ pub enum Question<V: ContentVersion> {
         options: Vec<CardOption<V>>,
         /// The options picked so far, in the order they were picked.
         picked: crate::Picks,
+        /// The fight's pile every option stands in, when they all stand in
+        /// one. Nothing outside a fight, and nothing for cards in no pile,
+        /// such as ones made to be chosen between.
+        ///
+        /// For a front end, which lists a draw pile the way the game's screen
+        /// does: sorted, so the order of the draws does not show. Not in the
+        /// digest, as the asker is not. It decides nothing.
+        pile: Option<crate::Pile>,
     },
     /// Answer with [`crate::Answer::Skip`] or [`crate::Answer::Take`].
     Rewards {

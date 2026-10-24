@@ -55,6 +55,7 @@ impl<V: Rules> Observed<V> for State<V> {
         crate::combat::belt::<V>(
             &self.player.potions,
             self.fight(),
+            self.merchant(),
             self.standing().alive,
             self.potions_held(),
         )

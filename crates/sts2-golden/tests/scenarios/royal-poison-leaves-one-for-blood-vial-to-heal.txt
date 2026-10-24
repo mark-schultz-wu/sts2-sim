@@ -1,0 +1,7 @@
+# At five hit points Royal Poison's four leaves one, and Blood Vial heals
+# two after it: the fight starts at three.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"ROYAL_POISON"}
+{"cmd":"grant","relic":"BLOOD_VIAL"}
+{"cmd":"hp","hp":5}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}

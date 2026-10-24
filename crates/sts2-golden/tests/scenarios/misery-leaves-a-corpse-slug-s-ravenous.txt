@@ -1,0 +1,10 @@
+# Misery spreads the target's debuffs to the other enemies, and Ravenous is
+# a buff, so it stays on the Corpse Slug it started on. The Weak goes.
+#
+# From RiptideLab's "YOUR Weird Spire Mechanics (and lies)".
+{"cmd":"start","seed":"S33D1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"CORPSE_SLUGS_WEAK"}
+{"cmd":"power","power":"WEAK_POWER","amount":2,"target":1}
+{"cmd":"grant","card":"MISERY"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"end_turn"}

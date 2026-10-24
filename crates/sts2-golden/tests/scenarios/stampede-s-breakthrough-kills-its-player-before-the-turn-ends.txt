@@ -1,0 +1,14 @@
+# Stampede auto-plays Breakthrough as the post-play phase opens. The player
+# stands at 1 HP, and Breakthrough's loss of 1 HP kills them, so the fight is
+# lost there. The turn ends no further, and no enemy acts.
+#
+# The game's `OnPlayWrapper` returns on its owner's death before it pops
+# the card off the choice context, so Stampede's hook finds the card on top
+# of the stack and logs an error. The mod pops it first, so the run goes on
+# as the game's does, with no error.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"STAMPEDE_POWER","amount":1,"target":0}
+{"cmd":"grant","card":"BREAKTHROUGH"}
+{"cmd":"hp","hp":1}
+{"cmd":"end_turn"}

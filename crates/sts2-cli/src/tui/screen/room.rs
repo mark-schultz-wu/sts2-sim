@@ -36,7 +36,7 @@ struct Choice {
 
 pub fn draw<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>, room: &Room<V>)
 where
-    V: sts2_content_wire::WireContentVersion,
+    V: crate::tui::Build,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -142,30 +142,32 @@ where
             let moves = app.moves();
             let choices = options
                 .iter()
-                .map(|option| Choice {
+                .map(|option| {
+                    // With no title, the last part of the option's key, which
+                    // is its name: `NEOW.pages.INITIAL.options.WINGED_BOOTS`
+                    // reads as *Winged Boots*.
+                    let what = option.title.as_deref().map_or_else(
+                        || {
+                            let key = crate::render::option_key(option);
+                            names::pretty(key.rsplit('.').next().unwrap_or(&key))
+                        },
+                        crate::render::prose::plain,
+                    );
+                    (option, what)
+                })
+                .map(|(option, what)| Choice {
                     key: chose(&moves, option.index),
-                    what: option
-                        .title
-                        .clone()
-                        .map(|t| crate::render::prose::plain(&t))
-                        .unwrap_or_else(|| names::pretty(&crate::render::option_key(option))),
                     // The relic an option hands over, *unless* the option's
-                    // own title already names it — which at Neow every one of
+                    // own name already says it — which at Neow every one of
                     // them does, and "Golden Pearl   Golden Pearl" is not a
                     // second fact.
                     note: option
                         .relic
                         .as_ref()
                         .map(|r| names::pretty(&spelling(r)))
-                        .filter(|named| {
-                            option
-                                .title
-                                .as_deref()
-                                .map(crate::render::prose::plain)
-                                .as_deref()
-                                != Some(named.as_str())
-                        })
+                        .filter(|named| *named != what)
                         .map(|named| (named, theme::better())),
+                    what,
                     words: option
                         .text
                         .as_deref()
@@ -186,10 +188,7 @@ where
 }
 
 /// Where a room's option sits in the list the keys act on.
-fn chose<V: sts2_content_wire::WireContentVersion>(
-    moves: &[Decision<V>],
-    index: u8,
-) -> Option<usize> {
+fn chose<V: crate::tui::Build>(moves: &[Decision<V>], index: u8) -> Option<usize> {
     moves
         .iter()
         .position(|m| m == &Decision::ChooseOption { index })
@@ -201,12 +200,12 @@ fn chose<V: sts2_content_wire::WireContentVersion>(
 /// the same time.
 fn leaving<V, G>(app: &App<V, G>, moves: &[Decision<V>]) -> Vec<Choice>
 where
-    V: sts2_content_wire::WireContentVersion,
+    V: crate::tui::Build,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
     let travelable = app
-        .observation()
+        .view()
         .map(|o| o.map.travelable.clone())
         .unwrap_or_default();
 
@@ -246,7 +245,7 @@ where
 
 pub fn asking<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>, question: &Question<V>)
 where
-    V: sts2_content_wire::WireContentVersion,
+    V: crate::tui::Build,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -272,7 +271,7 @@ where
                 .iter()
                 .enumerate()
                 .map(|(at, option)| {
-                    let mut face = card::Face::plain(&option.card);
+                    let mut face = card::Face::printed(&option.card);
                     face.key = Some(at);
                     face.picked = at == app.ui.at;
                     face.marked = app.marked().contains(&at);
@@ -404,7 +403,7 @@ where
     }
 }
 
-fn reward_name<V: sts2_content_wire::WireContentVersion>(reward: &RewardKind<V>) -> String {
+fn reward_name<V: crate::tui::Build>(reward: &RewardKind<V>) -> String {
     match reward {
         RewardKind::Gold { amount } => format!("{amount} gold"),
         RewardKind::Card { .. } => "a card".into(),

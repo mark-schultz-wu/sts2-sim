@@ -256,7 +256,12 @@ fn record<V: WireContentVersion + sts2_content::Build>(cli: Cli) -> Result<Outco
         if legal.is_empty() {
             return Err(Error::NothingLegal { step });
         }
-        let at = pick.choose(legal);
+        let room = sts2_golden::random::making_room(
+            seen.asking.as_ref(),
+            seen.observation.potions.len(),
+            seen.observation.potion_slots,
+        );
+        let at = pick.choose(legal, room);
         let decision = legal[at];
         after = named(&seen, &decision);
         seen = game
