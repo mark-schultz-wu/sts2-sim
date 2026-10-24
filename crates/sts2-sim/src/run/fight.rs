@@ -256,7 +256,17 @@ impl<V: Rules> State<V> {
                 let combat = live.finish(relics);
                 if let Some(resuming) = self.resuming.as_mut() {
                     resuming.escaped = escaped;
-                    resuming.extras = !extra_rewards.is_empty() || !extra.is_empty();
+                    if !extra_rewards.is_empty() || !extra.is_empty() {
+                        let encounter = combat.encounter.unwrap_or_else(|| {
+                            unimplemented!("a fight with no encounter behind it")
+                        });
+                        resuming.extras = Some(Box::new(Extras {
+                            rewards: extra_rewards.clone(),
+                            ending: extra.clone(),
+                            taken: taken.clone(),
+                            room: reward_room::<V>(encounter),
+                        }));
+                    }
                 }
                 if let Some(asked) = self.carry_out(leaving) {
                     let pickup = asked.pickup;
@@ -326,13 +336,7 @@ impl<V: Rules> State<V> {
         // `GenerateRewardsFor` switches on the room, which is what adds a
         // relic, moves the potion odds, and prices the card reward's
         // rarities. The encounter carries the room it belongs to.
-        let room = match <_ as sts2_core::EncounterTable>::room(encounter) {
-            room if room == <_ as sts2_core::RoomKinds>::ELITE => {
-                crate::reward::combat::Room::Elite
-            }
-            room if room == <_ as sts2_core::RoomKinds>::BOSS => crate::reward::combat::Room::Boss,
-            _ => crate::reward::combat::Room::Monster,
-        };
+        let room = reward_room::<V>(encounter);
         let added = self.card_reward_added(true);
         let forced = self.potion_forced(<_ as sts2_core::EncounterTable>::room(encounter));
         let pool = self.reward_pool(room == crate::reward::combat::Room::Elite);
@@ -361,9 +365,38 @@ impl<V: Rules> State<V> {
                 taken: false,
             });
         }
+        offered.extend(self.extra_offers(&Extras {
+            rewards: extra_rewards.to_vec(),
+            ending: ending.to_vec(),
+            taken: taken.to_vec(),
+            room,
+        }));
+        self.reward_offers(&mut offered);
+        let room = Some(<_ as sts2_core::EncounterTable>::room(encounter));
+        self.modify_rewards(&mut offered, room);
+        // `CombatRoom.OfferRoomEndRewards`: `BeforeCombatRewardOffered` once
+        // the set is made, before it is offered.
+        let card_reward = offered
+            .iter()
+            .any(|offer| matches!(offer, crate::reward::Offer::Card { .. }));
+        let offering = sts2_core::EventHook::CombatRewardOffering { card_reward };
+        if let Some(effect) = self.notify_run(offering).first() {
+            unimplemented!("a relic asking for {effect:?} before a fight's rewards are offered");
+        }
+        offered
+    }
+
+    /// `CombatRoom.ExtraRewards` filled in, in order, after whatever was
+    /// filled before them.
+    pub(super) fn extra_offers(&mut self, extras: &Extras<V>) -> Vec<crate::reward::Offer<V>> {
+        let ascension = self.ascension();
+        let character = self.character();
+        let act = self.act();
+        let room = extras.room;
+        let mut offered = Vec::new();
         // `CombatRoom.ExtraRewards`, which `Populate` reaches after the
         // room's own.
-        for extra in extra_rewards {
+        for extra in &extras.rewards {
             offered.push(match *extra {
                 combat::ExtraReward::SpecialCard(card) => crate::reward::Offer::SpecialCard {
                     card,
@@ -372,7 +405,8 @@ impl<V: Rules> State<V> {
                     taken: false,
                 },
                 combat::ExtraReward::Returned(id) => {
-                    let returned = taken
+                    let returned = extras
+                        .taken
                         .iter()
                         .find(|card| card.id == id)
                         .unwrap_or_else(|| unreachable!("a card handed back was taken"));
@@ -426,7 +460,7 @@ impl<V: Rules> State<V> {
         // rewards stream even for a gold reward whose two bounds are the one
         // amount, and a card removal's draws nothing. `ModifyRewards` comes
         // after them all.
-        for effect in ending {
+        for effect in &extras.ending {
             offered.push(match *effect {
                 sts2_core::HookEffect::AddGoldReward(amount) => {
                     let (rng, _) = self.rewarding();
@@ -441,18 +475,27 @@ impl<V: Rules> State<V> {
                 _ => unreachable!("the extra rewards are gold and card removals"),
             });
         }
-        self.reward_offers(&mut offered);
-        let room = Some(<_ as sts2_core::EncounterTable>::room(encounter));
-        self.modify_rewards(&mut offered, room);
-        // `CombatRoom.OfferRoomEndRewards`: `BeforeCombatRewardOffered` once
-        // the set is made, before it is offered.
-        let card_reward = offered
-            .iter()
-            .any(|offer| matches!(offer, crate::reward::Offer::Card { .. }));
-        let offering = sts2_core::EventHook::CombatRewardOffering { card_reward };
-        if let Some(effect) = self.notify_run(offering).first() {
-            unimplemented!("a relic asking for {effect:?} before a fight's rewards are offered");
-        }
         offered
     }
+}
+
+/// The kind of room `encounter` belongs to, which `GenerateRewardsFor`
+/// switches on.
+pub(super) fn reward_room<V: Rules>(encounter: V::Encounter) -> crate::reward::combat::Room {
+    match <_ as sts2_core::EncounterTable>::room(encounter) {
+        room if room == <_ as sts2_core::RoomKinds>::ELITE => crate::reward::combat::Room::Elite,
+        room if room == <_ as sts2_core::RoomKinds>::BOSS => crate::reward::combat::Room::Boss,
+        _ => crate::reward::combat::Room::Monster,
+    }
+}
+
+/// What a won fight left in `CombatRoom.ExtraRewards`: what the fight added,
+/// then what `AfterCombatEnd` added, and the deck cards a card handed back
+/// came from.
+#[derive(Debug, Clone)]
+pub(super) struct Extras<V: Rules> {
+    pub(super) rewards: Vec<combat::ExtraReward<V>>,
+    pub(super) ending: Vec<sts2_core::HookEffect<V>>,
+    pub(super) taken: Vec<sts2_core::DeckCard<V>>,
+    pub(super) room: crate::reward::combat::Room,
 }
