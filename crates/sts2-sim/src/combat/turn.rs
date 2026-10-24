@@ -65,6 +65,12 @@ pub(super) fn end_after_post_play<V: Rules>(
         next.skip_tick = skipping;
         return Ok(Some(ended));
     }
+    // A player an auto-play there killed has lost. The turn-end hooks hear
+    // nothing once the fight is over, and `CheckWinCondition` ends it.
+    if next.lost {
+        next.skip_tick = skipping;
+        return Ok(Some(super::Ended::Lost));
+    }
     // `EndPlayerTurnPhaseOne`: the turn-end hooks, and the win check they can
     // end the fight for, come before the orbs and the hand. The hook waits
     // for a listener that paused.

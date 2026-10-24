@@ -62,12 +62,13 @@ from seed 10000.
 
 - v0.107.1 parted 8, and all 8 are fixed.
 - One v0.107.1 run, IRONCLAD C000010510 with DoubleBoss, stopped on a
-  game error at step 1304. The game tried to pop Stampede Power off a
-  hook's choice context while Breakthrough was on top of it.
+  game error at step 1304, and it is fixed. Stampede auto-played
+  Breakthrough, which killed the player. The game left the card on its
+  choice context and logged an error, which the mod now patches. The
+  simulator played on past the death, and now ends the fight there.
 - v0.111.0 parted 9, and all 9 are fixed.
 
-Next, look into the game error, then hunt both builds again toward 3,000
-runs in a row with no split.
+Next, hunt both builds again toward 3,000 runs in a row with no split.
 
 ### 2. Coverage of the game's own code
 
