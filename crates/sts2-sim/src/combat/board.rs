@@ -2452,14 +2452,11 @@ impl<'a, V: Rules> Board<'a, V> {
                 (Listener::Power { owner, .. }, HookEffect::StunOwner { stun, then }) => {
                     self.stun_monster(owner, stun, then)
                 }
-                // `CreatureCmd.GainBlock`, unpowered, on the power's owner.
+                // `CreatureCmd.GainBlock`, unpowered, on the power's owner, from
+                // no play: a death inside a card's play does not make the card
+                // the block's source.
                 (Listener::Power { owner, .. }, HookEffect::GainBlock(amount)) => {
-                    let block = self.resolve(sts2_core::Effect::GainBlock {
-                        recipient: owner,
-                        amount: sts2_core::Amount::Number(amount),
-                        scaling: Scaling::Static,
-                    });
-                    sts2_core::Fight::apply(self, block);
+                    self.gain_unpowered(owner, amount)
                 }
                 (Listener::Card { id }, HookEffect::ModifySelf { change, lasting }) => {
                     self.live.modify_self(id, change, lasting)
@@ -6383,7 +6380,10 @@ impl<V: Rules> Board<'_, V> {
     /// then the block, then `Hook.AfterBlockGained`. Nothing once the fight
     /// is over.
     pub(super) fn gain_unpowered(&mut self, owner: CombatId, amount: V::Number) {
+        // No card is the source, not the one being played, nor the one whose
+        // attack is landing, so neither one's enchantment is asked.
         let playing = self.playing.take();
+        let attacking_as = self.attacking_as.take();
         let block = Fight::resolve(
             self,
             Effect::GainBlock {
@@ -6394,6 +6394,7 @@ impl<V: Rules> Board<'_, V> {
         );
         Fight::apply(self, block);
         self.playing = playing;
+        self.attacking_as = attacking_as;
     }
 
     /// Stop a command that starts while a question waits, where nothing
@@ -7367,7 +7368,7 @@ fn carry_out_drawn<V: Rules>(
             }
             (_, effect) => {
                 let mut board =
-                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, Some(drawn));
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
                 super::hook::apply::<V, _>(&mut board, [effect]);
                 ended = ended.or(board.ended());
             }

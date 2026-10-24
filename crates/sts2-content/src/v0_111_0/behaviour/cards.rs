@@ -179,12 +179,14 @@ pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Option<Played<
         // `Expertise`: its `Cards` drawn, each of which retains this turn.
         Cards::Silent(SilentCard::Expertise) => {
             let drew = fight.draw(fight.var(CardVar::Cards));
-            let drawn: Vec<_> = drew
-                .into_iter()
-                .filter_map(|id| fight.find_card(id))
-                .collect();
-            fight.act_on(sts2_core::PileAct::RetainThisTurn, &drawn);
-            Some(Played::Done)
+            // A shuffle inside the draw can ask, and the retain waits for the
+            // cards the draw goes on to draw.
+            if fight.waiting() {
+                return Some(Played::Waiting {
+                    at: crate::behaviour::cards::Resume::Own(card, 1, Left::of(&[])).into(),
+                });
+            }
+            Some(on_drew_from(card, fight, 1, &drew))
         }
         // `Tracking`: 50 Tracking on its owner, every play.
         Cards::Silent(SilentCard::Tracking) => {
@@ -414,6 +416,12 @@ pub(crate) fn on_drew_from<F: Fight<V>>(
                 .filter(|&card| fight.card_costs(card, true).0 != Cost::fixed(0))
                 .collect();
             fight.act_on(PileAct::Discard, &costly);
+            Played::Done
+        }
+        // `Expertise` once its draw is over: what it drew retains this turn.
+        (Cards::Silent(SilentCard::Expertise), 1) => {
+            let drawn: Vec<_> = drew.iter().filter_map(|&id| fight.find_card(id)).collect();
+            fight.act_on(PileAct::RetainThisTurn, &drawn);
             Played::Done
         }
         (card, from) => on_play_from(card, fight, from, Left::of(&[])),

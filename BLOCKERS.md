@@ -62,7 +62,8 @@ seed 10000. It parted 8 runs on v0.107.1 and 9 on v0.111.0, and one
 v0.107.1 run stopped on a game error. All of these are fixed.
 
 A third round, from seed 20000, parted 1 run on v0.107.1 and 3 on
-v0.111.0. All 4 are fixed.
+v0.111.0. All 4 are fixed. A fourth round, from seed 30000, parted 3 on
+v0.107.1 and 2 on v0.111.0, and all 5 are fixed.
 
 Next, hunt both builds again toward 3,000 runs in a row with no split.
 
