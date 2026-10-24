@@ -3298,12 +3298,7 @@ fn first_playable<V: Rules>(
     use sts2_core::TargetKinds;
 
     let walk = listen::Walk { live, relics };
-    let payable = super::legal::first_playable::<V>(
-        live.cards.iter(Pile::Hand),
-        walk,
-        live.energy,
-        live.stars,
-    )?;
+    let payable = super::legal::first_playable::<V>(live.cards.iter(Pile::Hand), walk)?;
     let target = match payable.target {
         // `HittableEnemies.FirstOrDefault()`.
         t if t == <V::TargetType as TargetKinds>::ANY_ENEMY => {

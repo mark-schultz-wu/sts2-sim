@@ -7198,38 +7198,44 @@ impl<V: Rules> State<V> {
     /// report reads and runs the rules the report runs, in the report's order:
     /// a pending question alone, or the belt, then the room, then the map.
     pub(crate) fn legal(&self) -> Legal<V> {
+        let mut moves = Legal::new();
+        self.legal_into(&mut moves);
+        moves
+    }
+
+    /// [`State::legal`], onto the end of `moves`.
+    pub(crate) fn legal_into(&self, moves: &mut Legal<V>) {
         let alive = self.standing().alive;
         if let Some((min, max, offered)) = self.selecting()
             && (alive || self.in_combat())
         {
-            let mut moves = Legal::new();
-            crate::legal::picks(min, max, offered, &self.picked, &mut moves);
+            crate::legal::picks(min, max, offered, &self.picked, moves);
             if self.cancelable() {
                 moves.push(Decision::Answer(Answer::Cancel));
             }
-            return moves;
+            return;
         }
         if let Phase::Combat(live) = &self.phase {
-            let mut moves = crate::combat::legal_moves::<V>(
+            crate::combat::legal_moves::<V>(
                 live,
                 &self.player.relics,
                 &self.player.potions,
                 alive,
+                moves,
             );
-            self.discards(alive, &mut moves);
-            return moves;
+            self.discards(alive, moves);
+            return;
         }
 
         // `IsGameOver`: a run whose player is dead takes nothing more.
-        let mut moves = Legal::new();
         if !alive {
-            return moves;
+            return;
         }
-        if self.answers(&mut moves) {
+        if self.answers(moves) {
             if self.pending() == Some(sts2_core::QuestionKind::Rewards) {
-                self.discards(alive, &mut moves);
+                self.discards(alive, moves);
             }
-            return moves;
+            return;
         }
         // No fight is live here, so a drink names no creature.
         crate::combat::drinks::<V>(
@@ -7238,9 +7244,9 @@ impl<V: Rules> State<V> {
             self.merchant(),
             alive,
             self.potions_held(),
-            &mut moves,
+            moves,
         );
-        self.room_moves(&mut moves);
+        self.room_moves(moves);
         if self.can_proceed() {
             moves.push(Decision::Proceed);
         } else {
@@ -7250,8 +7256,7 @@ impl<V: Rules> State<V> {
                     .map(|point| Decision::Travel { to: point.at }),
             );
         }
-        self.discards(alive, &mut moves);
-        moves
+        self.discards(alive, moves);
     }
 
     /// A discard for each potion in the belt, last in every list, as the

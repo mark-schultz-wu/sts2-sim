@@ -26,7 +26,7 @@ Two more checks say when that is enough:
   hunt enters. This finds what the simulator never ported, which
   `reached` cannot see.
 
-Speed is a goal as well as a guard. The target is still to be set.
+Speed is a goal as well as a guard. Item 3 says the target.
 
 ## How the list changes
 
@@ -78,8 +78,24 @@ methods. Counting makes a hunt about four times slower.
 Each gap gets a scenario, a hunt that starts from a built position, or a
 note that play cannot reach it.
 
-### 3. A speed target
+### 3. Speed
 
-Mark sets the target. It is measured by `cargo xtask instructions`,
-per replayed step.
+The target is spire-mentor's W1 workload at its cost or less. W1 plays
+random legal moves for the Ironclad, with the starter deck, against the
+22 Act 1 Overgrowth encounters in turn. Its engine costs about 7,400
+instructions per action on this machine. `cargo run --release -p sts2-sim
+--example fight_bench` plays the same workload here, and it costs 11,389.
+Count it under callgrind at 3 reps and at 1, and divide the difference by
+the actions between them.
+
+The easy savings come first. The design work after them is a flat fight
+state that copies cheaply. `cargo xtask instructions` still guards each
+PR, per replayed step.
+
+### 4. Co-op
+
+Co-op is in scope, before the AI front end. Two spikes come first. Can
+the headless game record a co-op run? Can the simulator reproduce the
+game's own checksums? What they find sets what done means for co-op.
+Then the simulator holds a player per seat, and hunts cover co-op runs.
 
