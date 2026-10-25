@@ -442,63 +442,7 @@ impl<V: Rules> Belt<V> {
 }
 
 /// `RunState.Players`: each player, in seat order.
-///
-/// The host sits inline, so a solo run holds its player where it always did
-/// and reaches it with one comparison.
-#[derive(Debug)]
-pub(crate) struct Players<V: Rules> {
-    host: Player<V>,
-    /// Every seat after the host's, in order.
-    others: Vec<Player<V>>,
-}
-
-impl<V: Rules> Players<V> {
-    /// A run of these players, the host first.
-    fn new(host: Player<V>, others: Vec<Player<V>>) -> Self {
-        Self { host, others }
-    }
-
-    /// How many players the run has.
-    pub(crate) fn len(&self) -> usize {
-        1 + self.others.len()
-    }
-}
-
-impl<V: Rules> Clone for Players<V> {
-    fn clone(&self) -> Self {
-        Self {
-            host: self.host.clone(),
-            others: self.others.clone(),
-        }
-    }
-
-    fn clone_from(&mut self, source: &Self) {
-        self.host.clone_from(&source.host);
-        self.others.clone_from(&source.others);
-    }
-}
-
-impl<V: Rules> std::ops::Index<sts2_core::SeatIndex> for Players<V> {
-    type Output = Player<V>;
-
-    #[inline(always)]
-    fn index(&self, seat: sts2_core::SeatIndex) -> &Player<V> {
-        match seat.0 {
-            0 => &self.host,
-            other => &self.others[usize::from(other) - 1],
-        }
-    }
-}
-
-impl<V: Rules> std::ops::IndexMut<sts2_core::SeatIndex> for Players<V> {
-    #[inline(always)]
-    fn index_mut(&mut self, seat: sts2_core::SeatIndex) -> &mut Player<V> {
-        match seat.0 {
-            0 => &mut self.host,
-            other => &mut self.others[usize::from(other) - 1],
-        }
-    }
-}
+pub(crate) type Players<V> = crate::seats::BySeat<Player<V>>;
 
 /// The small, mutable part of one player's run state.
 #[derive(Debug)]
@@ -1165,11 +1109,11 @@ impl<V: Rules> Phase<V> {
 
 impl<V: Rules> State<V> {
     /// The question that blocks every decision except its answer.
-    pub(crate) fn pending(&self) -> Option<sts2_core::QuestionKind> {
+    pub(crate) fn pending(&self, seat: sts2_core::SeatIndex) -> Option<sts2_core::QuestionKind> {
         match &self.phase {
             // The kind alone, without building the options the question lists.
             Phase::Combat(live) => live
-                .selecting()
+                .selecting(seat)
                 .map(|_| sts2_core::QuestionKind::SelectCards),
             Phase::Neow { .. }
             | Phase::Event { .. }
@@ -1207,8 +1151,8 @@ impl<V: Rules> State<V> {
     ///
     /// Reads the phase the way [`State::pending`] does. A command knows this
     /// without a report, which is why it is here rather than derived from one.
-    pub(crate) fn decided(&self) -> Decided {
-        match self.pending() {
+    pub(crate) fn decided(&self, seat: sts2_core::SeatIndex) -> Decided {
+        match self.pending(seat) {
             Some(_) => Decided::Abandoned,
             None => Decided::Resolved,
         }
@@ -1773,7 +1717,7 @@ impl<V: Rules> State<V> {
         let Phase::Combat(live) = &mut self.phase else {
             unreachable!("a won fight is the one the run stands in")
         };
-        crate::combat::combat_ended::<V>(live, &mut self.players[seat].relics);
+        crate::combat::combat_ended::<V>(seat, live, &mut self.players[seat].relics);
     }
 
     /// `Hook.BeforeRoomEntered`, which `RunManager.EnterRoom` raises once the
@@ -2015,7 +1959,7 @@ impl<V: Rules> State<V> {
     /// return false from `OnSelect`, so the option stays and the rest site
     /// is as it was. The shop's removal is not bought, and the removal
     /// reward is not taken.
-    fn cancel(&mut self) -> Settled<V> {
+    fn cancel(&mut self, seat: sts2_core::SeatIndex) -> Settled<V> {
         if !self.cancelable() {
             return Err(sts2_core::Refusal {
                 what: "answer".into(),
@@ -2040,7 +1984,7 @@ impl<V: Rules> State<V> {
             Phase::Rewards { removing, .. } => *removing = None,
             _ => unreachable!("only a cancelable selection is cancelled"),
         }
-        Ok(self.decided())
+        Ok(self.decided(seat))
     }
 
     /// `DiscardPotionGameAction`, which the potion's popup enqueues:
@@ -2080,7 +2024,7 @@ impl<V: Rules> State<V> {
     /// The belt's count, onto the fight the run stands in.
     fn belt_to_fight(&mut self, seat: sts2_core::SeatIndex) {
         if let Phase::Combat(live) = &mut self.phase {
-            live.hold_potions(&self.players[seat].potions);
+            live.hold_potions(seat, &self.players[seat].potions);
         }
     }
 
@@ -2194,8 +2138,8 @@ impl<V: Rules> State<V> {
         let Phase::Combat(live) = &mut self.phase else {
             return;
         };
-        for next in since..live.removed_from_deck().len() {
-            let id = live.removed_from_deck()[next];
+        for next in since..live.removed_from_deck(seat).len() {
+            let id = live.removed_from_deck(seat)[next];
             let Some(at) = self.players[seat]
                 .deck
                 .iter()
@@ -2204,7 +2148,7 @@ impl<V: Rules> State<V> {
                 continue;
             };
             let card = self.players[seat].deck_mut().remove(at);
-            live.take_from_deck(card);
+            live.take_from_deck(seat, card);
         }
     }
 
@@ -2237,7 +2181,7 @@ impl<V: Rules> State<V> {
     /// The player's gold, back from the fight that held it.
     pub(super) fn gold_from_fight(&mut self, seat: sts2_core::SeatIndex) {
         if let Phase::Combat(live) = &self.phase {
-            self.players[seat].gold = live.gold();
+            self.players[seat].gold = live.gold(seat);
         }
     }
 
@@ -2247,7 +2191,7 @@ impl<V: Rules> State<V> {
         let Phase::Combat(live) = &mut self.phase else {
             return;
         };
-        for &at in &live.take_spent_potions() {
+        for &at in &live.take_spent_potions(seat) {
             self.players[seat].potions.remove(usize::from(at));
             self.players[seat].potion_positions.remove(usize::from(at));
         }
@@ -4552,11 +4496,10 @@ impl<V: Rules> State<V> {
         self.list_player(
             &mut listed,
             sts2_core::SeatIndex(0),
-            &self.players.host,
+            self.players.host(),
             hook,
         );
-        for (at, player) in self.players.others.iter().enumerate() {
-            let seat = sts2_core::SeatIndex(u8::try_from(at + 1).expect("at most 255 seats"));
+        for (seat, player) in self.players.others() {
             self.list_player(&mut listed, seat, player, hook);
         }
         for (at, &modifier) in self.shared.modifiers.iter().enumerate() {
@@ -6503,6 +6446,7 @@ impl<V: Rules> State<V> {
             ended,
             arriving,
         } = crate::combat::enter::<V>(
+            seat,
             raw_seed,
             character,
             ascension,
@@ -6741,12 +6685,14 @@ impl<V: Rules> State<V> {
         let Some(fighting) = self.fighting(seat) else {
             unimplemented!("an enchantment put on a card outside a fight");
         };
-        Ok(crate::combat::enchant(fighting, enchantment, amount, index)
-            .map(|()| Decided::Resolved)
-            .map_err(|reason| sts2_core::Refusal {
-                what: "enchant".into(),
-                reason,
-            }))
+        Ok(
+            crate::combat::enchant(seat, fighting, enchantment, amount, index)
+                .map(|()| Decided::Resolved)
+                .map_err(|reason| sts2_core::Refusal {
+                    what: "enchant".into(),
+                    reason,
+                }),
+        )
     }
 
     /// Put a card, a relic or a potion straight into the run.
@@ -7177,7 +7123,7 @@ impl<V: Rules> State<V> {
         answer: &Answer,
     ) -> Result<Settled<V>, Error> {
         if let Answer::Cancel = answer {
-            return Ok(self.cancel());
+            return Ok(self.cancel(seat));
         }
         let Some((min, max, offered)) = self.selecting(seat) else {
             if let Answer::Pick(_) | Answer::Undo | Answer::Done = answer {
@@ -7246,7 +7192,7 @@ impl<V: Rules> State<V> {
         if let Phase::Rewards { .. } = self.phase {
             return self.take(seat, answer);
         }
-        if matches!(&self.phase, Phase::Combat(live) if live.question().is_some()) {
+        if matches!(&self.phase, Phase::Combat(live) if live.question(seat).is_some()) {
             return self.answer_fight(seat, answer);
         }
         if matches!(&self.phase, Phase::RestSite { upgrading, .. } if *upgrading) {
@@ -7432,14 +7378,14 @@ impl<V: Rules> State<V> {
                 unreachable!("removing a deck card leaves the reward screen up");
             };
             offered[at] = Offer::CardRemoval { taken: true };
-            return Ok(self.decided());
+            return Ok(self.decided(seat));
         }
         // `DoUnsyncedCardRemoval`, which is taken once a card comes back.
         if let Answer::Take(take) = *answer
             && let Some(Offer::CardRemoval { taken: false }) = offered.get(take.index())
         {
             *removing = Some(take.index());
-            return Ok(self.decided());
+            return Ok(self.decided(seat));
         }
         let mut offered = std::mem::take(offered);
         if let Some(asked) = self.take_reward(seat, &mut offered, answer) {
@@ -7450,7 +7396,7 @@ impl<V: Rules> State<V> {
             unreachable!("taking a fight's reward leaves its screen up");
         };
         *back = offered;
-        Ok(self.decided())
+        Ok(self.decided(seat))
     }
 
     /// Take one reward off a screen, or skip what is left of it.
@@ -7668,6 +7614,7 @@ impl<V: Rules> State<V> {
         // A fight that is over is not one a potion can be drunk in, so a live
         // fight is the only one read.
         crate::combat::belt::<V>(
+            seat,
             &self.players[seat].potions,
             self.fight(),
             self.merchant(),
@@ -7703,6 +7650,7 @@ impl<V: Rules> State<V> {
         }
         if let Phase::Combat(live) = &self.phase {
             crate::combat::legal_moves::<V>(
+                seat,
                 live,
                 &self.players[seat].relics,
                 &self.players[seat].potions,
@@ -7718,13 +7666,14 @@ impl<V: Rules> State<V> {
             return;
         }
         if self.answers(moves) {
-            if self.pending() == Some(sts2_core::QuestionKind::Rewards) {
+            if self.pending(seat) == Some(sts2_core::QuestionKind::Rewards) {
                 self.discards(seat, alive, moves);
             }
             return;
         }
         // No fight is live here, so a drink names no creature.
         crate::combat::drinks::<V>(
+            seat,
             &self.players[seat].potions,
             None,
             self.merchant(),
@@ -7848,7 +7797,7 @@ impl<V: Rules> State<V> {
     fn selecting(&self, seat: sts2_core::SeatIndex) -> Option<(usize, usize, usize)> {
         match &self.phase {
             Phase::Combat(live) => live
-                .selecting()
+                .selecting(seat)
                 .map(|(min, max, offered)| (min as usize, max as usize, offered)),
             Phase::Neow { .. }
             | Phase::Event { .. }
@@ -8365,7 +8314,7 @@ impl<V: Rules> State<V> {
     /// The fight the run is standing in, as its report shows it.
     fn fight_report(&self, seat: sts2_core::SeatIndex) -> Option<Combat<V>> {
         match &self.phase {
-            Phase::Combat(live) => Some(live.report(&self.players[seat].relics)),
+            Phase::Combat(live) => Some(live.report(seat, &self.players[seat].relics)),
             // `IsInProgress` is false once the loss is processed, and the
             // room it was fought in is still the room the run is standing in.
             // A won fight is still reported for the same reason: the run has
@@ -8459,7 +8408,7 @@ impl<V: Rules> State<V> {
                     pile: None,
                 }
             }),
-            Phase::Combat(live) => live.question(),
+            Phase::Combat(live) => live.question(seat),
             // `CardSelectCmd.FromDeckForRemoval`: one card of the deck less
             // its `Eternal` ones, curses first.
             Phase::Rewards {
@@ -9073,7 +9022,7 @@ mod tests {
         let mut combat = run
             .fight()
             .expect("the run is in the fight")
-            .report(&run.players[SOLO].relics);
+            .report(SOLO, &run.players[SOLO].relics);
         let player = combat
             .creatures
             .iter_mut()

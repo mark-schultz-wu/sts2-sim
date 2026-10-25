@@ -13,6 +13,7 @@ use super::{Error, Fighting};
 ///
 /// Whatever the drink ended, if it ended the fight.
 pub(crate) fn drink<V: Rules>(
+    seat: sts2_core::SeatIndex,
     fighting: Fighting<'_, V>,
     potion: V::Potion,
     target: Option<CombatId>,
@@ -26,11 +27,11 @@ pub(crate) fn drink<V: Rules>(
     // `Hook.BeforePotionUsed`, which nothing that listens answers with more
     // than what it writes on itself.
     let hook = sts2_core::EventHook::PotionUsing { target };
-    if let Some((listener, effect)) = super::listen::first_answer::<V>(live, relics, hook) {
+    if let Some((listener, effect)) = super::listen::first_answer::<V>(seat, live, relics, hook) {
         unimplemented!("{listener:?} asking for {effect:?} before a potion")
     }
     // `BeginCardOrPotionEffect`.
-    live.effect_depth += 1;
+    live.players[seat].effect_depth += 1;
     let mut board =
         Board::for_card(live, streams.combat(), relics, ascension, target, None).blocking();
     let used = V::on_use(potion, &mut board);
@@ -39,6 +40,7 @@ pub(crate) fn drink<V: Rules>(
 
     super::play::merge::<V>(&mut live.skip_tick, skipped);
     super::play::carry_on(
+        seat,
         Fighting {
             live,
             streams,

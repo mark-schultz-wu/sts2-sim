@@ -67,7 +67,9 @@ pub(crate) struct Entered<V: Rules> {
 /// from, without touching either. Entering a room is one transition, and a
 /// fight that cannot be built must leave the run where it stood.
 #[tracing::instrument(level = "trace", skip_all)]
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn enter<V: Rules>(
+    seat: sts2_core::SeatIndex,
     raw_seed: u64,
     character: V::Character,
     ascension: V::AscensionLevel,
@@ -82,15 +84,35 @@ pub(crate) fn enter<V: Rules>(
 
     let modifiers = super::live::RunModifiers::holding(entering.modifiers);
     // Built where it will live, and filled in place.
-    let mut live = Box::new(Live {
+    let player = super::live::PlayerCombat {
         character,
-        ascension,
-        turn: num_traits::one(),
         phase: <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY,
         energy,
         stars: num_traits::zero(),
         gold: entering.gold,
         potions: super::live::PotionBelt::holding(entering.potions, modifiers.hooks),
+        cards: Cards::with_cards(0),
+        removed_from_deck: Vec::new(),
+        ending_turn: false,
+        effect_depth: 0,
+        deck_versions: super::live::DeckVersions::none(),
+        taken_from_deck: Vec::new(),
+        exhaust_next: smallvec::SmallVec::new(),
+        // `PlayerCombatState` opens on `BaseOrbSlotCount` empty slots. Absent
+        // rather than empty for a character with none: the subsystem is inert
+        // until something gives the player a slot.
+        orbs: match V::orb_slots(character) {
+            0 => None,
+            slots => Some(sts2_core::Orbs {
+                capacity: num_traits::cast(slots).expect("a slot count fits the build's count"),
+                queue: Vec::new(),
+            }),
+        },
+    };
+    let mut live = Box::new(Live {
+        players: crate::seats::BySeat::new(player, Vec::new()),
+        ascension,
+        turn: num_traits::one(),
         modifiers,
         round: num_traits::one(),
         side: <V::CombatSide as SideKinds>::PLAYER,
@@ -98,16 +120,9 @@ pub(crate) fn enter<V: Rules>(
         kept: Vec::new(),
         encounter,
         encounter_state: sts2_core::EncounterModel::new(encounter),
-        cards: Cards::with_cards(0),
-        removed_from_deck: Vec::new(),
-        ending_turn: false,
         in_progress: false,
-        effect_depth: 0,
         point: entering.coord,
-        deck_versions: super::live::DeckVersions::none(),
-        taken_from_deck: Vec::new(),
         extra_rewards: Vec::new(),
-        exhaust_next: smallvec::SmallVec::new(),
         selector_answers: false,
         pause_boundary: false,
         leaving: Vec::new(),
@@ -120,18 +135,6 @@ pub(crate) fn enter<V: Rules>(
         drew: None,
         creatures: super::live::Creatures::new(),
         powers: PowerStore::new(),
-        // Absent rather than an empty queue: the subsystem is inert until
-        // something gives the player a slot.
-        // `PlayerCombatState` opens on `BaseOrbSlotCount` empty slots. Absent
-        // rather than empty for a character with none: the subsystem is inert
-        // until something gives the player a slot.
-        orbs: match V::orb_slots(character) {
-            0 => None,
-            slots => Some(sts2_core::Orbs {
-                capacity: num_traits::cast(slots).expect("a slot count fits the build's count"),
-                queue: Vec::new(),
-            }),
-        },
         machines: Bounded::new(),
         // Nothing has been applied to anyone yet.
         skip_tick: Bounded::new(),
@@ -192,7 +195,8 @@ pub(crate) fn enter<V: Rules>(
     // `DeckVersion`, set on each of them.
     if !entering.deck.is_empty() {
         let ids = entering.deck.iter().map(|card| card.id).collect();
-        live.deck_versions = super::live::DeckVersions::new(live.card_ids.peek(), ids);
+        live.players[seat].deck_versions =
+            super::live::DeckVersions::new(live.card_ids.peek(), ids);
     }
     let deck: Vec<CardInstance<V>> = entering
         .deck
@@ -223,7 +227,7 @@ pub(crate) fn enter<V: Rules>(
     let mut walking = super::listen::Walking::begin(&live, relics, entered);
     while let Some((_, effect)) = walking
         .as_mut()
-        .and_then(|walking| walking.next(&mut live, relics))
+        .and_then(|walking| walking.next(seat, &mut live, relics))
     {
         match effect {
             // `PlayerCmd.GainStars`.
@@ -355,13 +359,13 @@ pub(crate) fn enter<V: Rules>(
     live.in_progress = true;
     let starting = EventHook::CombatStarting {
         room: live.room(),
-        holding_potions: !live.potions.is_empty(),
+        holding_potions: !live.players[seat].potions.is_empty(),
         point: live.point,
     };
     let mut walking = super::listen::Walking::begin(&live, relics, starting);
     while let Some((listener, effect)) = walking
         .as_mut()
-        .and_then(|walking| walking.next(&mut live, relics))
+        .and_then(|walking| walking.next(seat, &mut live, relics))
     {
         match (listener, effect) {
             // On the creature carrying the listener, which for a relic is the
@@ -443,7 +447,7 @@ pub(crate) fn enter<V: Rules>(
     let mut walking = super::listen::Walking::begin(&live, relics, late);
     while let Some((listener, effect)) = walking
         .as_mut()
-        .and_then(|walking| walking.next(&mut live, relics))
+        .and_then(|walking| walking.next(seat, &mut live, relics))
     {
         match (listener, effect) {
             // The belt is the run's.
@@ -456,7 +460,7 @@ pub(crate) fn enter<V: Rules>(
         }
     }
     // The whole deck into the draw pile in the order the shuffle left it.
-    live.cards = Cards::dealt(&[], &order);
+    live.players[seat].cards = Cards::dealt(&[], &order);
     if !afflicting.is_empty() {
         super::board::Board::for_card(&mut live, streams.combat(), relics, ascension, None, None)
             .write_cards(afflicting);
@@ -479,8 +483,9 @@ pub(crate) fn enter<V: Rules>(
     // `StartTurn` puts the turn in its start, then raises
     // `BeforeSideTurnStart`, which is where a monster that opens the fight
     // behind block gains it.
-    live.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::START;
+    live.players[seat].phase = <V::PlayerTurnPhase as TurnPhaseKinds>::START;
     super::turn::before_side_turn_start::<V>(
+        seat,
         &mut live,
         streams.combat(),
         relics,
@@ -490,22 +495,25 @@ pub(crate) fn enter<V: Rules>(
     );
     // `SetupPlayerTurn` resets the energy to `MaxEnergy`, which runs
     // `Hook.ModifyMaxEnergy`, and raises the hooks that follow.
-    live.energy = super::board::max_energy::<V>(
+    live.players[seat].energy = super::board::max_energy::<V>(
         Walk {
             live: &live,
             relics,
         },
         energy,
     );
-    if let Some(ended) = super::turn::energy_reset::<V>(&mut live, &mut streams, relics, ascension)
+    if let Some(ended) =
+        super::turn::energy_reset::<V>(seat, &mut live, &mut streams, relics, ascension)
     {
         unimplemented!("a fight that ends {ended:?} as its first energy resets");
     }
-    super::turn::energy_reset_late::<V>(&mut live, streams.combat(), relics, ascension);
+    super::turn::energy_reset_late::<V>(seat, &mut live, streams.combat(), relics, ascension);
     // `RandomizeOrderInternal` raises `ModifyShuffleOrder` before the innate
     // cards move. No listener answers it.
     let hook = sts2_core::EventHook::ShuffleOrder { initial: true };
-    if let Some((listener, effect)) = super::listen::first_answer::<V>(&mut live, relics, hook) {
+    if let Some((listener, effect)) =
+        super::listen::first_answer::<V>(seat, &mut live, relics, hook)
+    {
         unimplemented!("{listener:?} asking for {effect:?} over the opening shuffle")
     }
     // `BeforeHandDraw`, then the hand, then `AfterPlayerTurnStart`: the first
@@ -520,6 +528,7 @@ pub(crate) fn enter<V: Rules>(
     let fresh = live.deferred.open_fresh();
     live.pause_boundary = true;
     let carried = super::turn::carry_setup(
+        seat,
         &mut live,
         streams.combat(),
         relics,
@@ -530,8 +539,8 @@ pub(crate) fn enter<V: Rules>(
     let ended = match carried {
         // A player who died in the setup has the turn in its end already.
         super::turn::Carried::Done(ended) => {
-            if live.phase == <V::PlayerTurnPhase as TurnPhaseKinds>::START {
-                live.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY;
+            if live.players[seat].phase == <V::PlayerTurnPhase as TurnPhaseKinds>::START {
+                live.players[seat].phase = <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY;
             }
             ended
         }
@@ -541,7 +550,7 @@ pub(crate) fn enter<V: Rules>(
         super::turn::Carried::Parked => None,
     };
     let setup = match live.asking {
-        Some(_) => Some(live.set_aside(fresh)),
+        Some(_) => Some(live.set_aside(seat, fresh)),
         None => {
             live.deferred.keep_fresh(fresh);
             None
@@ -557,6 +566,7 @@ pub(crate) fn enter<V: Rules>(
         });
     }
     let ended = super::turn::side_turn_started::<V>(
+        seat,
         &mut live,
         streams.combat(),
         relics,
@@ -566,27 +576,32 @@ pub(crate) fn enter<V: Rules>(
     )
     // `OrbQueue.AfterTurnStart`, which a fight's opening turn runs too.
     .or_else(|| {
-        super::turn::orbs_at_turn_start::<V>(&mut live, streams.combat(), relics, ascension)
+        super::turn::orbs_at_turn_start::<V>(seat, &mut live, streams.combat(), relics, ascension)
     });
     // A setup paused on a signal goes on once the turn has started, and
     // runs the pre-play phase itself where it runs to its end.
     if let Some(setup) = setup {
-        live.rejoin(setup);
+        live.rejoin(seat, setup);
     }
     let ended = match ended {
-        None if parked => super::play::come_up(super::Fighting {
-            live: &mut live,
-            streams: &mut streams,
-            relics: &mut *relics,
-        })?,
+        None if parked => super::play::come_up(
+            seat,
+            super::Fighting {
+                live: &mut live,
+                streams: &mut streams,
+                relics: &mut *relics,
+            },
+        )?,
         ended => ended,
     };
     // `RunAutoPrePlayPhase`, which a setup parked on a question waits out.
     let ended = match ended {
-        None if !parked && live.phase == <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY => {
-            let ended = super::turn::pre_play_phase::<V>(&mut live, streams.combat(), relics);
+        None if !parked
+            && live.players[seat].phase == <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY =>
+        {
+            let ended = super::turn::pre_play_phase::<V>(seat, &mut live, streams.combat(), relics);
             if ended.is_none() {
-                live.phase = super::turn::after_pre_play::<V>(&live);
+                live.players[seat].phase = super::turn::after_pre_play::<V>(&live);
             }
             ended
         }
@@ -604,11 +619,12 @@ pub(crate) fn enter<V: Rules>(
 /// `Hook.AfterModifyingHandDraw`, once the turn's hand size is worked out.
 /// A listener's own hook reads whether it changed the size.
 pub(super) fn after_modifying_hand_draw<V: Rules>(
+    seat: sts2_core::SeatIndex,
     live: &mut super::live::Live<V>,
     relics: &mut Belt<V>,
 ) {
     let hook = sts2_core::EventHook::HandDrawModified;
-    if let Some((listener, effect)) = super::listen::first_answer::<V>(live, relics, hook) {
+    if let Some((listener, effect)) = super::listen::first_answer::<V>(seat, live, relics, hook) {
         unimplemented!("{listener:?} asking for {effect:?} after the hand size is worked out")
     }
 }

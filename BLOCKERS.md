@@ -106,8 +106,8 @@ Next is a simulator that holds a player per seat. Each seat keeps the whole
 run as its own machine sees it. The work goes in this order:
 
 1. With one player and no change in behaviour, the simulator learns to hold
-   several. The run state keeps its players by seat (done). Next, a fight
-   keeps each player's piles, energy and orbs. Then the board acts for a
+   several. The run state keeps its players by seat, and a fight keeps each
+   player's piles, energy and orbs (both done). Next, the board acts for a
    given player, and each relic and potion knows its owner.
 2. A simulator seat, and `cargo xtask coop` following each recorded co-op
    run against it, step by step, as a hunt does.

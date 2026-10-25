@@ -128,23 +128,25 @@ impl<V: Rules> Copy for Walk<'_, V> {}
 /// model directly rather than raised.
 #[inline(always)]
 pub(crate) fn first_answer<V: Rules>(
+    seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     relics: &mut Belt<V>,
     hook: EventHook<V>,
 ) -> Option<(Listener<V>, HookEffect<V>)> {
     let walker = Walker::begin(live, relics, hook)?;
-    first_of_walk(live, relics, walker)
+    first_of_walk(seat, live, relics, walker)
 }
 
 /// [`first_answer`] once something hears the hook.
 #[inline(never)]
 fn first_of_walk<V: Rules>(
+    seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     relics: &mut Belt<V>,
     mut walker: Walker<V>,
 ) -> Option<(Listener<V>, HookEffect<V>)> {
     let mut asked = sts2_core::HookEffects::new();
-    while let Some(listener) = walker.next(live, relics, &mut asked) {
+    while let Some(listener) = walker.next(seat, live, relics, &mut asked) {
         if let Some(&effect) = asked.first() {
             return Some((listener, effect));
         }
@@ -213,6 +215,7 @@ pub(crate) enum Snapped<V: Rules> {
         relic: V::Relic,
     },
     Card {
+        seat: sts2_core::SeatIndex,
         id: CardId<V>,
     },
     Modifier {
@@ -287,7 +290,11 @@ pub(crate) enum Found<'a, V: Rules> {
     },
     /// The copy `id`, with what its card, its affliction and its
     /// enchantment override together.
-    Card { id: CardId<V>, overrides: Overrides },
+    Card {
+        seat: sts2_core::SeatIndex,
+        id: CardId<V>,
+        overrides: Overrides,
+    },
     Modifier {
         modifier: sts2_core::RunModifier<V>,
         overrides: Overrides,
@@ -392,6 +399,8 @@ fn listed<'a, V: Rules, S: Sought>(
         let Some(ModelId::Character(_)) = creature.model else {
             continue;
         };
+        // A fight adds its players first, so a player's creature is its seat.
+        let seat = sts2_core::SeatIndex(creature.id.get());
         if kinds.belt {
             // The listening slots alone, in slot order.
             let mut left = sought.relic_slots(relics);
@@ -405,11 +414,15 @@ fn listed<'a, V: Rules, S: Sought>(
             }
         }
         if kinds.others {
-            listed_potions(live, hooks, &mut found);
+            listed_potions(seat, live, hooks, &mut found);
         }
         if kinds.cards {
-            for (id, overrides) in live.cards.listening(hooks) {
-                found(Found::Card { id, overrides });
+            for (id, overrides) in live.players[seat].cards.listening(hooks) {
+                found(Found::Card {
+                    seat,
+                    id,
+                    overrides,
+                });
             }
         }
     }
@@ -423,11 +436,12 @@ fn listed<'a, V: Rules, S: Sought>(
 #[cold]
 #[inline(never)]
 fn listed_potions<'a, V: Rules>(
+    seat: sts2_core::SeatIndex,
     live: &'a Live<V>,
     hooks: Overrides,
     found: &mut impl FnMut(Found<'a, V>),
 ) {
-    for &potion in live.potions.held() {
+    for &potion in live.players[seat].potions.held() {
         let overrides = sts2_core::PotionTable::overrides(potion);
         if overrides.intersects(hooks) {
             found(Found::Potion { potion, overrides });
@@ -505,7 +519,7 @@ fn snapshot<V: Rules>(
                 Found::Potion { potion, .. } => {
                     unimplemented!("{potion:?} hearing {model_hook:?}")
                 }
-                Found::Card { id, .. } => Snapped::Card { id },
+                Found::Card { seat, id, .. } => Snapped::Card { seat, id },
                 Found::Modifier { modifier, .. } => Snapped::Modifier { modifier },
             });
         },
@@ -532,6 +546,7 @@ impl<V: Rules, C: Cursor<V>> Walker<V, C> {
     /// A belt that changed under the walk.
     pub(crate) fn next(
         &mut self,
+        seat: sts2_core::SeatIndex,
         live: &mut Live<V>,
         relics: &mut Belt<V>,
         asked: &mut sts2_core::HookEffects<V>,
@@ -544,7 +559,7 @@ impl<V: Rules, C: Cursor<V>> Walker<V, C> {
                 && self.pending.first() == Some(&HookEffect::Decrement)
             {
                 self.pending.remove(0);
-                *asked = decrement::<V>(live, owner, instance);
+                *asked = decrement::<V>(seat, live, owner, instance);
             }
             self.take_pending(asked);
             return Some(listener);
@@ -622,10 +637,10 @@ impl<V: Rules, C: Cursor<V>> Walker<V, C> {
                     V::relic_event_hook(state, belt, hook, asked);
                     Listener::Relic { slot }
                 }
-                Snapped::Card { id } => {
+                Snapped::Card { seat, id } => {
                     // `Contains`: still in the fight, and its owner active for
                     // hooks.
-                    if live.lost || !ask_card(live, id, hook, asked) {
+                    if live.lost || !ask_card(seat, live, id, hook, asked) {
                         continue;
                     }
                     Listener::Card { id }
@@ -644,7 +659,7 @@ impl<V: Rules, C: Cursor<V>> Walker<V, C> {
                 self.pending.extend(asked.drain(at..));
                 self.pending_from = Some(listener);
                 if asked.is_empty() {
-                    return self.next(live, relics, asked);
+                    return self.next(seat, live, relics, asked);
                 }
             }
             return Some(listener);
@@ -702,6 +717,7 @@ impl<V: Rules> Walking<V> {
     /// listener is asked only once the last one's effects are out.
     pub(crate) fn next(
         &mut self,
+        seat: sts2_core::SeatIndex,
         live: &mut Live<V>,
         relics: &mut Belt<V>,
     ) -> Option<(Listener<V>, HookEffect<V>)> {
@@ -711,7 +727,7 @@ impl<V: Rules> Walking<V> {
             {
                 return Some((listener, self.rest.remove(0)));
             }
-            self.listener = Some(self.walker.next(live, relics, &mut self.rest)?);
+            self.listener = Some(self.walker.next(seat, live, relics, &mut self.rest)?);
         }
     }
 }
@@ -726,12 +742,13 @@ impl<V: Rules> Walking<V> {
 /// A hook that is not one `AbstractModel` declares.
 #[inline(always)]
 fn ask_card<V: Rules>(
+    seat: sts2_core::SeatIndex,
     live: &Live<V>,
     id: CardId<V>,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) -> bool {
-    let Some(card) = live.cards.named(id) else {
+    let Some(card) = live.players[seat].cards.named(id) else {
         return false;
     };
     let model_hook = hook
@@ -742,7 +759,7 @@ fn ask_card<V: Rules>(
         V::card_event_hook(
             ident.card,
             id,
-            live.cards.pile_of(id),
+            live.players[seat].cards.pile_of(id),
             &card,
             live.history(),
             hook,
@@ -765,6 +782,7 @@ fn ask_card<V: Rules>(
 /// `PowerCmd.Decrement` of the instance `instance` on `owner`, and its
 /// removal at nothing. What its `AfterRemoved` asks for comes back.
 fn decrement<V: Rules>(
+    seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     owner: CombatId,
     instance: super::live::PowerInstance,
@@ -793,7 +811,7 @@ fn decrement<V: Rules>(
         return sts2_core::HookEffects::new();
     }
     match live.powers.place_of(owner, instance) {
-        Some(at) => live.remove_power_at_asking(owner, at),
+        Some(at) => live.remove_power_at_asking(seat, owner, at),
         None => sts2_core::HookEffects::new(),
     }
 }
@@ -901,8 +919,9 @@ pub(crate) fn listeners_to<V: Rules>(
             Found::Monster { monster, .. } => Overrider::Monster(monster),
             Found::Relic { slot, .. } => Overrider::Relic(relics[slot].relic),
             Found::Potion { potion, .. } => Overrider::Potion(potion),
-            Found::Card { id, .. } => Overrider::Card(
-                live.cards
+            Found::Card { seat, id, .. } => Overrider::Card(
+                live.players[seat]
+                    .cards
                     .named(id)
                     .expect("a card the fight lists as listening is in it")
                     .face
@@ -922,8 +941,10 @@ impl Kinds {
             powers: live.powers.hear(hooks),
             monsters: live.creatures.hear(hooks),
             belt: relics.hear(hooks),
-            cards: live.cards.hears(hooks),
-            others: live.potions.either_hears(hooks),
+            cards: live.players.any(|player| player.cards.hears(hooks)),
+            others: live
+                .players
+                .any(|player| player.potions.either_hears(hooks)),
         };
         (kinds.powers || kinds.monsters || kinds.belt || kinds.cards || kinds.others)
             .then_some(kinds)
@@ -991,8 +1012,12 @@ pub(crate) fn each<V: Rules>(
             Found::Potion { potion, overrides } => {
                 ask(sts2_core::Listener::Potion(potion), overrides)
             }
-            Found::Card { id, overrides } => {
-                let card = live
+            Found::Card {
+                seat,
+                id,
+                overrides,
+            } => {
+                let card = live.players[seat]
                     .cards
                     .named(id)
                     .expect("a card the fight lists as listening is in it");
@@ -1014,7 +1039,7 @@ pub(crate) fn each<V: Rules>(
                     card: ident.card,
                     id,
                     printed: &card,
-                    pile: live.cards.pile_of(id),
+                    pile: live.players[seat].cards.pile_of(id),
                     history: live.history(),
                 };
                 ask(listener, overrides);
@@ -1150,13 +1175,17 @@ fn decides<V: Rules>(
 ///
 /// A listener asking for anything else at the second, which nothing here
 /// carries out.
-pub(crate) fn combat_ended<V: Rules>(live: &mut Live<V>, relics: &mut Belt<V>) {
+pub(crate) fn combat_ended<V: Rules>(
+    seat: sts2_core::SeatIndex,
+    live: &mut Live<V>,
+    relics: &mut Belt<V>,
+) {
     // What a listener asks of the run, which carries it out as it leaves.
     let room = live.room();
     let mut walking = Walking::begin(live, relics, EventHook::CombatEnd { room });
     while let Some((_, effect)) = walking
         .as_mut()
-        .and_then(|walking| walking.next(live, relics))
+        .and_then(|walking| walking.next(seat, live, relics))
     {
         match effect {
             // `CreatureCmd.GainMaxHp` on the player's creature, which the
@@ -1187,7 +1216,7 @@ pub(crate) fn combat_ended<V: Rules>(live: &mut Live<V>, relics: &mut Belt<V>) {
     let mut walking = Walking::begin(live, relics, hook);
     while let Some((_, effect)) = walking
         .as_mut()
-        .and_then(|walking| walking.next(live, relics))
+        .and_then(|walking| walking.next(seat, live, relics))
     {
         match effect {
             // `CreatureCmd.Heal`, which caps at the maximum. The listeners
@@ -1207,7 +1236,7 @@ pub(crate) fn combat_ended<V: Rules>(live: &mut Live<V>, relics: &mut Belt<V>) {
     let mut walking = Walking::begin(live, relics, EventHook::CombatVictory { room });
     while let Some((_, effect)) = walking
         .as_mut()
-        .and_then(|walking| walking.next(live, relics))
+        .and_then(|walking| walking.next(seat, live, relics))
     {
         match effect {
             // `CreatureCmd.Heal`, which caps at the maximum.
