@@ -13,6 +13,7 @@ using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Multiplayer;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.GameActions;
+using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
@@ -1008,9 +1009,63 @@ internal static class ParasolWithoutAScreen
 /// run abandoned and awaits <c>GuaranteeKillAllPlayers</c>. It leaves out the
 /// screens <c>AbandonInternal</c> closes first, which take the headless
 /// process down with no message.
+///
+/// In a co-op run the option runs on every seat, for whichever player chose
+/// it, so every seat shows the popup and asks here. Its yes is the popup's:
+/// <c>RunManager.Abandon</c>, which on the host abandons the run for every
+/// seat, through <see cref="AbandonedWithoutScreens"/>. On a client it throws,
+/// as it does with the screen.
 /// </remarks>
 [HarmonyPatch(typeof(Trial), "DoubleDown")]
 internal static class DoubleDownWithoutAPopup
+{
+    private static bool Prefix(ref Task __result)
+    {
+        __result = Asked();
+        return false;
+    }
+
+    private static async Task Asked()
+    {
+        bool yes;
+        try
+        {
+            yes = await Confirmation.Ask();
+        }
+        catch (OperationCanceledException)
+        {
+            // The popup went away unanswered: the host abandoned the run, and
+            // a client's screens went back to the menu with it.
+            return;
+        }
+        if (!yes)
+        {
+            return;
+        }
+        if (Peers.Shared)
+        {
+            RunManager.Instance.Abandon();
+            return;
+        }
+        Log.Info("Abandoning an in-progress run (player-initiated)");
+        await AbandonedWithoutScreens.Abandon();
+    }
+}
+
+/// <summary>
+/// A co-op run abandoned, with no screens to close.
+/// </summary>
+/// <remarks>
+/// The host's <c>RunLobby.AbandonRun</c>, and a client hearing of it, both
+/// tell <c>RunManager</c>'s <c>IRunLobbyListener.RunAbandoned</c>. That closes
+/// the map screen and an overlay, then runs <c>AbandonInternal</c>, which
+/// closes them again, marks the run abandoned and kills every player. A client
+/// then shows an error popup. Headless the screens and the popup are null.
+/// This runs what is left: the run marked abandoned and every player killed.
+/// The host's message and each seat's disconnect are the game's own.
+/// </remarks>
+[HarmonyPatch]
+internal static class AbandonedWithoutScreens
 {
     private static readonly MethodInfo KillAllPlayers =
         AccessTools.Method(typeof(RunManager), "GuaranteeKillAllPlayers")
@@ -1020,20 +1075,23 @@ internal static class DoubleDownWithoutAPopup
         AccessTools.Property(typeof(RunManager), nameof(RunManager.IsAbandoned))
         ?? throw new InvalidOperationException("RunManager no longer has IsAbandoned");
 
-    private static bool Prefix(ref Task __result)
+    private static MethodBase TargetMethod() =>
+        AccessTools.Method(typeof(RunManager), "MegaCrit.Sts2.Core.Multiplayer.Game.Lobby.IRunLobbyListener.RunAbandoned")
+        ?? throw new InvalidOperationException("RunManager no longer hears RunAbandoned");
+
+    private static bool Prefix()
     {
-        __result = Asked();
+        Log.Info("The host told us to abandon the run");
+        TaskHelper.RunSafely(Abandon());
         return false;
     }
 
-    private static async Task Asked()
+    internal static async Task Abandon()
     {
-        if (await Confirmation.Ask())
-        {
-            Log.Info("Abandoning an in-progress run (player-initiated)");
-            Abandoned.SetValue(RunManager.Instance, true);
-            await (Task)KillAllPlayers.Invoke(RunManager.Instance, null)!;
-        }
+        // Leaving the run closes any popup still up, as the menu replaces it.
+        Pending.CancelOutstanding("the run was abandoned");
+        Abandoned.SetValue(RunManager.Instance, true);
+        await (Task)KillAllPlayers.Invoke(RunManager.Instance, null)!;
     }
 }
 

@@ -612,6 +612,11 @@ abandoned and kills the player, as `AbandonInternal` does, so the run ends lost.
 Answer `{"cmd":"answer","confirm":false}` to close the popup on the Reject page,
 whose options stay.
 
+In a co-op run the option runs on every seat, so every seat asks. A yes there is
+the popup's own. On the host it abandons the run for every seat. That ends the
+run lost on each seat, and closes any popup still asking. On a client the game throws, as
+it does with the screen, and the run goes on.
+
 ### rewards
 
 ```json
