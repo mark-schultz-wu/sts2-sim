@@ -481,7 +481,7 @@ mod tests {
     #[test]
     fn monsters_of_a_kind_get_different_health() {
         let seed = Seed::new("0RACLE1").unwrap();
-        let mut streams = Streams::<V0_107_1>::opening(stream_seed::<V0_107_1>(&seed));
+        let mut streams = Streams::<V0_107_1>::opening(stream_seed::<V0_107_1>(&seed), 1);
         let inklets =
             [Monster::Inklet, Monster::Inklet, Monster::Inklet].map(sts2_core::Spawned::new);
 
@@ -563,7 +563,7 @@ mod tests {
     #[test]
     fn the_decimillipede_segments_carry_different_even_healths() {
         let seed = Seed::new("0RACLE1").unwrap();
-        let mut streams = Streams::<V0_107_1>::opening(stream_seed::<V0_107_1>(&seed));
+        let mut streams = Streams::<V0_107_1>::opening(stream_seed::<V0_107_1>(&seed), 1);
         // The rolled numbers this reaches are 46, 43 and 45.
         for _ in 0..46 {
             streams.combat().niche.next_u64();
@@ -603,7 +603,7 @@ mod tests {
     #[test]
     fn the_oracle_weak_slimes_get_the_same_health_and_moves() {
         let seed = Seed::new("0RACLE1").unwrap();
-        let mut streams = Streams::<V0_107_1>::opening(stream_seed::<V0_107_1>(&seed));
+        let mut streams = Streams::<V0_107_1>::opening(stream_seed::<V0_107_1>(&seed), 1);
         let monsters = [
             Monster::TwigSlimeS,
             Monster::LeafSlimeM,
@@ -631,7 +631,7 @@ mod tests {
             creatures.iter().map(|c| c.max_hp).collect::<Vec<_>>(),
             [8, 35, 12]
         );
-        let at = streams.positions();
+        let at = streams.positions(sts2_core::SeatIndex(0));
         assert_eq!(at.run[&RunRngType::Niche].counter, 3);
         assert_eq!(at.run[&RunRngType::MonsterAi].counter, 1);
         assert_eq!(

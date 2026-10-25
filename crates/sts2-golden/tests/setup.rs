@@ -137,7 +137,7 @@ fn setting_up_a_run_draws_what_the_game_drew() {
     let acts = sts2_sim::run::run_acts::<V>(stream_seed::<V>(&seed));
     let opening = Opening::<V>::draw(
         &mut rng,
-        Character::Regent,
+        &[Character::Regent],
         &acts,
         sts2_content::v0_107_1::ascension::AscensionLevel::None,
     );

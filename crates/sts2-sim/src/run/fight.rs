@@ -298,7 +298,7 @@ impl<V: Rules> State<V> {
             Some(combat::Ended::Lost) => {
                 let (live, belts) = self.left_fight();
                 let combat = live.report(seat, belts);
-                self.lost(combat, Some(live));
+                self.lost(seat, combat, Some(live));
             }
             Some(combat::Ended::Won) => {
                 let (mut live, belts) = self.left_fight();
@@ -403,7 +403,7 @@ impl<V: Rules> State<V> {
         let added = self.card_reward_added(true);
         let forced = self.potion_forced(<_ as sts2_core::EncounterTable>::room(encounter));
         let pool = self.reward_pool(seat, room == crate::reward::combat::Room::Elite);
-        let (rng, odds) = self.rewarding();
+        let (rng, odds) = self.rewarding(seat);
         let (mut offered, rarity) = crate::reward::combat::won::<V, _>(
             rng,
             odds,
@@ -420,7 +420,7 @@ impl<V: Rules> State<V> {
         );
         if let Some(rarity) = rarity {
             // `PullNextRelicFromFront`, which the run's own bookkeeping covers.
-            let relic = self.pull_relic(rarity);
+            let relic = self.pull_relic(seat, rarity);
             offered.push(crate::reward::Offer::Relic {
                 relic,
                 rarity: <_ as sts2_core::RarityKinds>::UNDRAFTED,
@@ -490,10 +490,10 @@ impl<V: Rules> State<V> {
                 // `RelicFactory.PullNextRelicFromFront`, which rolls the
                 // rarity off the rewards stream.
                 combat::ExtraReward::Relic => {
-                    let (rng, _) = self.rewarding();
+                    let (rng, _) = self.rewarding(seat);
                     let rarity = crate::reward::relic_rarity::<V, _>(rng);
                     crate::reward::Offer::Relic {
-                        relic: self.pull_relic(rarity),
+                        relic: self.pull_relic(seat, rarity),
                         rarity: <_ as sts2_core::RarityKinds>::UNDRAFTED,
                         wax: false,
                         taken: false,
@@ -508,14 +508,14 @@ impl<V: Rules> State<V> {
                 // `GoldReward.Populate`, which draws even between one
                 // amount's two bounds.
                 combat::ExtraReward::Gold(amount) => {
-                    let (rng, _) = self.rewarding();
+                    let (rng, _) = self.rewarding(seat);
                     crate::reward::Offer::Gold {
                         amount: crate::reward::fixed_gold::<V, _>(rng, amount),
                         taken: false,
                     }
                 }
                 combat::ExtraReward::Potion => {
-                    let (rng, _) = self.rewarding();
+                    let (rng, _) = self.rewarding(seat);
                     crate::reward::Offer::Potion {
                         potion: crate::reward::potion::rolled::<V, _>(rng, character),
                         taken: false,
@@ -526,7 +526,7 @@ impl<V: Rules> State<V> {
                 combat::ExtraReward::Card => {
                     let added = self.card_reward_added(false);
                     let pool = self.reward_pool(seat, room == crate::reward::combat::Room::Elite);
-                    let (rng, odds) = self.rewarding();
+                    let (rng, odds) = self.rewarding(seat);
                     crate::reward::combat::card_reward::<V, _>(
                         rng, odds, ascension, &pool, act, room, &added,
                     )
@@ -541,7 +541,7 @@ impl<V: Rules> State<V> {
         for effect in &extras.ending {
             offered.push(match *effect {
                 sts2_core::HookEffect::AddGoldReward(amount) => {
-                    let (rng, _) = self.rewarding();
+                    let (rng, _) = self.rewarding(seat);
                     crate::reward::Offer::Gold {
                         amount: crate::reward::fixed_gold::<V, _>(rng, amount),
                         taken: false,

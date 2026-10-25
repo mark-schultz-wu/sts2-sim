@@ -93,11 +93,11 @@ impl<V: Rules> Merchant<'_, V> {
     /// The indices are the order `AllEntries` walks: the cards, then the
     /// relics, then the potions, then the removal. A decision names a slot by
     /// that index.
-    pub(super) fn stock(&mut self) -> Vec<Entry<V>> {
-        let mut cards = self.card_shelves();
-        cards.extend(self.colorless_shelves());
-        let relics = self.relic_shelves();
-        let potions = self.potion_shelves();
+    pub(super) fn stock(&mut self, seat: sts2_core::SeatIndex) -> Vec<Entry<V>> {
+        let mut cards = self.card_shelves(seat);
+        cards.extend(self.colorless_shelves(seat));
+        let relics = self.relic_shelves(seat);
+        let potions = self.potion_shelves(seat);
 
         let mut entries = Vec::new();
         for (card, cost) in cards {
@@ -133,6 +133,7 @@ impl<V: Rules> Merchant<'_, V> {
     /// shelf draws one potion, with the blacklist it builds never passed.
     pub(super) fn restock(
         &mut self,
+        seat: sts2_core::SeatIndex,
         index: usize,
         stock: Stock<V>,
         on_shelves: &[V::Card],
@@ -141,16 +142,24 @@ impl<V: Rules> Merchant<'_, V> {
             Stock::Card(_) => {
                 let (card, cost) = match SHELVES.get(index) {
                     Some(&kind) => {
-                        let rarity = self.rolled_rarity();
+                        let rarity = self.rolled_rarity(seat);
                         let rarity = self.allowed_rarity(kind, rarity, on_shelves);
-                        let card = self.pick(self.shelf(kind, rarity, on_shelves));
-                        (card, self.haggled(card_cost(rarity, false), CARD_SPREAD))
+                        let card = self.pick(seat, self.shelf(kind, rarity, on_shelves));
+                        (
+                            card,
+                            self.haggled(seat, card_cost(rarity, false), CARD_SPREAD),
+                        )
                     }
                     None => {
                         let rarity = COLORLESS[index - SHELVES.len()];
-                        let card =
-                            self.pick(unpicked(V::merchant_colorless_cards(rarity), on_shelves));
-                        (card, self.haggled(card_cost(rarity, true), CARD_SPREAD))
+                        let card = self.pick(
+                            seat,
+                            unpicked(V::merchant_colorless_cards(rarity), on_shelves),
+                        );
+                        (
+                            card,
+                            self.haggled(seat, card_cost(rarity, true), CARD_SPREAD),
+                        )
                     }
                 };
                 let card: CardIdent<V> = CardIdent::new(card);
@@ -162,7 +171,7 @@ impl<V: Rules> Merchant<'_, V> {
                 (Stock::Card(Some(shelf)), cost)
             }
             Stock::Relic(_) => {
-                let rarity = self.rolled_relic_rarity();
+                let rarity = self.rolled_relic_rarity(seat);
                 let relic = self.player_relics.back(
                     rarity,
                     self.dealt_relics,
@@ -175,13 +184,13 @@ impl<V: Rules> Merchant<'_, V> {
                     .unwrap_or_else(|| unimplemented!("a merchant stocking {relic:?}"));
                 (
                     Stock::Relic(Some(relic)),
-                    self.haggled(i32::from(base), RELIC_SPREAD),
+                    self.haggled(seat, i32::from(base), RELIC_SPREAD),
                 )
             }
             Stock::Potion(_) => {
                 let character = self.character;
                 let [potion] = crate::reward::potion::distinct::<V, MegaRng>(
-                    self.shops(),
+                    self.shops(seat),
                     character,
                     1,
                     false,
@@ -212,28 +221,28 @@ impl<V: Rules> Merchant<'_, V> {
     }
 
     /// The five slots the character's own pool fills, one of them on sale.
-    fn card_shelves(&mut self) -> Vec<(CardIdent<V>, i32)> {
+    fn card_shelves(&mut self, seat: sts2_core::SeatIndex) -> Vec<(CardIdent<V>, i32)> {
         let bound = Bound::try_new(
             num_traits::cast(SHELVES.len()).expect("a shelf count fits the RNG integer"),
         )
         .expect("a merchant has shelves");
-        let on_sale: usize = num_traits::cast(self.shops().next_int(bound))
+        let on_sale: usize = num_traits::cast(self.shops(seat).next_int(bound))
             .expect("a bounded draw is a valid shelf index");
 
         let mut stocked = Vec::new();
         let mut picked: Vec<V::Card> = Vec::new();
         for (at, kind) in SHELVES.into_iter().enumerate() {
-            let rarity = self.rolled_rarity();
+            let rarity = self.rolled_rarity(seat);
             let rarity = self.allowed_rarity(kind, rarity, &picked);
-            let card = self.pick(self.shelf(kind, rarity, &picked));
+            let card = self.pick(seat, self.shelf(kind, rarity, &picked));
             picked.push(card);
             let base = card_cost(rarity, false);
-            let mut cost = self.haggled(base, CARD_SPREAD);
+            let mut cost = self.haggled(seat, base, CARD_SPREAD);
             if at == on_sale {
                 // `SetOnSale` calls `CalcCost` again rather than halve what it
                 // had, so the slot on sale costs one draw more than its
                 // neighbours.
-                cost = self.haggled(base, CARD_SPREAD) / 2;
+                cost = self.haggled(seat, base, CARD_SPREAD) / 2;
             }
             stocked.push((CardIdent::new(card), cost));
         }
@@ -245,13 +254,13 @@ impl<V: Rules> Merchant<'_, V> {
     /// The picked list starts empty here, although `Populate` reads every card
     /// entry. The character shelves hold no colourless card, so this pool holds
     /// nothing that entry excludes.
-    fn colorless_shelves(&mut self) -> Vec<(CardIdent<V>, i32)> {
+    fn colorless_shelves(&mut self, seat: sts2_core::SeatIndex) -> Vec<(CardIdent<V>, i32)> {
         let mut stocked = Vec::new();
         let mut picked: Vec<V::Card> = Vec::new();
         for rarity in COLORLESS {
-            let card = self.pick(unpicked(V::merchant_colorless_cards(rarity), &picked));
+            let card = self.pick(seat, unpicked(V::merchant_colorless_cards(rarity), &picked));
             picked.push(card);
-            let cost = self.haggled(card_cost(rarity, true), CARD_SPREAD);
+            let cost = self.haggled(seat, card_cost(rarity, true), CARD_SPREAD);
             stocked.push((CardIdent::new(card), cost));
         }
         stocked
@@ -274,25 +283,25 @@ impl<V: Rules> Merchant<'_, V> {
     ///
     /// `CreateForMerchant` rolls for an upgrade against a chance of minus a
     /// billion, so the draw happens and never lands.
-    fn pick(&mut self, options: Vec<V::Card>) -> V::Card {
+    fn pick(&mut self, seat: sts2_core::SeatIndex, options: Vec<V::Card>) -> V::Card {
         let count = num_traits::cast(options.len()).expect("a shelf fits the RNG integer");
         let span = Span::new(num_traits::zero(), count).expect("a shelf has something on it");
-        let at: usize = num_traits::cast(self.shops().next_int_range(span))
+        let at: usize = num_traits::cast(self.shops(seat).next_int_range(span))
             .expect("a bounded draw is a valid card index");
         let card = options[at];
-        self.rewards().next_double();
+        self.rewards(seat).next_double();
         card
     }
 
     /// `RollWithoutChangingFutureOdds(Shop)`, which reads the saved offset and
     /// leaves it where it was.
-    fn rolled_rarity(&mut self) -> RewardRarity {
+    fn rolled_rarity(&mut self, seat: sts2_core::SeatIndex) -> RewardRarity {
         let base = match crate::reward::combat::scarce::<V>(self.ascension) {
             true => SCARCE_SHOP_RARE,
             false => SHOP_RARE,
         };
         let rare = base + self.offset;
-        let roll = self.rewards().next_double() as f32;
+        let roll = self.rewards(seat).next_double() as f32;
         if roll < rare {
             RewardRarity::Rare
         } else if roll < SHOP_UNCOMMON + rare {
@@ -327,12 +336,12 @@ impl<V: Rules> Merchant<'_, V> {
     }
 
     /// The three relic slots: two at a rolled rarity, then the shop's own.
-    fn relic_shelves(&mut self) -> Vec<(V::Relic, i32)> {
+    fn relic_shelves(&mut self, seat: sts2_core::SeatIndex) -> Vec<(V::Relic, i32)> {
         // The three rarities are worked out before any of them is filled,
         // because the game builds the array first and walks it afterwards.
         let rarities = [
-            self.rolled_relic_rarity(),
-            self.rolled_relic_rarity(),
+            self.rolled_relic_rarity(seat),
+            self.rolled_relic_rarity(seat),
             <Rarity<V> as sts2_core::RarityKinds>::SHOP,
         ];
 
@@ -351,7 +360,7 @@ impl<V: Rules> Merchant<'_, V> {
             let base = relic
                 .merchant_price()
                 .unwrap_or_else(|| unimplemented!("a merchant stocking {relic:?}"));
-            let cost = self.haggled(i32::from(base), RELIC_SPREAD);
+            let cost = self.haggled(seat, i32::from(base), RELIC_SPREAD);
             stocked.push((relic, cost));
         }
         stocked
@@ -362,34 +371,34 @@ impl<V: Rules> Merchant<'_, V> {
     /// `CalcCost` haggles a potion's price only with `TestMode.IsOff`, and the
     /// oracle runs headless with it on. So a potion's price is its rarity's
     /// number and no draw pays for it here.
-    fn potion_shelves(&mut self) -> Vec<(V::Potion, i32)> {
+    fn potion_shelves(&mut self, seat: sts2_core::SeatIndex) -> Vec<(V::Potion, i32)> {
         let character = self.character;
-        crate::reward::potion::distinct::<V, MegaRng>(self.shops(), character, 3, false)
+        crate::reward::potion::distinct::<V, MegaRng>(self.shops(seat), character, 3, false)
             .into_iter()
             .map(|potion| (potion, potion_cost::<V>(character, potion)))
             .collect()
     }
 
     /// `RelicFactory.RollRarity`, which reads the Rewards stream.
-    fn rolled_relic_rarity(&mut self) -> Rarity<V> {
-        crate::reward::relic_rarity::<V, _>(self.rewards())
+    fn rolled_relic_rarity(&mut self, seat: sts2_core::SeatIndex) -> Rarity<V> {
+        crate::reward::relic_rarity::<V, _>(self.rewards(seat))
     }
 
     /// `CalcCost`'s haggle: the base times a draw inside the spread, rounded.
-    fn haggled(&mut self, base: i32, spread: (f32, f32)) -> i32 {
+    fn haggled(&mut self, seat: sts2_core::SeatIndex, base: i32, spread: (f32, f32)) -> i32 {
         let interval = Interval::new(spread.0, spread.1);
-        let scale = self.shops().next_f32_range(interval);
+        let scale = self.shops(seat).next_f32_range(interval);
         rounded(base as f32 * scale)
     }
 
-    fn shops(&mut self) -> &mut MegaRng {
+    fn shops(&mut self, seat: sts2_core::SeatIndex) -> &mut MegaRng {
         self.streams
-            .player(<V::PlayerRngType as PlayerStreamKinds>::SHOPS)
+            .player(seat, <V::PlayerRngType as PlayerStreamKinds>::SHOPS)
     }
 
-    fn rewards(&mut self) -> &mut MegaRng {
+    fn rewards(&mut self, seat: sts2_core::SeatIndex) -> &mut MegaRng {
         self.streams
-            .player(<V::PlayerRngType as PlayerStreamKinds>::REWARDS)
+            .player(seat, <V::PlayerRngType as PlayerStreamKinds>::REWARDS)
     }
 }
 

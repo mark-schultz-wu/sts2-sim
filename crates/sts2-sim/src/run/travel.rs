@@ -26,8 +26,13 @@ pub(crate) struct Move<V: Rules> {
 
 impl<V: Rules> State<V> {
     /// A treasure room at `to`, entered on the streams the move resolved.
-    fn treasure(&mut self, to: Coord, streams: crate::stream::Streams<V>) {
-        self.enter_treasure(Location::MapPoint(to), streams);
+    fn treasure(
+        &mut self,
+        seat: sts2_core::SeatIndex,
+        to: Coord,
+        streams: crate::stream::Streams<V>,
+    ) {
+        self.enter_treasure(seat, Location::MapPoint(to), streams);
     }
 
     /// Validate a move and resolve what it will enter, without changing state.
@@ -97,7 +102,7 @@ impl<V: Rules> State<V> {
         }
         if let Destination::Other(kind) = destination {
             if kind == V::MapPointType::TREASURE {
-                self.treasure(to, *self.streams());
+                self.treasure(seat, to, *self.streams());
                 return Ok(Decided::Resolved);
             }
             if kind == V::MapPointType::REST_SITE {
@@ -148,7 +153,7 @@ impl<V: Rules> State<V> {
             if let Some(room) = rolled {
                 self.room_entering(seat, point, true);
                 if room == UnknownRoom::Treasure {
-                    self.treasure(to, streams);
+                    self.treasure(seat, to, streams);
                     return Ok(Decided::Resolved);
                 }
                 self.drew(streams);
