@@ -16,11 +16,12 @@ use super::live::{CardInstance, Fighter, Live};
 
 /// Every card in hand, in hand order, with the reasons each cannot be played.
 pub(super) fn hand<V: Rules>(
+    seat: sts2_core::SeatIndex,
     hand: impl ExactSizeIterator<Item = CardInstance<V>>,
     fight: Walk<'_, V>,
 ) -> Vec<Playable<V>> {
-    let facts = HandFacts::of(fight);
-    hand.map(|card| InHand::new(card, fight, &facts).playable())
+    let facts = HandFacts::of(seat, fight);
+    hand.map(|card| InHand::new(seat, card, fight, &facts).playable())
         .collect()
 }
 
@@ -35,22 +36,22 @@ pub(super) struct HandFacts<V: Rules> {
 
 impl<V: Rules> HandFacts<V> {
     #[inline(always)]
-    pub(super) fn of(fight: Walk<'_, V>) -> Self {
+    pub(super) fn of(seat: sts2_core::SeatIndex, fight: Walk<'_, V>) -> Self {
         let live = fight.live;
         Self {
-            energy: live.energy,
-            stars: live.stars,
+            energy: live.players[seat].energy,
+            stars: live.players[seat].stars,
             asks: asks_should_play::<V>(fight),
         }
     }
 }
 
 /// The fight as a card's own `IsPlayable` reads it.
-struct Logic<'a, V: Rules>(&'a Live<V>);
+struct Logic<'a, V: Rules>(&'a Live<V>, sts2_core::SeatIndex);
 
 impl<V: Rules> sts2_core::CardLogic for Logic<'_, V> {
     fn draw_pile(&self) -> usize {
-        self.0.cards.len(Pile::Draw)
+        self.0.players[self.1].cards.len(Pile::Draw)
     }
 
     fn osty(&self) -> bool {
@@ -58,7 +59,7 @@ impl<V: Rules> sts2_core::CardLogic for Logic<'_, V> {
     }
 
     fn hand_all_attacks(&self) -> bool {
-        (self.0.cards.iter(Pile::Hand))
+        (self.0.players[self.1].cards.iter(Pile::Hand))
             .all(|held| V::card_kind(held.face.ident.card) == Some(sts2_core::CardKind::Attack))
     }
 }
@@ -73,11 +74,12 @@ pub(super) struct Payable<V: Rules> {
 
 /// The hand's first card that `CanPlay`, with no previews worked out.
 pub(super) fn first_playable<V: Rules>(
+    seat: sts2_core::SeatIndex,
     hand: impl Iterator<Item = CardInstance<V>>,
     fight: Walk<'_, V>,
 ) -> Option<Payable<V>> {
-    let facts = HandFacts::of(fight);
-    hand.map(|held| InHand::new(held, fight, &facts))
+    let facts = HandFacts::of(seat, fight);
+    hand.map(|held| InHand::new(seat, held, fight, &facts))
         .find(|card| card.reason.is_none())
         .map(|card| Payable {
             held: card.held,
@@ -99,7 +101,7 @@ pub(super) fn target_type<V: Rules>(card: CardIdent<V>, live: &Live<V>) -> V::Ta
 /// Whether anything in the fight answers `ShouldPlay`, asked once for a hand
 /// rather than once for each card in it.
 fn asks_should_play<V: Rules>(fight: Walk<'_, V>) -> bool {
-    super::listen::heard::<V>(fight.live, fight.relics, sts2_core::ModelHook::ShouldPlay)
+    super::listen::heard::<V>(fight.live, fight.belts, sts2_core::ModelHook::ShouldPlay)
 }
 
 /// `EnergyCost.GetWithModifiers` for a copy in hand or being played, which
@@ -140,7 +142,7 @@ pub(super) fn costs<V: Rules>(
         // on every read.
         |cost| {
             let hook = sts2_core::ModelHook::TryModifyStarCost;
-            match super::listen::heard::<V>(fight.live, fight.relics, hook) {
+            match super::listen::heard::<V>(fight.live, fight.belts, hook) {
                 true => super::board::modified_by::<V>(
                     fight,
                     cost,
@@ -162,6 +164,7 @@ pub(super) fn costs<V: Rules>(
 /// `preventer`. `target` is the card's [`target_type`].
 #[inline(always)]
 pub(super) fn reasons<V: Rules>(
+    seat: sts2_core::SeatIndex,
     card: CardIdent<V>,
     target: V::TargetType,
     fight: Walk<'_, V>,
@@ -229,7 +232,7 @@ pub(super) fn reasons<V: Rules>(
     }
     // `IsPlayable`, the card's own logic.
     if let sts2_core::HookResponse::Decision(false) =
-        V::card_is_playable(card.card, &Logic(fight.live))
+        V::card_is_playable(card.card, &Logic(fight.live, seat))
     {
         why = refused::<V>(
             why,
@@ -275,6 +278,8 @@ pub(super) fn targets<V: Rules>(
 /// Everything but the previews is worked out when this is made. The previews
 /// are the dear part, and are worked out when asked for.
 pub(crate) struct InHand<'a, V: Rules> {
+    /// The seat whose hand it is in.
+    seat: sts2_core::SeatIndex,
     held: CardInstance<V>,
     fight: Walk<'a, V>,
     cost: Cost,
@@ -286,13 +291,25 @@ pub(crate) struct InHand<'a, V: Rules> {
 }
 
 impl<'a, V: Rules> InHand<'a, V> {
-    pub(super) fn new(held: CardInstance<V>, fight: Walk<'a, V>, facts: &HandFacts<V>) -> Self {
+    pub(super) fn new(
+        seat: sts2_core::SeatIndex,
+        held: CardInstance<V>,
+        fight: Walk<'a, V>,
+        facts: &HandFacts<V>,
+    ) -> Self {
         let creatures = &fight.live.creatures;
         let target = target_type::<V>(held.face.ident, fight.live);
         let (cost, star_cost) = costs::<V>(&held, Some(Pile::Hand), fight);
-        let (reason, preventer) =
-            reasons::<V>(held.face.ident, target, fight, (cost, star_cost), facts);
+        let (reason, preventer) = reasons::<V>(
+            seat,
+            held.face.ident,
+            target,
+            fight,
+            (cost, star_cost),
+            facts,
+        );
         Self {
+            seat,
             held,
             fight,
             cost,
@@ -306,7 +323,7 @@ impl<'a, V: Rules> InHand<'a, V> {
 
     /// What playing it does, per target it varies by.
     pub(super) fn previews(&self) -> Previews<V> {
-        effect::<V>(&self.held, self.fight, &self.targets)
+        effect::<V>(self.seat, &self.held, self.fight, &self.targets)
     }
 
     /// The card as a report lists it.
@@ -378,22 +395,24 @@ pub(super) type Previews<V> = SmallVec<[Preview<V>; 4]>;
 /// and each card's reasons and targets. Nothing computes a preview, and
 /// nothing is collected but the moves, which go on the end of `moves`.
 pub(crate) fn moves<V: Rules>(
+    seat: sts2_core::SeatIndex,
     live: &Live<V>,
-    relics: &crate::run::Belt<V>,
+    belts: &crate::run::Belts<V>,
     potions: &[V::Potion],
     alive: bool,
     moves: &mut Legal<V>,
 ) {
-    drinks::<V>(potions, Some(live), false, alive, false, moves);
+    drinks::<V>(seat, potions, Some(live), false, alive, false, moves);
 
-    let facts = HandFacts::of(Walk { live, relics });
-    for (at, card) in live.cards.iter(Pile::Hand).enumerate() {
-        let costs = costs::<V>(&card, Some(Pile::Hand), Walk { live, relics });
+    let facts = HandFacts::of(seat, Walk { live, belts });
+    for (at, card) in live.players[seat].cards.iter(Pile::Hand).enumerate() {
+        let costs = costs::<V>(&card, Some(Pile::Hand), Walk { live, belts });
         let target = target_type::<V>(card.face.ident, live);
         let (refused, _) = reasons::<V>(
+            seat,
             card.face.ident,
             target,
-            Walk { live, relics },
+            Walk { live, belts },
             costs,
             &facts,
         );
@@ -417,6 +436,7 @@ pub(crate) fn moves<V: Rules>(
 /// What [`belt`] reports, as moves: a potion with no reason against it, aimed
 /// only inside a live fight, where there are creatures to name.
 pub(crate) fn drinks<V: Rules>(
+    seat: sts2_core::SeatIndex,
     potions: &[V::Potion],
     fight: Option<&Live<V>>,
     merchant: bool,
@@ -425,7 +445,7 @@ pub(crate) fn drinks<V: Rules>(
     moves: &mut Legal<V>,
 ) {
     for (at, &potion) in potions.iter().enumerate() {
-        if undrinkable::<V>(potion, fight, merchant, alive, stuck).is_some() {
+        if undrinkable::<V>(seat, potion, fight, merchant, alive, stuck).is_some() {
             continue;
         }
         let targets = match fight {
@@ -451,6 +471,7 @@ pub(crate) fn drinks<V: Rules>(
 /// `merchant` is whether the room has a merchant a Foul Potion can be
 /// thrown at, which [`Rules::computed_potion_check`] reads.
 pub(crate) fn belt<'a, V: Rules>(
+    seat: sts2_core::SeatIndex,
     potions: &'a [V::Potion],
     fight: Option<&'a Live<V>>,
     merchant: bool,
@@ -458,7 +479,7 @@ pub(crate) fn belt<'a, V: Rules>(
     stuck: bool,
 ) -> impl ExactSizeIterator<Item = Held<V>> + 'a {
     potions.iter().map(move |&potion| {
-        let reason = undrinkable::<V>(potion, fight, merchant, alive, stuck);
+        let reason = undrinkable::<V>(seat, potion, fight, merchant, alive, stuck);
         Held {
             potion,
             // The game reads both out of its localisation tables, which
@@ -485,6 +506,7 @@ pub(crate) fn belt<'a, V: Rules>(
 /// asks anything else. A dead run answers for every potion in the belt,
 /// whatever else is true of one.
 fn undrinkable<V: Rules>(
+    seat: sts2_core::SeatIndex,
     potion: V::Potion,
     fight: Option<&Live<V>>,
     merchant: bool,
@@ -507,7 +529,9 @@ fn undrinkable<V: Rules>(
         // ending the turn sets and the next player turn's start clears. So a
         // question asked as the turn starts leaves potions drinkable. Only a
         // `CombatOnly` potion asks, and one usable any time does not.
-        Some(fight) if potion.usage() == PotionUsage::CombatOnly && !drinking_turn::<V>(fight) => {
+        Some(fight)
+            if potion.usage() == PotionUsage::CombatOnly && !drinking_turn::<V>(seat, fight) =>
+        {
             return Some(Undrinkable::NotYourTurn);
         }
         Some(_) => {}
@@ -521,7 +545,7 @@ fn undrinkable<V: Rules>(
 /// Whether the player's side holds the turn, with actions not disabled:
 /// from the turn's start until the player ends it. Where a build's selection
 /// takes back an ended turn, a question asked as the turn ends lifts it too.
-fn drinking_turn<V: Rules>(fight: &Live<V>) -> bool {
+fn drinking_turn<V: Rules>(seat: sts2_core::SeatIndex, fight: &Live<V>) -> bool {
     use sts2_core::TurnPhaseKinds as _;
     type Phase<V> = <V as sts2_core::ContentVersion>::PlayerTurnPhase;
     fight.side == <V::CombatSide as SideKinds>::PLAYER
@@ -530,7 +554,7 @@ fn drinking_turn<V: Rules>(fight: &Live<V>) -> bool {
             Phase::<V>::AUTO_PRE_PLAY,
             Phase::<V>::PLAY,
         ]
-        .contains(&fight.phase)
+        .contains(&fight.players[seat].phase)
             || V::selection_undoes_ended_turn() && fight.asking.is_some())
 }
 
@@ -612,6 +636,7 @@ fn valid_target<V: Rules>(target: V::TargetType, creature: &Fighter<V>) -> bool 
 /// target. Identical previews collapse into one with no target, which is what
 /// a card the fight moves no number of reports.
 fn effect<V: Rules>(
+    seat: sts2_core::SeatIndex,
     held: &CardInstance<V>,
     fight: Walk<'_, V>,
     targets: &[CombatId],
@@ -641,7 +666,7 @@ fn effect<V: Rules>(
         // simulator does not have. `Observation::rules_digest` leaves it
         // out for that reason, and a front end reads the numbers.
         text: None,
-        vars: previewed::<V>(held, fight, target),
+        vars: previewed::<V>(seat, held, fight, target),
         base: numbers.clone(),
     }));
 
@@ -668,6 +693,7 @@ fn effect<V: Rules>(
 /// A number whose class the simulator has nowhere to run, which is the Osty's
 /// damage. No character the simulator plays has one.
 fn previewed<V: Rules>(
+    seat: sts2_core::SeatIndex,
     held: &CardInstance<V>,
     fight: Walk<'_, V>,
     target: Option<CombatId>,
@@ -676,7 +702,7 @@ fn previewed<V: Rules>(
     held.face
         .numbers()
         .map(|var| {
-            let printed = || super::board::var::<V>(held, var.id, fight, target);
+            let printed = || super::board::var::<V>(seat, held, var.id, fight, target);
             let resolved = match (var.modifier, target) {
                 // `UpdateCardPreview` hands the null target to
                 // `Hook.ModifyDamage` rather than skipping it, so a hit
@@ -695,7 +721,7 @@ fn previewed<V: Rules>(
                     // props say otherwise.
                     let powered = modifier != sts2_core::CardNumberModifier::UnpoweredDamage;
                     Some(super::board::card_hit::<V>(
-                        fight, dealer, None, held, var.id, powered,
+                        seat, fight, dealer, None, held, var.id, powered,
                     ))
                 }
                 // `PowerVar<T>.UpdateCardPreview`: `Hook.ModifyPowerAmountGiven`
@@ -705,6 +731,7 @@ fn previewed<V: Rules>(
                         .unwrap_or_else(|| unreachable!("{:?} is a PowerVar of no power", var.id));
                     let giver = super::board::player::<V>(creatures);
                     let (given, _) = super::board::given_by::<V>(
+                        seat,
                         fight,
                         giver,
                         target,
@@ -723,12 +750,12 @@ fn previewed<V: Rules>(
                 (Some(modifier), _) => match super::board::dealer_of::<V>(modifier, creatures) {
                     Some(dealer) => super::board::effect_of::<V>(modifier, var.id, dealer, target)
                         .map(|effect| {
-                            super::board::resolve::<V>(fight, Some(held), effect).amount()
+                            super::board::resolve::<V>(seat, fight, Some(held), effect).amount()
                         }),
                     // `OstyDamageVar` with `Owner.Osty` null: `Hook.ModifyDamage`
                     // with no dealer.
                     None => Some(super::board::card_hit::<V>(
-                        fight, None, target, held, var.id, true,
+                        seat, fight, None, target, held, var.id, true,
                     )),
                 },
                 (None, _) => None,
@@ -751,6 +778,9 @@ fn numbers<V: Rules>(held: &CardInstance<V>) -> sts2_core::Keyed<V::CardVar, V::
 
 #[cfg(test)]
 mod tests {
+    /// The one seat of the solo fights these play.
+    const SOLO: sts2_core::SeatIndex = sts2_core::SeatIndex(0);
+
     use super::super::powers::Powers as _;
     use super::*;
     use sts2_content::v0_107_1::{
@@ -776,10 +806,10 @@ mod tests {
     }
 
     /// `fight` with `belt`, which a test leaves empty.
-    fn walk<'a>(fight: &'a Live<V>, belt: &'a crate::run::Belt<V>) -> Walk<'a, V> {
+    fn walk<'a>(fight: &'a Live<V>, belt: &'a crate::run::Belts<V>) -> Walk<'a, V> {
         Walk {
             live: fight,
-            relics: belt,
+            belts: belt,
         }
     }
 
@@ -819,10 +849,16 @@ mod tests {
         stars: <V as sts2_core::ContentVersion>::Count,
     ) -> Playable<V> {
         let mut fight = live(fight());
-        fight.energy = energy;
-        fight.stars = stars;
-        let mut plays =
-            super::hand::<V>(hand.iter().copied(), walk(&fight, &crate::run::Belt::new()));
+        fight.players[SOLO].energy = energy;
+        fight.players[SOLO].stars = stars;
+        let mut plays = super::hand::<V>(
+            SOLO,
+            hand.iter().copied(),
+            walk(
+                &fight,
+                &crate::run::Belts::new(crate::run::Belt::new(), Vec::new()),
+            ),
+        );
         assert_eq!(plays.len(), 1);
         plays.remove(0)
     }
@@ -855,8 +891,16 @@ mod tests {
         let strike = card(Cards::Regent(RegentCard::Strike));
         let fight = fight_with(at(0), Power::StrengthPower, -2);
         let damage = |targets: &[CombatId]| {
-            effect::<V>(&strike, walk(&fight, &crate::run::Belt::new()), targets)[0].vars
-                [&CardVar::Damage]
+            effect::<V>(
+                SOLO,
+                &strike,
+                walk(
+                    &fight,
+                    &crate::run::Belts::new(crate::run::Belt::new(), Vec::new()),
+                ),
+                targets,
+            )[0]
+            .vars[&CardVar::Damage]
         };
 
         // The same card, previewed at the one enemy and at nobody. Strength
@@ -875,8 +919,16 @@ mod tests {
         let strike = card(Cards::Regent(RegentCard::Strike));
         let fight = fight_with(at(1), Power::VulnerablePower, 1);
         let damage = |targets: &[CombatId]| {
-            effect::<V>(&strike, walk(&fight, &crate::run::Belt::new()), targets)[0].vars
-                [&CardVar::Damage]
+            effect::<V>(
+                SOLO,
+                &strike,
+                walk(
+                    &fight,
+                    &crate::run::Belts::new(crate::run::Belt::new(), Vec::new()),
+                ),
+                targets,
+            )[0]
+            .vars[&CardVar::Damage]
         };
 
         let printed = super::numbers::<V>(&strike)[&CardVar::Damage];
@@ -946,9 +998,16 @@ mod tests {
         creatures[1].alive = false;
 
         let mut fight = live(creatures);
-        fight.energy = 3;
-        fight.stars = 0;
-        let plays = super::hand::<V>([strike].into_iter(), walk(&fight, &crate::run::Belt::new()));
+        fight.players[SOLO].energy = 3;
+        fight.players[SOLO].stars = 0;
+        let plays = super::hand::<V>(
+            SOLO,
+            [strike].into_iter(),
+            walk(
+                &fight,
+                &crate::run::Belts::new(crate::run::Belt::new(), Vec::new()),
+            ),
+        );
 
         assert!(plays[0].targets.is_empty());
         // Nothing to hit is not a reason the card cannot be played. The game

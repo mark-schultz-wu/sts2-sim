@@ -54,6 +54,7 @@ impl<V: Rules> Observed<V> for AtSeat<'_, V> {
 
     fn potions(&self) -> impl ExactSizeIterator<Item = impl Borrow<Held<V>>> + '_ {
         crate::combat::belt::<V>(
+            self.seat,
             &self.state.players[self.seat].potions,
             self.state.fight(),
             self.state.merchant(),
@@ -117,7 +118,8 @@ impl<V: Rules> Observed<V> for AtSeat<'_, V> {
         match &self.state.phase {
             Phase::Combat(live) => Some(Fight::Live {
                 live,
-                relics: &self.state.players[self.seat].relics,
+                belts: &self.state.belts,
+                seat: self.seat,
             }),
             Phase::Lost { combat, .. } | Phase::Rewards { combat, .. } => Some(Fight::Over(combat)),
             Phase::Map

@@ -34,18 +34,39 @@ pub(crate) fn obtained<V: Rules>(
 ///
 /// A belt that changed under the command, or a relic that asks for more.
 pub(crate) fn own_command_over<V: Rules>(
-    relics: &mut crate::run::Belt<V>,
+    belt: &mut crate::run::Belt<V>,
     slot: u8,
     relic: V::Relic,
 ) {
     let slot = usize::from(slot);
-    if relics.get(slot).map(|held| held.relic) != Some(relic) {
+    if belt.get(slot).map(|held| held.relic) != Some(relic) {
         unimplemented!("the belt changing under {relic:?}'s own command");
     }
-    let (state, belt) = relics.state_beside(slot);
+    let (state, belt) = belt.state_beside(slot);
     let mut asked = sts2_core::HookEffects::new();
     V::relic_event_hook(state, belt, EventHook::OwnCommandOver, &mut asked);
     if !asked.is_empty() {
         unimplemented!("{relic:?} asking for {asked:?} once its own command is over");
     }
+}
+
+/// Where the relic whose model is `state` sits: its seat, and its slot on
+/// that belt. A walk hands back a relic's model and not its place.
+///
+/// # Panics
+///
+/// A model on no belt.
+pub(crate) fn place_of<V: Rules>(
+    belts: &crate::run::Belts<V>,
+    state: *const V::RelicState,
+) -> (sts2_core::SeatIndex, usize) {
+    belts
+        .seated()
+        .find_map(|(seat, belt)| {
+            let slot = belt
+                .iter()
+                .position(|held| std::ptr::eq(&held.state, state))?;
+            Some((seat, slot))
+        })
+        .expect("a relic asked is on a belt")
 }

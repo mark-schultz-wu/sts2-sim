@@ -19,18 +19,18 @@ impl<V: Rules> State<V> {
         mut ended: Option<combat::Ended>,
     ) -> Result<Option<combat::Ended>, Error> {
         while ended.is_none() {
-            let Some(fighting) = self.fighting(seat) else {
+            let Some(fighting) = self.fighting() else {
                 break;
             };
             // A choice that signalled under a pause boundary lists once the
             // task goes on, and takes its cards unasked where it can.
             let answered = match combat::signalled(fighting.live) {
-                true => combat::come_up(fighting)?,
+                true => combat::come_up(seat, fighting)?,
                 false => {
-                    let Some(picks) = combat::selector_picks(fighting.live) else {
+                    let Some(picks) = combat::selector_picks(seat, fighting.live) else {
                         break;
                     };
-                    combat::answer(fighting, picks)?
+                    combat::answer(seat, fighting, picks)?
                 }
             };
             ended = match answered {
@@ -50,11 +50,11 @@ impl<V: Rules> State<V> {
         let Answer::Cards(chosen) = *answer else {
             unimplemented!("an answer that is not a card selection");
         };
-        let Some(fighting) = self.fighting(seat) else {
+        let Some(fighting) = self.fighting() else {
             unreachable!("a fight answer has a live fight");
         };
-        let since = fighting.live.removed_from_deck().len();
-        let ended = match combat::answer(fighting, chosen)? {
+        let since = fighting.live.removed_from_deck(seat).len();
+        let ended = match combat::answer(seat, fighting, chosen)? {
             None => self.turn_ended_by_play(seat)?,
             ended => ended,
         };
@@ -78,16 +78,16 @@ impl<V: Rules> State<V> {
             }))
         };
 
-        let Some(fighting) = self.fighting(seat) else {
+        let Some(fighting) = self.fighting() else {
             return refused(Reason::NotInCombat);
         };
-        let play = match combat::resolve(fighting.live, fighting.relics, index, target) {
+        let play = match combat::resolve(seat, fighting.live, fighting.belts, index, target) {
             Ok(play) => play,
             Err(reason) => return refused(reason),
         };
 
-        let since = fighting.live.removed_from_deck().len();
-        let ended = match combat::play(fighting, play)? {
+        let since = fighting.live.removed_from_deck(seat).len();
+        let ended = match combat::play(seat, fighting, play)? {
             None => self.turn_ended_by_play(seat)?,
             ended => ended,
         };
@@ -148,7 +148,7 @@ impl<V: Rules> State<V> {
         let potion = held.potion;
         // `RemoveBeforeUse`.
         self.drank(seat, at);
-        let Some(fighting) = self.fighting(seat) else {
+        let Some(fighting) = self.fighting() else {
             // What it asks the run for.
             let effects = V::on_use_on_run(potion, &self.seen_by(seat), false);
             // Thrown at an event's merchant: what the event does with it,
@@ -197,8 +197,8 @@ impl<V: Rules> State<V> {
                 *own_rewards,
             )?));
         };
-        let since = fighting.live.removed_from_deck().len();
-        let ended = combat::drink(fighting, potion, target)?;
+        let since = fighting.live.removed_from_deck(seat).len();
+        let ended = combat::drink(seat, fighting, potion, target)?;
         // What the potion asks of the run beside the fight, which is its belt.
         let effects = V::on_use_on_run(potion, &self.seen_by(seat), true);
         if self.carry_out(seat, effects).is_some() {
@@ -226,15 +226,15 @@ impl<V: Rules> State<V> {
             .expect("the turn's energy fits the build's count type");
         let ascension = self.ascension();
         loop {
-            let Some(fighting) = self.fighting(seat) else {
+            let Some(fighting) = self.fighting() else {
                 return Ok(None);
             };
-            fighting.live.ask_paused();
-            if !fighting.live.ending_turn() || fighting.live.question().is_some() {
+            fighting.live.ask_paused(seat);
+            if !fighting.live.ending_turn(seat) || fighting.live.question(seat).is_some() {
                 return Ok(None);
             }
-            fighting.live.take_ending_turn();
-            if let Some(ended) = combat::end_turn(fighting, ascension, max_energy)? {
+            fighting.live.take_ending_turn(seat);
+            if let Some(ended) = combat::end_turn(seat, fighting, ascension, max_energy)? {
                 return Ok(Some(ended));
             }
         }
@@ -245,15 +245,15 @@ impl<V: Rules> State<V> {
         let max_energy: V::Count = num_traits::cast(V::max_energy(self.character(seat)))
             .expect("the turn's energy fits the build's count type");
         let ascension = self.ascension();
-        let Some(fighting) = self.fighting(seat) else {
+        let Some(fighting) = self.fighting() else {
             return Ok(Err(Refusal {
                 what: "end_turn".into(),
                 reason: Reason::NotInCombat,
             }));
         };
 
-        let since = fighting.live.removed_from_deck().len();
-        let ended = match combat::end_turn(fighting, ascension, max_energy)? {
+        let since = fighting.live.removed_from_deck(seat).len();
+        let ended = match combat::end_turn(seat, fighting, ascension, max_energy)? {
             None => self.turn_ended_by_play(seat)?,
             ended => ended,
         };
@@ -277,7 +277,10 @@ impl<V: Rules> State<V> {
         let ended = self
             .selector_answered(seat, ended)
             .unwrap_or_else(|error| unimplemented!("a pushed selector's answer failing: {error}"));
-        let ended = ended.or_else(|| self.fighting(seat).and_then(combat::check_win_condition));
+        let ended = ended.or_else(|| {
+            let fighting = self.fighting()?;
+            combat::check_win_condition(fighting)
+        });
         self.asked_by_fight(seat);
         self.forget_detached();
         self.lose_cards(seat, since);
@@ -293,14 +296,14 @@ impl<V: Rules> State<V> {
             // Not `finish`: the run never left the fight, and the piles and
             // the powers are where the player fell.
             Some(combat::Ended::Lost) => {
-                let (live, relics) = self.left_fight(seat);
-                let combat = live.report(relics);
+                let (live, belts) = self.left_fight();
+                let combat = live.report(seat, belts);
                 self.lost(combat, Some(live));
             }
             Some(combat::Ended::Won) => {
-                let (mut live, relics) = self.left_fight(seat);
+                let (mut live, belts) = self.left_fight();
                 let extra_rewards = live.extra_rewards().to_vec();
-                let taken = live.taken_from_deck().to_vec();
+                let taken = live.taken_from_deck(seat).to_vec();
                 // `AddExtraReward`, which the room's own rewards come before.
                 let (extra, leaving): (Vec<_>, Vec<_>) =
                     live.leaving().iter().partition(|effect| {
@@ -312,7 +315,7 @@ impl<V: Rules> State<V> {
                     });
                 let proportion = live.gold_proportion();
                 let escaped = live.any_escaped();
-                let combat = live.finish(relics);
+                let combat = live.finish(seat, belts);
                 if let Some(resuming) = self.resuming.as_mut() {
                     resuming.escaped = escaped;
                     if !extra_rewards.is_empty() || !extra.is_empty() {
@@ -354,7 +357,7 @@ impl<V: Rules> State<V> {
                 }) && self.in_last_act();
                 if last_boss {
                     self.won(seat, combat, Vec::new(), live);
-                    return self.decided();
+                    return self.decided(seat);
                 }
                 let mut offered =
                     self.combat_rewards(seat, &combat, proportion, &extra_rewards, &extra, &taken);
@@ -364,7 +367,7 @@ impl<V: Rules> State<V> {
         }
         // A decision the end of a fight cut short is `Decided::Abandoned`. The
         // rewards it put up are what is left of it.
-        self.decided()
+        self.decided(seat)
     }
 
     /// `RewardsSet.WithRewardsFromRoom`, for the fight just won.

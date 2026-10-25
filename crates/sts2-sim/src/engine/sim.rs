@@ -29,7 +29,7 @@ impl<V: Rules> Clone for Sim<V> {
     }
 }
 
-/// The one seat of a solo run, which is every seat `Sim` plays.
+/// The one SOLO of a solo run, which is every SOLO `Sim` plays.
 const SOLO: sts2_core::SeatIndex = sts2_core::SeatIndex(0);
 
 impl<V: Rules> Play<V> for Sim<V> {
@@ -97,7 +97,7 @@ impl<V: Rules> Sim<V> {
     /// most decisions do, and a search throws every one of them away.
     #[tracing::instrument(level = "trace", skip_all, fields(decision = name(decision)))]
     pub fn decide(&mut self, decision: &Decision<V>) -> Result<Settled<V>, Error> {
-        let pending = self.state.pending();
+        let pending = self.state.pending(SOLO);
         // A reward screen leaves the belt open, so a discard is the one
         // other decision it takes.
         if let Some(kind) = pending

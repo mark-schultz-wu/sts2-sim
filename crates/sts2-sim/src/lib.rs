@@ -12,6 +12,7 @@ pub mod map;
 mod reward;
 pub mod rng;
 pub mod run;
+mod seats;
 mod stream;
 
 pub use combat::Error;
