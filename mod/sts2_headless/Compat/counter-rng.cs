@@ -37,4 +37,13 @@ internal static class GameApi
 
     internal static IReadOnlyDictionary<PlayerRngType, RngPosition> PlayerRngCounters(Player player)
         => player.PlayerRng.ToSerializable().Counters.ToDictionary(pair => pair.Key, pair => new RngPosition(pair.Value));
+
+    /// <summary>
+    /// A local selection, as it stands. This family's selector answers before
+    /// any choice id is reserved, so there is nothing to send, and a co-op run
+    /// cannot be played on it.
+    /// </summary>
+    internal static System.Threading.Tasks.Task<IEnumerable<MegaCrit.Sts2.Core.Models.CardModel>> Sent(
+        List<MegaCrit.Sts2.Core.Models.CardModel> options,
+        System.Threading.Tasks.Task<IEnumerable<MegaCrit.Sts2.Core.Models.CardModel>> asked) => asked;
 }

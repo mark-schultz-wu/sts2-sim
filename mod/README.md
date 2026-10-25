@@ -8,6 +8,7 @@ Each mod has one job. A run loads the ones its job needs.
 | `sts2_headless` | The game without its presentation layer. It stands in for the screens: it reports what they show, and it does what a click does. It speaks the protocol. |
 | `sts2_setup` | Puts a run into a position without playing to it, as the developer console does. It adds commands to the protocol. |
 | `sts2_fixes` | Patches game bugs the simulator models as fixed. Each patch changes the game. |
+| `sts2_net` | Co-op over the game's ENet transport on one machine, with no Steam and no lobby screen. A game with its screens can load it too. |
 | `sts2_observe` | Reports what the game does inside, when a run asks. Off unless asked. |
 | `sts2_dump` | Dumps the game's content for code generation. |
 | `sts2_headless_test`, `sts2_determinism_test` | Check the others inside the game. |

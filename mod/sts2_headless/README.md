@@ -152,6 +152,7 @@ Modes, selected with `STS2_HEADLESS_MODE`:
 | *(unset)* | mod loads and does nothing |
 | `selftest` | claimed by `sts2_headless_test`, and does nothing without that mod |
 | `serve` | speaks the protocol over the TCP port the client passed in |
+| `coop` | hosts or joins a co-op run through `sts2_net`, then speaks the protocol as one seat. `STS2_COOP_ROLE`, `_PORT`, `_NETID`, `_PLAYERS`, `_CHARACTER` and `_SEED` configure it |
 
 Other variables: `STS2_HEADLESS_PORT` (required by `serve`) + `STS2_HEADLESS_TOKEN`,
 and `STS2_HEADLESS_OBS=full`.

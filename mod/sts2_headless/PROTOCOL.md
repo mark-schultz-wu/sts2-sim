@@ -279,6 +279,25 @@ moves, which is why it is reported here rather than dumped into a table.
 `title` and `text` are absent, not defaulted, where the localisation table has no
 key. That is a fault in the build rather than a name a client invents.
 
+#### A co-op seat sees the other seats
+
+In a co-op run, the observation carries `peers`, with what the screens show
+about the other seats:
+
+```json
+{"players":[{"netId":1,"endedTurn":true,"vote":null},
+            {"netId":1000,"endedTurn":false,"vote":{"col":2,"row":3}}],
+ "awaiting":[1000],"inFlight":false}
+```
+
+`endedTurn` is a player who ended the turn and waits for the rest. `vote`
+is where a player voted to go next. `awaiting` lists the players whose choice
+the game waits for. `inFlight` is an action of this seat's that is not back from
+the host yet. A run of one has no `peers`.
+
+Each observation is this seat's own. Every field above `peers` describes this
+seat's player.
+
 ### error
 
 ```json
@@ -351,11 +370,18 @@ game.
 | `buy` | `index` — into the shop entries |
 | `grant` | `card`, `relic` or `potion` — one entry name each, and one command can carry all three. It can park a question: see below |
 | `answer` | see below; shape depends on the pending |
-| `observe` | — |
+| `observe` | — . It lets the game finish what its screens do by themselves first, such as offering a won fight's rewards |
 | `quit` | — |
 
 `"full": true` is honoured on any command, since every one of them answers with an
 observation.
+
+A command does what the game's screens do for the same click. `travel` votes,
+and the run moves once every seat votes, which alone is at once. Each action
+goes through `ActionQueueSynchronizer.RequestEnqueue`. A command answers once
+the game stands still, waiting on this player or, in a co-op run, on another
+seat. Whether to wait for the others is the client's decision, made from
+`peers`.
 
 ### A Foul Potion thrown at a merchant
 
@@ -585,6 +611,11 @@ Answer `{"cmd":"answer","confirm":true}` to abandon the run. The mod marks the r
 abandoned and kills the player, as `AbandonInternal` does, so the run ends lost.
 Answer `{"cmd":"answer","confirm":false}` to close the popup on the Reject page,
 whose options stay.
+
+In a co-op run the option runs on every seat, so every seat asks. A yes there is
+the popup's own. On the host it abandons the run for every seat. That ends the
+run lost on each seat, and closes any popup still asking. On a client the game throws, as
+it does with the screen, and the run goes on.
 
 ### rewards
 

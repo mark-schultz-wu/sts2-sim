@@ -15,9 +15,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// The mods whose source the identity hashes, as `mod/identity.sh` lists them.
-const MODS: [&str; 5] = [
+const MODS: [&str; 6] = [
     "sts2_determinism",
     "sts2_fixes",
+    "sts2_net",
     "sts2_headless",
     "sts2_setup",
     "sts2_observe",

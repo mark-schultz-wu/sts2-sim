@@ -235,6 +235,11 @@ internal static class Protocol
                     return false;
 
                 case "observe":
+                    // What the screens do by themselves first, such as offering
+                    // a won fight's rewards. In a co-op run a fight can end
+                    // while this seat is between commands. A run of one has
+                    // nothing left to do here by the time it is observed.
+                    await Driver.WaitForDecisionPoint();
                     await Observe(req, "observe");
                     return false;
 
@@ -358,7 +363,7 @@ internal static class Protocol
         // the dialogue that ends a won run by the character's count. So the
         // run says what the count is. Nothing else in a run reads it.
         SaveManager.Instance.Progress
-            .GetOrCreateCharacterStats(_state.Players[0].Character.Id).TotalWins = wins;
+            .GetOrCreateCharacterStats(Seat.Me(_state).Character.Id).TotalWins = wins;
         await Observe(req, "start");
     }
 
@@ -550,7 +555,7 @@ internal static class Protocol
             {
                 IReadOnlyList<RelicModel>? relics =
                     RunManager.Instance.TreasureRoomRelicSynchronizer.CurrentRelics;
-                if (relics == null || !Chest.Open(_state.Players[0]))
+                if (relics == null || !Chest.Open(Seat.Me(_state)))
                 {
                     await Error("choose_option", Refusals.AlreadyAnswered());
                     return;
@@ -649,7 +654,7 @@ internal static class Protocol
         }
 
         MerchantEntry entry = entries[index];
-        Player buyer = _state.Players[0];
+        Player buyer = Seat.Me(_state);
 
         // Every refusal, decided in front of the purchase rather than read off
         // it. `OnTryPurchaseWrapper` makes the first two checks itself before it
@@ -742,7 +747,15 @@ internal static class Protocol
             return;
         }
 
-        await RunManager.Instance.EnterMapCoord(target.coord);
+        // A vote, as the map screen casts one. Alone it moves the run at once,
+        // and in a co-op run once every seat has voted.
+        var source = new MapLocation(_state.CurrentMapCoord, _state.CurrentActIndex);
+        var vote = new MapVote
+        {
+            coord = target.coord,
+            mapGenerationCount = RunManager.Instance.MapSelectionSynchronizer.MapGenerationCount,
+        };
+        Peers.Enqueue(new VoteForMapCoordAction(Seat.Me(_state), source, vote));
         // Waited on like every other command that enters a room. A fight the
         // room opens can end before the player moves, and the rewards it owes
         // are offered here or by nothing.
@@ -809,7 +822,7 @@ internal static class Protocol
     /// </remarks>
     private static async Task PlayCard(JsonElement req)
     {
-        PlayerCombatState? pcs = _state.Players[0].PlayerCombatState;
+        PlayerCombatState? pcs = Seat.Me(_state).PlayerCombatState;
         CombatState? combat = (_state.CurrentRoom as CombatRoom)?.CombatState;
         if (pcs == null || combat == null)
         {
@@ -864,7 +877,7 @@ internal static class Protocol
         }
 
         var action = new PlayCardAction(card, target);
-        RunManager.Instance.ActionQueueSet.EnqueueWithoutSynchronizing(action);
+        Peers.Enqueue(action);
         bool resolved = await Driver.Quiesce(action);
         await Observe(req, "play_card", resolved);
     }
@@ -888,7 +901,7 @@ internal static class Protocol
     /// </remarks>
     private static async Task UsePotion(JsonElement req)
     {
-        Player me = _state.Players[0];
+        Player me = Seat.Me(_state);
 
         if (!req.TryGetProperty("index", out JsonElement idxEl) || !idxEl.TryGetInt32(out int index))
         {
@@ -948,7 +961,7 @@ internal static class Protocol
         }
 
         var action = new UsePotionAction(potion, target, CombatManager.Instance.IsInProgress);
-        RunManager.Instance.ActionQueueSet.EnqueueWithoutSynchronizing(action);
+        Peers.Enqueue(action);
         bool resolved = await Driver.Quiesce(action);
         await Observe(req, "use_potion", resolved);
     }
@@ -964,7 +977,7 @@ internal static class Protocol
     /// </remarks>
     private static async Task DiscardPotion(JsonElement req)
     {
-        Player me = _state.Players[0];
+        Player me = Seat.Me(_state);
 
         if (!req.TryGetProperty("index", out JsonElement idxEl) || !idxEl.TryGetInt32(out int index))
         {
@@ -988,14 +1001,14 @@ internal static class Protocol
 
         int slot = me.PotionSlots.ToList().IndexOf(potion);
         var action = new DiscardPotionGameAction(me, (uint)slot, CombatManager.Instance.IsInProgress);
-        RunManager.Instance.ActionQueueSet.EnqueueWithoutSynchronizing(action);
+        Peers.Enqueue(action);
         bool resolved = await Driver.Quiesce(action);
         await Observe(req, "discard_potion", resolved);
     }
 
     private static async Task EndTurn(JsonElement req)
     {
-        Player me = _state.Players[0];
+        Player me = Seat.Me(_state);
         PlayerCombatState? pcs = me.PlayerCombatState;
         if (pcs == null || !CombatManager.Instance.IsInProgress)
         {

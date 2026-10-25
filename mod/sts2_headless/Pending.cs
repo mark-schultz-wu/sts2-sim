@@ -1053,8 +1053,9 @@ internal sealed class HeadlessCardSelector : ICardSelector
             minSelect = canSkip ? 0 : 1;
             ChooseACardSkip.CanSkip = null;
         }
-        return CardSelection.Ask(options.ToList(), minSelect, maxSelect,
-            RunManager.Instance.ActionExecutor.CurrentlyRunningAction?.ToString());
+        List<CardModel> offered = options.ToList();
+        return GameApi.Sent(offered, CardSelection.Ask(offered, minSelect, maxSelect,
+            RunManager.Instance.ActionExecutor.CurrentlyRunningAction?.ToString()));
     }
 
     /// <summary>

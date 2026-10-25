@@ -30,7 +30,7 @@ public static class Headless
         // itself: a selftest that hangs is still this process, and the test mods
         // load after this one. Not armed for a null mode, which is a player's
         // game and must keep Godot's own signal handling.
-        if (mode is "serve" or "selftest" or "determinism")
+        if (mode is "serve" or "coop" or "selftest" or "determinism")
         {
             Deadline.Arm();
         }
@@ -43,6 +43,11 @@ public static class Headless
                 // Driver.Run owns the rest of the lifecycle, including the
                 // reproducibility check.
                 _ = Driver.Run(Protocol.Serve);
+                break;
+
+            // One seat of a co-op run, which hosts or joins first.
+            case "coop":
+                _ = Driver.Run(Protocol.Serve, CoopSeat.Begin);
                 break;
 
             // Claimed by the test mods, which may or may not be installed.

@@ -267,7 +267,7 @@ public static class Setup
 
     internal static async Task Grant(JsonElement req)
     {
-        Player me = Protocol.State.Players[0];
+        Player me = Seat.Me(Protocol.State);
         string? card = Protocol.Str(req, "card");
         string? relic = Protocol.Str(req, "relic");
         string? potion = Protocol.Str(req, "potion");
@@ -448,7 +448,7 @@ public static class Cheats
     public static async Task<string?> EnterFight(RunState state, string encounter)
     {
         Driver.Stage = "entering fight";
-        CmdResult result = new FightConsoleCmd().Process(state.Players[0], new[] { encounter });
+        CmdResult result = new FightConsoleCmd().Process(Seat.Me(state), new[] { encounter });
         if (!result.success)
         {
             return result.msg;
@@ -498,7 +498,7 @@ public static class Cheats
         }
 
         CmdResult result = new ApplyPowerConsoleCmd().Process(
-            state.Players[0],
+            Seat.Me(state),
             new[]
             {
                 power,
@@ -526,7 +526,7 @@ public static class Cheats
     public static async Task<string?> SetHp(RunState state, int hp, uint? target)
     {
         Driver.Stage = "setting hit points";
-        Creature creature = state.Players[0].Creature;
+        Creature creature = Seat.Me(state).Creature;
         if (target is uint id)
         {
             CombatState? combat = (state.CurrentRoom as CombatRoom)?.CombatState;
@@ -558,7 +558,7 @@ public static class Cheats
         try
         {
             CmdResult result = new EnchantConsoleCmd().Process(
-                state.Players[0],
+                Seat.Me(state),
                 new[]
                 {
                     enchantment,
@@ -597,7 +597,7 @@ public static class Cheats
             return null;
         }
 
-        CmdResult result = new EventConsoleCmd().Process(state.Players[0], new[] { entry });
+        CmdResult result = new EventConsoleCmd().Process(Seat.Me(state), new[] { entry });
         if (!result.success)
         {
             return result.msg;
@@ -667,7 +667,7 @@ public static class Cheats
     /// </remarks>
     public static async Task GrantCard(RunState state, CardModel canonical)
     {
-        Player me = state.Players[0];
+        Player me = Seat.Me(state);
         CombatState? combat = (state.CurrentRoom as CombatRoom)?.CombatState;
 
         if (combat != null && CombatManager.Instance.IsInProgress)
