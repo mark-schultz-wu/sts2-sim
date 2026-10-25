@@ -11,21 +11,61 @@
 use crate::ContentVersion;
 use crate::Seed;
 
-/// The inputs a fresh run needs.
+/// The inputs a fresh run needs, for one player or several.
 ///
-/// The same five the game's own `start` command takes. See
-/// [PROTOCOL.md](../../../mod/sts2_headless/PROTOCOL.md) for what each means to
-/// the real game.
+/// A solo run is a run of one player. The game's own `start` command takes
+/// the fields of one. See [PROTOCOL.md](../../../mod/sts2_headless/PROTOCOL.md)
+/// for what each means to the real game. A co-op run is the lobby the host
+/// starts, and every seat begins from the same one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Start<V: ContentVersion> {
     pub seed: Seed,
-    pub character: V::Character,
+    /// Each player, in seat order. Seat 0 hosts. Never empty.
+    pub players: Vec<Player<V>>,
     pub ascension: V::AscensionLevel,
     /// Run modifiers, each with what it was set up with.
     pub modifiers: Vec<RunModifier<V>>,
-    /// The runs the profile has won with this character, its `TotalWins`.
-    /// The Architect picks the dialogue that ends a won run by it.
+}
+
+/// One player in a run's lobby.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Player<V: ContentVersion> {
+    pub character: V::Character,
+    /// The runs the player's profile has won with this character, its
+    /// `TotalWins`. The Architect picks the dialogue that ends a won run by
+    /// it.
     pub wins: u32,
+}
+
+impl<V: ContentVersion> Start<V> {
+    /// A run of one player.
+    pub fn solo(
+        seed: Seed,
+        character: V::Character,
+        ascension: V::AscensionLevel,
+        modifiers: Vec<RunModifier<V>>,
+        wins: u32,
+    ) -> Self {
+        Self {
+            seed,
+            players: vec![Player { character, wins }],
+            ascension,
+            modifiers,
+        }
+    }
+
+    /// The one player of a solo run.
+    ///
+    /// # Panics
+    ///
+    /// On a run of more than one player. What reads this plays a solo run, and
+    /// a co-op run there is a path nobody wrote.
+    pub fn alone(&self) -> &Player<V> {
+        match self.players.as_slice() {
+            [player] => player,
+            players => unimplemented!("a run of {} players played as one", players.len()),
+        }
+    }
 }
 
 /// A modifier a run is started with, and what it was set up with.

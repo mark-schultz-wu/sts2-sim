@@ -33,7 +33,9 @@ fn main() -> Result<(), String> {
         };
         println!(
             "{}\t{}\t{}\t{modifiers}",
-            run.seed, run.character, run.ascension
+            run.seed,
+            run.characters(),
+            run.ascension
         );
     }
     Ok(())

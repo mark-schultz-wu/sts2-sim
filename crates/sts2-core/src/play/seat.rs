@@ -13,27 +13,14 @@
 //! resolved. A co-op move can wait on the other seats. Ending the turn waits
 //! for every seat to end it, and travel waits for every vote.
 
-use crate::{ContentVersion, Coord, Decision, Refusal, Seed, Snapshot};
+use crate::{ContentVersion, Coord, Decision, Refusal, Snapshot, Start};
 
-/// What the lobby agreed before the run started.
-///
-/// Every seat begins from the same lobby, and each is told which place in it
-/// is its own.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Lobby<V: ContentVersion> {
-    pub seed: Seed,
-    /// Each seat's character, in seat order.
-    ///
-    /// Seat 0 hosts. The length is the number of players.
-    pub characters: Vec<V::Character>,
-}
-
-/// A place in the lobby. Seat 0 hosts.
+/// A place in a run's lobby: an index into [`Start::players`]. Seat 0 hosts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SeatIndex(pub u8);
 
 impl SeatIndex {
-    /// The index into a lobby's seats.
+    /// The index into [`Start::players`].
     pub fn at(self) -> usize {
         usize::from(self.0)
     }
@@ -101,16 +88,17 @@ pub trait Seat<V: ContentVersion>: Sized {
     /// A fault, which is not a refusal. See [`Play::Error`](super::Play::Error).
     type Error;
 
-    /// Whin it takes to reach this seat's game. See
+    /// What it takes to reach this seat's game. See
     /// [`Play::Host`](super::Play::Host).
     type Host;
 
-    /// Takes seat `me` in `lobby`, and returns once the run has started.
+    /// Takes seat `me` in the run `start` names, and returns once the run has
+    /// started.
     ///
-    /// A run starts only once every seat has joined, so the seats of one lobby
+    /// A run starts only once every seat has joined, so the seats of one run
     /// begin at the same time. [`Coop::begin`](super::coop::Coop::begin) does
     /// that.
-    fn begin(host: Self::Host, lobby: &Lobby<V>, me: SeatIndex) -> Result<Self, Self::Error>;
+    fn begin(host: Self::Host, start: &Start<V>, me: SeatIndex) -> Result<Self, Self::Error>;
 
     /// Submits one of this seat's moves.
     ///

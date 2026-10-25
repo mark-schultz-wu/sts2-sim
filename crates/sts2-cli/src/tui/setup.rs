@@ -142,10 +142,9 @@ impl<V: crate::tui::Build> Screen<V> {
         // `0RACLE1`, the alphabet having no `O`.
         Typed::Start(Start {
             seed,
-            character,
+            players: vec![sts2_core::Player { character, wins: 0 }],
             ascension,
             modifiers: Vec::new(),
-            wins: 0,
         })
     }
 }
@@ -279,7 +278,10 @@ mod tests {
         let start = started.expect("the screen described a run");
 
         assert_eq!(start.seed.as_str(), "0RACLE1", "the seed was not folded");
-        assert_eq!(crate::render::spelling(&start.character), "IRONCLAD");
+        assert_eq!(
+            crate::render::spelling(&start.alone().character),
+            "IRONCLAD"
+        );
         assert!(start.modifiers.is_empty());
     }
 

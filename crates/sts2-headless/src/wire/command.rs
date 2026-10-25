@@ -30,10 +30,14 @@ use sts2_core::{
 // `V` — which is a marker and implements neither.
 #[serde(tag = "cmd", rename_all = "snake_case", bound = "")]
 pub enum Command<V: sts2_content_wire::WireContentVersion> {
+    /// A solo run names its character, and the game's own `start` takes
+    /// that. A run of several players names each player instead, which only a
+    /// recording spells: a seat of a co-op run is begun by its settings.
     Start {
         #[serde(with = "seed")]
         seed: Seed,
-        character: V::Character,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        character: Option<V::Character>,
         ascension: V::AscensionLevel,
         // Omitted from the wire when empty, so absent has to read back as
         // empty — otherwise a recorded `start` with no modifiers is a file this
@@ -43,6 +47,8 @@ pub enum Command<V: sts2_content_wire::WireContentVersion> {
         // Omitted when none, for the same reason.
         #[serde(default, skip_serializing_if = "is_zero")]
         wins: u32,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        players: Vec<Player<V>>,
     },
     Fight {
         encounter: V::Encounter,
@@ -125,15 +131,39 @@ fn is_zero(wins: &u32) -> bool {
     *wins == 0
 }
 
+/// One player of a co-op run's `start`, as a recording spells it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, bound = "")]
+pub struct Player<V: sts2_content_wire::WireContentVersion> {
+    pub character: V::Character,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub wins: u32,
+}
+
 impl<V: sts2_content_wire::WireContentVersion> From<&Start<V>> for Command<V> {
     /// The one command that is not a decision. See [`sts2_core::Start`].
     fn from(s: &Start<V>) -> Self {
+        let (character, wins, players) = match s.players.as_slice() {
+            [one] => (Some(one.character), one.wins, Vec::new()),
+            several => (
+                None,
+                0,
+                several
+                    .iter()
+                    .map(|p| Player {
+                        character: p.character,
+                        wins: p.wins,
+                    })
+                    .collect(),
+            ),
+        };
         Self::Start {
             seed: s.seed.clone(),
-            character: s.character,
+            character,
             ascension: s.ascension,
             modifiers: s.modifiers.clone(),
-            wins: s.wins,
+            wins,
+            players,
         }
     }
 }
@@ -217,24 +247,37 @@ impl<V: sts2_content_wire::WireContentVersion> Command<V> {
     /// The run this starts, for the first line of a recording.
     ///
     /// `None` for everything else, which is every command that needs a run to
-    /// already be there.
+    /// already be there. `None` too for a `start` that names players both
+    /// ways, or none, or a list of one.
     pub fn into_start(self) -> Option<Start<V>> {
-        match self {
-            Self::Start {
-                seed,
-                character,
-                ascension,
-                modifiers,
-                wins,
-            } => Some(Start {
-                seed,
-                character,
-                ascension,
-                modifiers,
-                wins,
-            }),
-            _ => None,
-        }
+        let Self::Start {
+            seed,
+            character,
+            ascension,
+            modifiers,
+            wins,
+            players,
+        } = self
+        else {
+            return None;
+        };
+        let players = match (character, players.len()) {
+            (Some(character), 0) => vec![sts2_core::Player { character, wins }],
+            (None, 2..) if wins == 0 => players
+                .into_iter()
+                .map(|p| sts2_core::Player {
+                    character: p.character,
+                    wins: p.wins,
+                })
+                .collect(),
+            _ => return None,
+        };
+        Some(Start {
+            seed,
+            players,
+            ascension,
+            modifiers,
+        })
     }
 
     /// The step this is, for a command read back off disk.
@@ -653,10 +696,12 @@ mod tests {
         assert_eq!(
             wire_start(&Start {
                 seed: Seed::new("ABC").expect("a seed"),
-                character: Character::Silent,
+                players: vec![sts2_core::Player {
+                    character: Character::Silent,
+                    wins: 3
+                }],
                 ascension: AscensionLevel::AscendersBane,
                 modifiers: vec![sts2_core::RunModifier::plain(Modifier::Draft)],
-                wins: 3,
             }),
             json!({
                 "cmd": "start", "ascension": "AscendersBane", "seed": "ABC",
@@ -669,13 +714,15 @@ mod tests {
     fn a_modifier_set_up_with_a_character_carries_it_on_the_wire() {
         let start = Start {
             seed: Seed::new("ABC").expect("a seed"),
-            character: Character::Silent,
+            players: vec![sts2_core::Player {
+                character: Character::Silent,
+                wins: 0,
+            }],
             ascension: AscensionLevel::AscendersBane,
             modifiers: vec![sts2_core::RunModifier {
                 modifier: Modifier::CharacterCards,
                 character: Some(Character::Defect),
             }],
-            wins: 0,
         };
         let wire = wire_start(&start);
         assert_eq!(

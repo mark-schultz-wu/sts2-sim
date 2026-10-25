@@ -20,10 +20,12 @@ type Encounter = <V as ContentVersion>::Encounter;
 fn a_recording_takes_either_half_of_a_step() {
     let mut r: Recording<V> = Recording::new(Start {
         seed: Seed::new("SP1RE1").expect("a seed"),
-        character: Character::Ironclad,
+        players: vec![sts2_core::Player {
+            character: Character::Ironclad,
+            wins: 0,
+        }],
         ascension: AscensionLevel::None,
         modifiers: vec![],
-        wins: 0,
     });
     assert!(r.is_empty(), "the start is not a step");
 

@@ -7324,7 +7324,9 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
     type AscensionLevel: AscensionKinds
         + std::hash::Hash
         + serde::Serialize
-        + serde::de::DeserializeOwned;
+        + serde::de::DeserializeOwned
+        + Send
+        + Sync;
 
     /// Where in a run a room sits.
     type Act: std::fmt::Debug
@@ -7446,6 +7448,8 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + serde::Serialize
         + serde::de::DeserializeOwned
         + ModifierTable
+        + Send
+        + Sync
         + 'static;
 
     /// One creature in a fight.

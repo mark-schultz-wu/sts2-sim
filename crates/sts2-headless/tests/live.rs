@@ -59,10 +59,12 @@ fn launch() -> Oracle<V> {
 fn opening() -> Start<V> {
     Start {
         seed: Seed::new(SEED).expect("a seed"),
-        character: Character::Ironclad,
+        players: vec![sts2_core::Player {
+            character: Character::Ironclad,
+            wins: 0,
+        }],
         ascension: AscensionLevel::None,
         modifiers: vec![],
-        wins: 0,
     }
 }
 

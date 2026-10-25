@@ -183,6 +183,8 @@ impl<V: sts2_content_wire::WireContentVersion> Play<V> for Session<V> {
     /// the thing that knows a run is already open. It says so, rather than
     /// starting a second one over the first.
     fn begin(_: Self::Host, start: &Start<V>) -> Result<Self, Error> {
+        // The game's `start` begins a solo run.
+        start.alone();
         let mut session = Session::new();
         match session.dispatch(start)? {
             Ok(_) => Ok(session),

@@ -127,10 +127,12 @@ impl Construct<V> for Stub {
 fn started() -> Start<V> {
     Start {
         seed: sts2_core::Seed::new("SP1RE1").expect("a seed"),
-        character: <V as ContentVersion>::Character::ALL[0],
+        players: vec![sts2_core::Player {
+            character: <V as ContentVersion>::Character::ALL[0],
+            wins: 0,
+        }],
         ascension: <V as ContentVersion>::AscensionLevel::ALL[0],
         modifiers: vec![],
-        wins: 0,
     }
 }
 

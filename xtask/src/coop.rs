@@ -5,6 +5,9 @@
 //! from its own legal list. A run that ends is fine. A refused move, an error a game
 //! logged, or seats that stall are findings, and are named.
 //!
+//! The runs that end go into `target/coop/runs.bin`, one file of recorded
+//! runs, as a hunt keeps its own.
+//!
 //! ```text
 //! STS2_GAME_VERSION=v0.111.0 cargo xtask coop
 //! STS2_GAME_VERSION=v0.111.0 cargo xtask coop --runs 20 --characters IRONCLAD,SILENT,DEFECT
@@ -50,6 +53,7 @@ pub fn run(args: Args) -> Result<String, Error> {
     } = args;
     let root = crate::workspace();
     let runner = crate::error::build_example(&root, "coop_run")?;
+    let merger = crate::error::build_example(&root, "merge_runs")?;
     let scratch = root.join("target/coop");
     let _ = std::fs::remove_dir_all(&scratch);
     crate::error::create_dir(&scratch)?;
@@ -78,6 +82,15 @@ pub fn run(args: Args) -> Result<String, Error> {
     went.sort_by_key(|(at, _)| *at);
 
     let ended = went.iter().filter(|(_, went)| went.is_ok()).count();
+    let kept: Vec<_> = went
+        .iter()
+        .filter(|(_, went)| went.is_ok())
+        .map(|(at, _)| run_file(&scratch, &seeds[*at]))
+        .collect();
+    let file = scratch.join("runs.bin");
+    if !kept.is_empty() {
+        crate::error::status(Command::new(&merger).arg(&file).args(&kept))?;
+    }
     let mut out = String::new();
     for (at, went) in &went {
         let line = match went {
@@ -87,7 +100,15 @@ pub fn run(args: Args) -> Result<String, Error> {
         out += &format!("{} {characters}: {line}\n", seeds[*at]);
     }
     out += &format!("{ended} of {} runs ended\n", went.len());
+    if !kept.is_empty() {
+        out += &format!("the runs that ended are in {}\n", file.display());
+    }
     Ok(out)
+}
+
+/// Where the run of `seed` is written.
+fn run_file(scratch: &Path, seed: &str) -> std::path::PathBuf {
+    scratch.join(seed).join("run.bin")
 }
 
 /// Plays one run, and says how it ended or why it did not.
@@ -100,6 +121,8 @@ fn play_one(runner: &Path, seed: &str, characters: &str, scratch: &Path) -> Resu
         .args([seed, characters])
         .arg("--homes")
         .arg(&homes)
+        .arg("--out")
+        .arg(run_file(scratch, seed))
         .output()
         .map_err(|e| format!("launching the runner: {e}"))?;
     let log = homes.join("moves.log");

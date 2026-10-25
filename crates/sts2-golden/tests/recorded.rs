@@ -73,12 +73,12 @@ fn holds_every_census_run(recorded: &Recorded, build: &sts2_core::Version) {
         build.name
     );
     // Each setup's seeds, by character: its ascension and its modifiers.
-    let mut seeds: BTreeMap<RunSetup<'_>, BTreeMap<&str, Vec<&str>>> = BTreeMap::new();
+    let mut seeds: BTreeMap<RunSetup<'_>, BTreeMap<String, Vec<&str>>> = BTreeMap::new();
     for run in &recorded.runs {
         seeds
             .entry((&run.ascension, &run.modifiers))
             .or_default()
-            .entry(&run.character)
+            .entry(run.characters())
             .or_default()
             .push(&run.seed);
     }
@@ -170,7 +170,7 @@ fn follows_no_less_far<B: sts2_content::Build>(file: &str, count: &str) {
                         }
                         Err(_) => {
                             *failed.lock().expect("no panic holds it") =
-                                Some(format!("{} {}", run.character, run.seed));
+                                Some(format!("{} {}", run.characters(), run.seed));
                         }
                     }
                 }

@@ -20,10 +20,12 @@ fn fighting() -> Sim<V> {
         (),
         &Start {
             seed: Seed::new("0RACLE1").expect("a canonical seed"),
-            character: Character::Regent,
+            players: vec![sts2_core::Player {
+                character: Character::Regent,
+                wins: 0,
+            }],
             ascension: AscensionLevel::None,
             modifiers: Vec::new(),
-            wins: 0,
         },
     )
     .expect("the run starts");

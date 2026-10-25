@@ -182,6 +182,18 @@ the run is still being played. A session that is killed, times out or crashes
 leaves a file complete up to its last decision, and it replays fine. A
 half-written JSON array leaves nothing.
 
+A run of several players is the same file. Its start names each player in seat
+order instead of one character, and each step names the seat that took it,
+first on its line. A solo run is the run of one player, and its file names no
+seat.
+
+```text
+{"game":"v0.111.0","commit":"…","assemblyHash":…,"contentHash":…}
+{"cmd":"start","seed":"C000000001","ascension":"None","players":[{"character":"IRONCLAD"},{"character":"SILENT"}]}
+{"seat":1,"cmd":"end_turn"}
+{"seat":0,"cmd":"travel","col":1,"row":1}
+```
+
 ## Reaching a game somebody else launched
 
 `Session` is the second implementation of `Play` in this crate, with the same
@@ -220,4 +232,10 @@ reports.
 
 `cargo xtask coop` plays co-op runs at random on v0.111.0. Build v0.107.1
 cannot play co-op, because it answers the other seats' card choices on the
-local machine.
+local machine. The runs that end go into one file of recorded runs, the
+format `cargo xtask hunt` keeps. A move there names its seat, and its digest
+is where that seat stood before it. The file ends with where each seat stood.
+
+A seat's game takes the seed, the character and the wins from its settings.
+The mod's co-op lobby sets no ascension and no modifiers yet, so `GameSeat`
+stops on a run that has either.

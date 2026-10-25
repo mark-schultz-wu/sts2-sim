@@ -4,7 +4,7 @@
 //! 0 hosts on [`SeatHost::port`] and the others join it there. Each game
 //! answers for its own player only.
 
-use sts2_core::{Decision, Lobby, Seat, SeatAnswered, SeatIndex, Seated};
+use sts2_core::{AscensionKinds as _, Decision, Seat, SeatAnswered, SeatIndex, Seated, Start};
 
 use crate::session::error::Error;
 use crate::wire::peers::{net_id, peers};
@@ -24,7 +24,7 @@ pub struct SeatHost {
 #[derive(Debug)]
 pub struct GameSeat<V: sts2_content_wire::WireContentVersion> {
     game: Oracle<V>,
-    /// How many seats the lobby has.
+    /// How many seats the run has.
     seats: usize,
     /// What the game logged in every reply since [`GameSeat::take_logged`].
     logged: Vec<String>,
@@ -71,8 +71,17 @@ impl<V: sts2_content_wire::WireContentVersion> Seat<V> for GameSeat<V> {
 
     /// Launches the seat's game, which hosts or joins, and returns once the
     /// run has started.
-    fn begin(host: SeatHost, lobby: &Lobby<V>, me: SeatIndex) -> Result<Self, Error> {
-        let character = serde_json::to_value(lobby.characters[me.at()])
+    ///
+    /// # Panics
+    ///
+    /// On an ascension or a modifier, which the mod's co-op lobby does not
+    /// set yet.
+    fn begin(host: SeatHost, start: &Start<V>, me: SeatIndex) -> Result<Self, Error> {
+        if start.ascension != V::AscensionLevel::NONE || !start.modifiers.is_empty() {
+            unimplemented!("a co-op run with an ascension or modifiers");
+        }
+        let player = start.players[me.at()];
+        let character = serde_json::to_value(player.character)
             .ok()
             .and_then(|value| value.as_str().map(str::to_owned))
             .expect("a character is spelled as its id");
@@ -87,14 +96,15 @@ impl<V: sts2_content_wire::WireContentVersion> Seat<V> for GameSeat<V> {
                 ("STS2_COOP_ROLE", role.to_owned()),
                 ("STS2_COOP_PORT", host.port.to_string()),
                 ("STS2_COOP_NETID", net_id(me).to_string()),
-                ("STS2_COOP_PLAYERS", lobby.characters.len().to_string()),
+                ("STS2_COOP_PLAYERS", start.players.len().to_string()),
                 ("STS2_COOP_CHARACTER", character),
-                ("STS2_COOP_SEED", lobby.seed.as_str().to_owned()),
+                ("STS2_COOP_WINS", player.wins.to_string()),
+                ("STS2_COOP_SEED", start.seed.as_str().to_owned()),
             ],
         )?;
         Ok(Self {
             game,
-            seats: lobby.characters.len(),
+            seats: start.players.len(),
             logged: Vec::new(),
         })
     }

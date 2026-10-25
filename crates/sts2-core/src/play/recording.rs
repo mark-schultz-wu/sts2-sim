@@ -12,6 +12,7 @@
 //! to choose, and where it lives until this crate chooses it.
 
 use crate::ContentVersion;
+use crate::SeatIndex;
 use crate::Start;
 use crate::Step;
 
@@ -25,6 +26,9 @@ use crate::Step;
 pub struct Recording<V: ContentVersion> {
     start: Start<V>,
     steps: Vec<Step<V>>,
+    /// The seat that took each step. As long as `steps`. A solo run's are all
+    /// seat 0.
+    seats: Vec<SeatIndex>,
 }
 
 impl<V: ContentVersion> Recording<V> {
@@ -32,6 +36,7 @@ impl<V: ContentVersion> Recording<V> {
         Self {
             start,
             steps: Vec::new(),
+            seats: Vec::new(),
         }
     }
 
@@ -44,8 +49,35 @@ impl<V: ContentVersion> Recording<V> {
         &self.steps
     }
 
+    /// The seat that took each step, in step order.
+    pub fn seats(&self) -> &[SeatIndex] {
+        &self.seats
+    }
+
+    /// Adds a step of a solo run.
+    ///
+    /// # Panics
+    ///
+    /// On a run of several players, where a step has to say whose it is.
     pub fn push(&mut self, step: impl Into<Step<V>>) {
+        self.start.alone();
+        self.push_by(SeatIndex(0), step);
+    }
+
+    /// Adds a step `seat` took.
+    ///
+    /// # Panics
+    ///
+    /// On a seat the run has no player for.
+    pub fn push_by(&mut self, seat: SeatIndex, step: impl Into<Step<V>>) {
+        assert!(
+            seat.at() < self.start.players.len(),
+            "seat {} in a run of {} players",
+            seat.0,
+            self.start.players.len()
+        );
         self.steps.push(step.into());
+        self.seats.push(seat);
     }
 
     pub fn is_empty(&self) -> bool {
@@ -58,11 +90,16 @@ impl<V: ContentVersion> Recording<V> {
 }
 
 impl<V: ContentVersion> Recording<V> {
-    /// A recording of `start` and the steps that followed it.
+    /// A recording of a solo run: `start` and the steps that followed it.
+    ///
+    /// # Panics
+    ///
+    /// On a run of several players.
     pub fn of(start: Start<V>, steps: impl IntoIterator<Item = Step<V>>) -> Self {
-        Self {
-            start,
-            steps: steps.into_iter().collect(),
+        let mut recording = Self::new(start);
+        for step in steps {
+            recording.push(step);
         }
+        recording
     }
 }

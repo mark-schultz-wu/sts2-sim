@@ -88,10 +88,9 @@ fn main() {
             write!(seed, "{s:07}").expect("a string takes the digits");
             let start = Start {
                 seed: sts2_core::Seed::new(&seed).expect("a seed"),
-                character,
+                players: vec![sts2_core::Player { character, wins: 0 }],
                 ascension: sts2_content::generated::ascension::AscensionLevel::None,
                 modifiers: Vec::new(),
-                wins: 0,
             };
             let mut sim = Sim::<V>::begin((), &start).expect("a run starts");
             let encounter = encounters[(s % encounters.len() as u64) as usize];

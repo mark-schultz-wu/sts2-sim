@@ -41,13 +41,14 @@ impl<V: Rules> Play<V> for Sim<V> {
         {
             unimplemented!("a run started with {modifier:?}");
         }
+        let player = start.alone();
         Ok(Self {
             state: State::start(
                 &start.seed,
-                start.character,
+                player.character,
                 start.ascension,
                 &start.modifiers,
-                start.wins,
+                player.wins,
             ),
         })
     }

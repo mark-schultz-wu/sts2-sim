@@ -2,7 +2,7 @@
 //! `cargo xtask coop`.
 //!
 //! ```text
-//! coop_run <seed> <character>,<character>... --homes <dir> [--steps <n>]
+//! coop_run <seed> <character>,<character>... --homes <dir> [--steps <n>] [--out <file>]
 //! ```
 //!
 //! Seat 0 hosts, and each seat is a game of its own over ENet. [`Coop`] picks
@@ -24,8 +24,10 @@ use std::process::ExitCode;
 
 use clap::Parser;
 use sts2_content_wire::WireContentVersion;
-use sts2_core::{Coop, Lobby, Seed, Turn};
+use sts2_core::{AscensionKinds as _, Coop, Player, Seat as _, Seed, Start, Turn};
 use sts2_golden::random::{Pick, making_room};
+use sts2_golden::recorded::{Ending, Recorded, Run, position};
+use sts2_golden::scenario::Stamp;
 use sts2_headless::{Config, GameSeat, SeatHost, game_dir_from_env};
 
 /// Moves a run takes before this gives up on it.
@@ -53,6 +55,10 @@ struct Cli {
     /// Moves to play before giving up.
     #[arg(long, default_value_t = STEPS)]
     steps: usize,
+    /// Where to write the run, once it ends or reaches `--steps`. It is a
+    /// file of recorded runs, as `record_run` writes a solo one.
+    #[arg(long, value_name = "FILE")]
+    out: Option<PathBuf>,
 }
 
 fn seed(text: &str) -> Result<Seed, String> {
@@ -83,6 +89,8 @@ enum Error<V: WireContentVersion> {
     },
     #[error("no seat has a move at step {step}, and the run goes on")]
     Stalled { step: usize },
+    #[error("writing the run: {0}")]
+    Write(std::io::Error),
 }
 
 fn main() -> ExitCode {
@@ -120,6 +128,7 @@ fn play<V: WireContentVersion>(cli: Cli) -> Result<String, Error<V>> {
         characters,
         homes,
         steps,
+        out,
     } = cli;
     let characters = characters
         .iter()
@@ -137,18 +146,32 @@ fn play<V: WireContentVersion>(cli: Cli) -> Result<String, Error<V>> {
         })
         .collect();
     let mut pick = Pick::for_seed(seed.as_str());
-    let lobby = Lobby { seed, characters };
-    let mut coop = Coop::<V, GameSeat<V>>::begin(hosts, &lobby)?;
+    let start = Start {
+        seed,
+        players: characters
+            .into_iter()
+            .map(|character| Player { character, wins: 0 })
+            .collect(),
+        ascension: V::AscensionLevel::NONE,
+        modifiers: Vec::new(),
+    };
+    let mut coop = Coop::<V, GameSeat<V>>::begin(hosts, &start)?;
+    let mut run = Run::of(&start, Ending::Capped);
 
     let mut stalls = 0;
     for step in 0..steps {
-        let turn = coop.step(|_, seated, moves| {
+        let turn = coop.step(|me, seated, moves| {
             let room = making_room(
                 seated.snapshot.asking.as_ref(),
                 seated.snapshot.observation.potions.len(),
                 seated.snapshot.observation.potion_slots,
             );
-            pick.choose(moves, room)
+            let at = pick.choose(moves, room);
+            run.digests.push(position(&seated.snapshot));
+            run.moves
+                .push(u16::try_from(at).expect("a list of moves fits a u16"));
+            run.seats.push(me);
+            at
         })?;
         // First, so the log names the move a failure below comes after.
         if let Turn::Played { seat, decision, .. } = &turn {
@@ -188,16 +211,51 @@ fn play<V: WireContentVersion>(cli: Cli) -> Result<String, Error<V>> {
             }
             Turn::Over(seated) => {
                 let seat = &seated[0].snapshot.observation;
-                return Ok(format!(
+                let won = seat.victory == Some(true);
+                let said = format!(
                     "over at step {step}, floor {}, {}",
                     seat.floor,
-                    match seat.victory {
-                        Some(true) => "won",
-                        _ => "lost",
+                    match won {
+                        true => "won",
+                        false => "lost",
                     }
-                ));
+                );
+                run.ending = match won {
+                    true => Ending::Won,
+                    false => Ending::Lost,
+                };
+                run.digests
+                    .extend(seated.iter().map(|seat| position(&seat.snapshot)));
+                if let Some(out) = &out {
+                    write(&coop, run, out)?;
+                }
+                return Ok(said);
             }
         }
     }
+    for seat in coop.seats_mut() {
+        run.digests.push(position(&seat.observe()?.snapshot));
+    }
+    if let Some(out) = &out {
+        write(&coop, run, out)?;
+    }
     Ok(format!("capped at {steps} steps"))
+}
+
+/// Writes `run` to `out` as a file of one recorded run, stamped with the
+/// build the host's game greeted with.
+fn write<V: WireContentVersion>(
+    coop: &Coop<V, GameSeat<V>>,
+    run: Run,
+    out: &std::path::Path,
+) -> Result<(), Error<V>> {
+    let greeting = coop.seats()[0].game().greeting();
+    let recorded = Recorded {
+        stamp: Stamp {
+            assembly: greeting.assembly_hash,
+            content: i64::from(greeting.content_hash),
+        },
+        runs: vec![run],
+    };
+    std::fs::write(out, recorded.encode()).map_err(Error::Write)
 }
