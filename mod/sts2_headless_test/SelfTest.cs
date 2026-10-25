@@ -32,6 +32,7 @@ using MegaCrit.Sts2.Core.Runs;
 
 using MegaCrit.Sts2.Core.Modding;
 using Sts2Headless;
+using Sts2Setup;
 
 namespace Sts2HeadlessTest;
 
@@ -388,7 +389,7 @@ public static class SelfTest
     private static async Task ACardThatAsksParksAndCanBeAnswered(RunState state)
     {
         await EnterFight(state);
-        await Driver.GrantCard(state, ModelDb.Card<BurningPact>());
+        await Cheats.GrantCard(state, ModelDb.Card<BurningPact>());
 
         Check("selector: nothing is pending before the card is played", Pending.Current == null);
         Check("selector: the asking card was played",
@@ -1077,7 +1078,7 @@ public static class SelfTest
         // pile, a position, and a fight in progress.
         await RelicCmd.Obtain(ModelDb.Relic<WingedBoots>().ToMutable(), state.Players[0]);
         await EnterFight(state);
-        await Driver.GrantCard(state, ModelDb.Card<BurningPact>());
+        await Cheats.GrantCard(state, ModelDb.Card<BurningPact>());
         await Driver.PlayOneCard(state);
 
         string dirtied = Observation.Digest(state);
@@ -1178,7 +1179,7 @@ public static class SelfTest
     /// </remarks>
     private static async Task TheSoulNexusCanBeKilled(RunState state)
     {
-        string? refused = await Driver.EnterFight(state, "SOUL_NEXUS_ELITE");
+        string? refused = await Cheats.EnterFight(state, "SOUL_NEXUS_ELITE");
         Check($"soul nexus: the fight could be entered ({refused ?? "ok"})", refused == null);
         if (refused != null)
         {
@@ -1201,7 +1202,7 @@ public static class SelfTest
 
     private static async Task EnterFight(RunState state)
     {
-        string? refused = await Driver.EnterFight(state, "BOWLBUGS_WEAK");
+        string? refused = await Cheats.EnterFight(state, "BOWLBUGS_WEAK");
         if (refused != null)
         {
             throw new InvalidOperationException($"selftest could not enter its fight: {refused}");

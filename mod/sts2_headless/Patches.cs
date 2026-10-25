@@ -928,28 +928,6 @@ internal static class CauldronRewards
     }
 }
 
-/// <summary>A profile with no Wongo points, whatever the saved one holds.</summary>
-/// <remarks>
-/// <c>WelcomeToWongos.CheckObtainWongoBadge</c> reads
-/// <c>SaveManager.Instance.Progress.WongoPoints</c>, which is the profile's and
-/// not the run's. A purchase that takes the total past a multiple of two
-/// thousand hands over a badge. The oracle's profile keeps what every run it
-/// finishes earned, so the same seed would record a badge one day and none
-/// the next.
-///
-/// So the profile reads as a fresh one, which is what the simulator models.
-/// Besides the event, only the progress save reads the property.
-/// </remarks>
-[HarmonyPatch(typeof(ProgressState), nameof(ProgressState.WongoPoints), MethodType.Getter)]
-internal static class FreshWongoPoints
-{
-    private static bool Prefix(ref int __result)
-    {
-        __result = 0;
-        return false;
-    }
-}
-
 /// <summary>
 /// Lord's Parasol buys the whole merchant, as the game does, with no screen.
 /// </summary>
@@ -1259,44 +1237,5 @@ internal static class ThrownAtTheFakeMerchant
             ((FakeMerchant)RunManager.Instance.EventSynchronizer.GetEventForPlayer(player))
                 .FoulPotionThrown(__instance)));
         return false;
-    }
-}
-
-/// <summary>
-/// Pops the cards a dead player's plays left on a choice context.
-/// </summary>
-/// <remarks>
-/// <c>CardModel.OnPlayWrapper</c> pushes its card onto the choice context's
-/// model stack, and pops it at the end. Once its owner is dead it returns
-/// early, before that pop, so the card stays on the stack. Stampede shows it:
-/// its post-play hook auto-plays Breakthrough, whose loss of HP kills the
-/// player. The hook's own pop then finds the card on top, logs "Tried to pop
-/// model", and leaves both on the stack. The fight is lost by then, and
-/// nothing reads the stack again.
-///
-/// This pops the dead player's cards off the top first, in place of the pops
-/// each wrapper skipped, so the pop that follows finds its own model. Any
-/// other mismatch still logs.
-/// </remarks>
-[HarmonyPatch(typeof(PlayerChoiceContext), nameof(PlayerChoiceContext.PopModel))]
-internal static class PopCardsADeathLeft
-{
-    private static readonly AccessTools.FieldRef<PlayerChoiceContext, Stack<AbstractModel>?> ModelStack =
-        AccessTools.FieldRefAccess<PlayerChoiceContext, Stack<AbstractModel>?>("_modelStack");
-
-    private static void Prefix(PlayerChoiceContext __instance, AbstractModel model)
-    {
-        var stack = ModelStack(__instance);
-        if (stack == null || !stack.Contains(model))
-        {
-            return;
-        }
-        while (stack.TryPeek(out var top)
-            && top != model
-            && top is CardModel card
-            && card.Owner?.Creature?.IsDead == true)
-        {
-            stack.Pop();
-        }
     }
 }

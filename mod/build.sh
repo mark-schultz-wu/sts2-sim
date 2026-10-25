@@ -13,7 +13,7 @@ set -euo pipefail
 
 # Dependencies first, so a build failure in one stops before a caller installs
 # a half-updated set.
-MODS=(sts2_determinism sts2_headless sts2_headless_test sts2_determinism_test sts2_dump)
+MODS=(sts2_determinism sts2_fixes sts2_headless sts2_setup sts2_observe sts2_headless_test sts2_determinism_test sts2_dump)
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 

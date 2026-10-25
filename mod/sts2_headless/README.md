@@ -156,10 +156,8 @@ Modes, selected with `STS2_HEADLESS_MODE`:
 Other variables: `STS2_HEADLESS_PORT` (required by `serve`) + `STS2_HEADLESS_TOKEN`,
 and `STS2_HEADLESS_OBS=full`.
 
-`STS2_HEADLESS_TRACE` lists the game methods to trace, comma-separated, as
-`Type`, `Type.Method`, or either with a trailing `*`. Each call goes to
-`STS2_HEADLESS_TRACE_FILE`, with its arguments, after a `>` line for each
-command. `cargo xtask game-trace` sets both. Unset, nothing is patched.
+`STS2_HEADLESS_TRACE` lists the game methods to trace. `sts2_observe` reads it,
+and its `Trace.cs` says how. Unset, nothing is patched.
 
 `STS2_HEADLESS_TIMEOUT` is the wall-clock budget in seconds, default 600, `0` to
 disable. Whenever a mode is set, the process also makes SIGTERM and SIGINT

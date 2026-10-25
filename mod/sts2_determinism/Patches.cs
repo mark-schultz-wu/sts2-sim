@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using HarmonyLib;
+using MegaCrit.Sts2.Core.Saves;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Saves.Managers;
@@ -117,5 +118,27 @@ internal static class NoticeCanonicalMonsterRng
             $"[determinism] canonical monster {id} had its Rng read; that returns "
             + "the process-wide clock-seeded Rng.Chaotic, so whatever used it is "
             + "not reproducible");
+    }
+}
+
+/// <summary>A profile with no Wongo points, whatever the saved one holds.</summary>
+/// <remarks>
+/// <c>WelcomeToWongos.CheckObtainWongoBadge</c> reads
+/// <c>SaveManager.Instance.Progress.WongoPoints</c>, which is the profile's and
+/// not the run's. A purchase that takes the total past a multiple of two
+/// thousand hands over a badge. The oracle's profile keeps what every run it
+/// finishes earned, so the same seed would record a badge one day and none
+/// the next.
+///
+/// So the profile reads as a fresh one, which is what the simulator models.
+/// Besides the event, only the progress save reads the property.
+/// </remarks>
+[HarmonyPatch(typeof(ProgressState), nameof(ProgressState.WongoPoints), MethodType.Getter)]
+internal static class FreshWongoPoints
+{
+    private static bool Prefix(ref int __result)
+    {
+        __result = 0;
+        return false;
     }
 }
