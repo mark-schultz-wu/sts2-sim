@@ -25,10 +25,8 @@ use std::sync::Mutex;
 
 use clap::Parser;
 use sts2_content_wire::WireContentVersion;
-use sts2_core::{
-    Construct as _, Digested as _, Gift, Observed as _, Play as _, SeatIndex, Seed, Setup, Start,
-};
-use sts2_golden::recorded::{Ending, Recorded, Run, named, position};
+use sts2_core::{Construct as _, Gift, Observed as _, Play as _, SeatIndex, Seed, Setup, Start};
+use sts2_golden::recorded::{Ending, Recorded, Run, named, parted, position};
 use sts2_golden::scenario::Stamp;
 use sts2_headless::{Config, Oracle, game_dir_from_env};
 
@@ -345,26 +343,4 @@ fn simulator<V: sts2_content::Build>(start: &Start<V>) -> sts2_sim::Sim<V> {
         }
     }
     sim
-}
-
-/// The sections of the observation where the simulator and the game differ,
-/// and the question, if they ask different ones.
-fn parted<V: sts2_core::ContentVersion>(
-    simulated: &sts2_core::Snapshot<V>,
-    seen: &sts2_core::Snapshot<V>,
-) -> String {
-    let mut parts: Vec<String> = simulated
-        .observation
-        .sections()
-        .iter()
-        .zip(seen.observation.sections().iter())
-        .filter(|(a, b)| a != b)
-        .map(|(a, _)| format!("{:?}", a.0))
-        .collect();
-    if sts2_core::Digest::of_question(simulated.asking.as_ref())
-        != sts2_core::Digest::of_question(seen.asking.as_ref())
-    {
-        parts.push("the question".into());
-    }
-    parts.join(", ")
 }

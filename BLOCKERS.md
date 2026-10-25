@@ -109,9 +109,11 @@ run as its own machine sees it. The work goes in this order:
    several. The run state keeps its players and their belts by seat. A
    fight keeps each player's piles, energy and orbs, borrows every belt,
    and acts for a given player (all done). Next, card, relic and potion
-   behaviour learns its owner, where it now reads "the player".
-2. A simulator seat, and `cargo xtask coop` following each recorded co-op
-   run against it, step by step, as a hunt does.
+   behaviour learns its owner, where it now reads "the player". The co-op
+   runs check it, so it moves into step 3, where they reach it.
+2. A simulator seat, and `cargo xtask coop --hunt` playing it beside each
+   game seat, step by step, as a hunt does (done). Every run stops at step 0
+   for now, since the simulator starts no run of several players yet.
 3. The co-op rules, in the order the runs reach them. These include start
    and Neow for several players, monster health and block scaled by the
    player count, and turns all players take at once. Rewards, map votes,

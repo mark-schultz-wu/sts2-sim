@@ -84,6 +84,28 @@ pub fn position<V: sts2_core::ContentVersion>(snapshot: &Snapshot<V>) -> u32 {
     (both ^ (both >> 32)) as u32
 }
 
+/// The sections of the observation where the simulator and the game differ,
+/// and the question, if they ask different ones.
+pub fn parted<V: sts2_core::ContentVersion>(
+    simulated: &sts2_core::Snapshot<V>,
+    seen: &sts2_core::Snapshot<V>,
+) -> String {
+    let mut parts: Vec<String> = simulated
+        .observation
+        .sections()
+        .iter()
+        .zip(seen.observation.sections().iter())
+        .filter(|(a, b)| a != b)
+        .map(|(a, _)| format!("{:?}", a.0))
+        .collect();
+    if sts2_core::Digest::of_question(simulated.asking.as_ref())
+        != sts2_core::Digest::of_question(seen.asking.as_ref())
+    {
+        parts.push("the question".into());
+    }
+    parts.join(", ")
+}
+
 /// How far the simulator followed a recorded run.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Followed {
