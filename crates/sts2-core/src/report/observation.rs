@@ -424,8 +424,8 @@ pub struct Channelled<V: ContentVersion> {
 /// is where a rule gets one. Rules code compares two of them and reads neither
 /// out. The number is for the edges that spell an id or read one.
 ///
-/// A byte, because the roster bounds it: the player is `0` and the monsters
-/// are `index + 1`.
+/// A byte, because the roster bounds it. The players come first, in seat
+/// order. See [`crate::SeatIndex::creature`].
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]

@@ -35,8 +35,12 @@ impl<V: Rules> State<V> {
     /// Keeping this read-only makes travel transactional. Entering a room can
     /// still fail while its rules are incomplete, and a failed decision must
     /// leave the run where it was.
-    pub(crate) fn resolve(&self, to: Coord) -> Result<Move<V>, Reason<V>> {
-        let travelable = self.travelable();
+    pub(crate) fn resolve(
+        &self,
+        seat: sts2_core::SeatIndex,
+        to: Coord,
+    ) -> Result<Move<V>, Reason<V>> {
+        let travelable = self.travelable(seat);
         let reachable = travelable
             .iter()
             .find(|reachable| reachable.at == to)
@@ -80,12 +84,16 @@ impl<V: Rules> State<V> {
     /// run. A room the simulator cannot build yet reports which one, and the
     /// caller still holds the run it had.
     #[tracing::instrument(level = "trace", skip_all)]
-    pub(crate) fn travel(&mut self, moving: Move<V>) -> Result<Decided, crate::combat::Error> {
+    pub(crate) fn travel(
+        &mut self,
+        seat: sts2_core::SeatIndex,
+        moving: Move<V>,
+    ) -> Result<Decided, crate::combat::Error> {
         let Move { to, destination } = moving;
         let point = self.point_type(Location::MapPoint(to));
         // A `?` point picks its room first, and raises this once it has.
         if !matches!(destination, Destination::Other(kind) if kind == V::MapPointType::UNKNOWN) {
-            self.room_entering(point, true);
+            self.room_entering(seat, point, true);
         }
         if let Destination::Other(kind) = destination {
             if kind == V::MapPointType::TREASURE {
@@ -97,14 +105,14 @@ impl<V: Rules> State<V> {
                 return Ok(Decided::Resolved);
             }
             if kind == V::MapPointType::SHOP {
-                let shop = self.stocked_shop();
+                let shop = self.stocked_shop(seat);
                 self.enter(Location::MapPoint(to), shop);
                 return Ok(Decided::Resolved);
             }
             if kind == V::MapPointType::ANCIENT {
                 // `AncientEventModel.BeforeEventStarted`, which heals before
                 // the ancient says anything.
-                self.ancient_heal();
+                self.ancient_heal(seat);
                 // The act rolled which ancient it opens on when it rolled its
                 // rooms, so nothing is drawn for it here. The question mark
                 // odds and the event queue are the unknown rooms' own, and an
@@ -113,9 +121,9 @@ impl<V: Rules> State<V> {
                 let mut event_rng =
                     crate::event::stream::<V, crate::rng::MegaRng>(self.raw_seed(), 0, event);
                 let mut streams = *self.streams();
-                let floor = sts2_core::EventView::floor(&*self) + num_traits::one();
+                let floor = sts2_core::EventView::floor(&self.seen_by(seat)) + num_traits::one();
                 let (state, layout) =
-                    self.open_event(event, floor, &mut event_rng, &mut streams)?;
+                    self.open_event(seat, event, floor, &mut event_rng, &mut streams)?;
                 let (events_used, _, unknown_odds) = self.event_state();
                 self.enter_event(
                     to,
@@ -138,14 +146,14 @@ impl<V: Rules> State<V> {
             let rolled = self.roll_unknown_room(to, &mut streams);
             let (mut events_used, visited, odds) = self.event_state();
             if let Some(room) = rolled {
-                self.room_entering(point, true);
+                self.room_entering(seat, point, true);
                 if room == UnknownRoom::Treasure {
                     self.treasure(to, streams);
                     return Ok(Decided::Resolved);
                 }
                 self.drew(streams);
                 if room == UnknownRoom::Shop {
-                    let shop = self.stocked_shop();
+                    let shop = self.stocked_shop(seat);
                     self.enter(Location::MapPoint(to), shop);
                     return Ok(Decided::Resolved);
                 }
@@ -163,8 +171,8 @@ impl<V: Rules> State<V> {
                     ),
                 };
                 let at = Location::MapPoint(to);
-                let fight = self.create_fight(encounter, queue, at)?;
-                return self.enter_fight(fight, at);
+                let fight = self.create_fight(seat, encounter, queue, at)?;
+                return self.enter_fight(seat, fight, at);
             }
             // `RoomSet.EnsureNextEventIsValid`, which passes over an event
             // that is not allowed or was seen already. The one it stops at
@@ -173,7 +181,9 @@ impl<V: Rules> State<V> {
             let event = (0..events.len())
                 .find_map(|_| {
                     let candidate = events[events_used % events.len()];
-                    if V::event_allowed(candidate, self) && !visited.contains(&candidate) {
+                    if V::event_allowed(candidate, &self.seen_by(seat))
+                        && !visited.contains(&candidate)
+                    {
                         return Some(candidate);
                     }
                     events_used += 1;
@@ -187,11 +197,12 @@ impl<V: Rules> State<V> {
             .fold(event, |event, card| {
                 V::deck_card_next_event(card, self.act(), event)
             });
-            self.room_entering(point, true);
+            self.room_entering(seat, point, true);
             let mut event_rng =
                 crate::event::stream::<V, crate::rng::MegaRng>(self.raw_seed(), 0, event);
-            let floor = sts2_core::EventView::floor(&*self) + num_traits::one();
-            let (state, layout) = self.open_event(event, floor, &mut event_rng, &mut streams)?;
+            let floor = sts2_core::EventView::floor(&self.seen_by(seat)) + num_traits::one();
+            let (state, layout) =
+                self.open_event(seat, event, floor, &mut event_rng, &mut streams)?;
             self.enter_event(
                 to,
                 super::state::EnteredEvent {
@@ -211,7 +222,7 @@ impl<V: Rules> State<V> {
         };
 
         let at = Location::MapPoint(to);
-        let fight = self.create_fight(encounter, queue, at)?;
-        self.enter_fight(fight, at)
+        let fight = self.create_fight(seat, encounter, queue, at)?;
+        self.enter_fight(seat, fight, at)
     }
 }
