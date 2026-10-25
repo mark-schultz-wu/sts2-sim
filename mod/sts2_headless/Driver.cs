@@ -74,7 +74,7 @@ public static class Driver
     /// every driver passes through, rather than in each entry point that might
     /// forget it.
     /// </remarks>
-    public static async Task Run(Func<RunState, Task> body)
+    public static async Task Run(Func<RunState, Task> body, Func<Task<RunState>>? begin = null)
     {
         Clock.Start();
         try
@@ -133,8 +133,17 @@ public static class Driver
             RewardsSet.testSelector = RewardChoice.TakeRewards;
             WatchForWins();
 
-            RunState state = BuildRunState(_seed, Array.Empty<ModifierModel>(), Character(null), ascension: 0);
-            await StartRun(state);
+            RunState state;
+            if (begin == null)
+            {
+                state = BuildRunState(_seed, Array.Empty<ModifierModel>(), Character(null), ascension: 0);
+                await StartRun(state);
+            }
+            else
+            {
+                Stage = "begin";
+                state = await begin();
+            }
             Report(state);
 
             await body(state);
@@ -186,6 +195,12 @@ public static class Driver
 
     /// <summary>Raised with each protocol command as it arrives, before it runs.</summary>
     public static event Action<string>? CommandReceived;
+
+    /// <summary>
+    /// Raised with each run as it is set up, before it launches. A mod that
+    /// listens to the run listens from here.
+    /// </summary>
+    public static event Action<RunManager>? RunSetUp;
 
     /// <summary>Raised as the process is about to quit.</summary>
     public static event Action? Quitting;
@@ -450,7 +465,7 @@ public static class Driver
     /// </remarks>
     public static async Task<bool> PlayOneCard(RunState state, Func<CardModel, bool>? pick = null)
     {
-        Player me = state.Players[0];
+        Player me = Seat.Me(state);
         PlayerCombatState? pcs = me.PlayerCombatState;
         CombatState? combat = (state.CurrentRoom as CombatRoom)?.CombatState;
         if (pcs == null || combat == null)
@@ -475,7 +490,7 @@ public static class Driver
         }
 
         var action = new PlayCardAction(card, card.TargetType == TargetType.AnyEnemy ? target : null);
-        RunManager.Instance.ActionQueueSet.EnqueueWithoutSynchronizing(action);
+        Peers.Enqueue(action);
         await Quiesce(action);
         return true;
     }
@@ -497,18 +512,26 @@ public static class Driver
     /// </remarks>
     public static async Task<bool> EndTurn(RunState state)
     {
-        Player me = state.Players[0];
+        Player me = Seat.Me(state);
         PlayerCombatState pcs = me.PlayerCombatState
             ?? throw new InvalidOperationException("not in combat");
 
         int leaving = pcs.TurnNumber;
         var action = new EndPlayerTurnAction(me, leaving);
-        RunManager.Instance.ActionQueueSet.EnqueueWithoutSynchronizing(action);
+        Peers.Enqueue(action);
         return await Quiesce(action, turnMustAdvancePast: leaving);
     }
 
     public static async Task<bool> Quiesce(GameAction issued, int? turnMustAdvancePast = null)
     {
+        // A co-op seat's action runs as the copy the host sends back, so the
+        // one issued here never completes. The seat answers once the game here
+        // stands still, waiting on this player or on another seat.
+        if (Peers.Shared)
+        {
+            return await WaitForDecisionPoint();
+        }
+
         ActionQueueSet queue = RunManager.Instance.ActionQueueSet;
         ActionExecutor executor = RunManager.Instance.ActionExecutor;
 
@@ -635,7 +658,20 @@ public static class Driver
                 return true;
             }
 
-            if (queue.IsEmpty && !executor.IsRunning && ReadyForInput(turnMustAdvancePast))
+            if (queue.IsEmpty && !executor.IsRunning && !Peers.InFlight && ReadyForInput(turnMustAdvancePast))
+            {
+                return true;
+            }
+
+            // In a co-op run the game can stand still waiting on another seat,
+            // with this seat's part done or the queue held for another player's
+            // choice. That is as far as a command here can take it. Work this
+            // seat started outside the queue, such as an event option, can be
+            // what waits on that choice, and it finishes only once that seat
+            // has chosen.
+            if (!Peers.InFlight
+                && RunManager.Instance.DebugOnlyGetState() is RunState held && Peers.HeldByOthers(held)
+                && (!BackgroundWork.InFlight || Peers.AwaitedChoices().Count > 0))
             {
                 return true;
             }
@@ -648,7 +684,7 @@ public static class Driver
                     + $"running={executor.IsRunning} current={executor.CurrentlyRunningAction} "
                     + $"paused={executor.IsPaused} combat={CombatManager.Instance.IsInProgress} "
                     + $"actionsDisabled={CombatManager.Instance.PlayerActionsDisabled} "
-                    + $"phase={RunManager.Instance.DebugOnlyGetState()?.Players[0].PlayerCombatState?.Phase}");
+                    + $"phase={Seat.MeIn(RunManager.Instance.DebugOnlyGetState())?.PlayerCombatState?.Phase}");
             }
 
             await Task.Delay(1);
@@ -681,7 +717,7 @@ public static class Driver
             return true;
         }
 
-        PlayerCombatState? pcs = RunManager.Instance.DebugOnlyGetState()?.Players[0].PlayerCombatState;
+        PlayerCombatState? pcs = Seat.MeIn(RunManager.Instance.DebugOnlyGetState())?.PlayerCombatState;
         if (pcs == null)
         {
             return true;
@@ -703,8 +739,11 @@ public static class Driver
     /// singleton whose events outlive <c>CleanUp</c>, so a restart that only
     /// added them would add one more copy per run.
     /// </remarks>
-    private static void Subscribe(RunManager run)
+    internal static void Subscribe(RunManager run)
     {
+        RunSetUp?.Invoke(run);
+        run.ActionExecutor.BeforeActionExecuted -= Peers.Started;
+        run.ActionExecutor.BeforeActionExecuted += Peers.Started;
         run.ActionExecutor.AfterActionExecuted -= CountAction;
         run.ActionExecutor.AfterActionExecuted += CountAction;
         run.ChecksumTracker.ChecksumGenerated -= CountChecksum;
@@ -739,7 +778,7 @@ public static class Driver
     /// </summary>
     private static void Report(RunState state)
     {
-        Player me = state.Players[0];
+        Player me = Seat.Me(state);
         Log.Info($"[headless] REACHED act={state.CurrentActIndex} floor={state.TotalFloor} "
             + $"hp={me.Creature.CurrentHp}/{me.Creature.MaxHp} gold={me.Gold} "
             + $"relics=[{string.Join(",", me.Relics.Select(r => r.Id.Entry))}] "

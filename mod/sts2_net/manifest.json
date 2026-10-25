@@ -1,0 +1,11 @@
+{
+  "id": "sts2_net",
+  "name": "STS2 Net",
+  "author": "sts",
+  "description": "Co-op over the game's ENet transport on one machine, with no Steam and no lobby screen. Not a gameplay mod.",
+  "version": "0.1.0",
+  "has_dll": true,
+  "has_pck": false,
+  "affects_gameplay": false,
+  "min_game_version": "0.107.1"
+}

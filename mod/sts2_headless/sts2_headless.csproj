@@ -26,6 +26,10 @@
       <HintPath>../sts2_determinism/bin/Release/net9.0/sts2_determinism.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="sts2_net">
+      <HintPath>../sts2_net/bin/Release/net9.0/sts2_net.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="GodotSharp">
       <HintPath>$(Sts2GameDir)/GodotSharp.dll</HintPath>
       <Private>false</Private>

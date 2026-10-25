@@ -27,4 +27,11 @@
     </Reference>
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- One adapter per build family, selected by the game lock: the saved
+         property names sit in different places. -->
+    <Compile Remove="Compat/**/*.cs" />
+    <Compile Include="Compat/$(Sts2GameAbi).cs" />
+  </ItemGroup>
+
 </Project>

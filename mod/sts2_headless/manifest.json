@@ -11,6 +11,9 @@
   "dependencies": [
     {
       "id": "sts2_determinism"
+    },
+    {
+      "id": "sts2_net"
     }
   ]
 }

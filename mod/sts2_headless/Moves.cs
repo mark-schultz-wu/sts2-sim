@@ -34,8 +34,15 @@ public static class Moves
 {
     public static List<Dictionary<string, object?>> Legal(RunState state)
     {
-        Player me = state.Players[0];
+        Player me = Seat.Me(state);
         CombatState? combat = (state.CurrentRoom as CombatRoom)?.CombatState;
+
+        // A player who has ended the turn has nothing left to play until the
+        // others have, as the screen greys the hand out.
+        if (Pending.Current == null && Peers.Shared && Peers.EndedTurn(me))
+        {
+            return new List<Dictionary<string, object?>>();
+        }
         PlayerCombatState? pcs = me.PlayerCombatState;
         bool fighting = combat != null && pcs != null && CombatManager.Instance.IsInProgress;
         Pending? pending = Pending.Current;

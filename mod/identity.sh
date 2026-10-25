@@ -8,7 +8,7 @@
 # mod does not move the game's assembly or content hash.
 #
 # Every mod that can change what a run does is in it: the headless driver, the
-# setup commands, the fixes, reproducibility, and the tracing. Each build's
+# setup commands, the fixes, reproducibility, co-op, and the tracing. Each build's
 # Compat files are in it too, and each mod's manifest, which says what loads
 # after what.
 #
@@ -25,6 +25,6 @@ cd "$(dirname "$0")"
 # LC_ALL=C so the sort is by byte and not by whatever locale the caller has.
 # `sha256sum` prints "<hash>  <name>", so names are covered too: a file renamed
 # with its contents intact is still a different mod. Build output is left out.
-LC_ALL=C find sts2_determinism sts2_fixes sts2_headless sts2_setup sts2_observe \
+LC_ALL=C find sts2_determinism sts2_fixes sts2_net sts2_headless sts2_setup sts2_observe \
   \( -path '*/bin' -o -path '*/obj' \) -prune -o \( -name '*.cs' -o -name manifest.json \) -print \
   | LC_ALL=C sort | tr '\n' '\0' | LC_ALL=C xargs -0 sha256sum | sha256sum | cut -c1-16

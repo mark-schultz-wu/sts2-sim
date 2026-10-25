@@ -87,7 +87,7 @@ public static class Observation
 
     public static string Capture(RunState state)
     {
-        Player me = state.Players[0];
+        Player me = Seat.Me(state);
         CombatState? combat = (state.CurrentRoom as CombatRoom)?.CombatState;
         PlayerCombatState? pcs = me.PlayerCombatState;
 
@@ -127,6 +127,12 @@ public static class Observation
         if (room != null)
         {
             obs["room"] = room;
+        }
+
+        // Only in a co-op run, so a run of one reports what it always has.
+        if (Peers.Shared)
+        {
+            obs["peers"] = Peers.Report(state);
         }
 
         // Absent rather than empty: "not in combat" and "in combat with nothing

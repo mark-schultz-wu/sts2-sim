@@ -1,7 +1,15 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
+using System.Threading.Tasks;
+using System;
+using HarmonyLib;
+using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Entities.Rngs;
+using MegaCrit.Sts2.Core.GameActions.Multiplayer;
+using MegaCrit.Sts2.Core.GameActions;
+using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Runs;
 
 namespace Sts2Headless;
@@ -51,4 +59,84 @@ internal static class GameApi
     /// <summary>The whole record, which this family saves and the other does not.</summary>
     private static RngPosition Position(MegaCrit.Sts2.Core.Saves.SerializableRng rng)
         => new(rng.counter, rng.state0, rng.state1, rng.state2, rng.state3);
+
+    /// <summary>The shape a selection's choice goes to the other seats in.</summary>
+    private enum Shape { Index, Indexes, CombatCard, CombatCards, DeckCards, Bundle }
+
+    /// <summary>Each selection method, and the shape its screen branch sends.</summary>
+    private static readonly Dictionary<string, Shape> Shapes = new()
+    {
+        [nameof(CardSelectCmd.FromChooseACardScreen)] = Shape.Index,
+        [nameof(CardSelectCmd.FromSimpleGridForRewards)] = Shape.Indexes,
+        [nameof(CardSelectCmd.FromSimpleGrid)] = Shape.Indexes,
+        [nameof(CardSelectCmd.FromCombatPile)] = Shape.CombatCards,
+        [nameof(CardSelectCmd.FromDeckForUpgrade)] = Shape.DeckCards,
+        [nameof(CardSelectCmd.FromDeckForTransformation)] = Shape.DeckCards,
+        [nameof(CardSelectCmd.FromDeckForEnchantment)] = Shape.DeckCards,
+        [nameof(CardSelectCmd.FromDeckGeneric)] = Shape.DeckCards,
+        [nameof(CardSelectCmd.FromHand)] = Shape.CombatCards,
+        [nameof(CardSelectCmd.FromHandForUpgrade)] = Shape.CombatCard,
+        [nameof(CardSelectCmd.FromChooseABundleScreen)] = Shape.Bundle,
+    };
+
+    /// <summary>
+    /// The <c>CardSelectCmd</c> method asking now, as the stack names it. Its
+    /// state machine calls the selector, and is never inlined.
+    /// </summary>
+    private static string? AskingMethod()
+    {
+        foreach (var frame in new System.Diagnostics.StackTrace().GetFrames())
+        {
+            Type? type = frame.GetMethod()?.DeclaringType;
+            if (type?.DeclaringType == typeof(CardSelectCmd) && type.Name.StartsWith('<'))
+            {
+                return type.Name[1..type.Name.IndexOf('>')];
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// A local selection, sent on once it is made, as the selection screen
+    /// sends it.
+    /// </summary>
+    /// <remarks>
+    /// <c>CardSelectCmd</c> reserves a choice id for the selection just before
+    /// it asks <c>LocalSelector</c>, which this mod answers through. Its screen
+    /// branch then sends the choice with <c>SyncLocalChoice</c>, in a shape
+    /// each method picks, and a co-op seat waiting on it reads that. The
+    /// selector's branch sends nothing. So this sends what the screen would
+    /// have: the id just reserved, in the method's shape. Alone, the game
+    /// sends it to nobody.
+    /// </remarks>
+    internal static async Task<IEnumerable<CardModel>> Sent(List<CardModel> options, Task<IEnumerable<CardModel>> asked)
+    {
+        // Before the first await, while the asking method is on the stack.
+        string? method = AskingMethod();
+        RunManager run = RunManager.Instance;
+        RunState state = run.DebugOnlyGetState()!;
+        Player me = Seat.Me(state);
+        IReadOnlyList<uint> ids = run.PlayerChoiceSynchronizer.ChoiceIds;
+        int slot = state.GetPlayerSlotIndex(me);
+        List<CardModel> chosen = (await asked).ToList();
+        if (method == null || !Shapes.TryGetValue(method, out Shape shape) || slot >= ids.Count)
+        {
+            if (Peers.Shared)
+            {
+                throw new NotSupportedException($"a co-op selection asked by {method ?? "no screen method"}");
+            }
+            return chosen;
+        }
+        PlayerChoiceResult result = shape switch
+        {
+            Shape.Index => PlayerChoiceResult.FromIndex(chosen.Count == 0 ? null : options.IndexOf(chosen[0])),
+            Shape.Indexes => PlayerChoiceResult.FromIndexes(chosen.Select(c => options.IndexOf(c)).ToList()),
+            Shape.CombatCard => PlayerChoiceResult.FromMutableCombatCard(chosen.FirstOrDefault()),
+            Shape.CombatCards => PlayerChoiceResult.FromMutableCombatCards(chosen),
+            Shape.DeckCards => PlayerChoiceResult.FromMutableDeckCards(chosen),
+            _ => throw new NotSupportedException($"sending a selection shaped {shape}"),
+        };
+        run.PlayerChoiceSynchronizer.SyncLocalChoice(me, ids[slot] - 1, result);
+        return chosen;
+    }
 }

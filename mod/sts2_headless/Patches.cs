@@ -355,6 +355,12 @@ internal static class BundleWithoutAScreen
         IReadOnlyList<IReadOnlyList<CardModel>> bundles,
         ref Task<IEnumerable<CardModel>> __result)
     {
+        // The screen asks the local player alone. Another seat's bundle waits
+        // for that seat's choice, as the game's own code does.
+        if (!LocalContext.IsMe(player))
+        {
+            return true;
+        }
         __result = Asked(player, bundles);
         return false;
     }
@@ -1070,7 +1076,10 @@ internal static class LoneCardRewardAsks
 
     private static bool Prefix(Reward __instance, ref Task<bool> __result)
     {
-        if (_answered || __instance is not CardReward card || __instance.ParentRewardSet != null
+        // The screen asks the local player alone. Another seat's reward
+        // waits for that seat's choice, as the game's own code does.
+        if (_answered || __instance is not CardReward card || !LocalContext.IsMe(__instance.Player)
+            || __instance.ParentRewardSet != null
             || RewardPlan.CardInFlight != null || RewardPlan.AlternativeInFlight != null)
         {
             return true;

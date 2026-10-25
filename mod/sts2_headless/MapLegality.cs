@@ -102,7 +102,7 @@ public static class MapLegality
         if (ResumesEvent(state)
             || Pending.Current != null
             || CombatManager.Instance.IsInProgress
-            || state.Players[0].Creature.IsDead)
+            || Seat.Me(state).Creature.IsDead)
         {
             return false;
         }
@@ -112,7 +112,7 @@ public static class MapLegality
                 && (model.IsFinished || model is FakeMerchant),
             RestSiteRoom => RestSiteProgress.Rested
                 || RunManager.Instance.RestSiteSynchronizer.GetLocalOptions().Count == 0,
-            TreasureRoom => !Chest.Open(state.Players[0]),
+            TreasureRoom => !Chest.Open(Seat.Me(state)),
             _ => true,
         };
     }
@@ -148,7 +148,7 @@ public static class MapLegality
     /// </remarks>
     public static bool CanProceed(RunState state)
     {
-        if (!state.Players[0].Creature.IsAlive)
+        if (!Seat.Me(state).Creature.IsAlive)
         {
             return false;
         }
