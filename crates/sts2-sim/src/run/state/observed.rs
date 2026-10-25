@@ -107,7 +107,7 @@ impl<V: Rules> Observed<V> for AtSeat<'_, V> {
     }
 
     fn player_streams(&self) -> impl ExactSizeIterator<Item = (V::PlayerRngType, Position)> + '_ {
-        self.state.streams.player_positions()
+        self.state.streams.player_positions(self.seat)
     }
 
     fn room(&self) -> Option<impl Borrow<Room<V>> + '_> {

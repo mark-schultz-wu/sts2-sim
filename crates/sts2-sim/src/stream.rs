@@ -20,7 +20,8 @@ use sts2_core::{Position, Positions, Rules, RunStreamKinds};
 use crate::bounded::Bounded;
 use crate::rng::MegaRng;
 
-/// The run's twelve streams and the player's three, at the positions they stand.
+/// The run's twelve streams and each player's three, at the positions they
+/// stand.
 ///
 /// Held at the position each stream has in [`Rules::run_rng_types`], so this is
 /// a fixed row of generators and not a map. Cloning one copies that row, which
@@ -28,7 +29,8 @@ use crate::rng::MegaRng;
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Streams<V: Rules> {
     run: Bounded<MegaRng, RUN_STREAMS>,
-    player: Bounded<MegaRng, PLAYER_STREAMS>,
+    /// Each player's `PlayerRngSet`, in seat order.
+    players: Bounded<Bounded<MegaRng, PLAYER_STREAMS>, PLAYERS>,
     version: PhantomData<fn() -> V>,
 }
 
@@ -46,17 +48,30 @@ const RUN_STREAMS: usize = 12;
 /// How many streams each player keeps. Both ported builds keep three.
 const PLAYER_STREAMS: usize = 3;
 
+/// The most players a run has, which is what the game's lobby takes.
+const PLAYERS: usize = 4;
+
 impl<V: Rules> Streams<V> {
-    /// Every stream as the run's seed names it, before anything has drawn.
-    pub(crate) fn opening(raw_seed: u64) -> Self {
+    /// Every stream as the run's seed names it, before anything has drawn,
+    /// for a run of `players`.
+    ///
+    /// `Player.InitializeSeed` seeds each player's set with the run's seed
+    /// plus the player's seat.
+    pub(crate) fn opening(raw_seed: u64, players: usize) -> Self {
+        assert!(players <= PLAYERS, "a run of {players} players");
         Self {
             run: V::run_rng_types()
                 .iter()
                 .map(|&kind| sts2_core::rng::for_stream::<V, MegaRng>(raw_seed, kind))
                 .collect(),
-            player: V::player_rng_types()
-                .iter()
-                .map(|&kind| sts2_core::rng::for_stream::<V, MegaRng>(raw_seed, kind))
+            players: (0..players as u64)
+                .map(|seat| {
+                    let seed = raw_seed.wrapping_add(seat);
+                    V::player_rng_types()
+                        .iter()
+                        .map(|&kind| sts2_core::rng::for_stream::<V, MegaRng>(seed, kind))
+                        .collect()
+                })
                 .collect(),
             version: PhantomData,
         }
@@ -108,29 +123,39 @@ impl<V: Rules> Streams<V> {
         &mut self.run[slot(V::run_rng_types(), kind)]
     }
 
-    /// Whichever stream `stream` names, to draw from in place.
-    pub(crate) fn of(&mut self, stream: sts2_core::Stream<V>) -> &mut MegaRng {
+    /// Whichever stream `stream` names, `seat`'s where it is a player's, to
+    /// draw from in place.
+    pub(crate) fn of(
+        &mut self,
+        seat: sts2_core::SeatIndex,
+        stream: sts2_core::Stream<V>,
+    ) -> &mut MegaRng {
         match stream {
             sts2_core::Stream::Run(kind) => self.run(kind),
-            sts2_core::Stream::Player(kind) => self.player(kind),
+            sts2_core::Stream::Player(kind) => self.player(seat, kind),
             sts2_core::Stream::Event => unreachable!("an event's stream is its room's"),
         }
     }
 
-    /// One of the player's streams, to draw from in place.
-    pub(crate) fn player(&mut self, kind: V::PlayerRngType) -> &mut MegaRng {
-        &mut self.player[slot(V::player_rng_types(), kind)]
+    /// One of `seat`'s streams, to draw from in place.
+    pub(crate) fn player(
+        &mut self,
+        seat: sts2_core::SeatIndex,
+        kind: V::PlayerRngType,
+    ) -> &mut MegaRng {
+        &mut self.players[seat.at()][slot(V::player_rng_types(), kind)]
     }
 
-    /// Where each stream stands, which is what a report carries.
+    /// Where each stream stands, as `seat` sees them, which is what a report
+    /// carries.
     ///
     /// A run holds the generators, so it reports the words beside the count.
     /// A build whose save format keeps the count alone reports none, and the
     /// two are compared on what they both carry.
-    pub(crate) fn positions(&self) -> Positions<V> {
+    pub(crate) fn positions(&self, seat: sts2_core::SeatIndex) -> Positions<V> {
         Positions {
             run: self.run_positions().collect(),
-            player: self.player_positions().collect(),
+            player: self.player_positions(seat).collect(),
         }
     }
 
@@ -144,14 +169,15 @@ impl<V: Rules> Streams<V> {
             .zip(self.run.iter().map(position_of))
     }
 
-    /// Where each of the player's streams stands, lent rather than collected.
+    /// Where each of `seat`'s streams stands, lent rather than collected.
     pub(crate) fn player_positions(
         &self,
+        seat: sts2_core::SeatIndex,
     ) -> impl ExactSizeIterator<Item = (V::PlayerRngType, Position)> + '_ {
         V::player_rng_types()
             .iter()
             .copied()
-            .zip(self.player.iter().map(position_of))
+            .zip(self.players[seat.at()].iter().map(position_of))
     }
 }
 
@@ -250,7 +276,7 @@ mod tests {
     /// a real stream, and the wrong one.
     #[test]
     fn every_stream_opens_on_its_own_name() {
-        let mut streams = Streams::<V0_107_1>::opening(123);
+        let mut streams = Streams::<V0_107_1>::opening(123, 1);
 
         for kind in RunRngType::ALL {
             assert_eq!(
@@ -265,13 +291,13 @@ mod tests {
     /// A draw moves one stream and leaves the rest where they were.
     #[test]
     fn drawing_moves_one_stream() {
-        let mut streams = Streams::<V0_107_1>::opening(123);
+        let mut streams = Streams::<V0_107_1>::opening(123, 1);
 
         for _ in 0..9 {
             streams.run(RunRngType::Shuffle).next_u64();
         }
 
-        let at = streams.positions();
+        let at = streams.positions(sts2_core::SeatIndex(0));
         assert_eq!(at.run[&RunRngType::Shuffle].counter, 9);
         for kind in RunRngType::ALL
             .into_iter()
@@ -296,7 +322,7 @@ mod tests {
             (RunRngType::MonsterAi, 4),
         ];
 
-        let mut streams = Streams::<V0_107_1>::opening(123);
+        let mut streams = Streams::<V0_107_1>::opening(123, 1);
         {
             let rngs = streams.combat();
             let lent = [
@@ -314,7 +340,7 @@ mod tests {
             }
         }
 
-        let at = streams.positions();
+        let at = streams.positions(sts2_core::SeatIndex(0));
         for (kind, draws) in named {
             assert_eq!(
                 at.run[&kind].counter,
@@ -338,12 +364,18 @@ mod tests {
     /// so the copy is the whole of the boundary.
     #[test]
     fn a_decision_draws_from_a_clone() {
-        let streams = Streams::<V0_107_1>::opening(123);
+        let streams = Streams::<V0_107_1>::opening(123, 1);
 
         let mut taken = streams;
         taken.run(RunRngType::Niche).next_u64();
 
-        assert_eq!(streams.positions().run[&RunRngType::Niche].counter, 0);
-        assert_eq!(taken.positions().run[&RunRngType::Niche].counter, 1);
+        assert_eq!(
+            streams.positions(sts2_core::SeatIndex(0)).run[&RunRngType::Niche].counter,
+            0
+        );
+        assert_eq!(
+            taken.positions(sts2_core::SeatIndex(0)).run[&RunRngType::Niche].counter,
+            1
+        );
     }
 }

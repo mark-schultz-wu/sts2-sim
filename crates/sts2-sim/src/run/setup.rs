@@ -331,7 +331,15 @@ impl<V: Rules> Rooms<V> {
     /// `ancients` is the act's own list with whatever share of the run's
     /// ancients it was dealt already on the end. Only acts after the first get
     /// a share, so for the first act it is the act's own list alone.
-    pub fn roll<R: GameRng>(rng: &mut R, act: V::Act, ancients: &[V::Event]) -> Self {
+    ///
+    /// A run of several players deals one normal fight fewer, as its map is a
+    /// room shorter: `GetNumberOfRooms(isMultiplayer)`.
+    pub fn roll<R: GameRng>(
+        rng: &mut R,
+        act: V::Act,
+        ancients: &[V::Event],
+        multiplayer: bool,
+    ) -> Self {
         let events = Self::events(act);
         let mut events: Vec<V::Event> = events;
         rng.unstable_shuffle(&mut events);
@@ -347,7 +355,7 @@ impl<V: Rules> Rooms<V> {
         Self::deal(
             rng,
             &mut normal,
-            act.rooms() as usize - weak,
+            act.rooms() as usize - usize::from(multiplayer) - weak,
             &Self::of_room(act, V::RoomType::MONSTER, false),
         );
 
@@ -483,7 +491,8 @@ pub fn run_acts<V: Rules>(raw_seed: u64) -> Vec<V::Act> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Opening<V: Rules> {
     pub shared_relics: RelicBag<V>,
-    pub player_relics: RelicBag<V>,
+    /// Each player's own bag, in seat order.
+    pub player_relics: Vec<RelicBag<V>>,
     /// One entry per act, in act order.
     pub acts: Vec<(V::Act, Rooms<V>)>,
 }
@@ -491,16 +500,21 @@ pub struct Opening<V: Rules> {
 impl<V: Rules> Opening<V> {
     /// Draw the whole of a run's setup.
     ///
-    /// `rng` is the run's `UpFront` stream at its start. `acts` is the run's
-    /// act list in order, which [`run_acts`] draws.
+    /// `rng` is the run's `UpFront` stream at its start. `characters` is
+    /// each player's, in seat order. `acts` is the run's act list in order,
+    /// which [`run_acts`] draws.
     pub fn draw<R: GameRng>(
         rng: &mut R,
-        character: V::Character,
+        characters: &[V::Character],
         acts: &[V::Act],
         ascension: V::AscensionLevel,
     ) -> Self {
         let shared_relics = RelicBag::shared(rng);
-        let player_relics = RelicBag::player(rng, character);
+        // `PopulateRelicGrabBagIfNecessary`, for each player in seat order.
+        let player_relics = (characters.iter())
+            .map(|&character| RelicBag::player(rng, character))
+            .collect();
+        let multiplayer = characters.len() > 1;
 
         // The run's shared ancients, shuffled once and then dealt out. Each act
         // after the first takes a share, and how big a share is itself a draw.
@@ -529,7 +543,7 @@ impl<V: Rules> Opening<V> {
             .map(|(at, (&act, share))| {
                 let mut ancients: Vec<V::Event> = V::ancients(act).to_vec();
                 ancients.extend(share);
-                let mut rooms = Rooms::roll(rng, act, &ancients);
+                let mut rooms = Rooms::roll(rng, act, &ancients, multiplayer);
                 // `SetSecondBossEncounter`, off the same stream once the last
                 // act's rooms are rolled: another of its bosses.
                 if at == last && double_boss {

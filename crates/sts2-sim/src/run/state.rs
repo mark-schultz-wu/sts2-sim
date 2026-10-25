@@ -53,6 +53,9 @@ pub(crate) struct State<V: Rules> {
     /// Inline: an act's own height bounds it, and a coordinate is two bytes.
     visited: Bounded<Coord, VISITED>,
     players: Players<V>,
+    /// `MapSelectionSynchronizer`'s `map_point_selection` stream, which the
+    /// host draws a run of several players' destination from.
+    map_votes: MegaRng,
     /// Each player's relics, by seat. Apart from the rest of a player, so
     /// a fight can borrow every belt at once.
     belts: Belts<V>,
@@ -70,9 +73,6 @@ pub(crate) struct State<V: Rules> {
     /// Elite encounters have their own dealt list and position. Entering one
     /// must not consume the next normal encounter.
     elite_fights: usize,
-    /// The cards a select-cards question has been handed so far, in the order
-    /// they were picked. Empty whenever no selection is under way.
-    picked: sts2_core::Picks,
     /// `RoomSet.eventsVisited`: where this act's event queue stands.
     ///
     /// Every event room the run enters marks one, an ancient's included, and
@@ -82,14 +82,6 @@ pub(crate) struct State<V: Rules> {
     /// four acts, and no decision inside a fight touches the list.
     visited_events: Arc<Vec<V::Event>>,
     unknown_odds: [f32; 4],
-    odds: Odds,
-    /// Every relic this run has dealt out of a bag, in the order it dealt
-    /// them.
-    ///
-    /// The bags sit in the setup that every branch of a run shares. A branch
-    /// that deals a relic must not deal it to the other, so what moves lives
-    /// here. It is a handful over a run, not the whole table.
-    dealt_relics: Arc<Vec<V::Relic>>,
     /// The relics dealt out of the shared bag alone, which a treasure chest
     /// pulls from. The player's own bag still holds them, until one is
     /// obtained.
@@ -98,17 +90,6 @@ pub(crate) struct State<V: Rules> {
     /// the rarity, and how far `dealt_relics` and `shared_dealt` stood then.
     /// What left after that left the refilled deque.
     shared_refills: Arc<Vec<(Rarity<V>, usize, usize)>>,
-    /// `PlayerCombatState.TurnNumber` as the last fight left it. A fight's
-    /// state outlives it until the next one starts.
-    last_turn: Option<V::Count>,
-    /// `PlayerExtraFields.CardShopRemovalsUsed`, which every merchant's
-    /// removal price climbs with. It counts over the run, not the room.
-    removals_used: usize,
-    /// Card rewards that left their set without being offered or skipped,
-    /// as Vintage swaps a relic in for one. Each still hears
-    /// `RelicObtained`, which only its own selection or skip turns off, for
-    /// the rest of the run.
-    unheld_card_rewards: Arc<Vec<Offer<V>>>,
     phase: Phase<V>,
     /// The event a fight was entered from, which the rewards' proceed goes
     /// back to: the room under the fight in `RunState`'s room stack. Only a
@@ -193,6 +174,14 @@ enum Filling<V: Rules> {
         room: crate::reward::combat::Room,
         reroll: bool,
     },
+}
+
+/// An act's layout, which a run of several players walks a room shorter:
+/// `GetNumberOfRooms(isMultiplayer)`.
+fn layout<V: Rules>(act: V::Act, multiplayer: bool) -> sts2_core::Layout {
+    let mut layout = V::act_layout(act);
+    layout.rooms -= usize::from(multiplayer);
+    layout
 }
 
 /// `ClearAfterPurchase`, which empties one shelf.
@@ -480,6 +469,30 @@ pub(crate) struct Player<V: Rules> {
     /// `IsActiveForHooks` off: the player died, and their deck, relics and
     /// potions hear no hook after.
     deaf: bool,
+    /// The cards a select-cards question has been handed so far, in the order
+    /// they were picked. Empty whenever no selection is under way.
+    picked: sts2_core::Picks,
+    odds: Odds,
+    /// Every relic this run has dealt out of a bag, in the order it dealt
+    /// them.
+    ///
+    /// The bags sit in the setup that every branch of a run shares. A branch
+    /// that deals a relic must not deal it to the other, so what moves lives
+    /// here. It is a handful over a run, not the whole table.
+    dealt_relics: Arc<Vec<V::Relic>>,
+    /// `PlayerCombatState.TurnNumber` as the last fight left it. A fight's
+    /// state outlives it until the next one starts.
+    last_turn: Option<V::Count>,
+    /// `PlayerExtraFields.CardShopRemovalsUsed`, which every merchant's
+    /// removal price climbs with. It counts over the run, not the room.
+    removals_used: usize,
+    /// Card rewards that left their set without being offered or skipped,
+    /// as Vintage swaps a relic in for one. Each still hears
+    /// `RelicObtained`, which only its own selection or skip turns off, for
+    /// the rest of the run.
+    unheld_card_rewards: Arc<Vec<Offer<V>>>,
+    /// Where this player voted to travel, until the run moves.
+    vote: Option<Coord>,
 }
 
 impl<V: Rules> Clone for State<V> {
@@ -492,10 +505,8 @@ impl<V: Rules> Clone for State<V> {
             players: self.players.clone(),
             belts: self.belts.clone(),
             visited_events: Arc::clone(&self.visited_events),
-            dealt_relics: Arc::clone(&self.dealt_relics),
             shared_dealt: Arc::clone(&self.shared_dealt),
             shared_refills: Arc::clone(&self.shared_refills),
-            unheld_card_rewards: Arc::clone(&self.unheld_card_rewards),
             phase: self.phase.clone(),
             resuming: self.resuming.clone(),
             ..*self
@@ -516,21 +527,16 @@ impl<V: Rules> Clone for State<V> {
             floor,
             visited,
             players,
+            map_votes,
             belts,
             streams,
             normal_fights,
             elite_fights,
-            picked,
             events_used,
             visited_events,
             unknown_odds,
-            odds,
-            dealt_relics,
             shared_dealt,
             shared_refills,
-            last_turn,
-            removals_used,
-            unheld_card_rewards,
             phase,
             resuming,
         } = self;
@@ -542,21 +548,16 @@ impl<V: Rules> Clone for State<V> {
         *floor = source.floor;
         visited.copy_from(&source.visited);
         players.clone_from(&source.players);
+        *map_votes = source.map_votes;
         belts.clone_from(&source.belts);
         *streams = source.streams;
         *normal_fights = source.normal_fights;
         *elite_fights = source.elite_fights;
-        *picked = source.picked;
         *events_used = source.events_used;
         visited_events.clone_from(&source.visited_events);
         *unknown_odds = source.unknown_odds;
-        *odds = source.odds;
-        dealt_relics.clone_from(&source.dealt_relics);
         shared_dealt.clone_from(&source.shared_dealt);
         shared_refills.clone_from(&source.shared_refills);
-        *last_turn = source.last_turn;
-        *removals_used = source.removals_used;
-        unheld_card_rewards.clone_from(&source.unheld_card_rewards);
         resuming.clone_from(&source.resuming);
         match (phase, &source.phase) {
             (Phase::Combat(live), Phase::Combat(from)) => live.clone_from(from),
@@ -597,6 +598,13 @@ impl<V: Rules> Clone for Player<V> {
             gold: self.gold,
             potion_slots: self.potion_slots,
             deaf: self.deaf,
+            picked: self.picked,
+            odds: self.odds,
+            dealt_relics: Arc::clone(&self.dealt_relics),
+            last_turn: self.last_turn,
+            removals_used: self.removals_used,
+            unheld_card_rewards: Arc::clone(&self.unheld_card_rewards),
+            vote: self.vote,
         }
     }
 
@@ -613,6 +621,13 @@ impl<V: Rules> Clone for Player<V> {
             gold,
             potion_slots,
             deaf,
+            picked,
+            odds,
+            dealt_relics,
+            last_turn,
+            removals_used,
+            unheld_card_rewards,
+            vote,
         } = self;
         *character = source.character;
         *wins = source.wins;
@@ -625,6 +640,13 @@ impl<V: Rules> Clone for Player<V> {
         *gold = source.gold;
         *potion_slots = source.potion_slots;
         *deaf = source.deaf;
+        *picked = source.picked;
+        *odds = source.odds;
+        dealt_relics.clone_from(&source.dealt_relics);
+        *last_turn = source.last_turn;
+        *removals_used = source.removals_used;
+        unheld_card_rewards.clone_from(&source.unheld_card_rewards);
+        *vote = source.vote;
     }
 }
 
@@ -843,17 +865,33 @@ impl<V: Rules> std::fmt::Debug for Spent<V> {
     }
 }
 
+/// One player's Neow. Each player meets Neow alone, off a stream of their
+/// own.
+#[derive(Debug, Clone)]
+pub(super) struct NeowSeat<V: Rules> {
+    options: SmallVec<[V::Relic; 4]>,
+    chosen: Option<nonmax::NonMaxU8>,
+    /// `ModifierOptions`: the run's modifiers whose option Neow has not
+    /// offered and run yet, by their place among the run's. The first is
+    /// the one Neow shows. A run with modifiers is offered no blessing.
+    modifier_options: SmallVec<[u8; 4]>,
+    asking: Option<Asked<V>>,
+}
+
+impl<V: Rules> NeowSeat<V> {
+    /// Whether this player is done with Neow: a blessing chosen and
+    /// answered for, and every modifier's option run.
+    fn finished(&self) -> bool {
+        (self.chosen.is_some() || self.options.is_empty())
+            && self.modifier_options.is_empty()
+            && self.asking.is_none()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(super) enum Phase<V: Rules> {
-    Neow {
-        options: SmallVec<[V::Relic; 4]>,
-        chosen: Option<nonmax::NonMaxU8>,
-        /// `ModifierOptions`: the run's modifiers whose option Neow has not
-        /// offered and run yet, by their place among the run's. The first is
-        /// the one Neow shows. A run with modifiers is offered no blessing.
-        modifier_options: SmallVec<[u8; 4]>,
-        asking: Option<Asked<V>>,
-    },
+    /// Each player's Neow, by seat.
+    Neow(crate::seats::BySeat<NeowSeat<V>>),
     /// The map itself, which an act opens on and no room owns.
     Map,
     /// Boxed, so a run moves a pointer rather than a fight. A reused node
@@ -1056,25 +1094,16 @@ pub(super) enum Unfinished {
 }
 
 impl<V: Rules> Phase<V> {
-    /// Whether the run can leave the room this phase stands in.
+    /// Whether `seat`'s player can leave the room this phase stands in.
     ///
     /// A question rather than a flag, because two of the three rooms that
     /// finish already say so in what they hold. Neow has chosen a blessing and
     /// answered for it. A rest site has spent its options. Only the chest
     /// needs a bit of its own, because it keeps the relic it offered either
     /// way.
-    fn finished(&self) -> bool {
+    fn finished(&self, seat: sts2_core::SeatIndex) -> bool {
         match self {
-            Phase::Neow {
-                options,
-                chosen,
-                modifier_options,
-                asking,
-            } => {
-                (chosen.is_some() || options.is_empty())
-                    && modifier_options.is_empty()
-                    && asking.is_none()
-            }
+            Phase::Neow(seats) => seats[seat].finished(),
             Phase::Treasure { finished, .. } => *finished,
             Phase::RestSite { options, .. } => options.is_empty(),
             // A merchant never runs out. The run leaves when it decides to,
@@ -1090,22 +1119,22 @@ impl<V: Rules> Phase<V> {
         }
     }
 
-    /// The question a pickup or an event option parked the room on.
-    fn asking(&self) -> Option<&Asked<V>> {
+    /// The question a pickup or an event option parked `seat`'s room on.
+    fn asking(&self, seat: sts2_core::SeatIndex) -> Option<&Asked<V>> {
         match self {
-            Phase::Neow { asking, .. }
-            | Phase::Event { asking, .. }
+            Phase::Neow(seats) => seats[seat].asking.as_ref(),
+            Phase::Event { asking, .. }
             | Phase::RestSite { asking, .. }
             | Phase::Shop { asking, .. } => asking.as_ref(),
             _ => None,
         }
     }
 
-    /// Where the rooms that park keep what they are parked on.
-    fn asking_mut(&mut self) -> Option<&mut Option<Asked<V>>> {
+    /// Where the rooms that park keep what `seat`'s room is parked on.
+    fn asking_mut(&mut self, seat: sts2_core::SeatIndex) -> Option<&mut Option<Asked<V>>> {
         match self {
-            Phase::Neow { asking, .. }
-            | Phase::Event { asking, .. }
+            Phase::Neow(seats) => Some(&mut seats[seat].asking),
+            Phase::Event { asking, .. }
             | Phase::RestSite { asking, .. }
             | Phase::Shop { asking, .. } => Some(asking),
             _ => None,
@@ -1125,7 +1154,7 @@ impl<V: Rules> State<V> {
             | Phase::Event { .. }
             | Phase::Shop {
                 asking: Some(_), ..
-            } => self.phase.asking().map(|asked| match asked.pickup {
+            } => self.phase.asking(seat).map(|asked| match asked.pickup {
                 Pickup::Rewards { .. } => sts2_core::QuestionKind::Rewards,
                 Pickup::Bundles { .. } => sts2_core::QuestionKind::ChooseBundle,
                 Pickup::ConfirmAbandon => sts2_core::QuestionKind::Confirm,
@@ -1175,13 +1204,20 @@ impl<V: Rules> State<V> {
         index: usize,
         ascension: V::AscensionLevel,
         second_boss: bool,
+        multiplayer: bool,
     ) -> ActMap<V> {
         let named = MAP_STREAMS
             .get(index)
             .unwrap_or_else(|| unimplemented!("the map stream a run's act {index} draws from"));
         let mut rng: MegaRng = sts2_core::rng::named::<V, _>(raw_seed, named);
-        ActMap::<V>::generate(&mut rng, V::act_layout(act), ascension, second_boss, None)
-            .expect("an act's layout fits a packed map path")
+        ActMap::<V>::generate(
+            &mut rng,
+            layout::<V>(act, multiplayer),
+            ascension,
+            second_boss,
+            None,
+        )
+        .expect("an act's layout fits a packed map path")
     }
 
     /// `RunManager.GenerateMap` for the act the run stands in: `CreateMap`,
@@ -1193,12 +1229,14 @@ impl<V: Rules> State<V> {
     /// a map of its own.
     fn generate_map(&mut self, act: V::Act) -> ActMap<V> {
         let second_boss = self.shared.opening.acts[self.act].1.second_boss.is_some();
+        let multiplayer = self.players.len() > 1;
         let mut map = Self::act_map(
             self.shared.raw_seed,
             act,
             self.act,
             self.ascension(),
             second_boss,
+            multiplayer,
         );
         // Which class the map is, which a later listener reads.
         #[derive(PartialEq)]
@@ -1214,8 +1252,13 @@ impl<V: Rules> State<V> {
                 sts2_core::HookEffect::SpoilsMap => {
                     let mut rng: MegaRng =
                         sts2_core::rng::named::<V, _>(self.shared.raw_seed, "spoils_map");
-                    map = ActMap::<V>::spoils(&mut rng, V::act_layout(act), self.ascension(), None)
-                        .expect("a Spoils layout fits a packed map path");
+                    map = ActMap::<V>::spoils(
+                        &mut rng,
+                        layout::<V>(act, multiplayer),
+                        self.ascension(),
+                        None,
+                    )
+                    .expect("a Spoils layout fits a packed map path");
                     made = Made::Spoils;
                 }
                 sts2_core::HookEffect::FixedPathMap(rooms) => {
@@ -1237,7 +1280,7 @@ impl<V: Rules> State<V> {
                         rests: count(V::MapPointType::REST_SITE),
                         elites: elites.round_ties_even() as usize,
                     };
-                    let layout = V::act_layout(act);
+                    let layout = layout::<V>(act, multiplayer);
                     map = match made {
                         Made::Standard => {
                             let named = MAP_STREAMS.get(self.act).unwrap_or_else(|| {
@@ -1342,25 +1385,36 @@ impl<V: Rules> State<V> {
         held.state.mark_points(&points);
     }
 
+    /// A new run of `players`, in seat order, at `ascension` with
+    /// `modifiers`.
+    ///
+    /// # Panics
+    ///
+    /// Modifiers in a run of several players, which the co-op lobby sets
+    /// none of.
     pub(crate) fn start(
         seed: &Seed,
-        character: V::Character,
+        players: &[sts2_core::Player<V>],
         ascension: V::AscensionLevel,
         modifiers: &[sts2_core::RunModifier<V>],
-        wins: u32,
     ) -> Self {
+        if players.len() > 1 && !modifiers.is_empty() {
+            unimplemented!("a run of {} players started with modifiers", players.len());
+        }
         let raw_seed = stream_seed::<V>(seed);
         let acts = super::setup::run_acts::<V>(raw_seed);
-        let mut streams = Streams::<V>::opening(raw_seed);
+        let mut streams = Streams::<V>::opening(raw_seed, players.len());
+        let characters: SmallVec<[V::Character; 1]> = players.iter().map(|p| p.character).collect();
         let opening = Opening::draw(
             streams.run(V::RunRngType::UP_FRONT),
-            character,
+            &characters,
             &acts,
             ascension,
         );
 
         let second_boss = opening.acts[0].1.second_boss.is_some();
-        let map = Self::act_map(raw_seed, acts[0], 0, ascension, second_boss);
+        let multiplayer = players.len() > 1;
+        let map = Self::act_map(raw_seed, acts[0], 0, ascension, second_boss, multiplayer);
         let at = map
             .ancient()
             .expect("a generated act map opens somewhere")
@@ -1369,10 +1423,12 @@ impl<V: Rules> State<V> {
         // `Neow.GenerateInitialOptions`: a run with modifiers is offered what
         // they put in front of it instead, and no ported modifier offers
         // anything. Nothing offered leaves the event finished.
-        let neow_options = match modifiers.is_empty() {
+        // Each player has a Neow of their own, off a stream their seat is
+        // mixed into.
+        let neow_options = |seat: u64| match modifiers.is_empty() {
             true => {
-                let mut neow_rng: MegaRng = Blessing::<V>::stream(raw_seed, 0);
-                Blessing::<V>::roll(&mut neow_rng, 1).options
+                let mut neow_rng: MegaRng = Blessing::<V>::stream(raw_seed, seat);
+                Blessing::<V>::roll(&mut neow_rng, players.len()).options
             }
             false => Default::default(),
         };
@@ -1418,46 +1474,76 @@ impl<V: Rules> State<V> {
             }
         }
 
-        let mut player = Player {
-            character,
-            wins,
-            potions: Bounded::new(),
-            potion_positions: Bounded::new(),
-            deck: Arc::new(Vec::new()),
-            minted: sts2_core::DeckCardId::new(0),
-            // Neow's `BeforeEventStarted` sets it to nothing and heals what
-            // is missing, which a weary traveller gets four fifths of.
-            hp: ancient_heal::<V>(ascension, num_traits::zero(), V::starting_hp(character)),
-            max_hp: V::starting_hp(character),
-            gold: num_traits::cast(V::starting_gold(character))
-                .expect("starting gold fits the build's game-number type"),
-            potion_slots: num_traits::cast(V::starting_potion_slots())
-                .expect("starting potion slots fit the build's count type"),
-            deaf: false,
+        let player = |&sts2_core::Player { character, wins }: &sts2_core::Player<V>| {
+            let mut player = Player {
+                character,
+                wins,
+                potions: Bounded::new(),
+                potion_positions: Bounded::new(),
+                deck: Arc::new(Vec::new()),
+                minted: sts2_core::DeckCardId::new(0),
+                // Neow's `BeforeEventStarted` sets it to nothing and heals what
+                // is missing, which a weary traveller gets four fifths of.
+                hp: ancient_heal::<V>(ascension, num_traits::zero(), V::starting_hp(character)),
+                max_hp: V::starting_hp(character),
+                gold: num_traits::cast(V::starting_gold(character))
+                    .expect("starting gold fits the build's game-number type"),
+                potion_slots: num_traits::cast(V::starting_potion_slots())
+                    .expect("starting potion slots fit the build's count type"),
+                deaf: false,
+                picked: sts2_core::Picks::none(),
+                odds: Odds::default(),
+                dealt_relics: Arc::new(out_of_bags.clone()),
+                last_turn: None,
+                removals_used: 0,
+                unheld_card_rewards: Arc::new(Vec::new()),
+                vote: None,
+            };
+            // `AscensionManager.ApplyEffectsTo`: a slot fewer, and the curse on
+            // the end of the deck.
+            if sts2_core::AscensionKinds::has(
+                ascension,
+                <V::AscensionLevel as sts2_core::AscensionKinds>::TIGHT_BELT,
+            ) {
+                player.potion_slots = player.potion_slots - num_traits::one();
+            }
+            // `OnRunCreated` empties the deck for a modifier that clears it, and
+            // the ascension's curse goes on after.
+            let cleared = modifiers
+                .iter()
+                .any(|entry| sts2_core::ModifierTable::clears_deck(entry.modifier));
+            let starting = match cleared {
+                true => Vec::new(),
+                false => V::starting_deck(character).into_iter().collect(),
+            };
+            let deck = starting
+                .into_iter()
+                .chain(V::ascension_deck(ascension))
+                .map(|card| sts2_core::DeckCard::new(player.mint(), CardIdent::new(card)))
+                .collect();
+            player.deck = Arc::new(deck);
+            player
         };
-        // `AscensionManager.ApplyEffectsTo`: a slot fewer, and the curse on
-        // the end of the deck.
-        if sts2_core::AscensionKinds::has(
-            ascension,
-            <V::AscensionLevel as sts2_core::AscensionKinds>::TIGHT_BELT,
-        ) {
-            player.potion_slots = player.potion_slots - num_traits::one();
-        }
-        // `OnRunCreated` empties the deck for a modifier that clears it, and
-        // the ascension's curse goes on after.
-        let cleared = modifiers
-            .iter()
-            .any(|entry| sts2_core::ModifierTable::clears_deck(entry.modifier));
-        let starting = match cleared {
-            true => Vec::new(),
-            false => V::starting_deck(character).into_iter().collect(),
+        let mut seated = players.iter().map(player);
+        let host = seated.next().expect("a run has a player");
+        let others: Vec<Player<V>> = seated.collect();
+        let belt = |player: &sts2_core::Player<V>| -> Belt<V> {
+            V::starting_relics(player.character)
+                .into_iter()
+                .map(HeldRelic::new)
+                .collect()
         };
-        let deck = starting
-            .into_iter()
-            .chain(V::ascension_deck(ascension))
-            .map(|card| sts2_core::DeckCard::new(player.mint(), CardIdent::new(card)))
-            .collect();
-        player.deck = Arc::new(deck);
+        let neow_seat = |seat: usize| NeowSeat {
+            options: neow_options(seat as u64).into_iter().collect(),
+            chosen: None,
+            modifier_options: modifiers
+                .iter()
+                .enumerate()
+                .filter(|(_, entry)| sts2_core::ModifierTable::offers_neow_option(entry.modifier))
+                .map(|(at, _)| u8::try_from(at).expect("a run has few modifiers"))
+                .collect(),
+            asking: None,
+        };
         let mut state = Self {
             shared: Arc::new(RunData {
                 opening,
@@ -1472,43 +1558,23 @@ impl<V: Rules> State<V> {
             act: 0,
             floor: num_traits::one(),
             visited: [at].into_iter().collect(),
-            players: Players::new(player, Vec::new()),
-            belts: Belts::new(
-                V::starting_relics(character)
-                    .into_iter()
-                    .map(HeldRelic::new)
-                    .collect(),
-                Vec::new(),
-            ),
+            players: Players::new(host, others),
+            map_votes: sts2_core::rng::named::<V, _>(raw_seed, "map_point_selection"),
+            belts: Belts::new(belt(&players[0]), players[1..].iter().map(belt).collect()),
             normal_fights: 0,
             elite_fights: 0,
-            picked: sts2_core::Picks::none(),
             // A run opens in Neow's room, which is an event room.
             events_used: 1,
             visited_events: Arc::new(Vec::new()),
             unknown_odds,
-            odds: Odds::default(),
-            dealt_relics: Arc::new(out_of_bags),
             shared_dealt: Arc::new(Vec::new()),
             shared_refills: Arc::new(Vec::new()),
-            last_turn: None,
-            removals_used: 0,
-            unheld_card_rewards: Arc::new(Vec::new()),
             streams,
             resuming: None,
-            phase: Phase::Neow {
-                options: neow_options.into_iter().collect(),
-                chosen: None,
-                modifier_options: modifiers
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, entry)| {
-                        sts2_core::ModifierTable::offers_neow_option(entry.modifier)
-                    })
-                    .map(|(at, _)| u8::try_from(at).expect("a run has few modifiers"))
-                    .collect(),
-                asking: None,
-            },
+            phase: Phase::Neow(crate::seats::BySeat::new(
+                neow_seat(0),
+                (1..players.len()).map(neow_seat).collect(),
+            )),
         };
         // `RunManager.GenerateMap` runs its hooks for the first act too, and
         // a modifier is the only listener a new run holds that hears them.
@@ -1820,7 +1886,7 @@ impl<V: Rules> State<V> {
             | sts2_core::DeckAct::TransformTogether(stream) => {
                 let upgrade = matches!(act, sts2_core::DeckAct::TransformUpgraded(_));
                 let together = matches!(act, sts2_core::DeckAct::TransformTogether(_));
-                let rng = stream_of(&mut self.phase, &mut self.streams, stream);
+                let rng = stream_of(seat, &mut self.phase, &mut self.streams, stream);
                 let mut replaced: Vec<(usize, CardIdent<V>)> = taken
                     .iter()
                     .map(|&at| {
@@ -1977,7 +2043,7 @@ impl<V: Rules> State<V> {
                 },
             });
         }
-        self.picked = sts2_core::Picks::none();
+        self.players[seat].picked = sts2_core::Picks::none();
         match &mut self.phase {
             Phase::RestSite {
                 upgrading,
@@ -2213,7 +2279,7 @@ impl<V: Rules> State<V> {
         offered: Vec<Offer<V>>,
         spent: Box<crate::combat::Live<V>>,
     ) {
-        self.last_turn = Some(combat.turn);
+        self.players[seat].last_turn = Some(combat.turn);
         if let Some(player) = combat.creatures.iter().find(|c| c.id == seat.creature()) {
             self.players[seat].hp = player.hp;
             self.players[seat].max_hp = player.max_hp;
@@ -2233,8 +2299,13 @@ impl<V: Rules> State<V> {
     /// has nowhere to carry them to.
     ///
     /// `spent` is the fight's own storage, where there is one.
-    pub(super) fn lost(&mut self, combat: Combat<V>, spent: Option<Box<crate::combat::Live<V>>>) {
-        self.last_turn = Some(combat.turn);
+    pub(super) fn lost(
+        &mut self,
+        seat: sts2_core::SeatIndex,
+        combat: Combat<V>,
+        spent: Option<Box<crate::combat::Live<V>>>,
+    ) {
+        self.players[seat].last_turn = Some(combat.turn);
         self.phase = Phase::Lost {
             combat,
             spent: Spent(spent),
@@ -2245,10 +2316,10 @@ impl<V: Rules> State<V> {
     ///
     /// Together, because a roll reads and writes both, and they are two fields
     /// of the same run.
-    pub(super) fn rewarding(&mut self) -> (&mut MegaRng, &mut Odds) {
+    pub(super) fn rewarding(&mut self, seat: sts2_core::SeatIndex) -> (&mut MegaRng, &mut Odds) {
         (
-            self.streams.player(V::PlayerRngType::REWARDS),
-            &mut self.odds,
+            self.streams.player(seat, V::PlayerRngType::REWARDS),
+            &mut self.players[seat].odds,
         )
     }
 
@@ -2260,6 +2331,7 @@ impl<V: Rules> State<V> {
     /// only once it enters.
     pub(super) fn pull_relic_as(
         &mut self,
+        seat: sts2_core::SeatIndex,
         pull: sts2_core::RelicPull<V>,
         rarity: Rarity<V>,
         floor: V::Count,
@@ -2268,20 +2340,20 @@ impl<V: Rules> State<V> {
 
         let floor = num_traits::cast(floor).expect("a floor fits a usize");
         let relic = match pull {
-            sts2_core::RelicPull::Rolled => {
-                self.shared
-                    .opening
-                    .player_relics
-                    .front(rarity, &self.dealt_relics, floor)
-            }
-            sts2_core::RelicPull::Stocked(_) => self.shared.opening.player_relics.front_where(
+            sts2_core::RelicPull::Rolled => self.shared.opening.player_relics[seat.at()].front(
                 rarity,
-                &self.dealt_relics,
+                &self.players[seat].dealt_relics,
                 floor,
-                V::Relic::allowed_in_shops,
             ),
+            sts2_core::RelicPull::Stocked(_) => self.shared.opening.player_relics[seat.at()]
+                .front_where(
+                    rarity,
+                    &self.players[seat].dealt_relics,
+                    floor,
+                    V::Relic::allowed_in_shops,
+                ),
         };
-        Arc::make_mut(&mut self.dealt_relics).push(relic);
+        Arc::make_mut(&mut self.players[seat].dealt_relics).push(relic);
         relic
     }
 
@@ -2294,13 +2366,13 @@ impl<V: Rules> State<V> {
     /// The player's bag deals it, and the run notes it as dealt. That note is
     /// what `SharedRelicGrabBag.Remove` does on the other side, so the shared
     /// bag needs no second one.
-    pub(super) fn pull_relic(&mut self, rarity: Rarity<V>) -> V::Relic {
-        let relic = self.shared.opening.player_relics.front(
+    pub(super) fn pull_relic(&mut self, seat: sts2_core::SeatIndex, rarity: Rarity<V>) -> V::Relic {
+        let relic = self.shared.opening.player_relics[seat.at()].front(
             rarity,
-            &self.dealt_relics,
+            &self.players[seat].dealt_relics,
             num_traits::cast(self.floor).expect("a floor fits a usize"),
         );
-        Arc::make_mut(&mut self.dealt_relics).push(relic);
+        Arc::make_mut(&mut self.players[seat].dealt_relics).push(relic);
         relic
     }
 
@@ -2315,18 +2387,26 @@ impl<V: Rules> State<V> {
     ///
     /// A bag with nothing left at the rarity or above, where the game falls
     /// back to a relic of its own.
-    pub(super) fn deal_shared_relic(&mut self, rarity: Rarity<V>) -> V::Relic {
-        let mut relic = self.shared_front_at(rarity);
+    pub(super) fn deal_shared_relic(
+        &mut self,
+        seat: sts2_core::SeatIndex,
+        rarity: Rarity<V>,
+    ) -> V::Relic {
+        let mut relic = self.shared_front_at(seat, rarity);
         if relic.is_none() {
-            let mark = (rarity, self.dealt_relics.len(), self.shared_dealt.len());
+            let mark = (
+                rarity,
+                self.players[seat].dealt_relics.len(),
+                self.shared_dealt.len(),
+            );
             Arc::make_mut(&mut self.shared_refills).push(mark);
-            relic = self.shared_front_at(rarity);
+            relic = self.shared_front_at(seat, rarity);
         }
         let mut at = rarity;
         while relic.is_none() {
             at = super::setup::rarity_above::<V>(at)
                 .unwrap_or_else(|| unimplemented!("a shared relic bag with nothing left"));
-            relic = self.shared_front_at(at);
+            relic = self.shared_front_at(seat, at);
         }
         let relic = relic.expect("the walk stops on a relic");
         Arc::make_mut(&mut self.shared_dealt).push(relic);
@@ -2335,7 +2415,7 @@ impl<V: Rules> State<V> {
 
     /// The first relic the shared bag holds at `rarity` alone, as its deque
     /// stands since its last refill, if it had one.
-    fn shared_front_at(&self, rarity: Rarity<V>) -> Option<V::Relic> {
+    fn shared_front_at(&self, seat: sts2_core::SeatIndex, rarity: Rarity<V>) -> Option<V::Relic> {
         let floor = num_traits::cast(self.floor).expect("a floor fits a usize");
         let refill = self
             .shared_refills
@@ -2343,7 +2423,10 @@ impl<V: Rules> State<V> {
             .rev()
             .find(|mark| mark.0 == rarity);
         let (dealt, shared) = refill.map_or((0, 0), |&(_, dealt, shared)| (dealt, shared));
-        let (dealt, shared) = (&self.dealt_relics[dealt..], &self.shared_dealt[shared..]);
+        let (dealt, shared) = (
+            &self.players[seat].dealt_relics[dealt..],
+            &self.shared_dealt[shared..],
+        );
         self.shared
             .opening
             .shared_relics
@@ -2407,7 +2490,7 @@ impl<V: Rules> State<V> {
         if self.players[seat].hp == num_traits::zero() {
             return match self.carry_out(seat, rest) {
                 None => Decided::Resolved,
-                Some(asked) => self.park(asked),
+                Some(asked) => self.park(seat, asked),
             };
         }
         let stream = sts2_core::Stream::Player(V::PlayerRngType::REWARDS);
@@ -2415,14 +2498,17 @@ impl<V: Rules> State<V> {
         offered.extend(self.extra_offers(seat, extras));
         self.modify_rewards(seat, &mut offered, None);
         crate::reward::sort(&mut offered);
-        self.park(Asked {
-            pickup: Pickup::Rewards {
-                offered,
-                skippable: true,
+        self.park(
+            seat,
+            Asked {
+                pickup: Pickup::Rewards {
+                    offered,
+                    skippable: true,
+                },
+                rest,
+                under: None,
             },
-            rest,
-            under: None,
-        })
+        )
     }
 
     /// `CurrentActIndex >= Acts.Count - 1`: whether the run stands in its
@@ -2471,7 +2557,7 @@ impl<V: Rules> State<V> {
                 .collect();
             return Ok(match self.carry_out(seat, effects) {
                 None => Decided::Resolved,
-                Some(asked) => self.park(asked),
+                Some(asked) => self.park(seat, asked),
             });
         }
         let next = self.act + 1;
@@ -2506,10 +2592,10 @@ impl<V: Rules> State<V> {
 
     /// `Owner.PlayerCombatState?.TurnNumber`: the fight's while one runs, and
     /// otherwise the last one's.
-    fn player_turn(&self) -> Option<V::Count> {
+    fn player_turn(&self, seat: sts2_core::SeatIndex) -> Option<V::Count> {
         match &self.phase {
             Phase::Combat(live) => Some(live.turn),
-            _ => self.last_turn,
+            _ => self.players[seat].last_turn,
         }
     }
 
@@ -2565,7 +2651,7 @@ impl<V: Rules> State<V> {
         // where it was dealt already, since a refilled shared bag holds it
         // again until it is obtained.
         if !relic.stackable() {
-            Arc::make_mut(&mut self.dealt_relics).push(relic);
+            Arc::make_mut(&mut self.players[seat].dealt_relics).push(relic);
         }
         let mut held = HeldRelic {
             wax,
@@ -2589,12 +2675,13 @@ impl<V: Rules> State<V> {
         // `AddRelicInternal` raises `RelicObtained` before `AfterObtained`.
         // The card rewards that never left it hear it first, in the order
         // they were made.
-        if !self.unheld_card_rewards.is_empty() {
-            let mut unheld = std::mem::take(Arc::make_mut(&mut self.unheld_card_rewards));
+        if !self.players[seat].unheld_card_rewards.is_empty() {
+            let mut unheld =
+                std::mem::take(Arc::make_mut(&mut self.players[seat].unheld_card_rewards));
             self.reward_options_on_obtained(seat, slot, &mut unheld);
-            *Arc::make_mut(&mut self.unheld_card_rewards) = unheld;
+            *Arc::make_mut(&mut self.players[seat].unheld_card_rewards) = unheld;
         }
-        let (character, act, turn) = (self.character(seat), self.act, self.player_turn());
+        let (character, act, turn) = (self.character(seat), self.act, self.player_turn(seat));
         let effects =
             crate::combat::obtained::<V>(self.belts[seat].state_beside(slot), character, act, turn);
         self.carry_out(seat, effects)
@@ -2795,9 +2882,11 @@ impl<V: Rules> State<V> {
                     let relic = match effect {
                         HookEffect::ObtainRelic(relic) => relic,
                         HookEffect::ObtainNextRelic(pull) => {
-                            let rarity =
-                                pulled_rarity(pull, self.streams.player(V::PlayerRngType::REWARDS));
-                            self.pull_relic_as(pull, rarity, self.floor)
+                            let rarity = pulled_rarity(
+                                pull,
+                                self.streams.player(seat, V::PlayerRngType::REWARDS),
+                            );
+                            self.pull_relic_as(seat, pull, rarity, self.floor)
                         }
                         _ => unreachable!("matched above"),
                     };
@@ -2848,7 +2937,7 @@ impl<V: Rules> State<V> {
                     );
                     let drawn = crate::reward::card::regular::<V, _>(
                         self.ascension(),
-                        self.streams.player(V::PlayerRngType::REWARDS),
+                        self.streams.player(seat, V::PlayerRngType::REWARDS),
                         sts2_core::Drafted {
                             common: &common,
                             uncommon: &uncommon,
@@ -2918,7 +3007,7 @@ impl<V: Rules> State<V> {
                     };
                     self.belts[seat].replace(slot, HeldRelic::new(to));
                     let (character, act, turn) =
-                        (self.character(seat), self.act, self.player_turn());
+                        (self.character(seat), self.act, self.player_turn(seat));
                     let effects = crate::combat::obtained::<V>(
                         self.belts[seat].state_beside(slot),
                         character,
@@ -2946,7 +3035,7 @@ impl<V: Rules> State<V> {
                         .map_or(fallback, |&(_, to)| to);
                     self.belts[seat].replace(slot, HeldRelic::new(upgraded));
                     let (character, act, turn) =
-                        (self.character(seat), self.act, self.player_turn());
+                        (self.character(seat), self.act, self.player_turn(seat));
                     let effects = crate::combat::obtained::<V>(
                         self.belts[seat].state_beside(slot),
                         character,
@@ -2968,7 +3057,7 @@ impl<V: Rules> State<V> {
                     )
                     .expect("a draw has somewhere to land");
                     let _drawn =
-                        stream_of(&mut self.phase, &mut self.streams, stream).next_int(bound);
+                        stream_of(seat, &mut self.phase, &mut self.streams, stream).next_int(bound);
                     continue;
                 }
                 HookEffect::RemoveRelic(relic) => {
@@ -3056,7 +3145,7 @@ impl<V: Rules> State<V> {
                     use sts2_core::rng::GameRng as _;
 
                     let upgradable: Vec<usize> = self.upgradable(seat).map(|(at, _)| at).collect();
-                    let rng = stream_of(&mut self.phase, &mut self.streams, stream);
+                    let rng = stream_of(seat, &mut self.phase, &mut self.streams, stream);
                     if let Ok(&at) = rng.choose(&upgradable) {
                         self.act_on_deck(seat, sts2_core::DeckAct::Upgrade, &[at]);
                     }
@@ -3074,7 +3163,7 @@ impl<V: Rules> State<V> {
                         .filter(|(_, held)| held.ident.upgrade > 0)
                         .map(|(at, _)| at)
                         .collect();
-                    let rng = stream_of(&mut self.phase, &mut self.streams, stream);
+                    let rng = stream_of(seat, &mut self.phase, &mut self.streams, stream);
                     if let Ok(&at) = rng.choose(&upgraded) {
                         self.players[seat].deck_mut()[at].ident.upgrade = 0;
                     }
@@ -3130,7 +3219,7 @@ impl<V: Rules> State<V> {
                         .filter(|(_, held)| V::can_enchant(enchantment, &held.ident))
                         .map(|(at, _)| at)
                         .collect();
-                    stream_of(&mut self.phase, &mut self.streams, stream)
+                    stream_of(seat, &mut self.phase, &mut self.streams, stream)
                         .unstable_shuffle(&mut taken);
                     taken.truncate(count);
                     let act = sts2_core::DeckAct::Enchant {
@@ -3173,7 +3262,7 @@ impl<V: Rules> State<V> {
                     let places: Vec<usize> = (0..count).collect();
                     let Ok(&at) = self
                         .streams
-                        .player(V::PlayerRngType::REWARDS)
+                        .player(seat, V::PlayerRngType::REWARDS)
                         .choose(&places)
                     else {
                         continue;
@@ -3267,7 +3356,7 @@ impl<V: Rules> State<V> {
                 }
                 // `RelicGrabBag.Remove`, which counts the relic as dealt.
                 HookEffect::RemoveFromRelicBags(relic) => {
-                    Arc::make_mut(&mut self.dealt_relics).push(relic);
+                    Arc::make_mut(&mut self.players[seat].dealt_relics).push(relic);
                     continue;
                 }
                 HookEffect::OfferRewards(_) if self.players[seat].hp == num_traits::zero() => {
@@ -3299,7 +3388,7 @@ impl<V: Rules> State<V> {
                         .filter(|&relic| relic != except && V::allowed_at_neow(relic, 1))
                         .collect();
                     self.streams
-                        .player(V::PlayerRngType::REWARDS)
+                        .player(seat, V::PlayerRngType::REWARDS)
                         .unstable_shuffle(&mut relics);
                     Pickup::Rewards {
                         offered: relics
@@ -3427,7 +3516,7 @@ impl<V: Rules> State<V> {
                         self.card_reward_unheard();
                         let mut drawn: Vec<V::Card> = Vec::with_capacity(per_rarity);
                         for _ in 0..per_rarity {
-                            let card = self.uniform_card_of(pool, rarity, &drawn);
+                            let card = self.uniform_card_of(seat, pool, rarity, &drawn);
                             drawn.push(card);
                         }
                         let mut made: Vec<_> = drawn.into_iter().map(CardIdent::new).collect();
@@ -3454,7 +3543,7 @@ impl<V: Rules> State<V> {
                             let character = self.character(seat);
                             crate::reward::card::regular::<V, _>(
                                 self.ascension(),
-                                self.streams.player(V::PlayerRngType::REWARDS),
+                                self.streams.player(seat, V::PlayerRngType::REWARDS),
                                 V::reward_cards(character),
                                 count,
                                 None,
@@ -3465,8 +3554,8 @@ impl<V: Rules> State<V> {
                             let character = self.character(seat);
                             let ascension = self.ascension();
                             crate::reward::card::encounter::<V, _>(
-                                self.streams.player(V::PlayerRngType::REWARDS),
-                                &mut self.odds,
+                                self.streams.player(seat, V::PlayerRngType::REWARDS),
+                                &mut self.players[seat].odds,
                                 ascension,
                                 V::reward_cards(character),
                                 count,
@@ -3484,7 +3573,7 @@ impl<V: Rules> State<V> {
                     let act = self.act();
                     let mut offered = crate::reward::card::regular::<V, _>(
                         self.ascension(),
-                        self.streams.player(V::PlayerRngType::REWARDS),
+                        self.streams.player(seat, V::PlayerRngType::REWARDS),
                         V::colorless_cards(),
                         count,
                         Some(act),
@@ -3933,7 +4022,7 @@ impl<V: Rules> State<V> {
         // set fills anything in.
         let mut potions = SmallVec::<[V::Potion; 4]>::new();
         for reward in rewards {
-            let rng = stream_of(&mut self.phase, &mut self.streams, stream);
+            let rng = stream_of(seat, &mut self.phase, &mut self.streams, stream);
             let pool = match *reward {
                 CustomReward::PotionOf(rarity) => V::reward_potions(character).at(rarity),
                 CustomReward::UnlockedPotion => V::unlocked_potions(character),
@@ -3953,7 +4042,7 @@ impl<V: Rules> State<V> {
                 CustomReward::Relic(rarity) => Some(rarity),
                 _ => None,
             })
-            .map(|rarity| (self.pull_relic(rarity), rarity))
+            .map(|rarity| (self.pull_relic(seat, rarity), rarity))
             .collect::<SmallVec<[(V::Relic, Rarity<V>); 4]>>()
             .into_iter();
         // The pools a character's card reward draws from, which no draw
@@ -3977,7 +4066,7 @@ impl<V: Rules> State<V> {
         let act = self.act();
         let mut offered: Vec<Offer<V>> = Vec::with_capacity(rewards.len());
         for reward in rewards {
-            let rng = stream_of(&mut self.phase, &mut self.streams, stream);
+            let rng = stream_of(seat, &mut self.phase, &mut self.streams, stream);
             offered.push(match *reward {
                 CustomReward::Relic(_) => {
                     let (relic, rarity) = relics.next().expect("each relic reward was pulled");
@@ -3991,7 +4080,7 @@ impl<V: Rules> State<V> {
                 CustomReward::RolledRelic | CustomReward::WaxRelic => {
                     let rarity = crate::reward::relic_rarity::<V, _>(rng);
                     Offer::Relic {
-                        relic: self.pull_relic(rarity),
+                        relic: self.pull_relic(seat, rarity),
                         rarity: <_ as sts2_core::RarityKinds>::UNDRAFTED,
                         wax: matches!(reward, CustomReward::WaxRelic),
                         taken: false,
@@ -4019,7 +4108,7 @@ impl<V: Rules> State<V> {
                 },
                 CustomReward::MonsterRoomCards => crate::reward::combat::card_reward::<V, _>(
                     rng,
-                    &mut self.odds,
+                    &mut self.players[seat].odds,
                     ascension,
                     pool.as_ref().expect("a monster room's reward has its pool"),
                     act,
@@ -4077,7 +4166,7 @@ impl<V: Rules> State<V> {
             } => Some(self.cards_of(seat, pool.unwrap_or(character), rarity)),
             _ => None,
         };
-        let rng = stream_of(&mut self.phase, &mut self.streams, stream);
+        let rng = stream_of(seat, &mut self.phase, &mut self.streams, stream);
         match reward {
             CustomReward::CharacterCards {
                 count,
@@ -4216,7 +4305,7 @@ impl<V: Rules> State<V> {
                                 continue;
                             }
                         };
-                        Arc::make_mut(&mut self.unheld_card_rewards).push(unheld);
+                        Arc::make_mut(&mut self.players[seat].unheld_card_rewards).push(unheld);
                     }
                 }
                 effect => unimplemented!("a listener modifying rewards late with {effect:?}"),
@@ -4227,10 +4316,10 @@ impl<V: Rules> State<V> {
                 Filling::Filled(offer) => offer,
                 // `RelicReward.Populate` of no set rarity.
                 Filling::Relic => {
-                    let (rng, _) = self.rewarding();
+                    let (rng, _) = self.rewarding(seat);
                     let rarity = crate::reward::relic_rarity::<V, _>(rng);
                     Offer::Relic {
-                        relic: self.pull_relic(rarity),
+                        relic: self.pull_relic(seat, rarity),
                         rarity: <_ as sts2_core::RarityKinds>::UNDRAFTED,
                         wax: false,
                         taken: false,
@@ -4245,7 +4334,7 @@ impl<V: Rules> State<V> {
                     // encounter, with no `IsFromCombat`.
                     let added = self.card_reward_added(false);
                     let pool = self.reward_pool(seat, room == Room::Elite);
-                    let (rng, odds) = self.rewarding();
+                    let (rng, odds) = self.rewarding(seat);
                     let Offer::Card { mut cards, .. } = crate::reward::combat::card_reward::<V, _>(
                         rng, odds, ascension, &pool, act, room, &added,
                     ) else {
@@ -4876,7 +4965,7 @@ impl<V: Rules> State<V> {
                 // `CardFactory.CreateForReward` of one card, with its hooks.
                 self.card_reward_unheard();
                 let (act, ascension) = (self.act(), self.ascension());
-                let rng = self.streams.player(V::PlayerRngType::REWARDS);
+                let rng = self.streams.player(seat, V::PlayerRngType::REWARDS);
                 let [card] = crate::reward::card::regular::<V, _>(
                     ascension,
                     rng,
@@ -4908,7 +4997,7 @@ impl<V: Rules> State<V> {
         use sts2_core::rng::{Bound, GameRng as _};
 
         let pool = V::reward_cards(self.character(seat));
-        let rng = self.streams.player(V::PlayerRngType::REWARDS);
+        let rng = self.streams.player(seat, V::PlayerRngType::REWARDS);
         let mut used: Vec<V::Card> = Vec::new();
         let mut bundles = Vec::with_capacity(count);
         for _ in 0..count {
@@ -4953,12 +5042,13 @@ impl<V: Rules> State<V> {
         rarity: sts2_core::RewardRarity,
         drawn: &[V::Card],
     ) -> V::Card {
-        self.uniform_card_of(self.character(seat), rarity, drawn)
+        self.uniform_card_of(seat, self.character(seat), rarity, drawn)
     }
 
     /// [`State::uniform_card`] over another character's pool.
     fn uniform_card_of(
         &mut self,
+        seat: sts2_core::SeatIndex,
         character: V::Character,
         rarity: sts2_core::RewardRarity,
         drawn: &[V::Card],
@@ -4973,7 +5063,7 @@ impl<V: Rules> State<V> {
             .collect();
         *self
             .streams
-            .player(V::PlayerRngType::REWARDS)
+            .player(seat, V::PlayerRngType::REWARDS)
             .choose(&left)
             .unwrap_or_else(|_| unimplemented!("a reward pool with no {rarity:?} card left"))
     }
@@ -5516,19 +5606,19 @@ impl<V: Rules> State<V> {
         V::set_up_event(
             &mut state,
             &self.seen_by(seat),
-            streams.player(V::PlayerRngType::REWARDS),
+            streams.player(seat, V::PlayerRngType::REWARDS),
         );
         let pulled: SmallVec<[V::Relic; 4]> = V::event_relics_pulled(&state)
             .iter()
             .map(|&pull| {
-                let rarity = pulled_rarity(pull, streams.player(V::PlayerRngType::REWARDS));
-                self.pull_relic_as(pull, rarity, floor)
+                let rarity = pulled_rarity(pull, streams.player(seat, V::PlayerRngType::REWARDS));
+                self.pull_relic_as(seat, pull, rarity, floor)
             })
             .collect();
         if !pulled.is_empty() {
             V::hand_event_pulled_relics(&mut state, &pulled);
         }
-        V::stock_event(&mut state, streams.player(V::PlayerRngType::SHOPS));
+        V::stock_event(&mut state, streams.player(seat, V::PlayerRngType::SHOPS));
         Ok((state, layout))
     }
 
@@ -5597,7 +5687,12 @@ impl<V: Rules> State<V> {
     /// Enter a treasure room: `AfterRoomEntered`, then `BeginRelicPicking`.
     /// That rolls the chest's relic off its own stream with `RollRarity`,
     /// where `ShouldGenerateTreasure` lets it.
-    pub(super) fn enter_treasure(&mut self, at: Location, streams: Streams<V>) {
+    pub(super) fn enter_treasure(
+        &mut self,
+        seat: sts2_core::SeatIndex,
+        at: Location,
+        streams: Streams<V>,
+    ) {
         self.streams = streams;
         self.enter(
             at,
@@ -5613,7 +5708,7 @@ impl<V: Rules> State<V> {
             // `SharedRelicGrabBag.PullFromFront`, which leaves the player's
             // bag holding it. Taking it from the chest obtains it, which
             // takes it out of both.
-            self.deal_shared_relic(rarity)
+            self.deal_shared_relic(seat, rarity)
         });
         if let Phase::Treasure {
             relic: chest,
@@ -5641,7 +5736,7 @@ impl<V: Rules> State<V> {
             .expect("the chest's gold is a span");
         let rolled = self
             .streams
-            .player(V::PlayerRngType::REWARDS)
+            .player(seat, V::PlayerRngType::REWARDS)
             .next_int_range(span);
         let mut gold = f64::from(rolled);
         if self
@@ -5815,7 +5910,7 @@ impl<V: Rules> State<V> {
         };
         let effects = V::buy_in_event(state, index);
         match self.carry_out(seat, effects) {
-            Some(next) => self.park(next),
+            Some(next) => self.park(seat, next),
             None => Decided::Resolved,
         }
     }
@@ -5913,11 +6008,11 @@ impl<V: Rules> State<V> {
             true => num_traits::zero(),
             false => self.merchant_price(
                 seat,
-                removal_cost::<V>(self.removals_used, self.ascension()),
+                removal_cost::<V>(self.players[seat].removals_used, self.ascension()),
             ),
         };
         self.players[seat].gold = self.players[seat].gold - spent;
-        self.removals_used += 1;
+        self.players[seat].removals_used += 1;
         // `NMerchantCardRemoval.OnCardRemovalUsed` calls `SetUsed`, and
         // `IsStocked` is `!Used`, so this merchant sells no second removal.
         // The next merchant reads the raised count.
@@ -6024,7 +6119,7 @@ impl<V: Rules> State<V> {
         };
         let asked = self
             .phase
-            .asking_mut()
+            .asking_mut(seat)
             .and_then(Option::take)
             .expect("the popup was asking when this began");
         if !asked.rest.is_empty() || asked.under.is_some() {
@@ -6069,7 +6164,7 @@ impl<V: Rules> State<V> {
             return Ok(Decided::Resolved);
         }
         if room == <V::RoomType as sts2_core::RoomKinds>::TREASURE {
-            self.enter_treasure(Location::NoLocation, self.streams);
+            self.enter_treasure(seat, Location::NoLocation, self.streams);
             return Ok(Decided::Resolved);
         }
         if room != <V::RoomType as sts2_core::RoomKinds>::SHOP {
@@ -6110,24 +6205,24 @@ impl<V: Rules> State<V> {
     pub(super) fn stocked_shop(&mut self, seat: sts2_core::SeatIndex) -> Phase<V> {
         let added = self.merchant_card_pool();
         let mut streams = self.streams;
-        let mut dealt = self.dealt_relics.to_vec();
+        let mut dealt = self.players[seat].dealt_relics.to_vec();
         let entries = super::shop::Merchant::<V> {
             streams: &mut streams,
-            player_relics: &self.shared.opening.player_relics,
+            player_relics: &self.shared.opening.player_relics[seat.at()],
             dealt_relics: &mut dealt,
             // Stocked as the room is built, which `EnterRoom` does once the
             // room's floor counts.
             floor: num_traits::cast(self.floor + num_traits::one()).expect("a floor fits a usize"),
             character: self.players[seat].character,
             added,
-            offset: self.odds.rarity,
+            offset: self.players[seat].odds.rarity,
             ascension: self.ascension(),
-            removals_used: self.removals_used,
+            removals_used: self.players[seat].removals_used,
         }
-        .stock();
+        .stock(seat);
 
         self.streams = streams;
-        self.dealt_relics = Arc::new(dealt);
+        self.players[seat].dealt_relics = Arc::new(dealt);
         // `Hook.ModifyMerchantCardCreationResults` over the cards it stocked.
         let entries = entries
             .into_iter()
@@ -6339,8 +6434,8 @@ impl<V: Rules> State<V> {
     }
 
     /// Where each stream stands, which is what a report carries.
-    pub(super) fn positions(&self) -> Positions<V> {
-        self.streams.positions()
+    pub(super) fn positions(&self, seat: sts2_core::SeatIndex) -> Positions<V> {
+        self.streams.positions(seat)
     }
 
     /// Build the fight the run is walking into, and let its relics act.
@@ -6378,6 +6473,9 @@ impl<V: Rules> State<V> {
         roster: &[V::Monster],
         base: bool,
     ) -> Result<CreatedFight<V>, Error> {
+        if self.players.len() > 1 {
+            unimplemented!("a fight of {} players", self.players.len());
+        }
         let standing = self.standing(seat);
         let (raw_seed, character, ascension) =
             (self.raw_seed(), self.character(seat), self.ascension());
@@ -6684,10 +6782,10 @@ impl<V: Rules> State<V> {
             // `RelicCmd.Obtain`, whose pickup asks where the room can park on
             // it, as Neow's can.
             Gift::Relic(relic) => {
-                if self.phase.asking_mut().is_some() {
+                if self.phase.asking_mut(seat).is_some() {
                     return Ok(match self.obtain(seat, *relic) {
                         None => Decided::Resolved,
-                        Some(asked) => self.park(asked),
+                        Some(asked) => self.park(seat, asked),
                     });
                 }
                 self.obtain_here(seat, *relic)
@@ -6760,7 +6858,7 @@ impl<V: Rules> State<V> {
             return Ok(Decided::Resolved);
         }
         if let Phase::RestSite { options, .. } = &self.phase {
-            if self.phase.finished() {
+            if self.phase.finished(seat) {
                 unimplemented!("choosing at a rest site that is spent");
             }
             let option = *options
@@ -6777,7 +6875,7 @@ impl<V: Rules> State<V> {
                         self.rest_option_through();
                         Decided::Resolved
                     }
-                    Some(asked) => self.park(asked),
+                    Some(asked) => self.park(seat, asked),
                 });
             }
             // `RestSiteOption.OnSelect` for an option the run carries out,
@@ -6799,7 +6897,7 @@ impl<V: Rules> State<V> {
                         self.rest_option_through();
                         Decided::Resolved
                     }
-                    Some(asked) => self.park(asked),
+                    Some(asked) => self.park(seat, asked),
                 });
             }
             if option != <V::RestSiteOption as sts2_core::RestKinds<V>>::SMITH {
@@ -6870,18 +6968,18 @@ impl<V: Rules> State<V> {
             }
             return Ok(match self.carry_out(seat, effects) {
                 None => Decided::Resolved,
-                Some(asked) => self.park(asked),
+                Some(asked) => self.park(seat, asked),
             });
         }
-        let Phase::Neow {
+        let Phase::Neow(seats) = &mut self.phase else {
+            unimplemented!("choosing an option inside a fight");
+        };
+        let NeowSeat {
             options,
             chosen,
             modifier_options,
             ..
-        } = &mut self.phase
-        else {
-            unimplemented!("choosing an option inside a fight");
-        };
+        } = &mut seats[seat];
         // `OnModifierOptionSelected`: the modifier's option, then the next.
         if !modifier_options.is_empty() {
             if index != 0 {
@@ -6898,7 +6996,7 @@ impl<V: Rules> State<V> {
         // asks, which Neow's screen parks on.
         Ok(match self.obtain(seat, option) {
             None => Decided::Resolved,
-            Some(asked) => self.park(asked),
+            Some(asked) => self.park(seat, asked),
         })
     }
 
@@ -6920,7 +7018,7 @@ impl<V: Rules> State<V> {
         );
         match self.carry_out(seat, asked) {
             None => Decided::Resolved,
-            Some(asked) => self.park(asked),
+            Some(asked) => self.park(seat, asked),
         }
     }
 
@@ -6950,7 +7048,7 @@ impl<V: Rules> State<V> {
             self.card_reward_unheard();
             let [card] = crate::reward::card::uniform_rolled::<V, _>(
                 self.ascension(),
-                self.streams.player(V::PlayerRngType::REWARDS),
+                self.streams.player(seat, V::PlayerRngType::REWARDS),
                 &cards,
                 1,
                 None,
@@ -6967,7 +7065,7 @@ impl<V: Rules> State<V> {
     /// until every reward is taken or the rest are skipped, and what asked
     /// for it then goes on.
     fn take_parked(&mut self, seat: sts2_core::SeatIndex, answer: &Answer) -> Decided {
-        let Some(asking) = self.phase.asking_mut() else {
+        let Some(asking) = self.phase.asking_mut(seat) else {
             unreachable!("the room was parked when this began");
         };
         let Some(Asked {
@@ -6990,7 +7088,7 @@ impl<V: Rules> State<V> {
         // A relic whose pickup asks stands the screen still under its question.
         if let Some(mut asked) = self.take_reward(seat, &mut offered, answer) {
             asked.under = Some(Box::new(screen(offered)));
-            return self.park(asked);
+            return self.park(seat, asked);
         }
         let screen = screen(offered);
         self.taken_up(seat, screen)
@@ -7009,11 +7107,14 @@ impl<V: Rules> State<V> {
         if let Pickup::Rewards { offered, skippable } = pickup
             && offered.iter().any(|offer| !offer.taken())
         {
-            return self.park(Asked {
-                pickup: Pickup::Rewards { offered, skippable },
-                rest,
-                under,
-            });
+            return self.park(
+                seat,
+                Asked {
+                    pickup: Pickup::Rewards { offered, skippable },
+                    rest,
+                    under,
+                },
+            );
         }
         self.done_asking(seat, rest, under)
     }
@@ -7027,7 +7128,7 @@ impl<V: Rules> State<V> {
     ) -> Decided {
         if let Some(mut next) = self.carry_out(seat, rest) {
             next.under = under;
-            return self.park(next);
+            return self.park(seat, next);
         }
         if let Some(under) = under {
             return self.taken_up(seat, *under);
@@ -7062,11 +7163,11 @@ impl<V: Rules> State<V> {
     /// # Panics
     ///
     /// A clone, which only a merchant's shelf asks for.
-    fn park(&mut self, asked: Asked<V>) -> Decided {
+    fn park(&mut self, seat: sts2_core::SeatIndex, asked: Asked<V>) -> Decided {
         if let Pickup::CloneDeckCard { .. } = asked.pickup {
             unimplemented!("{:?} asked for outside a shop", asked.pickup);
         }
-        let Some(asking) = self.phase.asking_mut() else {
+        let Some(asking) = self.phase.asking_mut(seat) else {
             unreachable!("only Neow and an event park on what they ask")
         };
         *asking = Some(asked);
@@ -7106,7 +7207,7 @@ impl<V: Rules> State<V> {
             max: u32::try_from(max).expect("a selection counts in a few cards"),
         };
         // Each card checked as a pick would be, after the ones already held.
-        let mut picked = self.picked;
+        let mut picked = self.players[seat].picked;
         let more: &[usize] = match answer {
             Answer::Pick(at) => &[usize::from(*at)],
             Answer::Cards(cards) => &cards.iter().collect::<Vec<_>>(),
@@ -7129,10 +7230,10 @@ impl<V: Rules> State<V> {
         }
         match answer {
             Answer::Pick(_) => {
-                self.picked = picked;
+                self.players[seat].picked = picked;
                 Ok(Ok(Decided::Resolved))
             }
-            Answer::Undo => match self.picked.pop() {
+            Answer::Undo => match self.players[seat].picked.pop() {
                 Some(_) => Ok(Ok(Decided::Resolved)),
                 None => refused(Reason::NothingPicked),
             },
@@ -7140,7 +7241,7 @@ impl<V: Rules> State<V> {
                 if picked.len() < min {
                     return refused(wrong_count(picked.len()));
                 }
-                self.picked = sts2_core::Picks::none();
+                self.players[seat].picked = sts2_core::Picks::none();
                 self.answer(seat, &Answer::Cards(picked)).map(Ok)
             }
             _ => unimplemented!("{answer:?} to a select-cards question"),
@@ -7173,25 +7274,25 @@ impl<V: Rules> State<V> {
         if let Some(Asked {
             pickup: Pickup::Rewards { .. },
             ..
-        }) = self.phase.asking()
+        }) = self.phase.asking(seat)
         {
             return Ok(self.take_parked(seat, answer));
         }
         if let Some(Asked {
             pickup: Pickup::Event,
             ..
-        }) = self.phase.asking()
+        }) = self.phase.asking(seat)
         {
             return Ok(self.answer_event(seat, answer));
         }
         if let Some(Asked {
             pickup: Pickup::ConfirmAbandon,
             ..
-        }) = self.phase.asking()
+        }) = self.phase.asking(seat)
         {
             return Ok(self.confirmed_abandon(seat, answer));
         }
-        let Some(asking) = self.phase.asking_mut() else {
+        let Some(asking) = self.phase.asking_mut(seat) else {
             unimplemented!("answering a question inside a fight");
         };
         let Answer::Cards(picks) = answer else {
@@ -7277,7 +7378,7 @@ impl<V: Rules> State<V> {
         let effects = V::answer_event(state, answer);
         let then = (effects.into_iter().map(Then::Effect)).chain(asked.rest);
         match self.carry_out(seat, then) {
-            Some(next) => self.park(next),
+            Some(next) => self.park(seat, next),
             None => Decided::Resolved,
         }
     }
@@ -7474,7 +7575,7 @@ impl<V: Rules> State<V> {
                             self.reward_pool(seat, room == crate::reward::combat::Room::Elite);
                         let (ascension, act) = (self.ascension(), self.act());
                         let added = self.card_reward_added(from_combat);
-                        let (rng, odds) = self.rewarding();
+                        let (rng, odds) = self.rewarding(seat);
                         let Offer::Card { cards, .. } = crate::reward::combat::card_reward::<V, _>(
                             rng, odds, ascension, &pool, act, room, &added,
                         ) else {
@@ -7605,7 +7706,7 @@ impl<V: Rules> State<V> {
         if let Some((min, max, offered)) = self.selecting(seat)
             && (alive || self.in_combat())
         {
-            crate::legal::picks(min, max, offered, &self.picked, moves);
+            crate::legal::picks(min, max, offered, &self.players[seat].picked, moves);
             if self.cancelable() {
                 moves.push(Decision::Answer(Answer::Cancel));
             }
@@ -7628,7 +7729,7 @@ impl<V: Rules> State<V> {
         if !alive {
             return;
         }
-        if self.answers(moves) {
+        if self.answers(seat, moves) {
             if self.pending(seat) == Some(sts2_core::QuestionKind::Rewards) {
                 self.discards(seat, alive, moves);
             }
@@ -7682,13 +7783,16 @@ impl<V: Rules> State<V> {
     /// its relic, an event until it finishes, and a fight for its rewards.
     fn travel_enabled(&self, seat: sts2_core::SeatIndex) -> bool {
         // The map stays shut until the event under the fight is resumed.
-        if self.resuming.is_some() || !self.standing(seat).alive || self.phase.asking().is_some() {
+        if self.resuming.is_some()
+            || !self.standing(seat).alive
+            || self.phase.asking(seat).is_some()
+        {
             return false;
         }
         match &self.phase {
             Phase::Map => true,
             Phase::Shop { unfinished, .. } => unfinished.is_none(),
-            Phase::Neow { .. } | Phase::Treasure { .. } => self.phase.finished(),
+            Phase::Neow { .. } | Phase::Treasure { .. } => self.phase.finished(seat),
             // `NFakeMerchant` turns it on as it opens, like a merchant's room.
             Phase::Event { finished, .. } => {
                 *finished || matches!(self.event_room(seat), Some(Room::Shop { .. }))
@@ -7713,16 +7817,16 @@ impl<V: Rules> State<V> {
     ///
     /// Each is the question [`State::report`] asks in that phase, read for its
     /// sizes and its rewards alone.
-    fn answers(&self, moves: &mut Legal<V>) -> bool {
+    fn answers(&self, seat: sts2_core::SeatIndex, moves: &mut Legal<V>) -> bool {
         // `legal` answered a selection already, with its picks.
         match &self.phase {
             Phase::Neow { .. }
             | Phase::Event { .. }
             | Phase::RestSite { .. }
             | Phase::Shop { .. }
-                if self.phase.asking().is_some() =>
+                if self.phase.asking(seat).is_some() =>
             {
-                let Some(asked) = self.phase.asking() else {
+                let Some(asked) = self.phase.asking(seat) else {
                     unreachable!("the guard found it parked")
                 };
                 match &asked.pickup {
@@ -7766,9 +7870,9 @@ impl<V: Rules> State<V> {
             | Phase::Event { .. }
             | Phase::RestSite { .. }
             | Phase::Shop { .. }
-                if self.phase.asking().is_some() =>
+                if self.phase.asking(seat).is_some() =>
             {
-                match &self.phase.asking()?.pickup {
+                match &self.phase.asking(seat)?.pickup {
                     Pickup::Cards { offered, min, max } => Some((*min, *max, offered.len())),
                     Pickup::FromDeck { act, min, count } => {
                         Some((*min, *count, self.offered(seat, *act).len()))
@@ -7805,24 +7909,20 @@ impl<V: Rules> State<V> {
     /// chest answered, and an event option chosen or locked. Stock can be gone,
     /// cost more than the purse, or be a potion for a full belt.
     fn room_moves(&self, seat: sts2_core::SeatIndex, moves: &mut Legal<V>) {
-        let finished = self.phase.finished();
+        let finished = self.phase.finished(seat);
         match &self.phase {
-            Phase::Neow {
-                modifier_options, ..
-            } if !finished && !modifier_options.is_empty() => {
-                if self.phase.asking().is_none() {
+            Phase::Neow(seats) if !finished && !seats[seat].modifier_options.is_empty() => {
+                if self.phase.asking(seat).is_none() {
                     moves.push(Decision::ChooseOption {
                         index: 0,
                         target: None,
                     });
                 }
             }
-            Phase::Neow {
-                options, chosen, ..
-            } if !finished => moves.extend(
-                (0..options.len())
+            Phase::Neow(seats) if !finished => moves.extend(
+                (0..seats[seat].options.len())
                     .map(option_index)
-                    .filter(|&index| *chosen != nonmax::NonMaxU8::new(index))
+                    .filter(|&index| seats[seat].chosen != nonmax::NonMaxU8::new(index))
                     .map(|index| Decision::ChooseOption {
                         index,
                         target: None,
@@ -8111,21 +8211,21 @@ impl<V: Rules> State<V> {
         let stock = entries[at].stock;
         let added = self.merchant_card_pool();
         let mut streams = self.streams;
-        let mut dealt = self.dealt_relics.to_vec();
+        let mut dealt = self.players[seat].dealt_relics.to_vec();
         let (stock, cost) = super::shop::Merchant::<V> {
             streams: &mut streams,
-            player_relics: &self.shared.opening.player_relics,
+            player_relics: &self.shared.opening.player_relics[seat.at()],
             dealt_relics: &mut dealt,
             floor: num_traits::cast(self.floor).expect("a floor fits a usize"),
             character: self.players[seat].character,
             added,
-            offset: self.odds.rarity,
+            offset: self.players[seat].odds.rarity,
             ascension: self.ascension(),
-            removals_used: self.removals_used,
+            removals_used: self.players[seat].removals_used,
         }
-        .restock(usize::from(index), stock, &on_shelves);
+        .restock(seat, usize::from(index), stock, &on_shelves);
         self.streams = streams;
-        self.dealt_relics = Arc::new(dealt);
+        self.players[seat].dealt_relics = Arc::new(dealt);
         // `Hook.ModifyMerchantCardCreationResults` over the card it stocked.
         let stock = match stock {
             sts2_core::Stock::Card(Some(mut on_sale)) => {
@@ -8216,14 +8316,14 @@ impl<V: Rules> State<V> {
                     points: self.map.shared(),
                     proceed: self.can_proceed(),
                 },
-                rng: self.positions(),
+                rng: self.positions(seat),
                 room: self.room(seat),
                 combat: self.fight_report(seat),
                 moves: self.legal(seat).into_vec(),
             },
             asking: self.asking(seat).map(|mut question| {
                 if let Question::SelectCards { picked, .. } = &mut question {
-                    *picked = self.picked;
+                    *picked = self.players[seat].picked;
                 }
                 question
             }),
@@ -8264,9 +8364,12 @@ impl<V: Rules> State<V> {
         &self,
         seat: sts2_core::SeatIndex,
     ) -> impl ExactSizeIterator<Item = Carried<V>> + '_ {
-        self.belts[seat].iter().map(|held| Carried {
+        self.belts[seat].iter().map(move |held| Carried {
             relic: held.relic,
-            amount: held.amount(matches!(self.phase, Phase::Combat(_)), self.player_turn()),
+            amount: held.amount(
+                matches!(self.phase, Phase::Combat(_)),
+                self.player_turn(seat),
+            ),
             title: None,
             text: None,
         })
@@ -8312,7 +8415,7 @@ impl<V: Rules> State<V> {
             }
             | Phase::Shop {
                 asking: Some(_), ..
-            } => self.phase.asking().map(|asking| {
+            } => self.phase.asking(seat).map(|asking| {
                 let (min, max, cards): (u32, u32, Vec<CardIdent<V>>) = match &asking.pickup {
                     Pickup::Rewards { offered, skippable } => {
                         return asked::<V>(offered, *skippable);
@@ -8485,14 +8588,15 @@ impl<V: Rules> State<V> {
 
     /// The room the run is standing in, as its report shows it.
     fn room(&self, seat: sts2_core::SeatIndex) -> Option<Room<V>> {
-        let finished = self.phase.finished();
+        let finished = self.phase.finished(seat);
         match &self.phase {
-            Phase::Neow {
-                options: neow_options,
-                chosen: neow_chosen,
-                modifier_options,
-                asking,
-            } => {
+            Phase::Neow(seats) => {
+                let NeowSeat {
+                    options: neow_options,
+                    chosen: neow_chosen,
+                    modifier_options,
+                    asking,
+                } = &seats[seat];
                 // Neow shows the next modifier's option alone. While one
                 // still runs, its option stays up, chosen.
                 let offering: SmallVec<[usize; 4]> = (self.shared.modifiers.iter())
@@ -8647,7 +8751,7 @@ impl<V: Rules> State<V> {
             .filter(|(_, card)| kind.is_none_or(|kind| V::card_kind(card.card) == Some(kind)))
             .map(|(at, _)| at)
             .collect();
-        stream_of(&mut self.phase, &mut self.streams, stream)
+        stream_of(seat, &mut self.phase, &mut self.streams, stream)
             .stable_shuffle_by_key(&mut upgradable, |&at| {
                 (deck[at].ident.card.order(), deck[at].ident.upgrade)
             });
@@ -8725,8 +8829,8 @@ impl<V: Rules> sts2_core::EventView<V> for AtSeat<'_, V> {
     }
 
     fn relics_left(&self) -> bool {
-        self.state.shared.opening.player_relics.has_left(
-            &self.state.dealt_relics,
+        self.state.shared.opening.player_relics[self.seat.at()].has_left(
+            &self.state.players[self.seat].dealt_relics,
             num_traits::cast(self.state.floor).expect("a floor fits a usize"),
         )
     }
@@ -8750,6 +8854,35 @@ impl<V: Rules> Copy for AtSeat<'_, V> {}
 
 impl<V: Rules> State<V> {
     /// The run as `seat` sees it.
+    /// `MapSelectionSynchronizer.PlayerVotedForMapCoord`: `seat`'s vote to
+    /// travel to `to`, in a run of several players.
+    ///
+    /// Once every player has voted, the host draws one of the votes, in seat
+    /// order, off its `map_point_selection` stream. It draws even where the
+    /// votes agree. Then the run travels there.
+    pub(crate) fn vote(&mut self, seat: sts2_core::SeatIndex, to: Coord) -> Result<Decided, Error> {
+        use sts2_core::rng::GameRng as _;
+
+        self.players[seat].vote = Some(to);
+        let votes: Option<SmallVec<[Coord; 4]>> =
+            self.players.iter_mut().map(|player| player.vote).collect();
+        let Some(votes) = votes else {
+            return Ok(Decided::Resolved);
+        };
+        for player in self.players.iter_mut() {
+            player.vote = None;
+        }
+        let chosen = *self
+            .map_votes
+            .choose(&votes)
+            .expect("every player voted somewhere");
+        let host = sts2_core::SeatIndex(0);
+        let moving = self.resolve(host, chosen).unwrap_or_else(|reason| {
+            unreachable!("a voted point the host cannot reach: {reason:?}")
+        });
+        self.travel(host, moving)
+    }
+
     /// How many players the run has.
     pub(crate) fn player_count(&self) -> usize {
         self.players.len()
@@ -8888,6 +9021,7 @@ fn pulled_rarity<V: Rules>(pull: sts2_core::RelicPull<V>, rewards: &mut MegaRng)
 /// Over the two fields rather than the run, so a caller keeps the rest of the
 /// run to read while it draws.
 fn stream_of<'a, V: Rules>(
+    seat: sts2_core::SeatIndex,
     phase: &'a mut Phase<V>,
     streams: &'a mut Streams<V>,
     stream: sts2_core::Stream<V>,
@@ -8895,7 +9029,7 @@ fn stream_of<'a, V: Rules>(
     match (stream, phase) {
         (sts2_core::Stream::Event, Phase::Event { rng, .. }) => rng,
         (sts2_core::Stream::Event, _) => unreachable!("an event's stream outside its room"),
-        (stream, _) => streams.of(stream),
+        (stream, _) => streams.of(seat, stream),
     }
 }
 
@@ -8958,10 +9092,12 @@ mod tests {
     fn opened() -> State<V> {
         State::start(
             &Seed::new("0RACLE1").expect("the fixture's seed is a seed"),
-            Character::Regent,
+            &[sts2_core::Player {
+                character: Character::Regent,
+                wins: 0,
+            }],
             AscensionLevel::None,
             &[],
-            0,
         )
     }
 
@@ -8995,7 +9131,7 @@ mod tests {
             .expect("a fight has the player in it");
         player.hp = 0;
         player.alive = false;
-        run.lost(combat, None);
+        run.lost(SOLO, combat, None);
 
         let seen = run.report(SOLO).observation;
         assert!(!seen.alive, "the player is dead");

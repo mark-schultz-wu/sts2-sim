@@ -162,7 +162,7 @@ fn play<V: WireContentVersion + sts2_content::Build>(cli: Cli) -> Result<String,
     let mut coop = Coop::<V, GameSeat<V>>::begin(hosts, &start)?;
     let mut run = Run::of(&start, Ending::Capped);
     let mut hunt = match hunt {
-        true => match Hunt::begin(&start) {
+        true => match Hunt::begin(&start, homes.clone()) {
             Ok(hunt) => Some(hunt),
             Err(why) => return Ok(format!("panicked 0 as the run began: {why}")),
         },
@@ -196,7 +196,7 @@ fn play<V: WireContentVersion + sts2_content::Build>(cli: Cli) -> Result<String,
         })?;
         if let Some(verdict) = verdict {
             run.ending = Ending::Parted;
-            return finish(&coop, run, out.as_deref(), verdict);
+            return finish(&mut coop, run, out.as_deref(), verdict);
         }
         // First, so the log names the move a failure below comes after.
         if let Turn::Played { seat, decision, .. } = &turn {
@@ -236,7 +236,7 @@ fn play<V: WireContentVersion + sts2_content::Build>(cli: Cli) -> Result<String,
                         "{kind} {step} seat {}: {message}, after seat {}'s {decision:?}",
                         me.0, seat.0
                     );
-                    return finish(&coop, run, out.as_deref(), said);
+                    return finish(&mut coop, run, out.as_deref(), said);
                 }
             }
             Turn::Stalled(_) => {
@@ -279,26 +279,31 @@ fn play<V: WireContentVersion + sts2_content::Build>(cli: Cli) -> Result<String,
                         }
                     }
                 };
-                return finish(&coop, run, out.as_deref(), said);
+                return finish(&mut coop, run, out.as_deref(), said);
             }
         }
     }
-    for seat in coop.seats_mut() {
-        run.digests.push(position(&seat.observe()?.snapshot));
-    }
-    if let Some(out) = &out {
-        write(&coop, run, out)?;
-    }
-    Ok(format!("capped at {steps} steps"))
+    finish(
+        &mut coop,
+        run,
+        out.as_deref(),
+        format!("capped at {steps} steps"),
+    )
 }
 
-/// Writes `run` where `out` says, if it says, and says `said`.
+/// Writes `run` where `out` says, if it says, and says `said`. A run that
+/// stopped before its end takes where each seat stands as its last digests.
 fn finish<V: WireContentVersion>(
-    coop: &Coop<V, GameSeat<V>>,
-    run: Run,
+    coop: &mut Coop<V, GameSeat<V>>,
+    mut run: Run,
     out: Option<&std::path::Path>,
     said: String,
 ) -> Result<String, Error<V>> {
+    if run.digests.len() < run.moves.len() + run.players.len() {
+        for seat in coop.seats_mut() {
+            run.digests.push(position(&seat.observe()?.snapshot));
+        }
+    }
     if let Some(out) = out {
         write(coop, run, out)?;
     }
@@ -313,6 +318,9 @@ fn finish<V: WireContentVersion>(
 /// game's run stops there, as a solo hunt's does.
 struct Hunt<V: sts2_core::Rules> {
     sims: Vec<sts2_sim::SimSeat<V>>,
+    /// Where a parting writes the two snapshots it compared, in full:
+    /// `parted-sim.txt` and `parted-game.txt`.
+    homes: PathBuf,
     /// The move the last comparison was before, which a parting comes after.
     after: String,
 }
@@ -320,7 +328,7 @@ struct Hunt<V: sts2_core::Rules> {
 impl<V: sts2_core::Rules> Hunt<V> {
     /// A simulator seat for each of `start`'s players, or what the simulator
     /// panicked with as it began.
-    fn begin(start: &Start<V>) -> Result<Self, String> {
+    fn begin(start: &Start<V>, homes: PathBuf) -> Result<Self, String> {
         let sims = (0..start.players.len())
             .map(|at| {
                 let me = sts2_core::SeatIndex(u8::try_from(at).expect("at most 256 seats"));
@@ -329,6 +337,7 @@ impl<V: sts2_core::Rules> Hunt<V> {
             .collect::<Result<_, _>>()?;
         Ok(Self {
             sims,
+            homes,
             after: "the start".into(),
         })
     }
@@ -337,7 +346,16 @@ impl<V: sts2_core::Rules> Hunt<V> {
     /// where they agree.
     fn compare(&self, me: sts2_core::SeatIndex, seen: &sts2_core::Snapshot<V>) -> Option<String> {
         let simulated = self.sims[me.at()].observe();
-        (position(&simulated) != position(seen)).then(|| parted(&simulated, seen))
+        if position(&simulated) == position(seen) {
+            return None;
+        }
+        for (name, snapshot) in [("sim", &simulated), ("game", seen)] {
+            let file = self.homes.join(format!("parted-{name}.txt"));
+            if let Err(e) = std::fs::write(&file, format!("{snapshot:#?}\n")) {
+                eprintln!("writing {}: {e}", file.display());
+            }
+        }
+        Some(parted(&simulated, seen))
     }
 
     /// Seat `seat`'s `decision`, on every seat's simulator. A simulator that

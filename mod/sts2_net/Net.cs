@@ -62,7 +62,6 @@ public static class Net
             lobby = new StartRunLobby(GameMode.Standard, host, listener, session.Seats);
             lobby.AddLocalHostPlayer(session.Unlocks, 0);
             lobby.SetSeed(session.Seed);
-            lobby.Act1 = "overgrowth";
             lobby.SetLocalCharacter(session.Character);
             Log.Info($"[net] hosting on {session.Port} for {session.Seats} seats");
             while (lobby.Players.Count < session.Seats)

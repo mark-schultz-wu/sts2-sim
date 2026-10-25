@@ -143,8 +143,7 @@ impl<V: Rules> Construct<V> for Sim<V> {
 ///
 /// # Panics
 ///
-/// A modifier nobody has ported, or a run of several players, which nothing
-/// here starts yet.
+/// A modifier nobody has ported.
 pub(super) fn started<V: Rules>(start: &Start<V>) -> State<V> {
     if let Some(modifier) = start
         .modifiers
@@ -153,13 +152,11 @@ pub(super) fn started<V: Rules>(start: &Start<V>) -> State<V> {
     {
         unimplemented!("a run started with {modifier:?}");
     }
-    let player = start.alone();
     State::start(
         &start.seed,
-        player.character,
+        &start.players,
         start.ascension,
         &start.modifiers,
-        player.wins,
     )
 }
 
@@ -220,6 +217,8 @@ pub(super) fn decide<V: Rules>(
                 what: "travel".into(),
                 reason,
             })),
+            // A run of several players votes, and travels once all have.
+            Ok(_) if state.player_count() > 1 => state.vote(seat, *to).map(Ok),
             Ok(moving) => state.travel(seat, moving).map(Ok),
         },
     }

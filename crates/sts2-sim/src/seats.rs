@@ -44,6 +44,11 @@ impl<T> BySeat<T> {
             .zip(std::iter::once(&self.host).chain(&self.others))
     }
 
+    /// Each seat's, to write on, in seat order.
+    pub(crate) fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
+        std::iter::once(&mut self.host).chain(&mut self.others)
+    }
+
     /// The host's, which a solo run's player is.
     pub(crate) fn host(&self) -> &T {
         &self.host

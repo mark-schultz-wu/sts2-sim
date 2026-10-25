@@ -947,25 +947,14 @@ pub(crate) fn neow_options<V: crate::Build>() -> impl Iterator<Item = V::Relic> 
         .chain(added)
 }
 
-/// The four relics whose Neow gate is code rather than a flag.
+/// `RelicModel.IsAllowedAtNeow`, which is `IsAllowed` on the run as Neow
+/// meets it, on its first floor.
 ///
-/// `relics.txt` marks them `gatedAtNeow` or `gatedInRun`, which is the cue
-/// to ask rather than look up. The conditions themselves are one line each
-/// and are ported here, beside the build they belong to.
-///
-/// Both unlock questions are true for a run, which is set up with
-/// everything unlocked so that no scenario depends on a save file.
+/// Kaleidoscope and Scroll Boxes also ask about unlocks, which a run here
+/// always has. It is set up with everything unlocked, so that no scenario
+/// depends on a save file.
 pub(crate) fn allowed_at_neow<V: crate::Build>(relic: V::Relic, players: usize) -> bool {
-    match relic {
-        // `runState.Players.Count == 1`.
-        __c0 if __c0 == V::Relic::SILVER_CRUCIBLE => players == 1,
-        // `runState.Players.Count > 1`.
-        __c0 if __c0 == V::Relic::MASSIVE_SCROLL => players > 1,
-        // Every character's card pool unlocked, and every card pool has
-        // enough commons to build a bundle from.
-        __c0 if __c0 == V::Relic::KALEIDOSCOPE || __c0 == V::Relic::SCROLL_BOXES => true,
-        _ => true,
-    }
+    relic_allowed::<V>(relic, 1, players)
 }
 
 pub(crate) fn relic_allowed<V: crate::Build>(
