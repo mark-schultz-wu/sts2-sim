@@ -129,7 +129,9 @@ internal static class GameApi
         }
         PlayerChoiceResult result = shape switch
         {
-            Shape.Index => PlayerChoiceResult.FromIndex(chosen.Count == 0 ? null : options.IndexOf(chosen[0])),
+            // No pick is -1, as the screen's IndexOf sends it. An empty index
+            // reads back as 0 on the other seat, which is the first card.
+            Shape.Index => PlayerChoiceResult.FromIndex(chosen.Count == 0 ? -1 : options.IndexOf(chosen[0])),
             Shape.Indexes => PlayerChoiceResult.FromIndexes(chosen.Select(c => options.IndexOf(c)).ToList()),
             Shape.CombatCard => PlayerChoiceResult.FromMutableCombatCard(chosen.FirstOrDefault()),
             Shape.CombatCards => PlayerChoiceResult.FromMutableCombatCards(chosen),

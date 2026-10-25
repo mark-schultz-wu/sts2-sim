@@ -7384,6 +7384,8 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + 'static;
 
     /// A playable character.
+    ///
+    /// Shared between threads, because a co-op lobby's seats begin at once.
     type Character: std::fmt::Debug
         + Copy
         + Eq
@@ -7391,6 +7393,8 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + serde::Serialize
         + serde::de::DeserializeOwned
         + CharacterTable
+        + Send
+        + Sync
         + 'static;
 
     /// One enchantment on one copy, with the fields its class keeps.

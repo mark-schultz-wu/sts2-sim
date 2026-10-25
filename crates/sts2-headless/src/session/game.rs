@@ -24,7 +24,8 @@ use sts2_core::{Answered, Construct, Decision, Play, Setup, Snapshot, Start};
 /// shutdown, and then reaps the process. There is no `quit`: the protocol's is
 /// what `Drop` sends.
 pub struct Oracle<V: sts2_content_wire::WireContentVersion> {
-    version: PhantomData<V>,
+    /// The build names no data here, so the seat is `Send` whatever it is.
+    version: PhantomData<fn() -> V>,
     child: Child,
     writer: TcpStream,
     reader: BufReader<TcpStream>,
@@ -40,6 +41,16 @@ impl<V: sts2_content_wire::WireContentVersion> Oracle<V> {
     /// The game dials out. This binds an ephemeral port first and passes it to
     /// the game, so there is no port-allocation race and no connect-retry loop.
     pub fn launch(config: Config) -> Result<Self, Error> {
+        Self::launch_as(config, "serve", &[])
+    }
+
+    /// Launches the game in a mode of the mod's, with settings of the mode's
+    /// own, and waits for it to connect back.
+    pub(crate) fn launch_as(
+        config: Config,
+        mode: &str,
+        settings: &[(&str, String)],
+    ) -> Result<Self, Error> {
         let binary = config.game_dir.join(BINARY);
         if !binary.exists() {
             return Err(Error::GameNotFound(binary));
@@ -72,7 +83,8 @@ impl<V: sts2_content_wire::WireContentVersion> Oracle<V> {
         }
         proc.current_dir(&config.game_dir)
             .args(["--headless", "--force-steam=off"])
-            .env("STS2_HEADLESS_MODE", "serve")
+            .env("STS2_HEADLESS_MODE", mode)
+            .envs(settings.iter().map(|(name, value)| (name, value)))
             .env("STS2_HEADLESS_PORT", port.to_string())
             .env("STS2_HEADLESS_TOKEN", &token)
             // Always. The digest-only mode saves bandwidth and log size, not
@@ -197,7 +209,10 @@ impl<V: sts2_content_wire::WireContentVersion> Oracle<V> {
     /// The conversion is the point of the boundary. Nothing in `sts2-core`
     /// knows how to serialize itself, so the mod's shape cannot leak out of
     /// this crate by accident.
-    fn dispatch<'a>(&mut self, command: impl Into<Command<V>> + 'a) -> Result<Reply<V>, Error> {
+    pub(crate) fn dispatch<'a>(
+        &mut self,
+        command: impl Into<Command<V>> + 'a,
+    ) -> Result<Reply<V>, Error> {
         let wire: Command<V> = command.into();
         let line =
             serde_json::to_string(&wire).map_err(|e| Error::Encode(format!("{wire:?}"), e))?;
@@ -238,6 +253,11 @@ impl<V: sts2_content_wire::WireContentVersion> Oracle<V> {
             .and_then(|()| self.writer.write_all(b"\n"))
             .and_then(|()| self.writer.flush())
             .map_err(|e| Error::Io("sending a command", e))
+    }
+
+    /// Keeps a reply's envelope, and turns it into the answer.
+    pub(crate) fn receive(&mut self, reply: Reply<V>) -> Result<Answered<V>, Error> {
+        super::receive(reply, &mut self.last)
     }
 
     /// How long a single command can take before [`Error::Timeout`].

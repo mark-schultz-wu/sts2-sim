@@ -13,6 +13,7 @@ pub(crate) mod cost;
 pub(crate) mod greeting;
 pub(crate) mod ident;
 pub(crate) mod observation;
+pub(crate) mod peers;
 pub(crate) mod question;
 pub(crate) mod refusal;
 pub(crate) mod response;
