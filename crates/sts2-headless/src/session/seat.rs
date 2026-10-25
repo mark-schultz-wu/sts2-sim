@@ -7,7 +7,7 @@
 use sts2_core::{Decision, Lobby, Seat, SeatAnswered, SeatIndex, Seated};
 
 use crate::session::error::Error;
-use crate::wire::peers::peers;
+use crate::wire::peers::{net_id, peers};
 use crate::{Config, Oracle, Reply, Response, parse_reply};
 
 /// Where a seat's game is, and the port the lobby's host listens on.
@@ -24,21 +24,10 @@ pub struct SeatHost {
 #[derive(Debug)]
 pub struct GameSeat<V: sts2_content_wire::WireContentVersion> {
     game: Oracle<V>,
-    /// Each seat's net id, in seat order.
-    net_ids: Vec<u64>,
+    /// How many seats the lobby has.
+    seats: usize,
     /// What the game logged in every reply since [`GameSeat::take_logged`].
     logged: Vec<String>,
-}
-
-/// The net id of each seat. The game's ENet host is always 1, and a client
-/// picks its own.
-fn net_ids(seats: usize) -> Vec<u64> {
-    (0..seats)
-        .map(|at| match at {
-            0 => 1,
-            _ => 1000 + at as u64,
-        })
-        .collect()
 }
 
 impl<V: sts2_content_wire::WireContentVersion> GameSeat<V> {
@@ -71,7 +60,7 @@ impl<V: sts2_content_wire::WireContentVersion> GameSeat<V> {
             .expect("a reply with a state is kept");
         Ok(Ok(Seated {
             snapshot: applied.snapshot(),
-            peers: peers(state, &self.net_ids)?,
+            peers: peers(state, self.seats)?,
         }))
     }
 }
@@ -83,7 +72,6 @@ impl<V: sts2_content_wire::WireContentVersion> Seat<V> for GameSeat<V> {
     /// Launches the seat's game, which hosts or joins, and returns once the
     /// run has started.
     fn begin(host: SeatHost, lobby: &Lobby<V>, me: SeatIndex) -> Result<Self, Error> {
-        let net_ids = net_ids(lobby.characters.len());
         let character = serde_json::to_value(lobby.characters[me.at()])
             .ok()
             .and_then(|value| value.as_str().map(str::to_owned))
@@ -98,15 +86,15 @@ impl<V: sts2_content_wire::WireContentVersion> Seat<V> for GameSeat<V> {
             &[
                 ("STS2_COOP_ROLE", role.to_owned()),
                 ("STS2_COOP_PORT", host.port.to_string()),
-                ("STS2_COOP_NETID", net_ids[me.at()].to_string()),
-                ("STS2_COOP_PLAYERS", net_ids.len().to_string()),
+                ("STS2_COOP_NETID", net_id(me).to_string()),
+                ("STS2_COOP_PLAYERS", lobby.characters.len().to_string()),
                 ("STS2_COOP_CHARACTER", character),
                 ("STS2_COOP_SEED", lobby.seed.as_str().to_owned()),
             ],
         )?;
         Ok(Self {
             game,
-            net_ids,
+            seats: lobby.characters.len(),
             logged: Vec::new(),
         })
     }

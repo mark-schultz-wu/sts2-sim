@@ -98,6 +98,13 @@ pub enum Command<V: sts2_content_wire::WireContentVersion> {
     },
     ChooseOption {
         index: u8,
+        /// The player a co-op rest option is aimed at, by net id.
+        #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            with = "super::peers::target"
+        )]
+        target: Option<sts2_core::SeatIndex>,
     },
     Buy {
         index: u8,
@@ -149,7 +156,10 @@ impl<V: sts2_content_wire::WireContentVersion> From<&Decision<V>> for Command<V>
                 index: *index,
                 target: *target,
             },
-            Decision::ChooseOption { index } => Self::ChooseOption { index: *index },
+            Decision::ChooseOption { index, target } => Self::ChooseOption {
+                index: *index,
+                target: *target,
+            },
             Decision::Buy { index } => Self::Buy { index: *index },
             Decision::Answer(a) => Self::Answer(WireAnswer(*a)),
             Decision::DiscardPotion { index } => Self::DiscardPotion { index: *index },
@@ -246,7 +256,7 @@ impl<V: sts2_content_wire::WireContentVersion> Command<V> {
             Self::PlayCard { index, target } => Decision::PlayCard { index, target }.into(),
             Self::EndTurn => Decision::EndTurn.into(),
             Self::UsePotion { index, target } => Decision::UsePotion { index, target }.into(),
-            Self::ChooseOption { index } => Decision::ChooseOption { index }.into(),
+            Self::ChooseOption { index, target } => Decision::ChooseOption { index, target }.into(),
             Self::Buy { index } => Decision::Buy { index }.into(),
             Self::Answer(WireAnswer(a)) => Decision::Answer(a).into(),
             Self::DiscardPotion { index } => Decision::DiscardPotion { index }.into(),
@@ -811,7 +821,16 @@ mod tests {
             }
             .into(),
             Decision::Proceed.into(),
-            Decision::ChooseOption { index: 2 }.into(),
+            Decision::ChooseOption {
+                index: 2,
+                target: None,
+            }
+            .into(),
+            Decision::ChooseOption {
+                index: 2,
+                target: Some(sts2_core::SeatIndex(1)),
+            }
+            .into(),
             Decision::Buy { index: 0 }.into(),
             Decision::Answer(Answer::Cards([0, 2].into())).into(),
             Decision::Answer(Answer::Pick(3)).into(),

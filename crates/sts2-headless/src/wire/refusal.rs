@@ -105,6 +105,10 @@ pub(crate) enum WireReason {
     },
     CannotProceed {},
     OptionDisabled {},
+    WrongOptionTarget {
+        #[serde(with = "super::peers::target")]
+        target: Option<sts2_core::SeatIndex>,
+    },
     OptionLocked {},
     AlreadyAnswered {},
     Unpurchasable {
@@ -240,6 +244,7 @@ impl WireReason {
             },
             WireReason::CannotProceed {} => Reason::CannotProceed,
             WireReason::OptionDisabled {} => Reason::OptionDisabled,
+            WireReason::WrongOptionTarget { target } => Reason::WrongOptionTarget { target },
             WireReason::OptionLocked {} => Reason::OptionLocked,
             WireReason::AlreadyAnswered {} => Reason::AlreadyAnswered,
             WireReason::Unpurchasable {
@@ -466,6 +471,21 @@ mod tests {
                 stocked: true,
                 blocked: Some(Blocked::NoPotionSlot),
             }
+        );
+    }
+
+    /// A Mend target is a net id on the wire and a seat here.
+    #[test]
+    fn a_wrong_option_target_names_the_seat() {
+        assert_eq!(
+            reason(json!({"kind": "wrong_option_target", "target": 1001})),
+            Reason::WrongOptionTarget {
+                target: Some(sts2_core::SeatIndex(1)),
+            }
+        );
+        assert_eq!(
+            reason(json!({"kind": "wrong_option_target", "target": null})),
+            Reason::WrongOptionTarget { target: None }
         );
     }
 

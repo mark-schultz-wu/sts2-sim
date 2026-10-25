@@ -489,7 +489,10 @@ where
         let at = sent.count();
         app.press(Action::Nth(digit));
 
-        let wanted = Decision::ChooseOption { index };
+        let wanted = Decision::ChooseOption {
+            index,
+            target: None,
+        };
         match sent.since(at).as_slice() {
             [one] if *one == wanted => {}
             other => {

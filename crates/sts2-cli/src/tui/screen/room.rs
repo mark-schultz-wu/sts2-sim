@@ -189,9 +189,12 @@ where
 
 /// Where a room's option sits in the list the keys act on.
 fn chose<V: crate::tui::Build>(moves: &[Decision<V>], index: u8) -> Option<usize> {
-    moves
-        .iter()
-        .position(|m| m == &Decision::ChooseOption { index })
+    moves.iter().position(|m| {
+        m == &Decision::ChooseOption {
+            index,
+            target: None,
+        }
+    })
 }
 
 /// The ways out, as rows at the end of a room's own list.

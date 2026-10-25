@@ -343,7 +343,13 @@ fn the_crystal_sphere_is_divined_over_the_wire() {
     // Payment Plan, which costs a Debt rather than gold and gives six
     // divinations rather than three -- the longer of the two paths, so more of
     // the loop is exercised.
-    let mut seen = played(&mut game, &Decision::ChooseOption { index: 1 });
+    let mut seen = played(
+        &mut game,
+        &Decision::ChooseOption {
+            index: 1,
+            target: None,
+        },
+    );
     let mut spent = 0;
 
     while let Some(question) = seen.asking() {
@@ -422,9 +428,12 @@ fn a_divination_off_the_grid_is_refused() {
     })
     .expect("jumping to an event should not fail at the transport level")
     .expect("the event should be accepted");
-    game.play(&Decision::ChooseOption { index: 0 })
-        .expect("choosing an option should not fail at the transport level")
-        .expect("the option should be accepted");
+    game.play(&Decision::ChooseOption {
+        index: 0,
+        target: None,
+    })
+    .expect("choosing an option should not fail at the transport level")
+    .expect("the option should be accepted");
 
     let refusal = game
         .play(&Decision::Answer(Answer::Divine {
@@ -979,7 +988,13 @@ fn a_rest_site_option_that_asks_a_question_still_replies() {
 
     // The assertion is that this returns at all. A transport error here is the
     // deadlock; the command timeout is what turns the hang into a failure.
-    let parked = played(&mut game, &Decision::ChooseOption { index: smith as u8 });
+    let parked = played(
+        &mut game,
+        &Decision::ChooseOption {
+            index: smith as u8,
+            target: None,
+        },
+    );
 
     match parked.asking().expect("SMITH should park a question") {
         Question::SelectCards { min, options, .. } => {

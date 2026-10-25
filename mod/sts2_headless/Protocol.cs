@@ -17,6 +17,7 @@ using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Multiplayer.Game;
 using MegaCrit.Sts2.Core.Multiplayer.Serialization;
 using MegaCrit.Sts2.Core.Entities.Merchant;
+using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.Entities.RestSite;
 using MegaCrit.Sts2.Core.Entities.TreasureRelicPicking;
 using MegaCrit.Sts2.Core.Events;
@@ -528,6 +529,29 @@ internal static class Protocol
                     await Error("choose_option", Refusals.OptionDisabled());
                     return;
                 }
+
+                // Mend aims at another player, and nothing else takes a target.
+                ulong? aimed = null;
+                if (req.TryGetProperty("target", out JsonElement aim) && aim.ValueKind != JsonValueKind.Null)
+                {
+                    if (!aim.TryGetUInt64(out ulong netId))
+                    {
+                        await Error("choose_option", Refusals.Malformed("choose_option's 'target' is a player's net id"));
+                        return;
+                    }
+
+                    aimed = netId;
+                }
+
+                Player? target = _state.Players.FirstOrDefault(p => p.NetId == aimed && !LocalContext.IsMe(p));
+                bool aims = options[index] is MendRestSiteOption;
+                if (aims ? target == null : aimed != null)
+                {
+                    await Error("choose_option", Refusals.WrongOptionTarget(aimed));
+                    return;
+                }
+
+                MendWithoutAScreen.Target = target;
 
                 // Tracked, never awaited here — the same rule the event branch
                 // below follows, and for the same reason.

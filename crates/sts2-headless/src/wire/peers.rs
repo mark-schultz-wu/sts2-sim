@@ -1,7 +1,9 @@
-//! What a co-op seat's observation says about the other seats.
+//! What a co-op seat's observation says about the other seats, and how the
+//! protocol names a player.
 //!
 //! The mod names a player by its net id. A seat names it by its place in the
-//! lobby, so reading `peers` takes the net id each place was given.
+//! lobby. The net id each seat's game is given ties the two. The game's ENet
+//! host is always 1, and a client picks its own, `1000 + seat`.
 
 use serde::Deserialize;
 use sts2_core::{Peer, Peers, SeatIndex};
@@ -25,9 +27,50 @@ struct WirePlayer {
     vote: Option<String>,
 }
 
-/// The `peers` of a co-op seat's state, with each player at the place whose
-/// net id `net_ids` lists.
-pub(crate) fn peers(state: &serde_json::Value, net_ids: &[u64]) -> Result<Peers, Error> {
+/// The net id seat `seat`'s game plays under.
+pub(crate) fn net_id(seat: SeatIndex) -> u64 {
+    match seat.0 {
+        0 => 1,
+        at => 1000 + u64::from(at),
+    }
+}
+
+/// The seat whose game plays under `net_id`, if any does.
+pub(crate) fn seat_of(net_id: u64) -> Option<SeatIndex> {
+    match net_id {
+        1 => Some(SeatIndex(0)),
+        1001..=1255 => u8::try_from(net_id - 1000).ok().map(SeatIndex),
+        _ => None,
+    }
+}
+
+/// A target player on the wire: the seat, spelled as its net id.
+pub(crate) mod target {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use sts2_core::SeatIndex;
+
+    pub(crate) fn serialize<S: Serializer>(
+        target: &Option<SeatIndex>,
+        to: S,
+    ) -> Result<S::Ok, S::Error> {
+        target.map(super::net_id).serialize(to)
+    }
+
+    pub(crate) fn deserialize<'de, D: Deserializer<'de>>(
+        from: D,
+    ) -> Result<Option<SeatIndex>, D::Error> {
+        Option::<u64>::deserialize(from)?
+            .map(|net_id| {
+                super::seat_of(net_id).ok_or_else(|| {
+                    serde::de::Error::custom(format!("{net_id} is no seat's net id"))
+                })
+            })
+            .transpose()
+    }
+}
+
+/// The `peers` of a co-op seat's state, for a lobby of `seats`.
+pub(crate) fn peers(state: &serde_json::Value, seats: usize) -> Result<Peers, Error> {
     let fail = |why| Error {
         at: "peers".into(),
         why,
@@ -42,10 +85,8 @@ pub(crate) fn peers(state: &serde_json::Value, net_ids: &[u64]) -> Result<Peers,
         })
     })?;
     let place = |net_id: u64| {
-        net_ids
-            .iter()
-            .position(|&id| id == net_id)
-            .map(|at| SeatIndex(u8::try_from(at).expect("at most 256 seats")))
+        seat_of(net_id)
+            .filter(|seat| seat.at() < seats)
             .ok_or_else(|| {
                 fail(Why::Unknown {
                     what: "player's net id",
@@ -53,7 +94,7 @@ pub(crate) fn peers(state: &serde_json::Value, net_ids: &[u64]) -> Result<Peers,
                 })
             })
     };
-    let mut seats = vec![Peer::default(); net_ids.len()];
+    let mut seated = vec![Peer::default(); seats];
     for player in &wire.players {
         let vote = player
             .vote
@@ -61,7 +102,7 @@ pub(crate) fn peers(state: &serde_json::Value, net_ids: &[u64]) -> Result<Peers,
             .map(ident::coord)
             .transpose()
             .map_err(|e| fail(Why::Ident(e)))?;
-        seats[place(player.net_id)?.at()] = Peer {
+        seated[place(player.net_id)?.at()] = Peer {
             ended_turn: player.ended_turn,
             vote,
         };
@@ -72,7 +113,7 @@ pub(crate) fn peers(state: &serde_json::Value, net_ids: &[u64]) -> Result<Peers,
         .map(|&net_id| place(net_id))
         .collect::<Result<_, _>>()?;
     Ok(Peers {
-        seats,
+        seats: seated,
         awaiting,
         in_flight: wire.in_flight,
     })
@@ -89,12 +130,12 @@ mod tests {
     #[test]
     fn each_player_lands_at_the_seat_of_its_net_id() {
         let state = json!({"peers": {
-            "players": [{"netId": 1000, "endedTurn": false, "vote": "2,3"},
+            "players": [{"netId": 1001, "endedTurn": false, "vote": "2,3"},
                         {"netId": 1, "endedTurn": true, "vote": null}],
-            "awaiting": [1000],
+            "awaiting": [1001],
             "inFlight": false,
         }});
-        let read = peers(&state, &[1, 1000]).expect("the peers read");
+        let read = peers(&state, 2).expect("the peers read");
         assert_eq!(
             read.seats,
             [
@@ -119,11 +160,11 @@ mod tests {
             "awaiting": [],
             "inFlight": false,
         }});
-        assert!(peers(&state, &[1, 1000]).is_err());
+        assert!(peers(&state, 2).is_err());
     }
 
     #[test]
     fn a_run_of_one_has_no_peers_to_read() {
-        assert!(peers(&json!({}), &[1]).is_err());
+        assert!(peers(&json!({}), 1).is_err());
     }
 }

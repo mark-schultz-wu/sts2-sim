@@ -168,7 +168,7 @@ pub fn named<V: sts2_core::ContentVersion>(seen: &Snapshot<V>, decision: &Decisi
             Some(encounter) => format!("end turn in {encounter:?}"),
             None => "end turn".into(),
         },
-        Decision::ChooseOption { index } => match &observation.room {
+        Decision::ChooseOption { index, .. } => match &observation.room {
             Some(Room::Event { event, options, .. }) => {
                 match options.iter().find(|option| option.index == *index) {
                     Some(option) => format!("{event:?} {:?}", option.key.option),

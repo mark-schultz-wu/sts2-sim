@@ -418,7 +418,11 @@ impl Play {
             }
             .into(),
             Play::Proceed => Decision::Proceed.into(),
-            Play::ChooseOption { index } => Decision::ChooseOption { index: *index }.into(),
+            Play::ChooseOption { index } => Decision::ChooseOption {
+                index: *index,
+                target: None,
+            }
+            .into(),
             Play::Buy { index } => Decision::Buy { index: *index }.into(),
             Play::Answer(answering) => Decision::Answer(match answering {
                 Answering::Cards { cards } => GameAnswer::Cards(Picks::try_from(cards.as_slice())?),

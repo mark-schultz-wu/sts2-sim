@@ -56,8 +56,12 @@ pub enum Decision<V: ContentVersion> {
     },
     /// Indexes into the options the *most recent* observation reported. The rest
     /// site list shrinks as it is chosen from, so an older index means nothing.
+    ///
+    /// `target` is the player a co-op rest option is aimed at, by seat, as
+    /// Mend's is. It is absent for every other option.
     ChooseOption {
         index: u8,
+        target: Option<crate::SeatIndex>,
     },
     /// Indexes into the shop entries the most recent observation reported.
     Buy {
