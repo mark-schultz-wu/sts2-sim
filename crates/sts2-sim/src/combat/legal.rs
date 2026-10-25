@@ -101,7 +101,7 @@ pub(super) fn target_type<V: Rules>(card: CardIdent<V>, live: &Live<V>) -> V::Ta
 /// Whether anything in the fight answers `ShouldPlay`, asked once for a hand
 /// rather than once for each card in it.
 fn asks_should_play<V: Rules>(fight: Walk<'_, V>) -> bool {
-    super::listen::heard::<V>(fight.live, fight.relics, sts2_core::ModelHook::ShouldPlay)
+    super::listen::heard::<V>(fight.live, fight.belts, sts2_core::ModelHook::ShouldPlay)
 }
 
 /// `EnergyCost.GetWithModifiers` for a copy in hand or being played, which
@@ -142,7 +142,7 @@ pub(super) fn costs<V: Rules>(
         // on every read.
         |cost| {
             let hook = sts2_core::ModelHook::TryModifyStarCost;
-            match super::listen::heard::<V>(fight.live, fight.relics, hook) {
+            match super::listen::heard::<V>(fight.live, fight.belts, hook) {
                 true => super::board::modified_by::<V>(
                     fight,
                     cost,
@@ -397,22 +397,22 @@ pub(super) type Previews<V> = SmallVec<[Preview<V>; 4]>;
 pub(crate) fn moves<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &Live<V>,
-    relics: &crate::run::Belt<V>,
+    belts: &crate::run::Belts<V>,
     potions: &[V::Potion],
     alive: bool,
     moves: &mut Legal<V>,
 ) {
     drinks::<V>(seat, potions, Some(live), false, alive, false, moves);
 
-    let facts = HandFacts::of(seat, Walk { live, relics });
+    let facts = HandFacts::of(seat, Walk { live, belts });
     for (at, card) in live.players[seat].cards.iter(Pile::Hand).enumerate() {
-        let costs = costs::<V>(&card, Some(Pile::Hand), Walk { live, relics });
+        let costs = costs::<V>(&card, Some(Pile::Hand), Walk { live, belts });
         let target = target_type::<V>(card.face.ident, live);
         let (refused, _) = reasons::<V>(
             seat,
             card.face.ident,
             target,
-            Walk { live, relics },
+            Walk { live, belts },
             costs,
             &facts,
         );
@@ -731,6 +731,7 @@ fn previewed<V: Rules>(
                         .unwrap_or_else(|| unreachable!("{:?} is a PowerVar of no power", var.id));
                     let giver = super::board::player::<V>(creatures);
                     let (given, _) = super::board::given_by::<V>(
+                        seat,
                         fight,
                         giver,
                         target,
@@ -805,10 +806,10 @@ mod tests {
     }
 
     /// `fight` with `belt`, which a test leaves empty.
-    fn walk<'a>(fight: &'a Live<V>, belt: &'a crate::run::Belt<V>) -> Walk<'a, V> {
+    fn walk<'a>(fight: &'a Live<V>, belt: &'a crate::run::Belts<V>) -> Walk<'a, V> {
         Walk {
             live: fight,
-            relics: belt,
+            belts: belt,
         }
     }
 
@@ -853,7 +854,10 @@ mod tests {
         let mut plays = super::hand::<V>(
             SOLO,
             hand.iter().copied(),
-            walk(&fight, &crate::run::Belt::new()),
+            walk(
+                &fight,
+                &crate::run::Belts::new(crate::run::Belt::new(), Vec::new()),
+            ),
         );
         assert_eq!(plays.len(), 1);
         plays.remove(0)
@@ -890,7 +894,10 @@ mod tests {
             effect::<V>(
                 SOLO,
                 &strike,
-                walk(&fight, &crate::run::Belt::new()),
+                walk(
+                    &fight,
+                    &crate::run::Belts::new(crate::run::Belt::new(), Vec::new()),
+                ),
                 targets,
             )[0]
             .vars[&CardVar::Damage]
@@ -915,7 +922,10 @@ mod tests {
             effect::<V>(
                 SOLO,
                 &strike,
-                walk(&fight, &crate::run::Belt::new()),
+                walk(
+                    &fight,
+                    &crate::run::Belts::new(crate::run::Belt::new(), Vec::new()),
+                ),
                 targets,
             )[0]
             .vars[&CardVar::Damage]
@@ -993,7 +1003,10 @@ mod tests {
         let plays = super::hand::<V>(
             SOLO,
             [strike].into_iter(),
-            walk(&fight, &crate::run::Belt::new()),
+            walk(
+                &fight,
+                &crate::run::Belts::new(crate::run::Belt::new(), Vec::new()),
+            ),
         );
 
         assert!(plays[0].targets.is_empty());

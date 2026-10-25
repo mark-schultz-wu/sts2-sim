@@ -15,14 +15,14 @@ use sts2_core::{
 use super::legal::InHand;
 use super::live::{Fighter, HeldPower, Live};
 use super::powers::Powers as _;
-use crate::run::Belt;
+use crate::run::Belts;
 
 /// The fight a run is standing in, live or over.
 pub(crate) enum Fight<'a, V: Rules> {
     /// The fight, and the belt its listeners include.
     Live {
         live: &'a Live<V>,
-        relics: &'a Belt<V>,
+        belts: &'a Belts<V>,
         /// The seat whose view this is.
         seat: sts2_core::SeatIndex,
     },
@@ -111,11 +111,11 @@ impl<V: Rules> ObservedFight<V> for Fight<'_, V> {
 
     fn creatures(&self) -> impl ExactSizeIterator<Item = impl ObservedCreature<V>> + '_ {
         match self {
-            Fight::Live { live, relics, seat } => {
+            Fight::Live { live, belts, seat } => {
                 Either::Left(live.creatures.iter().map(|fighter| Creature::Live {
                     fighter,
                     live,
-                    relics,
+                    belts,
                     seat: *seat,
                 }))
             }
@@ -125,11 +125,11 @@ impl<V: Rules> ObservedFight<V> for Fight<'_, V> {
 
     fn legal(&self) -> impl ExactSizeIterator<Item = impl ObservedPlayable<V>> + '_ {
         match self {
-            Fight::Live { live, relics, seat } => {
+            Fight::Live { live, belts, seat } => {
                 let seat = *seat;
-                let facts = super::legal::HandFacts::of(seat, super::listen::Walk { live, relics });
+                let facts = super::legal::HandFacts::of(seat, super::listen::Walk { live, belts });
                 Either::Left(live.players[seat].cards.iter(Pile::Hand).map(move |card| {
-                    let fight = super::listen::Walk { live, relics };
+                    let fight = super::listen::Walk { live, belts };
                     Card::Live(InHand::new(seat, card, fight, &facts))
                 }))
             }
@@ -139,7 +139,7 @@ impl<V: Rules> ObservedFight<V> for Fight<'_, V> {
 
     fn orbs(&self) -> Option<Cow<'_, Orbs<V>>> {
         match self {
-            Fight::Live { live, relics, seat } => live.reported_orbs(*seat, relics),
+            Fight::Live { live, belts, seat } => live.reported_orbs(*seat, belts),
             Fight::Over(combat) => combat.orbs.as_ref().map(Cow::Borrowed),
         }
     }
@@ -150,7 +150,7 @@ enum Creature<'a, V: Rules> {
     Live {
         fighter: &'a Fighter<V>,
         live: &'a Live<V>,
-        relics: &'a Belt<V>,
+        belts: &'a Belts<V>,
         seat: sts2_core::SeatIndex,
     },
     Over(&'a sts2_core::Creature<V>),
@@ -226,9 +226,9 @@ impl<V: Rules> ObservedCreature<V> for Creature<'_, V> {
             Creature::Live {
                 fighter,
                 live,
-                relics,
+                belts,
                 seat,
-            } => live.telegraphed(*seat, relics, fighter).map(Cow::Owned),
+            } => live.telegraphed(*seat, belts, fighter).map(Cow::Owned),
             Creature::Over(creature) => creature.next_move.as_ref().map(Cow::Borrowed),
         }
     }

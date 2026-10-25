@@ -42,7 +42,7 @@ pub(crate) struct Play<V: Rules> {
 pub(crate) fn resolve<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &Live<V>,
-    relics: &crate::run::Belt<V>,
+    belts: &crate::run::Belts<V>,
     index: HandIndex,
     target: Option<CombatId>,
 ) -> Result<Play<V>, Reason<V>> {
@@ -58,7 +58,7 @@ pub(crate) fn resolve<V: Rules>(
     let (cost, star_cost) = legal::costs::<V>(
         &held,
         Some(sts2_core::Pile::Hand),
-        super::listen::Walk { live, relics },
+        super::listen::Walk { live, belts },
     );
 
     // The creature the play named has to still be in this fight. An id is
@@ -72,7 +72,7 @@ pub(crate) fn resolve<V: Rules>(
     // The same rules the reported hand carries, asked of the one card being
     // played. Nothing here builds the rest of the hand, or its previews.
     let takes = legal::target_type::<V>(card, live);
-    let fight = super::listen::Walk { live, relics };
+    let fight = super::listen::Walk { live, belts };
     let (refused, preventer) = legal::reasons::<V>(
         seat,
         card,
@@ -122,6 +122,7 @@ pub(crate) fn resolve<V: Rules>(
 /// without a card, so the state it leaves is the state a card leaves.
 #[tracing::instrument(level = "trace", skip_all)]
 pub(crate) fn apply_power<V: Rules>(
+    seat: sts2_core::SeatIndex,
     fighting: Fighting<'_, V>,
     at: CombatId,
     power: V::Power,
@@ -130,12 +131,12 @@ pub(crate) fn apply_power<V: Rules>(
     let Fighting {
         live,
         streams,
-        relics,
+        belts,
     } = fighting;
     // Nothing here draws. A board is built with the set, and building one
     // leaves every counter where it was.
     let ascension = live.ascension;
-    let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
+    let mut board = Board::for_card(seat, live, streams.combat(), belts, ascension, None, None);
     // `ApplyPowerConsoleCmd` hands `PowerCmd.Apply` no applier.
     board.land(at, power, amount, None);
     let ended = board.ended();
@@ -148,14 +149,19 @@ pub(crate) fn apply_power<V: Rules>(
 /// `CreatureCmd.SetCurrentHp` on a creature in the fight.
 ///
 /// Scenario construction, as [`apply_power`] is.
-pub(crate) fn set_hp<V: Rules>(fighting: Fighting<'_, V>, at: CombatId, hp: V::Health) {
+pub(crate) fn set_hp<V: Rules>(
+    seat: sts2_core::SeatIndex,
+    fighting: Fighting<'_, V>,
+    at: CombatId,
+    hp: V::Health,
+) {
     let Fighting {
         live,
         streams,
-        relics,
+        belts,
     } = fighting;
     let ascension = live.ascension;
-    let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
+    let mut board = Board::for_card(seat, live, streams.combat(), belts, ascension, None, None);
     board.set_current_hp(at, V::Number::from(hp));
     if let Some(ended) = board.ended() {
         unimplemented!("a fight that ends {ended:?} as hit points are set");
@@ -170,17 +176,21 @@ pub(crate) fn set_hp<V: Rules>(fighting: Fighting<'_, V>, at: CombatId, hp: V::H
 /// # Panics
 ///
 /// A listener that ends the fight.
-pub(crate) fn belt_changed<V: Rules>(fighting: Fighting<'_, V>, hook: sts2_core::EventHook<V>) {
+pub(crate) fn belt_changed<V: Rules>(
+    seat: sts2_core::SeatIndex,
+    fighting: Fighting<'_, V>,
+    hook: sts2_core::EventHook<V>,
+) {
     let Fighting {
         live,
         streams,
-        relics,
+        belts,
     } = fighting;
-    let Some(walking) = super::listen::Walking::begin(live, relics, hook) else {
+    let Some(walking) = super::listen::Walking::begin(live, belts, hook) else {
         return;
     };
     let ascension = live.ascension;
-    let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
+    let mut board = Board::for_card(seat, live, streams.combat(), belts, ascension, None, None);
     board.carry_out_walk(Some(walking));
     if let Some(ended) = board.ended() {
         unimplemented!("a fight that ends {ended:?} as the belt changes");
@@ -194,14 +204,18 @@ pub(crate) fn belt_changed<V: Rules>(fighting: Fighting<'_, V>, hook: sts2_core:
 /// card is not generated, so nothing records it or hears it made.
 ///
 /// Scenario construction, as [`apply_power`] is.
-pub(crate) fn grant_card<V: Rules>(fighting: Fighting<'_, V>, card: V::Card) {
+pub(crate) fn grant_card<V: Rules>(
+    seat: sts2_core::SeatIndex,
+    fighting: Fighting<'_, V>,
+    card: V::Card,
+) {
     let Fighting {
         live,
         streams,
-        relics,
+        belts,
     } = fighting;
     let ascension = live.ascension;
-    let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
+    let mut board = Board::for_card(seat, live, streams.combat(), belts, ascension, None, None);
     sts2_core::Fight::add_card(
         &mut board,
         sts2_core::CardIdent::new(card),
@@ -270,7 +284,7 @@ pub(crate) fn play<V: Rules>(
     let Fighting {
         live,
         streams,
-        relics,
+        belts,
     } = fighting;
 
     // `SpendResources`, before the card leaves the hand: the energy, then
@@ -279,14 +293,16 @@ pub(crate) fn play<V: Rules>(
     live.players[seat].energy = live.players[seat].energy - play.energy;
     let energy: V::Number =
         num_traits::cast(play.energy).expect("an energy cost fits a game number");
-    if let Some(ended) = super::board::energy_spent::<V>(live, streams.combat(), relics, energy) {
+    if let Some(ended) =
+        super::board::energy_spent::<V>(seat, live, streams.combat(), belts, energy)
+    {
         unimplemented!("a fight {ended:?} as its energy was spent");
     }
     let spent: V::Number = num_traits::cast(play.stars).expect("a star cost fits a game number");
     live.modify_stars(seat, -spent);
     let ascension = live.ascension;
     if spent > num_traits::zero() {
-        stars_spent::<V>(live, streams, relics, ascension, spent);
+        stars_spent::<V>(seat, live, streams, belts, ascension, spent);
     }
 
     // `AddDuringManualCardPlay`: the card is in the play pile, and so out of
@@ -294,8 +310,8 @@ pub(crate) fn play<V: Rules>(
     let card = live.players[seat]
         .cards
         .play(sts2_core::Pile::Hand, play.index);
-    let (pile, position) = result_pile::<V, _>(seat, live, streams, relics, &card, play.energy);
-    let count = play_count::<V, _>(live, streams, relics, &card);
+    let (pile, position) = result_pile::<V, _>(seat, live, streams, belts, &card, play.energy);
+    let count = play_count::<V, _>(seat, live, streams, belts, &card);
     // `SpendEnergy` captures what an X cost spent, and `SpendStars` what the
     // stars cost.
     let begun = CardPlay {
@@ -309,13 +325,14 @@ pub(crate) fn play<V: Rules>(
     };
     // `BeginCardOrPotionEffect`, before the first play.
     live.players[seat].effect_depth += 1;
-    before_played::<V, _>(seat, live, streams, relics, &card, begun, play.target);
+    before_played::<V, _>(seat, live, streams, belts, &card, begun, play.target);
     live.history
         .start(card.face.ident.card, card.id, begun, true);
     let mut board = Board::for_card(
+        seat,
         live,
         streams.combat(),
-        relics,
+        belts,
         ascension,
         play.target,
         Some(card.id),
@@ -331,7 +348,7 @@ pub(crate) fn play<V: Rules>(
         Fighting {
             live,
             streams,
-            relics,
+            belts,
         },
         ascension,
         Resuming {
@@ -365,13 +382,13 @@ pub(super) fn auto_play<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     rngs: crate::stream::CombatRngs<'_>,
-    relics: &mut crate::run::Belt<V>,
+    belts: &mut crate::run::Belts<V>,
     id: sts2_core::CardId<V>,
     from: sts2_core::Pile,
     named: Option<CombatId>,
     pausable: bool,
 ) -> Option<super::Ended> {
-    auto_play_capturing::<V>(seat, live, rngs, relics, id, from, named, pausable, None)
+    auto_play_capturing::<V>(seat, live, rngs, belts, id, from, named, pausable, None)
 }
 
 /// [`auto_play`], with `skipXCapture` where `captured` names what
@@ -385,7 +402,7 @@ pub(super) fn auto_play_capturing<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     rngs: crate::stream::CombatRngs<'_>,
-    relics: &mut crate::run::Belt<V>,
+    belts: &mut crate::run::Belts<V>,
     id: sts2_core::CardId<V>,
     from: sts2_core::Pile,
     named: Option<CombatId>,
@@ -410,7 +427,7 @@ pub(super) fn auto_play_capturing<V: Rules>(
         seat,
         live,
         rngs,
-        relics,
+        belts,
         card,
         Some(from),
         named,
@@ -426,19 +443,19 @@ fn auto_play_at_random<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     mut rngs: crate::stream::CombatRngs<'_>,
-    relics: &mut crate::run::Belt<V>,
+    belts: &mut crate::run::Belts<V>,
     ascension: V::AscensionLevel,
     id: sts2_core::CardId<V>,
 ) -> Option<super::Ended> {
     let Some(from) = live.players[seat].cards.pile_of(id) else {
         unimplemented!("auto-playing {id:?}, which no pile holds");
     };
-    let mut board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
-    if sts2_core::Fight::over_or_ending(&board) || !board.live.player().alive {
+    let mut board = Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
+    if sts2_core::Fight::over_or_ending(&board) || !board.live.player(seat).alive {
         return None;
     }
     let target = sts2_core::Fight::random_opponent(&mut board);
-    auto_play::<V>(seat, live, rngs, relics, id, from, target, true)
+    auto_play::<V>(seat, live, rngs, belts, id, from, target, true)
 }
 
 /// `AutoPlayFromDrawPile`'s play of one card it took into the play pile:
@@ -448,12 +465,12 @@ pub(super) fn auto_play_taken<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     rngs: crate::stream::CombatRngs<'_>,
-    relics: &mut crate::run::Belt<V>,
+    belts: &mut crate::run::Belts<V>,
     id: sts2_core::CardId<V>,
     force_exhaust: bool,
     pausable: bool,
 ) -> Option<super::Ended> {
-    if !live.player().alive {
+    if !live.player(seat).alive {
         return None;
     }
     live.players[seat].exhaust_next.retain(|held| *held != id);
@@ -463,7 +480,7 @@ pub(super) fn auto_play_taken<V: Rules>(
     let Some(card) = live.players[seat].cards.named(id) else {
         unimplemented!("auto-playing {id:?}, which left the fight first");
     };
-    auto_play_in_play::<V>(seat, live, rngs, relics, card, None, None, pausable, None)
+    auto_play_in_play::<V>(seat, live, rngs, belts, card, None, None, pausable, None)
 }
 
 /// `CardCmd.AutoPlay` for a card already in the play pile. `named` is the
@@ -480,7 +497,7 @@ pub(super) fn auto_play_in_play<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     mut rngs: crate::stream::CombatRngs<'_>,
-    relics: &mut crate::run::Belt<V>,
+    belts: &mut crate::run::Belts<V>,
     card: super::live::CardInstance<V>,
     stood: Option<sts2_core::Pile>,
     named: Option<CombatId>,
@@ -491,12 +508,12 @@ pub(super) fn auto_play_in_play<V: Rules>(
 
     let ident = card.face.ident;
     if ident.card.unplayable() {
-        return without_playing::<V>(seat, live, rngs, relics, &card);
+        return without_playing::<V>(seat, live, rngs, belts, &card);
     }
     // `Hook.ShouldPlay`, with the auto-play's type. A refused card goes to
     // its pile unplayed.
     if super::listen::first_deciding::<V>(
-        super::listen::Walk { live, relics },
+        super::listen::Walk { live, belts },
         sts2_core::DecisionHook::ShouldPlay {
             card: ident.card,
             affliction: ident.affliction,
@@ -506,15 +523,16 @@ pub(super) fn auto_play_in_play<V: Rules>(
     )
     .is_some()
     {
-        return without_playing::<V>(seat, live, rngs, relics, &card);
+        return without_playing::<V>(seat, live, rngs, belts, &card);
     }
     let ascension = live.ascension;
     let target = match super::legal::target_type::<V>(ident, live) {
         kind if kind == V::TargetType::ANY_ENEMY && named.is_some() => named,
         kind if kind == V::TargetType::ANY_ENEMY => {
-            let mut board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+            let mut board =
+                Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
             let Some(target) = sts2_core::Fight::random_opponent(&mut board) else {
-                return without_playing::<V>(seat, live, rngs, relics, &card);
+                return without_playing::<V>(seat, live, rngs, belts, &card);
             };
             Some(target)
         }
@@ -523,18 +541,18 @@ pub(super) fn auto_play_in_play<V: Rules>(
         }
         _ => None,
     };
-    super::turn::unheard::<V>(live, relics, sts2_core::ModelHook::BeforeCardAutoPlayed);
+    super::turn::unheard::<V>(live, belts, sts2_core::ModelHook::BeforeCardAutoPlayed);
 
     // `EnergyValue` is `GetAmountToSpend`: what the card costs, though an
     // auto-play spends none of it. `AutoPlay` takes a card into the play pile
     // only where it stood in none, so the cost reads the pile it stood in.
     let stood = stood.filter(|&pile| pile != sts2_core::Pile::Play);
     let (cost, star_cost) =
-        super::legal::costs::<V>(&card, stood, super::listen::Walk { live, relics });
+        super::legal::costs::<V>(&card, stood, super::listen::Walk { live, belts });
     let energy = super::legal::spend(cost, live.players[seat].energy)
         .unwrap_or_else(|| unimplemented!("an energy cost the count cannot hold"));
-    let (pile, position) = result_pile::<V, _>(seat, live, &mut rngs, relics, &card, energy);
-    let count = play_count::<V, _>(live, &mut rngs, relics, &card);
+    let (pile, position) = result_pile::<V, _>(seat, live, &mut rngs, belts, &card, energy);
+    let count = play_count::<V, _>(seat, live, &mut rngs, belts, &card);
     // `AutoPlay` spends nothing, and captures an X from what the pools hold,
     // unless `skipXCapture` keeps one a payment captured.
     let x = match ident.card.cost() {
@@ -557,13 +575,14 @@ pub(super) fn auto_play_in_play<V: Rules>(
     };
     // `BeginCardOrPotionEffect`, before the first play.
     live.players[seat].effect_depth += 1;
-    before_played::<V, _>(seat, live, &mut rngs, relics, &card, begun, target);
+    before_played::<V, _>(seat, live, &mut rngs, belts, &card, begun, target);
     live.history
         .start(card.face.ident.card, card.id, begun, true);
     let mut board = Board::for_card(
+        seat,
         live,
         rngs.reborrow(),
-        relics,
+        belts,
         ascension,
         target,
         Some(card.id),
@@ -581,7 +600,7 @@ pub(super) fn auto_play_in_play<V: Rules>(
         Fighting {
             live: &mut *live,
             streams: &mut rngs,
-            relics: &mut *relics,
+            belts: &mut *belts,
         },
         ascension,
         Resuming {
@@ -613,7 +632,7 @@ fn without_playing<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     rngs: crate::stream::CombatRngs<'_>,
-    relics: &mut crate::run::Belt<V>,
+    belts: &mut crate::run::Belts<V>,
     card: &super::live::CardInstance<V>,
 ) -> Option<super::Ended> {
     let marked = live.players[seat].exhaust_next.contains(&card.id);
@@ -631,7 +650,7 @@ fn without_playing<V: Rules>(
                 Some(sts2_core::Pile::Exhaust),
                 sts2_core::PilePosition::Bottom,
             );
-            super::turn::exhausted::<V>(live, rngs, relics, card, false, false)
+            super::turn::exhausted::<V>(seat, live, rngs, belts, card, false, false)
         }
         false => {
             live.players[seat].cards.leave_play(
@@ -655,27 +674,27 @@ fn before_played<V: Rules, S: LendsCombat>(
     seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     streams: &mut S,
-    relics: &mut crate::run::Belt<V>,
+    belts: &mut crate::run::Belts<V>,
     card: &super::live::CardInstance<V>,
     play: CardPlay<V>,
     target: Option<sts2_core::CombatId>,
 ) {
-    if !super::listen::heard::<V>(live, relics, sts2_core::ModelHook::BeforeCardPlayed) {
+    if !super::listen::heard::<V>(live, belts, sts2_core::ModelHook::BeforeCardPlayed) {
         return;
     }
     // `IterateCombatHookListeners` hands a fight that is over or ending no
     // listeners, as for the replay of a play that won it.
-    if live.won || live.lost || super::board::ending::<V>(super::listen::Walk { live, relics }) {
+    if live.won || live.lost || super::board::ending::<V>(super::listen::Walk { live, belts }) {
         return;
     }
     let energy = play.energy;
     // The cost each listener reads as the walk reaches it, which an earlier
     // one can move, as Veilpiercer's decrement does.
-    let hook = |live: &Live<V>, relics: &crate::run::Belt<V>| {
+    let hook = |live: &Live<V>, belts: &crate::run::Belts<V>| {
         let resolved = match card.face.ident.card.cost() {
             sts2_core::Cost::X => num_traits::cast(play.x).expect("an energy fits a game number"),
             _ => {
-                let fight = super::listen::Walk { live, relics };
+                let fight = super::listen::Walk { live, belts };
                 match super::legal::costs::<V>(card, None, fight).0 {
                     sts2_core::Cost::Fixed(cost) => {
                         num_traits::cast(cost.get()).expect("a cost fits a game number")
@@ -697,11 +716,11 @@ fn before_played<V: Rules, S: LendsCombat>(
         }
     };
     // Each listener acts as the walk reaches it.
-    let mut walk = super::listen::Walker::begin(live, relics, hook(live, relics));
+    let mut walk = super::listen::Walker::begin(live, belts, hook(live, belts));
     let mut asked = sts2_core::HookEffects::new();
     while let Some(listener) = walk
         .as_mut()
-        .and_then(|walk| walk.next(seat, live, relics, &mut asked))
+        .and_then(|walk| walk.next(seat, live, belts, &mut asked))
     {
         let mut rest: SmallVec<[sts2_core::HookEffect<V>; 4]> = SmallVec::new();
         for effect in asked.drain(..) {
@@ -724,7 +743,7 @@ fn before_played<V: Rules, S: LendsCombat>(
                         .unwrap_or_else(|| unimplemented!("{count:?} clones"));
                     let ascension = live.ascension;
                     let mut board =
-                        Board::for_card(live, streams.combat(), relics, ascension, None, None);
+                        Board::for_card(seat, live, streams.combat(), belts, ascension, None, None);
                     for _ in 0..count {
                         board.clone_written(card, sts2_core::Pile::Hand, writes);
                     }
@@ -734,13 +753,14 @@ fn before_played<V: Rules, S: LendsCombat>(
         }
         if !rest.is_empty() {
             let ascension = live.ascension;
-            let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
+            let mut board =
+                Board::for_card(seat, live, streams.combat(), belts, ascension, None, None);
             hook::apply::<V, _>(&mut board, rest);
             let skipped = std::mem::take(&mut board.skipped);
             merge::<V>(&mut live.skip_tick, skipped);
         }
         if let Some(walk) = walk.as_mut() {
-            walk.rehook(hook(live, relics));
+            walk.rehook(hook(live, belts));
         }
     }
 }
@@ -762,7 +782,7 @@ fn result_pile<V: Rules, S: LendsCombat>(
     seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     streams: &mut S,
-    relics: &mut crate::run::Belt<V>,
+    belts: &mut crate::run::Belts<V>,
     card: &super::live::CardInstance<V>,
     energy: V::Count,
 ) -> (Option<sts2_core::Pile>, sts2_core::PilePosition) {
@@ -789,10 +809,10 @@ fn result_pile<V: Rules, S: LendsCombat>(
         sts2_core::HookResponse::Decision(location) => location,
         sts2_core::HookResponse::DoesNotImplement => base,
     };
-    let player = live.player().id;
+    let player = live.player(seat).id;
     let mut modifiers: SmallVec<[(CombatId, V::Power); 2]> = SmallVec::new();
     super::listen::each::<V>(
-        super::listen::Walk { live, relics },
+        super::listen::Walk { live, belts },
         sts2_core::Overrides::of(sts2_core::ModelHook::ModifyCardPlayResultPileTypeAndPosition),
         |listener, _| {
             let hook = sts2_core::ResultPile {
@@ -834,7 +854,7 @@ fn result_pile<V: Rules, S: LendsCombat>(
         };
         let mut asked = sts2_core::HookEffects::new();
         live.ask_power(
-            Some(relics),
+            Some(belts),
             holder,
             at,
             sts2_core::EventHook::ResultPileModified { card: played },
@@ -844,7 +864,7 @@ fn result_pile<V: Rules, S: LendsCombat>(
             continue;
         }
         let ascension = live.ascension;
-        let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
+        let mut board = Board::for_card(seat, live, streams.combat(), belts, ascension, None, None);
         for effect in asked {
             match effect {
                 // `PowerCmd.Decrement` on the power that moved it.
@@ -869,12 +889,13 @@ fn result_pile<V: Rules, S: LendsCombat>(
 /// A listener other than a power changing the count, or one that does
 /// something other than add plays.
 pub(super) fn play_count<V: Rules, S: LendsCombat>(
+    seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     streams: &mut S,
-    relics: &mut crate::run::Belt<V>,
+    belts: &mut crate::run::Belts<V>,
     card: &super::live::CardInstance<V>,
 ) -> V::Number {
-    let player = live.player().id;
+    let player = live.player(seat).id;
     let hook = sts2_core::ModifyHook::CardPlayCount {
         player,
         card: card.face.ident.card,
@@ -885,7 +906,7 @@ pub(super) fn play_count<V: Rules, S: LendsCombat>(
     // that state lives, and the belt names the slot after.
     let mut relic_modifiers: SmallVec<[*const V::RelicState; 1]> = SmallVec::new();
     super::listen::each::<V>(
-        super::listen::Walk { live, relics },
+        super::listen::Walk { live, belts },
         sts2_core::Overrides::of(sts2_core::ModelHook::ModifyCardPlayCount),
         |listener, _| {
             let before = count;
@@ -924,7 +945,7 @@ pub(super) fn play_count<V: Rules, S: LendsCombat>(
         };
         let mut asked = sts2_core::HookEffects::new();
         live.ask_power(
-            Some(relics),
+            Some(belts),
             holder,
             at,
             sts2_core::EventHook::PlayCountModified {
@@ -933,7 +954,7 @@ pub(super) fn play_count<V: Rules, S: LendsCombat>(
             &mut asked,
         );
         let ascension = live.ascension;
-        let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
+        let mut board = Board::for_card(seat, live, streams.combat(), belts, ascension, None, None);
         for effect in asked {
             match effect {
                 sts2_core::HookEffect::Decrement => {
@@ -944,16 +965,13 @@ pub(super) fn play_count<V: Rules, S: LendsCombat>(
         }
     }
     for state in relic_modifiers {
-        let slot = relics
-            .iter()
-            .position(|held| std::ptr::eq(&held.state, state))
-            .expect("a relic that answered the walk is on the belt");
-        if !sts2_core::RelicTable::overrides(relics[slot].relic)
+        let (seat, slot) = super::relic::place_of::<V>(belts, state);
+        if !sts2_core::RelicTable::overrides(belts[seat][slot].relic)
             .contains(sts2_core::ModelHook::AfterModifyingCardPlayCount)
         {
             continue;
         }
-        let (state, belt) = relics.state_beside(slot);
+        let (state, belt) = belts[seat].state_beside(slot);
         let mut asked = sts2_core::HookEffects::new();
         V::relic_event_hook(
             state,
@@ -1022,7 +1040,7 @@ pub(crate) fn answer<V: Rules>(
     let Fighting {
         live,
         streams,
-        relics,
+        belts,
     } = fighting;
     let asking = live
         .asking
@@ -1090,7 +1108,7 @@ pub(crate) fn answer<V: Rules>(
         Fighting {
             live,
             streams,
-            relics,
+            belts,
         },
         asking.then,
         taken,
@@ -1107,7 +1125,7 @@ pub(crate) fn come_up<V: Rules>(
     let Fighting {
         live,
         streams,
-        relics,
+        belts,
     } = fighting;
     loop {
         match &mut live.asking {
@@ -1116,7 +1134,7 @@ pub(crate) fn come_up<V: Rules>(
         }
         let ending = super::board::ending::<V>(super::listen::Walk {
             live: &*live,
-            relics: &*relics,
+            belts: &*belts,
         });
         let Some(asking) = &live.asking else {
             unreachable!("a signalled choice stands");
@@ -1141,7 +1159,7 @@ pub(crate) fn come_up<V: Rules>(
             Fighting {
                 live: &mut *live,
                 streams: &mut *streams,
-                relics: &mut *relics,
+                belts: &mut *belts,
             },
             then,
             sts2_core::Taken::Selected(picked),
@@ -1163,7 +1181,7 @@ fn resume_answered<V: Rules>(
     let Fighting {
         live,
         streams,
-        relics,
+        belts,
     } = fighting;
     // What this answer's play defers runs ahead of what already waits.
     live.deferred.close();
@@ -1179,13 +1197,13 @@ fn resume_answered<V: Rules>(
             };
             let ascension = live.ascension;
             let ended =
-                super::turn::answer_setup::<V>(seat, live, streams.combat(), relics, act, picked);
+                super::turn::answer_setup::<V>(seat, live, streams.combat(), belts, act, picked);
             return run_deferred(
                 seat,
                 Fighting {
                     live,
                     streams,
-                    relics,
+                    belts,
                 },
                 ascension,
                 ended,
@@ -1197,7 +1215,8 @@ fn resume_answered<V: Rules>(
                 unreachable!("a setup's choice offers cards")
             };
             let ascension = live.ascension;
-            let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
+            let mut board =
+                Board::for_card(seat, live, streams.combat(), belts, ascension, None, None);
             if let Some(card) = chosen {
                 let added = sts2_core::Fight::add_generated_cards(
                     &mut board,
@@ -1217,7 +1236,7 @@ fn resume_answered<V: Rules>(
                 Fighting {
                     live,
                     streams,
-                    relics,
+                    belts,
                 },
                 ascension,
                 ended,
@@ -1234,20 +1253,24 @@ fn resume_answered<V: Rules>(
                 seat,
                 live,
                 streams.combat(),
-                relics,
+                belts,
                 act,
                 picked.as_slice(),
                 false,
             );
             let ended = ended.or_else(|| {
-                super::turn::play_sly::<V>(seat, live, streams.combat(), relics, sly, true)
+                super::turn::play_sly::<V>(seat, live, streams.combat(), belts, sly, true)
             });
             // The `AfterShuffle` listeners that waited for the pick, before
             // what the shuffle stood still.
             let ended = match live.after_pick.take() {
-                Some(waiting) if ended.is_none() => {
-                    super::board::after_pick_walk::<V>(live, streams.combat(), relics, *waiting)
-                }
+                Some(waiting) if ended.is_none() => super::board::after_pick_walk::<V>(
+                    seat,
+                    live,
+                    streams.combat(),
+                    belts,
+                    *waiting,
+                ),
                 _ => ended,
             };
             return run_deferred(
@@ -1255,7 +1278,7 @@ fn resume_answered<V: Rules>(
                 Fighting {
                     live,
                     streams,
-                    relics,
+                    belts,
                 },
                 ascension,
                 ended,
@@ -1265,10 +1288,11 @@ fn resume_answered<V: Rules>(
         Then::Chosen { at } => {
             let ascension = live.ascension;
             let ended = super::turn::resume_chosen::<V>(
+                seat,
                 Fighting {
                     live: &mut *live,
                     streams: &mut *streams,
-                    relics: &mut *relics,
+                    belts: &mut *belts,
                 },
                 at,
                 taken,
@@ -1278,7 +1302,7 @@ fn resume_answered<V: Rules>(
                 Fighting {
                     live,
                     streams,
-                    relics,
+                    belts,
                 },
                 ascension,
                 ended,
@@ -1291,9 +1315,10 @@ fn resume_answered<V: Rules>(
     };
     let ascension = live.ascension;
     let mut board = Board::for_card(
+        seat,
         live,
         streams.combat(),
-        relics,
+        belts,
         ascension,
         effect.target,
         playing,
@@ -1308,7 +1333,7 @@ fn resume_answered<V: Rules>(
         Fighting {
             live: &mut *live,
             streams: &mut *streams,
-            relics: &mut *relics,
+            belts: &mut *belts,
         },
         ascension,
         effect,
@@ -1320,7 +1345,7 @@ fn resume_answered<V: Rules>(
         Fighting {
             live,
             streams,
-            relics,
+            belts,
         },
         ascension,
         ended,
@@ -1339,7 +1364,7 @@ fn run_deferred<V: Rules>(
     let Fighting {
         live,
         streams,
-        relics,
+        belts,
     } = fighting;
     while live.asking.is_none() {
         let Some(deferred) = live.deferred.next() else {
@@ -1348,7 +1373,7 @@ fn run_deferred<V: Rules>(
         let fighting = Fighting {
             live: &mut *live,
             streams: &mut *streams,
-            relics: &mut *relics,
+            belts: &mut *belts,
         };
         ended = match deferred {
             super::live::Deferred::AutoPlay { id, named } => {
@@ -1365,7 +1390,7 @@ fn run_deferred<V: Rules>(
                         seat,
                         fighting.live,
                         fighting.streams.combat(),
-                        fighting.relics,
+                        fighting.belts,
                         id,
                         from,
                         named,
@@ -1379,7 +1404,7 @@ fn run_deferred<V: Rules>(
                     seat,
                     fighting.live,
                     fighting.streams.combat(),
-                    fighting.relics,
+                    fighting.belts,
                     ascension,
                     id,
                 ),
@@ -1390,7 +1415,7 @@ fn run_deferred<V: Rules>(
                     seat,
                     fighting.live,
                     fighting.streams.combat(),
-                    fighting.relics,
+                    fighting.belts,
                     id,
                     force_exhaust,
                     true,
@@ -1428,7 +1453,7 @@ fn run_deferred<V: Rules>(
                         Fighting {
                             live: &mut *fighting.live,
                             streams: &mut *fighting.streams,
-                            relics: &mut *fighting.relics,
+                            belts: &mut *fighting.belts,
                         },
                         &parked,
                     ),
@@ -1460,7 +1485,7 @@ fn run_deferred<V: Rules>(
                         seat,
                         fighting.live,
                         fighting.streams.combat(),
-                        fighting.relics,
+                        fighting.belts,
                         rest,
                         max_energy,
                     );
@@ -1506,7 +1531,7 @@ fn run_deferred<V: Rules>(
                         seat,
                         fighting.live,
                         fighting.streams.combat(),
-                        fighting.relics,
+                        fighting.belts,
                         rest,
                         next,
                     );
@@ -1522,7 +1547,7 @@ fn run_deferred<V: Rules>(
                 seat,
                 fighting.live,
                 fighting.streams.combat(),
-                fighting.relics,
+                fighting.belts,
                 ascension,
                 stage,
                 ended,
@@ -1531,7 +1556,7 @@ fn run_deferred<V: Rules>(
                 None => super::board::land_held::<V>(
                     fighting.live,
                     fighting.streams.combat(),
-                    fighting.relics,
+                    fighting.belts,
                     ascension,
                     held,
                 ),
@@ -1550,24 +1575,25 @@ fn run_deferred<V: Rules>(
                 (card, id, energy),
                 ended,
             ),
-            super::live::Deferred::OwnCommandOver { slot, relic } => {
-                super::relic::own_command_over::<V>(fighting.relics, slot, relic);
+            super::live::Deferred::OwnCommandOver { seat, slot, relic } => {
+                super::relic::own_command_over::<V>(&mut fighting.belts[seat], slot, relic);
                 ended
             }
             super::live::Deferred::PlayOver => check_for_empty_hand::<V, _>(
                 seat,
                 fighting.live,
                 fighting.streams,
-                fighting.relics,
+                fighting.belts,
                 ascension,
                 ended,
             ),
             super::live::Deferred::ActOn { act, cards } => match ended {
                 None => {
                     let mut board = Board::for_card(
+                        seat,
                         fighting.live,
                         fighting.streams.combat(),
-                        fighting.relics,
+                        fighting.belts,
                         ascension,
                         None,
                         None,
@@ -1583,9 +1609,10 @@ fn run_deferred<V: Rules>(
             },
             super::live::Deferred::Land(lands) => match ended {
                 None => super::board::land_waiting::<V>(
+                    seat,
                     fighting.live,
                     fighting.streams.combat(),
-                    fighting.relics,
+                    fighting.belts,
                     ascension,
                     lands,
                 ),
@@ -1596,7 +1623,7 @@ fn run_deferred<V: Rules>(
                     seat,
                     fighting.live,
                     fighting.streams.combat(),
-                    fighting.relics,
+                    fighting.belts,
                     ascension,
                     from,
                     true,
@@ -1614,7 +1641,7 @@ fn run_deferred<V: Rules>(
                     seat,
                     fighting.live,
                     fighting.streams.combat(),
-                    fighting.relics,
+                    fighting.belts,
                     ascension,
                     count,
                     hand_draw,
@@ -1652,7 +1679,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
     let Fighting {
         live: next,
         streams,
-        relics,
+        belts,
     } = fighting;
     loop {
         // A card this effect auto-played asked a question, and the effect
@@ -1673,9 +1700,10 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                 Asker::Potion(_) => None,
             };
             let mut board = Board::for_card(
+                seat,
                 next,
                 streams.combat(),
-                relics,
+                belts,
                 ascension,
                 effect.target,
                 playing,
@@ -1724,9 +1752,10 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                 if let Some(enchanted) = face.ident.enchantment {
                     let mut state = face.enchantment_state();
                     let mut board = Board::for_card(
+                        seat,
                         next,
                         streams.combat(),
-                        relics,
+                        belts,
                         ascension,
                         effect.target,
                         Some(card),
@@ -1751,7 +1780,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                     Fighting {
                         live: &mut *next,
                         streams: &mut *streams,
-                        relics: &mut *relics,
+                        belts: &mut *belts,
                     },
                     ascension,
                     played_card,
@@ -1768,7 +1797,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                 if V::replays_stop_once_ending()
                     && (next.won
                         || next.lost
-                        || super::board::ending::<V>(super::listen::Walk { live: next, relics }))
+                        || super::board::ending::<V>(super::listen::Walk { live: next, belts }))
                 {
                     break;
                 }
@@ -1779,12 +1808,13 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                     .cards
                     .named(card)
                     .expect("a card replaying stands in the play pile");
-                before_played::<V, _>(seat, next, streams, relics, &replaying, play, effect.target);
+                before_played::<V, _>(seat, next, streams, belts, &replaying, play, effect.target);
                 next.history.start(played_card, card, play, false);
                 let mut board = Board::for_card(
+                    seat,
                     next,
                     streams.combat(),
-                    relics,
+                    belts,
                     ascension,
                     effect.target,
                     Some(card),
@@ -1803,7 +1833,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                 selection,
                 at,
             } => {
-                let ending = super::board::ending::<V>(super::listen::Walk { live: next, relics });
+                let ending = super::board::ending::<V>(super::listen::Walk { live: next, belts });
                 signalled = !ending && signal_pauses::<V>(next);
                 let taken = match (ending, signalled) {
                     (true, _) => selection.validate_automatic(sts2_core::Picked::new()),
@@ -1825,7 +1855,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
             } => {
                 use sts2_core::CardTable as _;
 
-                if super::board::ending::<V>(super::listen::Walk { live: next, relics }) {
+                if super::board::ending::<V>(super::listen::Walk { live: next, belts }) {
                     cards.clear();
                 } else {
                     signalled = signal_pauses::<V>(next);
@@ -1881,9 +1911,10 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
             Asker::Potion(_) => None,
         };
         let mut board = Board::for_card(
+            seat,
             next,
             streams.combat(),
-            relics,
+            belts,
             ascension,
             effect.target,
             playing,
@@ -1906,7 +1937,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
         Fighting {
             live: next,
             streams,
-            relics,
+            belts,
         },
         ascension,
         effect,
@@ -1926,7 +1957,7 @@ fn finish_effect<V: Rules, S: LendsCombat>(
     let Fighting {
         live: next,
         streams,
-        relics,
+        belts,
     } = fighting;
     // `EndCardOrPotionEffect`, once the last play's `AfterCardPlayed` or the
     // potion's `OnUse` is over. `CheckForEmptyHand` acts only with no card
@@ -1940,7 +1971,7 @@ fn finish_effect<V: Rules, S: LendsCombat>(
         if ended.is_none() {
             let walking = super::listen::Walking::begin(
                 next,
-                relics,
+                belts,
                 sts2_core::EventHook::PotionUsed {
                     in_fight: true,
                     holding_potions: !next.players[seat].potions.is_empty(),
@@ -1948,13 +1979,13 @@ fn finish_effect<V: Rules, S: LendsCombat>(
             );
             if walking.is_some() {
                 let mut board =
-                    Board::for_card(next, streams.combat(), relics, ascension, None, None);
+                    Board::for_card(seat, next, streams.combat(), belts, ascension, None, None);
                 board.carry_out_walk(walking);
                 ended = board.ended();
             }
         }
         let ended = match idle {
-            true => check_for_empty_hand::<V, _>(seat, next, streams, relics, ascension, ended),
+            true => check_for_empty_hand::<V, _>(seat, next, streams, belts, ascension, ended),
             false => ended,
         };
         return Ok(ended);
@@ -1968,7 +1999,7 @@ fn finish_effect<V: Rules, S: LendsCombat>(
             .cards
             .write_named(play.id, super::live::Face::was_played);
         let ended = match idle {
-            true => check_for_empty_hand::<V, _>(seat, next, streams, relics, ascension, ended),
+            true => check_for_empty_hand::<V, _>(seat, next, streams, belts, ascension, ended),
             false => ended,
         };
         return Ok(ended);
@@ -2000,7 +2031,7 @@ fn finish_effect<V: Rules, S: LendsCombat>(
     // follows the card into the pile. A fight already over exhausts nothing.
     let ended = match (ended, exhausting) {
         (None, Some(card)) => {
-            super::turn::exhausted::<V>(next, streams.combat(), relics, &card, false, true)
+            super::turn::exhausted::<V>(seat, next, streams.combat(), belts, &card, false, true)
         }
         (ended, _) => ended,
     };
@@ -2021,7 +2052,7 @@ fn finish_effect<V: Rules, S: LendsCombat>(
         return Ok(ended);
     }
     let ended = match idle {
-        true => check_for_empty_hand::<V, _>(seat, next, streams, relics, ascension, ended),
+        true => check_for_empty_hand::<V, _>(seat, next, streams, belts, ascension, ended),
         false => ended,
     };
 
@@ -2033,19 +2064,20 @@ fn finish_effect<V: Rules, S: LendsCombat>(
 /// Apart from [`play`], which most plays run without it.
 #[inline(never)]
 fn stars_spent<V: Rules>(
+    seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     streams: &mut crate::stream::Streams<V>,
-    relics: &mut crate::run::Belt<V>,
+    belts: &mut crate::run::Belts<V>,
     ascension: V::AscensionLevel,
     spent: V::Number,
 ) {
     let hook = sts2_core::EventHook::StarsSpent {
-        player: live.player().id,
+        player: live.player(seat).id,
         amount: spent,
     };
-    let walking = super::listen::Walking::begin(live, relics, hook);
+    let walking = super::listen::Walking::begin(live, belts, hook);
     if walking.is_some() {
-        let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
+        let mut board = Board::for_card(seat, live, streams.combat(), belts, ascension, None, None);
         board.carry_out_walk(walking);
         if let Some(ended) = board.ended() {
             unimplemented!("a fight {ended:?} as its stars were spent");
@@ -2061,14 +2093,14 @@ fn check_for_empty_hand<V: Rules, S: LendsCombat>(
     seat: sts2_core::SeatIndex,
     next: &mut Live<V>,
     streams: &mut S,
-    relics: &mut crate::run::Belt<V>,
+    belts: &mut crate::run::Belts<V>,
     ascension: V::AscensionLevel,
     ended: Option<super::Ended>,
 ) -> Option<super::Ended> {
     if ended.is_some() || next.players[seat].cards.len(sts2_core::Pile::Hand) != 0 {
         return ended;
     }
-    hand_emptied::<V, S>(seat, next, streams, relics, ascension)
+    hand_emptied::<V, S>(seat, next, streams, belts, ascension)
 }
 
 /// [`check_for_empty_hand`] on an empty hand.
@@ -2078,18 +2110,18 @@ fn hand_emptied<V: Rules, S: LendsCombat>(
     seat: sts2_core::SeatIndex,
     next: &mut Live<V>,
     streams: &mut S,
-    relics: &mut crate::run::Belt<V>,
+    belts: &mut crate::run::Belts<V>,
     ascension: V::AscensionLevel,
 ) -> Option<super::Ended> {
     let hook = sts2_core::EventHook::HandEmptied {
-        player: next.player().id,
+        player: next.player(seat).id,
         phase: next.players[seat].phase,
     };
-    let mut walking = super::listen::Walking::begin(next, relics, hook)?;
+    let mut walking = super::listen::Walking::begin(next, belts, hook)?;
     // The play's own choice context, so a shuffle's question inside Unceasing
     // Top's `CardPileCmd.Draw` stands the play still.
     let mut board =
-        Board::for_card(next, streams.combat(), relics, ascension, None, None).blocking();
+        Board::for_card(seat, next, streams.combat(), belts, ascension, None, None).blocking();
     while let Some((_, effect)) = board.next_of(&mut walking) {
         if board.live.asking.is_some() {
             unimplemented!("{effect:?} after the hand emptied, behind a question");
@@ -2121,7 +2153,7 @@ fn finished<V: Rules, S: LendsCombat>(
     let Fighting {
         live: next,
         streams,
-        relics,
+        belts,
     } = fighting;
     let spent = play.energy;
     let dupe = next.players[seat]
@@ -2143,13 +2175,13 @@ fn finished<V: Rules, S: LendsCombat>(
         auto: play.auto,
         last,
     };
-    let walking = super::listen::Walking::begin(next, relics, hook);
+    let walking = super::listen::Walking::begin(next, belts, hook);
     walk_played::<V, S>(
         seat,
         Fighting {
             live: next,
             streams,
-            relics,
+            belts,
         },
         ascension,
         walking,
@@ -2173,7 +2205,7 @@ pub(super) fn walk_played<V: Rules, S: LendsCombat>(
     let Fighting {
         live: next,
         streams,
-        relics,
+        belts,
     } = fighting;
     loop {
         if next.asking.is_some() {
@@ -2187,16 +2219,16 @@ pub(super) fn walk_played<V: Rules, S: LendsCombat>(
         }
         let Some((listener, effect)) = walking
             .as_mut()
-            .and_then(|walking| walking.next(seat, next, relics))
+            .and_then(|walking| walking.next(seat, next, belts))
         else {
             break;
         };
         ended = ended.or(played_effect::<V, S>(
-            seat, next, streams, relics, ascension, listener, effect, ended,
+            seat, next, streams, belts, ascension, listener, effect, ended,
         ));
     }
     if ended.is_none() {
-        played_late::<V>(seat, next, relics, card, id, spent);
+        played_late::<V>(seat, next, belts, card, id, spent);
     }
     ended
 }
@@ -2208,7 +2240,7 @@ fn played_effect<V: Rules, S: LendsCombat>(
     seat: sts2_core::SeatIndex,
     next: &mut Live<V>,
     streams: &mut S,
-    relics: &mut crate::run::Belt<V>,
+    belts: &mut crate::run::Belts<V>,
     ascension: V::AscensionLevel,
     listener: super::listen::Listener<V>,
     effect: sts2_core::HookEffect<V>,
@@ -2248,9 +2280,10 @@ fn played_effect<V: Rules, S: LendsCombat>(
             sts2_core::HookEffect::GainBlockAndRemove(amount),
         ) => {
             super::board::gain_unpowered_block::<V>(
+                seat,
                 next,
                 streams.combat(),
-                relics,
+                belts,
                 next.ascension,
                 owner,
                 amount,
@@ -2266,7 +2299,8 @@ fn played_effect<V: Rules, S: LendsCombat>(
                 self_dealt,
             },
         ) => {
-            let mut board = Board::for_card(next, streams.combat(), relics, ascension, None, None);
+            let mut board =
+                Board::for_card(seat, next, streams.combat(), belts, ascension, None, None);
             board.hit_unpowered(self_dealt.then_some(owner), owner, amount, unblockable);
             ended_here = board.ended();
         }
@@ -2276,10 +2310,11 @@ fn played_effect<V: Rules, S: LendsCombat>(
             super::listen::Listener::Power { owner, .. },
             sts2_core::HookEffect::GenerateInHand { card, count },
         ) => {
-            let player = next.player().id;
+            let player = next.player(seat).id;
             let count = num_traits::cast(count)
                 .unwrap_or_else(|| unimplemented!("{count:?} cards generated"));
-            let mut board = Board::for_card(next, streams.combat(), relics, ascension, None, None);
+            let mut board =
+                Board::for_card(seat, next, streams.combat(), belts, ascension, None, None);
             board.generate(
                 sts2_core::CardIdent::new(card),
                 sts2_core::Pile::Hand,
@@ -2294,7 +2329,8 @@ fn played_effect<V: Rules, S: LendsCombat>(
             super::listen::Listener::Power { owner, .. },
             sts2_core::HookEffect::ApplyToOwner(power, amount),
         ) => {
-            let mut board = Board::for_card(next, streams.combat(), relics, ascension, None, None);
+            let mut board =
+                Board::for_card(seat, next, streams.combat(), belts, ascension, None, None);
             board.land(owner, power, amount, Some(owner));
             ended_here = board.ended();
         }
@@ -2310,7 +2346,8 @@ fn played_effect<V: Rules, S: LendsCombat>(
         ) => {
             let count: usize =
                 num_traits::cast(count).unwrap_or_else(|| unimplemented!("{count:?} clones"));
-            let mut board = Board::for_card(next, streams.combat(), relics, ascension, None, None);
+            let mut board =
+                Board::for_card(seat, next, streams.combat(), belts, ascension, None, None);
             for _ in 0..count {
                 board.clone_written(card, sts2_core::Pile::Hand, writes);
             }
@@ -2325,7 +2362,8 @@ fn played_effect<V: Rules, S: LendsCombat>(
                 applier,
             },
         ) => {
-            let mut board = Board::for_card(next, streams.combat(), relics, ascension, None, None);
+            let mut board =
+                Board::for_card(seat, next, streams.combat(), belts, ascension, None, None);
             board.land(target, power, amount, applier);
             ended_here = board.ended();
         }
@@ -2343,16 +2381,19 @@ fn played_effect<V: Rules, S: LendsCombat>(
         }
         // `CardCmd.ApplyKeyword`, on cards wherever they stand.
         (_, effect @ sts2_core::HookEffect::AddKeyword { .. }) => {
-            Board::for_card(next, streams.combat(), relics, ascension, None, None)
+            Board::for_card(seat, next, streams.combat(), belts, ascension, None, None)
                 .write_cards([effect]);
         }
         // The play's own choice context, so a shuffle's question
         // inside a listener's `CardPileCmd.Draw` stands the play still.
         (_, effect) => {
             let mut board =
-                Board::for_card(next, streams.combat(), relics, ascension, None, None).blocking();
+                Board::for_card(seat, next, streams.combat(), belts, ascension, None, None)
+                    .blocking();
             match listener {
-                super::listen::Listener::Relic { slot } => board.relic_asked(slot, effect),
+                super::listen::Listener::Relic { seat, slot } => {
+                    board.relic_asked(seat, slot, effect)
+                }
                 _ => hook::apply::<V, _>(&mut board, [effect]),
             }
             ended_here = board.ended();
@@ -2367,16 +2408,16 @@ fn played_effect<V: Rules, S: LendsCombat>(
 fn played_late<V: Rules>(
     seat: sts2_core::SeatIndex,
     next: &mut Live<V>,
-    relics: &mut crate::run::Belt<V>,
+    belts: &mut crate::run::Belts<V>,
     card: V::Card,
     id: sts2_core::CardId<V>,
     energy: V::Count,
 ) {
     let late = sts2_core::EventHook::CardPlayedLate { card, id, energy };
-    let mut walking = super::listen::Walking::begin(next, relics, late);
+    let mut walking = super::listen::Walking::begin(next, belts, late);
     while let Some((listener, effect)) = walking
         .as_mut()
-        .and_then(|walking| walking.next(seat, next, relics))
+        .and_then(|walking| walking.next(seat, next, belts))
     {
         match (listener, effect) {
             // `CardPileCmd.Add(this, PileType.Hand)`, which sends the card
