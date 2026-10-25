@@ -408,7 +408,11 @@ pub(super) enum Deferred<V: Rules> {
     AutoPlayFromDraw(super::board::AutoPlayFromDraw<V>),
     /// The code after the `await` on a command the relic `relic` in `slot`
     /// asked for, which a question inside the command stood still.
-    OwnCommandOver { slot: u8, relic: V::Relic },
+    OwnCommandOver {
+        seat: sts2_core::SeatIndex,
+        slot: u8,
+        relic: V::Relic,
+    },
     /// `CardPileCmd.Draw` of `count` cards. `resumed` for the rest of a draw
     /// a shuffle's question stopped, which asked `ShouldDraw` already.
     Draw {
@@ -1770,7 +1774,7 @@ pub(crate) struct Onlookers<'a, V: Rules> {
     pub(crate) kept: &'a [KeptBeside<V>],
     /// The belt, where the caller has one to lend. A relic asked about with
     /// none lent panics by name.
-    pub(crate) relics: Option<&'a crate::run::Belt<V>>,
+    pub(crate) belts: Option<&'a crate::run::Belts<V>>,
     /// The results of the attack whose `AfterAttack` is being raised.
     pub(crate) attack: &'a [sts2_core::DamageResult<V>],
 }
@@ -1843,17 +1847,14 @@ impl<V: Rules> sts2_core::FightView<V> for Onlookers<'_, V> {
             .collect()
     }
 
-    /// The belt is the one player's, and every creature that is no monster
-    /// is that player.
+    /// A fight adds its players first, so creature `k` is seat `k`'s player.
+    /// Any other creature holds no relic.
     fn relic(&self, creature: CombatId, relic: V::Relic) -> bool {
-        let player = self
-            .creatures
-            .iter()
-            .any(|fighter| fighter.id == creature && fighter.carrier().monster.is_none());
-        let relics = self
-            .relics
+        let belts = self
+            .belts
             .unwrap_or_else(|| unimplemented!("{relic:?} asked about where no belt is lent"));
-        player && relics.iter().any(|held| held.relic == relic)
+        let seat = sts2_core::SeatIndex(creature.get());
+        seat.at() < belts.len() && belts[seat].iter().any(|held| held.relic == relic)
     }
 }
 
@@ -3541,7 +3542,7 @@ impl<V: Rules> Live<V> {
     pub(crate) fn telegraphed(
         &self,
         seat: sts2_core::SeatIndex,
-        relics: &crate::run::Belt<V>,
+        belts: &crate::run::Belts<V>,
         fighter: &Fighter<V>,
     ) -> Option<sts2_core::NextMove<V>> {
         let Some(rolled) = fighter.next_move.as_ref() else {
@@ -3560,7 +3561,7 @@ impl<V: Rules> Live<V> {
                 if let Some(attack) = &mut intent.attack {
                     attack.damage = super::board::modified::<V>(
                         seat,
-                        super::listen::Walk { live: self, relics },
+                        super::listen::Walk { live: self, belts },
                         Some(fighter.id),
                         Some(player.id),
                         None,
@@ -3579,7 +3580,7 @@ impl<V: Rules> Live<V> {
     pub(crate) fn reported_orbs(
         &self,
         seat: sts2_core::SeatIndex,
-        relics: &crate::run::Belt<V>,
+        belts: &crate::run::Belts<V>,
     ) -> Option<std::borrow::Cow<'_, sts2_core::Orbs<V>>> {
         let orbs = self.players[seat].orbs.as_ref()?;
         // No slot and no orb reads as no orbs at all, as for a character
@@ -3587,10 +3588,10 @@ impl<V: Rules> Live<V> {
         if num_traits::Zero::is_zero(&orbs.capacity) && orbs.queue.is_empty() {
             return None;
         }
-        if !super::listen::heard::<V>(self, relics, sts2_core::ModelHook::ModifyOrbValue) {
+        if !super::listen::heard::<V>(self, belts, sts2_core::ModelHook::ModifyOrbValue) {
             return Some(std::borrow::Cow::Borrowed(orbs));
         }
-        let walk = || super::listen::Walk { live: self, relics };
+        let walk = || super::listen::Walk { live: self, belts };
         let mut reported = orbs.clone();
         for held in &mut reported.queue {
             let modify = |base| super::board::orb_value::<V>(walk(), held.orb, base);
@@ -3665,19 +3666,20 @@ impl<V: Rules> Live<V> {
         })
     }
 
-    /// The player, which every fight has one of.
-    pub(crate) fn player(&self) -> &Fighter<V> {
+    /// Seat `seat`'s player. A fight adds its players first, in seat order.
+    pub(crate) fn player(&self, seat: sts2_core::SeatIndex) -> &Fighter<V> {
+        let id = seat.creature();
         self.creatures
             .iter()
-            .find(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER)
-            .expect("a fight has the player in it")
+            .find(|creature| creature.id == id)
+            .expect("a fight has every player in it")
     }
 
     /// Ask the power at `at` among `owner`'s about `hook`, with the fight in
     /// view, and keep what its model saved. What it asks for goes on `asked`.
     pub(crate) fn ask_power(
         &mut self,
-        relics: Option<&crate::run::Belt<V>>,
+        belts: Option<&crate::run::Belts<V>>,
         owner: CombatId,
         at: usize,
         hook: sts2_core::EventHook<V>,
@@ -3691,13 +3693,13 @@ impl<V: Rules> Live<V> {
         else {
             return;
         };
-        self.ask_power_as(relics, carrier, at, hook, asked);
+        self.ask_power_as(belts, carrier, at, hook, asked);
     }
 
     /// [`Live::ask_power`] for a caller that has the power's carrier already.
     pub(crate) fn ask_power_as(
         &mut self,
-        relics: Option<&crate::run::Belt<V>>,
+        belts: Option<&crate::run::Belts<V>>,
         carrier: Carrier<V>,
         at: usize,
         hook: sts2_core::EventHook<V>,
@@ -3712,7 +3714,7 @@ impl<V: Rules> Live<V> {
             creatures: &self.creatures,
             powers: &self.powers,
             kept: &self.kept,
-            relics,
+            belts,
             attack: &self.attack_results,
         };
         V::power_event_hook(
@@ -3732,7 +3734,7 @@ impl<V: Rules> Live<V> {
     /// none.
     pub(crate) fn ask_detached_as(
         &mut self,
-        relics: Option<&crate::run::Belt<V>>,
+        belts: Option<&crate::run::Belts<V>>,
         carrier: Carrier<V>,
         instance: PowerInstance,
         hook: sts2_core::EventHook<V>,
@@ -3752,7 +3754,7 @@ impl<V: Rules> Live<V> {
             creatures: &self.creatures,
             powers: &self.powers,
             kept: &self.kept,
-            relics,
+            belts,
             attack: &self.attack_results,
         };
         V::power_event_hook(
@@ -3826,7 +3828,7 @@ impl<V: Rules> Live<V> {
             creatures: &self.creatures,
             powers: &self.powers,
             kept: &self.kept,
-            relics: None,
+            belts: None,
             attack: &self.attack_results,
         };
         V::power_event_hook(
@@ -3885,7 +3887,7 @@ impl<V: Rules> Live<V> {
     pub(crate) fn report(
         &self,
         seat: sts2_core::SeatIndex,
-        relics: &crate::run::Belt<V>,
+        belts: &crate::run::Belts<V>,
     ) -> Combat<V> {
         let creatures = self
             .creatures
@@ -3893,7 +3895,7 @@ impl<V: Rules> Live<V> {
             .map(|fighter| {
                 fighter.creature(
                     self.powers.of(fighter.id),
-                    self.telegraphed(seat, relics, fighter),
+                    self.telegraphed(seat, belts, fighter),
                 )
             })
             .collect();
@@ -3912,10 +3914,10 @@ impl<V: Rules> Live<V> {
             legal: super::legal::hand::<V>(
                 seat,
                 self.players[seat].cards.iter(Pile::Hand),
-                super::listen::Walk { live: self, relics },
+                super::listen::Walk { live: self, belts },
             ),
             orbs: self
-                .reported_orbs(seat, relics)
+                .reported_orbs(seat, belts)
                 .map(std::borrow::Cow::into_owned),
         }
     }
@@ -3924,7 +3926,7 @@ impl<V: Rules> Live<V> {
     pub(crate) fn finish(
         &mut self,
         seat: sts2_core::SeatIndex,
-        relics: &crate::run::Belt<V>,
+        belts: &crate::run::Belts<V>,
     ) -> Combat<V> {
         self.players[seat].phase = <V::PlayerTurnPhase as sts2_core::TurnPhaseKinds>::NONE;
         self.players[seat].cards.clear();
@@ -3936,7 +3938,7 @@ impl<V: Rules> Live<V> {
         player.block = num_traits::zero();
         let player = player.id;
         self.powers.clear(player);
-        self.report(seat, relics)
+        self.report(seat, belts)
     }
 }
 

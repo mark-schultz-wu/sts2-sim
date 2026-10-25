@@ -49,7 +49,7 @@ pub(crate) struct Fighting<'a, V: Rules, S = crate::stream::Streams<V>> {
     pub(crate) streams: &'a mut S,
     /// The belt. Relics are notified inside the fight and their models save
     /// what they counted.
-    pub(crate) relics: &'a mut crate::run::Belt<V>,
+    pub(crate) belts: &'a mut crate::run::Belts<V>,
 }
 
 /// How a fight finished.
@@ -69,12 +69,12 @@ pub(crate) enum Ended {
 /// fight as it stands, so a win that something in the decision did not hand
 /// back still ends it. A decision waiting on a question is not over yet.
 pub(crate) fn check_win_condition<V: Rules, S>(fighting: Fighting<'_, V, S>) -> Option<Ended> {
-    let Fighting { live, relics, .. } = fighting;
+    let Fighting { live, belts, .. } = fighting;
     if !live.won || live.asking.is_some() {
         return None;
     }
     live.won = false;
-    if !board::ending::<V>(listen::Walk { live, relics }) {
+    if !board::ending::<V>(listen::Walk { live, belts }) {
         return None;
     }
     Some(Ended::Won)

@@ -19,7 +19,7 @@ impl<V: Rules> State<V> {
         mut ended: Option<combat::Ended>,
     ) -> Result<Option<combat::Ended>, Error> {
         while ended.is_none() {
-            let Some(fighting) = self.fighting(seat) else {
+            let Some(fighting) = self.fighting() else {
                 break;
             };
             // A choice that signalled under a pause boundary lists once the
@@ -50,7 +50,7 @@ impl<V: Rules> State<V> {
         let Answer::Cards(chosen) = *answer else {
             unimplemented!("an answer that is not a card selection");
         };
-        let Some(fighting) = self.fighting(seat) else {
+        let Some(fighting) = self.fighting() else {
             unreachable!("a fight answer has a live fight");
         };
         let since = fighting.live.removed_from_deck(seat).len();
@@ -78,10 +78,10 @@ impl<V: Rules> State<V> {
             }))
         };
 
-        let Some(fighting) = self.fighting(seat) else {
+        let Some(fighting) = self.fighting() else {
             return refused(Reason::NotInCombat);
         };
-        let play = match combat::resolve(seat, fighting.live, fighting.relics, index, target) {
+        let play = match combat::resolve(seat, fighting.live, fighting.belts, index, target) {
             Ok(play) => play,
             Err(reason) => return refused(reason),
         };
@@ -148,7 +148,7 @@ impl<V: Rules> State<V> {
         let potion = held.potion;
         // `RemoveBeforeUse`.
         self.drank(seat, at);
-        let Some(fighting) = self.fighting(seat) else {
+        let Some(fighting) = self.fighting() else {
             // What it asks the run for.
             let effects = V::on_use_on_run(potion, &self.seen_by(seat), false);
             // Thrown at an event's merchant: what the event does with it,
@@ -226,7 +226,7 @@ impl<V: Rules> State<V> {
             .expect("the turn's energy fits the build's count type");
         let ascension = self.ascension();
         loop {
-            let Some(fighting) = self.fighting(seat) else {
+            let Some(fighting) = self.fighting() else {
                 return Ok(None);
             };
             fighting.live.ask_paused(seat);
@@ -245,7 +245,7 @@ impl<V: Rules> State<V> {
         let max_energy: V::Count = num_traits::cast(V::max_energy(self.character(seat)))
             .expect("the turn's energy fits the build's count type");
         let ascension = self.ascension();
-        let Some(fighting) = self.fighting(seat) else {
+        let Some(fighting) = self.fighting() else {
             return Ok(Err(Refusal {
                 what: "end_turn".into(),
                 reason: Reason::NotInCombat,
@@ -278,7 +278,7 @@ impl<V: Rules> State<V> {
             .selector_answered(seat, ended)
             .unwrap_or_else(|error| unimplemented!("a pushed selector's answer failing: {error}"));
         let ended = ended.or_else(|| {
-            let fighting = self.fighting(seat)?;
+            let fighting = self.fighting()?;
             combat::check_win_condition(fighting)
         });
         self.asked_by_fight(seat);
@@ -296,12 +296,12 @@ impl<V: Rules> State<V> {
             // Not `finish`: the run never left the fight, and the piles and
             // the powers are where the player fell.
             Some(combat::Ended::Lost) => {
-                let (live, relics) = self.left_fight(seat);
-                let combat = live.report(seat, relics);
+                let (live, belts) = self.left_fight();
+                let combat = live.report(seat, belts);
                 self.lost(combat, Some(live));
             }
             Some(combat::Ended::Won) => {
-                let (mut live, relics) = self.left_fight(seat);
+                let (mut live, belts) = self.left_fight();
                 let extra_rewards = live.extra_rewards().to_vec();
                 let taken = live.taken_from_deck(seat).to_vec();
                 // `AddExtraReward`, which the room's own rewards come before.
@@ -315,7 +315,7 @@ impl<V: Rules> State<V> {
                     });
                 let proportion = live.gold_proportion();
                 let escaped = live.any_escaped();
-                let combat = live.finish(seat, relics);
+                let combat = live.finish(seat, belts);
                 if let Some(resuming) = self.resuming.as_mut() {
                     resuming.escaped = escaped;
                     if !extra_rewards.is_empty() || !extra.is_empty() {

@@ -118,7 +118,7 @@ impl<V: Rules> Observed<V> for AtSeat<'_, V> {
         match &self.state.phase {
             Phase::Combat(live) => Some(Fight::Live {
                 live,
-                relics: &self.state.players[self.seat].relics,
+                belts: &self.state.belts,
                 seat: self.seat,
             }),
             Phase::Lost { combat, .. } | Phase::Rewards { combat, .. } => Some(Fight::Over(combat)),

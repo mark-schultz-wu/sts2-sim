@@ -11,7 +11,7 @@ use super::live::{CardIds, CardInstance, Fighter, Live};
 use super::powers::{PowerStore, Powers as _};
 use super::{Error, encounter, monster, pile};
 use crate::bounded::Bounded;
-use crate::run::Belt;
+use crate::run::Belts;
 use crate::stream::Streams;
 
 /// `CombatManager.baseHandDrawCount`, before a hook moves it.
@@ -76,7 +76,7 @@ pub(crate) fn enter<V: Rules>(
     encounter: V::Encounter,
     entering: &Entering<'_, V>,
     streams: &Streams<V>,
-    relics: &mut Belt<V>,
+    belts: &mut Belts<V>,
 ) -> Result<Entered<V>, Error> {
     let mut streams = *streams;
     let energy: V::Count = num_traits::cast(V::max_energy(character))
@@ -219,27 +219,41 @@ pub(crate) fn enter<V: Rules>(
         point: entering.point,
         deck: entering.deck.len(),
         player: sts2_core::PlayerHealth {
-            hp: live.player().hp,
-            max_hp: live.player().max_hp,
+            hp: live.player(seat).hp,
+            max_hp: live.player(seat).max_hp,
         },
         base: entering.base,
     };
-    let mut walking = super::listen::Walking::begin(&live, relics, entered);
+    let mut walking = super::listen::Walking::begin(&live, belts, entered);
     while let Some((_, effect)) = walking
         .as_mut()
-        .and_then(|walking| walking.next(seat, &mut live, relics))
+        .and_then(|walking| walking.next(seat, &mut live, belts))
     {
         match effect {
             // `PlayerCmd.GainStars`.
             HookEffect::GainStars(gained) => {
-                let mut board =
-                    Board::for_card(&mut live, streams.combat(), relics, ascension, None, None);
+                let mut board = Board::for_card(
+                    seat,
+                    &mut live,
+                    streams.combat(),
+                    belts,
+                    ascension,
+                    None,
+                    None,
+                );
                 sts2_core::Fight::gain_stars(&mut board, gained);
             }
             // `PowerCmd.Apply` on the relic's owner, which is the player.
             HookEffect::ApplyToOwner(power, amount) => {
-                let mut board =
-                    Board::for_card(&mut live, streams.combat(), relics, ascension, None, None);
+                let mut board = Board::for_card(
+                    seat,
+                    &mut live,
+                    streams.combat(),
+                    belts,
+                    ascension,
+                    None,
+                    None,
+                );
                 sts2_core::Fight::apply_to_actor(&mut board, power, amount);
             }
             HookEffect::UpgradeRandomDrawCards(count) => {
@@ -270,15 +284,29 @@ pub(crate) fn enter<V: Rules>(
             }
             // `PlayerCmd.GainGold` for the player who carries the relic.
             HookEffect::GainGold(amount) => {
-                let mut board =
-                    Board::for_card(&mut live, streams.combat(), relics, ascension, None, None);
+                let mut board = Board::for_card(
+                    seat,
+                    &mut live,
+                    streams.combat(),
+                    belts,
+                    ascension,
+                    None,
+                    None,
+                );
                 sts2_core::Fight::gain_gold(&mut board, amount);
             }
             // `CreatureCmd.Heal` on the player who carries the relic.
             HookEffect::Heal(amount) => {
-                let player = live.player().id;
-                let mut board =
-                    Board::for_card(&mut live, streams.combat(), relics, ascension, None, None);
+                let player = live.player(seat).id;
+                let mut board = Board::for_card(
+                    seat,
+                    &mut live,
+                    streams.combat(),
+                    belts,
+                    ascension,
+                    None,
+                    None,
+                );
                 sts2_core::Fight::heal(&mut board, player, amount);
             }
             // `CardCmd.ApplyKeyword` over `AllCards`, which is the deck the
@@ -302,8 +330,15 @@ pub(crate) fn enter<V: Rules>(
                     })
                     .map(|creature| creature.id)
                     .collect();
-                let mut board =
-                    Board::for_card(&mut live, streams.combat(), relics, ascension, None, None);
+                let mut board = Board::for_card(
+                    seat,
+                    &mut live,
+                    streams.combat(),
+                    belts,
+                    ascension,
+                    None,
+                    None,
+                );
                 for enemy in enemies {
                     board.land(enemy, power, amount, None);
                 }
@@ -312,24 +347,45 @@ pub(crate) fn enter<V: Rules>(
             HookEffect::ApplyToEveryCreature(power, amount) => {
                 let everyone: Vec<CombatId> =
                     live.creatures.iter().map(|creature| creature.id).collect();
-                let mut board =
-                    Board::for_card(&mut live, streams.combat(), relics, ascension, None, None);
+                let mut board = Board::for_card(
+                    seat,
+                    &mut live,
+                    streams.combat(),
+                    belts,
+                    ascension,
+                    None,
+                    None,
+                );
                 for creature in everyone {
                     board.land(creature, power, amount, None);
                 }
             }
             // `PowerCmd.Apply<P>` on the player, from nobody.
             HookEffect::ApplyToPlayers(power, amount) => {
-                let player = live.player().id;
-                let mut board =
-                    Board::for_card(&mut live, streams.combat(), relics, ascension, None, None);
+                let player = live.player(seat).id;
+                let mut board = Board::for_card(
+                    seat,
+                    &mut live,
+                    streams.combat(),
+                    belts,
+                    ascension,
+                    None,
+                    None,
+                );
                 board.land(player, power, amount, None);
             }
             // `CreatureCmd.LoseMaxHp` on the player.
             HookEffect::LoseMaxHp(amount) => {
-                let player = live.player().id;
-                let mut board =
-                    Board::for_card(&mut live, streams.combat(), relics, ascension, None, None);
+                let player = live.player(seat).id;
+                let mut board = Board::for_card(
+                    seat,
+                    &mut live,
+                    streams.combat(),
+                    belts,
+                    ascension,
+                    None,
+                    None,
+                );
                 if sts2_core::Fight::lose_max_hp(&mut board, player, amount).is_some() {
                     unimplemented!("a question inside a maximum health loss as a room opens");
                 }
@@ -362,10 +418,10 @@ pub(crate) fn enter<V: Rules>(
         holding_potions: !live.players[seat].potions.is_empty(),
         point: live.point,
     };
-    let mut walking = super::listen::Walking::begin(&live, relics, starting);
+    let mut walking = super::listen::Walking::begin(&live, belts, starting);
     while let Some((listener, effect)) = walking
         .as_mut()
-        .and_then(|walking| walking.next(seat, &mut live, relics))
+        .and_then(|walking| walking.next(seat, &mut live, belts))
     {
         match (listener, effect) {
             // On the creature carrying the listener, which for a relic is the
@@ -373,12 +429,13 @@ pub(crate) fn enter<V: Rules>(
             (listener, HookEffect::GainBlock(block)) => {
                 let owner = match listener {
                     super::listen::Listener::Power { owner, .. } => owner,
-                    _ => live.player().id,
+                    _ => live.player(seat).id,
                 };
                 super::board::gain_unpowered_block::<V>(
+                    seat,
                     &mut live,
                     streams.combat(),
-                    relics,
+                    belts,
                     ascension,
                     owner,
                     block,
@@ -387,9 +444,10 @@ pub(crate) fn enter<V: Rules>(
             // `PlayerCmd.AddPet`.
             (_, HookEffect::AddPet(monster)) => {
                 let mut board = super::board::Board::for_card(
+                    seat,
                     &mut live,
                     streams.combat(),
-                    relics,
+                    belts,
                     ascension,
                     None,
                     None,
@@ -398,9 +456,10 @@ pub(crate) fn enter<V: Rules>(
             }
             (_, HookEffect::Summon(amount)) => {
                 super::board::summon_osty::<V>(
+                    seat,
                     &mut live,
                     streams.combat(),
-                    relics,
+                    belts,
                     ascension,
                     amount,
                 );
@@ -422,21 +481,42 @@ pub(crate) fn enter<V: Rules>(
             }
             // `CreatureCmd.Heal` on the player who carries the relic.
             (super::listen::Listener::Relic { .. }, HookEffect::Heal(amount)) => {
-                let player = live.player().id;
-                let mut board =
-                    Board::for_card(&mut live, streams.combat(), relics, ascension, None, None);
+                let player = live.player(seat).id;
+                let mut board = Board::for_card(
+                    seat,
+                    &mut live,
+                    streams.combat(),
+                    belts,
+                    ascension,
+                    None,
+                    None,
+                );
                 sts2_core::Fight::heal(&mut board, player, amount);
             }
             // `PowerCmd.Apply` on the relic's owner, which is the player.
             (super::listen::Listener::Relic { .. }, HookEffect::ApplyToOwner(power, amount)) => {
-                let mut board =
-                    Board::for_card(&mut live, streams.combat(), relics, ascension, None, None);
+                let mut board = Board::for_card(
+                    seat,
+                    &mut live,
+                    streams.combat(),
+                    belts,
+                    ascension,
+                    None,
+                    None,
+                );
                 sts2_core::Fight::apply_to_actor(&mut board, power, amount);
             }
             // `CreatureCmd.SetCurrentHp` on the enemies a relic names.
             (super::listen::Listener::Relic { .. }, HookEffect::SetEnemiesHp { creature, hp }) => {
-                let mut board =
-                    Board::for_card(&mut live, streams.combat(), relics, ascension, None, None);
+                let mut board = Board::for_card(
+                    seat,
+                    &mut live,
+                    streams.combat(),
+                    belts,
+                    ascension,
+                    None,
+                    None,
+                );
                 board.set_enemies_hp(creature, hp);
             }
             (_, other) => unimplemented!("a listener asking for {other:?} as a fight starts"),
@@ -444,10 +524,10 @@ pub(crate) fn enter<V: Rules>(
     }
     // `BeforeCombatStartLate`, once every listener has heard the first.
     let late = EventHook::CombatStartingLate { room: live.room() };
-    let mut walking = super::listen::Walking::begin(&live, relics, late);
+    let mut walking = super::listen::Walking::begin(&live, belts, late);
     while let Some((listener, effect)) = walking
         .as_mut()
-        .and_then(|walking| walking.next(seat, &mut live, relics))
+        .and_then(|walking| walking.next(seat, &mut live, belts))
     {
         match (listener, effect) {
             // The belt is the run's.
@@ -462,20 +542,29 @@ pub(crate) fn enter<V: Rules>(
     // The whole deck into the draw pile in the order the shuffle left it.
     live.players[seat].cards = Cards::dealt(&[], &order);
     if !afflicting.is_empty() {
-        super::board::Board::for_card(&mut live, streams.combat(), relics, ascension, None, None)
-            .write_cards(afflicting);
+        super::board::Board::for_card(
+            seat,
+            &mut live,
+            streams.combat(),
+            belts,
+            ascension,
+            None,
+            None,
+        )
+        .write_cards(afflicting);
     }
     if !shuffled_in.is_empty() {
         let mut board = super::board::Board::for_card(
+            seat,
             &mut live,
             streams.combat(),
-            relics,
+            belts,
             ascension,
             None,
             None,
         );
         // A relic's, whose owner is the player.
-        let player = board.live.player().id;
+        let player = board.live.player(seat).id;
         for card in shuffled_in {
             board.add_to_draw_at_random(card, Some(player));
         }
@@ -488,50 +577,43 @@ pub(crate) fn enter<V: Rules>(
         seat,
         &mut live,
         streams.combat(),
-        relics,
+        belts,
         ascension,
         <V::CombatSide as SideKinds>::PLAYER,
         turn,
     );
     // `SetupPlayerTurn` resets the energy to `MaxEnergy`, which runs
     // `Hook.ModifyMaxEnergy`, and raises the hooks that follow.
-    live.players[seat].energy = super::board::max_energy::<V>(
-        Walk {
-            live: &live,
-            relics,
-        },
-        energy,
-    );
+    live.players[seat].energy = super::board::max_energy::<V>(Walk { live: &live, belts }, energy);
     if let Some(ended) =
-        super::turn::energy_reset::<V>(seat, &mut live, &mut streams, relics, ascension)
+        super::turn::energy_reset::<V>(seat, &mut live, &mut streams, belts, ascension)
     {
         unimplemented!("a fight that ends {ended:?} as its first energy resets");
     }
-    super::turn::energy_reset_late::<V>(seat, &mut live, streams.combat(), relics, ascension);
+    super::turn::energy_reset_late::<V>(seat, &mut live, streams.combat(), belts, ascension);
     // `RandomizeOrderInternal` raises `ModifyShuffleOrder` before the innate
     // cards move. No listener answers it.
     let hook = sts2_core::EventHook::ShuffleOrder { initial: true };
-    if let Some((listener, effect)) =
-        super::listen::first_answer::<V>(seat, &mut live, relics, hook)
+    if let Some((listener, effect)) = super::listen::first_answer::<V>(seat, &mut live, belts, hook)
     {
         unimplemented!("{listener:?} asking for {effect:?} over the opening shuffle")
     }
     // `BeforeHandDraw`, then the hand, then `AfterPlayerTurnStart`: the first
     // turn's `SetupPlayerTurn` runs as every other turn's does, with the
     // innate cards put on top first.
-    let player = live.player().id;
+    let player = live.player(seat).id;
     let hook = sts2_core::EventHook::BeforeHandDraw {
         player,
         turn: live.turn,
     };
-    let asked = super::listen::Walking::begin(&live, relics, hook).map(Box::new);
+    let asked = super::listen::Walking::begin(&live, belts, hook).map(Box::new);
     let fresh = live.deferred.open_fresh();
     live.pause_boundary = true;
     let carried = super::turn::carry_setup(
         seat,
         &mut live,
         streams.combat(),
-        relics,
+        belts,
         ascension,
         super::live::Setup::BeforeHandDraw(asked),
     );
@@ -569,14 +651,14 @@ pub(crate) fn enter<V: Rules>(
         seat,
         &mut live,
         streams.combat(),
-        relics,
+        belts,
         ascension,
         <V::CombatSide as SideKinds>::PLAYER,
         false,
     )
     // `OrbQueue.AfterTurnStart`, which a fight's opening turn runs too.
     .or_else(|| {
-        super::turn::orbs_at_turn_start::<V>(seat, &mut live, streams.combat(), relics, ascension)
+        super::turn::orbs_at_turn_start::<V>(seat, &mut live, streams.combat(), belts, ascension)
     });
     // A setup paused on a signal goes on once the turn has started, and
     // runs the pre-play phase itself where it runs to its end.
@@ -589,7 +671,7 @@ pub(crate) fn enter<V: Rules>(
             super::Fighting {
                 live: &mut live,
                 streams: &mut streams,
-                relics: &mut *relics,
+                belts: &mut *belts,
             },
         )?,
         ended => ended,
@@ -599,7 +681,7 @@ pub(crate) fn enter<V: Rules>(
         None if !parked
             && live.players[seat].phase == <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY =>
         {
-            let ended = super::turn::pre_play_phase::<V>(seat, &mut live, streams.combat(), relics);
+            let ended = super::turn::pre_play_phase::<V>(seat, &mut live, streams.combat(), belts);
             if ended.is_none() {
                 live.players[seat].phase = super::turn::after_pre_play::<V>(&live);
             }
@@ -621,10 +703,10 @@ pub(crate) fn enter<V: Rules>(
 pub(super) fn after_modifying_hand_draw<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &mut super::live::Live<V>,
-    relics: &mut Belt<V>,
+    belts: &mut Belts<V>,
 ) {
     let hook = sts2_core::EventHook::HandDrawModified;
-    if let Some((listener, effect)) = super::listen::first_answer::<V>(seat, live, relics, hook) {
+    if let Some((listener, effect)) = super::listen::first_answer::<V>(seat, live, belts, hook) {
         unimplemented!("{listener:?} asking for {effect:?} after the hand size is worked out")
     }
 }
@@ -634,10 +716,14 @@ pub(super) fn after_modifying_hand_draw<V: Rules>(
 /// `Hook.ModifyHandDraw` from `baseHandDrawCount`, then its late phase. The
 /// listeners that answer it read the turn, and the first turn of a fight
 /// follows no other.
-pub(super) fn hand_size<V: Rules>(fight: Walk<'_, V>, turn: V::Count) -> usize {
+pub(super) fn hand_size<V: Rules>(
+    seat: sts2_core::SeatIndex,
+    fight: Walk<'_, V>,
+    turn: V::Count,
+) -> usize {
     let base: V::Number =
         num_traits::cast(HAND_SIZE).expect("the printed hand size fits the build's game number");
-    let player = fight.live.player().id;
+    let player = fight.live.player(seat).id;
     let room = fight.live.room();
     let phases = [
         ModifyHook::HandDraw {

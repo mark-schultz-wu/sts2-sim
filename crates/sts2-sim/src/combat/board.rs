@@ -20,7 +20,7 @@ use sts2_core::{
 use super::listen::{Listener, Walk};
 use super::live::{CardInstance, Face, Fighter, HeldPower, Live};
 use super::powers::Powers as _;
-use crate::run::Belt;
+use crate::run::Belts;
 use crate::stream::CombatRngs;
 
 /// The fight an effect is resolved against.
@@ -29,7 +29,7 @@ pub(super) struct Board<'a, V: Rules> {
     /// The run streams an effect can draw from while it resolves.
     rngs: CombatRngs<'a>,
     /// The player's relic belt, for hooks raised while an effect resolves.
-    relics: &'a mut Belt<V>,
+    belts: &'a mut Belts<V>,
     /// Whose effect this is. The player for a card, the monster for a move.
     actor: CombatId,
     /// The creature a card was pointed at.
@@ -164,7 +164,7 @@ enum Resolved<V: Rules> {
         play: Option<sts2_core::PlayAt>,
         /// `cardSource`: which copy gives it.
         source: Option<CardId<V>>,
-        /// The relics whose block hooks changed it.
+        /// The belts whose block hooks changed it.
         modifying: SmallVec<[V::Relic; 1]>,
         /// Whether the decimal was above nothing before the floor.
         positive: bool,
@@ -198,13 +198,14 @@ impl<V: Rules> EffectResolution<V> for ResolvedEffect<V> {
 
 /// `OstyCmd.Summon` from a hook, outside any card or move.
 pub(super) fn summon_osty<V: Rules>(
+    seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     rngs: CombatRngs<'_>,
-    relics: &mut Belt<V>,
+    belts: &mut Belts<V>,
     ascension: V::AscensionLevel,
     amount: V::Number,
 ) {
-    Board::for_card(live, rngs, relics, ascension, None, None).summon_osty(amount);
+    Board::for_card(seat, live, rngs, belts, ascension, None, None).summon_osty(amount);
 }
 
 impl<'a, V: Rules> Board<'a, V> {
@@ -233,19 +234,21 @@ impl<'a, V: Rules> Board<'a, V> {
     }
 
     /// A board for one card, played from the player.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn for_card(
+        seat: sts2_core::SeatIndex,
         live: &'a mut Live<V>,
         rngs: CombatRngs<'a>,
-        relics: &'a mut Belt<V>,
+        belts: &'a mut Belts<V>,
         ascension: V::AscensionLevel,
         target: Option<CombatId>,
         playing: Option<CardId<V>>,
     ) -> Self {
-        let actor = live.player().id;
+        let actor = seat.creature();
         Board {
             live,
             rngs,
-            relics,
+            belts,
             actor,
             target,
             playing,
@@ -294,7 +297,7 @@ impl<'a, V: Rules> Board<'a, V> {
     pub(super) fn for_move(
         live: &'a mut Live<V>,
         rngs: CombatRngs<'a>,
-        relics: &'a mut Belt<V>,
+        belts: &'a mut Belts<V>,
         ascension: V::AscensionLevel,
         acting: (CombatId, V::Number, V::Count),
     ) -> Self {
@@ -302,7 +305,7 @@ impl<'a, V: Rules> Board<'a, V> {
         Board {
             live,
             rngs,
-            relics,
+            belts,
             actor,
             target: None,
             playing: None,
@@ -524,7 +527,7 @@ impl<'a, V: Rules> Board<'a, V> {
             PowerAmount::Endless => {
                 if super::listen::heard::<V>(
                     self.live,
-                    self.relics,
+                    self.belts,
                     sts2_core::ModelHook::TryModifyPowerAmountReceived,
                 ) {
                     let endless = -num_traits::one::<V::Number>();
@@ -660,13 +663,13 @@ impl<'a, V: Rules> Board<'a, V> {
             .with(ModelHook::ModifyPowerAmountGivenMultiplicative)
             .with(ModelHook::AfterModifyingPowerAmountGiven)
             .with(ModelHook::TryModifyPowerAmountReceived);
-        if !super::listen::heard_any::<V>(self.live, self.relics, AROUND) {
+        if !super::listen::heard_any::<V>(self.live, self.belts, AROUND) {
             return (amount, Received::<V>::new());
         }
         // `Hook.BeforePowerAmountChanged`, which no listener here answers with
         // a command.
         let source = self.playing;
-        if super::listen::heard::<V>(self.live, self.relics, ModelHook::BeforePowerAmountChanged) {
+        if super::listen::heard::<V>(self.live, self.belts, ModelHook::BeforePowerAmountChanged) {
             let target_side = self
                 .live
                 .creatures
@@ -694,11 +697,11 @@ impl<'a, V: Rules> Board<'a, V> {
                 target_side,
                 target_artifact,
                 applier,
-                player: self.live.player().id,
+                player: self.live.player(seat).id,
                 source,
             };
             if let Some((listener, effect)) =
-                super::listen::first_answer::<V>(seat, self.live, self.relics, hook)
+                super::listen::first_answer::<V>(seat, self.live, self.belts, hook)
             {
                 unimplemented!("{listener:?} asking for {effect:?} before {power:?} changes");
             }
@@ -707,30 +710,40 @@ impl<'a, V: Rules> Board<'a, V> {
         let mut amount = amount;
         if let Some(giver) = applier.filter(|&applier| self.at(applier).is_some()) {
             let modifying;
-            (amount, modifying) =
-                given_by::<V>(self.walk(), giver, Some(target), power, amount, source);
+            (amount, modifying) = given_by::<V>(
+                seat,
+                self.walk(),
+                giver,
+                Some(target),
+                power,
+                amount,
+                source,
+            );
             // `AfterModifyingPowerAmountGiven`, asked of each relic that
             // changed it. The game asks once the power has landed, and asking
             // here instead is the same while none of them asks for anything.
             for relic in modifying {
                 let hook = sts2_core::EventHook::PowerAmountGivenModified { power };
-                if let Some(effect) = super::listen::ask_relic(self.relics, relic, hook).first() {
+                if let Some(effect) =
+                    super::listen::ask_relic(seat, self.belts, relic, hook).first()
+                {
                     unimplemented!("{relic:?} asking for {effect:?} once it changed {power:?}")
                 }
             }
         }
-        received_by::<V>(self.walk(), target, power, amount)
+        received_by::<V>(seat, self.walk(), target, power, amount)
     }
 
     /// `Hook.AfterModifyingPowerAmountReceived`, asked of each listener that
     /// changed what `power` landed with.
     fn power_received(&mut self, modifiers: Received<V>, power: V::Power) {
+        let seat = self.seat();
         for modifier in modifiers {
             let (holder, modifier) = match modifier {
                 Receiver::Power(holder, modifier) => (holder, modifier),
                 Receiver::Relic(relic) => {
                     let hook = sts2_core::EventHook::PowerAmountReceivedModified { power };
-                    let asked = super::listen::ask_relic(self.relics, relic, hook);
+                    let asked = super::listen::ask_relic(seat, self.belts, relic, hook);
                     if let Some(effect) = asked.first() {
                         unimplemented!("{relic:?} asking for {effect:?} once it changed {power:?}");
                     }
@@ -747,7 +760,7 @@ impl<'a, V: Rules> Board<'a, V> {
             };
             let mut asked = sts2_core::HookEffects::new();
             self.live.ask_power(
-                Some(self.relics),
+                Some(self.belts),
                 holder,
                 at,
                 sts2_core::EventHook::PowerAmountReceivedModified { power },
@@ -815,7 +828,7 @@ impl<'a, V: Rules> Board<'a, V> {
             return;
         }
         let ascension = self.live.ascension;
-        super::turn::roll_moves_of::<V>(self.live, self.relics, ascension, self.rngs.ai, |at| {
+        super::turn::roll_moves_of::<V>(self.live, self.belts, ascension, self.rngs.ai, |at| {
             at == id
         })
         .unwrap_or_else(|e| unimplemented!("rolling the move of a monster that joined: {e}"));
@@ -836,7 +849,7 @@ impl<'a, V: Rules> Board<'a, V> {
         };
         let mut asked = sts2_core::HookEffects::new();
         self.live.ask_power(
-            Some(self.relics),
+            Some(self.belts),
             id,
             at,
             sts2_core::EventHook::Applied,
@@ -1055,7 +1068,7 @@ impl<'a, V: Rules> Board<'a, V> {
         }
         let mut walking = super::listen::Walking::begin(
             self.live,
-            self.relics,
+            self.belts,
             sts2_core::EventHook::PowerAmountChanged {
                 creature: id,
                 power,
@@ -1229,7 +1242,7 @@ impl<'a, V: Rules> Board<'a, V> {
         }
         let walking = super::listen::Walking::begin(
             self.live,
-            self.relics,
+            self.belts,
             sts2_core::EventHook::DamageReceiving {
                 target,
                 amount: damage,
@@ -1357,6 +1370,7 @@ impl<'a, V: Rules> Board<'a, V> {
     /// are done.
     #[inline(always)]
     fn settle_hit(&mut self, landed: Landed<V>, dying: &mut SmallVec<[CombatId; 2]>) {
+        let seat = self.seat();
         let Landed {
             dealer,
             target,
@@ -1399,12 +1413,12 @@ impl<'a, V: Rules> Board<'a, V> {
             if aimed && block_broken {
                 let walking = super::listen::Walking::begin(
                     self.live,
-                    self.relics,
+                    self.belts,
                     sts2_core::EventHook::BlockBroken {
                         creature: target,
                         breaker: dealer,
                         pet_of,
-                        player: self.live.player().id,
+                        player: self.live.player(seat).id,
                     },
                 );
                 self.after_hit(walking);
@@ -1427,7 +1441,7 @@ impl<'a, V: Rules> Board<'a, V> {
             }
             let walking = super::listen::Walking::begin(
                 self.live,
-                self.relics,
+                self.belts,
                 sts2_core::EventHook::DamageGiven {
                     dealer,
                     pet_of,
@@ -1437,7 +1451,7 @@ impl<'a, V: Rules> Board<'a, V> {
                     powered,
                     fully_blocked: aimed && fully_blocked,
                     block_broken: aimed && block_broken,
-                    player: self.live.player().id,
+                    player: self.live.player(seat).id,
                 },
             );
             self.after_hit(walking);
@@ -1448,7 +1462,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 false => {
                     let walking = super::listen::Walking::begin(
                         self.live,
-                        self.relics,
+                        self.belts,
                         sts2_core::EventHook::DamageReceived {
                             target: receiver,
                             unblocked: lost,
@@ -1459,7 +1473,7 @@ impl<'a, V: Rules> Board<'a, V> {
                             dealer,
                             powered,
                             card: card.and(self.playing),
-                            player: self.live.player().id,
+                            player: self.live.player(seat).id,
                             side: self.live.side,
                             fully_blocked: aimed && fully_blocked,
                             unblockable,
@@ -1565,7 +1579,7 @@ impl<'a, V: Rules> Board<'a, V> {
             creatures: &self.live.creatures,
             powers: &self.live.powers,
             kept: &self.live.kept,
-            relics: Some(&*self.relics),
+            belts: Some(&*self.belts),
             attack: &self.live.attack_results,
         };
         let listener = sts2_core::EventPower {
@@ -1666,7 +1680,7 @@ impl<'a, V: Rules> Board<'a, V> {
             .is_some_and(|ident| ident.affliction.is_some());
         let mut walking = super::listen::Walking::begin(
             self.live,
-            self.relics,
+            self.belts,
             sts2_core::EventHook::CardEnteredCombat {
                 at,
                 card,
@@ -1694,7 +1708,7 @@ impl<'a, V: Rules> Board<'a, V> {
     /// `AfterCardEnteredCombat` for it first.
     fn card_generated(&mut self, at: CardAt<V>, card: V::Card, creator: Option<CombatId>) {
         let seat = self.seat();
-        let by_player = creator == Some(self.live.player().id);
+        let by_player = creator == Some(self.live.player(seat).id);
         self.live.history.generated(by_player);
         // `IterateCombatHookListeners` hands a fight that is ending no
         // listeners, as for a card made after an orb it channelled won.
@@ -1703,7 +1717,7 @@ impl<'a, V: Rules> Board<'a, V> {
         }
         let mut walking = super::listen::Walking::begin(
             self.live,
-            self.relics,
+            self.belts,
             sts2_core::EventHook::CardGeneratedForCombat { at, card, creator },
         );
         let mut rest: SmallVec<[HookEffect<V>; 4]> = SmallVec::new();
@@ -1731,7 +1745,8 @@ impl<'a, V: Rules> Board<'a, V> {
     /// Who a card the acting creature makes is made by: the player, where
     /// the player acts. A monster's cards are made by nobody.
     fn creator(&self) -> Option<CombatId> {
-        let player = self.live.player().id;
+        let seat = self.seat();
+        let player = self.live.player(seat).id;
         (self.actor == player).then_some(player)
     }
 
@@ -1997,7 +2012,7 @@ impl<'a, V: Rules> Board<'a, V> {
     pub(super) fn walk(&self) -> Walk<'_, V> {
         Walk {
             live: self.live,
-            relics: self.relics,
+            belts: self.belts,
         }
     }
 
@@ -2028,7 +2043,7 @@ impl<'a, V: Rules> Board<'a, V> {
         // anything decides whether it dies.
         let mut walking = super::listen::Walking::begin(
             self.live,
-            self.relics,
+            self.belts,
             sts2_core::EventHook::BeforeDeath { creature: id },
         );
         while let Some((listener, effect)) =
@@ -2049,7 +2064,7 @@ impl<'a, V: Rules> Board<'a, V> {
         }
         // `Hook.ShouldDie`, then `Hook.ShouldDieLate`, and the model that
         // kept the creature alive. A forced death asks neither.
-        let player = self.live.player().id;
+        let player = self.live.player(seat).id;
         let preventer = (!force)
             .then(|| {
                 super::listen::first_deciding::<V>(
@@ -2102,9 +2117,9 @@ impl<'a, V: Rules> Board<'a, V> {
             if let Some(osty) = osty {
                 self.kill_outright(osty, force);
             }
-            // `DeactivateHooks`: the player's relics, potions and cards
+            // `DeactivateHooks`: the player's belts, potions and cards
             // hear nothing after.
-            self.relics.deafen();
+            self.belts[seat].deafen();
             self.live.players[seat].potions.deafen();
             self.live.players[seat].cards.deafen();
             self.ended = Some(super::Ended::Lost);
@@ -2289,7 +2304,7 @@ impl<'a, V: Rules> Board<'a, V> {
                             creatures: &self.live.creatures,
                             powers: &self.live.powers,
                             kept: &self.live.kept,
-                            relics: Some(&*self.relics),
+                            belts: Some(&*self.belts),
                             attack: &self.live.attack_results,
                         },
                     ),
@@ -2333,6 +2348,7 @@ impl<'a, V: Rules> Board<'a, V> {
     #[cold]
     #[inline(never)]
     fn death_prevented(&mut self, at: usize, preventer: sts2_core::ModelId<V>) {
+        let seat = self.seat();
         let creature = &self.live.creatures[at];
         let (id, side) = (creature.id, creature.side);
         let max_hp: V::Number =
@@ -2342,7 +2358,9 @@ impl<'a, V: Rules> Board<'a, V> {
         }
         let hook = sts2_core::EventHook::DeathPrevented { max_hp };
         let asked = match preventer {
-            sts2_core::ModelId::Relic(relic) => super::listen::ask_relic(self.relics, relic, hook),
+            sts2_core::ModelId::Relic(relic) => {
+                super::listen::ask_relic(seat, self.belts, relic, hook)
+            }
             sts2_core::ModelId::Potion(potion) => {
                 let mut asked = sts2_core::HookEffects::new();
                 V::potion_event_hook(potion, hook, &mut asked);
@@ -2388,7 +2406,7 @@ impl<'a, V: Rules> Board<'a, V> {
             target: Some(saved),
         };
         if let Some((listener, effect)) =
-            super::listen::first_answer::<V>(seat, self.live, self.relics, hook)
+            super::listen::first_answer::<V>(seat, self.live, self.belts, hook)
         {
             unimplemented!("{listener:?} asking for {effect:?} before a potion")
         }
@@ -2405,16 +2423,16 @@ impl<'a, V: Rules> Board<'a, V> {
             in_fight: true,
             holding_potions: !self.live.players[seat].potions.is_empty(),
         };
-        let walking = super::listen::Walking::begin(self.live, self.relics, hook);
+        let walking = super::listen::Walking::begin(self.live, self.belts, hook);
         self.carry_out_walk(walking);
         if self.ended().is_some() || self.live.players[seat].cards.len(Pile::Hand) != 0 {
             return;
         }
         let hook = sts2_core::EventHook::HandEmptied {
-            player: self.live.player().id,
+            player: self.live.player(seat).id,
             phase: self.live.players[seat].phase,
         };
-        let walking = super::listen::Walking::begin(self.live, self.relics, hook);
+        let walking = super::listen::Walking::begin(self.live, self.belts, hook);
         self.carry_out_walk(walking);
     }
 
@@ -2443,7 +2461,7 @@ impl<'a, V: Rules> Board<'a, V> {
             });
         let mut walking = super::listen::Walking::begin(
             self.live,
-            self.relics,
+            self.belts,
             sts2_core::EventHook::AfterDeath {
                 creature,
                 side,
@@ -2479,7 +2497,7 @@ impl<'a, V: Rules> Board<'a, V> {
                     Listener::Relic { .. },
                     sts2_core::HookEffect::GainEnergy(_) | sts2_core::HookEffect::Draw(_),
                 ) if self.ending() => {}
-                (Listener::Relic { slot }, effect) => self.relic_asked(slot, effect),
+                (Listener::Relic { seat, slot }, effect) => self.relic_asked(seat, slot, effect),
                 // `PowerCmd.Remove(this)`, from a power that goes with the
                 // creature that applied it.
                 (Listener::Power { owner, power, .. }, HookEffect::Remove) if owner != creature => {
@@ -2614,10 +2632,11 @@ impl<'a, V: Rules> Board<'a, V> {
         amount: V::Number,
         from: LossFrom,
     ) -> V::Number {
-        let lost = after_osty::<V>(self.walk(), target, amount, from);
+        let seat = self.seat();
+        let lost = after_osty::<V>(seat, self.walk(), target, amount, from);
         if !super::listen::heard::<V>(
             self.live,
-            self.relics,
+            self.belts,
             sts2_core::ModelHook::AfterModifyingHpLostAfterOsty,
         ) {
             return lost;
@@ -2625,7 +2644,7 @@ impl<'a, V: Rules> Board<'a, V> {
         let exact = exact::<V>;
         let mut number = exact(amount);
         let mut modifiers: SmallVec<[(CombatId, V::Power); 2]> = SmallVec::new();
-        let player = self.live.player().id;
+        let player = self.live.player(seat).id;
         let osty = osty::<V>(&self.live.creatures).map(|osty| osty.id);
         for phase in [
             ModifyHook::HpLostAfterOsty {
@@ -2695,7 +2714,7 @@ impl<'a, V: Rules> Board<'a, V> {
             };
             let mut asked = sts2_core::HookEffects::new();
             self.live.ask_power(
-                Some(self.relics),
+                Some(self.belts),
                 holder,
                 at,
                 sts2_core::EventHook::HpLostModified,
@@ -2725,7 +2744,7 @@ impl<'a, V: Rules> Board<'a, V> {
     /// A listener other than a relic to `AfterDiedToDoom`.
     pub(super) fn doom_kill(&mut self, doomed: &[CombatId]) {
         let seat = self.seat();
-        let player = self.live.player().id;
+        let player = self.live.player(seat).id;
         let triggers = |board: &Self, creature: CombatId| {
             creature != player && sts2_core::Fight::death_triggers_fatal(board, creature)
         };
@@ -2749,7 +2768,7 @@ impl<'a, V: Rules> Board<'a, V> {
             .count();
         let mut walking = super::listen::Walking::begin(
             self.live,
-            self.relics,
+            self.belts,
             sts2_core::EventHook::DiedToDoom { fatal },
         );
         // Each listener runs under a pause boundary of its own, and nothing
@@ -2760,7 +2779,7 @@ impl<'a, V: Rules> Board<'a, V> {
         {
             let boundary = listening.enter(self.live, listener);
             match listener {
-                Listener::Relic { slot } => self.relic_asked(slot, effect),
+                Listener::Relic { seat, slot } => self.relic_asked(seat, slot, effect),
                 listener => unimplemented!("{listener:?} asking for {effect:?} after Doom kills"),
             }
             listening.leave(seat, self.live, boundary);
@@ -2812,9 +2831,10 @@ impl<'a, V: Rules> Board<'a, V> {
     /// `HookEffect::SetEnemiesHp`: on the enemy `creature` names, or on each
     /// one that can be hit.
     pub(super) fn set_enemies_hp(&mut self, creature: Option<CombatId>, hp: V::Number) {
+        let seat = self.seat();
         let enemies = match creature {
             Some(creature) => smallvec::smallvec![creature],
-            None => self.hittable_opponents_of(self.live.player().id),
+            None => self.hittable_opponents_of(self.live.player(seat).id),
         };
         for enemy in enemies {
             self.set_current_hp(enemy, hp);
@@ -2833,7 +2853,7 @@ impl<'a, V: Rules> Board<'a, V> {
             side: <V::CombatSide as SideKinds>::ENEMY,
             point: self.live.point,
         };
-        let mut walking = super::listen::Walking::begin(self.live, self.relics, hook);
+        let mut walking = super::listen::Walking::begin(self.live, self.belts, hook);
         while let Some((listener, effect)) =
             walking.as_mut().and_then(|walking| self.next_of(walking))
         {
@@ -2853,6 +2873,7 @@ impl<'a, V: Rules> Board<'a, V> {
     /// `Hook.AfterCurrentHpChanged` for `creature`, whose hit points moved by
     /// `delta`, and what its listeners ask.
     fn current_hp_changed(&mut self, creature: CombatId, delta: V::Number) {
+        let seat = self.seat();
         let Some(at) = self.at(creature) else {
             return;
         };
@@ -2862,7 +2883,7 @@ impl<'a, V: Rules> Board<'a, V> {
             _ => None,
         };
         let pet_of = held.owner;
-        let player = self.live.player();
+        let player = self.live.player(seat);
         let hook = sts2_core::EventHook::CurrentHpChanged {
             creature,
             monster,
@@ -2874,7 +2895,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 max_hp: player.max_hp,
             },
         };
-        let walking = super::listen::Walking::begin(self.live, self.relics, hook);
+        let walking = super::listen::Walking::begin(self.live, self.belts, hook);
         self.after_hit(walking);
     }
 
@@ -2884,7 +2905,7 @@ impl<'a, V: Rules> Board<'a, V> {
         walking: &mut super::listen::Walking<V>,
     ) -> Option<(Listener<V>, HookEffect<V>)> {
         let seat = self.seat();
-        walking.next(seat, self.live, self.relics)
+        walking.next(seat, self.live, self.belts)
     }
 
     /// What `walking`'s listeners ask for, each carried out as the walk
@@ -2894,7 +2915,7 @@ impl<'a, V: Rules> Board<'a, V> {
             walking.as_mut().and_then(|walking| self.next_of(walking))
         {
             match listener {
-                Listener::Relic { slot } => self.relic_asked(slot, effect),
+                Listener::Relic { seat, slot } => self.relic_asked(seat, slot, effect),
                 _ => super::hook::apply::<V, _>(self, [effect]),
             }
         }
@@ -2903,23 +2924,28 @@ impl<'a, V: Rules> Board<'a, V> {
     /// What the relic in `slot` asked for, carried out for the player. Its
     /// `CardPileCmd.Draw` runs the code after its `await` once the draw is
     /// over, behind a question the draw left.
-    pub(super) fn relic_asked(&mut self, slot: u8, effect: HookEffect<V>) {
+    pub(super) fn relic_asked(
+        &mut self,
+        seat: sts2_core::SeatIndex,
+        slot: u8,
+        effect: HookEffect<V>,
+    ) {
+        // A relic acts for its owner, whoever's command raised the hook, as a
+        // monster's attack does where a fairy saves the player.
+        let actor = std::mem::replace(&mut self.actor, seat.creature());
         let HookEffect::Draw(count) = effect else {
-            // A relic acts for its owner, whoever's command raised the hook,
-            // as a monster's attack does where a fairy saves the player.
-            let player = self.live.player().id;
-            let actor = std::mem::replace(&mut self.actor, player);
             super::hook::apply::<V, _>(self, [effect]);
             self.actor = actor;
             return;
         };
         sts2_core::Fight::draw(self, count);
-        let relic = self.relics[usize::from(slot)].relic;
+        self.actor = actor;
+        let relic = self.belts[seat][usize::from(slot)].relic;
         match self.pausable() && self.live.asking.is_some() {
             true => self
                 .live
-                .defer(super::live::Deferred::OwnCommandOver { slot, relic }),
-            false => super::relic::own_command_over::<V>(self.relics, slot, relic),
+                .defer(super::live::Deferred::OwnCommandOver { seat, slot, relic }),
+            false => super::relic::own_command_over::<V>(&mut self.belts[seat], slot, relic),
         }
     }
 
@@ -2932,13 +2958,15 @@ impl<'a, V: Rules> Board<'a, V> {
             walking.as_mut().and_then(|walking| self.next_of(walking))
         {
             // `CardPileCmd.Draw` for the relic's owner, the player.
-            if let (Listener::Relic { slot }, effect @ HookEffect::Draw(_)) = (listener, effect) {
-                self.relic_asked(slot, effect);
+            if let (Listener::Relic { seat, slot }, effect @ HookEffect::Draw(_)) =
+                (listener, effect)
+            {
+                self.relic_asked(seat, slot, effect);
                 continue;
             }
             // `CreatureCmd.Heal` on the relic's owner, the player.
             if let (Listener::Relic { .. }, HookEffect::Heal(amount)) = (listener, effect) {
-                let player = self.live.player().id;
+                let player = self.live.player(seat).id;
                 sts2_core::Fight::heal(self, player, amount);
                 continue;
             }
@@ -2948,7 +2976,7 @@ impl<'a, V: Rules> Board<'a, V> {
             if let (Listener::Relic { .. }, HookEffect::ApplyToOwner(power, amount)) =
                 (listener, effect)
             {
-                let player = self.live.player().id;
+                let player = self.live.player(seat).id;
                 let playing = self.playing.take();
                 self.land(player, power, amount, Some(player));
                 self.playing = playing;
@@ -3075,7 +3103,7 @@ pub(super) fn modified_by<V: Rules>(
     amount: V::Number,
     phases: &[ModifyHook<V>],
 ) -> V::Number {
-    match super::listen::heard_any::<V>(fight.live, fight.relics, hooks_of(phases)) {
+    match super::listen::heard_any::<V>(fight.live, fight.belts, hooks_of(phases)) {
         true => modified_by_listeners::<V>(fight, amount, phases),
         false => amount.max(V::Number::zero()),
     }
@@ -3144,7 +3172,7 @@ fn scaled_by_signed<V: Rules>(
     let hooks = hooks_of(phases);
     // A number nothing listens to and nothing scales is the number itself.
     // Most energy costs are asked this way, once a card for every `legal`.
-    if scale.is_none() && !super::listen::heard_any::<V>(fight.live, fight.relics, hooks) {
+    if scale.is_none() && !super::listen::heard_any::<V>(fight.live, fight.belts, hooks) {
         return (amount, amount > V::Number::zero());
     }
     // Its own walk rather than [`answers`], which keeps the walk inlined on
@@ -3284,12 +3312,13 @@ pub(super) struct LossFrom {
 
 /// `ModifyHpLost` in the phases after a hit found who takes it.
 fn after_osty<V: Rules>(
+    seat: sts2_core::SeatIndex,
     fight: Walk<'_, V>,
     target: CombatId,
     amount: V::Number,
     from: LossFrom,
 ) -> V::Number {
-    let player = fight.live.player().id;
+    let player = fight.live.player(seat).id;
     let osty = osty::<V>(&fight.live.creatures).map(|osty| osty.id);
     hp_lost_by::<V>(
         fight,
@@ -3523,7 +3552,7 @@ pub(super) fn blocked<V: Rules>(
     // the listeners whose answer moved the number. Only a relic acts on it.
     let mut modifying = SmallVec::new();
     let after = sts2_core::ModelHook::AfterModifyingBlockAmount;
-    if super::listen::heard::<V>(fight.live, fight.relics, after) {
+    if super::listen::heard::<V>(fight.live, fight.belts, after) {
         for phase in phases {
             let hook = sts2_core::Overrides::of(phase.model_hook());
             super::listen::each::<V>(fight, hook, |listener, _| {
@@ -3536,11 +3565,8 @@ pub(super) fn blocked<V: Rules>(
                     Modify::Scaled(share) => share.exact() != Decimal::ONE,
                     answer => unimplemented!("a relic answering {answer:?} for block"),
                 };
-                let held = fight
-                    .relics
-                    .iter()
-                    .find(|held| std::ptr::eq(&held.state, state))
-                    .expect("a relic asked is on the belt");
+                let (seat, slot) = super::relic::place_of::<V>(fight.belts, state);
+                let held = &fight.belts[seat][slot];
                 if moved && !modifying.contains(&held.relic) {
                     modifying.push(held.relic);
                 }
@@ -3594,7 +3620,7 @@ pub(super) enum Receiver<V: Rules> {
 pub(super) type Received<V> = SmallVec<[Receiver<V>; 1]>;
 
 /// `Hook.ModifyPowerAmountGiven`, over the listeners in the fight: what
-/// `amount` of `power` from `giver` to `target` becomes, and the relics that
+/// `amount` of `power` from `giver` to `target` becomes, and the belts that
 /// changed it. Every addition lands, then every share multiplies what they
 /// left. `source` is the card giving it.
 ///
@@ -3602,6 +3628,7 @@ pub(super) type Received<V> = SmallVec<[Receiver<V>; 1]>;
 ///
 /// A listener other than a relic changing it, which nothing ported is.
 pub(super) fn given_by<V: Rules>(
+    seat: sts2_core::SeatIndex,
     fight: Walk<'_, V>,
     giver: CombatId,
     target: Option<CombatId>,
@@ -3612,10 +3639,10 @@ pub(super) fn given_by<V: Rules>(
     use sts2_core::ModelHook;
 
     let mut modifying = SmallVec::new();
-    let player = fight.live.player().id;
+    let player = fight.live.player(seat).id;
     let mut amount = amount;
     let mut modified = |hook: ModelHook, asked: ModifyHook<V>, amount: &mut V::Number| {
-        if !super::listen::heard::<V>(fight.live, fight.relics, hook) {
+        if !super::listen::heard::<V>(fight.live, fight.belts, hook) {
             return;
         }
         super::listen::each::<V>(fight, sts2_core::Overrides::of(hook), |listener, _| {
@@ -3643,11 +3670,8 @@ pub(super) fn given_by<V: Rules>(
                 }
             };
             if moved && let sts2_core::Listener::Relic { state, .. } = listener {
-                let held = fight
-                    .relics
-                    .iter()
-                    .find(|held| std::ptr::eq(&held.state, state))
-                    .expect("a relic asked is on the belt");
+                let (seat, slot) = super::relic::place_of::<V>(fight.belts, state);
+                let held = &fight.belts[seat][slot];
                 modifying.push(held.relic);
             }
         });
@@ -3682,6 +3706,7 @@ pub(super) fn given_by<V: Rules>(
 /// `Hook.ModifyPowerAmountReceived`: `amount` of `power` handed to each
 /// listener in turn, and what each hands back.
 pub(super) fn received_by<V: Rules>(
+    seat: sts2_core::SeatIndex,
     fight: Walk<'_, V>,
     target: CombatId,
     power: V::Power,
@@ -3689,7 +3714,7 @@ pub(super) fn received_by<V: Rules>(
 ) -> (V::Number, Received<V>) {
     let mut modifiers = Received::<V>::new();
     let hook = sts2_core::ModelHook::TryModifyPowerAmountReceived;
-    if !super::listen::heard::<V>(fight.live, fight.relics, hook) {
+    if !super::listen::heard::<V>(fight.live, fight.belts, hook) {
         return (amount, modifiers);
     }
     let mut amount = amount;
@@ -3698,7 +3723,7 @@ pub(super) fn received_by<V: Rules>(
             power,
             target,
             amount,
-            player: fight.live.player().id,
+            player: fight.live.player(seat).id,
         };
         match (
             <V as sts2_core::Hooks>::modify_hook(listener, asked),
@@ -3711,11 +3736,8 @@ pub(super) fn received_by<V: Rules>(
             }
             (Modify::Replaced(with), sts2_core::Listener::Relic { state, .. }) => {
                 amount = with;
-                let held = fight
-                    .relics
-                    .iter()
-                    .find(|held| std::ptr::eq(&held.state, state))
-                    .expect("a relic asked is on the belt");
+                let (seat, slot) = super::relic::place_of::<V>(fight.belts, state);
+                let held = &fight.belts[seat][slot];
                 modifiers.push(Receiver::Relic(held.relic));
             }
             (answer, _) => {
@@ -3954,7 +3976,7 @@ pub(crate) fn var<V: Rules>(
                         <<V::Card as sts2_core::CardTable>::Tag as sts2_core::CardTagKinds>::STRIKE,
                     )
                 }),
-                player: live.player().id,
+                player: live.player(seat).id,
                 targeted: target,
                 target: targeted.as_deref(),
                 history: live.history(),
@@ -4106,7 +4128,7 @@ impl<V: Rules> Board<'_, V> {
     /// `amount`. The game raises it for a gain the modifiers left at none.
     pub(super) fn block_gained(&mut self, creature: CombatId, amount: V::Number, positive: bool) {
         let gained = sts2_core::ModelHook::AfterBlockGained;
-        if !super::listen::heard::<V>(self.live, self.relics, gained) {
+        if !super::listen::heard::<V>(self.live, self.belts, gained) {
             return;
         }
         let hook = sts2_core::EventHook::BlockGained {
@@ -4114,7 +4136,7 @@ impl<V: Rules> Board<'_, V> {
             amount,
             positive,
         };
-        let mut walking = super::listen::Walking::begin(self.live, self.relics, hook);
+        let mut walking = super::listen::Walking::begin(self.live, self.belts, hook);
         while let Some((listener, effect)) =
             walking.as_mut().and_then(|walking| self.next_of(walking))
         {
@@ -4228,7 +4250,7 @@ impl<V: Rules> Board<'_, V> {
         let targets = V::orb_evoke(&orb, self);
         self.playing = playing;
         let hook = sts2_core::EventHook::OrbEvoked { orb: orb.orb };
-        let mut walking = super::listen::Walking::begin(self.live, self.relics, hook);
+        let mut walking = super::listen::Walking::begin(self.live, self.belts, hook);
         while let Some((listener, effect)) =
             walking.as_mut().and_then(|walking| self.next_of(walking))
         {
@@ -4290,7 +4312,7 @@ impl<V: Rules> Board<'_, V> {
             self.ascension,
         )
         .max();
-        let player = self.live.player().id;
+        let player = self.live.player(seat).id;
         self.live.creatures.insert(
             at,
             Fighter {
@@ -4311,7 +4333,7 @@ impl<V: Rules> Board<'_, V> {
             point: self.live.point,
         };
         if let Some((listener, effect)) =
-            super::listen::first_answer::<V>(seat, self.live, self.relics, hook)
+            super::listen::first_answer::<V>(seat, self.live, self.belts, hook)
         {
             unimplemented!("{listener:?} asking for {effect:?} as a pet arrives");
         }
@@ -4324,7 +4346,7 @@ impl<V: Rules> Board<'_, V> {
     ///
     /// Anything in the fight listening to `hook`.
     fn unheard(&self, hook: sts2_core::ModelHook) {
-        if super::listen::heard::<V>(self.live, self.relics, hook) {
+        if super::listen::heard::<V>(self.live, self.belts, hook) {
             unimplemented!("a listener to {}", hook.name());
         }
     }
@@ -4433,6 +4455,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     #[tracing::instrument(level = "trace", skip_all)]
     fn apply(&mut self, effect: Self::ResolvedEffect) {
+        let seat = self.seat();
         self.ran_on();
         match effect.effect {
             // `AttackCommand.Execute` stops before any hit whose attacker is
@@ -4471,7 +4494,8 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 // changed the gain, before it lands.
                 for relic in modifying {
                     let hook = sts2_core::EventHook::BlockAmountModified { amount, source };
-                    if let Some(effect) = super::listen::ask_relic(self.relics, relic, hook).first()
+                    if let Some(effect) =
+                        super::listen::ask_relic(seat, self.belts, relic, hook).first()
                     {
                         unimplemented!("{relic:?} asking for {effect:?} once it changed block")
                     }
@@ -4676,7 +4700,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                         creatures: &self.live.creatures,
                         powers: &self.live.powers,
                         kept: &self.live.kept,
-                        relics: Some(&*self.relics),
+                        belts: Some(&*self.belts),
                         attack: &self.live.attack_results,
                     },
                 ),
@@ -4804,7 +4828,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         if let Some((listener, effect)) = super::listen::first_answer::<V>(
             seat,
             self.live,
-            self.relics,
+            self.belts,
             sts2_core::EventHook::GoldGainModified,
         ) {
             unimplemented!("{listener:?} asking for {effect:?} as a gold gain is modified");
@@ -4815,9 +4839,9 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         }
         self.live.players[seat].gold = self.live.players[seat].gold + amount;
         // `AfterGoldGained`, once the gold has landed.
-        let player = self.live.player().id;
+        let player = self.live.player(seat).id;
         let mut walking =
-            super::listen::Walking::begin(self.live, self.relics, sts2_core::EventHook::GoldGained);
+            super::listen::Walking::begin(self.live, self.belts, sts2_core::EventHook::GoldGained);
         while let Some((listener, effect)) =
             walking.as_mut().and_then(|walking| self.next_of(walking))
         {
@@ -4848,11 +4872,11 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.live.modify_stars(seat, amount);
         // `Hook.AfterStarsGained`.
         let gained = sts2_core::ModelHook::AfterStarsGained;
-        if !super::listen::heard::<V>(self.live, self.relics, gained) {
+        if !super::listen::heard::<V>(self.live, self.belts, gained) {
             return;
         }
         let hook = sts2_core::EventHook::StarsGained { amount };
-        let mut walking = super::listen::Walking::begin(self.live, self.relics, hook);
+        let mut walking = super::listen::Walking::begin(self.live, self.belts, hook);
         while let Some((listener, effect)) =
             walking.as_mut().and_then(|walking| self.next_of(walking))
         {
@@ -4892,16 +4916,16 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             false if self.over() || amount.is_zero() => {}
             false => {
                 // `Hook.ModifyEnergyGain`, then `AfterModifyingEnergyGain`.
-                let player = self.live.player().id;
+                let player = self.live.player(seat).id;
                 let modifying = sts2_core::ModelHook::ModifyEnergyGain;
-                let gained = match super::listen::heard::<V>(self.live, self.relics, modifying) {
+                let gained = match super::listen::heard::<V>(self.live, self.belts, modifying) {
                     false => amount,
                     true => {
                         let hook = sts2_core::ModifyHook::EnergyGain { player };
                         let gained = modified_by::<V>(self.walk(), amount, &[hook]);
                         let after = sts2_core::EventHook::EnergyGainModified;
                         if let Some((listener, effect)) =
-                            super::listen::first_answer::<V>(seat, self.live, self.relics, after)
+                            super::listen::first_answer::<V>(seat, self.live, self.belts, after)
                         {
                             unimplemented!(
                                 "{listener:?} asking for {effect:?} once an energy gain is worked out"
@@ -4970,7 +4994,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 seat,
                 self.live,
                 self.rngs.reborrow(),
-                self.relics,
+                self.belts,
                 self.ascension,
                 count,
                 Some(&mut drew),
@@ -4992,7 +5016,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             seat,
             self.live,
             self.rngs.reborrow(),
-            self.relics,
+            self.belts,
             self.ascension,
             count,
             false,
@@ -5096,13 +5120,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             from: None,
         };
         if let Some((listener, effect)) =
-            super::listen::first_answer::<V>(seat, self.live, self.relics, hook)
+            super::listen::first_answer::<V>(seat, self.live, self.belts, hook)
         {
             unimplemented!("{listener:?} asking for {effect:?} as a card changes piles")
         }
         // `CardCmd.Transform` raises this once every replacement is in, made
         // by the card's owner.
-        let player = self.live.player().id;
+        let player = self.live.player(seat).id;
         self.card_generated(
             CardAt::new(id, card.pile(), card.index()),
             into.card,
@@ -5144,14 +5168,14 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 from: None,
             };
             if let Some((listener, effect)) =
-                super::listen::first_answer::<V>(seat, self.live, self.relics, hook)
+                super::listen::first_answer::<V>(seat, self.live, self.belts, hook)
             {
                 unimplemented!("{listener:?} asking for {effect:?} as a card changes piles")
             }
         }
         // `AfterCardGeneratedForCombat` for each, once every replacement is
         // in, made by the card's owner.
-        let player = self.live.player().id;
+        let player = self.live.player(seat).id;
         for (pile, at, into, id) in left {
             let index = num_traits::NumCast::from(at).expect("a pile's index fits a hand index");
             self.card_generated(CardAt::new(id, pile, index), into.card, Some(player));
@@ -5194,14 +5218,14 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         // which is the order `ForgeCmd` adds and then increases in.
         if let Some(at) = created {
             self.card_entered_combat(at, card, false);
-            let player = self.live.player().id;
+            let player = self.live.player(seat).id;
             self.card_generated(at, card, Some(player));
         }
         // `Hook.AfterForge`.
-        if super::listen::heard::<V>(self.live, self.relics, sts2_core::ModelHook::AfterForge) {
+        if super::listen::heard::<V>(self.live, self.belts, sts2_core::ModelHook::AfterForge) {
             let hook = sts2_core::EventHook::Forged { amount };
             if let Some((listener, effect)) =
-                super::listen::first_answer::<V>(seat, self.live, self.relics, hook)
+                super::listen::first_answer::<V>(seat, self.live, self.belts, hook)
             {
                 unimplemented!("{listener:?} asking for {effect:?} once a blade is forged");
             }
@@ -5259,10 +5283,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.live.history.channelled(orb);
         let mut walking = super::listen::Walking::begin(
             self.live,
-            self.relics,
+            self.belts,
             sts2_core::EventHook::OrbChanneled,
         );
-        let player = self.live.player().id;
+        let player = self.live.player(seat).id;
         while let Some((listener, effect)) =
             walking.as_mut().and_then(|walking| self.next_of(walking))
         {
@@ -5333,7 +5357,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 if let Some((listener, effect)) = super::listen::first_answer::<V>(
                     seat,
                     self.live,
-                    self.relics,
+                    self.belts,
                     sts2_core::EventHook::OstyRevived,
                 ) {
                     unimplemented!("{listener:?} asking for {effect:?} as Osty revives")
@@ -5400,7 +5424,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             seat,
             self.live,
             self.rngs.reborrow(),
-            self.relics,
+            self.belts,
             sts2_core::PileAct::Discard,
             cards,
             false,
@@ -5415,7 +5439,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 seat,
                 self.live,
                 self.rngs.reborrow(),
-                self.relics,
+                self.belts,
                 sly,
                 pausable,
             );
@@ -5436,7 +5460,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 Some(card.pile()),
                 super::listen::Walk {
                     live: self.live,
-                    relics: self.relics,
+                    belts: self.belts,
                 },
             ),
         }
@@ -5515,7 +5539,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             seat,
             self.live,
             self.rngs.reborrow(),
-            self.relics,
+            self.belts,
             ascension,
             AutoPlayFromDraw {
                 left: count,
@@ -5578,6 +5602,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn lose_block(&mut self, creature: CombatId, amount: V::Number, remover: Option<CombatId>) {
+        let seat = self.seat();
         self.ran_on();
         let zero = V::Number::zero();
         if self.over() || amount <= zero {
@@ -5594,10 +5619,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             let pet_of = remover
                 .and_then(|remover| self.at(remover))
                 .and_then(|at| self.live.creatures[at].owner);
-            let player = self.live.player().id;
+            let player = self.live.player(seat).id;
             let walking = super::listen::Walking::begin(
                 self.live,
-                self.relics,
+                self.belts,
                 sts2_core::EventHook::BlockBroken {
                     creature,
                     breaker: remover,
@@ -5626,7 +5651,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .cards
             .get(card.pile(), at)
             .expect("a card stands where it was found");
-        let player = self.live.player().id;
+        let player = self.live.player(seat).id;
         modified_exactly::<V>(
             seat,
             self.walk(),
@@ -5658,7 +5683,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn auto_play_card(&mut self, card: CardAt<V>) {
         let seat = self.seat();
-        if self.over() || !self.live.player().alive {
+        if self.over() || !self.live.player(seat).alive {
             return;
         }
         self.standing(card);
@@ -5667,7 +5692,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             seat,
             self.live,
             self.rngs.reborrow(),
-            self.relics,
+            self.belts,
             card.id(),
             card.pile(),
             None,
@@ -5679,7 +5704,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         let seat = self.seat();
         use sts2_core::{CardTable as _, TargetKinds as _};
 
-        if self.over() || !self.live.player().alive {
+        if self.over() || !self.live.player(seat).alive {
             return;
         }
         let Some(card) = self.live.players[seat].cards.last_state(id) else {
@@ -5693,7 +5718,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         if super::listen::first_deciding::<V>(
             super::listen::Walk {
                 live: self.live,
-                relics: self.relics,
+                belts: self.belts,
             },
             sts2_core::DecisionHook::ShouldPlay {
                 card: ident.card,
@@ -5715,14 +5740,14 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         // state, and `OnPlayWrapper` returns before it plays.
         super::turn::unheard::<V>(
             self.live,
-            self.relics,
+            self.belts,
             sts2_core::ModelHook::BeforeCardAutoPlayed,
         );
     }
 
     fn auto_play_card_at(&mut self, card: CardAt<V>, target: CombatId) {
         let seat = self.seat();
-        if self.over() || !self.live.player().alive {
+        if self.over() || !self.live.player(seat).alive {
             return;
         }
         self.standing(card);
@@ -5731,7 +5756,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             seat,
             self.live,
             self.rngs.reborrow(),
-            self.relics,
+            self.belts,
             card.id(),
             card.pile(),
             Some(target),
@@ -5741,7 +5766,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn auto_play_card_at_random(&mut self, card: CardAt<V>) {
         let seat = self.seat();
-        if self.over() || !self.live.player().alive {
+        if self.over() || !self.live.player(seat).alive {
             return;
         }
         self.standing(card);
@@ -5761,7 +5786,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             seat,
             self.live,
             self.rngs.reborrow(),
-            self.relics,
+            self.belts,
             card.id(),
             card.pile(),
             target,
@@ -5796,7 +5821,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .cards
             .named(card)
             .unwrap_or_else(|| unimplemented!("a play count for a card that left the fight"));
-        super::play::play_count::<V, _>(self.live, &mut self.rngs, self.relics, &held)
+        super::play::play_count::<V, _>(seat, self.live, &mut self.rngs, self.belts, &held)
     }
 
     fn next_energy_cost(&mut self, below: u8) -> V::Number {
@@ -5853,12 +5878,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     /// heals no monster, which is what leaves a segment killed with the last
     /// of them dead.
     fn heal(&mut self, at: CombatId, amount: V::Number) {
+        let seat = self.seat();
         self.ran_on();
         // `CombatManager.IsEnding` heals no creature but a player. A hit
         // that took the last enemy to nothing has the fight ending already,
         // so Sic 'Em's summon then grows Osty without healing it, and Feed's
         // kill still heals its owner.
-        if at != self.live.player().id && self.ending() {
+        if at != self.live.player(seat).id && self.ending() {
             return;
         }
         let Some(creature) = self.live.creatures.iter_mut().find(|c| c.id == at) else {
@@ -5962,38 +5988,28 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         }
         let ascension = self.ascension;
         if !self.pausable() {
-            self.ended = shuffle::<V>(
-                seat,
-                self.live,
-                self.rngs.reborrow(),
-                self.relics,
-                ascension,
-            );
+            self.ended = shuffle::<V>(seat, self.live, self.rngs.reborrow(), self.belts, ascension);
             return;
         }
         if self.live.asking.is_some() {
             unimplemented!("a shuffle behind a question an effect already asked");
         }
         // Inside an effect, a listener's question stands the effect still.
-        let (pile, selection, act) = match shuffle_asking::<V>(
-            seat,
-            self.live,
-            self.rngs.reborrow(),
-            self.relics,
-            ascension,
-        ) {
-            Ok(Some(asks)) => asks,
-            Ok(None) => return,
-            Err(ended) => {
-                self.ended = Some(ended);
-                return;
-            }
-        };
+        let (pile, selection, act) =
+            match shuffle_asking::<V>(seat, self.live, self.rngs.reborrow(), self.belts, ascension)
+            {
+                Ok(Some(asks)) => asks,
+                Ok(None) => return,
+                Err(ended) => {
+                    self.ended = Some(ended);
+                    return;
+                }
+            };
         match super::turn::select::<V>(
             seat,
             self.live,
             self.rngs.reborrow(),
-            self.relics,
+            self.belts,
             pile,
             selection,
             act,
@@ -6207,7 +6223,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             seat,
             self.live,
             self.rngs.reborrow(),
-            self.relics,
+            self.belts,
             act,
             cards,
             pausable,
@@ -6219,7 +6235,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 seat,
                 self.live,
                 self.rngs.reborrow(),
-                self.relics,
+                self.belts,
                 sly,
                 pausable,
             );
@@ -6418,10 +6434,10 @@ pub(super) fn shuffle<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     rngs: CombatRngs<'_>,
-    relics: &mut Belt<V>,
+    belts: &mut Belts<V>,
     ascension: V::AscensionLevel,
 ) -> Option<super::Ended> {
-    match shuffle_asking::<V>(seat, live, rngs, relics, ascension) {
+    match shuffle_asking::<V>(seat, live, rngs, belts, ascension) {
         Ok(None) => None,
         Ok(Some(asks)) => {
             unimplemented!("a shuffle asking for {asks:?} inside a draw that cannot pause")
@@ -6434,18 +6450,19 @@ pub(super) fn shuffle<V: Rules>(
 /// player's pool. How what its listeners asked for ended the fight, if it
 /// did.
 pub(super) fn energy_spent<V: Rules>(
+    seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     rngs: CombatRngs<'_>,
-    relics: &mut Belt<V>,
+    belts: &mut Belts<V>,
     amount: V::Number,
 ) -> Option<super::Ended> {
-    if !super::listen::heard::<V>(live, relics, sts2_core::ModelHook::AfterEnergySpent) {
+    if !super::listen::heard::<V>(live, belts, sts2_core::ModelHook::AfterEnergySpent) {
         return None;
     }
     let walking =
-        super::listen::Walking::begin(live, relics, sts2_core::EventHook::EnergySpent { amount });
+        super::listen::Walking::begin(live, belts, sts2_core::EventHook::EnergySpent { amount });
     let ascension = live.ascension;
-    let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
+    let mut board = Board::for_card(seat, live, rngs, belts, ascension, None, None);
     board.carry_out_walk(walking);
     board.ended()
 }
@@ -6453,14 +6470,15 @@ pub(super) fn energy_spent<V: Rules>(
 /// `CreatureCmd.GainBlock` of `amount`, unpowered, on `owner` from no play
 /// and outside any effect, then `Hook.AfterBlockGained`.
 pub(super) fn gain_unpowered_block<V: Rules>(
+    seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     rngs: CombatRngs<'_>,
-    relics: &mut Belt<V>,
+    belts: &mut Belts<V>,
     ascension: V::AscensionLevel,
     owner: CombatId,
     amount: V::Number,
 ) {
-    Board::for_card(live, rngs, relics, ascension, None, None).gain_unpowered(owner, amount);
+    Board::for_card(seat, live, rngs, belts, ascension, None, None).gain_unpowered(owner, amount);
 }
 
 /// [`shuffle`], handing back the selection a listener asks for after it,
@@ -6475,7 +6493,7 @@ pub(super) fn shuffle_asking<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     rngs: CombatRngs<'_>,
-    relics: &mut Belt<V>,
+    belts: &mut Belts<V>,
     ascension: V::AscensionLevel,
 ) -> Result<Option<ShuffleAsks>, super::Ended> {
     // `Hook.ModifyShuffleOrder` walks its listeners while the cards still
@@ -6483,10 +6501,10 @@ pub(super) fn shuffle_asking<V: Rules>(
     // is that walk's. Each moves its card in the list once it is shuffled.
     let hook = sts2_core::EventHook::ShuffleOrder { initial: false };
     let mut asked: SmallVec<[(Listener<V>, HookEffect<V>); 2]> = SmallVec::new();
-    let mut walking = super::listen::Walking::begin(live, relics, hook);
+    let mut walking = super::listen::Walking::begin(live, belts, hook);
     while let Some(answer) = walking
         .as_mut()
-        .and_then(|walking| walking.next(seat, live, relics))
+        .and_then(|walking| walking.next(seat, live, belts))
     {
         asked.push(answer);
     }
@@ -6507,10 +6525,10 @@ pub(super) fn shuffle_asking<V: Rules>(
     }
     // `Hook.AfterShuffle`.
     let hook = sts2_core::EventHook::Shuffled;
-    let Some(walking) = super::listen::Walking::begin(live, relics, hook) else {
+    let Some(walking) = super::listen::Walking::begin(live, belts, hook) else {
         return Ok(None);
     };
-    let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
+    let mut board = Board::for_card(seat, live, rngs, belts, ascension, None, None);
     let asks = after_shuffle_walk::<V>(&mut board, walking);
     match (board.ended(), asks) {
         (None, asks) => Ok(asks),
@@ -6639,7 +6657,7 @@ impl<V: Rules> Board<'_, V> {
         if let Some((listener, effect)) = super::listen::first_answer::<V>(
             seat,
             self.live,
-            self.relics,
+            self.belts,
             sts2_core::EventHook::BeforeAttack {
                 command,
                 attacker,
@@ -6717,7 +6735,7 @@ impl<V: Rules> Board<'_, V> {
         // listener's own commands leave them as they were.
         let Some(mut walking) = super::listen::Walking::begin(
             self.live,
-            self.relics,
+            self.belts,
             sts2_core::EventHook::AfterAttack {
                 command,
                 attacker,
@@ -6744,7 +6762,7 @@ impl<V: Rules> Board<'_, V> {
                 }
                 // `CreatureCmd.GainBlock`, unpowered, on the relic's owner.
                 (Listener::Relic { .. }, HookEffect::GainBlock(amount)) => {
-                    let player = self.live.player().id;
+                    let player = self.live.player(seat).id;
                     self.gain_unpowered(player, amount);
                 }
                 // The same, on the power's owner.
@@ -6753,7 +6771,7 @@ impl<V: Rules> Board<'_, V> {
                 }
                 // A fight here has one player, whose piles take them all.
                 (Listener::Power { .. }, HookEffect::GiveCardsPerUnblockedHit { card, per }) => {
-                    let player = self.live.player().id;
+                    let player = self.live.player(seat).id;
                     let hits = results
                         .iter()
                         .filter(|hit| hit.receiver == player && hit.unblocked > V::Number::zero())
@@ -6798,6 +6816,7 @@ impl<V: Rules> Board<'_, V> {
     /// What an `AfterShuffle` listener asked for, carried out. A relic is
     /// the only listener that adds cards then, and its owner is the player.
     fn after_shuffle(&mut self, effect: HookEffect<V>) {
+        let seat = self.seat();
         match effect {
             HookEffect::AddToDrawAtRandom {
                 card,
@@ -6806,7 +6825,7 @@ impl<V: Rules> Board<'_, V> {
             } => {
                 let count: usize = num_traits::cast(count)
                     .unwrap_or_else(|| unimplemented!("{count:?} cards into the draw pile"));
-                let creator = by_owner.then(|| self.live.player().id);
+                let creator = by_owner.then(|| self.live.player(seat).id);
                 for _ in 0..count {
                     self.add_to_draw_at_random(card, creator);
                 }
@@ -6832,13 +6851,13 @@ pub(super) fn draw<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     rngs: CombatRngs<'_>,
-    relics: &mut Belt<V>,
+    belts: &mut Belts<V>,
     ascension: V::AscensionLevel,
     count: usize,
     drew: Option<&mut sts2_core::Drew<V>>,
 ) -> Option<super::Ended> {
     match draw_pausing::<V>(
-        seat, live, rngs, relics, ascension, count, false, false, drew,
+        seat, live, rngs, belts, ascension, count, false, false, drew,
     ) {
         Drawn::Done(ended) => ended,
         Drawn::Paused { asks, .. } => {
@@ -6894,7 +6913,7 @@ impl<'a, V: Rules> Board<'a, V> {
     fn in_frame(
         live: &'a mut Live<V>,
         rngs: CombatRngs<'a>,
-        relics: &'a mut Belt<V>,
+        belts: &'a mut Belts<V>,
         ascension: V::AscensionLevel,
         frame: Frame<V>,
     ) -> Self {
@@ -6909,7 +6928,7 @@ impl<'a, V: Rules> Board<'a, V> {
         Board {
             live,
             rngs,
-            relics,
+            belts,
             actor,
             target,
             playing,
@@ -6936,7 +6955,7 @@ impl<'a, V: Rules> Board<'a, V> {
 pub(super) fn land_held<V: Rules>(
     live: &mut Live<V>,
     rngs: CombatRngs<'_>,
-    relics: &mut Belt<V>,
+    belts: &mut Belts<V>,
     ascension: V::AscensionLevel,
     held: super::live::Deferred<V>,
 ) -> Option<super::Ended> {
@@ -6951,7 +6970,7 @@ pub(super) fn land_held<V: Rules>(
     else {
         unreachable!("only held hits land as them")
     };
-    let mut board = Board::in_frame(live, rngs, relics, ascension, frame);
+    let mut board = Board::in_frame(live, rngs, belts, ascension, frame);
     board.landed = Some(landed);
     let mut hits = hits.into_iter();
     match (half, command) {
@@ -7013,7 +7032,7 @@ pub(super) fn draw_in_effect<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
-    relics: &mut Belt<V>,
+    belts: &mut Belts<V>,
     ascension: V::AscensionLevel,
     count: usize,
     hand_draw: bool,
@@ -7026,7 +7045,7 @@ pub(super) fn draw_in_effect<V: Rules>(
             seat,
             live,
             rngs.reborrow(),
-            relics,
+            belts,
             ascension,
             count,
             hand_draw,
@@ -7056,7 +7075,7 @@ pub(super) fn draw_in_effect<V: Rules>(
                     seat,
                     live,
                     rngs.reborrow(),
-                    relics,
+                    belts,
                     pile,
                     selection,
                     act,
@@ -7099,13 +7118,15 @@ pub(super) struct Lands<V: Rules> {
 /// The rest of a `PowerCmd.Apply` over several targets, which a question
 /// stood still.
 pub(super) fn land_waiting<V: Rules>(
+    seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     rngs: CombatRngs<'_>,
-    relics: &mut Belt<V>,
+    belts: &mut Belts<V>,
     ascension: V::AscensionLevel,
     lands: Lands<V>,
 ) -> Option<super::Ended> {
-    let mut board = Board::for_card(live, rngs, relics, ascension, None, lands.playing).blocking();
+    let mut board =
+        Board::for_card(seat, live, rngs, belts, ascension, None, lands.playing).blocking();
     board.land_each(&lands.targets, lands.power, lands.amount, lands.applier);
     let ended = board.ended();
     let skipped = std::mem::take(&mut board.skipped);
@@ -7129,13 +7150,14 @@ pub(super) struct AutoPlayFromDraw<V: Rules> {
 ///
 /// A second listener asking the player to pick.
 pub(super) fn after_pick_walk<V: Rules>(
+    seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     rngs: CombatRngs<'_>,
-    relics: &mut Belt<V>,
+    belts: &mut Belts<V>,
     waiting: super::listen::Walking<V>,
 ) -> Option<super::Ended> {
     let ascension = live.ascension;
-    let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
+    let mut board = Board::for_card(seat, live, rngs, belts, ascension, None, None);
     if let Some(asks) = after_shuffle_walk::<V>(&mut board, waiting) {
         unimplemented!("a second listener asking for {asks:?} after a shuffle");
     }
@@ -7152,7 +7174,7 @@ pub(super) fn auto_play_from_draw<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
-    relics: &mut Belt<V>,
+    belts: &mut Belts<V>,
     ascension: V::AscensionLevel,
     from: AutoPlayFromDraw<V>,
     pausable: bool,
@@ -7166,7 +7188,7 @@ pub(super) fn auto_play_from_draw<V: Rules>(
     // The `AfterShuffle` listeners that waited for the pick this resumes
     // from.
     if resumed && let Some(waiting) = live.after_pick.take() {
-        let mut board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+        let mut board = Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
         if let Some(asks) = after_shuffle_walk::<V>(&mut board, *waiting) {
             unimplemented!("a second listener asking for {asks:?} after a shuffle");
         }
@@ -7176,7 +7198,7 @@ pub(super) fn auto_play_from_draw<V: Rules>(
         let asks = match live.players[seat].cards.is_empty(Pile::Draw)
             && !live.players[seat].cards.is_empty(Pile::Discard)
         {
-            true => match shuffle_asking::<V>(seat, live, rngs.reborrow(), relics, ascension) {
+            true => match shuffle_asking::<V>(seat, live, rngs.reborrow(), belts, ascension) {
                 Ok(asks) => asks,
                 Err(ended) => return Some(ended),
             },
@@ -7186,15 +7208,8 @@ pub(super) fn auto_play_from_draw<V: Rules>(
             if !pausable {
                 unimplemented!("a shuffle asking for {pile:?} outside an effect's auto-play");
             }
-            match super::turn::select::<V>(
-                seat,
-                live,
-                rngs.reborrow(),
-                relics,
-                pile,
-                selection,
-                act,
-            ) {
+            match super::turn::select::<V>(seat, live, rngs.reborrow(), belts, pile, selection, act)
+            {
                 Ok(Some(ended)) => return Some(ended),
                 Ok(None) => {}
                 Err(question) => {
@@ -7230,7 +7245,7 @@ pub(super) fn auto_play_from_draw<V: Rules>(
             seat,
             live,
             rngs.reborrow(),
-            relics,
+            belts,
             id,
             force_exhaust,
             pausable,
@@ -7274,7 +7289,7 @@ pub(super) fn draw_pausing<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
-    relics: &mut Belt<V>,
+    belts: &mut Belts<V>,
     ascension: V::AscensionLevel,
     count: usize,
     hand_draw: bool,
@@ -7283,7 +7298,7 @@ pub(super) fn draw_pausing<V: Rules>(
 ) -> Drawn {
     // `Hook.ShouldDraw`, once for the whole draw, and `AfterPreventingDraw`
     // when a listener stops it.
-    let player = live.player().id;
+    let player = live.player(seat).id;
     let hook = sts2_core::DecisionHook::ShouldDraw {
         player,
         hand_draw,
@@ -7292,7 +7307,7 @@ pub(super) fn draw_pausing<V: Rules>(
     // The `AfterShuffle` listeners that waited for the pick this resumes
     // from.
     if resumed && let Some(waiting) = live.after_pick.take() {
-        let mut board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+        let mut board = Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
         if let Some(asks) = after_shuffle_walk::<V>(&mut board, *waiting) {
             unimplemented!("a second listener asking for {asks:?} after a shuffle");
         }
@@ -7308,7 +7323,7 @@ pub(super) fn draw_pausing<V: Rules>(
             seat,
             live,
             rngs.reborrow(),
-            relics,
+            belts,
             ascension,
             &drawn,
             hand_draw,
@@ -7329,7 +7344,7 @@ pub(super) fn draw_pausing<V: Rules>(
                 seat,
                 live,
                 rngs.reborrow(),
-                relics,
+                belts,
                 ascension,
                 left,
                 false,
@@ -7341,7 +7356,7 @@ pub(super) fn draw_pausing<V: Rules>(
                     seat,
                     live,
                     rngs.reborrow(),
-                    relics,
+                    belts,
                     ascension,
                     drawn,
                     *then,
@@ -7362,13 +7377,10 @@ pub(super) fn draw_pausing<V: Rules>(
             return stopped.with_left(count);
         }
     }
-    if !resumed && super::listen::any_decides::<V>(Walk { live, relics }, hook, false) {
-        if let Some((listener, effect)) = super::listen::first_answer::<V>(
-            seat,
-            live,
-            relics,
-            sts2_core::EventHook::DrawPrevented,
-        ) {
+    if !resumed && super::listen::any_decides::<V>(Walk { live, belts }, hook, false) {
+        if let Some((listener, effect)) =
+            super::listen::first_answer::<V>(seat, live, belts, sts2_core::EventHook::DrawPrevented)
+        {
             unimplemented!("{listener:?} asking for {effect:?} after preventing a draw");
         }
         return Drawn::Done(None);
@@ -7386,7 +7398,7 @@ pub(super) fn draw_pausing<V: Rules>(
             if live.players[seat].cards.is_empty(Pile::Discard) {
                 return Drawn::Done(ended);
             }
-            match shuffle_asking::<V>(seat, live, rngs.reborrow(), relics, ascension) {
+            match shuffle_asking::<V>(seat, live, rngs.reborrow(), belts, ascension) {
                 Ok(None) => {}
                 Ok(Some(asks)) => {
                     return Drawn::Paused {
@@ -7414,10 +7426,10 @@ pub(super) fn draw_pausing<V: Rules>(
             id: drawn.id,
             hand_draw,
         };
-        let mut walking = super::listen::Walking::begin(live, relics, hook);
+        let mut walking = super::listen::Walking::begin(live, belts, hook);
         while let Some((listener, effect)) = walking
             .as_mut()
-            .and_then(|walking| walking.next(seat, live, relics))
+            .and_then(|walking| walking.next(seat, live, belts))
         {
             match effect {
                 // `IsOverOrEnding` stops an auto-play before it starts.
@@ -7427,7 +7439,7 @@ pub(super) fn draw_pausing<V: Rules>(
                             seat,
                             live,
                             rngs.reborrow(),
-                            relics,
+                            belts,
                             card,
                             Pile::Hand,
                             None,
@@ -7450,7 +7462,7 @@ pub(super) fn draw_pausing<V: Rules>(
             seat,
             live,
             rngs.reborrow(),
-            relics,
+            belts,
             ascension,
             &drawn,
             hand_draw,
@@ -7475,7 +7487,7 @@ fn card_drawn_late<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     rngs: CombatRngs<'_>,
-    relics: &mut Belt<V>,
+    belts: &mut Belts<V>,
     ascension: V::AscensionLevel,
     drawn: &super::live::CardInstance<V>,
     hand_draw: bool,
@@ -7497,10 +7509,10 @@ fn card_drawn_late<V: Rules>(
         hand_draw,
         side: live.side,
     };
-    match super::listen::Walking::begin(live, relics, hook) {
-        Some(walking) => carry_out_drawn::<V>(
-            seat, live, rngs, relics, ascension, drawn.id, walking, ended,
-        ),
+    match super::listen::Walking::begin(live, belts, hook) {
+        Some(walking) => {
+            carry_out_drawn::<V>(seat, live, rngs, belts, ascension, drawn.id, walking, ended)
+        }
         None => Drawn::Done(ended),
     }
 }
@@ -7524,13 +7536,13 @@ fn carry_out_drawn<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
-    relics: &mut Belt<V>,
+    belts: &mut Belts<V>,
     ascension: V::AscensionLevel,
     drawn: CardId<V>,
     mut walking: super::listen::Walking<V>,
     mut ended: Option<super::Ended>,
 ) -> Drawn {
-    while let Some((listener, effect)) = walking.next(seat, live, relics) {
+    while let Some((listener, effect)) = walking.next(seat, live, belts) {
         match (listener, effect) {
             // Written on the card that asked, wherever it stands.
             (Listener::Card { id }, HookEffect::ModifySelf { change, lasting }) => {
@@ -7570,7 +7582,7 @@ fn carry_out_drawn<V: Rules>(
                     seat,
                     live,
                     rngs.reborrow(),
-                    relics,
+                    belts,
                     ascension,
                     owed,
                     false,
@@ -7593,7 +7605,7 @@ fn carry_out_drawn<V: Rules>(
             }
             (_, effect) => {
                 let mut board =
-                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                    Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
                 super::hook::apply::<V, _>(&mut board, [effect]);
                 ended = ended.or(board.ended());
             }
@@ -7631,7 +7643,7 @@ pub(super) fn ending<V: Rules>(walk: Walk<'_, V>) -> bool {
                             creatures: &walk.live.creatures,
                             powers: &walk.live.powers,
                             kept: &walk.live.kept,
-                            relics: Some(walk.relics),
+                            belts: Some(walk.belts),
                             attack: &walk.live.attack_results,
                         },
                     ),
@@ -7696,7 +7708,7 @@ mod tests {
             SOLO,
             Walk {
                 live: &fight,
-                relics: &Belt::new(),
+                belts: &Belts::new(crate::run::Belt::new(), Vec::new()),
             },
             Some(&card),
             Effect::Attack {

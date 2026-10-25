@@ -37,6 +37,13 @@ impl<T> BySeat<T> {
         test(&self.host) || (!self.others.is_empty() && self.others.iter().any(test))
     }
 
+    /// Each seat's, beside its seat, in seat order.
+    pub(crate) fn seated(&self) -> impl Iterator<Item = (SeatIndex, &T)> {
+        (0..)
+            .map(SeatIndex)
+            .zip(std::iter::once(&self.host).chain(&self.others))
+    }
+
     /// The host's, which a solo run's player is.
     pub(crate) fn host(&self) -> &T {
         &self.host
