@@ -29,6 +29,9 @@ impl<V: Rules> Clone for Sim<V> {
     }
 }
 
+/// The one seat of a solo run, which is every seat `Sim` plays.
+const SOLO: sts2_core::SeatIndex = sts2_core::SeatIndex(0);
+
 impl<V: Rules> Play<V> for Sim<V> {
     type Error = Error;
     type Host = ();
@@ -58,7 +61,7 @@ impl<V: Rules> Play<V> for Sim<V> {
     }
 
     fn observe(&mut self) -> Result<Snapshot<V>, Self::Error> {
-        Ok(self.state.report())
+        Ok(self.state.report(SOLO))
     }
 }
 
@@ -67,8 +70,8 @@ impl<V: Rules> Sim<V> {
     ///
     /// What [`Play::observe`] reports, read off the run instead of built. A
     /// digest of this is the digest of that report, and costs no allocation.
-    pub fn observed(&self) -> &impl sts2_core::Observed<V> {
-        &self.state
+    pub fn observed(&self) -> impl sts2_core::Observed<V> + Copy + '_ {
+        self.state.seen_by(SOLO)
     }
 
     /// Every decision the run accepts right now, in the order a driver picks
@@ -77,7 +80,7 @@ impl<V: Rules> Sim<V> {
     /// The moves the observation lists, read off the run instead. A search
     /// asks this at every node, and builds nothing but the moves.
     pub fn legal(&self) -> crate::Legal<V> {
-        self.state.legal()
+        self.state.legal(SOLO)
     }
 
     /// [`Sim::legal`], written over `moves`. A search that asks at every node
@@ -85,7 +88,7 @@ impl<V: Rules> Sim<V> {
     /// a kilobyte.
     pub fn legal_into(&self, moves: &mut crate::Legal<V>) {
         moves.clear();
-        self.state.legal_into(moves);
+        self.state.legal_into(SOLO, moves);
     }
 
     /// Plays one decision and reports what it decided, and nothing more.
@@ -117,7 +120,7 @@ impl<V: Rules> Sim<V> {
             Decision::ChooseOption {
                 index,
                 target: None,
-            } => self.state.choose(*index).map(Ok),
+            } => self.state.choose(SOLO, *index).map(Ok),
             // A run of one has no other player to aim an option at.
             Decision::ChooseOption {
                 target: Some(target),
@@ -128,20 +131,20 @@ impl<V: Rules> Sim<V> {
                     target: Some(*target),
                 },
             })),
-            Decision::Answer(answer) => self.state.respond(answer),
-            Decision::PlayCard { index, target } => self.state.play_card(*index, *target),
-            Decision::EndTurn => self.state.end_turn(),
-            Decision::UsePotion { index, target } => self.state.use_potion(*index, *target),
-            Decision::Proceed => self.state.proceed().map(Ok),
-            Decision::Buy { index } => self.state.buy(*index).map(Ok),
-            Decision::DiscardPotion { index } => self.state.discard_potion(*index),
-            Decision::EnterRoom { room } => self.state.enter_room(*room).map(Ok),
-            Decision::Travel { to } => match self.state.resolve(*to) {
+            Decision::Answer(answer) => self.state.respond(SOLO, answer),
+            Decision::PlayCard { index, target } => self.state.play_card(SOLO, *index, *target),
+            Decision::EndTurn => self.state.end_turn(SOLO),
+            Decision::UsePotion { index, target } => self.state.use_potion(SOLO, *index, *target),
+            Decision::Proceed => self.state.proceed(SOLO).map(Ok),
+            Decision::Buy { index } => self.state.buy(SOLO, *index).map(Ok),
+            Decision::DiscardPotion { index } => self.state.discard_potion(SOLO, *index),
+            Decision::EnterRoom { room } => self.state.enter_room(SOLO, *room).map(Ok),
+            Decision::Travel { to } => match self.state.resolve(SOLO, *to) {
                 Err(reason) => Ok(Err(Refusal {
                     what: "travel".into(),
                     reason,
                 })),
-                Ok(moving) => self.state.travel(moving).map(Ok),
+                Ok(moving) => self.state.travel(SOLO, moving).map(Ok),
             },
         }
     }
@@ -151,18 +154,18 @@ impl<V: Rules> Sim<V> {
     /// [`Sim::decide`], for the debug commands rather than the decisions.
     pub fn construct(&mut self, step: &Setup<V>) -> Result<Settled<V>, Error> {
         match step {
-            Setup::Fight { encounter } => self.state.fight_here(*encounter).map(Ok),
-            Setup::Grant(gift) => self.state.grant(gift).map(Ok),
+            Setup::Fight { encounter } => self.state.fight_here(SOLO, *encounter).map(Ok),
+            Setup::Grant(gift) => self.state.grant(SOLO, gift).map(Ok),
             Setup::Power { at, power, amount } => {
-                self.state.apply_power(*at, *power, *amount).map(Ok)
+                self.state.apply_power(SOLO, *at, *power, *amount).map(Ok)
             }
             Setup::Enchant {
                 enchantment,
                 amount,
                 index,
-            } => self.state.enchant(*enchantment, *amount, *index),
-            Setup::Event { event } => self.state.event_here(*event).map(Ok),
-            Setup::Hp { at, hp } => self.state.set_hp(*at, *hp).map(Ok),
+            } => self.state.enchant(SOLO, *enchantment, *amount, *index),
+            Setup::Event { event } => self.state.event_here(SOLO, *event).map(Ok),
+            Setup::Hp { at, hp } => self.state.set_hp(SOLO, *at, *hp).map(Ok),
         }
     }
 
@@ -183,7 +186,7 @@ impl<V: Rules> Sim<V> {
     /// hands back a [`Decided`] alone, so nothing pays for this but a caller
     /// that asked to see where it landed.
     fn reported(&self, decided: sts2_core::Decided) -> sts2_core::Applied<V> {
-        self.state.report().applied(decided)
+        self.state.report(SOLO).applied(decided)
     }
 }
 

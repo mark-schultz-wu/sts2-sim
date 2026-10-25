@@ -11,109 +11,113 @@ use sts2_core::{
     Room, Rules,
 };
 
-use super::{Phase, State};
+use super::{AtSeat, Phase, State};
 use crate::combat::Fight;
 
-impl<V: Rules> Observed<V> for State<V> {
+impl<V: Rules> Observed<V> for AtSeat<'_, V> {
     fn act(&self) -> V::Count {
-        num_traits::cast(self.act).expect("an act index is a game number")
+        num_traits::cast(self.state.act).expect("an act index is a game number")
     }
 
     fn floor(&self) -> V::Count {
-        self.floor
+        self.state.floor
     }
 
     fn hp(&self) -> V::Health {
-        self.standing().hp
+        self.state.standing(self.seat).hp
     }
 
     fn max_hp(&self) -> V::Health {
-        self.standing().max_hp
+        self.state.standing(self.seat).max_hp
     }
 
     fn alive(&self) -> bool {
-        self.standing().alive
+        self.state.standing(self.seat).alive
     }
 
     fn run_over(&self) -> bool {
-        !self.standing().alive
+        !self.state.standing(self.seat).alive
     }
 
     fn victory(&self) -> Option<bool> {
-        (!self.standing().alive).then_some(matches!(self.phase, Phase::Won { .. }))
+        (!self.state.standing(self.seat).alive)
+            .then_some(matches!(self.state.phase, Phase::Won { .. }))
     }
 
     fn gold(&self) -> V::Number {
-        self.player.gold
+        self.state.players[self.seat].gold
     }
 
     fn relics(&self) -> impl ExactSizeIterator<Item = impl Borrow<Carried<V>>> + '_ {
-        self.carried()
+        self.state.carried(self.seat)
     }
 
     fn potions(&self) -> impl ExactSizeIterator<Item = impl Borrow<Held<V>>> + '_ {
         crate::combat::belt::<V>(
-            &self.player.potions,
-            self.fight(),
-            self.merchant(),
-            self.standing().alive,
-            self.potions_held(),
+            &self.state.players[self.seat].potions,
+            self.state.fight(),
+            self.state.merchant(),
+            self.state.standing(self.seat).alive,
+            self.state.potions_held(),
         )
     }
 
     fn potion_slots(&self) -> V::Count {
-        self.player.potion_slots
+        self.state.players[self.seat].potion_slots
     }
 
     fn deck(&self) -> impl ExactSizeIterator<Item = CardIdent<V>> + '_ {
-        self.player.deck.iter().map(|held| held.ident)
+        self.state.players[self.seat]
+            .deck
+            .iter()
+            .map(|held| held.ident)
     }
 
     fn in_combat(&self) -> bool {
-        State::in_combat(self)
+        State::in_combat(self.state)
     }
 
     fn at(&self) -> Option<Coord> {
-        self.visited.last().copied()
+        self.state.visited.last().copied()
     }
 
     fn visited(&self) -> impl ExactSizeIterator<Item = Coord> + '_ {
-        self.visited.iter().copied()
+        self.state.visited.iter().copied()
     }
 
     fn travelable(&self) -> impl ExactSizeIterator<Item = Reachable<V>> + '_ {
-        State::travelable(self).into_iter()
+        State::travelable(self.state, self.seat).into_iter()
     }
 
     fn points(&self) -> &[Node<V>] {
-        sts2_core::ActMap::nodes(&*self.map)
+        sts2_core::ActMap::nodes(&*self.state.map)
     }
 
     fn points_digest(&self) -> Digest {
-        self.map.digest()
+        self.state.map.digest()
     }
 
     fn proceed(&self) -> bool {
-        self.can_proceed()
+        self.state.can_proceed()
     }
 
     fn run_streams(&self) -> impl ExactSizeIterator<Item = (V::RunRngType, Position)> + '_ {
-        self.streams.run_positions()
+        self.state.streams.run_positions()
     }
 
     fn player_streams(&self) -> impl ExactSizeIterator<Item = (V::PlayerRngType, Position)> + '_ {
-        self.streams.player_positions()
+        self.state.streams.player_positions()
     }
 
     fn room(&self) -> Option<impl Borrow<Room<V>> + '_> {
-        State::room(self)
+        State::room(self.state, self.seat)
     }
 
     fn combat(&self) -> Option<impl ObservedFight<V> + '_> {
-        match &self.phase {
+        match &self.state.phase {
             Phase::Combat(live) => Some(Fight::Live {
                 live,
-                relics: &self.player.relics,
+                relics: &self.state.players[self.seat].relics,
             }),
             Phase::Lost { combat, .. } | Phase::Rewards { combat, .. } => Some(Fight::Over(combat)),
             Phase::Map
@@ -127,6 +131,6 @@ impl<V: Rules> Observed<V> for State<V> {
     }
 
     fn moves(&self) -> impl ExactSizeIterator<Item = sts2_core::Decision<V>> + '_ {
-        self.legal().into_iter()
+        self.state.legal(self.seat).into_iter()
     }
 }

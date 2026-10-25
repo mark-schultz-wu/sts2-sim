@@ -156,7 +156,7 @@ fn compare<V: Rules + sts2_content_wire::WireContentVersion, E: std::fmt::Displa
         let lent = sim.observed();
         (
             lent.rules_digest(),
-            words_apart(&want.observation.rng, lent),
+            words_apart(&want.observation.rng, &lent),
         )
     }));
     let (got, apart) = match looked {

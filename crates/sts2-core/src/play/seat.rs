@@ -24,6 +24,12 @@ impl SeatIndex {
     pub fn at(self) -> usize {
         usize::from(self.0)
     }
+
+    /// This seat's player's creature. A fight adds every player before
+    /// anything else, in seat order, so seat `k`'s creature is `k`.
+    pub fn creature(self) -> crate::CombatId {
+        crate::CombatId::new(nonmax::NonMaxU8::new(self.0).expect("a seat is below 255"))
+    }
 }
 
 /// What a seat's screens show about one player.

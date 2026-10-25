@@ -15,10 +15,11 @@ impl<V: Rules> State<V> {
     /// those.
     fn selector_answered(
         &mut self,
+        seat: sts2_core::SeatIndex,
         mut ended: Option<combat::Ended>,
     ) -> Result<Option<combat::Ended>, Error> {
         while ended.is_none() {
-            let Some(fighting) = self.fighting() else {
+            let Some(fighting) = self.fighting(seat) else {
                 break;
             };
             // A choice that signalled under a pause boundary lists once the
@@ -33,7 +34,7 @@ impl<V: Rules> State<V> {
                 }
             };
             ended = match answered {
-                None => self.turn_ended_by_play()?,
+                None => self.turn_ended_by_play(seat)?,
                 ended => ended,
             };
         }
@@ -41,19 +42,23 @@ impl<V: Rules> State<V> {
     }
 
     /// Answer the selection on which a card play stopped.
-    pub(super) fn answer_fight(&mut self, answer: &Answer) -> Result<Decided, Error> {
+    pub(super) fn answer_fight(
+        &mut self,
+        seat: sts2_core::SeatIndex,
+        answer: &Answer,
+    ) -> Result<Decided, Error> {
         let Answer::Cards(chosen) = *answer else {
             unimplemented!("an answer that is not a card selection");
         };
-        let Some(fighting) = self.fighting() else {
+        let Some(fighting) = self.fighting(seat) else {
             unreachable!("a fight answer has a live fight");
         };
         let since = fighting.live.removed_from_deck().len();
         let ended = match combat::answer(fighting, chosen)? {
-            None => self.turn_ended_by_play()?,
+            None => self.turn_ended_by_play(seat)?,
             ended => ended,
         };
-        Ok(self.settle(ended, since))
+        Ok(self.settle(seat, ended, since))
     }
 
     /// Play one card from the hand.
@@ -62,6 +67,7 @@ impl<V: Rules> State<V> {
     /// refuse is asked before the fight is touched.
     pub(crate) fn play_card(
         &mut self,
+        seat: sts2_core::SeatIndex,
         index: HandIndex,
         target: Option<CombatId>,
     ) -> Result<Settled<V>, Error> {
@@ -72,7 +78,7 @@ impl<V: Rules> State<V> {
             }))
         };
 
-        let Some(fighting) = self.fighting() else {
+        let Some(fighting) = self.fighting(seat) else {
             return refused(Reason::NotInCombat);
         };
         let play = match combat::resolve(fighting.live, fighting.relics, index, target) {
@@ -82,10 +88,10 @@ impl<V: Rules> State<V> {
 
         let since = fighting.live.removed_from_deck().len();
         let ended = match combat::play(fighting, play)? {
-            None => self.turn_ended_by_play()?,
+            None => self.turn_ended_by_play(seat)?,
             ended => ended,
         };
-        Ok(Ok(self.settle(ended, since)))
+        Ok(Ok(self.settle(seat, ended, since)))
     }
 
     /// Drink one potion from the belt.
@@ -97,6 +103,7 @@ impl<V: Rules> State<V> {
     /// rather than working out a second answer.
     pub(crate) fn use_potion(
         &mut self,
+        seat: sts2_core::SeatIndex,
         index: BeltIndex,
         target: Option<CombatId>,
     ) -> Result<Settled<V>, Error> {
@@ -108,7 +115,7 @@ impl<V: Rules> State<V> {
         };
 
         // The belt alone, rather than the whole report it appears in.
-        let belt = self.belt();
+        let belt = self.belt(seat);
         let at = usize::from(index.get());
         let Some(held) = belt.get(at) else {
             return refused(Reason::OutOfRange {
@@ -140,10 +147,10 @@ impl<V: Rules> State<V> {
 
         let potion = held.potion;
         // `RemoveBeforeUse`.
-        self.drank(at);
-        let Some(fighting) = self.fighting() else {
+        self.drank(seat, at);
+        let Some(fighting) = self.fighting(seat) else {
             // What it asks the run for.
-            let effects = V::on_use_on_run(potion, &*self, false);
+            let effects = V::on_use_on_run(potion, &self.seen_by(seat), false);
             // Thrown at an event's merchant: what the event does with it,
             // which starts a fight. `EnterRoomWithoutExitingCurrentRoom`
             // runs on as its own task, and `AfterPotionUsed` goes ahead of
@@ -153,7 +160,7 @@ impl<V: Rules> State<V> {
                     Some(self.potion_thrown_at_event(*potion))
                 }
                 _ => {
-                    if self.carry_out(effects).is_some() {
+                    if self.carry_out(seat, effects).is_some() {
                         unimplemented!("a potion drunk outside a fight that asks a question");
                     }
                     None
@@ -161,7 +168,7 @@ impl<V: Rules> State<V> {
             };
             let used = sts2_core::EventHook::PotionUsed {
                 in_fight: false,
-                holding_potions: self.holding_potions(),
+                holding_potions: self.holding_potions(seat),
             };
             if self.walk_run(used).is_some() {
                 unimplemented!("a relic asking a question after a potion outside a fight");
@@ -182,6 +189,7 @@ impl<V: Rules> State<V> {
                 unimplemented!("a potion thrown at an event doing {thrown:?}")
             };
             return Ok(Ok(self.fight_in_event(
+                seat,
                 *encounter,
                 rewards,
                 roster,
@@ -192,30 +200,33 @@ impl<V: Rules> State<V> {
         let since = fighting.live.removed_from_deck().len();
         let ended = combat::drink(fighting, potion, target)?;
         // What the potion asks of the run beside the fight, which is its belt.
-        let effects = V::on_use_on_run(potion, &*self, true);
-        if self.carry_out(effects).is_some() {
+        let effects = V::on_use_on_run(potion, &self.seen_by(seat), true);
+        if self.carry_out(seat, effects).is_some() {
             unimplemented!("a potion drunk in a fight that asks the run a question");
         }
         // What a death's listener asked inside the potion, as the decision
         // ends, and a card the potion played that ends the turn, as Void
         // Form under Distilled Chaos does.
         let ended = match ended {
-            None => self.turn_ended_by_play()?,
+            None => self.turn_ended_by_play(seat)?,
             ended => ended,
         };
-        Ok(Ok(self.settle(ended, since)))
+        Ok(Ok(self.settle(seat, ended, since)))
     }
 
     /// `SetReadyToEndTurn`: a play that asked for the turn to end has it end
     /// once the play is over and nothing waits on the player. A play during a
     /// turn's setup, as Whispering Earring's are, ends it once the setup is
     /// done, and the next turn's setup can ask again.
-    pub(super) fn turn_ended_by_play(&mut self) -> Result<Option<combat::Ended>, Error> {
-        let max_energy: V::Count = num_traits::cast(V::max_energy(self.character()))
+    pub(super) fn turn_ended_by_play(
+        &mut self,
+        seat: sts2_core::SeatIndex,
+    ) -> Result<Option<combat::Ended>, Error> {
+        let max_energy: V::Count = num_traits::cast(V::max_energy(self.character(seat)))
             .expect("the turn's energy fits the build's count type");
         let ascension = self.ascension();
         loop {
-            let Some(fighting) = self.fighting() else {
+            let Some(fighting) = self.fighting(seat) else {
                 return Ok(None);
             };
             fighting.live.ask_paused();
@@ -230,11 +241,11 @@ impl<V: Rules> State<V> {
     }
 
     /// End the player's turn, and set up the next one.
-    pub(crate) fn end_turn(&mut self) -> Result<Settled<V>, Error> {
-        let max_energy: V::Count = num_traits::cast(V::max_energy(self.character()))
+    pub(crate) fn end_turn(&mut self, seat: sts2_core::SeatIndex) -> Result<Settled<V>, Error> {
+        let max_energy: V::Count = num_traits::cast(V::max_energy(self.character(seat)))
             .expect("the turn's energy fits the build's count type");
         let ascension = self.ascension();
-        let Some(fighting) = self.fighting() else {
+        let Some(fighting) = self.fighting(seat) else {
             return Ok(Err(Refusal {
                 what: "end_turn".into(),
                 reason: Reason::NotInCombat,
@@ -243,10 +254,10 @@ impl<V: Rules> State<V> {
 
         let since = fighting.live.removed_from_deck().len();
         let ended = match combat::end_turn(fighting, ascension, max_energy)? {
-            None => self.turn_ended_by_play()?,
+            None => self.turn_ended_by_play(seat)?,
             ended => ended,
         };
-        Ok(Ok(self.settle(ended, since)))
+        Ok(Ok(self.settle(seat, ended, since)))
     }
 
     /// Carry what a decision did to the fight over to the rest of the run.
@@ -257,32 +268,37 @@ impl<V: Rules> State<V> {
     /// includes a fight the decision left with no primary enemy, whatever it
     /// handed back.
     #[tracing::instrument(level = "trace", skip_all)]
-    pub(super) fn settle(&mut self, ended: Option<combat::Ended>, since: usize) -> Decided {
+    pub(super) fn settle(
+        &mut self,
+        seat: sts2_core::SeatIndex,
+        ended: Option<combat::Ended>,
+        since: usize,
+    ) -> Decided {
         let ended = self
-            .selector_answered(ended)
+            .selector_answered(seat, ended)
             .unwrap_or_else(|error| unimplemented!("a pushed selector's answer failing: {error}"));
-        let ended = ended.or_else(|| self.fighting().and_then(combat::check_win_condition));
-        self.asked_by_fight();
+        let ended = ended.or_else(|| self.fighting(seat).and_then(combat::check_win_condition));
+        self.asked_by_fight(seat);
         self.forget_detached();
-        self.lose_cards(since);
+        self.lose_cards(seat, since);
         // `EndCombatInternal` raises the fight's last hooks before
         // `RewardsCmd.Offer` builds the rewards.
         if ended == Some(combat::Ended::Won) {
-            self.combat_ended();
+            self.combat_ended(seat);
         }
-        self.gold_from_fight();
-        self.potions_from_fight();
+        self.gold_from_fight(seat);
+        self.potions_from_fight(seat);
         match ended {
             None => {}
             // Not `finish`: the run never left the fight, and the piles and
             // the powers are where the player fell.
             Some(combat::Ended::Lost) => {
-                let (live, relics) = self.left_fight();
+                let (live, relics) = self.left_fight(seat);
                 let combat = live.report(relics);
                 self.lost(combat, Some(live));
             }
             Some(combat::Ended::Won) => {
-                let (mut live, relics) = self.left_fight();
+                let (mut live, relics) = self.left_fight(seat);
                 let extra_rewards = live.extra_rewards().to_vec();
                 let taken = live.taken_from_deck().to_vec();
                 // `AddExtraReward`, which the room's own rewards come before.
@@ -311,7 +327,7 @@ impl<V: Rules> State<V> {
                         }));
                     }
                 }
-                if let Some(asked) = self.carry_out(leaving) {
+                if let Some(asked) = self.carry_out(seat, leaving) {
                     let pickup = asked.pickup;
                     unimplemented!("a fight's end asking for {pickup:?}");
                 }
@@ -325,9 +341,9 @@ impl<V: Rules> State<V> {
                     if self.resuming.is_none() {
                         unimplemented!("a fight that gives no rewards outside an event");
                     }
-                    self.won(combat, Vec::new(), live);
+                    self.won(seat, combat, Vec::new(), live);
                     return self
-                        .proceed()
+                        .proceed(seat)
                         .unwrap_or_else(|e| unreachable!("an event resumes after its fight: {e}"));
                 }
                 // `WithRewardsFromRoom` sets nothing for the last act's boss,
@@ -337,13 +353,13 @@ impl<V: Rules> State<V> {
                     sts2_core::EncounterTable::room(encounter) == <_ as sts2_core::RoomKinds>::BOSS
                 }) && self.in_last_act();
                 if last_boss {
-                    self.won(combat, Vec::new(), live);
+                    self.won(seat, combat, Vec::new(), live);
                     return self.decided();
                 }
                 let mut offered =
-                    self.combat_rewards(&combat, proportion, &extra_rewards, &extra, &taken);
+                    self.combat_rewards(seat, &combat, proportion, &extra_rewards, &extra, &taken);
                 crate::reward::sort(&mut offered);
-                self.won(combat, offered, live);
+                self.won(seat, combat, offered, live);
             }
         }
         // A decision the end of a fight cut short is `Decided::Abandoned`. The
@@ -357,6 +373,7 @@ impl<V: Rules> State<V> {
     /// while it is above nothing, over the encounter's range scaled by it.
     fn combat_rewards(
         &mut self,
+        seat: sts2_core::SeatIndex,
         combat: &sts2_core::Combat<V>,
         proportion: f32,
         extra_rewards: &[combat::ExtraReward<V>],
@@ -367,7 +384,7 @@ impl<V: Rules> State<V> {
             .encounter
             .unwrap_or_else(|| unimplemented!("a fight with no encounter behind it"));
         let ascension = self.ascension();
-        let character = self.character();
+        let character = self.character(seat);
         let gold = (proportion > 0.0).then(|| {
             let range = V::encounter_gold(encounter, ascension);
             // `(int)Math.Round((float)gold * GoldProportion)`, which rounds a
@@ -382,7 +399,7 @@ impl<V: Rules> State<V> {
         let room = reward_room::<V>(encounter);
         let added = self.card_reward_added(true);
         let forced = self.potion_forced(<_ as sts2_core::EncounterTable>::room(encounter));
-        let pool = self.reward_pool(room == crate::reward::combat::Room::Elite);
+        let pool = self.reward_pool(seat, room == crate::reward::combat::Room::Elite);
         let (rng, odds) = self.rewarding();
         let (mut offered, rarity) = crate::reward::combat::won::<V, _>(
             rng,
@@ -408,15 +425,18 @@ impl<V: Rules> State<V> {
                 taken: false,
             });
         }
-        offered.extend(self.extra_offers(&Extras {
-            rewards: extra_rewards.to_vec(),
-            ending: ending.to_vec(),
-            taken: taken.to_vec(),
-            room,
-        }));
+        offered.extend(self.extra_offers(
+            seat,
+            &Extras {
+                rewards: extra_rewards.to_vec(),
+                ending: ending.to_vec(),
+                taken: taken.to_vec(),
+                room,
+            },
+        ));
         self.reward_offers(&mut offered);
         let room = Some(<_ as sts2_core::EncounterTable>::room(encounter));
-        self.modify_rewards(&mut offered, room);
+        self.modify_rewards(seat, &mut offered, room);
         // `CombatRoom.OfferRoomEndRewards`: `BeforeCombatRewardOffered` once
         // the set is made, before it is offered.
         let card_reward = offered
@@ -431,9 +451,13 @@ impl<V: Rules> State<V> {
 
     /// `CombatRoom.ExtraRewards` filled in, in order, after whatever was
     /// filled before them.
-    pub(super) fn extra_offers(&mut self, extras: &Extras<V>) -> Vec<crate::reward::Offer<V>> {
+    pub(super) fn extra_offers(
+        &mut self,
+        seat: sts2_core::SeatIndex,
+        extras: &Extras<V>,
+    ) -> Vec<crate::reward::Offer<V>> {
         let ascension = self.ascension();
-        let character = self.character();
+        let character = self.character(seat);
         let act = self.act();
         let room = extras.room;
         let mut offered = Vec::new();
@@ -498,7 +522,7 @@ impl<V: Rules> State<V> {
                 // only the room's own card reward does.
                 combat::ExtraReward::Card => {
                     let added = self.card_reward_added(false);
-                    let pool = self.reward_pool(room == crate::reward::combat::Room::Elite);
+                    let pool = self.reward_pool(seat, room == crate::reward::combat::Room::Elite);
                     let (rng, odds) = self.rewarding();
                     crate::reward::combat::card_reward::<V, _>(
                         rng, odds, ascension, &pool, act, room, &added,

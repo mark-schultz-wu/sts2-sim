@@ -100,6 +100,20 @@ Co-op is in scope, before the AI front end. The headless game plays co-op on
 v0.111.0, one game for each seat, and `cargo xtask coop` plays runs at random.
 Each seat implements `sts2_core::Seat`, and `sts2_core::Coop` decides which
 seat acts. A run's `Start` names every player, and both run formats hold runs
-of any number of players, so the runs that end are kept. Next is a simulator
-that holds a player per seat, and then hunts over co-op runs.
+of any number of players, so the runs that end are kept.
+
+Next is a simulator that holds a player per seat. Each seat keeps the whole
+run as its own machine sees it. The work goes in this order:
+
+1. With one player and no change in behaviour, the simulator learns to hold
+   several. The run state keeps its players by seat (done). Next, a fight
+   keeps each player's piles, energy and orbs. Then the board acts for a
+   given player, and each relic and potion knows its owner.
+2. A simulator seat, and `cargo xtask coop` following each recorded co-op
+   run against it, step by step, as a hunt does.
+3. The co-op rules, in the order the runs reach them. These include start
+   and Neow for several players, monster health and block scaled by the
+   player count, and turns all players take at once. Rewards, map votes,
+   rest sites, shops, events, and death and revival follow.
+4. Co-op content, such as the 37 co-op cards, as the runs reach it.
 
