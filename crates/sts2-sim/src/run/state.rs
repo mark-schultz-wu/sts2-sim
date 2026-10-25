@@ -8750,6 +8750,11 @@ impl<V: Rules> Copy for AtSeat<'_, V> {}
 
 impl<V: Rules> State<V> {
     /// The run as `seat` sees it.
+    /// How many players the run has.
+    pub(crate) fn player_count(&self) -> usize {
+        self.players.len()
+    }
+
     pub(crate) fn seen_by(&self, seat: sts2_core::SeatIndex) -> AtSeat<'_, V> {
         AtSeat { state: self, seat }
     }

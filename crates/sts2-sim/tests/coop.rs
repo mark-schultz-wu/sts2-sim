@@ -136,3 +136,29 @@ fn the_run_is_over_once_it_is_over_on_every_seat() {
     let seated = over.expect("both runs end");
     assert!(seated.iter().all(|seat| seat.snapshot.observation.run_over));
 }
+
+/// A solo run's one seat plays as the simulator does: the same moves, to the
+/// same places, all the way to the end.
+#[test]
+fn a_solo_seat_plays_as_the_simulator() {
+    let mut start = lobby();
+    start.players.truncate(1);
+    let mut sim = Sim::begin((), &start).expect("the run begins");
+    let mut seat = sts2_sim::SimSeat::begin(&start, SeatIndex(0));
+    for step in 0..20_000_usize {
+        let seen = sim.observe().expect("the simulator observes");
+        assert_eq!(seat.observe(), seen, "step {step}");
+        if seen.observation.run_over {
+            return;
+        }
+        let moves = &seen.observation.moves;
+        let decision = moves[step.wrapping_mul(7919) % moves.len()];
+        sim.play(&decision)
+            .expect("no fault")
+            .expect("a listed move is accepted");
+        seat.play(SeatIndex(0), &decision)
+            .expect("no fault")
+            .expect("a listed move is accepted");
+    }
+    panic!("the run never ended");
+}

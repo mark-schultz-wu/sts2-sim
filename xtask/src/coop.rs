@@ -14,6 +14,10 @@
 //! ```
 //!
 //! The build is `STS2_GAME_VERSION`'s. Only v0.111.0 plays co-op.
+//!
+//! With `--hunt`, the simulator plays beside every seat, and each run stops
+//! where the two part. The report counts the runs that agreed, parted, or
+//! where the simulator panicked, and how many steps they matched in all.
 
 use std::path::Path;
 use std::process::Command;
@@ -34,6 +38,9 @@ pub struct Args {
     /// How many runs play at once.
     #[arg(long, default_value_t = 4)]
     width: usize,
+    /// Play the simulator beside the game, and stop each run where they part.
+    #[arg(long)]
+    hunt: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -50,6 +57,7 @@ pub fn run(args: Args) -> Result<String, Error> {
         first_seed,
         characters,
         width,
+        hunt,
     } = args;
     let root = crate::workspace();
     let runner = crate::error::build_example(&root, "coop_run")?;
@@ -72,7 +80,7 @@ pub fn run(args: Args) -> Result<String, Error> {
                 while let Some(at) =
                     Some(next.fetch_add(1, Ordering::Relaxed)).filter(|&at| at < seeds.len())
                 {
-                    let result = play_one(runner, &seeds[at], characters, scratch);
+                    let result = play_one(runner, &seeds[at], characters, scratch, hunt);
                     went.lock().expect("no thread panics").push((at, result));
                 }
             });
@@ -86,6 +94,8 @@ pub fn run(args: Args) -> Result<String, Error> {
         .iter()
         .filter(|(_, went)| went.is_ok())
         .map(|(at, _)| run_file(&scratch, &seeds[*at]))
+        // A hunt that stopped before the first move kept no run.
+        .filter(|file| file.exists())
         .collect();
     let file = scratch.join("runs.bin");
     if !kept.is_empty() {
@@ -100,10 +110,35 @@ pub fn run(args: Args) -> Result<String, Error> {
         out += &format!("{} {characters}: {line}\n", seeds[*at]);
     }
     out += &format!("{ended} of {} runs ended\n", went.len());
+    if hunt {
+        out += &verdicts(went.iter().filter_map(|(_, went)| went.as_deref().ok()));
+    }
     if !kept.is_empty() {
         out += &format!("the runs that ended are in {}\n", file.display());
     }
     Ok(out)
+}
+
+/// How the hunted runs that ended came out: how many of each verdict, and
+/// the steps the simulator matched across them. Each runner's last line
+/// opens with its verdict and the step it reached.
+fn verdicts<'a>(lines: impl Iterator<Item = &'a str>) -> String {
+    let mut counts: std::collections::BTreeMap<&str, usize> = Default::default();
+    let mut matched = 0;
+    for line in lines {
+        let mut words = line.split_whitespace();
+        let verdict = words.next().unwrap_or("nothing");
+        *counts.entry(verdict).or_default() += 1;
+        matched += words
+            .next()
+            .and_then(|step| step.trim_end_matches(',').parse::<usize>().ok())
+            .unwrap_or(0);
+    }
+    let counted: Vec<String> = counts
+        .iter()
+        .map(|(verdict, n)| format!("{n} {verdict}"))
+        .collect();
+    format!("hunted: {}; {matched} steps matched\n", counted.join(", "))
 }
 
 /// Where the run of `seed` is written.
@@ -115,7 +150,13 @@ fn run_file(scratch: &Path, seed: &str) -> std::path::PathBuf {
 ///
 /// Each move goes to a log beside the seats' profiles, which the failure
 /// names.
-fn play_one(runner: &Path, seed: &str, characters: &str, scratch: &Path) -> Result<String, String> {
+fn play_one(
+    runner: &Path,
+    seed: &str,
+    characters: &str,
+    scratch: &Path,
+    hunt: bool,
+) -> Result<String, String> {
     let homes = scratch.join(seed);
     let output = Command::new(runner)
         .args([seed, characters])
@@ -123,6 +164,7 @@ fn play_one(runner: &Path, seed: &str, characters: &str, scratch: &Path) -> Resu
         .arg(&homes)
         .arg("--out")
         .arg(run_file(scratch, seed))
+        .args(hunt.then_some("--hunt"))
         .output()
         .map_err(|e| format!("launching the runner: {e}"))?;
     let log = homes.join("moves.log");

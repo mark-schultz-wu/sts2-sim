@@ -29,7 +29,7 @@ impl<V: Rules> Clone for Sim<V> {
     }
 }
 
-/// The one SOLO of a solo run, which is every SOLO `Sim` plays.
+/// The one seat of a solo run, which is every seat `Sim` plays.
 const SOLO: sts2_core::SeatIndex = sts2_core::SeatIndex(0);
 
 impl<V: Rules> Play<V> for Sim<V> {
@@ -37,22 +37,9 @@ impl<V: Rules> Play<V> for Sim<V> {
     type Host = ();
 
     fn begin(_: Self::Host, start: &Start<V>) -> Result<Self, Self::Error> {
-        if let Some(modifier) = start
-            .modifiers
-            .iter()
-            .find(|m| !V::modifier_ported(m.modifier))
-        {
-            unimplemented!("a run started with {modifier:?}");
-        }
-        let player = start.alone();
+        start.alone();
         Ok(Self {
-            state: State::start(
-                &start.seed,
-                player.character,
-                start.ascension,
-                &start.modifiers,
-                player.wins,
-            ),
+            state: started(start),
         })
     }
 
@@ -97,56 +84,7 @@ impl<V: Rules> Sim<V> {
     /// most decisions do, and a search throws every one of them away.
     #[tracing::instrument(level = "trace", skip_all, fields(decision = name(decision)))]
     pub fn decide(&mut self, decision: &Decision<V>) -> Result<Settled<V>, Error> {
-        let pending = self.state.pending(SOLO);
-        // A reward screen leaves the belt open, so a discard is the one
-        // other decision it takes.
-        if let Some(kind) = pending
-            && !matches!(decision, Decision::Answer(_))
-            && !(matches!(decision, Decision::DiscardPotion { .. })
-                && kind == sts2_core::QuestionKind::Rewards)
-        {
-            return Ok(Err(Refusal {
-                what: name(decision).into(),
-                reason: Reason::Pending { kind },
-            }));
-        }
-        if pending.is_none() && matches!(decision, Decision::Answer(_)) {
-            return Ok(Err(Refusal {
-                what: "answer".into(),
-                reason: Reason::NothingPending,
-            }));
-        }
-        match decision {
-            Decision::ChooseOption {
-                index,
-                target: None,
-            } => self.state.choose(SOLO, *index).map(Ok),
-            // A run of one has no other player to aim an option at.
-            Decision::ChooseOption {
-                target: Some(target),
-                ..
-            } => Ok(Err(Refusal {
-                what: "choose_option".into(),
-                reason: Reason::WrongOptionTarget {
-                    target: Some(*target),
-                },
-            })),
-            Decision::Answer(answer) => self.state.respond(SOLO, answer),
-            Decision::PlayCard { index, target } => self.state.play_card(SOLO, *index, *target),
-            Decision::EndTurn => self.state.end_turn(SOLO),
-            Decision::UsePotion { index, target } => self.state.use_potion(SOLO, *index, *target),
-            Decision::Proceed => self.state.proceed(SOLO).map(Ok),
-            Decision::Buy { index } => self.state.buy(SOLO, *index).map(Ok),
-            Decision::DiscardPotion { index } => self.state.discard_potion(SOLO, *index),
-            Decision::EnterRoom { room } => self.state.enter_room(SOLO, *room).map(Ok),
-            Decision::Travel { to } => match self.state.resolve(SOLO, *to) {
-                Err(reason) => Ok(Err(Refusal {
-                    what: "travel".into(),
-                    reason,
-                })),
-                Ok(moving) => self.state.travel(SOLO, moving).map(Ok),
-            },
-        }
+        decide(&mut self.state, SOLO, decision)
     }
 
     /// Puts the run into a position, and reports what that decided.
@@ -201,7 +139,93 @@ impl<V: Rules> Construct<V> for Sim<V> {
     }
 }
 
-fn name<V: Rules>(decision: &Decision<V>) -> &'static str {
+/// The run `start` names, as it opens.
+///
+/// # Panics
+///
+/// A modifier nobody has ported, or a run of several players, which nothing
+/// here starts yet.
+pub(super) fn started<V: Rules>(start: &Start<V>) -> State<V> {
+    if let Some(modifier) = start
+        .modifiers
+        .iter()
+        .find(|m| !V::modifier_ported(m.modifier))
+    {
+        unimplemented!("a run started with {modifier:?}");
+    }
+    let player = start.alone();
+    State::start(
+        &start.seed,
+        player.character,
+        start.ascension,
+        &start.modifiers,
+        player.wins,
+    )
+}
+
+/// `decision`, taken by `seat`'s player, on `state`.
+pub(super) fn decide<V: Rules>(
+    state: &mut State<V>,
+    seat: sts2_core::SeatIndex,
+    decision: &Decision<V>,
+) -> Result<Settled<V>, Error> {
+    let pending = state.pending(seat);
+    // A reward screen leaves the belt open, so a discard is the one
+    // other decision it takes.
+    if let Some(kind) = pending
+        && !matches!(decision, Decision::Answer(_))
+        && !(matches!(decision, Decision::DiscardPotion { .. })
+            && kind == sts2_core::QuestionKind::Rewards)
+    {
+        return Ok(Err(Refusal {
+            what: name(decision).into(),
+            reason: Reason::Pending { kind },
+        }));
+    }
+    if pending.is_none() && matches!(decision, Decision::Answer(_)) {
+        return Ok(Err(Refusal {
+            what: "answer".into(),
+            reason: Reason::NothingPending,
+        }));
+    }
+    match decision {
+        Decision::ChooseOption {
+            index,
+            target: None,
+        } => state.choose(seat, *index).map(Ok),
+        // A run of one has no other player to aim an option at.
+        Decision::ChooseOption {
+            target: Some(target),
+            ..
+        } if state.player_count() == 1 => Ok(Err(Refusal {
+            what: "choose_option".into(),
+            reason: Reason::WrongOptionTarget {
+                target: Some(*target),
+            },
+        })),
+        Decision::ChooseOption {
+            target: Some(target),
+            ..
+        } => unimplemented!("an option aimed at {target:?}'s player"),
+        Decision::Answer(answer) => state.respond(seat, answer),
+        Decision::PlayCard { index, target } => state.play_card(seat, *index, *target),
+        Decision::EndTurn => state.end_turn(seat),
+        Decision::UsePotion { index, target } => state.use_potion(seat, *index, *target),
+        Decision::Proceed => state.proceed(seat).map(Ok),
+        Decision::Buy { index } => state.buy(seat, *index).map(Ok),
+        Decision::DiscardPotion { index } => state.discard_potion(seat, *index),
+        Decision::EnterRoom { room } => state.enter_room(seat, *room).map(Ok),
+        Decision::Travel { to } => match state.resolve(seat, *to) {
+            Err(reason) => Ok(Err(Refusal {
+                what: "travel".into(),
+                reason,
+            })),
+            Ok(moving) => state.travel(seat, moving).map(Ok),
+        },
+    }
+}
+
+pub(super) fn name<V: Rules>(decision: &Decision<V>) -> &'static str {
     match decision {
         Decision::Travel { .. } => "travel",
         Decision::EnterRoom { .. } => "enter_room",
