@@ -124,13 +124,8 @@ fn run(cli: Cli) -> Result<(), Error> {
         ascension,
         modifiers,
     } = cli;
-    let start = Start::<V> {
-        wins: sts2_golden::random::wins(seed.as_str()),
-        seed,
-        character,
-        ascension,
-        modifiers,
-    };
+    let wins = sts2_golden::random::wins(seed.as_str());
+    let start = Start::<V>::solo(seed, character, ascension, modifiers, wins);
     let mut pick = sts2_golden::random::Pick::for_seed(start.seed.as_str());
     let mut sim = Sim::<V>::begin((), &start).map_err(Error::Begin)?;
     for (relic, count) in carried::<V>() {

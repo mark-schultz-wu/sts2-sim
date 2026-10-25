@@ -89,10 +89,12 @@ fn run() -> Result<(), Error> {
         Config::new(dir),
         &Start {
             seed: Seed::new("0RACLE1")?,
-            character: Character::Ironclad,
+            players: vec![sts2_core::Player {
+                character: Character::Ironclad,
+                wins: 0,
+            }],
             ascension: AscensionLevel::None,
             modifiers: vec![],
-            wins: 0,
         },
     )?;
     println!(

@@ -131,7 +131,7 @@ fn followed<V: sts2_content::Build + sts2_content_wire::WireContentVersion>(
         return;
     }
     // First, so a panic below still says whose run it was, and how long.
-    print!("{} {} ", run.character, run.digests.len());
+    print!("{} {} ", run.characters(), run.digests.len());
     std::io::Write::flush(&mut std::io::stdout()).expect("stdout takes a line");
     static AGREED: AtomicUsize = AtomicUsize::new(0);
     let report = std::panic::take_hook();

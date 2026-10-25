@@ -99,6 +99,7 @@ step.
 Co-op is in scope, before the AI front end. The headless game plays co-op on
 v0.111.0, one game for each seat, and `cargo xtask coop` plays runs at random.
 Each seat implements `sts2_core::Seat`, and `sts2_core::Coop` decides which
-seat acts. Next is a file format for co-op runs, then a simulator that holds
-a player per seat, and then hunts over co-op runs.
+seat acts. A run's `Start` names every player, and both run formats hold runs
+of any number of players, so the runs that end are kept. Next is a simulator
+that holds a player per seat, and then hunts over co-op runs.
 

@@ -777,10 +777,12 @@ mod tests {
 
         let start = sts2_core::Start::<V> {
             seed: sts2_core::Seed::new("C000000042").expect("a seed"),
-            character: sts2_content::v0_107_1::characters::Character::Ironclad,
+            players: vec![sts2_core::Player {
+                character: sts2_content::v0_107_1::characters::Character::Ironclad,
+                wins: 0,
+            }],
             ascension: crate::cli::ascension::<V>("None").expect("no ascension"),
             modifiers: Vec::new(),
-            wins: 0,
         };
         let sim = sts2_sim::Sim::<V>::begin((), &start).expect("the run starts");
         let mut app = App::playing(sim, Options::default());
@@ -833,10 +835,12 @@ mod tests {
             .unwrap_or((100, 30));
         let start = sts2_core::Start::<V> {
             seed: sts2_core::Seed::new(&seed).expect("a seed"),
-            character: sts2_content::v0_107_1::characters::Character::Silent,
+            players: vec![sts2_core::Player {
+                character: sts2_content::v0_107_1::characters::Character::Silent,
+                wins: 0,
+            }],
             ascension: crate::cli::ascension::<V>("None").expect("no ascension"),
             modifiers: Vec::new(),
-            wins: 0,
         };
         let mut sim = sts2_sim::Sim::<V>::begin((), &start).expect("the run starts");
         let mut printed: std::collections::BTreeMap<String, usize> = Default::default();

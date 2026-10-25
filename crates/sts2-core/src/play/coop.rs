@@ -7,8 +7,8 @@
 
 use std::marker::PhantomData;
 
-use super::seat::{Lobby, Seat, SeatAnswered, SeatIndex, Seated};
-use crate::{ContentVersion, Decision};
+use super::seat::{Seat, SeatAnswered, SeatIndex, Seated};
+use crate::{ContentVersion, Decision, Start};
 
 /// The seats of one co-op run.
 pub struct Coop<V: ContentVersion, S: Seat<V>> {
@@ -43,26 +43,22 @@ impl<V: ContentVersion, S: Seat<V>> Coop<V, S> {
     ///
     /// # Panics
     ///
-    /// When `hosts` and the lobby's characters differ in number, or there are
+    /// When `hosts` and the run's players differ in number, or there are
     /// more than 256 seats.
-    pub fn begin(hosts: Vec<S::Host>, lobby: &Lobby<V>) -> Result<Self, S::Error>
+    pub fn begin(hosts: Vec<S::Host>, start: &Start<V>) -> Result<Self, S::Error>
     where
         S: Send,
         S::Host: Send,
         S::Error: Send,
     {
-        assert_eq!(
-            hosts.len(),
-            lobby.characters.len(),
-            "one host for each seat in the lobby"
-        );
+        assert_eq!(hosts.len(), start.players.len(), "one host for each player");
         let begun: Vec<Result<S, S::Error>> = std::thread::scope(|scope| {
             let threads: Vec<_> = hosts
                 .into_iter()
                 .enumerate()
                 .map(|(at, host)| {
                     let me = SeatIndex(u8::try_from(at).expect("at most 256 seats"));
-                    scope.spawn(move || S::begin(host, lobby, me))
+                    scope.spawn(move || S::begin(host, start, me))
                 })
                 .collect();
             threads

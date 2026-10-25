@@ -93,10 +93,9 @@ fn run(cli: Cli) -> Result<(), Error> {
                 seed: seed.clone(),
                 source,
             })?,
-            character,
+            players: vec![sts2_core::Player { character, wins: 0 }],
             ascension: sts2_content::v0_107_1::ascension::AscensionLevel::None,
             modifiers: Vec::new(),
-            wins: 0,
         };
         let sim = |source| Error::Sim {
             seed: seed.clone(),

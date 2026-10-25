@@ -283,6 +283,8 @@ impl<V: sts2_content_wire::WireContentVersion> Play<V> for Oracle<V> {
     /// it. A holder that outlives a run is [`Session`](super::held::Session),
     /// where the daemon owns the game and says whether a run is already open.
     fn begin(config: Self::Host, start: &Start<V>) -> Result<Self, Error> {
+        // The game's `start` begins a solo run. A co-op seat is a `GameSeat`.
+        start.alone();
         let mut oracle = Self::launch(config)?;
         let reply = oracle.dispatch(start)?;
         // The run's own first report is dropped. `observe` asks for it, and a

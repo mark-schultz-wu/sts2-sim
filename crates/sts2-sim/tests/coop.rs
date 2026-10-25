@@ -6,7 +6,7 @@
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::{
-    Coop, Decision, Lobby, Peer, Peers, Play, Seat, SeatAnswered, SeatIndex, Seated, Seed, Start,
+    Coop, Decision, Peer, Peers, Play, Player, Seat, SeatAnswered, SeatIndex, Seated, Seed, Start,
     Turn,
 };
 use sts2_sim::Sim;
@@ -35,17 +35,14 @@ impl Seat<V> for Solo {
     type Error = sts2_sim::Error;
     type Host = ();
 
-    fn begin(_: (), lobby: &Lobby<V>, me: SeatIndex) -> Result<Self, Self::Error> {
-        let start = Start {
-            seed: lobby.seed.clone(),
-            character: lobby.characters[me.at()],
-            ascension: AscensionLevel::None,
-            modifiers: Vec::new(),
-            wins: 0,
+    fn begin(_: (), start: &Start<V>, me: SeatIndex) -> Result<Self, Self::Error> {
+        let alone = Start {
+            players: vec![start.players[me.at()]],
+            ..start.clone()
         };
         Ok(Self {
-            sim: Sim::begin((), &start)?,
-            seats: lobby.characters.len(),
+            sim: Sim::begin((), &alone)?,
+            seats: start.players.len(),
         })
     }
 
@@ -65,10 +62,13 @@ impl Seat<V> for Solo {
     }
 }
 
-fn lobby() -> Lobby<V> {
-    Lobby {
+fn lobby() -> Start<V> {
+    let player = |character| Player { character, wins: 0 };
+    Start {
         seed: Seed::new("C0000001").expect("a seed"),
-        characters: vec![Character::Ironclad, Character::Silent],
+        players: vec![player(Character::Ironclad), player(Character::Silent)],
+        ascension: AscensionLevel::None,
+        modifiers: Vec::new(),
     }
 }
 

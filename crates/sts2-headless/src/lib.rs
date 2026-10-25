@@ -31,13 +31,13 @@
 //! // so nothing here has to answer for a run that never started.
 //! let mut game = Oracle::<V>::begin(
 //!     Config::new("/path/to/Slay the Spire 2"),
-//!     &Start {
-//!         seed: Seed::new("ABCDEF")?,
-//!         character: Character::Ironclad,
-//!         ascension: AscensionLevel::None,
-//!         modifiers: vec![],
-//!         wins: 0,
-//!     },
+//!     &Start::solo(
+//!         Seed::new("ABCDEF")?,
+//!         Character::Ironclad,
+//!         AscensionLevel::None,
+//!         vec![],
+//!         0,
+//!     ),
 //! )?;
 //!
 //! // Looking has one result. A step has two, because the game can refuse it,

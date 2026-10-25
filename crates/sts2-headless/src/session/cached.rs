@@ -221,6 +221,8 @@ impl<V: sts2_content_wire::WireContentVersion, P: Transport> Play<V> for Cached<
     /// A refused start takes the cache with it, there being none to hand back.
     /// Filling one starts from a run the game accepts.
     fn begin(host: Self::Host, start: &Start<V>) -> Result<Self, Error> {
+        // The game's `start` begins a solo run.
+        start.alone();
         let mut cached = match host.inner {
             Some(inner) => Self::filling(&host.path, inner),
             None => Self::open(&host.path).ok_or_else(|| {
@@ -313,10 +315,12 @@ mod tests {
         let dir = tempdir();
         let opening: Start<V> = Start {
             seed: sts2_core::Seed::new("0RACLE1").expect("a fixture's seed is a seed"),
-            character: sts2_content::v0_107_1::characters::Character::Regent,
+            players: vec![sts2_core::Player {
+                character: sts2_content::v0_107_1::characters::Character::Regent,
+                wins: 0,
+            }],
             ascension: sts2_content::v0_107_1::ascension::AscensionLevel::None,
             modifiers: Vec::new(),
-            wins: 0,
         };
 
         let absent = Cached::<Counting>::begin(

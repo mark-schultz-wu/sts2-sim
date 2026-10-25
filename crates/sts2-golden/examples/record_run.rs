@@ -26,7 +26,7 @@ use std::sync::Mutex;
 use clap::Parser;
 use sts2_content_wire::WireContentVersion;
 use sts2_core::{
-    Construct as _, Digested as _, Gift, Observed as _, Play as _, Seed, Setup, Start,
+    Construct as _, Digested as _, Gift, Observed as _, Play as _, SeatIndex, Seed, Setup, Start,
 };
 use sts2_golden::recorded::{Ending, Recorded, Run, named, position};
 use sts2_golden::scenario::Stamp;
@@ -170,12 +170,11 @@ fn record<V: WireContentVersion + sts2_content::Build>(cli: Cli) -> Result<Outco
         modifiers,
         hunt,
     } = cli;
-    let start = Start::<V> {
-        wins: sts2_golden::random::wins(seed.as_str()),
-        seed,
-        character: parse(&character)?,
-        ascension: parse(&ascension)?,
-        modifiers: modifiers
+    let start = Start::<V>::solo(
+        seed.clone(),
+        parse(&character)?,
+        parse(&ascension)?,
+        modifiers
             .iter()
             .map(|text| {
                 sts2_golden::recorded::read_modifier(text).map_err(|source| Error::Id {
@@ -184,7 +183,8 @@ fn record<V: WireContentVersion + sts2_content::Build>(cli: Cli) -> Result<Outco
                 })
             })
             .collect::<Result<_, _>>()?,
-    };
+        sts2_golden::random::wins(seed.as_str()),
+    );
     let mut config = Config::new(game_dir_from_env().ok_or(Error::NoGame)?);
     config.data_home = data_home;
     let mut pick = sts2_golden::random::Pick::for_seed(start.seed.as_str());
@@ -211,18 +211,8 @@ fn record<V: WireContentVersion + sts2_content::Build>(cli: Cli) -> Result<Outco
                 content: i64::from(greeting.content_hash),
             },
             runs: vec![Run {
-                character: id(&start.character),
-                seed: start.seed.as_str().to_owned(),
-                ascension: id(&start.ascension),
-                modifiers: start
-                    .modifiers
-                    .iter()
-                    .map(sts2_golden::recorded::spell_modifier)
-                    .collect(),
-                wins: start.wins,
-                ending: Ending::Parted,
                 digests: vec![position(&seen)],
-                moves: Vec::new(),
+                ..Run::of(&start, Ending::Parted)
             }],
         },
     ));
@@ -276,6 +266,7 @@ fn record<V: WireContentVersion + sts2_content::Build>(cli: Cli) -> Result<Outco
         played(|run| {
             run.moves
                 .push(u16::try_from(at).expect("a list of moves fits a u16"));
+            run.seats.push(SeatIndex(0));
             run.digests.push(position(&seen));
         });
         if !game.logged().is_empty() {
@@ -376,12 +367,4 @@ fn parted<V: sts2_core::ContentVersion>(
         parts.push("the question".into());
     }
     parts.join(", ")
-}
-
-/// An id as the game spells it, which is how serde writes it.
-fn id(value: &impl serde::Serialize) -> String {
-    match serde_json::to_value(value) {
-        Ok(serde_json::Value::String(id)) => id,
-        other => panic!("an id that is not a string: {other:?}"),
-    }
 }

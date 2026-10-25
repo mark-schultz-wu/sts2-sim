@@ -193,10 +193,9 @@ fn fuzz<V: sts2_content_wire::WireContentVersion>(cli: Cli) -> Result<(), Error<
     config.data_home = cli.data_home.clone();
     let start = Start {
         seed: seed.clone(),
-        character,
+        players: vec![sts2_core::Player { character, wins: 0 }],
         ascension,
         modifiers: vec![],
-        wins: 0,
     };
     // The run is begun with the game, because a simulator or an oracle without
     // one is not something to fuzz.

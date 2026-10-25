@@ -1,7 +1,8 @@
 //! Reading and writing a recording, in the oracle's spelling.
 //!
 //! JSON Lines: a build stamp, then one line per step, each step spelled as a
-//! [`crate::wire::command::Command`].
+//! [`crate::wire::command::Command`]. In a run of several players each step
+//! also names its seat, as `"seat"` on the same line.
 //!
 //! The crate README has the format and the example, and says why the format is
 //! here rather than in `sts2-core`.
@@ -12,7 +13,7 @@ use std::fs::File;
 use std::io::{self, BufRead, Write};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
-use sts2_core::{Recording, Start, Step, Tape};
+use sts2_core::{Recording, SeatIndex, Start, Step, Tape};
 
 /// Writes the stamp and every step.
 ///
@@ -25,8 +26,12 @@ pub fn write<V: sts2_content_wire::WireContentVersion>(
 ) -> io::Result<()> {
     open::<V>(&mut out)?;
     began(&mut out, recording.start())?;
-    for step in recording.steps() {
-        append(&mut out, step)?;
+    let solo = recording.start().players.len() == 1;
+    for (step, &seat) in recording.steps().iter().zip(recording.seats()) {
+        match solo {
+            true => append(&mut out, step)?,
+            false => append_by(&mut out, seat, step)?,
+        }
     }
     Ok(())
 }
@@ -48,7 +53,7 @@ pub fn open<V: sts2_content_wire::WireContentVersion>(mut out: impl Write) -> io
     writeln!(out, "{}", serde_json::to_string(&Stamp::of(&V::VERSION))?)
 }
 
-/// Writes one step.
+/// Writes one step of a solo run.
 ///
 /// Nothing here buffers across calls, so a process that dies between two steps
 /// has written the first.
@@ -58,6 +63,23 @@ pub fn append<V: sts2_content_wire::WireContentVersion>(
 ) -> io::Result<()> {
     let wire: Command<V> = step.into();
     writeln!(out, "{}", serde_json::to_string(&wire)?)
+}
+
+/// Writes one step of a run of several players, which `seat` took.
+///
+/// The seat comes first on the line, so a reader sees whose step it is
+/// before what it is.
+pub fn append_by<V: sts2_content_wire::WireContentVersion>(
+    mut out: impl Write,
+    seat: SeatIndex,
+    step: &Step<V>,
+) -> io::Result<()> {
+    let wire: Command<V> = step.into();
+    let line = serde_json::to_string(&wire)?;
+    let fields = line
+        .strip_prefix('{')
+        .expect("a command is spelled as an object");
+    writeln!(out, "{{\"seat\":{},{fields}", seat.0)
 }
 
 /// A file being written to as the run is played.
@@ -73,6 +95,8 @@ pub struct Writer<V: sts2_content_wire::WireContentVersion> {
     path: PathBuf,
     file: File,
     steps: usize,
+    /// How many players the run has.
+    players: usize,
     build: PhantomData<V>,
 }
 
@@ -93,6 +117,7 @@ impl<V: sts2_content_wire::WireContentVersion> Writer<V> {
             path,
             file,
             steps: 0,
+            players: start.players.len(),
             build: PhantomData,
         })
     }
@@ -111,24 +136,30 @@ impl<V: sts2_content_wire::WireContentVersion> Writer<V> {
         let path = path.into();
         let existing = std::fs::read_to_string(&path)?;
 
-        // Checked rather than subtracted from: a file with fewer than two lines
-        // has no stamp and no start, and is not a recording to carry on.
-        let lines = existing.lines().filter(|l| !l.trim().is_empty()).count();
-        let steps = lines.checked_sub(2).ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!(
-                    "{} starts no run; there is no recording to carry on",
-                    path.display()
-                ),
-            )
-        })?;
+        // A file with no start after its stamp is not a recording to carry
+        // on. The start says how many players the run has.
+        let mut lines = existing.lines().filter(|l| !l.trim().is_empty());
+        let start = lines
+            .nth(1)
+            .and_then(|line| serde_json::from_str::<Command<V>>(line.trim()).ok())
+            .and_then(Command::into_start)
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "{} starts no run; there is no recording to carry on",
+                        path.display()
+                    ),
+                )
+            })?;
+        let steps = lines.count();
 
         let file = File::options().append(true).open(&path)?;
         Ok(Writer {
             path,
             file,
             steps,
+            players: start.players.len(),
             build: PhantomData,
         })
     }
@@ -141,12 +172,35 @@ impl<V: sts2_content_wire::WireContentVersion> Writer<V> {
     pub fn steps(&self) -> usize {
         self.steps
     }
+
+    /// Writes a step `seat` took, in a run of several players.
+    ///
+    /// # Panics
+    ///
+    /// On a solo run, whose steps name no seat, or a seat the run lacks.
+    pub fn record_by(&mut self, seat: SeatIndex, step: &Step<V>) -> io::Result<()> {
+        assert!(
+            self.players > 1 && seat.at() < self.players,
+            "seat {} in a run of {} players",
+            seat.0,
+            self.players
+        );
+        append_by(&mut self.file, seat, step)?;
+        self.file.flush()?;
+        self.steps += 1;
+        Ok(())
+    }
 }
 
 impl<V: sts2_content_wire::WireContentVersion> Tape<V> for Writer<V> {
     type Error = io::Error;
 
+    /// # Panics
+    ///
+    /// On a run of several players, whose steps go through
+    /// [`Writer::record_by`].
     fn record(&mut self, step: &Step<V>) -> Result<(), io::Error> {
+        assert_eq!(self.players, 1, "a step of a co-op run names its seat");
         append(&mut self.file, step)?;
         // Insurance, not the mechanism: `File` does not buffer, so the step is
         // already down by the line above. It is here so that wrapping the file
@@ -204,24 +258,56 @@ pub fn read<V: sts2_content_wire::WireContentVersion>(
             source: e,
         })?;
 
+        // A command spells no seat, so it reads past one. Whether the line
+        // should have one depends on the run.
+        let seat = serde_json::from_str::<Seated>(line.trim())
+            .map_err(|e| Error::Step {
+                at,
+                line: named(&line),
+                source: e,
+            })?
+            .seat;
+
         match recording.as_mut() {
             None => {
-                let start = command.into_start().ok_or_else(|| Error::NotAStart {
-                    at,
-                    line: named(&line),
-                })?;
+                let start = command
+                    .into_start()
+                    .filter(|_| seat.is_none())
+                    .ok_or_else(|| Error::NotAStart {
+                        at,
+                        line: named(&line),
+                    })?;
                 recording = Some(Recording::new(start));
             }
             Some(recording) => {
-                recording.push(command.into_step().ok_or_else(|| Error::NotAStep {
+                let step = command.into_step().ok_or_else(|| Error::NotAStep {
                     at,
                     line: named(&line),
-                })?);
+                })?;
+                let players = recording.start().players.len();
+                let seat = match (players, seat) {
+                    (1, None) => SeatIndex(0),
+                    (2.., Some(seat)) if usize::from(seat) < players => SeatIndex(seat),
+                    _ => {
+                        return Err(Error::Seat {
+                            at,
+                            players,
+                            line: named(&line),
+                        });
+                    }
+                };
+                recording.push_by(seat, step);
             }
         }
     }
 
     recording.ok_or(Error::NoStart)
+}
+
+/// Whose a step is, read off its line beside the command.
+#[derive(serde::Deserialize)]
+struct Seated {
+    seat: Option<u8>,
 }
 
 /// Why a recording did not read.
@@ -265,6 +351,15 @@ pub enum Error {
     #[error("line {at} does not start a run, so this is a fragment rather than a run: {line}")]
     NotAStart { at: usize, line: String },
 
+    /// A step of a run of several players names one of its seats, and a
+    /// solo run's step names none.
+    #[error("line {at} does not name a seat of a run of {players} players as it should: {line}")]
+    Seat {
+        at: usize,
+        players: usize,
+        line: String,
+    },
+
     /// The stamp read, and then the file ended.
     #[error("the recording has no commands in it, so it starts no run")]
     NoStart,
@@ -287,10 +382,12 @@ mod tests {
     fn recorded() -> Recording<V> {
         let mut r = Recording::new(Start {
             seed: Seed::new("SP1RE1").expect("a seed"),
-            character: Character::Ironclad,
+            players: vec![sts2_core::Player {
+                character: Character::Ironclad,
+                wins: 0,
+            }],
             ascension: AscensionLevel::None,
             modifiers: vec![],
-            wins: 0,
         });
         r.push(Decision::Travel {
             to: Coord::new(1, 1),
@@ -429,10 +526,12 @@ mod tests {
     fn a_constructed_run_records_and_reads_back() {
         let mut r: Recording<V> = Recording::new(Start {
             seed: Seed::new("SP1RE1").expect("a seed"),
-            character: Character::Ironclad,
+            players: vec![sts2_core::Player {
+                character: Character::Ironclad,
+                wins: 0,
+            }],
             ascension: AscensionLevel::None,
             modifiers: vec![],
-            wins: 0,
         });
         r.push(sts2_core::Setup::Fight {
             encounter: <V as sts2_core::ContentVersion>::Encounter::ShrinkerBeetleWeak,
@@ -541,6 +640,151 @@ mod tests {
 
         let err = Writer::<V>::resume(&path).expect_err("there is nothing to carry on");
         assert!(err.to_string().contains("starts no run"), "{err}");
+
+        std::fs::remove_file(&path).ok();
+    }
+
+    /// Two players, and a step each.
+    fn together() -> Recording<V> {
+        let player = |character| sts2_core::Player { character, wins: 0 };
+        let mut r = Recording::new(Start {
+            seed: Seed::new("C000000001").expect("a seed"),
+            players: vec![player(Character::Ironclad), player(Character::Silent)],
+            ascension: AscensionLevel::None,
+            modifiers: vec![],
+        });
+        r.push_by(SeatIndex(1), Decision::EndTurn);
+        r.push_by(
+            SeatIndex(0),
+            Decision::Travel {
+                to: Coord::new(1, 1),
+            },
+        );
+        r
+    }
+
+    #[test]
+    fn a_run_of_several_players_round_trips() {
+        let text = written(&together());
+        assert_eq!(
+            read::<V>(text.as_bytes()).expect("its own build"),
+            together()
+        );
+    }
+
+    /// The start names each player, and each step its seat, first.
+    #[test]
+    fn a_run_of_several_players_names_each_and_their_seats() {
+        let text = written(&together());
+        let lines: Vec<&str> = text.lines().collect();
+
+        assert_eq!(
+            lines[1],
+            r#"{"cmd":"start","seed":"C000000001","ascension":"None","players":[{"character":"IRONCLAD"},{"character":"SILENT"}]}"#
+        );
+        assert_eq!(lines[2], r#"{"seat":1,"cmd":"end_turn"}"#);
+        assert_eq!(lines[3], r#"{"seat":0,"cmd":"travel","col":1,"row":1}"#);
+    }
+
+    /// A solo run's file is what it was before runs had players.
+    #[test]
+    fn a_solo_run_names_no_seat() {
+        let text = written(&recorded());
+        assert!(text.lines().all(|line| !line.contains("seat")), "{text}");
+        assert!(
+            text.lines()
+                .nth(1)
+                .is_some_and(|l| l.contains(r#""character":"IRONCLAD""#))
+        );
+    }
+
+    #[test]
+    fn a_seat_where_the_run_has_none_is_refused() {
+        let text =
+            written(&recorded()).replace(r#"{"cmd":"travel""#, r#"{"seat":0,"cmd":"travel""#);
+        let err = read::<V>(text.as_bytes()).expect_err("a solo step names no seat");
+        assert!(
+            matches!(
+                err,
+                Error::Seat {
+                    at: 3,
+                    players: 1,
+                    ..
+                }
+            ),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn a_step_of_several_players_with_no_seat_is_refused() {
+        let text = written(&together()).replace(r#"{"seat":1,"#, "{");
+        let err = read::<V>(text.as_bytes()).expect_err("whose step it is is missing");
+        assert!(
+            matches!(
+                err,
+                Error::Seat {
+                    at: 3,
+                    players: 2,
+                    ..
+                }
+            ),
+            "{err}"
+        );
+
+        let text = written(&together()).replace(r#"{"seat":1,"#, r#"{"seat":2,"#);
+        let err = read::<V>(text.as_bytes()).expect_err("a seat the run lacks");
+        assert!(
+            matches!(
+                err,
+                Error::Seat {
+                    at: 3,
+                    players: 2,
+                    ..
+                }
+            ),
+            "{err}"
+        );
+    }
+
+    /// A solo run spells its character as the game's `start` does. A start
+    /// that names one player in a list, or players both ways, is not a start.
+    #[test]
+    fn a_start_is_spelled_one_way() {
+        let stamp = written(&recorded())
+            .lines()
+            .next()
+            .expect("a stamp")
+            .to_owned();
+        for start in [
+            r#"{"cmd":"start","seed":"ABC","ascension":"None","players":[{"character":"SILENT"}]}"#,
+            r#"{"cmd":"start","seed":"ABC","ascension":"None","character":"SILENT","players":[{"character":"SILENT"},{"character":"DEFECT"}]}"#,
+            r#"{"cmd":"start","seed":"ABC","ascension":"None"}"#,
+        ] {
+            let err = read::<V>(format!("{stamp}\n{start}\n").as_bytes()).expect_err(start);
+            assert!(matches!(err, Error::NotAStart { at: 2, .. }), "{err}");
+        }
+    }
+
+    /// A co-op file carried on goes on naming seats.
+    #[test]
+    fn a_run_of_several_players_carries_on() {
+        let path = scratch("together");
+        let mut out = File::create(&path).expect("a file");
+        write(&together(), &mut out).expect("written");
+        drop(out);
+
+        let mut carried = Writer::<V>::resume(&path).expect("it carries on");
+        assert_eq!(carried.steps(), 2);
+        carried
+            .record_by(SeatIndex(1), &Decision::Proceed.into())
+            .expect("a step is written");
+
+        let file = std::io::BufReader::new(File::open(&path).expect("the file"));
+        let whole = read::<V>(file).expect("it reads back");
+        let mut want = together();
+        want.push_by(SeatIndex(1), Decision::Proceed);
+        assert_eq!(whole, want);
 
         std::fs::remove_file(&path).ok();
     }

@@ -12,13 +12,13 @@
 //! half folded into the high. Four find the first step two runs part at as
 //! surely as eight do here.
 
-use sts2_core::{Decision, Digest, Digested as _, Room, RunModifier, Snapshot, Start};
+use sts2_core::{Decision, Digest, Digested as _, Room, RunModifier, SeatIndex, Snapshot, Start};
 
 /// What the file starts with, so a wrong one is refused rather than read.
 const MAGIC: &[u8; 8] = b"STS2REC\x00";
 
 /// The layout below. A change here is a re-record, not a migration.
-const VERSION: u16 = 2;
+const VERSION: u16 = 3;
 
 /// Every recorded run, and the build that played them.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -40,24 +40,39 @@ pub enum Ending {
 }
 
 /// One run the game played.
+///
+/// A run of several players is the same. Each move also names the seat that
+/// played it, and the digest before it is where that seat stood. At the end
+/// there is one digest for every seat. A solo run is the run of one player,
+/// and its file spells no seats.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Run {
-    /// The character, as the game spells its id.
-    pub character: String,
     pub seed: String,
+    /// Each player, in seat order. Seat 0 hosts.
+    pub players: Vec<Player>,
     /// The ascension level, as the game names it.
     pub ascension: String,
     /// The modifiers the run was started with, each as [`spell_modifier`]
     /// writes it.
     pub modifiers: Vec<String>,
-    /// See [`sts2_core::Start::wins`].
-    pub wins: u32,
     pub ending: Ending,
-    /// Where the run stood before each move, and after the last: one more
-    /// than [`Run::moves`].
+    /// Where the seat that played each move stood before it. Then where each
+    /// seat stood after the last, so there are as many more than
+    /// [`Run::moves`] as there are players.
     pub digests: Vec<u32>,
-    /// Each move, as its index in the list the game offered.
+    /// Each move, as its index in the list the game offered its seat.
     pub moves: Vec<u16>,
+    /// The seat that played each move. As long as [`Run::moves`].
+    pub seats: Vec<SeatIndex>,
+}
+
+/// One player of a recorded run.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Player {
+    /// The character, as the game spells its id.
+    pub character: String,
+    /// See [`sts2_core::Player::wins`].
+    pub wins: u32,
 }
 
 /// Where a run stands, as a recorded run keeps it. The rules digest of the
@@ -81,6 +96,28 @@ pub enum Followed {
 }
 
 impl Run {
+    /// A run begun with `start` that has no positions yet, ended as `ending`
+    /// says until it ends.
+    pub fn of<V: sts2_core::ContentVersion>(start: &Start<V>, ending: Ending) -> Run {
+        Run {
+            seed: start.seed.as_str().to_owned(),
+            players: start
+                .players
+                .iter()
+                .map(|player| Player {
+                    character: spelled(&player.character),
+                    wins: player.wins,
+                })
+                .collect(),
+            ascension: spelled(&start.ascension),
+            modifiers: start.modifiers.iter().map(spell_modifier).collect(),
+            ending,
+            digests: Vec::new(),
+            moves: Vec::new(),
+            seats: Vec::new(),
+        }
+    }
+
     /// What the run was begun with.
     ///
     /// # Panics
@@ -90,15 +127,27 @@ impl Run {
     pub fn start<V: sts2_core::ContentVersion>(&self) -> Start<V> {
         Start {
             seed: sts2_core::Seed::new(&self.seed).expect("a recorded seed is a seed"),
-            character: from_id(&self.character),
+            players: self
+                .players
+                .iter()
+                .map(|player| sts2_core::Player {
+                    character: from_id(&player.character),
+                    wins: player.wins,
+                })
+                .collect(),
             ascension: from_id(&self.ascension),
             modifiers: self
                 .modifiers
                 .iter()
                 .map(|text| read_modifier(text).unwrap_or_else(|e| panic!("{text:?}: {e}")))
                 .collect(),
-            wins: self.wins,
         }
+    }
+
+    /// The players' characters, joined by `+`: a solo run's is its one.
+    pub fn characters(&self) -> String {
+        let ids: Vec<&str> = self.players.iter().map(|p| p.character.as_str()).collect();
+        ids.join("+")
     }
 }
 
@@ -211,7 +260,8 @@ pub fn named<V: sts2_core::ContentVersion>(seen: &Snapshot<V>, decision: &Decisi
 /// # Panics
 ///
 /// Where the simulator does: an unported path, or a move it refuses. A
-/// caller that must survive one runs this in a process of its own.
+/// caller that must survive one runs this in a process of its own. And on a
+/// run of several players, which needs a simulator of several seats.
 pub fn follow<V, P>(run: &Run, driven: &mut P) -> Followed
 where
     V: sts2_core::ContentVersion,
@@ -229,6 +279,9 @@ where
     P: sts2_core::Play<V>,
     P::Error: std::fmt::Display,
 {
+    if run.players.len() > 1 {
+        unimplemented!("following a run of {} players", run.players.len());
+    }
     let mut after = String::from("the start");
     for (step, &want) in run.digests.iter().enumerate() {
         let seen = driven
@@ -267,14 +320,19 @@ impl Recorded {
                 out.push(u8::try_from(text.len()).expect("an id is short"));
                 out.extend_from_slice(text.as_bytes());
             };
-            for id in [&run.character, &run.seed, &run.ascension] {
+            for id in [&run.seed, &run.ascension] {
                 text(&mut out, id);
             }
             out.push(u8::try_from(run.modifiers.len()).expect("a run has few modifiers"));
             for id in &run.modifiers {
                 text(&mut out, id);
             }
-            out.extend_from_slice(&run.wins.to_le_bytes());
+            assert!(!run.players.is_empty(), "a run has a player");
+            out.push(u8::try_from(run.players.len()).expect("at most 255 players"));
+            for player in &run.players {
+                text(&mut out, &player.character);
+                out.extend_from_slice(&player.wins.to_le_bytes());
+            }
             out.push(match run.ending {
                 Ending::Won => 0,
                 Ending::Lost => 1,
@@ -283,16 +341,26 @@ impl Recorded {
             });
             assert_eq!(
                 run.digests.len(),
-                run.moves.len() + 1,
-                "a digest for each position, before each move and after the last"
+                run.moves.len() + run.players.len(),
+                "a digest before each move, and one for each seat after the last"
+            );
+            assert_eq!(run.seats.len(), run.moves.len(), "a seat for each move");
+            let solo = run.players.len() == 1;
+            assert!(
+                run.seats.iter().all(|seat| seat.at() < run.players.len()),
+                "a move by a seat the run has"
             );
             let steps = u32::try_from(run.moves.len()).expect("a run's moves fit a u32");
             out.extend_from_slice(&steps.to_le_bytes());
             for digest in &run.digests {
                 out.extend_from_slice(&digest.to_le_bytes());
             }
-            // Most lists hold fewer than 128 moves, so most take one byte.
-            for &at in &run.moves {
+            // Most lists hold fewer than 128 moves, so most take one byte. A
+            // solo run's seat is always 0, so its file spells none.
+            for (&at, seat) in run.moves.iter().zip(&run.seats) {
+                if !solo {
+                    out.push(seat.0);
+                }
                 let mut at = at;
                 while at >= 0x80 {
                     out.push((at as u8 & 0x7f) | 0x80);
@@ -322,13 +390,22 @@ impl Recorded {
 
         let mut runs = Vec::with_capacity(count as usize);
         for _ in 0..count {
-            let character = read.text()?;
             let seed = read.text()?;
             let ascension = read.text()?;
             let modifiers = (0..read.u8()?)
                 .map(|_| read.text())
                 .collect::<Result<Vec<_>, _>>()?;
-            let wins = read.u32()?;
+            let players = (0..read.u8()?)
+                .map(|_| {
+                    Ok(Player {
+                        character: read.text()?,
+                        wins: read.u32()?,
+                    })
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            if players.is_empty() {
+                return Err(format!("run {} has no players", runs.len()));
+            }
             let ending = match read.u8()? {
                 0 => Ending::Won,
                 1 => Ending::Lost,
@@ -337,21 +414,31 @@ impl Recorded {
                 other => return Err(format!("{other} is no way for a run to end")),
             };
             let steps = read.u32()? as usize;
-            let digests = (0..=steps)
+            let digests = (0..steps + players.len())
                 .map(|_| read.u32())
                 .collect::<Result<Vec<_>, _>>()?;
-            let moves = (0..steps)
-                .map(|_| read.varint())
-                .collect::<Result<Vec<_>, _>>()?;
+            let mut moves = Vec::with_capacity(steps);
+            let mut seats = Vec::with_capacity(steps);
+            for _ in 0..steps {
+                let seat = match players.len() {
+                    1 => SeatIndex(0),
+                    count => match read.u8()? {
+                        seat if usize::from(seat) < count => SeatIndex(seat),
+                        seat => return Err(format!("seat {seat} in a run of {count} players")),
+                    },
+                };
+                seats.push(seat);
+                moves.push(read.varint()?);
+            }
             runs.push(Run {
-                character,
                 seed,
+                players,
                 ascension,
                 modifiers,
-                wins,
                 ending,
                 digests,
                 moves,
+                seats,
             });
         }
         if read.at != bytes.len() {
@@ -417,16 +504,36 @@ mod tests {
 
     fn run(seed: &str, moves: Vec<u16>) -> Run {
         Run {
-            character: "SILENT".into(),
             seed: seed.into(),
+            players: vec![Player {
+                character: "SILENT".into(),
+                wins: 4,
+            }],
             ascension: "None".into(),
             modifiers: Vec::new(),
-            wins: 4,
             ending: Ending::Lost,
             digests: (0..=moves.len() as u32)
                 .map(|n| n.wrapping_mul(0x9E37_79B9))
                 .collect(),
+            seats: vec![SeatIndex(0); moves.len()],
             moves,
+        }
+    }
+
+    /// A run of two: the seats take the moves in the order given.
+    fn coop(seed: &str, moves: Vec<(u8, u16)>) -> Run {
+        let player = |character: &str| Player {
+            character: character.into(),
+            wins: 0,
+        };
+        Run {
+            players: vec![player("IRONCLAD"), player("SILENT")],
+            digests: (0..moves.len() as u32 + 2)
+                .map(|n| n.wrapping_mul(0x85EB_CA6B))
+                .collect(),
+            seats: moves.iter().map(|&(seat, _)| SeatIndex(seat)).collect(),
+            moves: moves.iter().map(|&(_, at)| at).collect(),
+            ..run(seed, Vec::new())
         }
     }
 
@@ -444,6 +551,8 @@ mod tests {
                     modifiers: vec!["FLIGHT".into(), "CHARACTER_CARDS:DEFECT".into()],
                     ..run("C000000003", vec![1])
                 },
+                coop("C000000004", vec![(0, 3), (1, 200), (1, 0), (0, 65535)]),
+                coop("C000000005", vec![]),
             ],
         };
 
@@ -478,6 +587,37 @@ mod tests {
 
         // Four bytes of digest and one of index per step.
         assert_eq!(two.encode().len() - one.encode().len(), 5);
+    }
+
+    /// A run of several players spells the seat of each move, and a solo
+    /// run does not.
+    #[test]
+    fn a_seat_takes_one_byte_in_a_run_of_several() {
+        let one = Recorded {
+            runs: vec![coop("C", vec![(1, 5)])],
+            ..Recorded::default()
+        };
+        let two = Recorded {
+            runs: vec![coop("C", vec![(1, 5), (0, 6)])],
+            ..Recorded::default()
+        };
+
+        assert_eq!(two.encode().len() - one.encode().len(), 6);
+    }
+
+    #[test]
+    fn a_move_by_a_seat_the_run_lacks_is_refused() {
+        let mut bytes = Recorded {
+            runs: vec![coop("C", vec![(1, 5)])],
+            ..Recorded::default()
+        }
+        .encode();
+        // The seat byte sits just before the last move's one-byte index.
+        let seat = bytes.len() - 2;
+        assert_eq!(bytes[seat], 1);
+        bytes[seat] = 2;
+
+        assert!(Recorded::decode(&bytes).is_err());
     }
 
     #[test]

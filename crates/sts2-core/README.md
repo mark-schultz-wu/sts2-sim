@@ -102,6 +102,10 @@ wrong build is not a broken file. It is a different run that happens to parse.
 So `Recording<V>` is parameterised the way everything else here is, and there is
 no version field.
 
+A run of several players is a recording too. `Start` names each player in seat
+order, and the recording says which seat took each step. A solo run is the run
+of one player.
+
 The format is in-memory only, for now. A recording outlives either
 implementation, so the format is this crate's to choose. Inheriting the oracle's
 wire spelling hands that choice to the oracle instead. Until this crate chooses,

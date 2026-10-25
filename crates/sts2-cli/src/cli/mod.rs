@@ -146,7 +146,10 @@ impl StartArgs {
     pub fn start<V: sts2_content_wire::WireContentVersion>(&self) -> Result<Start<V>, Error> {
         Ok(Start {
             seed: Seed::fold(&self.seed)?,
-            character: id("character", &self.character)?,
+            players: vec![sts2_core::Player {
+                character: id("character", &self.character)?,
+                wins: self.wins,
+            }],
             ascension: match &self.ascension {
                 Some(level) => id("ascension level", level)?,
                 None => id("ascension level", "None")?,
@@ -156,7 +159,6 @@ impl StartArgs {
                 .iter()
                 .map(|modifier| id("modifier", modifier))
                 .collect::<Result<_, _>>()?,
-            wins: self.wins,
         })
     }
 

@@ -84,12 +84,11 @@ pub use step::Step;
 pub use step::answer::{Answer, Picks, RewardAlternative, TakeReward, Tool, Unpickable};
 pub use step::decision::{BeltIndex, Decision, HandIndex};
 pub use step::setup::{Gift, Setup};
-pub use step::start::{RunModifier, Start};
+pub use step::start::{Player, RunModifier, Start};
 
 pub use play::coop::{Coop, Turn};
 pub use play::recorder::{Recorder, Tape};
 pub use play::recording::Recording;
 pub use play::refusal::{Reason, Refusal};
-pub use play::seat::Lobby;
 pub use play::seat::{Peer, Peers, Seat, SeatAnswered, SeatIndex, Seated};
 pub use play::{Answered, Applied, Construct, Decided, Play, Snapshot};
