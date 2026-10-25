@@ -102,13 +102,3 @@ Each seat implements `sts2_core::Seat`, and `sts2_core::Coop` decides which
 seat acts. Next is a file format for co-op runs, then a simulator that holds
 a player per seat, and then hunts over co-op runs.
 
-Two gaps in the headless game come first, each a design for Mark:
-
-- Mend, the co-op rest option that heals another player, crashes the
-  seat's game. Its target pick is UI-node code (`NTargetManager` over the
-  rest site's nodes). The headless game needs a question that picks a
-  player. 3 of 12 seeds of `cargo xtask coop` reach it.
-- `CardSelectCmd.FromChooseACardScreen` lets the headless game skip the
-  pick. The game's own selector call asks for none to one card. The screen
-  allows a skip only where `canSkip` is set.
-

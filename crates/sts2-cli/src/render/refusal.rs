@@ -116,6 +116,10 @@ impl<V: sts2_content_wire::WireContentVersion> fmt::Display for Prose<'_, V> {
                 f.write_str("nothing to proceed from; this is for leaving a finished boss room")
             }
             Reason::OptionDisabled => f.write_str("that option is disabled"),
+            Reason::WrongOptionTarget { target } => match target {
+                Some(seat) => write!(f, "that option cannot be aimed at seat {}", seat.0),
+                None => f.write_str("that option needs another player to aim at"),
+            },
             Reason::OptionLocked => f.write_str("that option is locked"),
             Reason::AlreadyAnswered => f.write_str("this chest has already been answered"),
             Reason::Unpurchasable {

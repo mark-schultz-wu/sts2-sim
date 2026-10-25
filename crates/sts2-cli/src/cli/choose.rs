@@ -142,6 +142,7 @@ pub fn command<V: sts2_content_wire::WireContentVersion>(
         Awaiting::RoomOption => match flat("a room option")?.as_slice() {
             [index] => Decision::ChooseOption {
                 index: u8::try_from(*index).map_err(|_| Error::NoOption(*index))?,
+                target: None,
             },
             // A room takes one option and then stops being a room with options,
             // so more than one is a misunderstanding worth naming rather than

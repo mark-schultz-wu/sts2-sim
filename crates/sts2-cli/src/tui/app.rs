@@ -1185,7 +1185,13 @@ mod tests {
 
         let intent = app.act(Action::Nth(0));
 
-        assert_eq!(intent, Intent::Send(Decision::ChooseOption { index: 6 }));
+        assert_eq!(
+            intent,
+            Intent::Send(Decision::ChooseOption {
+                index: 6,
+                target: None
+            })
+        );
         assert_eq!(app.ui.at, 0);
     }
 

@@ -14,6 +14,7 @@ using MegaCrit.Sts2.Core.Entities.Multiplayer;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.GameActions;
 using MegaCrit.Sts2.Core.Helpers;
+using MegaCrit.Sts2.Core.Hooks;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
@@ -408,6 +409,57 @@ internal static class RestSiteProgress
     private static void Chosen(RestSiteOption option, bool success, ulong playerId)
     {
         Rested |= success;
+    }
+}
+
+/// <summary>
+/// Mend aimed as its screen aims it, at the player <c>choose_option</c> names.
+/// </summary>
+/// <remarks>
+/// <c>MendRestSiteOption.OnSelect</c> aims with <c>NTargetManager</c> over the
+/// rest site's character nodes, and a headless game has none of them. For the
+/// local player this reserves the choice id, sends the target as the screen
+/// does, and runs the rest of <c>OnSelect</c>. Another seat's Mend runs the
+/// game's own code, which waits for the choice that seat sends.
+/// </remarks>
+[HarmonyPatch(typeof(MendRestSiteOption), nameof(MendRestSiteOption.OnSelect))]
+internal static class MendWithoutAScreen
+{
+    private static readonly Func<RestSiteOption, Player> Owner =
+        AccessTools.MethodDelegate<Func<RestSiteOption, Player>>(
+            AccessTools.PropertyGetter(typeof(RestSiteOption), "Owner"));
+
+    /// <summary>The player the next local Mend heals, which <c>choose_option</c> sets.</summary>
+    internal static Player? Target { get; set; }
+
+    private static bool Prefix(MendRestSiteOption __instance, ref Task<bool> __result)
+    {
+        Player owner = Owner(__instance);
+        if (!LocalContext.IsMe(owner))
+        {
+            return true;
+        }
+
+        Player? target = Target;
+        Target = null;
+        __result = Select(__instance, owner, target);
+        return false;
+    }
+
+    private static async Task<bool> Select(MendRestSiteOption mend, Player owner, Player? target)
+    {
+        PlayerChoiceSynchronizer choices = RunManager.Instance.PlayerChoiceSynchronizer;
+        uint choiceId = choices.ReserveChoiceId(owner);
+        choices.SyncLocalChoice(owner, choiceId, PlayerChoiceResult.FromPlayerId(target?.NetId));
+        mend.Description.Add("HasTarget", variable: false);
+        if (target == null)
+        {
+            return false;
+        }
+
+        await CreatureCmd.Heal(target.Creature, MendRestSiteOption.GetHealAmount(target));
+        await Hook.AfterRestSiteHeal(target.RunState, target, isMimicked: false);
+        return true;
     }
 }
 

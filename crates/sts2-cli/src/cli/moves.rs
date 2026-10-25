@@ -74,7 +74,10 @@ pub fn describe<V: sts2_content_wire::WireContentVersion>(decision: &Decision<V>
         },
         Decision::Travel { to } => format!("travelled to {},{}", to.col, to.row),
         Decision::Proceed => "left the act".into(),
-        Decision::ChooseOption { index } => format!("chose option {index}"),
+        Decision::ChooseOption { index, target } => match target {
+            Some(seat) => format!("chose option {index} for seat {}", seat.0),
+            None => format!("chose option {index}"),
+        },
         Decision::Buy { index } => format!("bought entry {index}"),
         Decision::Answer(Answer::Skip) => "skipped".into(),
         Decision::Answer(Answer::Cards(cards)) if cards.is_empty() => "chose no cards".into(),
@@ -127,7 +130,10 @@ mod tests {
                     index: sts2_core::fixture::belt(0),
                     target: None,
                 },
-                Decision::ChooseOption { index: 2 },
+                Decision::ChooseOption {
+                    index: 2,
+                    target: None
+                },
                 Decision::Travel {
                     to: Coord::new(0, 3)
                 },
@@ -170,7 +176,10 @@ mod tests {
 
         assert_eq!(
             navigation(&applied.observation.moves),
-            vec![Decision::ChooseOption { index: 6 }]
+            vec![Decision::ChooseOption {
+                index: 6,
+                target: None
+            }]
         );
     }
 }

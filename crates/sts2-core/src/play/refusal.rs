@@ -128,6 +128,9 @@ pub enum Reason<V: ContentVersion> {
     CannotProceed,
     /// A rest site option the run cannot take.
     OptionDisabled,
+    /// A rest site option aimed at no other player, or not aimed where it
+    /// must be. Mend heals another player, and nothing else takes a target.
+    WrongOptionTarget { target: Option<crate::SeatIndex> },
     /// An event option the run has not unlocked.
     OptionLocked,
     /// This chest has already been answered.

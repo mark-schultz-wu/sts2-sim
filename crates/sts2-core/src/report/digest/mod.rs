@@ -638,9 +638,22 @@ impl Sink {
                 self.u8(5);
                 aimed(self, index.get(), *target);
             }
-            Decision::ChooseOption { index } => {
+            Decision::ChooseOption {
+                index,
+                target: None,
+            } => {
                 self.u8(6);
                 self.u8(*index);
+            }
+            // A tag of its own, so an option with no target digests as it
+            // did before options took one.
+            Decision::ChooseOption {
+                index,
+                target: Some(target),
+            } => {
+                self.u8(10);
+                self.u8(*index);
+                self.u8(target.0);
             }
             Decision::Buy { index } => {
                 self.u8(7);

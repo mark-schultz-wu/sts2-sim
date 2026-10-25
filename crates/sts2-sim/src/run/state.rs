@@ -7460,7 +7460,10 @@ impl<V: Rules> State<V> {
                 modifier_options, ..
             } if !finished && !modifier_options.is_empty() => {
                 if self.phase.asking().is_none() {
-                    moves.push(Decision::ChooseOption { index: 0 });
+                    moves.push(Decision::ChooseOption {
+                        index: 0,
+                        target: None,
+                    });
                 }
             }
             Phase::Neow {
@@ -7469,7 +7472,10 @@ impl<V: Rules> State<V> {
                 (0..options.len())
                     .map(option_index)
                     .filter(|&index| *chosen != nonmax::NonMaxU8::new(index))
-                    .map(|index| Decision::ChooseOption { index }),
+                    .map(|index| Decision::ChooseOption {
+                        index,
+                        target: None,
+                    }),
             ),
             // An event's options are the content's to spell, so its room is
             // built. That is the room alone, and only in an event.
@@ -7481,6 +7487,7 @@ impl<V: Rules> State<V> {
                         .filter(|option| !option.locked && !option.chosen)
                         .map(|option| Decision::ChooseOption {
                             index: option.index,
+                            target: None,
                         }),
                 ),
                 Some(Room::Shop { entries }) => moves.extend(
@@ -7495,7 +7502,10 @@ impl<V: Rules> State<V> {
             },
             Phase::Treasure {
                 finished: false, ..
-            } => moves.extend([0, 1].map(|index| Decision::ChooseOption { index })),
+            } => moves.extend([0, 1].map(|index| Decision::ChooseOption {
+                index,
+                target: None,
+            })),
             Phase::RestSite { options, .. } => moves.extend(
                 options
                     .iter()
@@ -7503,6 +7513,7 @@ impl<V: Rules> State<V> {
                     .filter(|&(_, &id)| self.rest_option_enabled(id))
                     .map(|(index, _)| Decision::ChooseOption {
                         index: option_index(index),
+                        target: None,
                     }),
             ),
             Phase::Shop { entries, .. } => {
@@ -8700,7 +8711,10 @@ mod tests {
         run.choose(0).expect("the heal can be chosen");
         let legal = run.legal();
         assert!(
-            legal.contains(&Decision::ChooseOption { index: 0 }),
+            legal.contains(&Decision::ChooseOption {
+                index: 0,
+                target: None
+            }),
             "the smith is still up"
         );
         assert!(travels(&run), "and the run can leave beside it");

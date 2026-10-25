@@ -204,9 +204,13 @@ public static class Moves
             {
                 IReadOnlyList<RestSiteOption> options =
                     RunManager.Instance.RestSiteSynchronizer.GetLocalOptions();
+                // Mend aims at another player, as a card aims at a creature:
+                // one move for each player it can heal.
                 return Enumerable.Range(0, options.Count)
                     .Where(i => options[i].IsEnabled)
-                    .Select(Choosing)
+                    .SelectMany(i => options[i] is MendRestSiteOption
+                        ? state.Players.Where(p => p != me).Select(p => Mending(i, p))
+                        : new[] { Choosing(i) })
                     .ToList();
             }
 
@@ -259,6 +263,9 @@ public static class Moves
 
     private static Dictionary<string, object?> Choosing(int index) =>
         new Dictionary<string, object?> { ["cmd"] = "choose_option", ["index"] = index };
+
+    private static Dictionary<string, object?> Mending(int index, Player target) =>
+        new Dictionary<string, object?> { ["cmd"] = "choose_option", ["index"] = index, ["target"] = target.NetId };
 
     private static Dictionary<string, object?> Aimed(string cmd, int index, uint? target) =>
         new Dictionary<string, object?> { ["cmd"] = cmd, ["index"] = index, ["target"] = target };

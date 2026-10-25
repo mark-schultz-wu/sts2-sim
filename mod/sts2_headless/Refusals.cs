@@ -127,6 +127,13 @@ internal static class Refusals
 
     public static Dictionary<string, object?> OptionDisabled() => Kind("option_disabled");
 
+    /// <summary>
+    /// A rest site option aimed at no other player, or not aimed where it must
+    /// be. Mend heals another player, and nothing else takes a target.
+    /// </summary>
+    public static Dictionary<string, object?> WrongOptionTarget(ulong? target) =>
+        Kind("wrong_option_target", ("target", target));
+
     public static Dictionary<string, object?> OptionLocked() => Kind("option_locked");
 
     public static Dictionary<string, object?> AlreadyAnswered() => Kind("already_answered");

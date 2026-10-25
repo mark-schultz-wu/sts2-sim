@@ -326,7 +326,7 @@ first.
 |---|---|
 | wrong moment | `no_run` `run_over` `not_in_combat` `in_combat` `wrong_room` `nothing_to_choose` `pending` `nothing_pending` |
 | no such thing | `out_of_range` `no_such_creature` |
-| the rules say no | `unplayable` `undrinkable` `wrong_target` `wrong_potion_target` `not_travelable` `cannot_proceed` `option_disabled` `option_locked` `already_answered` `unpurchasable` |
+| the rules say no | `unplayable` `undrinkable` `wrong_target` `wrong_potion_target` `not_travelable` `cannot_proceed` `option_disabled` `wrong_option_target` `option_locked` `already_answered` `unpurchasable` |
 | answering a question | `duplicate` `wrong_count` `not_skippable` `already_taken` `needs_card_choice` `no_such_alternative` `empty_take` `off_grid` `already_uncovered` |
 | prose, deliberately | `console` `malformed` |
 
@@ -366,7 +366,7 @@ game.
 | `end_turn` | — |
 | `use_potion` | `index` — into the belt as `potions` reports it; `target` — a creature's `CombatId`, or absent. Out of a fight a Foul Potion is thrown at a merchant: see below |
 | `discard_potion` | `index` — into the belt as `potions` reports it. The one command a reward screen takes besides `answer`: see below |
-| `choose_option` | `index` — into the options the last observation reported |
+| `choose_option` | `index` — into the options the last observation reported; `target` — the net id of the player Mend heals, for Mend alone |
 | `buy` | `index` — into the shop entries |
 | `grant` | `card`, `relic` or `potion` — one entry name each, and one command can carry all three. It can park a question: see below |
 | `answer` | see below; shape depends on the pending |
@@ -382,6 +382,16 @@ goes through `ActionQueueSynchronizer.RequestEnqueue`. A command answers once
 the game stands still, waiting on this player or, in a co-op run, on another
 seat. Whether to wait for the others is the client's decision, made from
 `peers`.
+
+### Mend aims at a player
+
+Mend is the co-op rest option that heals another player. Its screen aims it
+with `NTargetManager` over the rest site's characters, as a card is aimed at a
+creature. Headless there are no characters to aim at, so `choose_option` names
+the player. There is one move for each other player, with that player's net id
+as its `target`. The mod sends the choice the screen sends, and heals as
+`OnSelect` does. Mend with no other player named, or a target on any other option, is
+`wrong_option_target`.
 
 ### A Foul Potion thrown at a merchant
 

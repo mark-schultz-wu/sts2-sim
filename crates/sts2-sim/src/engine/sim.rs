@@ -113,7 +113,20 @@ impl<V: Rules> Sim<V> {
             }));
         }
         match decision {
-            Decision::ChooseOption { index } => self.state.choose(*index).map(Ok),
+            Decision::ChooseOption {
+                index,
+                target: None,
+            } => self.state.choose(*index).map(Ok),
+            // A run of one has no other player to aim an option at.
+            Decision::ChooseOption {
+                target: Some(target),
+                ..
+            } => Ok(Err(Refusal {
+                what: "choose_option".into(),
+                reason: Reason::WrongOptionTarget {
+                    target: Some(*target),
+                },
+            })),
             Decision::Answer(answer) => self.state.respond(answer),
             Decision::PlayCard { index, target } => self.state.play_card(*index, *target),
             Decision::EndTurn => self.state.end_turn(),
