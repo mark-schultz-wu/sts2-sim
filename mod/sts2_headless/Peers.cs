@@ -128,9 +128,7 @@ internal static class Peers
         {
             ["netId"] = p.NetId,
             ["endedTurn"] = EndedTurn(p),
-            ["vote"] = Vote(p) is MapVote vote
-                ? new Dictionary<string, object?> { ["col"] = vote.coord.col, ["row"] = vote.coord.row }
-                : null,
+            ["vote"] = Vote(p) is MapVote vote ? $"{vote.coord.col},{vote.coord.row}" : null,
         }).ToList(),
         ["awaiting"] = AwaitedChoices(),
         ["inFlight"] = InFlight,

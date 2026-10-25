@@ -96,8 +96,19 @@ step.
 
 ### 4. Co-op
 
-Co-op is in scope, before the AI front end. Two spikes come first. Can
-the headless game record a co-op run? Can the simulator reproduce the
-game's own checksums? What they find sets what done means for co-op.
-Then the simulator holds a player per seat, and hunts cover co-op runs.
+Co-op is in scope, before the AI front end. The headless game plays co-op on
+v0.111.0, one game for each seat, and `cargo xtask coop` plays runs at random.
+Each seat implements `sts2_core::Seat`, and `sts2_core::Coop` decides which
+seat acts. Next is a file format for co-op runs, then a simulator that holds
+a player per seat, and then hunts over co-op runs.
+
+Two gaps in the headless game come first, each a design for Mark:
+
+- Mend, the co-op rest option that heals another player, crashes the
+  seat's game. Its target pick is UI-node code (`NTargetManager` over the
+  rest site's nodes). The headless game needs a question that picks a
+  player. 3 of 12 seeds of `cargo xtask coop` reach it.
+- `CardSelectCmd.FromChooseACardScreen` lets the headless game skip the
+  pick. The game's own selector call asks for none to one card. The screen
+  allows a skip only where `canSkip` is set.
 

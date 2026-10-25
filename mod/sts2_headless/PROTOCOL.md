@@ -286,12 +286,12 @@ about the other seats:
 
 ```json
 {"players":[{"netId":1,"endedTurn":true,"vote":null},
-            {"netId":1000,"endedTurn":false,"vote":{"col":2,"row":3}}],
+            {"netId":1000,"endedTurn":false,"vote":"2,3"}],
  "awaiting":[1000],"inFlight":false}
 ```
 
 `endedTurn` is a player who ended the turn and waits for the rest. `vote`
-is where a player voted to go next. `awaiting` lists the players whose choice
+is where a player voted to go next, as `col,row`. `awaiting` lists the players whose choice
 the game waits for. `inFlight` is an action of this seat's that is not back from
 the host yet. A run of one has no `peers`.
 

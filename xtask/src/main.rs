@@ -14,6 +14,7 @@ mod allocations;
 mod asm;
 mod census;
 mod codegen;
+mod coop;
 mod coverage;
 mod dump;
 mod error;
@@ -68,6 +69,8 @@ enum Command {
     /// Play runs on the game and the simulator side by side, and keep the
     /// ones where the two part.
     Hunt(hunt::Args),
+    /// Have the game play co-op runs at random, one game for each seat.
+    Coop(coop::Args),
     /// Count how much of each act's content has code.
     Coverage(coverage::Args),
     /// Count which of the rules' code the runs the game played reach.
@@ -119,6 +122,8 @@ enum Error {
     Record(record::Error),
     #[error("hunt failed: {0}")]
     Hunt(#[from] hunt::Error),
+    #[error("coop failed: {0}")]
+    Coop(#[from] coop::Error),
     #[error("coverage failed: {0}")]
     Coverage(#[from] coverage::Error),
     #[error("reached failed: {0}")]
@@ -152,6 +157,7 @@ fn run(command: Command) -> Result<String, Error> {
         Command::Census(args) => census::run(args)?,
         Command::Record(args) => record::run(args).map_err(Error::Record)?,
         Command::Hunt(args) => hunt::run(args)?,
+        Command::Coop(args) => coop::run(args)?,
         Command::Coverage(args) => coverage::run(args)?,
         Command::Reached(args) => reached::run(args)?,
         Command::Neow(args) => neow::run(args)?,

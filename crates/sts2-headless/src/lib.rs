@@ -56,6 +56,7 @@ pub use session::config::{Config, game_dir_from_env};
 pub use session::error::Error;
 pub use session::game::{Oracle, parse_reply};
 pub use session::held::{Recorded, Session, Status};
+pub use session::seat::{GameSeat, SeatHost};
 
 /// Keeping a game alive between the processes that drive it.
 ///

@@ -272,6 +272,12 @@ struct WireObservation<V: sts2_content_wire::WireContentVersion> {
     combat: Option<WireCombat<V>>,
     /// Every move the game accepts, as the commands that make them.
     moves: Vec<super::command::Command<V>>,
+    /// The other seats of a co-op run. A seat reads them apart from the
+    /// observation, through `super::peers`, because only it knows which net
+    /// id is which seat.
+    #[serde(default)]
+    #[expect(dead_code, reason = "read through `super::peers`")]
+    peers: Option<serde::de::IgnoredAny>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

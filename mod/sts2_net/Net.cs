@@ -73,9 +73,7 @@ public static class Net
         }
         else
         {
-            JoinFlow join = NetApi.NewJoin();
-            JoinResult joined = await join.Begin(
-                new ENetClientConnectionInitializer(session.NetId, "127.0.0.1", session.Port), tree);
+            (JoinFlow join, JoinResult joined) = await Join(session, tree);
             INetGameService service = join.NetService
                 ?? throw new InvalidOperationException("joined with no net service");
             _ = Pump(service, tree);
@@ -116,6 +114,29 @@ public static class Net
     /// What a run scene's <c>_Process</c> does for the net service: one update a
     /// frame, for as long as the process lives.
     /// </summary>
+    /// <summary>
+    /// Joins the host, and again after a failed try, as a player does after
+    /// the join screen's error. A seat can start before its host listens.
+    /// </summary>
+    private static async Task<(JoinFlow, JoinResult)> Join(Session session, SceneTree tree)
+    {
+        while (true)
+        {
+            JoinFlow join = NetApi.NewJoin();
+            try
+            {
+                JoinResult joined = await join.Begin(
+                    new ENetClientConnectionInitializer(session.NetId, "127.0.0.1", session.Port), tree);
+                return (join, joined);
+            }
+            catch (ClientConnectionFailedException e)
+            {
+                Log.Info($"[net] no host on {session.Port} yet: {e.Message}");
+                await tree.ToSignal(tree.CreateTimer(1.0), SceneTreeTimer.SignalName.Timeout);
+            }
+        }
+    }
+
     private static async Task Pump(INetGameService service, SceneTree tree)
     {
         while (true)

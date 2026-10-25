@@ -205,3 +205,19 @@ The daemon relays a command the client already encoded against its own tables.
 A client reaching a daemon that holds another build reads that game through the
 wrong ids. Separate paths make that unreachable, and let two builds be held open
 at once.
+
+## Co-op seats
+
+`GameSeat` implements `sts2_core::Seat`, the co-op counterpart of `Play`. A
+co-op run has one game process for each seat, and the games talk over ENet as
+the game's own co-op does. Seat 0 hosts. The others join it on the port that
+`SeatHost` names, and try again until the host listens.
+
+The mod's `peers` names each player by net id. The host is always 1, and the
+client at seat `k` is `1000 + k`. `GameSeat` reads `peers` back into seat
+order. `sts2_core::Coop` decides which seat acts next, from what each seat
+reports.
+
+`cargo xtask coop` plays co-op runs at random on v0.111.0. Build v0.107.1
+cannot play co-op, because it answers the other seats' card choices on the
+local machine.
