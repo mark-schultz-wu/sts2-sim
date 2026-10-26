@@ -5959,6 +5959,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.live.players[seat].character
     }
 
+    fn multiplayer(&self) -> bool {
+        self.live.players.len() > 1
+    }
+
     fn generate_card(&mut self, cards: &[V::Card]) -> Option<V::Card> {
         self.ran_on();
         use sts2_core::rng::GameRng as _;

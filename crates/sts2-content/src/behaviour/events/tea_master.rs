@@ -113,6 +113,9 @@ mod tests {
         fn character(&self) -> <V as sts2_core::ContentVersion>::Character {
             unreachable!("Tea Master does not inspect the character")
         }
+        fn multiplayer(&self) -> bool {
+            unreachable!("Tea Master does not ask how many players there are")
+        }
         fn relics(&self) -> impl Iterator<Item = sts2_core::CarriedRelic<V>> + '_ {
             self.relics.iter().map(|&relic| sts2_core::CarriedRelic {
                 relic,

@@ -509,7 +509,7 @@ fn make_it_so<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
 fn bundle_of_joy<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     use sts2_core::RunStreamKinds as _;
 
-    let mut cards = V::combat_colorless_cards().to_vec();
+    let mut cards = V::combat_colorless_cards(fight.multiplayer()).to_vec();
     let stream = <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_GENERATION;
     let made: Vec<_> = match fight.var(V::CardVar::CARDS) {
         3 => fight.generate_cards::<3>(&mut cards, stream).map(Vec::from),
@@ -558,7 +558,7 @@ fn manifest_authority<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> 
         scaling: Scaling::Dynamic,
     });
     fight.apply(block);
-    let mut cards = V::combat_colorless_cards().to_vec();
+    let mut cards = V::combat_colorless_cards(fight.multiplayer()).to_vec();
     let Ok([card]) = fight.generate_cards::<1>(
         &mut cards,
         <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_GENERATION,
@@ -640,7 +640,7 @@ fn heirloom_hammer_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V>
 fn quasar<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     use sts2_core::CardTable as _;
 
-    let mut pool = <V as sts2_core::Rules>::combat_colorless_cards().to_vec();
+    let mut pool = <V as sts2_core::Rules>::combat_colorless_cards(fight.multiplayer()).to_vec();
     let stream = <crate::generated::runstate::RunRngType as sts2_core::RunStreamKinds>::COMBAT_CARD_GENERATION;
     let mut offered: [CardIdent<V>; sts2_core::CHOICES] = fight
         .generate_cards(&mut pool, stream)

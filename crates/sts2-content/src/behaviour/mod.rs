@@ -116,7 +116,7 @@ pub(crate) fn free_card_into_hand<V: crate::Build, F: Fight<V>>(
     keeps: impl Fn(V::Card) -> bool,
     generated: bool,
 ) {
-    let mut pool: Vec<V::Card> = V::combat_cards(fight.character())
+    let mut pool: Vec<V::Card> = V::combat_cards(fight.character(), fight.multiplayer())
         .iter()
         .copied()
         .filter(|&card| keeps(card))
@@ -146,7 +146,7 @@ pub(crate) fn character_cards<V: crate::Build, F: Fight<V>>(
     fight: &F,
     kind: CardKind,
 ) -> Vec<V::Card> {
-    V::combat_cards(fight.character())
+    V::combat_cards(fight.character(), fight.multiplayer())
         .iter()
         .copied()
         .filter(|&card| V::card_kind(card) == Some(kind))

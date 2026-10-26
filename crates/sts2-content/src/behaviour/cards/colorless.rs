@@ -161,7 +161,9 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F
         // `CombatCardGeneration`, of which its owner takes one into hand,
         // free this turn, or none.
         __c0 if __c0 == V::Card::DISCOVERY => {
-            let mut pool = <V as sts2_core::Rules>::combat_cards(fight.character()).to_vec();
+            let mut pool =
+                <V as sts2_core::Rules>::combat_cards(fight.character(), fight.multiplayer())
+                    .to_vec();
             let stream = <crate::generated::runstate::RunRngType as sts2_core::RunStreamKinds>::COMBAT_CARD_GENERATION;
             let offered: [sts2_core::CardIdent<V>; sts2_core::CHOICES] = fight
                 .generate_cards(&mut pool, stream)
@@ -394,12 +396,12 @@ fn hidden_gem<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 fn splash<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     use sts2_core::RunStreamKinds as _;
 
-    let own = fight.character();
+    let (own, multiplayer) = (fight.character(), fight.multiplayer());
     let mut attacks: Vec<_> = <V as crate::build::Lists>::ALL_CHARACTERS
         .iter()
         .copied()
         .filter(|&character| character != own)
-        .flat_map(|character| V::combat_cards(character).iter().copied())
+        .flat_map(|character| V::combat_cards(character, multiplayer).iter().copied())
         .filter(|&card| V::card_kind(card) == Some(CardKind::Attack))
         .collect();
     let stream = <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_GENERATION;
@@ -423,7 +425,7 @@ fn splash<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 fn jack_of_all_trades<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     use sts2_core::RunStreamKinds as _;
 
-    let mut pool: Vec<_> = V::combat_colorless_cards()
+    let mut pool: Vec<_> = V::combat_colorless_cards(fight.multiplayer())
         .iter()
         .copied()
         .filter(|&card| card != V::Card::JACK_OF_ALL_TRADES)
@@ -576,11 +578,12 @@ fn seeker_strike_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 fn jackpot_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     use sts2_core::{CardTable as _, Cost};
 
-    let free: Vec<_> = <V as sts2_core::Rules>::combat_cards(fight.character())
-        .iter()
-        .copied()
-        .filter(|card| card.cost() == Cost::fixed(0))
-        .collect();
+    let free: Vec<_> =
+        <V as sts2_core::Rules>::combat_cards(fight.character(), fight.multiplayer())
+            .iter()
+            .copied()
+            .filter(|card| card.cost() == Cost::fixed(0))
+            .collect();
     let upgrade = u8::from(fight.upgraded());
     let made: Vec<_> = (0..cards(fight))
         .filter_map(|_| fight.generate_card(&free))

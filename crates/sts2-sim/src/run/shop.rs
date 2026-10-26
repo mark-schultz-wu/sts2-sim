@@ -32,6 +32,8 @@ pub(super) struct Merchant<'a, V: Rules> {
     /// `RelicModel.IsAllowed` reads.
     pub(super) floor: usize,
     pub(super) character: V::Character,
+    /// Whether the run has several players, whose pools deal the co-op cards.
+    pub(super) multiplayer: bool,
     /// `ModifyMerchantCardPool`'s character, whose cards a character shelf
     /// offers after its own.
     pub(super) added: Option<V::Character>,
@@ -154,7 +156,10 @@ impl<V: Rules> Merchant<'_, V> {
                         let rarity = COLORLESS[index - SHELVES.len()];
                         let card = self.pick(
                             seat,
-                            unpicked(V::merchant_colorless_cards(rarity), on_shelves),
+                            unpicked(
+                                V::merchant_colorless_cards(rarity, self.multiplayer),
+                                on_shelves,
+                            ),
                         );
                         (
                             card,
@@ -258,7 +263,13 @@ impl<V: Rules> Merchant<'_, V> {
         let mut stocked = Vec::new();
         let mut picked: Vec<V::Card> = Vec::new();
         for rarity in COLORLESS {
-            let card = self.pick(seat, unpicked(V::merchant_colorless_cards(rarity), &picked));
+            let card = self.pick(
+                seat,
+                unpicked(
+                    V::merchant_colorless_cards(rarity, self.multiplayer),
+                    &picked,
+                ),
+            );
             picked.push(card);
             let cost = self.haggled(seat, card_cost(rarity, true), CARD_SPREAD);
             stocked.push((CardIdent::new(card), cost));
@@ -271,9 +282,13 @@ impl<V: Rules> Merchant<'_, V> {
     /// `ModifyMerchantCardPool` adds the added character's cards, every one,
     /// after them.
     fn shelf(&self, kind: CardKind, rarity: RewardRarity, picked: &[V::Card]) -> Vec<V::Card> {
-        let mut cards = unpicked(V::merchant_cards(self.character, kind, rarity), picked);
+        let multiplayer = self.multiplayer;
+        let mut cards = unpicked(
+            V::merchant_cards(self.character, kind, rarity, multiplayer),
+            picked,
+        );
         if let Some(added) = self.added {
-            cards.extend(V::merchant_cards(added, kind, rarity));
+            cards.extend(V::merchant_cards(added, kind, rarity, multiplayer));
         }
         cards
     }

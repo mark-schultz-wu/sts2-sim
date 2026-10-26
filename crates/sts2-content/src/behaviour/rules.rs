@@ -440,21 +440,31 @@ pub(crate) fn merchant_cards<V: crate::Build>(
     character: V::Character,
     kind: sts2_core::CardKind,
     rarity: sts2_core::RewardRarity,
+    multiplayer: bool,
 ) -> Vec<V::Card> {
-    narrowed::<V>(V::unlocked_cards(character), Some(kind), rarity)
+    narrowed::<V>(
+        V::unlocked_cards(character, multiplayer),
+        Some(kind),
+        rarity,
+    )
 }
 
 pub(crate) fn merchant_colorless_cards<V: crate::Build>(
     rarity: sts2_core::RewardRarity,
+    multiplayer: bool,
 ) -> Vec<V::Card> {
-    narrowed::<V>(V::unlocked_colorless_cards(), None, rarity)
+    narrowed::<V>(V::unlocked_colorless_cards(multiplayer), None, rarity)
 }
 
 /// A quest card, and an event, ancient or token one, transforms within
 /// the colorless pool. Any other transforms within its own, a curse or a
 /// status included. The shop lists are each pool's unlocked cards, in the
 /// pool's own order.
-pub(crate) fn transform_options<V: crate::Build>(card: V::Card, in_combat: bool) -> Vec<V::Card> {
+pub(crate) fn transform_options<V: crate::Build>(
+    card: V::Card,
+    in_combat: bool,
+    multiplayer: bool,
+) -> Vec<V::Card> {
     use crate::generated::cards::CardRarity;
     use sts2_core::CardTable as _;
 
@@ -465,8 +475,8 @@ pub(crate) fn transform_options<V: crate::Build>(card: V::Card, in_combat: bool)
     ) || V::card_kind(card) == Some(sts2_core::CardKind::Quest);
     let (pool, in_fight) = match (colorless, card.pool()) {
         (false, Some(pool)) => (
-            <V as crate::build::Tables>::merchant_pool_cards(pool),
-            <V as crate::build::Tables>::combat_pool_cards(pool),
+            <V as crate::build::Tables>::merchant_pool_cards(pool, multiplayer),
+            <V as crate::build::Tables>::combat_pool_cards(pool, multiplayer),
         ),
         _ if rarity == CardRarity::Curse => (
             <V as crate::build::Tables>::unlocked_curse_cards(),
@@ -476,7 +486,10 @@ pub(crate) fn transform_options<V: crate::Build>(card: V::Card, in_combat: bool)
             <V as crate::build::Tables>::unlocked_status_cards(),
             <V as crate::build::Tables>::combat_status_cards(),
         ),
-        _ => (V::unlocked_colorless_cards(), V::combat_colorless_cards()),
+        _ => (
+            V::unlocked_colorless_cards(multiplayer),
+            V::combat_colorless_cards(multiplayer),
+        ),
     };
     let any_rarity = matches!(rarity, CardRarity::Status | CardRarity::Curse);
     pool.iter()

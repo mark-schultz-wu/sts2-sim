@@ -3027,6 +3027,12 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("the character in this fight")
     }
 
+    /// Whether the run has several players, which the pools combat
+    /// generation reads deal the co-op cards from.
+    fn multiplayer(&self) -> bool {
+        unimplemented!("how many players this fight's run has")
+    }
+
     /// One card of a combat-ready pool, `NextItem` off
     /// `CombatCardGeneration`, which is each draw `CardFactory.GetForCombat`
     /// makes. Nothing, for an empty pool.
@@ -7757,7 +7763,10 @@ pub trait Rules: Hooks + Engine {
     fn neow_event() -> Self::Event;
 
     /// The colorless pool, split by rarity in the game's enumeration order.
-    fn colorless_cards() -> Drafted<'static, Self::Card>;
+    ///
+    /// `multiplayer` is whether the run has several players, which deals the
+    /// cards only such a run does: `FilterForPlayerCount`.
+    fn colorless_cards(multiplayer: bool) -> Drafted<'static, Self::Card>;
 
     /// A card rarity reduced to the three-way reward rule.
     fn reward_rarity(card: Self::Card) -> RewardRarity;
@@ -7791,23 +7800,29 @@ pub trait Rules: Hooks + Engine {
     ///
     /// `Character.CardPool`, which is what a fight's card reward draws from.
     /// [`Rules::colorless_cards`] is the other pool, and no character holds it.
-    fn reward_cards(character: Self::Character) -> Drafted<'static, Self::Card>;
+    ///
+    /// `multiplayer` as [`Rules::colorless_cards`] takes it.
+    fn reward_cards(character: Self::Character, multiplayer: bool) -> Drafted<'static, Self::Card>;
 
     /// The character's pool narrowed by `CardFactory.FilterForCombat`, in the
     /// order a combat generation effect shuffles it.
-    fn combat_cards(character: Self::Character) -> &'static [Self::Card];
+    ///
+    /// `multiplayer` as [`Rules::colorless_cards`] takes it.
+    fn combat_cards(character: Self::Character, multiplayer: bool) -> &'static [Self::Card];
 
-    /// The colorless pool's `GetUnlockedCards` for a one-player run, every
-    /// rarity, in the pool's order.
-    fn unlocked_colorless_cards() -> &'static [Self::Card];
+    /// The colorless pool's `GetUnlockedCards`, every rarity, in the pool's
+    /// order, `multiplayer` as [`Rules::colorless_cards`] takes it.
+    fn unlocked_colorless_cards(multiplayer: bool) -> &'static [Self::Card];
 
-    /// `Character.CardPool.GetUnlockedCards` for a one-player run, every
-    /// rarity, in the pool's order.
-    fn unlocked_cards(character: Self::Character) -> &'static [Self::Card];
+    /// `Character.CardPool.GetUnlockedCards`, every rarity, in the pool's
+    /// order, `multiplayer` as [`Rules::colorless_cards`] takes it.
+    fn unlocked_cards(character: Self::Character, multiplayer: bool) -> &'static [Self::Card];
 
     /// The colorless pool narrowed by `CardFactory.FilterForCombat`, in the
     /// order a combat generation effect shuffles it.
-    fn combat_colorless_cards() -> &'static [Self::Card];
+    ///
+    /// `multiplayer` as [`Rules::colorless_cards`] takes it.
+    fn combat_colorless_cards(multiplayer: bool) -> &'static [Self::Card];
 
     /// The cards one of a merchant's character shelves draws from.
     ///
@@ -7820,6 +7835,7 @@ pub trait Rules: Hooks + Engine {
         character: Self::Character,
         kind: CardKind,
         rarity: RewardRarity,
+        multiplayer: bool,
     ) -> Vec<Self::Card>;
 
     /// `CardModel.Type`, or nothing for the one card that works it out from
@@ -7833,7 +7849,7 @@ pub trait Rules: Hooks + Engine {
     ///
     /// The same pool narrowed the same way, at one rarity. A colourless shelf
     /// stocks by rarity alone, so it asks for no card type.
-    fn merchant_colorless_cards(rarity: RewardRarity) -> Vec<Self::Card>;
+    fn merchant_colorless_cards(rarity: RewardRarity, multiplayer: bool) -> Vec<Self::Card>;
 
     /// The cards a transform of `card` draws its replacement from, in the
     /// order `Rng.NextItem` reads them.
@@ -7842,7 +7858,7 @@ pub trait Rules: Hooks + Engine {
     /// pool, unlocked. It keeps common, uncommon and rare cards unless the card
     /// is a status or a curse, and it leaves the card itself out. `in_combat`
     /// keeps the cards `CanBeGeneratedInCombat`.
-    fn transform_options(card: Self::Card, in_combat: bool) -> Vec<Self::Card>;
+    fn transform_options(card: Self::Card, in_combat: bool, multiplayer: bool) -> Vec<Self::Card>;
 
     /// `EnchantmentModel.CanEnchant`, for a card in the deck.
     fn can_enchant(enchantment: Self::Enchantment, card: &crate::CardIdent<Self>) -> bool;

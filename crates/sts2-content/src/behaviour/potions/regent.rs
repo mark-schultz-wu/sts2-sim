@@ -27,7 +27,7 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
         __c0 if __c0 == V::Potion::COSMIC_CONCOCTION => {
             use sts2_core::{Change, Lasting, Pile, RunStreamKinds as _};
 
-            let mut cards = V::combat_colorless_cards().to_vec();
+            let mut cards = V::combat_colorless_cards(fight.multiplayer()).to_vec();
             // The count is the array's length, which no build's number can
             // set. The assert holds it to the build's `CardsVar`.
             assert_eq!(

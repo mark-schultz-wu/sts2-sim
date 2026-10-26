@@ -804,7 +804,7 @@ fn stoke_exhausting<V: crate::Build, F: Fight<V>>(
             return wait::<V>(Resume::StokeExhausting { left, count });
         }
     }
-    let pool = <V as sts2_core::Rules>::combat_cards(fight.character());
+    let pool = <V as sts2_core::Rules>::combat_cards(fight.character(), fight.multiplayer());
     let upgrade = u8::from(fight.upgraded());
     let made: Vec<_> = (0..count)
         .filter_map(|_| fight.generate_card(pool))
