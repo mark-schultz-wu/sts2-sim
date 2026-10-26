@@ -26,7 +26,7 @@ Two more checks say when that is enough:
   hunt enters. This finds what the simulator never ported, which
   `reached` cannot see.
 
-Speed is a goal as well as a guard. Item 2 says the target.
+Speed is a goal as well as a guard. Item 3 says the target.
 
 ## How the list changes
 
@@ -40,7 +40,23 @@ Speed is a goal as well as a guard. Item 2 says the target.
 
 ## Open
 
-### 1. Co-op
+### 1. Pausing as coroutines
+
+The rules that pause on a player's choice become coroutines, and the
+game's scheduler runs them. `docs/ASYNC.md` says why and in what order.
+`diapause` builds the coroutines, pinned, from a reviewed copy that the
+spike adds in `vendor/`.
+Co-op fights wait for it, because each player's paused work is a
+coroutine in that player's queue.
+
+1. A spike on the real engine: the Hellraiser and Rampart turn start and
+   one card pool's `Resume` enum. It measures the cost a step, a clone of a
+   paused fight, and compile time.
+2. The coroutines and the scheduler with one player.
+3. The pause sites, one pool at a time, each taking away the `Deferred`
+   and `Resume` variants it replaces.
+
+### 2. Co-op
 
 Co-op is in scope, before the AI front end. The headless game plays co-op on
 v0.111.0, one game for each seat, and `cargo xtask coop` plays runs at random.
@@ -69,7 +85,7 @@ run as its own machine sees it. The work goes in this order:
    - Then rewards, rest sites, shops, events, and death and revival.
 4. Co-op content, as the runs reach it. Massive Scroll is ported.
 
-### 2. Speed
+### 3. Speed
 
 The target is spire-mentor's W1 workload at its cost or less. W1 plays
 random legal moves for the Ironclad, with the starter deck, against the
@@ -85,7 +101,7 @@ copies cheaply, and a cheaper walk. Both hold a player per seat, so they
 come after co-op. `cargo xtask instructions` still guards each PR, per replayed
 step.
 
-### 3. The splits a hunt finds
+### 4. The splits a hunt finds
 
 `cargo xtask hunt` plays fresh seeds on the game and the simulator side
 by side, and keeps only the runs where they part. `--mixed` spreads the
@@ -112,7 +128,7 @@ v0.107.1 and 2 on v0.111.0, and all 5 are fixed.
 
 Next, hunt both builds again toward 3,000 runs in a row with no split.
 
-### 4. Coverage of the game's own code
+### 5. Coverage of the game's own code
 
 `cargo xtask hunt --coverage` has the mod count which methods of the
 game's rules code each run enters: models, commands, hooks and combat,
