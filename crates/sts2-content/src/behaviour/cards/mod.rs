@@ -26,7 +26,7 @@ pub(crate) mod defect;
 pub(crate) mod event;
 pub(crate) mod ironclad;
 pub(crate) mod necrobinder;
-mod regent;
+pub(crate) mod regent;
 pub(crate) mod silent;
 mod status;
 mod token;
@@ -648,7 +648,8 @@ pub enum Resume<V: crate::Build, K: sts2_core::FightKind<V>> {
     Ironclad(ironclad::paused::State<V, K>),
     /// A Necrobinder card's play, paused where it asked.
     Necrobinder(necrobinder::paused::State<V, K>),
-    Regent(regent::Resume<V>),
+    /// A Regent card's play, paused where it asked.
+    Regent(regent::paused::State<V, K>),
     /// A Silent card's play, paused where it asked.
     Silent(silent::paused::State<V, K>),
     Token(token::Resume),
@@ -672,6 +673,11 @@ pub(crate) enum Ask<V: crate::Build> {
         cards: smallvec::SmallVec<[sts2_core::CardAt<V>; sts2_core::MAX_CARDS_IN_HAND]>,
         selection: sts2_core::Selection,
     },
+    /// A choose-a-card screen over `offered`.
+    Choosing {
+        offered: sts2_core::Offered<V>,
+        skippable: bool,
+    },
     /// A question one of its commands left, which the fight holds.
     Waiting,
 }
@@ -691,6 +697,11 @@ impl<V: crate::Build> Ask<V> {
             Ask::AskingAmong { cards, selection } => Played::AskingAmong {
                 cards,
                 selection,
+                at,
+            },
+            Ask::Choosing { offered, skippable } => Played::Choosing {
+                offered,
+                skippable,
                 at,
             },
             Ask::Waiting => Played::Waiting { at },
@@ -743,6 +754,16 @@ macro_rules! paused_play {
     };
 }
 pub(crate) use paused_play;
+
+/// The card a choose-a-card screen took, or none where it was skipped.
+pub(crate) fn chosen<V: crate::Build>(
+    taken: &Option<sts2_core::Taken<V>>,
+) -> Option<sts2_core::CardIdent<V>> {
+    match taken {
+        Some(sts2_core::Taken::Chosen(card)) => *card,
+        taken => unreachable!("a choice, not {taken:?}"),
+    }
+}
 
 /// What a paused play is lent at each step: the fight, for that step alone,
 /// and the answer it waited for. Nothing on the first step.
@@ -853,7 +874,7 @@ pub(crate) fn on_play<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
     match V::card_filed(card) {
         CardFiled::Ironclad => ironclad::on_play::<V, K>(card, fight),
         CardFiled::Silent => silent::on_play::<V, K>(card, fight),
-        CardFiled::Regent => regent::on_play::<V, _>(card, fight),
+        CardFiled::Regent => regent::on_play::<V, K>(card, fight),
         CardFiled::Necrobinder => necrobinder::on_play::<V, K>(card, fight),
         CardFiled::Defect => defect::on_play::<V, K>(card, fight),
         CardFiled::Colorless => colorless::on_play::<V, _>(card, fight),
@@ -1354,9 +1375,12 @@ pub(crate) fn resume_play<V: crate::Build, F: Fight<V>>(
     match at {
         Resume::Colorless(at) => colorless::resume_play::<V, _>(fight, at, chosen),
         Resume::Event(at) => event::resume_play::<V, _>(fight, at, chosen),
-        Resume::Regent(at) => regent::resume_play::<V, _>(fight, at, chosen),
         Resume::Token(at) => unreachable!("{at:?} waits on a question, not a pick"),
-        Resume::Defect(_) | Resume::Ironclad(_) | Resume::Necrobinder(_) | Resume::Silent(_) => {
+        Resume::Defect(_)
+        | Resume::Ironclad(_)
+        | Resume::Necrobinder(_)
+        | Resume::Regent(_)
+        | Resume::Silent(_) => {
             unreachable!("a coroutine's play resumes through it")
         }
         Resume::Generated(card, _) => {
@@ -1388,8 +1412,11 @@ pub(crate) fn resume_waited<V: crate::Build, F: Fight<V>>(
     match at {
         Resume::Colorless(at) => colorless::resume_waited::<V, _>(fight, at),
         Resume::Event(at) => event::resume_waited::<V, _>(fight, at),
-        Resume::Regent(at) => regent::resume_waited::<V, _>(fight, at),
-        Resume::Defect(_) | Resume::Ironclad(_) | Resume::Necrobinder(_) | Resume::Silent(_) => {
+        Resume::Defect(_)
+        | Resume::Ironclad(_)
+        | Resume::Necrobinder(_)
+        | Resume::Regent(_)
+        | Resume::Silent(_) => {
             unreachable!("a coroutine's play resumes through it")
         }
         Resume::Token(at) => token::resume_waited::<V, _>(fight, at),
@@ -1406,7 +1433,6 @@ pub(crate) fn resume_chosen<V: crate::Build, F: Fight<V>>(
     chosen: Option<sts2_core::CardIdent<V>>,
 ) -> Played<V, F::Kind> {
     match at {
-        Resume::Regent(at) => regent::resume_chosen::<V, _>(fight, at, chosen),
         Resume::Colorless(at) => colorless::resume_chosen::<V, _>(fight, at, chosen),
         Resume::Event(at) => event::resume_chosen::<V, _>(fight, at, chosen),
         at => unimplemented!("{at:?} resumed with a chosen card"),
