@@ -196,14 +196,18 @@ What it needs:
   such as `let x: u32 = ...`.
 - A delegate in a typed local first: `let sub: f::State = f(io);`.
 - Suspensions in statement position.
-- The world as a `Copy` pointer, as in option 3. A borrowed resume type
-  puts its lifetime on the state, and then the world cannot hold its own
-  paused tasks.
+- A local patch for a borrowed world. Upstream puts the resume type's
+  lifetime on the state, and then the world cannot hold its own paused
+  tasks. The patch lends the world again at each step, and a binding that
+  keeps it across a suspension does not compile. `vendor/README.md` lists
+  the changes.
+- No inner binding, such as a closure's parameter, with the name of an
+  outer local. The macro counts it as a use and stores the outer one.
 
 What it risks: few people use it. It has one author and no outside users,
-and its first release came out on 2026-10-10. So the spike pins the
-version and adds a reviewed copy in `vendor/`, with a README that says
-what was checked.
+and its first release came out on 2026-10-10. So the version is
+pinned, and a reviewed copy is in `vendor/`, with a README that says what
+was checked.
 
 ### Ruled out
 
@@ -254,10 +258,18 @@ state loses the fields that only hold paused work.
 
 The order:
 
-1. A spike on the real engine. The turn-start boundary of v0.111.0 split
-   1 (Hellraiser and Rampart) and one card pool's `Resume` enum become
-   coroutines. It measures `cargo xtask instructions`, a clone of a fight
-   with paused tasks, and compile time.
+1. A spike on the real engine (done). `SetupPlayerTurn`, where v0.111.0
+   split 1 pauses for Hellraiser and Rampart, and the Silent pool's plays
+   that stop are coroutines. The results:
+   - `cargo xtask instructions`: +0.5%, all of it from the setup. The
+     Silent pool added nothing.
+   - A paused card play is a variant of the pool's coroutine, inline in
+     the card's `Resume`. Nothing is boxed.
+   - A paused fight is no bigger. `Live`, `Deferred` and the card's
+     `Resume` keep their sizes, 4,112, 376 and 148 bytes, so a clone
+     copies what it did before.
+   - Compile time: a release build of `sts2-cli` after a change to core
+     takes 150 s, against 148 s on main. A dev build is unchanged, at 4 s.
 2. The coroutines and the scheduler with one player. The scenarios, the
    golden replays and the hunts prove them.
 3. The pause sites move over, one pool at a time. Each takes away the

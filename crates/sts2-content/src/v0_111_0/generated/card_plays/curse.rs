@@ -4,7 +4,8 @@
 //! Source: `dumps/card_plays.txt`, build v0.111.0 (41cef1ea), assembly 1579942752.
 
 use super::super::cards::CurseCard;
-use sts2_core::{Change, Fight, Played};
+use crate::behaviour::Played;
+use sts2_core::{Change, Fight};
 
 type V = super::super::super::V0_111_0;
 
@@ -14,7 +15,11 @@ type V = super::super::super::V0_111_0;
 /// the play comes back as `Err` with the command to go on from.
 ///
 /// Any other card panics, and `behaviour/` ports it by hand.
-pub fn play_from<F: Fight<V>>(card: CurseCard, _fight: &mut F, _from: u8) -> Result<Played<V>, u8> {
+pub fn play_from<F: Fight<V>>(
+    card: CurseCard,
+    _fight: &mut F,
+    _from: u8,
+) -> Result<Played<V, F::Kind>, u8> {
     match card {
         CurseCard::AscendersBane => Ok(Played::Done),
         CurseCard::BadLuck => Ok(Played::Done),

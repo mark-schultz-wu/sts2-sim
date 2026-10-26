@@ -380,7 +380,7 @@ pub(crate) fn card_upgrade<V: crate::Build>(card: V::Card) -> &'static [sts2_cor
 pub(crate) fn on_use<V: crate::Build, F: sts2_core::Fight<V>>(
     potion: V::Potion,
     fight: &mut F,
-) -> sts2_core::Played<V> {
+) -> crate::behaviour::Played<V, F::Kind> {
     crate::behaviour::potions::on_use(potion, fight)
 }
 
@@ -392,11 +392,11 @@ pub(crate) fn on_use_on_run<V: crate::Build>(
     crate::behaviour::potions::on_use_on_run(potion, run, in_fight)
 }
 
-pub(crate) fn on_play<V: crate::Build, F: sts2_core::Fight<V>>(
+pub(crate) fn on_play<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
     card: V::Card,
-    fight: &mut F,
-) -> sts2_core::Played<V> {
-    crate::behaviour::cards::on_play::<V, _>(card, fight)
+    fight: &mut K::Fight<'a>,
+) -> crate::behaviour::Played<V, K> {
+    crate::behaviour::cards::on_play::<V, K>(card, fight)
 }
 
 pub(crate) fn on_card_turn_end<V: crate::Build, F: sts2_core::Fight<V>>(
@@ -406,12 +406,16 @@ pub(crate) fn on_card_turn_end<V: crate::Build, F: sts2_core::Fight<V>>(
     crate::behaviour::cards::on_turn_end::<V, _>(card, fight);
 }
 
-pub(crate) fn resume_play<V: crate::Build, F: sts2_core::Fight<V>>(
-    fight: &mut F,
-    at: V::Resume,
+pub(crate) fn resume_play<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
+    fight: &mut K::Fight<'a>,
+    at: crate::behaviour::Resume<V, K>,
     chosen: sts2_core::Taken<V>,
-) -> sts2_core::Played<V> {
+) -> crate::behaviour::Played<V, K> {
     match (at, chosen) {
+        (
+            crate::behaviour::Resume::Card(crate::behaviour::cards::Resume::Silent(paused)),
+            taken,
+        ) => crate::behaviour::cards::silent::resume::<V, K>(fight, paused, taken),
         (crate::behaviour::Resume::Card(at), sts2_core::Taken::Selected(cards)) => {
             crate::behaviour::cards::resume_play::<V, _>(fight, at, cards)
         }
@@ -766,7 +770,7 @@ pub(crate) fn perform_move<V: crate::Build, F: sts2_core::Fight<V>>(
     monster: V::Monster,
     move_id: V::MoveId,
     fight: &mut F,
-) -> sts2_core::Played<V> {
+) -> crate::behaviour::Played<V, F::Kind> {
     crate::behaviour::monsters::perform::<V, _>(monster, move_id, fight)
 }
 
@@ -818,9 +822,9 @@ pub(crate) fn intent_damage_now<V: crate::Build>(
 pub(crate) fn resume_move<V: crate::Build, F: sts2_core::Fight<V>>(
     monster: V::Monster,
     move_id: V::MoveId,
-    at: V::Resume,
+    at: crate::behaviour::Resume<V, F::Kind>,
     fight: &mut F,
-) -> sts2_core::Played<V> {
+) -> crate::behaviour::Played<V, F::Kind> {
     let crate::behaviour::Resume::Monster(at) = at else {
         unreachable!("{at:?} resumes no move")
     };

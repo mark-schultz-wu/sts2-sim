@@ -1,6 +1,7 @@
 //! The cards a fight makes, which no deck holds.
 
-use sts2_core::{Amount, CardVars, CreatureView as _, Effect, Fight, Opponents, Played, Scaling};
+use crate::behaviour::Played;
+use sts2_core::{Amount, CardVars, CreatureView as _, Effect, Fight, Opponents, Scaling};
 
 use crate::behaviour::cards::Number;
 use crate::generated::cards::TargetType;
@@ -15,7 +16,10 @@ pub enum Resume {
 
 /// The rest of a token card's play that stood still on a question its own
 /// command raised.
-pub(super) fn resume_waited<V: crate::Build, F: Fight<V>>(fight: &mut F, at: Resume) -> Played<V> {
+pub(super) fn resume_waited<V: crate::Build, F: Fight<V>>(
+    fight: &mut F,
+    at: Resume,
+) -> Played<V, F::Kind> {
     match at {
         Resume::SovereignBladeHit => sovereign_blade_hit::<V, _>(fight),
     }
@@ -85,7 +89,10 @@ pub(super) fn computed_target<V: crate::Build>(
     }
 }
 
-pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F) -> Played<V> {
+pub(super) fn on_play<V: crate::Build, F: Fight<V>>(
+    card: V::Card,
+    fight: &mut F,
+) -> Played<V, F::Kind> {
     match card {
         __c0 if __c0 == V::Card::SOVEREIGN_BLADE => sovereign_blade::<V, _>(fight),
         __c0 if __c0 == <V::Card as crate::ids::CardIds>::SHIV => shiv::<V, _>(fight),
@@ -96,7 +103,7 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F
 
 /// `SweepingGaze`: where Osty stands, its damage from Osty to an enemy drawn
 /// at random.
-fn sweeping_gaze<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn sweeping_gaze<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     let Some(osty) = fight.osty() else {
         return Played::Done;
     };
@@ -131,7 +138,7 @@ fn targets<V: crate::Build, F: Fight<V>>(fight: &F, power: V::Power) -> Opponent
 }
 
 /// `Shiv`. Deal its damage once, to every opponent under Fan of Knives.
-fn shiv<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn shiv<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     fight.attack(Scaling::Dynamic, |fight| {
         let targets = targets::<V, _>(fight, V::Power::FAN_OF_KNIVES_POWER);
         // One `CreatureCmd.Damage` over them all.
@@ -156,7 +163,7 @@ fn shiv<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 ///
 /// The damage is this copy's own. A forge raises it, and the card that was
 /// forged twice hits for more than the one beside it.
-fn sovereign_blade<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn sovereign_blade<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     fight.attack(Scaling::Dynamic, |fight| {
         for _ in 0..fight.var(V::CardVar::REPEAT) {
             let targets = targets::<V, _>(fight, V::Power::SEEKING_EDGE_POWER);
@@ -184,7 +191,7 @@ fn sovereign_blade<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// The rest of `SovereignBlade`, once its attack is over: its block where its
 /// owner carries Parry.
-fn sovereign_blade_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn sovereign_blade_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     // `GetOwnerParryAmount(this) > 0`.
     let actor = fight.actor();
     let parried = fight

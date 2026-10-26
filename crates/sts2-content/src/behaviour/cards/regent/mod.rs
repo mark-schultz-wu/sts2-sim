@@ -1,7 +1,8 @@
 //! The Regent's cards the generator leaves to a hand port, filed by rarity.
 
+use crate::behaviour::Played;
 use crate::ids::{CardIds as _, CardVarIds as _, PowerIds as _};
-use sts2_core::{CardIdent, Fight, Pile, Played};
+use sts2_core::{CardIdent, Fight, Pile};
 
 mod common;
 mod uncommon;
@@ -60,7 +61,7 @@ pub enum Resume<V: crate::Build> {
 
 /// The rest of the play waits at `at`, where a command left a question and
 /// more commands follow.
-pub(super) fn wait<V: crate::Build>(at: Resume<V>) -> Played<V> {
+pub(super) fn wait<V: crate::Build, K: sts2_core::FightKind<V>>(at: Resume<V>) -> Played<V, K> {
     Played::Waiting {
         at: crate::behaviour::cards::Resume::Regent(at).into(),
     }
@@ -72,7 +73,7 @@ fn crush_under_powers<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
     held: crate::behaviour::cards::Held,
     from: u8,
-) -> Played<V> {
+) -> Played<V, F::Kind> {
     use sts2_core::PowerAmount;
 
     let amount = PowerAmount::Counted(fight.power_var(V::CardVar::STRENGTH_LOSS));
@@ -90,7 +91,7 @@ fn crush_under_powers<V: crate::Build, F: Fight<V>>(
 
 /// The rest of `CrashLanding`, once its attack is over: Debris into every
 /// free place in the hand.
-fn crash_landing_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn crash_landing_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     let room = sts2_core::MAX_CARDS_IN_HAND.saturating_sub(fight.cards_in(Pile::Hand).len());
     if room > 0 {
         let debris = CardIdent::new(V::Card::DEBRIS);
@@ -104,7 +105,7 @@ fn crash_landing_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 fn dying_star_hit<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
     held: crate::behaviour::cards::Held,
-) -> Played<V> {
+) -> Played<V, F::Kind> {
     use sts2_core::PowerAmount;
 
     let loss = PowerAmount::Counted(fight.var(V::CardVar::STRENGTH_LOSS));
@@ -116,7 +117,7 @@ fn dying_star_hit<V: crate::Build, F: Fight<V>>(
 
 /// The rest of `ShiningStrike`, once its attack is over: its stars, then
 /// itself onto the draw pile, unless it exhausts.
-fn shining_strike_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn shining_strike_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     use crate::generated::cards::CardKeyword;
     use sts2_core::{Pile, PilePosition};
 
@@ -129,7 +130,7 @@ fn shining_strike_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> 
 
 /// `BeatIntoShape`: its damage to the target, then a Forge of its calculated
 /// number, less its extra for each hit of its own attack.
-fn beat_into_shape<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn beat_into_shape<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     use sts2_core::{Amount, Effect, Scaling};
 
     let target = fight.target();
@@ -143,7 +144,7 @@ fn beat_into_shape<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
         fight.apply(attack);
     });
     if fight.waiting() {
-        return wait::<V>(Resume::BeatIntoShapeHit);
+        return wait::<V, _>(Resume::BeatIntoShapeHit);
     }
     beat_into_shape_hit::<V, _>(fight, &results)
 }
@@ -153,7 +154,7 @@ fn beat_into_shape<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 fn beat_into_shape_hit<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
     results: &sts2_core::AttackResults<V>,
-) -> Played<V> {
+) -> Played<V, F::Kind> {
     let count = |n: usize| {
         crate::behaviour::cards::Number::try_from(n).expect("an attack's hits fit a number")
     };
@@ -163,7 +164,10 @@ fn beat_into_shape_hit<V: crate::Build, F: Fight<V>>(
     Played::Done
 }
 
-pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F) -> Played<V> {
+pub(super) fn on_play<V: crate::Build, F: Fight<V>>(
+    card: V::Card,
+    fight: &mut F,
+) -> Played<V, F::Kind> {
     match card {
         // `CrashLanding`: its damage to every enemy, as one attack, then
         // Debris into hand until the hand is full.
@@ -186,7 +190,7 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F
                 });
             });
             if fight.waiting() {
-                return wait::<V>(Resume::CrashLandingHit);
+                return wait::<V, _>(Resume::CrashLandingHit);
             }
             crash_landing_hit::<V, _>(fight)
         }
@@ -247,7 +251,7 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F
                 });
             });
             if fight.waiting() {
-                return wait::<V>(Resume::DyingStarHit { held });
+                return wait::<V, _>(Resume::DyingStarHit { held });
             }
             dying_star_hit::<V, _>(fight, held)
         }
@@ -306,7 +310,7 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F
             ),
             at: crate::behaviour::cards::Resume::Regent(Resume::GuardsTransform).into(),
         },
-        __c0 if __c0 == V::Card::BEGONE => common::begone::<V>(),
+        __c0 if __c0 == V::Card::BEGONE => common::begone::<V, _>(),
         // `Charge`: its `Cards` of the draw pile picked, each transformed.
         __c0 if __c0 == V::Card::CHARGE => Played::Asking {
             pile: Pile::Draw,
@@ -368,7 +372,7 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F
                 fight.apply(attack);
             });
             if fight.waiting() {
-                return wait::<V>(Resume::ShiningStrikeHit);
+                return wait::<V, _>(Resume::ShiningStrikeHit);
             }
             shining_strike_hit::<V, _>(fight)
         }
@@ -424,10 +428,10 @@ fn strike<V: crate::Build, F: Fight<V>>(fight: &mut F) -> sts2_core::AttackResul
 
 /// `KnockoutBlow`: its damage to the target, then its stars where a result
 /// says `WasTargetKilled`, whatever brought the target back after.
-fn knockout_blow<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn knockout_blow<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     let results = strike::<V, _>(fight);
     if fight.waiting() {
-        return wait::<V>(Resume::KnockoutBlowHit);
+        return wait::<V, _>(Resume::KnockoutBlowHit);
     }
     knockout_blow_hit::<V, _>(fight, &results)
 }
@@ -437,7 +441,7 @@ fn knockout_blow<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 fn knockout_blow_hit<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
     results: &sts2_core::AttackResults<V>,
-) -> Played<V> {
+) -> Played<V, F::Kind> {
     if results.iter().any(|result| result.killed) {
         fight.gain_stars(fight.var(V::CardVar::STARS));
     }
@@ -446,7 +450,7 @@ fn knockout_blow_hit<V: crate::Build, F: Fight<V>>(
 
 /// `PhotonCut`: its damage to the target, its `Cards` drawn, then its
 /// `PutBack` of the hand onto the top of the draw pile.
-fn photon_cut<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn photon_cut<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     strike::<V, _>(fight);
     fight.draw(fight.var(V::CardVar::CARDS));
     let count = usize::try_from(fight.var(V::CardVar::PUT_BACK))
@@ -462,7 +466,7 @@ fn photon_cut<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// `SummonForth`: every Sovereign Blade of its owner's outside the hand into
 /// the hand, then its `Forge`.
-fn summon_forth<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn summon_forth<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     use sts2_core::Pile;
 
     let blade = V::Card::SOVEREIGN_BLADE;
@@ -506,7 +510,7 @@ fn make_it_so<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
 
 /// `BundleOfJoy`: `GetDistinctForCombat` of its `Cards` of colorless cards
 /// off `CombatCardGeneration`, into hand.
-fn bundle_of_joy<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn bundle_of_joy<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     use sts2_core::RunStreamKinds as _;
 
     let mut cards = V::combat_colorless_cards(fight.multiplayer()).to_vec();
@@ -525,7 +529,7 @@ fn bundle_of_joy<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// `HeavenlyDrill`: its damage to the target, once for each energy its X
 /// spent, and twice that from its `Energy` on.
-fn heavenly_drill<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn heavenly_drill<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     use sts2_core::{Amount, Effect, Scaling};
 
     let mut hits = fight.x_value();
@@ -549,7 +553,7 @@ fn heavenly_drill<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// `ManifestAuthority`: its block, then one colorless card off
 /// `CombatCardGeneration` into hand, upgraded where it is.
-fn manifest_authority<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn manifest_authority<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     use sts2_core::{Amount, Effect, RunStreamKinds as _, Scaling};
 
     let block = fight.resolve(Effect::GainBlock {
@@ -599,7 +603,7 @@ pub(super) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
 
 /// `HeirloomHammer`: its damage to the target, then one card of the hand
 /// that shows as colorless picked, to be copied.
-fn heirloom_hammer<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn heirloom_hammer<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     use sts2_core::{Amount, Effect, Scaling};
 
     let target = fight.target();
@@ -613,14 +617,14 @@ fn heirloom_hammer<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
         fight.apply(attack);
     });
     if fight.waiting() {
-        return wait::<V>(Resume::HeirloomHammerHit);
+        return wait::<V, _>(Resume::HeirloomHammerHit);
     }
     heirloom_hammer_hit::<V, _>(fight)
 }
 
 /// The rest of `HeirloomHammer`, once its attack is over: one colorless
 /// card of the hand picked, to copy.
-fn heirloom_hammer_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn heirloom_hammer_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     use sts2_core::CardTable as _;
 
     let cards = fight
@@ -637,7 +641,7 @@ fn heirloom_hammer_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V>
 
 /// `Quasar`: three distinct colorless cards off `CombatCardGeneration`, each
 /// upgraded where Quasar is, of which its owner takes one into hand or none.
-fn quasar<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn quasar<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     use sts2_core::CardTable as _;
 
     let mut pool = <V as sts2_core::Rules>::combat_colorless_cards(fight.multiplayer()).to_vec();
@@ -664,7 +668,7 @@ pub(super) fn resume_chosen<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
     at: Resume<V>,
     chosen: Option<CardIdent<V>>,
-) -> Played<V> {
+) -> Played<V, F::Kind> {
     match at {
         // `CardPileCmd.AddGeneratedCardToCombat` of the one taken, into hand.
         Resume::QuasarChoice => {
@@ -682,7 +686,7 @@ pub(super) fn resume_play<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
     at: Resume<V>,
     chosen: sts2_core::SelectedCards<V>,
-) -> Played<V> {
+) -> Played<V, F::Kind> {
     match at {
         Resume::BegoneTransform => common::begone_transform::<V, _>(fight, chosen),
         // `CardCmd.Transform` of each into a `MinionDiveBomb` for Charge,
@@ -743,7 +747,7 @@ pub(super) fn resume_play<V: crate::Build, F: Fight<V>>(
 /// # Panics
 ///
 /// A card in hand whose type the fight works out.
-fn decisions_ask<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn decisions_ask<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     use sts2_core::CardKind;
 
     use crate::generated::cards::CardKeyword;
@@ -776,7 +780,7 @@ fn decisions_play<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
     card: sts2_core::CardAt<V>,
     plays: crate::behaviour::cards::Number,
-) -> Played<V> {
+) -> Played<V, F::Kind> {
     for played in 1..=plays {
         let at = crate::behaviour::cards::standing::<V, _>(fight, card)
             .unwrap_or_else(|| unimplemented!("Decisions, Decisions playing a card no pile holds"));
@@ -798,7 +802,7 @@ fn decisions_play<V: crate::Build, F: Fight<V>>(
 pub(super) fn resume_waited<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
     at: Resume<V>,
-) -> Played<V> {
+) -> Played<V, F::Kind> {
     match at {
         Resume::CrushUnder { held, at } => crush_under_powers::<V, _>(fight, held, at),
         Resume::CrashLandingHit => crash_landing_hit::<V, _>(fight),

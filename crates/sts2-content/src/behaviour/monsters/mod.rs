@@ -9,7 +9,8 @@
 //! A monster nobody has ported panics naming itself, so this tree is also the
 //! list of fights the simulator can take a turn in.
 
-use sts2_core::{ContentError, EventHook, Fight, MonsterSpawn, Played};
+use crate::behaviour::Played;
+use sts2_core::{ContentError, EventHook, Fight, MonsterSpawn};
 
 use crate::generated::monster_moves::Filed;
 use crate::ids::{EncounterIds as _, MonsterIds as _, MoveIds as _, PowerIds as _};
@@ -39,7 +40,7 @@ pub(crate) fn resume<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
     at: Resume,
     chosen: Option<sts2_core::CardIdent<V>>,
-) -> Played<V> {
+) -> Played<V, F::Kind> {
     hive::resume::<V, _>(fight, at, chosen)
 }
 
@@ -353,7 +354,7 @@ pub(crate) fn perform<V: crate::Build, F: Fight<V>>(
     monster: V::Monster,
     move_id: V::MoveId,
     fight: &mut F,
-) -> Played<V> {
+) -> Played<V, F::Kind> {
     perform_from::<V, _>(monster, move_id, 0, fight)
 }
 
@@ -364,7 +365,7 @@ pub(crate) fn resume_move<V: crate::Build, F: Fight<V>>(
     move_id: V::MoveId,
     at: Resume,
     fight: &mut F,
-) -> Played<V> {
+) -> Played<V, F::Kind> {
     let Resume::Step(step) = at else {
         unreachable!("{at:?} resumes a choice, not a move")
     };
@@ -378,7 +379,7 @@ fn perform_from<V: crate::Build, F: Fight<V>>(
     move_id: V::MoveId,
     step: u8,
     fight: &mut F,
-) -> Played<V> {
+) -> Played<V, F::Kind> {
     // Two states no table names. `Creature.Stun` builds one and
     // `IllusionPower` builds the other, and what each does belongs to
     // whoever built it rather than to the monster standing on it.

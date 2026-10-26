@@ -305,7 +305,7 @@ pub(super) enum Then<V: Rules> {
     /// `outermost` is a play no other is running inside.
     Play {
         effect: Resuming<V>,
-        at: V::Resume,
+        at: super::board::Resume<V>,
         outermost: bool,
     },
     /// `SetupPlayerTurn`, which a hook parked on its selection. `act` is what
@@ -321,7 +321,7 @@ pub(super) enum Then<V: Rules> {
     /// A choice a monster's move offered, which `V::resume_play` picks up.
     /// The rest of the move and of the enemy turn waits in
     /// [`Live::deferred`].
-    Chosen { at: V::Resume },
+    Chosen { at: super::board::Resume<V> },
     /// A selection a shuffle asked for inside an effect's draw. `act` is
     /// what happens to the cards picked, and the rest of the draw waits in
     /// [`Live::deferred`].
@@ -346,7 +346,7 @@ pub(super) enum Deferred<V: Rules> {
     /// The rest of an effect, from where its own code handed back `played`.
     Resume {
         effect: Resuming<V>,
-        played: sts2_core::Played<V>,
+        played: super::board::Played<V>,
         outermost: bool,
     },
     /// The end of an effect whose last play is over, which puts the card
@@ -376,7 +376,7 @@ pub(super) enum Deferred<V: Rules> {
         actor: CombatId,
         monster: V::Monster,
         move_id: V::MoveId,
-        at: Option<V::Resume>,
+        at: Option<super::board::Resume<V>>,
         damage: V::Number,
         repeats: V::Count,
         acting: smallvec::SmallVec<[CombatId; CREATURES]>,
@@ -423,14 +423,9 @@ pub(super) enum Deferred<V: Rules> {
         /// effect waits on. Nothing for any other draw.
         drew: Option<sts2_core::Drew<V>>,
     },
-    /// The hits of an attack that came up while a question one of its
-    /// earlier hits raised waited, each resolved as it lands. Then the end of
-    /// the attack, over every hit in `landed` and the rest.
-    ///
-    /// `AttackCommand`'s hit loop awaits each hit, so the later ones stand
-    /// still until the answer comes.
-    /// `SetupPlayerTurn` from `stage`, which a hook stopped on its selection.
-    Setup(Setup<V>),
+    /// `SetupPlayerTurn`, stopped on a question, which goes on from where it
+    /// stopped once the question is answered.
+    Setup(Box<super::setup::setup::State<V>>),
     /// A listener's task a pause boundary set aside, which goes on here
     /// where its caller waits for it.
     Rejoin(Box<Paused<V>>),
@@ -468,6 +463,12 @@ pub(super) enum Deferred<V: Rules> {
         max_energy: V::Count,
         skipping: Skips<V>,
     },
+    /// The hits of an attack that came up while a question one of its
+    /// earlier hits raised waited, each resolved as it lands. Then the end of
+    /// the attack, over every hit in `landed` and the rest.
+    ///
+    /// `AttackCommand`'s hit loop awaits each hit, so the later ones stand
+    /// still until the answer comes.
     Hits {
         frame: super::board::Frame<V>,
         attack: HeldAttack<V>,
@@ -600,32 +601,6 @@ pub(super) struct HeldAttack<V: Rules> {
     pub(super) powered: bool,
     /// `ModelSource` where it is a card.
     pub(super) source: Option<(sts2_core::CardId<V>, V::Card)>,
-}
-
-/// Where `SetupPlayerTurn` stands, with what the hook it stopped in has still
-/// to carry out.
-#[derive(Debug, Clone, PartialEq)]
-pub(super) enum Setup<V: Rules> {
-    /// Inside `BeforeHandDraw`, before the hand is drawn: the rest of its
-    /// walk, boxed as `PlayerTurnStart`'s is. Nothing where no listener
-    /// hears the hook.
-    BeforeHandDraw(Option<Box<super::listen::Walking<V>>>),
-    /// Drawing the hand, with this many cards still to draw. `resumed` for a
-    /// draw that a shuffle's question paused.
-    Drawing { left: usize, resumed: bool },
-    /// Inside `AfterPlayerTurnStart`, the last of the setup.
-    /// Boxed, as the walk is far larger than the stages before it, which
-    /// move it at every step of the setup. Nothing where no listener hears
-    /// the hook.
-    PlayerTurnStart(Option<Box<super::listen::Walking<V>>>),
-    /// Drawing for a listener inside `AfterPlayerTurnStart`, with this many
-    /// cards still to draw and the listeners after it still to run.
-    /// `resumed` for a draw that a shuffle's question paused.
-    TurnStartDrawing {
-        left: usize,
-        resumed: bool,
-        rest: Option<Box<super::listen::Walking<V>>>,
-    },
 }
 
 /// Mints the ids a fight names its cards by.

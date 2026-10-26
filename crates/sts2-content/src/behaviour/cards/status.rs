@@ -8,7 +8,7 @@ use crate::ids::{CardIds as _, CardVarIds as _, PowerIds as _};
 pub(super) fn on_play<V: crate::Build, F: Fight<V>>(
     card: V::Card,
     fight: &mut F,
-) -> sts2_core::Played<V> {
+) -> crate::behaviour::Played<V, F::Kind> {
     match card {
         __c0 if __c0 == V::Card::FRANTIC_ESCAPE => frantic_escape::<V, _>(fight),
         card => crate::behaviour::cards::generated_from::<V, _>(card, fight, 0),
@@ -18,7 +18,9 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(
 /// `FranticEscape`: one more on the Sandpit of the first enemy that holds
 /// one, then its own cost one higher for the rest of the fight. A fight here
 /// has one player, whom every Sandpit targets.
-fn frantic_escape<V: crate::Build, F: Fight<V>>(fight: &mut F) -> sts2_core::Played<V> {
+fn frantic_escape<V: crate::Build, F: Fight<V>>(
+    fight: &mut F,
+) -> crate::behaviour::Played<V, F::Kind> {
     use sts2_core::CreatureView as _;
 
     let player_side = fight.side();
@@ -35,7 +37,7 @@ fn frantic_escape<V: crate::Build, F: Fight<V>>(fight: &mut F) -> sts2_core::Pla
         sts2_core::Change::ChangeCost(sts2_core::CostPool::Energy, 1),
         sts2_core::Lasting::ThisFight,
     );
-    sts2_core::Played::Done
+    crate::behaviour::Played::Done
 }
 
 /// A status card's effect while it remains in the hand at turn end.

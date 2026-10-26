@@ -622,7 +622,7 @@ pub(super) fn knowledge_demon<V: crate::Build, F: Fight<V>>(
     move_id: V::MoveId,
     step: u8,
     fight: &mut F,
-) -> sts2_core::Played<V> {
+) -> crate::behaviour::Played<V, F::Kind> {
     use sts2_core::CardIdent;
 
     // `ThrowingPlayerChoiceContext`'s `PowerCmd.Apply<StrengthPower>`.
@@ -650,7 +650,7 @@ pub(super) fn knowledge_demon<V: crate::Build, F: Fight<V>>(
                 2 => V::Card::WASTE_AWAY,
                 _ => unimplemented!("a Knowledge Demon with no set left at {set}"),
             };
-            sts2_core::Played::Choosing {
+            crate::behaviour::Played::Choosing {
                 offered: [
                     CardIdent::new(V::Card::DISINTEGRATION),
                     CardIdent::new(other),
@@ -665,11 +665,11 @@ pub(super) fn knowledge_demon<V: crate::Build, F: Fight<V>>(
         // `IsBurnt` picks the demon's animations alone.
         __c0 if __c0 == V::MoveId::KNOWLEDGE_OVERWHELMING_MOVE || __c0 == V::MoveId::SLAP_MOVE => {
             fight.attack_opponents();
-            sts2_core::Played::Done
+            crate::behaviour::Played::Done
         }
         __c0 if __c0 == V::MoveId::PONDER_MOVE => {
             if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
-                return sts2_core::Played::Waiting {
+                return crate::behaviour::Played::Waiting {
                     at: Resume::Step(1).into(),
                 };
             }
@@ -684,7 +684,7 @@ pub(super) fn knowledge_demon<V: crate::Build, F: Fight<V>>(
                 V::Power::STRENGTH_POWER,
                 PowerAmount::Counted(strength),
             );
-            sts2_core::Played::Done
+            crate::behaviour::Played::Done
         }
         move_id => unimplemented!("what {move_id:?} does when a Knowledge Demon performs it"),
     }
@@ -696,7 +696,7 @@ pub(super) fn resume<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
     at: Resume,
     chosen: Option<sts2_core::CardIdent<V>>,
-) -> sts2_core::Played<V> {
+) -> crate::behaviour::Played<V, F::Kind> {
     // `_disintegrationDamageValues`.
     const DISINTEGRATION: [Number; CURSE_SETS] = [6, 7, 8];
 
@@ -704,7 +704,7 @@ pub(super) fn resume<V: crate::Build, F: Fight<V>>(
         unreachable!("{at:?} resumes a move, not a choice")
     };
     let Some(chosen) = chosen else {
-        return sts2_core::Played::Done;
+        return crate::behaviour::Played::Done;
     };
     let (power, amount) = match chosen.card {
         __c0 if __c0 == V::Card::DISINTEGRATION => (
@@ -718,7 +718,7 @@ pub(super) fn resume<V: crate::Build, F: Fight<V>>(
     };
     let actor = fight.actor();
     fight.apply_power(actor, power, PowerAmount::Counted(amount));
-    sts2_core::Played::Done
+    crate::behaviour::Played::Done
 }
 
 /// `HatchMove`: Hatch goes, then every other power but Minion, then `Hatch`:

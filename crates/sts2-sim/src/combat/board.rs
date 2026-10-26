@@ -4352,7 +4352,25 @@ impl<V: Rules> Board<'_, V> {
     }
 }
 
+/// [`Board`]'s kind, which names it for any borrow of the fight.
+///
+/// A play that stops holds no borrow, and is lent the board again at each
+/// step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(super) struct BoardKind<V>(std::marker::PhantomData<fn() -> V>);
+
+impl<V: Rules> sts2_core::FightKind<V> for BoardKind<V> {
+    type Fight<'a> = Board<'a, V>;
+}
+
+/// Where a play stopped on this engine's board.
+pub(super) type Resume<V> = <V as sts2_core::ContentVersion>::Resume<BoardKind<V>>;
+
+/// How far a play got on this engine's board.
+pub(super) type Played<V> = sts2_core::Played<V, Resume<V>>;
+
 impl<V: Rules> Fight<V> for Board<'_, V> {
+    type Kind = BoardKind<V>;
     type ResolvedEffect = ResolvedEffect<V>;
     type Creature<'a>
         = super::live::Seen<'a, V>

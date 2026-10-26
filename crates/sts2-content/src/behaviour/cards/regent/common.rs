@@ -1,15 +1,15 @@
 //! The Regent's common cards.
 
+use crate::behaviour::Played;
 use sts2_core::{
-    Amount, CardIdent, Effect, EffectResolution, Fight, Pile, Played, PowerAmount, Scaling,
-    Selection,
+    Amount, CardIdent, Effect, EffectResolution, Fight, Pile, PowerAmount, Scaling, Selection,
 };
 
 use crate::behaviour::cards::regent::Resume;
 use crate::ids::{CardIds as _, CardVarIds as _, PowerIds as _};
 
 /// `CollisionCourse`: its damage to the target, then a Debris into hand.
-pub(super) fn collision_course<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+pub(super) fn collision_course<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     let target = fight.target();
     fight.attack(Scaling::Dynamic, |fight| {
         let attack = fight.resolve(Effect::Attack {
@@ -21,7 +21,7 @@ pub(super) fn collision_course<V: crate::Build, F: Fight<V>>(fight: &mut F) -> P
         fight.apply(attack);
     });
     if fight.waiting() {
-        return crate::behaviour::cards::regent::wait::<V>(
+        return crate::behaviour::cards::regent::wait::<V, _>(
             crate::behaviour::cards::regent::Resume::CollisionCourseHit,
         );
     }
@@ -30,7 +30,9 @@ pub(super) fn collision_course<V: crate::Build, F: Fight<V>>(fight: &mut F) -> P
 
 /// The rest of `CollisionCourse`, once its attack is over: a Debris into
 /// hand.
-pub(super) fn collision_course_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+pub(super) fn collision_course_hit<V: crate::Build, F: Fight<V>>(
+    fight: &mut F,
+) -> Played<V, F::Kind> {
     fight.add_generated_cards(CardIdent::new(V::Card::DEBRIS), Pile::Hand, 1);
     Played::Done
 }
@@ -41,7 +43,7 @@ pub(super) fn collision_course_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) 
 /// this card does itself rather than leave to the gain. It reads the hook
 /// before the block it gains lands, as the game's own order does. A fraction
 /// below one lands a power of nothing, as Dodge and Roll's does.
-pub(super) fn glitterstream<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+pub(super) fn glitterstream<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     let next_turn = fight.resolve(Effect::GainBlock {
         recipient: fight.actor(),
         amount: Amount::Var(V::CardVar::BLOCK_NEXT_TURN),
@@ -71,7 +73,7 @@ pub(super) fn glitterstream<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Play
 ///
 /// Upgraded, the Minion Strike it creates is upgraded with it. Begone prints
 /// no number for an upgrade to raise.
-pub(super) fn begone<V: crate::Build>() -> Played<V> {
+pub(super) fn begone<V: crate::Build, K: sts2_core::FightKind<V>>() -> Played<V, K> {
     Played::Asking {
         pile: Pile::Hand,
         selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
@@ -86,7 +88,7 @@ pub(super) fn begone<V: crate::Build>() -> Played<V> {
 pub(super) fn begone_transform<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
     chosen: sts2_core::SelectedCards<V>,
-) -> Played<V> {
+) -> Played<V, F::Kind> {
     if let Some(card) = chosen.one_or_none() {
         let mut into = CardIdent::new(V::Card::MINION_STRIKE);
         into.upgrade = u8::from(fight.upgraded());

@@ -331,7 +331,7 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
              /// the play comes back as `Err` with the command to go on from.\n\
              ///\n\
              /// Any other card panics, and `behaviour/` ports it by hand.\n\
-             pub fn play_from<F: Fight<V>>(card: {enum_name}, {fight}: &mut F, {from}: u8) -> Result<Played<V>, u8> {{\n\
+             pub fn play_from<F: Fight<V>>(card: {enum_name}, {fight}: &mut F, {from}: u8) -> Result<Played<V, F::Kind>, u8> {{\n\
              match card {{"
         )
         .unwrap();
@@ -524,6 +524,7 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
                     "TokenCard",
                 ],
             ),
+            ("crate::behaviour", &["Played"]),
             ("super::super::orbs", &["Orb"]),
             ("super::super::powers", &["Power"]),
             (
@@ -534,7 +535,6 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
                     "CostPool",
                     "Effect",
                     "Fight",
-                    "Played",
                     "PowerAmount",
                     "Scaling",
                 ],

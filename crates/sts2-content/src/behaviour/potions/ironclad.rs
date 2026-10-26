@@ -1,7 +1,8 @@
 //! The potions only the Ironclad's pool draws.
 
+use crate::behaviour::Played;
 use crate::vars::PotionVars as _;
-use sts2_core::{CreatureView as _, Fight, Pile, PileAct, Played};
+use sts2_core::{CreatureView as _, Fight, Pile, PileAct};
 
 use crate::behaviour::potions::Number;
 use crate::ids::PotionIds as _;
@@ -18,7 +19,7 @@ pub(super) fn resume<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
     at: Resume,
     picked: sts2_core::SelectedCards<V>,
-) -> Played<V> {
+) -> Played<V, F::Kind> {
     match at {
         // `CardCmd.Exhaust` on each, one at a time.
         Resume::Ashwater => {
@@ -33,7 +34,10 @@ pub(super) fn resume<V: crate::Build, F: Fight<V>>(
 /// # Panics
 ///
 /// A potion of this pool nobody has ported.
-pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mut F) -> Played<V> {
+pub(super) fn on_use<V: crate::Build, F: Fight<V>>(
+    potion: V::Potion,
+    fight: &mut F,
+) -> Played<V, F::Kind> {
     match potion {
         // `AnyPlayer`: a fifth of its maximum, which `SetCurrentHpInternal`
         // truncates.

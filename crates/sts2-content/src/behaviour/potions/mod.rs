@@ -19,7 +19,8 @@ mod shared;
 mod silent;
 mod token;
 
-use sts2_core::{Fight, Played, PotionTable, Taken};
+use crate::behaviour::Played;
+use sts2_core::{Fight, PotionTable, Taken};
 
 use crate::generated::cards::TargetType;
 use crate::generated::potions::PotionPool;
@@ -78,7 +79,10 @@ pub(crate) fn event_hook<V: crate::Build>(
 /// # Panics
 ///
 /// A potion from a pool nobody has ported, and a potion its own pool has not.
-pub(crate) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mut F) -> Played<V> {
+pub(crate) fn on_use<V: crate::Build, F: Fight<V>>(
+    potion: V::Potion,
+    fight: &mut F,
+) -> Played<V, F::Kind> {
     // A potion whose rule is the build's own.
     if let Some(played) = V::own_potion_use(potion, fight) {
         return played;
@@ -161,7 +165,7 @@ pub(crate) fn resume<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
     at: Resume,
     answer: Taken<V>,
-) -> Played<V> {
+) -> Played<V, F::Kind> {
     match at {
         Resume::Shared(at) => shared::resume::<V, _>(fight, at, answer),
         Resume::Event(at) => event::resume::<V, _>(fight, at, answer),

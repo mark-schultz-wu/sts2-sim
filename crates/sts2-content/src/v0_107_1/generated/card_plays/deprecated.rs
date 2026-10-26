@@ -4,7 +4,8 @@
 //! Source: `dumps/card_plays.txt`, build v0.107.1 (59260271), assembly 1692500715.
 
 use super::super::cards::DeprecatedCard;
-use sts2_core::{Change, Fight, Played};
+use crate::behaviour::Played;
+use sts2_core::{Change, Fight};
 
 type V = super::super::super::V0_107_1;
 
@@ -18,7 +19,7 @@ pub fn play_from<F: Fight<V>>(
     card: DeprecatedCard,
     _fight: &mut F,
     _from: u8,
-) -> Result<Played<V>, u8> {
+) -> Result<Played<V, F::Kind>, u8> {
     match card {
         // `if`
         DeprecatedCard::DeprecatedCard => unimplemented!("what {card:?} does when it is played"),

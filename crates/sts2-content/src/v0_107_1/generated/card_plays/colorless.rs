@@ -5,7 +5,8 @@
 
 use super::super::cards::{CardKeyword, CardVar, ColorlessCard};
 use super::super::powers::Power;
-use sts2_core::{Amount, Change, CostPool, Effect, Fight, Played, PowerAmount, Scaling};
+use crate::behaviour::Played;
+use sts2_core::{Amount, Change, CostPool, Effect, Fight, PowerAmount, Scaling};
 
 type V = super::super::super::V0_107_1;
 
@@ -19,7 +20,7 @@ pub fn play_from<F: Fight<V>>(
     card: ColorlessCard,
     fight: &mut F,
     from: u8,
-) -> Result<Played<V>, u8> {
+) -> Result<Played<V, F::Kind>, u8> {
     match card {
         // `call PotionCmd.TryToProcure`
         ColorlessCard::Alchemize => unimplemented!("what {card:?} does when it is played"),

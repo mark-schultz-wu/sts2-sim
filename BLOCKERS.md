@@ -44,16 +44,14 @@ Speed is a goal as well as a guard. Item 3 says the target.
 
 The rules that pause on a player's choice become coroutines, and the
 game's scheduler runs them. `docs/ASYNC.md` says why and in what order.
-`diapause` builds the coroutines, pinned, from a reviewed copy that the
-spike adds in `vendor/`.
+`diapause` builds the coroutines, pinned, from the reviewed and patched
+copy in `vendor/`. `SetupPlayerTurn` and the Silent pool's plays that stop
+are coroutines already.
 Co-op fights wait for it, because each player's paused work is a
 coroutine in that player's queue.
 
-1. A spike on the real engine: the Hellraiser and Rampart turn start and
-   one card pool's `Resume` enum. It measures the cost a step, a clone of a
-   paused fight, and compile time.
-2. The coroutines and the scheduler with one player.
-3. The pause sites, one pool at a time, each taking away the `Deferred`
+1. The coroutines and the scheduler with one player.
+2. The pause sites, one pool at a time, each taking away the `Deferred`
    and `Resume` variants it replaces.
 
 ### 2. Co-op

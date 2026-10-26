@@ -1,7 +1,8 @@
 //! The token pool's potions, which only a relic or a card makes.
 
+use crate::behaviour::Played;
 use crate::vars::PotionVars as _;
-use sts2_core::{Amount, Effect, Fight, Played, Scaling};
+use sts2_core::{Amount, Effect, Fight, Scaling};
 
 use crate::ids::PotionIds as _;
 
@@ -10,7 +11,10 @@ use crate::ids::PotionIds as _;
 /// # Panics
 ///
 /// A token potion nobody has ported.
-pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mut F) -> Played<V> {
+pub(super) fn on_use<V: crate::Build, F: Fight<V>>(
+    potion: V::Potion,
+    fight: &mut F,
+) -> Played<V, F::Kind> {
     match potion {
         // `CreatureCmd.Damage` on the target, unpowered and from the player.
         __c0 if __c0 == V::Potion::POTION_SHAPED_ROCK => {

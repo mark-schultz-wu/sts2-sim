@@ -338,7 +338,7 @@ pub(crate) fn play<V: Rules>(
         Some(card.id),
     )
     .blocking();
-    let played = V::on_play(card.face.ident.card, &mut board);
+    let played = V::on_play::<super::board::BoardKind<V>>(card.face.ident.card, &mut board);
     let ended = board.ended();
     let skipped = std::mem::take(&mut board.skipped);
     merge::<V>(&mut live.skip_tick, skipped);
@@ -590,7 +590,7 @@ pub(super) fn auto_play_in_play<V: Rules>(
     if pausable {
         board = board.blocking();
     }
-    let played = V::on_play(card.face.ident.card, &mut board);
+    let played = V::on_play::<super::board::BoardKind<V>>(card.face.ident.card, &mut board);
     let ended = board.ended();
     let skipped = std::mem::take(&mut board.skipped);
     merge::<V>(&mut live.skip_tick, skipped);
@@ -1324,7 +1324,7 @@ fn resume_answered<V: Rules>(
         playing,
     )
     .blocking();
-    let played = V::resume_play(&mut board, at, taken);
+    let played = V::resume_play::<super::board::BoardKind<V>>(&mut board, at, taken);
     effect.ended = effect.ended.or(board.ended());
     let skipped = std::mem::take(&mut board.skipped);
     merge::<V>(&mut live.skip_tick, skipped);
@@ -1543,13 +1543,12 @@ fn run_deferred<V: Rules>(
                 }
                 ended => ended,
             },
-            super::live::Deferred::Setup(stage) => super::turn::finish_setup::<V>(
+            super::live::Deferred::Setup(setup) => super::turn::finish_setup::<V>(
                 seat,
                 fighting.live,
                 fighting.streams.combat(),
                 fighting.belts,
-                ascension,
-                stage,
+                setup,
                 ended,
             ),
             held @ super::live::Deferred::Hits { .. } => match ended {
@@ -1673,7 +1672,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
     fighting: Fighting<'_, V, S>,
     ascension: V::AscensionLevel,
     mut effect: Resuming<V>,
-    mut played: sts2_core::Played<V>,
+    mut played: super::board::Played<V>,
     outermost: bool,
 ) -> Result<Option<super::Ended>, Error> {
     let Fighting {
@@ -1714,7 +1713,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                 Some(drew) => sts2_core::Taken::Drew(drew),
                 None => sts2_core::Taken::Waited,
             };
-            played = V::resume_play(&mut board, at, taken);
+            played = V::resume_play::<super::board::BoardKind<V>>(&mut board, at, taken);
             effect.ended = effect.ended.or(board.ended());
             let skipped = std::mem::take(&mut board.skipped);
             merge::<V>(&mut next.skip_tick, skipped);
@@ -1820,7 +1819,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                     Some(card),
                 )
                 .blocking();
-                played = V::on_play(played_card, &mut board);
+                played = V::on_play::<super::board::BoardKind<V>>(played_card, &mut board);
                 effect.ended = effect.ended.or(board.ended());
                 let skipped = std::mem::take(&mut board.skipped);
                 merge::<V>(&mut next.skip_tick, skipped);
@@ -1920,7 +1919,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
             playing,
         )
         .blocking();
-        played = V::resume_play(&mut board, at, answer);
+        played = V::resume_play::<super::board::BoardKind<V>>(&mut board, at, answer);
         effect.ended = effect.ended.or(board.ended());
         let skipped = std::mem::take(&mut board.skipped);
         merge::<V>(&mut next.skip_tick, skipped);

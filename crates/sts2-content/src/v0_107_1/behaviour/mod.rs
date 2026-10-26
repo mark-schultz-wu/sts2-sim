@@ -89,7 +89,7 @@ impl crate::build::OwnRules for V {
     fn own_card_play<F: sts2_core::Fight<V>>(
         card: <V as sts2_core::ContentVersion>::Card,
         fight: &mut F,
-    ) -> Option<sts2_core::Played<V>> {
+    ) -> Option<crate::behaviour::Played<V, F::Kind>> {
         cards::on_play(card, fight)
     }
 
@@ -98,7 +98,7 @@ impl crate::build::OwnRules for V {
         _fight: &mut F,
         from: u8,
         _left: crate::behaviour::cards::Left<V>,
-    ) -> sts2_core::Played<V> {
+    ) -> crate::behaviour::Played<V, F::Kind> {
         unreachable!("{card:?} waited at {from} in a play this build has none of its own")
     }
 
@@ -107,7 +107,7 @@ impl crate::build::OwnRules for V {
         _fight: &mut F,
         from: u8,
         _drew: &[sts2_core::CardId<V>],
-    ) -> sts2_core::Played<V> {
+    ) -> crate::behaviour::Played<V, F::Kind> {
         unreachable!("{card:?} drew at {from} in a play this build has none of its own")
     }
 
@@ -152,7 +152,7 @@ impl crate::build::OwnRules for V {
         card: <V as sts2_core::ContentVersion>::Card,
         fight: &mut F,
         from: u8,
-    ) -> Result<sts2_core::Played<V>, u8> {
+    ) -> Result<crate::behaviour::Played<V, F::Kind>, u8> {
         use super::generated::card_plays;
         use super::generated::cards::Cards;
 
@@ -285,7 +285,7 @@ impl crate::build::OwnRules for V {
     fn own_potion_use<F: sts2_core::Fight<V>>(
         potion: <V as sts2_core::ContentVersion>::Potion,
         fight: &mut F,
-    ) -> Option<sts2_core::Played<V>> {
+    ) -> Option<crate::behaviour::Played<V, F::Kind>> {
         potions::own_potion_use(potion, fight)
     }
 

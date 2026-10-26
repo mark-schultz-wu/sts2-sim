@@ -4,7 +4,8 @@
 //! Source: `dumps/card_plays.txt`, build v0.107.1 (59260271), assembly 1692500715.
 
 use super::super::cards::{CardVar, TokenCard};
-use sts2_core::{Amount, Change, CostPool, Effect, Fight, Played, Scaling};
+use crate::behaviour::Played;
+use sts2_core::{Amount, Change, CostPool, Effect, Fight, Scaling};
 
 type V = super::super::super::V0_107_1;
 
@@ -14,7 +15,11 @@ type V = super::super::super::V0_107_1;
 /// the play comes back as `Err` with the command to go on from.
 ///
 /// Any other card panics, and `behaviour/` ports it by hand.
-pub fn play_from<F: Fight<V>>(card: TokenCard, fight: &mut F, from: u8) -> Result<Played<V>, u8> {
+pub fn play_from<F: Fight<V>>(
+    card: TokenCard,
+    fight: &mut F,
+    from: u8,
+) -> Result<Played<V, F::Kind>, u8> {
     match card {
         TokenCard::Disintegration => Ok(Played::Done),
         TokenCard::Fuel => {

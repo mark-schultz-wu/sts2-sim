@@ -1,7 +1,8 @@
 //! The Defect's cards the generator leaves to a hand port.
 
+use crate::behaviour::Played;
 use crate::ids::{CardIds as _, CardVarIds as _, OrbIds as _, PowerIds as _};
-use sts2_core::{Amount, Effect, Fight, Pile, PileAct, Played, PowerAmount, Scaling};
+use sts2_core::{Amount, Effect, Fight, Pile, PileAct, PowerAmount, Scaling};
 
 /// Where a Defect card's play stops to ask something.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -44,7 +45,7 @@ pub enum Resume<V: crate::Build> {
 
 /// The rest of the play waits at `at`, where a command left a question and
 /// more commands follow.
-fn wait<V: crate::Build>(at: Resume<V>) -> Played<V> {
+fn wait<V: crate::Build, K: sts2_core::FightKind<V>>(at: Resume<V>) -> Played<V, K> {
     Played::Waiting {
         at: crate::behaviour::cards::Resume::Defect(at).into(),
     }
@@ -55,7 +56,7 @@ fn wait<V: crate::Build>(at: Resume<V>) -> Played<V> {
 pub(super) fn resume_waited<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
     at: Resume<V>,
-) -> Played<V> {
+) -> Played<V, F::Kind> {
     match at {
         Resume::OverclockDrew => {
             add_status::<V, _>(fight, V::Card::BURN);
@@ -97,7 +98,7 @@ pub(super) fn resume_play<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
     at: Resume<V>,
     chosen: sts2_core::SelectedCards<V>,
-) -> Played<V> {
+) -> Played<V, F::Kind> {
     match at {
         Resume::HologramIntoHand | Resume::ScavengeExhaust => {
             resume_picked::<V, _>(fight, at, chosen)
@@ -111,7 +112,7 @@ fn resume_picked<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
     at: Resume<V>,
     chosen: sts2_core::SelectedCards<V>,
-) -> Played<V> {
+) -> Played<V, F::Kind> {
     match at {
         // `CardPileCmd.Add(cardModel, PileType.Hand)`.
         Resume::HologramIntoHand => {
@@ -131,7 +132,7 @@ fn resume_picked<V: crate::Build, F: Fight<V>>(
 }
 
 /// The rest of `IceLance`, once its attack is over: its Frosts channelled.
-fn ice_lance_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn ice_lance_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     // The game's loop reads its count before each pass.
     let mut pass = 0;
     while pass < fight.var(V::CardVar::REPEAT) {
@@ -143,7 +144,7 @@ fn ice_lance_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// The rest of `MeteorStrike`, once its attack is over: three Plasma
 /// channelled.
-fn meteor_strike_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn meteor_strike_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     for _ in 0..3 {
         fight.channel(V::Orb::PLASMA_ORB);
     }
@@ -152,7 +153,7 @@ fn meteor_strike_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// The rest of `Hyperbeam`, once its attack is over: its Focus off its
 /// owner.
-fn hyperbeam_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn hyperbeam_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     fight.apply_to_actor(
         V::Power::FOCUS_POWER,
         PowerAmount::Counted(-fight.var(V::CardVar::FOCUS_POWER)),
@@ -162,7 +163,7 @@ fn hyperbeam_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// The rest of `AllForOne`, once its attack is over: each card of the
 /// discard pile that costs nothing into hand, one at a time.
-fn all_for_one_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn all_for_one_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     let free: Vec<_> = fight
         .cards_in(Pile::Discard)
         .into_iter()
@@ -191,7 +192,7 @@ fn all_for_one_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// The rest of `Refract`, once its attack is over: its Glass orbs
 /// channelled.
-fn refract_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn refract_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     // The game's loop reads its count before each pass.
     let mut pass = 0;
     while pass < fight.var(V::CardVar::REPEAT) {
@@ -203,7 +204,7 @@ fn refract_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// The rest of `AdaptiveStrike`, once its attack is over: a clone of itself
 /// into the discard pile, costing nothing for the fight.
-fn adaptive_strike_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn adaptive_strike_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     if let Some(clone) = fight.clone_this(Pile::Discard) {
         fight.modify_card(
             clone,
@@ -215,7 +216,7 @@ fn adaptive_strike_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V>
 }
 
 /// The rest of `Sunder`, once its attack is over: its energy where `gains`.
-fn sunder_hit<V: crate::Build, F: Fight<V>>(fight: &mut F, gains: bool) -> Played<V> {
+fn sunder_hit<V: crate::Build, F: Fight<V>>(fight: &mut F, gains: bool) -> Played<V, F::Kind> {
     if gains {
         fight.modify_energy(fight.var(V::CardVar::ENERGY));
     }
@@ -229,12 +230,12 @@ fn flak_cannon<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
     cards: &[sts2_core::CardAt<V>],
     hits: u8,
-) -> Played<V> {
+) -> Played<V, F::Kind> {
     for (at, &card) in cards.iter().enumerate() {
         fight.act_on(PileAct::Exhaust, &[card]);
         if fight.waiting() {
             let left = crate::behaviour::cards::Left::of(&cards[at + 1..]);
-            return wait::<V>(Resume::FlakCannon { left, hits });
+            return wait::<V, _>(Resume::FlakCannon { left, hits });
         }
     }
     fight.attack(Scaling::Dynamic, |fight| {
@@ -272,7 +273,7 @@ fn add_status<V: crate::Build, F: Fight<V>>(fight: &mut F, status: V::Card) {
 
 /// `Ftl`: its damage to the target, then its `Cards` drawn while its owner
 /// has finished fewer plays this turn than its `PlayMax`.
-fn ftl<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn ftl<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     hit::<V, _>(fight, fight.target(), 1);
     let finished = fight.history().finished_this_turn().count();
     let finished = crate::behaviour::cards::Number::try_from(finished)
@@ -285,7 +286,7 @@ fn ftl<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// `Compact`: its block, then each Status in hand transformed into a Fuel,
 /// upgraded where Compact is. A card in a fight is always transformable.
-fn compact<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn compact<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     let block = fight.resolve(Effect::GainBlock {
         recipient: fight.actor(),
         amount: Amount::Var(V::CardVar::BLOCK),
@@ -307,7 +308,10 @@ fn compact<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
     Played::Done
 }
 
-pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F) -> Played<V> {
+pub(super) fn on_play<V: crate::Build, F: Fight<V>>(
+    card: V::Card,
+    fight: &mut F,
+) -> Played<V, F::Kind> {
     match card {
         // `GeneticAlgorithm`: its block, then `BuffFromPlay` of its
         // `Increase` on this copy and on its deck version.
@@ -335,7 +339,7 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F
             let target = fight.target();
             hit::<V, _>(fight, target, 1);
             if fight.waiting() {
-                return wait::<V>(Resume::IceLanceHit);
+                return wait::<V, _>(Resume::IceLanceHit);
             }
             ice_lance_hit::<V, _>(fight)
         }
@@ -409,7 +413,7 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F
             let target = fight.target();
             hit::<V, _>(fight, target, 1);
             if fight.waiting() {
-                return wait::<V>(Resume::MeteorStrikeHit);
+                return wait::<V, _>(Resume::MeteorStrikeHit);
             }
             meteor_strike_hit::<V, _>(fight)
         }
@@ -467,7 +471,7 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F
                 });
             });
             if fight.waiting() {
-                return wait::<V>(Resume::HyperbeamHit);
+                return wait::<V, _>(Resume::HyperbeamHit);
             }
             hyperbeam_hit::<V, _>(fight)
         }
@@ -477,7 +481,7 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F
             let target = fight.target();
             hit::<V, _>(fight, target, 1);
             if fight.waiting() {
-                return wait::<V>(Resume::AllForOneHit);
+                return wait::<V, _>(Resume::AllForOneHit);
             }
             all_for_one_hit::<V, _>(fight)
         }
@@ -507,7 +511,7 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F
             let target = fight.target();
             hit::<V, _>(fight, target, 2);
             if fight.waiting() {
-                return wait::<V>(Resume::RefractHit);
+                return wait::<V, _>(Resume::RefractHit);
             }
             refract_hit::<V, _>(fight)
         }
@@ -590,7 +594,7 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F
                 fight.apply(attack);
             });
             if fight.waiting() {
-                return wait::<V>(Resume::SunderHit);
+                return wait::<V, _>(Resume::SunderHit);
             }
             sunder_hit::<V, _>(fight, results.iter().any(|result| result.killed))
         }
@@ -629,7 +633,7 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F
         __c0 if __c0 == V::Card::ADAPTIVE_STRIKE => {
             hit::<V, _>(fight, fight.target(), 1);
             if fight.waiting() {
-                return wait::<V>(Resume::AdaptiveStrikeHit);
+                return wait::<V, _>(Resume::AdaptiveStrikeHit);
             }
             adaptive_strike_hit::<V, _>(fight)
         }
@@ -709,7 +713,7 @@ fn hit<V: crate::Build, F: Fight<V>>(
 
 /// `Barrage`: its damage to the target, once for each of its
 /// `CalculatedHits`.
-fn barrage<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn barrage<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     let target = fight.target();
     let hits = fight.var(V::CardVar::CALCULATED_HITS);
     hit::<V, _>(fight, target, hits);
@@ -718,17 +722,17 @@ fn barrage<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// `Claw`: its damage to the target, then its `Increase` onto the damage of
 /// every Claw its owner holds in the fight, itself included.
-fn claw<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn claw<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     let target = fight.target();
     hit::<V, _>(fight, target, 1);
     if fight.waiting() {
-        return wait::<V>(Resume::ClawHit);
+        return wait::<V, _>(Resume::ClawHit);
     }
     claw_hit::<V, _>(fight)
 }
 
 /// The rest of `Claw`, once its attack is over: every Claw's damage raised.
-fn claw_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn claw_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     let raise = sts2_core::Change::Own(crate::behaviour::cards::CardWrite::BuffFromPlay(
         fight.var(V::CardVar::INCREASE),
     ));
@@ -747,7 +751,7 @@ fn claw_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// `CompileDriver`: its damage to the target, then as many cards drawn as
 /// its `CalculatedCards`.
-fn compile_driver<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn compile_driver<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     let target = fight.target();
     hit::<V, _>(fight, target, 1);
     let cards = fight.var(V::CardVar::CALCULATED_CARDS);
@@ -757,18 +761,18 @@ fn compile_driver<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// `GoForTheEyes`: its damage to the target, then its Weak on it where the
 /// target `IntendsToAttack`: an attack or a death blow among its intents.
-fn go_for_the_eyes<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn go_for_the_eyes<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     let target = fight.target();
     hit::<V, _>(fight, target, 1);
     if fight.waiting() {
-        return wait::<V>(Resume::GoForTheEyesHit);
+        return wait::<V, _>(Resume::GoForTheEyesHit);
     }
     go_for_the_eyes_hit::<V, _>(fight)
 }
 
 /// The rest of `GoForTheEyes`, once its attack is over: its Weak, where the
 /// target means to attack.
-fn go_for_the_eyes_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn go_for_the_eyes_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     use crate::generated::monsters::IntentKind;
     use sts2_core::CreatureView as _;
 
@@ -790,25 +794,25 @@ fn go_for_the_eyes_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V>
 
 /// `GunkUp`: its damage to the target, once for each of its `Repeat`, then a
 /// Slimed into the discard pile.
-fn gunk_up<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn gunk_up<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     let target = fight.target();
     let hits = fight.var(V::CardVar::REPEAT);
     hit::<V, _>(fight, target, hits);
     if fight.waiting() {
-        return wait::<V>(Resume::GunkUpHit);
+        return wait::<V, _>(Resume::GunkUpHit);
     }
     gunk_up_hit::<V, _>(fight)
 }
 
 /// The rest of `GunkUp`, once its attack is over: a Slimed into the discard
 /// pile.
-fn gunk_up_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn gunk_up_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     fight.add_generated_cards(sts2_core::CardIdent::new(V::Card::SLIMED), Pile::Discard, 1);
     Played::Done
 }
 
 /// `Hologram`: its block, then one card of the discard pile into the hand.
-fn hologram<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn hologram<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     let block = fight.resolve(Effect::GainBlock {
         recipient: fight.actor(),
         amount: Amount::Var(V::CardVar::BLOCK),
@@ -824,7 +828,7 @@ fn hologram<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// `MomentumStrike`: its damage to the target, then its own cost set to
 /// nothing for the rest of the fight.
-fn momentum_strike<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn momentum_strike<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     let target = fight.target();
     fight.attack(Scaling::Dynamic, |fight| {
         let attack = fight.resolve(Effect::Attack {
@@ -836,14 +840,14 @@ fn momentum_strike<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
         fight.apply(attack);
     });
     if fight.waiting() {
-        return wait::<V>(Resume::MomentumStrikeHit);
+        return wait::<V, _>(Resume::MomentumStrikeHit);
     }
     momentum_strike_hit::<V, _>(fight)
 }
 
 /// The rest of `MomentumStrike`, once its attack is over: its own cost to
 /// nothing for the fight.
-fn momentum_strike_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn momentum_strike_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     fight.modify_this(
         sts2_core::Change::SetCost(sts2_core::CostPool::Energy, 0),
         sts2_core::Lasting::ThisFight,
@@ -853,7 +857,7 @@ fn momentum_strike_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V>
 
 /// `Scrape`: its damage to the target, then its `Cards` drawn, and each drawn
 /// card whose own cost is anything but nothing discarded.
-fn scrape<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn scrape<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     let target = fight.target();
     fight.attack(Scaling::Dynamic, |fight| {
         let attack = fight.resolve(Effect::Attack {
@@ -879,7 +883,7 @@ fn scrape<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 fn scrape_drew<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
     drew: &[sts2_core::CardId<V>],
-) -> Played<V> {
+) -> Played<V, F::Kind> {
     let costly: Vec<sts2_core::CardAt<V>> = drew
         .iter()
         .map(|&id| {
@@ -899,7 +903,7 @@ pub(super) fn resume_drew<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
     at: Resume<V>,
     drew: &[sts2_core::CardId<V>],
-) -> Played<V> {
+) -> Played<V, F::Kind> {
     match at {
         Resume::ScrapeDrew => scrape_drew::<V, _>(fight, drew),
         at => resume_waited::<V, _>(fight, at),
@@ -908,7 +912,7 @@ pub(super) fn resume_drew<V: crate::Build, F: Fight<V>>(
 
 /// `Tempest`: a Lightning channelled for each energy of its X, and one more
 /// once upgraded.
-fn tempest<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn tempest<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     let orbs = fight.x_value() + crate::behaviour::cards::Number::from(fight.upgraded());
     for _ in 0..orbs {
         fight.channel(V::Orb::LIGHTNING_ORB);
@@ -919,7 +923,7 @@ fn tempest<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 /// `Shatter`: its damage to every opponent. Then, once for each orb held as
 /// it began, the first orb is evoked twice: once where it stands, then once
 /// as it leaves.
-fn shatter<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn shatter<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     fight.attack(Scaling::Dynamic, |fight| {
         let targets = fight.opponents();
         // One `CreatureCmd.Damage` over them all.
@@ -936,13 +940,13 @@ fn shatter<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
         });
     });
     if fight.waiting() {
-        return wait::<V>(Resume::ShatterHit);
+        return wait::<V, _>(Resume::ShatterHit);
     }
     shatter_hit::<V, _>(fight)
 }
 
 /// The rest of `Shatter`, once its attack is over: each orb evoked twice.
-fn shatter_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn shatter_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     for _ in 0..fight.orbs_held() {
         fight.evoke_next(false);
         fight.evoke_next(true);
@@ -952,7 +956,7 @@ fn shatter_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// `Dualcast`. Evoke the first orb twice: once where it stands, then once
 /// as it leaves. Nothing with no orb.
-fn dualcast<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn dualcast<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     if fight.orbs_held() > 0 {
         fight.evoke_next(false);
         fight.evoke_next(true);
@@ -963,7 +967,7 @@ fn dualcast<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 /// `TeslaCoil`: its `Damage` at its target, then each Lightning's passive at
 /// the same target, twice for an upgraded copy. The Lightnings are listed as
 /// the damage leaves them.
-fn tesla_coil<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn tesla_coil<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     let target = fight.target();
     fight.attack(Scaling::Dynamic, |fight| {
         let hit = fight.resolve(Effect::Attack {
@@ -975,14 +979,14 @@ fn tesla_coil<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
         fight.apply(hit);
     });
     if fight.waiting() {
-        return wait::<V>(Resume::TeslaCoilHit);
+        return wait::<V, _>(Resume::TeslaCoilHit);
     }
     tesla_coil_hit::<V, _>(fight)
 }
 
 /// The rest of `TeslaCoil`, once its attack is over: each Lightning's passive
 /// on the target.
-fn tesla_coil_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn tesla_coil_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     let target = fight.target();
     let times = if fight.upgraded() { 2 } else { 1 };
     let lightning: Vec<_> = fight
@@ -1001,7 +1005,7 @@ fn tesla_coil_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 /// `Uproar`: its damage to the target twice, then an Attack from the draw
 /// pile auto-played. The first of the playable Attacks stably shuffled off
 /// `Shuffle`, or where none is playable, the first of all of them.
-fn uproar<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn uproar<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     let target = fight.target();
     fight.attack(Scaling::Dynamic, |fight| {
         for _ in 0..2 {
@@ -1015,14 +1019,14 @@ fn uproar<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
         }
     });
     if fight.waiting() {
-        return wait::<V>(Resume::UproarHit);
+        return wait::<V, _>(Resume::UproarHit);
     }
     uproar_hit::<V, _>(fight)
 }
 
 /// The rest of `Uproar`, once its attack is over: an Attack of the draw
 /// pile auto-played.
-fn uproar_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn uproar_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     use crate::generated::cards::CardKeyword;
     use sts2_core::{CardKind, RunStreamKinds as _};
 
@@ -1054,7 +1058,7 @@ fn uproar_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// `Modded`, once its draw is over: its own energy cost one higher for the
 /// rest of the fight.
-fn modded_drew<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn modded_drew<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     fight.modify_this(
         sts2_core::Change::ChangeCost(sts2_core::CostPool::Energy, 1),
         sts2_core::Lasting::ThisFight,

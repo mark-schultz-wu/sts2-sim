@@ -8,7 +8,7 @@ use super::super::generated::potions::Potion;
 pub(crate) fn own_potion_use<F: sts2_core::Fight<V>>(
     _potion: Potion,
     _fight: &mut F,
-) -> Option<sts2_core::Played<V>> {
+) -> Option<crate::behaviour::Played<V, F::Kind>> {
     None
 }
 

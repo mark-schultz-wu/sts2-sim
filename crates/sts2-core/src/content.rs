@@ -1993,6 +1993,17 @@ pub trait FightView<V: ContentVersion> {
     }
 }
 
+/// A fight's type, named for any borrow of the fight.
+///
+/// A play that stops waits inside the fight, so it can hold no borrow of it.
+/// It names the fight by its kind, and is lent the fight again at each step.
+pub trait FightKind<V: ContentVersion>:
+    std::fmt::Debug + Copy + Eq + std::hash::Hash + Send + Sync + 'static
+{
+    /// The fight, borrowed for `'a`.
+    type Fight<'a>: Fight<V, Kind = Self>;
+}
+
 /// The fight, as a card's own behaviour reaches it.
 ///
 /// A card's behaviour is ported code and lives per build, in `sts2-content`.
@@ -2002,6 +2013,9 @@ pub trait FightView<V: ContentVersion> {
 /// Each method is a command, and arrives when a ported card needs it. What a
 /// card prints is not here: that is static, and a card reads its own table.
 pub trait Fight<V: ContentVersion> {
+    /// This fight's type for any borrow of it.
+    type Kind: FightKind<V>;
+
     /// An effect after this fight's current listeners have modified it.
     type ResolvedEffect: EffectResolution<V>;
 
@@ -3154,11 +3168,11 @@ impl Lasting {
 /// How far a card's play got.
 ///
 /// `CardModel.OnPlay` is an `async Task`, and a card that selects awaits in the
-/// middle of one. Nothing here is a coroutine, so a card that has to ask says
-/// where it stopped and is called back.
+/// middle of one. A card that has to ask says where it stopped, `R`, and is
+/// called back: [`ContentVersion::Resume`] for the fight's [`FightKind`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[must_use = "a card play can stop on a question that must be carried"]
-pub enum Played<V: ContentVersion> {
+pub enum Played<V: ContentVersion, R> {
     /// The play ran to its end.
     Done,
     /// The play stopped on a `CardSelectCmd`, which is a question.
@@ -3168,7 +3182,7 @@ pub enum Played<V: ContentVersion> {
         /// How many it takes, which decides whether it asks at all.
         selection: Selection,
         /// Where the card stopped, in the card's own words.
-        at: V::Resume,
+        at: R,
     },
     /// The play stopped on a `CardSelectCmd` whose filter lets these cards
     /// through, which are the ones it offers. They stand in one pile, in its
@@ -3177,18 +3191,18 @@ pub enum Played<V: ContentVersion> {
         cards: smallvec::SmallVec<[crate::CardAt<V>; MAX_CARDS_IN_HAND]>,
         /// How many it takes, which decides whether it asks at all.
         selection: Selection,
-        at: V::Resume,
+        at: R,
     },
     /// The play stopped on a choose-a-card screen.
     Choosing {
         offered: Offered<V>,
         skippable: bool,
-        at: V::Resume,
+        at: R,
     },
     /// A card the play auto-played stopped on a question, which
     /// [`Fight::waiting`] says. The play carries on from `at`, with
     /// [`Taken::Waited`], once that card's play is over.
-    Waiting { at: V::Resume },
+    Waiting { at: R },
 }
 
 /// What a stopped effect resumes with.
@@ -7332,7 +7346,10 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
     /// One per card that stops, and nothing for a build whose cards never do.
     /// A card names its own stopping points, so no card can be resumed at
     /// another card's.
-    type Resume: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'static;
+    ///
+    /// For a fight of kind `K`: a stopped play holds the rest of itself, and
+    /// that rest reaches the fight through `K`'s type.
+    type Resume<K: FightKind<Self>>: std::fmt::Debug + Clone + Eq + std::hash::Hash + 'static;
 
     /// Where a card sits in one of a fight's piles.
     ///
@@ -7805,7 +7822,10 @@ pub trait Rules: Hooks + Engine {
     ///
     /// A card either finishes or names the question on which it stopped.
     /// Panics for a card nobody has ported.
-    fn on_play<F: Fight<Self>>(card: Self::Card, fight: &mut F) -> Played<Self>;
+    fn on_play<'a, K: FightKind<Self>>(
+        card: Self::Card,
+        fight: &mut K::Fight<'a>,
+    ) -> Played<Self, Self::Resume<K>>;
 
     /// `CardModel.OnTurnEnd`, for a card that remains in the hand.
     fn on_card_turn_end<F: Fight<Self>>(card: Self::Card, fight: &mut F);
@@ -7814,11 +7834,11 @@ pub trait Rules: Hooks + Engine {
     ///
     /// `at` identifies the card grouping and the point where it stopped.
     /// `chosen` is what the selection took. A card that stops again says so.
-    fn resume_play<F: Fight<Self>>(
-        fight: &mut F,
-        at: Self::Resume,
+    fn resume_play<'a, K: FightKind<Self>>(
+        fight: &mut K::Fight<'a>,
+        at: Self::Resume<K>,
         chosen: Taken<Self>,
-    ) -> Played<Self>;
+    ) -> Played<Self, Self::Resume<K>>;
 
     /// The cards a character's own pool offers, split by rarity.
     ///
@@ -8076,7 +8096,10 @@ pub trait Rules: Hooks + Engine {
     ///
     /// Panics for a potion nobody has ported, as [`Rules::on_play`] does for a
     /// card.
-    fn on_use<F: Fight<Self>>(potion: Self::Potion, fight: &mut F) -> Played<Self>;
+    fn on_use<F: Fight<Self>>(
+        potion: Self::Potion,
+        fight: &mut F,
+    ) -> Played<Self, Self::Resume<F::Kind>>;
 
     /// What `PotionModel.OnUse` asks of the run rather than of a fight.
     /// Outside a fight, where `AnyTime` lets a player drink, that is all of
@@ -8156,7 +8179,7 @@ pub trait Rules: Hooks + Engine {
         monster: Self::Monster,
         move_id: Self::MoveId,
         fight: &mut F,
-    ) -> Played<Self>;
+    ) -> Played<Self, Self::Resume<F::Kind>>;
 
     /// The hit count `move_id`'s `MultiAttackIntent` reads off its monster's
     /// model now, as the intent's lambda does each time it is shown:
@@ -8184,9 +8207,9 @@ pub trait Rules: Hooks + Engine {
     fn resume_move<F: Fight<Self>>(
         monster: Self::Monster,
         move_id: Self::MoveId,
-        at: Self::Resume,
+        at: Self::Resume<F::Kind>,
         fight: &mut F,
-    ) -> Played<Self>;
+    ) -> Played<Self, Self::Resume<F::Kind>>;
 
     /// Generate an encounter whose roster is code rather than table data.
     /// An unported build-specific rule returns a typed error.

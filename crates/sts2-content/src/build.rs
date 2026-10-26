@@ -492,7 +492,7 @@ pub trait OwnRules: ContentVersion + Sized {
     fn own_card_play<F: sts2_core::Fight<Self>>(
         card: Self::Card,
         fight: &mut F,
-    ) -> Option<sts2_core::Played<Self>>
+    ) -> Option<crate::behaviour::Played<Self, F::Kind>>
     where
         Self: Build;
 
@@ -504,7 +504,7 @@ pub trait OwnRules: ContentVersion + Sized {
         fight: &mut F,
         from: u8,
         left: crate::behaviour::cards::Left<Self>,
-    ) -> sts2_core::Played<Self>
+    ) -> crate::behaviour::Played<Self, F::Kind>
     where
         Self: Build;
 
@@ -515,7 +515,7 @@ pub trait OwnRules: ContentVersion + Sized {
         fight: &mut F,
         from: u8,
         drew: &[sts2_core::CardId<Self>],
-    ) -> sts2_core::Played<Self>
+    ) -> crate::behaviour::Played<Self, F::Kind>
     where
         Self: Build;
 
@@ -544,7 +544,7 @@ pub trait OwnRules: ContentVersion + Sized {
         card: Self::Card,
         fight: &mut F,
         from: u8,
-    ) -> Result<sts2_core::Played<Self>, u8>
+    ) -> Result<crate::behaviour::Played<Self, F::Kind>, u8>
     where
         Self: Build;
 
@@ -666,7 +666,7 @@ pub trait OwnRules: ContentVersion + Sized {
     fn own_potion_use<F: sts2_core::Fight<Self>>(
         potion: Self::Potion,
         fight: &mut F,
-    ) -> Option<sts2_core::Played<Self>>
+    ) -> Option<crate::behaviour::Played<Self, F::Kind>>
     where
         Self: Build;
 
@@ -707,7 +707,6 @@ pub trait Build:
         CardFields = crate::behaviour::cards::Fields,
     > + OwnRules
     + ContentVersion<
-        Resume = crate::behaviour::Resume<Self>,
         EnchantmentState = crate::behaviour::enchantments::State,
         CardWrite = crate::behaviour::cards::CardWrite,
     >
@@ -727,7 +726,6 @@ impl<V> Build for V where
             CardFields = crate::behaviour::cards::Fields,
         > + OwnRules
         + ContentVersion<
-            Resume = crate::behaviour::Resume<V>,
             EnchantmentState = crate::behaviour::enchantments::State,
             CardWrite = crate::behaviour::cards::CardWrite,
         >
@@ -1035,7 +1033,10 @@ macro_rules! rules {
                     crate::behaviour::rules::card_upgrade::<Self>(card)
                 }
 
-                fn on_use<F: Fight<Self>>(potion: Self::Potion, fight: &mut F) -> Played<Self> {
+                fn on_use<F: Fight<Self>>(
+                    potion: Self::Potion,
+                    fight: &mut F,
+                ) -> crate::behaviour::Played<Self, F::Kind> {
                     crate::behaviour::rules::on_use::<Self, F>(potion, fight)
                 }
 
@@ -1047,20 +1048,23 @@ macro_rules! rules {
                     crate::behaviour::rules::on_use_on_run::<Self>(potion, run, in_fight)
                 }
 
-                fn on_play<F: Fight<Self>>(card: Self::Card, fight: &mut F) -> Played<Self> {
-                    crate::behaviour::rules::on_play::<Self, F>(card, fight)
+                fn on_play<'a, K: sts2_core::FightKind<Self>>(
+                    card: Self::Card,
+                    fight: &mut K::Fight<'a>,
+                ) -> crate::behaviour::Played<Self, K> {
+                    crate::behaviour::rules::on_play::<Self, K>(card, fight)
                 }
 
                 fn on_card_turn_end<F: Fight<Self>>(card: Self::Card, fight: &mut F) {
                     crate::behaviour::rules::on_card_turn_end::<Self, F>(card, fight)
                 }
 
-                fn resume_play<F: Fight<Self>>(
-                    fight: &mut F,
-                    at: Self::Resume,
+                fn resume_play<'a, K: sts2_core::FightKind<Self>>(
+                    fight: &mut K::Fight<'a>,
+                    at: Self::Resume<K>,
                     chosen: Taken<Self>,
-                ) -> Played<Self> {
-                    crate::behaviour::rules::resume_play::<Self, F>(fight, at, chosen)
+                ) -> crate::behaviour::Played<Self, K> {
+                    crate::behaviour::rules::resume_play::<Self, K>(fight, at, chosen)
                 }
 
                 fn reward_cards(
@@ -1352,7 +1356,7 @@ macro_rules! rules {
                     monster: Self::Monster,
                     move_id: Self::MoveId,
                     fight: &mut F,
-                ) -> Played<Self> {
+                ) -> crate::behaviour::Played<Self, F::Kind> {
                     crate::behaviour::rules::perform_move::<Self, F>(monster, move_id, fight)
                 }
 
@@ -1378,9 +1382,9 @@ macro_rules! rules {
                 fn resume_move<F: Fight<Self>>(
                     monster: Self::Monster,
                     move_id: Self::MoveId,
-                    at: Self::Resume,
+                    at: Self::Resume<F::Kind>,
                     fight: &mut F,
-                ) -> Played<Self> {
+                ) -> crate::behaviour::Played<Self, F::Kind> {
                     crate::behaviour::rules::resume_move::<Self, F>(monster, move_id, at, fight)
                 }
 

@@ -1,7 +1,8 @@
 //! The event pool's potions.
 
+use crate::behaviour::Played;
 use crate::vars::PotionVars as _;
-use sts2_core::{Amount, CreatureView as _, Effect, Fight, Played, Scaling};
+use sts2_core::{Amount, CreatureView as _, Effect, Fight, Scaling};
 
 use crate::generated::cards::TargetType;
 use crate::ids::PotionIds as _;
@@ -19,7 +20,7 @@ pub(super) fn resume<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
     at: Resume,
     answer: sts2_core::Taken<V>,
-) -> Played<V> {
+) -> Played<V, F::Kind> {
     match (at, answer) {
         (Resume::GlowwaterExhausted, sts2_core::Taken::Waited) => {
             fight.draw(V::Potion::GLOWWATER_POTION_CARDS);
@@ -34,7 +35,10 @@ pub(super) fn resume<V: crate::Build, F: Fight<V>>(
 /// # Panics
 ///
 /// An event potion nobody has ported.
-pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mut F) -> Played<V> {
+pub(super) fn on_use<V: crate::Build, F: Fight<V>>(
+    potion: V::Potion,
+    fight: &mut F,
+) -> Played<V, F::Kind> {
     match potion {
         // `CreatureCmd.Damage` on every creature in the fight that is not a
         // pet, its drinker included, from the drinker.

@@ -74,12 +74,20 @@ def is_prose_source(path: pathlib.Path) -> bool:
     return suffix in DIRECT_SUFFIXES | HASH_SUFFIXES or path.name in HASH_NAMES
 
 
+def is_vendored(name: str) -> bool:
+    """A vendored crate keeps its authors' text. Only `vendor/README.md` is ours."""
+    return name.startswith("vendor/") and name != "vendor/README.md"
+
+
 def source_files() -> list[str]:
     """Every tracked file that holds prose the style applies to."""
     names = git("ls-files", "-z").split("\0")
     return sorted(
         name for name in names
-        if name and is_prose_source(pathlib.Path(name)) and (ROOT / name).is_file()
+        if name
+        and not is_vendored(name)
+        and is_prose_source(pathlib.Path(name))
+        and (ROOT / name).is_file()
     )
 
 

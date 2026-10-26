@@ -1,7 +1,8 @@
 //! The potions only the Defect's pool draws.
 
+use crate::behaviour::Played;
 use crate::vars::PotionVars as _;
-use sts2_core::{Fight, Played, PowerAmount};
+use sts2_core::{Fight, PowerAmount};
 
 use crate::ids::{OrbIds as _, PotionIds as _, PowerIds as _};
 
@@ -10,7 +11,10 @@ use crate::ids::{OrbIds as _, PotionIds as _, PowerIds as _};
 /// # Panics
 ///
 /// A potion of this pool nobody has ported.
-pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mut F) -> Played<V> {
+pub(super) fn on_use<V: crate::Build, F: Fight<V>>(
+    potion: V::Potion,
+    fight: &mut F,
+) -> Played<V, F::Kind> {
     match potion {
         // On its drinker, whom `Self` names.
         __c0 if __c0 == V::Potion::FOCUS_POTION => {

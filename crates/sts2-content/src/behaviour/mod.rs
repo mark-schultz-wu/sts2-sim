@@ -19,30 +19,37 @@ pub(crate) mod relics;
 pub(crate) mod restsite;
 pub(crate) mod rules;
 
-use sts2_core::{CardAt, CardKind, Change, CostPool, Fight, Lasting, Pile, RunStreamKinds};
+use sts2_core::{
+    CardAt, CardKind, Change, CostPool, Fight, FightKind, Lasting, Pile, RunStreamKinds,
+};
+
+/// How far a play got in a fight of kind `K`: where it stopped, if it did.
+pub type Played<V, K> = sts2_core::Played<V, Resume<V, K>>;
 
 /// Where a rule that waits on a question resumes, under the module whose rule
-/// it is.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Resume<V: crate::Build> {
-    Card(crate::behaviour::cards::Resume<V>),
+/// it is, in a fight of kind `K`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Resume<V: crate::Build, K: FightKind<V>> {
+    Card(crate::behaviour::cards::Resume<V, K>),
     Potion(crate::behaviour::potions::Resume),
     Monster(crate::behaviour::monsters::Resume),
 }
 
-impl<V: crate::Build> From<crate::behaviour::cards::Resume<V>> for Resume<V> {
-    fn from(at: crate::behaviour::cards::Resume<V>) -> Self {
+impl<V: crate::Build, K: FightKind<V>> From<crate::behaviour::cards::Resume<V, K>>
+    for Resume<V, K>
+{
+    fn from(at: crate::behaviour::cards::Resume<V, K>) -> Self {
         Resume::Card(at)
     }
 }
 
-impl<V: crate::Build> From<crate::behaviour::monsters::Resume> for Resume<V> {
+impl<V: crate::Build, K: FightKind<V>> From<crate::behaviour::monsters::Resume> for Resume<V, K> {
     fn from(at: crate::behaviour::monsters::Resume) -> Self {
         Resume::Monster(at)
     }
 }
 
-impl<V: crate::Build> From<crate::behaviour::potions::Resume> for Resume<V> {
+impl<V: crate::Build, K: FightKind<V>> From<crate::behaviour::potions::Resume> for Resume<V, K> {
     fn from(at: crate::behaviour::potions::Resume) -> Self {
         Resume::Potion(at)
     }

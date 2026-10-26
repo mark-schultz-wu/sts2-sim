@@ -1,8 +1,9 @@
 //! The cards whose rules this build ports for itself, which the shared cards
 //! hand over through [`crate::build::OwnRules`].
 
+use crate::behaviour::Played;
 use crate::behaviour::cards::Left;
-use sts2_core::{Amount, Effect, Fight, Played, Scaling};
+use sts2_core::{Amount, Effect, Fight, Scaling};
 
 use super::super::V0_111_0 as V;
 use super::super::generated::cards::{
@@ -78,7 +79,7 @@ pub(crate) fn own_card_event_hook(
 
 /// What a card of this build's own does when it is played, or nothing for a
 /// shared one.
-pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Option<Played<V>> {
+pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Option<Played<V, F::Kind>> {
     match card {
         // `ExpectAFight`: as much block as its `CalculatedBlock`, a move's.
         Cards::Ironclad(IroncladCard::ExpectAFight) => {
@@ -345,7 +346,7 @@ pub(crate) fn on_play_from<F: Fight<V>>(
     fight: &mut F,
     from: u8,
     left: Left<V>,
-) -> Played<V> {
+) -> Played<V, F::Kind> {
     match (card, from) {
         (Cards::Defect(DefectCard::Hyperbeam), 0) => {
             fight.attack(Scaling::Dynamic, |fight| {
@@ -400,7 +401,7 @@ pub(crate) fn on_drew_from<F: Fight<V>>(
     fight: &mut F,
     from: u8,
     drew: &[sts2_core::CardId<V>],
-) -> Played<V> {
+) -> Played<V, F::Kind> {
     use sts2_core::{Cost, PileAct};
 
     match (card, from) {
@@ -433,7 +434,7 @@ pub(crate) fn on_drew_from<F: Fight<V>>(
 /// Each other hittable enemy takes each amount that is not zero, from the
 /// debuff's applier. `PowerCmd.ModifyAmount` puts it onto an instance it
 /// stacks with, and `PowerCmd.Apply` puts on a copy otherwise.
-fn misery<F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn misery<F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     use super::super::generated::powers::PowerInstanceType;
     use sts2_core::{PowerAmount, Table as _};
 
@@ -492,7 +493,7 @@ fn misery<F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// `Eidolon`'s `CardCmd.AutoPlay` of each of `cards`, in order. Each is
 /// awaited, so the plays after one that asks wait on the answer.
-fn eidolon_plays<F: Fight<V>>(fight: &mut F, cards: &[sts2_core::CardAt<V>]) -> Played<V> {
+fn eidolon_plays<F: Fight<V>>(fight: &mut F, cards: &[sts2_core::CardAt<V>]) -> Played<V, F::Kind> {
     for (played, &card) in cards.iter().enumerate() {
         // A power card an earlier play took out of the fight stands in no
         // pile, and does not play again.

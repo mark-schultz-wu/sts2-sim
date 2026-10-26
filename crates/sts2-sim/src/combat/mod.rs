@@ -18,6 +18,7 @@ mod play;
 mod potion;
 mod powers;
 mod relic;
+mod setup;
 mod start;
 mod turn;
 pub(crate) use legal::{belt, drinks, moves as legal_moves, thrown};

@@ -1,8 +1,9 @@
 //! The event cards the generator leaves to a hand port.
 
+use crate::behaviour::Played;
 use crate::ids::{CardIds as _, CardVarIds as _, PowerIds as _};
 use sts2_core::{
-    Amount, Change, CostPool, CreatureView as _, Effect, Fight, Lasting, Pile, PileAct, Played,
+    Amount, Change, CostPool, CreatureView as _, Effect, Fight, Lasting, Pile, PileAct,
     PowerAmount, Scaling, Selection,
 };
 
@@ -32,13 +33,16 @@ pub enum Resume<V: crate::Build> {
 
 /// The rest of the play waits at `at`, where a command left a question and
 /// more commands follow.
-fn wait<V: crate::Build>(at: Resume<V>) -> Played<V> {
+fn wait<V: crate::Build, K: sts2_core::FightKind<V>>(at: Resume<V>) -> Played<V, K> {
     Played::Waiting {
         at: crate::behaviour::cards::Resume::Event(at).into(),
     }
 }
 
-pub(super) fn on_play<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F) -> Played<V> {
+pub(super) fn on_play<V: crate::Build, F: Fight<V>>(
+    card: V::Card,
+    fight: &mut F,
+) -> Played<V, F::Kind> {
     match card {
         __c0 if __c0 == V::Card::NEOWS_FURY => neows_fury::<V, _>(fight),
         // `Enlightenment`: every card in hand costs at most one, this turn or
@@ -204,7 +208,7 @@ pub(super) fn resume_chosen<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
     at: Resume<V>,
     chosen: Option<sts2_core::CardIdent<V>>,
-) -> Played<V> {
+) -> Played<V, F::Kind> {
     match at {
         // `SetToFreeThisTurn`, then `CardPileCmd.AddGeneratedCardToCombat`
         // into hand.
@@ -224,7 +228,7 @@ pub(super) fn resume_play<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
     at: Resume<V>,
     chosen: sts2_core::SelectedCards<V>,
-) -> Played<V> {
+) -> Played<V, F::Kind> {
     match at {
         // `CardPileCmd.Add(picked, PileType.Hand)`.
         Resume::NeowsFuryPicks | Resume::WishPick => {
@@ -256,7 +260,7 @@ pub(super) fn resume_play<V: crate::Build, F: Fight<V>>(
 
 /// `NeowsFury`: its damage to the target, then up to its `Cards` from the
 /// discard pile into hand, as many as the hand has room for.
-fn neows_fury<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn neows_fury<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     let target = fight.target();
     fight.attack(Scaling::Dynamic, |fight| {
         let attack = fight.resolve(Effect::Attack {
@@ -283,7 +287,7 @@ fn neows_fury<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 /// `Metamorphosis`: its `Cards` attacks from the character's pool, each
 /// `NextItem` off `CombatCardGeneration`, free this fight and into the draw
 /// pile at a random place.
-fn metamorphosis<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn metamorphosis<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     let attacks = crate::behaviour::character_cards(fight, sts2_core::CardKind::Attack);
     for _ in 0..fight.var(V::CardVar::CARDS) {
         let Some(card) = fight.generate_card(&attacks) else {
@@ -327,14 +331,14 @@ fn mad_science_hits<V: crate::Build, F: Fight<V>>(
     card: V::Card,
     fight: &mut F,
     left: u8,
-) -> Played<V> {
+) -> Played<V, F::Kind> {
     use sts2_core::PowerAmount;
 
     let target = fight.target();
     for done in 0..left {
         hit::<V, _>(fight, target, 1);
         if fight.waiting() {
-            return wait::<V>(Resume::MadScienceHit {
+            return wait::<V, _>(Resume::MadScienceHit {
                 card,
                 left: left - done - 1,
             });
@@ -364,7 +368,7 @@ fn mad_science_hits<V: crate::Build, F: Fight<V>>(
 /// its rider names to its owner. Sapping and Choking then debuff the target,
 /// Energized gives energy, Wisdom draws, and Chaos adds a card of the
 /// character's pool, free this turn.
-fn mad_science<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F) -> Played<V> {
+fn mad_science<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F) -> Played<V, F::Kind> {
     use sts2_core::PowerAmount;
 
     let counted = |fight: &F, key| PowerAmount::Counted(fight.var(key));
@@ -421,7 +425,7 @@ fn mad_science<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &mut F) -> Pl
 
 /// `Whistle`: its damage to the target, then `CreatureCmd.Stun` on it with
 /// no move named after.
-fn whistle<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn whistle<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     let target = fight.target();
     hit::<V, _>(fight, target, 1);
     fight.stun(
@@ -434,17 +438,17 @@ fn whistle<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// `Maul`: its damage to the target twice, then its `Increase` onto the
 /// damage of every Maul its owner holds in the fight, itself included.
-fn maul<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn maul<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     let target = fight.target();
     hit::<V, _>(fight, target, 2);
     if fight.waiting() {
-        return wait::<V>(Resume::MaulHit);
+        return wait::<V, _>(Resume::MaulHit);
     }
     maul_hit::<V, _>(fight)
 }
 
 /// The rest of `Maul`, once its attack is over: every Maul's damage raised.
-fn maul_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn maul_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     let raise = Change::Own(crate::behaviour::cards::CardWrite::BuffFromPlay(
         fight.var(V::CardVar::INCREASE),
     ));
@@ -471,7 +475,7 @@ fn maul_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 /// `Apotheosis`: every other card its owner holds in the fight upgraded,
 /// where it can be.
-fn apotheosis<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn apotheosis<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     // `AllCards` less itself: the hand, the draw, discard, exhaust and play
     // piles, where a card that auto-played it stands. `CardCmd.Upgrade`
     // leaves a card at its highest alone.
@@ -495,7 +499,7 @@ fn apotheosis<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
 /// `BrightestFlame`'s `MaxHp` off its owner's maximum. The hit that takes
 /// the health down with it can ask, as Centennial Puzzle's draw does, and the
 /// new maximum waits for the answer.
-fn brightest_flame_loses<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V> {
+fn brightest_flame_loses<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     match fight.lose_max_hp(fight.actor(), fight.var(V::CardVar::MAX_HP)) {
         Some(max_hp) => wait(Resume::BrightestFlameHit { max_hp }),
         None => Played::Done,
@@ -507,7 +511,7 @@ fn brightest_flame_loses<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<
 pub(super) fn resume_waited<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
     at: Resume<V>,
-) -> Played<V> {
+) -> Played<V, F::Kind> {
     match at {
         Resume::BrightestFlameDrew => brightest_flame_loses::<V, _>(fight),
         Resume::BrightestFlameHit { max_hp } => {

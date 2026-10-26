@@ -609,14 +609,8 @@ pub(crate) fn enter<V: Rules>(
     let asked = super::listen::Walking::begin(&live, belts, hook).map(Box::new);
     let fresh = live.deferred.open_fresh();
     live.pause_boundary = true;
-    let carried = super::turn::carry_setup(
-        seat,
-        &mut live,
-        streams.combat(),
-        belts,
-        ascension,
-        super::live::Setup::BeforeHandDraw(asked),
-    );
+    let carried =
+        super::turn::begin_setup(seat, &mut live, streams.combat(), belts, ascension, asked);
     live.pause_boundary = false;
     let ended = match carried {
         // A player who died in the setup has the turn in its end already.

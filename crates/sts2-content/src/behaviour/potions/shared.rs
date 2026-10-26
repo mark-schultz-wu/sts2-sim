@@ -1,9 +1,10 @@
 //! The potions every character's pool draws from.
 
+use crate::behaviour::Played;
 use crate::vars::PotionVars as _;
 use sts2_core::{
     Amount, CardTable as _, Change, CostPool, CreatureView as _, Effect, Fight, Lasting, Pile,
-    PileAct, Played, PowerAmount, RunStreamKinds as _, Scaling,
+    PileAct, PowerAmount, RunStreamKinds as _, Scaling,
 };
 
 use crate::behaviour::potions::Number;
@@ -39,7 +40,10 @@ pub enum Resume {
 /// # Panics
 ///
 /// A potion of this pool nobody has ported.
-pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mut F) -> Played<V> {
+pub(super) fn on_use<V: crate::Build, F: Fight<V>>(
+    potion: V::Potion,
+    fight: &mut F,
+) -> Played<V, F::Kind> {
     match potion {
         // `CreatureCmd.Heal` on the creature it saved, by
         // `Math.Max(MaxHp * 0.3m, 1m)`, which `SetCurrentHpInternal`
@@ -458,7 +462,10 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
 /// `PowerPotion`, `AttackPotion`, `SkillPotion` and `ColorlessPotion`: three
 /// distinct cards of `cards`, off `CombatCardGeneration`. The player takes one
 /// into hand, free this turn, or none.
-fn free_card_of<V: crate::Build, F: Fight<V>>(fight: &mut F, mut cards: Vec<V::Card>) -> Played<V> {
+fn free_card_of<V: crate::Build, F: Fight<V>>(
+    fight: &mut F,
+    mut cards: Vec<V::Card>,
+) -> Played<V, F::Kind> {
     let offered: [_; sts2_core::CHOICES] = fight
         .generate_cards(
             &mut cards,
@@ -476,7 +483,7 @@ pub(super) fn resume<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
     at: Resume,
     answer: sts2_core::Taken<V>,
-) -> Played<V> {
+) -> Played<V, F::Kind> {
     match (at, answer) {
         (Resume::FreeCardChoice, sts2_core::Taken::Chosen(chosen)) => {
             if let Some(card) = chosen {

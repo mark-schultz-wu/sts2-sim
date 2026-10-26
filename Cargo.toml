@@ -11,12 +11,20 @@ members = [
     "crates/sts2-trace",
     "xtask",
 ]
+# The copy of `diapause` that `[patch.crates-io]` builds from. Its authors lint
+# and test it, not this workspace. `vendor/README.md` says why we keep it.
+exclude = ["vendor"]
 
 # Shared dependencies live here and members say `workspace = true`, so a version
 # is chosen once. Before this, `thiserror` was "2.0.20" in one crate and "2" in
 # another. That resolved to the same version, with two places to change it.
 [workspace.dependencies]
 clap = { version = "4", features = ["derive"] }
+# Copyable coroutines on stable Rust, for the rules that pause on a player's
+# choice. `docs/ASYNC.md` says why. It does what we need, so it is better than
+# writing our own. But few people use it, so the version is exact and the code is
+# a reviewed copy in `vendor/`. We read a new version before the pin moves.
+diapause = "=0.2.0"
 indexmap = "2"
 # The transcendentals the gaussian draws need, compiled in rather than taken
 # from whatever libm the target has. See `sts2-core/src/rng`.
@@ -67,3 +75,10 @@ inherits = "release"
 
 [profile.profiling.package.tracing]
 debug-assertions = true
+
+# `diapause` and its macros build from the reviewed copy in `vendor/`, never from
+# the registry. `vendor/README.md` says why.
+[patch.crates-io]
+diapause = { path = "vendor/diapause" }
+diapause-macro = { path = "vendor/diapause-macro" }
+diapause-macro-core = { path = "vendor/diapause-macro-core" }
