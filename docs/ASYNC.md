@@ -275,6 +275,7 @@ The order:
    because each pool stands alone, and the recorded runs prove it.
 3. The scheduler with one player. It takes away the engine's `Deferred`
    work. The scenarios, the golden replays and the hunts prove it.
+   `docs/SCHEDULER.md` is its design.
 4. Co-op fights, on top.
 
 ## Open question
