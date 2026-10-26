@@ -5,9 +5,6 @@ use crate::behaviour::cards::{Ask, Lent};
 use crate::ids::{CardIds as _, CardVarIds as _, OrbIds as _, PowerIds as _};
 use sts2_core::{Amount, Effect, Fight, FightKind, Pile, PileAct, PowerAmount, Scaling};
 
-/// The statuses `FlakCannon` goes through, which a wait keeps.
-type Statuses<V> = smallvec::SmallVec<[sts2_core::CardAt<V>; crate::behaviour::cards::LEFT]>;
-
 /// One card, as a pick asks for it.
 const ONE: sts2_core::Selection = sts2_core::Selection::Exactly(nonmax::NonMaxUsize::ONE);
 
@@ -132,7 +129,7 @@ fn hit_all<V: crate::Build, F: Fight<V>>(fight: &mut F) {
 /// `FlakCannon`'s statuses: every one its owner holds outside the exhaust
 /// pile, as `AllCards` lists them, the hand, then the draw and discard
 /// piles.
-fn statuses<V: crate::Build, F: Fight<V>>(fight: &F) -> Statuses<V> {
+fn statuses<V: crate::Build, F: Fight<V>>(fight: &F) -> crate::behaviour::cards::Listed<V> {
     [Pile::Hand, Pile::Draw, Pile::Discard]
         .into_iter()
         .flat_map(|pile| fight.cards_in(pile))
@@ -486,7 +483,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
         __c0 if __c0 == V::Card::FLAK_CANNON => {
             let hits: u8 = u8::try_from(resumed!().fight.var(V::CardVar::CALCULATED_HITS))
                 .expect("a count of statuses fits a u8");
-            let cards: Statuses<V> = statuses::<V, _>(resumed!().fight);
+            let cards: crate::behaviour::cards::Listed<V> = statuses::<V, _>(resumed!().fight);
             let count: usize = cards.len();
             for at in 0..count {
                 resumed!().fight.act_on(PileAct::Exhaust, &[cards[at]]);

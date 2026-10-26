@@ -2,8 +2,8 @@
 //! hand over through [`crate::build::OwnRules`].
 
 use crate::behaviour::Played;
-use crate::behaviour::cards::Left;
-use sts2_core::{Amount, Effect, Fight, Scaling};
+use crate::behaviour::cards::{Ask, Lent, Listed};
+use sts2_core::{Amount, Effect, Fight, FightKind, Scaling};
 
 use super::super::V0_111_0 as V;
 use super::super::generated::cards::{
@@ -14,9 +14,6 @@ use super::super::generated::powers::Power;
 use crate::generated::runstate::MapPointType;
 
 type Number = i32;
-
-/// `Eidolon`, which waits on its last play's question.
-const EIDOLON: Cards = Cards::Necrobinder(NecrobinderCard::Eidolon);
 
 /// `Tracking`'s `PowerCmd.Apply<TrackingPower>(…, 50m, …)`, which it prints
 /// nowhere.
@@ -100,9 +97,6 @@ pub(crate) fn on_play<'a, K: sts2_core::FightKind<V>>(
         Cards::Ironclad(IroncladCard::ForgottenRitual) => {
             Some(crate::behaviour::cards::generated::<V, K>(card, fight))
         }
-        // `Hyperbeam`: its damage to every enemy, then its Focus as a
-        // `HyperbeamFocusDownPower` on its owner.
-        Cards::Defect(DefectCard::Hyperbeam) => Some(on_play_from(card, fight, 0, Left::of(&[]))),
         // `Outbreak`: its Poison onto each enemy that can be hit, from its
         // owner, then `PoisonPower.Trigger` on each that carries Poison.
         Cards::Silent(SilentCard::Outbreak) => {
@@ -136,29 +130,6 @@ pub(crate) fn on_play<'a, K: sts2_core::FightKind<V>>(
             fight.transform_all(&statuses);
             Some(Played::Done)
         }
-        // `Scrape`: its damage to the target, then its `Cards` drawn, and
-        // each copy drawn whose cost with every modifier is anything but
-        // nothing discarded. v0.107.1's read the copy's own modifiers alone.
-        Cards::Defect(DefectCard::Scrape) => {
-            let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(attack);
-            });
-            let drew = fight.draw(fight.var(CardVar::Cards));
-            // A shuffle inside the draw can ask, and the discard waits for it.
-            if fight.waiting() {
-                return Some(Played::Waiting {
-                    at: crate::behaviour::cards::Resume::Own(card, 1, Left::of(&[])).into(),
-                });
-            }
-            Some(on_drew_from(card, fight, 1, &drew))
-        }
         // `Haze`: its Poison onto each enemy that can be hit, then its Weak
         // onto each.
         Cards::Silent(SilentCard::Haze) => {
@@ -180,58 +151,12 @@ pub(crate) fn on_play<'a, K: sts2_core::FightKind<V>>(
             }
             Some(Played::Done)
         }
-        // `Expertise`: its `Cards` drawn, each of which retains this turn.
-        Cards::Silent(SilentCard::Expertise) => {
-            let drew = fight.draw(fight.var(CardVar::Cards));
-            // A shuffle inside the draw can ask, and the retain waits for the
-            // cards the draw goes on to draw.
-            if fight.waiting() {
-                return Some(Played::Waiting {
-                    at: crate::behaviour::cards::Resume::Own(card, 1, Left::of(&[])).into(),
-                });
-            }
-            Some(on_drew_from(card, fight, 1, &drew))
-        }
         // `Tracking`: 50 Tracking on its owner, every play.
         Cards::Silent(SilentCard::Tracking) => {
             fight.apply_to_actor(
                 Power::TrackingPower,
                 sts2_core::PowerAmount::Counted(TRACKING),
             );
-            Some(Played::Done)
-        }
-        // `Eidolon`: `CardCmd.AutoPlay` of each card in the exhaust pile that
-        // is Ethereal and not Unplayable, as the play began, with no target
-        // named.
-        Cards::Necrobinder(NecrobinderCard::Eidolon) => {
-            use crate::generated::cards::CardKeyword;
-            use sts2_core::Pile;
-
-            let ethereal: Vec<_> = fight
-                .cards_in(Pile::Exhaust)
-                .into_iter()
-                .filter(|&at| {
-                    fight.card_keyword(at, CardKeyword::Ethereal)
-                        && !fight.card_keyword(at, CardKeyword::Unplayable)
-                })
-                .collect();
-            Some(eidolon_plays(fight, &ethereal))
-        }
-        // `Abundance`: `GetDistinctForCombat` of three Powers from its
-        // owner's own pool, off `CombatCardGeneration`, each upgraded, and
-        // the one chosen into hand, free this turn.
-        // `MadScience` with Violence: its damage to the target, as one
-        // attack of `ViolenceHits` hits. v0.107.1's made each hit its own.
-        Cards::Event(EventCard::MadScienceViolence) => {
-            let target = fight.target();
-            let hits = usize::try_from(fight.var(CardVar::ViolenceHits))
-                .expect("a count of hits is not negative");
-            crate::behaviour::cards::event::hit::<V, _>(fight, target, hits);
-            if fight.waiting() {
-                return Some(Played::Waiting {
-                    at: crate::behaviour::cards::Resume::Own(card, 1, Left::of(&[])).into(),
-                });
-            }
             Some(Played::Done)
         }
         // `MadScience` with Chaos: its block, then a card of the character's
@@ -247,48 +172,14 @@ pub(crate) fn on_play<'a, K: sts2_core::FightKind<V>>(
             crate::behaviour::free_card_into_hand(fight, |_| true, true);
             Some(Played::Done)
         }
-        // `ShiningStrike`: its damage to the target, then its stars. Where it
-        // goes after is its own `GetResultLocationForCardPlay`.
-        Cards::Regent(RegentCard::ShiningStrike) => {
-            let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(attack);
-            });
-            if fight.waiting() {
-                return Some(Played::Waiting {
-                    at: crate::behaviour::cards::Resume::Own(card, 1, Left::of(&[])).into(),
-                });
-            }
-            Some(on_play_from(card, fight, 1, Left::of(&[])))
-        }
         Cards::Necrobinder(NecrobinderCard::Misery) => Some(misery(fight)),
-        Cards::Event(EventCard::Abundance) => {
-            use sts2_core::{CardKind, Rules as _, RunStreamKinds as _};
-
-            let mut powers: Vec<_> = V::combat_cards(fight.character(), fight.multiplayer())
-                .iter()
-                .copied()
-                .filter(|&card| V::card_kind(card) == Some(CardKind::Power))
-                .collect();
-            let stream = <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_GENERATION;
-            let mut offered: [sts2_core::CardIdent<V>; sts2_core::CHOICES] = fight
-                .generate_cards(&mut powers, stream)
-                .unwrap_or_else(|_| unimplemented!("a pool offering fewer than three Powers"));
-            for card in &mut offered {
-                card.upgrade = 1;
-            }
-            Some(Played::Choosing {
-                offered: offered.into_iter().collect(),
-                skippable: false,
-                at: crate::behaviour::cards::Resume::FreeChoice.into(),
-            })
-        }
+        Cards::Defect(DefectCard::Hyperbeam)
+        | Cards::Defect(DefectCard::Scrape)
+        | Cards::Silent(SilentCard::Expertise)
+        | Cards::Necrobinder(NecrobinderCard::Eidolon)
+        | Cards::Event(EventCard::MadScienceViolence)
+        | Cards::Regent(RegentCard::ShiningStrike)
+        | Cards::Event(EventCard::Abundance) => Some(start::<K>(card, fight)),
         _ => None,
     }
 }
@@ -336,96 +227,6 @@ fn trigger_poison<F: Fight<V>>(fight: &mut F, creature: sts2_core::CombatId) {
         if alive {
             fight.modify_power_amount(creature, Power::PoisonPower, -1, None);
         }
-    }
-}
-
-/// A play of this build's own from the command at `from`, which is past the
-/// first after a wait.
-pub(crate) fn on_play_from<F: Fight<V>>(
-    card: Cards,
-    fight: &mut F,
-    from: u8,
-    left: Left<V>,
-) -> Played<V, F::Kind> {
-    match (card, from) {
-        (Cards::Defect(DefectCard::Hyperbeam), 0) => {
-            fight.attack(Scaling::Dynamic, |fight| {
-                let targets = fight.opponents();
-                // One `CreatureCmd.Damage` over them all.
-                fight.damage_command(|fight| {
-                    for target in targets {
-                        let hit = fight.resolve(Effect::Attack {
-                            dealer: fight.actor(),
-                            target,
-                            damage: Amount::Var(CardVar::Damage),
-                            scaling: Scaling::Dynamic,
-                        });
-                        fight.apply(hit);
-                    }
-                });
-            });
-            if fight.waiting() {
-                return Played::Waiting {
-                    at: crate::behaviour::cards::Resume::Own(card, 1, Left::of(&[])).into(),
-                };
-            }
-            on_play_from(card, fight, 1, Left::of(&[]))
-        }
-        (Cards::Defect(DefectCard::Hyperbeam), 1) => {
-            fight.apply_to_actor(
-                Power::HyperbeamFocusDownPower,
-                sts2_core::PowerAmount::Counted(fight.var(CardVar::FocusPower)),
-            );
-            Played::Done
-        }
-        // `Eidolon` after a play's question: the plays its list has left.
-        // `ShiningStrike` after its attack: its stars.
-        (Cards::Regent(RegentCard::ShiningStrike), 1) => {
-            fight.gain_stars(fight.var(CardVar::Stars));
-            Played::Done
-        }
-        // Mad Science's Violence after its attack's question: nothing more.
-        (Cards::Event(EventCard::MadScienceViolence), 1) => Played::Done,
-        (Cards::Necrobinder(NecrobinderCard::Eidolon), 1) => {
-            let left: Vec<_> = left.cards().collect();
-            eidolon_plays(fight, &left)
-        }
-        (card, from) => unreachable!("{card:?} has no command {from} of its own"),
-    }
-}
-
-/// The rest of a play of this build's own that waited on its own draw, with
-/// every copy the draw drew.
-pub(crate) fn on_drew_from<F: Fight<V>>(
-    card: Cards,
-    fight: &mut F,
-    from: u8,
-    drew: &[sts2_core::CardId<V>],
-) -> Played<V, F::Kind> {
-    use sts2_core::{Cost, PileAct};
-
-    match (card, from) {
-        // `Scrape` once its draw is over.
-        (Cards::Defect(DefectCard::Scrape), 1) => {
-            let costly: Vec<_> = drew
-                .iter()
-                .map(|&id| {
-                    fight.find_card(id).unwrap_or_else(|| {
-                        unimplemented!("Scrape discarding {id:?}, which left the fight")
-                    })
-                })
-                .filter(|&card| fight.card_costs(card, true).0 != Cost::fixed(0))
-                .collect();
-            fight.act_on(PileAct::Discard, &costly);
-            Played::Done
-        }
-        // `Expertise` once its draw is over: what it drew retains this turn.
-        (Cards::Silent(SilentCard::Expertise), 1) => {
-            let drawn: Vec<_> = drew.iter().filter_map(|&id| fight.find_card(id)).collect();
-            fight.act_on(PileAct::RetainThisTurn, &drawn);
-            Played::Done
-        }
-        (card, from) => on_play_from(card, fight, from, Left::of(&[])),
     }
 }
 
@@ -491,24 +292,248 @@ fn misery<F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     Played::Done
 }
 
-/// `Eidolon`'s `CardCmd.AutoPlay` of each of `cards`, in order. Each is
-/// awaited, so the plays after one that asks wait on the answer.
-fn eidolon_plays<F: Fight<V>>(fight: &mut F, cards: &[sts2_core::CardAt<V>]) -> Played<V, F::Kind> {
-    for (played, &card) in cards.iter().enumerate() {
-        // A power card an earlier play took out of the fight stands in no
-        // pile, and does not play again.
-        match crate::behaviour::cards::standing::<V, _>(fight, card) {
-            Some(at) => fight.auto_play_card(at),
-            None => fight.auto_play_departed(card.id()),
+/// A play of this build's own that can stop on a question: from its start
+/// to its end, yielding each question it stops on. Each step is lent the
+/// fight, and after a question the answer.
+#[diapause::coroutine(yield = Ask<V>, resume = for<'f, 'a> Lent<'f, 'a, V, K>)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub fn paused<K: FightKind<V>>(card: Cards) {
+    match card {
+        // `Hyperbeam`: its damage to every enemy, then its Focus as a
+        // `HyperbeamFocusDownPower` on its owner.
+        Cards::Defect(DefectCard::Hyperbeam) => {
+            hyperbeam(resumed!().fight);
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            let fight = &mut *resumed!().fight;
+            fight.apply_to_actor(
+                Power::HyperbeamFocusDownPower,
+                sts2_core::PowerAmount::Counted(fight.var(CardVar::FocusPower)),
+            );
         }
-        if fight.waiting() {
-            let left = Left::of(&cards[played + 1..]);
-            return Played::Waiting {
-                at: crate::behaviour::cards::Resume::Own(EIDOLON, 1, left).into(),
-            };
+        // `Scrape`: its damage to the target, then its `Cards` drawn, and
+        // each copy drawn whose cost with every modifier is anything but
+        // nothing discarded. v0.107.1's read the copy's own modifiers alone.
+        // A shuffle inside the draw can ask, and the discard waits for it.
+        Cards::Defect(DefectCard::Scrape) => {
+            strike(resumed!().fight);
+            let mut drew: sts2_core::Drew<V> = draw_cards(resumed!().fight);
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+                drew = drawn(resumed!().taken.take());
+            }
+            scrape_discards(resumed!().fight, &drew);
+        }
+        // `Expertise`: its `Cards` drawn, each of which retains this turn. A
+        // shuffle inside the draw can ask, and the retain waits for the
+        // cards the draw goes on to draw.
+        Cards::Silent(SilentCard::Expertise) => {
+            let mut drew: sts2_core::Drew<V> = draw_cards(resumed!().fight);
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+                drew = drawn(resumed!().taken.take());
+            }
+            let fight = &mut *resumed!().fight;
+            let kept: Vec<_> = drew.iter().filter_map(|&id| fight.find_card(id)).collect();
+            fight.act_on(sts2_core::PileAct::RetainThisTurn, &kept);
+        }
+        // `Eidolon`: `CardCmd.AutoPlay` of each card in the exhaust pile that
+        // is Ethereal and not Unplayable, as the play began, with no target
+        // named. Each is awaited, so the plays after one that asks wait on
+        // the answer.
+        Cards::Necrobinder(NecrobinderCard::Eidolon) => {
+            let ethereal: Listed<V> = ethereal_in_exhaust(resumed!().fight);
+            let count: usize = ethereal.len();
+            for at in 0..count {
+                let fight = &mut *resumed!().fight;
+                // A power card an earlier play took out of the fight stands in
+                // no pile, and does not play again.
+                match crate::behaviour::cards::standing::<V, _>(fight, ethereal[at]) {
+                    Some(standing) => fight.auto_play_card(standing),
+                    None => fight.auto_play_departed(ethereal[at].id()),
+                }
+                if resumed!().fight.waiting() {
+                    yield_!(Ask::Waiting);
+                }
+            }
+        }
+        // `MadScience` with Violence: its damage to the target, as one
+        // attack of `ViolenceHits` hits. v0.107.1's made each hit its own.
+        Cards::Event(EventCard::MadScienceViolence) => {
+            let fight = &mut *resumed!().fight;
+            let target = fight.target();
+            let hits = usize::try_from(fight.var(CardVar::ViolenceHits))
+                .expect("a count of hits is not negative");
+            crate::behaviour::cards::event::hit::<V, _>(fight, target, hits);
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+        }
+        // `ShiningStrike`: its damage to the target, then its stars. Where it
+        // goes after is its own `GetResultLocationForCardPlay`.
+        Cards::Regent(RegentCard::ShiningStrike) => {
+            strike(resumed!().fight);
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            let fight = &mut *resumed!().fight;
+            fight.gain_stars(fight.var(CardVar::Stars));
+        }
+        // `Abundance`: `GetDistinctForCombat` of three Powers from its
+        // owner's own pool, off `CombatCardGeneration`, each upgraded, and
+        // the one chosen into hand, free this turn, through
+        // `SetToFreeThisTurn` and `CardPileCmd.AddGeneratedCardToCombat`.
+        Cards::Event(EventCard::Abundance) => {
+            let offered: sts2_core::Offered<V> = abundance_offer(resumed!().fight);
+            yield_!(Ask::Choosing {
+                offered,
+                skippable: false,
+            });
+            let Lent { fight, taken } = resumed!();
+            if let Some(chosen) = crate::behaviour::cards::chosen::<V>(taken) {
+                for at in fight.add_generated_cards(chosen, sts2_core::Pile::Hand, 1) {
+                    crate::behaviour::free_this_turn(&mut **fight, at);
+                }
+            }
+        }
+        card => unreachable!("{card:?} never stops on a question"),
+    }
+}
+
+/// A play of [`paused`], from its start.
+fn start<'a, K: FightKind<V>>(card: Cards, fight: &mut K::Fight<'a>) -> Played<V, K> {
+    let mut play = paused::<K>(card);
+    let state = play.start_with(Lent { fight, taken: None });
+    settle::<K>(play, state)
+}
+
+/// A paused play of [`paused`], with the answer it waited for.
+pub(crate) fn resume<'a, K: FightKind<V>>(
+    fight: &mut K::Fight<'a>,
+    mut play: paused::State<K>,
+    taken: sts2_core::Taken<V>,
+) -> Played<V, K> {
+    let state = diapause::Coroutine::resume(
+        &mut play,
+        Lent {
+            fight,
+            taken: Some(taken),
+        },
+    );
+    settle::<K>(play, state)
+}
+
+/// How far a step of `play` got.
+fn settle<K: FightKind<V>>(
+    play: paused::State<K>,
+    state: diapause::CoroutineState<Ask<V>, ()>,
+) -> Played<V, K> {
+    match state {
+        diapause::CoroutineState::Complete(()) => Played::Done,
+        diapause::CoroutineState::Yielded(ask) => {
+            ask.at(crate::behaviour::cards::Resume::Build(super::Paused::Own(play)).into())
         }
     }
-    Played::Done
+}
+
+/// `Hyperbeam`'s attack: its damage to every enemy, as one
+/// `CreatureCmd.Damage`.
+fn hyperbeam<F: Fight<V>>(fight: &mut F) {
+    fight.attack(Scaling::Dynamic, |fight| {
+        let targets = fight.opponents();
+        fight.damage_command(|fight| {
+            for target in targets {
+                let hit = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(hit);
+            }
+        });
+    });
+}
+
+/// Its damage to the target, as one attack.
+fn strike<F: Fight<V>>(fight: &mut F) {
+    let target = fight.target();
+    fight.attack(Scaling::Dynamic, |fight| {
+        let attack = fight.resolve(Effect::Attack {
+            dealer: fight.actor(),
+            target,
+            damage: Amount::Var(CardVar::Damage),
+            scaling: Scaling::Dynamic,
+        });
+        fight.apply(attack);
+    });
+}
+
+/// Its `Cards` drawn.
+fn draw_cards<F: Fight<V>>(fight: &mut F) -> sts2_core::Drew<V> {
+    let cards = fight.var(CardVar::Cards);
+    fight.draw(cards)
+}
+
+/// The copies a draw that waited drew. A draw the ended fight never ran
+/// drew nothing.
+fn drawn(taken: Option<sts2_core::Taken<V>>) -> sts2_core::Drew<V> {
+    match taken {
+        Some(sts2_core::Taken::Drew(drew)) => drew,
+        _ => sts2_core::Drew::new(),
+    }
+}
+
+/// `Scrape` once its draw is over: each copy it drew whose cost with every
+/// modifier is anything but nothing discarded.
+fn scrape_discards<F: Fight<V>>(fight: &mut F, drew: &[sts2_core::CardId<V>]) {
+    use sts2_core::{Cost, PileAct};
+
+    let costly: Vec<_> = drew
+        .iter()
+        .map(|&id| {
+            fight
+                .find_card(id)
+                .unwrap_or_else(|| unimplemented!("Scrape discarding {id:?}, which left the fight"))
+        })
+        .filter(|&card| fight.card_costs(card, true).0 != Cost::fixed(0))
+        .collect();
+    fight.act_on(PileAct::Discard, &costly);
+}
+
+/// The cards of the exhaust pile that are Ethereal and not Unplayable.
+fn ethereal_in_exhaust<F: Fight<V>>(fight: &F) -> Listed<V> {
+    use crate::generated::cards::CardKeyword;
+
+    fight
+        .cards_in(sts2_core::Pile::Exhaust)
+        .into_iter()
+        .filter(|&at| {
+            fight.card_keyword(at, CardKeyword::Ethereal)
+                && !fight.card_keyword(at, CardKeyword::Unplayable)
+        })
+        .collect()
+}
+
+/// `Abundance`'s offer: three distinct Powers of its owner's own pool, off
+/// `CombatCardGeneration`, each upgraded.
+fn abundance_offer<F: Fight<V>>(fight: &mut F) -> sts2_core::Offered<V> {
+    use sts2_core::{CardKind, Rules as _, RunStreamKinds as _};
+
+    let mut powers: Vec<_> = V::combat_cards(fight.character(), fight.multiplayer())
+        .iter()
+        .copied()
+        .filter(|&card| V::card_kind(card) == Some(CardKind::Power))
+        .collect();
+    let stream = <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_GENERATION;
+    let mut offered: [sts2_core::CardIdent<V>; sts2_core::CHOICES] = fight
+        .generate_cards(&mut powers, stream)
+        .unwrap_or_else(|_| unimplemented!("a pool offering fewer than three Powers"));
+    for card in &mut offered {
+        card.upgrade = 1;
+    }
+    offered.into_iter().collect()
 }
 
 /// A number a card of this build's own works out, or nothing for a shared one.
@@ -519,8 +544,6 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
     owner: sts2_core::CardOwner<'_, V>,
 ) -> Option<Number> {
     match (card, key) {
-        // `ExpectAFight`: a base, and more for each Strength its owner has,
-        // none for less than none.
         // `Sacrifice`: a base, and more for each of three times the maximum
         // health a living Osty has. v0.107.1's counts twice it.
         (Cards::Necrobinder(NecrobinderCard::Sacrifice), CardVar::CalculatedBlock) => {
@@ -530,6 +553,8 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
                     + printed.face(CardVar::CalculationExtra) * thrice,
             )
         }
+        // `ExpectAFight`: a base, and more for each Strength its owner has,
+        // none for less than none.
         (Cards::Ironclad(IroncladCard::ExpectAFight), CardVar::CalculatedBlock) => {
             let strength = owner
                 .powers

@@ -496,29 +496,6 @@ pub trait OwnRules: ContentVersion + Sized {
     where
         Self: Build;
 
-    /// The rest of a play of the build's own that waited, from the command
-    /// after the one that left a question waiting. `left` is the cards its
-    /// list still has to go through.
-    fn own_card_play_from<F: sts2_core::Fight<Self>>(
-        card: Self::Card,
-        fight: &mut F,
-        from: u8,
-        left: crate::behaviour::cards::Left<Self>,
-    ) -> crate::behaviour::Played<Self, F::Kind>
-    where
-        Self: Build;
-
-    /// The rest of a play of the build's own that waited on its own draw,
-    /// from the command after the draw. `drew` is every copy the draw drew.
-    fn own_card_drew_from<F: sts2_core::Fight<Self>>(
-        card: Self::Card,
-        fight: &mut F,
-        from: u8,
-        drew: &[sts2_core::CardId<Self>],
-    ) -> crate::behaviour::Played<Self, F::Kind>
-    where
-        Self: Build;
-
     /// What a power of the build's own lends for a turn and `IsPositive`, for
     /// a temporary power only the build has, or nothing.
     fn own_lends(power: Self::Power) -> Option<(Self::Power, bool)>;
@@ -539,7 +516,8 @@ pub trait OwnRules: ContentVersion + Sized {
     fn generated_upgrade(card: Self::Card) -> &'static [sts2_core::Change<Self>];
 
     /// A play of the build's standing still on a question, which the fight
-    /// lends it again at each step. Its generated plays' pools.
+    /// lends it again at each step. It is one of the build's generated plays
+    /// or one of its own.
     type Paused<K: sts2_core::FightKind<Self>>: std::fmt::Debug
         + Clone
         + Eq

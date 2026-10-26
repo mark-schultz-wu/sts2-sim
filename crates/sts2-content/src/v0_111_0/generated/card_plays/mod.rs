@@ -176,7 +176,7 @@ fn settle<K: sts2_core::FightKind<V>>(
     match state {
         diapause::CoroutineState::Complete(()) => crate::behaviour::Played::Done,
         diapause::CoroutineState::Yielded(ask) => {
-            ask.at(crate::behaviour::cards::Resume::Generated(play).into())
+            ask.at(crate::behaviour::cards::Resume::Build(play.into()).into())
         }
     }
 }

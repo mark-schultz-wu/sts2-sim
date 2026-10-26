@@ -93,24 +93,6 @@ impl crate::build::OwnRules for V {
         cards::on_play::<K>(card, fight)
     }
 
-    fn own_card_play_from<F: sts2_core::Fight<V>>(
-        card: <V as sts2_core::ContentVersion>::Card,
-        fight: &mut F,
-        from: u8,
-        left: crate::behaviour::cards::Left<V>,
-    ) -> crate::behaviour::Played<V, F::Kind> {
-        cards::on_play_from(card, fight, from, left)
-    }
-
-    fn own_card_drew_from<F: sts2_core::Fight<V>>(
-        card: <V as sts2_core::ContentVersion>::Card,
-        fight: &mut F,
-        from: u8,
-        drew: &[sts2_core::CardId<V>],
-    ) -> crate::behaviour::Played<V, F::Kind> {
-        cards::on_drew_from(card, fight, from, drew)
-    }
-
     fn own_lends(
         power: <V as sts2_core::ContentVersion>::Power,
     ) -> Option<(<V as sts2_core::ContentVersion>::Power, bool)> {
@@ -148,7 +130,7 @@ impl crate::build::OwnRules for V {
         }
     }
 
-    type Paused<K: sts2_core::FightKind<V>> = super::generated::card_plays::Paused<K>;
+    type Paused<K: sts2_core::FightKind<V>> = Paused<K>;
 
     fn generated_play<'a, K: sts2_core::FightKind<V>>(
         card: <V as sts2_core::ContentVersion>::Card,
@@ -162,7 +144,12 @@ impl crate::build::OwnRules for V {
         paused: Self::Paused<K>,
         taken: sts2_core::Taken<V>,
     ) -> crate::behaviour::Played<V, K> {
-        super::generated::card_plays::resume::<K>(fight, paused, taken)
+        match paused {
+            Paused::Generated(paused) => {
+                super::generated::card_plays::resume::<K>(fight, paused, taken)
+            }
+            Paused::Own(paused) => cards::resume::<K>(fight, paused, taken),
+        }
     }
 
     fn generated_turn_end<F: sts2_core::Fight<V>>(
@@ -324,5 +311,20 @@ impl crate::build::OwnRules for V {
         in_fight: bool,
     ) -> Option<sts2_core::HookEffects<V>> {
         potions::own_potion_use_on_run(potion, run, in_fight)
+    }
+}
+
+/// A play of this build's standing still on a question.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Paused<K: sts2_core::FightKind<V>> {
+    /// One of its generated plays.
+    Generated(super::generated::card_plays::Paused<K>),
+    /// One of the plays it ports for itself.
+    Own(cards::paused::State<K>),
+}
+
+impl<K: sts2_core::FightKind<V>> From<super::generated::card_plays::Paused<K>> for Paused<K> {
+    fn from(paused: super::generated::card_plays::Paused<K>) -> Self {
+        Paused::Generated(paused)
     }
 }

@@ -48,24 +48,21 @@ the coroutines, pinned, from the reviewed and patched copy in `vendor/`.
 Co-op fights wait for it, because each player's paused work is a
 coroutine in that player's queue.
 
-Done: `SetupPlayerTurn`, the plays that stop in every card pool, and the
-generated plays. Each pool's coroutine holds its paused plays, in place of
-its hand-written `Resume` enum. The card-play generator writes a
-coroutine for each pool, and `Build::Paused` names a build's paused
-plays.
+Done: `SetupPlayerTurn`, and every card play: each card pool's, the
+generated ones, and each build's own. Each pool's coroutine holds its
+paused plays, in place of its hand-written `Resume` enum. The card-play
+generator writes a coroutine for each pool, and `Build::Paused` names a
+build's paused plays, its generated ones and its own.
 
 The pools go first, because each stands alone and a recorded run proves
 it. The scheduler replaces the engine's `Deferred` work, which the pools
 do not touch. The order:
 
-1. The builds' own plays join `Build::Paused`, beside the generated ones.
-   That takes away `Resume::Own`, `Left`, and v0.111.0's `Abundance` on
-   `Resume::FreeChoice`.
-2. Potions and monster moves.
-3. The scheduler with one player. The turn loop, the card plays and the
+1. Potions and monster moves.
+2. The scheduler with one player. The turn loop, the card plays and the
    paused hooks run as the game's queues run them. It takes away the
    `Deferred`, `Then` and `Setup` work in the engine.
-4. The run layer's pauses, `Pickup` and `Unfinished`, once Mark decides
+3. The run layer's pauses, `Pickup` and `Unfinished`, once Mark decides
    whether they move too (`docs/ASYNC.md`, open question 1).
 
 ### 2. Co-op

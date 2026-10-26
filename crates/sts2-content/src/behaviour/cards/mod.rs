@@ -646,11 +646,6 @@ pub enum Resume<V: crate::Build, K: sts2_core::FightKind<V>> {
     Defect(defect::paused::State<V, K>),
     /// An event card's play, paused where it asked.
     Event(event::paused::State<V, K>),
-    /// A choose-a-card screen whose card goes into hand free this turn,
-    /// through `SetToFreeThisTurn` and `CardPileCmd.AddGeneratedCardToCombat`.
-    /// v0.111.0's `Abundance` stops here, until its build's own plays are
-    /// coroutines.
-    FreeChoice,
     /// An Ironclad card's play, paused where it asked.
     Ironclad(ironclad::paused::State<V, K>),
     /// A Necrobinder card's play, paused where it asked.
@@ -663,10 +658,7 @@ pub enum Resume<V: crate::Build, K: sts2_core::FightKind<V>> {
     Token(token::paused::State<V, K>),
     /// A play of the build's [`crate::Build::Paused`], standing still where
     /// it asked.
-    Generated(V::Paused<K>),
-    /// A play of the build's own, from the command after the one that left a
-    /// question waiting. The list holds the cards it still has to go through.
-    Own(V::Card, u8, Left<V>),
+    Build(V::Paused<K>),
 }
 
 /// What a paused play asks, before it is told where it waits.
@@ -794,38 +786,11 @@ pub(crate) fn selected<V: crate::Build>(
     }
 }
 
-/// How many cards [`Left`] holds. Most lists are a hand's worth, but
-/// Eidolon's is every Ethereal card in the exhaust pile.
-pub(crate) const LEFT: usize = 24;
-
-/// The cards a play still has to go through once it waited, in the order
-/// the game's list took them. A card that joined the pile meanwhile is not
-/// one of them.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Left<V: crate::Build>([Option<sts2_core::CardAt<V>>; LEFT]);
-
-impl<V: crate::Build> Left<V> {
-    /// `cards`, in order.
-    ///
-    /// # Panics
-    ///
-    /// More cards than [`LEFT`].
-    pub(crate) fn of(cards: &[sts2_core::CardAt<V>]) -> Self {
-        let mut left = [None; LEFT];
-        if cards.len() > LEFT {
-            unimplemented!("a play going through {} cards after a wait", cards.len());
-        }
-        for (at, &card) in cards.iter().enumerate() {
-            left[at] = Some(card);
-        }
-        Left(left)
-    }
-
-    /// The cards, in order.
-    pub(crate) fn cards(self) -> impl Iterator<Item = sts2_core::CardAt<V>> {
-        self.0.into_iter().flatten()
-    }
-}
+/// The cards a play goes through, across the questions it waits on, in the
+/// order the game's list took them. Most lists are a hand's worth. Eidolon's
+/// is every Ethereal card in the exhaust pile, so the list holds 24 before it
+/// moves to the heap.
+pub(crate) type Listed<V> = smallvec::SmallVec<[sts2_core::CardAt<V>; 24]>;
 
 /// The creatures a play took before a command that can wait, which it reads
 /// after. A fight holds ten at most.
@@ -1369,59 +1334,22 @@ pub(crate) fn deck_event_hook<V: crate::Build>(
     }
 }
 
-/// The rest of a play that waited on its own draw, with every copy the draw
-/// drew. A play that waited on anything else carries on as after a wait.
-pub(crate) fn resume_drew<V: crate::Build, F: Fight<V>>(
-    fight: &mut F,
-    at: Resume<V, F::Kind>,
-    drew: &[sts2_core::CardId<V>],
-) -> Played<V, F::Kind> {
+/// A play that stood still on a question, with the answer it waited for.
+pub(crate) fn resume<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
+    fight: &mut K::Fight<'a>,
+    at: Resume<V, K>,
+    taken: sts2_core::Taken<V>,
+) -> Played<V, K> {
     match at {
-        Resume::Own(card, from, _) => V::own_card_drew_from(card, fight, from, drew),
-        at => resume_waited::<V, _>(fight, at),
-    }
-}
-
-/// The rest of a play that waited on a question one of its commands left,
-/// once the question is answered.
-pub(crate) fn resume_waited<V: crate::Build, F: Fight<V>>(
-    fight: &mut F,
-    at: Resume<V, F::Kind>,
-) -> Played<V, F::Kind> {
-    match at {
-        Resume::Colorless(_)
-        | Resume::Defect(_)
-        | Resume::Event(_)
-        | Resume::Ironclad(_)
-        | Resume::Necrobinder(_)
-        | Resume::Regent(_)
-        | Resume::Silent(_)
-        | Resume::Token(_) => {
-            unreachable!("a coroutine's play resumes through it")
-        }
-        Resume::FreeChoice => unreachable!("a free choice chooses, and waits on nothing"),
-        Resume::Generated(_) => unreachable!("a coroutine's play resumes through it"),
-        Resume::Own(card, from, left) => V::own_card_play_from(card, fight, from, left),
-    }
-}
-
-/// The rest of a play that stopped on a choose-a-card screen, once the
-/// player took one or skipped it.
-pub(crate) fn resume_chosen<V: crate::Build, F: Fight<V>>(
-    fight: &mut F,
-    at: Resume<V, F::Kind>,
-    chosen: Option<sts2_core::CardIdent<V>>,
-) -> Played<V, F::Kind> {
-    match at {
-        Resume::FreeChoice => {
-            if let Some(card) = chosen {
-                for at in fight.add_generated_cards(card, sts2_core::Pile::Hand, 1) {
-                    crate::behaviour::free_this_turn(fight, at);
-                }
-            }
-            Played::Done
-        }
-        at => unimplemented!("{at:?} resumed with a chosen card"),
+        Resume::Colorless(paused) => colorless::resume::<V, K>(fight, paused, taken),
+        Resume::Defect(paused) => defect::resume::<V, K>(fight, paused, taken),
+        Resume::Event(paused) => event::resume::<V, K>(fight, paused, taken),
+        Resume::Ironclad(paused) => ironclad::resume::<V, K>(fight, paused, taken),
+        Resume::Necrobinder(paused) => necrobinder::resume::<V, K>(fight, paused, taken),
+        Resume::Regent(paused) => regent::resume::<V, K>(fight, paused, taken),
+        Resume::Silent(paused) => silent::resume::<V, K>(fight, paused, taken),
+        Resume::Token(paused) => token::resume::<V, K>(fight, paused, taken),
+        Resume::Build(paused) => V::resume_paused::<K>(fight, paused, taken),
     }
 }
 

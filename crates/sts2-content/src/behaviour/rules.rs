@@ -412,48 +412,8 @@ pub(crate) fn resume_play<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
     chosen: sts2_core::Taken<V>,
 ) -> crate::behaviour::Played<V, K> {
     match (at, chosen) {
-        (
-            crate::behaviour::Resume::Card(crate::behaviour::cards::Resume::Silent(paused)),
-            taken,
-        ) => crate::behaviour::cards::silent::resume::<V, K>(fight, paused, taken),
-        (
-            crate::behaviour::Resume::Card(crate::behaviour::cards::Resume::Ironclad(paused)),
-            taken,
-        ) => crate::behaviour::cards::ironclad::resume::<V, K>(fight, paused, taken),
-        (
-            crate::behaviour::Resume::Card(crate::behaviour::cards::Resume::Defect(paused)),
-            taken,
-        ) => crate::behaviour::cards::defect::resume::<V, K>(fight, paused, taken),
-        (
-            crate::behaviour::Resume::Card(crate::behaviour::cards::Resume::Necrobinder(paused)),
-            taken,
-        ) => crate::behaviour::cards::necrobinder::resume::<V, K>(fight, paused, taken),
-        (
-            crate::behaviour::Resume::Card(crate::behaviour::cards::Resume::Regent(paused)),
-            taken,
-        ) => crate::behaviour::cards::regent::resume::<V, K>(fight, paused, taken),
-        (
-            crate::behaviour::Resume::Card(crate::behaviour::cards::Resume::Colorless(paused)),
-            taken,
-        ) => crate::behaviour::cards::colorless::resume::<V, K>(fight, paused, taken),
-        (crate::behaviour::Resume::Card(crate::behaviour::cards::Resume::Event(paused)), taken) => {
-            crate::behaviour::cards::event::resume::<V, K>(fight, paused, taken)
-        }
-        (
-            crate::behaviour::Resume::Card(crate::behaviour::cards::Resume::Generated(paused)),
-            taken,
-        ) => V::resume_paused::<K>(fight, paused, taken),
-        (crate::behaviour::Resume::Card(crate::behaviour::cards::Resume::Token(paused)), taken) => {
-            crate::behaviour::cards::token::resume::<V, K>(fight, paused, taken)
-        }
-        (crate::behaviour::Resume::Card(at), sts2_core::Taken::Chosen(card)) => {
-            crate::behaviour::cards::resume_chosen::<V, _>(fight, at, card)
-        }
-        (crate::behaviour::Resume::Card(at), sts2_core::Taken::Waited) => {
-            crate::behaviour::cards::resume_waited::<V, _>(fight, at)
-        }
-        (crate::behaviour::Resume::Card(at), sts2_core::Taken::Drew(drew)) => {
-            crate::behaviour::cards::resume_drew::<V, _>(fight, at, &drew)
+        (crate::behaviour::Resume::Card(at), taken) => {
+            crate::behaviour::cards::resume::<V, K>(fight, at, taken)
         }
         (crate::behaviour::Resume::Potion(at), chosen) => {
             crate::behaviour::potions::resume(fight, at, chosen)
