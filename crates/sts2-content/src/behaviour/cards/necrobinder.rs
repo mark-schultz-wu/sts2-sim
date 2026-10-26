@@ -1,7 +1,8 @@
 //! The Necrobinder's cards, where the generator leaves them.
 
 use crate::behaviour::Played;
-use crate::behaviour::cards::{Ask, Lent, Number};
+use crate::behaviour::cards::Number;
+use crate::behaviour::paused::{Ask, Lent};
 use sts2_core::{
     Amount, Change, CostPool, Effect, EventHook, Fight, FightKind, HookEffect, Lasting, Pile,
     PileAct, Scaling, Selection,
@@ -550,7 +551,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             });
             let Lent { fight, taken } = resumed!();
             let soul = sts2_core::CardIdent::new(V::Card::SOUL);
-            for &picked in crate::behaviour::cards::selected::<V>(taken).as_slice() {
+            for &picked in crate::behaviour::paused::selected::<V>(taken).as_slice() {
                 fight.transform(picked, soul);
             }
         }
@@ -584,7 +585,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             let Lent { fight, taken } = resumed!();
             fight.act_on(
                 PileAct::Exhaust,
-                crate::behaviour::cards::selected::<V>(taken).as_slice(),
+                crate::behaviour::paused::selected::<V>(taken).as_slice(),
             );
         }
         // `HighFive`: where Osty stands, its damage from Osty to every enemy,
@@ -624,7 +625,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             let Lent { fight, taken } = resumed!();
             fight.act_on(
                 PileAct::IntoHand,
-                crate::behaviour::cards::selected::<V>(taken).as_slice(),
+                crate::behaviour::paused::selected::<V>(taken).as_slice(),
             );
         }
         // `SculptingStrike`: its damage to the target, then one card of the
@@ -665,7 +666,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
                 selection: ONE,
             });
             let Lent { fight, taken } = resumed!();
-            for &picked in crate::behaviour::cards::selected::<V>(taken).as_slice() {
+            for &picked in crate::behaviour::paused::selected::<V>(taken).as_slice() {
                 if let sts2_core::Cost::Fixed(_) =
                     sts2_core::CardTable::cost(fight.card_ident(picked).card)
                 {
@@ -718,7 +719,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
                 let Lent { fight, taken } = resumed!();
                 fight.act_on(
                     PileAct::IntoHand,
-                    crate::behaviour::cards::selected::<V>(taken).as_slice(),
+                    crate::behaviour::paused::selected::<V>(taken).as_slice(),
                 );
             }
         }
@@ -745,7 +746,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
     }
 }
 
-crate::behaviour::cards::paused_play!(Necrobinder);
+crate::behaviour::paused::paused_play!(Card, crate::behaviour::cards::Resume::Necrobinder);
 
 /// The cards in hand without `keyword`, read locally where `local` says.
 fn without_keyword<V: crate::Build, F: Fight<V>>(
@@ -772,7 +773,7 @@ fn add_keyword<V: crate::Build, K: FightKind<V>>(
     keyword: CardKeyword,
 ) {
     let Lent { fight, taken } = lent;
-    for &picked in crate::behaviour::cards::selected::<V>(taken).as_slice() {
+    for &picked in crate::behaviour::paused::selected::<V>(taken).as_slice() {
         fight.modify_card(picked, Change::AddKeyword(keyword), Lasting::ThisFight);
     }
 }

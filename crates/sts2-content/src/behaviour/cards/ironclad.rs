@@ -1,7 +1,7 @@
 //! The Ironclad's cards the generator leaves to a hand port.
 
 use crate::behaviour::Played;
-use crate::behaviour::cards::{Ask, Lent};
+use crate::behaviour::paused::{Ask, Lent};
 use crate::ids::{CardIds as _, CardVarIds as _, PowerIds as _};
 use sts2_core::{
     Amount, CardKind, Change, CostPool, CreatureView as _, Effect, EventHook, Fight, FightKind,
@@ -295,7 +295,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             let Lent { fight, taken } = resumed!();
             fight.act_on(
                 PileAct::Exhaust,
-                crate::behaviour::cards::selected::<V>(taken).as_slice(),
+                crate::behaviour::paused::selected::<V>(taken).as_slice(),
             );
             let cards = fight.var(V::CardVar::CARDS);
             fight.draw(cards);
@@ -335,7 +335,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             let Lent { fight, taken } = resumed!();
             fight.act_on(
                 PileAct::OntoDrawTop,
-                crate::behaviour::cards::selected::<V>(taken).as_slice(),
+                crate::behaviour::paused::selected::<V>(taken).as_slice(),
             );
         }
         // `Bloodletting`: its `HpLoss` off its owner, unblockable, then its
@@ -429,7 +429,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
                 let Lent { fight, taken } = resumed!();
                 fight.act_on(
                     PileAct::Exhaust,
-                    crate::behaviour::cards::selected::<V>(taken).as_slice(),
+                    crate::behaviour::paused::selected::<V>(taken).as_slice(),
                 );
             } else {
                 exhaust_random_in_hand::<V, _>(resumed!().fight);
@@ -446,7 +446,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             let Lent { fight, taken } = resumed!();
             fight.act_on(
                 PileAct::Exhaust,
-                crate::behaviour::cards::selected::<V>(taken).as_slice(),
+                crate::behaviour::paused::selected::<V>(taken).as_slice(),
             );
             let strength = fight.var(V::CardVar::STRENGTH_POWER);
             fight.apply_to_actor(V::Power::STRENGTH_POWER, PowerAmount::Counted(strength));
@@ -498,7 +498,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
                 let Lent { fight, taken } = resumed!();
                 upgrade::<V, _>(
                     &mut **fight,
-                    crate::behaviour::cards::selected::<V>(taken).as_slice(),
+                    crate::behaviour::paused::selected::<V>(taken).as_slice(),
                 );
             }
         }
@@ -533,7 +533,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
     }
 }
 
-crate::behaviour::cards::paused_play!(Ironclad);
+crate::behaviour::paused::paused_play!(Card, crate::behaviour::cards::Resume::Ironclad);
 
 /// `Dismantle`: its damage to the target, twice where the target carries
 /// Vulnerable.

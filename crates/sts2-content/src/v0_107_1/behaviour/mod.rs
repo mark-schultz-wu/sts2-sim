@@ -261,10 +261,10 @@ impl crate::build::OwnRules for V {
         powers::own_power_decide_hook(power, amount, held, state, hook)
     }
 
-    fn own_potion_use<F: sts2_core::Fight<V>>(
+    fn own_potion_use<'a, K: sts2_core::FightKind<V>>(
         potion: <V as sts2_core::ContentVersion>::Potion,
-        fight: &mut F,
-    ) -> Option<crate::behaviour::Played<V, F::Kind>> {
+        fight: &mut K::Fight<'a>,
+    ) -> Option<crate::behaviour::Played<V, K>> {
         potions::own_potion_use(potion, fight)
     }
 

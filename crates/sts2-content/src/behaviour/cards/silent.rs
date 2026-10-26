@@ -283,8 +283,8 @@ pub(super) fn on_play<'a, V: crate::Build, K: FightKind<V>>(
 /// end, yielding each question it stops on. Each step is lent the fight, and
 /// after a question the answer.
 #[diapause::coroutine(
-    yield = crate::behaviour::cards::Ask<V>,
-    resume = for<'f, 'a> crate::behaviour::cards::Lent<'f, 'a, V, K>
+    yield = crate::behaviour::paused::Ask<V>,
+    resume = for<'f, 'a> crate::behaviour::paused::Lent<'f, 'a, V, K>
 )]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
@@ -298,7 +298,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
                 scaling: Scaling::Dynamic,
             });
             fight.apply(block);
-            yield_!(crate::behaviour::cards::Ask::Asking {
+            yield_!(crate::behaviour::paused::Ask::Asking {
                 pile: Pile::Hand,
                 selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
             });
@@ -313,7 +313,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
                 .ok()
                 .and_then(nonmax::NonMaxUsize::new)
                 .unwrap_or_else(|| unimplemented!("Prepared discarding {cards} cards"));
-            yield_!(crate::behaviour::cards::Ask::Asking {
+            yield_!(crate::behaviour::paused::Ask::Asking {
                 pile: Pile::Hand,
                 selection: Selection::Exactly(count),
             });
@@ -325,7 +325,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             let fight = &mut *resumed!().fight;
             hit_target::<V, _>(fight, 1);
             fight.draw(1);
-            yield_!(crate::behaviour::cards::Ask::Asking {
+            yield_!(crate::behaviour::paused::Ask::Asking {
                 pile: Pile::Hand,
                 selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
             });
@@ -336,7 +336,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
         __c0 if __c0 == V::Card::ACROBATICS => {
             let fight = &mut *resumed!().fight;
             fight.draw(fight.var(V::CardVar::CARDS));
-            yield_!(crate::behaviour::cards::Ask::Asking {
+            yield_!(crate::behaviour::paused::Ask::Asking {
                 pile: Pile::Hand,
                 selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
             });
@@ -360,13 +360,13 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
                         && !fight.card_keyword_this_turn(held, CardKeyword::Sly)
                 })
                 .collect();
-            yield_!(crate::behaviour::cards::Ask::AskingAmong {
+            yield_!(crate::behaviour::paused::Ask::AskingAmong {
                 cards,
                 selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
             });
             // `CardCmd.ApplySingleTurnSly` on the one taken.
-            let crate::behaviour::cards::Lent { fight, taken } = resumed!();
-            for &picked in crate::behaviour::cards::selected::<V>(taken).as_slice() {
+            let crate::behaviour::paused::Lent { fight, taken } = resumed!();
+            for &picked in crate::behaviour::paused::selected::<V>(taken).as_slice() {
                 fight.modify_card(
                     picked,
                     Change::AddKeyword(CardKeyword::Sly),
@@ -378,12 +378,12 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
         // `NightmarePower` on its owner, which keeps a clone of it, where a
         // card was taken.
         __c0 if __c0 == V::Card::NIGHTMARE => {
-            yield_!(crate::behaviour::cards::Ask::Asking {
+            yield_!(crate::behaviour::paused::Ask::Asking {
                 pile: Pile::Hand,
                 selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
             });
-            let crate::behaviour::cards::Lent { fight, taken } = resumed!();
-            if let Some(picked) = crate::behaviour::cards::selected::<V>(taken).one_or_none() {
+            let crate::behaviour::paused::Lent { fight, taken } = resumed!();
+            if let Some(picked) = crate::behaviour::paused::selected::<V>(taken).one_or_none() {
                 let owner = fight.actor();
                 fight.apply_to_actor(V::Power::NIGHTMARE_POWER, PowerAmount::Counted(NIGHTMARE));
                 fight.keep_card_on_power(owner, V::Power::NIGHTMARE_POWER, picked);
@@ -396,13 +396,13 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
                 .ok()
                 .and_then(nonmax::NonMaxUsize::new)
                 .expect("a count of cards is not negative");
-            yield_!(crate::behaviour::cards::Ask::Asking {
+            yield_!(crate::behaviour::paused::Ask::Asking {
                 pile: Pile::Hand,
                 selection: Selection::Exactly(count),
             });
             discard_taken::<V, K>(resumed!());
             if resumed!().fight.waiting() {
-                yield_!(crate::behaviour::cards::Ask::Waiting);
+                yield_!(crate::behaviour::paused::Ask::Waiting);
             }
             hidden_daggers_shivs::<V, _>(resumed!().fight);
         }
@@ -420,8 +420,8 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
                 waits
             };
             if waits {
-                yield_!(crate::behaviour::cards::Ask::Waiting);
-                let crate::behaviour::cards::Lent { fight, taken } = resumed!();
+                yield_!(crate::behaviour::paused::Ask::Waiting);
+                let crate::behaviour::paused::Lent { fight, taken } = resumed!();
                 let drew = match taken.take() {
                     Some(sts2_core::Taken::Drew(drew)) => drew,
                     _ => sts2_core::Drew::new(),
@@ -437,7 +437,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             let count: u8 = u8::try_from(hand.len()).expect("a hand's worth fits a u8");
             fight.act_on(sts2_core::PileAct::Discard, &hand);
             if resumed!().fight.waiting() {
-                yield_!(crate::behaviour::cards::Ask::Waiting);
+                yield_!(crate::behaviour::paused::Ask::Waiting);
             }
             storm_of_steel_discarded::<V, _>(resumed!().fight, count);
         }
@@ -448,7 +448,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             let hand = fight.cards_in(Pile::Hand);
             fight.act_on(sts2_core::PileAct::Discard, &hand);
             if resumed!().fight.waiting() {
-                yield_!(crate::behaviour::cards::Ask::Waiting);
+                yield_!(crate::behaviour::paused::Ask::Waiting);
             }
             shadow_step_discarded::<V, _>(resumed!().fight);
         }
@@ -462,7 +462,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             let fatal: bool = fight.death_triggers_fatal(target);
             let results = hit_target::<V, _>(fight, 1);
             if resumed!().fight.waiting() {
-                yield_!(crate::behaviour::cards::Ask::Waiting);
+                yield_!(crate::behaviour::paused::Ask::Waiting);
                 let fight = &mut *resumed!().fight;
                 let results = fight.waited_attack_results();
                 the_hunt_hit::<V, _>(fight, fatal && results.iter().any(|result| result.killed));
@@ -478,7 +478,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
         __c0 if __c0 == V::Card::LEADING_STRIKE => {
             hit_target::<V, _>(resumed!().fight, 1);
             if resumed!().fight.waiting() {
-                yield_!(crate::behaviour::cards::Ask::Waiting);
+                yield_!(crate::behaviour::paused::Ask::Waiting);
             }
             leading_strike_hit::<V, _>(resumed!().fight);
         }
@@ -488,16 +488,16 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
 
 /// `CardCmd.Discard` of the cards a selection took.
 fn discard_taken<V: crate::Build, K: FightKind<V>>(
-    lent: &mut crate::behaviour::cards::Lent<'_, '_, V, K>,
+    lent: &mut crate::behaviour::paused::Lent<'_, '_, V, K>,
 ) {
-    let crate::behaviour::cards::Lent { fight, taken } = lent;
+    let crate::behaviour::paused::Lent { fight, taken } = lent;
     fight.act_on(
         sts2_core::PileAct::Discard,
-        crate::behaviour::cards::selected::<V>(taken).as_slice(),
+        crate::behaviour::paused::selected::<V>(taken).as_slice(),
     );
 }
 
-crate::behaviour::cards::paused_play!(Silent);
+crate::behaviour::paused::paused_play!(Card, crate::behaviour::cards::Resume::Silent);
 
 /// `Malaise`: its X, one more once upgraded, off the target's Strength, then
 /// as Weak on it.

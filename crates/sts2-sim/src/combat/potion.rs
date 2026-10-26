@@ -34,7 +34,7 @@ pub(crate) fn drink<V: Rules>(
     live.players[seat].effect_depth += 1;
     let mut board =
         Board::for_card(seat, live, streams.combat(), belts, ascension, target, None).blocking();
-    let used = V::on_use(potion, &mut board);
+    let used = V::on_use::<super::board::BoardKind<V>>(potion, &mut board);
     let ended = board.ended();
     let skipped = std::mem::take(&mut board.skipped);
 

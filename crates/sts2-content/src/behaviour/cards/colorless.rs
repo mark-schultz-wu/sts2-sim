@@ -3,7 +3,8 @@
 use crate::behaviour::Played;
 use sts2_core::{CardKind, EventHook, Fight, FightKind, HookEffect, Pile, PileAct, Selection};
 
-use crate::behaviour::cards::{Ask, Lent, Number};
+use crate::behaviour::cards::Number;
+use crate::behaviour::paused::{Ask, Lent};
 
 /// Cards a play offers from a pile.
 type Cards<V> = smallvec::SmallVec<[sts2_core::CardAt<V>; sts2_core::MAX_CARDS_IN_HAND]>;
@@ -233,7 +234,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
                 let Lent { fight, taken } = resumed!();
                 fight.act_on(
                     PileAct::Exhaust,
-                    crate::behaviour::cards::selected::<V>(taken).as_slice(),
+                    crate::behaviour::paused::selected::<V>(taken).as_slice(),
                 );
             }
         }
@@ -249,7 +250,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             let Lent { fight, taken } = resumed!();
             fight.act_on(
                 PileAct::OntoDrawTop,
-                crate::behaviour::cards::selected::<V>(taken).as_slice(),
+                crate::behaviour::paused::selected::<V>(taken).as_slice(),
             );
         }
         // `BeatDown`: up to its `Cards` of the discard pile's playable
@@ -294,7 +295,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
     }
 }
 
-crate::behaviour::cards::paused_play!(Colorless);
+crate::behaviour::paused::paused_play!(Card, crate::behaviour::cards::Resume::Colorless);
 
 /// Its damage to the target, as one attack, and the attack's results.
 fn strike<V: crate::Build, F: Fight<V>>(fight: &mut F) -> sts2_core::AttackResults<V> {
@@ -338,7 +339,7 @@ fn into_hand_taken<V: crate::Build, K: FightKind<V>>(lent: &mut Lent<'_, '_, V, 
     let Lent { fight, taken } = lent;
     fight.act_on(
         PileAct::IntoHand,
-        crate::behaviour::cards::selected::<V>(taken).as_slice(),
+        crate::behaviour::paused::selected::<V>(taken).as_slice(),
     );
 }
 
@@ -346,7 +347,7 @@ fn into_hand_taken<V: crate::Build, K: FightKind<V>>(lent: &mut Lent<'_, '_, V, 
 /// hand, of the one a choice took.
 fn free_into_hand<V: crate::Build, K: FightKind<V>>(lent: &mut Lent<'_, '_, V, K>) {
     let Lent { fight, taken } = lent;
-    if let Some(chosen) = crate::behaviour::cards::chosen::<V>(taken) {
+    if let Some(chosen) = crate::behaviour::paused::chosen::<V>(taken) {
         for at in fight.add_generated_cards(chosen, Pile::Hand, 1) {
             crate::behaviour::free_this_turn(&mut **fight, at);
         }

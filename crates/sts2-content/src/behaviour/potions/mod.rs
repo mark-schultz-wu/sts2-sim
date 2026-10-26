@@ -11,16 +11,16 @@ use crate::ids::PotionIds as _;
 use crate::vars::PotionVars as _;
 
 mod defect;
-mod event;
-mod ironclad;
+pub(crate) mod event;
+pub(crate) mod ironclad;
 mod necrobinder;
 mod regent;
-mod shared;
+pub(crate) mod shared;
 mod silent;
 mod token;
 
 use crate::behaviour::Played;
-use sts2_core::{Fight, PotionTable, Taken};
+use sts2_core::{PotionTable, Taken};
 
 use crate::generated::cards::TargetType;
 use crate::generated::potions::PotionPool;
@@ -31,11 +31,13 @@ pub(crate) type Number = i32;
 /// `CardSelectorPrefs(prompt, 0, 999999999)`: any number of cards.
 pub(super) const ANY_NUMBER: usize = 999_999_999;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Resume {
-    Shared(shared::Resume),
-    Event(event::Resume),
-    Ironclad(ironclad::Resume),
+/// Where a potion that waits on a question resumes, under the pool whose
+/// potion it is.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Resume<V: crate::Build, K: sts2_core::FightKind<V>> {
+    Shared(shared::paused::State<V, K>),
+    Event(event::paused::State<V, K>),
+    Ironclad(ironclad::paused::State<V, K>),
 }
 
 /// `ShouldDie`, which only `FairyInABottle` answers in this build: no for
@@ -79,22 +81,22 @@ pub(crate) fn event_hook<V: crate::Build>(
 /// # Panics
 ///
 /// A potion from a pool nobody has ported, and a potion its own pool has not.
-pub(crate) fn on_use<V: crate::Build, F: Fight<V>>(
+pub(crate) fn on_use<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
     potion: V::Potion,
-    fight: &mut F,
-) -> Played<V, F::Kind> {
+    fight: &mut K::Fight<'a>,
+) -> Played<V, K> {
     // A potion whose rule is the build's own.
-    if let Some(played) = V::own_potion_use(potion, fight) {
+    if let Some(played) = V::own_potion_use::<K>(potion, fight) {
         return played;
     }
     match potion.pool() {
-        PotionPool::Shared => shared::on_use::<V, _>(potion, fight),
+        PotionPool::Shared => shared::on_use::<V, K>(potion, fight),
         PotionPool::Silent => silent::on_use::<V, _>(potion, fight),
-        PotionPool::Ironclad => ironclad::on_use::<V, _>(potion, fight),
+        PotionPool::Ironclad => ironclad::on_use::<V, K>(potion, fight),
         PotionPool::Defect => defect::on_use::<V, _>(potion, fight),
         PotionPool::Necrobinder => necrobinder::on_use::<V, _>(potion, fight),
         PotionPool::Regent => regent::on_use::<V, _>(potion, fight),
-        PotionPool::Event => event::on_use::<V, _>(potion, fight),
+        PotionPool::Event => event::on_use::<V, K>(potion, fight),
         PotionPool::Token => token::on_use::<V, _>(potion, fight),
         _ => unimplemented!("what {potion:?} does when it is drunk"),
     }
@@ -161,20 +163,16 @@ pub(crate) fn on_use_on_run<V: crate::Build>(
     }
 }
 
-pub(crate) fn resume<V: crate::Build, F: Fight<V>>(
-    fight: &mut F,
-    at: Resume,
-    answer: Taken<V>,
-) -> Played<V, F::Kind> {
+/// A potion that stood still on a question, with the answer it waited for.
+pub(crate) fn resume<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
+    fight: &mut K::Fight<'a>,
+    at: Resume<V, K>,
+    taken: Taken<V>,
+) -> Played<V, K> {
     match at {
-        Resume::Shared(at) => shared::resume::<V, _>(fight, at, answer),
-        Resume::Event(at) => event::resume::<V, _>(fight, at, answer),
-        Resume::Ironclad(at) => {
-            let Taken::Selected(picked) = answer else {
-                unreachable!("an Ironclad potion asks for cards of a pile")
-            };
-            ironclad::resume::<V, _>(fight, at, picked)
-        }
+        Resume::Shared(paused) => shared::resume::<V, K>(fight, paused, taken),
+        Resume::Event(paused) => event::resume::<V, K>(fight, paused, taken),
+        Resume::Ironclad(paused) => ironclad::resume::<V, K>(fight, paused, taken),
     }
 }
 

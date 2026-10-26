@@ -1,7 +1,7 @@
 //! The event cards the generator leaves to a hand port.
 
 use crate::behaviour::Played;
-use crate::behaviour::cards::{Ask, Lent};
+use crate::behaviour::paused::{Ask, Lent};
 use crate::ids::{CardIds as _, CardVarIds as _, PowerIds as _};
 use sts2_core::{
     Amount, Change, CostPool, CreatureView as _, Effect, Fight, FightKind, Lasting, Pile, PileAct,
@@ -244,7 +244,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
                 selection: ONE,
             });
             let Lent { fight, taken } = resumed!();
-            if let Some(picked) = crate::behaviour::cards::selected::<V>(taken).one_or_none() {
+            if let Some(picked) = crate::behaviour::paused::selected::<V>(taken).one_or_none() {
                 // The game's loop reads its count before each pass.
                 let mut pass = 0;
                 while pass < fight.var(V::CardVar::CARDS) {
@@ -257,14 +257,14 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
     }
 }
 
-crate::behaviour::cards::paused_play!(Event);
+crate::behaviour::paused::paused_play!(Card, crate::behaviour::cards::Resume::Event);
 
 /// `CardPileCmd.Add` of the cards a pick took, into hand.
 fn into_hand_taken<V: crate::Build, K: FightKind<V>>(lent: &mut Lent<'_, '_, V, K>) {
     let Lent { fight, taken } = lent;
     fight.act_on(
         PileAct::IntoHand,
-        crate::behaviour::cards::selected::<V>(taken).as_slice(),
+        crate::behaviour::paused::selected::<V>(taken).as_slice(),
     );
 }
 

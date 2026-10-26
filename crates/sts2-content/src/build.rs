@@ -657,10 +657,10 @@ pub trait OwnRules: ContentVersion + Sized {
 
     /// What a potion of the build's own does when it is drunk in a fight, or
     /// nothing for a shared one.
-    fn own_potion_use<F: sts2_core::Fight<Self>>(
+    fn own_potion_use<'a, K: sts2_core::FightKind<Self>>(
         potion: Self::Potion,
-        fight: &mut F,
-    ) -> Option<crate::behaviour::Played<Self, F::Kind>>
+        fight: &mut K::Fight<'a>,
+    ) -> Option<crate::behaviour::Played<Self, K>>
     where
         Self: Build;
 
@@ -1027,11 +1027,11 @@ macro_rules! rules {
                     crate::behaviour::rules::card_upgrade::<Self>(card)
                 }
 
-                fn on_use<F: Fight<Self>>(
+                fn on_use<'a, K: sts2_core::FightKind<Self>>(
                     potion: Self::Potion,
-                    fight: &mut F,
-                ) -> crate::behaviour::Played<Self, F::Kind> {
-                    crate::behaviour::rules::on_use::<Self, F>(potion, fight)
+                    fight: &mut K::Fight<'a>,
+                ) -> crate::behaviour::Played<Self, K> {
+                    crate::behaviour::rules::on_use::<Self, K>(potion, fight)
                 }
 
                 fn on_use_on_run(

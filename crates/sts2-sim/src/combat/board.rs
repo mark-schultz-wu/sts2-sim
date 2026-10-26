@@ -2411,7 +2411,7 @@ impl<'a, V: Rules> Board<'a, V> {
             unimplemented!("{listener:?} asking for {effect:?} before a potion")
         }
         let actor = std::mem::replace(&mut self.actor, saved);
-        let played = V::on_use(potion, self);
+        let played = V::on_use::<BoardKind<V>>(potion, self);
         self.actor = actor;
         if !matches!(played, sts2_core::Played::Done) {
             unimplemented!("{potion:?} stopping to ask as it keeps {saved:?} alive");

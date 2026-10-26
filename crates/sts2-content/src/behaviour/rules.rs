@@ -377,11 +377,11 @@ pub(crate) fn card_upgrade<V: crate::Build>(card: V::Card) -> &'static [sts2_cor
     crate::behaviour::cards::upgrade::<V>(card)
 }
 
-pub(crate) fn on_use<V: crate::Build, F: sts2_core::Fight<V>>(
+pub(crate) fn on_use<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
     potion: V::Potion,
-    fight: &mut F,
-) -> crate::behaviour::Played<V, F::Kind> {
-    crate::behaviour::potions::on_use(potion, fight)
+    fight: &mut K::Fight<'a>,
+) -> crate::behaviour::Played<V, K> {
+    crate::behaviour::potions::on_use::<V, K>(potion, fight)
 }
 
 pub(crate) fn on_use_on_run<V: crate::Build>(
@@ -416,7 +416,7 @@ pub(crate) fn resume_play<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
             crate::behaviour::cards::resume::<V, K>(fight, at, taken)
         }
         (crate::behaviour::Resume::Potion(at), chosen) => {
-            crate::behaviour::potions::resume(fight, at, chosen)
+            crate::behaviour::potions::resume::<V, K>(fight, at, chosen)
         }
         (crate::behaviour::Resume::Monster(at), sts2_core::Taken::Chosen(card)) => {
             crate::behaviour::monsters::resume(fight, at, card)

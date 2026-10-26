@@ -13,6 +13,7 @@ pub mod events;
 pub(crate) mod modifiers;
 pub(crate) mod monsters;
 pub(crate) mod orbs;
+pub(crate) mod paused;
 pub(crate) mod potions;
 pub(crate) mod powers;
 pub(crate) mod relics;
@@ -31,7 +32,7 @@ pub type Played<V, K> = sts2_core::Played<V, Resume<V, K>>;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Resume<V: crate::Build, K: FightKind<V>> {
     Card(crate::behaviour::cards::Resume<V, K>),
-    Potion(crate::behaviour::potions::Resume),
+    Potion(crate::behaviour::potions::Resume<V, K>),
     Monster(crate::behaviour::monsters::Resume),
 }
 
@@ -49,8 +50,10 @@ impl<V: crate::Build, K: FightKind<V>> From<crate::behaviour::monsters::Resume> 
     }
 }
 
-impl<V: crate::Build, K: FightKind<V>> From<crate::behaviour::potions::Resume> for Resume<V, K> {
-    fn from(at: crate::behaviour::potions::Resume) -> Self {
+impl<V: crate::Build, K: FightKind<V>> From<crate::behaviour::potions::Resume<V, K>>
+    for Resume<V, K>
+{
+    fn from(at: crate::behaviour::potions::Resume<V, K>) -> Self {
         Resume::Potion(at)
     }
 }

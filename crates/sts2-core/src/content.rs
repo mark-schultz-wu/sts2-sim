@@ -8096,10 +8096,10 @@ pub trait Rules: Hooks + Engine {
     ///
     /// Panics for a potion nobody has ported, as [`Rules::on_play`] does for a
     /// card.
-    fn on_use<F: Fight<Self>>(
+    fn on_use<'a, K: FightKind<Self>>(
         potion: Self::Potion,
-        fight: &mut F,
-    ) -> Played<Self, Self::Resume<F::Kind>>;
+        fight: &mut K::Fight<'a>,
+    ) -> Played<Self, Self::Resume<K>>;
 
     /// What `PotionModel.OnUse` asks of the run rather than of a fight.
     /// Outside a fight, where `AnyTime` lets a player drink, that is all of

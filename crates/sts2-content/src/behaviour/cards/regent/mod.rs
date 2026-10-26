@@ -1,7 +1,8 @@
 //! The Regent's cards the generator leaves to a hand port, filed by rarity.
 
 use crate::behaviour::Played;
-use crate::behaviour::cards::{Ask, Lent, Number};
+use crate::behaviour::cards::Number;
+use crate::behaviour::paused::{Ask, Lent};
 use crate::ids::{CardIds as _, CardVarIds as _, PowerIds as _};
 use sts2_core::{CardIdent, Fight, FightKind, Pile, PowerAmount};
 
@@ -217,7 +218,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
                 selection: ONE,
             });
             let picked: Option<sts2_core::CardAt<V>> =
-                match crate::behaviour::cards::selected::<V>(&resumed!().taken).as_slice() {
+                match crate::behaviour::paused::selected::<V>(&resumed!().taken).as_slice() {
                     [] => None,
                     &[skill] => Some(skill),
                     many => unreachable!("Decisions, Decisions picked {} cards", many.len()),
@@ -262,7 +263,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
                 offered,
                 skippable: true,
             });
-            if let Some(taken) = crate::behaviour::cards::chosen::<V>(&resumed!().taken) {
+            if let Some(taken) = crate::behaviour::paused::chosen::<V>(&resumed!().taken) {
                 resumed!().fight.add_generated_cards(taken, Pile::Hand, 1);
             }
         }
@@ -280,7 +281,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
                 selection: ONE,
             });
             let Lent { fight, taken } = resumed!();
-            if let Some(picked) = crate::behaviour::cards::selected::<V>(taken).one_or_none() {
+            if let Some(picked) = crate::behaviour::paused::selected::<V>(taken).one_or_none() {
                 // The game's loop reads its count before each pass.
                 let mut pass = 0;
                 while pass < fight.var(V::CardVar::REPEAT) {
@@ -309,7 +310,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             let Lent { fight, taken } = resumed!();
             common::begone_transform::<V, _>(
                 &mut **fight,
-                crate::behaviour::cards::selected::<V>(taken),
+                crate::behaviour::paused::selected::<V>(taken),
             );
         }
         // `Charge`: its `Cards` of the draw pile picked, each
@@ -403,7 +404,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
     }
 }
 
-crate::behaviour::cards::paused_play!(Regent);
+crate::behaviour::paused::paused_play!(Card, crate::behaviour::cards::Resume::Regent);
 
 /// Its damage to the target, as one attack, and the attack's results.
 fn strike<V: crate::Build, F: Fight<V>>(fight: &mut F) -> sts2_core::AttackResults<V> {
@@ -660,7 +661,7 @@ fn transform_taken<V: crate::Build, K: FightKind<V>>(
 ) {
     let Lent { fight, taken } = lent;
     let upgrade = u8::from(fight.upgraded());
-    for &picked in crate::behaviour::cards::selected::<V>(taken).as_slice() {
+    for &picked in crate::behaviour::paused::selected::<V>(taken).as_slice() {
         let mut into = CardIdent::new(token);
         into.upgrade = upgrade;
         fight.transform(picked, into);
@@ -672,6 +673,6 @@ fn put_back_taken<V: crate::Build, K: FightKind<V>>(lent: &mut Lent<'_, '_, V, K
     let Lent { fight, taken } = lent;
     fight.act_on(
         sts2_core::PileAct::OntoDrawTop,
-        crate::behaviour::cards::selected::<V>(taken).as_slice(),
+        crate::behaviour::paused::selected::<V>(taken).as_slice(),
     );
 }

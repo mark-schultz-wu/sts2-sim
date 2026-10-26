@@ -5,7 +5,8 @@ use sts2_core::{
     Amount, CardVars, CreatureView as _, Effect, Fight, FightKind, Opponents, Scaling,
 };
 
-use crate::behaviour::cards::{Ask, Lent, Number};
+use crate::behaviour::cards::Number;
+use crate::behaviour::paused::{Ask, Lent};
 use crate::generated::cards::TargetType;
 use crate::ids::{CardIds as _, CardVarIds as _, PowerIds as _};
 
@@ -165,7 +166,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
     }
 }
 
-crate::behaviour::cards::paused_play!(Token);
+crate::behaviour::paused::paused_play!(Card, crate::behaviour::cards::Resume::Token);
 
 /// `SovereignBlade`'s attack: its damage, as many times as it repeats, to
 /// every opponent under Seeking Edge.

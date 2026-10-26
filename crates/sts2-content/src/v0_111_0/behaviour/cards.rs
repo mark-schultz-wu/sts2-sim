@@ -2,7 +2,8 @@
 //! hand over through [`crate::build::OwnRules`].
 
 use crate::behaviour::Played;
-use crate::behaviour::cards::{Ask, Lent, Listed};
+use crate::behaviour::cards::Listed;
+use crate::behaviour::paused::{Ask, Lent};
 use sts2_core::{Amount, Effect, Fight, FightKind, Scaling};
 
 use super::super::V0_111_0 as V;
@@ -391,7 +392,7 @@ pub fn paused<K: FightKind<V>>(card: Cards) {
                 skippable: false,
             });
             let Lent { fight, taken } = resumed!();
-            if let Some(chosen) = crate::behaviour::cards::chosen::<V>(taken) {
+            if let Some(chosen) = crate::behaviour::paused::chosen::<V>(taken) {
                 for at in fight.add_generated_cards(chosen, sts2_core::Pile::Hand, 1) {
                     crate::behaviour::free_this_turn(&mut **fight, at);
                 }

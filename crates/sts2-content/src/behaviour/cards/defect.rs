@@ -1,7 +1,7 @@
 //! The Defect's cards the generator leaves to a hand port.
 
 use crate::behaviour::Played;
-use crate::behaviour::cards::{Ask, Lent};
+use crate::behaviour::paused::{Ask, Lent};
 use crate::ids::{CardIds as _, CardVarIds as _, OrbIds as _, PowerIds as _};
 use sts2_core::{Amount, Effect, Fight, FightKind, Pile, PileAct, PowerAmount, Scaling};
 
@@ -591,7 +591,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             let Lent { fight, taken } = resumed!();
             fight.act_on(
                 PileAct::Exhaust,
-                crate::behaviour::cards::selected::<V>(taken).as_slice(),
+                crate::behaviour::paused::selected::<V>(taken).as_slice(),
             );
             let energy = PowerAmount::Counted(fight.var(V::CardVar::ENERGY));
             fight.apply_to_actor(V::Power::ENERGY_NEXT_TURN_POWER, energy);
@@ -647,7 +647,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             let Lent { fight, taken } = resumed!();
             fight.act_on(
                 PileAct::IntoHand,
-                crate::behaviour::cards::selected::<V>(taken).as_slice(),
+                crate::behaviour::paused::selected::<V>(taken).as_slice(),
             );
         }
         // `Scrape`: its damage to the target, then its `Cards` drawn, and
@@ -688,7 +688,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
     }
 }
 
-crate::behaviour::cards::paused_play!(Defect);
+crate::behaviour::paused::paused_play!(Card, crate::behaviour::cards::Resume::Defect);
 
 /// Its damage to the target, `hits` times, as one attack.
 fn hit_target<V: crate::Build, F: Fight<V>>(fight: &mut F, hits: crate::behaviour::cards::Number) {
