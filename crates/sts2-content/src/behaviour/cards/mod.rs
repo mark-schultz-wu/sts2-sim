@@ -22,7 +22,7 @@ type Number = i32;
 
 mod colorless;
 mod curse;
-mod defect;
+pub(crate) mod defect;
 pub(crate) mod event;
 pub(crate) mod ironclad;
 pub(crate) mod necrobinder;
@@ -641,7 +641,8 @@ pub(crate) fn calculated<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Resume<V: crate::Build, K: sts2_core::FightKind<V>> {
     Colorless(colorless::Resume),
-    Defect(defect::Resume<V>),
+    /// A Defect card's play, paused where it asked.
+    Defect(defect::paused::State<V, K>),
     Event(event::Resume<V>),
     /// An Ironclad card's play, paused where it asked.
     Ironclad(ironclad::paused::State<V, K>),
@@ -765,7 +766,7 @@ pub(crate) fn selected<V: crate::Build>(
 
 /// How many cards [`Left`] holds. Most lists are a hand's worth, but
 /// Eidolon's is every Ethereal card in the exhaust pile.
-const LEFT: usize = 24;
+pub(crate) const LEFT: usize = 24;
 
 /// The cards a play still has to go through once it waited, in the order
 /// the game's list took them. A card that joined the pile meanwhile is not
@@ -853,7 +854,7 @@ pub(crate) fn on_play<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
         CardFiled::Silent => silent::on_play::<V, K>(card, fight),
         CardFiled::Regent => regent::on_play::<V, _>(card, fight),
         CardFiled::Necrobinder => necrobinder::on_play::<V, _>(card, fight),
-        CardFiled::Defect => defect::on_play::<V, _>(card, fight),
+        CardFiled::Defect => defect::on_play::<V, K>(card, fight),
         CardFiled::Colorless => colorless::on_play::<V, _>(card, fight),
         CardFiled::Curse | CardFiled::Quest | CardFiled::Deprecated => {
             generated_from::<V, _>(card, fight, 0)
@@ -1351,12 +1352,11 @@ pub(crate) fn resume_play<V: crate::Build, F: Fight<V>>(
 ) -> Played<V, F::Kind> {
     match at {
         Resume::Colorless(at) => colorless::resume_play::<V, _>(fight, at, chosen),
-        Resume::Defect(at) => defect::resume_play::<V, _>(fight, at, chosen),
         Resume::Event(at) => event::resume_play::<V, _>(fight, at, chosen),
         Resume::Necrobinder(at) => necrobinder::resume_play::<V, _>(fight, at, chosen),
         Resume::Regent(at) => regent::resume_play::<V, _>(fight, at, chosen),
         Resume::Token(at) => unreachable!("{at:?} waits on a question, not a pick"),
-        Resume::Ironclad(_) | Resume::Silent(_) => {
+        Resume::Defect(_) | Resume::Ironclad(_) | Resume::Silent(_) => {
             unreachable!("a coroutine's play resumes through it")
         }
         Resume::Generated(card, _) => {
@@ -1374,7 +1374,6 @@ pub(crate) fn resume_drew<V: crate::Build, F: Fight<V>>(
     drew: &[sts2_core::CardId<V>],
 ) -> Played<V, F::Kind> {
     match at {
-        Resume::Defect(at) => defect::resume_drew::<V, _>(fight, at, drew),
         Resume::Own(card, from, _) => V::own_card_drew_from(card, fight, from, drew),
         at => resume_waited::<V, _>(fight, at),
     }
@@ -1388,11 +1387,10 @@ pub(crate) fn resume_waited<V: crate::Build, F: Fight<V>>(
 ) -> Played<V, F::Kind> {
     match at {
         Resume::Colorless(at) => colorless::resume_waited::<V, _>(fight, at),
-        Resume::Defect(at) => defect::resume_waited::<V, _>(fight, at),
         Resume::Event(at) => event::resume_waited::<V, _>(fight, at),
         Resume::Necrobinder(at) => necrobinder::resume_waited::<V, _>(fight, at),
         Resume::Regent(at) => regent::resume_waited::<V, _>(fight, at),
-        Resume::Ironclad(_) | Resume::Silent(_) => {
+        Resume::Defect(_) | Resume::Ironclad(_) | Resume::Silent(_) => {
             unreachable!("a coroutine's play resumes through it")
         }
         Resume::Token(at) => token::resume_waited::<V, _>(fight, at),

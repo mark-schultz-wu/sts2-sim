@@ -48,16 +48,16 @@ the coroutines, pinned, from the reviewed and patched copy in `vendor/`.
 Co-op fights wait for it, because each player's paused work is a
 coroutine in that player's queue.
 
-Done: `SetupPlayerTurn`, and the plays that stop in the Silent and
-Ironclad pools. Each pool's coroutine holds its paused plays, in place of
+Done: `SetupPlayerTurn`, and the plays that stop in the Silent, Ironclad
+and Defect pools. Each pool's coroutine holds its paused plays, in place of
 its hand-written `Resume` enum.
 
 The pools go first, because each stands alone and a recorded run proves
 it. The scheduler replaces the engine's `Deferred` work, which the pools
 do not touch. The order:
 
-1. The other card pools, one PR each: Defect, Necrobinder, Regent,
-   colorless, event and token cards.
+1. The other card pools, one PR each: Necrobinder, Regent, colorless,
+   event and token cards.
 2. The generated plays and the builds' own plays, `Resume::Generated` and
    `Resume::Own`.
 3. Potions and monster moves.
