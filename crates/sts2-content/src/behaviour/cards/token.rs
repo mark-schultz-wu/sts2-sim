@@ -1,29 +1,13 @@
 //! The cards a fight makes, which no deck holds.
 
 use crate::behaviour::Played;
-use sts2_core::{Amount, CardVars, CreatureView as _, Effect, Fight, Opponents, Scaling};
+use sts2_core::{
+    Amount, CardVars, CreatureView as _, Effect, Fight, FightKind, Opponents, Scaling,
+};
 
-use crate::behaviour::cards::Number;
+use crate::behaviour::cards::{Ask, Lent, Number};
 use crate::generated::cards::TargetType;
 use crate::ids::{CardIds as _, CardVarIds as _, PowerIds as _};
-
-/// Where a token card's play stops to ask something.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Resume {
-    /// `SovereignBlade`, after a question inside its attack was answered.
-    SovereignBladeHit,
-}
-
-/// The rest of a token card's play that stood still on a question its own
-/// command raised.
-pub(super) fn resume_waited<V: crate::Build, F: Fight<V>>(
-    fight: &mut F,
-    at: Resume,
-) -> Played<V, F::Kind> {
-    match at {
-        Resume::SovereignBladeHit => sovereign_blade_hit::<V, _>(fight),
-    }
-}
 
 /// What a card works out from the fight for a number it prints.
 pub(super) fn calculated<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
@@ -89,12 +73,12 @@ pub(super) fn computed_target<V: crate::Build>(
     }
 }
 
-pub(super) fn on_play<V: crate::Build, F: Fight<V>>(
+pub(super) fn on_play<'a, V: crate::Build, K: FightKind<V>>(
     card: V::Card,
-    fight: &mut F,
-) -> Played<V, F::Kind> {
+    fight: &mut K::Fight<'a>,
+) -> Played<V, K> {
     match card {
-        __c0 if __c0 == V::Card::SOVEREIGN_BLADE => sovereign_blade::<V, _>(fight),
+        __c0 if __c0 == V::Card::SOVEREIGN_BLADE => start::<V, K>(card, fight),
         __c0 if __c0 == <V::Card as crate::ids::CardIds>::SHIV => shiv::<V, _>(fight),
         __c0 if __c0 == V::Card::SWEEPING_GAZE => sweeping_gaze::<V, _>(fight),
         card => crate::behaviour::cards::generated_from::<V, _>(card, fight, 0),
@@ -157,13 +141,35 @@ fn shiv<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     Played::Done
 }
 
-/// `SovereignBlade`. Deal its damage, as many times as it repeats, to every
-/// opponent under Seeking Edge. Then, while its owner holds Parry, gain its
-/// `CalculatedBlock`.
-///
-/// The damage is this copy's own. A forge raises it, and the card that was
-/// forged twice hits for more than the one beside it.
-fn sovereign_blade<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
+/// A token card's play that can stop on a question: from its start to its
+/// end, yielding each question it stops on. Each step is lent the fight, and
+/// after a question the answer.
+#[diapause::coroutine(yield = Ask<V>, resume = for<'f, 'a> Lent<'f, 'a, V, K>)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
+    match card {
+        // `SovereignBlade`. Deal its damage, as many times as it repeats, to
+        // every opponent under Seeking Edge. Then, while its owner holds
+        // Parry, gain its `CalculatedBlock`.
+        //
+        // The damage is this copy's own. A forge raises it, and the card
+        // that was forged twice hits for more than the one beside it.
+        __c0 if __c0 == V::Card::SOVEREIGN_BLADE => {
+            sovereign_blade::<V, _>(resumed!().fight);
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            sovereign_blade_hit::<V, _>(resumed!().fight);
+        }
+        card => unreachable!("{card:?} never stops on a question"),
+    }
+}
+
+crate::behaviour::cards::paused_play!(Token);
+
+/// `SovereignBlade`'s attack: its damage, as many times as it repeats, to
+/// every opponent under Seeking Edge.
+fn sovereign_blade<V: crate::Build, F: Fight<V>>(fight: &mut F) {
     fight.attack(Scaling::Dynamic, |fight| {
         for _ in 0..fight.var(V::CardVar::REPEAT) {
             let targets = targets::<V, _>(fight, V::Power::SEEKING_EDGE_POWER);
@@ -181,17 +187,11 @@ fn sovereign_blade<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::
             });
         }
     });
-    if fight.waiting() {
-        return Played::Waiting {
-            at: crate::behaviour::cards::Resume::Token(Resume::SovereignBladeHit).into(),
-        };
-    }
-    sovereign_blade_hit::<V, _>(fight)
 }
 
 /// The rest of `SovereignBlade`, once its attack is over: its block where its
 /// owner carries Parry.
-fn sovereign_blade_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
+fn sovereign_blade_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) {
     // `GetOwnerParryAmount(this) > 0`.
     let actor = fight.actor();
     let parried = fight
@@ -210,5 +210,4 @@ fn sovereign_blade_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V,
         });
         fight.apply(block);
     }
-    Played::Done
 }

@@ -20,7 +20,7 @@ use crate::ids::{CardIds as _, CardVarIds as _, EventIds as _, OrbIds as _, Powe
 /// What the run holds a card's numbers as.
 type Number = i32;
 
-mod colorless;
+pub(crate) mod colorless;
 mod curse;
 pub(crate) mod defect;
 pub(crate) mod event;
@@ -29,7 +29,7 @@ pub(crate) mod necrobinder;
 pub(crate) mod regent;
 pub(crate) mod silent;
 mod status;
-mod token;
+pub(crate) mod token;
 
 /// The pool a card is filed under, which is the `Cards` member holding it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -640,7 +640,8 @@ pub(crate) fn calculated<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
 /// in a fight of kind `K`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Resume<V: crate::Build, K: sts2_core::FightKind<V>> {
-    Colorless(colorless::Resume),
+    /// A colorless card's play, paused where it asked.
+    Colorless(colorless::paused::State<V, K>),
     /// A Defect card's play, paused where it asked.
     Defect(defect::paused::State<V, K>),
     Event(event::Resume<V>),
@@ -652,7 +653,8 @@ pub enum Resume<V: crate::Build, K: sts2_core::FightKind<V>> {
     Regent(regent::paused::State<V, K>),
     /// A Silent card's play, paused where it asked.
     Silent(silent::paused::State<V, K>),
-    Token(token::Resume),
+    /// A token card's play, paused where it asked.
+    Token(token::paused::State<V, K>),
     /// A generated play, from the command after the one that left a
     /// question waiting.
     Generated(V::Card, u8),
@@ -877,13 +879,13 @@ pub(crate) fn on_play<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
         CardFiled::Regent => regent::on_play::<V, K>(card, fight),
         CardFiled::Necrobinder => necrobinder::on_play::<V, K>(card, fight),
         CardFiled::Defect => defect::on_play::<V, K>(card, fight),
-        CardFiled::Colorless => colorless::on_play::<V, _>(card, fight),
+        CardFiled::Colorless => colorless::on_play::<V, K>(card, fight),
         CardFiled::Curse | CardFiled::Quest | CardFiled::Deprecated => {
             generated_from::<V, _>(card, fight, 0)
         }
         CardFiled::Event => event::on_play::<V, _>(card, fight),
         CardFiled::Status => status::on_play::<V, _>(card, fight),
-        CardFiled::Token => token::on_play::<V, _>(card, fight),
+        CardFiled::Token => token::on_play::<V, K>(card, fight),
     }
 }
 
@@ -1373,14 +1375,14 @@ pub(crate) fn resume_play<V: crate::Build, F: Fight<V>>(
     chosen: sts2_core::SelectedCards<V>,
 ) -> Played<V, F::Kind> {
     match at {
-        Resume::Colorless(at) => colorless::resume_play::<V, _>(fight, at, chosen),
         Resume::Event(at) => event::resume_play::<V, _>(fight, at, chosen),
-        Resume::Token(at) => unreachable!("{at:?} waits on a question, not a pick"),
-        Resume::Defect(_)
+        Resume::Colorless(_)
+        | Resume::Defect(_)
         | Resume::Ironclad(_)
         | Resume::Necrobinder(_)
         | Resume::Regent(_)
-        | Resume::Silent(_) => {
+        | Resume::Silent(_)
+        | Resume::Token(_) => {
             unreachable!("a coroutine's play resumes through it")
         }
         Resume::Generated(card, _) => {
@@ -1410,16 +1412,16 @@ pub(crate) fn resume_waited<V: crate::Build, F: Fight<V>>(
     at: Resume<V, F::Kind>,
 ) -> Played<V, F::Kind> {
     match at {
-        Resume::Colorless(at) => colorless::resume_waited::<V, _>(fight, at),
         Resume::Event(at) => event::resume_waited::<V, _>(fight, at),
-        Resume::Defect(_)
+        Resume::Colorless(_)
+        | Resume::Defect(_)
         | Resume::Ironclad(_)
         | Resume::Necrobinder(_)
         | Resume::Regent(_)
-        | Resume::Silent(_) => {
+        | Resume::Silent(_)
+        | Resume::Token(_) => {
             unreachable!("a coroutine's play resumes through it")
         }
-        Resume::Token(at) => token::resume_waited::<V, _>(fight, at),
         Resume::Generated(card, from) => generated_from::<V, _>(card, fight, from),
         Resume::Own(card, from, left) => V::own_card_play_from(card, fight, from, left),
     }
@@ -1433,7 +1435,6 @@ pub(crate) fn resume_chosen<V: crate::Build, F: Fight<V>>(
     chosen: Option<sts2_core::CardIdent<V>>,
 ) -> Played<V, F::Kind> {
     match at {
-        Resume::Colorless(at) => colorless::resume_chosen::<V, _>(fight, at, chosen),
         Resume::Event(at) => event::resume_chosen::<V, _>(fight, at, chosen),
         at => unimplemented!("{at:?} resumed with a chosen card"),
     }
