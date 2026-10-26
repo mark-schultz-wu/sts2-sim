@@ -1,6 +1,6 @@
 ---
 name: blocker-grind
-description: One iteration of the single-player port loop. Take the first open item in BLOCKERS.md, fix it, update the list with what the fix found, and land it as the next stacked PR. Use it with /loop to grind the list down.
+description: One iteration of the port loop, solo and co-op. Take the first open item in BLOCKERS.md, fix it, update the list with what the fix found, and land it as the next stacked PR. Use it with /loop to grind the list down.
 ---
 
 # Blocker grind
