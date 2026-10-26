@@ -24,7 +24,7 @@ mod colorless;
 mod curse;
 mod defect;
 pub(crate) mod event;
-mod ironclad;
+pub(crate) mod ironclad;
 pub(crate) mod necrobinder;
 mod regent;
 pub(crate) mod silent;
@@ -643,7 +643,8 @@ pub enum Resume<V: crate::Build, K: sts2_core::FightKind<V>> {
     Colorless(colorless::Resume),
     Defect(defect::Resume<V>),
     Event(event::Resume<V>),
-    Ironclad(ironclad::Resume<V>),
+    /// An Ironclad card's play, paused where it asked.
+    Ironclad(ironclad::paused::State<V, K>),
     Necrobinder(necrobinder::Resume<V>),
     Regent(regent::Resume<V>),
     /// A Silent card's play, paused where it asked.
@@ -694,6 +695,52 @@ impl<V: crate::Build> Ask<V> {
         }
     }
 }
+
+/// `start`, `resume` and `settle` for a pool's `paused` coroutine, whose
+/// paused plays wait in `Resume::$pool`.
+macro_rules! paused_play {
+    ($pool:ident) => {
+        /// A play of [`paused`], from its start.
+        fn start<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
+            card: V::Card,
+            fight: &mut K::Fight<'a>,
+        ) -> crate::behaviour::Played<V, K> {
+            let mut play = paused::<V, K>(card);
+            let state = play.start_with(crate::behaviour::cards::Lent { fight, taken: None });
+            settle::<V, K>(play, state)
+        }
+
+        /// A paused play of [`paused`], with the answer it waited for.
+        pub(crate) fn resume<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
+            fight: &mut K::Fight<'a>,
+            mut play: paused::State<V, K>,
+            taken: sts2_core::Taken<V>,
+        ) -> crate::behaviour::Played<V, K> {
+            let state = diapause::Coroutine::resume(
+                &mut play,
+                crate::behaviour::cards::Lent {
+                    fight,
+                    taken: Some(taken),
+                },
+            );
+            settle::<V, K>(play, state)
+        }
+
+        /// How far a step of `play` got.
+        fn settle<V: crate::Build, K: sts2_core::FightKind<V>>(
+            play: paused::State<V, K>,
+            state: diapause::CoroutineState<crate::behaviour::cards::Ask<V>, ()>,
+        ) -> crate::behaviour::Played<V, K> {
+            match state {
+                diapause::CoroutineState::Complete(()) => crate::behaviour::Played::Done,
+                diapause::CoroutineState::Yielded(ask) => {
+                    ask.at(crate::behaviour::cards::Resume::$pool(play).into())
+                }
+            }
+        }
+    };
+}
+pub(crate) use paused_play;
 
 /// What a paused play is lent at each step: the fight, for that step alone,
 /// and the answer it waited for. Nothing on the first step.
@@ -802,7 +849,7 @@ pub(crate) fn on_play<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
         return played;
     }
     match V::card_filed(card) {
-        CardFiled::Ironclad => ironclad::on_play::<V, _>(card, fight),
+        CardFiled::Ironclad => ironclad::on_play::<V, K>(card, fight),
         CardFiled::Silent => silent::on_play::<V, K>(card, fight),
         CardFiled::Regent => regent::on_play::<V, _>(card, fight),
         CardFiled::Necrobinder => necrobinder::on_play::<V, _>(card, fight),
@@ -1306,11 +1353,12 @@ pub(crate) fn resume_play<V: crate::Build, F: Fight<V>>(
         Resume::Colorless(at) => colorless::resume_play::<V, _>(fight, at, chosen),
         Resume::Defect(at) => defect::resume_play::<V, _>(fight, at, chosen),
         Resume::Event(at) => event::resume_play::<V, _>(fight, at, chosen),
-        Resume::Ironclad(at) => ironclad::resume_play::<V, _>(fight, at, chosen),
         Resume::Necrobinder(at) => necrobinder::resume_play::<V, _>(fight, at, chosen),
         Resume::Regent(at) => regent::resume_play::<V, _>(fight, at, chosen),
         Resume::Token(at) => unreachable!("{at:?} waits on a question, not a pick"),
-        Resume::Silent(_) => unreachable!("a Silent play resumes through its coroutine"),
+        Resume::Ironclad(_) | Resume::Silent(_) => {
+            unreachable!("a coroutine's play resumes through it")
+        }
         Resume::Generated(card, _) => {
             unreachable!("generated {card:?} waits on a question, not a pick")
         }
@@ -1327,7 +1375,6 @@ pub(crate) fn resume_drew<V: crate::Build, F: Fight<V>>(
 ) -> Played<V, F::Kind> {
     match at {
         Resume::Defect(at) => defect::resume_drew::<V, _>(fight, at, drew),
-        Resume::Ironclad(at) => ironclad::resume_drew::<V, _>(fight, at, drew),
         Resume::Own(card, from, _) => V::own_card_drew_from(card, fight, from, drew),
         at => resume_waited::<V, _>(fight, at),
     }
@@ -1343,10 +1390,11 @@ pub(crate) fn resume_waited<V: crate::Build, F: Fight<V>>(
         Resume::Colorless(at) => colorless::resume_waited::<V, _>(fight, at),
         Resume::Defect(at) => defect::resume_waited::<V, _>(fight, at),
         Resume::Event(at) => event::resume_waited::<V, _>(fight, at),
-        Resume::Ironclad(at) => ironclad::resume_waited::<V, _>(fight, at),
         Resume::Necrobinder(at) => necrobinder::resume_waited::<V, _>(fight, at),
         Resume::Regent(at) => regent::resume_waited::<V, _>(fight, at),
-        Resume::Silent(_) => unreachable!("a Silent play resumes through its coroutine"),
+        Resume::Ironclad(_) | Resume::Silent(_) => {
+            unreachable!("a coroutine's play resumes through it")
+        }
         Resume::Token(at) => token::resume_waited::<V, _>(fight, at),
         Resume::Generated(card, from) => generated_from::<V, _>(card, fight, from),
         Resume::Own(card, from, left) => V::own_card_play_from(card, fight, from, left),

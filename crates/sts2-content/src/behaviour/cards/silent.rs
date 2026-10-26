@@ -497,44 +497,7 @@ fn discard_taken<V: crate::Build, K: FightKind<V>>(
     );
 }
 
-/// A play of [`paused`], from its start.
-fn start<'a, V: crate::Build, K: FightKind<V>>(
-    card: V::Card,
-    fight: &mut K::Fight<'a>,
-) -> Played<V, K> {
-    let mut play = paused::<V, K>(card);
-    let state = play.start_with(crate::behaviour::cards::Lent { fight, taken: None });
-    settle::<V, K>(play, state)
-}
-
-/// A paused play of [`paused`], with the answer it waited for.
-pub(crate) fn resume<'a, V: crate::Build, K: FightKind<V>>(
-    fight: &mut K::Fight<'a>,
-    mut play: paused::State<V, K>,
-    taken: sts2_core::Taken<V>,
-) -> Played<V, K> {
-    let state = diapause::Coroutine::resume(
-        &mut play,
-        crate::behaviour::cards::Lent {
-            fight,
-            taken: Some(taken),
-        },
-    );
-    settle::<V, K>(play, state)
-}
-
-/// How far a step of `play` got.
-fn settle<V: crate::Build, K: FightKind<V>>(
-    play: paused::State<V, K>,
-    state: diapause::CoroutineState<crate::behaviour::cards::Ask<V>, ()>,
-) -> Played<V, K> {
-    match state {
-        diapause::CoroutineState::Complete(()) => Played::Done,
-        diapause::CoroutineState::Yielded(ask) => {
-            ask.at(crate::behaviour::cards::Resume::Silent(play).into())
-        }
-    }
-}
+crate::behaviour::cards::paused_play!(Silent);
 
 /// `Malaise`: its X, one more once upgraded, off the target's Strength, then
 /// as Weak on it.

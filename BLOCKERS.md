@@ -40,19 +40,32 @@ Speed is a goal as well as a guard. Item 3 says the target.
 
 ## Open
 
-### 1. Pausing as coroutines
+### 1. Switch pausing over to `diapause` coroutines
 
-The rules that pause on a player's choice become coroutines, and the
-game's scheduler runs them. `docs/ASYNC.md` says why and in what order.
-`diapause` builds the coroutines, pinned, from the reviewed and patched
-copy in `vendor/`. `SetupPlayerTurn` and the Silent pool's plays that stop
-are coroutines already.
+Every rule that pauses on a player's choice becomes a coroutine, and the
+game's scheduler runs them. `docs/ASYNC.md` says why. `diapause` builds
+the coroutines, pinned, from the reviewed and patched copy in `vendor/`.
 Co-op fights wait for it, because each player's paused work is a
 coroutine in that player's queue.
 
-1. The coroutines and the scheduler with one player.
-2. The pause sites, one pool at a time, each taking away the `Deferred`
-   and `Resume` variants it replaces.
+Done: `SetupPlayerTurn`, and the plays that stop in the Silent and
+Ironclad pools. Each pool's coroutine holds its paused plays, in place of
+its hand-written `Resume` enum.
+
+The pools go first, because each stands alone and a recorded run proves
+it. The scheduler replaces the engine's `Deferred` work, which the pools
+do not touch. The order:
+
+1. The other card pools, one PR each: Defect, Necrobinder, Regent,
+   colorless, event and token cards.
+2. The generated plays and the builds' own plays, `Resume::Generated` and
+   `Resume::Own`.
+3. Potions and monster moves.
+4. The scheduler with one player. The turn loop, the card plays and the
+   paused hooks run as the game's queues run them. It takes away the
+   `Deferred`, `Then` and `Setup` work in the engine.
+5. The run layer's pauses, `Pickup` and `Unfinished`, once Mark decides
+   whether they move too (`docs/ASYNC.md`, open question 1).
 
 ### 2. Co-op
 

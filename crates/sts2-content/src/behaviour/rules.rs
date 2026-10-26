@@ -416,6 +416,10 @@ pub(crate) fn resume_play<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
             crate::behaviour::Resume::Card(crate::behaviour::cards::Resume::Silent(paused)),
             taken,
         ) => crate::behaviour::cards::silent::resume::<V, K>(fight, paused, taken),
+        (
+            crate::behaviour::Resume::Card(crate::behaviour::cards::Resume::Ironclad(paused)),
+            taken,
+        ) => crate::behaviour::cards::ironclad::resume::<V, K>(fight, paused, taken),
         (crate::behaviour::Resume::Card(at), sts2_core::Taken::Selected(cards)) => {
             crate::behaviour::cards::resume_play::<V, _>(fight, at, cards)
         }
