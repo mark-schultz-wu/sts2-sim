@@ -275,7 +275,7 @@ pub(super) fn on_play<'a, V: crate::Build, K: FightKind<V>>(
         // triggers Fatal, the room offers one more card reward, and its owner
         // takes one The Hunt.
         __c0 if __c0 == V::Card::THE_HUNT => start::<V, K>(card, fight),
-        card => crate::behaviour::cards::generated_from::<V, _>(card, fight, 0),
+        card => crate::behaviour::cards::generated::<V, K>(card, fight),
     }
 }
 

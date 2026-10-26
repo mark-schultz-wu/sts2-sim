@@ -459,7 +459,7 @@ pub(super) fn on_play<'a, V: crate::Build, K: FightKind<V>>(
         {
             start::<V, K>(card, fight)
         }
-        card => crate::behaviour::cards::generated_from::<V, _>(card, fight, 0),
+        card => crate::behaviour::cards::generated::<V, K>(card, fight),
     }
 }
 

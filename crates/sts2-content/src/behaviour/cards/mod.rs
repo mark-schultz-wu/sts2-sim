@@ -661,9 +661,9 @@ pub enum Resume<V: crate::Build, K: sts2_core::FightKind<V>> {
     Silent(silent::paused::State<V, K>),
     /// A token card's play, paused where it asked.
     Token(token::paused::State<V, K>),
-    /// A generated play, from the command after the one that left a
-    /// question waiting.
-    Generated(V::Card, u8),
+    /// A play of the build's [`crate::Build::Paused`], standing still where
+    /// it asked.
+    Generated(V::Paused<K>),
     /// A play of the build's own, from the command after the one that left a
     /// question waiting. The list holds the cards it still has to go through.
     Own(V::Card, u8, Left<V>),
@@ -856,17 +856,12 @@ impl Held {
     }
 }
 
-/// A generated play from the command at `from` on, standing still where a
-/// command leaves a question waiting.
-pub(crate) fn generated_from<V: crate::Build, F: Fight<V>>(
+/// A card's play, as the build's generated scripts have it.
+pub(crate) fn generated<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
     card: V::Card,
-    fight: &mut F,
-    from: u8,
-) -> Played<V, F::Kind> {
-    let played = V::generated_play_from(card, fight, from);
-    played.unwrap_or_else(|next| Played::Waiting {
-        at: Resume::Generated(card, next).into(),
-    })
+    fight: &mut K::Fight<'a>,
+) -> Played<V, K> {
+    V::generated_play::<K>(card, fight)
 }
 
 /// What a card does when it is played.
@@ -887,10 +882,10 @@ pub(crate) fn on_play<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
         CardFiled::Defect => defect::on_play::<V, K>(card, fight),
         CardFiled::Colorless => colorless::on_play::<V, K>(card, fight),
         CardFiled::Curse | CardFiled::Quest | CardFiled::Deprecated => {
-            generated_from::<V, _>(card, fight, 0)
+            generated::<V, K>(card, fight)
         }
         CardFiled::Event => event::on_play::<V, K>(card, fight),
-        CardFiled::Status => status::on_play::<V, _>(card, fight),
+        CardFiled::Status => status::on_play::<V, K>(card, fight),
         CardFiled::Token => token::on_play::<V, K>(card, fight),
     }
 }
@@ -1405,7 +1400,7 @@ pub(crate) fn resume_waited<V: crate::Build, F: Fight<V>>(
             unreachable!("a coroutine's play resumes through it")
         }
         Resume::FreeChoice => unreachable!("a free choice chooses, and waits on nothing"),
-        Resume::Generated(card, from) => generated_from::<V, _>(card, fight, from),
+        Resume::Generated(_) => unreachable!("a coroutine's play resumes through it"),
         Resume::Own(card, from, left) => V::own_card_play_from(card, fight, from, left),
     }
 }

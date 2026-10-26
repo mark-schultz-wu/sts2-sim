@@ -489,10 +489,10 @@ pub trait OwnRules: ContentVersion + Sized {
 
     /// What a card of the build's own does when it is played, or nothing for
     /// a shared one.
-    fn own_card_play<F: sts2_core::Fight<Self>>(
+    fn own_card_play<'a, K: sts2_core::FightKind<Self>>(
         card: Self::Card,
-        fight: &mut F,
-    ) -> Option<crate::behaviour::Played<Self, F::Kind>>
+        fight: &mut K::Fight<'a>,
+    ) -> Option<crate::behaviour::Played<Self, K>>
     where
         Self: Build;
 
@@ -538,13 +538,29 @@ pub trait OwnRules: ContentVersion + Sized {
     /// have it.
     fn generated_upgrade(card: Self::Card) -> &'static [sts2_core::Change<Self>];
 
-    /// A card's play from the command at `from` on, as the build's generated
-    /// scripts have it, or the command a question stopped it at.
-    fn generated_play_from<F: sts2_core::Fight<Self>>(
+    /// A play of the build's standing still on a question, which the fight
+    /// lends it again at each step. Its generated plays' pools.
+    type Paused<K: sts2_core::FightKind<Self>>: std::fmt::Debug
+        + Clone
+        + Eq
+        + std::hash::Hash
+        + 'static;
+
+    /// A card's play, as the build's generated scripts have it.
+    fn generated_play<'a, K: sts2_core::FightKind<Self>>(
         card: Self::Card,
-        fight: &mut F,
-        from: u8,
-    ) -> Result<crate::behaviour::Played<Self, F::Kind>, u8>
+        fight: &mut K::Fight<'a>,
+    ) -> crate::behaviour::Played<Self, K>
+    where
+        Self: Build;
+
+    /// A play of [`Self::Paused`] that stood still, with the answer it waited
+    /// for.
+    fn resume_paused<'a, K: sts2_core::FightKind<Self>>(
+        fight: &mut K::Fight<'a>,
+        paused: Self::Paused<K>,
+        taken: sts2_core::Taken<Self>,
+    ) -> crate::behaviour::Played<Self, K>
     where
         Self: Build;
 

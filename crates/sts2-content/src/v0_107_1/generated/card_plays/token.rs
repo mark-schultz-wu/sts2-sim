@@ -4,119 +4,119 @@
 //! Source: `dumps/card_plays.txt`, build v0.107.1 (59260271), assembly 1692500715.
 
 use super::super::cards::{CardVar, TokenCard};
-use crate::behaviour::Played;
-use sts2_core::{Amount, Change, CostPool, Effect, Fight, Scaling};
+use crate::behaviour::cards::{Ask, Lent};
+use sts2_core::{Amount, Change, CostPool, Effect, Fight, FightKind, Scaling};
 
 type V = super::super::super::V0_107_1;
 
-/// `OnPlay` from the command at `from` on, for every card whose
-/// statements the dump matched. A command that leaves a question
-/// waiting stands the rest still, as the game's `await` does, and
-/// the play comes back as `Err` with the command to go on from.
+/// `OnPlay` of a card whose play is one command, which never stands
+/// still on a question. `None` for a card with more, which [`paused`]
+/// plays.
 ///
 /// Any other card panics, and `behaviour/` ports it by hand.
-pub fn play_from<F: Fight<V>>(
-    card: TokenCard,
-    fight: &mut F,
-    from: u8,
-) -> Result<Played<V, F::Kind>, u8> {
+pub fn play<F: Fight<V>>(card: TokenCard, fight: &mut F) -> Option<()> {
     match card {
-        TokenCard::Disintegration => Ok(Played::Done),
-        TokenCard::Fuel => {
-            if from == 0 {
-                fight.modify_energy(fight.var(CardVar::Energy));
-                if fight.waiting() {
-                    return Err(1);
-                }
-            }
-            if from <= 1 {
-                fight.draw(fight.var(CardVar::Cards));
-            }
-            Ok(Played::Done)
-        }
-        TokenCard::GiantRock => {
-            let target = fight.target();
-            if from == 0 {
-                fight.attack(Scaling::Dynamic, |fight| {
-                    let attack = fight.resolve(Effect::Attack {
-                        dealer: fight.actor(),
-                        target,
-                        damage: Amount::Var(CardVar::Damage),
-                        scaling: Scaling::Dynamic,
-                    });
-                    fight.apply(attack);
-                });
-            }
-            Ok(Played::Done)
-        }
-        TokenCard::Luminesce => {
-            if from == 0 {
-                fight.modify_energy(fight.var(CardVar::Energy));
-            }
-            Ok(Played::Done)
-        }
-        TokenCard::MindRot => Ok(Played::Done),
-        TokenCard::MinionDiveBomb => {
-            let target = fight.target();
-            if from == 0 {
-                fight.attack(Scaling::Dynamic, |fight| {
-                    let attack = fight.resolve(Effect::Attack {
-                        dealer: fight.actor(),
-                        target,
-                        damage: Amount::Var(CardVar::Damage),
-                        scaling: Scaling::Dynamic,
-                    });
-                    fight.apply(attack);
-                });
-            }
-            Ok(Played::Done)
-        }
-        TokenCard::MinionSacrifice => {
-            if from == 0 {
-                let block = fight.resolve(Effect::GainBlock {
-                    recipient: fight.actor(),
-                    amount: Amount::Var(CardVar::Block),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(block);
-            }
-            Ok(Played::Done)
-        }
-        TokenCard::MinionStrike => {
-            let target = fight.target();
-            if from == 0 {
-                fight.attack(Scaling::Dynamic, |fight| {
-                    let attack = fight.resolve(Effect::Attack {
-                        dealer: fight.actor(),
-                        target,
-                        damage: Amount::Var(CardVar::Damage),
-                        scaling: Scaling::Dynamic,
-                    });
-                    fight.apply(attack);
-                });
-                if fight.waiting() {
-                    return Err(1);
-                }
-            }
-            if from <= 1 {
-                fight.draw(fight.var(CardVar::Cards));
-            }
-            Ok(Played::Done)
-        }
         // `call DamageCmd.Attack`
         TokenCard::Shiv => unimplemented!("what {card:?} does when it is played"),
-        TokenCard::Sloth => Ok(Played::Done),
-        TokenCard::Soul => {
-            if from == 0 {
-                fight.draw(fight.var(CardVar::Cards));
-            }
-            Ok(Played::Done)
-        }
         // `call DamageCmd.Attack`
         TokenCard::SovereignBlade => unimplemented!("what {card:?} does when it is played"),
         // `if`
         TokenCard::SweepingGaze => unimplemented!("what {card:?} does when it is played"),
-        TokenCard::WasteAway => Ok(Played::Done),
+        TokenCard::Disintegration => Some(()),
+        TokenCard::GiantRock => {
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            Some(())
+        }
+        TokenCard::Luminesce => {
+            fight.modify_energy(fight.var(CardVar::Energy));
+            Some(())
+        }
+        TokenCard::MindRot => Some(()),
+        TokenCard::MinionDiveBomb => {
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            Some(())
+        }
+        TokenCard::MinionSacrifice => {
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Var(CardVar::Block),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+            Some(())
+        }
+        TokenCard::Sloth => Some(()),
+        TokenCard::Soul => {
+            fight.draw(fight.var(CardVar::Cards));
+            Some(())
+        }
+        TokenCard::WasteAway => Some(()),
+        TokenCard::Fuel | TokenCard::MinionStrike => None,
+    }
+}
+
+/// `OnPlay` of a card whose play is more than one command, from its
+/// start to its end. A command that leaves a question waiting stands
+/// the rest still, as the game's `await` does. Each step is lent the
+/// fight, and after a question the answer.
+#[diapause::coroutine(yield = Ask<V>, resume = for<'f, 'a> Lent<'f, 'a, V, K>)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub fn paused<K: FightKind<V>>(card: TokenCard) {
+    match card {
+        TokenCard::Fuel => {
+            {
+                let fight = &mut *resumed!().fight;
+                fight.modify_energy(fight.var(CardVar::Energy));
+            }
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            {
+                let fight = &mut *resumed!().fight;
+                fight.draw(fight.var(CardVar::Cards));
+            }
+        }
+        TokenCard::MinionStrike => {
+            let target: sts2_core::CombatId = resumed!().fight.target();
+            {
+                let fight = &mut *resumed!().fight;
+                fight.attack(Scaling::Dynamic, |fight| {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
+                });
+            }
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            {
+                let fight = &mut *resumed!().fight;
+                fight.draw(fight.var(CardVar::Cards));
+            }
+        }
+        card => unreachable!("{card:?} is not a play of more than one command"),
     }
 }
 

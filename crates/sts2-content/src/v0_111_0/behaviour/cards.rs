@@ -79,7 +79,10 @@ pub(crate) fn own_card_event_hook(
 
 /// What a card of this build's own does when it is played, or nothing for a
 /// shared one.
-pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Option<Played<V, F::Kind>> {
+pub(crate) fn on_play<'a, K: sts2_core::FightKind<V>>(
+    card: Cards,
+    fight: &mut K::Fight<'a>,
+) -> Option<Played<V, K>> {
     match card {
         // `ExpectAFight`: as much block as its `CalculatedBlock`, a move's.
         Cards::Ironclad(IroncladCard::ExpectAFight) => {
@@ -94,9 +97,9 @@ pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Option<Played<
         // `ForgottenRitual`: its energy, every play. v0.107.1's waited on a
         // card exhausted that turn, which the shared port reads, so this build
         // plays its generated script.
-        Cards::Ironclad(IroncladCard::ForgottenRitual) => Some(
-            crate::behaviour::cards::generated_from::<V, _>(card, fight, 0),
-        ),
+        Cards::Ironclad(IroncladCard::ForgottenRitual) => {
+            Some(crate::behaviour::cards::generated::<V, K>(card, fight))
+        }
         // `Hyperbeam`: its damage to every enemy, then its Focus as a
         // `HyperbeamFocusDownPower` on its owner.
         Cards::Defect(DefectCard::Hyperbeam) => Some(on_play_from(card, fight, 0, Left::of(&[]))),

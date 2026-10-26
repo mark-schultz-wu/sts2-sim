@@ -5,13 +5,13 @@ use sts2_core::{Amount, Effect, EventHook, Fight, HookEffect, Scaling};
 use crate::ids::{CardIds as _, CardVarIds as _, PowerIds as _};
 
 /// What a status card does when it is played.
-pub(super) fn on_play<V: crate::Build, F: Fight<V>>(
+pub(super) fn on_play<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
     card: V::Card,
-    fight: &mut F,
-) -> crate::behaviour::Played<V, F::Kind> {
+    fight: &mut K::Fight<'a>,
+) -> crate::behaviour::Played<V, K> {
     match card {
         __c0 if __c0 == V::Card::FRANTIC_ESCAPE => frantic_escape::<V, _>(fight),
-        card => crate::behaviour::cards::generated_from::<V, _>(card, fight, 0),
+        card => crate::behaviour::cards::generated::<V, K>(card, fight),
     }
 }
 

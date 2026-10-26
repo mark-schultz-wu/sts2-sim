@@ -439,6 +439,10 @@ pub(crate) fn resume_play<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
         (crate::behaviour::Resume::Card(crate::behaviour::cards::Resume::Event(paused)), taken) => {
             crate::behaviour::cards::event::resume::<V, K>(fight, paused, taken)
         }
+        (
+            crate::behaviour::Resume::Card(crate::behaviour::cards::Resume::Generated(paused)),
+            taken,
+        ) => V::resume_paused::<K>(fight, paused, taken),
         (crate::behaviour::Resume::Card(crate::behaviour::cards::Resume::Token(paused)), taken) => {
             crate::behaviour::cards::token::resume::<V, K>(fight, paused, taken)
         }

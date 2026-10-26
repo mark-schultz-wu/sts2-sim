@@ -15,3 +15,168 @@ pub mod regent;
 pub mod silent;
 pub mod status;
 pub mod token;
+
+type V = super::super::V0_111_0;
+
+/// A generated play standing still on a question, by its pool.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Paused<K: sts2_core::FightKind<V>> {
+    Ironclad(ironclad::paused::State<K>),
+    Silent(silent::paused::State<K>),
+    Regent(regent::paused::State<K>),
+    Necrobinder(necrobinder::paused::State<K>),
+    Defect(defect::paused::State<K>),
+    Colorless(colorless::paused::State<K>),
+    Event(event::paused::State<K>),
+    Token(token::paused::State<K>),
+}
+
+/// `OnPlay`, for every card whose statements the dump matched.
+///
+/// Any other card panics, and `behaviour/` ports it by hand.
+pub fn play<'a, K: sts2_core::FightKind<V>>(
+    card: super::cards::Cards,
+    fight: &mut K::Fight<'a>,
+) -> crate::behaviour::Played<V, K> {
+    match card {
+        super::cards::Cards::Ironclad(card) => match ironclad::play(card, fight) {
+            Some(()) => crate::behaviour::Played::Done,
+            None => {
+                let mut play = ironclad::paused::<K>(card);
+                let state = play.start_with(crate::behaviour::cards::Lent { fight, taken: None });
+                settle(Paused::Ironclad(play), state)
+            }
+        },
+        super::cards::Cards::Silent(card) => match silent::play(card, fight) {
+            Some(()) => crate::behaviour::Played::Done,
+            None => {
+                let mut play = silent::paused::<K>(card);
+                let state = play.start_with(crate::behaviour::cards::Lent { fight, taken: None });
+                settle(Paused::Silent(play), state)
+            }
+        },
+        super::cards::Cards::Regent(card) => match regent::play(card, fight) {
+            Some(()) => crate::behaviour::Played::Done,
+            None => {
+                let mut play = regent::paused::<K>(card);
+                let state = play.start_with(crate::behaviour::cards::Lent { fight, taken: None });
+                settle(Paused::Regent(play), state)
+            }
+        },
+        super::cards::Cards::Necrobinder(card) => match necrobinder::play(card, fight) {
+            Some(()) => crate::behaviour::Played::Done,
+            None => {
+                let mut play = necrobinder::paused::<K>(card);
+                let state = play.start_with(crate::behaviour::cards::Lent { fight, taken: None });
+                settle(Paused::Necrobinder(play), state)
+            }
+        },
+        super::cards::Cards::Defect(card) => match defect::play(card, fight) {
+            Some(()) => crate::behaviour::Played::Done,
+            None => {
+                let mut play = defect::paused::<K>(card);
+                let state = play.start_with(crate::behaviour::cards::Lent { fight, taken: None });
+                settle(Paused::Defect(play), state)
+            }
+        },
+        super::cards::Cards::Colorless(card) => match colorless::play(card, fight) {
+            Some(()) => crate::behaviour::Played::Done,
+            None => {
+                let mut play = colorless::paused::<K>(card);
+                let state = play.start_with(crate::behaviour::cards::Lent { fight, taken: None });
+                settle(Paused::Colorless(play), state)
+            }
+        },
+        super::cards::Cards::Curse(card) => {
+            curse::play(card, fight);
+            crate::behaviour::Played::Done
+        }
+        super::cards::Cards::Event(card) => match event::play(card, fight) {
+            Some(()) => crate::behaviour::Played::Done,
+            None => {
+                let mut play = event::paused::<K>(card);
+                let state = play.start_with(crate::behaviour::cards::Lent { fight, taken: None });
+                settle(Paused::Event(play), state)
+            }
+        },
+        super::cards::Cards::Quest(card) => {
+            quest::play(card, fight);
+            crate::behaviour::Played::Done
+        }
+        super::cards::Cards::Status(card) => {
+            status::play(card, fight);
+            crate::behaviour::Played::Done
+        }
+        super::cards::Cards::Token(card) => match token::play(card, fight) {
+            Some(()) => crate::behaviour::Played::Done,
+            None => {
+                let mut play = token::paused::<K>(card);
+                let state = play.start_with(crate::behaviour::cards::Lent { fight, taken: None });
+                settle(Paused::Token(play), state)
+            }
+        },
+        super::cards::Cards::Deprecated(card) => {
+            deprecated::play(card, fight);
+            crate::behaviour::Played::Done
+        }
+    }
+}
+
+/// A generated play that stood still, with the answer it waited for.
+pub fn resume<'a, K: sts2_core::FightKind<V>>(
+    fight: &mut K::Fight<'a>,
+    paused: Paused<K>,
+    taken: sts2_core::Taken<V>,
+) -> crate::behaviour::Played<V, K> {
+    let lent = crate::behaviour::cards::Lent {
+        fight,
+        taken: Some(taken),
+    };
+    match paused {
+        Paused::Ironclad(mut play) => {
+            let state = diapause::Coroutine::resume(&mut play, lent);
+            settle(Paused::Ironclad(play), state)
+        }
+        Paused::Silent(mut play) => {
+            let state = diapause::Coroutine::resume(&mut play, lent);
+            settle(Paused::Silent(play), state)
+        }
+        Paused::Regent(mut play) => {
+            let state = diapause::Coroutine::resume(&mut play, lent);
+            settle(Paused::Regent(play), state)
+        }
+        Paused::Necrobinder(mut play) => {
+            let state = diapause::Coroutine::resume(&mut play, lent);
+            settle(Paused::Necrobinder(play), state)
+        }
+        Paused::Defect(mut play) => {
+            let state = diapause::Coroutine::resume(&mut play, lent);
+            settle(Paused::Defect(play), state)
+        }
+        Paused::Colorless(mut play) => {
+            let state = diapause::Coroutine::resume(&mut play, lent);
+            settle(Paused::Colorless(play), state)
+        }
+        Paused::Event(mut play) => {
+            let state = diapause::Coroutine::resume(&mut play, lent);
+            settle(Paused::Event(play), state)
+        }
+        Paused::Token(mut play) => {
+            let state = diapause::Coroutine::resume(&mut play, lent);
+            settle(Paused::Token(play), state)
+        }
+    }
+}
+
+/// How far a step of `play` got.
+fn settle<K: sts2_core::FightKind<V>>(
+    play: Paused<K>,
+    state: diapause::CoroutineState<crate::behaviour::cards::Ask<V>, ()>,
+) -> crate::behaviour::Played<V, K> {
+    match state {
+        diapause::CoroutineState::Complete(()) => crate::behaviour::Played::Done,
+        diapause::CoroutineState::Yielded(ask) => {
+            ask.at(crate::behaviour::cards::Resume::Generated(play).into())
+        }
+    }
+}

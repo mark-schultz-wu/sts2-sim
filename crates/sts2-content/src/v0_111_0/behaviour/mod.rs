@@ -86,11 +86,11 @@ impl crate::build::OwnRules for V {
         cards::result_pile(card, base)
     }
 
-    fn own_card_play<F: sts2_core::Fight<V>>(
+    fn own_card_play<'a, K: sts2_core::FightKind<V>>(
         card: <V as sts2_core::ContentVersion>::Card,
-        fight: &mut F,
-    ) -> Option<crate::behaviour::Played<V, F::Kind>> {
-        cards::on_play(card, fight)
+        fight: &mut K::Fight<'a>,
+    ) -> Option<crate::behaviour::Played<V, K>> {
+        cards::on_play::<K>(card, fight)
     }
 
     fn own_card_play_from<F: sts2_core::Fight<V>>(
@@ -148,28 +148,21 @@ impl crate::build::OwnRules for V {
         }
     }
 
-    fn generated_play_from<F: sts2_core::Fight<V>>(
-        card: <V as sts2_core::ContentVersion>::Card,
-        fight: &mut F,
-        from: u8,
-    ) -> Result<crate::behaviour::Played<V, F::Kind>, u8> {
-        use super::generated::card_plays;
-        use super::generated::cards::Cards;
+    type Paused<K: sts2_core::FightKind<V>> = super::generated::card_plays::Paused<K>;
 
-        match card {
-            Cards::Ironclad(card) => card_plays::ironclad::play_from(card, fight, from),
-            Cards::Silent(card) => card_plays::silent::play_from(card, fight, from),
-            Cards::Regent(card) => card_plays::regent::play_from(card, fight, from),
-            Cards::Necrobinder(card) => card_plays::necrobinder::play_from(card, fight, from),
-            Cards::Defect(card) => card_plays::defect::play_from(card, fight, from),
-            Cards::Colorless(card) => card_plays::colorless::play_from(card, fight, from),
-            Cards::Curse(card) => card_plays::curse::play_from(card, fight, from),
-            Cards::Event(card) => card_plays::event::play_from(card, fight, from),
-            Cards::Quest(card) => card_plays::quest::play_from(card, fight, from),
-            Cards::Status(card) => card_plays::status::play_from(card, fight, from),
-            Cards::Token(card) => card_plays::token::play_from(card, fight, from),
-            Cards::Deprecated(card) => card_plays::deprecated::play_from(card, fight, from),
-        }
+    fn generated_play<'a, K: sts2_core::FightKind<V>>(
+        card: <V as sts2_core::ContentVersion>::Card,
+        fight: &mut K::Fight<'a>,
+    ) -> crate::behaviour::Played<V, K> {
+        super::generated::card_plays::play::<K>(card, fight)
+    }
+
+    fn resume_paused<'a, K: sts2_core::FightKind<V>>(
+        fight: &mut K::Fight<'a>,
+        paused: Self::Paused<K>,
+        taken: sts2_core::Taken<V>,
+    ) -> crate::behaviour::Played<V, K> {
+        super::generated::card_plays::resume::<K>(fight, paused, taken)
     }
 
     fn generated_turn_end<F: sts2_core::Fight<V>>(

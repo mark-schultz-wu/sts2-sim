@@ -48,17 +48,19 @@ the coroutines, pinned, from the reviewed and patched copy in `vendor/`.
 Co-op fights wait for it, because each player's paused work is a
 coroutine in that player's queue.
 
-Done: `SetupPlayerTurn`, and the plays that stop in every card pool. Each
-pool's coroutine holds its paused plays, in place of its hand-written
-`Resume` enum.
+Done: `SetupPlayerTurn`, the plays that stop in every card pool, and the
+generated plays. Each pool's coroutine holds its paused plays, in place of
+its hand-written `Resume` enum. The card-play generator writes a
+coroutine for each pool, and `Build::Paused` names a build's paused
+plays.
 
 The pools go first, because each stands alone and a recorded run proves
 it. The scheduler replaces the engine's `Deferred` work, which the pools
 do not touch. The order:
 
-1. The generated plays and the builds' own plays, `Resume::Generated` and
-   `Resume::Own`. v0.111.0's `Abundance` stops on `Resume::FreeChoice`
-   until then, which goes with them.
+1. The builds' own plays join `Build::Paused`, beside the generated ones.
+   That takes away `Resume::Own`, `Left`, and v0.111.0's `Abundance` on
+   `Resume::FreeChoice`.
 2. Potions and monster moves.
 3. The scheduler with one player. The turn loop, the card plays and the
    paused hooks run as the game's queues run them. It takes away the

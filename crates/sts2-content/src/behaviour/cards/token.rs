@@ -81,7 +81,7 @@ pub(super) fn on_play<'a, V: crate::Build, K: FightKind<V>>(
         __c0 if __c0 == V::Card::SOVEREIGN_BLADE => start::<V, K>(card, fight),
         __c0 if __c0 == <V::Card as crate::ids::CardIds>::SHIV => shiv::<V, _>(fight),
         __c0 if __c0 == V::Card::SWEEPING_GAZE => sweeping_gaze::<V, _>(fight),
-        card => crate::behaviour::cards::generated_from::<V, _>(card, fight, 0),
+        card => crate::behaviour::cards::generated::<V, K>(card, fight),
     }
 }
 
