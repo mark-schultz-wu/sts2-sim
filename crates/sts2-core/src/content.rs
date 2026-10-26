@@ -251,6 +251,17 @@ impl<'a, T> Drafted<'a, T> {
 ///
 /// The game's own six. `_coloredCardTypes` names the first three, and a shelf
 /// is stocked by filtering the character's pool down to one of them.
+/// `CardMultiplayerConstraint`: the runs a card is dealt in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MultiplayerConstraint {
+    /// Any run deals it.
+    None,
+    /// Only a run of several players deals it.
+    MultiplayerOnly,
+    /// Only a run of one player deals it.
+    SingleplayerOnly,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CardKind {
     Attack,
@@ -328,6 +339,10 @@ pub trait CardTable: Table {
     /// `VisualCardPool.IsColorless`: whether the card shows as colorless.
     /// Most cards show their own pool, and a few event cards a character's.
     fn visually_colorless(self) -> bool;
+
+    /// `CardModel.MultiplayerConstraint`: which runs deal the card, by how
+    /// many players they have.
+    fn multiplayer_constraint(self) -> MultiplayerConstraint;
 
     /// `HasTurnEndInHandEffect`: whether a turn that ends with it in hand
     /// runs `OnTurnEndInHandWrapper` on it.
@@ -6417,6 +6432,15 @@ pub enum HookEffect<V: ContentVersion> {
     /// `FromChooseACardScreen` then takes one or none into the deck.
     ChooseColorlessCards {
         count: usize,
+    },
+    /// `CardFactory.CreateForReward` for `count` cards of the player's
+    /// character pool and the colorless pool, at `RegularEncounter` odds, the
+    /// upgrade roll included. Only the cards a run of several players alone
+    /// deals are drawn. `colorless_first` lists the colorless pool first. A
+    /// `FromChooseACardScreen` then takes one or none into the deck.
+    ChooseMultiplayerCards {
+        count: usize,
+        colorless_first: bool,
     },
     /// A potion thrown at the event's merchant, which
     /// [`crate::EventBehavior::potion_thrown`] carries out. It is the whole

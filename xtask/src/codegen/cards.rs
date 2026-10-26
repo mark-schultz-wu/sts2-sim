@@ -170,6 +170,8 @@ struct Card {
     gains_block: bool,
     /// `VisualCardPool.IsColorless`.
     visually_colorless: bool,
+    /// `MultiplayerConstraint`, as the dump spells it.
+    constraint: String,
     turn_end_in_hand: bool,
     /// Name, printed value, whether the game recomputes it in a fight, and
     /// the `DynamicVar` subclass it is.
@@ -448,6 +450,7 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
             },
             gains_block: f[13] == "1",
             visually_colorless: f[14] == "1",
+            constraint: "None".to_string(),
             turn_end_in_hand: f[15] == "1",
             vars: Vec::new(),
         })
@@ -470,6 +473,13 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     }
     if let Some((id, _)) = by_id.into_iter().next() {
         return Err(Error::NotACard(id));
+    }
+    // `MultiplayerConstraint`, for the cards that have one.
+    for f in dump.of("constraint") {
+        match cards.iter_mut().find(|card| card.id == f[1]) {
+            Some(card) => card.constraint = f[2].clone(),
+            None => return Err(Error::NotACard(f[1].clone())),
+        }
     }
     let cards = cards;
     let fixed_numbers = cards
@@ -656,6 +666,12 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
                 row,
                 "        visually_colorless: {},",
                 card.visually_colorless
+            )
+            .unwrap();
+            writeln!(
+                row,
+                "        multiplayer_constraint: sts2_core::MultiplayerConstraint::{},",
+                card.constraint
             )
             .unwrap();
             writeln!(row, "        turn_end_in_hand: {},", card.turn_end_in_hand).unwrap();
@@ -976,6 +992,16 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     writeln!(out, "    pub visually_colorless: bool,").unwrap();
     writeln!(
         out,
+        "    /// `MultiplayerConstraint`: which runs deal it, by their player count."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    pub multiplayer_constraint: sts2_core::MultiplayerConstraint,"
+    )
+    .unwrap();
+    writeln!(
+        out,
         "    /// `HasTurnEndInHandEffect`: whether it acts when a turn ends with it in hand."
     )
     .unwrap();
@@ -1085,23 +1111,17 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     // of several does, which `GetUnlockedCards` and `FilterForPlayerCount`
     // narrow by each card's `MultiplayerConstraint`. Narrowing keeps the
     // order.
-    let constraints: BTreeMap<String, String> = dump
-        .of("constraint")
-        .map(|f| (f[1].clone(), f[2].clone()))
+    let constraints: BTreeMap<&str, &str> = cards
+        .iter()
+        .map(|card| (card.id.as_str(), card.constraint.as_str()))
         .collect();
-    if let Some(id) = constraints
-        .keys()
-        .find(|id| !cards.iter().any(|card| card.id == **id))
-    {
-        return Err(Error::NotACard(id.clone()));
-    }
     let narrowed = |lists: &Lists, dropped: &str| -> Lists {
         lists
             .iter()
             .map(|(pool, entries)| {
                 let kept = entries
                     .iter()
-                    .filter(|(_, id)| constraints.get(id).is_none_or(|c| c != dropped))
+                    .filter(|(_, id)| constraints.get(id.as_str()).is_none_or(|c| *c != dropped))
                     .cloned()
                     .collect();
                 (pool.clone(), kept)
@@ -1221,6 +1241,14 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     writeln!(out).unwrap();
     writeln!(out, "    fn visually_colorless(self) -> bool {{").unwrap();
     writeln!(out, "        self.data().visually_colorless").unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out).unwrap();
+    writeln!(
+        out,
+        "    fn multiplayer_constraint(self) -> sts2_core::MultiplayerConstraint {{"
+    )
+    .unwrap();
+    writeln!(out, "        self.data().multiplayer_constraint").unwrap();
     writeln!(out, "    }}").unwrap();
     writeln!(out).unwrap();
     writeln!(out, "    fn turn_end_in_hand(self) -> bool {{").unwrap();

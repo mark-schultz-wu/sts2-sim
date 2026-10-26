@@ -44,5 +44,6 @@ pub(super) static ROWS: [CardData; 1] = [CardData {
     tags: TagSet::new(&[]),
     gains_block: false,
     visually_colorless: true,
+    multiplayer_constraint: sts2_core::MultiplayerConstraint::None,
     turn_end_in_hand: false,
 }];

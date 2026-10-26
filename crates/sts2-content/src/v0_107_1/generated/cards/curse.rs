@@ -86,6 +86,7 @@ pub(super) static ROWS: [CardData; 18] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        multiplayer_constraint: sts2_core::MultiplayerConstraint::None,
         turn_end_in_hand: false,
     },
     CardData {
@@ -105,6 +106,7 @@ pub(super) static ROWS: [CardData; 18] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        multiplayer_constraint: sts2_core::MultiplayerConstraint::None,
         turn_end_in_hand: true,
     },
     CardData {
@@ -119,6 +121,7 @@ pub(super) static ROWS: [CardData; 18] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        multiplayer_constraint: sts2_core::MultiplayerConstraint::None,
         turn_end_in_hand: false,
     },
     CardData {
@@ -133,6 +136,7 @@ pub(super) static ROWS: [CardData; 18] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        multiplayer_constraint: sts2_core::MultiplayerConstraint::None,
         turn_end_in_hand: false,
     },
     CardData {
@@ -152,6 +156,7 @@ pub(super) static ROWS: [CardData; 18] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        multiplayer_constraint: sts2_core::MultiplayerConstraint::None,
         turn_end_in_hand: true,
     },
     CardData {
@@ -171,6 +176,7 @@ pub(super) static ROWS: [CardData; 18] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        multiplayer_constraint: sts2_core::MultiplayerConstraint::None,
         turn_end_in_hand: true,
     },
     CardData {
@@ -190,6 +196,7 @@ pub(super) static ROWS: [CardData; 18] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        multiplayer_constraint: sts2_core::MultiplayerConstraint::None,
         turn_end_in_hand: true,
     },
     CardData {
@@ -204,6 +211,7 @@ pub(super) static ROWS: [CardData; 18] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        multiplayer_constraint: sts2_core::MultiplayerConstraint::None,
         turn_end_in_hand: false,
     },
     CardData {
@@ -223,6 +231,7 @@ pub(super) static ROWS: [CardData; 18] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        multiplayer_constraint: sts2_core::MultiplayerConstraint::None,
         turn_end_in_hand: false,
     },
     CardData {
@@ -237,6 +246,7 @@ pub(super) static ROWS: [CardData; 18] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        multiplayer_constraint: sts2_core::MultiplayerConstraint::None,
         turn_end_in_hand: false,
     },
     CardData {
@@ -256,6 +266,7 @@ pub(super) static ROWS: [CardData; 18] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        multiplayer_constraint: sts2_core::MultiplayerConstraint::None,
         turn_end_in_hand: false,
     },
     CardData {
@@ -270,6 +281,7 @@ pub(super) static ROWS: [CardData; 18] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        multiplayer_constraint: sts2_core::MultiplayerConstraint::None,
         turn_end_in_hand: false,
     },
     CardData {
@@ -303,6 +315,7 @@ pub(super) static ROWS: [CardData; 18] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        multiplayer_constraint: sts2_core::MultiplayerConstraint::None,
         turn_end_in_hand: false,
     },
     CardData {
@@ -317,6 +330,7 @@ pub(super) static ROWS: [CardData; 18] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        multiplayer_constraint: sts2_core::MultiplayerConstraint::None,
         turn_end_in_hand: false,
     },
     CardData {
@@ -331,6 +345,7 @@ pub(super) static ROWS: [CardData; 18] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        multiplayer_constraint: sts2_core::MultiplayerConstraint::None,
         turn_end_in_hand: true,
     },
     CardData {
@@ -350,6 +365,7 @@ pub(super) static ROWS: [CardData; 18] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        multiplayer_constraint: sts2_core::MultiplayerConstraint::None,
         turn_end_in_hand: true,
     },
     CardData {
@@ -364,6 +380,7 @@ pub(super) static ROWS: [CardData; 18] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        multiplayer_constraint: sts2_core::MultiplayerConstraint::None,
         turn_end_in_hand: false,
     },
     CardData {
@@ -378,6 +395,7 @@ pub(super) static ROWS: [CardData; 18] = [
         tags: TagSet::new(&[]),
         gains_block: false,
         visually_colorless: false,
+        multiplayer_constraint: sts2_core::MultiplayerConstraint::None,
         turn_end_in_hand: false,
     },
 ];
