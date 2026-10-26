@@ -83,6 +83,7 @@ pub(crate) fn own_relic(relic: Relic) -> bool {
             | Relic::UnsettlingLamp
             | Relic::JeweledMask
             | Relic::Planisphere
+            | Relic::MassiveScroll
     )
 }
 
@@ -97,6 +98,14 @@ pub(crate) fn own_shared_relic_event_hook(
     use crate::vars::RelicVars as _;
 
     match (state, hook) {
+        // `MassiveScroll.AfterObtained` lists the character's pool and then
+        // the colorless one, where v0.107.1's `Concat` put colorless first.
+        (State::MassiveScroll, EventHook::Obtained { .. }) => {
+            asked.push(crate::behaviour::relics::massive_scroll::obtained::<V>(
+                false,
+            ));
+            Some(())
+        }
         // `ToyBox.AfterCombatEnd` returns at once once `IsUsedUp`, where
         // v0.107.1's counts on.
         (State::ToyBox(state), EventHook::CombatEnd { .. })

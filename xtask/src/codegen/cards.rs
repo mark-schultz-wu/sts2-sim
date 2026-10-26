@@ -170,6 +170,8 @@ struct Card {
     gains_block: bool,
     /// `VisualCardPool.IsColorless`.
     visually_colorless: bool,
+    /// `MultiplayerConstraint`, as the dump spells it.
+    constraint: String,
     turn_end_in_hand: bool,
     /// Name, printed value, whether the game recomputes it in a fight, and
     /// the `DynamicVar` subclass it is.
@@ -448,6 +450,7 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
             },
             gains_block: f[13] == "1",
             visually_colorless: f[14] == "1",
+            constraint: "None".to_string(),
             turn_end_in_hand: f[15] == "1",
             vars: Vec::new(),
         })
@@ -470,6 +473,13 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     }
     if let Some((id, _)) = by_id.into_iter().next() {
         return Err(Error::NotACard(id));
+    }
+    // `MultiplayerConstraint`, for the cards that have one.
+    for f in dump.of("constraint") {
+        match cards.iter_mut().find(|card| card.id == f[1]) {
+            Some(card) => card.constraint = f[2].clone(),
+            None => return Err(Error::NotACard(f[1].clone())),
+        }
     }
     let cards = cards;
     let fixed_numbers = cards
@@ -656,6 +666,12 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
                 row,
                 "        visually_colorless: {},",
                 card.visually_colorless
+            )
+            .unwrap();
+            writeln!(
+                row,
+                "        multiplayer_constraint: sts2_core::MultiplayerConstraint::{},",
+                card.constraint
             )
             .unwrap();
             writeln!(row, "        turn_end_in_hand: {},", card.turn_end_in_hand).unwrap();
@@ -976,6 +992,16 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     writeln!(out, "    pub visually_colorless: bool,").unwrap();
     writeln!(
         out,
+        "    /// `MultiplayerConstraint`: which runs deal it, by their player count."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    pub multiplayer_constraint: sts2_core::MultiplayerConstraint,"
+    )
+    .unwrap();
+    writeln!(
+        out,
         "    /// `HasTurnEndInHandEffect`: whether it acts when a turn ends with it in hand."
     )
     .unwrap();
@@ -1081,338 +1107,63 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     writeln!(out, "    }}").unwrap();
     writeln!(out, "}}\n").unwrap();
 
-    writeln!(
-        out,
-        "/// A character pool as a combat generation effect sees it.\n\
-         ///\n\
-         /// [`pool_cards`] narrowed by `CardFactory.FilterForCombat`, in the\n\
-         /// same order, which is the order the shuffle it feeds will see. An\n\
-         /// effect that wants one card type filters this further, and\n\
-         /// filtering keeps the order, so the result is what the game's own\n\
-         /// query gives."
-    )
-    .unwrap();
-    writeln!(
-        out,
-        "pub fn combat_cards(pool: CardPool) -> &'static [Cards] {{"
-    )
-    .unwrap();
-    writeln!(out, "    match pool {{").unwrap();
-    for (pool_id, _, enum_name, suffix) in POOLS
+    // Each pool twice: as a run of one player deals from it, and as a run
+    // of several does, which `GetUnlockedCards` and `FilterForPlayerCount`
+    // narrow by each card's `MultiplayerConstraint`. Narrowing keeps the
+    // order.
+    let constraints: BTreeMap<&str, &str> = cards
         .iter()
-        .copied()
-        .filter(|(_, _, _, suffix)| suffix.is_some())
-    {
-        let pool_name = camel(pool_id.trim_end_matches("_CARD_POOL"));
-        writeln!(out, "        CardPool::{pool_name} => &[").unwrap();
-        let entries = combat_pools.get(pool_id).ok_or_else(|| Error::NoOrder {
-            kind: "combatpool",
-            pool: pool_id.to_string(),
-        })?;
-        for (_, id) in entries {
-            let card = cards
-                .iter()
-                .find(|card| card.id == *id)
-                .expect("validated above");
-            writeln!(
-                out,
-                "            Cards::{}({enum_name}::{}),",
-                enum_name.trim_end_matches("Card"),
-                variant(card, suffix)
-            )
-            .unwrap();
-        }
-        writeln!(out, "        ],").unwrap();
-    }
-    writeln!(out, "        _ => &[],").unwrap();
-    writeln!(out, "    }}").unwrap();
-    writeln!(out, "}}\n").unwrap();
-
-    writeln!(
-        out,
-        "/// A pool as a merchant sees it.\n\
-         ///\n\
-         /// [`pool_cards`] narrowed by `GetUnlockedCards` for a one-player\n\
-         /// run, in the same order. A shelf narrows this further by rarity and\n\
-         /// by card type, and filtering keeps the order, so the result is what\n\
-         /// the game's own query gives."
-    )
-    .unwrap();
-    writeln!(
-        out,
-        "pub fn merchant_cards(pool: CardPool) -> &'static [Cards] {{"
-    )
-    .unwrap();
-    writeln!(out, "    match pool {{").unwrap();
-    for (pool_id, _, enum_name, suffix) in POOLS
-        .iter()
-        .copied()
-        .filter(|(_, _, _, suffix)| suffix.is_some())
-    {
-        let pool_name = camel(pool_id.trim_end_matches("_CARD_POOL"));
-        writeln!(out, "        CardPool::{pool_name} => &[").unwrap();
-        let entries = shop_pools.get(pool_id).ok_or_else(|| Error::NoOrder {
-            kind: "shoppool",
-            pool: pool_id.to_string(),
-        })?;
-        for (_, id) in entries {
-            let card = cards
-                .iter()
-                .find(|card| card.id == *id)
-                .expect("validated above");
-            writeln!(
-                out,
-                "            Cards::{}({enum_name}::{}),",
-                enum_name.trim_end_matches("Card"),
-                variant(card, suffix)
-            )
-            .unwrap();
-        }
-        writeln!(out, "        ],").unwrap();
-    }
-    writeln!(out, "        _ => &[],").unwrap();
-    writeln!(out, "    }}").unwrap();
-    writeln!(out, "}}\n").unwrap();
-
-    writeln!(
-        out,
-        "/// The colourless pool as a merchant sees it.\n\
-         ///\n\
-         /// The same narrowing [`merchant_cards`] applies, on the one pool no\n\
-         /// character holds. Two of a merchant's shelves read it."
-    )
-    .unwrap();
-    writeln!(
-        out,
-        "pub fn merchant_colorless_cards() -> &'static [Cards] {{"
-    )
-    .unwrap();
-    writeln!(out, "    &[").unwrap();
-    {
-        let entries = shop_pools
-            .get("COLORLESS_CARD_POOL")
-            .ok_or_else(|| Error::NoOrder {
-                kind: "shoppool",
-                pool: COLORLESS.to_string(),
-            })?;
-        for (_, id) in entries {
-            let card = cards
-                .iter()
-                .find(|card| card.id == *id)
-                .expect("validated above");
-            writeln!(
-                out,
-                "        Cards::Colorless(ColorlessCard::{}),",
-                variant(card, None)
-            )
-            .unwrap();
-        }
-    }
-    writeln!(out, "    ]").unwrap();
-    writeln!(out, "}}\n").unwrap();
-
-    writeln!(
-        out,
-        "/// The colourless pool as a combat generation effect sees it.\n\
-         ///\n\
-         /// The same narrowing [`combat_cards`] applies, on the one pool no\n\
-         /// character holds."
-    )
-    .unwrap();
-    writeln!(
-        out,
-        "pub fn combat_colorless_cards() -> &'static [Cards] {{"
-    )
-    .unwrap();
-    writeln!(out, "    &[").unwrap();
-    {
-        let entries = combat_pools.get(COLORLESS).ok_or_else(|| Error::NoOrder {
-            kind: "combatpool",
-            pool: COLORLESS.to_string(),
-        })?;
-        for (_, id) in entries {
-            let card = cards
-                .iter()
-                .find(|card| card.id == *id)
-                .expect("validated above");
-            writeln!(
-                out,
-                "        Cards::Colorless(ColorlessCard::{}),",
-                variant(card, None)
-            )
-            .unwrap();
-        }
-    }
-    writeln!(out, "    ]").unwrap();
-    writeln!(out, "}}\n").unwrap();
-
-    // The curse and status pools, which no character holds, each unlocked
-    // and as a combat generation effect sees it. A transform of a curse or a
-    // status draws from its own.
-    for (fname, doc, lists, kind, pool, wrap, card_enum) in [
-        (
-            "unlocked_curse_cards",
-            "The curse pool, unlocked.",
-            &shop_pools,
-            "shoppool",
-            "CURSE_CARD_POOL",
-            "Curse",
-            "CurseCard",
-        ),
-        (
-            "combat_curse_cards",
-            "The curse pool as a combat generation effect sees it.",
-            &combat_pools,
-            "combatpool",
-            "CURSE_CARD_POOL",
-            "Curse",
-            "CurseCard",
-        ),
-        (
-            "unlocked_status_cards",
-            "The status pool, unlocked.",
-            &shop_pools,
-            "shoppool",
-            "STATUS_CARD_POOL",
-            "Status",
-            "StatusCard",
-        ),
-        (
-            "combat_status_cards",
-            "The status pool as a combat generation effect sees it.",
-            &combat_pools,
-            "combatpool",
-            "STATUS_CARD_POOL",
-            "Status",
-            "StatusCard",
-        ),
-    ] {
-        writeln!(out, "/// {doc}").unwrap();
-        writeln!(out, "pub fn {fname}() -> &'static [Cards] {{").unwrap();
-        writeln!(out, "    &[").unwrap();
-        let entries = lists.get(pool).ok_or_else(|| Error::NoOrder {
-            kind,
-            pool: pool.to_string(),
-        })?;
-        for (_, id) in entries {
-            let card = cards
-                .iter()
-                .find(|card| card.id == *id)
-                .expect("validated above");
-            writeln!(
-                out,
-                "        Cards::{wrap}({card_enum}::{}),",
-                variant(card, None)
-            )
-            .unwrap();
-        }
-        writeln!(out, "    ]").unwrap();
-        writeln!(out, "}}\n").unwrap();
-    }
-
-    writeln!(
-        out,
-        "/// Cards eligible for an ordinary room reward, split by rarity.\n\
-         ///\n\
-         /// Each slice keeps the game's pool order, so an index into one means\n\
-         /// what the same index into the filtered pool meant. A card at no\n\
-         /// drafted rarity is in none of them, which is what the game's own\n\
-         /// rarity filter does with it."
-    )
-    .unwrap();
-    writeln!(
-        out,
-        "pub fn reward_cards(character: Character) -> Drafted<'static, Cards> {{"
-    )
-    .unwrap();
-    writeln!(out, "    match character {{").unwrap();
-    for (character, entries) in &reward_pools {
-        writeln!(out, "        Character::{} => Drafted {{", camel(character)).unwrap();
-        for (field, rarity) in [
-            ("common", "Common"),
-            ("uncommon", "Uncommon"),
-            ("rare", "Rare"),
-        ] {
-            writeln!(out, "            {field}: &[").unwrap();
-            for (_, id) in entries {
-                let card = cards
+        .map(|card| (card.id.as_str(), card.constraint.as_str()))
+        .collect();
+    let narrowed = |lists: &Lists, dropped: &str| -> Lists {
+        lists
+            .iter()
+            .map(|(pool, entries)| {
+                let kept = entries
                     .iter()
-                    .find(|card| card.id == *id)
-                    .expect("validated above");
-                if sanitize(&card.rarity) != rarity {
-                    continue;
+                    .filter(|(_, id)| constraints.get(id.as_str()).is_none_or(|c| *c != dropped))
+                    .cloned()
+                    .collect();
+                (pool.clone(), kept)
+            })
+            .collect()
+    };
+    for (suffix, dropped) in [
+        ("", "MultiplayerOnly"),
+        ("_multiplayer", "SingleplayerOnly"),
+    ] {
+        let mut section = String::new();
+        pool_tables(
+            &mut section,
+            &cards,
+            &narrowed(&combat_pools, dropped),
+            &narrowed(&shop_pools, dropped),
+            &narrowed(&reward_pools, dropped),
+            suffix,
+        )?;
+        match suffix {
+            "" => out.push_str(&section),
+            // A run of several players' tables are the same tables narrowed
+            // the other way, so each says only that.
+            _ => {
+                for line in section.lines().filter(|line| !line.starts_with("///")) {
+                    if let Some(name) = line
+                        .strip_prefix("pub fn ")
+                        .and_then(|rest| rest.split('(').next())
+                    {
+                        let solo = name.trim_end_matches(suffix);
+                        writeln!(
+                            out,
+                            "/// [`{solo}`] for a run of several players, which deals the\n\
+                             /// cards only such a run does."
+                        )
+                        .unwrap();
+                    }
+                    writeln!(out, "{line}").unwrap();
                 }
-                let (_, _, enum_name, suffix) = POOLS
-                    .iter()
-                    .find(|(pool, ..)| *pool == card.pool)
-                    .expect("a card has a generated pool");
-                writeln!(
-                    out,
-                    "                Cards::{}({enum_name}::{}),",
-                    enum_name.trim_end_matches("Card"),
-                    variant(card, *suffix)
-                )
-                .unwrap();
             }
-            writeln!(out, "            ],").unwrap();
         }
-        writeln!(out, "        }},").unwrap();
     }
-    writeln!(out, "        _ => EMPTY_DRAFT,").unwrap();
-    writeln!(out, "    }}").unwrap();
-    writeln!(out, "}}\n").unwrap();
-
-    writeln!(
-        out,
-        "/// The colourless pool, split by rarity.\n\
-         ///\n\
-         /// `ColorlessCardPool.GetUnlockedCards` for a run of one player, which\n\
-         /// leaves out the cards only a multiplayer run deals. No character\n\
-         /// holds it, so no reward pool covers it. The pool's own order is not\n\
-         /// the id order: it deals Jack of All Trades before Jackpot, and the\n\
-         /// two are the same rarity, so the draw lands differently."
-    )
-    .unwrap();
-    writeln!(
-        out,
-        "pub fn colorless_cards() -> Drafted<'static, Cards> {{"
-    )
-    .unwrap();
-    let colorless = shop_pools.get(COLORLESS).ok_or_else(|| Error::NoOrder {
-        kind: "shoppool",
-        pool: COLORLESS.to_string(),
-    })?;
-    writeln!(out, "    Drafted {{").unwrap();
-    for (field, rarity) in [
-        ("common", "Common"),
-        ("uncommon", "Uncommon"),
-        ("rare", "Rare"),
-    ] {
-        writeln!(out, "        {field}: &[").unwrap();
-        for (_, id) in colorless {
-            let card = cards
-                .iter()
-                .find(|card| card.id == *id)
-                .expect("validated above");
-            if sanitize(&card.rarity) != rarity {
-                continue;
-            }
-            let (_, _, enum_name, suffix) = POOLS
-                .iter()
-                .find(|(pool, ..)| *pool == card.pool)
-                .expect("a card has a generated pool");
-            writeln!(
-                out,
-                "            Cards::{}({enum_name}::{}),",
-                enum_name.trim_end_matches("Card"),
-                variant(card, *suffix)
-            )
-            .unwrap();
-        }
-        writeln!(out, "        ],").unwrap();
-    }
-    writeln!(out, "    }}").unwrap();
-    writeln!(out, "}}\n").unwrap();
 
     writeln!(
         out,
@@ -1490,6 +1241,14 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     writeln!(out).unwrap();
     writeln!(out, "    fn visually_colorless(self) -> bool {{").unwrap();
     writeln!(out, "        self.data().visually_colorless").unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out).unwrap();
+    writeln!(
+        out,
+        "    fn multiplayer_constraint(self) -> sts2_core::MultiplayerConstraint {{"
+    )
+    .unwrap();
+    writeln!(out, "        self.data().multiplayer_constraint").unwrap();
     writeln!(out, "    }}").unwrap();
     writeln!(out).unwrap();
     writeln!(out, "    fn turn_end_in_hand(self) -> bool {{").unwrap();
@@ -1669,4 +1428,352 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     );
 
     Ok(build)
+}
+
+/// Pools by name, each as the cards in the game's order, beside their place.
+type Lists = BTreeMap<String, Vec<(usize, String)>>;
+
+/// The pool tables a run draws from, with `suffix` on each function's name.
+fn pool_tables(
+    out: &mut String,
+    cards: &[Card],
+    combat_pools: &Lists,
+    shop_pools: &Lists,
+    reward_pools: &Lists,
+    suffix: &str,
+) -> Result<(), Error> {
+    writeln!(
+        out,
+        "/// A character pool as a combat generation effect sees it.\n\
+         ///\n\
+         /// [`pool_cards`] narrowed by `CardFactory.FilterForCombat`, in the\n\
+         /// same order, which is the order the shuffle it feeds will see. An\n\
+         /// effect that wants one card type filters this further, and\n\
+         /// filtering keeps the order, so the result is what the game's own\n\
+         /// query gives."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "pub fn combat_cards{suffix}(pool: CardPool) -> &'static [Cards] {{"
+    )
+    .unwrap();
+    writeln!(out, "    match pool {{").unwrap();
+    for (pool_id, _, enum_name, suffix) in POOLS
+        .iter()
+        .copied()
+        .filter(|(_, _, _, suffix)| suffix.is_some())
+    {
+        let pool_name = camel(pool_id.trim_end_matches("_CARD_POOL"));
+        writeln!(out, "        CardPool::{pool_name} => &[").unwrap();
+        let entries = combat_pools.get(pool_id).ok_or_else(|| Error::NoOrder {
+            kind: "combatpool",
+            pool: pool_id.to_string(),
+        })?;
+        for (_, id) in entries {
+            let card = cards
+                .iter()
+                .find(|card| card.id == *id)
+                .expect("validated above");
+            writeln!(
+                out,
+                "            Cards::{}({enum_name}::{}),",
+                enum_name.trim_end_matches("Card"),
+                variant(card, suffix)
+            )
+            .unwrap();
+        }
+        writeln!(out, "        ],").unwrap();
+    }
+    writeln!(out, "        _ => &[],").unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out, "}}\n").unwrap();
+
+    writeln!(
+        out,
+        "/// A pool as a merchant sees it.\n\
+         ///\n\
+         /// [`pool_cards`] narrowed by `GetUnlockedCards` for a one-player\n\
+         /// run, in the same order. A shelf narrows this further by rarity and\n\
+         /// by card type, and filtering keeps the order, so the result is what\n\
+         /// the game's own query gives."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "pub fn merchant_cards{suffix}(pool: CardPool) -> &'static [Cards] {{"
+    )
+    .unwrap();
+    writeln!(out, "    match pool {{").unwrap();
+    for (pool_id, _, enum_name, suffix) in POOLS
+        .iter()
+        .copied()
+        .filter(|(_, _, _, suffix)| suffix.is_some())
+    {
+        let pool_name = camel(pool_id.trim_end_matches("_CARD_POOL"));
+        writeln!(out, "        CardPool::{pool_name} => &[").unwrap();
+        let entries = shop_pools.get(pool_id).ok_or_else(|| Error::NoOrder {
+            kind: "shoppool",
+            pool: pool_id.to_string(),
+        })?;
+        for (_, id) in entries {
+            let card = cards
+                .iter()
+                .find(|card| card.id == *id)
+                .expect("validated above");
+            writeln!(
+                out,
+                "            Cards::{}({enum_name}::{}),",
+                enum_name.trim_end_matches("Card"),
+                variant(card, suffix)
+            )
+            .unwrap();
+        }
+        writeln!(out, "        ],").unwrap();
+    }
+    writeln!(out, "        _ => &[],").unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out, "}}\n").unwrap();
+
+    writeln!(
+        out,
+        "/// The colourless pool as a merchant sees it.\n\
+         ///\n\
+         /// The same narrowing [`merchant_cards`] applies, on the one pool no\n\
+         /// character holds. Two of a merchant's shelves read it."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "pub fn merchant_colorless_cards{suffix}() -> &'static [Cards] {{"
+    )
+    .unwrap();
+    writeln!(out, "    &[").unwrap();
+    {
+        let entries = shop_pools
+            .get("COLORLESS_CARD_POOL")
+            .ok_or_else(|| Error::NoOrder {
+                kind: "shoppool",
+                pool: COLORLESS.to_string(),
+            })?;
+        for (_, id) in entries {
+            let card = cards
+                .iter()
+                .find(|card| card.id == *id)
+                .expect("validated above");
+            writeln!(
+                out,
+                "        Cards::Colorless(ColorlessCard::{}),",
+                variant(card, None)
+            )
+            .unwrap();
+        }
+    }
+    writeln!(out, "    ]").unwrap();
+    writeln!(out, "}}\n").unwrap();
+
+    writeln!(
+        out,
+        "/// The colourless pool as a combat generation effect sees it.\n\
+         ///\n\
+         /// The same narrowing [`combat_cards`] applies, on the one pool no\n\
+         /// character holds."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "pub fn combat_colorless_cards{suffix}() -> &'static [Cards] {{"
+    )
+    .unwrap();
+    writeln!(out, "    &[").unwrap();
+    {
+        let entries = combat_pools.get(COLORLESS).ok_or_else(|| Error::NoOrder {
+            kind: "combatpool",
+            pool: COLORLESS.to_string(),
+        })?;
+        for (_, id) in entries {
+            let card = cards
+                .iter()
+                .find(|card| card.id == *id)
+                .expect("validated above");
+            writeln!(
+                out,
+                "        Cards::Colorless(ColorlessCard::{}),",
+                variant(card, None)
+            )
+            .unwrap();
+        }
+    }
+    writeln!(out, "    ]").unwrap();
+    writeln!(out, "}}\n").unwrap();
+
+    // The curse and status pools, which no character holds, each unlocked
+    // and as a combat generation effect sees it. A transform of a curse or a
+    // status draws from its own.
+    for (fname, doc, lists, kind, pool, wrap, card_enum) in [
+        (
+            "unlocked_curse_cards",
+            "The curse pool, unlocked.",
+            &shop_pools,
+            "shoppool",
+            "CURSE_CARD_POOL",
+            "Curse",
+            "CurseCard",
+        ),
+        (
+            "combat_curse_cards",
+            "The curse pool as a combat generation effect sees it.",
+            &combat_pools,
+            "combatpool",
+            "CURSE_CARD_POOL",
+            "Curse",
+            "CurseCard",
+        ),
+        (
+            "unlocked_status_cards",
+            "The status pool, unlocked.",
+            &shop_pools,
+            "shoppool",
+            "STATUS_CARD_POOL",
+            "Status",
+            "StatusCard",
+        ),
+        (
+            "combat_status_cards",
+            "The status pool as a combat generation effect sees it.",
+            &combat_pools,
+            "combatpool",
+            "STATUS_CARD_POOL",
+            "Status",
+            "StatusCard",
+        ),
+    ] {
+        writeln!(out, "/// {doc}").unwrap();
+        writeln!(out, "pub fn {fname}{suffix}() -> &'static [Cards] {{").unwrap();
+        writeln!(out, "    &[").unwrap();
+        let entries = lists.get(pool).ok_or_else(|| Error::NoOrder {
+            kind,
+            pool: pool.to_string(),
+        })?;
+        for (_, id) in entries {
+            let card = cards
+                .iter()
+                .find(|card| card.id == *id)
+                .expect("validated above");
+            writeln!(
+                out,
+                "        Cards::{wrap}({card_enum}::{}),",
+                variant(card, None)
+            )
+            .unwrap();
+        }
+        writeln!(out, "    ]").unwrap();
+        writeln!(out, "}}\n").unwrap();
+    }
+
+    writeln!(
+        out,
+        "/// Cards eligible for an ordinary room reward, split by rarity.\n\
+         ///\n\
+         /// Each slice keeps the game's pool order, so an index into one means\n\
+         /// what the same index into the filtered pool meant. A card at no\n\
+         /// drafted rarity is in none of them, which is what the game's own\n\
+         /// rarity filter does with it."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "pub fn reward_cards{suffix}(character: Character) -> Drafted<'static, Cards> {{"
+    )
+    .unwrap();
+    writeln!(out, "    match character {{").unwrap();
+    for (character, entries) in reward_pools {
+        writeln!(out, "        Character::{} => Drafted {{", camel(character)).unwrap();
+        for (field, rarity) in [
+            ("common", "Common"),
+            ("uncommon", "Uncommon"),
+            ("rare", "Rare"),
+        ] {
+            writeln!(out, "            {field}: &[").unwrap();
+            for (_, id) in entries {
+                let card = cards
+                    .iter()
+                    .find(|card| card.id == *id)
+                    .expect("validated above");
+                if sanitize(&card.rarity) != rarity {
+                    continue;
+                }
+                let (_, _, enum_name, suffix) = POOLS
+                    .iter()
+                    .find(|(pool, ..)| *pool == card.pool)
+                    .expect("a card has a generated pool");
+                writeln!(
+                    out,
+                    "                Cards::{}({enum_name}::{}),",
+                    enum_name.trim_end_matches("Card"),
+                    variant(card, *suffix)
+                )
+                .unwrap();
+            }
+            writeln!(out, "            ],").unwrap();
+        }
+        writeln!(out, "        }},").unwrap();
+    }
+    writeln!(out, "        _ => EMPTY_DRAFT,").unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out, "}}\n").unwrap();
+
+    writeln!(
+        out,
+        "/// The colourless pool, split by rarity.\n\
+         ///\n\
+         /// `ColorlessCardPool.GetUnlockedCards` for a run of one player, which\n\
+         /// leaves out the cards only a multiplayer run deals. No character\n\
+         /// holds it, so no reward pool covers it. The pool's own order is not\n\
+         /// the id order: it deals Jack of All Trades before Jackpot, and the\n\
+         /// two are the same rarity, so the draw lands differently."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "pub fn colorless_cards{suffix}() -> Drafted<'static, Cards> {{"
+    )
+    .unwrap();
+    let colorless = shop_pools.get(COLORLESS).ok_or_else(|| Error::NoOrder {
+        kind: "shoppool",
+        pool: COLORLESS.to_string(),
+    })?;
+    writeln!(out, "    Drafted {{").unwrap();
+    for (field, rarity) in [
+        ("common", "Common"),
+        ("uncommon", "Uncommon"),
+        ("rare", "Rare"),
+    ] {
+        writeln!(out, "        {field}: &[").unwrap();
+        for (_, id) in colorless {
+            let card = cards
+                .iter()
+                .find(|card| card.id == *id)
+                .expect("validated above");
+            if sanitize(&card.rarity) != rarity {
+                continue;
+            }
+            let (_, _, enum_name, suffix) = POOLS
+                .iter()
+                .find(|(pool, ..)| *pool == card.pool)
+                .expect("a card has a generated pool");
+            writeln!(
+                out,
+                "            Cards::{}({enum_name}::{}),",
+                enum_name.trim_end_matches("Card"),
+                variant(card, *suffix)
+            )
+            .unwrap();
+        }
+        writeln!(out, "        ],").unwrap();
+    }
+    writeln!(out, "    }}").unwrap();
+    writeln!(out, "}}\n").unwrap();
+
+    Ok(())
 }

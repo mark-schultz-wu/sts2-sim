@@ -67,6 +67,7 @@ public static class CardDump
         output.Append("# pool <pool> <index> <card>\n");
         output.Append("# combatpool <pool> <index> <card>\n");
         output.Append("# rewardpool <character> <index> <card>\n");
+        output.Append("# constraint <card> <constraint> -- each card a run's player count narrows a pool by\n");
 
         foreach (CardPoolModel pool in ModelDb.AllCardPools.OrderBy(p => p.Id.Entry, StringComparer.Ordinal))
         {
@@ -85,9 +86,9 @@ public static class CardDump
         // would mean a per-card `CanBeGeneratedInCombat` and
         // `MultiplayerConstraint` column and then re-running the filter here.
         //
-        // `SingleplayerOnly` is what a one-player run's `RunState` reports, and
-        // `FilterForPlayerCount` narrows the same way after it, so one pass
-        // over `GetUnlockedCards` is the whole filter.
+        // No player-count constraint is applied. A run narrows the list by its
+        // own count, as `GetUnlockedCards` and `FilterForPlayerCount` do,
+        // from each card's `constraint` line. Narrowing keeps the order.
         //
         // The type filter each effect adds is not applied: it belongs to the
         // effect and not to the pool, and filtering preserves order, so
@@ -96,7 +97,7 @@ public static class CardDump
         {
             int index = 0;
             IEnumerable<CardModel> unlocked = pool.GetUnlockedCards(
-                UnlockState.all, CardMultiplayerConstraint.SingleplayerOnly);
+                UnlockState.all, CardMultiplayerConstraint.None);
             foreach (CardModel card in CardFactory.FilterForCombat(unlocked))
             {
                 output.Append($"combatpool {pool.Id.Entry} {index} {card.Id.Entry}\n");
@@ -109,16 +110,14 @@ public static class CardDump
         // `GetUnlockedCards`, and `CreateForMerchant` then drops the basics and
         // runs `FilterForPlayerCount` over what is left.
         //
-        // Dumped rather than derived for the same reason `combatpool` is: the
-        // filter reads `MultiplayerConstraint`, which is on the model and in no
-        // column here. The rarity and type filters a shelf adds are not
-        // applied, because they belong to the shelf and filtering preserves
-        // order.
+        // Unnarrowed by player count, as `combatpool` is. The rarity and type
+        // filters a shelf adds are not applied either, because they belong to
+        // the shelf and filtering preserves order.
         foreach (CardPoolModel pool in ModelDb.AllCardPools.OrderBy(p => p.Id.Entry, StringComparer.Ordinal))
         {
             int index = 0;
             IEnumerable<CardModel> unlocked = pool.GetUnlockedCards(
-                UnlockState.all, CardMultiplayerConstraint.SingleplayerOnly);
+                UnlockState.all, CardMultiplayerConstraint.None);
             foreach (CardModel card in unlocked)
             {
                 output.Append($"shoppool {pool.Id.Entry} {index} {card.Id.Entry}\n");
@@ -131,7 +130,12 @@ public static class CardDump
             Player player = Player.CreateForNewRun(character, UnlockState.all, 1uL);
             CardCreationOptions options = CardCreationOptions.ForRoom(player, RoomType.Monster);
             int index = 0;
-            foreach (CardModel card in options.GetPossibleCards(player))
+            // `GetPossibleCards`, but unnarrowed by player count, as the pools
+            // above are: it reads the constraint off the player's run.
+            IEnumerable<CardModel> possible = options.CardPools
+                .SelectMany(p => p.GetUnlockedCards(UnlockState.all, CardMultiplayerConstraint.None))
+                .Where(c => options.CardPoolFilter == null || options.CardPoolFilter(c));
+            foreach (CardModel card in possible)
             {
                 output.Append($"rewardpool {character.Id.Entry} {index} {card.Id.Entry}\n");
                 index++;
@@ -141,6 +145,12 @@ public static class CardDump
         List<CardModel> cards = ModelDb.AllCards
             .OrderBy(c => c.Id.Entry, StringComparer.Ordinal)
             .ToList();
+
+        // `CardModel.MultiplayerConstraint`, for each card that has one.
+        foreach (CardModel card in cards.Where(c => c.MultiplayerConstraint != CardMultiplayerConstraint.None))
+        {
+            output.Append($"constraint {card.Id.Entry} {card.MultiplayerConstraint}\n");
+        }
 
         foreach (CardModel card in cards)
         {

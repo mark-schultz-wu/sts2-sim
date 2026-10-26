@@ -32,6 +32,9 @@ pub trait EventView<V: ContentVersion> {
     /// Not in an observation, which reports what a run holds rather than who
     /// is holding it. The run itself is what answers an event's questions.
     fn character(&self) -> V::Character;
+    /// Whether the run has several players, which the card pools an event
+    /// draws from deal the co-op cards from.
+    fn multiplayer(&self) -> bool;
     /// The runs the profile had won with the character as this one started.
     /// See [`Start::wins`](crate::Start::wins).
     fn wins(&self) -> u32;

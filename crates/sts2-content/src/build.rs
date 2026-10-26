@@ -197,14 +197,19 @@ pub trait Tables: ContentVersion {
     /// The bounds a monster's health is rolled between, lowest first.
     fn monster_hp(monster: Self::Monster) -> (crate::Scaled<u16>, crate::Scaled<u16>);
 
-    /// A character pool's unlocked cards, in the pool's own order.
+    /// A character pool's unlocked cards, in the pool's own order, for a run
+    /// of several players where `multiplayer` says so.
     fn merchant_pool_cards(
         pool: <Self::Card as sts2_core::CardTable>::Pool,
+        multiplayer: bool,
     ) -> &'static [Self::Card];
 
-    /// The cards of a character pool a fight can generate.
-    fn combat_pool_cards(pool: <Self::Card as sts2_core::CardTable>::Pool)
-    -> &'static [Self::Card];
+    /// The cards of a character pool a fight can generate, `multiplayer` as
+    /// [`Tables::merchant_pool_cards`] takes it.
+    fn combat_pool_cards(
+        pool: <Self::Card as sts2_core::CardTable>::Pool,
+        multiplayer: bool,
+    ) -> &'static [Self::Card];
 
     /// The unlocked curses.
     fn unlocked_curse_cards() -> &'static [Self::Card];
@@ -291,14 +296,22 @@ macro_rules! tables {
 
             fn merchant_pool_cards(
                 pool: <Self::Card as sts2_core::CardTable>::Pool,
+                multiplayer: bool,
             ) -> &'static [Self::Card] {
-                crate::$module::cards::merchant_cards(pool)
+                match multiplayer {
+                    false => crate::$module::cards::merchant_cards(pool),
+                    true => crate::$module::cards::merchant_cards_multiplayer(pool),
+                }
             }
 
             fn combat_pool_cards(
                 pool: <Self::Card as sts2_core::CardTable>::Pool,
+                multiplayer: bool,
             ) -> &'static [Self::Card] {
-                crate::$module::cards::combat_cards(pool)
+                match multiplayer {
+                    false => crate::$module::cards::combat_cards(pool),
+                    true => crate::$module::cards::combat_cards_multiplayer(pool),
+                }
             }
 
             fn unlocked_curse_cards() -> &'static [Self::Card] {
@@ -1007,8 +1020,11 @@ macro_rules! rules {
                     crate::behaviour::rules::neow_event::<Self>()
                 }
 
-                fn colorless_cards() -> Drafted<'static, Self::Card> {
-                    crate::$module::cards::colorless_cards()
+                fn colorless_cards(multiplayer: bool) -> Drafted<'static, Self::Card> {
+                    match multiplayer {
+                        false => crate::$module::cards::colorless_cards(),
+                        true => crate::$module::cards::colorless_cards_multiplayer(),
+                    }
                 }
 
                 fn reward_rarity(card: Self::Card) -> RewardRarity {
@@ -1047,32 +1063,62 @@ macro_rules! rules {
                     crate::behaviour::rules::resume_play::<Self, F>(fight, at, chosen)
                 }
 
-                fn reward_cards(character: Self::Character) -> Drafted<'static, Self::Card> {
-                    crate::$module::cards::reward_cards(character)
+                fn reward_cards(
+                    character: Self::Character,
+                    multiplayer: bool,
+                ) -> Drafted<'static, Self::Card> {
+                    match multiplayer {
+                        false => crate::$module::cards::reward_cards(character),
+                        true => crate::$module::cards::reward_cards_multiplayer(character),
+                    }
                 }
 
-                fn combat_cards(character: Self::Character) -> &'static [Self::Card] {
-                    crate::$module::cards::combat_cards(Table::data(character).card_pool)
+                fn combat_cards(
+                    character: Self::Character,
+                    multiplayer: bool,
+                ) -> &'static [Self::Card] {
+                    <Self as crate::build::Tables>::combat_pool_cards(
+                        Table::data(character).card_pool,
+                        multiplayer,
+                    )
                 }
 
-                fn unlocked_cards(character: Self::Character) -> &'static [Self::Card] {
-                    crate::$module::cards::merchant_cards(Table::data(character).card_pool)
+                fn unlocked_cards(
+                    character: Self::Character,
+                    multiplayer: bool,
+                ) -> &'static [Self::Card] {
+                    <Self as crate::build::Tables>::merchant_pool_cards(
+                        Table::data(character).card_pool,
+                        multiplayer,
+                    )
                 }
 
-                fn unlocked_colorless_cards() -> &'static [Self::Card] {
-                    crate::$module::cards::merchant_colorless_cards()
+                fn unlocked_colorless_cards(multiplayer: bool) -> &'static [Self::Card] {
+                    match multiplayer {
+                        false => crate::$module::cards::merchant_colorless_cards(),
+                        true => crate::$module::cards::merchant_colorless_cards_multiplayer(),
+                    }
                 }
 
-                fn combat_colorless_cards() -> &'static [Self::Card] {
-                    crate::$module::cards::combat_colorless_cards()
+                fn combat_colorless_cards(multiplayer: bool) -> &'static [Self::Card] {
+                    match multiplayer {
+                        false => crate::$module::cards::combat_colorless_cards(),
+                        true => crate::$module::cards::combat_colorless_cards_multiplayer(),
+                    }
                 }
 
                 fn merchant_cards(
                     character: Self::Character,
                     kind: CardKind,
                     rarity: RewardRarity,
+                    multiplayer: bool,
                 ) -> Vec<Self::Card> {
-                    crate::behaviour::rules::merchant_cards::<Self>(character, kind, rarity)
+                    crate::behaviour::rules::merchant_cards::<Self>(
+                        character,
+                        kind,
+                        rarity,
+                        multiplayer,
+                    )
                 }
 
                 fn card_kind(card: Self::Card) -> Option<CardKind> {
@@ -1091,12 +1137,19 @@ macro_rules! rules {
                     })
                 }
 
-                fn merchant_colorless_cards(rarity: RewardRarity) -> Vec<Self::Card> {
-                    crate::behaviour::rules::merchant_colorless_cards::<Self>(rarity)
+                fn merchant_colorless_cards(
+                    rarity: RewardRarity,
+                    multiplayer: bool,
+                ) -> Vec<Self::Card> {
+                    crate::behaviour::rules::merchant_colorless_cards::<Self>(rarity, multiplayer)
                 }
 
-                fn transform_options(card: Self::Card, in_combat: bool) -> Vec<Self::Card> {
-                    crate::behaviour::rules::transform_options::<Self>(card, in_combat)
+                fn transform_options(
+                    card: Self::Card,
+                    in_combat: bool,
+                    multiplayer: bool,
+                ) -> Vec<Self::Card> {
+                    crate::behaviour::rules::transform_options::<Self>(card, in_combat, multiplayer)
                 }
 
                 fn reward_potions(character: Self::Character) -> Drafted<'static, Self::Potion> {

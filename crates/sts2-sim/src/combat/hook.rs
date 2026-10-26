@@ -29,7 +29,7 @@ pub(crate) fn apply<V: Rules, F: Fight<V>>(
                 fight.draw(amount);
             }
             HookEffect::GenerateForCombat { kind, count } => {
-                let pool: Vec<V::Card> = V::combat_cards(fight.character())
+                let pool: Vec<V::Card> = V::combat_cards(fight.character(), fight.multiplayer())
                     .iter()
                     .copied()
                     .filter(|&card| V::card_kind(card) == Some(kind))

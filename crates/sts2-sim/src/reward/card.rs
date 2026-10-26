@@ -16,11 +16,12 @@ pub(crate) enum Source<V: Rules> {
 }
 
 impl<V: Rules> Source<V> {
-    /// Its cards, a rarity at a time.
-    pub(crate) fn drafted(self) -> Drafted<'static, V::Card> {
+    /// Its cards, a rarity at a time, in a run of several players where
+    /// `multiplayer` says so.
+    pub(crate) fn drafted(self, multiplayer: bool) -> Drafted<'static, V::Card> {
         match self {
-            Source::Character(character) => V::reward_cards(character),
-            Source::Colorless => V::colorless_cards(),
+            Source::Character(character) => V::reward_cards(character, multiplayer),
+            Source::Colorless => V::colorless_cards(multiplayer),
         }
     }
 }
@@ -31,7 +32,9 @@ impl<V: Rules> Source<V> {
 /// One character's pool is borrowed as the table drafts it. Several are
 /// merged, which only a relic's `ModifyCardRewardCreationOptions` asks for.
 pub(crate) enum Pool<V: Rules> {
-    Own(V::Character),
+    /// A character's own pool, in a run of several players where the flag
+    /// says so.
+    Own(V::Character, bool),
     /// `WithCustomPool` at `CardRarityOddsType.Uniform`: `cards`, each as
     /// likely as any other, which no rarity roll reads. The hook writes the
     /// reward's own options, so what `TryModifyCardRewardOptions` adds
@@ -45,14 +48,15 @@ pub(crate) enum Pool<V: Rules> {
 }
 
 impl<V: Rules> Pool<V> {
-    /// The pools of `sources`, in that order. One character's is borrowed.
-    pub(crate) fn of(sources: &[Source<V>]) -> Self {
+    /// The pools of `sources`, in that order, in a run of several players
+    /// where `multiplayer` says so. One character's is borrowed.
+    pub(crate) fn of(sources: &[Source<V>], multiplayer: bool) -> Self {
         if let [Source::Character(one)] = sources {
-            return Pool::Own(*one);
+            return Pool::Own(*one, multiplayer);
         }
         let merged = |rarity| -> Vec<V::Card> {
             (sources.iter())
-                .flat_map(|&source| source.drafted().at(rarity).iter().copied())
+                .flat_map(|&source| source.drafted(multiplayer).at(rarity).iter().copied())
                 .collect()
         };
         Pool::Merged {
@@ -69,7 +73,7 @@ impl<V: Rules> Pool<V> {
     /// A pool at even odds, which no rarity roll reads.
     pub(crate) fn drafted(&self) -> Drafted<'_, V::Card> {
         match self {
-            Pool::Own(character) => V::reward_cards(*character),
+            Pool::Own(character, multiplayer) => V::reward_cards(*character, *multiplayer),
             Pool::Uniform(_) => unimplemented!("a pool at even odds read by rarity"),
             Pool::Merged {
                 common,

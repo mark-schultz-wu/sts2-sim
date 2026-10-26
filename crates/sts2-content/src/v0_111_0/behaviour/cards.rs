@@ -267,7 +267,7 @@ pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Option<Played<
         Cards::Event(EventCard::Abundance) => {
             use sts2_core::{CardKind, Rules as _, RunStreamKinds as _};
 
-            let mut powers: Vec<_> = V::combat_cards(fight.character())
+            let mut powers: Vec<_> = V::combat_cards(fight.character(), fight.multiplayer())
                 .iter()
                 .copied()
                 .filter(|&card| V::card_kind(card) == Some(CardKind::Power))

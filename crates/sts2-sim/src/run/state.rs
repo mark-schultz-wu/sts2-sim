@@ -1890,8 +1890,11 @@ impl<V: Rules> State<V> {
                 let mut replaced: Vec<(usize, CardIdent<V>)> = taken
                     .iter()
                     .map(|&at| {
-                        let options =
-                            V::transform_options(self.players[seat].deck[at].ident.card, false);
+                        let options = V::transform_options(
+                            self.players[seat].deck[at].ident.card,
+                            false,
+                            self.players.len() > 1,
+                        );
                         let card = *rng
                             .choose(&options)
                             .unwrap_or_else(|_| unimplemented!("a transform with no option"));
@@ -2922,7 +2925,7 @@ impl<V: Rules> State<V> {
                 HookEffect::AddRegularCard(filter) => {
                     self.card_reward_unheard();
                     let character = self.character(seat);
-                    let pool = V::reward_cards(character);
+                    let pool = V::reward_cards(character, self.players.len() > 1);
                     let narrow = |cards: &[V::Card]| -> Vec<V::Card> {
                         cards
                             .iter()
@@ -3544,7 +3547,7 @@ impl<V: Rules> State<V> {
                             crate::reward::card::regular::<V, _>(
                                 self.ascension(),
                                 self.streams.player(seat, V::PlayerRngType::REWARDS),
-                                V::reward_cards(character),
+                                V::reward_cards(character, self.players.len() > 1),
                                 count,
                                 None,
                             )
@@ -3553,11 +3556,12 @@ impl<V: Rules> State<V> {
                             self.card_reward_unheard();
                             let character = self.character(seat);
                             let ascension = self.ascension();
+                            let multiplayer = self.players.len() > 1;
                             crate::reward::card::encounter::<V, _>(
                                 self.streams.player(seat, V::PlayerRngType::REWARDS),
                                 &mut self.players[seat].odds,
                                 ascension,
-                                V::reward_cards(character),
+                                V::reward_cards(character, multiplayer),
                                 count,
                                 None,
                                 crate::reward::card::RarityOdds::Regular,
@@ -3574,7 +3578,54 @@ impl<V: Rules> State<V> {
                     let mut offered = crate::reward::card::regular::<V, _>(
                         self.ascension(),
                         self.streams.player(seat, V::PlayerRngType::REWARDS),
-                        V::colorless_cards(),
+                        V::colorless_cards(self.players.len() > 1),
+                        count,
+                        Some(act),
+                    );
+                    self.reward_options(&mut offered, false);
+                    Pickup::Cards {
+                        offered,
+                        min: 0,
+                        max: 1,
+                    }
+                }
+                HookEffect::ChooseMultiplayerCards {
+                    count,
+                    colorless_first,
+                } => {
+                    use crate::reward::card::{Pool, Source};
+                    use sts2_core::CardTable as _;
+
+                    self.card_reward_unheard();
+                    let act = self.act();
+                    let mut sources: [Source<V>; 2] =
+                        [Source::Character(self.character(seat)), Source::Colorless];
+                    if colorless_first {
+                        sources.reverse();
+                    }
+                    let pool = Pool::of(&sources, self.players.len() > 1);
+                    let drafted = pool.drafted();
+                    let only = |cards: &[V::Card]| -> Vec<V::Card> {
+                        (cards.iter().copied())
+                            .filter(|card| {
+                                card.multiplayer_constraint()
+                                    == sts2_core::MultiplayerConstraint::MultiplayerOnly
+                            })
+                            .collect()
+                    };
+                    let (common, uncommon, rare) = (
+                        only(drafted.common),
+                        only(drafted.uncommon),
+                        only(drafted.rare),
+                    );
+                    let mut offered = crate::reward::card::regular::<V, _>(
+                        self.ascension(),
+                        self.streams.player(seat, V::PlayerRngType::REWARDS),
+                        sts2_core::Drafted {
+                            common: &common,
+                            uncommon: &uncommon,
+                            rare: &rare,
+                        },
                         count,
                         Some(act),
                     );
@@ -4155,6 +4206,7 @@ impl<V: Rules> State<V> {
         use sts2_core::CustomReward;
 
         let (character, act, ascension) = (self.character(seat), self.act(), self.ascension());
+        let multiplayer = self.players.len() > 1;
         // What a pool's hooks leave of a rarity, which they read before the
         // first card is drawn.
         let hooked = match reward {
@@ -4182,7 +4234,7 @@ impl<V: Rules> State<V> {
             CustomReward::ColorlessCards(count) => crate::reward::card::regular::<V, _>(
                 ascension,
                 rng,
-                V::colorless_cards(),
+                V::colorless_cards(self.players.len() > 1),
                 count,
                 None,
             ),
@@ -4197,7 +4249,8 @@ impl<V: Rules> State<V> {
                 rng,
                 match &hooked {
                     Some(cards) => cards,
-                    None => V::reward_cards(pool.unwrap_or(character)).at(rarity),
+                    None => V::reward_cards(pool.unwrap_or(character), self.players.len() > 1)
+                        .at(rarity),
                 },
                 count,
                 upgrade_roll.then_some(act),
@@ -4208,7 +4261,7 @@ impl<V: Rules> State<V> {
                 count,
             } => crate::reward::card::upgraded_of::<V, _>(
                 rng,
-                &V::merchant_cards(character, kind, rarity),
+                &V::merchant_cards(character, kind, rarity, multiplayer),
                 count,
             ),
             reward => unreachable!("{reward:?} makes no pack of cards"),
@@ -4969,7 +5022,7 @@ impl<V: Rules> State<V> {
                 let [card] = crate::reward::card::regular::<V, _>(
                     ascension,
                     rng,
-                    V::reward_cards(character),
+                    V::reward_cards(character, self.players.len() > 1),
                     1,
                     Some(act),
                 )[..] else {
@@ -4996,7 +5049,7 @@ impl<V: Rules> State<V> {
     ) -> Vec<Vec<V::Card>> {
         use sts2_core::rng::{Bound, GameRng as _};
 
-        let pool = V::reward_cards(self.character(seat));
+        let pool = V::reward_cards(self.character(seat), self.players.len() > 1);
         let rng = self.streams.player(seat, V::PlayerRngType::REWARDS);
         let mut used: Vec<V::Card> = Vec::new();
         let mut bundles = Vec::with_capacity(count);
@@ -5055,7 +5108,7 @@ impl<V: Rules> State<V> {
     ) -> V::Card {
         use sts2_core::rng::GameRng as _;
 
-        let pool = V::reward_cards(character).at(rarity);
+        let pool = V::reward_cards(character, self.players.len() > 1).at(rarity);
         let left: Vec<V::Card> = pool
             .iter()
             .copied()
@@ -5092,7 +5145,7 @@ impl<V: Rules> State<V> {
                 {
                     pools.push(Source::Character(character));
                 }
-                crate::reward::card::Pool::of(&pools)
+                crate::reward::card::Pool::of(&pools, self.players.len() > 1)
             }
         }
     }
@@ -5122,11 +5175,17 @@ impl<V: Rules> State<V> {
         };
         let mut cards: Vec<V::Card> = pools
             .iter()
-            .flat_map(|source| source.drafted().at(rarity).iter().copied())
+            .flat_map(|source| {
+                source
+                    .drafted(self.players.len() > 1)
+                    .at(rarity)
+                    .iter()
+                    .copied()
+            })
             .collect();
         if let Some(added) = concat {
             cards.extend(
-                V::unlocked_cards(added)
+                V::unlocked_cards(added, self.players.len() > 1)
                     .iter()
                     .copied()
                     .filter(|&card| V::reward_rarity(card) != sts2_core::RewardRarity::Other),
@@ -5174,13 +5233,16 @@ impl<V: Rules> State<V> {
                     {
                         pools.push(Source::Character(character));
                     }
-                    let possible = crate::reward::card::Pool::of(&pools);
+                    let possible = crate::reward::card::Pool::of(&pools, self.players.len() > 1);
                     let mut cards = possible.drafted().rare.to_vec();
                     if cards.is_empty() {
-                        cards = crate::reward::card::Pool::<V>::of(&[Source::Character(own)])
-                            .drafted()
-                            .rare
-                            .to_vec();
+                        cards = crate::reward::card::Pool::<V>::of(
+                            &[Source::Character(own)],
+                            self.players.len() > 1,
+                        )
+                        .drafted()
+                        .rare
+                        .to_vec();
                     }
                     return Hooked::Uniform(cards);
                 }
@@ -6214,6 +6276,7 @@ impl<V: Rules> State<V> {
             // room's floor counts.
             floor: num_traits::cast(self.floor + num_traits::one()).expect("a floor fits a usize"),
             character: self.players[seat].character,
+            multiplayer: self.players.len() > 1,
             added,
             offset: self.players[seat].odds.rarity,
             ascension: self.ascension(),
@@ -7033,8 +7096,8 @@ impl<V: Rules> State<V> {
         copies: usize,
     ) {
         let pool = match colorless {
-            true => V::unlocked_colorless_cards(),
-            false => V::unlocked_cards(self.character(seat)),
+            true => V::unlocked_colorless_cards(self.players.len() > 1),
+            false => V::unlocked_cards(self.character(seat), self.players.len() > 1),
         };
         // `Uniform` leaves out the basic and ancient cards, which
         // are every rarity a pool holds past the three.
@@ -8218,6 +8281,7 @@ impl<V: Rules> State<V> {
             dealt_relics: &mut dealt,
             floor: num_traits::cast(self.floor).expect("a floor fits a usize"),
             character: self.players[seat].character,
+            multiplayer: self.players.len() > 1,
             added,
             offset: self.players[seat].odds.rarity,
             ascension: self.ascension(),
@@ -8794,6 +8858,10 @@ impl<V: Rules> sts2_core::EventView<V> for AtSeat<'_, V> {
 
     fn character(&self) -> V::Character {
         self.state.players[self.seat].character
+    }
+
+    fn multiplayer(&self) -> bool {
+        self.state.players.len() > 1
     }
 
     fn wins(&self) -> u32 {

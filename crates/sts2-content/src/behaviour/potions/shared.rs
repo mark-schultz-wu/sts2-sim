@@ -163,9 +163,10 @@ pub(super) fn on_use<V: crate::Build, F: Fight<V>>(potion: V::Potion, fight: &mu
             fight,
             crate::behaviour::character_cards(fight, CardKind::Skill),
         ),
-        __c0 if __c0 == V::Potion::COLORLESS_POTION => {
-            free_card_of::<V, _>(fight, V::combat_colorless_cards().to_vec())
-        }
+        __c0 if __c0 == V::Potion::COLORLESS_POTION => free_card_of::<V, _>(
+            fight,
+            V::combat_colorless_cards(fight.multiplayer()).to_vec(),
+        ),
         // `CreatureCmd.Damage` on the target, unpowered and from the player.
         __c0 if __c0 == V::Potion::FIRE_POTION => {
             let target = fight.target();

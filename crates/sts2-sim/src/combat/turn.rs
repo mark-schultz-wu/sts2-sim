@@ -1882,7 +1882,8 @@ pub(super) fn carry_setup<V: Rules>(
                 {
                     match effect {
                         sts2_core::HookEffect::ChooseColorlessIntoHand => {
-                            let mut pool = V::combat_colorless_cards().to_vec();
+                            let mut pool =
+                                V::combat_colorless_cards(live.players.len() > 1).to_vec();
                             let mut board = Board::for_card(
                                 seat,
                                 live,
@@ -2376,7 +2377,11 @@ pub(super) fn carry_setup<V: Rules>(
                             });
                             // `TakeRandom` shuffles the pool once and takes the
                             // first `count`.
-                            let mut pool = V::combat_cards(live.players[seat].character).to_vec();
+                            let mut pool = V::combat_cards(
+                                live.players[seat].character,
+                                live.players.len() > 1,
+                            )
+                            .to_vec();
                             sts2_core::rng::GameRng::unstable_shuffle(rngs.generation, &mut pool);
                             pool.truncate(count);
                             // An empty pool offers nothing, and the game returns.
@@ -2755,7 +2760,7 @@ fn generate_distinct_colorless<V: Rules>(
     ascension: V::AscensionLevel,
     count: V::Number,
 ) {
-    let cards = V::combat_colorless_cards().to_vec();
+    let cards = V::combat_colorless_cards(live.players.len() > 1).to_vec();
     generate_distinct::<V>(seat, live, rngs, belts, ascension, cards, count);
 }
 
@@ -2771,7 +2776,7 @@ fn generate_distinct_from_pool<V: Rules>(
     filter: sts2_core::PoolFilter,
     count: V::Number,
 ) {
-    let cards: Vec<V::Card> = V::combat_cards(live.players[seat].character)
+    let cards: Vec<V::Card> = V::combat_cards(live.players[seat].character, live.players.len() > 1)
         .iter()
         .copied()
         .filter(|&card| crate::reward::card::keeps::<V>(filter, card))
@@ -2824,11 +2829,12 @@ fn generate_from_pool<V: Rules>(
         .unwrap_or_else(|| unimplemented!("making {count:?} cards from a pool"));
     let keeps = |card: V::Card| crate::reward::card::keeps::<V>(filter, card);
     for _ in 0..count {
-        let mut cards: Vec<V::Card> = V::combat_cards(live.players[seat].character)
-            .iter()
-            .copied()
-            .filter(|card| keeps(*card))
-            .collect();
+        let mut cards: Vec<V::Card> =
+            V::combat_cards(live.players[seat].character, live.players.len() > 1)
+                .iter()
+                .copied()
+                .filter(|card| keeps(*card))
+                .collect();
         let mut board = Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
         let Ok([card]) = sts2_core::Fight::generate_cards::<1>(
             &mut board,
@@ -2966,7 +2972,8 @@ pub(super) fn act_on<V: Rules>(
                     .cards
                     .get(from, at)
                     .expect("a card stands where it was found");
-                let options = V::transform_options(held.face.ident.card, true);
+                let options =
+                    V::transform_options(held.face.ident.card, true, live.players.len() > 1);
                 let into = *sts2_core::rng::GameRng::choose(&mut *rngs.selection, &options)
                     .unwrap_or_else(|_| unimplemented!("a transform with no option"));
                 let ascension = live.ascension;

@@ -115,16 +115,11 @@ run as its own machine sees it. The work goes in this order:
    game seat, step by step, as a hunt does (done).
 3. The co-op rules, in the order the runs reach them. A run of several
    players starts, each player meets Neow, and the map takes votes (done).
-   Of 12 seeds, 8 reach the first fight. Next:
+   The card pools deal the co-op cards in a run of several players (done).
+   All 12 seeds match every step to the first fight. Next:
    - A fight of several players. Every player's creature, piles and turn,
      monster health and block scaled by the player count, and turns all
      players take at once.
-   - The card pools a run of several players deals from, which add the
-     co-op cards. Our pools are dumped narrowed for one player, so 3 seeds
-     split on a card offered after a Neow relic. The cards'
-     `MultiplayerConstraint` comes in as data, and the pools narrow at run
-     time, as `CardFactory.FilterForPlayerCount` does.
    - Then rewards, rest sites, shops, events, and death and revival.
-4. Co-op content, as the runs reach it. Massive Scroll is first: one seed
-   takes it from Neow.
+4. Co-op content, as the runs reach it. Massive Scroll is ported.
 
