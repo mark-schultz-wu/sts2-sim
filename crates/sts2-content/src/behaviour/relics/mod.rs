@@ -154,6 +154,7 @@ mod lost_wisp;
 mod lucky_fysh;
 mod lunar_pastry;
 mod mango;
+pub(crate) mod massive_scroll;
 mod maw_bank;
 mod meal_ticket;
 mod meat_on_the_bone;
@@ -376,6 +377,7 @@ pub enum State<V: crate::Build> {
     LavaRock(lava_rock::State),
     LeadPaperweight,
     LeafyPoultice,
+    MassiveScroll,
     LostCoffer,
     LostWisp,
     MercuryHourglass,
@@ -700,6 +702,7 @@ pub(crate) fn event_hook<V: crate::Build>(
         State::UnsettlingLamp(_) => V::own_relic(V::Relic::UNSETTLING_LAMP),
         State::JeweledMask => V::own_relic(V::Relic::JEWELED_MASK),
         State::Planisphere => V::own_relic(V::Relic::PLANISPHERE),
+        State::MassiveScroll => V::own_relic(V::Relic::MASSIVE_SCROLL),
         _ => false,
     };
     if owned && V::own_shared_relic_event_hook(state, hook, asked).is_some() {
@@ -745,6 +748,7 @@ pub(crate) fn event_hook<V: crate::Build>(
         State::HeftyTablet => hefty_tablet::event_hook::<V>(hook, asked),
         State::LavaRock(state) => lava_rock::event_hook::<V>(state, hook, asked),
         State::LeadPaperweight => lead_paperweight::event_hook::<V>(hook, asked),
+        State::MassiveScroll => massive_scroll::event_hook::<V>(hook, asked),
         State::LeafyPoultice => leafy_poultice::event_hook::<V>(hook, asked),
         State::LostCoffer => lost_coffer::event_hook::<V>(hook, asked),
         State::LostWisp => lost_wisp::event_hook::<V>(hook, asked),
@@ -1205,6 +1209,7 @@ pub(crate) fn modify_hook<V: crate::Build>(
         | State::HeftyTablet
         | State::LavaRock(_)
         | State::LeadPaperweight
+        | State::MassiveScroll
         | State::LeafyPoultice
         | State::LostCoffer
         | State::LostWisp
@@ -1465,6 +1470,7 @@ impl<V: crate::Build> sts2_core::RelicModel<V> for State<V> {
             __c0 if __c0 == V::Relic::HEFTY_TABLET => State::HeftyTablet,
             __c0 if __c0 == V::Relic::LAVA_ROCK => State::LavaRock(lava_rock::State::default()),
             __c0 if __c0 == V::Relic::LEAD_PAPERWEIGHT => State::LeadPaperweight,
+            __c0 if __c0 == V::Relic::MASSIVE_SCROLL => State::MassiveScroll,
             __c0 if __c0 == V::Relic::LEAFY_POULTICE => State::LeafyPoultice,
             __c0 if __c0 == V::Relic::LOST_COFFER => State::LostCoffer,
             __c0 if __c0 == V::Relic::LOST_WISP => State::LostWisp,

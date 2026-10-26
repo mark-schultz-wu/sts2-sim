@@ -583,6 +583,8 @@ pub struct CardData {
     pub gains_block: bool,
     /// `VisualCardPool.IsColorless`: whether it shows as colorless.
     pub visually_colorless: bool,
+    /// `MultiplayerConstraint`: which runs deal it, by their player count.
+    pub multiplayer_constraint: sts2_core::MultiplayerConstraint,
     /// `HasTurnEndInHandEffect`: whether it acts when a turn ends with it in hand.
     pub turn_end_in_hand: bool,
 }
@@ -5045,6 +5047,10 @@ impl sts2_core::CardTable for Cards {
 
     fn visually_colorless(self) -> bool {
         self.data().visually_colorless
+    }
+
+    fn multiplayer_constraint(self) -> sts2_core::MultiplayerConstraint {
+        self.data().multiplayer_constraint
     }
 
     fn turn_end_in_hand(self) -> bool {

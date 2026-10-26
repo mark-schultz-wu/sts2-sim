@@ -3589,6 +3589,53 @@ impl<V: Rules> State<V> {
                         max: 1,
                     }
                 }
+                HookEffect::ChooseMultiplayerCards {
+                    count,
+                    colorless_first,
+                } => {
+                    use crate::reward::card::{Pool, Source};
+                    use sts2_core::CardTable as _;
+
+                    self.card_reward_unheard();
+                    let act = self.act();
+                    let mut sources: [Source<V>; 2] =
+                        [Source::Character(self.character(seat)), Source::Colorless];
+                    if colorless_first {
+                        sources.reverse();
+                    }
+                    let pool = Pool::of(&sources, self.players.len() > 1);
+                    let drafted = pool.drafted();
+                    let only = |cards: &[V::Card]| -> Vec<V::Card> {
+                        (cards.iter().copied())
+                            .filter(|card| {
+                                card.multiplayer_constraint()
+                                    == sts2_core::MultiplayerConstraint::MultiplayerOnly
+                            })
+                            .collect()
+                    };
+                    let (common, uncommon, rare) = (
+                        only(drafted.common),
+                        only(drafted.uncommon),
+                        only(drafted.rare),
+                    );
+                    let mut offered = crate::reward::card::regular::<V, _>(
+                        self.ascension(),
+                        self.streams.player(seat, V::PlayerRngType::REWARDS),
+                        sts2_core::Drafted {
+                            common: &common,
+                            uncommon: &uncommon,
+                            rare: &rare,
+                        },
+                        count,
+                        Some(act),
+                    );
+                    self.reward_options(&mut offered, false);
+                    Pickup::Cards {
+                        offered,
+                        min: 0,
+                        max: 1,
+                    }
+                }
                 effect => unimplemented!("a run-level relic effect: {effect:?}"),
             };
             return Some(Asked {

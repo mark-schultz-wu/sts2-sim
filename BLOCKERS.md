@@ -116,11 +116,10 @@ run as its own machine sees it. The work goes in this order:
 3. The co-op rules, in the order the runs reach them. A run of several
    players starts, each player meets Neow, and the map takes votes (done).
    The card pools deal the co-op cards in a run of several players (done).
-   Of 12 seeds, 11 reach the first fight. Next:
+   All 12 seeds match every step to the first fight. Next:
    - A fight of several players. Every player's creature, piles and turn,
      monster health and block scaled by the player count, and turns all
      players take at once.
    - Then rewards, rest sites, shops, events, and death and revival.
-4. Co-op content, as the runs reach it. Massive Scroll is first: one seed
-   takes it from Neow.
+4. Co-op content, as the runs reach it. Massive Scroll is ported.
 
