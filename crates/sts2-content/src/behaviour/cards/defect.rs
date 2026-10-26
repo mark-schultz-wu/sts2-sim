@@ -688,7 +688,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
     }
 }
 
-crate::behaviour::paused::paused_play!(Card, crate::behaviour::cards::Resume::Defect);
+crate::behaviour::paused::paused_play!(V::Card, crate::behaviour::cards::Resume::Defect);
 
 /// Its damage to the target, `hits` times, as one attack.
 fn hit_target<V: crate::Build, F: Fight<V>>(fight: &mut F, hits: crate::behaviour::cards::Number) {

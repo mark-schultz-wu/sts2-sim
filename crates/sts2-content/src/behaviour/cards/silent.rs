@@ -497,7 +497,7 @@ fn discard_taken<V: crate::Build, K: FightKind<V>>(
     );
 }
 
-crate::behaviour::paused::paused_play!(Card, crate::behaviour::cards::Resume::Silent);
+crate::behaviour::paused::paused_play!(V::Card, crate::behaviour::cards::Resume::Silent);
 
 /// `Malaise`: its X, one more once upgraded, off the target's Strength, then
 /// as Weak on it.

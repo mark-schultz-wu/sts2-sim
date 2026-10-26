@@ -257,7 +257,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
     }
 }
 
-crate::behaviour::paused::paused_play!(Card, crate::behaviour::cards::Resume::Event);
+crate::behaviour::paused::paused_play!(V::Card, crate::behaviour::cards::Resume::Event);
 
 /// `CardPileCmd.Add` of the cards a pick took, into hand.
 fn into_hand_taken<V: crate::Build, K: FightKind<V>>(lent: &mut Lent<'_, '_, V, K>) {

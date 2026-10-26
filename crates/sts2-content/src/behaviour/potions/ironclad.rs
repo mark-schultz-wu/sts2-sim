@@ -72,4 +72,4 @@ pub fn paused<V: crate::Build, K: sts2_core::FightKind<V>>(potion: V::Potion) {
     }
 }
 
-crate::behaviour::paused::paused_play!(Potion, crate::behaviour::potions::Resume::Ironclad);
+crate::behaviour::paused::paused_play!(V::Potion, crate::behaviour::potions::Resume::Ironclad);

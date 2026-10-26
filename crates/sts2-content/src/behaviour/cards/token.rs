@@ -166,7 +166,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
     }
 }
 
-crate::behaviour::paused::paused_play!(Card, crate::behaviour::cards::Resume::Token);
+crate::behaviour::paused::paused_play!(V::Card, crate::behaviour::cards::Resume::Token);
 
 /// `SovereignBlade`'s attack: its damage, as many times as it repeats, to
 /// every opponent under Seeking Edge.

@@ -556,7 +556,7 @@ pub(super) fn resume_move<V: Rules>(
         ascension,
         (actor, damage, repeats),
     );
-    let played = V::resume_move(monster, move_id, at, &mut board);
+    let played = V::resume_move::<super::board::BoardKind<V>>(monster, move_id, at, &mut board);
     let ended = board.ended();
     let skipped = std::mem::take(&mut board.skipped);
     super::play::merge::<V>(&mut live.skip_tick, skipped);
@@ -4659,7 +4659,8 @@ fn enemy_turn<V: Rules>(
             ascension,
             (id, damage, repeats),
         );
-        let played = V::perform_move(monster, next_move.id, &mut board);
+        let played =
+            V::perform_move::<super::board::BoardKind<V>>(monster, next_move.id, &mut board);
         ended = ended.or(board.ended());
         super::play::merge::<V>(skipping, std::mem::take(&mut board.skipped));
         // An intent that works its hit count or damage out from the model

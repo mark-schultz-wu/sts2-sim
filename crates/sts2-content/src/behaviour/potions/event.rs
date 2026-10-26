@@ -72,7 +72,7 @@ pub fn paused<V: crate::Build, K: sts2_core::FightKind<V>>(potion: V::Potion) {
     }
 }
 
-crate::behaviour::paused::paused_play!(Potion, crate::behaviour::potions::Resume::Event);
+crate::behaviour::paused::paused_play!(V::Potion, crate::behaviour::potions::Resume::Event);
 
 /// `TargetType`, for the one potion that reads whether a fight is on:
 /// Foul Potion hits every enemy in one, and names no creature outside.

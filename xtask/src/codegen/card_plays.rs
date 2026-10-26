@@ -686,7 +686,7 @@ fn dispatch(version: &str, pausing: &[(&str, &str, bool)]) -> String {
          match state {\n\
          diapause::CoroutineState::Complete(()) => crate::behaviour::Played::Done,\n\
          diapause::CoroutineState::Yielded(ask) => {\n\
-         ask.at(crate::behaviour::cards::Resume::Build(play.into()).into())\n\
+         ask.at(crate::behaviour::Resume::Build(play.into()))\n\
          }\n\
          }\n\
          }\n",

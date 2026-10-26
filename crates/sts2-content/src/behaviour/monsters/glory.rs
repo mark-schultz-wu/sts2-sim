@@ -289,12 +289,11 @@ const RITUAL: Number = 9;
 
 /// Perform one of the Glory monsters' moves, where the generator left it to
 /// a hand port.
-pub(super) fn perform<V: crate::Build, F: Fight<V>>(
+pub(super) fn perform<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
     monster: V::Monster,
     move_id: V::MoveId,
-    step: u8,
-    fight: &mut F,
-) -> Option<u8> {
+    fight: &mut K::Fight<'a>,
+) -> crate::behaviour::Played<V, K> {
     match (monster, move_id) {
         // `BootUpMove`: its block, then Strength for each stock it lost.
         (__c0, __c1) if (__c0 == V::Monster::AXEBOT && __c1 == V::MoveId::BOOT_UP_MOVE) => {
@@ -366,10 +365,7 @@ pub(super) fn perform<V: crate::Build, F: Fight<V>>(
         (__c0, __c1)
             if (__c0 == V::Monster::FABRICATOR && __c1 == V::MoveId::FABRICATING_STRIKE_MOVE) =>
         {
-            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
-                return Some(1);
-            }
-            spawn_bot::<V, _>(fight, V::GLORY_AGGRO_SPAWNS);
+            return start::<V, K>((monster, move_id), fight);
         }
         // `GuardMove`: fifteen block, unpowered, on each Fabricator.
         (__c0, __c1) if (__c0 == V::Monster::GUARDBOT && __c1 == V::MoveId::GUARD_MOVE) => {
@@ -468,12 +464,7 @@ pub(super) fn perform<V: crate::Build, F: Fight<V>>(
         // `VerdictMove`: its hit, four Vulnerable on each target, then Soar
         // comes off.
         (__c0, __c1) if (__c0 == V::Monster::OWL_MAGISTRATE && __c1 == V::MoveId::VERDICT) => {
-            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
-                return Some(1);
-            }
-            fight.apply_to_opponents(V::Power::VULNERABLE_POWER, PowerAmount::Counted(4));
-            let actor = fight.actor();
-            fight.remove_power(actor, V::Power::SOAR_POWER);
+            return start::<V, K>((monster, move_id), fight);
         }
         // `LeechingHugMove`: three Weak on each target from nobody, then
         // three Strength onto itself.
@@ -560,18 +551,7 @@ pub(super) fn perform<V: crate::Build, F: Fight<V>>(
         (__c0, __c1)
             if (__c0 == V::Monster::TEST_SUBJECT && __c1 == V::MoveId::MULTI_CLAW_MOVE) =>
         {
-            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
-                return Some(1);
-            }
-            fight.model(|model| {
-                let crate::behaviour::monsters::Model::TestSubject { extra_claws, .. } = model
-                else {
-                    unreachable!("a Test Subject holding {model:?}")
-                };
-                *extra_claws = extra_claws
-                    .checked_add(1)
-                    .unwrap_or_else(|| unimplemented!("a Multi Claw past {extra_claws} before it"));
-            });
+            return start::<V, K>((monster, move_id), fight);
         }
         // `BurningGrowlMove`: Burns into the discard pile, then Strength.
         (__c0, __c1)
@@ -612,10 +592,77 @@ pub(super) fn perform<V: crate::Build, F: Fight<V>>(
                 _ => {}
             }
         }
-        _ => return V::generated_move(monster, move_id, step, fight),
+        _ => return V::generated_move::<K>(monster, move_id, fight),
     }
-    None
+    crate::behaviour::Played::Done
 }
+
+/// A move of a monster in this file that can stop on a question. It attacks,
+/// and does the rest once any question the attack left is answered. Each
+/// step is lent the fight, and after a question the answer.
+///
+/// The attack is the one command a move can stand still on. Every other
+/// command takes a `ThrowingPlayerChoiceContext`, which throws on a
+/// question.
+#[diapause::coroutine(
+    yield = crate::behaviour::paused::Ask<V>,
+    resume = for<'f, 'a> crate::behaviour::paused::Lent<'f, 'a, V, K>
+)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub fn paused<V: crate::Build, K: sts2_core::FightKind<V>>(item: (V::Monster, V::MoveId)) {
+    let monster: V::Monster = item.0;
+    let move_id: V::MoveId = item.1;
+    match (monster, move_id) {
+        // `FabricatingStrikeMove`: its hit, then an aggressive bot.
+        (__c0, __c1)
+            if (__c0 == V::Monster::FABRICATOR && __c1 == V::MoveId::FABRICATING_STRIKE_MOVE) =>
+        {
+            resumed!().fight.attack_opponents();
+            if resumed!().fight.waiting() {
+                yield_!(crate::behaviour::paused::Ask::Waiting);
+            }
+            let fight = &mut *resumed!().fight;
+            spawn_bot::<V, _>(fight, V::GLORY_AGGRO_SPAWNS);
+        }
+        // `VerdictMove`: its hit, four Vulnerable on each target, then Soar
+        // comes off.
+        (__c0, __c1) if (__c0 == V::Monster::OWL_MAGISTRATE && __c1 == V::MoveId::VERDICT) => {
+            resumed!().fight.attack_opponents();
+            if resumed!().fight.waiting() {
+                yield_!(crate::behaviour::paused::Ask::Waiting);
+            }
+            let fight = &mut *resumed!().fight;
+            fight.apply_to_opponents(V::Power::VULNERABLE_POWER, PowerAmount::Counted(4));
+            let actor = fight.actor();
+            fight.remove_power(actor, V::Power::SOAR_POWER);
+        }
+        // `MultiClawMove`: its hits, then one more for the next.
+        (__c0, __c1)
+            if (__c0 == V::Monster::TEST_SUBJECT && __c1 == V::MoveId::MULTI_CLAW_MOVE) =>
+        {
+            resumed!().fight.attack_opponents();
+            if resumed!().fight.waiting() {
+                yield_!(crate::behaviour::paused::Ask::Waiting);
+            }
+            let fight = &mut *resumed!().fight;
+            fight.model(|model| {
+                let crate::behaviour::monsters::Model::TestSubject { extra_claws, .. } = model
+                else {
+                    unreachable!("a Test Subject holding {model:?}")
+                };
+                *extra_claws = extra_claws
+                    .checked_add(1)
+                    .unwrap_or_else(|| unimplemented!("a Multi Claw past {extra_claws} before it"));
+            });
+        }
+        other => unreachable!("{other:?} never stops on a question"),
+    }
+}
+
+crate::behaviour::paused::paused_play!(
+    (V::Monster, V::MoveId),
+    crate::behaviour::monsters::Resume::Glory
+);
 
 /// A Glory monster's attack damage that it works out from the fight.
 pub(super) fn computed_damage<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(

@@ -656,9 +656,6 @@ pub enum Resume<V: crate::Build, K: sts2_core::FightKind<V>> {
     Silent(silent::paused::State<V, K>),
     /// A token card's play, paused where it asked.
     Token(token::paused::State<V, K>),
-    /// A play of the build's [`crate::Build::Paused`], standing still where
-    /// it asked.
-    Build(V::Paused<K>),
 }
 
 /// The cards a play goes through, across the questions it waits on, in the
@@ -1224,7 +1221,6 @@ pub(crate) fn resume<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
         Resume::Regent(paused) => regent::resume::<V, K>(fight, paused, taken),
         Resume::Silent(paused) => silent::resume::<V, K>(fight, paused, taken),
         Resume::Token(paused) => token::resume::<V, K>(fight, paused, taken),
-        Resume::Build(paused) => V::resume_paused::<K>(fight, paused, taken),
     }
 }
 

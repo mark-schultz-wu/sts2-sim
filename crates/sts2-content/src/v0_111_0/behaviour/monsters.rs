@@ -1,19 +1,17 @@
 //! The monster moves whose rules this build ports for itself, which the
 //! shared monsters hand over through [`crate::build::OwnRules`].
 
-use sts2_core::Fight;
+use sts2_core::{Fight, FightKind};
 
 use super::super::V0_111_0 as V;
 use super::super::generated::monsters::{Monster, MoveId};
 
-/// A move of this build's own, performed: the step to go on from, or nothing
-/// for a shared move.
-pub(crate) fn own_move<F: Fight<V>>(
+/// A move of this build's own, performed, or nothing for a shared move.
+pub(crate) fn own_move<'a, K: FightKind<V>>(
     monster: Monster,
     move_id: MoveId,
-    step: u8,
-    fight: &mut F,
-) -> Option<Option<u8>> {
+    fight: &mut K::Fight<'a>,
+) -> Option<crate::behaviour::Played<V, K>> {
     match (monster, move_id) {
         // `Hatch` draws `NextInt(HatchlingMinHp, HatchlingMaxHp + 1)`, so the
         // top of the range can come up.
@@ -21,24 +19,78 @@ pub(crate) fn own_move<F: Fight<V>>(
             crate::behaviour::monsters::hive::hatch::<V, _>(fight, |fight, min, max| {
                 fight.niche_int(min, max + 1)
             });
-            Some(None)
+            Some(crate::behaviour::Played::Done)
         }
-        // `FlamethrowerMove`: its hit, then four Burns into the hand of the
-        // one player. v0.107.1's added the Burns alone.
-        (Monster::MechaKnight, MoveId::FlamethrowerMove) => {
-            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
-                return Some(Some(1));
+        (Monster::MechaKnight, MoveId::FlamethrowerMove) => Some(start::<K>(move_id, fight)),
+        _ => None,
+    }
+}
+
+/// A move of this build's own that can stop on a question. It attacks, and
+/// does the rest once any question the attack left is answered. Each step is
+/// lent the fight, and after a question the answer.
+#[diapause::coroutine(
+    yield = crate::behaviour::paused::Ask<V>,
+    resume = for<'f, 'a> crate::behaviour::paused::Lent<'f, 'a, V, K>
+)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub fn paused<K: FightKind<V>>(move_id: MoveId) {
+    match move_id {
+        // The Mecha Knight's `FlamethrowerMove`: its hit, then four Burns
+        // into the hand of the one player. v0.107.1's added the Burns alone.
+        MoveId::FlamethrowerMove => {
+            resumed!().fight.attack_opponents();
+            if resumed!().fight.waiting() {
+                yield_!(crate::behaviour::paused::Ask::Waiting);
             }
-            fight.add_generated_cards(
-                sts2_core::CardIdent::new(super::super::generated::cards::Cards::Status(
-                    super::super::generated::cards::StatusCard::Burn,
+            resumed!().fight.add_generated_cards(
+                sts2_core::CardIdent::new(crate::v0_111_0::cards::Cards::Status(
+                    crate::v0_111_0::cards::StatusCard::Burn,
                 )),
                 sts2_core::Pile::Hand,
                 4,
             );
-            Some(None)
         }
-        _ => None,
+        other => unreachable!("{other:?} never stops on a question"),
+    }
+}
+
+/// A move of [`paused`], from its start.
+fn start<'a, K: FightKind<V>>(
+    move_id: MoveId,
+    fight: &mut K::Fight<'a>,
+) -> crate::behaviour::Played<V, K> {
+    let mut play = paused::<K>(move_id);
+    let state = play.start_with(crate::behaviour::paused::Lent { fight, taken: None });
+    settle::<K>(play, state)
+}
+
+/// A paused move of [`paused`], with the answer it waited for.
+pub(crate) fn resume<'a, K: FightKind<V>>(
+    fight: &mut K::Fight<'a>,
+    mut play: paused::State<K>,
+    taken: sts2_core::Taken<V>,
+) -> crate::behaviour::Played<V, K> {
+    let state = diapause::Coroutine::resume(
+        &mut play,
+        crate::behaviour::paused::Lent {
+            fight,
+            taken: Some(taken),
+        },
+    );
+    settle::<K>(play, state)
+}
+
+/// How far a step of `play` got.
+fn settle<K: FightKind<V>>(
+    play: paused::State<K>,
+    state: diapause::CoroutineState<crate::behaviour::paused::Ask<V>, ()>,
+) -> crate::behaviour::Played<V, K> {
+    match state {
+        diapause::CoroutineState::Complete(()) => crate::behaviour::Played::Done,
+        diapause::CoroutineState::Yielded(ask) => ask.at(crate::behaviour::Resume::Build(
+            super::Paused::OwnMoves(play),
+        )),
     }
 }
 

@@ -494,7 +494,7 @@ pub fn paused<V: crate::Build, K: sts2_core::FightKind<V>>(potion: V::Potion) {
     }
 }
 
-crate::behaviour::paused::paused_play!(Potion, crate::behaviour::potions::Resume::Shared);
+crate::behaviour::paused::paused_play!(V::Potion, crate::behaviour::potions::Resume::Shared);
 
 /// Cards of the hand a potion offers.
 type Hand<V> = smallvec::SmallVec<[sts2_core::CardAt<V>; sts2_core::MAX_CARDS_IN_HAND]>;

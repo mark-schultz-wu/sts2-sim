@@ -4,7 +4,7 @@ use sts2_core::{
     Amount, CardAt, CardTable as _, Effect, Fight, Pile, PowerAmount, RunStreamKinds as _, Scaling,
 };
 
-use crate::behaviour::monsters::{Number, Resume};
+use crate::behaviour::monsters::Number;
 use crate::generated::ascension::AscensionLevel;
 use crate::generated::cards::CardRarity;
 use crate::generated::runstate::CombatSide;
@@ -184,12 +184,11 @@ pub(super) fn conditional<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
 
 /// Perform one of the Hive monsters' moves, where the generator left it to a
 /// hand port.
-pub(super) fn perform<V: crate::Build, F: Fight<V>>(
+pub(super) fn perform<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
     monster: V::Monster,
     move_id: V::MoveId,
-    step: u8,
-    fight: &mut F,
-) -> Option<u8> {
+    fight: &mut K::Fight<'a>,
+) -> crate::behaviour::Played<V, K> {
     match (monster, move_id) {
         (__c0, __c1)
             if (__c0 == V::Monster::THIEVING_HOPPER && __c1 == V::MoveId::THIEVERY_MOVE) =>
@@ -201,10 +200,7 @@ pub(super) fn perform<V: crate::Build, F: Fight<V>>(
         (__c0, __c1)
             if (__c0 == V::Monster::LOUSE_PROGENITOR && __c1 == V::MoveId::WEB_CANNON_MOVE) =>
         {
-            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
-                return Some(1);
-            }
-            fight.apply_to_opponents(V::Power::FRAIL_POWER, PowerAmount::Counted(2));
+            return start::<V, K>((monster, move_id), fight);
         }
         (__c0, __c1)
             if (__c0 == V::Monster::LOUSE_PROGENITOR && __c1 == V::MoveId::POUNCE_MOVE) =>
@@ -281,11 +277,7 @@ pub(super) fn perform<V: crate::Build, F: Fight<V>>(
         // `BugStingMove`: its two hits, then Weak and Frail at two on each
         // target.
         (__c0, __c1) if (__c0 == V::Monster::CRUSHER && __c1 == V::MoveId::BUG_STING_MOVE) => {
-            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
-                return Some(1);
-            }
-            fight.apply_to_opponents(V::Power::WEAK_POWER, PowerAmount::Counted(2));
-            fight.apply_to_opponents(V::Power::FRAIL_POWER, PowerAmount::Counted(2));
+            return start::<V, K>((monster, move_id), fight);
         }
         (__c0, __c1) if (__c0 == V::Monster::CRUSHER && __c1 == V::MoveId::ADAPT_MOVE) => {
             let strength = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
@@ -296,15 +288,7 @@ pub(super) fn perform<V: crate::Build, F: Fight<V>>(
         }
         // `GuardedStrikeMove`: its hit, then eighteen block as a move.
         (__c0, __c1) if (__c0 == V::Monster::CRUSHER && __c1 == V::MoveId::GUARDED_STRIKE_MOVE) => {
-            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
-                return Some(1);
-            }
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Number(GUARDED_BLOCK),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
+            return start::<V, K>((monster, move_id), fight);
         }
         (__c0, __c1)
             if (__c0 == V::Monster::ROCKET
@@ -352,10 +336,7 @@ pub(super) fn perform<V: crate::Build, F: Fight<V>>(
         (__c0, __c1)
             if (__c0 == V::Monster::SPINY_TOAD && __c1 == V::MoveId::SPIKE_EXPLOSION_MOVE) =>
         {
-            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
-                return Some(1);
-            }
-            fight.apply_to_actor(V::Power::THORNS_POWER, PowerAmount::Counted(-SPINES));
+            return start::<V, K>((monster, move_id), fight);
         }
         // `CurlAndGrowMove`: `CreatureCmd.GainBlock` of its `CurlBlock` as a
         // move, then Strength of its `GrowStrength` on itself, which a build
@@ -399,7 +380,7 @@ pub(super) fn perform<V: crate::Build, F: Fight<V>>(
         (__c0, __c1)
             if (__c0 == V::Monster::SLUMBERING_BEETLE && __c1 == V::MoveId::ROLL_OUT_MOVE) =>
         {
-            return roll_out::<V, _>(fight, step);
+            return start::<V, K>((monster, move_id), fight);
         }
         // `WritheMove`, whose two hits are the intent's own repeat count.
         (__c0, __c1)
@@ -416,7 +397,7 @@ pub(super) fn perform<V: crate::Build, F: Fight<V>>(
                 || __c0 == V::Monster::DECIMILLIPEDE_SEGMENT_BACK)
                 && __c1 == V::MoveId::BULK_MOVE) =>
         {
-            return bulk::<V, _>(fight, step);
+            return start::<V, K>((monster, move_id), fight);
         }
         (__c0, __c1)
             if ((__c0 == V::Monster::DECIMILLIPEDE_SEGMENT_FRONT
@@ -424,7 +405,7 @@ pub(super) fn perform<V: crate::Build, F: Fight<V>>(
                 || __c0 == V::Monster::DECIMILLIPEDE_SEGMENT_BACK)
                 && __c1 == V::MoveId::CONSTRICT_MOVE) =>
         {
-            return constrict::<V, _>(fight, step);
+            return start::<V, K>((monster, move_id), fight);
         }
         (__c0, __c1)
             if ((__c0 == V::Monster::DECIMILLIPEDE_SEGMENT_FRONT
@@ -434,46 +415,171 @@ pub(super) fn perform<V: crate::Build, F: Fight<V>>(
         {
             reattach::<V, _>(fight)
         }
-        (monster, move_id) => return V::generated_move(monster, move_id, step, fight),
+        (monster, move_id) => return V::generated_move::<K>(monster, move_id, fight),
     }
-    None
+    crate::behaviour::Played::Done
 }
 
-/// Roll over the target, then harden.
+/// A move of a monster in this file that can stop on a question. It attacks,
+/// and does the rest once any question the attack left is answered. Each
+/// step is lent the fight, and after a question the answer.
+///
+/// The attack is the one command a move can stand still on. Every other
+/// command takes a `ThrowingPlayerChoiceContext`, which throws on a
+/// question.
+#[diapause::coroutine(
+    yield = crate::behaviour::paused::Ask<V>,
+    resume = for<'f, 'a> crate::behaviour::paused::Lent<'f, 'a, V, K>
+)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub fn paused<V: crate::Build, K: sts2_core::FightKind<V>>(item: (V::Monster, V::MoveId)) {
+    let monster: V::Monster = item.0;
+    let move_id: V::MoveId = item.1;
+    match (monster, move_id) {
+        // `WebMove`: its hit, then Frail at two on each target. `Curled`
+        // picks its animations alone.
+        (__c0, __c1)
+            if (__c0 == V::Monster::LOUSE_PROGENITOR && __c1 == V::MoveId::WEB_CANNON_MOVE) =>
+        {
+            resumed!().fight.attack_opponents();
+            if resumed!().fight.waiting() {
+                yield_!(crate::behaviour::paused::Ask::Waiting);
+            }
+            let fight = &mut *resumed!().fight;
+            fight.apply_to_opponents(V::Power::FRAIL_POWER, PowerAmount::Counted(2));
+        }
+        // `BugStingMove`: its two hits, then Weak and Frail at two on each
+        // target.
+        (__c0, __c1) if (__c0 == V::Monster::CRUSHER && __c1 == V::MoveId::BUG_STING_MOVE) => {
+            resumed!().fight.attack_opponents();
+            if resumed!().fight.waiting() {
+                yield_!(crate::behaviour::paused::Ask::Waiting);
+            }
+            let fight = &mut *resumed!().fight;
+            fight.apply_to_opponents(V::Power::WEAK_POWER, PowerAmount::Counted(2));
+            fight.apply_to_opponents(V::Power::FRAIL_POWER, PowerAmount::Counted(2));
+        }
+        // `GuardedStrikeMove`: its hit, then eighteen block as a move.
+        (__c0, __c1) if (__c0 == V::Monster::CRUSHER && __c1 == V::MoveId::GUARDED_STRIKE_MOVE) => {
+            resumed!().fight.attack_opponents();
+            if resumed!().fight.waiting() {
+                yield_!(crate::behaviour::paused::Ask::Waiting);
+            }
+            let fight = &mut *resumed!().fight;
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Number(GUARDED_BLOCK),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+        }
+        // `ExplosionMove`: its hit, then the same Thorns taken back.
+        (__c0, __c1)
+            if (__c0 == V::Monster::SPINY_TOAD && __c1 == V::MoveId::SPIKE_EXPLOSION_MOVE) =>
+        {
+            resumed!().fight.attack_opponents();
+            if resumed!().fight.waiting() {
+                yield_!(crate::behaviour::paused::Ask::Waiting);
+            }
+            let fight = &mut *resumed!().fight;
+            fight.apply_to_actor(V::Power::THORNS_POWER, PowerAmount::Counted(-SPINES));
+        }
+        // `RolloutMove`: its hit, then the beetle hardens.
+        (__c0, __c1)
+            if (__c0 == V::Monster::SLUMBERING_BEETLE && __c1 == V::MoveId::ROLL_OUT_MOVE) =>
+        {
+            resumed!().fight.attack_opponents();
+            if resumed!().fight.waiting() {
+                yield_!(crate::behaviour::paused::Ask::Waiting);
+            }
+            roll_out::<V, _>(resumed!().fight);
+        }
+        // `BulkMove`: its hit, then the segment grows.
+        (__c0, __c1)
+            if ((__c0 == V::Monster::DECIMILLIPEDE_SEGMENT_FRONT
+                || __c0 == V::Monster::DECIMILLIPEDE_SEGMENT_MIDDLE
+                || __c0 == V::Monster::DECIMILLIPEDE_SEGMENT_BACK)
+                && __c1 == V::MoveId::BULK_MOVE) =>
+        {
+            resumed!().fight.attack_opponents();
+            if resumed!().fight.waiting() {
+                yield_!(crate::behaviour::paused::Ask::Waiting);
+            }
+            bulk::<V, _>(resumed!().fight);
+        }
+        // `ConstrictMove`: its hit, then Weak on the target.
+        (__c0, __c1)
+            if ((__c0 == V::Monster::DECIMILLIPEDE_SEGMENT_FRONT
+                || __c0 == V::Monster::DECIMILLIPEDE_SEGMENT_MIDDLE
+                || __c0 == V::Monster::DECIMILLIPEDE_SEGMENT_BACK)
+                && __c1 == V::MoveId::CONSTRICT_MOVE) =>
+        {
+            resumed!().fight.attack_opponents();
+            if resumed!().fight.waiting() {
+                yield_!(crate::behaviour::paused::Ask::Waiting);
+            }
+            constrict::<V, _>(resumed!().fight);
+        }
+        // The Knowledge Demon's `CurseOfKnowledgeMove`: a choice of
+        // `Disintegration` and one more curse of the set it is on, which
+        // `FromChooseACardScreen` offers without `canSkip`. The power the
+        // card chosen names lands on the demon.
+        (__c0, __c1)
+            if (__c0 == V::Monster::KNOWLEDGE_DEMON
+                && __c1 == V::MoveId::CURSE_OF_KNOWLEDGE_MOVE) =>
+        {
+            let set: u8 = curse_set::<V, _>(resumed!().fight);
+            let offered: sts2_core::Offered<V> = curse_offer::<V>(set);
+            yield_!(crate::behaviour::paused::Ask::Choosing {
+                offered,
+                skippable: false,
+            });
+            let crate::behaviour::paused::Lent { fight, taken } = resumed!();
+            if let Some(chosen) = crate::behaviour::paused::chosen::<V>(taken) {
+                curse_chosen::<V, _>(&mut **fight, set, chosen);
+            }
+        }
+        // The Knowledge Demon's `PonderMove`: its hit, then it heals and
+        // grows.
+        (__c0, __c1) if (__c0 == V::Monster::KNOWLEDGE_DEMON && __c1 == V::MoveId::PONDER_MOVE) => {
+            resumed!().fight.attack_opponents();
+            if resumed!().fight.waiting() {
+                yield_!(crate::behaviour::paused::Ask::Waiting);
+            }
+            ponder::<V, _>(resumed!().fight);
+        }
+        other => unreachable!("{other:?} never stops on a question"),
+    }
+}
+
+crate::behaviour::paused::paused_play!(
+    (V::Monster, V::MoveId),
+    crate::behaviour::monsters::Resume::Hive
+);
+
+/// The rest of `RolloutMove`, once its hit is over: the beetle hardens.
 ///
 /// `RolloutMove` applies the Strength to the beetle itself, so the fight it
 /// hits and the creature it grows are not the same one.
-fn roll_out<V: crate::Build, F: Fight<V>>(fight: &mut F, step: u8) -> Option<u8> {
+fn roll_out<V: crate::Build, F: Fight<V>>(fight: &mut F) {
     const HARDENS: Number = 2;
 
-    if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
-        return Some(1);
-    }
     fight.apply_to_actor(V::Power::STRENGTH_POWER, PowerAmount::Counted(HARDENS));
-    None
 }
 
-/// Swell: hit, then grow.
+/// The rest of `BulkMove`, once its hit is over: the segment grows.
 ///
 /// `BulkMove` applies the Strength to the segment itself, so the creature it
 /// hits and the one it grows are not the same.
-fn bulk<V: crate::Build, F: Fight<V>>(fight: &mut F, step: u8) -> Option<u8> {
+fn bulk<V: crate::Build, F: Fight<V>>(fight: &mut F) {
     const BULKS: Number = 2;
 
-    if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
-        return Some(1);
-    }
     fight.apply_to_actor(V::Power::STRENGTH_POWER, PowerAmount::Counted(BULKS));
-    None
 }
 
-/// Squeeze: hit, and leave the target weakened.
-fn constrict<V: crate::Build, F: Fight<V>>(fight: &mut F, step: u8) -> Option<u8> {
-    if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
-        return Some(1);
-    }
+/// The rest of `ConstrictMove`, once its hit is over: the target weakened.
+fn constrict<V: crate::Build, F: Fight<V>>(fight: &mut F) {
     fight.apply_to_opponents(V::Power::WEAK_POWER, PowerAmount::Counted(1));
-    None
 }
 
 /// Join the row again, for the health the power carries.
@@ -613,99 +719,68 @@ pub(super) fn knowledge_demon_branch<V: crate::Build>(
 /// `_curseOfKnowledgeSets.Count`.
 const CURSE_SETS: usize = 3;
 
-/// The Knowledge Demon's moves.
-///
-/// `CurseOfKnowledge` offers the player `Disintegration` and one more card of
-/// the set its counter stands at. The card chosen applies its power, which
-/// `resume` carries out.
-pub(super) fn knowledge_demon<V: crate::Build, F: Fight<V>>(
+/// A Knowledge Demon's move. `CurseOfKnowledgeMove` offers the player
+/// `Disintegration` and one more card of the set it is on. Ponder waits on
+/// any question its hit leaves. So both are [`paused`]'s.
+pub(super) fn knowledge_demon<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
     move_id: V::MoveId,
-    step: u8,
-    fight: &mut F,
-) -> crate::behaviour::Played<V, F::Kind> {
-    use sts2_core::CardIdent;
-
-    // `ThrowingPlayerChoiceContext`'s `PowerCmd.Apply<StrengthPower>`.
-    const PONDER_STRENGTH: Number = 2;
-    const DEADLY_PONDER_STRENGTH: Number = 3;
-    // `30 * Players.Count`, and a fight here has one player.
-    const PONDER_HEAL: Number = 30;
-
-    let deadly = fight.ascension().has(AscensionLevel::DeadlyEnemies);
+    fight: &mut K::Fight<'a>,
+) -> crate::behaviour::Played<V, K> {
     match move_id {
-        __c0 if __c0 == V::MoveId::CURSE_OF_KNOWLEDGE_MOVE => {
-            // `CurseOfKnowledgeCounter++`, after the choice in the game.
-            // Nothing reads it before the enemy turn is over.
-            let set = fight.model(|model| {
-                let crate::behaviour::monsters::Model::KnowledgeDemon { curses } = model else {
-                    unimplemented!("a Knowledge Demon holding {model:?}")
-                };
-                let set = *curses;
-                *curses = set + 1;
-                set
-            });
-            let other = match set {
-                0 => V::Card::MIND_ROT,
-                1 => V::Card::SLOTH,
-                2 => V::Card::WASTE_AWAY,
-                _ => unimplemented!("a Knowledge Demon with no set left at {set}"),
-            };
-            crate::behaviour::Played::Choosing {
-                offered: [
-                    CardIdent::new(V::Card::DISINTEGRATION),
-                    CardIdent::new(other),
-                ]
-                .into_iter()
-                .collect(),
-                // `FromChooseACardScreen` without `canSkip`.
-                skippable: false,
-                at: Resume::CurseOfKnowledge { set }.into(),
-            }
+        __c0 if __c0 == V::MoveId::CURSE_OF_KNOWLEDGE_MOVE || __c0 == V::MoveId::PONDER_MOVE => {
+            start::<V, K>((V::Monster::KNOWLEDGE_DEMON, move_id), fight)
         }
         // `IsBurnt` picks the demon's animations alone.
         __c0 if __c0 == V::MoveId::KNOWLEDGE_OVERWHELMING_MOVE || __c0 == V::MoveId::SLAP_MOVE => {
             fight.attack_opponents();
             crate::behaviour::Played::Done
         }
-        __c0 if __c0 == V::MoveId::PONDER_MOVE => {
-            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
-                return crate::behaviour::Played::Waiting {
-                    at: Resume::Step(1).into(),
-                };
-            }
-            let actor = fight.actor();
-            fight.heal(actor, PONDER_HEAL);
-            let strength = match deadly {
-                true => DEADLY_PONDER_STRENGTH,
-                false => PONDER_STRENGTH,
-            };
-            fight.apply_power(
-                actor,
-                V::Power::STRENGTH_POWER,
-                PowerAmount::Counted(strength),
-            );
-            crate::behaviour::Played::Done
-        }
         move_id => unimplemented!("what {move_id:?} does when a Knowledge Demon performs it"),
     }
 }
 
-/// `IChoosable.OnChosen` for the card the player took, which applies its
-/// power to them. A skipped choice does nothing.
-pub(super) fn resume<V: crate::Build, F: Fight<V>>(
+/// The set a curse of knowledge is on, and one more counted:
+/// `CurseOfKnowledgeCounter++`, after the choice in the game. Nothing reads
+/// it before the enemy turn is over.
+fn curse_set<V: crate::Build, F: Fight<V>>(fight: &mut F) -> u8 {
+    fight.model(|model| {
+        let crate::behaviour::monsters::Model::KnowledgeDemon { curses } = model else {
+            unimplemented!("a Knowledge Demon holding {model:?}")
+        };
+        let set = *curses;
+        *curses = set + 1;
+        set
+    })
+}
+
+/// What a curse of knowledge on `set` offers: `Disintegration`, and the
+/// set's other curse.
+fn curse_offer<V: crate::Build>(set: u8) -> sts2_core::Offered<V> {
+    use sts2_core::CardIdent;
+
+    let other = match set {
+        0 => V::Card::MIND_ROT,
+        1 => V::Card::SLOTH,
+        2 => V::Card::WASTE_AWAY,
+        _ => unimplemented!("a Knowledge Demon with no set left at {set}"),
+    };
+    [
+        CardIdent::new(V::Card::DISINTEGRATION),
+        CardIdent::new(other),
+    ]
+    .into_iter()
+    .collect()
+}
+
+/// The power the curse `chosen` off `set` names, on the demon.
+fn curse_chosen<V: crate::Build, F: Fight<V>>(
     fight: &mut F,
-    at: Resume,
-    chosen: Option<sts2_core::CardIdent<V>>,
-) -> crate::behaviour::Played<V, F::Kind> {
+    set: u8,
+    chosen: sts2_core::CardIdent<V>,
+) {
     // `_disintegrationDamageValues`.
     const DISINTEGRATION: [Number; CURSE_SETS] = [6, 7, 8];
 
-    let Resume::CurseOfKnowledge { set } = at else {
-        unreachable!("{at:?} resumes a move, not a choice")
-    };
-    let Some(chosen) = chosen else {
-        return crate::behaviour::Played::Done;
-    };
     let (power, amount) = match chosen.card {
         __c0 if __c0 == V::Card::DISINTEGRATION => (
             V::Power::DISINTEGRATION_POWER,
@@ -718,7 +793,28 @@ pub(super) fn resume<V: crate::Build, F: Fight<V>>(
     };
     let actor = fight.actor();
     fight.apply_power(actor, power, PowerAmount::Counted(amount));
-    crate::behaviour::Played::Done
+}
+
+/// The rest of `PonderMove`, once its hit is over: it heals, then gains
+/// Strength.
+fn ponder<V: crate::Build, F: Fight<V>>(fight: &mut F) {
+    // `ThrowingPlayerChoiceContext`'s `PowerCmd.Apply<StrengthPower>`.
+    const PONDER_STRENGTH: Number = 2;
+    const DEADLY_PONDER_STRENGTH: Number = 3;
+    // `30 * Players.Count`, and a fight here has one player.
+    const PONDER_HEAL: Number = 30;
+
+    let actor = fight.actor();
+    fight.heal(actor, PONDER_HEAL);
+    let strength = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
+        true => DEADLY_PONDER_STRENGTH,
+        false => PONDER_STRENGTH,
+    };
+    fight.apply_power(
+        actor,
+        V::Power::STRENGTH_POWER,
+        PowerAmount::Counted(strength),
+    );
 }
 
 /// `HatchMove`: Hatch goes, then every other power but Minion, then `Hatch`:

@@ -91,12 +91,12 @@ pub(crate) fn chosen<V: crate::Build>(
 }
 
 /// `start`, `resume` and `settle` for a module's `paused` coroutine over
-/// `V::$item`, whose paused plays wait in the variant `$wrap`.
+/// `$item`, whose paused plays wait in the variant `$wrap`.
 macro_rules! paused_play {
-    ($item:ident, $wrap:path) => {
+    ($item:ty, $wrap:path) => {
         /// A play of [`paused`], from its start.
         fn start<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
-            item: V::$item,
+            item: $item,
             fight: &mut K::Fight<'a>,
         ) -> crate::behaviour::Played<V, K> {
             let mut play = paused::<V, K>(item);

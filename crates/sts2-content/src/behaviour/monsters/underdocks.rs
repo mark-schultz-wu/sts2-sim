@@ -187,40 +187,25 @@ fn toadpole_opens<V: crate::Build>(
 
 /// Perform one of an Underdocks monster's moves, where the generator left it
 /// to a hand port.
-pub(super) fn perform<V: crate::Build, F: Fight<V>>(
+pub(super) fn perform<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
     monster: V::Monster,
     move_id: V::MoveId,
-    step: u8,
-    fight: &mut F,
-) -> Option<u8> {
+    fight: &mut K::Fight<'a>,
+) -> crate::behaviour::Played<V, K> {
     match (monster, move_id) {
         // `GimmeMove`: the hits, then each Thievery steals.
         (__c0, __c1) if (__c0 == V::Monster::GREMLIN_MERC && __c1 == V::MoveId::GIMME_MOVE) => {
-            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
-                return Some(1);
-            }
-            steal::<V, _>(fight);
+            return start::<V, K>((monster, move_id), fight);
         }
         // `DoubleSmashMove`: the hits, the steal, then Weak on each target.
         (__c0, __c1)
             if (__c0 == V::Monster::GREMLIN_MERC && __c1 == V::MoveId::DOUBLE_SMASH_MOVE) =>
         {
-            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
-                return Some(1);
-            }
-            steal::<V, _>(fight);
-            fight.apply_to_opponents(V::Power::WEAK_POWER, PowerAmount::Counted(MERC_WEAK));
+            return start::<V, K>((monster, move_id), fight);
         }
         // `HeheMove`: the hit, the steal, then Strength on itself.
         (__c0, __c1) if (__c0 == V::Monster::GREMLIN_MERC && __c1 == V::MoveId::HEHE_MOVE) => {
-            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
-                return Some(1);
-            }
-            steal::<V, _>(fight);
-            fight.apply_to_actor(
-                V::Power::STRENGTH_POWER,
-                PowerAmount::Counted(MERC_STRENGTH),
-            );
+            return start::<V, K>((monster, move_id), fight);
         }
         // `SpawnedMove`: it wakes, which is an animation and `IsAwake`, which
         // nothing reads.
@@ -271,25 +256,12 @@ pub(super) fn perform<V: crate::Build, F: Fight<V>>(
             if (__c0 == V::Monster::WATERFALL_GIANT
                 && (__c1 == V::MoveId::RAM_MOVE || __c1 == V::MoveId::PRESSURE_UP_MOVE)) =>
         {
-            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
-                return Some(1);
-            }
-            fight.apply_to_actor(
-                V::Power::STEAM_ERUPTION_POWER,
-                PowerAmount::Counted(GIANT_STEAM),
-            );
+            return start::<V, K>((monster, move_id), fight);
         }
         // `StompMove`: the hit, a Weak on each target, then three Steam
         // Eruption.
         (__c0, __c1) if (__c0 == V::Monster::WATERFALL_GIANT && __c1 == V::MoveId::STOMP_MOVE) => {
-            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
-                return Some(1);
-            }
-            fight.apply_to_opponents(V::Power::WEAK_POWER, PowerAmount::Counted(1));
-            fight.apply_to_actor(
-                V::Power::STEAM_ERUPTION_POWER,
-                PowerAmount::Counted(GIANT_STEAM),
-            );
+            return start::<V, K>((monster, move_id), fight);
         }
         // `SiphonMove`: `SiphonHeal` for each player, of which a fight here
         // has one, then three Steam Eruption.
@@ -310,20 +282,7 @@ pub(super) fn perform<V: crate::Build, F: Fight<V>>(
         (__c0, __c1)
             if (__c0 == V::Monster::WATERFALL_GIANT && __c1 == V::MoveId::PRESSURE_GUN_MOVE) =>
         {
-            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
-                return Some(1);
-            }
-            fight.model(|model| {
-                let crate::behaviour::monsters::Model::WaterfallGiant { gun_raises, .. } = model
-                else {
-                    unreachable!("a Waterfall Giant's model is its own")
-                };
-                *gun_raises += 1;
-            });
-            fight.apply_to_actor(
-                V::Power::STEAM_ERUPTION_POWER,
-                PowerAmount::Counted(GIANT_STEAM),
-            );
+            return start::<V, K>((monster, move_id), fight);
         }
         // `AboutToBlowMove`: the Steam Eruption it built becomes the damage
         // its Explode deals, and comes off.
@@ -354,11 +313,7 @@ pub(super) fn perform<V: crate::Build, F: Fight<V>>(
         (__c0, __c1)
             if (__c0 == V::Monster::WATERFALL_GIANT && __c1 == V::MoveId::EXPLODE_MOVE) =>
         {
-            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
-                return Some(1);
-            }
-            let giant = fight.actor();
-            fight.kill(giant);
+            return start::<V, K>((monster, move_id), fight);
         }
         // `BeckonMove`: for the one player, a Beckon into the draw pile at
         // random, then one into the discard pile.
@@ -372,14 +327,7 @@ pub(super) fn perform<V: crate::Build, F: Fight<V>>(
         }
         // `GazeMove`: its hit, then a Beckon into the discard pile.
         (__c0, __c1) if (__c0 == V::Monster::SOUL_FYSH && __c1 == V::MoveId::GAZE_MOVE) => {
-            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
-                return Some(1);
-            }
-            fight.add_generated_cards(
-                sts2_core::CardIdent::new(beckon::<V>()),
-                sts2_core::Pile::Discard,
-                1,
-            );
+            return start::<V, K>((monster, move_id), fight);
         }
         // `FadeMove`: two Intangible. `IsInvisible` and the music are on
         // screen alone.
@@ -388,13 +336,7 @@ pub(super) fn perform<V: crate::Build, F: Fight<V>>(
         }
         // `ScreamMove`: its hit, then three Vulnerable on each target.
         (__c0, __c1) if (__c0 == V::Monster::SOUL_FYSH && __c1 == V::MoveId::SCREAM_MOVE) => {
-            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
-                return Some(1);
-            }
-            fight.apply_to_opponents(
-                V::Power::VULNERABLE_POWER,
-                PowerAmount::Counted(FYSH_SCREAM),
-            );
+            return start::<V, K>((monster, move_id), fight);
         }
         // The Matriarch's four waking moves. Each first stops its sleeping
         // effect, which is all on screen.
@@ -408,19 +350,7 @@ pub(super) fn perform<V: crate::Build, F: Fight<V>>(
         (__c0, __c1)
             if (__c0 == V::Monster::LAGAVULIN_MATRIARCH && __c1 == V::MoveId::SLASH2_MOVE) =>
         {
-            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
-                return Some(1);
-            }
-            let amount = match fight.ascension().has(AscensionLevel::ToughEnemies) {
-                true => 14,
-                false => 12,
-            };
-            let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
-                amount: Amount::Number(amount),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(block);
+            return start::<V, K>((monster, move_id), fight);
         }
         // `SoulSiphonMove`: Strength and Dexterity off each target, then the
         // Strength on itself.
@@ -460,11 +390,7 @@ pub(super) fn perform<V: crate::Build, F: Fight<V>>(
         // `ExplodeMove`: its hit, then `CreatureCmd.Kill` on itself.
         // `HasExploded` picks how it dies on screen alone.
         (__c0, __c1) if (__c0 == V::Monster::GAS_BOMB && __c1 == V::MoveId::EXPLODE_MOVE) => {
-            if crate::behaviour::monsters::attack_first::<V, _>(fight, step) {
-                return Some(1);
-            }
-            let bomb = fight.actor();
-            fight.kill(bomb);
+            return start::<V, K>((monster, move_id), fight);
         }
         // `SpikeSpitMove`: the Thorns Spiken gave, taken back, then its hits.
         (__c0, __c1) if (__c0 == V::Monster::TOADPOLE && __c1 == V::MoveId::SPIKE_SPIT_MOVE) => {
@@ -472,11 +398,189 @@ pub(super) fn perform<V: crate::Build, F: Fight<V>>(
             fight.attack_opponents();
         }
         (monster, move_id) => {
-            return V::generated_move(monster, move_id, step, fight);
+            return V::generated_move::<K>(monster, move_id, fight);
         }
     }
-    None
+    crate::behaviour::Played::Done
 }
+
+/// A move of a monster in this file that can stop on a question. It attacks,
+/// and does the rest once any question the attack left is answered. Each
+/// step is lent the fight, and after a question the answer.
+///
+/// The attack is the one command a move can stand still on. Every other
+/// command takes a `ThrowingPlayerChoiceContext`, which throws on a
+/// question.
+#[diapause::coroutine(
+    yield = crate::behaviour::paused::Ask<V>,
+    resume = for<'f, 'a> crate::behaviour::paused::Lent<'f, 'a, V, K>
+)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub fn paused<V: crate::Build, K: sts2_core::FightKind<V>>(item: (V::Monster, V::MoveId)) {
+    let monster: V::Monster = item.0;
+    let move_id: V::MoveId = item.1;
+    match (monster, move_id) {
+        // `GimmeMove`: the hits, then each Thievery steals.
+        (__c0, __c1) if (__c0 == V::Monster::GREMLIN_MERC && __c1 == V::MoveId::GIMME_MOVE) => {
+            resumed!().fight.attack_opponents();
+            if resumed!().fight.waiting() {
+                yield_!(crate::behaviour::paused::Ask::Waiting);
+            }
+            let fight = &mut *resumed!().fight;
+            steal::<V, _>(fight);
+        }
+        // `DoubleSmashMove`: the hits, the steal, then Weak on each target.
+        (__c0, __c1)
+            if (__c0 == V::Monster::GREMLIN_MERC && __c1 == V::MoveId::DOUBLE_SMASH_MOVE) =>
+        {
+            resumed!().fight.attack_opponents();
+            if resumed!().fight.waiting() {
+                yield_!(crate::behaviour::paused::Ask::Waiting);
+            }
+            let fight = &mut *resumed!().fight;
+            steal::<V, _>(fight);
+            fight.apply_to_opponents(V::Power::WEAK_POWER, PowerAmount::Counted(MERC_WEAK));
+        }
+        // `HeheMove`: the hit, the steal, then Strength on itself.
+        (__c0, __c1) if (__c0 == V::Monster::GREMLIN_MERC && __c1 == V::MoveId::HEHE_MOVE) => {
+            resumed!().fight.attack_opponents();
+            if resumed!().fight.waiting() {
+                yield_!(crate::behaviour::paused::Ask::Waiting);
+            }
+            let fight = &mut *resumed!().fight;
+            steal::<V, _>(fight);
+            fight.apply_to_actor(
+                V::Power::STRENGTH_POWER,
+                PowerAmount::Counted(MERC_STRENGTH),
+            );
+        }
+        // `RamMove` and `PressureUpMove`: the hit, then three Steam Eruption.
+        (__c0, __c1)
+            if (__c0 == V::Monster::WATERFALL_GIANT
+                && (__c1 == V::MoveId::RAM_MOVE || __c1 == V::MoveId::PRESSURE_UP_MOVE)) =>
+        {
+            resumed!().fight.attack_opponents();
+            if resumed!().fight.waiting() {
+                yield_!(crate::behaviour::paused::Ask::Waiting);
+            }
+            let fight = &mut *resumed!().fight;
+            fight.apply_to_actor(
+                V::Power::STEAM_ERUPTION_POWER,
+                PowerAmount::Counted(GIANT_STEAM),
+            );
+        }
+        // `StompMove`: the hit, a Weak on each target, then three Steam
+        // Eruption.
+        (__c0, __c1) if (__c0 == V::Monster::WATERFALL_GIANT && __c1 == V::MoveId::STOMP_MOVE) => {
+            resumed!().fight.attack_opponents();
+            if resumed!().fight.waiting() {
+                yield_!(crate::behaviour::paused::Ask::Waiting);
+            }
+            let fight = &mut *resumed!().fight;
+            fight.apply_to_opponents(V::Power::WEAK_POWER, PowerAmount::Counted(1));
+            fight.apply_to_actor(
+                V::Power::STEAM_ERUPTION_POWER,
+                PowerAmount::Counted(GIANT_STEAM),
+            );
+        }
+        // `PressureGunMove`: the hit, five more on the next, then three Steam
+        // Eruption.
+        (__c0, __c1)
+            if (__c0 == V::Monster::WATERFALL_GIANT && __c1 == V::MoveId::PRESSURE_GUN_MOVE) =>
+        {
+            resumed!().fight.attack_opponents();
+            if resumed!().fight.waiting() {
+                yield_!(crate::behaviour::paused::Ask::Waiting);
+            }
+            let fight = &mut *resumed!().fight;
+            fight.model(|model| {
+                let crate::behaviour::monsters::Model::WaterfallGiant { gun_raises, .. } = model
+                else {
+                    unreachable!("a Waterfall Giant's model is its own")
+                };
+                *gun_raises += 1;
+            });
+            fight.apply_to_actor(
+                V::Power::STEAM_ERUPTION_POWER,
+                PowerAmount::Counted(GIANT_STEAM),
+            );
+        }
+        // `ExplodeMove`: the hit, then `CreatureCmd.Kill` on itself.
+        (__c0, __c1)
+            if (__c0 == V::Monster::WATERFALL_GIANT && __c1 == V::MoveId::EXPLODE_MOVE) =>
+        {
+            resumed!().fight.attack_opponents();
+            if resumed!().fight.waiting() {
+                yield_!(crate::behaviour::paused::Ask::Waiting);
+            }
+            let fight = &mut *resumed!().fight;
+            let giant = fight.actor();
+            fight.kill(giant);
+        }
+        // `GazeMove`: its hit, then a Beckon into the discard pile.
+        (__c0, __c1) if (__c0 == V::Monster::SOUL_FYSH && __c1 == V::MoveId::GAZE_MOVE) => {
+            resumed!().fight.attack_opponents();
+            if resumed!().fight.waiting() {
+                yield_!(crate::behaviour::paused::Ask::Waiting);
+            }
+            let fight = &mut *resumed!().fight;
+            fight.add_generated_cards(
+                sts2_core::CardIdent::new(beckon::<V>()),
+                sts2_core::Pile::Discard,
+                1,
+            );
+        }
+        // `ScreamMove`: its hit, then three Vulnerable on each target.
+        (__c0, __c1) if (__c0 == V::Monster::SOUL_FYSH && __c1 == V::MoveId::SCREAM_MOVE) => {
+            resumed!().fight.attack_opponents();
+            if resumed!().fight.waiting() {
+                yield_!(crate::behaviour::paused::Ask::Waiting);
+            }
+            let fight = &mut *resumed!().fight;
+            fight.apply_to_opponents(
+                V::Power::VULNERABLE_POWER,
+                PowerAmount::Counted(FYSH_SCREAM),
+            );
+        }
+        // `Slash2Move`: its hit, then powered block on itself.
+        (__c0, __c1)
+            if (__c0 == V::Monster::LAGAVULIN_MATRIARCH && __c1 == V::MoveId::SLASH2_MOVE) =>
+        {
+            resumed!().fight.attack_opponents();
+            if resumed!().fight.waiting() {
+                yield_!(crate::behaviour::paused::Ask::Waiting);
+            }
+            let fight = &mut *resumed!().fight;
+            let amount = match fight.ascension().has(AscensionLevel::ToughEnemies) {
+                true => 14,
+                false => 12,
+            };
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Number(amount),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+        }
+        // `ExplodeMove`: its hit, then `CreatureCmd.Kill` on itself.
+        // `HasExploded` picks how it dies on screen alone.
+        (__c0, __c1) if (__c0 == V::Monster::GAS_BOMB && __c1 == V::MoveId::EXPLODE_MOVE) => {
+            resumed!().fight.attack_opponents();
+            if resumed!().fight.waiting() {
+                yield_!(crate::behaviour::paused::Ask::Waiting);
+            }
+            let fight = &mut *resumed!().fight;
+            let bomb = fight.actor();
+            fight.kill(bomb);
+        }
+        other => unreachable!("{other:?} never stops on a question"),
+    }
+}
+
+crate::behaviour::paused::paused_play!(
+    (V::Monster, V::MoveId),
+    crate::behaviour::monsters::Resume::Underdocks
+);
 
 /// `TurnsUntilSummonable--`.
 /// `ThieveryPower.Steal` for the Gremlin Merc's one instance: the lesser of

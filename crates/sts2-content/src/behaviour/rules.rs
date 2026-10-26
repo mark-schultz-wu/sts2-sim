@@ -411,17 +411,17 @@ pub(crate) fn resume_play<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
     at: crate::behaviour::Resume<V, K>,
     chosen: sts2_core::Taken<V>,
 ) -> crate::behaviour::Played<V, K> {
-    match (at, chosen) {
-        (crate::behaviour::Resume::Card(at), taken) => {
-            crate::behaviour::cards::resume::<V, K>(fight, at, taken)
+    match at {
+        crate::behaviour::Resume::Card(at) => {
+            crate::behaviour::cards::resume::<V, K>(fight, at, chosen)
         }
-        (crate::behaviour::Resume::Potion(at), chosen) => {
+        crate::behaviour::Resume::Potion(at) => {
             crate::behaviour::potions::resume::<V, K>(fight, at, chosen)
         }
-        (crate::behaviour::Resume::Monster(at), sts2_core::Taken::Chosen(card)) => {
-            crate::behaviour::monsters::resume(fight, at, card)
+        crate::behaviour::Resume::Monster(at) => {
+            crate::behaviour::monsters::resume::<V, K>(fight, at, chosen)
         }
-        (at, chosen) => unimplemented!("{at:?} resumed with {chosen:?}"),
+        crate::behaviour::Resume::Build(paused) => V::resume_paused::<K>(fight, paused, chosen),
     }
 }
 
@@ -753,12 +753,12 @@ pub(crate) fn calculated_card_var<V: crate::Build, P: sts2_core::Printed<V> + ?S
     crate::behaviour::cards::calculated::<V, _>(card, key, printed, owner)
 }
 
-pub(crate) fn perform_move<V: crate::Build, F: sts2_core::Fight<V>>(
+pub(crate) fn perform_move<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
     monster: V::Monster,
     move_id: V::MoveId,
-    fight: &mut F,
-) -> crate::behaviour::Played<V, F::Kind> {
-    crate::behaviour::monsters::perform::<V, _>(monster, move_id, fight)
+    fight: &mut K::Fight<'a>,
+) -> crate::behaviour::Played<V, K> {
+    crate::behaviour::monsters::perform::<V, K>(monster, move_id, fight)
 }
 
 pub(crate) fn intent_repeats_now<V: crate::Build>(
@@ -806,16 +806,23 @@ pub(crate) fn intent_damage_now<V: crate::Build>(
     }
 }
 
-pub(crate) fn resume_move<V: crate::Build, F: sts2_core::Fight<V>>(
-    monster: V::Monster,
-    move_id: V::MoveId,
-    at: crate::behaviour::Resume<V, F::Kind>,
-    fight: &mut F,
-) -> crate::behaviour::Played<V, F::Kind> {
-    let crate::behaviour::Resume::Monster(at) = at else {
-        unreachable!("{at:?} resumes no move")
-    };
-    crate::behaviour::monsters::resume_move::<V, _>(monster, move_id, at, fight)
+/// A move that stood still on a question its attack left, once the question
+/// is answered. The paused move knows which move it is.
+pub(crate) fn resume_move<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
+    _monster: V::Monster,
+    _move_id: V::MoveId,
+    at: crate::behaviour::Resume<V, K>,
+    fight: &mut K::Fight<'a>,
+) -> crate::behaviour::Played<V, K> {
+    match at {
+        crate::behaviour::Resume::Monster(at) => {
+            crate::behaviour::monsters::resume::<V, K>(fight, at, sts2_core::Taken::Waited)
+        }
+        crate::behaviour::Resume::Build(paused) => {
+            V::resume_paused::<K>(fight, paused, sts2_core::Taken::Waited)
+        }
+        at => unreachable!("{at:?} resumes no move"),
+    }
 }
 
 pub(crate) fn random_encounter_monsters<V: crate::Build, R: sts2_core::rng::GameRng>(

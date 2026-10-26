@@ -746,7 +746,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
     }
 }
 
-crate::behaviour::paused::paused_play!(Card, crate::behaviour::cards::Resume::Necrobinder);
+crate::behaviour::paused::paused_play!(V::Card, crate::behaviour::cards::Resume::Necrobinder);
 
 /// The cards in hand without `keyword`, read locally where `local` says.
 fn without_keyword<V: crate::Build, F: Fight<V>>(

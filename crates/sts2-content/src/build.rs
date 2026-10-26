@@ -548,26 +548,22 @@ pub trait OwnRules: ContentVersion + Sized {
     where
         Self: Build;
 
-    /// A move whose rule is the build's own, performed from `step`, or
-    /// nothing for a shared move. It holds the step to go on from where a
-    /// command asked the player something.
-    fn own_move<F: sts2_core::Fight<Self>>(
+    /// A move whose rule is the build's own, performed, or nothing for a
+    /// shared move.
+    fn own_move<'a, K: sts2_core::FightKind<Self>>(
         monster: Self::Monster,
         move_id: Self::MoveId,
-        step: u8,
-        fight: &mut F,
-    ) -> Option<Option<u8>>
+        fight: &mut K::Fight<'a>,
+    ) -> Option<crate::behaviour::Played<Self, K>>
     where
         Self: Build;
 
-    /// A move the build's generated scripts perform, from `step`, and the
-    /// step to go on from where a command asked the player something.
-    fn generated_move<F: sts2_core::Fight<Self>>(
+    /// A move the build's generated scripts perform.
+    fn generated_move<'a, K: sts2_core::FightKind<Self>>(
         monster: Self::Monster,
         move_id: Self::MoveId,
-        step: u8,
-        fight: &mut F,
-    ) -> Option<u8>
+        fight: &mut K::Fight<'a>,
+    ) -> crate::behaviour::Played<Self, K>
     where
         Self: Build;
 
@@ -1346,12 +1342,12 @@ macro_rules! rules {
                     )
                 }
 
-                fn perform_move<F: Fight<Self>>(
+                fn perform_move<'a, K: sts2_core::FightKind<Self>>(
                     monster: Self::Monster,
                     move_id: Self::MoveId,
-                    fight: &mut F,
-                ) -> crate::behaviour::Played<Self, F::Kind> {
-                    crate::behaviour::rules::perform_move::<Self, F>(monster, move_id, fight)
+                    fight: &mut K::Fight<'a>,
+                ) -> crate::behaviour::Played<Self, K> {
+                    crate::behaviour::rules::perform_move::<Self, K>(monster, move_id, fight)
                 }
 
                 fn intent_repeats_now(
@@ -1373,13 +1369,13 @@ macro_rules! rules {
                     )
                 }
 
-                fn resume_move<F: Fight<Self>>(
+                fn resume_move<'a, K: sts2_core::FightKind<Self>>(
                     monster: Self::Monster,
                     move_id: Self::MoveId,
-                    at: Self::Resume<F::Kind>,
-                    fight: &mut F,
-                ) -> crate::behaviour::Played<Self, F::Kind> {
-                    crate::behaviour::rules::resume_move::<Self, F>(monster, move_id, at, fight)
+                    at: Self::Resume<K>,
+                    fight: &mut K::Fight<'a>,
+                ) -> crate::behaviour::Played<Self, K> {
+                    crate::behaviour::rules::resume_move::<Self, K>(monster, move_id, at, fight)
                 }
 
                 fn random_encounter_monsters<R: sts2_core::rng::GameRng>(

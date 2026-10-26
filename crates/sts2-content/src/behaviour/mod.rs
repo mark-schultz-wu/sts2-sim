@@ -33,7 +33,10 @@ pub type Played<V, K> = sts2_core::Played<V, Resume<V, K>>;
 pub enum Resume<V: crate::Build, K: FightKind<V>> {
     Card(crate::behaviour::cards::Resume<V, K>),
     Potion(crate::behaviour::potions::Resume<V, K>),
-    Monster(crate::behaviour::monsters::Resume),
+    Monster(crate::behaviour::monsters::Resume<V, K>),
+    /// A play or a move of the build's [`crate::Build::Paused`], standing
+    /// still where it asked.
+    Build(V::Paused<K>),
 }
 
 impl<V: crate::Build, K: FightKind<V>> From<crate::behaviour::cards::Resume<V, K>>
@@ -44,8 +47,10 @@ impl<V: crate::Build, K: FightKind<V>> From<crate::behaviour::cards::Resume<V, K
     }
 }
 
-impl<V: crate::Build, K: FightKind<V>> From<crate::behaviour::monsters::Resume> for Resume<V, K> {
-    fn from(at: crate::behaviour::monsters::Resume) -> Self {
+impl<V: crate::Build, K: FightKind<V>> From<crate::behaviour::monsters::Resume<V, K>>
+    for Resume<V, K>
+{
+    fn from(at: crate::behaviour::monsters::Resume<V, K>) -> Self {
         Resume::Monster(at)
     }
 }

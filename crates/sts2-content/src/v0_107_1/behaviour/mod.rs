@@ -148,6 +148,9 @@ impl crate::build::OwnRules for V {
             Paused::Generated(paused) => {
                 super::generated::card_plays::resume::<K>(fight, paused, taken)
             }
+            Paused::Moves(paused) => {
+                super::generated::monster_moves::resume::<K>(fight, paused, taken)
+            }
         }
     }
 
@@ -175,35 +178,22 @@ impl crate::build::OwnRules for V {
     }
 
     /// No move is its own.
-    fn own_move<F: sts2_core::Fight<V>>(
+    fn own_move<'a, K: sts2_core::FightKind<V>>(
         _monster: <V as sts2_core::ContentVersion>::Monster,
         _move_id: <V as sts2_core::ContentVersion>::MoveId,
-        _step: u8,
-        _fight: &mut F,
-    ) -> Option<Option<u8>> {
+        _fight: &mut K::Fight<'a>,
+    ) -> Option<crate::behaviour::Played<V, K>> {
         None
     }
 
-    fn generated_move<F: sts2_core::Fight<V>>(
+    fn generated_move<'a, K: sts2_core::FightKind<V>>(
         monster: <V as sts2_core::ContentVersion>::Monster,
         move_id: <V as sts2_core::ContentVersion>::MoveId,
-        step: u8,
-        fight: &mut F,
-    ) -> Option<u8> {
-        use super::generated::monster_moves;
-        use crate::generated::monster_moves::Filed;
-
-        match monster_moves::filed(monster) {
-            Filed::Glory => monster_moves::glory::perform(monster, move_id, step, fight),
-            Filed::Hive => monster_moves::hive::perform(monster, move_id, step, fight),
-            Filed::Overgrowth => monster_moves::overgrowth::perform(monster, move_id, step, fight),
-            Filed::Shared => monster_moves::shared::perform(monster, move_id, step, fight),
-            Filed::Summoned => monster_moves::summoned::perform(monster, move_id, step, fight),
-            Filed::Underdocks => monster_moves::underdocks::perform(monster, move_id, step, fight),
-        }
+        fight: &mut K::Fight<'a>,
+    ) -> crate::behaviour::Played<V, K> {
+        super::generated::monster_moves::perform::<K>(monster, move_id, fight)
     }
 
-    /// No power's death is its own.
     fn own_power_death<F: sts2_core::Fight<V>>(
         _power: <V as sts2_core::ContentVersion>::Power,
         _holder: sts2_core::CombatId,
@@ -315,12 +305,20 @@ impl crate::build::OwnRules for V {
     }
 }
 
-/// A play of this build's standing still on a question. Its own plays never
-/// stop, so each is one of its generated plays.
+/// A play or a move of this build's standing still on a question. Its own
+/// plays and moves never stop, so each is one of its generated ones.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Paused<K: sts2_core::FightKind<V>> {
     /// One of its generated plays.
     Generated(super::generated::card_plays::Paused<K>),
+    /// One of its generated moves.
+    Moves(super::generated::monster_moves::Paused<K>),
+}
+
+impl<K: sts2_core::FightKind<V>> From<super::generated::monster_moves::Paused<K>> for Paused<K> {
+    fn from(paused: super::generated::monster_moves::Paused<K>) -> Self {
+        Paused::Moves(paused)
+    }
 }
 
 impl<K: sts2_core::FightKind<V>> From<super::generated::card_plays::Paused<K>> for Paused<K> {

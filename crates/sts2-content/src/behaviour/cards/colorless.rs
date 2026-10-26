@@ -295,7 +295,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
     }
 }
 
-crate::behaviour::paused::paused_play!(Card, crate::behaviour::cards::Resume::Colorless);
+crate::behaviour::paused::paused_play!(V::Card, crate::behaviour::cards::Resume::Colorless);
 
 /// Its damage to the target, as one attack, and the attack's results.
 fn strike<V: crate::Build, F: Fight<V>>(fight: &mut F) -> sts2_core::AttackResults<V> {

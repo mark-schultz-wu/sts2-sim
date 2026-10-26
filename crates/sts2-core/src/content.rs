@@ -8175,11 +8175,11 @@ pub trait Rules: Hooks + Engine {
     /// # Panics
     ///
     /// A move nobody has ported.
-    fn perform_move<F: Fight<Self>>(
+    fn perform_move<'a, K: FightKind<Self>>(
         monster: Self::Monster,
         move_id: Self::MoveId,
-        fight: &mut F,
-    ) -> Played<Self, Self::Resume<F::Kind>>;
+        fight: &mut K::Fight<'a>,
+    ) -> Played<Self, Self::Resume<K>>;
 
     /// The hit count `move_id`'s `MultiAttackIntent` reads off its monster's
     /// model now, as the intent's lambda does each time it is shown:
@@ -8204,12 +8204,12 @@ pub trait Rules: Hooks + Engine {
 
     /// The rest of a move that handed back [`Played::Waiting`], from `at`,
     /// once what it waited on is over.
-    fn resume_move<F: Fight<Self>>(
+    fn resume_move<'a, K: FightKind<Self>>(
         monster: Self::Monster,
         move_id: Self::MoveId,
-        at: Self::Resume<F::Kind>,
-        fight: &mut F,
-    ) -> Played<Self, Self::Resume<F::Kind>>;
+        at: Self::Resume<K>,
+        fight: &mut K::Fight<'a>,
+    ) -> Played<Self, Self::Resume<K>>;
 
     /// Generate an encounter whose roster is code rather than table data.
     /// An unported build-specific rule returns a typed error.

@@ -433,7 +433,7 @@ fn settle<K: FightKind<V>>(
     match state {
         diapause::CoroutineState::Complete(()) => Played::Done,
         diapause::CoroutineState::Yielded(ask) => {
-            ask.at(crate::behaviour::cards::Resume::Build(super::Paused::Own(play)).into())
+            ask.at(crate::behaviour::Resume::Build(super::Paused::Own(play)))
         }
     }
 }

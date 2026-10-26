@@ -533,7 +533,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
     }
 }
 
-crate::behaviour::paused::paused_play!(Card, crate::behaviour::cards::Resume::Ironclad);
+crate::behaviour::paused::paused_play!(V::Card, crate::behaviour::cards::Resume::Ironclad);
 
 /// `Dismantle`: its damage to the target, twice where the target carries
 /// Vulnerable.
