@@ -283,10 +283,7 @@ pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Option<Played<
             Some(Played::Choosing {
                 offered: offered.into_iter().collect(),
                 skippable: false,
-                at: crate::behaviour::cards::Resume::Event(
-                    crate::behaviour::cards::event::Resume::AbundanceChoice,
-                )
-                .into(),
+                at: crate::behaviour::cards::Resume::FreeChoice.into(),
             })
         }
         _ => None,

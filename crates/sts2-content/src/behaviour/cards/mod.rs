@@ -644,7 +644,13 @@ pub enum Resume<V: crate::Build, K: sts2_core::FightKind<V>> {
     Colorless(colorless::paused::State<V, K>),
     /// A Defect card's play, paused where it asked.
     Defect(defect::paused::State<V, K>),
-    Event(event::Resume<V>),
+    /// An event card's play, paused where it asked.
+    Event(event::paused::State<V, K>),
+    /// A choose-a-card screen whose card goes into hand free this turn,
+    /// through `SetToFreeThisTurn` and `CardPileCmd.AddGeneratedCardToCombat`.
+    /// v0.111.0's `Abundance` stops here, until its build's own plays are
+    /// coroutines.
+    FreeChoice,
     /// An Ironclad card's play, paused where it asked.
     Ironclad(ironclad::paused::State<V, K>),
     /// A Necrobinder card's play, paused where it asked.
@@ -883,7 +889,7 @@ pub(crate) fn on_play<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
         CardFiled::Curse | CardFiled::Quest | CardFiled::Deprecated => {
             generated_from::<V, _>(card, fight, 0)
         }
-        CardFiled::Event => event::on_play::<V, _>(card, fight),
+        CardFiled::Event => event::on_play::<V, K>(card, fight),
         CardFiled::Status => status::on_play::<V, _>(card, fight),
         CardFiled::Token => token::on_play::<V, K>(card, fight),
     }
@@ -1368,30 +1374,6 @@ pub(crate) fn deck_event_hook<V: crate::Build>(
     }
 }
 
-/// The rest of a play that stopped, once the fight has its answer.
-pub(crate) fn resume_play<V: crate::Build, F: Fight<V>>(
-    fight: &mut F,
-    at: Resume<V, F::Kind>,
-    chosen: sts2_core::SelectedCards<V>,
-) -> Played<V, F::Kind> {
-    match at {
-        Resume::Event(at) => event::resume_play::<V, _>(fight, at, chosen),
-        Resume::Colorless(_)
-        | Resume::Defect(_)
-        | Resume::Ironclad(_)
-        | Resume::Necrobinder(_)
-        | Resume::Regent(_)
-        | Resume::Silent(_)
-        | Resume::Token(_) => {
-            unreachable!("a coroutine's play resumes through it")
-        }
-        Resume::Generated(card, _) => {
-            unreachable!("generated {card:?} waits on a question, not a pick")
-        }
-        Resume::Own(card, ..) => unreachable!("{card:?} waits on a question, not a pick"),
-    }
-}
-
 /// The rest of a play that waited on its own draw, with every copy the draw
 /// drew. A play that waited on anything else carries on as after a wait.
 pub(crate) fn resume_drew<V: crate::Build, F: Fight<V>>(
@@ -1412,9 +1394,9 @@ pub(crate) fn resume_waited<V: crate::Build, F: Fight<V>>(
     at: Resume<V, F::Kind>,
 ) -> Played<V, F::Kind> {
     match at {
-        Resume::Event(at) => event::resume_waited::<V, _>(fight, at),
         Resume::Colorless(_)
         | Resume::Defect(_)
+        | Resume::Event(_)
         | Resume::Ironclad(_)
         | Resume::Necrobinder(_)
         | Resume::Regent(_)
@@ -1422,6 +1404,7 @@ pub(crate) fn resume_waited<V: crate::Build, F: Fight<V>>(
         | Resume::Token(_) => {
             unreachable!("a coroutine's play resumes through it")
         }
+        Resume::FreeChoice => unreachable!("a free choice chooses, and waits on nothing"),
         Resume::Generated(card, from) => generated_from::<V, _>(card, fight, from),
         Resume::Own(card, from, left) => V::own_card_play_from(card, fight, from, left),
     }
@@ -1435,7 +1418,14 @@ pub(crate) fn resume_chosen<V: crate::Build, F: Fight<V>>(
     chosen: Option<sts2_core::CardIdent<V>>,
 ) -> Played<V, F::Kind> {
     match at {
-        Resume::Event(at) => event::resume_chosen::<V, _>(fight, at, chosen),
+        Resume::FreeChoice => {
+            if let Some(card) = chosen {
+                for at in fight.add_generated_cards(card, sts2_core::Pile::Hand, 1) {
+                    crate::behaviour::free_this_turn(fight, at);
+                }
+            }
+            Played::Done
+        }
         at => unimplemented!("{at:?} resumed with a chosen card"),
     }
 }
