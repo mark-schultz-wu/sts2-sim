@@ -646,7 +646,8 @@ pub enum Resume<V: crate::Build, K: sts2_core::FightKind<V>> {
     Event(event::Resume<V>),
     /// An Ironclad card's play, paused where it asked.
     Ironclad(ironclad::paused::State<V, K>),
-    Necrobinder(necrobinder::Resume<V>),
+    /// A Necrobinder card's play, paused where it asked.
+    Necrobinder(necrobinder::paused::State<V, K>),
     Regent(regent::Resume<V>),
     /// A Silent card's play, paused where it asked.
     Silent(silent::paused::State<V, K>),
@@ -853,7 +854,7 @@ pub(crate) fn on_play<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
         CardFiled::Ironclad => ironclad::on_play::<V, K>(card, fight),
         CardFiled::Silent => silent::on_play::<V, K>(card, fight),
         CardFiled::Regent => regent::on_play::<V, _>(card, fight),
-        CardFiled::Necrobinder => necrobinder::on_play::<V, _>(card, fight),
+        CardFiled::Necrobinder => necrobinder::on_play::<V, K>(card, fight),
         CardFiled::Defect => defect::on_play::<V, K>(card, fight),
         CardFiled::Colorless => colorless::on_play::<V, _>(card, fight),
         CardFiled::Curse | CardFiled::Quest | CardFiled::Deprecated => {
@@ -1353,10 +1354,9 @@ pub(crate) fn resume_play<V: crate::Build, F: Fight<V>>(
     match at {
         Resume::Colorless(at) => colorless::resume_play::<V, _>(fight, at, chosen),
         Resume::Event(at) => event::resume_play::<V, _>(fight, at, chosen),
-        Resume::Necrobinder(at) => necrobinder::resume_play::<V, _>(fight, at, chosen),
         Resume::Regent(at) => regent::resume_play::<V, _>(fight, at, chosen),
         Resume::Token(at) => unreachable!("{at:?} waits on a question, not a pick"),
-        Resume::Defect(_) | Resume::Ironclad(_) | Resume::Silent(_) => {
+        Resume::Defect(_) | Resume::Ironclad(_) | Resume::Necrobinder(_) | Resume::Silent(_) => {
             unreachable!("a coroutine's play resumes through it")
         }
         Resume::Generated(card, _) => {
@@ -1388,9 +1388,8 @@ pub(crate) fn resume_waited<V: crate::Build, F: Fight<V>>(
     match at {
         Resume::Colorless(at) => colorless::resume_waited::<V, _>(fight, at),
         Resume::Event(at) => event::resume_waited::<V, _>(fight, at),
-        Resume::Necrobinder(at) => necrobinder::resume_waited::<V, _>(fight, at),
         Resume::Regent(at) => regent::resume_waited::<V, _>(fight, at),
-        Resume::Defect(_) | Resume::Ironclad(_) | Resume::Silent(_) => {
+        Resume::Defect(_) | Resume::Ironclad(_) | Resume::Necrobinder(_) | Resume::Silent(_) => {
             unreachable!("a coroutine's play resumes through it")
         }
         Resume::Token(at) => token::resume_waited::<V, _>(fight, at),

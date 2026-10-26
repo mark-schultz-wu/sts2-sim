@@ -1,10 +1,17 @@
 //! The Necrobinder's cards, where the generator leaves them.
 
 use crate::behaviour::Played;
+use crate::behaviour::cards::{Ask, Lent, Number};
 use sts2_core::{
-    Amount, Change, CostPool, Effect, EventHook, Fight, HookEffect, Lasting, Pile, PileAct,
-    Scaling, Selection,
+    Amount, Change, CostPool, Effect, EventHook, Fight, FightKind, HookEffect, Lasting, Pile,
+    PileAct, Scaling, Selection,
 };
+
+/// Cards a play took from the hand, which it goes through after a wait.
+type Hand<V> = smallvec::SmallVec<[sts2_core::CardAt<V>; sts2_core::MAX_CARDS_IN_HAND]>;
+
+/// One card, as a pick asks for it.
+const ONE: Selection = Selection::Exactly(nonmax::NonMaxUsize::ONE);
 
 use crate::generated::cards::CardKeyword;
 use crate::ids::{CardIds as _, CardVarIds as _, PowerIds as _};
@@ -21,22 +28,6 @@ pub(crate) fn strike<V: crate::Build, F: Fight<V>>(fight: &mut F) {
         });
         fight.apply(attack);
     });
-}
-
-/// `Snap`: Osty's damage to the target, where Osty stands, then one card of
-/// the hand that does not Retain made to.
-fn snap<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
-    osty_hit::<V, _>(fight, V::CardVar::OSTY_DAMAGE);
-    let cards = fight
-        .cards_in(Pile::Hand)
-        .into_iter()
-        .filter(|&card| !fight.card_keyword(card, CardKeyword::Retain))
-        .collect();
-    Played::AskingAmong {
-        cards,
-        selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
-        at: crate::behaviour::cards::Resume::Necrobinder(Resume::SnapRetain).into(),
-    }
 }
 
 /// `Fetch`: where Osty stands, its damage to the target, then its `Cards`
@@ -227,40 +218,6 @@ fn bone_shards<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind
     Played::Done
 }
 
-/// `BlightStrike`: its damage to the target, then as much Doom on it as the
-/// attack's hits dealt, block included.
-fn blight_strike<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
-    let target = fight.target();
-    let results = fight.attack(Scaling::Dynamic, |fight| {
-        let attack = fight.resolve(Effect::Attack {
-            dealer: fight.actor(),
-            target,
-            damage: Amount::Var(V::CardVar::DAMAGE),
-            scaling: Scaling::Dynamic,
-        });
-        fight.apply(attack);
-    });
-    if fight.waiting() {
-        return wait::<V, _>(Resume::BlightStrikeHit);
-    }
-    blight_strike_hit::<V, _>(fight, &results)
-}
-
-/// The rest of `BlightStrike`, once its attack is over: as much Doom on the
-/// target as `results` dealt.
-fn blight_strike_hit<V: crate::Build, F: Fight<V>>(
-    fight: &mut F,
-    results: &sts2_core::AttackResults<V>,
-) -> Played<V, F::Kind> {
-    let doom = results.iter().map(|result| result.total).sum();
-    fight.apply_power(
-        fight.target(),
-        V::Power::DOOM_POWER,
-        sts2_core::PowerAmount::Counted(doom),
-    );
-    Played::Done
-}
-
 /// `Misery`: the target's debuffs as they stand, then its damage to the
 /// target. Each other hittable enemy then takes each of those debuffs: onto
 /// the instance it stacks with through `PowerCmd.ModifyAmount`, else as a
@@ -350,58 +307,11 @@ fn dirge<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
     Played::Done
 }
 
-/// `SculptingStrike`: its damage to the target, then one card of the hand
-/// that is not Ethereal of its own made Ethereal.
-fn sculpting_strike<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
-    let target = fight.target();
-    fight.attack(Scaling::Dynamic, |fight| {
-        let attack = fight.resolve(Effect::Attack {
-            dealer: fight.actor(),
-            target,
-            damage: Amount::Var(V::CardVar::DAMAGE),
-            scaling: Scaling::Dynamic,
-        });
-        fight.apply(attack);
-    });
-    if fight.waiting() {
-        return wait::<V, _>(Resume::SculptingStrikeHit);
-    }
-    sculpting_strike_hit::<V, _>(fight)
-}
-
-/// The rest of `SculptingStrike`, once its attack is over: one card of the
-/// hand that is not Ethereal picked, to become so.
-fn sculpting_strike_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
-    let ethereal = CardKeyword::Ethereal;
-    let cards = fight
-        .cards_in(Pile::Hand)
-        .into_iter()
-        .filter(|&card| !fight.card_local_keyword(card, ethereal))
-        .collect();
-    Played::AskingAmong {
-        cards,
-        selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
-        at: crate::behaviour::cards::Resume::Necrobinder(Resume::SculptingStrikeEthereal).into(),
-    }
-}
-
-pub(super) fn on_play<V: crate::Build, F: Fight<V>>(
+pub(super) fn on_play<'a, V: crate::Build, K: FightKind<V>>(
     card: V::Card,
-    fight: &mut F,
-) -> Played<V, F::Kind> {
+    fight: &mut K::Fight<'a>,
+) -> Played<V, K> {
     match card {
-        // `Seance`: its `Cards` of the draw pile picked, to turn into Souls.
-        __c0 if __c0 == V::Card::SEANCE => {
-            let count = usize::try_from(fight.var(V::CardVar::CARDS))
-                .ok()
-                .and_then(nonmax::NonMaxUsize::new)
-                .expect("a count of cards is not negative");
-            Played::Asking {
-                pile: Pile::Draw,
-                selection: Selection::Exactly(count),
-                at: crate::behaviour::cards::Resume::Necrobinder(Resume::SeanceTransforms).into(),
-            }
-        }
         // `DeathsDoor`: its block, and its `Repeat` times more where its owner
         // applied Doom this turn.
         __c0 if __c0 == V::Card::DEATHS_DOOR => {
@@ -424,52 +334,6 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(
                 fight.apply(block);
             }
             Played::Done
-        }
-        // `Hang`: its damage to the target, then Hang on it: as much as it
-        // already carries, and at least two.
-        __c0 if __c0 == V::Card::HANG => {
-            let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let hit = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(V::CardVar::DAMAGE),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(hit);
-            });
-            if fight.waiting() {
-                return wait::<V, _>(Resume::HangHit);
-            }
-            hang_hit::<V, _>(fight)
-        }
-        // `TheScythe`: its damage to the target, then `BuffFromPlay` of its
-        // `Increase` on this copy and on its deck version.
-        __c0 if __c0 == V::Card::THE_SCYTHE => {
-            let target = fight.target();
-            fight.attack(Scaling::Dynamic, |fight| {
-                let hit = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(V::CardVar::DAMAGE),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(hit);
-            });
-            if fight.waiting() {
-                return wait::<V, _>(Resume::TheScytheHit);
-            }
-            the_scythe_hit::<V, _>(fight)
-        }
-        // `Cleanse`: its `Summon` of Osty, then one card of the draw pile
-        // picked, to exhaust.
-        __c0 if __c0 == V::Card::CLEANSE => {
-            fight.summon_osty(fight.var(V::CardVar::SUMMON));
-            Played::Asking {
-                pile: Pile::Draw,
-                selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
-                at: crate::behaviour::cards::Resume::Necrobinder(Resume::CleanseExhausts).into(),
-            }
         }
         // `EndOfDays`: its Doom on each enemy that can be hit, then
         // `DoomKill` of those it leaves doomed.
@@ -501,32 +365,6 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(
             fight.doom_kill(&doomed);
             Played::Done
         }
-        // `HighFive`: where Osty stands, its damage from Osty to every enemy,
-        // then its Vulnerable on each enemy that can be hit.
-        __c0 if __c0 == V::Card::HIGH_FIVE => {
-            let Some(osty) = fight.osty() else {
-                return Played::Done;
-            };
-            fight.attack_from(osty, Scaling::Dynamic, |fight| {
-                let targets = fight.opponents();
-                // One `CreatureCmd.Damage` over them all.
-                fight.damage_command(|fight| {
-                    for target in targets {
-                        let hit = fight.resolve(Effect::Attack {
-                            dealer: osty,
-                            target,
-                            damage: Amount::Var(V::CardVar::OSTY_DAMAGE),
-                            scaling: Scaling::Dynamic,
-                        });
-                        fight.apply(hit);
-                    }
-                });
-            });
-            if fight.waiting() {
-                return wait::<V, _>(Resume::HighFiveHit);
-            }
-            high_five_hit::<V, _>(fight)
-        }
         __c0 if __c0 == V::Card::UNLEASH || __c0 == V::Card::PROTECTOR => {
             osty_attack::<V, _>(fight, V::CardVar::CALCULATED_DAMAGE)
         }
@@ -536,16 +374,6 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(
         __c0 if __c0 == V::Card::POKE || __c0 == V::Card::FLATTEN => {
             osty_attack::<V, _>(fight, V::CardVar::OSTY_DAMAGE)
         }
-        __c0 if __c0 == V::Card::GRAVEBLAST => graveblast::<V, _>(fight),
-        __c0 if __c0 == V::Card::SCULPTING_STRIKE => sculpting_strike::<V, _>(fight),
-        __c0 if __c0 == V::Card::SNAP => snap::<V, _>(fight),
-        // `Transfigure`: one card of the hand picked, to cost one more and
-        // play once more.
-        __c0 if __c0 == V::Card::TRANSFIGURE => Played::Asking {
-            pile: Pile::Hand,
-            selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
-            at: crate::behaviour::cards::Resume::Necrobinder(Resume::TransfigureReplay).into(),
-        },
         // `Squeeze`: its calculated damage from Osty to the target, where
         // Osty stands.
         __c0 if __c0 == V::Card::SQUEEZE => {
@@ -612,7 +440,6 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(
             });
             Played::Done
         }
-        __c0 if __c0 == V::Card::BLIGHT_STRIKE => blight_strike::<V, _>(fight),
         __c0 if __c0 == V::Card::MISERY => misery::<V, _>(fight),
         // `NoEscape`: its calculated Doom on the target.
         __c0 if __c0 == V::Card::NO_ESCAPE => {
@@ -651,16 +478,6 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(
         __c0 if __c0 == V::Card::BONE_SHARDS => bone_shards::<V, _>(fight),
         __c0 if __c0 == V::Card::NEGATIVE_PULSE => negative_pulse::<V, _>(fight),
         __c0 if __c0 == V::Card::SEVERANCE => severance::<V, _>(fight),
-        // `Friendship`: its Strength off its owner, then its Energy as
-        // Friendship.
-        __c0 if __c0 == V::Card::DREDGE => dredge::<V, _>(fight),
-        // `Eidolon`: every card of the hand exhausted, one at a time, then one
-        // Intangible where that came to nine or more.
-        __c0 if __c0 == V::Card::EIDOLON => {
-            let hand = fight.cards_in(Pile::Hand);
-            let count = u8::try_from(hand.len()).expect("a hand's worth fits a u8");
-            eidolon::<V, _>(fight, &hand, count)
-        }
         // `CaptureSpirit`: its damage to the target, unblockable and
         // unpowered, then its `Cards` of Souls into the draw pile at random.
         // The damage meets no block.
@@ -679,6 +496,8 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(
             }
             Played::Done
         }
+        // `Friendship`: its Strength off its owner, then its Energy as
+        // Friendship.
         __c0 if __c0 == V::Card::FRIENDSHIP => {
             let strength = fight.var(V::CardVar::STRENGTH_POWER);
             fight.apply_to_actor(
@@ -692,140 +511,308 @@ pub(super) fn on_play<V: crate::Build, F: Fight<V>>(
             );
             Played::Done
         }
+        __c0 if __c0 == V::Card::SEANCE
+            || __c0 == V::Card::HANG
+            || __c0 == V::Card::THE_SCYTHE
+            || __c0 == V::Card::CLEANSE
+            || __c0 == V::Card::HIGH_FIVE
+            || __c0 == V::Card::GRAVEBLAST
+            || __c0 == V::Card::SCULPTING_STRIKE
+            || __c0 == V::Card::SNAP
+            || __c0 == V::Card::TRANSFIGURE
+            || __c0 == V::Card::BLIGHT_STRIKE
+            || __c0 == V::Card::DREDGE
+            || __c0 == V::Card::EIDOLON =>
+        {
+            start::<V, K>(card, fight)
+        }
         card => crate::behaviour::cards::generated_from::<V, _>(card, fight, 0),
     }
 }
 
-/// Where a Necrobinder card stopped inside its own play.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Resume<V: crate::Build> {
-    /// `Seance`, after its owner picked the cards of the draw pile to turn
-    /// into Souls.
-    SeanceTransforms,
-    /// `Cleanse`, after its owner picked the card of the draw pile to
-    /// exhaust.
-    CleanseExhausts,
-    /// `Dredge`, after its owner picked the cards to take back.
-    DredgeTakeBack,
-    /// `Graveblast`, after its owner picked the card to take back.
-    GraveblastTakeBack,
-    /// `SculptingStrike`, after its owner picked the card to make Ethereal.
-    SculptingStrikeEthereal,
-    /// `Snap`, after its owner picked the card to Retain.
-    SnapRetain,
-    /// `Transfigure`, after its owner picked the card to replay.
-    TransfigureReplay,
-    /// After a question inside the card's attack was answered.
-    HangHit,
-    TheScytheHit,
-    SculptingStrikeHit,
-    BlightStrikeHit,
-    HighFiveHit,
-    /// `HighFive`, after a question inside one of its Vulnerables. `held` is
-    /// the enemies it took after the attack, and `at` the one to go on from.
-    HighFive {
-        held: crate::behaviour::cards::Held,
-        at: u8,
-    },
-    /// `Eidolon`, after a question inside its exhausts was answered, with the
-    /// cards left to exhaust and how many the hand held.
-    Eidolon {
-        left: crate::behaviour::cards::Left<V>,
-        count: u8,
-    },
-}
-
-/// The rest of a Necrobinder card's play that stood still on a question its
-/// own command raised.
-pub(super) fn resume_waited<V: crate::Build, F: Fight<V>>(
-    fight: &mut F,
-    at: Resume<V>,
-) -> Played<V, F::Kind> {
-    match at {
-        Resume::HangHit => hang_hit::<V, _>(fight),
-        Resume::TheScytheHit => the_scythe_hit::<V, _>(fight),
-        Resume::SculptingStrikeHit => sculpting_strike_hit::<V, _>(fight),
-        Resume::BlightStrikeHit => {
-            let results = fight.waited_attack_results();
-            blight_strike_hit::<V, _>(fight, &results)
-        }
-        Resume::HighFiveHit => high_five_hit::<V, _>(fight),
-        Resume::HighFive { held, at } => high_five_vulnerable::<V, _>(fight, held, at),
-        Resume::Eidolon { left, count } => {
-            let left: Vec<_> = left.cards().collect();
-            eidolon::<V, _>(fight, &left, count)
-        }
-        at => unreachable!("{at:?} stops on a pick, not on a question it waited for"),
-    }
-}
-
-/// The rest of the play waits at `at`, where a command left a question and
-/// more commands follow.
-fn wait<V: crate::Build, K: sts2_core::FightKind<V>>(at: Resume<V>) -> Played<V, K> {
-    Played::Waiting {
-        at: crate::behaviour::cards::Resume::Necrobinder(at).into(),
-    }
-}
-
-pub(super) fn resume_play<V: crate::Build, F: Fight<V>>(
-    fight: &mut F,
-    at: Resume<V>,
-    chosen: sts2_core::SelectedCards<V>,
-) -> Played<V, F::Kind> {
-    match at {
-        // `CardCmd.TransformTo<Soul>` of each one taken.
-        Resume::SeanceTransforms => {
+/// A Necrobinder card's play that can stop on a question: from its start to
+/// its end, yielding each question it stops on. Each step is lent the fight,
+/// and after a question the answer.
+#[diapause::coroutine(yield = Ask<V>, resume = for<'f, 'a> Lent<'f, 'a, V, K>)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
+    match card {
+        // `Seance`: its `Cards` of the draw pile picked, each
+        // `CardCmd.TransformTo<Soul>`.
+        __c0 if __c0 == V::Card::SEANCE => {
+            let count = usize::try_from(resumed!().fight.var(V::CardVar::CARDS))
+                .ok()
+                .and_then(nonmax::NonMaxUsize::new)
+                .expect("a count of cards is not negative");
+            yield_!(Ask::Asking {
+                pile: Pile::Draw,
+                selection: Selection::Exactly(count),
+            });
+            let Lent { fight, taken } = resumed!();
             let soul = sts2_core::CardIdent::new(V::Card::SOUL);
-            for &card in chosen.as_slice() {
-                fight.transform(card, soul);
+            for &picked in crate::behaviour::cards::selected::<V>(taken).as_slice() {
+                fight.transform(picked, soul);
             }
-            Played::Done
         }
-        // `CardCmd.Exhaust` of the one taken.
-        Resume::CleanseExhausts => {
-            fight.act_on(PileAct::Exhaust, chosen.as_slice());
-            Played::Done
+        // `Hang`: its damage to the target, then Hang on it: as much as it
+        // already carries, and at least two.
+        __c0 if __c0 == V::Card::HANG => {
+            strike::<V, _>(resumed!().fight);
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            hang_hit::<V, _>(resumed!().fight);
         }
-        // `CardPileCmd.Add` of those taken, into hand.
-        Resume::GraveblastTakeBack | Resume::DredgeTakeBack => {
-            fight.act_on(PileAct::IntoHand, chosen.as_slice());
-            Played::Done
+        // `TheScythe`: its damage to the target, then `BuffFromPlay` of its
+        // `Increase` on this copy and on its deck version.
+        __c0 if __c0 == V::Card::THE_SCYTHE => {
+            strike::<V, _>(resumed!().fight);
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            the_scythe_hit::<V, _>(resumed!().fight);
         }
-        // One more energy on its cost for the fight, where it has a cost that
-        // is not X, and one more replay.
-        Resume::TransfigureReplay => {
-            for &card in chosen.as_slice() {
+        // `Cleanse`: its `Summon` of Osty, then one card of the draw pile
+        // picked, for `CardCmd.Exhaust`.
+        __c0 if __c0 == V::Card::CLEANSE => {
+            let fight = &mut *resumed!().fight;
+            fight.summon_osty(fight.var(V::CardVar::SUMMON));
+            yield_!(Ask::Asking {
+                pile: Pile::Draw,
+                selection: ONE,
+            });
+            let Lent { fight, taken } = resumed!();
+            fight.act_on(
+                PileAct::Exhaust,
+                crate::behaviour::cards::selected::<V>(taken).as_slice(),
+            );
+        }
+        // `HighFive`: where Osty stands, its damage from Osty to every enemy,
+        // then its Vulnerable on each enemy that can be hit then. A question
+        // left before one Vulnerable waits.
+        __c0 if __c0 == V::Card::HIGH_FIVE => {
+            if high_five_attack::<V, _>(resumed!().fight) {
+                if resumed!().fight.waiting() {
+                    yield_!(Ask::Waiting);
+                }
+                let held: crate::behaviour::cards::Held =
+                    crate::behaviour::cards::Held::of(&resumed!().fight.hittable_opponents());
+                let count: usize = held.creatures().count();
+                let mut vulnerable: Number = resumed!().fight.var(V::CardVar::VULNERABLE_POWER);
+                for at in 0..count {
+                    if resumed!().fight.waiting() {
+                        yield_!(Ask::Waiting);
+                        vulnerable = resumed!().fight.var(V::CardVar::VULNERABLE_POWER);
+                    }
+                    let target = held.creatures().nth(at).expect("one of those held");
+                    resumed!().fight.apply_power(
+                        target,
+                        V::Power::VULNERABLE_POWER,
+                        sts2_core::PowerAmount::Counted(vulnerable),
+                    );
+                }
+            }
+        }
+        // `Graveblast`: its damage to the target, then one card from the
+        // discard pile picked into hand, as `CardPileCmd.Add`.
+        __c0 if __c0 == V::Card::GRAVEBLAST => {
+            strike::<V, _>(resumed!().fight);
+            yield_!(Ask::Asking {
+                pile: Pile::Discard,
+                selection: ONE,
+            });
+            let Lent { fight, taken } = resumed!();
+            fight.act_on(
+                PileAct::IntoHand,
+                crate::behaviour::cards::selected::<V>(taken).as_slice(),
+            );
+        }
+        // `SculptingStrike`: its damage to the target, then one card of the
+        // hand that is not Ethereal of its own picked, for
+        // `CardCmd.ApplyKeyword(cardModel, CardKeyword.Ethereal)`.
+        __c0 if __c0 == V::Card::SCULPTING_STRIKE => {
+            strike::<V, _>(resumed!().fight);
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            let cards: Hand<V> =
+                without_keyword::<V, _>(resumed!().fight, CardKeyword::Ethereal, true);
+            yield_!(Ask::AskingAmong {
+                cards,
+                selection: ONE,
+            });
+            add_keyword::<V, K>(resumed!(), CardKeyword::Ethereal);
+        }
+        // `Snap`: Osty's damage to the target, where Osty stands, then one
+        // card of the hand that does not Retain picked, for
+        // `CardCmd.ApplyKeyword(cardModel, CardKeyword.Retain)`.
+        __c0 if __c0 == V::Card::SNAP => {
+            osty_hit::<V, _>(resumed!().fight, V::CardVar::OSTY_DAMAGE);
+            let cards: Hand<V> =
+                without_keyword::<V, _>(resumed!().fight, CardKeyword::Retain, false);
+            yield_!(Ask::AskingAmong {
+                cards,
+                selection: ONE,
+            });
+            add_keyword::<V, K>(resumed!(), CardKeyword::Retain);
+        }
+        // `Transfigure`: one card of the hand picked, to cost one more for
+        // the fight, where it has a cost that is not X, and to play once
+        // more.
+        __c0 if __c0 == V::Card::TRANSFIGURE => {
+            yield_!(Ask::Asking {
+                pile: Pile::Hand,
+                selection: ONE,
+            });
+            let Lent { fight, taken } = resumed!();
+            for &picked in crate::behaviour::cards::selected::<V>(taken).as_slice() {
                 if let sts2_core::Cost::Fixed(_) =
-                    sts2_core::CardTable::cost(fight.card_ident(card).card)
+                    sts2_core::CardTable::cost(fight.card_ident(picked).card)
                 {
                     fight.modify_card(
-                        card,
-                        Change::ChangeCost(sts2_core::CostPool::Energy, 1),
+                        picked,
+                        Change::ChangeCost(CostPool::Energy, 1),
                         Lasting::ThisFight,
                     );
                 }
-                fight.add_replays(sts2_core::Writing::One(card), 1);
+                fight.add_replays(sts2_core::Writing::One(picked), 1);
             }
-            Played::Done
         }
-        // `CardCmd.ApplyKeyword(cardModel, CardKeyword.Retain)`.
-        Resume::SnapRetain => {
-            for &card in chosen.as_slice() {
-                let retain = Change::AddKeyword(CardKeyword::Retain);
-                fight.modify_card(card, retain, Lasting::ThisFight);
+        // `BlightStrike`: its damage to the target, then as much Doom on it
+        // as the attack's hits dealt, block included.
+        __c0 if __c0 == V::Card::BLIGHT_STRIKE => {
+            let mut dealt: Number = {
+                let fight = &mut *resumed!().fight;
+                let target = fight.target();
+                let results = fight.attack(Scaling::Dynamic, |attacking| {
+                    let attack = attacking.resolve(Effect::Attack {
+                        dealer: attacking.actor(),
+                        target,
+                        damage: Amount::Var(V::CardVar::DAMAGE),
+                        scaling: Scaling::Dynamic,
+                    });
+                    attacking.apply(attack);
+                });
+                total::<V>(&results)
+            };
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+                dealt = total::<V>(&resumed!().fight.waited_attack_results());
             }
-            Played::Done
+            let fight = &mut *resumed!().fight;
+            fight.apply_power(
+                fight.target(),
+                V::Power::DOOM_POWER,
+                sts2_core::PowerAmount::Counted(dealt),
+            );
         }
-        // `CardCmd.ApplyKeyword(cardModel, CardKeyword.Ethereal)`.
-        Resume::SculptingStrikeEthereal => {
-            for &card in chosen.as_slice() {
-                let ethereal = Change::AddKeyword(CardKeyword::Ethereal);
-                fight.modify_card(card, ethereal, Lasting::ThisFight);
+        // `Dredge`: its `Cards` from the discard pile picked into hand, as
+        // many as the hand has room for, as `CardPileCmd.Add`.
+        __c0 if __c0 == V::Card::DREDGE => {
+            let room: Option<nonmax::NonMaxUsize> = dredge_room::<V, _>(resumed!().fight);
+            if let Some(count) = room {
+                yield_!(Ask::Asking {
+                    pile: Pile::Discard,
+                    selection: Selection::Exactly(count),
+                });
+                let Lent { fight, taken } = resumed!();
+                fight.act_on(
+                    PileAct::IntoHand,
+                    crate::behaviour::cards::selected::<V>(taken).as_slice(),
+                );
             }
-            Played::Done
         }
-        at => unreachable!("{at:?} waits on a question, not a pick"),
+        // `Eidolon`: every card of the hand exhausted, one at a time, then
+        // one Intangible where that came to nine or more. A hook's question
+        // inside an exhaust stands the rest still.
+        __c0 if __c0 == V::Card::EIDOLON => {
+            let cards: Hand<V> = resumed!().fight.cards_in(Pile::Hand).into_iter().collect();
+            let count: usize = cards.len();
+            for at in 0..count {
+                resumed!().fight.act_on(PileAct::Exhaust, &[cards[at]]);
+                if resumed!().fight.waiting() {
+                    yield_!(Ask::Waiting);
+                }
+            }
+            if count >= EIDOLON_CARDS {
+                resumed!().fight.apply_to_actor(
+                    V::Power::INTANGIBLE_POWER,
+                    sts2_core::PowerAmount::Counted(1),
+                );
+            }
+        }
+        card => unreachable!("{card:?} never stops on a question"),
     }
+}
+
+crate::behaviour::cards::paused_play!(Necrobinder);
+
+/// The cards in hand without `keyword`, read locally where `local` says.
+fn without_keyword<V: crate::Build, F: Fight<V>>(
+    fight: &F,
+    keyword: CardKeyword,
+    local: bool,
+) -> Hand<V> {
+    fight
+        .cards_in(Pile::Hand)
+        .into_iter()
+        .filter(|&card| {
+            !if local {
+                fight.card_local_keyword(card, keyword)
+            } else {
+                fight.card_keyword(card, keyword)
+            }
+        })
+        .collect()
+}
+
+/// `CardCmd.ApplyKeyword` of `keyword` to each card a pick took.
+fn add_keyword<V: crate::Build, K: FightKind<V>>(
+    lent: &mut Lent<'_, '_, V, K>,
+    keyword: CardKeyword,
+) {
+    let Lent { fight, taken } = lent;
+    for &picked in crate::behaviour::cards::selected::<V>(taken).as_slice() {
+        fight.modify_card(picked, Change::AddKeyword(keyword), Lasting::ThisFight);
+    }
+}
+
+/// What the hits of an attack dealt, block included.
+fn total<V: crate::Build>(results: &sts2_core::AttackResults<V>) -> Number {
+    results.iter().map(|result| result.total).sum()
+}
+
+/// How many cards `Dredge` takes: its `Cards`, or as many as the hand has
+/// room for. `None` where that is none.
+fn dredge_room<V: crate::Build, F: Fight<V>>(fight: &F) -> Option<nonmax::NonMaxUsize> {
+    let cards: usize =
+        num_traits::cast(fight.var(V::CardVar::CARDS)).expect("a count of cards is not negative");
+    let room = sts2_core::MAX_CARDS_IN_HAND.saturating_sub(fight.cards_in(Pile::Hand).len());
+    nonmax::NonMaxUsize::new(cards.min(room)).filter(|count| count.get() > 0)
+}
+
+/// `HighFive`'s attack: where Osty stands, its damage from Osty to every
+/// enemy. Whether Osty stood.
+fn high_five_attack<V: crate::Build, F: Fight<V>>(fight: &mut F) -> bool {
+    let Some(osty) = fight.osty() else {
+        return false;
+    };
+    fight.attack_from(osty, Scaling::Dynamic, |fight| {
+        let targets = fight.opponents();
+        // One `CreatureCmd.Damage` over them all.
+        fight.damage_command(|fight| {
+            for target in targets {
+                let hit = fight.resolve(Effect::Attack {
+                    dealer: osty,
+                    target,
+                    damage: Amount::Var(V::CardVar::OSTY_DAMAGE),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(hit);
+            }
+        });
+    });
+    true
 }
 
 /// `Eidolon`'s `_intangibleThreshold`.
@@ -833,7 +820,7 @@ const EIDOLON_CARDS: usize = 9;
 
 /// The rest of `Hang`, once its attack is over: Hang on the target, as much
 /// as it already carries, and at least two.
-fn hang_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
+fn hang_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) {
     use sts2_core::CreatureView as _;
 
     let target = fight.target();
@@ -852,103 +839,17 @@ fn hang_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
         V::Power::HANG_POWER,
         sts2_core::PowerAmount::Counted(added),
     );
-    Played::Done
 }
 
 /// The rest of `TheScythe`, once its attack is over: `BuffFromPlay` of its
 /// `Increase` on this copy and on its deck version.
-fn the_scythe_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
+fn the_scythe_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) {
     let increase = fight.var(V::CardVar::INCREASE);
     fight.modify_this(
         sts2_core::Change::Own(crate::behaviour::cards::CardWrite::BuffFromPlay(increase)),
         sts2_core::Lasting::ThisFight,
     );
     fight.write_deck_version(crate::behaviour::cards::DeckWrite::BuffFromPlay(increase));
-    Played::Done
-}
-
-/// The rest of `HighFive`, once Osty's attack is over: its Vulnerable on each
-/// enemy that can be hit then.
-fn high_five_hit<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
-    let held = crate::behaviour::cards::Held::of(&fight.hittable_opponents());
-    high_five_vulnerable::<V, _>(fight, held, 0)
-}
-
-/// `HighFive`'s Vulnerable on each of `held` from the one at `from` on. A
-/// question left before one waits.
-fn high_five_vulnerable<V: crate::Build, F: Fight<V>>(
-    fight: &mut F,
-    held: crate::behaviour::cards::Held,
-    from: u8,
-) -> Played<V, F::Kind> {
-    let vulnerable = sts2_core::PowerAmount::Counted(fight.var(V::CardVar::VULNERABLE_POWER));
-    for (at, target) in held.creatures().enumerate().skip(usize::from(from)) {
-        if fight.waiting() {
-            let at = u8::try_from(at).expect("a fight's creatures fit a u8");
-            return wait::<V, _>(Resume::HighFive { held, at });
-        }
-        fight.apply_power(target, V::Power::VULNERABLE_POWER, vulnerable);
-    }
-    Played::Done
-}
-
-/// `Eidolon` over the cards `cards`: each exhausted, then one Intangible
-/// where the hand held nine or more.
-fn eidolon<V: crate::Build, F: Fight<V>>(
-    fight: &mut F,
-    cards: &[sts2_core::CardAt<V>],
-    count: u8,
-) -> Played<V, F::Kind> {
-    for (at, &card) in cards.iter().enumerate() {
-        fight.act_on(PileAct::Exhaust, &[card]);
-        if fight.waiting() {
-            let left = crate::behaviour::cards::Left::of(&cards[at + 1..]);
-            return wait::<V, _>(Resume::Eidolon { left, count });
-        }
-    }
-    if usize::from(count) >= EIDOLON_CARDS {
-        fight.apply_to_actor(
-            V::Power::INTANGIBLE_POWER,
-            sts2_core::PowerAmount::Counted(1),
-        );
-    }
-    Played::Done
-}
-
-/// `Dredge`: its `Cards` from the discard pile picked into hand, as many as
-/// the hand has room for.
-fn dredge<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
-    let cards: usize =
-        num_traits::cast(fight.var(V::CardVar::CARDS)).expect("a count of cards is not negative");
-    let room = sts2_core::MAX_CARDS_IN_HAND.saturating_sub(fight.cards_in(Pile::Hand).len());
-    match nonmax::NonMaxUsize::new(cards.min(room)) {
-        Some(count) if count.get() > 0 => Played::Asking {
-            pile: Pile::Discard,
-            selection: Selection::Exactly(count),
-            at: crate::behaviour::cards::Resume::Necrobinder(Resume::DredgeTakeBack).into(),
-        },
-        _ => Played::Done,
-    }
-}
-
-/// `Graveblast`: its damage to the target, then one card from the discard
-/// pile picked into hand.
-fn graveblast<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
-    let target = fight.target();
-    fight.attack(Scaling::Dynamic, |fight| {
-        let attack = fight.resolve(Effect::Attack {
-            dealer: fight.actor(),
-            target,
-            damage: Amount::Var(V::CardVar::DAMAGE),
-            scaling: Scaling::Dynamic,
-        });
-        fight.apply(attack);
-    });
-    Played::Asking {
-        pile: Pile::Discard,
-        selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
-        at: crate::behaviour::cards::Resume::Necrobinder(Resume::GraveblastTakeBack).into(),
-    }
 }
 
 /// `DamageCmd.Attack(damage).FromOsty(Owner.Osty, this).Targeting(target)`,
