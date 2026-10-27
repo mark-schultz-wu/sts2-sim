@@ -83,4 +83,17 @@ yield, since the copy took away the first state it crossed. The random
 differential test passes 2,000 cases on two seeds. On the first seed
 rustc's peak memory falls from 27.8 GB to 20.5 GB. The test takes 321 s
 to build and run, against 248 s. `sts2-content` builds in about
-the same time with and without the pass.
+the same time with and without the pass. This change is ours alone.
+
+### A spent inclusive range saves the same state on every toolchain
+
+A `for` loop over `a..=b` keeps its place in a `__RangeInclusiveIter`,
+with an explicit `done` flag, because std's `RangeInclusive` does not
+serialize its own. After each element the wrapper copied back the
+`start` that std's `next` left. Where std leaves `start` after the last
+element changed between releases. Rust 1.99 moves it past `end`, so
+`1..=1` saves as `start: 2`, and the serde test that expects 1 failed on
+upstream's main too. Now the wrapper copies `start` back only while the
+range has elements left. The saved state is then the same on every
+toolchain, and the serde suite passes. The fix is offered upstream in
+<https://github.com/todesking/diapause/pull/3>.
