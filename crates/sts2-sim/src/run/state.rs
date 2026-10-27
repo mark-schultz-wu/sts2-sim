@@ -658,6 +658,14 @@ pub(super) enum Then<V: Rules> {
     Effect(sts2_core::HookEffect<V>),
     Walk(RunWalking<V>),
     Ask(Pickup<V>),
+    /// `ClearAfterPurchase` of the shelf a merchant sold, once its pickup
+    /// is done, for the gold it cost. A Lord's Parasol purchase goes on from
+    /// the next shelf.
+    Purchased {
+        shelf: u8,
+        spent: u32,
+        parasol: bool,
+    },
 }
 
 /// A pickup's steps, in order.
@@ -1000,8 +1008,6 @@ pub(super) enum Phase<V: Rules> {
     /// index the next decision names is the slot's own.
     Shop {
         entries: Vec<sts2_core::Entry<V>>,
-        /// The purchase this merchant has not finished.
-        unfinished: Option<Unfinished>,
         /// What a relic bought here asks as it is picked up.
         asking: Option<Asked<V>>,
     },
@@ -1044,6 +1050,10 @@ pub(super) enum Pickup<V: Rules> {
     Event,
     /// The abandon-run popup, whose yes ends the run.
     ConfirmAbandon,
+    /// `DoLocalMerchantCardRemoval`: one card of the deck less its `Eternal`
+    /// ones, curses first, which the merchant takes out. A `free` one is Lord's
+    /// Parasol's, which spends nothing.
+    CardRemoval { free: bool },
 }
 
 /// A pickup's question, and the pickup standing still on it, which goes on
@@ -1096,27 +1106,6 @@ pub(super) enum Location {
     NoLocation,
 }
 
-/// A purchase a merchant is waiting on an answer to.
-///
-/// `OnTryPurchaseWrapper` does not return while the entry's own purchase is
-/// awaiting one, so the shelf and the question it opened are one thing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Unfinished {
-    /// The card removal, waiting for the card it takes out of the deck. It
-    /// clears no shelf, so it names none. `free` for one bought with
-    /// `ignoreCost`, which spends nothing.
-    Removal { free: bool },
-    /// A relic's pickup the shop parks on as any room does, a copy of a deck
-    /// card among what it can ask. The shelf it came off clears once that
-    /// pickup is done. `parasol` for one Lord's
-    /// Parasol bought, whose purchases go on from the next shelf.
-    Relic {
-        shelf: u8,
-        parasol: bool,
-        spent: u32,
-    },
-}
-
 impl<V: Rules> Phase<V> {
     /// Whether `seat`'s player can leave the room this phase stands in.
     ///
@@ -1132,7 +1121,7 @@ impl<V: Rules> Phase<V> {
             Phase::RestSite { options, .. } => options.is_empty(),
             // A merchant never runs out. The run leaves when it decides to,
             // and a shelf it has not bought is still there.
-            Phase::Shop { unfinished, .. } => unfinished.is_none(),
+            Phase::Shop { asking, .. } => asking.is_none(),
             // The map is not a room, so there is nothing to leave.
             Phase::Map
             | Phase::Combat(_)
@@ -1198,10 +1187,6 @@ impl<V: Rules> State<V> {
             Phase::RestSite { upgrading, .. } if *upgrading => {
                 Some(sts2_core::QuestionKind::SelectCards)
             }
-            Phase::Shop {
-                unfinished: Some(_),
-                ..
-            } => Some(sts2_core::QuestionKind::SelectCards),
             _ => None,
         }
     }
@@ -2047,9 +2032,9 @@ impl<V: Rules> State<V> {
                     )
             }
             Phase::Shop {
-                unfinished: Some(Unfinished::Removal { free: false }),
+                asking: Some(asked),
                 ..
-            } => true,
+            } => asked.pickup == Pickup::CardRemoval { free: false },
             Phase::Rewards {
                 removing: Some(_), ..
             } => true,
@@ -2083,7 +2068,7 @@ impl<V: Rules> State<V> {
                 *asking = None;
                 *chosen = None;
             }
-            Phase::Shop { unfinished, .. } => *unfinished = None,
+            Phase::Shop { asking, .. } => *asking = None,
             Phase::Rewards { removing, .. } => *removing = None,
             _ => unreachable!("only a cancelable selection is cancelled"),
         }
@@ -2745,7 +2730,7 @@ impl<V: Rules> State<V> {
         };
         match diapause::Coroutine::resume(&mut *rest, lent) {
             diapause::CoroutineState::Yielded(pickup) => self.park(seat, Asked { pickup, rest }),
-            diapause::CoroutineState::Complete(()) => self.pickup_over(seat),
+            diapause::CoroutineState::Complete(()) => self.pickup_over(),
         }
     }
 
@@ -2757,6 +2742,21 @@ impl<V: Rules> State<V> {
             Then::Effect(effect) => effect,
             Then::Walk(walking) => return Stepped::Walk(walking),
             Then::Ask(pickup) => return Stepped::Ask(pickup),
+            Then::Purchased {
+                shelf,
+                spent,
+                parasol,
+            } => {
+                self.purchased(seat, shelf, Self::gold(spent));
+                return match parasol {
+                    true => Stepped::Nested(
+                        seat,
+                        self.purchase_everything(seat, Some(shelf)),
+                        After::Done,
+                    ),
+                    false => Stepped::Done,
+                };
+            }
         };
         {
             let pickup = match effect {
@@ -2800,8 +2800,8 @@ impl<V: Rules> State<V> {
                     return Stepped::Done;
                 }
                 HookEffect::PurchaseEverything => {
-                    self.purchase_everything(seat, None);
-                    return Stepped::Done;
+                    let steps = self.purchase_everything(seat, None);
+                    return Stepped::Nested(seat, steps, After::Done);
                 }
                 HookEffect::ItemPurchased(gold) => {
                     self.item_purchased(gold);
@@ -5574,11 +5574,13 @@ impl<V: Rules> State<V> {
         }
     }
 
-    /// `AfterRoomEntered` for a room no fight opens in.
+    /// `AfterRoomEntered` for a room no fight opens in. A shop parks on what
+    /// its listeners ask, as Lord's Parasol's purchases do, and the walk's
+    /// later listeners wait for the answer.
     ///
     /// # Panics
     ///
-    /// A relic asking for something the run cannot carry out as it enters.
+    /// A listener asking in any other room.
     fn room_entered(&mut self, room: V::RoomType, strayed: bool, point: Option<V::MapPointType>) {
         // Each listener reads its own player's numbers, which the walk fills
         // in. These are the host's, for the modifiers, which read none.
@@ -5593,8 +5595,11 @@ impl<V: Rules> State<V> {
             base: true,
         };
         if let Some(asked) = self.walk_run(entered) {
-            let pickup = asked.pickup;
-            unimplemented!("entering a room asking for {pickup:?}");
+            if !matches!(self.phase, Phase::Shop { .. }) {
+                let pickup = asked.pickup;
+                unimplemented!("entering a room asking for {pickup:?}");
+            }
+            self.park(host, asked);
         }
     }
 
@@ -5900,23 +5905,25 @@ impl<V: Rules> State<V> {
         // game. Nothing between the two reads the gold, so it is spent here,
         // and handed back by a purchase that fails.
         self.players[seat].gold = self.players[seat].gold - cost;
-        let asking = match stock {
-            sts2_core::Stock::Card(Some(on_sale)) => {
-                self.add_to_deck(seat, on_sale.card);
-                None
-            }
-            // `AfterObtained` awaits the pickup, as any room's does.
-            sts2_core::Stock::Relic(Some(relic)) => self.obtain(seat, relic).map(|asked| {
-                let Phase::Shop { asking, .. } = &mut self.phase else {
-                    unreachable!("the phase was a shop when this began");
-                };
-                *asking = Some(asked);
-                Unfinished::Relic {
+        match stock {
+            sts2_core::Stock::Card(Some(on_sale)) => self.add_to_deck(seat, on_sale.card),
+            // `AfterObtained` awaits the pickup, as any room's does, and
+            // `ClearAfterPurchase` runs once the entry's own purchase returns.
+            // So a shelf whose purchase is still asking stays stocked until it
+            // does. A purchase that has not returned leaves the decision
+            // unresolved, which is what the game reports.
+            sts2_core::Stock::Relic(Some(relic)) => {
+                let mut steps = self.obtained_held(seat, relic, false, None);
+                steps.push(Then::Purchased {
                     shelf: index,
-                    parasol: false,
                     spent,
-                }
-            }),
+                    parasol: false,
+                });
+                return Ok(match self.carry_out(seat, steps) {
+                    Some(asked) => self.park(seat, asked),
+                    None => Decided::Resolved,
+                });
+            }
             // `TryToProcure` refuses where a relic's `ShouldProcurePotion`
             // says no, and the purchase fails with it. Nothing is spent and
             // the shelf keeps its potion. A full belt is refused before any
@@ -5926,35 +5933,22 @@ impl<V: Rules> State<V> {
                     self.players[seat].gold = self.players[seat].gold + cost;
                     return Ok(Decided::Resolved);
                 }
-                None
             }
             // `DoLocalMerchantCardRemoval` opens a cancelable selection and
             // spends the gold once a card comes back, so nothing is spent on
             // this one until then.
             sts2_core::Stock::CardRemoval => {
                 self.players[seat].gold = self.players[seat].gold + cost;
-                Some(Unfinished::Removal { free: false })
+                let removal = Then::Ask(Pickup::CardRemoval { free: false });
+                return Ok(match self.carry_out(seat, [removal]) {
+                    Some(asked) => self.park(seat, asked),
+                    None => Decided::Resolved,
+                });
             }
             stock => unimplemented!("buying {stock:?}"),
-        };
-
-        // `ClearAfterPurchase` runs once the entry's own purchase returns, so a
-        // shelf whose purchase is still asking stays stocked until it does.
-        match asking {
-            Some(_) => {
-                let Phase::Shop { unfinished, .. } = &mut self.phase else {
-                    unreachable!("the phase was a shop when this began");
-                };
-                *unfinished = asking;
-            }
-            None => self.purchased(seat, index, cost),
         }
-        // A purchase that has not returned leaves the decision unresolved,
-        // which is what the game reports.
-        Ok(match asking {
-            Some(_) => Decided::Abandoned,
-            None => Decided::Resolved,
-        })
+        self.purchased(seat, index, cost);
+        Ok(Decided::Resolved)
     }
 
     /// A purchase from the shop an event's room is, which the event carries
@@ -5981,38 +5975,6 @@ impl<V: Rules> State<V> {
             Some(next) => self.park(seat, next),
             None => Decided::Resolved,
         }
-    }
-
-    /// Finish the purchase this merchant is waiting on.
-    ///
-    /// One entry point, because the phase holds one unfinished purchase. Which
-    /// of the two it is decides what the answer means and what clears after it.
-    fn finish_purchase(
-        &mut self,
-        seat: sts2_core::SeatIndex,
-        answer: &Answer,
-    ) -> Result<Decided, Error> {
-        let Phase::Shop { unfinished, .. } = &self.phase else {
-            unreachable!("the phase was a shop when this began");
-        };
-        let unfinished = unfinished.expect("the merchant was waiting when this began");
-        let Answer::Cards(picks) = answer else {
-            unimplemented!("an answer to a purchase that is not a card selection");
-        };
-        let Some(index) = picks.only() else {
-            unimplemented!("a purchase answered with other than one card");
-        };
-        match unfinished {
-            Unfinished::Removal { free } => self.removed(seat, index, free),
-            Unfinished::Relic { .. } => {
-                unreachable!("a pickup the shop parks on answers as a room's")
-            }
-        }
-        let Phase::Shop { unfinished, .. } = &mut self.phase else {
-            unreachable!("the phase was a shop when this began");
-        };
-        *unfinished = None;
-        Ok(Decided::Resolved)
     }
 
     /// `CloneCard`, then `CardPileCmd.Add` to the deck.
@@ -6074,7 +6036,7 @@ impl<V: Rules> State<V> {
     ///
     /// A relic's pickup that asks stands the rest still. They go on from the
     /// shelf `after` it once the pickup is done.
-    fn purchase_everything(&mut self, seat: sts2_core::SeatIndex, after: Option<u8>) {
+    fn purchase_everything(&mut self, seat: sts2_core::SeatIndex, after: Option<u8>) -> Steps<V> {
         let Phase::Shop { entries, .. } = &self.phase else {
             unimplemented!("Lord's Parasol buying outside a merchant's room");
         };
@@ -6092,22 +6054,15 @@ impl<V: Rules> State<V> {
                 }
                 _ if !stocked => continue,
                 sts2_core::Stock::Card(Some(on_sale)) => self.add_to_deck(seat, on_sale.card),
+                // Its pickup, then the purchases from the next shelf.
                 sts2_core::Stock::Relic(Some(relic)) => {
-                    if let Some(asked) = self.obtain(seat, relic) {
-                        let Phase::Shop {
-                            asking, unfinished, ..
-                        } = &mut self.phase
-                        else {
-                            unreachable!("the phase was a shop when this began");
-                        };
-                        *asking = Some(asked);
-                        *unfinished = Some(Unfinished::Relic {
-                            shelf: index,
-                            parasol: true,
-                            spent: 0,
-                        });
-                        return;
-                    }
+                    let mut steps = self.obtained_held(seat, relic, false, None);
+                    steps.push(Then::Purchased {
+                        shelf: index,
+                        spent: 0,
+                        parasol: true,
+                    });
+                    return steps;
                 }
                 sts2_core::Stock::Potion(Some(potion)) => {
                     if !self.procure(seat, potion) {
@@ -6119,11 +6074,9 @@ impl<V: Rules> State<V> {
             // `ignoreCost`, which spends nothing.
             self.purchased(seat, index, num_traits::zero());
         }
-        if removal {
-            let Phase::Shop { unfinished, .. } = &mut self.phase else {
-                unreachable!("the phase was a shop when this began");
-            };
-            *unfinished = Some(Unfinished::Removal { free: true });
+        match removal {
+            true => vec![Then::Ask(Pickup::CardRemoval { free: true })],
+            false => Vec::new(),
         }
     }
 
@@ -6247,7 +6200,6 @@ impl<V: Rules> State<V> {
         }
         Phase::Shop {
             entries,
-            unfinished: None,
             asking: None,
         }
     }
@@ -7063,21 +7015,7 @@ impl<V: Rules> State<V> {
     }
 
     /// What a pickup was part of, once the pickup is done.
-    fn pickup_over(&mut self, seat: sts2_core::SeatIndex) -> Decided {
-        // `ClearAfterPurchase`, once the relic bought has finished its pickup.
-        if let Phase::Shop { unfinished, .. } = &mut self.phase
-            && let Some(Unfinished::Relic {
-                shelf,
-                parasol,
-                spent,
-            }) = *unfinished
-        {
-            *unfinished = None;
-            self.purchased(seat, shelf, Self::gold(spent));
-            if parasol {
-                self.purchase_everything(seat, Some(shelf));
-            }
-        }
+    fn pickup_over(&mut self) -> Decided {
         // A rest site's option is done once its pickup is. A pickup no
         // option made, such as a relic granted there, finishes none.
         if let Phase::RestSite {
@@ -7201,6 +7139,13 @@ impl<V: Rules> State<V> {
                     unimplemented!("a clone answered with other than one card");
                 };
                 self.cloned(seat, index, excluding);
+                Stepped::Done
+            }
+            Pickup::CardRemoval { free } => {
+                let Some(index) = picks().only() else {
+                    unimplemented!("a card removal answered with other than one card");
+                };
+                self.removed(seat, index, free);
                 Stepped::Done
             }
         }
@@ -7355,15 +7300,6 @@ impl<V: Rules> State<V> {
         }
         if matches!(&self.phase, Phase::RestSite { upgrading, .. } if *upgrading) {
             return self.smith(seat, answer);
-        }
-        if matches!(
-            &self.phase,
-            Phase::Shop {
-                unfinished: Some(Unfinished::Removal { .. }),
-                ..
-            }
-        ) {
-            return self.finish_purchase(seat, answer);
         }
         let Some(asking) = self.phase.asking_mut(seat) else {
             unimplemented!("answering a question inside a fight");
@@ -7795,7 +7731,7 @@ impl<V: Rules> State<V> {
         }
         match &self.phase {
             Phase::Map => true,
-            Phase::Shop { unfinished, .. } => unfinished.is_none(),
+            Phase::Shop { .. } => true,
             Phase::Neow { .. } | Phase::Treasure { .. } => self.phase.finished(seat),
             // `NFakeMerchant` turns it on as it opens, like a merchant's room.
             Phase::Event { finished, .. } => {
@@ -7844,7 +7780,8 @@ impl<V: Rules> State<V> {
                     ]),
                     Pickup::Cards { .. }
                     | Pickup::FromDeck { .. }
-                    | Pickup::CloneDeckCard { .. } => {
+                    | Pickup::CloneDeckCard { .. }
+                    | Pickup::CardRemoval { .. } => {
                         unreachable!("a selection's moves are its picks")
                     }
                     Pickup::Rewards { offered, skippable } => {
@@ -7885,6 +7822,9 @@ impl<V: Rules> State<V> {
                     Pickup::CloneDeckCard { excluding } => {
                         Some((1, 1, self.clonable(seat, *excluding).len()))
                     }
+                    Pickup::CardRemoval { .. } => {
+                        Some((1, 1, self.offered(seat, sts2_core::DeckAct::Remove).len()))
+                    }
                     _ => None,
                 }
             }
@@ -7892,15 +7832,6 @@ impl<V: Rules> State<V> {
             Phase::RestSite {
                 upgrading: true, ..
             } => Some((1, 1, self.upgradable(seat).count())),
-            Phase::Shop {
-                unfinished: Some(unfinished),
-                ..
-            } => match unfinished {
-                Unfinished::Removal { .. } => {
-                    Some((1, 1, self.offered(seat, sts2_core::DeckAct::Remove).len()))
-                }
-                Unfinished::Relic { .. } => None,
-            },
             Phase::Rewards {
                 removing: Some(_), ..
             } => Some((1, 1, self.offered(seat, sts2_core::DeckAct::Remove).len())),
@@ -8460,6 +8391,15 @@ impl<V: Rules> State<V> {
                             .map(|held| held.ident)
                             .collect(),
                     ),
+                    // The deck less its `Eternal` cards, curses first.
+                    Pickup::CardRemoval { .. } => (
+                        1,
+                        1,
+                        self.offered(seat, sts2_core::DeckAct::Remove)
+                            .into_iter()
+                            .map(|(_, card)| card)
+                            .collect(),
+                    ),
                     Pickup::FromDeck { act, min, count } => (
                         u32::try_from(*min).expect("a selection counts in a few cards"),
                         u32::try_from(*count).expect("a selection counts in a few cards"),
@@ -8532,42 +8472,13 @@ impl<V: Rules> State<V> {
                 picked: sts2_core::Picks::none(),
                 pile: None,
             }),
-            // Each selection offers a different list. The removal reads the
-            // deck less its `Eternal` cards, curses first, and a pickup reads
-            // the deck less what its own filter leaves out. One card either
-            // way, and neither can be empty.
-            Phase::Shop { unfinished, .. } => {
-                let offered: Option<Vec<_>> = match unfinished {
-                    None => None,
-                    Some(Unfinished::Removal { .. }) => Some(
-                        self.offered(seat, sts2_core::DeckAct::Remove)
-                            .into_iter()
-                            .map(|(_, card)| card)
-                            .collect(),
-                    ),
-                    Some(Unfinished::Relic { .. }) => {
-                        unreachable!("the parked pickup is asked first")
-                    }
-                };
-                offered.map(|offered| Question::SelectCards {
-                    min: 1,
-                    max: 1,
-                    asker: None,
-                    options: offered
-                        .into_iter()
-                        .enumerate()
-                        .map(|(index, card)| CardOption {
-                            index,
-                            card,
-                            text: None,
-                        })
-                        .collect(),
-                    picked: sts2_core::Picks::none(),
-                    pile: None,
-                })
-            }
-            // An act opens on its map, which is no room and asks nothing.
-            Phase::Map | Phase::Lost { .. } | Phase::Won { .. } | Phase::Treasure { .. } => None,
+            // An act opens on its map, which is no room and asks nothing. A
+            // shop asks only what a purchase parked.
+            Phase::Map
+            | Phase::Lost { .. }
+            | Phase::Won { .. }
+            | Phase::Treasure { .. }
+            | Phase::Shop { .. } => None,
         }
     }
 
