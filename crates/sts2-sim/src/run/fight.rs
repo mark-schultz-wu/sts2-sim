@@ -53,6 +53,7 @@ impl<V: Rules> State<V> {
         let Some(fighting) = self.fighting() else {
             unreachable!("a fight answer has a live fight");
         };
+        fighting.live.answering(seat);
         let since = fighting.live.removed_from_deck(seat).len();
         let ended = match combat::answer(seat, fighting, chosen)? {
             None => self.turn_ended_by_play(seat)?,
@@ -288,7 +289,11 @@ impl<V: Rules> State<V> {
         self.gold_from_fight(seat);
         self.potions_from_fight(seat);
         match ended {
-            None => {}
+            None => {
+                if let Some(fighting) = self.fighting() {
+                    fighting.live.stop_for_answer(seat);
+                }
+            }
             // Not `finish`: the run never left the fight, and the piles and
             // the powers are where the player fell.
             Some(combat::Ended::Lost) => {

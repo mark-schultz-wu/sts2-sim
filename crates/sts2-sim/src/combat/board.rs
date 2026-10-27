@@ -1050,7 +1050,8 @@ impl<'a, V: Rules> Board<'a, V> {
 
     /// `PowerCmd.Remove`, with what its `AfterRemoved` asks carried out.
     pub(super) fn remove_power_carried(&mut self, id: CombatId, power: V::Power) {
-        let seat = self.seat();
+        // What it does to cards is to its holder's player's.
+        let seat = self.live.seat_of(id).unwrap_or_else(|| self.actor_seat());
         for effect in self.live.remove_power_asking(seat, id, power) {
             match effect {
                 HookEffect::KillCreature(creature) => self.kill_outright(creature, true),

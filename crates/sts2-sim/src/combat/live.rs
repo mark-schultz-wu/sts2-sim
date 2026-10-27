@@ -3235,7 +3235,7 @@ impl<V: Rules> Live<V> {
     /// Forget the powers taken off during the decision, unless a question
     /// waits, behind which a parked walk can still reach one.
     pub(crate) fn forget_detached(&mut self) {
-        if self.asking.is_none() {
+        if self.asking.is_none() && !self.queues.any_stopped() {
             self.detached.clear();
         }
     }
@@ -3361,9 +3361,42 @@ impl<V: Rules> Live<V> {
         offered
     }
 
+    /// In a fight of several players, the question `seat`'s decision ended
+    /// on goes to the front of `seat`'s queue, with what waits behind it. The
+    /// other seats act around it until `seat` answers.
+    pub(crate) fn stop_for_answer(&mut self, seat: sts2_core::SeatIndex) {
+        if self.players.len() == 1 {
+            return;
+        }
+        let Some(asking) = self.asking.take() else {
+            return;
+        };
+        let task = Paused {
+            asking,
+            waiting: self.deferred.take_fresh((0, None)),
+            hand: self.players[seat].cards.len(sts2_core::Pile::Hand),
+        };
+        self.queues.stop(seat, task);
+    }
+
+    /// The question `seat` answers, back in play with what waits behind it,
+    /// where its queue stopped on one.
+    pub(crate) fn answering(&mut self, seat: sts2_core::SeatIndex) {
+        if let Some(task) = self.queues.go_on(seat) {
+            self.rejoin(seat, task);
+        }
+    }
+
+    /// The question in play, or else the one `seat`'s queue stopped on.
+    fn asked_of(&self, seat: sts2_core::SeatIndex) -> Option<&Asking<V>> {
+        self.asking
+            .as_ref()
+            .or_else(|| self.queues.stopped(seat).map(|task| &task.asking))
+    }
+
     /// The card-selection question on which this fight is parked.
     pub(crate) fn question(&self, seat: sts2_core::SeatIndex) -> Option<sts2_core::Question<V>> {
-        let asked = self.asking.as_ref()?;
+        let asked = self.asked_of(seat)?;
         let (min, max, _) = self.selecting(seat)?;
         // The pile every option stands in, where they share one.
         let pile = match &asked.question {
@@ -3433,7 +3466,7 @@ impl<V: Rules> Live<V> {
     /// The whole of what the legal answers read, so they are listed without
     /// building the question.
     pub(crate) fn selecting(&self, seat: sts2_core::SeatIndex) -> Option<(u32, u32, usize)> {
-        let asked = self.asking.as_ref()?;
+        let asked = self.asked_of(seat)?;
         let bounds = |selection: sts2_core::Selection| match selection {
             sts2_core::Selection::Exactly(count) => {
                 let count = u32::try_from(count.get()).expect("a selection count fits the wire");

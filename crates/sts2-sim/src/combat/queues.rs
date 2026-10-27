@@ -18,6 +18,10 @@ pub(super) struct Queues<V: Rules> {
     actions: Vec<Action<V>>,
     /// The id the next action takes.
     next_id: u32,
+    /// The fronts that stopped on their owner's question, by seat. Each
+    /// holds its owner's queue until the answer comes, and the other queues
+    /// go on around it.
+    stopped: Vec<(sts2_core::SeatIndex, Paused<V>)>,
 }
 
 /// One queued action.
@@ -42,6 +46,7 @@ impl<V: Rules> Queues<V> {
         Queues {
             actions: Vec::new(),
             next_id: 0,
+            stopped: Vec::new(),
         }
     }
 
@@ -63,15 +68,48 @@ impl<V: Rules> Queues<V> {
     }
 
     /// The ready front with the smallest id, taken off its queue, with its
-    /// owner.
+    /// owner. A queue whose front stopped on a question has none ready.
     pub(super) fn take_next(&mut self) -> Option<(sts2_core::SeatIndex, Paused<V>)> {
-        if self.actions.is_empty() {
-            return None;
-        }
-        let Action { owner, body, .. } = self.actions.remove(0);
+        let at = self
+            .actions
+            .iter()
+            .position(|action| self.stopped.iter().all(|(seat, _)| *seat != action.owner))?;
+        let Action { owner, body, .. } = self.actions.remove(at);
         match body {
             Body::Hook(task) => Some((owner, task)),
         }
+    }
+}
+
+impl<V: Rules> Queues<V> {
+    /// `task`, which stopped on `seat`'s question, at the front of `seat`'s
+    /// queue until the answer comes.
+    pub(super) fn stop(&mut self, seat: sts2_core::SeatIndex, task: Paused<V>) {
+        debug_assert!(
+            self.stopped(seat).is_none(),
+            "a queue stops on one question at a time"
+        );
+        self.stopped.push((seat, task));
+    }
+
+    /// The front of `seat`'s queue that waits on its question.
+    pub(super) fn stopped(&self, seat: sts2_core::SeatIndex) -> Option<&Paused<V>> {
+        self.stopped
+            .iter()
+            .find(|(owner, _)| *owner == seat)
+            .map(|(_, task)| task)
+    }
+
+    /// Whether any queue's front waits on a question.
+    pub(super) fn any_stopped(&self) -> bool {
+        !self.stopped.is_empty()
+    }
+
+    /// The front of `seat`'s queue that waits on its question, taken off to
+    /// go on with the answer.
+    pub(super) fn go_on(&mut self, seat: sts2_core::SeatIndex) -> Option<Paused<V>> {
+        let at = self.stopped.iter().position(|(owner, _)| *owner == seat)?;
+        Some(self.stopped.remove(at).1)
     }
 }
 
@@ -80,11 +118,13 @@ impl<V: Rules> Clone for Queues<V> {
         Queues {
             actions: self.actions.clone(),
             next_id: self.next_id,
+            stopped: self.stopped.clone(),
         }
     }
 
     fn clone_from(&mut self, source: &Self) {
         self.actions.clone_from(&source.actions);
         self.next_id = source.next_id;
+        self.stopped.clone_from(&source.stopped);
     }
 }

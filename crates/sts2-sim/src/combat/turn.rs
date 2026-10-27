@@ -39,6 +39,9 @@ pub(crate) fn end<V: Rules>(
         if !seats(live).all(|other| live.players[other].ready) {
             return Ok(None);
         }
+        if live.queues.any_stopped() {
+            unimplemented!("the turn ending while a player's action waits on a question");
+        }
     }
     super::turn_loop::begin(seat, fighting, ascension, false)
 }
