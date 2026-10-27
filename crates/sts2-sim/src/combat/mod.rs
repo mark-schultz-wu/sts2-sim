@@ -24,7 +24,7 @@ mod start;
 mod turn;
 mod turn_loop;
 pub(crate) use legal::{belt, drinks, moves as legal_moves, thrown};
-pub(crate) use listen::combat_ended;
+pub(crate) use listen::{combat_ended, revive_the_dead};
 pub(crate) use live::{ExtraReward, Heard, Live, printed_costs};
 pub(crate) use observed::Fight;
 pub(crate) use play::{

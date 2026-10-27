@@ -111,7 +111,9 @@ pub(super) fn takes_extra_turn<V: Rules>(
     if !extra {
         return false;
     }
-    live.players[seat].phase = <V::PlayerTurnPhase as TurnPhaseKinds>::NONE;
+    for player in live.players.iter_mut() {
+        player.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::NONE;
+    }
     live.switch_side(<V::CombatSide as SideKinds>::PLAYER);
     live.turn = live.turn + num_traits::one();
     // `PowerCmd.Decrement` of a power asking runs inside the walk.
@@ -140,7 +142,9 @@ pub(super) fn enemy_side_starts<V: Rules>(
     belts: &mut crate::run::Belts<V>,
     ascension: V::AscensionLevel,
 ) -> Result<SmallVec<[CombatId; CREATURES]>, super::Ended> {
-    live.players[seat].phase = <V::PlayerTurnPhase as TurnPhaseKinds>::NONE;
+    for player in live.players.iter_mut() {
+        player.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::NONE;
+    }
     live.switch_side(<V::CombatSide as SideKinds>::ENEMY);
     // `Creature.BeforeTurnStart` for each enemy, then `BeforeSideTurnStart`
     // for their side. Hardened Shell's cap starts again here.
@@ -369,6 +373,10 @@ pub(super) fn side_starts<V: Rules>(
     }
     let mut setup = None;
     for seat in seats(live) {
+        // `SetupPlayerTurn` does nothing for a dead player.
+        if !live.player(seat).alive {
+            continue;
+        }
         match player_setup::<V>(seat, live, streams, belts, ascension) {
             PlayerSetUp::Ended(ended) => {
                 if let Some(task) = setup {
@@ -2853,10 +2861,11 @@ pub(super) fn pre_play_from<V: Rules>(
     next: usize,
 ) -> PrePlayed<V> {
     let turn = live.turn;
+    let player = seat.creature();
     let passes = [
-        sts2_core::EventHook::AutoPrePlayPhaseEarly { turn },
-        sts2_core::EventHook::AutoPrePlayPhase { turn },
-        sts2_core::EventHook::AutoPrePlayPhaseLate { turn },
+        sts2_core::EventHook::AutoPrePlayPhaseEarly { player, turn },
+        sts2_core::EventHook::AutoPrePlayPhase { player, turn },
+        sts2_core::EventHook::AutoPrePlayPhaseLate { player, turn },
     ];
     let mut pass = next;
     let mut asked = rest;

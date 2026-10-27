@@ -780,6 +780,23 @@ fn ask_card<V: Rules>(
     let Some(card) = live.players[seat].cards.named(id) else {
         return false;
     };
+    // A hook raised for one player reaches another player's card, which
+    // returns at once: each of the game's checks `player == Owner`.
+    if let EventHook::BeforeHandDraw { player, .. }
+    | EventHook::EnergyReset { player, .. }
+    | EventHook::EnergyResetLate { player, .. }
+    | EventHook::PlayerTurnStart { player, .. }
+    | EventHook::PlayerTurnStartLate { player, .. }
+    | EventHook::AutoPrePlayPhaseEarly { player, .. }
+    | EventHook::AutoPrePlayPhase { player, .. }
+    | EventHook::AutoPrePlayPhaseLate { player, .. }
+    | EventHook::AutoPostPlayPhase { player, .. }
+    | EventHook::StarsSpent { player, .. }
+    | EventHook::HandEmptied { player, .. } = hook
+        && player != seat.creature()
+    {
+        return false;
+    }
     let model_hook = hook
         .model_hook()
         .unwrap_or_else(|| unreachable!("{hook:?} is asked of one model, not raised"));
@@ -1201,6 +1218,35 @@ fn decides<V: Rules>(
         decided |= V::decide_hook(listener, hook).is_decision_and(|said| said == answer);
     });
     decided
+}
+
+/// `ReviveBeforeCombatEnd` for each player a won fight left dead:
+/// `CreatureCmd.Heal` of one hit point. `HealInternal` brings the player
+/// back with their hooks on again, and `AfterCurrentHpChanged` follows.
+pub(crate) fn revive_the_dead<V: Rules>(fighting: super::Fighting<'_, V>) {
+    let super::Fighting {
+        live,
+        streams,
+        belts,
+    } = fighting;
+    let ascension = live.ascension;
+    for seat in super::turn::seats(live) {
+        if live.player(seat).alive {
+            continue;
+        }
+        belts[seat].rehear();
+        live.players[seat].potions.rehear();
+        let mut board = super::board::Board::for_card(
+            seat,
+            live,
+            streams.combat(),
+            belts,
+            ascension,
+            None,
+            None,
+        );
+        sts2_core::Fight::heal(&mut board, seat.creature(), num_traits::one());
+    }
 }
 
 /// `AfterCombatEnd`, then `AfterCombatVictory`, raised on the fight's

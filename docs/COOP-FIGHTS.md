@@ -18,7 +18,9 @@ cards a move gives go to each, and an enemy's powered block is scaled. A
 card play that stops on a question waits at the front of its player's
 queue with its command frames. The other players act around it. A won
 fight hands each player back their health, and rolls each player's
-rewards in seat order before any is offered.
+rewards in seat order before any is offered. A player who dies beside a
+living one loses their cards and sits out each turn. They come back at 1
+HP when the fight is won.
 
 What still assumes one player:
 
@@ -27,8 +29,8 @@ What still assumes one player:
   no player's queue.
 - A phase of the turn's end that waits on a question, and an extra turn,
   panic in a fight of several players.
-- A player's death beside a living one, and a potion thrown at another
-  player, panic.
+- A potion thrown at another player panics, and so does a player's death
+  inside their own card or potion beside a living one.
 - Nothing scales monster powers yet.
 - `FightView::player` panics in a fight of several players.
 - `monster.rs` reads seat 0's stream positions.

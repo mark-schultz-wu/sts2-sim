@@ -284,6 +284,9 @@ impl<V: Rules> State<V> {
         // `EndCombatInternal` raises the fight's last hooks before
         // `RewardsCmd.Offer` builds the rewards.
         if ended == Some(combat::Ended::Won) {
+            if let Some(fighting) = self.fighting() {
+                combat::revive_the_dead(fighting);
+            }
             self.combat_ended();
         }
         for each in self.seats() {
@@ -299,9 +302,10 @@ impl<V: Rules> State<V> {
             // Not `finish`: the run never left the fight, and the piles and
             // the powers are where the player fell.
             Some(combat::Ended::Lost) => {
+                let seats: smallvec::SmallVec<[sts2_core::SeatIndex; 4]> = self.seats().collect();
                 let (live, belts) = self.left_fight();
-                let combat = live.report(seat, belts);
-                self.lost(seat, combat, Some(live));
+                let combats = seats.iter().map(|&each| live.report(each, belts)).collect();
+                self.lost(combats, Some(live));
             }
             Some(combat::Ended::Won) => {
                 let seats: smallvec::SmallVec<[sts2_core::SeatIndex; 4]> = self.seats().collect();

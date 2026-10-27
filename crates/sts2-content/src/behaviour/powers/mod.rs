@@ -2414,12 +2414,16 @@ pub(crate) fn event_hook<V: crate::Build>(
             return;
         }
         // `MayhemPower.AfterAutoPrePlayPhaseEntered`: its stack, off the top
-        // of the draw pile, auto-played. A fight here has one player, whose
-        // power it is.
-        (__c0, PowerAmount::Counted(amount), EventHook::AutoPrePlayPhase { .. })
-            if __c0 == V::Power::MAYHEM_POWER =>
+        // of the draw pile, auto-played on its owner's turn.
+        (__c0, PowerAmount::Counted(amount), EventHook::AutoPrePlayPhase { player, .. })
+            if __c0 == V::Power::MAYHEM_POWER && player == holder =>
         {
             Some(HookEffect::AutoPlayFromDraw(amount))
+        }
+        (__c0, PowerAmount::Counted(_), EventHook::AutoPrePlayPhase { .. })
+            if __c0 == V::Power::MAYHEM_POWER =>
+        {
+            return;
         }
         // Its `AfterModifyingEnergyGain` only flashes.
         (__c0, _, EventHook::EnergyGainModified) if __c0 == V::Power::NO_ENERGY_GAIN_POWER => {
@@ -2771,15 +2775,19 @@ pub(crate) fn event_hook<V: crate::Build>(
             unimplemented!("an endless Black Hole")
         }
         // `StampedePower.AfterAutoPostPlayPhaseEntered`: its stack of Attacks
-        // in hand, each drawn off `Shuffle`, auto-played. A fight here has one
-        // player, whose power it is.
-        (__c0, PowerAmount::Counted(count), EventHook::AutoPostPlayPhase { .. })
-            if __c0 == V::Power::STAMPEDE_POWER =>
+        // in hand, each drawn off `Shuffle`, auto-played on its owner's turn.
+        (__c0, PowerAmount::Counted(count), EventHook::AutoPostPlayPhase { player, .. })
+            if __c0 == V::Power::STAMPEDE_POWER && player == holder =>
         {
             Some(HookEffect::AutoPlayRandomFromHand {
                 kind: sts2_core::CardKind::Attack,
                 count,
             })
+        }
+        (__c0, PowerAmount::Counted(_), EventHook::AutoPostPlayPhase { .. })
+            if __c0 == V::Power::STAMPEDE_POWER =>
+        {
+            return;
         }
         (__c0, PowerAmount::Endless, EventHook::AutoPostPlayPhase { .. })
             if __c0 == V::Power::STAMPEDE_POWER =>

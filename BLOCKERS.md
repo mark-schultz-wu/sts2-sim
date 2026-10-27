@@ -62,16 +62,22 @@ run as its own machine sees it. The work goes in this order:
 3. The co-op rules, in the order the runs reach them. A run of several
    players starts, each player meets Neow, and the map takes votes (done).
    The card pools deal the co-op cards in a run of several players (done).
-   Every seed matches each step through its first fight and its rewards.
-   The fight holds every player, and the turn ends once every player ends
-   it. A monster's move reaches every player, with its health and powered
-   block scaled by the player count. Each relic reads its own owner. A
-   card play that stops on a question waits at the front of its player's
-   queue, and the other players act around it. A won fight hands each
-   player back their health and rolls their own rewards. Next, in the
+   Every seed matches each step through its first fight and its rewards,
+   and two of eight hunted runs match to the run's end. The fight holds
+   every player, and the turn ends once every player ends it. A monster's
+   move reaches every player, with its health and powered block scaled by
+   the player count. Each relic reads its own owner. A card play that
+   stops on a question waits at the front of its player's queue, and the
+   other players act around it. A won fight hands each player back their
+   health and rolls their own rewards. A player who dies beside a living
+   one leaves the fight's cards, and a win revives them. Next, in the
    order of `docs/COOP-FIGHTS.md` and where the hunted runs stop:
-   - A player's death beside a living player, which panics. Three of eight
-     hunted runs stop there.
+   - The co-op hunt is not repeatable at `--width 4`. One seed in eight
+     parts early in one run and not the next, and alone it never does.
+     Seed 2 parted after seat 0's Stoke with seat 1's game a few draws
+     behind the simulator. The seat looks read before another seat's
+     action is over there. The mod's wait for a decision point needs to
+     cover the other seats' actions.
    - The rest of the scheduler (steps 3 and 4 of `docs/SCHEDULER.md`). A
      question the turn loop asks belongs to no player's queue yet. Each
      phase of the turn's end panics at one in a fight of several players.
@@ -85,7 +91,9 @@ run as its own machine sees it. The work goes in this order:
      next room's stream.
    - A fight won inside an event, and the extra rewards a monster gives,
      which panic in a run of several players.
-   - Monster power scaling by the player count.
+   - Monster power scaling by the player count. A monster's opening
+     block power reads 24 in the game where the simulator has 8, in a
+     hunted run's second fight.
    - A potion thrown at another player, which panics: the potions act on
      their drinker.
    - Content that reads "the player" where the game reads an owner:
@@ -98,7 +106,9 @@ run as its own machine sees it. The work goes in this order:
      - Content whose comment says "a fight here has one" player.
      - The rest of `Board::seat`'s callers, which a card or potion reaches
        for its own player and a monster's move does not yet.
-   - Then rest sites, shops, events, and revival.
+   - A player who dies inside their own card or potion beside a living
+     one, and a death that leaves every standing player ready, panic.
+   - Then rest sites, shops and events.
 4. Co-op content, as the runs reach it. Massive Scroll is ported. The
    Concoct power's `AfterDamageGiven` stops one hunted run.
 

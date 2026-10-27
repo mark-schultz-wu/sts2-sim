@@ -2514,6 +2514,12 @@ impl<V: Rules> PotionBelt<V> {
         &self.held
     }
 
+    /// Each potion hears its hooks again, as a revived player's do.
+    pub(super) fn rehear(&mut self) {
+        self.hooks = hooks_of::<V>(&self.held);
+        self.either = self.hooks.union(self.modifiers);
+    }
+
     /// No potion hears a hook after, as a dead player's potions hear none.
     pub(super) fn deafen(&mut self) {
         self.hooks = sts2_core::Overrides::default();

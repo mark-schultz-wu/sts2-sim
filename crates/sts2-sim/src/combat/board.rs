@@ -2119,13 +2119,11 @@ impl<'a, V: Rules> Board<'a, V> {
         // powers say. Only a player's death can lose the fight.
         let pet = self.live.creatures[at].owner.is_some();
         if owner != <V::CombatSide as SideKinds>::ENEMY && !pet {
-            if self.live.creatures.iter().any(|creature| {
+            let standing = self.live.creatures.iter().any(|creature| {
                 creature.side == <V::CombatSide as SideKinds>::PLAYER
                     && creature.owner.is_none()
                     && creature.alive
-            }) {
-                unimplemented!("a player dying beside a player still standing");
-            }
+            });
             if let Some(effect) = self.after_death(id, owner, false).first() {
                 unimplemented!("a power asking for {effect:?} over a player's death")
             }
@@ -2145,6 +2143,10 @@ impl<'a, V: Rules> Board<'a, V> {
             self.belts[seat].deafen();
             self.live.players[seat].potions.deafen();
             self.live.players[seat].cards.deafen();
+            if standing {
+                self.died_beside_others(seat);
+                return;
+            }
             self.ended = Some(super::Ended::Lost);
             self.live.lost = true;
             // `CreatureCmd.Kill` readies the turn a player dies on to end.
@@ -2303,6 +2305,34 @@ impl<'a, V: Rules> Board<'a, V> {
         // reporting it dead, and the numbers its powers counted go with it.
         self.live.creatures.retain(|creature| creature.id != id);
         self.live.powers.clear(id);
+    }
+
+    /// `HandlePlayerDeath` for a player who died while another stands, and
+    /// the end of turn `CreatureCmd.Kill` asks for them. Their cards leave
+    /// the fight, and their energy and stars go to nothing. On their side's
+    /// turn they are ready to end it.
+    ///
+    /// # Panics
+    ///
+    /// A death inside the player's own card or potion, whose cards the game
+    /// takes once the effect is over. A death that leaves every standing
+    /// player ready, which ends the turn.
+    fn died_beside_others(&mut self, seat: sts2_core::SeatIndex) {
+        let player = &mut self.live.players[seat];
+        if player.effect_depth > 0 {
+            unimplemented!("a player dying inside their own card or potion beside a living one");
+        }
+        // `RemoveDeadPlayerCardsFromCombat`, which raises no hook.
+        player.cards.clear();
+        player.energy = num_traits::zero();
+        player.stars = num_traits::zero();
+        if self.live.side == <V::CombatSide as SideKinds>::PLAYER {
+            player.ready = true;
+            let live = &*self.live;
+            if super::turn::seats(live).all(|other| live.players[other].ready) {
+                unimplemented!("a player's death leaving every player ready to end the turn");
+            }
+        }
     }
 
     /// `RemoveAllPowersAfterDeath` on a creature that stays in the fight.
@@ -2475,7 +2505,6 @@ impl<'a, V: Rules> Board<'a, V> {
         side: V::CombatSide,
         removal_prevented: bool,
     ) -> sts2_core::HookEffects<V> {
-        let seat = self.seat();
         let monster = self
             .at(creature)
             .and_then(|at| match self.live.creatures[at].model {
@@ -2502,6 +2531,10 @@ impl<'a, V: Rules> Board<'a, V> {
             if paused == Some(listener) {
                 unimplemented!("{listener:?} asking for {effect:?} behind its own question")
             }
+            // What a listener asks is for its owner, and a monster's for the
+            // actor.
+            let seat =
+                super::listen::owner(self.live, listener).unwrap_or_else(|| self.actor_seat());
             // Each listener runs under a pause boundary of its own, with a
             // context that blocks on a question. A question it asks pauses it
             // alone, and the caller runs on. What it deferred waits with the
@@ -2590,8 +2623,7 @@ impl<'a, V: Rules> Board<'a, V> {
                                 .collect();
                             task.asking.question = super::live::Asked::Among { cards, selection };
                         }
-                        let owner = self.seat();
-                        self.live.queues.enqueue_hook(owner, task);
+                        self.live.queues.enqueue_hook(seat, task);
                         paused = Some(listener);
                     }
                     false => self.live.deferred.keep_fresh(fresh),
@@ -5017,8 +5049,15 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn apply_to_opponents(&mut self, power: V::Power, amount: PowerAmount<V::Number>) {
-        // The list is taken before the first lands, as an attack's is.
-        let targets = self.opponents();
+        // The list is taken before the first lands, as an attack's is. A
+        // monster's move is handed `PlayerCreatures`, a dead player among
+        // them, and `PowerCmd.Apply` lands on each.
+        let targets = match self.side() == <V::CombatSide as SideKinds>::ENEMY {
+            true => super::turn::seats(self.live)
+                .map(sts2_core::SeatIndex::creature)
+                .collect(),
+            false => self.opponents(),
+        };
         self.land_each(&targets, power, amount, Some(self.actor));
     }
 
@@ -5925,13 +5964,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     /// heals no monster, which is what leaves a segment killed with the last
     /// of them dead.
     fn heal(&mut self, at: CombatId, amount: V::Number) {
-        let seat = self.seat();
         self.ran_on();
         // `CombatManager.IsEnding` heals no creature but a player. A hit
         // that took the last enemy to nothing has the fight ending already,
         // so Sic 'Em's summon then grows Osty without healing it, and Feed's
         // kill still heals its owner.
-        if at != self.live.player(seat).id && self.ending() {
+        let player = super::turn::seats(self.live).any(|seat| seat.creature() == at);
+        if !player && self.ending() {
             return;
         }
         let Some(creature) = self.live.creatures.iter_mut().find(|c| c.id == at) else {

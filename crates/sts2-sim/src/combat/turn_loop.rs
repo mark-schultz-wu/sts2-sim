@@ -383,8 +383,11 @@ fn turn_ends_each<V: Rules>(
     }
     // `EndPlayerTurnPhaseTwo`: each player's flush, then `AfterSideTurnEnd`
     // once. A fight that ended skips its late pass.
+    // `FlushPlayerHand` does nothing for a dead player.
     for &seat in &seats {
-        flush::<V>(seat, ascension, lent);
+        if lent.live.player(seat).alive {
+            flush::<V>(seat, ascension, lent);
+        }
     }
     let mut ended = None;
     for pass in [TurnEndPass::Main, TurnEndPass::Late] {
@@ -432,7 +435,18 @@ fn pre_play_each<V: Rules>(
     if crate::combat::signalled(lent.live) {
         unimplemented!("a choice signalled in a fight of several players");
     }
+    // A dead player is ready to end the turn as it starts, and runs no
+    // pre-play phase.
+    let live = &mut *lent.live;
+    for seat in crate::combat::turn::seats(live) {
+        if !live.player(seat).alive {
+            live.players[seat].ready = true;
+        }
+    }
     for seat in crate::combat::turn::seats(lent.live) {
+        if !lent.live.player(seat).alive {
+            continue;
+        }
         match pre_play::<V>(seat, lent) {
             PrePlayed::Over(Some(ended)) => {
                 lent.live.skip_tick = skipping;
@@ -569,7 +583,10 @@ fn post_play_pass<V: Rules>(seat: sts2_core::SeatIndex, lent: &mut Lent<'_, V>) 
     PassRest::walk(
         live,
         belts,
-        sts2_core::EventHook::AutoPostPlayPhase { turn },
+        sts2_core::EventHook::AutoPostPlayPhase {
+            player: seat.creature(),
+            turn,
+        },
     )
 }
 

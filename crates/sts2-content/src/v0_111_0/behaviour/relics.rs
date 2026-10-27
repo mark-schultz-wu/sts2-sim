@@ -170,8 +170,8 @@ pub(crate) fn own_shared_relic_event_hook(
         ) => Some(()),
         // `HistoryCourse.AfterAutoPrePlayPhaseEntered` replays the last
         // Attack alone, where v0.107.1's took a Skill too.
-        (State::HistoryCourse, EventHook::AutoPrePlayPhase { turn }) => {
-            if turn > 1 {
+        (State::HistoryCourse, EventHook::AutoPrePlayPhase { player, turn }) => {
+            if player == owner && turn > 1 {
                 asked.push(HookEffect::AutoPlayDupeOfLastPlay {
                     kinds: &[sts2_core::CardKind::Attack],
                 });

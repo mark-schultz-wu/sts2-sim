@@ -4357,13 +4357,23 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `AfterAutoPrePlayPhaseEnteredEarly`, once the player's turn is set up,
     /// in the player's `TurnNumber`.
-    AutoPrePlayPhaseEarly { turn: V::Count },
+    AutoPrePlayPhaseEarly {
+        /// The player whose turn it is.
+        player: crate::CombatId,
+        turn: V::Count,
+    },
     /// `AfterAutoPrePlayPhaseEntered`, once every listener heard the early
     /// pass.
-    AutoPrePlayPhase { turn: V::Count },
+    AutoPrePlayPhase {
+        player: crate::CombatId,
+        turn: V::Count,
+    },
     /// `AfterAutoPrePlayPhaseEnteredLate`, the last pass before the play
     /// phase.
-    AutoPrePlayPhaseLate { turn: V::Count },
+    AutoPrePlayPhaseLate {
+        player: crate::CombatId,
+        turn: V::Count,
+    },
     /// `AfterEnergySpent`, once a card's `SpendEnergy` took `amount` off the
     /// player's pool, which can be none.
     EnergySpent { amount: V::Number },
@@ -4375,7 +4385,11 @@ pub enum EventHook<V: ContentVersion> {
     FlushingLate,
     /// `AfterAutoPostPlayPhaseEntered`, as `EndPlayerTurnPhaseOne` opens and
     /// before `BeforeTurnEnd`, in the player's `TurnNumber`.
-    AutoPostPlayPhase { turn: V::Count },
+    AutoPostPlayPhase {
+        /// The player whose turn is ending.
+        player: crate::CombatId,
+        turn: V::Count,
+    },
     /// `AfterEnergyReset`, carrying the player's creature.
     EnergyReset {
         player: crate::CombatId,

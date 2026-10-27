@@ -415,6 +415,13 @@ impl<V: Rules> Belt<V> {
         self.heard.intersects(hooks)
     }
 
+    /// Each relic on the belt hears its hooks again, as a revived player's
+    /// do.
+    pub(crate) fn rehear(&mut self) {
+        let held = std::mem::take(&mut self.held);
+        *self = held.into_iter().collect();
+    }
+
     /// No relic on the belt hears a hook after, as a dead player's relics
     /// hear none.
     pub(crate) fn deafen(&mut self) {
@@ -1000,7 +1007,11 @@ pub(super) enum Phase<V: Rules> {
     /// `ProcessPendingLoss` ends the combat and the run with it. The room is
     /// still the one it was fought in, so the fight is still reported. Nothing
     /// is offered, because a dead run takes nothing.
-    Lost { combat: Combat<V>, spent: Spent<V> },
+    Lost {
+        /// The fight as each player saw it end, by seat.
+        combats: crate::seats::BySeat<Combat<V>>,
+        spent: Spent<V>,
+    },
     /// The run won: The Architect's `PROCEED`, which is `RunManager.WinRun`.
     /// `WinRun` kills every player, which leaves nothing to decide.
     ///
@@ -2333,13 +2344,16 @@ impl<V: Rules> State<V> {
     /// `spent` is the fight's own storage, where there is one.
     pub(super) fn lost(
         &mut self,
-        seat: sts2_core::SeatIndex,
-        combat: Combat<V>,
+        combats: Vec<Combat<V>>,
         spent: Option<Box<crate::combat::Live<V>>>,
     ) {
-        self.players[seat].last_turn = Some(combat.turn);
+        for (seat, combat) in self.players.seats().zip(&combats) {
+            self.players[seat].last_turn = Some(combat.turn);
+        }
+        let mut combats = combats.into_iter();
+        let host = combats.next().expect("a run has a player");
         self.phase = Phase::Lost {
-            combat,
+            combats: crate::seats::BySeat::new(host, combats.collect()),
             spent: Spent(spent),
         };
     }
@@ -7663,8 +7677,8 @@ impl<V: Rules> State<V> {
             }
             // The player fell in the fight, and the fight is where its own
             // numbers stayed.
-            Phase::Lost { combat, .. } => {
-                let player = combat
+            Phase::Lost { combats, .. } => {
+                let player = combats[seat]
                     .creatures
                     .iter()
                     .find(|c| c.id == seat.creature())
@@ -8416,7 +8430,7 @@ impl<V: Rules> State<V> {
             // room it was fought in is still the room the run is standing in.
             // A won fight is still reported for the same reason: the run has
             // not left the room it was fought in.
-            Phase::Lost { combat, .. } => Some(combat.clone()),
+            Phase::Lost { combats, .. } => Some(combats[seat].clone()),
             // The player's creature is the run's own, so what happens to it
             // between the fight and leaving the room shows on it.
             Phase::Rewards { seats, .. } => {
@@ -9158,7 +9172,7 @@ mod tests {
             .expect("a fight has the player in it");
         player.hp = 0;
         player.alive = false;
-        run.lost(SOLO, combat, None);
+        run.lost(vec![combat], None);
 
         let seen = run.report(SOLO).observation;
         assert!(!seen.alive, "the player is dead");
