@@ -68,8 +68,12 @@ step, and no room holds it. `cargo xtask instructions` checks each step.
 Each step is one PR, with the golden replays, the census and
 `cargo xtask instructions` against the step before.
 
-1. **`pickup`.** `carry_out`, `Asked`, `rest`, `under`, `Then` and the
-   answer for each kind of `Pickup` become the coroutine. The rooms park
-   on it.
-2. **`purchase`.** The shop's `Unfinished` becomes the coroutine, which
-   delegates to `pickup` for a relic's.
+1. **`pickup`** (done). `carry_out` starts the coroutine, and `rest`,
+   `under` and the answer for each kind of `Pickup` went into it. The
+   rooms park on it. The shop's clone of a deck card is now the pickup's
+   own question, so `Unfinished::Pickup` went too. `yield_all!` starts a
+   delegate with nothing lent, so a pickup drives the pickups inside it a
+   step at a time.
+2. **`purchase`.** The shop's `Unfinished`, now a card removal or a
+   relic's pickup, becomes the coroutine, which delegates to `pickup` for
+   a relic's.

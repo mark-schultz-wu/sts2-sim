@@ -67,7 +67,8 @@ does not touch. What is left, in order:
    for each seat, with ids (done). The rest of steps 3 and 4 changes
    nothing with one player, so it comes with co-op fights.
 2. The run layer's pauses, `Pickup` and `Unfinished`, move to coroutines
-   (Mark, 2026-10-26), in the order of `docs/RUN-PAUSES.md`.
+   (Mark, 2026-10-26), in the order of `docs/RUN-PAUSES.md`. A pickup is a
+   coroutine (done). Next, a shop's purchase.
 
 ### 2. Co-op
 
