@@ -878,7 +878,7 @@ pub(super) fn orbs_at_turn_start<V: Rules>(
     let boundary = listening.enter_task(live);
     let ended = orb_triggers::<V>(seat, live, rngs, belts, ascension, OrbMoment::TurnStart);
     listening.leave(seat, live, boundary);
-    listening.queue(live);
+    listening.queue(seat, live);
     ended
 }
 
@@ -1003,7 +1003,7 @@ pub(super) fn before_side_turn_start<V: Rules>(
         }
         listening.leave(seat, live, boundary);
     }
-    listening.queue(live);
+    listening.queue(seat, live);
 }
 
 /// `AggressionPower.BeforeSideTurnStart`: the discard pile's attacks, in an

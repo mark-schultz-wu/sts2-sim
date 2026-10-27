@@ -17,6 +17,7 @@ mod observed;
 mod play;
 mod potion;
 mod powers;
+mod queues;
 mod relic;
 mod setup;
 mod start;

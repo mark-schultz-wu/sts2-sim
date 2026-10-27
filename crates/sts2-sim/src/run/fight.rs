@@ -229,7 +229,7 @@ impl<V: Rules> State<V> {
             let Some(fighting) = self.fighting() else {
                 return Ok(None);
             };
-            fighting.live.ask_paused(seat);
+            fighting.live.ask_paused();
             if !fighting.live.ending_turn(seat) || fighting.live.question(seat).is_some() {
                 return Ok(None);
             }

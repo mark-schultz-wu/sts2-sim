@@ -2567,7 +2567,8 @@ impl<'a, V: Rules> Board<'a, V> {
                                 .collect();
                             task.asking.question = super::live::Asked::Among { cards, selection };
                         }
-                        self.live.paused.push(task);
+                        let owner = self.seat();
+                        self.live.queues.enqueue_hook(owner, task);
                         paused = Some(listener);
                     }
                     false => self.live.deferred.keep_fresh(fresh),
@@ -2784,7 +2785,8 @@ impl<'a, V: Rules> Board<'a, V> {
             }
             listening.leave(seat, self.live, boundary);
         }
-        listening.queue(self.live);
+        let seat = self.seat();
+        listening.queue(seat, self.live);
     }
 
     /// `CreatureCmd.Kill`: the creature loses what hit points it has, and

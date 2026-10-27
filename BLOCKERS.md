@@ -63,8 +63,10 @@ does not touch. What is left, in order:
    queues run them. It takes away the `Deferred`, `Then` and `Setup` work
    in the engine. The turn loop is one coroutine, from the player's turn
    end through the enemies' turn to the next play phase. A fight's first
-   turn starts in it too (done). Next, step 3: the queues and the action
-   ids.
+   turn starts in it too (done). Step 3 is the queues and the action ids.
+   The paused hook actions wait in a queue for each seat, with ids
+   (done). Next, the question moves into the action that asked it. Then
+   card plays, potions and the turn's end go through the queues.
 2. The run layer's pauses, `Pickup` and `Unfinished`, once Mark decides
    whether they move too (`docs/ASYNC.md`, open question 1).
 

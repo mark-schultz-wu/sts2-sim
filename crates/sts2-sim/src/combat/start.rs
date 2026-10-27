@@ -149,7 +149,7 @@ pub(crate) fn enter<V: Rules>(
         notes: smallvec::SmallVec::new(),
         asking: None,
         deferred: super::live::Deferrals::new(),
-        paused: Vec::new(),
+        queues: super::queues::Queues::new(),
         waited_attack: None,
     });
 

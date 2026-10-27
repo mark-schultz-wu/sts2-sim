@@ -247,11 +247,11 @@ impl<V: Rules> Listening<V> {
     }
 
     /// The listeners' tasks with no join: each that paused goes on as a
-    /// queued action, once the decision is over.
+    /// hook action on `owner`'s queue, once the decision is over.
     #[inline]
-    pub(super) fn queue(self, live: &mut Live<V>) {
-        if !self.aside.is_empty() {
-            live.paused.extend(self.aside);
+    pub(super) fn queue(self, owner: sts2_core::SeatIndex, live: &mut Live<V>) {
+        for task in self.aside {
+            live.queues.enqueue_hook(owner, task);
         }
     }
 
@@ -2725,12 +2725,11 @@ pub(crate) struct Live<V: Rules> {
     pub(super) asking: Option<Asking<V>>,
     /// What waits behind that answer.
     pub(super) deferred: Deferrals<V>,
-    /// Questions a death's listener asked inside a play, each with what
-    /// waits behind it, in the order they were asked. `Hook.AfterDeath`
-    /// gives each listener a `HookPlayerChoiceContext`, whose question
-    /// pauses only that listener. The play runs on, and the question is
-    /// asked once the decision is over.
-    pub(super) paused: Vec<Paused<V>>,
+    /// The hook actions a pause boundary queued, such as a death's
+    /// listener: `Hook.AfterDeath` gives each a `HookPlayerChoiceContext`,
+    /// whose question pauses only that listener. The play runs on, and the
+    /// question is asked once the decision is over.
+    pub(super) queues: super::queues::Queues<V>,
     /// The results of the last attack that ended while a question waited,
     /// or whose hits landed once it was answered. A card waiting behind its
     /// own attack reads them as it goes on.
@@ -2981,7 +2980,7 @@ impl<V: Rules> Clone for Live<V> {
             notes: self.notes.clone(),
             asking: self.asking.clone(),
             deferred: self.deferred.clone(),
-            paused: self.paused.clone(),
+            queues: self.queues.clone(),
             waited_attack: self.waited_attack.clone(),
             ..*self
         }
@@ -3027,7 +3026,7 @@ impl<V: Rules> Clone for Live<V> {
             notes,
             asking,
             deferred,
-            paused,
+            queues,
             waited_attack,
             selector_answers,
             pause_boundary,
@@ -3070,7 +3069,7 @@ impl<V: Rules> Clone for Live<V> {
         notes.clone_from(&source.notes);
         asking.clone_from(&source.asking);
         deferred.clone_from(&source.deferred);
-        paused.clone_from(&source.paused);
+        queues.clone_from(&source.queues);
         waited_attack.clone_from(&source.waited_attack);
     }
 }
@@ -3278,25 +3277,26 @@ impl<V: Rules> Live<V> {
         self.deferred.push(deferred);
     }
 
-    /// The first question a death's listener asked inside a play, once
-    /// nothing else waits: the paused listener's `GameAction`, which runs
-    /// after the play's own.
+    /// The next queued hook action, once nothing else waits: a paused
+    /// listener's `GameAction`, which runs after the play's own. It goes on
+    /// as its owner.
     #[inline]
-    pub(crate) fn ask_paused(&mut self, seat: sts2_core::SeatIndex) {
-        if self.paused.is_empty() {
+    pub(crate) fn ask_paused(&mut self) {
+        if self.queues.is_empty() {
             return;
         }
-        self.ask_first_paused(seat);
+        self.ask_first_paused();
     }
 
-    /// [`Live::ask_paused`] once a question waits behind the play.
+    /// [`Live::ask_paused`] once an action waits behind the play.
     #[cold]
-    fn ask_first_paused(&mut self, seat: sts2_core::SeatIndex) {
+    fn ask_first_paused(&mut self) {
         if self.asking.is_some() || !self.deferred.is_empty() {
             return;
         }
-        let task = self.paused.remove(0);
-        self.rejoin(seat, task);
+        if let Some((owner, task)) = self.queues.take_next() {
+            self.rejoin(owner, task);
+        }
     }
 
     /// Whether the fight asked anything of the run since the last decision
@@ -4071,7 +4071,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             notes: smallvec::SmallVec::new(),
             asking: None,
             deferred: Deferrals::new(),
-            paused: Vec::new(),
+            queues: super::queues::Queues::new(),
             waited_attack: None,
         }
     }
