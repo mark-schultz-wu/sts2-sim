@@ -71,7 +71,8 @@ run as its own machine sees it. The work goes in this order:
    other players act around it. A won fight hands each player back their
    health and rolls their own rewards. A player who dies beside a living
    one leaves the fight's cards, and a win revives them. A win cancels
-   the actions still waiting, as the game's does. Hunts stay at
+   the actions still waiting, as the game's does. A merchant stocks an
+   inventory for each player, who buys from it alone. Hunts stay at
    `--width 4`: at `--width 8` two games of sixteen failed in Godot
    itself. Next, in the order of `docs/COOP-FIGHTS.md` and where the
    hunted runs stop:
@@ -81,19 +82,20 @@ run as its own machine sees it. The work goes in this order:
      So does the turn's end while a player's action waits on a question.
      Card plays, potions and the turn's end go through the queues, with
      the action types, gating and cancellations.
-   - Shops, events and travel after the first fight, where most of the
-     sixteen hunted seeds part. Three part after a purchase, and three in
-     the next room's stream after travel. Five part at events: Room Full
-     of Cheese, Doors of Light and Dark, Self-Help Book, Drowning Beacon
-     and Aroma of Chaos. A player's event is their own, and seat 1 sees seat 0's
-     option and reward. Seed 14 parts at step 3, after its first travel.
+   - Events and travel after the first fight, where most of the sixteen
+     hunted seeds part. Two part in the next room's creatures after
+     travel. Seven part at events: Room Full of Cheese, Doors of Light and
+     Dark, Self-Help Book, Drowning Beacon, Aroma of Chaos, Brain Leech
+     and Sunken Treasury. A player's event is their own, and seat 1 sees
+     seat 0's option and reward. Seed 14 parts at step 3, after its first
+     travel.
+   - A potion thrown at another player, which panics in two hunted runs:
+     the potions act on their drinker.
    - A fight won inside an event, and the extra rewards a monster gives,
      which panic in a run of several players.
    - Monster power scaling by the player count. A monster's opening
      block power reads 24 in the game where the simulator has 8, in a
      hunted run's second fight.
-   - A potion thrown at another player, which panics: the potions act on
-     their drinker.
    - Content that reads "the player" where the game reads an owner:
      - `FightView::player`, which about a dozen power rules read, panics
        in a fight of several players.

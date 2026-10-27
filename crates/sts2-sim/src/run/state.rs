@@ -1018,16 +1018,26 @@ pub(super) enum Phase<V: Rules> {
     /// The room stays The Architect's, with the option that won marked
     /// chosen, as `EventOption.WasChosen` reports it.
     Won { room: Option<Room<V>> },
-    /// A merchant, and how far through its shelves the run has bought.
+    /// A merchant, and how far through each player's shelves they have
+    /// bought.
     ///
-    /// The entries are stocked once, when the run walks in. A slot the run
-    /// bought stops being stocked rather than leaving the list, because the
-    /// index the next decision names is the slot's own.
+    /// `MerchantRoom.Inventories`: one inventory for each player, stocked in
+    /// seat order when the run walks in. Each player sees and buys from
+    /// their own, and answers their own purchase's questions.
     Shop {
-        entries: Vec<sts2_core::Entry<V>>,
-        /// What a relic bought here asks as it is picked up.
-        asking: Option<Asked<V>>,
+        seats: crate::seats::BySeat<ShopSeat<V>>,
     },
+}
+
+/// One player's side of a merchant.
+#[derive(Debug, Clone)]
+pub(super) struct ShopSeat<V: Rules> {
+    /// The player's inventory. A slot bought stops being stocked rather than
+    /// leaving the list, because the index the next decision names is the
+    /// slot's own.
+    entries: Vec<sts2_core::Entry<V>>,
+    /// What a relic the player bought here asks as it is picked up.
+    asking: Option<Asked<V>>,
 }
 
 /// What a relic's pickup is still asking the run for.
@@ -1138,7 +1148,7 @@ impl<V: Rules> Phase<V> {
             Phase::RestSite { options, .. } => options.is_empty(),
             // A merchant never runs out. The run leaves when it decides to,
             // and a shelf it has not bought is still there.
-            Phase::Shop { asking, .. } => asking.is_none(),
+            Phase::Shop { seats } => seats[seat].asking.is_none(),
             // The map is not a room, so there is nothing to leave.
             Phase::Map
             | Phase::Combat(_)
@@ -1153,9 +1163,8 @@ impl<V: Rules> Phase<V> {
     fn asking(&self, seat: sts2_core::SeatIndex) -> Option<&Asked<V>> {
         match self {
             Phase::Neow(seats) => seats[seat].asking.as_ref(),
-            Phase::Event { asking, .. }
-            | Phase::RestSite { asking, .. }
-            | Phase::Shop { asking, .. } => asking.as_ref(),
+            Phase::Shop { seats } => seats[seat].asking.as_ref(),
+            Phase::Event { asking, .. } | Phase::RestSite { asking, .. } => asking.as_ref(),
             _ => None,
         }
     }
@@ -1164,9 +1173,8 @@ impl<V: Rules> Phase<V> {
     fn asking_mut(&mut self, seat: sts2_core::SeatIndex) -> Option<&mut Option<Asked<V>>> {
         match self {
             Phase::Neow(seats) => Some(&mut seats[seat].asking),
-            Phase::Event { asking, .. }
-            | Phase::RestSite { asking, .. }
-            | Phase::Shop { asking, .. } => Some(asking),
+            Phase::Shop { seats } => Some(&mut seats[seat].asking),
+            Phase::Event { asking, .. } | Phase::RestSite { asking, .. } => Some(asking),
             _ => None,
         }
     }
@@ -1180,17 +1188,15 @@ impl<V: Rules> State<V> {
             Phase::Combat(live) => live
                 .selecting(seat)
                 .map(|_| sts2_core::QuestionKind::SelectCards),
-            Phase::Neow { .. }
-            | Phase::Event { .. }
-            | Phase::Shop {
-                asking: Some(_), ..
-            } => self.phase.asking(seat).map(|asked| match asked.pickup {
-                Pickup::Rewards { .. } => sts2_core::QuestionKind::Rewards,
-                Pickup::Bundles { .. } => sts2_core::QuestionKind::ChooseBundle,
-                Pickup::ConfirmAbandon => sts2_core::QuestionKind::Confirm,
-                Pickup::Event => self.event_question().kind(),
-                _ => sts2_core::QuestionKind::SelectCards,
-            }),
+            Phase::Neow { .. } | Phase::Event { .. } | Phase::Shop { .. } => {
+                self.phase.asking(seat).map(|asked| match asked.pickup {
+                    Pickup::Rewards { .. } => sts2_core::QuestionKind::Rewards,
+                    Pickup::Bundles { .. } => sts2_core::QuestionKind::ChooseBundle,
+                    Pickup::ConfirmAbandon => sts2_core::QuestionKind::Confirm,
+                    Pickup::Event => self.event_question().kind(),
+                    _ => sts2_core::QuestionKind::SelectCards,
+                })
+            }
             Phase::Rewards { seats, .. } if seats[seat].removing.is_some() => {
                 Some(sts2_core::QuestionKind::SelectCards)
             }
@@ -2056,10 +2062,10 @@ impl<V: Rules> State<V> {
                         }
                     )
             }
-            Phase::Shop {
-                asking: Some(asked),
-                ..
-            } => asked.pickup == Pickup::CardRemoval { free: false },
+            Phase::Shop { seats } => seats[seat]
+                .asking
+                .as_ref()
+                .is_some_and(|asked| asked.pickup == Pickup::CardRemoval { free: false }),
             Phase::Rewards { seats, .. } => seats[seat].removing.is_some(),
             _ => false,
         }
@@ -2091,7 +2097,7 @@ impl<V: Rules> State<V> {
                 *asking = None;
                 *chosen = None;
             }
-            Phase::Shop { asking, .. } => *asking = None,
+            Phase::Shop { seats } => seats[seat].asking = None,
             Phase::Rewards { seats, .. } => seats[seat].removing = None,
             _ => unreachable!("only a cancelable selection is cancelled"),
         }
@@ -2843,7 +2849,7 @@ impl<V: Rules> State<V> {
                     return Stepped::Nested(seat, steps, After::Done);
                 }
                 HookEffect::ItemPurchased(gold) => {
-                    self.item_purchased(gold);
+                    self.item_purchased(seat, gold);
                     return Stepped::Done;
                 }
                 HookEffect::MarkCombatPoints { relic, count, name } => {
@@ -5980,10 +5986,14 @@ impl<V: Rules> State<V> {
         if let Phase::Event { .. } = self.phase {
             return Ok(self.buy_in_event(seat, index));
         }
-        let Phase::Shop { entries, .. } = &self.phase else {
+        let Phase::Shop { seats } = &self.phase else {
             unimplemented!("buying outside a shop");
         };
-        let Some(entry) = entries.iter().find(|entry| entry.index == index) else {
+        let Some(entry) = seats[seat]
+            .entries
+            .iter()
+            .find(|entry| entry.index == index)
+        else {
             unimplemented!("buying a shelf this merchant does not have");
         };
         if !entry.stocked {
@@ -6112,15 +6122,16 @@ impl<V: Rules> State<V> {
         // `NMerchantCardRemoval.OnCardRemovalUsed` calls `SetUsed`, and
         // `IsStocked` is `!Used`, so this merchant sells no second removal.
         // The next merchant reads the raised count.
-        if let Phase::Shop { entries, .. } = &mut self.phase {
-            for entry in entries
+        if let Phase::Shop { seats } = &mut self.phase {
+            for entry in seats[seat]
+                .entries
                 .iter_mut()
                 .filter(|entry| entry.stock == sts2_core::Stock::CardRemoval)
             {
                 entry.stocked = false;
             }
         }
-        self.item_purchased(spent);
+        self.item_purchased(seat, spent);
     }
 
     /// `LordsParasol.PurchaseEverything`, as its owner enters a merchant.
@@ -6131,10 +6142,11 @@ impl<V: Rules> State<V> {
     /// A relic's pickup that asks stands the rest still. They go on from the
     /// shelf `after` it once the pickup is done.
     fn purchase_everything(&mut self, seat: sts2_core::SeatIndex, after: Option<u8>) -> Steps<V> {
-        let Phase::Shop { entries, .. } = &self.phase else {
+        let Phase::Shop { seats } = &self.phase else {
             unimplemented!("Lord's Parasol buying outside a merchant's room");
         };
-        let shelves: Vec<(u8, sts2_core::Stock<V>, bool)> = entries
+        let shelves: Vec<(u8, sts2_core::Stock<V>, bool)> = seats[seat]
+            .entries
             .iter()
             .filter(|entry| after.is_none_or(|after| entry.index > after))
             .map(|entry| (entry.index, entry.stock, entry.stocked))
@@ -6213,7 +6225,7 @@ impl<V: Rules> State<V> {
         if room != <V::RoomType as sts2_core::RoomKinds>::SHOP {
             unimplemented!("constructing a {room:?} room");
         }
-        let shop = self.stocked_shop(seat);
+        let shop = self.stocked_shop();
         self.enter(Location::NoLocation, shop);
         Ok(Decided::Resolved)
     }
@@ -6240,12 +6252,27 @@ impl<V: Rules> State<V> {
         added
     }
 
-    /// `MerchantInventory.CreateForNormalMerchant`, which runs as the room
-    /// opens. So every draw it takes is paid for on the way in, not at a shelf.
+    /// `MerchantRoom`, which runs `MerchantInventory.CreateForNormalMerchant`
+    /// for each player in seat order as the room opens. So every draw it
+    /// takes is paid for on the way in, not at a shelf.
     ///
     /// Built rather than entered, because what a merchant stocks does not
     /// depend on how the run reached it.
-    pub(super) fn stocked_shop(&mut self, seat: sts2_core::SeatIndex) -> Phase<V> {
+    pub(super) fn stocked_shop(&mut self) -> Phase<V> {
+        let mut seats = self.players.seats();
+        let mut stocked = |seat| ShopSeat {
+            entries: self.inventory(seat),
+            asking: None,
+        };
+        let host = stocked(seats.next().expect("a run has a player"));
+        let others = seats.map(stocked).collect();
+        Phase::Shop {
+            seats: crate::seats::BySeat::new(host, others),
+        }
+    }
+
+    /// `MerchantInventory.CreateForNormalMerchant` for `seat`'s player.
+    fn inventory(&mut self, seat: sts2_core::SeatIndex) -> Vec<sts2_core::Entry<V>> {
         let added = self.merchant_card_pool();
         let mut streams = self.streams;
         let mut dealt = self.players[seat].dealt_relics.to_vec();
@@ -6272,9 +6299,7 @@ impl<V: Rules> State<V> {
             .into_iter()
             .map(|mut entry| {
                 if let sts2_core::Stock::Card(Some(on_sale)) = &mut entry.stock {
-                    on_sale.card = self.rewritten(on_sale.card, |card| {
-                        sts2_core::EventHook::MerchantCardCreated { card }
-                    });
+                    on_sale.card = self.merchant_card_created(seat, on_sale.card);
                     // What it costs to play, once the hook upgraded it.
                     (on_sale.cost, on_sale.star_cost) = crate::combat::printed_costs(on_sale.card);
                 }
@@ -6292,10 +6317,18 @@ impl<V: Rules> State<V> {
                 entry.stocked = false;
             }
         }
-        Phase::Shop {
-            entries,
-            asking: None,
-        }
+        entries
+    }
+
+    /// `Hook.ModifyMerchantCardCreationResults` for `seat`'s player, whom
+    /// each relic that answers compares with its owner.
+    fn merchant_card_created(
+        &mut self,
+        seat: sts2_core::SeatIndex,
+        card: CardIdent<V>,
+    ) -> CardIdent<V> {
+        let hook = sts2_core::EventHook::MerchantCardCreated { card };
+        rewrite(card, self.notify_run_for(seat, hook))
     }
 
     /// Enter a rest site, with the options this run's belt and deck open it on.
@@ -8010,14 +8043,15 @@ impl<V: Rules> State<V> {
                         target: None,
                     }),
             ),
-            Phase::Shop { entries, .. } => {
+            Phase::Shop { seats } => {
                 let gold = self.players[seat].gold;
                 let room_for_a_potion =
                     num_traits::cast::<_, usize>(self.players[seat].potion_slots)
                         .expect("a potion slot count fits this machine")
                         > self.players[seat].potions.len();
                 moves.extend(
-                    entries
+                    seats[seat]
+                        .entries
                         .iter()
                         .filter(|entry| {
                             entry.stocked
@@ -8159,13 +8193,19 @@ impl<V: Rules> State<V> {
         }
     }
 
-    /// `Hook.ShouldRefillMerchantEntry`, which any relic on the belt can
-    /// answer yes to.
-    fn refills(&self) -> bool {
+    /// `Hook.ShouldRefillMerchantEntry` for `seat`'s purchase, which a
+    /// relic of that player's can answer yes to. The game's compares the
+    /// buyer with its owner.
+    fn refills(&self, seat: sts2_core::SeatIndex) -> bool {
         let hook = sts2_core::DecisionHook::ShouldRefillMerchantEntry;
         let model_hook = sts2_core::ModelHook::ShouldRefillMerchantEntry;
         let mut refills = false;
         self.run_each(model_hook, |listener, _| {
+            if let sts2_core::Listener::Relic { owner, .. } = listener
+                && owner != seat.creature()
+            {
+                return;
+            }
             refills |= V::decide_hook(listener, hook).is_decision_and(|refill| refill);
         });
         refills
@@ -8176,7 +8216,7 @@ impl<V: Rules> State<V> {
     /// `ClearAfterPurchase` otherwise.
     fn purchased(&mut self, seat: sts2_core::SeatIndex, index: u8, spent: V::Number) {
         self.clear_or_restock(seat, index);
-        self.item_purchased(spent);
+        self.item_purchased(seat, spent);
     }
 
     /// `Hook.AfterItemPurchased`, once an entry's purchase has returned and
@@ -8185,23 +8225,24 @@ impl<V: Rules> State<V> {
     /// # Panics
     ///
     /// A relic asking for something as it hears of the purchase.
-    fn item_purchased(&mut self, gold: V::Number) {
-        let asked = self.notify_run(sts2_core::EventHook::ItemPurchased { gold });
+    fn item_purchased(&mut self, seat: sts2_core::SeatIndex, gold: V::Number) {
+        let asked = self.notify_run_for(seat, sts2_core::EventHook::ItemPurchased { gold });
         if let Some(effect) = asked.first() {
             unimplemented!("a relic asking for {effect:?} after a purchase");
         }
-        self.entries_updated();
+        self.entries_updated(seat);
     }
 
     /// `MerchantInventory.UpdateEntries`, once a purchase completes:
     /// `Hook.ModifyMerchantCardCreationResults` again over every card a
     /// shelf holds. An egg bought here upgrades what is already for sale.
     /// The price stays what the shelf was stocked at.
-    fn entries_updated(&mut self) {
-        let Phase::Shop { entries, .. } = &self.phase else {
+    fn entries_updated(&mut self, seat: sts2_core::SeatIndex) {
+        let Phase::Shop { seats } = &self.phase else {
             return;
         };
-        let held: Vec<(usize, CardIdent<V>)> = entries
+        let held: Vec<(usize, CardIdent<V>)> = seats[seat]
+            .entries
             .iter()
             .enumerate()
             .filter_map(|(at, entry)| match entry.stock {
@@ -8210,13 +8251,11 @@ impl<V: Rules> State<V> {
             })
             .collect();
         for (at, card) in held {
-            let card = self.rewritten(card, |card| sts2_core::EventHook::MerchantCardCreated {
-                card,
-            });
-            let Phase::Shop { entries, .. } = &mut self.phase else {
+            let card = self.merchant_card_created(seat, card);
+            let Phase::Shop { seats } = &mut self.phase else {
                 unreachable!("a shop stays a shop while it updates");
             };
-            if let sts2_core::Stock::Card(Some(on_sale)) = &mut entries[at].stock {
+            if let sts2_core::Stock::Card(Some(on_sale)) = &mut seats[seat].entries[at].stock {
                 on_sale.card = card;
                 (on_sale.cost, on_sale.star_cost) = crate::combat::printed_costs(card);
             }
@@ -8231,16 +8270,17 @@ impl<V: Rules> State<V> {
     /// `RestockAfterPurchase` where a relic refills the shelf, and
     /// `ClearAfterPurchase` otherwise.
     fn clear_or_restock(&mut self, seat: sts2_core::SeatIndex, index: u8) {
-        if !self.refills() {
-            let Phase::Shop { entries, .. } = &mut self.phase else {
+        if !self.refills(seat) {
+            let Phase::Shop { seats } = &mut self.phase else {
                 unreachable!("a purchase is made in a shop");
             };
-            sold(entries, index);
+            sold(&mut seats[seat].entries, index);
             return;
         }
-        let Phase::Shop { entries, .. } = &self.phase else {
+        let Phase::Shop { seats } = &self.phase else {
             unreachable!("a purchase is made in a shop");
         };
+        let entries = &seats[seat].entries;
         let at = entries
             .iter()
             .position(|entry| entry.index == index)
@@ -8274,18 +8314,16 @@ impl<V: Rules> State<V> {
         // `Hook.ModifyMerchantCardCreationResults` over the card it stocked.
         let stock = match stock {
             sts2_core::Stock::Card(Some(mut on_sale)) => {
-                on_sale.card = self.rewritten(on_sale.card, |card| {
-                    sts2_core::EventHook::MerchantCardCreated { card }
-                });
+                on_sale.card = self.merchant_card_created(seat, on_sale.card);
                 (on_sale.cost, on_sale.star_cost) = crate::combat::printed_costs(on_sale.card);
                 sts2_core::Stock::Card(Some(on_sale))
             }
             stock => stock,
         };
-        let Phase::Shop { entries, .. } = &mut self.phase else {
+        let Phase::Shop { seats } = &mut self.phase else {
             unreachable!("a purchase is made in a shop");
         };
-        let entry = &mut entries[at];
+        let entry = &mut seats[seat].entries[at];
         entry.stock = stock;
         entry.cost = num_traits::cast(cost).expect("a merchant's price fits the build's number");
         entry.stocked = true;
@@ -8460,9 +8498,7 @@ impl<V: Rules> State<V> {
             | Phase::RestSite {
                 asking: Some(_), ..
             }
-            | Phase::Shop {
-                asking: Some(_), ..
-            } => self.phase.asking(seat).map(|asking| {
+            | Phase::Shop { .. } => self.phase.asking(seat).map(|asking| {
                 let (min, max, cards): (u32, u32, Vec<CardIdent<V>>) = match &asking.pickup {
                     Pickup::Rewards { offered, skippable } => {
                         return asked::<V>(offered, *skippable);
@@ -8585,13 +8621,8 @@ impl<V: Rules> State<V> {
                 picked: sts2_core::Picks::none(),
                 pile: None,
             }),
-            // An act opens on its map, which is no room and asks nothing. A
-            // shop asks only what a purchase parked.
-            Phase::Map
-            | Phase::Lost { .. }
-            | Phase::Won { .. }
-            | Phase::Treasure { .. }
-            | Phase::Shop { .. } => None,
+            // An act opens on its map, which is no room and asks nothing.
+            Phase::Map | Phase::Lost { .. } | Phase::Won { .. } | Phase::Treasure { .. } => None,
         }
     }
 
@@ -8733,7 +8764,7 @@ impl<V: Rules> State<V> {
                     })
                     .collect(),
             }),
-            Phase::Shop { entries, .. } => {
+            Phase::Shop { seats } => {
                 // `EnoughGold` and the potion slot check are derived, the way
                 // the belt is. Both move as the run buys, and neither is a
                 // fact about the shelf.
@@ -8742,7 +8773,8 @@ impl<V: Rules> State<V> {
                     num_traits::cast::<_, usize>(self.players[seat].potion_slots)
                         .expect("a potion slot count fits this machine")
                         > self.players[seat].potions.len();
-                let entries = entries
+                let entries = seats[seat]
+                    .entries
                     .iter()
                     .cloned()
                     .map(|entry| sts2_core::Entry {

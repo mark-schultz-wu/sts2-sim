@@ -110,7 +110,7 @@ impl<V: Rules> State<V> {
                 return Ok(Decided::Resolved);
             }
             if kind == V::MapPointType::SHOP {
-                let shop = self.stocked_shop(seat);
+                let shop = self.stocked_shop();
                 self.enter(Location::MapPoint(to), shop);
                 return Ok(Decided::Resolved);
             }
@@ -158,7 +158,7 @@ impl<V: Rules> State<V> {
                 }
                 self.drew(streams);
                 if room == UnknownRoom::Shop {
-                    let shop = self.stocked_shop(seat);
+                    let shop = self.stocked_shop();
                     self.enter(Location::MapPoint(to), shop);
                     return Ok(Decided::Resolved);
                 }
