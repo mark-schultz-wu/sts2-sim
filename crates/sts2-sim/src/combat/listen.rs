@@ -311,6 +311,7 @@ pub(crate) enum Found<'a, V: Rules> {
         overrides: Overrides,
     },
     Potion {
+        seat: sts2_core::SeatIndex,
         potion: V::Potion,
         overrides: Overrides,
     },
@@ -472,7 +473,11 @@ fn listed_potions<'a, V: Rules>(
     for &potion in live.players[seat].potions.held() {
         let overrides = sts2_core::PotionTable::overrides(potion);
         if overrides.intersects(hooks) {
-            found(Found::Potion { potion, overrides });
+            found(Found::Potion {
+                seat,
+                potion,
+                overrides,
+            });
         }
     }
 }
@@ -1077,9 +1082,17 @@ pub(crate) fn each<V: Rules>(
                 },
                 overrides,
             ),
-            Found::Potion { potion, overrides } => {
-                ask(sts2_core::Listener::Potion(potion), overrides)
-            }
+            Found::Potion {
+                seat,
+                potion,
+                overrides,
+            } => ask(
+                sts2_core::Listener::Potion {
+                    potion,
+                    owner: seat.creature(),
+                },
+                overrides,
+            ),
             Found::Card {
                 seat,
                 id,
@@ -1176,7 +1189,7 @@ fn first_of<V: Rules>(
                     sts2_core::ModelId::Monster(monster)
                 }
                 sts2_core::Listener::Card { card, .. } => sts2_core::ModelId::Card(card),
-                sts2_core::Listener::Potion(potion) => sts2_core::ModelId::Potion(potion),
+                sts2_core::Listener::Potion { potion, .. } => sts2_core::ModelId::Potion(potion),
                 sts2_core::Listener::Modifier(modifier) => sts2_core::ModelId::Modifier(modifier),
                 // The relic whose model this is, which only its place on the
                 // belt names.

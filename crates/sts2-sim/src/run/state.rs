@@ -3930,7 +3930,7 @@ impl<V: Rules> State<V> {
 
     /// `Hook.ShouldDie`, then `Hook.ShouldDieLate`, for `seat`'s player
     /// outside a fight: the first relic that keeps them alive, and whose belt
-    /// it is on. Each relic is asked as its own player's.
+    /// it is on. Each relic compares the player with its own owner.
     ///
     /// # Panics
     ///
@@ -3938,14 +3938,12 @@ impl<V: Rules> State<V> {
     /// `ShouldDie`, which outside a fight nothing here carries out.
     fn death_preventer(&self, seat: sts2_core::SeatIndex) -> Option<(sts2_core::SeatIndex, usize)> {
         let creature = seat.creature();
-        let asked: [fn(sts2_core::CombatId, sts2_core::CombatId) -> sts2_core::DecisionHook<V>; 2] = [
-            |creature, player| sts2_core::DecisionHook::ShouldDie { creature, player },
-            |creature, player| sts2_core::DecisionHook::ShouldDieLate { creature, player },
+        let asked = [
+            sts2_core::DecisionHook::ShouldDie { creature },
+            sts2_core::DecisionHook::ShouldDieLate { creature },
         ];
         asked.into_iter().find_map(|hook| {
-            let model_hook = hook(creature, creature)
-                .model_hook()
-                .expect("a death's questions are raised");
+            let model_hook = hook.model_hook().expect("a death's questions are raised");
             let listed = self.run_listed(model_hook);
             listed.iter().find_map(|listener| match listener {
                 RunListener::Relic { seat: owner, slot } => V::decide_hook(
@@ -3955,7 +3953,7 @@ impl<V: Rules> State<V> {
                         fight: None,
                         belt: self.belts[owner].relics(),
                     },
-                    hook(creature, owner.creature()),
+                    hook,
                 )
                 .is_decision_and(|dies| !dies)
                 .then_some((owner, slot)),
@@ -5084,8 +5082,11 @@ impl<V: Rules> State<V> {
                     },
                     self.belts[seat][slot].relic.overrides(),
                 ),
-                RunListener::Potion { potion, .. } => ask(
-                    sts2_core::Listener::Potion(potion),
+                RunListener::Potion { potion, seat } => ask(
+                    sts2_core::Listener::Potion {
+                        potion,
+                        owner: seat.creature(),
+                    },
                     sts2_core::PotionTable::overrides(potion),
                 ),
                 RunListener::Modifier { modifier, .. } => ask(

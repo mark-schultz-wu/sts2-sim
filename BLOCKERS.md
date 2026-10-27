@@ -81,7 +81,9 @@ run as its own machine sees it. The work goes in this order:
    offers Mend in a run of several players. A power that makes a card
    free, and a relic that rewrites a card joining a deck, read the card's
    owner. A treasure chest holds a relic for each player, and awards them
-   by the players' votes. Of sixteen hunted seeds, eight match to the run's
+   by the players' votes. A monster's attack, and a player's death in it,
+   reach each player's own listeners. Of sixteen hunted seeds, nine match
+   to the run's
    end. Hunts stay at
    `--width 4`: at `--width 8` two games of sixteen failed in Godot
    itself. Next, in the order of `docs/COOP-FIGHTS.md` and where the
@@ -92,8 +94,9 @@ run as its own machine sees it. The work goes in this order:
      So does the turn's end while a player's action waits on a question.
      Card plays, potions and the turn's end go through the queues, with
      the action types, gating and cancellations.
-   - A monster's move that reaches one player in a fight of two panics,
-     in two hunted runs.
+   - The shared relic bag passes over what any player's own bag dealt,
+     and the simulator passes over only the dealing player's. One hunted
+     run parts at a chest there.
    - The simulator ticks down a dead player's Frail, and the game does
      not. Two hunted runs part there.
    - A question that waits on a player's own card play names no asker,
@@ -106,8 +109,6 @@ run as its own machine sees it. The work goes in this order:
    - Content that reads "the player" where the game reads an owner:
      - `FightView::player`, which about a dozen power rules read, panics
        in a fight of several players.
-     - The decision hooks `ShouldDie` and `ShouldDieLate` carry the
-       fight's player for a relic to compare with.
      - `RoomEntered` carries the first player's deck size and health,
        which a relic and the Terminal modifier read.
      - `AfterRestSiteHeal` reaches every player's relics, where each of

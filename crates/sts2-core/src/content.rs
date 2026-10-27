@@ -3753,18 +3753,12 @@ pub enum DecisionHook<V: ContentVersion> {
     /// answers no to draws nothing. `hand_draw` is `fromHandDraw`, which the
     /// turn's own draw is.
     /// `ShouldDie`, as `creature`'s hit points are gone, asked ahead of
-    /// [`DecisionHook::ShouldDieLate`]. `player` is the player's creature.
-    ShouldDie {
-        creature: crate::CombatId,
-        player: crate::CombatId,
-    },
-    /// `ShouldDieLate`, as `creature`'s hit points are gone. `player` is the
-    /// player's creature, which a relic reads its owner as. A creature no
+    /// [`DecisionHook::ShouldDieLate`]. A listener compares it with its own
+    /// owner.
+    ShouldDie { creature: crate::CombatId },
+    /// `ShouldDieLate`, as `creature`'s hit points are gone. A creature no
     /// listener lets die stays in the fight.
-    ShouldDieLate {
-        creature: crate::CombatId,
-        player: crate::CombatId,
-    },
+    ShouldDieLate { creature: crate::CombatId },
     /// `ShouldForcePotionReward`, as a won fight's rewards roll for a potion
     /// in a room of this type. One listener answering yes gives the potion.
     ShouldForcePotionReward { room: V::RoomType },
@@ -6798,8 +6792,12 @@ pub enum Listener<'a, V: Hooks, P: Printed<V> + ?Sized> {
         /// its own.
         fight: &'a dyn FightView<V>,
     },
-    /// A potion in the belt, which the fight asks after the relics.
-    Potion(V::Potion),
+    /// A potion in the belt, which the fight asks after the relics. `owner`
+    /// is the creature of the player whose belt holds it.
+    Potion {
+        potion: V::Potion,
+        owner: crate::CombatId,
+    },
     /// A modifier the run was started with. A fight asks the modifiers last,
     /// after every creature's listeners.
     Modifier(V::Modifier),

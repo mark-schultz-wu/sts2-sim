@@ -235,7 +235,13 @@ impl<'a, V: Rules> Board<'a, V> {
             .or_else(|| self.live.seat_of(self.actor))
             .unwrap_or_else(|| {
                 let players = self.live.players.len();
-                unimplemented!("a monster's move reaching a player in a fight of {players}")
+                let model = (self.live.creatures.iter())
+                    .find(|creature| creature.id == self.actor)
+                    .and_then(|creature| creature.model);
+                unimplemented!(
+                    "{model:?}'s move reaching a player in a fight of {players}, \
+                     with no player named"
+                )
             })
     }
 
@@ -2104,24 +2110,17 @@ impl<'a, V: Rules> Board<'a, V> {
         }
         // `Hook.ShouldDie`, then `Hook.ShouldDieLate`, and the model that
         // kept the creature alive. A forced death asks neither.
-        let player = self.live.player(seat).id;
         let preventer = (!force)
             .then(|| {
                 super::listen::first_deciding::<V>(
                     self.walk(),
-                    sts2_core::DecisionHook::ShouldDie {
-                        creature: id,
-                        player,
-                    },
+                    sts2_core::DecisionHook::ShouldDie { creature: id },
                     false,
                 )
                 .or_else(|| {
                     super::listen::first_deciding::<V>(
                         self.walk(),
-                        sts2_core::DecisionHook::ShouldDieLate {
-                            creature: id,
-                            player,
-                        },
+                        sts2_core::DecisionHook::ShouldDieLate { creature: id },
                         false,
                     )
                 })
@@ -2418,9 +2417,13 @@ impl<'a, V: Rules> Board<'a, V> {
     #[cold]
     #[inline(never)]
     fn death_prevented(&mut self, at: usize, preventer: sts2_core::ModelId<V>) {
-        let seat = self.seat();
         let creature = &self.live.creatures[at];
         let (id, side) = (creature.id, creature.side);
+        // The relic or potion is the dying player's own.
+        let seat = self
+            .live
+            .seat_of(id)
+            .unwrap_or_else(|| unimplemented!("{preventer:?} keeping {id:?}, no player, alive"));
         let max_hp: V::Number =
             num_traits::cast(creature.max_hp).expect("maximum health fits a game number");
         if let Some(effect) = self.after_death(id, side, true).first() {
@@ -2464,7 +2467,10 @@ impl<'a, V: Rules> Board<'a, V> {
     #[cold]
     #[inline(never)]
     fn use_on_saved(&mut self, saved: CombatId, potion: V::Potion) {
-        let seat = self.seat();
+        let seat = self
+            .live
+            .seat_of(saved)
+            .expect("a potion saves the player whose belt holds it");
         let at = self.live.players[seat]
             .potions
             .held()
@@ -6859,18 +6865,18 @@ impl<V: Rules> Board<'_, V> {
             self.live.attack_results.clear();
             next
         } {
-            let seat = self.listener_seat(listener);
             match (listener, effect) {
                 (Listener::Power { owner, power, .. }, HookEffect::ModifyAmount(offset)) => {
                     self.modify_amount(owner, power, offset)
                 }
                 // Written on the card that asked, wherever it stands.
                 (Listener::Card { id }, HookEffect::ModifySelf { change, lasting }) => {
+                    let seat = self.listener_seat(listener);
                     self.live.modify_self(seat, id, change, lasting)
                 }
                 // `CreatureCmd.GainBlock`, unpowered, on the relic's owner.
                 (Listener::Relic { .. }, HookEffect::GainBlock(amount)) => {
-                    let player = self.live.player(seat).id;
+                    let player = self.live.player(self.listener_seat(listener)).id;
                     self.gain_unpowered(player, amount);
                 }
                 // The same, on the power's owner.
@@ -6879,7 +6885,7 @@ impl<V: Rules> Board<'_, V> {
                 }
                 // A fight here has one player, whose piles take them all.
                 (Listener::Power { .. }, HookEffect::GiveCardsPerUnblockedHit { card, per }) => {
-                    let player = self.live.player(seat).id;
+                    let player = self.live.player(self.listener_seat(listener)).id;
                     let hits = results
                         .iter()
                         .filter(|hit| hit.receiver == player && hit.unblocked > V::Number::zero())

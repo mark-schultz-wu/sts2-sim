@@ -1095,6 +1095,7 @@ pub(crate) fn event_hook<V: crate::Build>(
 pub(crate) fn decide_hook<V: crate::Build>(
     state: &State<V>,
     belt: &[V::Relic],
+    owner: sts2_core::CombatId,
     hook: sts2_core::DecisionHook<V>,
 ) -> sts2_core::HookResponse<bool> {
     match state {
@@ -1107,7 +1108,7 @@ pub(crate) fn decide_hook<V: crate::Build>(
         State::SturdyClamp => sturdy_clamp::decide_hook::<V>(hook),
         State::IceCream => ice_cream::decide_hook::<V>(hook),
         State::WhiteBeastStatue => white_beast_statue::decide_hook::<V>(hook),
-        State::LizardTail(state) => lizard_tail::decide_hook::<V>(state, hook),
+        State::LizardTail(state) => lizard_tail::decide_hook::<V>(state, owner, hook),
         State::TheCourier => the_courier::decide_hook::<V>(hook),
         State::MiniatureTent => miniature_tent::decide_hook::<V>(hook),
         State::SilverCrucible(state) => silver_crucible::decide_hook::<V>(state, hook),

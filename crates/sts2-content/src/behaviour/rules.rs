@@ -60,7 +60,7 @@ pub(crate) fn modify_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
             unimplemented!("what {card:?} does for {hook:?}")
         }
         // No potion in this build overrides a number's hook.
-        sts2_core::Listener::Potion(potion) => {
+        sts2_core::Listener::Potion { potion, .. } => {
             unimplemented!("what {potion:?} does for {hook:?}")
         }
         sts2_core::Listener::Modifier(modifier) => {
@@ -98,10 +98,12 @@ pub(crate) fn decide_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
             };
             crate::behaviour::powers::decide_hook::<V>(power, amount, held, state, hook)
         }
-        sts2_core::Listener::Relic { state, belt, .. } => {
-            crate::behaviour::relics::decide_hook(state, belt, hook)
+        sts2_core::Listener::Relic {
+            state, belt, owner, ..
+        } => crate::behaviour::relics::decide_hook(state, belt, owner, hook),
+        sts2_core::Listener::Potion { potion, owner } => {
+            crate::behaviour::potions::decide_hook(potion, owner, hook)
         }
-        sts2_core::Listener::Potion(potion) => crate::behaviour::potions::decide_hook(potion, hook),
         sts2_core::Listener::Modifier(modifier) => {
             crate::behaviour::modifiers::decide_hook(modifier, hook)
         }
