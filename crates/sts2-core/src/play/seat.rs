@@ -50,6 +50,10 @@ pub struct Peers {
     pub awaiting: Vec<SeatIndex>,
     /// A move of this seat's is not back from the host yet.
     pub in_flight: bool,
+    /// How many shared actions this machine has taken in from the host, in
+    /// order: actions, hook actions and resumes after a choice. Every seat
+    /// comes to the same count once it has caught up with the others.
+    pub synced: u64,
 }
 
 /// Where one seat stands: its own view of the run, and of the others.

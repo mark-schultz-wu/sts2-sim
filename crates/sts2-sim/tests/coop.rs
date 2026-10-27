@@ -27,6 +27,7 @@ impl Solo {
             seats: vec![Peer::default(); self.seats],
             awaiting: Vec::new(),
             in_flight: false,
+            synced: 0,
         }
     }
 }

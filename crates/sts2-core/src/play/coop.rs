@@ -10,6 +10,11 @@ use std::marker::PhantomData;
 use super::seat::{Seat, SeatAnswered, SeatIndex, Seated};
 use crate::{ContentVersion, Decision, Start};
 
+/// How many times [`Coop::step`] looks again at a seat that has not caught
+/// up with the others before it calls the run stalled. Each look waits for
+/// the seat's game to stand still, so this is a few seconds at most.
+const CATCH_UP: usize = 1000;
+
 /// The seats of one co-op run.
 pub struct Coop<V: ContentVersion, S: Seat<V>> {
     seats: Vec<S>,
@@ -28,7 +33,8 @@ pub enum Turn<V: ContentVersion> {
         /// Boxed, because a seat's answer is large and the other turns are not.
         answered: Box<SeatAnswered<V>>,
     },
-    /// No seat has a move, and the run goes on. Each seat, as it stands.
+    /// No seat has a move, and the run goes on, or a seat never took in what
+    /// another had. Each seat, as it stands.
     Stalled(Vec<Seated<V>>),
     /// The run is over on every seat. Each seat, as it stands.
     Over(Vec<Seated<V>>),
@@ -97,11 +103,33 @@ impl<V: ContentVersion, S: Seat<V>> Coop<V, S> {
         &mut self,
         mut choose: impl FnMut(SeatIndex, &Seated<V>, &[Decision<V>]) -> usize,
     ) -> Result<Turn<V>, S::Error> {
-        let seated = self
+        let mut seated = self
             .seats
             .iter_mut()
             .map(Seat::observe)
             .collect::<Result<Vec<_>, _>>()?;
+        // Another seat's move reaches a seat over the network, so a seat can
+        // be looked at before it has taken in what another has. Each one
+        // behind is looked at again until every seat has taken in as much as
+        // the furthest.
+        let mut looks = 0;
+        loop {
+            let furthest = seated.iter().map(|seat| seat.peers.synced).max();
+            let mut behind = false;
+            for (seat, at) in self.seats.iter_mut().zip(&mut seated) {
+                if Some(at.peers.synced) < furthest {
+                    *at = seat.observe()?;
+                    behind = true;
+                }
+            }
+            if !behind {
+                break;
+            }
+            looks += 1;
+            if looks == CATCH_UP {
+                return Ok(Turn::Stalled(seated));
+            }
+        }
         let count = self.seats.len();
         let acting = (0..count)
             .map(|offset| (self.next + offset) % count)

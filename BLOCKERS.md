@@ -72,12 +72,9 @@ run as its own machine sees it. The work goes in this order:
    health and rolls their own rewards. A player who dies beside a living
    one leaves the fight's cards, and a win revives them. Next, in the
    order of `docs/COOP-FIGHTS.md` and where the hunted runs stop:
-   - The co-op hunt is not repeatable at `--width 4`. One seed in eight
-     parts early in one run and not the next, and alone it never does.
-     Seed 2 parted after seat 0's Stoke with seat 1's game a few draws
-     behind the simulator. The seat looks read before another seat's
-     action is over there. The mod's wait for a decision point needs to
-     cover the other seats' actions.
+   - One game of a hunt at `--width 4` exited before it connected, once in
+     three runs of eight seeds. The next run overwrote its log, and it has
+     not come back since.
    - The rest of the scheduler (steps 3 and 4 of `docs/SCHEDULER.md`). A
      question the turn loop asks belongs to no player's queue yet. Each
      phase of the turn's end panics at one in a fight of several players.
