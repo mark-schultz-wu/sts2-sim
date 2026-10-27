@@ -449,7 +449,7 @@ pub(crate) fn drinks<V: Rules>(
             continue;
         }
         let targets = match fight {
-            Some(fight) => aimable::<V>(potion, &fight.creatures),
+            Some(fight) => aimable::<V>(potion, fight),
             None => Targets::new(),
         };
         // `IsValidTarget` refuses no target for a potion thrown at one other
@@ -491,7 +491,7 @@ pub(crate) fn belt<'a, V: Rules>(
             // names them. Outside a fight, and once the player has died and
             // the fight is no longer in progress, there are none.
             targets: match fight {
-                Some(fight) if alive => aimable::<V>(potion, &fight.creatures),
+                Some(fight) if alive => aimable::<V>(potion, fight),
                 _ => Targets::new(),
             },
             reason,
@@ -558,7 +558,6 @@ fn drinking_turn<V: Rules>(seat: sts2_core::SeatIndex, fight: &Live<V>) -> bool 
             || V::selection_undoes_ended_turn() && fight.asking.is_some())
 }
 
-/// The creatures a potion can be pointed at.
 /// Whether `potion` is thrown at one creature other than its drinker, which
 /// `AnyEnemy` and `AnyAlly` are.
 pub(crate) fn thrown<V: Rules>(potion: V::Potion) -> bool {
@@ -569,11 +568,14 @@ pub(crate) fn thrown<V: Rules>(potion: V::Potion) -> bool {
         || target == <V::TargetType as TargetKinds>::ANY_ALLY
 }
 
-fn aimable<V: Rules>(potion: V::Potion, creatures: &[Fighter<V>]) -> Targets {
+/// The creatures a potion can be pointed at. `AnyPlayer` names one only in
+/// a fight of several players, which is `CanThrowAtAlly`.
+fn aimable<V: Rules>(potion: V::Potion, fight: &Live<V>) -> Targets {
     let target = potion
         .target()
         .unwrap_or_else(|| V::computed_potion_target(potion, true));
-    creatures
+    fight
+        .creatures
         .iter()
         .filter(|creature| {
             creature.is_alive()
@@ -583,6 +585,11 @@ fn aimable<V: Rules>(potion: V::Potion, creatures: &[Fighter<V>]) -> Targets {
                     }
                     t if t == <V::TargetType as TargetKinds>::ANY_ALLY => {
                         creature.side == <V::CombatSide as SideKinds>::PLAYER
+                    }
+                    t if t == <V::TargetType as TargetKinds>::ANY_PLAYER
+                        && fight.players.len() > 1 =>
+                    {
+                        super::turn::seats(fight).any(|seat| seat.creature() == creature.id)
                     }
                     _ => false,
                 }

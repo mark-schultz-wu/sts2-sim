@@ -35,8 +35,14 @@ pub(super) fn event_hook<V: crate::Build>(
 }
 
 /// `ModifyMaxEnergy`: its energy while it burns.
-pub(super) fn modify_hook<V: crate::Build>(state: &State, hook: ModifyHook<V>) -> Modify<Number> {
+pub(super) fn modify_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    state: &State,
+    hook: ModifyHook<V>,
+) -> Modify<Number> {
     match hook {
+        // `player != base.Owner`: another player's number is left as it is.
+        ModifyHook::MaxEnergy { player, .. } if player != owner => Modify::Nothing,
         ModifyHook::MaxEnergy { .. } if state.kindle_count > 0 => {
             Modify::Added(V::Relic::PUMPKIN_CANDLE_ENERGY)
         }

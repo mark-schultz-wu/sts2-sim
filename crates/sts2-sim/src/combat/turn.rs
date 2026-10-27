@@ -22,13 +22,22 @@ use crate::stream::CombatRngs;
 ///
 /// Whatever the enemy turn ended, if it ended the fight.
 #[tracing::instrument(level = "trace", skip_all)]
+///
+/// # Panics
+///
+/// A fight of several players, whose turn ends once every player is ready.
 pub(crate) fn end<V: Rules>(
     seat: sts2_core::SeatIndex,
     fighting: Fighting<'_, V>,
     ascension: V::AscensionLevel,
-    max_energy: V::Count,
 ) -> Result<Option<super::Ended>, Error> {
-    super::turn_loop::begin(seat, fighting, ascension, max_energy, false)
+    if fighting.live.players.len() > 1 {
+        unimplemented!(
+            "ending a turn in a fight of {} players",
+            fighting.live.players.len()
+        );
+    }
+    super::turn_loop::begin(seat, fighting, ascension, false)
 }
 
 /// The cards still to run `DoTurnEnd` behind one whose effect asked.
@@ -298,26 +307,25 @@ pub(super) fn enemy_turn_ends<V: Rules>(
 /// `OrbQueue.AfterTurnStart`. An `extra` turn is one `ShouldTakeExtraTurn`
 /// gave, which rolls no enemy move.
 ///
-/// `SetupPlayerTurn` runs under a pause boundary inside it. One that stops
-/// on a question lets the turn go on around it: `StartTurn` waits for it to
-/// finish or to pause. Its task comes back, set aside, for
-/// `RunAutoPrePlayPhase` to wait for.
+/// `SetupPlayerTurn` runs for each player in seat order, under a pause
+/// boundary. One that stops on a question lets the turn go on around it:
+/// `StartTurn` waits for each setup only to finish or to pause. Each paused
+/// setup's task comes back, set aside, for `RunAutoPrePlayPhase` to wait for.
 #[tracing::instrument(level = "trace", skip_all)]
-#[allow(clippy::too_many_arguments)]
 pub(super) fn side_starts<V: Rules>(
-    seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     streams: &mut crate::stream::Streams<V>,
     belts: &mut crate::run::Belts<V>,
     ascension: V::AscensionLevel,
-    max_energy: V::Count,
     extra: bool,
 ) -> Result<SideStarted<V>, Error> {
+    // What no one player owns acts as the first.
+    let host = sts2_core::SeatIndex(0);
     // `StartTurn` opens on `BeforeSideTurnStart`, which is where a relic
     // counting a turn's plays moves the count on for the draw to read.
     let turn = live.turn;
     before_side_turn_start::<V>(
-        seat,
+        host,
         live,
         streams.combat(),
         belts,
@@ -326,7 +334,9 @@ pub(super) fn side_starts<V: Rules>(
         turn,
     );
 
-    live.players[seat].phase = <V::PlayerTurnPhase as TurnPhaseKinds>::START;
+    for player in live.players.iter_mut() {
+        player.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::START;
+    }
 
     // `PrepareForNextTurn`, before the player draws anything. An extra turn
     // leaves the enemies' moves as they were.
@@ -334,9 +344,9 @@ pub(super) fn side_starts<V: Rules>(
         roll_moves(live, belts, ascension, streams.combat().ai)?;
     }
 
-    // `AfterTurnStart` on the player, then `SetupPlayerTurn`.
+    // `AfterTurnStart` on each player, then `SetupPlayerTurn`.
     clear_block::<V>(
-        seat,
+        host,
         live,
         streams.combat(),
         belts,
@@ -346,9 +356,79 @@ pub(super) fn side_starts<V: Rules>(
     // off. `ResetEnergy` still runs, but no listener hears a hook from then
     // on, so the energy is the plain maximum and nothing is drawn.
     if live.won && super::board::ending::<V>(listen::Walk { live, belts }) {
-        live.players[seat].energy = max_energy;
+        for seat in seats(live) {
+            live.players[seat].energy = base_energy::<V>(live, seat);
+        }
         return Ok(SideStarted::Ended(super::Ended::Won));
     }
+    let mut setup = None;
+    for seat in seats(live) {
+        match player_setup::<V>(seat, live, streams, belts, ascension) {
+            PlayerSetUp::Ended(ended) => {
+                if let Some(task) = setup {
+                    live.rejoin(host, task);
+                }
+                return Ok(SideStarted::Ended(ended));
+            }
+            PlayerSetUp::Parked(task) if seat == host => setup = Some(task),
+            PlayerSetUp::Parked(_) => {
+                unimplemented!("seat {seat:?}'s setup stopping on a question")
+            }
+            PlayerSetUp::Done => {}
+        }
+    }
+    let ended = side_turn_started::<V>(
+        host,
+        live,
+        streams.combat(),
+        belts,
+        ascension,
+        <V::CombatSide as SideKinds>::PLAYER,
+        extra,
+    )
+    // `OrbQueue.AfterTurnStart` for each player, once the side's turn has
+    // started.
+    .or_else(|| {
+        seats(live).find_map(|seat| {
+            orbs_at_turn_start::<V>(seat, live, streams.combat(), belts, ascension)
+        })
+    });
+    Ok(SideStarted::Started { setup, ended })
+}
+
+/// Every seat in the fight, in order.
+pub(super) fn seats<V: Rules>(
+    live: &Live<V>,
+) -> impl Iterator<Item = sts2_core::SeatIndex> + use<V> {
+    (0..live.players.len())
+        .map(|at| sts2_core::SeatIndex(u8::try_from(at).expect("a fight's players fit a u8")))
+}
+
+/// `MaxEnergy` before `Hook.ModifyMaxEnergy`: the character's own.
+fn base_energy<V: Rules>(live: &Live<V>, seat: sts2_core::SeatIndex) -> V::Count {
+    num_traits::cast(V::max_energy(live.players[seat].character))
+        .expect("the turn's energy fits the build's count type")
+}
+
+/// How one player's `SetupPlayerTurn` came out.
+enum PlayerSetUp<V: Rules> {
+    /// It ended the fight.
+    Ended(super::Ended),
+    /// It stopped on a question, and its task was set aside.
+    Parked(super::live::Paused<V>),
+    /// It ran to its end.
+    Done,
+}
+
+/// `SetupPlayerTurn` for `seat`: the energy reset and its hooks, then the
+/// setup as far as its end or the first question, under a pause boundary.
+fn player_setup<V: Rules>(
+    seat: sts2_core::SeatIndex,
+    live: &mut Live<V>,
+    streams: &mut crate::stream::Streams<V>,
+    belts: &mut crate::run::Belts<V>,
+    ascension: V::AscensionLevel,
+) -> PlayerSetUp<V> {
     // `ResetEnergy`, to `MaxEnergy`, which runs `Hook.ModifyMaxEnergy`. A
     // player `Hook.ShouldPlayerResetEnergy` keeps from it adds the maximum
     // to what they have instead.
@@ -361,7 +441,8 @@ pub(super) fn side_starts<V: Rules>(
         },
         false,
     );
-    let max = super::board::max_energy::<V>(listen::Walk { live, belts }, max_energy);
+    let base = base_energy::<V>(live, seat);
+    let max = super::board::max_energy::<V>(listen::Walk { live, belts }, base);
     live.players[seat].energy = if kept {
         live.players[seat].energy + max
     } else {
@@ -370,10 +451,9 @@ pub(super) fn side_starts<V: Rules>(
     // An evoke that ends the fight ends `SetupPlayerTurn` with it, as a
     // relic's damage before the hand does below.
     if let Some(ended) = energy_reset::<V>(seat, live, streams.combat(), belts, ascension) {
-        return Ok(SideStarted::Ended(ended));
+        return PlayerSetUp::Ended(ended);
     }
     energy_reset_late::<V>(seat, live, streams.combat(), belts, ascension);
-    let player = live.player(seat).id;
     let hook = sts2_core::EventHook::BeforeHandDraw {
         player,
         turn: live.turn,
@@ -385,34 +465,23 @@ pub(super) fn side_starts<V: Rules>(
     live.pause_boundary = true;
     let carried = begin_setup(seat, live, streams, belts, ascension, asked);
     live.pause_boundary = false;
-    let setup = match carried {
-        Carried::Done(Some(ended)) => return Ok(SideStarted::Ended(ended)),
+    match carried {
+        Carried::Done(Some(ended)) => PlayerSetUp::Ended(ended),
         Carried::Done(None) => {
             live.deferred.keep_fresh(fresh);
-            None
+            PlayerSetUp::Done
         }
-        Carried::Parked => Some(live.set_aside(seat, fresh)),
-    };
-    let ended = side_turn_started::<V>(
-        seat,
-        live,
-        streams.combat(),
-        belts,
-        ascension,
-        <V::CombatSide as SideKinds>::PLAYER,
-        extra,
-    )
-    // `OrbQueue.AfterTurnStart`, once the side's turn has started.
-    .or_else(|| orbs_at_turn_start::<V>(seat, live, streams.combat(), belts, ascension));
-    Ok(SideStarted::Started { setup, ended })
+        Carried::Parked => PlayerSetUp::Parked(live.set_aside(seat, fresh)),
+    }
 }
 
 /// How the player's side turn start came out.
 pub(super) enum SideStarted<V: Rules> {
     /// The fight ended before the side's turn started.
     Ended(super::Ended),
-    /// The side's turn started. `setup` is the task of a setup that stopped
-    /// on a question, and `ended` is how the side's start ended the fight.
+    /// The side's turn started. `setup` is the task of the first player's
+    /// setup, if it stopped on a question, and `ended` is how the side's
+    /// start ended the fight.
     Started {
         setup: Option<super::live::Paused<V>>,
         ended: Option<super::Ended>,

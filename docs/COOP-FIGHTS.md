@@ -7,19 +7,22 @@ source, `target/decompiled/v0.111.0-1579942752/`.
 ## Where the simulator stands
 
 `cargo xtask coop --hunt` plays a simulator seat beside each game seat.
-Every seed matches every step to its first fight, and stops there: the
-run refuses a fight of more than one player (`State::build_fight`).
+Every seed matches each step through its first fight's opening. The run
+builds a fight of every player: their creatures first, their decks
+shuffled in seat order, and the monsters' health scaled. Each relic hears
+a draw or energy hook only for its own player, as each of the game's
+checks `player != Owner`. An `AnyPlayer` potion can be aimed at any
+player.
 
-The fight already keeps each player's piles, energy and orbs by seat, and
-acts for a given player. What assumes one player:
+What still assumes one player:
 
 - `Live::asking` holds one question, and `Live::deferred` one stack of
   command frames.
-- The turn loop's coroutine takes one seat.
+- The turn's end runs for one player (`turn::end` panics for several).
 - A monster's move reaches one player (`Board::seat_of_several` panics).
-- A player's death beside a living one, and cards given to several
-  players, panic.
-- The fight's opening builds one player creature and one opening shuffle.
+- A player's death beside a living one, cards given to several players,
+  and a potion thrown at another player panic.
+- Nothing scales monster block or powers yet.
 - `monster.rs` reads seat 0's stream positions.
 
 ## The game's model

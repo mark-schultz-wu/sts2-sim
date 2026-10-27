@@ -222,8 +222,6 @@ impl<V: Rules> State<V> {
         &mut self,
         seat: sts2_core::SeatIndex,
     ) -> Result<Option<combat::Ended>, Error> {
-        let max_energy: V::Count = num_traits::cast(V::max_energy(self.character(seat)))
-            .expect("the turn's energy fits the build's count type");
         let ascension = self.ascension();
         loop {
             let Some(fighting) = self.fighting() else {
@@ -234,7 +232,7 @@ impl<V: Rules> State<V> {
                 return Ok(None);
             }
             fighting.live.take_ending_turn(seat);
-            if let Some(ended) = combat::end_turn(seat, fighting, ascension, max_energy)? {
+            if let Some(ended) = combat::end_turn(seat, fighting, ascension)? {
                 return Ok(Some(ended));
             }
         }
@@ -242,8 +240,6 @@ impl<V: Rules> State<V> {
 
     /// End the player's turn, and set up the next one.
     pub(crate) fn end_turn(&mut self, seat: sts2_core::SeatIndex) -> Result<Settled<V>, Error> {
-        let max_energy: V::Count = num_traits::cast(V::max_energy(self.character(seat)))
-            .expect("the turn's energy fits the build's count type");
         let ascension = self.ascension();
         let Some(fighting) = self.fighting() else {
             return Ok(Err(Refusal {
@@ -253,7 +249,7 @@ impl<V: Rules> State<V> {
         };
 
         let since = fighting.live.removed_from_deck(seat).len();
-        let ended = match combat::end_turn(seat, fighting, ascension, max_energy)? {
+        let ended = match combat::end_turn(seat, fighting, ascension)? {
             None => self.turn_ended_by_play(seat)?,
             ended => ended,
         };

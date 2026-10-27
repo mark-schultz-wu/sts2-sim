@@ -29,8 +29,13 @@ pub(super) fn event_hook<V: crate::Build>(
 
 /// `ModifyOrbValue`: its extra damage on its owner's Lightning. The player
 /// is the only one with orbs.
-pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
+pub(super) fn modify_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    hook: ModifyHook<V>,
+) -> Modify<Number> {
     match hook {
+        // `orb.Owner != base.Owner`: another player's number is left as it is.
+        ModifyHook::OrbValue { player, .. } if player != owner => Modify::Nothing,
         ModifyHook::OrbValue { orb: __c0, .. } if __c0 == V::Orb::LIGHTNING_ORB => {
             Modify::Added(V::Relic::INFUSED_CORE_EXTRA_DAMAGE)
         }

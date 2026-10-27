@@ -115,10 +115,57 @@ impl<V: Rules> Clone for Machine<V> {
 
 impl<V: Rules> Copy for Machine<V> {}
 
+/// `MultiplayerScalingModel` for a fight of `players`: how much more health a
+/// monster has with more than one.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct Scaling {
+    pub(crate) players: usize,
+    /// `GetMultiplayerScaling`: the act's factor.
+    pub(crate) factor: sts2_core::Decimal,
+}
+
+impl Scaling {
+    /// The scaling of a fight of `players` in the act `act`, counted from
+    /// zero. The factor is 1.1 in the first act and 1.2 in the second. In
+    /// the third it is 1.3 for a boss and 1.2 otherwise.
+    pub(crate) fn of<V: Rules>(players: usize, encounter: V::Encounter, act: usize) -> Self {
+        use sts2_core::{EncounterTable as _, RoomKinds as _};
+
+        let tenths = match act {
+            0 => 11,
+            1 => 12,
+            2 if encounter.room() == <V::Encounter as sts2_core::EncounterTable>::Room::BOSS => 13,
+            2 => 12,
+            act => unimplemented!("a fight of several players in act {act}"),
+        };
+        Scaling {
+            players,
+            factor: sts2_core::Decimal::new(tenths, 1),
+        }
+    }
+
+    /// `ScaleMonsterHpForMultiplayer`: `hp * players * factor`, truncated
+    /// as `SetMaxHpInternal` stores it.
+    pub(crate) fn health<V: Rules>(self, hp: V::Health) -> V::Health {
+        if self.players <= 1 {
+            return hp;
+        }
+        let whole: sts2_core::Decimal = num_traits::cast::<_, i64>(hp)
+            .expect("a monster's health fits an i64")
+            .into();
+        let scaled = whole * sts2_core::Decimal::from(self.players) * self.factor;
+        num_traits::cast(
+            num_traits::ToPrimitive::to_i64(&scaled.trunc()).expect("a scaled health fits an i64"),
+        )
+        .expect("a scaled health fits the build's health type")
+    }
+}
+
 /// Roll health and the first move in encounter order, advancing the two run
 /// streams that own those draws.
 pub(crate) fn initialize<V: Rules>(
     ascension: V::AscensionLevel,
+    scaling: Scaling,
     encounter: V::Encounter,
     streams: &mut Streams<V>,
     roster: Roster<'_, V>,
@@ -150,10 +197,15 @@ pub(crate) fn initialize<V: Rules>(
         let state = spawned_model(&monsters[index]);
         // A fight an event built as it opened rolled its health then.
         let hp = match rolled.get(index) {
+            Some(_) if scaling.players > 1 => {
+                unimplemented!("health an event rolled in a fight of several players")
+            }
             Some(&hp) => hp,
+            // `SetUniqueMonsterHpValue`, against the health of those standing
+            // already, then `ScaleMonsterHpForMultiplayer`.
             None => {
                 let used = monster_hps::<V>(&creatures[first..]);
-                health::<V>(monster, &state, ascension, &used, rngs.niche)
+                scaling.health::<V>(health::<V>(monster, &state, ascension, &used, rngs.niche))
             }
         };
 
@@ -161,10 +213,10 @@ pub(crate) fn initialize<V: Rules>(
             .ok()
             .and_then(nonmax::NonMaxU8::new)
             .ok_or(Error::CreatureIdOverflow)?;
-        // `CombatId` counts from the player, so the monsters start at one.
+        // `CombatId` counts from the players, so the monsters start after them.
         let id = position
             .get()
-            .checked_add(1)
+            .checked_add(u8::try_from(first).expect("a fight's players fit a u8"))
             .and_then(nonmax::NonMaxU8::new)
             .map(CombatId::new)
             .ok_or(Error::CreatureIdOverflow)?;
@@ -489,6 +541,7 @@ mod tests {
             (Creatures::new(), PowerStore::new(), Bounded::new());
         initialize::<V0_107_1>(
             AscensionLevel::None,
+            Scaling::of::<V0_107_1>(1, Encounter::SlimesWeak, 0),
             Encounter::SlimesWeak,
             &mut streams,
             Roster {
@@ -579,6 +632,7 @@ mod tests {
             (Creatures::new(), PowerStore::new(), Bounded::new());
         initialize::<V0_107_1>(
             AscensionLevel::None,
+            Scaling::of::<V0_107_1>(1, Encounter::DecimillipedeElite, 0),
             Encounter::DecimillipedeElite,
             &mut streams,
             Roster {
@@ -615,6 +669,7 @@ mod tests {
             (Creatures::new(), PowerStore::new(), Bounded::new());
         initialize::<V0_107_1>(
             AscensionLevel::None,
+            Scaling::of::<V0_107_1>(1, Encounter::SlimesWeak, 0),
             Encounter::SlimesWeak,
             &mut streams,
             Roster {

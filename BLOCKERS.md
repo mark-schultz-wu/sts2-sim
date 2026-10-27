@@ -62,15 +62,23 @@ run as its own machine sees it. The work goes in this order:
 3. The co-op rules, in the order the runs reach them. A run of several
    players starts, each player meets Neow, and the map takes votes (done).
    The card pools deal the co-op cards in a run of several players (done).
-   All 12 seeds match every step to the first fight. Next:
-   - A fight of several players, in the order of `docs/COOP-FIGHTS.md`.
-     Every player's creature, piles and turn,
-     monster health and block scaled by the player count, and turns all
-     players take at once. The rest of the scheduler comes with it, since
-     a second seat makes each part testable (steps 3 and 4 of
-     `docs/SCHEDULER.md`). That is a question for each seat, in the
-     action that asked it. Card plays, potions and the turn's end go
+   Every seed matches each step through the first fight's opening. The
+   fight holds every player's creature and shuffled deck, and scales
+   monster health by the player count. Each relic hears only its own
+   player's draw and energy. Next, in the order of `docs/COOP-FIGHTS.md`:
+   - The turn's end over every player. `turn::end` panics in a fight of
+     several players, and most hunted runs stop there.
+   - A question for each seat, in the action that asked it. Silent's
+     Survivor asks seat 0 the discard now. The rest of the scheduler comes
+     with it, since a second seat makes each part testable (steps 3 and 4
+     of `docs/SCHEDULER.md`). Card plays, potions and the turn's end go
      through the queues, with the action types, gating and cancellations.
+   - Monster block and power scaling by the player count.
+   - A potion thrown at another player, which panics: the potions act on
+     their drinker.
+   - Content that reads every card or hook as its owner's, which says "a
+     fight here has one" in its comment. The game checks the owner in
+     each.
    - Then rewards, rest sites, shops, events, and death and revival.
 4. Co-op content, as the runs reach it. Massive Scroll is ported.
 

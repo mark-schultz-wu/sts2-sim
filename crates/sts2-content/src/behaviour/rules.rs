@@ -43,9 +43,12 @@ pub(crate) fn modify_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
             };
             crate::behaviour::powers::modify_hook::<V>(power, amount, held, state, hook)
         }
-        sts2_core::Listener::Relic { state, fight, .. } => {
-            crate::behaviour::relics::modify_hook(state, fight, hook)
-        }
+        sts2_core::Listener::Relic {
+            state,
+            owner,
+            fight,
+            ..
+        } => crate::behaviour::relics::modify_hook(state, owner, fight, hook),
         // The fight asks only a monster whose class overrides the hook,
         // and no monster this build ports overrides one of these.
         sts2_core::Listener::Monster { monster, .. } => {

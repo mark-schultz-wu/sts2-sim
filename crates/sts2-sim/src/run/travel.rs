@@ -176,7 +176,7 @@ impl<V: Rules> State<V> {
                     ),
                 };
                 let at = Location::MapPoint(to);
-                let fight = self.create_fight(seat, encounter, queue, at)?;
+                let fight = self.create_fight(encounter, queue, at)?;
                 return self.enter_fight(seat, fight, at);
             }
             // `RoomSet.EnsureNextEventIsValid`, which passes over an event
@@ -227,7 +227,7 @@ impl<V: Rules> State<V> {
         };
 
         let at = Location::MapPoint(to);
-        let fight = self.create_fight(seat, encounter, queue, at)?;
+        let fight = self.create_fight(encounter, queue, at)?;
         self.enter_fight(seat, fight, at)
     }
 }

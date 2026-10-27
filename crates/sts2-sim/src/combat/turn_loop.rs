@@ -43,7 +43,6 @@ type Waits<V> = (Option<crate::combat::Ended>, Option<Vec<Paused<V>>>);
 pub(super) fn turn_loop<V: Rules>(
     seat: sts2_core::SeatIndex,
     ascension: V::AscensionLevel,
-    max_energy: V::Count,
     first: bool,
 ) -> Result<Option<crate::combat::Ended>, Error> {
     let mut skipping: Skips<V> = Skips::<V>::default();
@@ -216,8 +215,7 @@ pub(super) fn turn_loop<V: Rules>(
     }
 
     // `StartTurn` for the player's side, to `OrbQueue.AfterTurnStart`.
-    let started: Result<SideStarted<V>, Error> =
-        side_starts::<V>(seat, ascension, max_energy, extra, resumed!());
+    let started: Result<SideStarted<V>, Error> = side_starts::<V>(ascension, extra, resumed!());
     let parked: Option<Paused<V>> = match started {
         Ok(SideStarted::Started { setup, ended: None }) => setup,
         Ok(SideStarted::Started {
@@ -225,7 +223,7 @@ pub(super) fn turn_loop<V: Rules>(
             ended: Some(at_side_start),
         }) => {
             if let Some(task) = setup {
-                resumed!().live.rejoin(seat, task);
+                resumed!().live.rejoin(sts2_core::SeatIndex(0), task);
             }
             resumed!().live.skip_tick = skipping;
             return Ok(Some(at_side_start));
@@ -236,6 +234,15 @@ pub(super) fn turn_loop<V: Rules>(
         }
         Err(error) => return Err(error),
     };
+
+    // `RunAutoPrePlayPhase` for each player, which no pause holds up yet in
+    // a fight of several.
+    if several::<V>(resumed!()) {
+        if parked.is_some() {
+            unimplemented!("a setup stopping on a question in a fight of several players");
+        }
+        return pre_play_each::<V>(resumed!(), skipping);
+    }
 
     // `RunAutoPrePlayPhase`, which waits for a setup that stopped on a
     // question. A choice it signalled comes up once it goes on.
@@ -294,22 +301,53 @@ pub(super) fn turn_loop<V: Rules>(
 
 /// `StartTurn` for the player's side.
 fn side_starts<V: Rules>(
-    seat: sts2_core::SeatIndex,
     ascension: V::AscensionLevel,
-    max_energy: V::Count,
     extra: bool,
     lent: &mut Lent<'_, V>,
 ) -> Result<SideStarted<V>, Error> {
     let fighting = lent.fighting();
     crate::combat::turn::side_starts::<V>(
-        seat,
         fighting.live,
         fighting.streams,
         fighting.belts,
         ascension,
-        max_energy,
         extra,
     )
+}
+
+/// Whether the fight has several players.
+fn several<V: Rules>(lent: &mut Lent<'_, V>) -> bool {
+    lent.live.players.len() > 1
+}
+
+/// `RunAutoPrePlayPhase` for each player in seat order, with no question
+/// standing.
+///
+/// # Panics
+///
+/// A choice that signalled, or an auto-play that asks, in a fight of
+/// several players.
+fn pre_play_each<V: Rules>(
+    lent: &mut Lent<'_, V>,
+    skipping: Skips<V>,
+) -> Result<Option<crate::combat::Ended>, Error> {
+    if crate::combat::signalled(lent.live) {
+        unimplemented!("a choice signalled in a fight of several players");
+    }
+    for seat in crate::combat::turn::seats(lent.live) {
+        match pre_play::<V>(seat, lent) {
+            PrePlayed::Over(Some(ended)) => {
+                lent.live.skip_tick = skipping;
+                return Ok(Some(ended));
+            }
+            PrePlayed::Over(None) => play_phase::<V>(seat, lent),
+            PrePlayed::Asked { .. } => {
+                unimplemented!("seat {seat:?}'s pre-play phase asking in a fight of several")
+            }
+        }
+    }
+    lent.live.skip_tick = skipping;
+    Ok(None)
 }
 
 /// A choice signalled under a pause boundary, once the turn has run on.
@@ -536,10 +574,9 @@ pub(super) fn begin<V: Rules>(
     seat: sts2_core::SeatIndex,
     fighting: Fighting<'_, V>,
     ascension: V::AscensionLevel,
-    max_energy: V::Count,
     first: bool,
 ) -> Result<Option<crate::combat::Ended>, Error> {
-    let mut looping = turn_loop::<V>(seat, ascension, max_energy, first);
+    let mut looping = turn_loop::<V>(seat, ascension, first);
     let state = looping.start_with(Lent {
         live: &mut *fighting.live,
         streams: &mut *fighting.streams,

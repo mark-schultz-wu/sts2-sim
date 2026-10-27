@@ -7,8 +7,13 @@ use sts2_core::{EventHook, HookEffect, Modify, ModifyHook};
 use crate::behaviour::relics::Number;
 
 /// `ModifyMaxEnergy`: one more.
-pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
+pub(super) fn modify_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    hook: ModifyHook<V>,
+) -> Modify<Number> {
     match hook {
+        // `player != base.Owner`: another player's number is left as it is.
+        ModifyHook::MaxEnergy { player, .. } if player != owner => Modify::Nothing,
         ModifyHook::MaxEnergy { .. } => Modify::Added(V::Relic::PRISMATIC_GEM_ENERGY),
         hook => unimplemented!("what PrismaticGem does for {hook:?}"),
     }

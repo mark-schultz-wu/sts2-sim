@@ -290,11 +290,18 @@ pub(crate) fn own_shared_relic_event_hook(
 /// A shared relic's `ModifyHook`, for a hook this build answers itself.
 pub(crate) fn own_shared_relic_modify_hook(
     state: &State<V>,
+    owner: sts2_core::CombatId,
     hook: sts2_core::ModifyHook<V>,
 ) -> Option<sts2_core::Modify<i32>> {
     use crate::vars::RelicVars as _;
 
     match (state, hook) {
+        // `player != base.Owner`: another player's draw is left as it is.
+        (State::PollinousCore(_), sts2_core::ModifyHook::HandDraw { player, .. })
+            if player != owner =>
+        {
+            Some(sts2_core::Modify::Nothing)
+        }
         // `PollinousCore.ModifyHandDraw`: its cards once it has seen its
         // turns or more, where v0.107.1's paid on that turn alone.
         (State::PollinousCore(state), sts2_core::ModifyHook::HandDraw { .. }) => {

@@ -1088,7 +1088,7 @@ pub(super) struct CreatedFight<V: Rules> {
     /// How the fight ended before the player took a turn in it, if it did.
     ended: Option<crate::combat::Ended>,
     /// What the fight's opening asked of the run.
-    arriving: Vec<sts2_core::HookEffect<V>>,
+    arriving: Vec<(sts2_core::SeatIndex, sts2_core::HookEffect<V>)>,
 }
 
 /// Where the run stands when it enters a room.
@@ -3710,6 +3710,7 @@ impl<V: Rules> State<V> {
             left &= left - 1;
             let listener: crate::combat::Heard<'_, V> = sts2_core::Listener::Relic {
                 state: &self.belts[seat][slot].state,
+                owner: seat.creature(),
                 fight: None,
                 belt: self.belts[seat].relics(),
             };
@@ -3876,6 +3877,7 @@ impl<V: Rules> State<V> {
                 RunListener::Relic { seat: owner, slot } => V::decide_hook(
                     crate::combat::Heard::<V>::Relic {
                         state: &self.belts[owner][slot].state,
+                        owner: owner.creature(),
                         fight: None,
                         belt: self.belts[owner].relics(),
                     },
@@ -3947,6 +3949,7 @@ impl<V: Rules> State<V> {
                 left &= left - 1;
                 let listener: crate::combat::Heard<'_, V> = sts2_core::Listener::Relic {
                     state: &self.belts[seat][slot].state,
+                    owner: seat.creature(),
                     fight: None,
                     belt: self.belts[seat].relics(),
                 };
@@ -3986,6 +3989,7 @@ impl<V: Rules> State<V> {
             left &= left - 1;
             let listener: crate::combat::Heard<'_, V> = sts2_core::Listener::Relic {
                 state: &self.belts[seat][slot].state,
+                owner: seat.creature(),
                 fight: None,
                 belt: self.belts[seat].relics(),
             };
@@ -4933,6 +4937,7 @@ impl<V: Rules> State<V> {
                 RunListener::Relic { seat, slot } => ask(
                     sts2_core::Listener::Relic {
                         state: &self.belts[seat][slot].state,
+                        owner: seat.creature(),
                         fight: None,
                         belt: self.belts[seat].relics(),
                     },
@@ -6256,7 +6261,7 @@ impl<V: Rules> State<V> {
         }
         self.drew(streams);
         self.enter(at, Phase::Combat(live));
-        self.arrived(seat, arriving);
+        self.arrived(arriving);
         let ended = match ended {
             None => self.turn_ended_by_play(seat)?,
             ended => ended,
@@ -6398,13 +6403,12 @@ impl<V: Rules> State<V> {
     #[tracing::instrument(level = "trace", skip_all)]
     pub(super) fn create_fight(
         &mut self,
-        seat: sts2_core::SeatIndex,
         encounter: V::Encounter,
         queue: EncounterQueue,
         at: Location,
     ) -> Result<CreatedFight<V>, Error> {
         let floor = self.floor + num_traits::one();
-        self.build_fight(seat, encounter, queue, at, floor, &[], &[], true)
+        self.build_fight(encounter, queue, at, floor, &[], &[], true)
     }
 
     /// [`State::create_fight`] on a floor the caller names. `base` is whether
@@ -6413,7 +6417,6 @@ impl<V: Rules> State<V> {
     #[allow(clippy::too_many_arguments)]
     fn build_fight(
         &mut self,
-        seat: sts2_core::SeatIndex,
         encounter: V::Encounter,
         queue: EncounterQueue,
         at: Location,
@@ -6422,24 +6425,34 @@ impl<V: Rules> State<V> {
         roster: &[V::Monster],
         base: bool,
     ) -> Result<CreatedFight<V>, Error> {
-        if self.players.len() > 1 {
-            unimplemented!("a fight of {} players", self.players.len());
-        }
-        let standing = self.standing(seat);
-        let (raw_seed, character, ascension) =
-            (self.raw_seed(), self.character(seat), self.ascension());
+        let (raw_seed, ascension) = (self.raw_seed(), self.ascension());
         // A fight an event opens moves the run nowhere.
         let (strayed, point) = (base && self.strays(at), self.point_type(at));
-        let player = &mut self.players[seat];
+        let standing: Vec<_> = (0..self.players.len())
+            .map(|at| {
+                self.standing(sts2_core::SeatIndex(
+                    u8::try_from(at).expect("a run's players fit a u8"),
+                ))
+            })
+            .collect();
+        let players: Vec<crate::combat::EnteringPlayer<'_, V>> = self
+            .players
+            .seated()
+            .zip(&standing)
+            .map(|((_, player), standing)| crate::combat::EnteringPlayer {
+                character: player.character,
+                hp: standing.hp,
+                max_hp: standing.max_hp,
+                gold: player.gold,
+                potions: &player.potions,
+                alive: standing.alive,
+                deck: &player.deck,
+            })
+            .collect();
         let entering = crate::combat::Entering {
             floor,
-            hp: standing.hp,
-            max_hp: standing.max_hp,
-            gold: player.gold,
-            potions: &player.potions,
+            act: self.act,
             modifiers: &self.shared.modifiers,
-            alive: standing.alive,
-            deck: &player.deck,
             strayed,
             point,
             coord: match at {
@@ -6456,12 +6469,11 @@ impl<V: Rules> State<V> {
             ended,
             arriving,
         } = crate::combat::enter::<V>(
-            seat,
             raw_seed,
-            character,
             ascension,
             encounter,
             &entering,
+            &players,
             &self.streams,
             &mut self.belts,
         )?;
@@ -6518,7 +6530,6 @@ impl<V: Rules> State<V> {
             // The fight's room stacks on the event's.
             self.room_entering(seat, self.point_type(at), false);
             self.build_fight(
-                seat,
                 encounter,
                 EncounterQueue::Named,
                 at,
@@ -6552,7 +6563,7 @@ impl<V: Rules> State<V> {
                 extras: None,
             }));
         }
-        self.arrived(seat, arriving);
+        self.arrived(arriving);
         let ended = match ended {
             None => self.turn_ended_by_play(seat)?,
             ended => ended,
@@ -6562,10 +6573,12 @@ impl<V: Rules> State<V> {
 
     /// Carry out what a fight's opening asked of the run, which asks nothing
     /// back.
-    fn arrived(&mut self, seat: sts2_core::SeatIndex, arriving: Vec<sts2_core::HookEffect<V>>) {
-        if let Some(asked) = self.carry_out(seat, arriving) {
-            let pickup = asked.pickup;
-            unimplemented!("a fight's opening asking for {pickup:?}");
+    fn arrived(&mut self, arriving: Vec<(sts2_core::SeatIndex, sts2_core::HookEffect<V>)>) {
+        for (owner, effect) in arriving {
+            if let Some(asked) = self.carry_out(owner, [effect]) {
+                let pickup = asked.pickup;
+                unimplemented!("a fight's opening asking for {pickup:?}");
+            }
         }
     }
 
@@ -6582,8 +6595,7 @@ impl<V: Rules> State<V> {
         encounter: V::Encounter,
     ) -> Result<Decided, Error> {
         self.room_entering(seat, self.point_type(Location::NoLocation), true);
-        let fight =
-            self.create_fight(seat, encounter, EncounterQueue::Named, Location::NoLocation)?;
+        let fight = self.create_fight(encounter, EncounterQueue::Named, Location::NoLocation)?;
         self.enter_fight(seat, fight, Location::NoLocation)
     }
 
@@ -8009,6 +8021,7 @@ impl<V: Rules> State<V> {
             match V::modify_hook(
                 crate::combat::Heard::<V>::Relic {
                     state: &held.state,
+                    owner: seat.creature(),
                     fight: None,
                     belt: self.belts[seat].relics(),
                 },

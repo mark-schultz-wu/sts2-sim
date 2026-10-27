@@ -6762,6 +6762,9 @@ pub enum Listener<'a, V: Hooks, P: Printed<V> + ?Sized> {
     Modifier(V::Modifier),
     Relic {
         state: &'a V::RelicState,
+        /// `Owner`, as its creature, which a hook naming a player compares
+        /// with.
+        owner: crate::CombatId,
         /// The fight's creatures, for a relic that asks about one. Nothing
         /// outside a fight.
         fight: Option<&'a dyn FightView<V>>,

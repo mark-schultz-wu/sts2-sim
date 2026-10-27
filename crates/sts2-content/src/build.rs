@@ -452,6 +452,7 @@ pub trait OwnRules: ContentVersion + Sized {
     /// names, or nothing for a hook the shared relics answer for it.
     fn own_shared_relic_modify_hook(
         state: &crate::behaviour::relics::State<Self>,
+        owner: sts2_core::CombatId,
         hook: sts2_core::ModifyHook<Self>,
     ) -> Option<sts2_core::Modify<i32>>
     where

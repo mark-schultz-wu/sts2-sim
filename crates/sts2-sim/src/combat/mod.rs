@@ -33,8 +33,8 @@ pub(crate) use play::{
 };
 pub(crate) use potion::drink;
 pub(crate) use relic::obtained;
-pub(crate) use start::Entering;
 pub(crate) use start::{Entered, enter, roll_layout};
+pub(crate) use start::{Entering, EnteringPlayer};
 pub(crate) use turn::end as end_turn;
 pub mod pile;
 

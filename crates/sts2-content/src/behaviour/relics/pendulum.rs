@@ -38,8 +38,14 @@ pub(super) fn event_hook<V: crate::Build>(
 
 /// v0.111.0's `ModifyHandDraw`: its card in the hand of a turn the count
 /// came round on.
-pub(super) fn modify_hook<V: crate::Build>(state: &State, hook: ModifyHook<V>) -> Modify<Number> {
+pub(super) fn modify_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    state: &State,
+    hook: ModifyHook<V>,
+) -> Modify<Number> {
     match hook {
+        // `player != base.Owner`: another player's number is left as it is.
+        ModifyHook::HandDraw { player, .. } if player != owner => Modify::Nothing,
         ModifyHook::HandDraw { .. } if state.turns_seen == 0 => {
             Modify::Added(V::Relic::PENDULUM_CARDS)
         }

@@ -24,6 +24,14 @@ pub(crate) fn drink<V: Rules>(
         belts,
     } = fighting;
     let ascension = live.ascension;
+    // An `AnyPlayer` potion acts on the player it is aimed at, and the
+    // potions here act on their drinker.
+    if let Some(target) = target
+        && target != seat.creature()
+        && super::turn::seats(live).any(|other| other.creature() == target)
+    {
+        unimplemented!("{potion:?} thrown at another player")
+    }
     // `Hook.BeforePotionUsed`, which nothing that listens answers with more
     // than what it writes on itself.
     let hook = sts2_core::EventHook::PotionUsing { target };

@@ -8,8 +8,13 @@ use crate::generated::encounters::RoomType;
 use crate::generated::runstate::CombatSide;
 
 /// `ModifyHandDraw`: two more cards on an elite fight's first turn.
-pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
+pub(super) fn modify_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    hook: ModifyHook<V>,
+) -> Modify<Number> {
     match hook {
+        // `player != base.Owner`: another player's number is left as it is.
+        ModifyHook::HandDraw { player, .. } if player != owner => Modify::Nothing,
         ModifyHook::HandDraw {
             turn,
             room: RoomType::Elite,

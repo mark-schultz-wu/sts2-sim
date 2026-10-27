@@ -283,6 +283,7 @@ impl crate::build::OwnRules for V {
 
     fn own_shared_relic_modify_hook(
         _state: &crate::behaviour::relics::State<V>,
+        _owner: sts2_core::CombatId,
         _hook: sts2_core::ModifyHook<V>,
     ) -> Option<sts2_core::Modify<i32>> {
         None

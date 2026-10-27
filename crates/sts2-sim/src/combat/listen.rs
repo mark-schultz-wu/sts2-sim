@@ -48,6 +48,25 @@ pub(crate) enum Listener<V: Rules> {
     },
 }
 
+/// The seat whose player `listener` acts for: a relic's or a card's owner,
+/// or the player a power's creature is or belongs to. Nothing for a monster
+/// or a modifier, which belong to no player.
+pub(crate) fn owner<V: Rules>(
+    live: &Live<V>,
+    listener: Listener<V>,
+) -> Option<sts2_core::SeatIndex> {
+    match listener {
+        Listener::Relic { seat, .. } => Some(seat),
+        Listener::Power { owner, .. } => live.seat_of(owner),
+        Listener::Card { id } => live
+            .players
+            .seated()
+            .find(|(_, player)| player.cards.named(id).is_some())
+            .map(|(seat, _)| seat),
+        Listener::Monster { .. } | Listener::Modifier { .. } => None,
+    }
+}
+
 /// How many of a container's listeners override each hook.
 ///
 /// A container that holds listeners keeps one, and moves it only where a
@@ -1027,6 +1046,7 @@ pub(crate) fn each<V: Rules>(
             } => ask(
                 Heard::<V>::Relic {
                     state: &belts[seat][slot].state,
+                    owner: seat.creature(),
                     fight: Some(&onlookers),
                     belt: belts[seat].relics(),
                 },
