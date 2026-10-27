@@ -2006,6 +2006,9 @@ impl<V: Rules> From<sts2_core::Attack<V>> for Landing {
 pub(crate) struct Carrier<V: Rules> {
     pub(crate) side: V::CombatSide,
     pub(crate) id: CombatId,
+    /// The creature whose card plays its powers count as their owner's: the
+    /// player it belongs to for a pet, and itself otherwise.
+    pub(crate) player: CombatId,
     pub(crate) monster: Option<V::Monster>,
 }
 
@@ -2183,6 +2186,7 @@ impl<V: Rules> Fighter<V> {
         Carrier {
             side: self.side,
             id: self.id,
+            player: self.owner.unwrap_or(self.id),
             monster: match self.model {
                 Some(sts2_core::ModelId::Monster(monster)) => Some(monster),
                 _ => None,
@@ -2791,9 +2795,17 @@ impl<V: Rules> CombatHistory<V> {
     }
 
     /// `History.CardPlayStarted`, in the turn the fight stands in.
-    pub(super) fn start(&mut self, card: V::Card, id: CardId<V>, play: CardPlay<V>, first: bool) {
+    pub(super) fn start(
+        &mut self,
+        card: V::Card,
+        player: CombatId,
+        id: CardId<V>,
+        play: CardPlay<V>,
+        first: bool,
+    ) {
         let started = sts2_core::PlayStarted {
             card,
+            player,
             id,
             energy: play.energy,
             auto: play.auto,
@@ -2809,6 +2821,7 @@ impl<V: Rules> CombatHistory<V> {
     pub(super) fn finish(
         &mut self,
         card: V::Card,
+        player: CombatId,
         id: CardId<V>,
         ethereal: bool,
         auto: bool,
@@ -2816,6 +2829,7 @@ impl<V: Rules> CombatHistory<V> {
     ) {
         let finished = sts2_core::PlayFinished {
             card,
+            player,
             id,
             ethereal,
             auto,
@@ -2923,8 +2937,11 @@ impl<V: Rules> CombatHistory<V> {
         std::sync::Arc::make_mut(past).end_turn(round, side, player_turn, self.this_turn.drain(..));
     }
 
-    pub(super) fn view(&self) -> sts2_core::History<'_, V> {
+    /// What `player`'s listeners read, `player` being their owner's
+    /// creature.
+    pub(super) fn view(&self, player: CombatId) -> sts2_core::History<'_, V> {
         sts2_core::History {
+            player,
             this_turn: &self.this_turn,
             before: self.before.as_deref(),
         }
@@ -3603,9 +3620,10 @@ impl<V: Rules> Live<V> {
         }
     }
 
-    /// `CombatManager.History`, as a listener reads it.
-    pub(crate) fn history(&self) -> sts2_core::History<'_, V> {
-        self.history.view()
+    /// `CombatManager.History`, as a listener whose owner's plays are
+    /// `player`'s reads it.
+    pub(crate) fn history(&self, player: CombatId) -> sts2_core::History<'_, V> {
+        self.history.view(player)
     }
 
     /// `SwitchSides`: the turn now over joins the history, and `side` takes
@@ -3699,7 +3717,7 @@ impl<V: Rules> Live<V> {
             attack: &self.attack_results,
         };
         V::power_event_hook(
-            held.event_power(&mut state, carrier, self.history.view(), &fight),
+            held.event_power(&mut state, carrier, self.history(carrier.player), &fight),
             hook,
             asked,
         );
@@ -3739,7 +3757,7 @@ impl<V: Rules> Live<V> {
             attack: &self.attack_results,
         };
         V::power_event_hook(
-            held.event_power(&mut state, carrier, self.history.view(), &fight),
+            held.event_power(&mut state, carrier, self.history(carrier.player), &fight),
             hook,
             asked,
         );
@@ -3815,7 +3833,7 @@ impl<V: Rules> Live<V> {
             attack: &self.attack_results,
         };
         V::power_event_hook(
-            held.event_power(&mut state, carrier, self.history.view(), &fight),
+            held.event_power(&mut state, carrier, self.history(carrier.player), &fight),
             sts2_core::EventHook::Removed,
             &mut asked,
         );

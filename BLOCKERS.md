@@ -62,8 +62,8 @@ run as its own machine sees it. The work goes in this order:
 3. The co-op rules, in the order the runs reach them. A run of several
    players starts, each player meets Neow, and the map takes votes (done).
    The card pools deal the co-op cards in a run of several players (done).
-   Every seed matches each step through its first fight and its rewards,
-   and two of eight hunted runs match to the run's end. The fight holds
+   Of sixteen hunted seeds, three match to the run's end, and every seed
+   that reaches a fight matches through its first fight and rewards. The fight holds
    every player, and the turn ends once every player ends it. A monster's
    move reaches every player, with its health and powered block scaled by
    the player count. Each relic reads its own owner. A card play that
@@ -72,9 +72,16 @@ run as its own machine sees it. The work goes in this order:
    health and rolls their own rewards. A player who dies beside a living
    one leaves the fight's cards, and a win revives them. Next, in the
    order of `docs/COOP-FIGHTS.md` and where the hunted runs stop:
-   - One game of a hunt at `--width 4` exited before it connected, once in
-     three runs of eight seeds. The next run overwrote its log, and it has
-     not come back since.
+   - Seed 13's host stops answering after it takes Drowning Beacon's
+     Bottle, at step 59, in every hunt. The host's log ends before the
+     event, so nothing yet says what it waits on.
+   - The game fails under load. At `--width 8` two games of sixteen runs
+     failed: one closed its connection, one logged Godot's `Parameter "t"
+     is null` and `Invalid Task ID` and stopped answering. At `--width 4`
+     one game of twenty-four runs exited before it connected. Under load
+     a seat can also go without moves for a moment, so the other acts
+     first. The seed then takes another path, which the simulator
+     follows. Hunts stay at `--width 4`.
    - The rest of the scheduler (steps 3 and 4 of `docs/SCHEDULER.md`). A
      question the turn loop asks belongs to no player's queue yet. Each
      phase of the turn's end panics at one in a fight of several players.
@@ -83,9 +90,11 @@ run as its own machine sees it. The work goes in this order:
      stays up after the win, and the player's rewards come once it is
      answered. Card plays, potions and the turn's end go through the
      queues, with the action types, gating and cancellations.
-   - A shop, an event and travel after the first fight. One hunted run
-     parts at each: after a purchase, at Room Full of Cheese, and in the
-     next room's stream.
+   - Shops, events and travel after the first fight, where most of the
+     sixteen hunted seeds part. Three part after a purchase, and three in
+     the next room's stream after travel. Three part at events: Room Full
+     of Cheese, Doors of Light and Dark and Self-Help Book. Seed 14 parts
+     at step 3, after its first travel.
    - A fight won inside an event, and the extra rewards a monster gives,
      which panic in a run of several players.
    - Monster power scaling by the player count. A monster's opening

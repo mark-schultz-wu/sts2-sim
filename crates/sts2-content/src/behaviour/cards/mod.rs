@@ -114,8 +114,7 @@ pub(crate) fn decide_hook<V: crate::Build>(
 
     match (card, hook) {
         // `Normality.ShouldPlay`: from the hand, no play once its owner has
-        // started three this turn. A fight here has one player, whose plays
-        // are all its owner's.
+        // started three this turn.
         (__c0, DecisionHook::ShouldPlay { .. }) if __c0 == V::Card::NORMALITY => {
             HookResponse::Decision(
                 pile != Some(sts2_core::Pile::Hand)
@@ -462,7 +461,7 @@ pub(crate) fn calculated<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
                 + printed.face(V::CardVar::EXTRA_DAMAGE) * draw
         }
         // `LunarBlast`: a base, and one more hit for each Skill its owner's
-        // plays finished this turn. A fight here has one player.
+        // plays finished this turn.
         (__c0, __c1) if (__c0 == V::Card::LUNAR_BLAST && __c1 == V::CardVar::CALCULATED_HITS) => {
             let skills = owner
                 .history
@@ -476,7 +475,7 @@ pub(crate) fn calculated<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
                 + printed.face(V::CardVar::CALCULATION_EXTRA) * skills
         }
         // `Finisher`: a base, and one more hit for each attack its owner's
-        // plays finished this turn. A fight here has one player.
+        // plays finished this turn.
         (__c0, __c1) if (__c0 == V::Card::FINISHER && __c1 == V::CardVar::CALCULATED_HITS) => {
             let attacks = owner
                 .history
@@ -529,16 +528,15 @@ pub(crate) fn calculated<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
                 + printed.face(V::CardVar::EXTRA_DAMAGE) * starred
         }
         // `GoldAxe`: a base, and more for each card play the fight has
-        // finished.
+        // finished, every player's.
         (__c0, __c1) if (__c0 == V::Card::GOLD_AXE && __c1 == V::CardVar::CALCULATED_DAMAGE) => {
-            let plays = owner.history.finished_this_fight().count();
+            let plays = owner.history.finished_this_fight_by_all().count();
             let plays = Number::try_from(plays).expect("a fight's plays fit the game's numbers");
             printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
                 + printed.face(V::CardVar::EXTRA_DAMAGE) * plays
         }
         // `PullFromBelow`: a base, and one more hit for each of its owner's
-        // plays this fight of a card that was Ethereal. A fight here has one
-        // player.
+        // plays this fight of a card that was Ethereal.
         (__c0, __c1)
             if (__c0 == V::Card::PULL_FROM_BELOW && __c1 == V::CardVar::CALCULATED_HITS) =>
         {

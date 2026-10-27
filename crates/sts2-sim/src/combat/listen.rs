@@ -807,7 +807,7 @@ fn ask_card<V: Rules>(
             id,
             live.players[seat].cards.pile_of(id),
             &card,
-            live.history(),
+            live.history(seat.creature()),
             hook,
             asked,
         );
@@ -913,7 +913,11 @@ pub(crate) fn unblocked_damage_target<V: Rules>(
             pet_of: creature.owner,
             alive: creature.alive,
         };
-        let listener = held.listener(creature.carrier(), fight.live.history(), &onlookers);
+        let listener = held.listener(
+            creature.carrier(),
+            fight.live.history(creature.id),
+            &onlookers,
+        );
         if V::decide_hook(listener, hook).is_decision_and(|takes| takes) {
             chosen = creature.id;
         }
@@ -1042,7 +1046,11 @@ pub(crate) fn each<V: Rules>(
                 overrides,
                 ..
             } => ask(
-                held.listener(creature.carrier(), live.history(), &onlookers),
+                held.listener(
+                    creature.carrier(),
+                    live.history(creature.carrier().player),
+                    &onlookers,
+                ),
                 overrides,
             ),
             Found::Monster {
@@ -1100,7 +1108,7 @@ pub(crate) fn each<V: Rules>(
                     id,
                     printed: &card,
                     pile: live.players[seat].cards.pile_of(id),
-                    history: live.history(),
+                    history: live.history(seat.creature()),
                 };
                 ask(listener, overrides);
             }

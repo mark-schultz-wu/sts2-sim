@@ -4808,6 +4808,8 @@ pub enum Writing<V: ContentVersion> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlayStarted<V: ContentVersion> {
     pub card: V::Card,
+    /// `CardPlay.Player`: whose play it is, by their creature.
+    pub player: crate::CombatId,
     /// Which copy it is, which `CardPlay.Card` is.
     pub id: crate::CardId<V>,
     /// `CardPlay.Resources.EnergyValue`: what the card costs, which an
@@ -4830,6 +4832,8 @@ pub struct PlayStarted<V: ContentVersion> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlayFinished<V: ContentVersion> {
     pub card: V::Card,
+    /// `CardPlay.Player`: whose play it was, by their creature.
+    pub player: crate::CombatId,
     /// Which copy it was, which `CardPlay.Card` is.
     pub id: crate::CardId<V>,
     /// `WasEthereal`: the copy was Ethereal as it was played.
@@ -5026,6 +5030,10 @@ impl<V: ContentVersion> PastTurns<V> {
 /// `CombatManager.History`, as far as a listener reads it.
 #[derive(Debug, Clone, Copy)]
 pub struct History<'a, V: ContentVersion> {
+    /// The player whose card plays the reader counts as its owner's, by their
+    /// creature. Each of the game's readers of `CardPlaysStarted` and
+    /// `CardPlaysFinished` keeps its owner's alone, but Gold Axe.
+    pub player: crate::CombatId,
     /// The turn the fight stands in, oldest first.
     pub this_turn: &'a [HistoryEntry<V>],
     /// The turns before it that had entries.
@@ -5033,10 +5041,12 @@ pub struct History<'a, V: ContentVersion> {
 }
 
 impl<V: ContentVersion> History<'_, V> {
-    /// `CardPlaysFinished` where `HappenedThisTurn`.
+    /// `CardPlaysFinished` where `HappenedThisTurn`, of the owner's plays.
     pub fn finished_this_turn(&self) -> impl Iterator<Item = V::Card> + '_ {
         self.this_turn.iter().filter_map(|entry| match entry {
-            HistoryEntry::Finished(finished) => Some(finished.card),
+            HistoryEntry::Finished(finished) if finished.player == self.player => {
+                Some(finished.card)
+            }
             _ => None,
         })
     }
@@ -5057,14 +5067,25 @@ impl<V: ContentVersion> History<'_, V> {
             .filter(move |(before, _)| before.player_turn == last)
             .flat_map(|(_, entries)| entries.iter())
             .filter_map(|entry| match entry {
-                HistoryEntry::Finished(finished) => Some(*finished),
+                HistoryEntry::Finished(finished) if finished.player == self.player => {
+                    Some(*finished)
+                }
                 _ => None,
             })
     }
 
     /// Every `CardPlaysFinished` entry of the fight, the turn it stands in
-    /// first and then the turns before it, latest first.
+    /// first and then the turns before it, latest first, of the owner's
+    /// plays.
     pub fn finished_this_fight(&self) -> impl Iterator<Item = PlayFinished<V>> + '_ {
+        let player = self.player;
+        self.finished_this_fight_by_all()
+            .filter(move |finished| finished.player == player)
+    }
+
+    /// [`History::finished_this_fight`] of every player's plays, which Gold
+    /// Axe counts.
+    pub fn finished_this_fight_by_all(&self) -> impl Iterator<Item = PlayFinished<V>> + '_ {
         let before = self.before.into_iter().flat_map(PastTurns::entries);
         self.this_turn
             .iter()
@@ -5084,10 +5105,10 @@ impl<V: ContentVersion> History<'_, V> {
         })
     }
 
-    /// `CardPlaysStarted` where `HappenedThisTurn`.
+    /// `CardPlaysStarted` where `HappenedThisTurn`, of the owner's plays.
     pub fn started_this_turn(&self) -> impl Iterator<Item = PlayStarted<V>> + '_ {
         self.this_turn.iter().filter_map(|entry| match entry {
-            HistoryEntry::Started(started) => Some(*started),
+            HistoryEntry::Started(started) if started.player == self.player => Some(*started),
             _ => None,
         })
     }

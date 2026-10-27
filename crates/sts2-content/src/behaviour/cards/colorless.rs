@@ -654,7 +654,7 @@ pub(super) fn event_hook<V: crate::Build>(
     match (card, hook) {
         // `Bolas.BeforeHandDraw` and `ThrummingHatchet.BeforeHandDraw`: back
         // into hand, from wherever it is, once this copy finished a play in
-        // its owner's last turn. A fight here has one player.
+        // its owner's last turn.
         (__c0, EventHook::BeforeHandDraw { turn, .. })
             if (__c0 == V::Card::BOLAS || __c0 == V::Card::THRUMMING_HATCHET) =>
         {

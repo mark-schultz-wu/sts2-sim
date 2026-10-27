@@ -327,7 +327,7 @@ pub(crate) fn play<V: Rules>(
     live.players[seat].effect_depth += 1;
     before_played::<V, _>(seat, live, streams, belts, &card, begun, play.target);
     live.history
-        .start(card.face.ident.card, card.id, begun, true);
+        .start(card.face.ident.card, seat.creature(), card.id, begun, true);
     let mut board = Board::for_card(
         seat,
         live,
@@ -577,7 +577,7 @@ pub(super) fn auto_play_in_play<V: Rules>(
     live.players[seat].effect_depth += 1;
     before_played::<V, _>(seat, live, &mut rngs, belts, &card, begun, target);
     live.history
-        .start(card.face.ident.card, card.id, begun, true);
+        .start(card.face.ident.card, seat.creature(), card.id, begun, true);
     let mut board = Board::for_card(
         seat,
         live,
@@ -1719,7 +1719,8 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                     .named(card)
                     .expect("a card replaying stands in the play pile");
                 before_played::<V, _>(seat, next, streams, belts, &replaying, play, effect.target);
-                next.history.start(played_card, card, play, false);
+                next.history
+                    .start(played_card, seat.creature(), card, play, false);
                 let mut board = Board::for_card(
                     seat,
                     next,
@@ -2070,7 +2071,8 @@ fn finished<V: Rules, S: LendsCombat>(
         .cards
         .named(id)
         .is_some_and(|held| held.face.dupe());
-    next.history.finish(card, id, ethereal, play.auto, dupe);
+    next.history
+        .finish(card, seat.creature(), id, ethereal, play.auto, dupe);
     // The copy stays in the play pile until its play is over.
     let affliction = next.players[seat]
         .cards

@@ -1612,7 +1612,7 @@ impl<'a, V: Rules> Board<'a, V> {
             monster: carrier.monster,
             on_turn_start: sts2_core::PowerAmount::Counted(num_traits::zero()),
             state: &mut state,
-            history: self.live.history.view(),
+            history: self.live.history(carrier.player),
             fight: &fight,
         };
         let mut asked = sts2_core::HookEffects::new();
@@ -2352,7 +2352,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 let itself = <V as sts2_core::Hooks>::decide_hook(
                     subject.listener(
                         carrier,
-                        self.live.history(),
+                        self.live.history(carrier.player),
                         &super::live::Onlookers {
                             creatures: &self.live.creatures,
                             powers: &self.live.powers,
@@ -4044,7 +4044,7 @@ pub(crate) fn var<V: Rules>(
                 player: live.player(seat).id,
                 targeted: target,
                 target: targeted.as_deref(),
-                history: live.history(),
+                history: live.history(seat.creature()),
                 block: live
                     .creatures
                     .iter()
@@ -4777,7 +4777,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             !<V as sts2_core::Hooks>::decide_hook(
                 subject.listener(
                     carrier,
-                    self.live.history(),
+                    self.live.history(carrier.player),
                     &super::live::Onlookers {
                         creatures: &self.live.creatures,
                         powers: &self.live.powers,
@@ -5160,7 +5160,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn history(&self) -> sts2_core::History<'_, V> {
-        self.live.history()
+        self.live.history(self.actor)
     }
 
     fn playing(&self) -> CardId<V> {
@@ -5926,7 +5926,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     fn x_value(&self) -> V::Number {
         let started = self
             .live
-            .history()
+            .history(self.actor)
             .started_this_turn()
             .last()
             .expect("an X-cost card resolving its X is a play started this turn");
@@ -5939,7 +5939,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     fn star_x_value(&self) -> V::Number {
         let started = self
             .live
-            .history()
+            .history(self.actor)
             .started_this_turn()
             .last()
             .expect("an X star cost resolving its X is a play started this turn");
@@ -7729,7 +7729,7 @@ pub(super) fn ending<V: Rules>(walk: Walk<'_, V>) -> bool {
                 <V as sts2_core::Hooks>::decide_hook(
                     held.listener(
                         creature.carrier(),
-                        walk.live.history(),
+                        walk.live.history(creature.carrier().player),
                         &super::live::Onlookers {
                             creatures: &walk.live.creatures,
                             powers: &walk.live.powers,

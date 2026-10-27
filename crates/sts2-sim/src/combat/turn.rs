@@ -2819,7 +2819,7 @@ fn auto_play_dupe_of_last_play<V: Rules>(
     kinds: &[sts2_core::CardKind],
 ) -> Option<super::Ended> {
     let last = live
-        .history()
+        .history(seat.creature())
         .finished_last_player_turn(turn)
         .filter(|finished| {
             !finished.dupe && V::card_kind(finished.card).is_some_and(|kind| kinds.contains(&kind))
@@ -4451,7 +4451,7 @@ pub(super) fn roll_moves_of<V: Rules>(
                 .expect("a retained move machine has its creature");
             let powers = live.powers.of(creature.id).map(|power| {
                 // Through the field, because the machine is borrowed.
-                power.listener(creature.carrier(), live.history.view(), &fight)
+                power.listener(creature.carrier(), live.history.view(creature.id), &fight)
             });
             V::roll_monster_move(
                 held.monster,
