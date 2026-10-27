@@ -80,7 +80,8 @@ run as its own machine sees it. The work goes in this order:
    stack for each player. Each player has their own rest site, which
    offers Mend in a run of several players. A power that makes a card
    free, and a relic that rewrites a card joining a deck, read the card's
-   owner. Of sixteen hunted seeds, seven match to the run's
+   owner. A treasure chest holds a relic for each player, and awards them
+   by the players' votes. Of sixteen hunted seeds, eight match to the run's
    end. Hunts stay at
    `--width 4`: at `--width 8` two games of sixteen failed in Godot
    itself. Next, in the order of `docs/COOP-FIGHTS.md` and where the
@@ -91,12 +92,13 @@ run as its own machine sees it. The work goes in this order:
      So does the turn's end while a player's action waits on a question.
      Card plays, potions and the turn's end go through the queues, with
      the action types, gating and cancellations.
-   - A treasure chest in a run of several players holds a relic for each
-     player, which the simulator rolls one of. Four hunted runs part there.
    - A monster's move that reaches one player in a fight of two panics,
      in two hunted runs.
    - The simulator ticks down a dead player's Frail, and the game does
-     not. One hunted run parts there.
+     not. Two hunted runs part there.
+   - A question that waits on a player's own card play names no asker,
+     where the game names the play. One hunted run parts there, beside
+     Shuriken counting the other player's Attack.
    - A shared event, which the players vote through, and an event that
      opens on a fight panic in a run of several players.
    - A fight won inside an event, and the extra rewards a monster gives,
@@ -109,7 +111,9 @@ run as its own machine sees it. The work goes in this order:
      - `RoomEntered` carries the first player's deck size and health,
        which a relic and the Terminal modifier read.
      - `AfterRestSiteHeal` reaches every player's relics, where each of
-       the game's compares the healed player with its owner.
+       the game's compares the healed player with its owner. One hunted
+       run parts there, on Stone Humidifier.
+     - Shuriken counts another player's Attack.
      - Content whose comment says "a fight here has one" player.
      - The rest of `Board::seat`'s callers, which a card or potion reaches
        for its own player and a monster's move does not yet.

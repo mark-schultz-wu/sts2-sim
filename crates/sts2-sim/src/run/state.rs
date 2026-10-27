@@ -968,11 +968,16 @@ pub(super) enum Phase<V: Rules> {
     Event {
         seats: crate::seats::BySeat<EventSeat<V>>,
     },
-    /// A treasure room, and the relic in its chest. An empty chest leaves the
-    /// room finished as it opens.
+    /// A treasure room: `TreasureRoomRelicSynchronizer`'s relics and each
+    /// player's vote.
     Treasure {
-        relic: Option<V::Relic>,
-        finished: bool,
+        /// `CurrentRelics`: one for each player whose `ShouldGenerateTreasure`
+        /// holds, while the picking is open. Empty once the relics are
+        /// awarded, and for a chest that holds none.
+        relics: Vec<V::Relic>,
+        /// Each player's vote: a relic's index, or nothing for a skip. No
+        /// vote until they answer.
+        votes: crate::seats::BySeat<Option<Option<u8>>>,
     },
     /// A rest site, and how far through its one option the run is.
     ///
@@ -1170,7 +1175,8 @@ impl<V: Rules> Phase<V> {
     fn finished(&self, seat: sts2_core::SeatIndex) -> bool {
         match self {
             Phase::Neow(seats) => seats[seat].finished(),
-            Phase::Treasure { finished, .. } => *finished,
+            // `voteReceived`, or a picking already over.
+            Phase::Treasure { relics, votes } => votes[seat].is_some() || relics.is_empty(),
             Phase::RestSite { seats } => seats[seat].options.is_empty(),
             // A merchant never runs out. The run leaves when it decides to,
             // and a shelf it has not bought is still there.
@@ -5961,38 +5967,84 @@ impl<V: Rules> State<V> {
     }
 
     /// Enter a treasure room: `AfterRoomEntered`, then `BeginRelicPicking`.
-    /// That rolls the chest's relic off its own stream with `RollRarity`,
-    /// where `ShouldGenerateTreasure` lets it.
-    pub(super) fn enter_treasure(
-        &mut self,
-        seat: sts2_core::SeatIndex,
-        at: Location,
-        streams: Streams<V>,
-    ) {
+    /// That deals a relic for each player whose `ShouldGenerateTreasure`
+    /// holds. `RollRarity` rolls its rarity off the chest's own stream, and
+    /// it comes off the front of the shared bag.
+    pub(super) fn enter_treasure(&mut self, at: Location, streams: Streams<V>) {
         self.streams = streams;
+        let votes = crate::seats::BySeat::new(None, self.seats().skip(1).map(|_| None).collect());
         self.enter(
             at,
             Phase::Treasure {
-                relic: None,
-                finished: false,
+                relics: Vec::new(),
+                votes,
             },
         );
-        let relic = self.generates_treasure().then(|| {
+        let mut relics = Vec::new();
+        for seat in self.seats() {
+            if !self.generates_treasure(seat) {
+                continue;
+            }
             let rarity = crate::reward::relic_rarity::<V, _>(
                 self.streams.run(V::RunRngType::TREASURE_ROOM_RELICS),
             );
             // `SharedRelicGrabBag.PullFromFront`, which leaves the player's
             // bag holding it. Taking it from the chest obtains it, which
             // takes it out of both.
-            self.deal_shared_relic(seat, rarity)
-        });
-        if let Phase::Treasure {
-            relic: chest,
-            finished,
-        } = &mut self.phase
-        {
-            *chest = relic;
-            *finished = relic.is_none();
+            relics.push(self.deal_shared_relic(seat, rarity));
+        }
+        if let Phase::Treasure { relics: chest, .. } = &mut self.phase {
+            *chest = relics;
+        }
+    }
+
+    /// `PickRelicAction`: `seat`'s vote for the relic at `index`, or for none
+    /// one past the last. The chest opens first, as answering it is how the
+    /// player gets at it. `OnPicked` awards the relics once every player has
+    /// voted. A skip in a run of one returns before it records a vote,
+    /// which leaves the relics showing.
+    ///
+    /// # Panics
+    ///
+    /// A vote from a player who voted already, or for a relic not offered.
+    fn pick_relic(&mut self, seat: sts2_core::SeatIndex, index: u8) {
+        if self.phase.finished(seat) {
+            unimplemented!("choosing from a finished treasure room");
+        }
+        self.open_chest(seat);
+        let players = self.player_count();
+        let Phase::Treasure { relics, votes } = &mut self.phase else {
+            unreachable!("a relic is picked in a treasure room");
+        };
+        let vote = match usize::from(index) {
+            at if at < relics.len() => Some(index),
+            at if at == relics.len() => None,
+            _ => unimplemented!("an option the treasure room does not offer"),
+        };
+        votes[seat] = Some(vote);
+        if vote.is_none() && players == 1 {
+            return;
+        }
+        if votes.any(|vote| vote.is_none()) {
+            return;
+        }
+        let relics = std::mem::take(relics);
+        let votes: Vec<Option<u8>> = votes.seated().map(|(_, vote)| vote.flatten()).collect();
+        let awarded = super::treasure::awarded::<V>(
+            &relics,
+            &votes,
+            self.streams.run(V::RunRngType::TREASURE_ROOM_RELICS),
+        );
+        // `NTreasureRoomRelicCollection.AnimateRelicAwards`: each result's
+        // relic obtained, and moved to the fallback of every other player's
+        // bag.
+        for (winner, relic) in awarded {
+            if let Some(winner) = winner {
+                self.obtain_here(winner, relic);
+            }
+            for other in self.seats().filter(|&other| Some(other) != winner) {
+                Arc::make_mut(&mut self.players[other].dealt_relics).push(relic);
+            }
         }
     }
 
@@ -6005,7 +6057,7 @@ impl<V: Rules> State<V> {
         use sts2_core::rng::GameRng as _;
         use sts2_core::{AscensionKinds as _, PlayerStreamKinds as _};
 
-        if !self.generates_treasure() {
+        if !self.generates_treasure(seat) {
             return;
         }
         let span = sts2_core::rng::Span::new(CHEST_GOLD.0, CHEST_GOLD.1)
@@ -6050,13 +6102,19 @@ impl<V: Rules> State<V> {
         self.spoils = None;
     }
 
-    /// `Hook.ShouldGenerateTreasure`, which any relic on the belt can answer
-    /// no to.
-    fn generates_treasure(&self) -> bool {
+    /// `Hook.ShouldGenerateTreasure` for `seat`'s player, which a relic of
+    /// theirs or a modifier can answer no to. Silver Crucible, the one relic
+    /// that answers, says yes for another player.
+    fn generates_treasure(&self, seat: sts2_core::SeatIndex) -> bool {
         let hook = sts2_core::DecisionHook::ShouldGenerateTreasure;
         let model_hook = sts2_core::ModelHook::ShouldGenerateTreasure;
         let mut generates = true;
         self.run_each(model_hook, |listener, _| {
+            if let sts2_core::Listener::Relic { owner, .. } = listener
+                && owner != seat.creature()
+            {
+                return;
+            }
             generates &= !V::decide_hook(listener, hook).is_decision_and(|generate| !generate);
         });
         generates
@@ -6307,7 +6365,7 @@ impl<V: Rules> State<V> {
             return Ok(Decided::Resolved);
         }
         if room == <V::RoomType as sts2_core::RoomKinds>::TREASURE {
-            self.enter_treasure(seat, Location::NoLocation, self.streams);
+            self.enter_treasure(Location::NoLocation, self.streams);
             return Ok(Decided::Resolved);
         }
         if room != <V::RoomType as sts2_core::RoomKinds>::SHOP {
@@ -6989,27 +7047,8 @@ impl<V: Rules> State<V> {
         seat: sts2_core::SeatIndex,
         index: u8,
     ) -> Result<Decided, Error> {
-        if let Phase::Treasure { relic, finished } = &mut self.phase {
-            if *finished {
-                unimplemented!("choosing from a finished treasure room");
-            }
-            let Some(relic) = *relic else {
-                unreachable!("an empty chest finishes its room as it opens");
-            };
-            *finished = true;
-            self.open_chest(seat);
-            match index {
-                // Taking the relic ends the session and clears `CurrentRelics`.
-                // A skip leaves them showing until the room is left.
-                0 => {
-                    if let Phase::Treasure { relic, .. } = &mut self.phase {
-                        *relic = None;
-                    }
-                    self.obtain_here(seat, relic);
-                }
-                1 => {}
-                _ => unimplemented!("an option the treasure room does not offer"),
-            }
+        if let Phase::Treasure { .. } = self.phase {
+            self.pick_relic(seat, index);
             return Ok(Decided::Resolved);
         }
         if let Phase::RestSite { seats } = &self.phase {
@@ -8098,12 +8137,13 @@ impl<V: Rules> State<V> {
                 ),
                 _ => {}
             },
-            Phase::Treasure {
-                finished: false, ..
-            } => moves.extend([0, 1].map(|index| Decision::ChooseOption {
-                index,
-                target: None,
-            })),
+            // Each relic, then the skip one past them.
+            Phase::Treasure { relics, .. } if !self.phase.finished(seat) => {
+                moves.extend((0..=relics.len()).map(|index| Decision::ChooseOption {
+                    index: option_index(index),
+                    target: None,
+                }));
+            }
             Phase::RestSite { seats } => {
                 for (index, &id) in seats[seat].options.iter().enumerate() {
                     if !self.rest_option_enabled(seat, id) {
@@ -8819,28 +8859,25 @@ impl<V: Rules> State<V> {
             }
             Phase::Event { .. } => self.event_room(seat),
             Phase::Won { room } => room.clone(),
-            Phase::Treasure { relic, finished } => {
-                // A taken relic empties the chest. A skip leaves its relic
-                // showing, answered, until the room is left.
-                let options = match *relic {
-                    None => Vec::new(),
-                    Some(relic) => vec![
-                        sts2_core::ChestOption {
-                            index: 0,
-                            take: sts2_core::Take::Relic(relic),
-                            chosen: *finished,
-                        },
-                        sts2_core::ChestOption {
-                            index: 1,
-                            take: sts2_core::Take::Skip,
-                            chosen: *finished,
-                        },
-                    ],
+            Phase::Treasure { relics, .. } => {
+                // The relics on offer and the skip. Awarding them empties the
+                // chest. A skip by the one player leaves them showing,
+                // answered, until the room is left.
+                let finished = self.phase.finished(seat);
+                let takes = relics.iter().map(|&relic| sts2_core::Take::Relic(relic));
+                let options = match relics.is_empty() {
+                    true => Vec::new(),
+                    false => takes
+                        .chain([sts2_core::Take::Skip])
+                        .enumerate()
+                        .map(|(index, take)| sts2_core::ChestOption {
+                            index: option_index(index),
+                            take,
+                            chosen: finished,
+                        })
+                        .collect(),
                 };
-                Some(Room::Treasure {
-                    finished: *finished,
-                    options,
-                })
+                Some(Room::Treasure { finished, options })
             }
             Phase::RestSite { seats } => Some(Room::RestSite {
                 options: seats[seat]

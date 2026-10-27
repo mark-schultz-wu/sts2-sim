@@ -5,6 +5,7 @@ mod setup;
 mod shop;
 mod state;
 mod travel;
+mod treasure;
 
 pub use setup::{Opening, Rarity, RelicBag, run_acts};
 pub(crate) use state::{BELT, Belt, Belts, State};

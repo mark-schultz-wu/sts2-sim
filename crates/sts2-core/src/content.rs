@@ -1432,6 +1432,10 @@ pub trait RelicTable: Table {
     /// Whether a merchant is allowed to stock it, which is `IsAllowedInShops`.
     fn allowed_in_shops(self) -> bool;
 
+    /// Where this relic sorts against every other: `ModelId.CompareTo`,
+    /// ordinal over the id the wire spells. `StableShuffle` sorts by it.
+    fn order(self) -> u16;
+
     /// `IsStackable`: whether a run can hold more than one. `RelicCmd.Obtain`
     /// takes one that is not out of both relic bags.
     fn stackable(self) -> bool;
