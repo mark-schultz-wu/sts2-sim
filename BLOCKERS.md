@@ -63,7 +63,8 @@ run as its own machine sees it. The work goes in this order:
    players starts, each player meets Neow, and the map takes votes (done).
    The card pools deal the co-op cards in a run of several players (done).
    All 12 seeds match every step to the first fight. Next:
-   - A fight of several players. Every player's creature, piles and turn,
+   - A fight of several players, in the order of `docs/COOP-FIGHTS.md`.
+     Every player's creature, piles and turn,
      monster health and block scaled by the player count, and turns all
      players take at once. The rest of the scheduler comes with it, since
      a second seat makes each part testable (steps 3 and 4 of
