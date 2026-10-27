@@ -158,7 +158,7 @@ impl<V: Rules> State<V> {
             // it with no fight in progress.
             let thrown = match effects.as_slice() {
                 [sts2_core::HookEffect::PotionThrownAtEvent(potion)] => {
-                    Some(self.potion_thrown_at_event(*potion))
+                    Some(self.potion_thrown_at_event(seat, *potion))
                 }
                 _ => {
                     if self.carry_out(seat, effects).is_some() {

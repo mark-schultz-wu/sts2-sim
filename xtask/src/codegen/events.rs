@@ -438,6 +438,13 @@ fn emit_events(
          \x20       <Self as sts2_core::Table>::data(self).seed_name\n\
          \x20   }}\n\
          \n\
+         \x20   /// `IsShared`: every player goes through one copy, by vote.\n\
+         \x20   fn shared(self) -> bool {{\n\
+         \x20       <Self as sts2_core::Table>::data(self)\n\
+         \x20           .flags\n\
+         \x20           .contains(EventFlag::SharedBetweenPlayers)\n\
+         \x20   }}\n\
+         \n\
          \x20   /// The fight a `Combat`-layout event builds as it opens.\n\
          \x20   fn combat_layout(self) -> Option<Encounter> {{\n\
          \x20       let data = <Self as sts2_core::Table>::data(self);\n\

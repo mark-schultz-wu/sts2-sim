@@ -188,6 +188,10 @@ pub trait EventTable: Table {
     /// The event id's deterministic hash, already cast for seed arithmetic.
     fn seed_name(self) -> &'static str;
 
+    /// `EventModel.IsShared`: every player goes through one copy of it and
+    /// votes on each option, rather than each through their own.
+    fn shared(self) -> bool;
+
     /// The fights a build names.
     type Encounter: Copy + 'static;
 

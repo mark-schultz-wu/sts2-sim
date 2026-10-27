@@ -72,7 +72,8 @@ run as its own machine sees it. The work goes in this order:
    health and rolls their own rewards. A player who dies beside a living
    one leaves the fight's cards, and a win revives them. A win cancels
    the actions still waiting, as the game's does. A merchant stocks an
-   inventory for each player, who buys from it alone. Hunts stay at
+   inventory for each player, who buys from it alone. Each player goes
+   through their own copy of an event. Hunts stay at
    `--width 4`: at `--width 8` two games of sixteen failed in Godot
    itself. Next, in the order of `docs/COOP-FIGHTS.md` and where the
    hunted runs stop:
@@ -82,20 +83,22 @@ run as its own machine sees it. The work goes in this order:
      So does the turn's end while a player's action waits on a question.
      Card plays, potions and the turn's end go through the queues, with
      the action types, gating and cancellations.
-   - Events and travel after the first fight, where most of the sixteen
-     hunted seeds part. Two part in the next room's creatures after
-     travel. Seven part at events: Room Full of Cheese, Doors of Light and
-     Dark, Self-Help Book, Drowning Beacon, Aroma of Chaos, Brain Leech
-     and Sunken Treasury. A player's event is their own, and seat 1 sees
-     seat 0's option and reward. Seed 14 parts at step 3, after its first
-     travel.
-   - A potion thrown at another player, which panics in two hunted runs:
-     the potions act on their drinker.
+   - A potion thrown at another player, which panics in four of the
+     sixteen hunted runs: the potions act on their drinker.
+   - Monster power scaling by the player count, where four hunted runs
+     part. A monster's Plating reads 24 in the game where the simulator
+     has 8. Slippery, Artifact and Shriek differ too.
+   - Seed 14 parts at step 3, after its first travel.
+   - A rest site in a run of several players offers Mend, which the
+     simulator leaves out. One hunted run parts there.
+   - Unrelenting makes the wrong player's attack free. One hunted run
+     parts there.
+   - The simulator ticks down a dead player's Frail, and the game does
+     not. One hunted run parts there.
+   - A shared event, which the players vote through, and an event that
+     opens on a fight panic in a run of several players.
    - A fight won inside an event, and the extra rewards a monster gives,
      which panic in a run of several players.
-   - Monster power scaling by the player count. A monster's opening
-     block power reads 24 in the game where the simulator has 8, in a
-     hunted run's second fight.
    - Content that reads "the player" where the game reads an owner:
      - `FightView::player`, which about a dozen power rules read, panics
        in a fight of several players.
@@ -108,7 +111,6 @@ run as its own machine sees it. The work goes in this order:
        for its own player and a monster's move does not yet.
    - A player who dies inside their own card or potion beside a living
      one, and a death that leaves every standing player ready, panic.
-   - Then rest sites, shops and events.
 4. Co-op content, as the runs reach it. Massive Scroll is ported. The
    Concoct power's `AfterDamageGiven` stops one hunted run.
 

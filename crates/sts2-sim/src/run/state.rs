@@ -893,9 +893,7 @@ pub(super) type Layout<V> = SmallVec<[<V as sts2_core::ContentVersion>::Health; 
 #[derive(Debug, Clone)]
 pub(super) struct EnteredEvent<V: Rules> {
     pub event: V::Event,
-    pub state: V::EventState,
-    pub layout: Layout<V>,
-    pub rng: MegaRng,
+    pub seats: crate::seats::BySeat<EventSeat<V>>,
     pub streams: Streams<V>,
     pub events_used: usize,
     pub unknown_odds: [f32; 4],
@@ -968,16 +966,7 @@ pub(super) enum Phase<V: Rules> {
         spent: Spent<V>,
     },
     Event {
-        state: V::EventState,
-        rng: MegaRng,
-        /// What an option's effects asked, which the room parks on.
-        asking: Option<Asked<V>>,
-        /// `EventModel.IsFinished`, which the option that ends the event
-        /// sets last.
-        finished: bool,
-        /// The health a `Combat`-layout event's monsters rolled as it
-        /// opened. Empty for any other event.
-        layout: Layout<V>,
+        seats: crate::seats::BySeat<EventSeat<V>>,
     },
     /// A treasure room, and the relic in its chest. An empty chest leaves the
     /// room finished as it opens.
@@ -1038,6 +1027,23 @@ pub(super) struct ShopSeat<V: Rules> {
     entries: Vec<sts2_core::Entry<V>>,
     /// What a relic the player bought here asks as it is picked up.
     asking: Option<Asked<V>>,
+}
+
+/// One player's copy of an event. `EventSynchronizer.BeginEvent` begins one
+/// for each player, and each chooses their own options.
+#[derive(Debug, Clone)]
+pub(super) struct EventSeat<V: Rules> {
+    state: V::EventState,
+    /// `EventModel.Rng`, seeded with the player's slot.
+    rng: MegaRng,
+    /// What an option's effects asked, which the room parks on.
+    asking: Option<Asked<V>>,
+    /// `EventModel.IsFinished`, which the option that ends the event sets
+    /// last.
+    finished: bool,
+    /// The health a `Combat`-layout event's monsters rolled as it opened.
+    /// Empty for any other event.
+    layout: Layout<V>,
 }
 
 /// What a relic's pickup is still asking the run for.
@@ -1164,7 +1170,8 @@ impl<V: Rules> Phase<V> {
         match self {
             Phase::Neow(seats) => seats[seat].asking.as_ref(),
             Phase::Shop { seats } => seats[seat].asking.as_ref(),
-            Phase::Event { asking, .. } | Phase::RestSite { asking, .. } => asking.as_ref(),
+            Phase::Event { seats } => seats[seat].asking.as_ref(),
+            Phase::RestSite { asking, .. } => asking.as_ref(),
             _ => None,
         }
     }
@@ -1174,7 +1181,8 @@ impl<V: Rules> Phase<V> {
         match self {
             Phase::Neow(seats) => Some(&mut seats[seat].asking),
             Phase::Shop { seats } => Some(&mut seats[seat].asking),
-            Phase::Event { asking, .. } | Phase::RestSite { asking, .. } => Some(asking),
+            Phase::Event { seats } => Some(&mut seats[seat].asking),
+            Phase::RestSite { asking, .. } => Some(asking),
             _ => None,
         }
     }
@@ -1193,7 +1201,7 @@ impl<V: Rules> State<V> {
                     Pickup::Rewards { .. } => sts2_core::QuestionKind::Rewards,
                     Pickup::Bundles { .. } => sts2_core::QuestionKind::ChooseBundle,
                     Pickup::ConfirmAbandon => sts2_core::QuestionKind::Confirm,
-                    Pickup::Event => self.event_question().kind(),
+                    Pickup::Event => self.event_question(seat).kind(),
                     _ => sts2_core::QuestionKind::SelectCards,
                 })
             }
@@ -2489,13 +2497,11 @@ impl<V: Rules> State<V> {
 
     /// `Player.CanRemovePotions` off: an event that holds the potions while it
     /// runs, and has not finished.
-    pub(super) fn potions_held(&self) -> bool {
+    pub(super) fn potions_held(&self, seat: sts2_core::SeatIndex) -> bool {
         match &self.phase {
-            Phase::Event {
-                state,
-                finished: false,
-                ..
-            } => V::event_holds_potions(state),
+            Phase::Event { seats } if !seats[seat].finished => {
+                V::event_holds_potions(&seats[seat].state)
+            }
             _ => false,
         }
     }
@@ -2583,10 +2589,10 @@ impl<V: Rules> State<V> {
                 extras,
             } = *resuming;
             self.phase = event;
-            let Phase::Event { state, .. } = &mut self.phase else {
+            let Phase::Event { seats } = &mut self.phase else {
                 unreachable!("only an event resumes after its fight")
             };
-            let effects = V::resume_event_from_fight(state, escaped);
+            let effects = V::resume_event_from_fight(&mut seats[seat].state, escaped);
             let offering = effects.iter().position(|effect| {
                 matches!(effect, sts2_core::HookEffect::OfferRewardsWithRoomExtras(_))
             });
@@ -2882,33 +2888,22 @@ impl<V: Rules> State<V> {
                     unreachable!("entering the next act is the whole of its option")
                 }
                 HookEffect::FinishEvent => {
-                    let Phase::Event { finished, .. } = &mut self.phase else {
+                    let Phase::Event { seats } = &mut self.phase else {
                         unreachable!("only an event's option finishes it")
                     };
-                    *finished = true;
+                    seats[seat].finished = true;
                     return Stepped::Done;
                 }
                 HookEffect::ResumeEvent => {
                     // Lent out of the run for as long as it reads it, as a
                     // choice is.
-                    let Phase::Event {
-                        mut state,
-                        mut rng,
-                        asking,
-                        finished,
-                        layout,
-                    } = std::mem::replace(&mut self.phase, Phase::Map)
-                    else {
+                    let mut phase = std::mem::replace(&mut self.phase, Phase::Map);
+                    let Phase::Event { seats } = &mut phase else {
                         unreachable!("only an event's option resumes it")
                     };
-                    let resumed = V::resume_event(&mut state, &self.seen_by(seat), &mut rng);
-                    self.phase = Phase::Event {
-                        state,
-                        rng,
-                        asking,
-                        finished,
-                        layout,
-                    };
+                    let EventSeat { state, rng, .. } = &mut seats[seat];
+                    let resumed = V::resume_event(state, &self.seen_by(seat), rng);
+                    self.phase = phase;
                     let steps = resumed.into_iter().map(Then::Effect).collect();
                     return Stepped::Nested(seat, steps, After::Done);
                 }
@@ -3481,10 +3476,10 @@ impl<V: Rules> State<V> {
                     }
                 }
                 HookEffect::OfferEventRewards => {
-                    let Phase::Event { state, .. } = &self.phase else {
+                    let Phase::Event { seats } = &self.phase else {
                         unreachable!("only an event offers rewards of its own")
                     };
-                    let rewards = V::event_rewards(state);
+                    let rewards = V::event_rewards(&seats[seat].state);
                     let offered = self.custom_rewards(seat, &rewards, sts2_core::Stream::Event);
                     // `RewardsSet.Offer` puts up no screen for an empty set
                     // outside a fight, which `OfferCustom` does not allow.
@@ -5723,10 +5718,10 @@ impl<V: Rules> State<V> {
     /// `FoulPotion.GetFoulPotionMerchantTarget` finding a merchant's button:
     /// a shop's, whose inventory a run with no screen never opens, or the
     /// one an event shows.
-    pub(super) fn merchant(&self) -> bool {
+    pub(super) fn merchant(&self, seat: sts2_core::SeatIndex) -> bool {
         match &self.phase {
             Phase::Shop { .. } => true,
-            Phase::Event { state, .. } => V::event_merchant(state),
+            Phase::Event { seats } => V::event_merchant(&seats[seat].state),
             _ => false,
         }
     }
@@ -5734,12 +5729,13 @@ impl<V: Rules> State<V> {
     /// [`Rules::event_potion_thrown`] on the event the run stands in.
     pub(super) fn potion_thrown_at_event(
         &mut self,
+        seat: sts2_core::SeatIndex,
         potion: V::Potion,
     ) -> sts2_core::HookEffects<V> {
-        let Phase::Event { state, .. } = &mut self.phase else {
+        let Phase::Event { seats } = &mut self.phase else {
             unreachable!("only an event's merchant is thrown at")
         };
-        V::event_potion_thrown(state, potion)
+        V::event_potion_thrown(&mut seats[seat].state, potion)
     }
 
     /// The type of the map point at `at`. None off the map.
@@ -5762,6 +5758,50 @@ impl<V: Rules> State<V> {
             return false;
         };
         self.map.at(from).is_ok_and(|from| !from.to.contains(&to))
+    }
+
+    /// `EventSynchronizer.BeginEvent`: a copy of `event` for each player, in
+    /// seat order. Each copy's stream is seeded with its player's slot.
+    /// `floor` is the floor its room stands on.
+    ///
+    /// # Panics
+    ///
+    /// A shared event, or one that opens on a fight, in a run of several
+    /// players.
+    pub(super) fn opened_event(
+        &mut self,
+        event: V::Event,
+        floor: V::Count,
+        streams: &mut Streams<V>,
+    ) -> Result<crate::seats::BySeat<EventSeat<V>>, Error> {
+        use sts2_core::EventTable as _;
+
+        if self.players.len() > 1 {
+            if event.shared() {
+                unimplemented!("{event:?}, which every player goes through together");
+            }
+            // `GenerateInternalCombatStateIfNecessary` rolls the local
+            // player's alone.
+            if event.combat_layout().is_some() {
+                unimplemented!("{event:?}, which opens on a fight, in a run of several players");
+            }
+        }
+        let mut seats = self.players.seats();
+        let mut open = |seat: sts2_core::SeatIndex| {
+            let slot = u64::from(seat.0);
+            let mut rng = crate::event::stream::<V, MegaRng>(self.raw_seed(), slot, event);
+            let (state, layout) = self.open_event(seat, event, floor, &mut rng, streams)?;
+            Ok(EventSeat {
+                state,
+                rng,
+                asking: None,
+                finished: false,
+                layout,
+            })
+        };
+        let host = open(seats.next().expect("a run has a player"))?;
+        let others = seats.map(open).collect::<Result<Vec<_>, Error>>()?;
+        Ok(crate::seats::BySeat::new(host, others))
     }
 
     /// The fight a `Combat`-layout event builds, then `GenerateInitialOptions`:
@@ -5828,20 +5868,13 @@ impl<V: Rules> State<V> {
             .and_then(|&at| self.point_type(Location::MapPoint(at)));
         self.room_entering(seat, point, true);
         let event = V::the_architect();
-        let mut rng = crate::event::stream::<V, crate::rng::MegaRng>(self.raw_seed(), 0, event);
         let mut streams = *self.streams();
-        let (state, layout) = self.open_event(seat, event, self.floor, &mut rng, &mut streams)?;
+        let seats = self.opened_event(event, self.floor, &mut streams)?;
         self.streams = streams;
         Arc::make_mut(&mut self.visited_events).push(event);
         // `ActModel.MarkRoomVisited`.
         self.events_used += 1;
-        self.phase = Phase::Event {
-            state,
-            rng,
-            asking: None,
-            finished: false,
-            layout,
-        };
+        self.phase = Phase::Event { seats };
         self.room_entered(<V::RoomType as sts2_core::RoomKinds>::EVENT, false, point);
         Ok(Decided::Resolved)
     }
@@ -5849,9 +5882,7 @@ impl<V: Rules> State<V> {
     pub(super) fn enter_event(&mut self, to: Coord, entered: EnteredEvent<V>) {
         let EnteredEvent {
             event,
-            state,
-            layout,
-            rng,
+            seats,
             streams,
             events_used,
             unknown_odds,
@@ -5860,16 +5891,7 @@ impl<V: Rules> State<V> {
         self.events_used = events_used;
         self.unknown_odds = unknown_odds;
         Arc::make_mut(&mut self.visited_events).push(event);
-        self.enter(
-            Location::MapPoint(to),
-            Phase::Event {
-                state,
-                rng,
-                asking: None,
-                finished: false,
-                layout,
-            },
-        );
+        self.enter(Location::MapPoint(to), Phase::Event { seats });
     }
 
     /// Enter a treasure room: `AfterRoomEntered`, then `BeginRelicPicking`.
@@ -6071,10 +6093,10 @@ impl<V: Rules> State<V> {
         if !entry.stocked || !entry.affordable {
             unimplemented!("buying a shelf this event cannot sell");
         }
-        let Phase::Event { state, .. } = &mut self.phase else {
+        let Phase::Event { seats } = &mut self.phase else {
             unreachable!("the phase was an event when this began");
         };
-        let effects = V::buy_in_event(state, index);
+        let effects = V::buy_in_event(&mut seats[seat].state, index);
         match self.carry_out(seat, effects) {
             Some(next) => self.park(seat, next),
             None => Decided::Resolved,
@@ -6628,7 +6650,7 @@ impl<V: Rules> State<V> {
         own_rewards: bool,
     ) -> Result<Decided, Error> {
         let own = match (own_rewards, &self.phase) {
-            (true, Phase::Event { state, .. }) => V::event_rewards(state),
+            (true, Phase::Event { seats }) => V::event_rewards(&seats[seat].state),
             (true, _) => unreachable!("only an event has rewards of its own"),
             (false, _) => Vec::new(),
         };
@@ -6640,7 +6662,7 @@ impl<V: Rules> State<V> {
             ..
         } = {
             let rolled = match &self.phase {
-                Phase::Event { layout, .. } => layout.clone(),
+                Phase::Event { seats } => seats[seat].layout.clone(),
                 _ => SmallVec::new(),
             };
             // `CurrentMapPoint` is still the event's, which `AfterRoomEntered`
@@ -6737,22 +6759,12 @@ impl<V: Rules> State<V> {
             return self.enter_architect(seat);
         }
         self.room_entering(seat, self.point_type(Location::NoLocation), true);
-        let mut rng = crate::event::stream::<V, crate::rng::MegaRng>(self.raw_seed(), 0, event);
         let mut streams = *self.streams();
         let floor = self.floor + num_traits::one();
-        let (state, layout) = self.open_event(seat, event, floor, &mut rng, &mut streams)?;
+        let seats = self.opened_event(event, floor, &mut streams)?;
         self.streams = streams;
         Arc::make_mut(&mut self.visited_events).push(event);
-        self.enter(
-            Location::NoLocation,
-            Phase::Event {
-                state,
-                rng,
-                asking: None,
-                finished: false,
-                layout,
-            },
-        );
+        self.enter(Location::NoLocation, Phase::Event { seats });
         Ok(Decided::Resolved)
     }
 
@@ -7013,23 +7025,20 @@ impl<V: Rules> State<V> {
             // The choice acts on the whole run, so the room is taken out of
             // the run for as long as it is acting and put back after. A relic
             // an event hands over is taken the way any other is.
-            let Phase::Event {
-                mut state,
-                mut rng,
-                layout,
-                ..
-            } = std::mem::replace(&mut self.phase, Phase::Map)
-            else {
+            let mut phase = std::mem::replace(&mut self.phase, Phase::Map);
+            let Phase::Event { seats } = &mut phase else {
                 unreachable!()
             };
-            let effects = V::choose_event(&mut state, index, &self.seen_by(seat), &mut rng);
-            self.phase = Phase::Event {
-                state,
-                rng,
-                asking: None,
-                finished: false,
-                layout,
-            };
+            let chosen = &mut seats[seat];
+            let effects = V::choose_event(
+                &mut chosen.state,
+                index,
+                &self.seen_by(seat),
+                &mut chosen.rng,
+            );
+            chosen.asking = None;
+            chosen.finished = false;
+            self.phase = phase;
             if let [sts2_core::HookEffect::EnterNextAct] = effects.as_slice() {
                 return self.proceed(seat);
             }
@@ -7196,10 +7205,10 @@ impl<V: Rules> State<V> {
                 }
             }
             Pickup::Event => {
-                let Phase::Event { state, .. } = &mut self.phase else {
+                let Phase::Event { seats } = &mut self.phase else {
                     unreachable!("only an event asks its own question")
                 };
-                let effects = V::answer_event(state, answer);
+                let effects = V::answer_event(&mut seats[seat].state, answer);
                 let steps = effects.into_iter().map(Then::Effect).collect();
                 Stepped::Nested(seat, steps, After::Done)
             }
@@ -7443,12 +7452,13 @@ impl<V: Rules> State<V> {
         Ok(self.answer_asked(seat, asked, answer))
     }
 
-    /// The question the event the run stands in parks on.
-    fn event_question(&self) -> Question<V> {
-        let Phase::Event { state, .. } = &self.phase else {
+    /// The question `seat`'s event parks on.
+    fn event_question(&self, seat: sts2_core::SeatIndex) -> Question<V> {
+        let Phase::Event { seats } = &self.phase else {
             unreachable!("only an event asks its own question")
         };
-        V::event_question(state).unwrap_or_else(|| unreachable!("an event parked on no question"))
+        V::event_question(&seats[seat].state)
+            .unwrap_or_else(|| unreachable!("an event parked on no question"))
     }
 
     /// Upgrade the card the smith was pointed at.
@@ -7754,9 +7764,9 @@ impl<V: Rules> State<V> {
             seat,
             &self.players[seat].potions,
             self.fight(),
-            self.merchant(),
+            self.merchant(seat),
             self.standing(seat).alive,
-            self.potions_held(),
+            self.potions_held(seat),
         )
         .collect()
     }
@@ -7818,9 +7828,9 @@ impl<V: Rules> State<V> {
             seat,
             &self.players[seat].potions,
             None,
-            self.merchant(),
+            self.merchant(seat),
             alive,
-            self.potions_held(),
+            self.potions_held(seat),
             moves,
         );
         self.room_moves(seat, moves);
@@ -7872,8 +7882,8 @@ impl<V: Rules> State<V> {
             Phase::Shop { .. } => true,
             Phase::Neow { .. } | Phase::Treasure { .. } => self.phase.finished(seat),
             // `NFakeMerchant` turns it on as it opens, like a merchant's room.
-            Phase::Event { finished, .. } => {
-                *finished || matches!(self.event_room(seat), Some(Room::Shop { .. }))
+            Phase::Event { seats } => {
+                seats[seat].finished || matches!(self.event_room(seat), Some(Room::Shop { .. }))
             }
             // `OnActiveScreenUpdated` puts the proceed button up for a rest
             // site that offers nothing at all.
@@ -7925,7 +7935,7 @@ impl<V: Rules> State<V> {
                     Pickup::Rewards { offered, skippable } => {
                         reward_moves(offered, *skippable, moves)
                     }
-                    Pickup::Event => event_moves(self.event_question(), moves),
+                    Pickup::Event => event_moves(self.event_question(seat), moves),
                 }
             }
             Phase::Rewards { seats, .. }
@@ -8503,7 +8513,7 @@ impl<V: Rules> State<V> {
                     Pickup::Rewards { offered, skippable } => {
                         return asked::<V>(offered, *skippable);
                     }
-                    Pickup::Event => return self.event_question(),
+                    Pickup::Event => return self.event_question(seat),
                     Pickup::ConfirmAbandon => return Question::Confirm,
                     Pickup::Bundles { bundles } => {
                         return Question::ChooseBundle {
@@ -8629,12 +8639,12 @@ impl<V: Rules> State<V> {
     /// The event the run stands in, as its page shows it. A finished one
     /// offers nothing.
     fn event_room(&self, seat: sts2_core::SeatIndex) -> Option<Room<V>> {
-        let Phase::Event {
-            state, finished, ..
-        } = &self.phase
-        else {
+        let Phase::Event { seats } = &self.phase else {
             return None;
         };
+        let EventSeat {
+            state, finished, ..
+        } = &seats[seat];
         let mut room = V::observe_event(state, &self.seen_by(seat));
         if let Room::Event {
             finished: shown,
@@ -9100,7 +9110,7 @@ fn stream_of<'a, V: Rules>(
     stream: sts2_core::Stream<V>,
 ) -> &'a mut MegaRng {
     match (stream, phase) {
-        (sts2_core::Stream::Event, Phase::Event { rng, .. }) => rng,
+        (sts2_core::Stream::Event, Phase::Event { seats }) => &mut seats[seat].rng,
         (sts2_core::Stream::Event, _) => unreachable!("an event's stream outside its room"),
         (stream, _) => streams.of(seat, stream),
     }

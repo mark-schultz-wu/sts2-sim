@@ -57,9 +57,9 @@ impl<V: Rules> Observed<V> for AtSeat<'_, V> {
             self.seat,
             &self.state.players[self.seat].potions,
             self.state.fight(),
-            self.state.merchant(),
+            self.state.merchant(self.seat),
             self.state.standing(self.seat).alive,
-            self.state.potions_held(),
+            self.state.potions_held(self.seat),
         )
     }
 

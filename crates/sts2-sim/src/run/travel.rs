@@ -123,20 +123,15 @@ impl<V: Rules> State<V> {
                 // odds and the event queue are the unknown rooms' own, and an
                 // ancient is not one of them.
                 let event = self.act_ancient();
-                let mut event_rng =
-                    crate::event::stream::<V, crate::rng::MegaRng>(self.raw_seed(), 0, event);
                 let mut streams = *self.streams();
                 let floor = sts2_core::EventView::floor(&self.seen_by(seat)) + num_traits::one();
-                let (state, layout) =
-                    self.open_event(seat, event, floor, &mut event_rng, &mut streams)?;
+                let seats = self.opened_event(event, floor, &mut streams)?;
                 let (events_used, _, unknown_odds) = self.event_state();
                 self.enter_event(
                     to,
                     super::state::EnteredEvent {
                         event,
-                        state,
-                        layout,
-                        rng: event_rng,
+                        seats,
                         streams,
                         events_used,
                         unknown_odds,
@@ -203,18 +198,13 @@ impl<V: Rules> State<V> {
                 V::deck_card_next_event(card, self.act(), event)
             });
             self.room_entering(seat, point, true);
-            let mut event_rng =
-                crate::event::stream::<V, crate::rng::MegaRng>(self.raw_seed(), 0, event);
             let floor = sts2_core::EventView::floor(&self.seen_by(seat)) + num_traits::one();
-            let (state, layout) =
-                self.open_event(seat, event, floor, &mut event_rng, &mut streams)?;
+            let seats = self.opened_event(event, floor, &mut streams)?;
             self.enter_event(
                 to,
                 super::state::EnteredEvent {
                     event,
-                    state,
-                    layout,
-                    rng: event_rng,
+                    seats,
                     streams,
                     events_used,
                     unknown_odds: odds,
