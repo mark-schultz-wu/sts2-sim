@@ -110,11 +110,13 @@ fn asks_should_play<V: Rules>(fight: Walk<'_, V>) -> bool {
 /// is where the copy stands, or nothing for the play pile.
 #[inline(always)]
 pub(super) fn costs<V: Rules>(
+    seat: sts2_core::SeatIndex,
     held: &CardInstance<V>,
     pile: Option<Pile>,
     fight: Walk<'_, V>,
 ) -> (sts2_core::Cost, sts2_core::Cost) {
     let card = (held.id, held.face.ident.card);
+    let player = seat.creature();
     let ethereal = held.face.ethereal();
     let affliction = held.face.ident.affliction;
     held.face.costs(
@@ -125,12 +127,14 @@ pub(super) fn costs<V: Rules>(
                 &[
                     sts2_core::ModifyHook::EnergyCost {
                         card,
+                        player,
                         ethereal,
                         affliction,
                         pile,
                     },
                     sts2_core::ModifyHook::EnergyCostLate {
                         card,
+                        player,
                         ethereal,
                         affliction,
                         pile,
@@ -299,7 +303,7 @@ impl<'a, V: Rules> InHand<'a, V> {
     ) -> Self {
         let creatures = &fight.live.creatures;
         let target = target_type::<V>(held.face.ident, fight.live);
-        let (cost, star_cost) = costs::<V>(&held, Some(Pile::Hand), fight);
+        let (cost, star_cost) = costs::<V>(seat, &held, Some(Pile::Hand), fight);
         let (reason, preventer) = reasons::<V>(
             seat,
             held.face.ident,
@@ -406,7 +410,7 @@ pub(crate) fn moves<V: Rules>(
 
     let facts = HandFacts::of(seat, Walk { live, belts });
     for (at, card) in live.players[seat].cards.iter(Pile::Hand).enumerate() {
-        let costs = costs::<V>(&card, Some(Pile::Hand), Walk { live, belts });
+        let costs = costs::<V>(seat, &card, Some(Pile::Hand), Walk { live, belts });
         let target = target_type::<V>(card.face.ident, live);
         let (refused, _) = reasons::<V>(
             seat,

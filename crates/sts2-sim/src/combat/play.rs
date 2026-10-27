@@ -56,6 +56,7 @@ pub(crate) fn resolve<V: Rules>(
         })?;
     let card = held.face.ident;
     let (cost, star_cost) = legal::costs::<V>(
+        seat,
         &held,
         Some(sts2_core::Pile::Hand),
         super::listen::Walk { live, belts },
@@ -548,7 +549,7 @@ pub(super) fn auto_play_in_play<V: Rules>(
     // only where it stood in none, so the cost reads the pile it stood in.
     let stood = stood.filter(|&pile| pile != sts2_core::Pile::Play);
     let (cost, star_cost) =
-        super::legal::costs::<V>(&card, stood, super::listen::Walk { live, belts });
+        super::legal::costs::<V>(seat, &card, stood, super::listen::Walk { live, belts });
     let energy = super::legal::spend(cost, live.players[seat].energy)
         .unwrap_or_else(|| unimplemented!("an energy cost the count cannot hold"));
     let (pile, position) = result_pile::<V, _>(seat, live, &mut rngs, belts, &card, energy);
@@ -695,7 +696,7 @@ fn before_played<V: Rules, S: LendsCombat>(
             sts2_core::Cost::X => num_traits::cast(play.x).expect("an energy fits a game number"),
             _ => {
                 let fight = super::listen::Walk { live, belts };
-                match super::legal::costs::<V>(card, None, fight).0 {
+                match super::legal::costs::<V>(seat, card, None, fight).0 {
                     sts2_core::Cost::Fixed(cost) => {
                         num_traits::cast(cost.get()).expect("a cost fits a game number")
                     }
@@ -706,6 +707,7 @@ fn before_played<V: Rules, S: LendsCombat>(
         sts2_core::EventHook::CardPlaying {
             card: card.face.ident.card,
             id: card.id,
+            player: seat.creature(),
             affliction: card.face.ident.affliction,
             target,
             ethereal: card.face.ethereal(),

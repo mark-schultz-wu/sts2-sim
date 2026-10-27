@@ -3594,6 +3594,9 @@ pub enum ModifyHook<V: ContentVersion> {
     /// hand or being played. An auto-play reads the pile the card stood in.
     EnergyCost {
         card: (crate::CardId<V>, V::Card),
+        /// The card's `Owner.Creature`, which a listener compares with its
+        /// own.
+        player: crate::CombatId,
         /// `Keywords.Contains(Ethereal)` for the copy.
         ethereal: bool,
         /// The copy's `Affliction`.
@@ -3606,6 +3609,8 @@ pub enum ModifyHook<V: ContentVersion> {
     /// left.
     EnergyCostLate {
         card: (crate::CardId<V>, V::Card),
+        /// The card's `Owner.Creature`.
+        player: crate::CombatId,
         ethereal: bool,
         affliction: Option<V::Affliction>,
         pile: Option<crate::Pile>,
@@ -4255,6 +4260,9 @@ pub enum EventHook<V: ContentVersion> {
     CardPlaying {
         card: V::Card,
         id: crate::CardId<V>,
+        /// The card's `Owner.Creature`, which a listener compares with its
+        /// own.
+        player: crate::CombatId,
         /// The copy's `Affliction`.
         affliction: Option<V::Affliction>,
         /// `CardPlay.Target`.

@@ -4595,7 +4595,9 @@ impl<V: Rules> State<V> {
         use sts2_core::EventHook;
 
         // `Hook.ModifyCardBeingAddedToDeck`, both passes.
-        card.ident = self.rewritten(card.ident, |card| EventHook::CardBeingAddedToDeck { card });
+        card.ident = self.rewritten(seat, card.ident, |card| EventHook::CardBeingAddedToDeck {
+            card,
+        });
         self.unheard(sts2_core::ModelHook::TryModifyCardBeingAddedToDeckLate);
 
         self.players[seat].deck_mut().push(card);
@@ -4673,8 +4675,9 @@ impl<V: Rules> State<V> {
             if let Some(effect) = asked.first() {
                 unimplemented!("{copier:?} asking for {effect:?} for its copy");
             }
-            let rewritten =
-                self.rewritten(copy.ident, |card| EventHook::CardBeingAddedToDeck { card });
+            let rewritten = self.rewritten(seat, copy.ident, |card| {
+                EventHook::CardBeingAddedToDeck { card }
+            });
             if rewritten != copy.ident {
                 unimplemented!("a listener replacing a copy {copier:?} made");
             }
@@ -5186,7 +5189,7 @@ impl<V: Rules> State<V> {
                 )[..] else {
                     unreachable!("one card drawn is one card");
                 };
-                self.rewritten(card, |card| sts2_core::EventHook::CardRewardOption {
+                self.rewritten(seat, card, |card| sts2_core::EventHook::CardRewardOption {
                     card,
                     card_reward: false,
                 })
@@ -5650,19 +5653,21 @@ impl<V: Rules> State<V> {
         }
     }
 
-    /// `card` after each relic's answer to `hook`: a clone upgraded, which
-    /// takes its place.
+    /// `card`, which is `seat`'s player's, after each answer to `hook`: a
+    /// clone upgraded or enchanted, which takes its place. Each relic that
+    /// answers compares the card's owner with its own, so `seat`'s listeners
+    /// and the run's are asked.
     ///
     /// # Panics
     ///
     /// A relic asking for anything else.
     pub(super) fn rewritten(
         &mut self,
-        mut card: CardIdent<V>,
+        seat: sts2_core::SeatIndex,
+        card: CardIdent<V>,
         hook: impl Fn(CardIdent<V>) -> sts2_core::EventHook<V>,
     ) -> CardIdent<V> {
-        card = rewrite(card, self.notify_run(hook(card)));
-        card
+        rewrite(card, self.notify_run_for(seat, hook(card)))
     }
 
     /// Pick a relic up where nothing can park on what its pickup asks.
@@ -6382,7 +6387,9 @@ impl<V: Rules> State<V> {
             .into_iter()
             .map(|mut entry| {
                 if let sts2_core::Stock::Card(Some(on_sale)) = &mut entry.stock {
-                    on_sale.card = self.merchant_card_created(seat, on_sale.card);
+                    on_sale.card = self.rewritten(seat, on_sale.card, |card| {
+                        sts2_core::EventHook::MerchantCardCreated { card }
+                    });
                     // What it costs to play, once the hook upgraded it.
                     (on_sale.cost, on_sale.star_cost) = crate::combat::printed_costs(on_sale.card);
                 }
@@ -6401,17 +6408,6 @@ impl<V: Rules> State<V> {
             }
         }
         entries
-    }
-
-    /// `Hook.ModifyMerchantCardCreationResults` for `seat`'s player, whom
-    /// each relic that answers compares with its owner.
-    fn merchant_card_created(
-        &mut self,
-        seat: sts2_core::SeatIndex,
-        card: CardIdent<V>,
-    ) -> CardIdent<V> {
-        let hook = sts2_core::EventHook::MerchantCardCreated { card };
-        rewrite(card, self.notify_run_for(seat, hook))
     }
 
     /// Enter a rest site, with the options this run's belt and deck open it on.
@@ -8338,7 +8334,9 @@ impl<V: Rules> State<V> {
             })
             .collect();
         for (at, card) in held {
-            let card = self.merchant_card_created(seat, card);
+            let card = self.rewritten(seat, card, |card| {
+                sts2_core::EventHook::MerchantCardCreated { card }
+            });
             let Phase::Shop { seats } = &mut self.phase else {
                 unreachable!("a shop stays a shop while it updates");
             };
@@ -8401,7 +8399,9 @@ impl<V: Rules> State<V> {
         // `Hook.ModifyMerchantCardCreationResults` over the card it stocked.
         let stock = match stock {
             sts2_core::Stock::Card(Some(mut on_sale)) => {
-                on_sale.card = self.merchant_card_created(seat, on_sale.card);
+                on_sale.card = self.rewritten(seat, on_sale.card, |card| {
+                    sts2_core::EventHook::MerchantCardCreated { card }
+                });
                 (on_sale.cost, on_sale.star_cost) = crate::combat::printed_costs(on_sale.card);
                 sts2_core::Stock::Card(Some(on_sale))
             }

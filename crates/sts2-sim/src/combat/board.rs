@@ -4072,7 +4072,7 @@ pub(crate) fn var<V: Rules>(
                 cost_in_play: live.players[seat]
                     .cards
                     .in_play(held.id)
-                    .then(|| super::legal::costs::<V>(held, None, fight).0),
+                    .then(|| super::legal::costs::<V>(seat, held, None, fight).0),
                 statuses: {
                     let status = |face: &Face<V>| {
                         V::card_kind(face.ident.card) == Some(sts2_core::CardKind::Status)
@@ -5562,6 +5562,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         match global {
             false => held.face.costs(|cost| cost, |cost| cost),
             true => super::legal::costs::<V>(
+                seat,
                 &held,
                 Some(card.pile()),
                 super::listen::Walk {

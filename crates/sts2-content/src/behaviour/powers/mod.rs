@@ -1095,13 +1095,13 @@ pub(crate) fn modify_hook<V: crate::Build>(
         }
         // `TryModifyEnergyCostInCombatLate`: nothing for a card of its kind
         // in its owner's hand or play pile. A card in another pile keeps its
-        // cost. A fight here has one player, so its owner's cards are the
-        // player's.
+        // cost, and so does another player's card.
         (
             __c0,
             PowerAmount::Counted(_),
             ModifyHook::EnergyCostLate {
                 card: (_, card),
+                player,
                 ethereal,
                 pile: Some(sts2_core::Pile::Hand) | None,
                 ..
@@ -1110,7 +1110,7 @@ pub(crate) fn modify_hook<V: crate::Build>(
             || __c0 == V::Power::FREE_SKILL_POWER
             || __c0 == V::Power::FREE_POWER_POWER
             || __c0 == V::Power::VEILPIERCER_POWER)
-            && (owner == CombatSide::Player && frees::<V>(power, card, ethereal)) =>
+            && (player == holder && frees::<V>(power, card, ethereal)) =>
         {
             Modify::AtMost(num_traits::zero())
         }
@@ -3664,14 +3664,21 @@ pub(crate) fn event_hook<V: crate::Build>(
         (__c0, _, EventHook::AfterDeath { .. }) if __c0 == V::Power::CONSTRICT_POWER => None,
         // `BeforeCardPlayed`: one off the stack for each card of its kind its
         // owner plays, which stands in the play pile.
-        (__c0, _, EventHook::CardPlaying { card, ethereal, .. })
-            if (__c0 == V::Power::FREE_ATTACK_POWER
-                || __c0 == V::Power::FREE_SKILL_POWER
-                || __c0 == V::Power::FREE_POWER_POWER
-                || __c0 == V::Power::VEILPIERCER_POWER) =>
+        (
+            __c0,
+            _,
+            EventHook::CardPlaying {
+                card,
+                player,
+                ethereal,
+                ..
+            },
+        ) if (__c0 == V::Power::FREE_ATTACK_POWER
+            || __c0 == V::Power::FREE_SKILL_POWER
+            || __c0 == V::Power::FREE_POWER_POWER
+            || __c0 == V::Power::VEILPIERCER_POWER) =>
         {
-            (owner == CombatSide::Player && frees::<V>(power, card, ethereal))
-                .then_some(HookEffect::Decrement)
+            (player == holder && frees::<V>(power, card, ethereal)).then_some(HookEffect::Decrement)
         }
         // `IntangiblePower.AfterSideTurnEnd`: one off its stack as the
         // enemies' turn ends.

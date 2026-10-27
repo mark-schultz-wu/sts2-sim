@@ -78,8 +78,9 @@ run as its own machine sees it. The work goes in this order:
    powers. A fresh power on
    an enemy scales by the player count, and an enemy's Plating loses a
    stack for each player. Each player has their own rest site, which
-   offers Mend in a run of several players. Of sixteen hunted seeds, six
-   match to the run's
+   offers Mend in a run of several players. A power that makes a card
+   free, and a relic that rewrites a card joining a deck, read the card's
+   owner. Of sixteen hunted seeds, seven match to the run's
    end. Hunts stay at
    `--width 4`: at `--width 8` two games of sixteen failed in Godot
    itself. Next, in the order of `docs/COOP-FIGHTS.md` and where the
@@ -90,12 +91,10 @@ run as its own machine sees it. The work goes in this order:
      So does the turn's end while a player's action waits on a question.
      Card plays, potions and the turn's end go through the queues, with
      the action types, gating and cancellations.
+   - A treasure chest in a run of several players holds a relic for each
+     player, which the simulator rolls one of. Four hunted runs part there.
    - A monster's move that reaches one player in a fight of two panics,
      in two hunted runs.
-   - A treasure chest in a run of several players holds a relic for each
-     player, which the simulator rolls one of. Two hunted runs part there.
-   - Unrelenting and Pounce make the wrong player's card free. Three
-     hunted runs part there.
    - The simulator ticks down a dead player's Frail, and the game does
      not. One hunted run parts there.
    - A shared event, which the players vote through, and an event that
@@ -109,6 +108,8 @@ run as its own machine sees it. The work goes in this order:
        fight's player for a relic to compare with.
      - `RoomEntered` carries the first player's deck size and health,
        which a relic and the Terminal modifier read.
+     - `AfterRestSiteHeal` reaches every player's relics, where each of
+       the game's compares the healed player with its owner.
      - Content whose comment says "a fight here has one" player.
      - The rest of `Board::seat`'s callers, which a card or potion reaches
        for its own player and a monster's move does not yet.
