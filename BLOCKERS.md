@@ -72,16 +72,17 @@ run as its own machine sees it. The work goes in this order:
    health and rolls their own rewards. A player who dies beside a living
    one leaves the fight's cards, and a win revives them. Next, in the
    order of `docs/COOP-FIGHTS.md` and where the hunted runs stop:
-   - Seed 13's host stops answering after it takes Drowning Beacon's
-     Bottle, at step 59, in every hunt. The host's log ends before the
-     event, so nothing yet says what it waits on.
    - The game fails under load. At `--width 8` two games of sixteen runs
      failed: one closed its connection, one logged Godot's `Parameter "t"
      is null` and `Invalid Task ID` and stopped answering. At `--width 4`
-     one game of twenty-four runs exited before it connected. Under load
-     a seat can also go without moves for a moment, so the other acts
-     first. The seed then takes another path, which the simulator
-     follows. Hunts stay at `--width 4`.
+     one game of twenty-four runs exited before it connected. Hunts stay
+     at `--width 4`.
+   - A seed can take another path from one hunt to the next. A seat can
+     go without moves for a moment, so the other acts first, and the
+     simulator follows the game either way. Seed 10 matched to its end in
+     one hunt at `--width 4` and stopped at Concoct's power in the next.
+     A fix is for the co-op driver to wait until no seat waits on a move
+     of its own before it picks who acts.
    - The rest of the scheduler (steps 3 and 4 of `docs/SCHEDULER.md`). A
      question the turn loop asks belongs to no player's queue yet. Each
      phase of the turn's end panics at one in a fight of several players.
@@ -92,9 +93,10 @@ run as its own machine sees it. The work goes in this order:
      queues, with the action types, gating and cancellations.
    - Shops, events and travel after the first fight, where most of the
      sixteen hunted seeds part. Three part after a purchase, and three in
-     the next room's stream after travel. Three part at events: Room Full
-     of Cheese, Doors of Light and Dark and Self-Help Book. Seed 14 parts
-     at step 3, after its first travel.
+     the next room's stream after travel. Four part at events: Room Full
+     of Cheese, Doors of Light and Dark, Self-Help Book and Drowning
+     Beacon. A player's event is their own, and seat 1 sees seat 0's
+     option and reward. Seed 14 parts at step 3, after its first travel.
    - A fight won inside an event, and the extra rewards a monster gives,
      which panic in a run of several players.
    - Monster power scaling by the player count. A monster's opening
