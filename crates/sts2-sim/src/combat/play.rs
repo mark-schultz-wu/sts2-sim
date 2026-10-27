@@ -1320,6 +1320,7 @@ fn resume_answered<V: Rules>(
         Asker::Potion(_) => None,
     };
     let ascension = live.ascension;
+    let reaching = effect.reaching(live, seat);
     let mut board = Board::for_card(
         seat,
         live,
@@ -1329,7 +1330,8 @@ fn resume_answered<V: Rules>(
         effect.target,
         playing,
     )
-    .blocking();
+    .blocking()
+    .reaching(reaching);
     let played = V::resume_play::<super::board::BoardKind<V>>(&mut board, at, taken);
     effect.ended = effect.ended.or(board.ended());
     let skipped = std::mem::take(&mut board.skipped);
@@ -1609,6 +1611,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                 Asker::Card(card) => Some(card.id),
                 Asker::Potion(_) => None,
             };
+            let reaching = effect.reaching(next, seat);
             let mut board = Board::for_card(
                 seat,
                 next,
@@ -1618,7 +1621,8 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                 effect.target,
                 playing,
             )
-            .blocking();
+            .blocking()
+            .reaching(reaching);
             // The copies its own draw drew, where that is what it waited on.
             let taken = match board.live.drew.take() {
                 Some(drew) => sts2_core::Taken::Drew(drew),
@@ -1821,6 +1825,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
             Asker::Card(card) => Some(card.id),
             Asker::Potion(_) => None,
         };
+        let reaching = effect.reaching(next, seat);
         let mut board = Board::for_card(
             seat,
             next,
@@ -1830,7 +1835,8 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
             effect.target,
             playing,
         )
-        .blocking();
+        .blocking()
+        .reaching(reaching);
         played = V::resume_play::<super::board::BoardKind<V>>(&mut board, at, answer);
         effect.ended = effect.ended.or(board.ended());
         let skipped = std::mem::take(&mut board.skipped);

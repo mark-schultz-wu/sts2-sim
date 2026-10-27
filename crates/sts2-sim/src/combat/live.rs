@@ -119,6 +119,33 @@ pub(super) struct Resuming<V: Rules> {
     pub(super) plays: Plays<V>,
 }
 
+impl<V: Rules> Resuming<V> {
+    /// The other player a potion is aimed at, for whom its effect acts and
+    /// whom its `CardSelectCmd` asks. Nothing for a card, or a potion aimed
+    /// at its drinker in `seat`.
+    pub(super) fn reaching(
+        &self,
+        live: &Live<V>,
+        seat: sts2_core::SeatIndex,
+    ) -> Option<sts2_core::SeatIndex> {
+        match self.asker {
+            Asker::Potion(_) => potion_reaching(live, seat, self.target),
+            Asker::Card(_) => None,
+        }
+    }
+}
+
+/// The other player a potion that `seat` drinks at `target` is aimed at.
+pub(super) fn potion_reaching<V: Rules>(
+    live: &Live<V>,
+    seat: sts2_core::SeatIndex,
+    target: Option<CombatId>,
+) -> Option<sts2_core::SeatIndex> {
+    target
+        .and_then(|target| live.seat_of(target))
+        .filter(|&aimed| aimed != seat)
+}
+
 /// `GeneratePlayCount`'s count, and how much of its loop has run.
 ///
 /// The count is worked out once, before the first play. A replay the effect
@@ -3404,18 +3431,41 @@ impl<V: Rules> Live<V> {
     }
 
     /// The question `seat` answers, back in play with what waits behind it,
-    /// where its queue stopped on one.
-    pub(crate) fn answering(&mut self, seat: sts2_core::SeatIndex) {
-        if let Some(task) = self.queues.go_on(seat) {
-            self.rejoin(seat, task);
-        }
+    /// where a queue stopped on one. The seat whose action goes on, which
+    /// is the drinker's for a potion aimed at `seat`.
+    pub(crate) fn answering(&mut self, seat: sts2_core::SeatIndex) -> sts2_core::SeatIndex {
+        let Some(owner) = self.stopped_for(seat).map(|(owner, _)| owner) else {
+            return seat;
+        };
+        let task = self
+            .queues
+            .go_on(owner)
+            .expect("the queue stopped on the question");
+        self.rejoin(owner, task);
+        owner
     }
 
-    /// The question in play, or else the one `seat`'s queue stopped on.
+    /// The question in play, or else the one a queue stopped on for `seat`.
     fn asked_of(&self, seat: sts2_core::SeatIndex) -> Option<&Asking<V>> {
         self.asking
             .as_ref()
-            .or_else(|| self.queues.stopped(seat).map(|task| &task.asking))
+            .or_else(|| self.stopped_for(seat).map(|(_, task)| &task.asking))
+    }
+
+    /// The stopped front `seat` answers, beside the seat whose queue it
+    /// stands in. The player a potion is aimed at answers what it asks,
+    /// and the owner of the queue answers anything else.
+    fn stopped_for(
+        &self,
+        seat: sts2_core::SeatIndex,
+    ) -> Option<(sts2_core::SeatIndex, &Paused<V>)> {
+        self.queues.every_stopped().find(|&(owner, task)| {
+            let answerer = match &task.asking.then {
+                Then::Play { effect, .. } => effect.reaching(self, owner),
+                _ => None,
+            };
+            answerer.unwrap_or(owner) == seat
+        })
     }
 
     /// The card-selection question on which this fight is parked.

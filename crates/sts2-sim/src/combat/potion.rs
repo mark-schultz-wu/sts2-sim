@@ -28,9 +28,7 @@ pub(crate) fn drink<V: Rules>(
     // is used on its drinker. Its own effect acts for the player it is aimed
     // at, and its drinker applies what it applies.
     let target = target.or_else(|| on_drinker::<V>(potion).then(|| seat.creature()));
-    let reaching = target
-        .and_then(|target| live.seat_of(target))
-        .filter(|&aimed| aimed != seat);
+    let reaching = super::live::potion_reaching(live, seat, target);
     // `Hook.BeforePotionUsed`, which nothing that listens answers with more
     // than what it writes on itself.
     let hook = sts2_core::EventHook::PotionUsing { target };
@@ -43,10 +41,6 @@ pub(crate) fn drink<V: Rules>(
         .blocking()
         .reaching(reaching);
     let used = V::on_use::<super::board::BoardKind<V>>(potion, &mut board);
-    // `CardSelectCmd` asks the player it is aimed at.
-    if reaching.is_some() && !matches!(used, sts2_core::Played::Done) {
-        unimplemented!("{potion:?} thrown at another player asking them a question");
-    }
     let ended = board.ended();
     let skipped = std::mem::take(&mut board.skipped);
 

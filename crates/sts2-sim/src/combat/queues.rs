@@ -100,6 +100,11 @@ impl<V: Rules> Queues<V> {
             .map(|(_, task)| task)
     }
 
+    /// Every front that waits on a question, beside its queue's seat.
+    pub(super) fn every_stopped(&self) -> impl Iterator<Item = (sts2_core::SeatIndex, &Paused<V>)> {
+        self.stopped.iter().map(|(owner, task)| (*owner, task))
+    }
+
     /// Whether any queue's front waits on a question.
     pub(super) fn any_stopped(&self) -> bool {
         !self.stopped.is_empty()

@@ -53,7 +53,8 @@ impl<V: Rules> State<V> {
         let Some(fighting) = self.fighting() else {
             unreachable!("a fight answer has a live fight");
         };
-        fighting.live.answering(seat);
+        // A potion aimed at `seat` asks them, and its drinker's action goes on.
+        let seat = fighting.live.answering(seat);
         let since = fighting.live.removed_from_deck(seat).len();
         let ended = match combat::answer(seat, fighting, chosen)? {
             None => self.turn_ended_by_play(seat)?,

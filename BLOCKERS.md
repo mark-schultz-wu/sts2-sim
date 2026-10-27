@@ -74,7 +74,8 @@ run as its own machine sees it. The work goes in this order:
    the actions still waiting, as the game's does. A merchant stocks an
    inventory for each player, who buys from it alone. Each player goes
    through their own copy of an event. A potion aimed at a player acts
-   for that player, and its drinker applies its powers. A fresh power on
+   for that player, who answers what it asks, and its drinker applies its
+   powers. A fresh power on
    an enemy scales by the player count, and an enemy's Plating loses a
    stack for each player. Of sixteen hunted seeds, six match to the run's
    end. Hunts stay at
@@ -87,16 +88,13 @@ run as its own machine sees it. The work goes in this order:
      So does the turn's end while a player's action waits on a question.
      Card plays, potions and the turn's end go through the queues, with
      the action types, gating and cancellations.
-   - A potion thrown at another player that asks a question, which that
-     player answers in the game. It panics in two of the sixteen hunted
-     runs, with Colorless Potion and Skill Potion.
    - A monster's move that reaches one player in a fight of two panics,
      in one hunted run.
    - Seed 14 parts at step 3, after its first travel.
    - A rest site in a run of several players offers Mend, which the
-     simulator leaves out. Two hunted runs part there.
-   - Unrelenting and Pounce make the wrong player's card free. Two hunted
-     runs part there.
+     simulator leaves out. Three hunted runs part there.
+   - Unrelenting and Pounce make the wrong player's card free. Three
+     hunted runs part there.
    - The simulator ticks down a dead player's Frail, and the game does
      not. One hunted run parts there.
    - A shared event, which the players vote through, and an event that
