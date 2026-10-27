@@ -56,20 +56,24 @@ Other fields that only hold paused work:
 
 The order comes from the stack, so the innermost work finishes first.
 The game orders by action id across queues instead (§1). Three places
-look different from the game. These are read from the code, not yet
-shown by a run:
+looked different from the game when read from the code. A run settles
+each:
 
 1. **Two tails at turn start.** A paused orb `AfterTurnStart` task is
    queued in the game before the paused setup's hook action, so it runs
    first by id. The engine runs the setup and its pre-play first.
 2. **`Combat` tails in the enemy turn.** A `Combat` hook action paused in
    the enemy turn, from `BeforeSideTurnStart`, `AfterDiedToDoom` or
-   `AfterDeath`, runs at once in the game. The engine runs it only after
-   `end_turn` returns, which is after the next turn's setup.
+   `AfterDeath`, looked as if it ran at once in the game. It does not.
+   The scenario `a-death-hook-paused-in-the-enemy-turn-waits-for-the-next-turn`
+   shows the game asking only once the next turn is under way, after the
+   setup drew its hand. The engine does the same, so this one is not a
+   difference.
 3. **`Hook.BeforeFlush`.** The engine raises only the late pass,
    `BeforeFlushLate`. No ported listener answers the main pass yet.
 
-Each needs a scenario before the change that fixes it.
+Each gets a scenario. One that shows a difference lands with the change
+that fixes it, since CI runs every scenario.
 
 ### What assumes one player
 
@@ -226,8 +230,8 @@ Each step is one PR, with the golden replays, the census and
 `cargo xtask instructions` against the step before.
 
 1. **Scenarios for the three orders above.** Each records what the game
-   does. Where the engine differs, the scenario fails until the step
-   that fixes it lands.
+   does. One that agrees lands at once. One that differs lands with the
+   step that fixes it.
 2. **The turn loop as a coroutine.** End of turn, enemy turn and turn start
    become one coroutine in the fight. The turn variants of `Deferred` go,
    and so does `start.rs`'s duplicate. `Listening::join` becomes a yield.
@@ -235,7 +239,7 @@ Each step is one PR, with the golden replays, the census and
 3. **Queues and ids.** Card plays, potions, end turn and hook tasks go
    through the queues, and the executor picks by id. `Live::paused` and
    `Live::asking` go into the actions. The `Combat` tails in the enemy
-   turn now run when the game runs them, and the scenario for that passes.
+   turn keep the order their scenario pins.
 4. **Action types and gating.** `CombatPlayPhaseOnly` waits for the play
    phase, so the turn-start order matches the game. The cancellations
    follow: end of turn, and a `FromHand` pick.
