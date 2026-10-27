@@ -1346,6 +1346,16 @@ pub struct PlayerHealth<V: ContentVersion> {
     pub max_hp: V::Health,
 }
 
+/// `Owner`, as a relic reads it: the player's creature, and its health.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RelicOwner<V: ContentVersion> {
+    /// `Owner.Creature`.
+    pub creature: crate::CombatId,
+    /// Its current and maximum hit points, which are the run's outside a
+    /// fight.
+    pub health: PlayerHealth<V>,
+}
+
 /// `cardSource`, the card whose number a damage hook is working out: which
 /// copy, which card, and whether it is being played.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -3503,29 +3513,22 @@ pub enum ModifyHook<V: ContentVersion> {
     },
     HpLostAfterOsty {
         target: crate::CombatId,
-        /// The fight's player, which a relic's owner is.
-        player: crate::CombatId,
         /// `CombatManager.IsInProgress`.
         in_fight: bool,
     },
     HpLostAfterOstyLate {
         target: crate::CombatId,
-        player: crate::CombatId,
         /// `dealer`, nothing for a loss no creature deals.
         dealer: Option<crate::CombatId>,
-        /// `player.Osty`, once one is summoned.
-        osty: Option<crate::CombatId>,
         /// `props.IsPoweredAttack()`.
         powered: bool,
     },
     /// `ModifyPowerAmountGivenAdditive`: what `giver` adds to `power` it
-    /// applies to `target`. `player` is the player's creature, which a relic
-    /// reads its owner as.
+    /// applies to `target`.
     PowerAmountGivenAdditive {
         power: V::Power,
         giver: crate::CombatId,
         target: Option<crate::CombatId>,
-        player: crate::CombatId,
     },
     /// `ModifyPowerAmountGivenMultiplicative`, over what the additions left,
     /// which is `amount`.
@@ -3533,19 +3536,16 @@ pub enum ModifyHook<V: ContentVersion> {
         power: V::Power,
         giver: crate::CombatId,
         target: Option<crate::CombatId>,
-        player: crate::CombatId,
         amount: V::Number,
         /// `cardSource`: which copy gives the power.
         source: Option<crate::CardId<V>>,
     },
     /// `TryModifyPowerAmountReceived`: what `amount` of `power` lands on
-    /// `target`, as an application or a change to one it carries. `player`
-    /// is the player's creature, which a relic reads its owner as.
+    /// `target`, as an application or a change to one it carries.
     PowerAmountReceived {
         power: V::Power,
         target: crate::CombatId,
         amount: V::Number,
-        player: crate::CombatId,
     },
     /// `ModifyHandDraw`: how many cards the player draws to open a turn, in a
     /// room of this type.
@@ -3984,7 +3984,8 @@ pub enum EventHook<V: ContentVersion> {
         point: Option<V::MapPointType>,
         /// How many cards the deck holds, which a relic reads off its owner.
         deck: usize,
-        /// The player's hit points, which a relic reads off its owner.
+        /// The first player's hit points, which `Terminal` reads for every
+        /// player.
         player: PlayerHealth<V>,
         /// `room == RunState.BaseRoom`: not a room an event opened inside its
         /// own.
@@ -4032,12 +4033,8 @@ pub enum EventHook<V: ContentVersion> {
     /// listener answers with the rewards it adds.
     RestSiteHealRewards { mimicked: bool },
     /// `AfterCombatVictoryEarly`, raised on every listener before any hears
-    /// `AfterCombatVictory`, with the player's hit points, which a relic reads
-    /// off its owner.
-    CombatVictoryEarly {
-        room: V::RoomType,
-        player: PlayerHealth<V>,
-    },
+    /// `AfterCombatVictory`.
+    CombatVictoryEarly { room: V::RoomType },
     /// `AfterCombatVictory`, raised after `AfterCombatEnd` for a fight the
     /// run won, in a room of this type.
     CombatVictory { room: V::RoomType },
@@ -4146,8 +4143,6 @@ pub enum EventHook<V: ContentVersion> {
         delta: V::Number,
         /// `CombatManager.IsInProgress`.
         in_fight: bool,
-        /// The player's hit points, which a relic reads off its owner.
-        player: PlayerHealth<V>,
     },
     /// `AfterOrbEvoked`, once an orb's evoke has run. The creatures it hit
     /// stay with the fight, which [`HookEffect::DamageTargets`] reaches.
@@ -4212,8 +4207,6 @@ pub enum EventHook<V: ContentVersion> {
         powered: bool,
         /// `cardSource`, as the copy being played that deals it.
         card: Option<crate::CardId<V>>,
-        /// The fight's player, which a relic's owner is.
-        player: crate::CombatId,
         /// `CombatState.CurrentSide`: whose turn the hit lands in.
         side: V::CombatSide,
         /// `DamageResult.WasFullyBlocked`, which only the creature the hit was
@@ -4248,8 +4241,6 @@ pub enum EventHook<V: ContentVersion> {
         /// `DamageResult.WasBlockBroken`, on the creature the hit was aimed
         /// at.
         block_broken: bool,
-        /// The fight's player, which a relic's owner is.
-        player: crate::CombatId,
     },
     /// `MonsterMoveState.OnPerform`, after the move's behavior runs.
     MonsterMovePerformed { move_id: V::MoveId },
@@ -4397,8 +4388,6 @@ pub enum EventHook<V: ContentVersion> {
     /// them has cleared.
     BlockCleared {
         creature: crate::CombatId,
-        /// The player's creature, which a relic reads its owner as.
-        player: crate::CombatId,
         /// The player's `TurnNumber`.
         turn: V::Count,
     },
@@ -4428,8 +4417,6 @@ pub enum EventHook<V: ContentVersion> {
         /// Whether `target` holds Artifact.
         target_artifact: bool,
         applier: Option<crate::CombatId>,
-        /// The player's creature, which a relic reads its owner as.
-        player: crate::CombatId,
         /// `cardSource`: which copy gives the power.
         source: Option<crate::CardId<V>>,
     },
@@ -4481,8 +4468,6 @@ pub enum EventHook<V: ContentVersion> {
         breaker: Option<crate::CombatId>,
         /// The creature `breaker` is a pet of, where it is one.
         pet_of: Option<crate::CombatId>,
-        /// The fight's player, which a relic's owner is.
-        player: crate::CombatId,
     },
     /// `Hook.AfterDeath`, carrying the dead creature and the side it fought
     /// on.
@@ -6981,6 +6966,7 @@ pub trait Hooks: ContentVersion {
     fn relic_event_hook(
         state: &mut Self::RelicState,
         belt: &[Self::Relic],
+        owner: RelicOwner<Self>,
         hook: EventHook<Self>,
         asked: &mut HookEffects<Self>,
     );

@@ -19,10 +19,18 @@ pub struct State {
 /// A relic's owner is the player, and a fight here has one, so every card
 /// played is its owner's.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+
     state: &mut State,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
+    // `player != Owner`: another player's turn is not its owner's.
+    if let EventHook::EnergyReset { player, .. } = hook
+        && player != owner
+    {
+        return;
+    }
     match hook {
         EventHook::CardPlayed { card, .. }
             if V::card_kind(card) == Some(CardKind::Attack) && !state.last_turn =>

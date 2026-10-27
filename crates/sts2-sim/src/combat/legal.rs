@@ -55,7 +55,7 @@ impl<V: Rules> sts2_core::CardLogic for Logic<'_, V> {
     }
 
     fn osty(&self) -> bool {
-        super::board::osty::<V>(&self.0.creatures).is_some_and(|osty| osty.alive)
+        super::board::osty::<V>(&self.0.creatures, self.1).is_some_and(|osty| osty.alive)
     }
 
     fn hand_all_attacks(&self) -> bool {
@@ -723,7 +723,7 @@ fn previewed<V: Rules>(
                     ),
                     None,
                 ) => {
-                    let dealer = super::board::dealer_of::<V>(modifier, creatures);
+                    let dealer = super::board::dealer_of::<V>(seat, modifier, creatures);
                     // A card's `DamageVar` is a powered attack's unless its
                     // props say otherwise.
                     let powered = modifier != sts2_core::CardNumberModifier::UnpoweredDamage;
@@ -736,9 +736,8 @@ fn previewed<V: Rules>(
                 (Some(sts2_core::CardNumberModifier::PowerGiven), _) => {
                     let power = sts2_core::CardVars::power(var.id)
                         .unwrap_or_else(|| unreachable!("{:?} is a PowerVar of no power", var.id));
-                    let giver = super::board::player::<V>(creatures);
+                    let giver = seat.creature();
                     let (given, _) = super::board::given_by::<V>(
-                        seat,
                         fight,
                         giver,
                         target,
@@ -754,17 +753,21 @@ fn previewed<V: Rules>(
                 (Some(sts2_core::CardNumberModifier::ExtraDamage), _) => {
                     super::board::enchant_scaled::<V>(held, printed())
                 }
-                (Some(modifier), _) => match super::board::dealer_of::<V>(modifier, creatures) {
-                    Some(dealer) => super::board::effect_of::<V>(modifier, var.id, dealer, target)
+                (Some(modifier), _) => {
+                    match super::board::dealer_of::<V>(seat, modifier, creatures) {
+                        Some(dealer) => super::board::effect_of::<V>(
+                            modifier, var.id, dealer, target,
+                        )
                         .map(|effect| {
                             super::board::resolve::<V>(seat, fight, Some(held), effect).amount()
                         }),
-                    // `OstyDamageVar` with `Owner.Osty` null: `Hook.ModifyDamage`
-                    // with no dealer.
-                    None => Some(super::board::card_hit::<V>(
-                        seat, fight, None, target, held, var.id, true,
-                    )),
-                },
+                        // `OstyDamageVar` with `Owner.Osty` null: `Hook.ModifyDamage`
+                        // with no dealer.
+                        None => Some(super::board::card_hit::<V>(
+                            seat, fight, None, target, held, var.id, true,
+                        )),
+                    }
+                }
                 (None, _) => None,
             };
             // A number no hook reaches reads what the card reads.

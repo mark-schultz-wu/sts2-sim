@@ -971,11 +971,13 @@ pub(super) fn play_count<V: Rules, S: LendsCombat>(
         {
             continue;
         }
+        let owner = live.relic_owner(seat);
         let (state, belt) = belts[seat].state_beside(slot);
         let mut asked = sts2_core::HookEffects::new();
         V::relic_event_hook(
             state,
             belt,
+            owner,
             sts2_core::EventHook::PlayCountModified {
                 card: card.face.ident.card,
             },
@@ -1479,7 +1481,12 @@ fn run_deferred<V: Rules>(
                 ended,
             ),
             super::live::Deferred::OwnCommandOver { seat, slot, relic } => {
-                super::relic::own_command_over::<V>(&mut fighting.belts[seat], slot, relic);
+                super::relic::own_command_over::<V>(
+                    fighting.live.relic_owner(seat),
+                    &mut fighting.belts[seat],
+                    slot,
+                    relic,
+                );
                 ended
             }
             super::live::Deferred::PlayOver => check_for_empty_hand::<V, _>(

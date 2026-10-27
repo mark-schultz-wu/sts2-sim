@@ -15,15 +15,18 @@ pub struct State {
 /// `AfterDamageReceived` on its owner, in a fight in progress, adds what the
 /// hit took.
 /// `BeforeSideTurnStart` on its owner's side starts the count again.
-pub(super) fn event_hook<V: crate::Build>(state: &mut State, hook: EventHook<V>) {
+pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    state: &mut State,
+    hook: EventHook<V>,
+) {
     match hook {
         EventHook::DamageReceived {
             target,
             unblocked,
-            player,
             in_progress: true,
             ..
-        } if target == player => state.damage_received_this_turn += unblocked,
+        } if target == owner => state.damage_received_this_turn += unblocked,
         EventHook::BeforeSideTurnStart {
             side: CombatSide::Player,
             ..
@@ -34,13 +37,16 @@ pub(super) fn event_hook<V: crate::Build>(state: &mut State, hook: EventHook<V>)
 
 /// `ModifyHpLostAfterOsty` on its owner in a fight: no more than what the
 /// turn has left of its loss.
-pub(super) fn modify_hook<V: crate::Build>(state: &State, hook: ModifyHook<V>) -> Modify<Number> {
+pub(super) fn modify_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    state: &State,
+    hook: ModifyHook<V>,
+) -> Modify<Number> {
     match hook {
         ModifyHook::HpLostAfterOsty {
             target,
-            player,
             in_fight: true,
-        } if target == player => {
+        } if target == owner => {
             Modify::AtMost(V::Relic::BEATING_REMNANT_MAX_HP_LOSS - state.damage_received_this_turn)
         }
         ModifyHook::HpLostAfterOsty { .. } => Modify::Nothing,

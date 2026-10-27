@@ -2664,6 +2664,7 @@ impl<V: Rules> State<V> {
             V::relic_event_hook(
                 &mut held.state,
                 self.belts[seat].relics(),
+                self.relic_owner(seat),
                 sts2_core::EventHook::CharacterNamed(character),
                 &mut asked,
             );
@@ -2683,8 +2684,13 @@ impl<V: Rules> State<V> {
             *Arc::make_mut(&mut self.players[seat].unheld_card_rewards) = unheld;
         }
         let (character, act, turn) = (self.character(seat), self.act, self.player_turn(seat));
-        let effects =
-            crate::combat::obtained::<V>(self.belts[seat].state_beside(slot), character, act, turn);
+        let effects = crate::combat::obtained::<V>(
+            self.relic_owner(seat),
+            self.belts[seat].state_beside(slot),
+            character,
+            act,
+            turn,
+        );
         effects.into_iter().map(Then::Effect).collect()
     }
 
@@ -3037,6 +3043,7 @@ impl<V: Rules> State<V> {
                     let (character, act, turn) =
                         (self.character(seat), self.act, self.player_turn(seat));
                     let effects = crate::combat::obtained::<V>(
+                        self.relic_owner(seat),
                         self.belts[seat].state_beside(slot),
                         character,
                         act,
@@ -3065,6 +3072,7 @@ impl<V: Rules> State<V> {
                     let (character, act, turn) =
                         (self.character(seat), self.act, self.player_turn(seat));
                     let effects = crate::combat::obtained::<V>(
+                        self.relic_owner(seat),
                         self.belts[seat].state_beside(slot),
                         character,
                         act,
@@ -3102,10 +3110,11 @@ impl<V: Rules> State<V> {
                     else {
                         unimplemented!("an option of {relic:?}, which the run does not carry");
                     };
+                    let relic_owner = self.relic_owner(seat);
                     let (state, belt) = self.belts[seat].state_beside(slot);
                     let mut asked = sts2_core::HookEffects::new();
                     let taken = sts2_core::EventHook::RestOptionTaken;
-                    V::relic_event_hook(state, belt, taken, &mut asked);
+                    V::relic_event_hook(state, belt, relic_owner, taken, &mut asked);
                     if let Some(effect) = asked.first() {
                         unimplemented!("{relic:?} asking for {effect:?} as its option is taken");
                     }
@@ -3754,6 +3763,14 @@ impl<V: Rules> State<V> {
         self.players[seat].hp = (self.players[seat].hp + amount).min(self.players[seat].max_hp);
     }
 
+    /// Seat `seat`'s relics' `Owner`: its player's creature and health.
+    fn relic_owner(&self, seat: sts2_core::SeatIndex) -> sts2_core::RelicOwner<V> {
+        sts2_core::RelicOwner {
+            creature: seat.creature(),
+            health: self.player_health(seat),
+        }
+    }
+
     /// The player's hit points, as a hook hands them to a relic.
     fn player_health(&self, seat: sts2_core::SeatIndex) -> sts2_core::PlayerHealth<V> {
         sts2_core::PlayerHealth {
@@ -3820,7 +3837,6 @@ impl<V: Rules> State<V> {
                 delta: -num_traits::cast::<_, V::Number>(amount)
                     .expect("a health fits a game number"),
                 in_fight: false,
-                player: self.player_health(seat),
             };
             if let Some(effect) = self.notify_run(hook).first() {
                 unimplemented!("a relic asking for {effect:?} as damage lands outside a fight");
@@ -3903,9 +3919,10 @@ impl<V: Rules> State<V> {
             num_traits::cast(self.players[seat].max_hp).expect("maximum health fits a game number");
         let hook = sts2_core::EventHook::DeathPrevented { max_hp };
         let relic = self.belts[seat][slot].relic;
+        let relic_owner = self.relic_owner(seat);
         let (state, belt) = self.belts[seat].state_beside(slot);
         let mut asked = sts2_core::HookEffects::new();
-        V::relic_event_hook(state, belt, hook, &mut asked);
+        V::relic_event_hook(state, belt, relic_owner, hook, &mut asked);
         for effect in asked {
             match effect {
                 sts2_core::HookEffect::Heal(amount) => {
@@ -3932,14 +3949,11 @@ impl<V: Rules> State<V> {
         for hook in [
             sts2_core::ModifyHook::HpLostAfterOsty {
                 target: player,
-                player,
                 in_fight: false,
             },
             sts2_core::ModifyHook::HpLostAfterOstyLate {
                 target: player,
-                player,
                 dealer: None,
-                osty: None,
                 powered: false,
             },
         ] {
@@ -4551,8 +4565,9 @@ impl<V: Rules> State<V> {
             let mut asked = sts2_core::HookEffects::new();
             match copier {
                 Copier::Relic(owner, slot) => {
+                    let relic_owner = self.relic_owner(owner);
                     let (state, belt) = self.belts[owner].state_beside(slot);
-                    V::relic_event_hook(state, belt, made, &mut asked);
+                    V::relic_event_hook(state, belt, relic_owner, made, &mut asked);
                 }
                 Copier::Modifier(at) => {
                     let entry = self.shared.modifiers[at];
@@ -4736,8 +4751,9 @@ impl<V: Rules> State<V> {
                 unimplemented!("{enchanted:?} on a deck card hearing {hook:?}")
             }
             RunListener::Relic { seat, slot } => {
+                let relic_owner = self.relic_owner(seat);
                 let (state, belt) = self.belts[seat].state_beside(slot);
-                V::relic_event_hook(state, belt, hook, asked);
+                V::relic_event_hook(state, belt, relic_owner, hook, asked);
             }
             RunListener::Potion { seat, potion } => {
                 if !self.players[seat].potions.contains(&potion) {
@@ -5425,8 +5441,9 @@ impl<V: Rules> State<V> {
                         encounter,
                         from_combat,
                     };
+                    let relic_owner = self.relic_owner(seat);
                     let (state, belt) = self.belts[seat].state_beside(slot);
-                    V::relic_event_hook(state, belt, options, &mut asked);
+                    V::relic_event_hook(state, belt, relic_owner, options, &mut asked);
                     if let Some(effect) = asked.first() {
                         unimplemented!("a relic obtained over a card reward asking for {effect:?}");
                     }
@@ -5463,14 +5480,16 @@ impl<V: Rules> State<V> {
                 card: *card,
                 card_reward,
             };
+            let relic_owner = self.relic_owner(owner);
             let (state, belt) = self.belts[owner].state_beside(slot);
-            V::relic_event_hook(state, belt, option, &mut asked);
+            V::relic_event_hook(state, belt, relic_owner, option, &mut asked);
             *card = rewrite(*card, asked);
         }
         let mut asked = sts2_core::HookEffects::new();
         let pick = sts2_core::EventHook::CardRewardPick { card_reward };
+        let relic_owner = self.relic_owner(owner);
         let (state, belt) = self.belts[owner].state_beside(slot);
-        V::relic_event_hook(state, belt, pick, &mut asked);
+        V::relic_event_hook(state, belt, relic_owner, pick, &mut asked);
         for effect in asked {
             match effect {
                 sts2_core::HookEffect::EnchantOneRewardCard {
@@ -6684,7 +6703,6 @@ impl<V: Rules> State<V> {
                 pet_of: None,
                 delta,
                 in_fight: false,
-                player: self.player_health(seat),
             };
             if let Some(effect) = self.notify_run(hook).first() {
                 unimplemented!(

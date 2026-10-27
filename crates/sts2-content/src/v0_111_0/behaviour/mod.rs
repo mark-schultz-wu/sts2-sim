@@ -292,10 +292,11 @@ impl crate::build::OwnRules for V {
 
     fn own_shared_relic_event_hook(
         state: &mut crate::behaviour::relics::State<V>,
+        owner: sts2_core::CombatId,
         hook: sts2_core::EventHook<V>,
         asked: &mut sts2_core::HookEffects<V>,
     ) -> Option<()> {
-        relics::own_shared_relic_event_hook(state, hook, asked)
+        relics::own_shared_relic_event_hook(state, owner, hook, asked)
     }
 
     fn own_potion_use_on_run(

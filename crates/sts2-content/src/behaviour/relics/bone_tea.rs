@@ -37,10 +37,18 @@ impl State {
 /// for a turn that is not its owner's. Each of those is an arm this does not
 /// match.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+
     state: &mut State,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
+    // `player != Owner`: another player's turn is not its owner's.
+    if let EventHook::PlayerTurnStart { player, .. } = hook
+        && player != owner
+    {
+        return;
+    }
     match hook {
         EventHook::SideTurnStart {
             side: CombatSide::Player,

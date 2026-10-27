@@ -663,7 +663,7 @@ impl<V: Rules, C: Cursor<V>> Walker<V, C> {
                         unimplemented!("the belt changing under a walk over {hook:?}")
                     }
                     let (state, belt) = belts[seat].state_beside(usize::from(slot));
-                    V::relic_event_hook(state, belt, hook, asked);
+                    V::relic_event_hook(state, belt, live.relic_owner(seat), hook, asked);
                     Listener::Relic { seat, slot }
                 }
                 Snapped::Card { seat, id } => {
@@ -1172,6 +1172,7 @@ fn first_of<V: Rules>(
 ///
 /// A relic that is not on the belt.
 pub(crate) fn ask_relic<V: Rules>(
+    live: &Live<V>,
     seat: sts2_core::SeatIndex,
     belts: &mut Belts<V>,
     relic: V::Relic,
@@ -1183,7 +1184,7 @@ pub(crate) fn ask_relic<V: Rules>(
         .expect("the relic asked is on the belt");
     let (state, belt) = belts[seat].state_beside(slot);
     let mut asked = sts2_core::HookEffects::new();
-    V::relic_event_hook(state, belt, hook, &mut asked);
+    V::relic_event_hook(state, belt, live.relic_owner(seat), hook, &mut asked);
     asked
 }
 
@@ -1242,16 +1243,7 @@ pub(crate) fn combat_ended<V: Rules>(
             effect => live.leaving.push(effect),
         }
     }
-    let early = |live: &mut Live<V>| EventHook::CombatVictoryEarly {
-        room,
-        player: {
-            let player = player_of(seat, live);
-            sts2_core::PlayerHealth {
-                hp: player.hp,
-                max_hp: player.max_hp,
-            }
-        },
-    };
+    let early = |_: &mut Live<V>| EventHook::CombatVictoryEarly { room };
     let hook = early(live);
     let mut walking = Walking::begin(live, belts, hook);
     while let Some((_, effect)) = walking

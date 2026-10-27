@@ -106,6 +106,7 @@ pub(crate) fn enter<V: Rules>(
         kept: Vec::new(),
         encounter,
         encounter_state: sts2_core::EncounterModel::new(encounter),
+        scaling: monster::Scaling::of::<V>(players.len(), encounter, entering.act),
         in_progress: false,
         point: entering.coord,
         extra_rewards: Vec::new(),
@@ -162,11 +163,12 @@ pub(crate) fn enter<V: Rules>(
     let Live {
         creatures,
         machines,
+        scaling,
         ..
     } = &mut *live;
     monster::initialize::<V>(
         ascension,
-        monster::Scaling::of::<V>(players.len(), encounter, entering.act),
+        *scaling,
         encounter,
         &mut streams,
         monster::Roster {

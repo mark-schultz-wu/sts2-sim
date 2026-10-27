@@ -237,10 +237,11 @@ pub(crate) fn modifier_ported<V: crate::Build>(modifier: V::Modifier) -> bool {
 pub(crate) fn relic_event_hook<V: crate::Build>(
     state: &mut V::RelicState,
     belt: &[V::Relic],
+    owner: sts2_core::RelicOwner<V>,
     hook: sts2_core::EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
-    crate::behaviour::relics::event_hook(state, belt, hook, asked)
+    crate::behaviour::relics::event_hook(state, belt, owner, hook, asked)
 }
 
 pub(crate) fn potion_event_hook<V: crate::Build>(

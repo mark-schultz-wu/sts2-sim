@@ -62,29 +62,33 @@ run as its own machine sees it. The work goes in this order:
 3. The co-op rules, in the order the runs reach them. A run of several
    players starts, each player meets Neow, and the map takes votes (done).
    The card pools deal the co-op cards in a run of several players (done).
-   Every seed matches each step through the first fight's opening. The
-   fight holds every player's creature and shuffled deck, and scales
-   monster health by the player count. Each relic hears only its own
-   player's draw and energy. The turn ends once every player ends it,
-   with each phase run for each player in seat order. Next, in the
-   order of `docs/COOP-FIGHTS.md`:
-   - A monster's move over every player. About 90 places in `Board` take
-     "the player" from `Board::seat`, which panics for a monster's move in
-     a fight of several. An attack hits every living player, and a status
-     card or debuff a move gives goes to each. Most hunted runs stop at
-     the enemies' first move.
-   - A question for each seat, in the action that asked it. Each phase of
-     the turn's end panics at one in a fight of several players. Silent's
-     Survivor asks seat 0 the discard now. The rest of the scheduler comes
-     with it, since a second seat makes each part testable (steps 3 and 4
-     of `docs/SCHEDULER.md`). Card plays, potions and the turn's end go
+   Every seed matches each step of its first fight until a question or
+   the fight's end. The fight holds every player, and the turn ends once
+   every player ends it. A monster's move reaches every player, with its
+   health and powered block scaled by the player count. Each relic reads
+   its own owner. Next, in the order of `docs/COOP-FIGHTS.md`:
+   - A question for each seat, in the action that asked it. Silent's
+     Survivor asks seat 0 the discard now, where five of eight hunted runs
+     part. Each phase of the turn's end panics at one in a fight of
+     several players. The rest of the scheduler comes with it, since a
+     second seat makes each part testable (steps 3 and 4 of
+     `docs/SCHEDULER.md`). Card plays, potions and the turn's end go
      through the queues, with the action types, gating and cancellations.
-   - Monster block and power scaling by the player count.
+   - The fight's end for each player. Seat 1 sees seat 0's health and card
+     rewards after a won fight, where the other three runs part.
+   - Monster power scaling by the player count.
    - A potion thrown at another player, which panics: the potions act on
      their drinker.
-   - Content that reads every card or hook as its owner's, which says "a
-     fight here has one" in its comment. The game checks the owner in
-     each.
+   - Content that reads "the player" where the game reads an owner:
+     - `FightView::player`, which about a dozen power rules read, panics
+       in a fight of several players.
+     - The decision hooks `ShouldDie` and `ShouldDieLate` carry the
+       fight's player for a relic to compare with.
+     - `RoomEntered` carries the first player's deck size and health,
+       which a relic and the Terminal modifier read.
+     - Content whose comment says "a fight here has one" player.
+     - The rest of `Board::seat`'s callers, which a card or potion reaches
+       for its own player and a monster's move does not yet.
    - Then rewards, rest sites, shops, events, and death and revival.
 4. Co-op content, as the runs reach it. Massive Scroll is ported.
 

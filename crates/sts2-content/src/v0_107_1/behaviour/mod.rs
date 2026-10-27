@@ -291,6 +291,7 @@ impl crate::build::OwnRules for V {
 
     fn own_shared_relic_event_hook(
         _state: &mut crate::behaviour::relics::State<V>,
+        _owner: sts2_core::CombatId,
         _hook: sts2_core::EventHook<V>,
         _asked: &mut sts2_core::HookEffects<V>,
     ) -> Option<()> {

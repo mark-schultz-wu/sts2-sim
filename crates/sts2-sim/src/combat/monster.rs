@@ -144,6 +144,17 @@ impl Scaling {
         }
     }
 
+    /// `ModifyBlockMultiplicative`'s factor on an enemy's powered block: the
+    /// player count for two players, and that times the act's factor for
+    /// more. Nothing for one player, whose factor is one.
+    pub(crate) fn block(self) -> Option<sts2_core::Decimal> {
+        match self.players {
+            0 | 1 => None,
+            2 => Some(sts2_core::Decimal::from(2)),
+            players => Some(sts2_core::Decimal::from(players) * self.factor),
+        }
+    }
+
     /// `ScaleMonsterHpForMultiplayer`: `hp * players * factor`, truncated
     /// as `SetMaxHpInternal` stores it.
     pub(crate) fn health<V: Rules>(self, hp: V::Health) -> V::Health {

@@ -445,7 +445,7 @@ fn player_setup<V: Rules>(
         false,
     );
     let base = base_energy::<V>(live, seat);
-    let max = super::board::max_energy::<V>(listen::Walk { live, belts }, base);
+    let max = super::board::max_energy::<V>(listen::Walk { live, belts }, seat, base);
     live.players[seat].energy = if kept {
         live.players[seat].energy + max
     } else {
@@ -2696,7 +2696,12 @@ pub(super) fn ask_out_walk<V: Rules>(
         if let (Listener::Relic { seat, slot }, sts2_core::HookEffect::Draw(_)) = (listener, effect)
         {
             let relic = belts[seat][usize::from(slot)].relic;
-            super::relic::own_command_over::<V>(&mut belts[seat], slot, relic);
+            super::relic::own_command_over::<V>(
+                live.relic_owner(seat),
+                &mut belts[seat],
+                slot,
+                relic,
+            );
         }
     }
 }
@@ -3715,7 +3720,7 @@ fn clear_block<V: Rules>(
                     .find(|c| c.id == creature)
                     .map_or_else(num_traits::zero, |held| held.block);
                 let hook = sts2_core::EventHook::BlockClearPrevented { block };
-                for effect in listen::ask_relic(seat, belts, relic, hook) {
+                for effect in listen::ask_relic(live, seat, belts, relic, hook) {
                     match effect {
                         sts2_core::HookEffect::LoseSomeBlock(amount) => {
                             let ascension = live.ascension;
@@ -3742,7 +3747,6 @@ fn clear_block<V: Rules>(
     for creature in clearing {
         let hook = sts2_core::EventHook::BlockCleared {
             creature,
-            player,
             turn: live.turn,
         };
         let mut walking = listen::Walking::begin(live, belts, hook);
@@ -3864,7 +3868,12 @@ fn walk_turn_end<V: Rules>(
                 match (listener, effect) {
                     (Listener::Relic { seat, slot }, sts2_core::HookEffect::Draw(_)) => {
                         let relic = belts[seat][usize::from(slot)].relic;
-                        super::relic::own_command_over::<V>(&mut belts[seat], slot, relic);
+                        super::relic::own_command_over::<V>(
+                            live.relic_owner(seat),
+                            &mut belts[seat],
+                            slot,
+                            relic,
+                        );
                     }
                     (
                         Listener::Power {
@@ -3997,7 +4006,7 @@ fn tick_down<V: Rules>(
     // `PowerCmd.Decrement`, which is `ModifyAmount` by one down.
     let fight = listen::Walk { live, belts };
     let (_, modifiers) =
-        super::board::received_by::<V>(seat, fight, owner, power, -num_traits::one::<V::Number>());
+        super::board::received_by::<V>(fight, owner, power, -num_traits::one::<V::Number>());
     if !modifiers.is_empty() {
         unimplemented!("a listener changing a {power:?} tick");
     }

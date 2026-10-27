@@ -90,6 +90,7 @@ pub(crate) fn own_relic(relic: Relic) -> bool {
 /// A shared relic's `EventHook`, for a hook this build answers itself.
 pub(crate) fn own_shared_relic_event_hook(
     state: &mut State<V>,
+    owner: sts2_core::CombatId,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) -> Option<()> {
@@ -97,6 +98,14 @@ pub(crate) fn own_shared_relic_event_hook(
     use crate::ids::CardIds as _;
     use crate::vars::RelicVars as _;
 
+    // `player != Owner`: another player's turn is not its owner's, for each
+    // relic here that hears it.
+    if let EventHook::BeforeHandDraw { player, .. } = hook
+        && player != owner
+        && matches!(state, State::JeweledMask | State::PollinousCore(_))
+    {
+        return Some(());
+    }
     match (state, hook) {
         // `MassiveScroll.AfterObtained` lists the character's pool and then
         // the colorless one, where v0.107.1's `Concat` put colorless first.
@@ -178,17 +187,16 @@ pub(crate) fn own_shared_relic_event_hook(
                 creature,
                 breaker,
                 pet_of,
-                player,
             },
         ) => {
             use crate::ids::PowerIds as _;
 
-            if (breaker == Some(player) || pet_of == Some(player)) && creature != player {
+            if (breaker == Some(owner) || pet_of == Some(owner)) && creature != owner {
                 asked.push(HookEffect::ApplyPower {
                     target: creature,
                     power: <V as sts2_core::ContentVersion>::Power::VULNERABLE_POWER,
                     amount: PowerAmount::Counted(Relic::HAND_DRILL_VULNERABLE_POWER),
-                    applier: Some(player),
+                    applier: Some(owner),
                 });
             }
             Some(())

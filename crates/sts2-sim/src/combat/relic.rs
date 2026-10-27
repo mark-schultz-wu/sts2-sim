@@ -8,6 +8,7 @@ use sts2_core::{EventHook, Rules};
 /// `AfterObtained`, which `RelicCmd.Obtain` gives the relic it just handed
 /// over and to no other, once it is on the belt.
 pub(crate) fn obtained<V: Rules>(
+    owner: sts2_core::RelicOwner<V>,
     (state, belt): (&mut V::RelicState, &[V::Relic]),
     character: V::Character,
     act: usize,
@@ -17,6 +18,7 @@ pub(crate) fn obtained<V: Rules>(
     V::relic_event_hook(
         state,
         belt,
+        owner,
         EventHook::Obtained {
             character,
             act,
@@ -34,6 +36,7 @@ pub(crate) fn obtained<V: Rules>(
 ///
 /// A belt that changed under the command, or a relic that asks for more.
 pub(crate) fn own_command_over<V: Rules>(
+    owner: sts2_core::RelicOwner<V>,
     belt: &mut crate::run::Belt<V>,
     slot: u8,
     relic: V::Relic,
@@ -44,7 +47,7 @@ pub(crate) fn own_command_over<V: Rules>(
     }
     let (state, belt) = belt.state_beside(slot);
     let mut asked = sts2_core::HookEffects::new();
-    V::relic_event_hook(state, belt, EventHook::OwnCommandOver, &mut asked);
+    V::relic_event_hook(state, belt, owner, EventHook::OwnCommandOver, &mut asked);
     if !asked.is_empty() {
         unimplemented!("{relic:?} asking for {asked:?} once its own command is over");
     }

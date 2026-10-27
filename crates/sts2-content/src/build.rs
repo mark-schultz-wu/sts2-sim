@@ -442,6 +442,7 @@ pub trait OwnRules: ContentVersion + Sized {
     /// names, or nothing for a hook the shared relics answer for it.
     fn own_shared_relic_event_hook(
         state: &mut crate::behaviour::relics::State<Self>,
+        owner: sts2_core::CombatId,
         hook: sts2_core::EventHook<Self>,
         asked: &mut sts2_core::HookEffects<Self>,
     ) -> Option<()>
@@ -839,10 +840,13 @@ macro_rules! rules {
                 fn relic_event_hook(
                     state: &mut Self::RelicState,
                     belt: &[Self::Relic],
+                    owner: sts2_core::RelicOwner<Self>,
                     hook: EventHook<Self>,
                     asked: &mut HookEffects<Self>,
                 ) {
-                    crate::behaviour::rules::relic_event_hook::<Self>(state, belt, hook, asked)
+                    crate::behaviour::rules::relic_event_hook::<Self>(
+                        state, belt, owner, hook, asked,
+                    )
                 }
 
                 fn potion_event_hook(

@@ -1728,7 +1728,15 @@ impl<V: Rules> sts2_core::FightView<V> for Onlookers<'_, V> {
     }
 
     fn player(&self) -> CombatId {
-        super::board::player::<V>(self.creatures)
+        let mut players = self
+            .creatures
+            .iter()
+            .filter(|creature| matches!(creature.model, Some(sts2_core::ModelId::Character(_))));
+        let first = players.next().expect("a fight has a player in it").id;
+        if players.next().is_some() {
+            unimplemented!("which player a power reads in a fight of several players");
+        }
+        first
     }
 
     /// The other side's creatures, a pet among them.
@@ -2640,6 +2648,8 @@ pub(crate) struct Live<V: Rules> {
     pub(super) encounter: V::Encounter,
     /// `CombatState.Encounter`'s own fields.
     pub(super) encounter_state: V::EncounterState,
+    /// `MultiplayerScalingModel`: how the player count scales the monsters.
+    pub(super) scaling: super::monster::Scaling,
     /// `CombatManager.IsInProgress`, which `StartCombatInternal` sets just
     /// before `BeforeCombatStart`. `AfterRoomEntered` runs before it.
     pub(super) in_progress: bool,
@@ -3005,6 +3015,7 @@ impl<V: Rules> Clone for Live<V> {
             kept,
             encounter,
             encounter_state,
+            scaling,
             in_progress,
             point,
             extra_rewards,
@@ -3046,6 +3057,7 @@ impl<V: Rules> Clone for Live<V> {
         kept.clone_from(&source.kept);
         *encounter = source.encounter;
         *encounter_state = source.encounter_state;
+        *scaling = source.scaling;
         *in_progress = source.in_progress;
         *point = source.point;
         extra_rewards.clone_from(&source.extra_rewards);
@@ -3505,7 +3517,7 @@ impl<V: Rules> Live<V> {
         let walk = || super::listen::Walk { live: self, belts };
         let mut reported = orbs.clone();
         for held in &mut reported.queue {
-            let modify = |base| super::board::orb_value::<V>(walk(), held.orb, base);
+            let modify = |base| super::board::orb_value::<V>(walk(), seat, held.orb, base);
             let passive = V::orb_passive_val(held, modify);
             held.evoke = V::orb_evoke_val(held, modify);
             held.passive = passive;
@@ -3575,6 +3587,18 @@ impl<V: Rules> Live<V> {
             let owner = self.creatures.iter().find(|c| c.id == creature)?.owner?;
             player(owner)
         })
+    }
+
+    /// Seat `seat`'s relics' `Owner`: its player's creature and health.
+    pub(crate) fn relic_owner(&self, seat: sts2_core::SeatIndex) -> sts2_core::RelicOwner<V> {
+        let player = self.player(seat);
+        sts2_core::RelicOwner {
+            creature: player.id,
+            health: sts2_core::PlayerHealth {
+                hp: player.hp,
+                max_hp: player.max_hp,
+            },
+        }
     }
 
     /// Seat `seat`'s player. A fight adds its players first, in seat order.
@@ -3718,6 +3742,8 @@ impl<V: Rules> Live<V> {
         owner: CombatId,
         at: usize,
     ) -> sts2_core::HookEffects<V> {
+        // What it does to cards as it comes off is to its owner's.
+        let seat = self.seat_of(owner).unwrap_or(seat);
         let mut left = sts2_core::HookEffects::new();
         let Some(carrier) = self
             .creatures
@@ -4054,6 +4080,11 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
                 <_ as sts2_core::EncounterModel<sts2_content::v0_107_1::V0_107_1>>::new(
                     Encounter::SlimesWeak,
                 ),
+            scaling: super::monster::Scaling::of::<sts2_content::v0_107_1::V0_107_1>(
+                1,
+                Encounter::SlimesWeak,
+                0,
+            ),
             in_progress: true,
             point: None,
             extra_rewards: Vec::new(),

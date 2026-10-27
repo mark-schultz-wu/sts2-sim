@@ -7,14 +7,15 @@ source, `target/decompiled/v0.111.0-1579942752/`.
 ## Where the simulator stands
 
 `cargo xtask coop --hunt` plays a simulator seat beside each game seat.
-Every seed matches each step through its first fight's opening. The run
-builds a fight of every player: their creatures first, their decks
-shuffled in seat order, and the monsters' health scaled. Each relic hears
-a draw or energy hook only for its own player, as each of the game's
-checks `player != Owner`. An `AnyPlayer` potion can be aimed at any
-player. A player who ends the turn waits with no moves until every player
-ends it. Then each phase of the turn's end runs for each player in seat
-order, and the side's hooks run once.
+Every seed matches each step of its first fight until a question or the
+fight's end. The run builds a fight of every player: their creatures
+first, their decks shuffled in seat order, and the monsters' health
+scaled. Each relic reads its own owner, as each of the game's compares
+with `Owner`. An `AnyPlayer` potion can be aimed at any player. A player
+who ends the turn waits with no moves until every player ends it. Then
+each phase of the turn's end runs for each player in seat order, and the
+side's hooks run once. A monster's attack hits every living player, the
+cards a move gives go to each, and an enemy's powered block is scaled.
 
 What still assumes one player:
 
@@ -22,10 +23,10 @@ What still assumes one player:
   command frames.
 - A phase of the turn's end that waits on a question, and an extra turn,
   panic in a fight of several players.
-- A monster's move reaches one player (`Board::seat_of_several` panics).
-- A player's death beside a living one, cards given to several players,
-  and a potion thrown at another player panic.
-- Nothing scales monster block or powers yet.
+- A player's death beside a living one, and a potion thrown at another
+  player, panic.
+- Nothing scales monster powers yet.
+- `FightView::player` panics in a fight of several players.
 - `monster.rs` reads seat 0's stream positions.
 
 ## The game's model
