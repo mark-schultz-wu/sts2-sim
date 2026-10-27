@@ -224,6 +224,41 @@ pub(crate) fn clone_starts_anew<V: crate::Build>(power: V::Power) -> bool {
         || power == V::Power::SERPENT_FORM_POWER
 }
 
+/// `GetScaledAmountForMultiplayer` for a power whose
+/// `ShouldScaleInMultiplayer` holds, and `None` for any other. The default
+/// is `amount * players * factor`. Plating, Artifact, Slippery and Skittish
+/// have formulas of their own.
+pub(crate) fn scaled_for_multiplayer<V: crate::Build>(
+    power: V::Power,
+    amount: sts2_core::Decimal,
+    players: usize,
+    factor: sts2_core::Decimal,
+) -> Option<sts2_core::Decimal> {
+    use crate::generated::powers::PowerFlag;
+    use sts2_core::Decimal;
+
+    let crate::Field::Constant(scales) = sts2_core::Table::data(power)
+        .flags
+        .get(PowerFlag::ScalesInMultiplayer)
+    else {
+        unimplemented!("whether {power:?} scales in multiplayer")
+    };
+    if !scales {
+        return None;
+    }
+    let players = Decimal::from(players);
+    let others = players - Decimal::ONE;
+    Some(match power {
+        __c0 if __c0 == V::Power::PLATING_POWER => (others * Decimal::TWO + Decimal::ONE) * amount,
+        __c0 if __c0 == V::Power::ARTIFACT_POWER => amount + others,
+        __c0 if __c0 == V::Power::SLIPPERY_POWER => amount * players,
+        __c0 if __c0 == V::Power::SKITTISH_POWER => {
+            amount * (Decimal::ONE + others * Decimal::new(5, 1))
+        }
+        _ => amount * players * factor,
+    })
+}
+
 /// `VoidFormPower.HideTemporaryZeroCostVisual`'s count, which leaves no
 /// card free for the rest of the turn.
 const VOID_FORM_SPENT: u32 = 999_999_999;
@@ -5033,15 +5068,25 @@ pub(crate) fn event_hook<V: crate::Build>(
         {
             unimplemented!("an endless Sword Sage")
         }
-        // `PlatingPower.AfterSideTurnStart` on a monster: one off each of
-        // its side's turns once the first round is over.
-        (__c0, PowerAmount::Counted(_), EventHook::SideTurnStart { side, round, .. })
-            if __c0 == V::Power::PLATING_POWER
-                && (owner == CombatSide::Enemy
-                    && side == owner
-                    && round > <V as sts2_core::ContentVersion>::Count::from(1u8)) =>
+        // `PlatingPower.AfterSideTurnStart` on a monster: its `Decrement` off
+        // each of its side's turns once the first round is over, by
+        // `PowerCmd.ModifyAmount`. `AfterApplied` set that to the run's
+        // player count as it landed on the enemy.
+        (
+            __c0,
+            PowerAmount::Counted(_),
+            EventHook::SideTurnStart {
+                side,
+                round,
+                players,
+                ..
+            },
+        ) if __c0 == V::Power::PLATING_POWER
+            && (owner == CombatSide::Enemy
+                && side == owner
+                && round > <V as sts2_core::ContentVersion>::Count::from(1u8)) =>
         {
-            Some(HookEffect::Decrement)
+            Some(HookEffect::ModifyAmount(-Number::from(players)))
         }
         // `PlatingPower.BeforeSideTurnStart`: a monster that opens the fight
         // with Plating opens it behind that much block. It answers each

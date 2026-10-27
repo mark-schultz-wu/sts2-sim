@@ -3172,6 +3172,7 @@ pub(super) fn side_turn_started<V: Rules>(
         round: live.round,
         room: live.room(),
         extra,
+        players: u8::try_from(live.players.len()).expect("a fight's players fit a u8"),
     };
     // Each listener acts as the walk reaches it.
     let mut walk = listen::Walker::begin(live, belts, hook);
@@ -3197,6 +3198,15 @@ pub(super) fn side_turn_started<V: Rules>(
                     let mut board =
                         Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
                     board.modify_amount(owner, power, -num_traits::one::<V::Number>());
+                }
+                // `PowerCmd.ModifyAmount(this, offset)`.
+                sts2_core::HookEffect::ModifyAmount(offset) => {
+                    let Listener::Power { owner, power, .. } = listener else {
+                        unimplemented!("{listener:?} changing its amount as a side turn starts")
+                    };
+                    let mut board =
+                        Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
+                    board.modify_amount(owner, power, offset);
                 }
                 // `PowerCmd.Apply<P>(Owner, amount, Owner)`. A relic's owner is
                 // the player.

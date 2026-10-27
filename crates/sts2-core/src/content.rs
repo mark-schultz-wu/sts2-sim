@@ -4319,6 +4319,9 @@ pub enum EventHook<V: ContentVersion> {
         /// `CombatManager.PlayersTakingExtraTurn` is not empty: the player
         /// takes another turn, and the enemy's turn did not run between.
         extra: bool,
+        /// `RunState.Players.Count`, which an enemy's Plating loses each of
+        /// its turns.
+        players: u8,
     },
     BeforeSideTurnEndEarly {
         side: V::CombatSide,
@@ -6884,6 +6887,17 @@ pub trait Hooks: ContentVersion {
     /// Where a power's model keeps the clone `kept` of a card, which
     /// [`Fight::keep_card_on_power`] hands it.
     fn power_kept_card(state: &mut Self::PowerState, kept: crate::CardId<Self>);
+
+    /// `PowerModel.GetScaledAmountForMultiplayer`: the amount of `power`
+    /// that lands on an enemy in a fight of `players`, where `factor` is the
+    /// act's. `None` for a power whose `ShouldScaleInMultiplayer` is false,
+    /// which the game does not ask.
+    fn power_scaled_for_multiplayer(
+        power: Self::Power,
+        amount: crate::Decimal,
+        players: usize,
+        factor: crate::Decimal,
+    ) -> Option<crate::Decimal>;
 
     fn modify_hook<P: Printed<Self> + ?Sized>(
         listener: Listener<'_, Self, P>,

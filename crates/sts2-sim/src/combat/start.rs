@@ -402,9 +402,10 @@ pub(crate) fn enter<V: Rules>(
         creatures,
         powers,
         machines,
+        scaling,
         ..
     } = &mut *live;
-    monster::added_to_room::<V>(ascension, creatures, powers, machines);
+    monster::added_to_room::<V>(ascension, *scaling, creatures, powers, machines);
     // `BeforeCombatStart`, after the room and before the fight opens. The
     // player carries no power yet, so block gained here is what was asked for
     // and passes no modifier.

@@ -555,6 +555,12 @@ impl<'a, V: Rules> Board<'a, V> {
         let (amount, modifiers) = match amount {
             PowerAmount::Counted(amount) => {
                 let (amount, modifiers) = self.received(id, power, amount, applier);
+                // `IsPrimaryEnemy || IsSecondaryEnemy`, which is the enemies'
+                // side.
+                let amount = match self.live.creatures[at].side == V::CombatSide::ENEMY {
+                    true => self.live.scaling.power::<V>(power, amount),
+                    false => amount,
+                };
                 (PowerAmount::Counted(amount), modifiers)
             }
             // The game's endless amount is -1, which `IsInfinite` reads, and
@@ -662,6 +668,10 @@ impl<'a, V: Rules> Board<'a, V> {
             unimplemented!("{power:?}'s AfterApplied on a creature not yet in the fight");
         }
         let (amount, modifiers) = self.received(id, power, amount, applier);
+        let amount = match self.live.created[at].fighter.side == V::CombatSide::ENEMY {
+            true => self.live.scaling.power::<V>(power, amount),
+            false => amount,
+        };
         let carrier = self.live.created[at].fighter.carrier();
         let state = self.apply_fresh(carrier, power, PowerAmount::Counted(amount), applier, copy);
         if amount.is_zero() {

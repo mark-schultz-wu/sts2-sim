@@ -751,6 +751,17 @@ macro_rules! rules {
                     crate::behaviour::rules::power_kept_card::<Self>(state, kept)
                 }
 
+                fn power_scaled_for_multiplayer(
+                    power: Self::Power,
+                    amount: Decimal,
+                    players: usize,
+                    factor: Decimal,
+                ) -> Option<Decimal> {
+                    crate::behaviour::powers::scaled_for_multiplayer::<Self>(
+                        power, amount, players, factor,
+                    )
+                }
+
                 fn modify_hook<P: Printed<Self> + ?Sized>(
                     listener: Listener<'_, Self, P>,
                     hook: ModifyHook<Self>,

@@ -62,8 +62,8 @@ run as its own machine sees it. The work goes in this order:
 3. The co-op rules, in the order the runs reach them. A run of several
    players starts, each player meets Neow, and the map takes votes (done).
    The card pools deal the co-op cards in a run of several players (done).
-   Of sixteen hunted seeds, three match to the run's end, and every seed
-   that reaches a fight matches through its first fight and rewards. The fight holds
+   Every hunted seed that reaches a fight matches through its first fight
+   and rewards. The fight holds
    every player, and the turn ends once every player ends it. A monster's
    move reaches every player, with its health and powered block scaled by
    the player count. Each relic reads its own owner. A card play that
@@ -74,7 +74,10 @@ run as its own machine sees it. The work goes in this order:
    the actions still waiting, as the game's does. A merchant stocks an
    inventory for each player, who buys from it alone. Each player goes
    through their own copy of an event. A potion aimed at a player acts
-   for that player, and its drinker applies its powers. Hunts stay at
+   for that player, and its drinker applies its powers. A fresh power on
+   an enemy scales by the player count, and an enemy's Plating loses a
+   stack for each player. Of sixteen hunted seeds, six match to the run's
+   end. Hunts stay at
    `--width 4`: at `--width 8` two games of sixteen failed in Godot
    itself. Next, in the order of `docs/COOP-FIGHTS.md` and where the
    hunted runs stop:
@@ -87,9 +90,8 @@ run as its own machine sees it. The work goes in this order:
    - A potion thrown at another player that asks a question, which that
      player answers in the game. It panics in two of the sixteen hunted
      runs, with Colorless Potion and Skill Potion.
-   - Monster power scaling by the player count, where four hunted runs
-     part. A monster's Plating reads 24 in the game where the simulator
-     has 8. Slippery, Artifact and Shriek differ too.
+   - A monster's move that reaches one player in a fight of two panics,
+     in one hunted run.
    - Seed 14 parts at step 3, after its first travel.
    - A rest site in a run of several players offers Mend, which the
      simulator leaves out. Two hunted runs part there.
