@@ -390,7 +390,7 @@ pub(super) type Previews<V> = SmallVec<[Preview<V>; 4]>;
 
 /// Every decision a live fight accepts, in the order its report implies them.
 ///
-/// What [`sts2_core::legal::implied`] reads off the report, read from the
+/// What [`sts2_core::Observed::moves`] reads off the report, read from the
 /// fight instead. The rules are the ones the report runs: the belt's reasons,
 /// and each card's reasons and targets. Nothing computes a preview, and
 /// nothing is collected but the moves, which go on the end of `moves`.

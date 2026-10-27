@@ -46,7 +46,7 @@ pub(super) type Moved = i32;
 /// `ForgeCmd` moves one again.
 ///
 /// `None` for a card printing more than [`VARS`] numbers. Nothing raises one
-/// of those, and [`CardInstance::raise`] says so if something tries.
+/// of those, and [`Face::raise`] says so if something tries.
 pub(super) type CardVarList = Option<[NonMaxI32; VARS]>;
 
 /// The powers one creature holds.
@@ -240,30 +240,10 @@ impl<V: Rules> Listening<V> {
         self.listeners.extend(entered.listener);
     }
 
-    /// Whether no listener paused.
-    pub(super) fn none_paused(&self) -> bool {
-        self.aside.is_empty()
-    }
-
-    /// `Task.WhenAll` over the listeners' tasks: each that paused goes on in
-    /// the order it paused, then `then`. False where none paused, and the
-    /// caller goes on itself.
-    pub(super) fn join(
-        self,
-        seat: sts2_core::SeatIndex,
-        live: &mut Live<V>,
-        then: Deferred<V>,
-    ) -> bool {
-        let mut aside = self.aside.into_iter();
-        let Some(first) = aside.next() else {
-            return false;
-        };
-        for task in aside {
-            live.defer(Deferred::Rejoin(Box::new(task)));
-        }
-        live.defer(then);
-        live.rejoin(seat, first);
-        true
+    /// The listeners' tasks that paused, in the order they paused, for a
+    /// caller that waits for each.
+    pub(super) fn into_tasks(self) -> Vec<Paused<V>> {
+        self.aside
     }
 
     /// The listeners' tasks with no join: each that paused goes on as a
@@ -336,13 +316,6 @@ pub(super) enum Then<V: Rules> {
 /// goes on past the question does that part early.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum Deferred<V: Rules> {
-    /// The player's `AfterTurnEnd` from the pass after one whose listeners
-    /// paused, once they are over, and the rest of the turn end behind it.
-    AfterTurnEnd {
-        walk: Box<super::turn::TurnEndWalk<V>>,
-        max_energy: V::Count,
-        skipping: Skips<V>,
-    },
     /// The rest of an effect, from where its own code handed back `played`.
     Resume {
         effect: Resuming<V>,
@@ -429,11 +402,12 @@ pub(super) enum Deferred<V: Rules> {
     /// A listener's task a pause boundary set aside, which goes on here
     /// where its caller waits for it.
     Rejoin(Box<Paused<V>>),
-    /// The player's turn end once every `BeforeSideTurnEnd` listener that
-    /// paused is over. `skipping` is what this turn's tick skips.
-    TurnEndHooksOver {
+    /// The player's turn end, stopped on a question or waiting for a
+    /// listener's task, which goes on from where it stopped. The enemies'
+    /// turn and the player's next follow it.
+    EndingTurn {
+        ending: Box<super::ending::player_turn_end::State<V>>,
         max_energy: V::Count,
-        skipping: Skips<V>,
     },
     /// `RunAutoPrePlayPhase` from what a pass still asked for, then from the
     /// pass at `next`, once an auto-play's question is answered. The phase
@@ -441,27 +415,6 @@ pub(super) enum Deferred<V: Rules> {
     PrePlay {
         rest: super::turn::PassRest<V>,
         next: usize,
-    },
-    /// The post-play phase from what its listeners still asked for, once an
-    /// auto-play's question is answered. The turn's end follows it.
-    PostPlay {
-        rest: super::turn::PassRest<V>,
-        max_energy: V::Count,
-    },
-    /// The player's turn end from the hand's flush on, once a pick before
-    /// it is answered. `skipping` is what this turn's tick skips.
-    Flush {
-        max_energy: V::Count,
-        skipping: Skips<V>,
-    },
-    /// `DoTurnEnd` from the end of `card`'s `OnTurnEndInHandWrapper`, whose
-    /// effect a question stood still. The cards in `rest` run theirs after,
-    /// then the turn's end goes on to the flush.
-    TurnEnd {
-        card: CardId<V>,
-        rest: smallvec::SmallVec<[CardId<V>; super::pile::MAX_CARDS_IN_HAND]>,
-        max_energy: V::Count,
-        skipping: Skips<V>,
     },
     /// The hits of an attack that came up while a question one of its
     /// earlier hits raised waited, each resolved as it lands. Then the end of

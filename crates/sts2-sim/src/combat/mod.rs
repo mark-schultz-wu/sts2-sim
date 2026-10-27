@@ -8,6 +8,7 @@ mod piles;
 pub use board::ResolvedEffect;
 pub(crate) use board::{exact, whole};
 mod encounter;
+mod ending;
 mod hook;
 mod legal;
 mod listen;

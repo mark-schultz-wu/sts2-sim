@@ -28,275 +28,39 @@ pub(crate) fn end<V: Rules>(
     ascension: V::AscensionLevel,
     max_energy: V::Count,
 ) -> Result<Option<super::Ended>, Error> {
-    // `EndPlayerTurnPhaseOne` opens on the post-play phase. An auto-play
-    // there that asks stands the turn's end still behind the answer.
-    let parked = post_play_phase::<V>(
-        seat,
-        fighting.live,
-        fighting.streams.combat(),
-        fighting.belts,
-        max_energy,
-    );
-    if parked {
-        return Ok(None);
-    }
-    end_after_post_play(seat, fighting, ascension, max_energy)
+    super::ending::begin(seat, fighting, ascension, max_energy)
 }
 
-/// The player's turn end once its post-play phase is over. The turn-end
-/// hooks, the orbs and the hand come first, then the enemies' turn and the
-/// player's next.
-pub(super) fn end_after_post_play<V: Rules>(
-    seat: sts2_core::SeatIndex,
-    fighting: Fighting<'_, V>,
-    ascension: V::AscensionLevel,
-    max_energy: V::Count,
-) -> Result<Option<super::Ended>, Error> {
-    let Fighting {
-        live: next,
-        streams,
-        belts,
-    } = fighting;
-    let skipping = std::mem::take(&mut next.skip_tick);
-
-    // The post-play hooks run as an action, and `ActionExecutor` checks the
-    // win after each. So an auto-play there that killed the last enemy ends
-    // the fight before the turn-end hooks, which hear nothing.
-    let mut board = Board::for_card(seat, next, streams.combat(), belts, ascension, None, None);
-    board.end_if_ending();
-    if let Some(ended) = board.ended() {
-        next.skip_tick = skipping;
-        return Ok(Some(ended));
-    }
-    // A player an auto-play there killed has lost. The turn-end hooks hear
-    // nothing once the fight is over, and `CheckWinCondition` ends it.
-    if next.lost {
-        next.skip_tick = skipping;
-        return Ok(Some(super::Ended::Lost));
-    }
-    // `EndPlayerTurnPhaseOne`: the turn-end hooks, and the win check they can
-    // end the fight for, come before the orbs and the hand. The hook waits
-    // for a listener that paused.
-    let (ended, listening) = before_turn_end::<V>(
-        seat,
-        next,
-        streams.combat(),
-        belts,
-        ascension,
-        <V::CombatSide as SideKinds>::PLAYER,
-    );
-    if !listening.none_paused() {
-        if let Some(ended) = ended {
-            unimplemented!("a turn-end listener paused in a fight that ended {ended:?}");
-        }
-        let then = super::live::Deferred::TurnEndHooksOver {
-            max_energy,
-            skipping,
-        };
-        listening.join(seat, next, then);
-        return Ok(None);
-    }
-    after_turn_end_hooks(
-        seat,
-        Fighting {
-            live: next,
-            streams,
-            belts,
-        },
-        ascension,
-        max_energy,
-        skipping,
-        ended,
-    )
-}
-
-/// The player's turn end once `BeforeSideTurnEnd` is over, `ended` where it
-/// ended the fight: the win check, `DoTurnEnd`, then the flush on.
-pub(super) fn after_turn_end_hooks<V: Rules>(
-    seat: sts2_core::SeatIndex,
-    fighting: Fighting<'_, V>,
-    ascension: V::AscensionLevel,
-    max_energy: V::Count,
-    skipping: Skips<V>,
-    ended: Option<super::Ended>,
-) -> Result<Option<super::Ended>, Error> {
-    let Fighting {
-        live: next,
-        streams,
-        belts,
-    } = fighting;
-    // `CheckWinCondition`, whatever ended the fight: an auto-play in the
-    // post-play phase can kill the last enemy as well as a hook can.
-    let ended = ended.or_else(|| {
-        let mut board = Board::for_card(seat, next, streams.combat(), belts, ascension, None, None);
-        board.end_if_ending();
-        board.ended()
-    });
-    if let Some(ended) = ended {
-        next.skip_tick = skipping;
-        return Ok(Some(ended));
-    }
-    // `DoTurnEnd` returns once the fight is over, and a fight an orb ended
-    // ends the turn with it.
-    let done = turn_end(seat, next, streams.combat(), belts, ascension);
-    after_turn_end_in_hand(
-        seat,
-        Fighting {
-            live: next,
-            streams,
-            belts,
-        },
-        ascension,
-        done,
-        max_energy,
-        skipping,
-    )
-}
+/// The cards still to run `DoTurnEnd` behind one whose effect asked.
+pub(super) type Rest<V> = SmallVec<[sts2_core::CardId<V>; MAX_CARDS_IN_HAND]>;
 
 /// `DoTurnEnd` from the end of `card`'s `OnTurnEndInHandWrapper`, once the
 /// question its effect asked is answered. The cards in `rest` run theirs
-/// after it, and the turn's end goes on to the flush.
-pub(super) fn end_from_hand<V: Rules>(
+/// after it.
+pub(super) fn in_hand_from<V: Rules>(
     seat: sts2_core::SeatIndex,
-    fighting: Fighting<'_, V>,
+    live: &mut Live<V>,
+    mut rngs: CombatRngs<'_>,
+    belts: &mut crate::run::Belts<V>,
     ascension: V::AscensionLevel,
     card: sts2_core::CardId<V>,
     rest: &[sts2_core::CardId<V>],
+) -> InHand<V> {
+    match wrapper_end(seat, live, rngs.reborrow(), belts, card) {
+        Some(ended) => InHand::Done(Some(ended)),
+        None => cards_turn_end(seat, live, rngs, belts, ascension, rest),
+    }
+}
+
+/// The player's turn end once `AfterTurnEnd` is over. `ended` is how it
+/// ended the fight, which stops the turn's end. Otherwise it goes on to the
+/// enemies' turn and the player's next.
+pub(super) fn after_player_turn_end<V: Rules>(
+    seat: sts2_core::SeatIndex,
+    fighting: Fighting<'_, V>,
+    ascension: V::AscensionLevel,
     max_energy: V::Count,
     skipping: Skips<V>,
-) -> Result<Option<super::Ended>, Error> {
-    let Fighting {
-        live: next,
-        streams,
-        belts,
-    } = fighting;
-    let done = match wrapper_end(seat, next, streams.combat(), belts, card) {
-        Some(ended) => InHand::Done(Some(ended)),
-        None => cards_turn_end(seat, next, streams.combat(), belts, ascension, rest),
-    };
-    after_turn_end_in_hand(
-        seat,
-        Fighting {
-            live: next,
-            streams,
-            belts,
-        },
-        ascension,
-        done,
-        max_energy,
-        skipping,
-    )
-}
-
-/// The player's turn end once `DoTurnEnd` came to `done`: over with the
-/// fight, stood still behind a question, or on to the flush.
-fn after_turn_end_in_hand<V: Rules>(
-    seat: sts2_core::SeatIndex,
-    fighting: Fighting<'_, V>,
-    ascension: V::AscensionLevel,
-    done: InHand<V>,
-    max_energy: V::Count,
-    mut skipping: Skips<V>,
-) -> Result<Option<super::Ended>, Error> {
-    let Fighting {
-        live: next,
-        streams,
-        belts,
-    } = fighting;
-    // What `DoTurnEnd` put on the player skips this turn's tick too.
-    let landed = std::mem::take(&mut next.skip_tick);
-    super::play::merge::<V>(&mut skipping, landed.iter().copied().collect());
-    let ended = match done {
-        InHand::Done(ended) => ended,
-        InHand::Parked { card, rest } => {
-            next.defer(super::live::Deferred::TurnEnd {
-                card,
-                rest,
-                max_energy,
-                skipping,
-            });
-            return Ok(None);
-        }
-    };
-    if let Some(ended) = ended {
-        next.skip_tick = skipping;
-        return Ok(Some(ended));
-    }
-    // `Hook.BeforeFlush`'s late pass, whose pick stands the turn's end still
-    // behind the answer.
-    if before_flush_late::<V>(seat, next, streams.combat(), belts, max_energy, &skipping) {
-        return Ok(None);
-    }
-    end_from_flush(
-        seat,
-        Fighting {
-            live: next,
-            streams,
-            belts,
-        },
-        ascension,
-        max_energy,
-        skipping,
-    )
-}
-
-/// The player's turn end from the hand's flush on: the flush, the cards'
-/// cleanup, `AfterTurnEnd`, then the enemies' turn and the player's next.
-pub(super) fn end_from_flush<V: Rules>(
-    seat: sts2_core::SeatIndex,
-    fighting: Fighting<'_, V>,
-    ascension: V::AscensionLevel,
-    max_energy: V::Count,
-    mut skipping: Skips<V>,
-) -> Result<Option<super::Ended>, Error> {
-    let Fighting {
-        live: next,
-        streams,
-        belts,
-    } = fighting;
-    flush_hand(seat, next, streams.combat(), belts, ascension);
-    end_of_turn_cleanup(seat, next);
-    // `AfterTurnEnd` for the side that just ended. A question a draw a
-    // listener asks for raises pauses that listener.
-    let from = TurnEndWalk {
-        side: <V::CombatSide as SideKinds>::PLAYER,
-        next: TurnEndPass::Main,
-        ended: None,
-    };
-    let walked = after_turn_end_from::<V>(
-        seat,
-        next,
-        streams.combat(),
-        belts,
-        ascension,
-        &mut skipping,
-        from,
-        true,
-    );
-    after_player_turn_end(
-        seat,
-        Fighting {
-            live: next,
-            streams,
-            belts,
-        },
-        ascension,
-        max_energy,
-        skipping,
-        walked,
-    )
-}
-
-/// The player's `AfterTurnEnd` from the pass after one whose paused
-/// listeners are over, then the rest of the turn end. `ended` is how the
-/// fight stood once they were.
-pub(super) fn resume_after_turn_end<V: Rules>(
-    seat: sts2_core::SeatIndex,
-    fighting: Fighting<'_, V>,
-    ascension: V::AscensionLevel,
-    mut walk: TurnEndWalk<V>,
-    max_energy: V::Count,
-    mut skipping: Skips<V>,
     ended: Option<super::Ended>,
 ) -> Result<Option<super::Ended>, Error> {
     let Fighting {
@@ -304,59 +68,6 @@ pub(super) fn resume_after_turn_end<V: Rules>(
         streams,
         belts,
     } = fighting;
-    walk.ended = walk.ended.or(ended);
-    let walked = after_turn_end_from::<V>(
-        seat,
-        next,
-        streams.combat(),
-        belts,
-        ascension,
-        &mut skipping,
-        walk,
-        true,
-    );
-    after_player_turn_end(
-        seat,
-        Fighting {
-            live: next,
-            streams,
-            belts,
-        },
-        ascension,
-        max_energy,
-        skipping,
-        walked,
-    )
-}
-
-/// The player's turn end once `AfterTurnEnd` came to `walked`. Listeners
-/// that paused hold it until they are over, and an ended fight stops it.
-/// Otherwise it goes on to the enemies' turn and the player's next.
-fn after_player_turn_end<V: Rules>(
-    seat: sts2_core::SeatIndex,
-    fighting: Fighting<'_, V>,
-    ascension: V::AscensionLevel,
-    max_energy: V::Count,
-    skipping: Skips<V>,
-    walked: Walked<V>,
-) -> Result<Option<super::Ended>, Error> {
-    let Fighting {
-        live: next,
-        streams,
-        belts,
-    } = fighting;
-    let ended = match walked {
-        Walked::Paused(listening, walk) => {
-            let then = super::live::Deferred::AfterTurnEnd {
-                walk,
-                max_energy,
-                skipping,
-            };
-            listening.join(seat, next, then);
-            return Ok(None);
-        }
-        Walked::Done(ended) => ended,
-    };
     if let Some(ended) = ended {
         next.skip_tick = skipping;
         match ended {
@@ -856,36 +567,19 @@ fn start_player_turn<V: Rules>(
     Ok(None)
 }
 
-/// `AfterAutoPostPlayPhaseEntered`, with the player in the `AutoPostPlay`
-/// phase, which turns to `End` once every listener is done. True where an
-/// auto-play asked, and what is left waits behind the answer.
+/// The post-play phase from `rest`, what its listeners still ask for. It
+/// runs until an auto-play asks, which is true. Otherwise it runs to its
+/// end, which turns the phase to `End`.
 ///
 /// # Panics
 ///
 /// A listener asking for anything but an auto-play.
-fn post_play_phase<V: Rules>(
-    seat: sts2_core::SeatIndex,
-    live: &mut Live<V>,
-    rngs: CombatRngs<'_>,
-    belts: &mut crate::run::Belts<V>,
-    max_energy: V::Count,
-) -> bool {
-    live.players[seat].phase = <V::PlayerTurnPhase as TurnPhaseKinds>::AUTO_POST_PLAY;
-    let turn = live.turn;
-    let hook = sts2_core::EventHook::AutoPostPlayPhase { turn };
-    let rest = PassRest::walk(live, belts, hook);
-    post_play_from::<V>(seat, live, rngs, belts, rest, max_energy)
-}
-
-/// The post-play phase from what its listeners asked for. True where an
-/// auto-play asked, with the rest deferred behind the answer.
-pub(super) fn post_play_from<V: Rules>(
+pub(super) fn post_play_until_asked<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
     belts: &mut crate::run::Belts<V>,
-    mut rest: PassRest<V>,
-    max_energy: V::Count,
+    rest: &mut PassRest<V>,
 ) -> bool {
     while let Some((listener, effect)) = rest.next(seat, live, belts) {
         // A Stampede part-way through puts what it has left back first.
@@ -976,7 +670,6 @@ pub(super) fn post_play_from<V: Rules>(
         // `CardCmd.AutoPlay` is awaited, so what is left waits on the answer.
         if live.asking.is_some() {
             rest.first = left_over.map(|effect| (listener, effect));
-            live.defer(super::live::Deferred::PostPlay { rest, max_energy });
             return true;
         }
     }
@@ -984,23 +677,22 @@ pub(super) fn post_play_from<V: Rules>(
     false
 }
 
-/// `BeforeFlushLate`, the second pass of `Hook.BeforeFlush`. True where a
-/// listener paused on its pick, and the turn's end from the flush on waits
-/// for it. A listener that paused lets the later ones run first.
+/// `BeforeFlushLate`, the second pass of `Hook.BeforeFlush`. It hands back
+/// the tasks of the listeners that paused on a pick, and the turn's end
+/// waits for them before the flush. A listener that paused lets the later
+/// ones run first.
 ///
 /// # Panics
 ///
 /// A listener asking for anything but a pick of cards to retain.
-fn before_flush_late<V: Rules>(
+pub(super) fn before_flush_late<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
     belts: &mut crate::run::Belts<V>,
-    max_energy: V::Count,
-    skipping: &Skips<V>,
-) -> bool {
+) -> Vec<super::live::Paused<V>> {
     if !listen::heard::<V>(live, belts, sts2_core::ModelHook::BeforeFlushLate) {
-        return false;
+        return Vec::new();
     }
     let player = live.player(seat).id;
     let turn = live.turn;
@@ -1032,14 +724,7 @@ fn before_flush_late<V: Rules>(
         listening.leave(seat, live, boundary);
     }
     // The turn's end from the flush on waits for every paused listener.
-    listening.join(
-        seat,
-        live,
-        super::live::Deferred::Flush {
-            max_energy,
-            skipping: *skipping,
-        },
-    )
+    listening.into_tasks()
 }
 
 /// `CardSelectCmd.FromHand` of up to `count` cards that do not retain
@@ -1117,7 +802,7 @@ fn auto_play_from_draw<V: Rules>(
 /// every other ethereal card is exhausted. An ethereal card with the effect
 /// is exhausted by the wrapper, once the effect is over.
 #[tracing::instrument(level = "trace", skip_all)]
-fn turn_end<V: Rules>(
+pub(super) fn turn_end<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
@@ -1164,6 +849,7 @@ fn turn_end<V: Rules>(
 }
 
 /// What `DoTurnEnd` came to.
+#[derive(Debug, Clone, PartialEq)]
 pub(super) enum InHand<V: Rules> {
     /// Done, and how the fight ended if it did.
     Done(Option<super::Ended>),
@@ -1181,7 +867,7 @@ pub(super) enum InHand<V: Rules> {
 ///
 /// Every effect runs, ending fight or not. `CardPileCmd.Add` refuses a
 /// combat pile once the fight is ending, so the cards stay put from then on.
-fn cards_turn_end<V: Rules>(
+pub(super) fn cards_turn_end<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
@@ -1236,7 +922,7 @@ fn cards_turn_end<V: Rules>(
 /// The end of `OnTurnEndInHandWrapper` for `id`, once its effect is over:
 /// to the exhaust pile for an ethereal card, or the discard pile for any
 /// other.
-fn wrapper_end<V: Rules>(
+pub(super) fn wrapper_end<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     rngs: CombatRngs<'_>,
@@ -1364,7 +1050,7 @@ fn keep_orb<V: Rules>(
 
 /// `PlayerCombatState.EndOfTurnCleanup`: what a card carried only for the turn.
 #[tracing::instrument(level = "trace", skip_all)]
-fn end_of_turn_cleanup<V: Rules>(seat: sts2_core::SeatIndex, live: &mut Live<V>) {
+pub(super) fn end_of_turn_cleanup<V: Rules>(seat: sts2_core::SeatIndex, live: &mut Live<V>) {
     live.players[seat]
         .cards
         .write_all_cards(Face::lasts_the_turn, Face::turn_ended);
@@ -1519,7 +1205,7 @@ fn attacks_from_discard<V: Rules>(
 ///
 /// A listener asking for something no turn end carries out.
 #[tracing::instrument(level = "trace", skip_all)]
-fn before_turn_end<V: Rules>(
+pub(super) fn before_turn_end<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
@@ -1604,7 +1290,7 @@ fn before_turn_end<V: Rules>(
                     belts,
                     sts2_core::PileAct::Exhaust,
                     &hand,
-                    false,
+                    true,
                 )
                 .1;
             }
@@ -2720,10 +2406,20 @@ pub(super) fn act_on<V: Rules>(
     let mut sly = SmallVec::new();
     let asked_before = live.asking.is_some();
     for (taking, card) in picked.iter().enumerate() {
-        // A question a hook asked stands the cards after it still, which
-        // nothing here holds back yet.
+        // A question a hook asked stands the cards after it still. They go
+        // on once what the question stood still is over.
         if !asked_before && live.asking.is_some() && taking > 0 {
-            unimplemented!("{act:?} of more cards behind a question");
+            if !pausable {
+                unimplemented!("{act:?} of more cards behind a question that cannot pause");
+            }
+            if !sly.is_empty() {
+                unimplemented!("{act:?} of more cards behind a question, after a Sly card");
+            }
+            live.defer(super::live::Deferred::ActOn {
+                act,
+                cards: picked[taking..].iter().copied().collect(),
+            });
+            return (sly, None);
         }
         // `CardCmd` acts on the card wherever it stands now, which an
         // earlier card's hook can have moved.
@@ -3474,7 +3170,11 @@ pub(super) struct PassRest<V: Rules> {
 
 impl<V: Rules> PassRest<V> {
     /// The walk over `hook`'s listeners, where any hears it.
-    fn walk(live: &Live<V>, belts: &crate::run::Belts<V>, hook: sts2_core::EventHook<V>) -> Self {
+    pub(super) fn walk(
+        live: &Live<V>,
+        belts: &crate::run::Belts<V>,
+        hook: sts2_core::EventHook<V>,
+    ) -> Self {
         PassRest {
             first: None,
             walking: listen::Walking::begin(live, belts, hook).map(Box::new),
@@ -3873,7 +3573,7 @@ pub(super) fn side_turn_started<V: Rules>(
 /// A card that retains stays where it is, whether it prints the keyword or
 /// something in the fight wrote it on.
 #[tracing::instrument(level = "trace", skip_all)]
-fn flush_hand<V: Rules>(
+pub(super) fn flush_hand<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     rngs: CombatRngs<'_>,
@@ -4186,34 +3886,13 @@ fn clear_block<V: Rules>(
     }
 }
 
-/// How far a turn end's walk got. `Done` carries how a listener ended the
-/// fight, if one did. `Paused` is the listeners of a pass that paused, which
-/// the rest of the turn end waits for, and where that rest starts.
-pub(super) enum Walked<V: Rules> {
-    Done(Option<super::Ended>),
-    Paused(super::live::Listening<V>, Box<TurnEndWalk<V>>),
-}
-
-/// Which of `AfterTurnEnd`'s passes is still to run.
+/// One of `AfterTurnEnd`'s passes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum TurnEndPass {
-    /// `AfterSideTurnEnd`, then its late pass.
+    /// `AfterSideTurnEnd`.
     Main,
-    /// `AfterSideTurnEndLate` alone.
+    /// `AfterSideTurnEndLate`.
     Late,
-    /// Neither.
-    Over,
-}
-
-/// Where `AfterTurnEnd` goes on once the listeners of a pass that paused
-/// are over.
-#[derive(Debug, Clone, PartialEq)]
-pub(super) struct TurnEndWalk<V: Rules> {
-    /// The side whose turn ended.
-    side: V::CombatSide,
-    next: TurnEndPass,
-    /// How the fight stood.
-    ended: Option<super::Ended>,
 }
 
 /// `hook`, `AfterSideTurnEnd` or its late pass, raised on every listener once a
@@ -4433,87 +4112,55 @@ fn tick_down<V: Rules>(
 fn after_turn_end<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
-    rngs: CombatRngs<'_>,
+    mut rngs: CombatRngs<'_>,
     belts: &mut crate::run::Belts<V>,
     ascension: V::AscensionLevel,
     skipping: &mut Skips<V>,
     side: V::CombatSide,
 ) -> Option<super::Ended> {
-    let from = TurnEndWalk {
-        side,
-        next: TurnEndPass::Main,
-        ended: None,
-    };
-    match after_turn_end_from::<V>(seat, live, rngs, belts, ascension, skipping, from, false) {
-        Walked::Done(ended) => ended,
-        Walked::Paused(listening, _) => {
-            listening.none_waits("the enemies' AfterSideTurnEnd");
-            unreachable!("a listener paused")
-        }
-    }
-}
-
-/// [`after_turn_end`] from the pass `from` names. `Task.WhenAll` waits for
-/// each pass's listeners before the next pass. With `pausing`, a question a
-/// draw raises pauses its listener, and the walk comes back
-/// [`Walked::Paused`] at the end of that pass.
-#[allow(clippy::too_many_arguments)]
-fn after_turn_end_from<V: Rules>(
-    seat: sts2_core::SeatIndex,
-    live: &mut Live<V>,
-    mut rngs: CombatRngs<'_>,
-    belts: &mut crate::run::Belts<V>,
-    ascension: V::AscensionLevel,
-    skipping: &mut Skips<V>,
-    from: TurnEndWalk<V>,
-    pausing: bool,
-) -> Walked<V> {
-    let TurnEndWalk {
-        side,
-        mut next,
-        ended,
-    } = from;
-    if ended.is_some() {
-        return Walked::Done(ended);
-    }
-    loop {
-        let (hook, following) = match next {
-            TurnEndPass::Main => (
-                sts2_core::EventHook::SideTurnEnd {
-                    side,
-                    block: live.player(seat).block,
-                },
-                TurnEndPass::Late,
-            ),
-            TurnEndPass::Late => (
-                sts2_core::EventHook::SideTurnEndLate { side },
-                TurnEndPass::Over,
-            ),
-            TurnEndPass::Over => return Walked::Done(None),
-        };
-        let (ended, listening) = walk_turn_end::<V>(
+    for pass in [TurnEndPass::Main, TurnEndPass::Late] {
+        let (ended, listening) = after_turn_end_pass::<V>(
             seat,
             live,
             rngs.reborrow(),
             belts,
             ascension,
             skipping,
-            hook,
-            pausing,
+            side,
+            pass,
+            false,
         );
-        if !listening.none_paused() {
-            let rest = TurnEndWalk {
-                side,
-                next: following,
-                ended,
-            };
-            return Walked::Paused(listening, Box::new(rest));
-        }
+        listening.none_waits("the enemies' AfterSideTurnEnd");
         if ended.is_some() {
-            return Walked::Done(ended);
+            return ended;
         }
-        next = following;
     }
+    None
+}
+
+/// The pass `pass` of `Hook.AfterTurnEnd` once `side`'s turn ends. With
+/// `pausing`, a question a draw raises pauses its listener, and the
+/// listeners that paused come back for the caller to wait for.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn after_turn_end_pass<V: Rules>(
+    seat: sts2_core::SeatIndex,
+    live: &mut Live<V>,
+    rngs: CombatRngs<'_>,
+    belts: &mut crate::run::Belts<V>,
+    ascension: V::AscensionLevel,
+    skipping: &mut Skips<V>,
+    side: V::CombatSide,
+    pass: TurnEndPass,
+    pausing: bool,
+) -> (Option<super::Ended>, super::live::Listening<V>) {
+    let hook = match pass {
+        TurnEndPass::Main => sts2_core::EventHook::SideTurnEnd {
+            side,
+            block: live.player(seat).block,
+        },
+        TurnEndPass::Late => sts2_core::EventHook::SideTurnEndLate { side },
+    };
+    walk_turn_end::<V>(seat, live, rngs, belts, ascension, skipping, hook, pausing)
 }
 
 /// What a turn end's listeners asked for on the creature carrying them,
@@ -4562,11 +4209,14 @@ fn applied<V: Rules>(
 ) -> Option<super::Ended> {
     for ask in asked {
         let board = Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
-        // A draw, a power's or a relic's, can stop on a shuffle's pick.
+        // A draw, a power's or a relic's, can stop on a shuffle's pick. So
+        // can a hit, where a relic answering it draws.
         let mut board = match (pausing, &ask) {
             (
                 true,
-                TurnEndAsk::Draw(_) | TurnEndAsk::Relic(_, _, sts2_core::HookEffect::Draw(_)),
+                TurnEndAsk::Draw(_)
+                | TurnEndAsk::Relic(_, _, sts2_core::HookEffect::Draw(_))
+                | TurnEndAsk::Damage { .. },
             ) => board.blocking(),
             _ => board,
         };

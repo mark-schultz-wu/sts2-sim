@@ -58,9 +58,12 @@ plays and moves, its generated ones and its own.
 The scheduler replaces the engine's `Deferred` work, which the content
 does not touch. What is left, in order:
 
-1. The scheduler with one player. The turn loop, the card plays and the
-   paused hooks run as the game's queues run them. It takes away the
-   `Deferred`, `Then` and `Setup` work in the engine.
+1. The scheduler with one player, in the order of `docs/SCHEDULER.md`.
+   The turn loop, the card plays and the paused hooks run as the game's
+   queues run them. It takes away the `Deferred`, `Then` and `Setup` work
+   in the engine. The player's turn end is one coroutine, from the
+   post-play phase to `AfterTurnEnd` (done). Next, the enemy turn and the
+   turn's start join it.
 2. The run layer's pauses, `Pickup` and `Unfinished`, once Mark decides
    whether they move too (`docs/ASYNC.md`, open question 1).
 

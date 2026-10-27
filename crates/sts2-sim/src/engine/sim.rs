@@ -121,7 +121,7 @@ impl<V: Rules> Sim<V> {
     /// Where the run is standing, beside what the decision decided.
     ///
     /// The one place an observation is built for a decision. Every command
-    /// hands back a [`Decided`] alone, so nothing pays for this but a caller
+    /// hands back a [`sts2_core::Decided`] alone, so nothing pays for this but a caller
     /// that asked to see where it landed.
     fn reported(&self, decided: sts2_core::Decided) -> sts2_core::Applied<V> {
         self.state.report(SOLO).applied(decided)

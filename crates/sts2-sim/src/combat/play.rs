@@ -6,7 +6,7 @@
 //! pile it ends in.
 //!
 //! What each card does is not here. That is per build and lives in
-//! `sts2-content`, reached through [`Fight`]. This file is the fight that
+//! `sts2-content`, reached through [`sts2_core::Fight`]. This file is the fight that
 //! trait acts on.
 
 use crate::stream::LendsCombat;
@@ -1441,12 +1441,9 @@ fn run_deferred<V: Rules>(
                 fighting.live.rejoin(seat, *task);
                 ended
             }
-            super::live::Deferred::TurnEndHooksOver {
-                max_energy,
-                skipping,
-            } => super::turn::after_turn_end_hooks::<V>(
-                seat, fighting, ascension, max_energy, skipping, ended,
-            )?,
+            super::live::Deferred::EndingTurn { ending, max_energy } => {
+                super::ending::finish::<V>(seat, fighting, ascension, max_energy, ending, ended)?
+            }
             parked @ super::live::Deferred::Move { .. } => {
                 let resumed = match ended {
                     None => super::turn::resume_move::<V>(
@@ -1479,52 +1476,6 @@ fn run_deferred<V: Rules>(
                     }
                 }
             }
-            super::live::Deferred::PostPlay { rest, max_energy } => match ended {
-                None => {
-                    let parked = super::turn::post_play_from::<V>(
-                        seat,
-                        fighting.live,
-                        fighting.streams.combat(),
-                        fighting.belts,
-                        rest,
-                        max_energy,
-                    );
-                    match parked {
-                        true => None,
-                        false => {
-                            super::turn::end_after_post_play(seat, fighting, ascension, max_energy)?
-                        }
-                    }
-                }
-                ended => ended,
-            },
-            super::live::Deferred::AfterTurnEnd {
-                walk,
-                max_energy,
-                skipping,
-            } => super::turn::resume_after_turn_end(
-                seat, fighting, ascension, *walk, max_energy, skipping, ended,
-            )?,
-            super::live::Deferred::Flush {
-                max_energy,
-                skipping,
-            } => match ended {
-                None => {
-                    super::turn::end_from_flush(seat, fighting, ascension, max_energy, skipping)?
-                }
-                ended => ended,
-            },
-            super::live::Deferred::TurnEnd {
-                card,
-                rest,
-                max_energy,
-                skipping,
-            } => match ended {
-                None => super::turn::end_from_hand(
-                    seat, fighting, ascension, card, &rest, max_energy, skipping,
-                )?,
-                ended => ended,
-            },
             super::live::Deferred::PrePlay { rest, next } => match ended {
                 None => {
                     let ended = super::turn::pre_play_from::<V>(

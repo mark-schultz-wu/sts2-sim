@@ -25,7 +25,7 @@ pub(super) struct Lent<'a, V: Rules> {
 }
 
 impl<V: Rules> Lent<'_, V> {
-    fn parts(&mut self) -> (&mut Live<V>, CombatRngs<'_>, &mut Belts<V>) {
+    pub(super) fn parts(&mut self) -> (&mut Live<V>, CombatRngs<'_>, &mut Belts<V>) {
         (&mut *self.live, self.rngs.reborrow(), &mut *self.belts)
     }
 }
