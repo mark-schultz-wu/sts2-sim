@@ -386,20 +386,9 @@ pub(super) enum Deferred<V: Rules> {
     /// A listener's task a pause boundary set aside, which goes on here
     /// where its caller waits for it.
     Rejoin(Box<Paused<V>>),
-    /// The turn loop, stopped on a question or waiting for a listener's
-    /// task, which goes on from where it stopped. The player's next turn
-    /// follows it.
-    TurnLoop {
-        looping: Box<super::turn_loop::turn_loop::State<V>>,
-        max_energy: V::Count,
-    },
-    /// `RunAutoPrePlayPhase` from what a pass still asked for, then from the
-    /// pass at `next`, once an auto-play's question is answered. The phase
-    /// turns to the play phase after.
-    PrePlay {
-        rest: super::turn::PassRest<V>,
-        next: usize,
-    },
+    /// The turn loop, stopped on a question or waiting for a task, which
+    /// goes on from where it stopped.
+    TurnLoop(Box<super::turn_loop::turn_loop::State<V>>),
     /// The hits of an attack that came up while a question one of its
     /// earlier hits raised waited, each resolved as it lands. Then the end of
     /// the attack, over every hit in `landed` and the rest.

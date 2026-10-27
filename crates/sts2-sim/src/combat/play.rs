@@ -1287,11 +1287,7 @@ fn resume_answered<V: Rules>(
         // The turn loop's own question, which it takes as it goes on.
         Then::Turn => {
             let ascension = live.ascension;
-            let Some(super::live::Deferred::TurnLoop {
-                looping,
-                max_energy,
-            }) = live.deferred.next()
-            else {
+            let Some(super::live::Deferred::TurnLoop(looping)) = live.deferred.next() else {
                 unreachable!("the turn loop waits under its own question")
             };
             let ended = super::turn_loop::finish::<V>(
@@ -1301,8 +1297,6 @@ fn resume_answered<V: Rules>(
                     streams: &mut *streams,
                     belts: &mut *belts,
                 },
-                ascension,
-                max_energy,
                 looping,
                 None,
                 Some(taken),
@@ -1451,34 +1445,12 @@ fn run_deferred<V: Rules>(
                 fighting.live.rejoin(seat, *task);
                 ended
             }
-            super::live::Deferred::TurnLoop {
-                looping,
-                max_energy,
-            } => super::turn_loop::finish::<V>(
-                seat, fighting, ascension, max_energy, looping, ended, None,
-            )?,
-            super::live::Deferred::PrePlay { rest, next } => match ended {
-                None => {
-                    let ended = super::turn::pre_play_from::<V>(
-                        seat,
-                        fighting.live,
-                        fighting.streams.combat(),
-                        fighting.belts,
-                        rest,
-                        next,
-                    );
-                    if ended.is_none() {
-                        fighting.live.players[seat].phase =
-                            super::turn::after_pre_play::<V>(fighting.live);
-                    }
-                    ended
-                }
-                ended => ended,
-            },
+            super::live::Deferred::TurnLoop(looping) => {
+                super::turn_loop::finish::<V>(seat, fighting, looping, ended, None)?
+            }
             super::live::Deferred::Setup(setup) => super::turn::finish_setup::<V>(
-                seat,
                 fighting.live,
-                fighting.streams.combat(),
+                fighting.streams,
                 fighting.belts,
                 setup,
                 ended,

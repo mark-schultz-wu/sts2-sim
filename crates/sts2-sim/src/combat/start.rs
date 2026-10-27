@@ -576,7 +576,7 @@ pub(crate) fn enter<V: Rules>(
     }
     // `StartTurn`, as for every turn. `SetupPlayerTurn` puts the innate cards
     // on top on the first.
-    let ended = super::turn::start_player_turn(
+    let ended = super::turn_loop::begin(
         seat,
         super::Fighting {
             live: &mut live,
@@ -585,8 +585,7 @@ pub(crate) fn enter<V: Rules>(
         },
         ascension,
         energy,
-        Default::default(),
-        false,
+        true,
     )?;
     Ok(Entered {
         live,

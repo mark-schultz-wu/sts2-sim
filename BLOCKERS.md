@@ -62,8 +62,9 @@ does not touch. What is left, in order:
    The turn loop, the card plays and the paused hooks run as the game's
    queues run them. It takes away the `Deferred`, `Then` and `Setup` work
    in the engine. The turn loop is one coroutine, from the player's turn
-   end through the enemies' turn (done). Next, the player's turn start
-   joins it.
+   end through the enemies' turn to the next play phase. A fight's first
+   turn starts in it too (done). Next, step 3: the queues and the action
+   ids.
 2. The run layer's pauses, `Pickup` and `Unfinished`, once Mark decides
    whether they move too (`docs/ASYNC.md`, open question 1).
 

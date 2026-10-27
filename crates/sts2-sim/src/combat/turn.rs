@@ -28,7 +28,7 @@ pub(crate) fn end<V: Rules>(
     ascension: V::AscensionLevel,
     max_energy: V::Count,
 ) -> Result<Option<super::Ended>, Error> {
-    super::turn_loop::begin(seat, fighting, ascension, max_energy)
+    super::turn_loop::begin(seat, fighting, ascension, max_energy, false)
 }
 
 /// The cards still to run `DoTurnEnd` behind one whose effect asked.
@@ -294,47 +294,50 @@ pub(super) fn enemy_turn_ends<V: Rules>(
     ended
 }
 
-/// `StartTurn` for the player's side, from `BeforeSideTurnStart` to the play
-/// phase. An `extra` turn is one `ShouldTakeExtraTurn` gave, which rolls no
-/// enemy move.
+/// `StartTurn` for the player's side, from `BeforeSideTurnStart` to
+/// `OrbQueue.AfterTurnStart`. An `extra` turn is one `ShouldTakeExtraTurn`
+/// gave, which rolls no enemy move.
+///
+/// `SetupPlayerTurn` runs under a pause boundary inside it. One that stops
+/// on a question lets the turn go on around it: `StartTurn` waits for it to
+/// finish or to pause. Its task comes back, set aside, for
+/// `RunAutoPrePlayPhase` to wait for.
 #[tracing::instrument(level = "trace", skip_all)]
-pub(super) fn start_player_turn<V: Rules>(
+#[allow(clippy::too_many_arguments)]
+pub(super) fn side_starts<V: Rules>(
     seat: sts2_core::SeatIndex,
-    fighting: Fighting<'_, V>,
+    live: &mut Live<V>,
+    streams: &mut crate::stream::Streams<V>,
+    belts: &mut crate::run::Belts<V>,
     ascension: V::AscensionLevel,
     max_energy: V::Count,
-    skipping: Skips<V>,
     extra: bool,
-) -> Result<Option<super::Ended>, Error> {
-    let Fighting {
-        live: next,
-        streams,
-        belts,
-    } = fighting;
+) -> Result<SideStarted<V>, Error> {
     // `StartTurn` opens on `BeforeSideTurnStart`, which is where a relic
     // counting a turn's plays moves the count on for the draw to read.
+    let turn = live.turn;
     before_side_turn_start::<V>(
         seat,
-        next,
+        live,
         streams.combat(),
         belts,
         ascension,
         <V::CombatSide as SideKinds>::PLAYER,
-        next.turn,
+        turn,
     );
 
-    next.players[seat].phase = <V::PlayerTurnPhase as TurnPhaseKinds>::START;
+    live.players[seat].phase = <V::PlayerTurnPhase as TurnPhaseKinds>::START;
 
     // `PrepareForNextTurn`, before the player draws anything. An extra turn
     // leaves the enemies' moves as they were.
     if !extra {
-        roll_moves(next, belts, ascension, streams.combat().ai)?;
+        roll_moves(live, belts, ascension, streams.combat().ai)?;
     }
 
     // `AfterTurnStart` on the player, then `SetupPlayerTurn`.
     clear_block::<V>(
         seat,
-        next,
+        live,
         streams.combat(),
         belts,
         <V::CombatSide as SideKinds>::PLAYER,
@@ -342,65 +345,57 @@ pub(super) fn start_player_turn<V: Rules>(
     // A block the clear gives back can end the fight, through a hit it sets
     // off. `ResetEnergy` still runs, but no listener hears a hook from then
     // on, so the energy is the plain maximum and nothing is drawn.
-    if next.won && super::board::ending::<V>(listen::Walk { live: next, belts }) {
-        next.players[seat].energy = max_energy;
-        next.skip_tick = skipping;
-        return Ok(Some(super::Ended::Won));
+    if live.won && super::board::ending::<V>(listen::Walk { live, belts }) {
+        live.players[seat].energy = max_energy;
+        return Ok(SideStarted::Ended(super::Ended::Won));
     }
     // `ResetEnergy`, to `MaxEnergy`, which runs `Hook.ModifyMaxEnergy`. A
     // player `Hook.ShouldPlayerResetEnergy` keeps from it adds the maximum
     // to what they have instead.
-    let player = next.player(seat).id;
+    let player = live.player(seat).id;
     let kept = listen::any_decides::<V>(
-        listen::Walk { live: next, belts },
+        listen::Walk { live, belts },
         sts2_core::DecisionHook::ShouldPlayerResetEnergy {
             player,
-            turn: next.turn,
+            turn: live.turn,
         },
         false,
     );
-    let max = super::board::max_energy::<V>(listen::Walk { live: next, belts }, max_energy);
-    next.players[seat].energy = if kept {
-        next.players[seat].energy + max
+    let max = super::board::max_energy::<V>(listen::Walk { live, belts }, max_energy);
+    live.players[seat].energy = if kept {
+        live.players[seat].energy + max
     } else {
         max
     };
     // An evoke that ends the fight ends `SetupPlayerTurn` with it, as a
     // relic's damage before the hand does below.
-    if let Some(ended) = energy_reset::<V>(seat, next, streams, belts, ascension) {
-        next.skip_tick = skipping;
-        return Ok(Some(ended));
+    if let Some(ended) = energy_reset::<V>(seat, live, streams.combat(), belts, ascension) {
+        return Ok(SideStarted::Ended(ended));
     }
-    energy_reset_late::<V>(seat, next, streams.combat(), belts, ascension);
-    let player = next.player(seat).id;
+    energy_reset_late::<V>(seat, live, streams.combat(), belts, ascension);
+    let player = live.player(seat).id;
     let hook = sts2_core::EventHook::BeforeHandDraw {
         player,
-        turn: next.turn,
+        turn: live.turn,
     };
-    let asked = listen::Walking::begin(next, belts, hook).map(Box::new);
-    // A setup that stops on a question lets the turn go on around it:
-    // `StartTurn` waits for it to finish or to pause. A relic's damage can
-    // end the fight, and a fight ended in `SetupPlayerTurn` starts no side
-    // turn after it.
-    let fresh = next.deferred.open_fresh();
-    next.pause_boundary = true;
-    let carried = begin_setup(seat, next, streams.combat(), belts, ascension, asked);
-    next.pause_boundary = false;
+    let asked = listen::Walking::begin(live, belts, hook).map(Box::new);
+    // A relic's damage can end the fight, and a fight ended in
+    // `SetupPlayerTurn` starts no side turn after it.
+    let fresh = live.deferred.open_fresh();
+    live.pause_boundary = true;
+    let carried = begin_setup(seat, live, streams, belts, ascension, asked);
+    live.pause_boundary = false;
     let setup = match carried {
-        Carried::Done(Some(ended)) => {
-            next.skip_tick = skipping;
-            return Ok(Some(ended));
-        }
+        Carried::Done(Some(ended)) => return Ok(SideStarted::Ended(ended)),
         Carried::Done(None) => {
-            next.deferred.keep_fresh(fresh);
+            live.deferred.keep_fresh(fresh);
             None
         }
-        Carried::Parked => Some(next.set_aside(seat, fresh)),
+        Carried::Parked => Some(live.set_aside(seat, fresh)),
     };
-    let parked = setup.is_some();
     let ended = side_turn_started::<V>(
         seat,
-        next,
+        live,
         streams.combat(),
         belts,
         ascension,
@@ -408,42 +403,20 @@ pub(super) fn start_player_turn<V: Rules>(
         extra,
     )
     // `OrbQueue.AfterTurnStart`, once the side's turn has started.
-    .or_else(|| orbs_at_turn_start::<V>(seat, next, streams.combat(), belts, ascension));
-    // `RunAutoPrePlayPhase` waits for a paused setup, which goes on once the
-    // turn has started around it. A choice it signalled lists now, and
-    // where the setup runs to its end the pre-play phase follows it there.
-    if let Some(setup) = setup {
-        next.rejoin(seat, setup);
-    }
-    if let Some(ended) = ended {
-        next.skip_tick = skipping;
-        return Ok(Some(ended));
-    }
-    let came_up = super::play::come_up(
-        seat,
-        super::Fighting {
-            live: &mut *next,
-            streams: &mut *streams,
-            belts: &mut *belts,
-        },
-    )?;
-    if let Some(ended) = came_up {
-        next.skip_tick = skipping;
-        return Ok(Some(ended));
-    }
+    .or_else(|| orbs_at_turn_start::<V>(seat, live, streams.combat(), belts, ascension));
+    Ok(SideStarted::Started { setup, ended })
+}
 
-    // `RunAutoPrePlayPhase` waits for the setup, so a parked one keeps the
-    // turn in its start until the answer.
-    if !parked {
-        if let Some(ended) = pre_play_phase::<V>(seat, next, streams.combat(), belts) {
-            next.skip_tick = skipping;
-            return Ok(Some(ended));
-        }
-        next.players[seat].phase = after_pre_play::<V>(next);
-    }
-
-    next.skip_tick = skipping;
-    Ok(None)
+/// How the player's side turn start came out.
+pub(super) enum SideStarted<V: Rules> {
+    /// The fight ended before the side's turn started.
+    Ended(super::Ended),
+    /// The side's turn started. `setup` is the task of a setup that stopped
+    /// on a question, and `ended` is how the side's start ended the fight.
+    Started {
+        setup: Option<super::live::Paused<V>>,
+        ended: Option<super::Ended>,
+    },
 }
 
 /// The post-play phase from `rest`, what its listeners still ask for. It
@@ -2576,61 +2549,48 @@ pub(super) fn answer_setup<V: Rules>(
     ended.or_else(|| play_sly::<V>(seat, live, rngs, belts, sly, true))
 }
 
-/// `SetupPlayerTurn` from where `setup` stopped to its end, once the question
-/// it stopped on is answered, then `RunAutoPrePlayPhase`. `ended` is how the
-/// answer ended the fight, which leaves the setup unfinished.
+/// `SetupPlayerTurn` from where `setup` stopped, once the question it
+/// stopped on is answered. `ended` is how the answer ended the fight, which
+/// leaves the setup unfinished. How the setup ended the fight, where it ran
+/// to its end.
 #[tracing::instrument(level = "trace", skip_all)]
 pub(super) fn finish_setup<V: Rules>(
-    seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
-    mut rngs: CombatRngs<'_>,
+    streams: &mut crate::stream::Streams<V>,
     belts: &mut crate::run::Belts<V>,
     mut setup: Box<super::setup::setup::State<V>>,
     ended: Option<super::Ended>,
 ) -> Option<super::Ended> {
     let lent = super::setup::Lent {
         live: &mut *live,
-        rngs: rngs.reborrow(),
-        belts: &mut *belts,
+        streams,
+        belts,
         ended,
         taken: None,
     };
-    let state = diapause::Coroutine::resume(&mut *setup, lent);
-    let carried = match state {
+    match diapause::Coroutine::resume(&mut *setup, lent) {
         diapause::CoroutineState::Yielded(()) => {
             live.defer(super::live::Deferred::Setup(setup));
-            Carried::Parked
+            None
         }
-        diapause::CoroutineState::Complete(ended) => Carried::Done(ended),
-    };
-    match carried {
-        Carried::Parked => None,
-        Carried::Done(ended) => {
-            let ended = ended.or_else(|| pre_play_phase::<V>(seat, live, rngs, belts));
-            match ended {
-                Some(_) => {}
-                None => live.players[seat].phase = after_pre_play::<V>(live),
-            }
-            ended
-        }
+        diapause::CoroutineState::Complete(ended) => ended,
     }
 }
 
 /// `SetupPlayerTurn` from inside `Hook.BeforeHandDraw`, whose walk `before`
 /// is: as far as its end, or the first question it stops on, whose rest
 /// waits in [`Live::deferred`].
-#[allow(clippy::too_many_arguments)]
 pub(super) fn begin_setup<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
-    rngs: CombatRngs<'_>,
+    streams: &mut crate::stream::Streams<V>,
     belts: &mut crate::run::Belts<V>,
     ascension: V::AscensionLevel,
     before: Option<Box<listen::Walking<V>>>,
 ) -> Carried {
     let lent = super::setup::Lent {
         live: &mut *live,
-        rngs,
+        streams,
         belts,
         ended: None,
         taken: None,
@@ -2669,6 +2629,16 @@ pub(super) fn ask_out_walk<V: Rules>(
     }
 }
 
+/// How far `RunAutoPrePlayPhase` got.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) enum PrePlayed<V: Rules> {
+    /// Over, with how an auto-play ended the fight.
+    Over(Option<super::Ended>),
+    /// An auto-play asked. Once the question is over, what the pass still
+    /// asked for goes on from `rest`, then the passes from `next`.
+    Asked { rest: PassRest<V>, next: usize },
+}
+
 /// `RunAutoPrePlayPhase` once the player's turn is set up:
 /// `AfterAutoPrePlayPhaseEntered`'s early pass, its own, then its late one,
 /// each over every listener. How an auto-play there ended the fight.
@@ -2681,7 +2651,7 @@ pub(super) fn pre_play_phase<V: Rules>(
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
     belts: &mut crate::run::Belts<V>,
-) -> Option<super::Ended> {
+) -> PrePlayed<V> {
     use sts2_core::{ModelHook, Overrides};
 
     // `Phase = PlayerTurnPhase.AutoPrePlay`, which what the passes play reads.
@@ -2689,14 +2659,14 @@ pub(super) fn pre_play_phase<V: Rules>(
     if V::checks_empty_hand_entering_pre_play()
         && let Some(ended) = empty_hand_entering_pre_play::<V>(seat, live, rngs.reborrow(), belts)
     {
-        return Some(ended);
+        return PrePlayed::Over(Some(ended));
     }
     // Most fights hold nothing that hears any of the three passes.
     let hooks = Overrides::of(ModelHook::AfterAutoPrePlayPhaseEnteredEarly)
         .with(ModelHook::AfterAutoPrePlayPhaseEntered)
         .with(ModelHook::AfterAutoPrePlayPhaseEnteredLate);
     if !listen::heard_any::<V>(live, belts, hooks) {
-        return None;
+        return PrePlayed::Over(None);
     }
     pre_play_heard::<V>(seat, live, rngs, belts)
 }
@@ -2733,7 +2703,7 @@ fn pre_play_heard<V: Rules>(
     live: &mut Live<V>,
     rngs: CombatRngs<'_>,
     belts: &mut crate::run::Belts<V>,
-) -> Option<super::Ended> {
+) -> PrePlayed<V> {
     pre_play_from::<V>(seat, live, rngs, belts, PassRest::none(), 0)
 }
 
@@ -2802,7 +2772,7 @@ pub(super) fn pre_play_from<V: Rules>(
     belts: &mut crate::run::Belts<V>,
     rest: PassRest<V>,
     next: usize,
-) -> Option<super::Ended> {
+) -> PrePlayed<V> {
     let turn = live.turn;
     let passes = [
         sts2_core::EventHook::AutoPrePlayPhaseEarly { turn },
@@ -2830,7 +2800,7 @@ pub(super) fn pre_play_from<V: Rules>(
                         true,
                     );
                     if ended.is_some() {
-                        return ended;
+                        return PrePlayed::Over(ended);
                     }
                 }
                 sts2_core::HookEffect::AutoPlayDupeOfLastPlay { kinds } => {
@@ -2843,16 +2813,15 @@ pub(super) fn pre_play_from<V: Rules>(
                         kinds,
                     );
                     if ended.is_some() {
-                        return ended;
+                        return PrePlayed::Over(ended);
                     }
                     // `CardCmd.AutoPlay` is awaited, so what the pass still
                     // asked for waits on the answer.
                     if live.asking.is_some() {
-                        live.defer(super::live::Deferred::PrePlay {
+                        return PrePlayed::Asked {
                             rest: asked,
                             next: pass,
-                        });
-                        return None;
+                        };
                     }
                 }
                 // `CardSelectCmd.PushSelector(new VakuuCardSelector())` around
@@ -2879,7 +2848,7 @@ pub(super) fn pre_play_from<V: Rules>(
                             Some(captured),
                         );
                         if ended.is_some() {
-                            return ended;
+                            return PrePlayed::Over(ended);
                         }
                         // `CardCmd.AutoPlay` is awaited, so the plays left
                         // wait on the answer, ahead of what the pass still
@@ -2887,11 +2856,10 @@ pub(super) fn pre_play_from<V: Rules>(
                         if live.asking.is_some() {
                             asked.first =
                                 Some((listener, sts2_core::HookEffect::AutoPlayHand { left }));
-                            live.defer(super::live::Deferred::PrePlay {
+                            return PrePlayed::Asked {
                                 rest: asked,
                                 next: pass,
-                            });
-                            return None;
+                            };
                         }
                     }
                     live.selector_answers = false;
@@ -2912,7 +2880,7 @@ pub(super) fn pre_play_from<V: Rules>(
                     .blocking();
                     sts2_core::Fight::auto_play_from_draw(&mut board, count, false);
                     if let Some(ended) = board.ended() {
-                        return Some(ended);
+                        return PrePlayed::Over(Some(ended));
                     }
                 }
                 effect => {
@@ -2922,15 +2890,16 @@ pub(super) fn pre_play_from<V: Rules>(
             // `RunAutoPrePlayPhase` awaits each hook, so the rest waits on
             // the answer.
             if live.asking.is_some() {
-                live.defer(super::live::Deferred::PrePlay {
+                return PrePlayed::Asked {
                     rest: asked,
                     next: pass,
-                });
-                return None;
+                };
             }
         }
         // Past the last pass, the phase is over and the fight goes on.
-        let &hook = passes.get(pass)?;
+        let Some(&hook) = passes.get(pass) else {
+            return PrePlayed::Over(None);
+        };
         asked = PassRest::walk(live, belts, hook);
         pass += 1;
     }
@@ -3522,7 +3491,7 @@ pub(super) fn flush_hand<V: Rules>(
 pub(super) fn energy_reset<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
-    streams: &mut crate::stream::Streams<V>,
+    mut rngs: CombatRngs<'_>,
     belts: &mut crate::run::Belts<V>,
     ascension: V::AscensionLevel,
 ) -> Option<super::Ended> {
@@ -3544,7 +3513,7 @@ pub(super) fn energy_reset<V: Rules>(
                 sts2_core::HookEffect::GainEnergyAndRemove(amount),
             ) => {
                 let mut board =
-                    Board::for_card(seat, live, streams.combat(), belts, ascension, None, None);
+                    Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
                 sts2_core::Fight::modify_energy(&mut board, amount);
                 live.remove_power(seat, owner, power);
             }
@@ -3552,7 +3521,7 @@ pub(super) fn energy_reset<V: Rules>(
             // fight, as Black Hole's damage does.
             (_, sts2_core::HookEffect::GainStars(amount)) => {
                 let mut board =
-                    Board::for_card(seat, live, streams.combat(), belts, ascension, None, None);
+                    Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
                 sts2_core::Fight::gain_stars(&mut board, amount);
                 ended = ended.or(board.ended());
             }
@@ -3563,20 +3532,19 @@ pub(super) fn energy_reset<V: Rules>(
             // `PlayerCmd.GainEnergy`.
             (_, sts2_core::HookEffect::GainEnergy(amount)) => {
                 let mut board =
-                    Board::for_card(seat, live, streams.combat(), belts, ascension, None, None);
+                    Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
                 sts2_core::Fight::modify_energy(&mut board, amount);
             }
             // `PowerCmd.Decrement(this)`.
             (Listener::Power { owner, power, .. }, sts2_core::HookEffect::Decrement) => {
                 let mut board =
-                    Board::for_card(seat, live, streams.combat(), belts, ascension, None, None);
+                    Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
                 board.modify_amount(owner, power, -num_traits::one::<V::Number>());
             }
             // `OrbCmd.Channel` on the player, which evokes an orb to make room.
-            // The streams are lent only here, which most turns never reach.
             (_, sts2_core::HookEffect::Channel(orb)) => {
                 let mut board =
-                    Board::for_card(seat, live, streams.combat(), belts, ascension, None, None);
+                    Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
                 sts2_core::Fight::channel(&mut board, orb);
                 ended = ended.or(board.ended());
             }
