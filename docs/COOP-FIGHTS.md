@@ -12,13 +12,16 @@ builds a fight of every player: their creatures first, their decks
 shuffled in seat order, and the monsters' health scaled. Each relic hears
 a draw or energy hook only for its own player, as each of the game's
 checks `player != Owner`. An `AnyPlayer` potion can be aimed at any
-player.
+player. A player who ends the turn waits with no moves until every player
+ends it. Then each phase of the turn's end runs for each player in seat
+order, and the side's hooks run once.
 
 What still assumes one player:
 
 - `Live::asking` holds one question, and `Live::deferred` one stack of
   command frames.
-- The turn's end runs for one player (`turn::end` panics for several).
+- A phase of the turn's end that waits on a question, and an extra turn,
+  panic in a fight of several players.
 - A monster's move reaches one player (`Board::seat_of_several` panics).
 - A player's death beside a living one, cards given to several players,
   and a potion thrown at another player panic.

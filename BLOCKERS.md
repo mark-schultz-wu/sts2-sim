@@ -65,10 +65,16 @@ run as its own machine sees it. The work goes in this order:
    Every seed matches each step through the first fight's opening. The
    fight holds every player's creature and shuffled deck, and scales
    monster health by the player count. Each relic hears only its own
-   player's draw and energy. Next, in the order of `docs/COOP-FIGHTS.md`:
-   - The turn's end over every player. `turn::end` panics in a fight of
-     several players, and most hunted runs stop there.
-   - A question for each seat, in the action that asked it. Silent's
+   player's draw and energy. The turn ends once every player ends it,
+   with each phase run for each player in seat order. Next, in the
+   order of `docs/COOP-FIGHTS.md`:
+   - A monster's move over every player. About 90 places in `Board` take
+     "the player" from `Board::seat`, which panics for a monster's move in
+     a fight of several. An attack hits every living player, and a status
+     card or debuff a move gives goes to each. Most hunted runs stop at
+     the enemies' first move.
+   - A question for each seat, in the action that asked it. Each phase of
+     the turn's end panics at one in a fight of several players. Silent's
      Survivor asks seat 0 the discard now. The rest of the scheduler comes
      with it, since a second seat makes each part testable (steps 3 and 4
      of `docs/SCHEDULER.md`). Card plays, potions and the turn's end go

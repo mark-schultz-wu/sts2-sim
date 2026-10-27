@@ -7665,6 +7665,11 @@ impl<V: Rules> State<V> {
             return;
         }
         if let Phase::Combat(live) = &self.phase {
+            // A player who ended the turn has nothing to do until the rest
+            // have, as the screen greys the hand out.
+            if live.ready(seat) {
+                return;
+            }
             crate::combat::legal_moves::<V>(
                 seat,
                 live,

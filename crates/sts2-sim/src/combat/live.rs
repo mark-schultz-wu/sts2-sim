@@ -2551,6 +2551,9 @@ pub(crate) struct PlayerCombat<V: Rules> {
     /// `SetReadyToEndTurn`: the player's turn ends once the play in progress
     /// is over.
     pub(super) ending_turn: bool,
+    /// `PlayersReadyToEndTurn` holds the player: in a fight of several, it
+    /// ended its turn and waits for the rest until the next turn starts.
+    pub(super) ready: bool,
     /// `CombatManager`'s card or potion effect depth for the player: how
     /// many plays or potions are between `BeginCardOrPotionEffect` and
     /// `EndCardOrPotionEffect`.
@@ -2590,6 +2593,7 @@ impl<V: Rules> Clone for PlayerCombat<V> {
             cards,
             removed_from_deck,
             ending_turn,
+            ready,
             effect_depth,
             deck_versions,
             taken_from_deck,
@@ -2605,6 +2609,7 @@ impl<V: Rules> Clone for PlayerCombat<V> {
         cards.clone_from(&source.cards);
         removed_from_deck.clone_from(&source.removed_from_deck);
         *ending_turn = source.ending_turn;
+        *ready = source.ready;
         *effect_depth = source.effect_depth;
         deck_versions.clone_from(&source.deck_versions);
         taken_from_deck.clone_from(&source.taken_from_deck);
@@ -3168,6 +3173,11 @@ impl<V: Rules> Live<V> {
     /// `RanOutOfTime` records.
     pub(crate) fn any_escaped(&self) -> bool {
         self.creatures.any_escaped()
+    }
+
+    /// Whether the player ended the turn and waits for the rest.
+    pub(crate) fn ready(&self, seat: sts2_core::SeatIndex) -> bool {
+        self.players[seat].ready
     }
 
     /// Whether a play asked for the turn to end.
@@ -4023,6 +4033,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             cards: super::cards::Cards::with_cards(0),
             removed_from_deck: Vec::new(),
             ending_turn: false,
+            ready: false,
             effect_depth: 0,
             deck_versions: DeckVersions::none(),
             taken_from_deck: Vec::new(),

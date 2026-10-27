@@ -31,11 +31,14 @@ pub(crate) fn end<V: Rules>(
     fighting: Fighting<'_, V>,
     ascension: V::AscensionLevel,
 ) -> Result<Option<super::Ended>, Error> {
-    if fighting.live.players.len() > 1 {
-        unimplemented!(
-            "ending a turn in a fight of {} players",
-            fighting.live.players.len()
-        );
+    // `SetReadyToEndTurn`. In a fight of several, the turn ends once every
+    // player is ready.
+    let live = &mut *fighting.live;
+    if live.players.len() > 1 {
+        live.players[seat].ready = true;
+        if !seats(live).all(|other| live.players[other].ready) {
+            return Ok(None);
+        }
     }
     super::turn_loop::begin(seat, fighting, ascension, false)
 }
@@ -66,16 +69,14 @@ pub(super) fn in_hand_from<V: Rules>(
 /// win check. Every hook walk yields nothing while the fight is ending. So
 /// what is left is the switch, the phase `StartTurn` opens on, and
 /// `Creature.AfterTurnStart` clearing each enemy's block.
-pub(super) fn ended_at_turn_end<V: Rules>(
-    seat: sts2_core::SeatIndex,
-    live: &mut Live<V>,
-    ended: super::Ended,
-) {
+pub(super) fn ended_at_turn_end<V: Rules>(live: &mut Live<V>, ended: super::Ended) {
     match ended {
         super::Ended::Won => {}
         super::Ended::Lost => {
             live.switch_side(<V::CombatSide as SideKinds>::ENEMY);
-            live.players[seat].phase = <V::PlayerTurnPhase as TurnPhaseKinds>::NONE;
+            for player in live.players.iter_mut() {
+                player.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::NONE;
+            }
             for creature in live.creatures.iter_mut() {
                 if creature.side == <V::CombatSide as SideKinds>::ENEMY {
                     creature.block = num_traits::zero();
@@ -334,8 +335,10 @@ pub(super) fn side_starts<V: Rules>(
         turn,
     );
 
+    // `SetPhaseForAllPlayers`, and `PlayersReadyToEndTurn` emptied.
     for player in live.players.iter_mut() {
         player.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::START;
+        player.ready = false;
     }
 
     // `PrepareForNextTurn`, before the player draws anything. An extra turn

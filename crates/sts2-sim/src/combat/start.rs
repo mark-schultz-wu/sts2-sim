@@ -623,6 +623,7 @@ fn player_combat<V: Rules>(
         cards: Cards::with_cards(0),
         removed_from_deck: Vec::new(),
         ending_turn: false,
+        ready: false,
         effect_depth: 0,
         deck_versions: super::live::DeckVersions::none(),
         taken_from_deck: Vec::new(),
