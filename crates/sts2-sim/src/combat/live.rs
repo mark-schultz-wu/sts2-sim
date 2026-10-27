@@ -2668,9 +2668,9 @@ pub(crate) struct Live<V: Rules> {
     /// has not returned: `StartTurn`'s on `SetupPlayerTurn`. A choice
     /// signalled under it pauses the task there, and the caller runs on.
     pub(super) pause_boundary: bool,
-    /// What `AfterCombatEnd` asked of the run, which carries it out as it
-    /// takes the fight's rewards.
-    pub(super) leaving: Vec<sts2_core::HookEffect<V>>,
+    /// What `AfterCombatEnd` asked of the run, by the seat whose listener
+    /// asked, which the run carries out for it as it takes the rewards.
+    pub(super) leaving: Vec<(sts2_core::SeatIndex, sts2_core::HookEffect<V>)>,
     /// What the fight asked of the run in the middle of a decision, which the
     /// run carries out as the decision settles.
     pub(super) for_run: Vec<sts2_core::HookEffect<V>>,
@@ -3240,8 +3240,9 @@ impl<V: Rules> Live<V> {
         }
     }
 
-    /// What the fight's end asked of the run, in the order it asked.
-    pub(crate) fn leaving(&self) -> &[sts2_core::HookEffect<V>] {
+    /// What the fight's end asked of the run, in the order it asked, by the
+    /// seat it asked for.
+    pub(crate) fn leaving(&self) -> &[(sts2_core::SeatIndex, sts2_core::HookEffect<V>)] {
         &self.leaving
     }
 
@@ -3385,6 +3386,12 @@ impl<V: Rules> Live<V> {
         if let Some(task) = self.queues.go_on(seat) {
             self.rejoin(seat, task);
         }
+    }
+
+    /// Whether a player's action waits on its question at the front of its
+    /// queue.
+    pub(crate) fn waits_on_a_question(&self) -> bool {
+        self.queues.any_stopped()
     }
 
     /// The question in play, or else the one `seat`'s queue stopped on.
@@ -3892,23 +3899,25 @@ impl<V: Rules> Live<V> {
         }
     }
 
-    /// Consume a won fight into the report that remains on its reward screen.
-    pub(crate) fn finish(
-        &mut self,
-        seat: sts2_core::SeatIndex,
-        belts: &crate::run::Belts<V>,
-    ) -> Combat<V> {
-        self.players[seat].phase = <V::PlayerTurnPhase as sts2_core::TurnPhaseKinds>::NONE;
-        self.players[seat].cards.clear();
-        let player = self
-            .creatures
-            .iter_mut()
-            .find(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER)
-            .expect("a fight has the player in it");
-        player.block = num_traits::zero();
-        let player = player.id;
-        self.powers.clear(player);
-        self.report(seat, belts)
+    /// Consume a won fight into the reports that remain on each player's
+    /// reward screen, in seat order.
+    pub(crate) fn finish(&mut self, belts: &crate::run::Belts<V>) -> Vec<Combat<V>> {
+        for seat in self.players.seats() {
+            self.players[seat].phase = <V::PlayerTurnPhase as sts2_core::TurnPhaseKinds>::NONE;
+            self.players[seat].cards.clear();
+            let id = seat.creature();
+            let player = self
+                .creatures
+                .iter_mut()
+                .find(|creature| creature.id == id)
+                .expect("a fight has every player in it");
+            player.block = num_traits::zero();
+            self.powers.clear(id);
+        }
+        self.players
+            .seats()
+            .map(|seat| self.report(seat, belts))
+            .collect()
     }
 }
 

@@ -4568,6 +4568,8 @@ pub enum EventHook<V: ContentVersion> {
     /// `BeforeCombatRewardOffered`, once a won fight's rewards are made and
     /// before they are offered. A hook v0.111.0 has and v0.107.1 lacks.
     CombatRewardOffering {
+        /// `rewards.Player`: whose rewards they are.
+        player: crate::CombatId,
         /// Whether a `CardReward` is among them.
         card_reward: bool,
     },

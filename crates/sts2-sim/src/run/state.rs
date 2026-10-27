@@ -933,6 +933,18 @@ impl<V: Rules> NeowSeat<V> {
     }
 }
 
+/// One player's screen after a won fight.
+#[derive(Debug, Clone)]
+pub(super) struct RewardSeat<V: Rules> {
+    /// The fight as this player saw it end, which stays in the observation
+    /// until the run leaves the room.
+    combat: Combat<V>,
+    offered: Vec<Offer<V>>,
+    /// The card removal taken and waiting on the card to remove, by its
+    /// place on the screen.
+    removing: Option<usize>,
+}
+
 #[derive(Debug, Clone)]
 pub(super) enum Phase<V: Rules> {
     /// Each player's Neow, by seat.
@@ -942,16 +954,10 @@ pub(super) enum Phase<V: Rules> {
     /// Boxed, so a run moves a pointer rather than a fight. A reused node
     /// writes into the box it already has.
     Combat(Box<crate::combat::Live<V>>),
-    /// A fight that is over, and the rewards it has not handed out yet.
-    ///
-    /// The fight stays in the observation. It reports the state it ended in
-    /// until the run leaves the room.
+    /// A fight that is over, and each player's rewards it has not handed
+    /// out yet, by seat.
     Rewards {
-        combat: Combat<V>,
-        offered: Vec<Offer<V>>,
-        /// The card removal taken and waiting on the card to remove, by its
-        /// place on the screen.
-        removing: Option<usize>,
+        seats: crate::seats::BySeat<RewardSeat<V>>,
         spent: Spent<V>,
     },
     Event {
@@ -1174,10 +1180,12 @@ impl<V: Rules> State<V> {
                 Pickup::Event => self.event_question().kind(),
                 _ => sts2_core::QuestionKind::SelectCards,
             }),
-            Phase::Rewards {
-                removing: Some(_), ..
-            } => Some(sts2_core::QuestionKind::SelectCards),
-            Phase::Rewards { offered, .. } if offered.iter().any(|offer| !offer.taken()) => {
+            Phase::Rewards { seats, .. } if seats[seat].removing.is_some() => {
+                Some(sts2_core::QuestionKind::SelectCards)
+            }
+            Phase::Rewards { seats, .. }
+                if seats[seat].offered.iter().any(|offer| !offer.taken()) =>
+            {
                 Some(sts2_core::QuestionKind::Rewards)
             }
             // Only a heal's rewards park at a rest site.
@@ -1764,7 +1772,7 @@ impl<V: Rules> State<V> {
     ///
     /// A deck listener hearing either victory hook, or asking for anything
     /// but to leave the deck.
-    pub(super) fn combat_ended(&mut self, seat: sts2_core::SeatIndex) {
+    pub(super) fn combat_ended(&mut self) {
         use sts2_core::{ModelHook, Overrides};
 
         let Phase::Combat(live) = &self.phase else {
@@ -1772,36 +1780,42 @@ impl<V: Rules> State<V> {
         };
         let hook = sts2_core::EventHook::CombatEnd { room: live.room() };
         let mut asked = sts2_core::HookEffects::new();
-        for listener in self.deck_listed(seat, Overrides::of(ModelHook::AfterCombatEnd)) {
-            if !self.ask_run_listener(listener, hook, &mut asked) {
-                continue;
-            }
-            for effect in asked.drain(..) {
-                match (listener, effect) {
-                    // `CardPileCmd.RemoveFromDeck`.
-                    (RunListener::DeckCard { id, .. }, sts2_core::HookEffect::RemoveFromDeck) => {
-                        let at = self.players[seat]
-                            .deck
-                            .iter()
-                            .position(|held| held.id == id);
-                        let at = at.expect("a card the deck held as it was asked");
-                        self.players[seat].deck_mut().remove(at);
-                    }
-                    (listener, effect) => {
-                        unimplemented!("{listener:?} in the deck asking for {effect:?}")
+        // Each player's deck, in seat order.
+        for seat in self.players.seats() {
+            for listener in self.deck_listed(seat, Overrides::of(ModelHook::AfterCombatEnd)) {
+                if !self.ask_run_listener(listener, hook, &mut asked) {
+                    continue;
+                }
+                for effect in asked.drain(..) {
+                    match (listener, effect) {
+                        // `CardPileCmd.RemoveFromDeck`.
+                        (
+                            RunListener::DeckCard { id, .. },
+                            sts2_core::HookEffect::RemoveFromDeck,
+                        ) => {
+                            let at = self.players[seat]
+                                .deck
+                                .iter()
+                                .position(|held| held.id == id);
+                            let at = at.expect("a card the deck held as it was asked");
+                            self.players[seat].deck_mut().remove(at);
+                        }
+                        (listener, effect) => {
+                            unimplemented!("{listener:?} in the deck asking for {effect:?}")
+                        }
                     }
                 }
             }
-        }
-        let victory = Overrides::of(ModelHook::AfterCombatVictoryEarly)
-            .union(Overrides::of(ModelHook::AfterCombatVictory));
-        if let Some(listener) = self.deck_listed(seat, victory).first() {
-            unimplemented!("{listener:?} in the deck hearing a won fight");
+            let victory = Overrides::of(ModelHook::AfterCombatVictoryEarly)
+                .union(Overrides::of(ModelHook::AfterCombatVictory));
+            if let Some(listener) = self.deck_listed(seat, victory).first() {
+                unimplemented!("{listener:?} in the deck hearing a won fight");
+            }
         }
         let Phase::Combat(live) = &mut self.phase else {
             unreachable!("a won fight is the one the run stands in")
         };
-        crate::combat::combat_ended::<V>(seat, live, &mut self.belts);
+        crate::combat::combat_ended::<V>(live, &mut self.belts);
     }
 
     /// `Hook.BeforeRoomEntered`, which `RunManager.EnterRoom` raises once the
@@ -2011,7 +2025,7 @@ impl<V: Rules> State<V> {
     /// `CardSelectorPrefs.Cancelable` puts there. Smith, Cook, the shop's
     /// paid card removal and the card-removal reward each set it. Lord's
     /// Parasol's free removal does not.
-    fn cancelable(&self) -> bool {
+    fn cancelable(&self, seat: sts2_core::SeatIndex) -> bool {
         match &self.phase {
             Phase::RestSite {
                 upgrading: true, ..
@@ -2035,9 +2049,7 @@ impl<V: Rules> State<V> {
                 asking: Some(asked),
                 ..
             } => asked.pickup == Pickup::CardRemoval { free: false },
-            Phase::Rewards {
-                removing: Some(_), ..
-            } => true,
+            Phase::Rewards { seats, .. } => seats[seat].removing.is_some(),
             _ => false,
         }
     }
@@ -2048,7 +2060,7 @@ impl<V: Rules> State<V> {
     /// is as it was. The shop's removal is not bought, and the removal
     /// reward is not taken.
     fn cancel(&mut self, seat: sts2_core::SeatIndex) -> Settled<V> {
-        if !self.cancelable() {
+        if !self.cancelable(seat) {
             return Err(sts2_core::Refusal {
                 what: "answer".into(),
                 reason: sts2_core::Reason::Malformed {
@@ -2069,7 +2081,7 @@ impl<V: Rules> State<V> {
                 *chosen = None;
             }
             Phase::Shop { asking, .. } => *asking = None,
-            Phase::Rewards { removing, .. } => *removing = None,
+            Phase::Rewards { seats, .. } => seats[seat].removing = None,
             _ => unreachable!("only a cancelable selection is cancelled"),
         }
         Ok(self.decided(seat))
@@ -2279,28 +2291,35 @@ impl<V: Rules> State<V> {
         }
     }
 
-    /// Park the run on the rewards a won fight left it.
+    /// Park the run on the rewards a won fight left each player, in seat
+    /// order.
     ///
-    /// What the fight did to the player comes out with it. The creature was
+    /// What the fight did to each player comes out with it. The creature was
     /// built from the run's own numbers and is where they stood while the
     /// fight lasted.
     /// `spent` is the fight's own storage.
     pub(super) fn won(
         &mut self,
-        seat: sts2_core::SeatIndex,
-        combat: Combat<V>,
-        offered: Vec<Offer<V>>,
+        screens: Vec<(Combat<V>, Vec<Offer<V>>)>,
         spent: Box<crate::combat::Live<V>>,
     ) {
-        self.players[seat].last_turn = Some(combat.turn);
-        if let Some(player) = combat.creatures.iter().find(|c| c.id == seat.creature()) {
-            self.players[seat].hp = player.hp;
-            self.players[seat].max_hp = player.max_hp;
+        let mut seats = Vec::with_capacity(screens.len());
+        for (seat, (combat, offered)) in self.players.seats().zip(screens) {
+            self.players[seat].last_turn = Some(combat.turn);
+            if let Some(player) = combat.creatures.iter().find(|c| c.id == seat.creature()) {
+                self.players[seat].hp = player.hp;
+                self.players[seat].max_hp = player.max_hp;
+            }
+            seats.push(RewardSeat {
+                combat,
+                offered,
+                removing: None,
+            });
         }
+        let mut seats = seats.into_iter();
+        let host = seats.next().expect("a run has a player");
         self.phase = Phase::Rewards {
-            combat,
-            offered,
-            removing: None,
+            seats: crate::seats::BySeat::new(host, seats.collect()),
             spent: Spent(Some(spent)),
         };
     }
@@ -2894,7 +2913,7 @@ impl<V: Rules> State<V> {
                         .collect();
                     // `CardReward.Populate` over cards set by hand, which
                     // raises the reward's own pass with `IsCardReward`.
-                    self.reward_offers(&mut offered);
+                    self.reward_offers(seat, &mut offered);
                     self.modify_rewards(seat, &mut offered, None);
                     crate::reward::sort(&mut offered);
                     Pickup::Rewards {
@@ -2954,7 +2973,7 @@ impl<V: Rules> State<V> {
                     return Stepped::Done;
                 }
                 HookEffect::AddRegularCard(filter) => {
-                    self.card_reward_unheard();
+                    self.card_reward_unheard(seat);
                     let character = self.character(seat);
                     let pool = V::reward_cards(character, self.players.len() > 1);
                     let narrow = |cards: &[V::Card]| -> Vec<V::Card> {
@@ -2982,7 +3001,7 @@ impl<V: Rules> State<V> {
                     );
                     for card in drawn {
                         let mut card = [card];
-                        self.reward_options(&mut card, false);
+                        self.reward_options(seat, &mut card, false);
                         self.add_to_deck(seat, card[0]);
                     }
                     return Stepped::Done;
@@ -3550,14 +3569,14 @@ impl<V: Rules> State<V> {
                     ] {
                         // Each its own `CreateForReward`, whose hooks run on
                         // what that one made.
-                        self.card_reward_unheard();
+                        self.card_reward_unheard(seat);
                         let mut drawn: Vec<V::Card> = Vec::with_capacity(per_rarity);
                         for _ in 0..per_rarity {
                             let card = self.uniform_card_of(seat, pool, rarity, &drawn);
                             drawn.push(card);
                         }
                         let mut made: Vec<_> = drawn.into_iter().map(CardIdent::new).collect();
-                        self.reward_options(&mut made, false);
+                        self.reward_options(seat, &mut made, false);
                         offered.extend(made);
                     }
                     Pickup::Cards { offered, min, max }
@@ -3576,7 +3595,7 @@ impl<V: Rules> State<V> {
                             .map(CardIdent::new)
                             .collect(),
                         sts2_core::CardDraw::Regular => {
-                            self.card_reward_unheard();
+                            self.card_reward_unheard(seat);
                             let character = self.character(seat);
                             crate::reward::card::regular::<V, _>(
                                 self.ascension(),
@@ -3587,7 +3606,7 @@ impl<V: Rules> State<V> {
                             )
                         }
                         sts2_core::CardDraw::Encounter => {
-                            self.card_reward_unheard();
+                            self.card_reward_unheard(seat);
                             let character = self.character(seat);
                             let ascension = self.ascension();
                             let multiplayer = self.players.len() > 1;
@@ -3603,11 +3622,11 @@ impl<V: Rules> State<V> {
                         }
                     };
                     let mut offered: Vec<_> = drawn;
-                    self.reward_options(&mut offered, card_reward);
+                    self.reward_options(seat, &mut offered, card_reward);
                     Pickup::Cards { offered, min, max }
                 }
                 HookEffect::ChooseColorlessCards { count } => {
-                    self.card_reward_unheard();
+                    self.card_reward_unheard(seat);
                     let act = self.act();
                     let mut offered = crate::reward::card::regular::<V, _>(
                         self.ascension(),
@@ -3616,7 +3635,7 @@ impl<V: Rules> State<V> {
                         count,
                         Some(act),
                     );
-                    self.reward_options(&mut offered, false);
+                    self.reward_options(seat, &mut offered, false);
                     Pickup::Cards {
                         offered,
                         min: 0,
@@ -3630,7 +3649,7 @@ impl<V: Rules> State<V> {
                     use crate::reward::card::{Pool, Source};
                     use sts2_core::CardTable as _;
 
-                    self.card_reward_unheard();
+                    self.card_reward_unheard(seat);
                     let act = self.act();
                     let mut sources: [Source<V>; 2] =
                         [Source::Character(self.character(seat)), Source::Colorless];
@@ -3663,7 +3682,7 @@ impl<V: Rules> State<V> {
                         count,
                         Some(act),
                     );
-                    self.reward_options(&mut offered, false);
+                    self.reward_options(seat, &mut offered, false);
                     Pickup::Cards {
                         offered,
                         min: 0,
@@ -4101,7 +4120,7 @@ impl<V: Rules> State<V> {
                     | CustomReward::UpgradedCardsOf { .. }
             )
         }) {
-            self.card_reward_unheard();
+            self.card_reward_unheard(seat);
         }
         // `new PotionReward(potion, player)`: the potion is drawn before the
         // set fills anything in.
@@ -4144,7 +4163,7 @@ impl<V: Rules> State<V> {
         // reward reads the same way.
         let added =
             match (rewards.iter()).any(|reward| matches!(reward, CustomReward::MonsterRoomCards)) {
-                true => self.card_reward_added(false),
+                true => self.card_reward_added(seat, false),
                 false => Vec::new(),
             };
         let ascension = self.ascension();
@@ -4220,7 +4239,7 @@ impl<V: Rules> State<V> {
                 },
             });
         }
-        self.reward_offers(&mut offered);
+        self.reward_offers(seat, &mut offered);
         offered
     }
 
@@ -4325,7 +4344,7 @@ impl<V: Rules> State<V> {
             act: self.act(),
             acts: self.shared.opening.acts.len(),
         };
-        for effect in self.notify_run(hook) {
+        for effect in self.notify_run_for(seat, hook) {
             match effect {
                 sts2_core::HookEffect::AddRelicRewards(count) => {
                     set.extend((0..count).map(|_| Filling::Relic));
@@ -4349,7 +4368,7 @@ impl<V: Rules> State<V> {
                 effect => unimplemented!("a listener modifying rewards with {effect:?}"),
             }
         }
-        let late = self.notify_run(sts2_core::EventHook::ModifyRewardsLate { room });
+        let late = self.notify_run_for(seat, sts2_core::EventHook::ModifyRewardsLate { room });
         for effect in late {
             match effect {
                 sts2_core::HookEffect::RerollableCardRewards => {
@@ -4419,7 +4438,7 @@ impl<V: Rules> State<V> {
                     let act = self.act();
                     // `CardCreationOptions.ForRoom`, whose source is an
                     // encounter, with no `IsFromCombat`.
-                    let added = self.card_reward_added(false);
+                    let added = self.card_reward_added(seat, false);
                     let pool = self.reward_pool(seat, room == Room::Elite);
                     let (rng, odds) = self.rewarding(seat);
                     let Offer::Card { mut cards, .. } = crate::reward::combat::card_reward::<V, _>(
@@ -4427,7 +4446,7 @@ impl<V: Rules> State<V> {
                     ) else {
                         unreachable!("a card reward rolls a card offer");
                     };
-                    self.reward_options(&mut cards, true);
+                    self.reward_options(seat, &mut cards, true);
                     Offer::Card {
                         cards,
                         rolled: Some(crate::reward::Rolled::Room {
@@ -4908,6 +4927,27 @@ impl<V: Rules> State<V> {
         asked
     }
 
+    /// [`Self::notify_run`] over `seat`'s own listeners and the run's, for a
+    /// hook raised for one player's reward. Every other player's listener
+    /// returns from it at once, as each of the game's checks `player !=
+    /// Owner`.
+    pub(super) fn notify_run_for(
+        &mut self,
+        seat: sts2_core::SeatIndex,
+        hook: sts2_core::EventHook<V>,
+    ) -> sts2_core::HookEffects<V> {
+        let mut asked = sts2_core::HookEffects::new();
+        let Some(model_hook) = hook.model_hook() else {
+            return asked;
+        };
+        for listener in self.run_listed(model_hook).iter() {
+            if listener.seat().is_none_or(|owner| owner == seat) {
+                self.ask_run_listener(listener, hook, &mut asked);
+            }
+        }
+        asked
+    }
+
     /// [`Self::notify_run`], each answer beside the player whose listener
     /// gave it, for answers that act on their own player.
     pub(super) fn notify_run_owned(
@@ -5026,7 +5066,7 @@ impl<V: Rules> State<V> {
         count: usize,
         rarity: sts2_core::RewardRarity,
     ) -> Vec<V::Card> {
-        self.card_reward_unheard();
+        self.card_reward_unheard(seat);
         let mut drawn: Vec<V::Card> = Vec::with_capacity(count);
         for _ in 0..count {
             let card = self.uniform_card(seat, rarity, &drawn);
@@ -5058,7 +5098,7 @@ impl<V: Rules> State<V> {
             .take(pools)
             .map(|character| {
                 // `CardFactory.CreateForReward` of one card, with its hooks.
-                self.card_reward_unheard();
+                self.card_reward_unheard(seat);
                 let (act, ascension) = (self.act(), self.ascension());
                 let rng = self.streams.player(seat, V::PlayerRngType::REWARDS);
                 let [card] = crate::reward::card::regular::<V, _>(
@@ -5350,13 +5390,16 @@ impl<V: Rules> State<V> {
     /// # Panics
     ///
     /// A relic listening to one of them.
-    pub(super) fn card_reward_unheard(&mut self) {
+    pub(super) fn card_reward_unheard(&mut self, seat: sts2_core::SeatIndex) {
         self.unheard(sts2_core::ModelHook::ModifyCardRewardUpgradeOdds);
         if let Some(effect) = self
-            .notify_run(sts2_core::EventHook::CardRewardOptions {
-                encounter: false,
-                from_combat: false,
-            })
+            .notify_run_for(
+                seat,
+                sts2_core::EventHook::CardRewardOptions {
+                    encounter: false,
+                    from_combat: false,
+                },
+            )
             .first()
         {
             unimplemented!("a relic asking for {effect:?} over a card reward");
@@ -5366,12 +5409,19 @@ impl<V: Rules> State<V> {
     /// `TryModifyCardRewardOptions` over a card reward at a room's odds: the
     /// kind of each option the belt adds. `from_combat` is `IsFromCombat`,
     /// which a won fight's own card reward carries and an extra one does not.
-    pub(super) fn card_reward_added(&mut self, from_combat: bool) -> Vec<sts2_core::CardKind> {
+    pub(super) fn card_reward_added(
+        &mut self,
+        seat: sts2_core::SeatIndex,
+        from_combat: bool,
+    ) -> Vec<sts2_core::CardKind> {
         self.unheard(sts2_core::ModelHook::ModifyCardRewardUpgradeOdds);
-        self.notify_run(sts2_core::EventHook::CardRewardOptions {
-            encounter: true,
-            from_combat,
-        })
+        self.notify_run_for(
+            seat,
+            sts2_core::EventHook::CardRewardOptions {
+                encounter: true,
+                from_combat,
+            },
+        )
         .into_iter()
         .map(|effect| match effect {
             sts2_core::HookEffect::AddCardRewardOption(kind) => kind,
@@ -5387,20 +5437,26 @@ impl<V: Rules> State<V> {
     /// Each listener here answers it where its own first answer was yes.
     /// `card_reward` is `CardCreationFlags.IsCardReward`, which only a
     /// `CardReward` sets.
-    pub(super) fn reward_options(&mut self, cards: &mut [CardIdent<V>], card_reward: bool) {
+    pub(super) fn reward_options(
+        &mut self,
+        seat: sts2_core::SeatIndex,
+        cards: &mut [CardIdent<V>],
+        card_reward: bool,
+    ) {
         // Listener by listener, each over the whole reward: one relic's card
-        // can be another's to enchant or not.
+        // can be another's to enchant or not. Only `seat`'s own answer.
         let hook = sts2_core::ModelHook::TryModifyCardRewardOptionsLate;
         for listener in self.run_listed(hook).iter() {
             match listener {
-                RunListener::Relic { seat: owner, slot } => {
+                RunListener::Relic { seat: owner, slot } if owner == seat => {
                     self.reward_options_of(owner, slot, cards, card_reward)
                 }
+                RunListener::Relic { .. } => {}
                 listener => unimplemented!("{listener:?} changing a card reward's options"),
             }
         }
         let modified = sts2_core::EventHook::CardRewardOptionsModified { card_reward };
-        let asked = self.notify_run(modified);
+        let asked = self.notify_run_for(seat, modified);
         if let Some(effect) = asked.first() {
             unimplemented!("a relic asking for {effect:?} once a card reward was modified");
         }
@@ -5510,10 +5566,10 @@ impl<V: Rules> State<V> {
     }
 
     /// [`State::reward_options`] over every card reward in `offered`.
-    pub(super) fn reward_offers(&mut self, offered: &mut [Offer<V>]) {
+    pub(super) fn reward_offers(&mut self, seat: sts2_core::SeatIndex, offered: &mut [Offer<V>]) {
         for offer in offered {
             if let Offer::Card { cards, .. } = offer {
-                self.reward_options(cards, true);
+                self.reward_options(seat, cards, true);
             }
         }
     }
@@ -7028,7 +7084,7 @@ impl<V: Rules> State<V> {
             .collect();
         for _ in 0..draws {
             // `TryModifyCardRewardOptions` over the one card.
-            self.card_reward_unheard();
+            self.card_reward_unheard(seat);
             let [card] = crate::reward::card::uniform_rolled::<V, _>(
                 self.ascension(),
                 self.streams.player(seat, V::PlayerRngType::REWARDS),
@@ -7383,12 +7439,12 @@ impl<V: Rules> State<V> {
     /// reward stays in the set once it is taken, because the indices an answer
     /// names never renumber.
     fn take(&mut self, seat: sts2_core::SeatIndex, answer: &Answer) -> Result<Decided, Error> {
-        let Phase::Rewards {
-            offered, removing, ..
-        } = &mut self.phase
-        else {
+        let Phase::Rewards { seats, .. } = &mut self.phase else {
             unreachable!("the phase was a reward screen when this began");
         };
+        let RewardSeat {
+            offered, removing, ..
+        } = &mut seats[seat];
         // The removal a card removal reward waits on.
         if let Some(at) = *removing {
             let Answer::Cards(picks) = answer else {
@@ -7403,10 +7459,10 @@ impl<V: Rules> State<V> {
                 unimplemented!("a removal naming a card the selection did not offer");
             };
             self.act_on_deck(seat, sts2_core::DeckAct::Remove, &[in_deck]);
-            let Phase::Rewards { offered, .. } = &mut self.phase else {
+            let Phase::Rewards { seats, .. } = &mut self.phase else {
                 unreachable!("removing a deck card leaves the reward screen up");
             };
-            offered[at] = Offer::CardRemoval { taken: true };
+            seats[seat].offered[at] = Offer::CardRemoval { taken: true };
             return Ok(self.decided(seat));
         }
         // `DoUnsyncedCardRemoval`, which is taken once a card comes back.
@@ -7425,10 +7481,10 @@ impl<V: Rules> State<V> {
             }
             self.heard_on_screen(seat, &mut offered, since, taking);
         }
-        let Phase::Rewards { offered: back, .. } = &mut self.phase else {
+        let Phase::Rewards { seats, .. } = &mut self.phase else {
             unreachable!("taking a fight's reward leaves its screen up");
         };
-        *back = offered;
+        seats[seat].offered = offered;
         Ok(self.decided(seat))
     }
 
@@ -7541,7 +7597,7 @@ impl<V: Rules> State<V> {
                         let pool =
                             self.reward_pool(seat, room == crate::reward::combat::Room::Elite);
                         let (ascension, act) = (self.ascension(), self.act());
-                        let added = self.card_reward_added(from_combat);
+                        let added = self.card_reward_added(seat, from_combat);
                         let (rng, odds) = self.rewarding(seat);
                         let Offer::Card { cards, .. } = crate::reward::combat::card_reward::<V, _>(
                             rng, odds, ascension, &pool, act, room, &added,
@@ -7552,11 +7608,11 @@ impl<V: Rules> State<V> {
                     }
                     crate::reward::Rolled::Custom { reward, stream } => {
                         let pool = self.reward_pool(seat, false);
-                        self.card_reward_unheard();
+                        self.card_reward_unheard(seat);
                         self.custom_cards(seat, reward, stream, Some(&pool))
                     }
                 };
-                self.reward_options(cards, true);
+                self.reward_options(seat, cards, true);
             }
             // The alternative's `OnSelect`, which completes the reward.
             (
@@ -7677,7 +7733,7 @@ impl<V: Rules> State<V> {
             && (alive || self.in_combat())
         {
             crate::legal::picks(min, max, offered, &self.players[seat].picked, moves);
-            if self.cancelable() {
+            if self.cancelable(seat) {
                 moves.push(Decision::Answer(Answer::Cancel));
             }
             return;
@@ -7781,9 +7837,9 @@ impl<V: Rules> State<V> {
                 upgrading,
                 ..
             } => (*rested || options.is_empty()) && chosen.is_none() && !*upgrading,
-            Phase::Rewards {
-                offered, removing, ..
-            } => removing.is_none() && offered.iter().all(Offer::taken),
+            Phase::Rewards { seats, .. } => {
+                seats[seat].removing.is_none() && seats[seat].offered.iter().all(Offer::taken)
+            }
             Phase::Combat(_) | Phase::Lost { .. } | Phase::Won { .. } => false,
         }
     }
@@ -7825,8 +7881,10 @@ impl<V: Rules> State<V> {
                     Pickup::Event => event_moves(self.event_question(), moves),
                 }
             }
-            Phase::Rewards { offered, .. } if offered.iter().any(|offer| !offer.taken()) => {
-                reward_moves(offered, true, moves)
+            Phase::Rewards { seats, .. }
+                if seats[seat].offered.iter().any(|offer| !offer.taken()) =>
+            {
+                reward_moves(&seats[seat].offered, true, moves)
             }
             _ => return false,
         }
@@ -7867,9 +7925,9 @@ impl<V: Rules> State<V> {
             Phase::RestSite {
                 upgrading: true, ..
             } => Some((1, 1, self.upgradable(seat).count())),
-            Phase::Rewards {
-                removing: Some(_), ..
-            } => Some((1, 1, self.offered(seat, sts2_core::DeckAct::Remove).len())),
+            Phase::Rewards { seats, .. } if seats[seat].removing.is_some() => {
+                Some((1, 1, self.offered(seat, sts2_core::DeckAct::Remove).len()))
+            }
             _ => None,
         }
     }
@@ -8316,9 +8374,11 @@ impl<V: Rules> State<V> {
     ///
     /// The first of two bosses is not a way out: travel to the second is.
     fn can_proceed(&self) -> bool {
-        let Phase::Rewards { combat, .. } = &self.phase else {
+        let Phase::Rewards { seats, .. } = &self.phase else {
             return false;
         };
+        // Every player fought the same encounter.
+        let combat = &seats.host().combat;
         if self.boss_ahead() {
             return false;
         }
@@ -8359,8 +8419,8 @@ impl<V: Rules> State<V> {
             Phase::Lost { combat, .. } => Some(combat.clone()),
             // The player's creature is the run's own, so what happens to it
             // between the fight and leaving the room shows on it.
-            Phase::Rewards { combat, .. } => {
-                let mut combat = combat.clone();
+            Phase::Rewards { seats, .. } => {
+                let mut combat = seats[seat].combat.clone();
                 let player = seat.creature();
                 if let Some(creature) = combat.creatures.iter_mut().find(|c| c.id == player) {
                     creature.hp = self.players[seat].hp;
@@ -8465,29 +8525,32 @@ impl<V: Rules> State<V> {
             Phase::Combat(live) => live.question(seat),
             // `CardSelectCmd.FromDeckForRemoval`: one card of the deck less
             // its `Eternal` ones, curses first.
-            Phase::Rewards {
-                removing: Some(_), ..
-            } => Some(Question::SelectCards {
-                min: 1,
-                max: 1,
-                asker: None,
-                options: self
-                    .offered(seat, sts2_core::DeckAct::Remove)
-                    .into_iter()
-                    .enumerate()
-                    .map(|(index, (_, card))| CardOption {
-                        index,
-                        card,
-                        text: None,
-                    })
-                    .collect(),
-                picked: sts2_core::Picks::none(),
-                pile: None,
-            }),
-            Phase::Rewards { offered, .. } => offered
-                .iter()
-                .any(|offer| !offer.taken())
-                .then(|| asked::<V>(offered, true)),
+            Phase::Rewards { seats, .. } if seats[seat].removing.is_some() => {
+                Some(Question::SelectCards {
+                    min: 1,
+                    max: 1,
+                    asker: None,
+                    options: self
+                        .offered(seat, sts2_core::DeckAct::Remove)
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, (_, card))| CardOption {
+                            index,
+                            card,
+                            text: None,
+                        })
+                        .collect(),
+                    picked: sts2_core::Picks::none(),
+                    pile: None,
+                })
+            }
+            Phase::Rewards { seats, .. } => {
+                let offered = &seats[seat].offered;
+                offered
+                    .iter()
+                    .any(|offer| !offer.taken())
+                    .then(|| asked::<V>(offered, true))
+            }
             // `CardSelectCmd.FromDeckForUpgrade` offers the deck's upgradable
             // cards alone, so a card already at its highest is not offered and
             // the indices are that list's rather than the deck's. One card, and
@@ -8845,6 +8908,11 @@ impl<V: Rules> State<V> {
     /// How many players the run has.
     pub(crate) fn player_count(&self) -> usize {
         self.players.len()
+    }
+
+    /// Every seat, in order.
+    pub(crate) fn seats(&self) -> impl Iterator<Item = sts2_core::SeatIndex> + use<V> {
+        self.players.seats()
     }
 
     pub(crate) fn seen_by(&self, seat: sts2_core::SeatIndex) -> AtSeat<'_, V> {

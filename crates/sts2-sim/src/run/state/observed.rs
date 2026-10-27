@@ -121,7 +121,8 @@ impl<V: Rules> Observed<V> for AtSeat<'_, V> {
                 belts: &self.state.belts,
                 seat: self.seat,
             }),
-            Phase::Lost { combat, .. } | Phase::Rewards { combat, .. } => Some(Fight::Over(combat)),
+            Phase::Lost { combat, .. } => Some(Fight::Over(combat)),
+            Phase::Rewards { seats, .. } => Some(Fight::Over(&seats[self.seat].combat)),
             Phase::Map
             | Phase::Won { .. }
             | Phase::Neow { .. }

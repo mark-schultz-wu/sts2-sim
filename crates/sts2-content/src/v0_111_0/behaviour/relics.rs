@@ -222,8 +222,15 @@ pub(crate) fn own_shared_relic_event_hook(
         // that hold a card reward, where v0.107.1's counted on
         // `AfterCombatEnd`. It runs once they are made, so the reward it
         // adds to comes on an odd count.
-        (State::LastingCandy(state), EventHook::CombatRewardOffering { card_reward }) => {
-            if card_reward {
+        // `rewards.Player != Owner`: another player's rewards are not its own.
+        (
+            State::LastingCandy(state),
+            EventHook::CombatRewardOffering {
+                player,
+                card_reward,
+            },
+        ) => {
+            if card_reward && player == owner {
                 state.combats_seen += 1;
             }
             Some(())

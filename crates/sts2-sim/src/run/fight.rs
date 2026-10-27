@@ -284,10 +284,12 @@ impl<V: Rules> State<V> {
         // `EndCombatInternal` raises the fight's last hooks before
         // `RewardsCmd.Offer` builds the rewards.
         if ended == Some(combat::Ended::Won) {
-            self.combat_ended(seat);
+            self.combat_ended();
         }
-        self.gold_from_fight(seat);
-        self.potions_from_fight(seat);
+        for each in self.seats() {
+            self.gold_from_fight(each);
+            self.potions_from_fight(each);
+        }
         match ended {
             None => {
                 if let Some(fighting) = self.fighting() {
@@ -302,50 +304,85 @@ impl<V: Rules> State<V> {
                 self.lost(seat, combat, Some(live));
             }
             Some(combat::Ended::Won) => {
+                let seats: smallvec::SmallVec<[sts2_core::SeatIndex; 4]> = self.seats().collect();
+                let host = sts2_core::SeatIndex(0);
+                let in_event = self.resuming.is_some();
+                if let Some(fighting) = self.fighting()
+                    && fighting.live.waits_on_a_question()
+                {
+                    unimplemented!("a fight won while a player's action waits on a question");
+                }
                 let (mut live, belts) = self.left_fight();
                 let extra_rewards = live.extra_rewards().to_vec();
-                let taken = live.taken_from_deck(seat).to_vec();
+                if seats.len() > 1 && (!extra_rewards.is_empty() || in_event) {
+                    unimplemented!("a fight of several players won inside an event or with extras");
+                }
+                let taken: smallvec::SmallVec<[Vec<sts2_core::DeckCard<V>>; 1]> = seats
+                    .iter()
+                    .map(|&seat| live.taken_from_deck(seat).to_vec())
+                    .collect();
                 // `AddExtraReward`, which the room's own rewards come before.
                 let (extra, leaving): (Vec<_>, Vec<_>) =
-                    live.leaving().iter().partition(|effect| {
+                    live.leaving().iter().partition(|(_, effect)| {
                         matches!(
                             effect,
                             sts2_core::HookEffect::AddGoldReward(_)
                                 | sts2_core::HookEffect::AddCardRemovalReward
                         )
                     });
+                let extra_of = |seat: sts2_core::SeatIndex| -> Vec<sts2_core::HookEffect<V>> {
+                    (extra.iter())
+                        .filter(|(owner, _)| *owner == seat)
+                        .map(|&(_, effect)| effect)
+                        .collect()
+                };
                 let proportion = live.gold_proportion();
                 let escaped = live.any_escaped();
-                let combat = live.finish(seat, belts);
+                let combats = live.finish(belts);
+                let encounter = combats[0].encounter;
                 if let Some(resuming) = self.resuming.as_mut() {
                     resuming.escaped = escaped;
                     if !extra_rewards.is_empty() || !extra.is_empty() {
-                        let encounter = combat.encounter.unwrap_or_else(|| {
+                        let encounter = encounter.unwrap_or_else(|| {
                             unimplemented!("a fight with no encounter behind it")
                         });
                         resuming.extras = Some(Box::new(Extras {
                             rewards: extra_rewards.clone(),
-                            ending: extra.clone(),
-                            taken: taken.clone(),
+                            ending: extra_of(host),
+                            taken: taken[0].clone(),
                             room: reward_room::<V>(encounter),
                         }));
                     }
                 }
-                if let Some(asked) = self.carry_out(seat, leaving) {
-                    let pickup = asked.pickup;
-                    unimplemented!("a fight's end asking for {pickup:?}");
+                // What the fight's end asked of the run, in the order it
+                // asked, each for the player whose listener asked.
+                let mut leaving = leaving.into_iter().peekable();
+                while let Some((owner, effect)) = leaving.next() {
+                    let mut effects = vec![effect];
+                    while let Some((_, next)) = leaving.next_if(|(next, _)| *next == owner) {
+                        effects.push(next);
+                    }
+                    if let Some(asked) = self.carry_out(owner, effects) {
+                        let pickup = asked.pickup;
+                        unimplemented!("a fight's end asking for {pickup:?}");
+                    }
                 }
+                let empty = |combats: Vec<sts2_core::Combat<V>>| {
+                    combats
+                        .into_iter()
+                        .map(|combat| (combat, Vec::new()))
+                        .collect()
+                };
                 // `NCombatUi.OnCombatWon` offers rewards only for an encounter
                 // that gives them. One that gives none goes straight on through
                 // `ProceedFromTerminalRewardsScreen`, rolling nothing.
-                if combat
-                    .encounter
+                if encounter
                     .is_some_and(|encounter| !sts2_core::EncounterTable::gives_rewards(encounter))
                 {
                     if self.resuming.is_none() {
                         unimplemented!("a fight that gives no rewards outside an event");
                     }
-                    self.won(seat, combat, Vec::new(), live);
+                    self.won(empty(combats), live);
                     return self
                         .proceed(seat)
                         .unwrap_or_else(|e| unreachable!("an event resumes after its fight: {e}"));
@@ -353,17 +390,47 @@ impl<V: Rules> State<V> {
                 // `WithRewardsFromRoom` sets nothing for the last act's boss,
                 // its room's extra rewards included, and rolls nothing. The
                 // Architect is what comes after it.
-                let last_boss = combat.encounter.is_some_and(|encounter| {
+                let last_boss = encounter.is_some_and(|encounter| {
                     sts2_core::EncounterTable::room(encounter) == <_ as sts2_core::RoomKinds>::BOSS
                 }) && self.in_last_act();
                 if last_boss {
-                    self.won(seat, combat, Vec::new(), live);
+                    self.won(empty(combats), live);
                     return self.decided(seat);
                 }
-                let mut offered =
-                    self.combat_rewards(seat, &combat, proportion, &extra_rewards, &extra, &taken);
-                crate::reward::sort(&mut offered);
-                self.won(seat, combat, offered, live);
+                // `OfferRoomEndRewards`: each player's rewards made in seat
+                // order, then `BeforeCombatRewardOffered` on each set.
+                let mut screens = Vec::with_capacity(seats.len());
+                for (at, (&each, combat)) in seats.iter().zip(combats).enumerate() {
+                    let extras = match each == host {
+                        true => &extra_rewards[..],
+                        false => &[],
+                    };
+                    let offered = self.combat_rewards(
+                        each,
+                        &combat,
+                        proportion,
+                        extras,
+                        &extra_of(each),
+                        &taken[at],
+                    );
+                    screens.push((combat, offered));
+                }
+                for (&each, (_, offered)) in seats.iter().zip(&mut screens) {
+                    let card_reward = offered
+                        .iter()
+                        .any(|offer| matches!(offer, crate::reward::Offer::Card { .. }));
+                    let offering = sts2_core::EventHook::CombatRewardOffering {
+                        player: each.creature(),
+                        card_reward,
+                    };
+                    if let Some(effect) = self.notify_run(offering).first() {
+                        unimplemented!(
+                            "a relic asking for {effect:?} before a fight's rewards are offered"
+                        );
+                    }
+                    crate::reward::sort(offered);
+                }
+                self.won(screens, live);
             }
         }
         // A decision the end of a fight cut short is `Decided::Abandoned`. The
@@ -401,7 +468,7 @@ impl<V: Rules> State<V> {
         // relic, moves the potion odds, and prices the card reward's
         // rarities. The encounter carries the room it belongs to.
         let room = reward_room::<V>(encounter);
-        let added = self.card_reward_added(true);
+        let added = self.card_reward_added(seat, true);
         let forced = self.potion_forced(<_ as sts2_core::EncounterTable>::room(encounter));
         let pool = self.reward_pool(seat, room == crate::reward::combat::Room::Elite);
         let (rng, odds) = self.rewarding(seat);
@@ -438,18 +505,9 @@ impl<V: Rules> State<V> {
                 room,
             },
         ));
-        self.reward_offers(&mut offered);
+        self.reward_offers(seat, &mut offered);
         let room = Some(<_ as sts2_core::EncounterTable>::room(encounter));
         self.modify_rewards(seat, &mut offered, room);
-        // `CombatRoom.OfferRoomEndRewards`: `BeforeCombatRewardOffered` once
-        // the set is made, before it is offered.
-        let card_reward = offered
-            .iter()
-            .any(|offer| matches!(offer, crate::reward::Offer::Card { .. }));
-        let offering = sts2_core::EventHook::CombatRewardOffering { card_reward };
-        if let Some(effect) = self.notify_run(offering).first() {
-            unimplemented!("a relic asking for {effect:?} before a fight's rewards are offered");
-        }
         offered
     }
 
@@ -525,7 +583,7 @@ impl<V: Rules> State<V> {
                 // `CardReward` over `ForRoom`, which carries no `IsFromCombat`:
                 // only the room's own card reward does.
                 combat::ExtraReward::Card => {
-                    let added = self.card_reward_added(false);
+                    let added = self.card_reward_added(seat, false);
                     let pool = self.reward_pool(seat, room == crate::reward::combat::Room::Elite);
                     let (rng, odds) = self.rewarding(seat);
                     crate::reward::combat::card_reward::<V, _>(

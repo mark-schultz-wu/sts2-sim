@@ -406,8 +406,7 @@ pub(super) fn side_starts<V: Rules>(
 pub(super) fn seats<V: Rules>(
     live: &Live<V>,
 ) -> impl Iterator<Item = sts2_core::SeatIndex> + use<V> {
-    (0..live.players.len())
-        .map(|at| sts2_core::SeatIndex(u8::try_from(at).expect("a fight's players fit a u8")))
+    live.players.seats()
 }
 
 /// `MaxEnergy` before `Hook.ModifyMaxEnergy`: the character's own.

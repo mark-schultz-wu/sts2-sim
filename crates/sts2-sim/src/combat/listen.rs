@@ -1216,18 +1216,18 @@ fn decides<V: Rules>(
 ///
 /// A listener asking for anything else at the second, which nothing here
 /// carries out.
-pub(crate) fn combat_ended<V: Rules>(
-    seat: sts2_core::SeatIndex,
-    live: &mut Live<V>,
-    belts: &mut Belts<V>,
-) {
+pub(crate) fn combat_ended<V: Rules>(live: &mut Live<V>, belts: &mut Belts<V>) {
+    // What no one player owns acts as the first.
+    let host = sts2_core::SeatIndex(0);
     // What a listener asks of the run, which carries it out as it leaves.
     let room = live.room();
     let mut walking = Walking::begin(live, belts, EventHook::CombatEnd { room });
-    while let Some((_, effect)) = walking
+    while let Some((listener, effect)) = walking
         .as_mut()
-        .and_then(|walking| walking.next(seat, live, belts))
+        .and_then(|walking| walking.next(host, live, belts))
     {
+        // Each listener acts for its owner.
+        let seat = owner::<V>(live, listener).unwrap_or(host);
         match effect {
             // `CreatureCmd.GainMaxHp` on the player's creature, which the
             // fight still holds: the maximum grows, and the health with it.
@@ -1240,16 +1240,18 @@ pub(crate) fn combat_ended<V: Rules>(
             // `RelicCmd.Melt`, at once: the relic it melts hears no hook the
             // fight raises after this one.
             HookEffect::MeltFirstWax => belts[seat].melt_first_wax(),
-            effect => live.leaving.push(effect),
+            effect => live.leaving.push((seat, effect)),
         }
     }
     let early = |_: &mut Live<V>| EventHook::CombatVictoryEarly { room };
     let hook = early(live);
     let mut walking = Walking::begin(live, belts, hook);
-    while let Some((_, effect)) = walking
+    while let Some((listener, effect)) = walking
         .as_mut()
-        .and_then(|walking| walking.next(seat, live, belts))
+        .and_then(|walking| walking.next(host, live, belts))
     {
+        // Each listener acts for its owner.
+        let seat = owner::<V>(live, listener).unwrap_or(host);
         match effect {
             // `CreatureCmd.Heal`, which caps at the maximum. The listeners
             // after it read the health it left.
@@ -1266,10 +1268,12 @@ pub(crate) fn combat_ended<V: Rules>(
         }
     }
     let mut walking = Walking::begin(live, belts, EventHook::CombatVictory { room });
-    while let Some((_, effect)) = walking
+    while let Some((listener, effect)) = walking
         .as_mut()
-        .and_then(|walking| walking.next(seat, live, belts))
+        .and_then(|walking| walking.next(host, live, belts))
     {
+        // Each listener acts for its owner.
+        let seat = owner::<V>(live, listener).unwrap_or(host);
         match effect {
             // `CreatureCmd.Heal`, which caps at the maximum.
             HookEffect::Heal(amount) => {
@@ -1280,7 +1284,7 @@ pub(crate) fn combat_ended<V: Rules>(
             // The deck and the belt are the run's, which carries these out as
             // it leaves.
             effect @ (HookEffect::UpgradeRandomDeckCards { .. }
-            | HookEffect::ReplaceRelic { .. }) => live.leaving.push(effect),
+            | HookEffect::ReplaceRelic { .. }) => live.leaving.push((seat, effect)),
             effect => unimplemented!("a listener asking for {effect:?} as a fight is won"),
         }
     }

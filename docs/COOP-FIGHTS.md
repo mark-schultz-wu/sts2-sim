@@ -7,7 +7,7 @@ source, `target/decompiled/v0.111.0-1579942752/`.
 ## Where the simulator stands
 
 `cargo xtask coop --hunt` plays a simulator seat beside each game seat.
-Every seed matches each step of its first fight to the fight's end. The run builds a fight of every player: their creatures
+Every seed matches each step through its first fight and its rewards. The run builds a fight of every player: their creatures
 first, their decks shuffled in seat order, and the monsters' health
 scaled. Each relic reads its own owner, as each of the game's compares
 with `Owner`. An `AnyPlayer` potion can be aimed at any player. A player
@@ -16,7 +16,9 @@ each phase of the turn's end runs for each player in seat order, and the
 side's hooks run once. A monster's attack hits every living player, the
 cards a move gives go to each, and an enemy's powered block is scaled. A
 card play that stops on a question waits at the front of its player's
-queue with its command frames. The other players act around it.
+queue with its command frames. The other players act around it. A won
+fight hands each player back their health, and rolls each player's
+rewards in seat order before any is offered.
 
 What still assumes one player:
 
