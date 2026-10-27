@@ -390,9 +390,11 @@ internal static class BundleWithoutAScreen
 /// </summary>
 /// <remarks>
 /// The room hears it from <c>NRestSiteButton.SelectOption</c>, which calls
-/// <c>AfterSelectingOption</c> on success alone. The synchronizer's
-/// <c>AfterPlayerOptionChosen</c> carries the same success, so this listens
-/// there. <c>BeginRestSite</c> opens each rest site and resets it.
+/// <c>AfterSelectingOption</c> on success alone. Only the local player's
+/// button does, so another player's choice puts nothing up. The
+/// synchronizer's <c>AfterPlayerOptionChosen</c> carries the same success and
+/// the player, so this listens there. <c>BeginRestSite</c> opens each rest
+/// site and resets it.
 /// </remarks>
 [HarmonyPatch(typeof(RestSiteSynchronizer), nameof(RestSiteSynchronizer.BeginRestSite))]
 internal static class RestSiteProgress
@@ -408,7 +410,7 @@ internal static class RestSiteProgress
 
     private static void Chosen(RestSiteOption option, bool success, ulong playerId)
     {
-        Rested |= success;
+        Rested |= success && playerId == LocalContext.NetId;
     }
 }
 

@@ -980,16 +980,7 @@ pub(super) enum Phase<V: Rules> {
     /// choice, and the game stops offering any once it is taken. That is what
     /// an observation reports, rather than a flag beside them.
     RestSite {
-        options: Vec<V::RestSiteOption>,
-        /// The option being carried out, until it goes through.
-        chosen: Option<V::RestSiteOption>,
-        /// Whether an option went through, which puts the proceed button up.
-        rested: bool,
-        /// Waiting for the card the smith upgrades.
-        upgrading: bool,
-        /// The rewards the heal offered, while they are on screen, or what an
-        /// option's pickup asks.
-        asking: Option<Asked<V>>,
+        seats: crate::seats::BySeat<RestSeat<V>>,
     },
     /// The fight the run died in, as it stood when the player fell.
     ///
@@ -1027,6 +1018,35 @@ pub(super) struct ShopSeat<V: Rules> {
     entries: Vec<sts2_core::Entry<V>>,
     /// What a relic the player bought here asks as it is picked up.
     asking: Option<Asked<V>>,
+}
+
+/// One player's rest site. `RestSiteSynchronizer.BeginRestSite` generates
+/// options for each player, and each chooses their own.
+#[derive(Debug, Clone)]
+pub(super) struct RestSeat<V: Rules> {
+    options: Vec<V::RestSiteOption>,
+    /// The option being carried out, until it goes through.
+    chosen: Option<V::RestSiteOption>,
+    /// Whether an option went through, which puts the proceed button up.
+    rested: bool,
+    /// Waiting for the card the smith upgrades.
+    upgrading: bool,
+    /// The rewards the heal offered, while they are on screen, or what an
+    /// option's pickup asks.
+    asking: Option<Asked<V>>,
+}
+
+impl<V: Rules> RestSeat<V> {
+    /// A rest site offering `options`, with nothing chosen yet.
+    fn offering(options: Vec<V::RestSiteOption>) -> Self {
+        RestSeat {
+            options,
+            chosen: None,
+            rested: false,
+            upgrading: false,
+            asking: None,
+        }
+    }
 }
 
 /// One player's copy of an event. `EventSynchronizer.BeginEvent` begins one
@@ -1151,7 +1171,7 @@ impl<V: Rules> Phase<V> {
         match self {
             Phase::Neow(seats) => seats[seat].finished(),
             Phase::Treasure { finished, .. } => *finished,
-            Phase::RestSite { options, .. } => options.is_empty(),
+            Phase::RestSite { seats } => seats[seat].options.is_empty(),
             // A merchant never runs out. The run leaves when it decides to,
             // and a shelf it has not bought is still there.
             Phase::Shop { seats } => seats[seat].asking.is_none(),
@@ -1171,7 +1191,7 @@ impl<V: Rules> Phase<V> {
             Phase::Neow(seats) => seats[seat].asking.as_ref(),
             Phase::Shop { seats } => seats[seat].asking.as_ref(),
             Phase::Event { seats } => seats[seat].asking.as_ref(),
-            Phase::RestSite { asking, .. } => asking.as_ref(),
+            Phase::RestSite { seats } => seats[seat].asking.as_ref(),
             _ => None,
         }
     }
@@ -1182,7 +1202,7 @@ impl<V: Rules> Phase<V> {
             Phase::Neow(seats) => Some(&mut seats[seat].asking),
             Phase::Shop { seats } => Some(&mut seats[seat].asking),
             Phase::Event { seats } => Some(&mut seats[seat].asking),
-            Phase::RestSite { asking, .. } => Some(asking),
+            Phase::RestSite { seats } => Some(&mut seats[seat].asking),
             _ => None,
         }
     }
@@ -1214,10 +1234,10 @@ impl<V: Rules> State<V> {
                 Some(sts2_core::QuestionKind::Rewards)
             }
             // Only a heal's rewards park at a rest site.
-            Phase::RestSite {
-                asking: Some(_), ..
-            } => Some(sts2_core::QuestionKind::Rewards),
-            Phase::RestSite { upgrading, .. } if *upgrading => {
+            Phase::RestSite { seats } if seats[seat].asking.is_some() => {
+                Some(sts2_core::QuestionKind::Rewards)
+            }
+            Phase::RestSite { seats } if seats[seat].upgrading => {
                 Some(sts2_core::QuestionKind::SelectCards)
             }
             _ => None,
@@ -2052,15 +2072,13 @@ impl<V: Rules> State<V> {
     /// Parasol's free removal does not.
     fn cancelable(&self, seat: sts2_core::SeatIndex) -> bool {
         match &self.phase {
-            Phase::RestSite {
-                upgrading: true, ..
-            } => true,
+            Phase::RestSite { seats } if seats[seat].upgrading => true,
             // Cook, which is the one rest site option that removes cards.
-            Phase::RestSite {
-                asking: Some(asked),
-                chosen: Some(option),
-                ..
-            } => {
+            Phase::RestSite { seats } => {
+                let RestSeat { asking, chosen, .. } = &seats[seat];
+                let (Some(asked), Some(option)) = (asking, chosen) else {
+                    return false;
+                };
                 *option == <V::RestSiteOption as sts2_core::RestKinds<V>>::COOK
                     && matches!(
                         asked.pickup,
@@ -2095,15 +2113,11 @@ impl<V: Rules> State<V> {
         }
         self.players[seat].picked = sts2_core::Picks::none();
         match &mut self.phase {
-            Phase::RestSite {
-                upgrading,
-                asking,
-                chosen,
-                ..
-            } => {
-                *upgrading = false;
-                *asking = None;
-                *chosen = None;
+            Phase::RestSite { seats } => {
+                let rest = &mut seats[seat];
+                rest.upgrading = false;
+                rest.asking = None;
+                rest.chosen = None;
             }
             Phase::Shop { seats } => seats[seat].asking = None,
             Phase::Rewards { seats, .. } => seats[seat].removing = None,
@@ -2785,7 +2799,7 @@ impl<V: Rules> State<V> {
         };
         match diapause::Coroutine::resume(&mut *rest, lent) {
             diapause::CoroutineState::Yielded(pickup) => self.park(seat, Asked { pickup, rest }),
-            diapause::CoroutineState::Complete(()) => self.pickup_over(),
+            diapause::CoroutineState::Complete(()) => self.pickup_over(seat),
         }
     }
 
@@ -4028,6 +4042,18 @@ impl<V: Rules> State<V> {
     /// A relic changing the amount other than by adding to it, or asking for
     /// something the run cannot carry out here.
     fn rest_site_heal(&mut self, seat: sts2_core::SeatIndex, mimicked: bool) -> Option<Pickup<V>> {
+        self.healed_at_rest_site(seat, mimicked);
+        self.rest_site_heal_rewards(seat, mimicked)
+    }
+
+    /// `seat`'s player healed by `GetHealAmount`: three tenths of the
+    /// maximum after `ModifyRestSiteHealAmount`. Then `AfterRestSiteHeal`.
+    ///
+    /// # Panics
+    ///
+    /// A relic changing the amount other than by adding to it, or a
+    /// listener asking for something.
+    fn healed_at_rest_site(&mut self, seat: sts2_core::SeatIndex, mimicked: bool) {
         let max_hp: u64 = num_traits::cast(self.players[seat].max_hp)
             .expect("maximum health fits an unsigned rest calculation");
         let mut healed: V::Number =
@@ -4072,7 +4098,38 @@ impl<V: Rules> State<V> {
             let pickup = asked.pickup;
             unimplemented!("a rest site's heal asking for {pickup:?}");
         }
-        self.rest_site_heal_rewards(seat, mimicked)
+    }
+
+    /// `MendRestSiteOption.OnSelect` aimed at `target`'s player:
+    /// `CreatureCmd.Heal` by their `GetHealAmount`, then `AfterRestSiteHeal`
+    /// for them, which is not mimicked. It offers no rewards.
+    ///
+    /// # Panics
+    ///
+    /// Any other option aimed at a player, or Mend aimed at its own.
+    pub(crate) fn mend(
+        &mut self,
+        seat: sts2_core::SeatIndex,
+        index: u8,
+        target: sts2_core::SeatIndex,
+    ) -> Result<Decided, Error> {
+        let Phase::RestSite { seats } = &mut self.phase else {
+            unimplemented!("an option aimed at {target:?}'s player outside a rest site");
+        };
+        let option = *seats[seat]
+            .options
+            .get(usize::from(index))
+            .unwrap_or_else(|| unimplemented!("an option the rest site does not offer"));
+        if option != <V::RestSiteOption as sts2_core::RestKinds<V>>::MEND {
+            unimplemented!("{option:?} aimed at {target:?}'s player");
+        }
+        if target == seat {
+            unimplemented!("Mend aimed at its own player");
+        }
+        seats[seat].chosen = Some(option);
+        self.healed_at_rest_site(target, false);
+        self.rest_option_through(seat);
+        Ok(Decided::Resolved)
     }
 
     /// `Hook.ModifyRestSiteHealRewards`, then `RewardsCmd.OfferCustom`. Each
@@ -6359,29 +6416,33 @@ impl<V: Rules> State<V> {
 
     /// Enter a rest site, with the options this run's belt and deck open it on.
     pub(super) fn enter_rest_site(&mut self, at: Location) {
-        // `TryModifyRestSiteOptions`, which the deck answers first, then the
-        // belt, then the modifiers.
+        let mut seats = self.players.seats();
+        let host = RestSeat::offering(self.rest_options(seats.next().expect("a run has a player")));
+        let others = seats
+            .map(|seat| RestSeat::offering(self.rest_options(seat)))
+            .collect();
+        let seats = crate::seats::BySeat::new(host, others);
+        self.enter(at, Phase::RestSite { seats });
+    }
+
+    /// `RestSiteOption.Generate` for `seat`'s player: Heal, Smith, and Mend
+    /// in a run of several players. Then `TryModifyRestSiteOptions`, which
+    /// the deck answers first, then the belt, then the modifiers. Each relic
+    /// compares the player with its owner.
+    fn rest_options(&mut self, seat: sts2_core::SeatIndex) -> Vec<V::RestSiteOption> {
         let mut added: Vec<V::RestSiteOption> = Vec::new();
         let mut withdrawn: Vec<V::RestSiteOption> = Vec::new();
-        for effect in self.notify_run(sts2_core::EventHook::RestSiteOptions) {
+        for effect in self.notify_run_for(seat, sts2_core::EventHook::RestSiteOptions) {
             match effect {
                 sts2_core::HookEffect::OfferRestOption(option) => added.push(option),
                 sts2_core::HookEffect::WithdrawRestOption(option) => withdrawn.push(option),
                 effect => unimplemented!("a listener asking for {effect:?} as a rest site opens"),
             }
         }
-        let mut options = <V::RestSiteOption as sts2_core::RestKinds<V>>::offered(&added);
+        let mut options =
+            <V::RestSiteOption as sts2_core::RestKinds<V>>::offered(self.players.len(), &added);
         options.retain(|option| !withdrawn.contains(option));
-        self.enter(
-            at,
-            Phase::RestSite {
-                options,
-                chosen: None,
-                rested: false,
-                upgrading: false,
-                asking: None,
-            },
-        );
+        options
     }
 
     /// Enter a fight that is already built, where the run reached it.
@@ -6955,15 +7016,19 @@ impl<V: Rules> State<V> {
             }
             return Ok(Decided::Resolved);
         }
-        if let Phase::RestSite { options, .. } = &self.phase {
+        if let Phase::RestSite { seats } = &self.phase {
             if self.phase.finished(seat) {
                 unimplemented!("choosing at a rest site that is spent");
             }
-            let option = *options
+            let option = *seats[seat]
+                .options
                 .get(usize::from(index))
                 .unwrap_or_else(|| unimplemented!("an option the rest site does not offer"));
-            if let Phase::RestSite { chosen, .. } = &mut self.phase {
-                *chosen = Some(option);
+            if option == <V::RestSiteOption as sts2_core::RestKinds<V>>::MEND {
+                unimplemented!("Mend aimed at nobody");
+            }
+            if let Phase::RestSite { seats } = &mut self.phase {
+                seats[seat].chosen = Some(option);
             }
             // The option's `OnSelect` awaits the heal's rewards, so the
             // options stay up until the screen is done.
@@ -6974,7 +7039,7 @@ impl<V: Rules> State<V> {
                 };
                 return Ok(match asked {
                     None => {
-                        self.rest_option_through();
+                        self.rest_option_through(seat);
                         Decided::Resolved
                     }
                     Some(asked) => self.park(seat, asked),
@@ -6996,7 +7061,7 @@ impl<V: Rules> State<V> {
                 let effects = sts2_core::RestKinds::selected(option);
                 return Ok(match self.carry_out(seat, effects) {
                     None => {
-                        self.rest_option_through();
+                        self.rest_option_through(seat);
                         Decided::Resolved
                     }
                     Some(asked) => self.park(seat, asked),
@@ -7008,10 +7073,10 @@ impl<V: Rules> State<V> {
             if !self.rest_option_enabled(seat, option) {
                 unimplemented!("a rest site option the run cannot take");
             }
-            let Phase::RestSite { upgrading, .. } = &mut self.phase else {
+            let Phase::RestSite { seats } = &mut self.phase else {
                 unreachable!("the phase was a rest site when this began");
             };
-            *upgrading = true;
+            seats[seat].upgrading = true;
             // The option opened a card selection rather than finishing. The
             // game reports the decision as unresolved until the selection is
             // confirmed, because `CardSelectorPrefs` makes it cancelable.
@@ -7161,14 +7226,13 @@ impl<V: Rules> State<V> {
     }
 
     /// What a pickup was part of, once the pickup is done.
-    fn pickup_over(&mut self) -> Decided {
+    fn pickup_over(&mut self, seat: sts2_core::SeatIndex) -> Decided {
         // A rest site's option is done once its pickup is. A pickup no
         // option made, such as a relic granted there, finishes none.
-        if let Phase::RestSite {
-            chosen: Some(_), ..
-        } = &self.phase
+        if let Phase::RestSite { seats } = &self.phase
+            && seats[seat].chosen.is_some()
         {
-            self.rest_option_through();
+            self.rest_option_through(seat);
         }
         Decided::Resolved
     }
@@ -7444,7 +7508,7 @@ impl<V: Rules> State<V> {
         if matches!(&self.phase, Phase::Combat(live) if live.question(seat).is_some()) {
             return self.answer_fight(seat, answer);
         }
-        if matches!(&self.phase, Phase::RestSite { upgrading, .. } if *upgrading) {
+        if matches!(&self.phase, Phase::RestSite { seats } if seats[seat].upgrading) {
             return self.smith(seat, answer);
         }
         let Some(asking) = self.phase.asking_mut(seat) else {
@@ -7486,11 +7550,11 @@ impl<V: Rules> State<V> {
             .unwrap_or_else(|| unimplemented!("upgrading a card the selection did not offer"));
         self.players[seat].deck_mut()[at].ident.upgrade += 1;
 
-        let Phase::RestSite { upgrading, .. } = &mut self.phase else {
+        let Phase::RestSite { seats } = &mut self.phase else {
             unreachable!("the phase was a rest site when this began");
         };
-        *upgrading = false;
-        self.rest_option_through();
+        seats[seat].upgrading = false;
+        self.rest_option_through(seat);
         Ok(Decided::Resolved)
     }
 
@@ -7891,13 +7955,10 @@ impl<V: Rules> State<V> {
             }
             // `OnActiveScreenUpdated` puts the proceed button up for a rest
             // site that offers nothing at all.
-            Phase::RestSite {
-                options,
-                rested,
-                chosen,
-                upgrading,
-                ..
-            } => (*rested || options.is_empty()) && chosen.is_none() && !*upgrading,
+            Phase::RestSite { seats } => {
+                let rest = &seats[seat];
+                (rest.rested || rest.options.is_empty()) && rest.chosen.is_none() && !rest.upgrading
+            }
             Phase::Rewards { seats, .. } => {
                 seats[seat].removing.is_none() && seats[seat].offered.iter().all(Offer::taken)
             }
@@ -7983,9 +8044,9 @@ impl<V: Rules> State<V> {
                 }
             }
             // `CardSelectCmd.FromDeckForUpgrade`: one card, never none.
-            Phase::RestSite {
-                upgrading: true, ..
-            } => Some((1, 1, self.upgradable(seat).count())),
+            Phase::RestSite { seats } if seats[seat].upgrading => {
+                Some((1, 1, self.upgradable(seat).count()))
+            }
             Phase::Rewards { seats, .. } if seats[seat].removing.is_some() => {
                 Some((1, 1, self.offered(seat, sts2_core::DeckAct::Remove).len()))
             }
@@ -8047,16 +8108,28 @@ impl<V: Rules> State<V> {
                 index,
                 target: None,
             })),
-            Phase::RestSite { options, .. } => moves.extend(
-                options
-                    .iter()
-                    .enumerate()
-                    .filter(|&(_, &id)| self.rest_option_enabled(seat, id))
-                    .map(|(index, _)| Decision::ChooseOption {
-                        index: option_index(index),
+            Phase::RestSite { seats } => {
+                for (index, &id) in seats[seat].options.iter().enumerate() {
+                    if !self.rest_option_enabled(seat, id) {
+                        continue;
+                    }
+                    let index = option_index(index);
+                    // Mend aims at another player, dead or alive.
+                    if id == <V::RestSiteOption as sts2_core::RestKinds<V>>::MEND {
+                        moves.extend(self.seats().filter(|&other| other != seat).map(|other| {
+                            Decision::ChooseOption {
+                                index,
+                                target: Some(other),
+                            }
+                        }));
+                        continue;
+                    }
+                    moves.push(Decision::ChooseOption {
+                        index,
                         target: None,
-                    }),
-            ),
+                    });
+                }
+            }
             Phase::Shop { seats } => {
                 let gold = self.players[seat].gold;
                 let room_for_a_potion =
@@ -8181,22 +8254,22 @@ impl<V: Rules> State<V> {
     /// `RestSiteSynchronizer.ChooseOption` once the chosen option went
     /// through. `Hook.ShouldDisableRemainingRestSiteOptions` clears every
     /// option unless a relic answers no, and then only the chosen one goes.
-    fn rest_option_through(&mut self) {
+    fn rest_option_through(&mut self, seat: sts2_core::SeatIndex) {
         let hook = sts2_core::DecisionHook::ShouldDisableRemainingRestSiteOptions;
         let model_hook = sts2_core::ModelHook::ShouldDisableRemainingRestSiteOptions;
         let mut disable = true;
         self.run_each(model_hook, |listener, _| {
             disable &= !V::decide_hook(listener, hook).is_decision_and(|disable| !disable);
         });
-        let Phase::RestSite {
+        let Phase::RestSite { seats } = &mut self.phase else {
+            unreachable!("an option went through at a rest site");
+        };
+        let RestSeat {
             options,
             chosen,
             rested,
             ..
-        } = &mut self.phase
-        else {
-            unreachable!("an option went through at a rest site");
-        };
+        } = &mut seats[seat];
         let chosen = chosen
             .take()
             .unwrap_or_else(|| unreachable!("an option went through that was chosen"));
@@ -8507,76 +8580,15 @@ impl<V: Rules> State<V> {
     /// The question the run is parked on, if it is parked.
     fn asking(&self, seat: sts2_core::SeatIndex) -> Option<Question<V>> {
         match &self.phase {
-            Phase::Neow { .. }
-            | Phase::Event { .. }
-            | Phase::RestSite {
-                asking: Some(_), ..
-            }
-            | Phase::Shop { .. } => self.phase.asking(seat).map(|asking| {
-                let (min, max, cards): (u32, u32, Vec<CardIdent<V>>) = match &asking.pickup {
-                    Pickup::Rewards { offered, skippable } => {
-                        return asked::<V>(offered, *skippable);
-                    }
-                    Pickup::Event => return self.event_question(seat),
-                    Pickup::ConfirmAbandon => return Question::Confirm,
-                    Pickup::Bundles { bundles } => {
-                        return Question::ChooseBundle {
-                            bundles: bundles
-                                .iter()
-                                .enumerate()
-                                .map(|(index, bundle)| sts2_core::BundleOption {
-                                    index,
-                                    cards: bundle
-                                        .iter()
-                                        .map(|&card| sts2_core::RewardCard {
-                                            card: CardIdent::new(card),
-                                            text: None,
-                                        })
-                                        .collect(),
-                                })
-                                .collect(),
-                        };
-                    }
-                    Pickup::Cards { offered, min, max } => (
-                        u32::try_from(*min).expect("a selection counts in a few cards"),
-                        u32::try_from(*max).expect("a selection counts in a few cards"),
-                        offered.clone(),
-                    ),
-                    // The deck less what the relic's own filter leaves out.
-                    Pickup::CloneDeckCard { excluding } => (
-                        1,
-                        1,
-                        self.clonable(seat, *excluding)
-                            .into_iter()
-                            .map(|held| held.ident)
-                            .collect(),
-                    ),
-                    // The deck less its `Eternal` cards, curses first.
-                    Pickup::CardRemoval { .. } => (
-                        1,
-                        1,
-                        self.offered(seat, sts2_core::DeckAct::Remove)
-                            .into_iter()
-                            .map(|(_, card)| card)
-                            .collect(),
-                    ),
-                    Pickup::FromDeck { act, min, count } => (
-                        u32::try_from(*min).expect("a selection counts in a few cards"),
-                        u32::try_from(*count).expect("a selection counts in a few cards"),
-                        self.offered(seat, *act)
-                            .into_iter()
-                            .map(|(_, card)| card)
-                            .collect(),
-                    ),
-                };
-                Question::SelectCards {
-                    min,
-                    max,
+            Phase::RestSite { seats } if seats[seat].asking.is_none() => {
+                seats[seat].upgrading.then(|| Question::SelectCards {
+                    min: 1,
+                    max: 1,
                     asker: None,
-                    options: cards
-                        .into_iter()
+                    options: self
+                        .upgradable(seat)
                         .enumerate()
-                        .map(|(index, card)| CardOption {
+                        .map(|(index, (_, card))| CardOption {
                             index,
                             card,
                             text: None,
@@ -8584,8 +8596,88 @@ impl<V: Rules> State<V> {
                         .collect(),
                     picked: sts2_core::Picks::none(),
                     pile: None,
-                }
-            }),
+                })
+            }
+            // A rest site parks only on what an option's pickup asks.
+            Phase::Neow { .. }
+            | Phase::Event { .. }
+            | Phase::RestSite { .. }
+            | Phase::Shop { .. } => {
+                self.phase.asking(seat).map(|asking| {
+                    let (min, max, cards): (u32, u32, Vec<CardIdent<V>>) = match &asking.pickup {
+                        Pickup::Rewards { offered, skippable } => {
+                            return asked::<V>(offered, *skippable);
+                        }
+                        Pickup::Event => return self.event_question(seat),
+                        Pickup::ConfirmAbandon => return Question::Confirm,
+                        Pickup::Bundles { bundles } => {
+                            return Question::ChooseBundle {
+                                bundles: bundles
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(index, bundle)| sts2_core::BundleOption {
+                                        index,
+                                        cards: bundle
+                                            .iter()
+                                            .map(|&card| sts2_core::RewardCard {
+                                                card: CardIdent::new(card),
+                                                text: None,
+                                            })
+                                            .collect(),
+                                    })
+                                    .collect(),
+                            };
+                        }
+                        Pickup::Cards { offered, min, max } => (
+                            u32::try_from(*min).expect("a selection counts in a few cards"),
+                            u32::try_from(*max).expect("a selection counts in a few cards"),
+                            offered.clone(),
+                        ),
+                        // The deck less what the relic's own filter leaves out.
+                        Pickup::CloneDeckCard { excluding } => (
+                            1,
+                            1,
+                            self.clonable(seat, *excluding)
+                                .into_iter()
+                                .map(|held| held.ident)
+                                .collect(),
+                        ),
+                        // The deck less its `Eternal` cards, curses first.
+                        Pickup::CardRemoval { .. } => (
+                            1,
+                            1,
+                            self.offered(seat, sts2_core::DeckAct::Remove)
+                                .into_iter()
+                                .map(|(_, card)| card)
+                                .collect(),
+                        ),
+                        Pickup::FromDeck { act, min, count } => (
+                            u32::try_from(*min).expect("a selection counts in a few cards"),
+                            u32::try_from(*count).expect("a selection counts in a few cards"),
+                            self.offered(seat, *act)
+                                .into_iter()
+                                .map(|(_, card)| card)
+                                .collect(),
+                        ),
+                    };
+                    Question::SelectCards {
+                        min,
+                        max,
+                        asker: None,
+                        options: cards
+                            .into_iter()
+                            .enumerate()
+                            .map(|(index, card)| CardOption {
+                                index,
+                                card,
+                                text: None,
+                            })
+                            .collect(),
+                        picked: sts2_core::Picks::none(),
+                        pile: None,
+                    }
+                })
+            }
             Phase::Combat(live) => live.question(seat),
             // `CardSelectCmd.FromDeckForRemoval`: one card of the deck less
             // its `Eternal` ones, curses first.
@@ -8619,22 +8711,6 @@ impl<V: Rules> State<V> {
             // cards alone, so a card already at its highest is not offered and
             // the indices are that list's rather than the deck's. One card, and
             // the selection cannot be empty.
-            Phase::RestSite { upgrading, .. } => upgrading.then(|| Question::SelectCards {
-                min: 1,
-                max: 1,
-                asker: None,
-                options: self
-                    .upgradable(seat)
-                    .enumerate()
-                    .map(|(index, (_, card))| CardOption {
-                        index,
-                        card,
-                        text: None,
-                    })
-                    .collect(),
-                picked: sts2_core::Picks::none(),
-                pile: None,
-            }),
             // An act opens on its map, which is no room and asks nothing.
             Phase::Map | Phase::Lost { .. } | Phase::Won { .. } | Phase::Treasure { .. } => None,
         }
@@ -8766,8 +8842,9 @@ impl<V: Rules> State<V> {
                     options,
                 })
             }
-            Phase::RestSite { options, .. } => Some(Room::RestSite {
-                options: options
+            Phase::RestSite { seats } => Some(Room::RestSite {
+                options: seats[seat]
+                    .options
                     .iter()
                     .copied()
                     .enumerate()
@@ -9306,14 +9383,13 @@ mod tests {
         run.grant(SOLO, &Gift::Relic(Relic::MiniatureTent))
             .expect("a relic can be granted");
         run.phase = Phase::RestSite {
-            options: vec![
-                <V as sts2_core::ContentVersion>::RestSiteOption::HEAL,
-                <V as sts2_core::ContentVersion>::RestSiteOption::SMITH,
-            ],
-            chosen: None,
-            rested: false,
-            upgrading: false,
-            asking: None,
+            seats: crate::seats::BySeat::new(
+                RestSeat::offering(vec![
+                    <V as sts2_core::ContentVersion>::RestSiteOption::HEAL,
+                    <V as sts2_core::ContentVersion>::RestSiteOption::SMITH,
+                ]),
+                Vec::new(),
+            ),
         };
         let travels = |run: &State<V>| {
             run.legal(SOLO)
@@ -9355,14 +9431,13 @@ mod tests {
             .collect();
         run.players[SOLO].deck = Arc::new(deck);
         run.phase = Phase::RestSite {
-            options: vec![
-                <V as sts2_core::ContentVersion>::RestSiteOption::HEAL,
-                <V as sts2_core::ContentVersion>::RestSiteOption::SMITH,
-            ],
-            chosen: None,
-            rested: false,
-            upgrading: false,
-            asking: None,
+            seats: crate::seats::BySeat::new(
+                RestSeat::offering(vec![
+                    <V as sts2_core::ContentVersion>::RestSiteOption::HEAL,
+                    <V as sts2_core::ContentVersion>::RestSiteOption::SMITH,
+                ]),
+                Vec::new(),
+            ),
         };
 
         run.choose(SOLO, 1).expect("the smith can be chosen");

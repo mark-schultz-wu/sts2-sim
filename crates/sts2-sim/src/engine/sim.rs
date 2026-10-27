@@ -201,9 +201,9 @@ pub(super) fn decide<V: Rules>(
             },
         })),
         Decision::ChooseOption {
+            index,
             target: Some(target),
-            ..
-        } => unimplemented!("an option aimed at {target:?}'s player"),
+        } => state.mend(seat, *index, *target).map(Ok),
         Decision::Answer(answer) => state.respond(seat, answer),
         Decision::PlayCard { index, target } => state.play_card(seat, *index, *target),
         Decision::EndTurn => state.end_turn(seat),

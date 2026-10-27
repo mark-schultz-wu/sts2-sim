@@ -77,7 +77,9 @@ run as its own machine sees it. The work goes in this order:
    for that player, who answers what it asks, and its drinker applies its
    powers. A fresh power on
    an enemy scales by the player count, and an enemy's Plating loses a
-   stack for each player. Of sixteen hunted seeds, six match to the run's
+   stack for each player. Each player has their own rest site, which
+   offers Mend in a run of several players. Of sixteen hunted seeds, six
+   match to the run's
    end. Hunts stay at
    `--width 4`: at `--width 8` two games of sixteen failed in Godot
    itself. Next, in the order of `docs/COOP-FIGHTS.md` and where the
@@ -89,9 +91,9 @@ run as its own machine sees it. The work goes in this order:
      Card plays, potions and the turn's end go through the queues, with
      the action types, gating and cancellations.
    - A monster's move that reaches one player in a fight of two panics,
-     in one hunted run.
-   - A rest site in a run of several players offers Mend, which the
-     simulator leaves out. Three hunted runs part there.
+     in two hunted runs.
+   - A treasure chest in a run of several players holds a relic for each
+     player, which the simulator rolls one of. Two hunted runs part there.
    - Unrelenting and Pounce make the wrong player's card free. Three
      hunted runs part there.
    - The simulator ticks down a dead player's Frail, and the game does

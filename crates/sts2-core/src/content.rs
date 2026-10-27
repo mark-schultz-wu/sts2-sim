@@ -1756,13 +1756,15 @@ pub trait RestKinds<V: ContentVersion>: std::fmt::Debug + Copy + Eq + 'static {
     /// Upgrade a card the deck can still upgrade.
     const SMITH: Self;
 
-    /// What a rest site offers this run, in the game's own order.
+    /// What a rest site offers a player of a run of `players`, in the
+    /// game's own order.
     ///
     /// `RestSiteOption.Generate` opens with `HEAL` and `SMITH`, adds `MEND`
-    /// for a second player, and then runs `TryModifyRestSiteOptions`. That
-    /// hook is why the list is the build's answer and not a constant. Its
-    /// listeners add `added`, in the order they answered.
-    fn offered(added: &[Self]) -> Vec<Self>;
+    /// where there are several players, and then runs
+    /// `TryModifyRestSiteOptions`. That hook is why the list is the build's
+    /// answer and not a constant. Its listeners add `added`, in the order
+    /// they answered.
+    fn offered(players: usize, added: &[Self]) -> Vec<Self>;
 
     /// `RestSiteOption.OnSelect` for an option whose selection is something
     /// the run carries out: `HATCH` obtains Byrdpip.
