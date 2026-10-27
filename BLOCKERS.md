@@ -40,37 +40,7 @@ Speed is a goal as well as a guard. Item 3 says the target.
 
 ## Open
 
-### 1. Switch pausing over to `diapause` coroutines
-
-Every rule that pauses on a player's choice becomes a coroutine, and the
-game's scheduler runs them. `docs/ASYNC.md` says why. `diapause` builds
-the coroutines, pinned, from the reviewed and patched copy in `vendor/`.
-Co-op fights wait for it, because each player's paused work is a
-coroutine in that player's queue.
-
-Done: `SetupPlayerTurn`, the potions that stop, every monster move that
-stops, and every card play: each card pool's, the generated ones, and each
-build's own. Each file's coroutine holds its paused plays or moves, in
-place of a hand-written `Resume` enum. The card-play and move generators
-write a coroutine for each file. `Build::Paused` names a build's paused
-plays and moves, its generated ones and its own.
-
-The scheduler replaces the engine's `Deferred` work, which the content
-does not touch. What is left, in order:
-
-1. The scheduler with one player, in the order of `docs/SCHEDULER.md`.
-   The turn loop, the card plays and the paused hooks run as the game's
-   queues run them. It takes away the `Deferred`, `Then` and `Setup` work
-   in the engine. The turn loop is one coroutine, from the player's turn
-   end through the enemies' turn to the next play phase. A fight's first
-   turn starts in it too (done). The paused hook actions wait in a queue
-   for each seat, with ids (done). The rest of steps 3 and 4 changes
-   nothing with one player, so it comes with co-op fights.
-2. The run layer's pauses, `Pickup` and `Unfinished`, move to coroutines
-   (Mark, 2026-10-26), in the order of `docs/RUN-PAUSES.md`. A pickup is a
-   coroutine, and a shop's purchase runs as its steps (done).
-
-### 2. Co-op
+### 1. Co-op
 
 Co-op is in scope, before the AI front end. The headless game plays co-op on
 v0.111.0, one game for each seat, and `cargo xtask coop` plays runs at random.
@@ -95,9 +65,25 @@ run as its own machine sees it. The work goes in this order:
    All 12 seeds match every step to the first fight. Next:
    - A fight of several players. Every player's creature, piles and turn,
      monster health and block scaled by the player count, and turns all
-     players take at once.
+     players take at once. The rest of the scheduler comes with it, since
+     a second seat makes each part testable (steps 3 and 4 of
+     `docs/SCHEDULER.md`). That is a question for each seat, in the
+     action that asked it. Card plays, potions and the turn's end go
+     through the queues, with the action types, gating and cancellations.
    - Then rewards, rest sites, shops, events, and death and revival.
 4. Co-op content, as the runs reach it. Massive Scroll is ported.
+
+### 2. The engine's command frames as coroutines
+
+Every rule in content that pauses is a `diapause` coroutine, and so are
+the turn loop and the run layer's pickups (`docs/SCHEDULER.md`,
+`docs/RUN-PAUSES.md`). The engine still holds the frames of a command
+inside one action by hand. That is a draw, an auto-play, `PowerCmd.Apply`
+over several targets, and an attack's hits. They are `Deferred`'s
+command variants and `Then::Play` and `Then::Pick`, with `Live`'s fields
+that only hold them. Each carrier moves on its own, which is step 5 of
+`docs/SCHEDULER.md`. It changes no order. Mark chose on 2026-10-27 to
+leave it until co-op fights are done, since they do not need it.
 
 ### 3. Speed
 
