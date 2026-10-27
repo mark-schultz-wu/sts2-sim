@@ -57,3 +57,30 @@ The first two are offered upstream in
 <https://github.com/todesking/diapause/issues/2>, with the patch on
 <https://github.com/mark-schultz-wu/diapause/tree/borrowed-resume>. The
 upstream suites still pass with all the changes.
+
+### Joins copied on the path that does not suspend
+
+A block where two paths meet, after an `if` or a `match` whose arms can
+yield, was a state of its own. Every run that reached it moved its live
+locals into the state enum and back out through the dispatch loop, even
+when nothing suspended. A body that rarely stops paid that on each run.
+The simulator's end of turn spent about 1,000 instructions a turn on it.
+
+`cfg::inline_joins` runs after the lowering, in `expand` and
+`expand_debug`. It copies each such join once for each path into it,
+with the blocks only it leads to. Each copy is plain Rust in the arm that
+reaches it. A yield in a copy comes with its resume point, so each
+copy has its own. A join on a loop stays a state, and so does a block
+that defines a direct borrow. A copied block's jump markers get fresh
+jumps of their own. A budget of the body's own size, and at least 128
+statements, bounds the copies.
+
+The lowering's own tests see the CFG without the copies. On the fork,
+upstream's macro-core suite, runtime suite and compile-fail cases pass.
+One compile-fail case,
+`value_let_missing_annotation`, had to hold its value across a second
+yield, since the copy took away the first state it crossed. The random
+differential test passes 2,000 cases on two seeds. On the first seed
+rustc's peak memory falls from 27.8 GB to 20.5 GB. The test takes 321 s
+to build and run, against 248 s. `sts2-content` builds in about
+the same time with and without the pass.

@@ -247,12 +247,10 @@ Steps 2 to 4 are the scheduler with one player.
 
 ## Open questions
 
-1. The spike's cost: lower `diapause` better first, or keep the turn loop
-   hand-written? See the spike below.
-2. The engine never raises `Hook.BeforeFlush`'s main pass. It is a rules gap, not a
+1. The engine never raises `Hook.BeforeFlush`'s main pass. It is a rules gap, not a
    scheduler one. Fix it in step 1 with its scenario, or list it in
    `BLOCKERS.md` on its own?
-3. Step 5 makes every engine command a possible coroutine. Can that wait
+2. Step 5 makes every engine command a possible coroutine. Can that wait
    until after co-op, since nothing in co-op needs it?
 
 ## The spike
@@ -311,3 +309,24 @@ Two ways on:
 
 The recommendation is the first: a spike on `diapause`'s lowering,
 measured on this same coroutine, before step 2.
+
+### The patch to `diapause`
+
+Mark chose the first way. `vendor/README.md` describes the change. A
+join on the path that does not suspend is copied into each path that
+reaches it, so only a yield writes the state.
+
+Two changes to the spike went with it. The paused listeners' tasks are
+yielded, not held in the coroutine's state. Held there, they made the
+types recursive: a paused task holds `Deferred`, which holds the
+coroutine. The compiler then stopped inlining the drop of every list of
+tasks, also in code the spike did not touch. The phase is boxed only
+where it waits.
+
+The same coroutine then measures +0.5%, against +1.9% before. About
++0.3% of that is functions the compiler now leaves out of line. One is
+`apply_to_opponents` in the enemy turn, which the phase does not run.
+The coroutine's own cost is about 120 instructions for each turn's end,
+against about 1,000. Most of it copies its 216-byte state in and out.
+
+At that cost the turn loop fits the budget, and step 2 can go ahead.

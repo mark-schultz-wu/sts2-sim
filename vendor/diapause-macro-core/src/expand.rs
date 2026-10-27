@@ -21,7 +21,8 @@ use crate::signature::{
 
 pub fn expand(attr: TokenStream, item: syn::ItemFn) -> syn::Result<TokenStream> {
     let prepared = Prepared::parse(attr, item)?;
-    let cfg = prepared.lower()?;
+    let mut cfg = prepared.lower()?;
+    crate::cfg::inline_joins(&mut cfg);
     let analysis = prepared.analyze(&cfg)?;
 
     // Self-check in the spirit of rustc's MIR validation: re-derive the
@@ -95,6 +96,7 @@ fn expand_debug_stages(
     let mut cfg = prepared.lower_unsimplified()?;
     *cfg_unsimplified = Some(cfg.clone());
     crate::cfg::simplify(&mut cfg);
+    crate::cfg::inline_joins(&mut cfg);
     let cfg = &*cfg_out.insert(cfg);
     let analysis = &*analysis_out.insert(prepared.analyze(cfg)?);
     // Unlike `expand`, run the validator unconditionally and surface a
