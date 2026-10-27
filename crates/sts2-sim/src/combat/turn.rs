@@ -3649,6 +3649,11 @@ fn clear_block<V: Rules>(
         .collect();
     let player = live.player(seat).id;
     for &creature in &clearing {
+        // `Creature.AfterTurnStart` keeps the player's block on its first
+        // turn, before it asks anything. `AfterBlockCleared` still runs.
+        if creature == player && live.turn == num_traits::one() {
+            continue;
+        }
         // `Hook.ShouldClearBlock`, and the model that kept the block.
         let preventer = listen::first_deciding::<V>(
             listen::Walk { live, belts },

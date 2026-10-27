@@ -210,9 +210,7 @@ pub(crate) fn enter<V: Rules>(
         })
         .collect();
     let mut order = pile::shuffle(streams.combat().shuffle, deck).into_cards();
-    // `AfterRoomEntered` as the room opens, then `BeforeSideTurnStart` for the
-    // turn the fight is about to begin on. Both run before anything is drawn.
-    let turn = live.turn;
+    // `AfterRoomEntered` as the room opens, before anything is drawn.
     let entered = EventHook::RoomEntered {
         room: live.room(),
         strayed: entering.strayed,
@@ -569,28 +567,6 @@ pub(crate) fn enter<V: Rules>(
             board.add_to_draw_at_random(card, Some(player));
         }
     }
-    // `StartTurn` puts the turn in its start, then raises
-    // `BeforeSideTurnStart`, which is where a monster that opens the fight
-    // behind block gains it.
-    live.players[seat].phase = <V::PlayerTurnPhase as TurnPhaseKinds>::START;
-    super::turn::before_side_turn_start::<V>(
-        seat,
-        &mut live,
-        streams.combat(),
-        belts,
-        ascension,
-        <V::CombatSide as SideKinds>::PLAYER,
-        turn,
-    );
-    // `SetupPlayerTurn` resets the energy to `MaxEnergy`, which runs
-    // `Hook.ModifyMaxEnergy`, and raises the hooks that follow.
-    live.players[seat].energy = super::board::max_energy::<V>(Walk { live: &live, belts }, energy);
-    if let Some(ended) =
-        super::turn::energy_reset::<V>(seat, &mut live, &mut streams, belts, ascension)
-    {
-        unimplemented!("a fight that ends {ended:?} as its first energy resets");
-    }
-    super::turn::energy_reset_late::<V>(seat, &mut live, streams.combat(), belts, ascension);
     // `RandomizeOrderInternal` raises `ModifyShuffleOrder` before the innate
     // cards move. No listener answers it.
     let hook = sts2_core::EventHook::ShuffleOrder { initial: true };
@@ -598,92 +574,20 @@ pub(crate) fn enter<V: Rules>(
     {
         unimplemented!("{listener:?} asking for {effect:?} over the opening shuffle")
     }
-    // `BeforeHandDraw`, then the hand, then `AfterPlayerTurnStart`: the first
-    // turn's `SetupPlayerTurn` runs as every other turn's does, with the
-    // innate cards put on top first.
-    let player = live.player(seat).id;
-    let hook = sts2_core::EventHook::BeforeHandDraw {
-        player,
-        turn: live.turn,
-    };
-    let asked = super::listen::Walking::begin(&live, belts, hook).map(Box::new);
-    let fresh = live.deferred.open_fresh();
-    live.pause_boundary = true;
-    let carried =
-        super::turn::begin_setup(seat, &mut live, streams.combat(), belts, ascension, asked);
-    live.pause_boundary = false;
-    let ended = match carried {
-        // A player who died in the setup has the turn in its end already.
-        super::turn::Carried::Done(ended) => {
-            if live.players[seat].phase == <V::PlayerTurnPhase as TurnPhaseKinds>::START {
-                live.players[seat].phase = <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY;
-            }
-            ended
-        }
-        // A setup that stops on a question lets the fight open around it, as
-        // any turn's does. `RunAutoPrePlayPhase` waits for the answer, so the
-        // turn stays in its start until then.
-        super::turn::Carried::Parked => None,
-    };
-    let setup = match live.asking {
-        Some(_) => Some(live.set_aside(seat, fresh)),
-        None => {
-            live.deferred.keep_fresh(fresh);
-            None
-        }
-    };
-    let parked = setup.is_some();
-    if let Some(ended) = ended {
-        return Ok(Entered {
-            live,
-            streams,
-            ended: Some(ended),
-            arriving,
-        });
-    }
-    let ended = super::turn::side_turn_started::<V>(
+    // `StartTurn`, as for every turn. `SetupPlayerTurn` puts the innate cards
+    // on top on the first.
+    let ended = super::turn::start_player_turn(
         seat,
-        &mut live,
-        streams.combat(),
-        belts,
+        super::Fighting {
+            live: &mut live,
+            streams: &mut streams,
+            belts: &mut *belts,
+        },
         ascension,
-        <V::CombatSide as SideKinds>::PLAYER,
+        energy,
+        Default::default(),
         false,
-    )
-    // `OrbQueue.AfterTurnStart`, which a fight's opening turn runs too.
-    .or_else(|| {
-        super::turn::orbs_at_turn_start::<V>(seat, &mut live, streams.combat(), belts, ascension)
-    });
-    // A setup paused on a signal goes on once the turn has started, and
-    // runs the pre-play phase itself where it runs to its end.
-    if let Some(setup) = setup {
-        live.rejoin(seat, setup);
-    }
-    let ended = match ended {
-        None if parked => super::play::come_up(
-            seat,
-            super::Fighting {
-                live: &mut live,
-                streams: &mut streams,
-                belts: &mut *belts,
-            },
-        )?,
-        ended => ended,
-    };
-    // `RunAutoPrePlayPhase`, which a setup parked on a question waits out.
-    let ended = match ended {
-        None if !parked
-            && live.players[seat].phase == <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY =>
-        {
-            let ended = super::turn::pre_play_phase::<V>(seat, &mut live, streams.combat(), belts);
-            if ended.is_none() {
-                live.players[seat].phase = super::turn::after_pre_play::<V>(&live);
-            }
-            ended
-        }
-        ended => ended,
-    };
-
+    )?;
     Ok(Entered {
         live,
         streams,
