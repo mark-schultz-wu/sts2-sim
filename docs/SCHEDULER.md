@@ -59,9 +59,13 @@ The game orders by action id across queues instead (§1). Three places
 looked different from the game when read from the code. A run settles
 each:
 
-1. **Two tails at turn start.** A paused orb `AfterTurnStart` task is
-   queued in the game before the paused setup's hook action, so it runs
-   first by id. The engine runs the setup and its pre-play first.
+1. **Two tails at turn start.** In the game, a paused orb
+   `AfterTurnStart` task goes on the queue before the paused setup's hook
+   action, and runs first by id. No orb task can pause, though. Only `PlasmaOrb` has a
+   turn-start trigger, which gains energy, in either build. The two hooks
+   that raises, `AfterModifyingOrbPassiveTriggerCount` and
+   `AfterModifyingEnergyGain`, have one listener each, and both only
+   flash. So no run can tell the orders apart.
 2. **`Combat` tails in the enemy turn.** A `Combat` hook action paused in
    the enemy turn, from `BeforeSideTurnStart`, `AfterDiedToDoom` or
    `AfterDeath`, looked as if it ran at once in the game. It does not.
@@ -70,7 +74,9 @@ each:
    setup drew its hand. The engine does the same, so this one is not a
    difference.
 3. **`Hook.BeforeFlush`.** The engine raises only the late pass,
-   `BeforeFlushLate`. No ported listener answers the main pass yet.
+   `BeforeFlushLate`. The main pass has one listener outside test
+   content, the Slumbering Essence enchantment, and nothing in either
+   build grants it. So no run reaches it.
 
 Each gets a scenario. One that shows a difference lands with the change
 that fixes it, since CI runs every scenario.
@@ -229,9 +235,9 @@ The spike below measures the turn loop's part, which is the costly one.
 Each step is one PR, with the golden replays, the census and
 `cargo xtask instructions` against the step before.
 
-1. **Scenarios for the three orders above.** Each records what the game
-   does. One that agrees lands at once. One that differs lands with the
-   step that fixes it.
+1. **Scenarios for the three orders above** (done). The second agrees
+   with the game, and its scenario pins the order. No run can reach the
+   other two.
 2. **The turn loop as a coroutine.** End of turn, enemy turn and turn start
    become one coroutine in the fight. The turn variants of `Deferred` go,
    and so does `start.rs`'s duplicate. `Listening::join` becomes a yield.
@@ -241,8 +247,8 @@ Each step is one PR, with the golden replays, the census and
    `Live::asking` go into the actions. The `Combat` tails in the enemy
    turn keep the order their scenario pins.
 4. **Action types and gating.** `CombatPlayPhaseOnly` waits for the play
-   phase, so the turn-start order matches the game. The cancellations
-   follow: end of turn, and a `FromHand` pick.
+   phase, as the game's does. The cancellations follow: end of turn, and
+   a `FromHand` pick.
 5. **Command frames as coroutines**, one carrier at a time.
 6. **Co-op**: a turn loop over players, a question for each seat, and
    cross-player boundaries.
@@ -251,10 +257,7 @@ Steps 2 to 4 are the scheduler with one player.
 
 ## Open questions
 
-1. The engine never raises `Hook.BeforeFlush`'s main pass. It is a rules gap, not a
-   scheduler one. Fix it in step 1 with its scenario, or list it in
-   `BLOCKERS.md` on its own?
-2. Step 5 makes every engine command a possible coroutine. Can that wait
+1. Step 5 makes every engine command a possible coroutine. Can that wait
    until after co-op, since nothing in co-op needs it?
 
 ## The spike
