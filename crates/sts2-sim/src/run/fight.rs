@@ -311,11 +311,9 @@ impl<V: Rules> State<V> {
                 let seats: smallvec::SmallVec<[sts2_core::SeatIndex; 4]> = self.seats().collect();
                 let host = sts2_core::SeatIndex(0);
                 let in_event = self.resuming.is_some();
-                if let Some(fighting) = self.fighting()
-                    && fighting.live.waits_on_a_question()
-                {
-                    unimplemented!("a fight won while a player's action waits on a question");
-                }
+                // `ActionQueueSet.CombatEnded` cancels every combat action
+                // not running, a play paused on another player's choice among
+                // them. They go with the fight.
                 let (mut live, belts) = self.left_fight();
                 let extra_rewards = live.extra_rewards().to_vec();
                 if seats.len() > 1 && (!extra_rewards.is_empty() || in_event) {

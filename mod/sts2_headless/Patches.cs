@@ -1382,3 +1382,19 @@ internal static class CountSyncedActions
     [HarmonyPatch("ResumeActionAfterPlayerChoice")]
     private static void Resumed() => Peers.Synced++;
 }
+
+/// <summary>
+/// Drops the question a cancelled action asked, for <see cref="Pending.DropFor"/>.
+/// </summary>
+/// <remarks>
+/// A won fight cancels every combat action that is not executing, a play
+/// paused on a card choice among them. The game's screen closes that choice
+/// (<c>NCombatUi</c> calls <c>Hand.CancelAllCardPlay</c>), so the question is
+/// gone, and the rewards come next.
+/// </remarks>
+[HarmonyPatch(typeof(GameAction), nameof(GameAction.Cancel))]
+internal static class DropCancelledQuestion
+{
+    [HarmonyPostfix]
+    private static void Cancelled(GameAction __instance) => Pending.DropFor(__instance);
+}

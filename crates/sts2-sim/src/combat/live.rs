@@ -3411,12 +3411,6 @@ impl<V: Rules> Live<V> {
         }
     }
 
-    /// Whether a player's action waits on its question at the front of its
-    /// queue.
-    pub(crate) fn waits_on_a_question(&self) -> bool {
-        self.queues.any_stopped()
-    }
-
     /// The question in play, or else the one `seat`'s queue stopped on.
     fn asked_of(&self, seat: sts2_core::SeatIndex) -> Option<&Asking<V>> {
         self.asking

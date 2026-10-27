@@ -70,26 +70,22 @@ run as its own machine sees it. The work goes in this order:
    stops on a question waits at the front of its player's queue, and the
    other players act around it. A won fight hands each player back their
    health and rolls their own rewards. A player who dies beside a living
-   one leaves the fight's cards, and a win revives them. Next, in the
-   order of `docs/COOP-FIGHTS.md` and where the hunted runs stop:
-   - The game fails under load. At `--width 8` two games of sixteen runs
-     failed: one closed its connection, one logged Godot's `Parameter "t"
-     is null` and `Invalid Task ID` and stopped answering. At `--width 4`
-     one game of twenty-four runs exited before it connected. Hunts stay
-     at `--width 4`.
+   one leaves the fight's cards, and a win revives them. A win cancels
+   the actions still waiting, as the game's does. Hunts stay at
+   `--width 4`: at `--width 8` two games of sixteen failed in Godot
+   itself. Next, in the order of `docs/COOP-FIGHTS.md` and where the
+   hunted runs stop:
    - The rest of the scheduler (steps 3 and 4 of `docs/SCHEDULER.md`). A
      question the turn loop asks belongs to no player's queue yet. Each
      phase of the turn's end panics at one in a fight of several players.
-     So do the turn's end and a won fight while a player's action waits on
-     a question, where one hunted run stops. In the game that question
-     stays up after the win, and the player's rewards come once it is
-     answered. Card plays, potions and the turn's end go through the
-     queues, with the action types, gating and cancellations.
+     So does the turn's end while a player's action waits on a question.
+     Card plays, potions and the turn's end go through the queues, with
+     the action types, gating and cancellations.
    - Shops, events and travel after the first fight, where most of the
      sixteen hunted seeds part. Three part after a purchase, and three in
-     the next room's stream after travel. Four part at events: Room Full
-     of Cheese, Doors of Light and Dark, Self-Help Book and Drowning
-     Beacon. A player's event is their own, and seat 1 sees seat 0's
+     the next room's stream after travel. Five part at events: Room Full
+     of Cheese, Doors of Light and Dark, Self-Help Book, Drowning Beacon
+     and Aroma of Chaos. A player's event is their own, and seat 1 sees seat 0's
      option and reward. Seed 14 parts at step 3, after its first travel.
    - A fight won inside an event, and the extra rewards a monster gives,
      which panic in a run of several players.

@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using MegaCrit.Sts2.Core.Entities.CardRewardAlternatives;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Events.Custom.CrystalSphereEvent;
+using MegaCrit.Sts2.Core.GameActions;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Rewards;
@@ -98,6 +99,21 @@ public abstract class Pending
     /// that deliberately does nothing while <c>TestMode.IsOn</c> and knows
     /// nothing about our task in any case.
     /// </remarks>
+    /// <summary>
+    /// Drops the question once the game cancelled the action that asked it,
+    /// as <c>ActionQueueSet.CombatEnded</c> cancels a play paused on a choice
+    /// when the fight is won. The action never resumes, so its task is left
+    /// as it is: the game asks nothing more of it.
+    /// </summary>
+    public static void DropFor(GameAction cancelled)
+    {
+        if (Current is CardSelection selection && selection.AskedBy(cancelled))
+        {
+            Log.Info($"[headless] dropping pending {selection.Kind}: {cancelled} was cancelled");
+            Current = null;
+        }
+    }
+
     public static void CancelOutstanding(string why)
     {
         Pending? pending = Current;
@@ -176,6 +192,9 @@ internal sealed class CardSelection : Pending
     /// <summary>Whether a back button closes the selection, handing the game no cards.</summary>
     private readonly bool _cancelable;
 
+    /// <summary>The action that was running as the question was asked.</summary>
+    private readonly GameAction? _action;
+
     /// <summary>The options picked so far, in the order they were picked.</summary>
     /// <remarks>
     /// The game's screens take a selection a click at a time, and hand the
@@ -193,7 +212,11 @@ internal sealed class CardSelection : Pending
         _asker = asker;
         _cancelable = CancelableSelection.Cancelable == true;
         CancelableSelection.Cancelable = null;
+        _action = RunManager.Instance.ActionExecutor.CurrentlyRunningAction;
     }
+
+    /// <summary>Whether <paramref name="action"/> is the action that asked.</summary>
+    internal bool AskedBy(GameAction action) => ReferenceEquals(_action, action);
 
     public override string Kind => "select_cards";
 
