@@ -90,7 +90,6 @@ run as its own machine sees it. The work goes in this order:
      the action types, gating and cancellations.
    - A monster's move that reaches one player in a fight of two panics,
      in one hunted run.
-   - Seed 14 parts at step 3, after its first travel.
    - A rest site in a run of several players offers Mend, which the
      simulator leaves out. Three hunted runs part there.
    - Unrelenting and Pounce make the wrong player's card free. Three
@@ -114,7 +113,8 @@ run as its own machine sees it. The work goes in this order:
    - A player who dies inside their own card or potion beside a living
      one, and a death that leaves every standing player ready, panic.
 4. Co-op content, as the runs reach it. Massive Scroll is ported. The
-   Concoct power's `AfterDamageGiven` stops one hunted run.
+   Concoct power's `AfterDamageGiven` stops one hunted run, and Tag Team
+   over another player's Attack stops another.
 
 ### 2. The engine's command frames as coroutines
 

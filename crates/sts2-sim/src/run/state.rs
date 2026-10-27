@@ -2404,12 +2404,14 @@ impl<V: Rules> State<V> {
                 rarity,
                 &self.players[seat].dealt_relics,
                 floor,
+                self.players.len(),
             ),
             sts2_core::RelicPull::Stocked(_) => self.shared.opening.player_relics[seat.at()]
                 .front_where(
                     rarity,
                     &self.players[seat].dealt_relics,
                     floor,
+                    self.players.len(),
                     V::Relic::allowed_in_shops,
                 ),
         };
@@ -2431,6 +2433,7 @@ impl<V: Rules> State<V> {
             rarity,
             &self.players[seat].dealt_relics,
             num_traits::cast(self.floor).expect("a floor fits a usize"),
+            self.players.len(),
         );
         Arc::make_mut(&mut self.players[seat].dealt_relics).push(relic);
         relic
@@ -2487,12 +2490,13 @@ impl<V: Rules> State<V> {
             &self.players[seat].dealt_relics[dealt..],
             &self.shared_dealt[shared..],
         );
-        self.shared
-            .opening
-            .shared_relics
-            .first_at(rarity, refill.is_some(), floor, |relic| {
-                dealt.contains(&relic) || shared.contains(&relic)
-            })
+        self.shared.opening.shared_relics.first_at(
+            rarity,
+            refill.is_some(),
+            floor,
+            self.players.len(),
+            |relic| dealt.contains(&relic) || shared.contains(&relic),
+        )
     }
 
     /// `Player.CanRemovePotions` off: an event that holds the potions while it
@@ -3454,9 +3458,9 @@ impl<V: Rules> State<V> {
                 HookEffect::OfferNeowRelics { count, except } => {
                     use sts2_core::rng::GameRng as _;
 
-                    // A run here has one player, as Neow's own roll does.
+                    let players = self.players.len();
                     let mut relics: Vec<V::Relic> = V::neow_options()
-                        .filter(|&relic| relic != except && V::allowed_at_neow(relic, 1))
+                        .filter(|&relic| relic != except && V::allowed_at_neow(relic, players))
                         .collect();
                     self.streams
                         .player(seat, V::PlayerRngType::REWARDS)
@@ -6306,7 +6310,7 @@ impl<V: Rules> State<V> {
             // room's floor counts.
             floor: num_traits::cast(self.floor + num_traits::one()).expect("a floor fits a usize"),
             character: self.players[seat].character,
-            multiplayer: self.players.len() > 1,
+            players: self.players.len(),
             added,
             offset: self.players[seat].odds.rarity,
             ascension: self.ascension(),
@@ -8312,7 +8316,7 @@ impl<V: Rules> State<V> {
             dealt_relics: &mut dealt,
             floor: num_traits::cast(self.floor).expect("a floor fits a usize"),
             character: self.players[seat].character,
-            multiplayer: self.players.len() > 1,
+            players: self.players.len(),
             added,
             offset: self.players[seat].odds.rarity,
             ascension: self.ascension(),
@@ -8910,6 +8914,7 @@ impl<V: Rules> sts2_core::EventView<V> for AtSeat<'_, V> {
         self.state.shared.opening.player_relics[self.seat.at()].has_left(
             &self.state.players[self.seat].dealt_relics,
             num_traits::cast(self.state.floor).expect("a floor fits a usize"),
+            self.state.players.len(),
         )
     }
 }
