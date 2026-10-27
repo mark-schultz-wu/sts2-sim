@@ -306,6 +306,13 @@ impl<'a, V: Rules> Board<'a, V> {
         self
     }
 
+    /// This board acting for `seat`'s player, where a potion is aimed at
+    /// them, or for its actor's where nothing is.
+    pub(super) fn reaching(mut self, seat: Option<sts2_core::SeatIndex>) -> Self {
+        self.reaching = seat;
+        self
+    }
+
     /// Whether a question raised now stands this board still rather than
     /// throwing.
     #[inline]

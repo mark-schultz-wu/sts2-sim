@@ -73,7 +73,8 @@ run as its own machine sees it. The work goes in this order:
    one leaves the fight's cards, and a win revives them. A win cancels
    the actions still waiting, as the game's does. A merchant stocks an
    inventory for each player, who buys from it alone. Each player goes
-   through their own copy of an event. Hunts stay at
+   through their own copy of an event. A potion aimed at a player acts
+   for that player, and its drinker applies its powers. Hunts stay at
    `--width 4`: at `--width 8` two games of sixteen failed in Godot
    itself. Next, in the order of `docs/COOP-FIGHTS.md` and where the
    hunted runs stop:
@@ -83,16 +84,17 @@ run as its own machine sees it. The work goes in this order:
      So does the turn's end while a player's action waits on a question.
      Card plays, potions and the turn's end go through the queues, with
      the action types, gating and cancellations.
-   - A potion thrown at another player, which panics in four of the
-     sixteen hunted runs: the potions act on their drinker.
+   - A potion thrown at another player that asks a question, which that
+     player answers in the game. It panics in two of the sixteen hunted
+     runs, with Colorless Potion and Skill Potion.
    - Monster power scaling by the player count, where four hunted runs
      part. A monster's Plating reads 24 in the game where the simulator
      has 8. Slippery, Artifact and Shriek differ too.
    - Seed 14 parts at step 3, after its first travel.
    - A rest site in a run of several players offers Mend, which the
-     simulator leaves out. One hunted run parts there.
-   - Unrelenting makes the wrong player's attack free. One hunted run
-     parts there.
+     simulator leaves out. Two hunted runs part there.
+   - Unrelenting and Pounce make the wrong player's card free. Two hunted
+     runs part there.
    - The simulator ticks down a dead player's Frail, and the game does
      not. One hunted run parts there.
    - A shared event, which the players vote through, and an event that

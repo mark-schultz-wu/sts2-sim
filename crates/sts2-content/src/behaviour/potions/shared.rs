@@ -47,7 +47,7 @@ pub(super) fn on_use<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
         // block is unpowered, which no block listener this build fields reads.
         __c0 if __c0 == V::Potion::BLOCK_POTION => {
             let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
+                recipient: fight.target(),
                 amount: Amount::Number(V::Potion::BLOCK_POTION_BLOCK),
                 scaling: Scaling::Static,
             });
@@ -56,7 +56,8 @@ pub(super) fn on_use<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
         }
         // `AnyPlayer` again.
         __c0 if __c0 == V::Potion::GIGANTIFICATION_POTION => {
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::GIGANTIFICATION_POWER,
                 PowerAmount::Counted(V::Potion::GIGANTIFICATION_POTION_GIGANTIFICATION_POWER),
             );
@@ -64,7 +65,8 @@ pub(super) fn on_use<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
         }
         // `AnyPlayer`, which a run with one player points at that player.
         __c0 if __c0 == V::Potion::DEXTERITY_POTION => {
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::DEXTERITY_POWER,
                 PowerAmount::Counted(V::Potion::DEXTERITY_POTION_DEXTERITY_POWER),
             );
@@ -72,7 +74,8 @@ pub(super) fn on_use<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
         }
         // `AnyPlayer` again.
         __c0 if __c0 == V::Potion::STRENGTH_POTION => {
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::STRENGTH_POWER,
                 PowerAmount::Counted(V::Potion::STRENGTH_POTION_STRENGTH_POWER),
             );
@@ -80,7 +83,8 @@ pub(super) fn on_use<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
         }
         // `AnyPlayer`, and `SpeedPotionPower` lends the Dexterity.
         __c0 if __c0 == V::Potion::SPEED_POTION => {
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::SPEED_POTION_POWER,
                 PowerAmount::Counted(V::Potion::SPEED_POTION_DEXTERITY_POWER),
             );
@@ -122,7 +126,8 @@ pub(super) fn on_use<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
         }
         // `AnyPlayer` again.
         __c0 if __c0 == V::Potion::LUCKY_TONIC => {
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::BUFFER_POWER,
                 PowerAmount::Counted(V::Potion::LUCKY_TONIC_BUFFER_POWER),
             );
@@ -177,7 +182,8 @@ pub(super) fn on_use<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
         }
         __c0 if __c0 == V::Potion::CLARITY => {
             fight.draw(V::Potion::CLARITY_CARDS);
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::CLARITY_POWER,
                 PowerAmount::Counted(V::Potion::CLARITY_CLARITY_POWER),
             );
@@ -185,28 +191,32 @@ pub(super) fn on_use<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
         }
         // `FlexPotionPower` lends the Strength.
         __c0 if __c0 == V::Potion::FLEX_POTION => {
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::FLEX_POTION_POWER,
                 PowerAmount::Counted(V::Potion::FLEX_POTION_STRENGTH_POWER),
             );
             Played::Done
         }
         __c0 if __c0 == V::Potion::STABLE_SERUM => {
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::RETAIN_HAND_POWER,
                 PowerAmount::Counted(V::Potion::STABLE_SERUM_REPEAT),
             );
             Played::Done
         }
         __c0 if __c0 == V::Potion::HEART_OF_IRON => {
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::PLATING_POWER,
                 PowerAmount::Counted(V::Potion::HEART_OF_IRON_PLATING_POWER),
             );
             Played::Done
         }
         __c0 if __c0 == V::Potion::LIQUID_BRONZE => {
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::THORNS_POWER,
                 PowerAmount::Counted(V::Potion::LIQUID_BRONZE_THORNS_POWER),
             );
@@ -230,14 +240,14 @@ pub(super) fn on_use<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
         }
         // `AnyPlayer`: twice what its block stands at, unpowered.
         __c0 if __c0 == V::Potion::FORTIFIER => {
-            let actor = fight.actor();
+            let target = fight.target();
             let block = fight
                 .creatures()
-                .find(|creature| creature.id() == actor)
+                .find(|creature| creature.id() == target)
                 .map(|creature| creature.block())
                 .expect("the player drinking stands in the fight");
             let gained = fight.resolve(Effect::GainBlock {
-                recipient: actor,
+                recipient: target,
                 amount: Amount::Number(block * 2),
                 scaling: Scaling::Static,
             });
@@ -246,18 +256,21 @@ pub(super) fn on_use<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
         }
         // `AnyPlayer` again, for each of these.
         __c0 if __c0 == V::Potion::FYSH_OIL => {
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::STRENGTH_POWER,
                 PowerAmount::Counted(V::Potion::FYSH_OIL_STRENGTH_POWER),
             );
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::DEXTERITY_POWER,
                 PowerAmount::Counted(V::Potion::FYSH_OIL_STRENGTH_POWER),
             );
             Played::Done
         }
         __c0 if __c0 == V::Potion::MAZALETHS_GIFT => {
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::RITUAL_POWER,
                 PowerAmount::Counted(V::Potion::MAZALETHS_GIFT_RITUAL_POWER),
             );
@@ -265,14 +278,16 @@ pub(super) fn on_use<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
         }
         __c0 if __c0 == V::Potion::RADIANT_TINCTURE => {
             fight.modify_energy(V::Potion::RADIANT_TINCTURE_ENERGY);
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::RADIANCE_POWER,
                 PowerAmount::Counted(V::Potion::RADIANT_TINCTURE_RADIANCE_POWER),
             );
             Played::Done
         }
         __c0 if __c0 == V::Potion::REGEN_POTION => {
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::REGEN_POWER,
                 PowerAmount::Counted(V::Potion::REGEN_POTION_REGEN_POWER),
             );
@@ -284,7 +299,8 @@ pub(super) fn on_use<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
             Played::Done
         }
         __c0 if __c0 == V::Potion::DUPLICATOR => {
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::DUPLICATION_POWER,
                 PowerAmount::Counted(DUPLICATION),
             );
@@ -334,12 +350,13 @@ pub(super) fn on_use<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
         // Turn at the same amount, from the drinker.
         __c0 if __c0 == V::Potion::SHIP_IN_A_BOTTLE => {
             let block = fight.resolve(Effect::GainBlock {
-                recipient: fight.actor(),
+                recipient: fight.target(),
                 amount: Amount::Number(V::Potion::SHIP_IN_A_BOTTLE_BLOCK),
                 scaling: Scaling::Static,
             });
             fight.apply(block);
-            fight.apply_to_actor(
+            fight.apply_power(
+                fight.target(),
                 V::Power::BLOCK_NEXT_TURN_POWER,
                 PowerAmount::Counted(V::Potion::SHIP_IN_A_BOTTLE_BLOCK),
             );
@@ -381,7 +398,7 @@ pub(super) fn on_use<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
         // `CreatureCmd.GainMaxHp` on its target by its `MaxHpVar(5)`. A fight
         // here has one player, who drinks it.
         __c0 if __c0 == V::Potion::FRUIT_JUICE => {
-            fight.gain_max_hp(fight.actor(), V::Potion::FRUIT_JUICE_MAX_HP);
+            fight.gain_max_hp(fight.target(), V::Potion::FRUIT_JUICE_MAX_HP);
             Played::Done
         }
         __c0 if __c0 == V::Potion::POWER_POTION
