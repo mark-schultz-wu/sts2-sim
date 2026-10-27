@@ -1284,19 +1284,29 @@ fn resume_answered<V: Rules>(
                 ended,
             );
         }
-        // The choice a monster's move offered, then the rest of the turn.
-        Then::Chosen { at } => {
+        // The turn loop's own question, which it takes as it goes on.
+        Then::Turn => {
             let ascension = live.ascension;
-            let ended = super::turn::resume_chosen::<V>(
+            let Some(super::live::Deferred::TurnLoop {
+                looping,
+                max_energy,
+            }) = live.deferred.next()
+            else {
+                unreachable!("the turn loop waits under its own question")
+            };
+            let ended = super::turn_loop::finish::<V>(
                 seat,
                 Fighting {
                     live: &mut *live,
                     streams: &mut *streams,
                     belts: &mut *belts,
                 },
-                at,
-                taken,
-            );
+                ascension,
+                max_energy,
+                looping,
+                None,
+                Some(taken),
+            )?;
             return run_deferred(
                 seat,
                 Fighting {
@@ -1441,41 +1451,12 @@ fn run_deferred<V: Rules>(
                 fighting.live.rejoin(seat, *task);
                 ended
             }
-            super::live::Deferred::EndingTurn { ending, max_energy } => {
-                super::ending::finish::<V>(seat, fighting, ascension, max_energy, ending, ended)?
-            }
-            parked @ super::live::Deferred::Move { .. } => {
-                let resumed = match ended {
-                    None => super::turn::resume_move::<V>(
-                        Fighting {
-                            live: &mut *fighting.live,
-                            streams: &mut *fighting.streams,
-                            belts: &mut *fighting.belts,
-                        },
-                        &parked,
-                    ),
-                    ended => Some(ended),
-                };
-                match resumed {
-                    // It stood still again, and waits once more.
-                    None => ended,
-                    Some(ended) => {
-                        let super::live::Deferred::Move {
-                            actor,
-                            move_id,
-                            acting,
-                            max_energy,
-                            ..
-                        } = parked
-                        else {
-                            unreachable!("a move was parked")
-                        };
-                        super::turn::after_move::<V>(
-                            seat, fighting, actor, move_id, &acting, max_energy, ended,
-                        )?
-                    }
-                }
-            }
+            super::live::Deferred::TurnLoop {
+                looping,
+                max_energy,
+            } => super::turn_loop::finish::<V>(
+                seat, fighting, ascension, max_energy, looping, ended, None,
+            )?,
             super::live::Deferred::PrePlay { rest, next } => match ended {
                 None => {
                     let ended = super::turn::pre_play_from::<V>(

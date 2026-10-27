@@ -298,10 +298,9 @@ pub(super) enum Then<V: Rules> {
     SetupChosen {
         writes: &'static [(sts2_core::Change<V>, sts2_core::Lasting)],
     },
-    /// A choice a monster's move offered, which `V::resume_play` picks up.
-    /// The rest of the move and of the enemy turn waits in
-    /// [`Live::deferred`].
-    Chosen { at: super::board::Resume<V> },
+    /// A question the turn loop asked itself, a monster's move's choice,
+    /// which it takes as it goes on. It waits on top of [`Live::deferred`].
+    Turn,
     /// A selection a shuffle asked for inside an effect's draw. `act` is
     /// what happens to the cards picked, and the rest of the draw waits in
     /// [`Live::deferred`].
@@ -340,21 +339,6 @@ pub(super) enum Deferred<V: Rules> {
     /// `CardCmd.AutoPlay` of a card `AutoPlayFromDrawPile` already took into
     /// the play pile, with `ExhaustOnNextPlay` set to `force_exhaust` first.
     AutoPlayTaken { id: CardId<V>, force_exhaust: bool },
-    /// The move `move_id` of `actor`, which stood still on a command the
-    /// player had to answer. It goes on from `at`, where it handed a resume
-    /// point back, and is over otherwise. Then `OnMovePerformed`, the enemies
-    /// in `acting`, and the end of the turn. `damage` and `repeats` are what
-    /// the move advertised, which its attacks read.
-    Move {
-        actor: CombatId,
-        monster: V::Monster,
-        move_id: V::MoveId,
-        at: Option<super::board::Resume<V>>,
-        damage: V::Number,
-        repeats: V::Count,
-        acting: smallvec::SmallVec<[CombatId; CREATURES]>,
-        max_energy: V::Count,
-    },
     /// The rest of a play's `AfterCardPlayed` walk, which a question a
     /// listener asked stood still, then `AfterCardPlayedLate`.
     Played {
@@ -402,11 +386,11 @@ pub(super) enum Deferred<V: Rules> {
     /// A listener's task a pause boundary set aside, which goes on here
     /// where its caller waits for it.
     Rejoin(Box<Paused<V>>),
-    /// The player's turn end, stopped on a question or waiting for a
-    /// listener's task, which goes on from where it stopped. The enemies'
-    /// turn and the player's next follow it.
-    EndingTurn {
-        ending: Box<super::ending::player_turn_end::State<V>>,
+    /// The turn loop, stopped on a question or waiting for a listener's
+    /// task, which goes on from where it stopped. The player's next turn
+    /// follows it.
+    TurnLoop {
+        looping: Box<super::turn_loop::turn_loop::State<V>>,
         max_energy: V::Count,
     },
     /// `RunAutoPrePlayPhase` from what a pass still asked for, then from the

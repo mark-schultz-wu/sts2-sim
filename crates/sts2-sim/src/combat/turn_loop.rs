@@ -1,49 +1,48 @@
-//! The player's turn end as a coroutine: `EndPlayerTurnPhaseOne` and
-//! `EndPlayerTurnPhaseTwo`.
+//! The turn loop as a coroutine, from the player's turn end to the start of
+//! the player's next turn. It runs `EndPlayerTurnPhaseOne`,
+//! `EndPlayerTurnPhaseTwo`, `SwitchSides` and the enemies' turn.
 //!
-//! The post-play phase, `BeforeSideTurnEnd`, `DoTurnEnd`, `BeforeFlushLate`
-//! and `AfterTurnEnd` can each stop on a question. `diapause` turns the
-//! straight-line code below into the state it waits in, which
+//! The post-play phase, `BeforeSideTurnEnd`, `DoTurnEnd`, `BeforeFlushLate`,
+//! `AfterTurnEnd` and each enemy's move can stop on a question. `diapause`
+//! turns the straight-line code below into the state it waits in, which
 //! [`Live::deferred`](crate::combat::live::Live) holds and clones. The
-//! enemies' turn and the player's next run once it is over.
+//! player's next turn starts once it is over.
 
-use sts2_core::{Rules, SideKinds};
+use smallvec::SmallVec;
+use sts2_core::{CombatId, Rules, SideKinds};
 
 use super::{Error, Fighting};
 use crate::combat::board::Board;
-use crate::combat::live::{Paused, Skips};
+use crate::combat::live::{CREATURES, Paused, Skips};
 use crate::combat::setup::Lent;
-use crate::combat::turn::{InHand, PassRest, TurnEndPass};
+use crate::combat::turn::{InHand, Moved, PassRest, Stood, TurnEndPass};
 
-/// How the player's turn end came out.
+/// How the turn loop came out.
 #[derive(Debug, Clone, PartialEq)]
-pub(super) enum TurnEnd<V: Rules> {
-    /// The fight ended before the flush, and the turn's end stops.
+pub(super) enum Looped<V: Rules> {
+    /// The fight ended, and the turn loop stops.
     Ended(crate::combat::Ended),
-    /// `AfterTurnEnd` over, with how it ended the fight and what skips
-    /// the tick this turn.
-    AfterTurnEnd {
-        ended: Option<crate::combat::Ended>,
-        skipping: Skips<V>,
-    },
+    /// The player's next turn starts, with what skips the tick this turn.
+    /// `extra` is a turn `ShouldTakeExtraTurn` gave.
+    PlayerTurn { skipping: Skips<V>, extra: bool },
 }
 
 /// What a hook that waits for its listeners came to. It holds how the hook
 /// ended the fight, and the tasks of the listeners that paused, in order.
 type Waits<V> = (Option<crate::combat::Ended>, Option<Vec<Paused<V>>>);
 
-/// The player's turn end, to the end of `AfterTurnEnd`.
+/// The turn loop, from the player's turn end to the start of the next.
 ///
 /// It yields on each question it stops on, which stands in
 /// [`Live::asking`](crate::combat::live::Live). Some hooks wait for their
 /// paused listeners. At each of those, it yields the listeners' tasks in
-/// the order they paused, and they go on before the turn's end does.
+/// the order they paused, and they go on before the turn loop does.
 #[diapause::coroutine(yield = Option<Vec<Paused<V>>>, resume = for<'f> Lent<'f, V>)]
 #[derive(Debug, Clone, PartialEq)]
-pub(super) fn player_turn_end<V: Rules>(
+pub(super) fn turn_loop<V: Rules>(
     seat: sts2_core::SeatIndex,
     ascension: V::AscensionLevel,
-) -> TurnEnd<V> {
+) -> Looped<V> {
     // The post-play phase. An auto-play there that asks stands the turn's
     // end still behind the answer.
     let mut pass: PassRest<V> = post_play_pass::<V>(seat, resumed!());
@@ -51,7 +50,7 @@ pub(super) fn player_turn_end<V: Rules>(
         loop {
             yield_!(None);
             if let Some(ended) = resumed!().ended {
-                return TurnEnd::Ended(ended);
+                return Looped::Ended(ended);
             }
             if !post_play::<V>(seat, resumed!(), &mut pass) {
                 break;
@@ -66,7 +65,7 @@ pub(super) fn player_turn_end<V: Rules>(
         Ok(hooks) => hooks,
         Err(ended) => {
             resumed!().live.skip_tick = skipping;
-            return TurnEnd::Ended(ended);
+            return Looped::Ended(ended);
         }
     };
     let mut over: Option<crate::combat::Ended> = hooks.0;
@@ -80,7 +79,7 @@ pub(super) fn player_turn_end<V: Rules>(
     let mut done: InHand<V> = match turn_end::<V>(seat, ascension, over, resumed!(), &mut skipping)
     {
         Ok(done) => done,
-        Err(ended) => return TurnEnd::Ended(ended),
+        Err(ended) => return Looped::Ended(ended),
     };
     if let InHand::Parked { .. } = done {
         loop {
@@ -91,12 +90,12 @@ pub(super) fn player_turn_end<V: Rules>(
                 };
             yield_!(None);
             if let Some(ended) = resumed!().ended {
-                return TurnEnd::Ended(ended);
+                return Looped::Ended(ended);
             }
             done = in_hand_from::<V>(seat, ascension, resumed!(), held, &mut skipping);
             if let InHand::Done(Some(by_hand)) = done {
                 resumed!().live.skip_tick = skipping;
-                return TurnEnd::Ended(by_hand);
+                return Looped::Ended(by_hand);
             }
         }
     }
@@ -111,7 +110,7 @@ pub(super) fn player_turn_end<V: Rules>(
     if picking.is_some() {
         yield_!(picking);
         if let Some(ended) = resumed!().ended {
-            return TurnEnd::Ended(ended);
+            return Looped::Ended(ended);
         }
     }
 
@@ -146,7 +145,124 @@ pub(super) fn player_turn_end<V: Rules>(
             ended = ended.or(resumed!().ended);
         }
     }
-    TurnEnd::AfterTurnEnd { ended, skipping }
+    if let Some(by_turn_end) = ended {
+        let lent = resumed!();
+        lent.live.skip_tick = skipping;
+        crate::combat::turn::ended_at_turn_end::<V>(seat, lent.live, by_turn_end);
+        return Looped::Ended(by_turn_end);
+    }
+    if extra_turn::<V>(seat, resumed!()) {
+        return Looped::PlayerTurn {
+            skipping,
+            extra: true,
+        };
+    }
+
+    // `SwitchSides` to the enemy and its `StartTurn`, then
+    // `ExecuteEnemyTurn`: each enemy that acts performs what it advertised,
+    // in turn. Each is held against the fight again before it acts, since
+    // an earlier move can take a later one out. A move that stands still on
+    // a question stands the turn still with it.
+    let acting: SmallVec<[CombatId; CREATURES]> =
+        match enemy_side_starts::<V>(seat, ascension, resumed!()) {
+            Ok(acting) => acting,
+            Err(at_start) => {
+                resumed!().live.skip_tick = skipping;
+                return Looped::Ended(at_start);
+            }
+        };
+    let mut next: usize = 0;
+    let mut moved: Moved<V> = enemies_act::<V>(resumed!(), &mut skipping, &acting, &mut next);
+    if let Moved::Stood(_) = moved {
+        loop {
+            let stood: Stood<V> = match std::mem::replace(&mut moved, Moved::Over(None)) {
+                Moved::Stood(stood) => stood,
+                // `CheckWinCondition` after each enemy's turn: an ended
+                // fight gives the enemies after it no turn.
+                Moved::Over(by_move) => {
+                    if by_move.is_some() || next >= acting.len() {
+                        moved = Moved::Over(by_move);
+                        break;
+                    }
+                    moved = enemies_act::<V>(resumed!(), &mut skipping, &acting, &mut next);
+                    continue;
+                }
+            };
+            resumed!().live.skip_tick = skipping;
+            yield_!(None);
+            skipping = std::mem::take(&mut resumed!().live.skip_tick);
+            moved = move_goes_on::<V>(seat, resumed!(), &mut skipping, stood);
+        }
+    }
+    let over: Option<crate::combat::Ended> = match moved {
+        Moved::Over(by_enemies) => by_enemies,
+        Moved::Stood(_) => unreachable!("a move standing still after the enemies' turn"),
+    };
+    // `EndEnemyTurn` is gated on `IsInProgress`, which both endings clear.
+    // So a fight that ended during the enemy turn ends the turn with it.
+    if let Some(by_enemies) = over {
+        resumed!().live.skip_tick = skipping;
+        return Looped::Ended(by_enemies);
+    }
+    if let Some(at_enemy_end) = enemy_turn_ends::<V>(seat, ascension, resumed!(), &mut skipping) {
+        resumed!().live.skip_tick = skipping;
+        return Looped::Ended(at_enemy_end);
+    }
+    Looped::PlayerTurn {
+        skipping,
+        extra: false,
+    }
+}
+
+/// Whether the player takes an extra turn, with it set up where so.
+fn extra_turn<V: Rules>(seat: sts2_core::SeatIndex, lent: &mut Lent<'_, V>) -> bool {
+    let (live, _, belts) = lent.parts();
+    crate::combat::turn::takes_extra_turn::<V>(seat, live, belts)
+}
+
+/// The enemy side's turn start, and the enemies that act in it.
+fn enemy_side_starts<V: Rules>(
+    seat: sts2_core::SeatIndex,
+    ascension: V::AscensionLevel,
+    lent: &mut Lent<'_, V>,
+) -> Result<SmallVec<[CombatId; CREATURES]>, crate::combat::Ended> {
+    let (live, rngs, belts) = lent.parts();
+    crate::combat::turn::enemy_side_starts::<V>(seat, live, rngs, belts, ascension)
+}
+
+/// The enemies from `next` on act, until a move stands still.
+fn enemies_act<V: Rules>(
+    lent: &mut Lent<'_, V>,
+    skipping: &mut Skips<V>,
+    acting: &[CombatId],
+    next: &mut usize,
+) -> Moved<V> {
+    let (live, rngs, belts) = lent.parts();
+    crate::combat::turn::enemies_act::<V>(live, rngs, belts, skipping, acting, next)
+}
+
+/// A move that stood still, once what it stood still on is over.
+fn move_goes_on<V: Rules>(
+    seat: sts2_core::SeatIndex,
+    lent: &mut Lent<'_, V>,
+    skipping: &mut Skips<V>,
+    stood: Stood<V>,
+) -> Moved<V> {
+    let answer = lent.taken.take();
+    let ended = lent.ended;
+    let (live, rngs, belts) = lent.parts();
+    crate::combat::turn::move_goes_on::<V>(seat, live, rngs, belts, skipping, stood, answer, ended)
+}
+
+/// The enemies' turn end and the switch back to the player.
+fn enemy_turn_ends<V: Rules>(
+    seat: sts2_core::SeatIndex,
+    ascension: V::AscensionLevel,
+    lent: &mut Lent<'_, V>,
+    skipping: &mut Skips<V>,
+) -> Option<crate::combat::Ended> {
+    let (live, rngs, belts) = lent.parts();
+    crate::combat::turn::enemy_turn_ends::<V>(seat, live, rngs, belts, ascension, skipping)
 }
 
 /// The hand's flush, then the cards' cleanup.
@@ -292,16 +408,17 @@ pub(super) fn begin<V: Rules>(
     ascension: V::AscensionLevel,
     max_energy: V::Count,
 ) -> Result<Option<crate::combat::Ended>, Error> {
-    let mut ending = player_turn_end::<V>(seat, ascension);
-    let state = ending.start_with(Lent {
+    let mut looping = turn_loop::<V>(seat, ascension);
+    let state = looping.start_with(Lent {
         live: &mut *fighting.live,
         rngs: fighting.streams.combat(),
         belts: &mut *fighting.belts,
         ended: None,
+        taken: None,
     });
     match state {
         diapause::CoroutineState::Yielded(tasks) => {
-            park(seat, fighting, max_energy, Box::new(ending), tasks);
+            park(seat, fighting, max_energy, Box::new(looping), tasks);
             Ok(None)
         }
         diapause::CoroutineState::Complete(done) => {
@@ -310,28 +427,31 @@ pub(super) fn begin<V: Rules>(
     }
 }
 
-/// The player's turn end from where `ending` stopped, once what it waited
-/// for is over. `ended` is how that ended the fight.
+/// The turn loop from where `looping` stopped, once what it waited for is
+/// over. `ended` is how that ended the fight, and `taken` is the player's
+/// answer where it waited on its own question.
 pub(super) fn finish<V: Rules>(
     seat: sts2_core::SeatIndex,
     fighting: Fighting<'_, V>,
     ascension: V::AscensionLevel,
     max_energy: V::Count,
-    mut ending: Box<player_turn_end::State<V>>,
+    mut looping: Box<turn_loop::State<V>>,
     ended: Option<crate::combat::Ended>,
+    taken: Option<sts2_core::Taken<V>>,
 ) -> Result<Option<crate::combat::Ended>, Error> {
     let state = diapause::Coroutine::resume(
-        &mut *ending,
+        &mut *looping,
         Lent {
             live: &mut *fighting.live,
             rngs: fighting.streams.combat(),
             belts: &mut *fighting.belts,
             ended,
+            taken,
         },
     );
     match state {
         diapause::CoroutineState::Yielded(tasks) => {
-            park(seat, fighting, max_energy, ending, tasks);
+            park(seat, fighting, max_energy, looping, tasks);
             Ok(None)
         }
         diapause::CoroutineState::Complete(done) => {
@@ -340,14 +460,14 @@ pub(super) fn finish<V: Rules>(
     }
 }
 
-/// The turn's end waiting, behind the tasks of the listeners that paused
+/// The turn loop waiting, behind the tasks of the listeners that paused
 /// where it yielded some. It is `Task.WhenAll`: the tasks go on in the
-/// order they paused, then the turn's end.
+/// order they paused, then the turn loop.
 fn park<V: Rules>(
     seat: sts2_core::SeatIndex,
     fighting: Fighting<'_, V>,
     max_energy: V::Count,
-    ending: Box<player_turn_end::State<V>>,
+    looping: Box<turn_loop::State<V>>,
     tasks: Option<Vec<Paused<V>>>,
 ) {
     let mut tasks = tasks.into_iter().flatten();
@@ -359,25 +479,27 @@ fn park<V: Rules>(
     }
     fighting
         .live
-        .defer(crate::combat::live::Deferred::EndingTurn { ending, max_energy });
+        .defer(crate::combat::live::Deferred::TurnLoop {
+            looping,
+            max_energy,
+        });
     if let Some(first) = first {
         fighting.live.rejoin(seat, first);
     }
 }
 
-/// The turn's end over: the fight's end, or the enemies' turn and the
-/// player's next.
+/// The turn loop over: the fight's end, or the player's next turn.
 fn complete<V: Rules>(
     seat: sts2_core::SeatIndex,
     fighting: Fighting<'_, V>,
     ascension: V::AscensionLevel,
     max_energy: V::Count,
-    done: TurnEnd<V>,
+    done: Looped<V>,
 ) -> Result<Option<crate::combat::Ended>, Error> {
     match done {
-        TurnEnd::Ended(ended) => Ok(Some(ended)),
-        TurnEnd::AfterTurnEnd { ended, skipping } => crate::combat::turn::after_player_turn_end(
-            seat, fighting, ascension, max_energy, skipping, ended,
+        Looped::Ended(ended) => Ok(Some(ended)),
+        Looped::PlayerTurn { skipping, extra } => crate::combat::turn::start_player_turn(
+            seat, fighting, ascension, max_energy, skipping, extra,
         ),
     }
 }

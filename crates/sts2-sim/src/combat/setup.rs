@@ -22,6 +22,8 @@ pub(super) struct Lent<'a, V: Rules> {
     pub(super) belts: &'a mut Belts<V>,
     /// How the answer the setup waited for ended the fight, if it did.
     pub(super) ended: Option<crate::combat::Ended>,
+    /// The player's answer, where the coroutine asked the question itself.
+    pub(super) taken: Option<sts2_core::Taken<V>>,
 }
 
 impl<V: Rules> Lent<'_, V> {
