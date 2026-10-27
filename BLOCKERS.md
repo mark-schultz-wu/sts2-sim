@@ -77,12 +77,6 @@ run as its own machine sees it. The work goes in this order:
      is null` and `Invalid Task ID` and stopped answering. At `--width 4`
      one game of twenty-four runs exited before it connected. Hunts stay
      at `--width 4`.
-   - A seed can take another path from one hunt to the next. A seat can
-     go without moves for a moment, so the other acts first, and the
-     simulator follows the game either way. Seed 10 matched to its end in
-     one hunt at `--width 4` and stopped at Concoct's power in the next.
-     A fix is for the co-op driver to wait until no seat waits on a move
-     of its own before it picks who acts.
    - The rest of the scheduler (steps 3 and 4 of `docs/SCHEDULER.md`). A
      question the turn loop asks belongs to no player's queue yet. Each
      phase of the turn's end panics at one in a fight of several players.

@@ -54,6 +54,10 @@ pub struct Peers {
     /// order: actions, hook actions and resumes after a choice. Every seat
     /// comes to the same count once it has caught up with the others.
     pub synced: u64,
+    /// How many checksums this machine's game generated. Every seat
+    /// generates them at the same points, a turn's changes among them. A
+    /// seat still running a turn's change has fewer than one past it.
+    pub checksums: u64,
 }
 
 /// Where one seat stands: its own view of the run, and of the others.

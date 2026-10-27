@@ -54,6 +54,13 @@ public static class Driver
     private static int _checksums;
 
     /// <summary>
+    /// How many checksums the game has generated. Every machine of a co-op
+    /// run generates them at the same points, the turn's changes among
+    /// them, so a seat behind another has generated fewer.
+    /// </summary>
+    internal static int Checksums => _checksums;
+
+    /// <summary>
     /// Runs the whole slice, logging each stage so a failure names its own step.
     /// </summary>
     /// <remarks>

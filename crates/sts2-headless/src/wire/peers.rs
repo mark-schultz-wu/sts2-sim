@@ -18,6 +18,7 @@ struct WirePeers {
     awaiting: Vec<u64>,
     in_flight: bool,
     synced: u64,
+    checksums: u64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -118,6 +119,7 @@ pub(crate) fn peers(state: &serde_json::Value, seats: usize) -> Result<Peers, Er
         awaiting,
         in_flight: wire.in_flight,
         synced: wire.synced,
+        checksums: wire.checksums,
     })
 }
 
@@ -137,6 +139,7 @@ mod tests {
             "awaiting": [1001],
             "inFlight": false,
             "synced": 0,
+            "checksums": 0,
         }});
         let read = peers(&state, 2).expect("the peers read");
         assert_eq!(
@@ -163,6 +166,7 @@ mod tests {
             "awaiting": [],
             "inFlight": false,
             "synced": 0,
+            "checksums": 0,
         }});
         assert!(peers(&state, 2).is_err());
     }

@@ -28,6 +28,7 @@ impl Solo {
             awaiting: Vec::new(),
             in_flight: false,
             synced: 0,
+            checksums: 0,
         }
     }
 }

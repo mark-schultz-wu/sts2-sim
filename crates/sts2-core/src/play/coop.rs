@@ -108,16 +108,18 @@ impl<V: ContentVersion, S: Seat<V>> Coop<V, S> {
             .iter_mut()
             .map(Seat::observe)
             .collect::<Result<Vec<_>, _>>()?;
-        // Another seat's move reaches a seat over the network, so a seat can
-        // be looked at before it has taken in what another has. Each one
-        // behind is looked at again until every seat has taken in as much as
-        // the furthest.
+        // Another seat's move reaches a seat over the network, and each runs
+        // a turn's change on its own, so a seat can be looked at before it
+        // has caught up with another. Each one behind is looked at again
+        // until every seat has taken in as much as the furthest, and
+        // generated as many checksums.
         let mut looks = 0;
         loop {
-            let furthest = seated.iter().map(|seat| seat.peers.synced).max();
+            let synced = seated.iter().map(|seat| seat.peers.synced).max();
+            let checksums = seated.iter().map(|seat| seat.peers.checksums).max();
             let mut behind = false;
             for (seat, at) in self.seats.iter_mut().zip(&mut seated) {
-                if Some(at.peers.synced) < furthest {
+                if Some(at.peers.synced) < synced || Some(at.peers.checksums) < checksums {
                     *at = seat.observe()?;
                     behind = true;
                 }

@@ -142,5 +142,6 @@ internal static class Peers
         ["awaiting"] = AwaitedChoices(),
         ["inFlight"] = InFlight,
         ["synced"] = Synced,
+        ["checksums"] = Driver.Checksums,
     };
 }
