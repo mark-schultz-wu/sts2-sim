@@ -49,6 +49,7 @@ fn any_cards_played_this_turn<V: crate::Build>(belt: &[V::Relic], plays: u8, tur
 /// fight, and `AfterCombatEnd` gives it back. `BeforeCardPlayed` sets only
 /// the relic's `Status`, which the game shows and nothing reads.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     state: &mut State,
     belt: &[V::Relic],
     hook: EventHook<V>,
@@ -65,10 +66,11 @@ pub(super) fn event_hook<V: crate::Build>(
                 asked.push(HookEffect::ExhaustHand);
             }
         }
-        EventHook::TakingExtraTurn => state.used_this_combat = true,
+        EventHook::TakingExtraTurn { player } if player == owner => state.used_this_combat = true,
         EventHook::CombatEnd { .. } => state.used_this_combat = false,
         EventHook::SideTurnStart { .. }
         | EventHook::BeforeSideTurnEndEarly { .. }
+        | EventHook::TakingExtraTurn { .. }
         | EventHook::CardPlaying { .. } => {}
         hook => unimplemented!("what PaelsEye does for {hook:?}"),
     }
@@ -76,13 +78,18 @@ pub(super) fn event_hook<V: crate::Build>(
 
 /// `ShouldTakeExtraTurn`.
 pub(super) fn decide_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     state: &State,
     belt: &[V::Relic],
     hook: DecisionHook<V>,
 ) -> HookResponse<bool> {
     match hook {
-        DecisionHook::ShouldTakeExtraTurn { plays, turn } => {
-            HookResponse::Decision(state.takes_the_turn::<V>(belt, plays, turn))
+        DecisionHook::ShouldTakeExtraTurn {
+            player,
+            plays,
+            turn,
+        } => {
+            HookResponse::Decision(player == owner && state.takes_the_turn::<V>(belt, plays, turn))
         }
         hook => unimplemented!("what PaelsEye decides for {hook:?}"),
     }

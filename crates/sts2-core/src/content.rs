@@ -3775,7 +3775,12 @@ pub enum DecisionHook<V: ContentVersion> {
     /// player's plays finished this turn that no auto-play made. One
     /// listener answering yes keeps the turn with the player. `turn` is the
     /// player's `TurnNumber`.
-    ShouldTakeExtraTurn { plays: u8, turn: V::Count },
+    ShouldTakeExtraTurn {
+        /// The player asked about.
+        player: crate::CombatId,
+        plays: u8,
+        turn: V::Count,
+    },
     /// `ShouldRefillMerchantEntry`, once a shelf's purchase went through. One
     /// listener answering yes restocks the shelf rather than emptying it.
     ShouldRefillMerchantEntry,
@@ -3894,6 +3899,8 @@ pub enum EventHook<V: ContentVersion> {
     /// `BeforePotionUsed`, as the player drinks a potion in a fight, before
     /// it leaves the belt.
     PotionUsing {
+        /// `potion.Owner.Creature`, its drinker.
+        player: crate::CombatId,
         /// The creature it is aimed at, where it aims.
         target: Option<crate::CombatId>,
     },
@@ -3901,6 +3908,8 @@ pub enum EventHook<V: ContentVersion> {
     /// `CombatManager.IsInProgress`, and `holding_potions` is
     /// `Owner.Potions.Any()`.
     PotionUsed {
+        /// `potion.Owner.Creature`, its drinker.
+        player: crate::CombatId,
         in_fight: bool,
         holding_potions: bool,
     },
@@ -4373,7 +4382,7 @@ pub enum EventHook<V: ContentVersion> {
         turn: V::Count,
     },
     /// `AfterTakingExtraTurn`, as the player's side keeps the turn.
-    TakingExtraTurn,
+    TakingExtraTurn { player: crate::CombatId },
     /// `BeforeSideTurnEnd`, the last of the three before a side's turn ends.
     BeforeSideTurnEnd {
         side: V::CombatSide,
@@ -4621,6 +4630,8 @@ pub enum EventHook<V: ContentVersion> {
         command: AttackId,
         /// `Attacker`.
         attacker: crate::CombatId,
+        /// `Attacker.PetOwner.Creature`, for a pet's attack.
+        pet_of: Option<crate::CombatId>,
         /// `ModelSource` where it is a card: which copy, and which card.
         source: Option<(crate::CardId<V>, V::Card)>,
         /// `Attacker.Monster`, which is nothing for the player.
@@ -4741,7 +4752,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::CardPlaying { .. } => ModelHook::BeforeCardPlayed,
             EventHook::BeforeSideTurnStart { .. } => ModelHook::BeforeSideTurnStart,
             EventHook::SideTurnStart { .. } => ModelHook::AfterSideTurnStart,
-            EventHook::TakingExtraTurn => ModelHook::AfterTakingExtraTurn,
+            EventHook::TakingExtraTurn { .. } => ModelHook::AfterTakingExtraTurn,
             EventHook::BeforeSideTurnEndEarly { .. } => ModelHook::BeforeSideTurnEndEarly,
             EventHook::BeforeSideTurnEnd { .. } => ModelHook::BeforeSideTurnEnd,
             EventHook::SideTurnEnd { .. } => ModelHook::AfterSideTurnEnd,

@@ -239,8 +239,10 @@ pub(crate) fn own_power_event_hook(
             Some((side != held.owner).then_some(HookEffect::Remove))
         }
         // `AmbergrisPower.AfterTakingExtraTurn`: one off, for its owner's
-        // turn. A fight here has one player, whose turn it is.
-        (Power::AmbergrisPower, EventHook::TakingExtraTurn) => Some(Some(HookEffect::Decrement)),
+        // turn.
+        (Power::AmbergrisPower, EventHook::TakingExtraTurn { player }) => {
+            Some((player == held.holder).then_some(HookEffect::Decrement))
+        }
         _ => None,
     }
 }
@@ -256,18 +258,20 @@ const JUGGLING_ATTACKS: Number = 3;
 pub(crate) fn own_power_decide_hook(
     power: Power,
     amount: PowerAmount<Number>,
-    _held: Held<'_, V>,
+    held: Held<'_, V>,
     _state: &State<V>,
     hook: sts2_core::DecisionHook<V>,
 ) -> Option<sts2_core::HookResponse<bool>> {
     match (power, amount, hook) {
         // `AmbergrisPower.ShouldTakeExtraTurn`: yes while it has a stack, for
-        // its owner. A fight here has one player.
+        // its owner.
         (
             Power::AmbergrisPower,
             PowerAmount::Counted(amount),
-            sts2_core::DecisionHook::ShouldTakeExtraTurn { .. },
-        ) => Some(sts2_core::HookResponse::Decision(amount > 0)),
+            sts2_core::DecisionHook::ShouldTakeExtraTurn { player, .. },
+        ) => Some(sts2_core::HookResponse::Decision(
+            amount > 0 && player == held.holder,
+        )),
         (Power::AmbergrisPower, PowerAmount::Endless, _) => {
             unimplemented!("an endless Ambergris")
         }

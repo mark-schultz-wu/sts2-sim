@@ -169,6 +169,7 @@ impl<V: Rules> State<V> {
                 }
             };
             let used = sts2_core::EventHook::PotionUsed {
+                player: seat.creature(),
                 in_fight: false,
                 holding_potions: self.holding_potions(seat),
             };

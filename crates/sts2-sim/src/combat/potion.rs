@@ -31,7 +31,10 @@ pub(crate) fn drink<V: Rules>(
     let reaching = super::live::potion_reaching(live, seat, target);
     // `Hook.BeforePotionUsed`, which nothing that listens answers with more
     // than what it writes on itself.
-    let hook = sts2_core::EventHook::PotionUsing { target };
+    let hook = sts2_core::EventHook::PotionUsing {
+        player: seat.creature(),
+        target,
+    };
     if let Some((listener, effect)) = super::listen::first_answer::<V>(seat, live, belts, hook) {
         unimplemented!("{listener:?} asking for {effect:?} before a potion")
     }

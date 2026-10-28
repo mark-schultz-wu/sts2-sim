@@ -2499,6 +2499,7 @@ impl<'a, V: Rules> Board<'a, V> {
             .expect("the potion that kept a creature alive is in the belt");
         self.live.players[seat].potions.spend(at);
         let hook = sts2_core::EventHook::PotionUsing {
+            player: seat.creature(),
             target: Some(saved),
         };
         if let Some((listener, effect)) =
@@ -2516,6 +2517,7 @@ impl<'a, V: Rules> Board<'a, V> {
             return;
         }
         let hook = sts2_core::EventHook::PotionUsed {
+            player: seat.creature(),
             in_fight: true,
             holding_potions: !self.live.players[seat].potions.is_empty(),
         };
@@ -6911,6 +6913,9 @@ impl<V: Rules> Board<'_, V> {
         // `History.CreatureAttacked`, before `AfterAttack` and whether or not
         // the fight is ending.
         self.live.history.attacked(monster);
+        let pet_of = (self.live.creatures.iter())
+            .find(|creature| creature.id == attacker)
+            .and_then(|creature| creature.owner);
         // `IterateCombatHookListeners` hands a fight that is ending no
         // listeners.
         if self.over() {
@@ -6925,6 +6930,7 @@ impl<V: Rules> Board<'_, V> {
             sts2_core::EventHook::AfterAttack {
                 command,
                 attacker,
+                pet_of,
                 source,
                 monster,
                 powered,

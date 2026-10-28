@@ -109,11 +109,6 @@ Each of these needs the field first.
   for a card that gives block to a teammate.
 - Single hooks:
   - `Forged`: Hammer Time.
-  - `AfterAttack`: Bone Flute, which needs the pet's owner.
-  - `PotionUsed`: Reptile Trinket.
-  - `PotionUsing`: Surrounded.
-- `ShouldTakeExtraTurn` and `TakingExtraTurn`: Pael's Eye and
-  Ambergris.
 - Run hooks:
   - `GoldGained`: Dragon Fruit, Ectoplasm, Bowler Hat.
   - `AddedToDeck`: Bing Bong, Book of Five Rings, Darkstone Periapt,

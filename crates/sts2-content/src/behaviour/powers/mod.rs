@@ -4202,19 +4202,20 @@ pub(crate) fn event_hook<V: crate::Build>(
             None
         }
         // `SurroundedPower.BeforeCardPlayed` and `BeforePotionUsed`: its owner
-        // turns toward a target behind it. A fight here has one player, whose
-        // every card and potion is its owner's.
+        // turns toward a target behind it, for its owner's card or potion.
         (
             __c0,
             _,
             EventHook::CardPlaying {
                 target: Some(target),
+                player,
                 ..
             }
             | EventHook::PotionUsing {
                 target: Some(target),
+                player,
             },
-        ) if __c0 == V::Power::SURROUNDED_POWER => {
+        ) if __c0 == V::Power::SURROUNDED_POWER && player == holder => {
             state.turn_toward(fight, target);
             None
         }

@@ -102,6 +102,7 @@ pub(super) fn takes_extra_turn<V: Rules>(
         listen::any_decides::<V>(
             listen::Walk { live, belts },
             sts2_core::DecisionHook::ShouldTakeExtraTurn {
+                player: seat.creature(),
                 plays,
                 turn: live.turn,
             },
@@ -117,7 +118,9 @@ pub(super) fn takes_extra_turn<V: Rules>(
     live.switch_side(<V::CombatSide as SideKinds>::PLAYER);
     live.turn = live.turn + num_traits::one();
     // `PowerCmd.Decrement` of a power asking runs inside the walk.
-    let taking = sts2_core::EventHook::TakingExtraTurn;
+    let taking = sts2_core::EventHook::TakingExtraTurn {
+        player: seat.creature(),
+    };
     let mut walking = listen::Walking::begin(live, belts, taking);
     if let Some((listener, effect)) = walking
         .as_mut()

@@ -4978,7 +4978,10 @@ impl<V: Rules> State<V> {
                 player: self.player_health(seat),
                 base,
             },
-            EventHook::PotionUsed { in_fight, .. } => EventHook::PotionUsed {
+            EventHook::PotionUsed {
+                player, in_fight, ..
+            } => EventHook::PotionUsed {
+                player,
                 in_fight,
                 holding_potions: self.holding_potions(seat),
             },

@@ -1909,6 +1909,7 @@ fn finish_effect<V: Rules, S: LendsCombat>(
                 next,
                 belts,
                 sts2_core::EventHook::PotionUsed {
+                    player: seat.creature(),
                     in_fight: true,
                     holding_potions: !next.players[seat].potions.is_empty(),
                 },

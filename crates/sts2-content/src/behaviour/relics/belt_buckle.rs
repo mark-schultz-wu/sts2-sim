@@ -41,6 +41,7 @@ pub(super) fn event_hook<V: crate::Build>(
         EventHook::PotionUsed {
             in_fight: true,
             holding_potions,
+            ..
         }
         | EventHook::PotionDiscarded {
             in_fight: true,
