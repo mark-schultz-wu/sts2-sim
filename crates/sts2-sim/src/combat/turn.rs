@@ -1033,10 +1033,12 @@ pub(super) fn before_side_turn_start<V: Rules>(
         .and_then(|walking| walking.next(seat, live, belts))
     {
         let boundary = listening.enter(live, listener);
+        // A listener acts for its owner, whichever player the walk is for.
+        let acting = listen::owner(live, listener).unwrap_or(seat);
         match (listener, effect) {
             (Listener::Power { owner, .. }, sts2_core::HookEffect::GainBlock(amount)) => {
                 super::board::gain_unpowered_block::<V>(
-                    seat,
+                    acting,
                     live,
                     rngs.reborrow(),
                     belts,
@@ -1046,20 +1048,20 @@ pub(super) fn before_side_turn_start<V: Rules>(
                 );
             }
             (_, sts2_core::HookEffect::AttacksFromDiscard(count)) => {
-                attacks_from_discard::<V>(seat, live, rngs.reborrow(), count)
+                attacks_from_discard::<V>(acting, live, rngs.reborrow(), count)
             }
             // A relic's owner is the player, whose orbs these are.
             (Listener::Relic { .. }, sts2_core::HookEffect::Channel(orb)) => {
                 let mut board =
-                    Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
+                    Board::for_card(acting, live, rngs.reborrow(), belts, ascension, None, None);
                 sts2_core::Fight::channel(&mut board, orb);
             }
             // `PowerCmd.Apply<P>(HittableEnemies, amount, Owner)`, from the
             // player who carries the relic.
             (Listener::Relic { .. }, sts2_core::HookEffect::ApplyToOpponents(power, amount)) => {
-                let player = live.player(seat).id;
+                let player = live.player(acting).id;
                 let mut board =
-                    Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
+                    Board::for_card(acting, live, rngs.reborrow(), belts, ascension, None, None);
                 for target in board.hittable_opponents() {
                     board.land(target, power, amount, Some(player));
                 }
@@ -1068,7 +1070,7 @@ pub(super) fn before_side_turn_start<V: Rules>(
                 use sts2_core::Fight as _;
 
                 let mut board =
-                    Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
+                    Board::for_card(acting, live, rngs.reborrow(), belts, ascension, None, None);
                 let mut free: Vec<_> = board
                     .cards_in(Pile::Draw)
                     .into_iter()
@@ -1158,10 +1160,12 @@ pub(super) fn before_turn_end<V: Rules>(
         .and_then(|walking| walking.next(seat, live, belts))
     {
         let boundary = listening.enter(live, listener);
+        // A listener acts for its owner, whichever player the walk is for.
+        let acting = listen::owner(live, listener).unwrap_or(seat);
         match (listener, effect) {
             // `PowerCmd.Remove` of another power on the listener's owner.
             (Listener::Power { owner, .. }, sts2_core::HookEffect::RemoveFromOwner(power)) => {
-                live.remove_power(seat, owner, power);
+                live.remove_power(acting, owner, power);
             }
             (listener, effect) => {
                 unimplemented!("{listener:?} asking for {effect:?} as a turn is about to end")
@@ -1186,17 +1190,19 @@ pub(super) fn before_turn_end<V: Rules>(
         .and_then(|walking| walking.next(seat, live, belts))
     {
         let boundary = listening.enter(live, listener);
+        // A listener acts for its owner, whichever player the walk is for.
+        let acting = listen::owner(live, listener).unwrap_or(seat);
         let mut ended = None;
         match (listener, effect) {
             // `CreatureCmd.Heal` on the creature carrying the power.
             (Listener::Power { owner, .. }, sts2_core::HookEffect::Heal(amount)) => {
                 let mut board =
-                    Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
+                    Board::for_card(acting, live, rngs.reborrow(), belts, ascension, None, None);
                 sts2_core::Fight::heal(&mut board, owner, amount);
             }
             (Listener::Power { owner, .. }, sts2_core::HookEffect::GainBlock(amount)) => {
                 super::board::gain_unpowered_block::<V>(
-                    seat,
+                    acting,
                     live,
                     rngs.reborrow(),
                     belts,
@@ -1207,7 +1213,7 @@ pub(super) fn before_turn_end<V: Rules>(
             }
             // `CardCmd.Exhaust` of each card the hand holds as it starts.
             (Listener::Relic { .. }, sts2_core::HookEffect::ExhaustHand) => {
-                let hand: SmallVec<[sts2_core::CardAt<V>; 10]> = (live.players[seat]
+                let hand: SmallVec<[sts2_core::CardAt<V>; 10]> = (live.players[acting]
                     .cards
                     .iter(Pile::Hand))
                 .enumerate()
@@ -1218,7 +1224,7 @@ pub(super) fn before_turn_end<V: Rules>(
                 })
                 .collect();
                 ended = act_on::<V>(
-                    seat,
+                    acting,
                     live,
                     rngs.reborrow(),
                     belts,
@@ -1249,6 +1255,8 @@ pub(super) fn before_turn_end<V: Rules>(
         walking.next(seat, live, belts)
     }) {
         let boundary = listening.enter(live, listener);
+        // A listener acts for its owner, whichever player the walk is for.
+        let acting = listen::owner(live, listener).unwrap_or(seat);
         'effect: {
             match (listener, effect) {
                 // `CreatureCmd.Damage` over `HittableEnemies`, unpowered, from the
@@ -1257,8 +1265,15 @@ pub(super) fn before_turn_end<V: Rules>(
                     if ended.is_some() {
                         break 'effect;
                     }
-                    let mut board =
-                        Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
+                    let mut board = Board::for_card(
+                        acting,
+                        live,
+                        rngs.reborrow(),
+                        belts,
+                        ascension,
+                        None,
+                        None,
+                    );
                     let targets = board.hittable_opponents_of(owner);
                     board.damage_command(|board| {
                         for target in targets {
@@ -1280,7 +1295,7 @@ pub(super) fn before_turn_end<V: Rules>(
                 ) => {
                     if let Some(place) = live.powers.place_of(owner, instance)
                         && let Some(effect) =
-                            live.remove_power_at_asking(seat, owner, place).first()
+                            live.remove_power_at_asking(acting, owner, place).first()
                     {
                         unimplemented!("{power:?} asking for {effect:?} as it comes off")
                     }
@@ -1299,8 +1314,15 @@ pub(super) fn before_turn_end<V: Rules>(
                     if doomed.first() != Some(&owner) {
                         break 'effect;
                     }
-                    let mut board =
-                        Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
+                    let mut board = Board::for_card(
+                        acting,
+                        live,
+                        rngs.reborrow(),
+                        belts,
+                        ascension,
+                        None,
+                        None,
+                    );
                     board.doom_kill(&doomed);
                     ended = board.ended();
                 }
@@ -1308,7 +1330,7 @@ pub(super) fn before_turn_end<V: Rules>(
                     Listener::Power { owner, .. },
                     sts2_core::HookEffect::DamageOpponentsHolding { orb, amount },
                 ) => {
-                    let holding = live.players[seat]
+                    let holding = live.players[acting]
                         .orbs
                         .iter()
                         .flat_map(|orbs| &orbs.queue)
@@ -1316,8 +1338,15 @@ pub(super) fn before_turn_end<V: Rules>(
                     if !holding || ended.is_some() {
                         break 'effect;
                     }
-                    let mut board =
-                        Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
+                    let mut board = Board::for_card(
+                        acting,
+                        live,
+                        rngs.reborrow(),
+                        belts,
+                        ascension,
+                        None,
+                        None,
+                    );
                     let targets = sts2_core::Fight::opponents(&board);
                     board.damage_command(|board| {
                         for target in targets {
@@ -1338,9 +1367,9 @@ pub(super) fn before_turn_end<V: Rules>(
                 // `CreatureCmd.GainBlock`, unpowered, on the player who carries
                 // the relic.
                 (Listener::Relic { .. }, sts2_core::HookEffect::GainBlock(amount)) => {
-                    let player = live.player(seat).id;
+                    let player = live.player(acting).id;
                     super::board::gain_unpowered_block::<V>(
-                        seat,
+                        acting,
                         live,
                         rngs.reborrow(),
                         belts,
@@ -1351,9 +1380,16 @@ pub(super) fn before_turn_end<V: Rules>(
                 }
                 // `PowerCmd.Apply` on the player who carries the relic.
                 (Listener::Relic { .. }, sts2_core::HookEffect::ApplyToOwner(power, amount)) => {
-                    let player = live.player(seat).id;
-                    let mut board =
-                        Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
+                    let player = live.player(acting).id;
+                    let mut board = Board::for_card(
+                        acting,
+                        live,
+                        rngs.reborrow(),
+                        belts,
+                        ascension,
+                        None,
+                        None,
+                    );
                     board.land(player, power, amount, Some(player));
                     ended = ended.or(board.ended());
                 }
@@ -1363,15 +1399,29 @@ pub(super) fn before_turn_end<V: Rules>(
                     if ended.is_some() {
                         break 'effect;
                     }
-                    let mut board =
-                        Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
+                    let mut board = Board::for_card(
+                        acting,
+                        live,
+                        rngs.reborrow(),
+                        belts,
+                        ascension,
+                        None,
+                        None,
+                    );
                     super::hook::apply(&mut board, [effect]);
                     ended = board.ended();
                 }
                 // Written on the fight's cards.
                 (_, effect @ sts2_core::HookEffect::ClearAffliction(_)) => {
-                    let mut board =
-                        Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
+                    let mut board = Board::for_card(
+                        acting,
+                        live,
+                        rngs.reborrow(),
+                        belts,
+                        ascension,
+                        None,
+                        None,
+                    );
                     board.write_cards([effect]);
                 }
                 (_, effect) => {
@@ -2583,7 +2633,7 @@ pub(super) fn exhausted<V: Rules>(
             // Clones of the card just exhausted, which the exhaust pile still
             // holds.
             (
-                _,
+                listener,
                 sts2_core::HookEffect::CloneIntoHand {
                     card,
                     count,
@@ -2592,12 +2642,13 @@ pub(super) fn exhausted<V: Rules>(
             ) => {
                 let count: usize =
                     num_traits::cast(count).unwrap_or_else(|| unimplemented!("{count:?} clones"));
-                for _ in 0..count {
-                    board.clone_written(card, Pile::Hand, writes);
-                }
+                board.as_listener(listener, |board| {
+                    for _ in 0..count {
+                        board.clone_written(card, Pile::Hand, writes);
+                    }
+                });
             }
-            (Listener::Relic { seat, slot }, effect) => board.relic_asked(seat, slot, effect),
-            (_, effect) => super::hook::apply::<V, _>(&mut board, [effect]),
+            (listener, effect) => board.listener_asked(listener, effect),
         }
     }
     let skipped = std::mem::take(&mut board.skipped);
@@ -3086,8 +3137,8 @@ fn spend_resources<V: Rules>(
         if let Some(mut walking) = listen::Walking::begin(live, belts, hook) {
             let ascension = live.ascension;
             let mut board = Board::for_card(seat, live, rngs, belts, ascension, None, None);
-            while let Some((_, effect)) = board.next_of(&mut walking) {
-                super::hook::apply::<V, _>(&mut board, [effect]);
+            while let Some((listener, effect)) = board.next_of(&mut walking) {
+                board.listener_asked(listener, effect);
             }
             if let Some(ended) = board.ended() {
                 unimplemented!("a fight {ended:?} as its stars were spent");
@@ -3778,12 +3829,15 @@ fn clear_block<V: Rules>(
             .as_mut()
             .and_then(|walking| walking.next(seat, live, belts))
         {
+            // A listener acts for its owner, whichever player the walk is for.
+            let acting = listen::owner(live, listener).unwrap_or(seat);
+            let player = live.player(acting).id;
             match (listener, effect) {
                 // `CreatureCmd.GainBlock`, unpowered, on the player who
                 // carries the relic.
                 (Listener::Relic { .. }, sts2_core::HookEffect::GainBlock(amount)) => {
                     super::board::gain_unpowered_block::<V>(
-                        seat,
+                        acting,
                         live,
                         rngs.reborrow(),
                         belts,
@@ -3796,8 +3850,15 @@ fn clear_block<V: Rules>(
                 // the player.
                 (Listener::Relic { .. }, sts2_core::HookEffect::ApplyToOwner(power, amount)) => {
                     let ascension = live.ascension;
-                    let mut board =
-                        Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
+                    let mut board = Board::for_card(
+                        acting,
+                        live,
+                        rngs.reborrow(),
+                        belts,
+                        ascension,
+                        None,
+                        None,
+                    );
                     board.land(player, power, amount, Some(player));
                 }
                 // `CreatureCmd.GainBlock`, unpowered, then
@@ -3807,7 +3868,7 @@ fn clear_block<V: Rules>(
                     sts2_core::HookEffect::GainBlockAndRemove(amount),
                 ) => {
                     super::board::gain_unpowered_block::<V>(
-                        seat,
+                        acting,
                         live,
                         rngs.reborrow(),
                         belts,
@@ -3815,7 +3876,7 @@ fn clear_block<V: Rules>(
                         owner,
                         amount,
                     );
-                    live.remove_power(seat, owner, power);
+                    live.remove_power(acting, owner, power);
                 }
                 // `CreatureCmd.GainBlock` of a power's unpowered block on its
                 // owner, which runs `Hook.ModifyBlock`.
@@ -3823,8 +3884,15 @@ fn clear_block<V: Rules>(
                     use sts2_core::Fight as _;
 
                     let ascension = live.ascension;
-                    let mut board =
-                        Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
+                    let mut board = Board::for_card(
+                        acting,
+                        live,
+                        rngs.reborrow(),
+                        belts,
+                        ascension,
+                        None,
+                        None,
+                    );
                     let block = board.resolve(sts2_core::Effect::GainBlock {
                         recipient: owner,
                         amount: sts2_core::Amount::Number(amount),

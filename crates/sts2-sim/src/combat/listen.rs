@@ -58,11 +58,7 @@ pub(crate) fn owner<V: Rules>(
     match listener {
         Listener::Relic { seat, .. } => Some(seat),
         Listener::Power { owner, .. } => live.seat_of(owner),
-        Listener::Card { id } => live
-            .players
-            .seated()
-            .find(|(_, player)| player.cards.named(id).is_some())
-            .map(|(seat, _)| seat),
+        Listener::Card { id } => live.card_seat(id),
         Listener::Monster { .. } | Listener::Modifier { .. } => None,
     }
 }

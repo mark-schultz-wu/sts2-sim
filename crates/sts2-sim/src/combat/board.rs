@@ -1124,7 +1124,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 applier,
             },
         );
-        let mut cards: SmallVec<[HookEffect<V>; 4]> = SmallVec::new();
+        let mut cards: SmallVec<[(Listener<V>, HookEffect<V>); 4]> = SmallVec::new();
         while let Some((listener, effect)) =
             walking.as_mut().and_then(|walking| self.next_of(walking))
         {
@@ -1132,9 +1132,9 @@ impl<'a, V: Rules> Board<'a, V> {
                 (Listener::Power { owner, .. }, HookEffect::ApplyToOwner(lent, amount)) => {
                     self.land(owner, lent, amount, applier)
                 }
-                // `CardPileCmd.Draw` for the player.
+                // `CardPileCmd.Draw` for the power's owner.
                 (Listener::Power { .. }, HookEffect::Draw(count)) => {
-                    sts2_core::Fight::draw(self, count);
+                    self.as_listener(listener, |board| sts2_core::Fight::draw(board, count));
                 }
                 // `CreatureCmd.Damage`, unpowered, from the power's owner.
                 (Listener::Power { owner, .. }, HookEffect::Damage { target, amount }) => {
@@ -1165,10 +1165,12 @@ impl<'a, V: Rules> Board<'a, V> {
                     );
                     self.apply(block);
                 }
-                (_, effect) => cards.push(effect),
+                (listener, effect) => cards.push((listener, effect)),
             }
         }
-        self.write_cards(cards);
+        for (listener, effect) in cards {
+            self.as_listener(listener, |board| board.write_cards([effect]));
+        }
     }
 
     /// `CreatureCmd.Damage` on `target` once hooks worked `damage` out:
@@ -1744,7 +1746,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 afflicted,
             },
         );
-        let mut rest: SmallVec<[HookEffect<V>; 4]> = SmallVec::new();
+        let mut rest: SmallVec<[(Listener<V>, HookEffect<V>); 4]> = SmallVec::new();
         while let Some((listener, effect)) =
             walking.as_mut().and_then(|walking| self.next_of(walking))
         {
@@ -1753,10 +1755,12 @@ impl<'a, V: Rules> Board<'a, V> {
                 (Listener::Card { id }, HookEffect::ModifySelf { change, lasting }) => {
                     self.live.modify_self(seat, id, change, lasting)
                 }
-                (_, effect) => rest.push(effect),
+                (listener, effect) => rest.push((listener, effect)),
             }
         }
-        self.write_cards(rest);
+        for (listener, effect) in rest {
+            self.as_listener(listener, |board| board.write_cards([effect]));
+        }
     }
 
     /// `Hook.AfterCardGeneratedForCombat`, once a card made in the fight has
@@ -1776,7 +1780,7 @@ impl<'a, V: Rules> Board<'a, V> {
             self.belts,
             sts2_core::EventHook::CardGeneratedForCombat { at, card, creator },
         );
-        let mut rest: SmallVec<[HookEffect<V>; 4]> = SmallVec::new();
+        let mut rest: SmallVec<[(Listener<V>, HookEffect<V>); 4]> = SmallVec::new();
         while let Some((listener, effect)) =
             walking.as_mut().and_then(|walking| self.next_of(walking))
         {
@@ -1786,15 +1790,18 @@ impl<'a, V: Rules> Board<'a, V> {
                     self.live.modify_self(seat, id, change, lasting)
                 }
                 // Written on the cards it names.
-                (_, effect @ HookEffect::ModifyCards { .. }) => self.write_cards([effect]),
-                (_, effect) => rest.push(effect),
+                (listener, effect @ HookEffect::ModifyCards { .. }) => {
+                    self.as_listener(listener, |board| board.write_cards([effect]))
+                }
+                (listener, effect) => rest.push((listener, effect)),
             }
         }
-        // A power answers a card its own holder made, and that holder is the
-        // creature acting. Its block names no `CardPlay`, so the card being
-        // played lends it no enchantment.
+        // A listener's block names no `CardPlay`, so the card being played
+        // lends it no enchantment.
         let playing = self.playing.take();
-        super::hook::apply::<V, _>(self, rest);
+        for (listener, effect) in rest {
+            self.listener_asked(listener, effect);
+        }
         self.playing = playing;
     }
 
@@ -2994,14 +3001,54 @@ impl<'a, V: Rules> Board<'a, V> {
         while let Some((listener, effect)) =
             walking.as_mut().and_then(|walking| self.next_of(walking))
         {
-            match listener {
-                Listener::Relic { seat, slot } => self.relic_asked(seat, slot, effect),
-                _ => super::hook::apply::<V, _>(self, [effect]),
-            }
+            self.listener_asked(listener, effect);
         }
     }
 
-    /// What the relic in `slot` asked for, carried out for the player. Its
+    /// What `listener` asked for, carried out for its owner, through the
+    /// fight.
+    pub(super) fn listener_asked(&mut self, listener: Listener<V>, effect: HookEffect<V>) {
+        match listener {
+            Listener::Relic { seat, slot } => self.relic_asked(seat, slot, effect),
+            listener => self.as_listener(listener, |board| {
+                super::hook::apply::<V, _>(board, [effect]);
+            }),
+        }
+    }
+
+    /// `act` with this board acting for `listener`'s owner, whoever's
+    /// command raised the hook. A model acts on its own `Owner`: a relic's
+    /// or a card's player, or the creature that carries a power. A monster
+    /// acts for itself, and a modifier for the board's actor.
+    ///
+    /// A player's listener reaches its own player. Any other keeps the
+    /// player the board reached before.
+    pub(super) fn as_listener<R>(
+        &mut self,
+        listener: Listener<V>,
+        act: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let actor = match listener {
+            Listener::Relic { seat, .. } => seat.creature(),
+            Listener::Power { owner, .. } => owner,
+            Listener::Card { .. } => super::listen::owner(self.live, listener)
+                .map_or(self.actor, sts2_core::SeatIndex::creature),
+            Listener::Monster { creature, .. } => creature,
+            Listener::Modifier { .. } => self.actor,
+        };
+        let reaching = match self.live.seat_of(actor) {
+            Some(_) => None,
+            None => self.reaching.or_else(|| self.live.seat_of(self.actor)),
+        };
+        let actor = std::mem::replace(&mut self.actor, actor);
+        let reaching = std::mem::replace(&mut self.reaching, reaching);
+        let answer = act(self);
+        self.actor = actor;
+        self.reaching = reaching;
+        answer
+    }
+
+    /// What the relic in `slot` asked for, carried out for its player. Its
     /// `CardPileCmd.Draw` runs the code after its `await` once the draw is
     /// over, behind a question the draw left.
     pub(super) fn relic_asked(
@@ -3010,16 +3057,14 @@ impl<'a, V: Rules> Board<'a, V> {
         slot: u8,
         effect: HookEffect<V>,
     ) {
-        // A relic acts for its owner, whoever's command raised the hook, as a
-        // monster's attack does where a fairy saves the player.
-        let actor = std::mem::replace(&mut self.actor, seat.creature());
+        let listener = Listener::Relic { seat, slot };
         let HookEffect::Draw(count) = effect else {
-            super::hook::apply::<V, _>(self, [effect]);
-            self.actor = actor;
+            self.as_listener(listener, |board| {
+                super::hook::apply::<V, _>(board, [effect]);
+            });
             return;
         };
-        sts2_core::Fight::draw(self, count);
-        self.actor = actor;
+        self.as_listener(listener, |board| sts2_core::Fight::draw(board, count));
         let relic = self.belts[seat][usize::from(slot)].relic;
         match self.pausable() && self.live.asking.is_some() {
             true => self
@@ -3041,17 +3086,13 @@ impl<'a, V: Rules> Board<'a, V> {
         while let Some((listener, effect)) =
             walking.as_mut().and_then(|walking| self.next_of(walking))
         {
-            // `CardPileCmd.Draw` for the relic's owner, the player.
-            if let (Listener::Relic { seat, slot }, effect @ HookEffect::Draw(_)) =
-                (listener, effect)
+            // `CardPileCmd.Draw` and `CreatureCmd.Heal` for the relic's owner.
+            if let (
+                Listener::Relic { seat, slot },
+                effect @ (HookEffect::Draw(_) | HookEffect::Heal(_)),
+            ) = (listener, effect)
             {
                 self.relic_asked(seat, slot, effect);
-                continue;
-            }
-            // `CreatureCmd.Heal` on the relic's owner, the player.
-            if let (Listener::Relic { seat, .. }, HookEffect::Heal(amount)) = (listener, effect) {
-                let player = self.live.player(seat).id;
-                sts2_core::Fight::heal(self, player, amount);
                 continue;
             }
             // `PowerCmd.Apply` on the relic's owner, the player. Every relic
@@ -4238,7 +4279,7 @@ impl<V: Rules> Board<'_, V> {
         {
             match (listener, effect) {
                 (Listener::Power { .. }, effect @ HookEffect::DamageRandomOpponent { .. }) => {
-                    super::hook::apply::<V, _>(self, [effect])
+                    self.listener_asked(listener, effect)
                 }
                 (listener, effect) => {
                     unimplemented!("{listener:?} asking for {effect:?} once block is gained")
@@ -4957,7 +4998,6 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         }
         self.live.players[seat].gold = self.live.players[seat].gold + amount;
         // `AfterGoldGained`, once the gold has landed.
-        let player = self.live.player(seat).id;
         let mut walking =
             super::listen::Walking::begin(self.live, self.belts, sts2_core::EventHook::GoldGained);
         while let Some((listener, effect)) =
@@ -4965,8 +5005,8 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         {
             match (listener, effect) {
                 // `CreatureCmd.GainMaxHp` on the relic's owner.
-                (Listener::Relic { .. }, HookEffect::GainMaxHp(amount)) => {
-                    sts2_core::Fight::gain_max_hp(self, player, amount)
+                (Listener::Relic { seat, .. }, HookEffect::GainMaxHp(amount)) => {
+                    sts2_core::Fight::gain_max_hp(self, seat.creature(), amount)
                 }
                 (listener, effect) => {
                     unimplemented!("{listener:?} asking for {effect:?} as a fight gains gold")
@@ -5411,14 +5451,14 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             self.belts,
             sts2_core::EventHook::OrbChanneled,
         );
-        let player = self.live.player(seat).id;
         while let Some((listener, effect)) =
             walking.as_mut().and_then(|walking| self.next_of(walking))
         {
             match (listener, effect) {
                 // `CreatureCmd.Damage` over `HittableEnemies`, unpowered and
                 // from the relic's owner.
-                (Listener::Relic { .. }, HookEffect::DamageOpponents(amount)) => {
+                (Listener::Relic { seat, .. }, HookEffect::DamageOpponents(amount)) => {
+                    let player = seat.creature();
                     // One `CreatureCmd.Damage` over them all.
                     let targets = self.hittable_opponents_of(player);
                     self.damage_command(|board| {
@@ -6690,10 +6730,12 @@ fn after_shuffle_walk<V: Rules>(
                 board.live.after_pick = Some(Box::new(walking));
                 return Some((pile, selection, act));
             }
-            effect @ HookEffect::AddToDrawAtRandom { .. } => board.after_shuffle(effect),
+            effect @ HookEffect::AddToDrawAtRandom { .. } => {
+                board.as_listener(listener, |board| board.after_shuffle(effect))
+            }
             // `CreatureCmd.GainBlock`, unpowered, on a relic's owner.
             effect @ HookEffect::GainBlock(_) if matches!(listener, Listener::Relic { .. }) => {
-                board.after_shuffle(effect)
+                board.as_listener(listener, |board| board.after_shuffle(effect))
             }
             effect => unimplemented!("{listener:?} asking for {effect:?} after a shuffle"),
         }
@@ -6962,7 +7004,7 @@ impl<V: Rules> Board<'_, V> {
                 }
             }
             // `CreatureCmd.GainBlock`, unpowered, on a relic's owner, which
-            // is the only listener that waits with one.
+            // the board acts for.
             effect @ HookEffect::GainBlock(_) => super::hook::apply::<V, _>(self, [effect]),
             effect => unimplemented!("{effect:?} after a shuffle"),
         }
@@ -7736,10 +7778,10 @@ fn carry_out_drawn<V: Rules>(
                     }
                 }
             }
-            (_, effect) => {
+            (listener, effect) => {
                 let mut board =
                     Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
-                super::hook::apply::<V, _>(&mut board, [effect]);
+                board.listener_asked(listener, effect);
                 ended = ended.or(board.ended());
             }
         }

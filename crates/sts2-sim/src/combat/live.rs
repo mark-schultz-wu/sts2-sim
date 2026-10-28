@@ -3652,6 +3652,9 @@ impl<V: Rules> Live<V> {
         change: sts2_core::Change<V>,
         lasting: sts2_core::Lasting,
     ) {
+        // The copy's own player, whose piles hold it. One that left every
+        // pile is looked for in `seat`'s play.
+        let seat = self.card_seat(id).unwrap_or(seat);
         let write = |held: &mut Face<V>| {
             held.modify(change, lasting);
             true
@@ -3703,6 +3706,14 @@ impl<V: Rules> Live<V> {
 
     /// The seat of the player `creature` is, or whose pet it is. A fight
     /// adds the players first, in seat order. Nothing for a monster.
+    /// The seat whose player holds the copy `id`, in any pile.
+    pub(crate) fn card_seat(&self, id: CardId<V>) -> Option<sts2_core::SeatIndex> {
+        self.players
+            .seated()
+            .find(|(_, player)| player.cards.named(id).is_some())
+            .map(|(seat, _)| seat)
+    }
+
     pub(crate) fn seat_of(&self, creature: CombatId) -> Option<sts2_core::SeatIndex> {
         let player = |id: CombatId| {
             (usize::from(id.get()) < self.players.len()).then(|| sts2_core::SeatIndex(id.get()))

@@ -48,7 +48,7 @@ reached yet. Work it in
 this order:
 
 1. Whom a hook is about, in the four parts of `docs/HOOK-SUBJECTS.md`.
-   They close most of classes A, B and C.
+   They close most of classes A, B and C. Part 1 is done.
 2. The mod's items F1 to F4.
 3. The turn's phases for each player: the block clear, the hooks before
    the turn's end, and the start of a side's turn.
@@ -193,35 +193,14 @@ players. These read such a count:
 
 #### B. Effects for the acting player
 
-- `hook::apply`, as above. These reach it:
-  - `PotionUsed`: `play.rs:1914`, `board.rs:2516` and `board.rs:2525`
-  - `EnergySpent`: `board.rs:6595`
-  - `StarsSpent`: `play.rs:2012`
-  - `belt_changed`: `play.rs:195`.
-
-  `carry_out_walk` (`board.rs:2993`) gives each relic its own seat
-  again, but not powers or cards.
-- Turn phases that walk once with `host`:
-  - `before_side_turn_start` (`turn.rs:1005`, from `turn.rs:335`).
-    This covers Channel, ApplyToOpponents and ZeroCostFromDraw. It also
-    covers the discard pile that Aggression reads.
-  - `before_turn_end` (`turn.rs:1142`, from `turn_loop.rs:355`). This
-    covers ExhaustHand, GainBlock and DamageOpponents. It also covers
-    the orbs that DamageOpponentsHolding reads.
-  - `clear_block` (`turn.rs:3706`, from `turn.rs:358`):
-    - only the host keeps their turn-1 block
-    - another seat's Anchor block is cleared
-    - `ask_relic(live, host, ..)` panics for another seat's relic
-    - BlockCleared's effects go to the host.
-- Board sites that use `self.seat()` or the actor:
-  - `amount_changed` (`board.rs:1131`): a power's Draw
-  - `board.rs:1936` `write_on`: Afflict and ClearAffliction from Hex,
-    Ringing and Tangled
-  - `card_entered_combat` and `card_generated` (`board.rs:1733`)
-  - `block_gained` (`board.rs:4233`): Juggernaut deals damage from the
-    actor, not from the player who got the block
-  - `walk_played` (`play.rs:2185`)
-  - `carry_out_drawn` (`board.rs:7740`).
+- `clear_block` (`turn.rs:3706`, from `turn.rs:358`):
+  - only the host keeps their turn-1 block
+  - another seat's Anchor block is cleared
+  - `ask_relic(live, host, ..)` panics for another seat's relic.
+- Walks of a hook raised for one player build their boards for that
+  player, not for the listener's owner. Part 2's owner checks make the
+  two the same. These are the hand draw, the turn's start for a player,
+  the flush, the energy reset and the extra turn.
 - Monster powers that use `fight.player()`:
   - Paper Cuts, Sleight of Flesh
   - Possess Strength and Possess Speed, where the game keeps a count

@@ -16,7 +16,7 @@ use sts2_core::{CardTable, CombatId, HandIndex, Reason, Rules};
 use super::board::Board;
 use super::live::{Asked, Asker, CardPlay, Live, Plays, Resuming, Skips, Then};
 use super::powers::Powers as _;
-use super::{Error, Fighting, hook, legal};
+use super::{Error, Fighting, legal};
 
 /// A play the fight allows, resolved but not yet made.
 ///
@@ -746,9 +746,11 @@ fn before_played<V: Rules, S: LendsCombat>(
                     let ascension = live.ascension;
                     let mut board =
                         Board::for_card(seat, live, streams.combat(), belts, ascension, None, None);
-                    for _ in 0..count {
-                        board.clone_written(card, sts2_core::Pile::Hand, writes);
-                    }
+                    board.as_listener(listener, |board| {
+                        for _ in 0..count {
+                            board.clone_written(card, sts2_core::Pile::Hand, writes);
+                        }
+                    });
                 }
                 (_, effect) => rest.push(effect),
             }
@@ -757,7 +759,9 @@ fn before_played<V: Rules, S: LendsCombat>(
             let ascension = live.ascension;
             let mut board =
                 Board::for_card(seat, live, streams.combat(), belts, ascension, None, None);
-            hook::apply::<V, _>(&mut board, rest);
+            for effect in rest {
+                board.listener_asked(listener, effect);
+            }
             let skipped = std::mem::take(&mut board.skipped);
             merge::<V>(&mut live.skip_tick, skipped);
         }
@@ -2053,11 +2057,11 @@ fn hand_emptied<V: Rules, S: LendsCombat>(
     // Top's `CardPileCmd.Draw` stands the play still.
     let mut board =
         Board::for_card(seat, next, streams.combat(), belts, ascension, None, None).blocking();
-    while let Some((_, effect)) = board.next_of(&mut walking) {
+    while let Some((listener, effect)) = board.next_of(&mut walking) {
         if board.live.asking.is_some() {
             unimplemented!("{effect:?} after the hand emptied, behind a question");
         }
-        hook::apply::<V, _>(&mut board, [effect]);
+        board.listener_asked(listener, effect);
     }
     board.ended()
 }
@@ -2179,6 +2183,8 @@ fn played_effect<V: Rules, S: LendsCombat>(
     effect: sts2_core::HookEffect<V>,
     ended: Option<super::Ended>,
 ) -> Option<super::Ended> {
+    // A listener acts for its owner, whichever player played the card.
+    let seat = super::listen::owner(next, listener).unwrap_or(seat);
     let mut ended_here = None;
     match (listener, effect) {
         // Written on the card that asked, wherever it stands.
@@ -2315,7 +2321,7 @@ fn played_effect<V: Rules, S: LendsCombat>(
         // `CardCmd.ApplyKeyword`, on cards wherever they stand.
         (_, effect @ sts2_core::HookEffect::AddKeyword { .. }) => {
             Board::for_card(seat, next, streams.combat(), belts, ascension, None, None)
-                .write_cards([effect]);
+                .as_listener(listener, |board| board.write_cards([effect]));
         }
         // The play's own choice context, so a shuffle's question
         // inside a listener's `CardPileCmd.Draw` stands the play still.
@@ -2323,12 +2329,7 @@ fn played_effect<V: Rules, S: LendsCombat>(
             let mut board =
                 Board::for_card(seat, next, streams.combat(), belts, ascension, None, None)
                     .blocking();
-            match listener {
-                super::listen::Listener::Relic { seat, slot } => {
-                    board.relic_asked(seat, slot, effect)
-                }
-                _ => hook::apply::<V, _>(&mut board, [effect]),
-            }
+            board.listener_asked(listener, effect);
             ended_here = board.ended();
             let skipped = std::mem::take(&mut board.skipped);
             merge::<V>(&mut next.skip_tick, skipped);
