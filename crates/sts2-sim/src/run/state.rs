@@ -57,6 +57,9 @@ pub(crate) struct State<V: Rules> {
     /// `MapSelectionSynchronizer`'s `map_point_selection` stream, which the
     /// host draws a run of several players' destination from.
     map_votes: MegaRng,
+    /// `EventSynchronizer`'s `event_synchronizer` stream, which the host
+    /// draws a shared event's option from among the players' votes.
+    event_votes: MegaRng,
     /// Each player's relics, by seat. Apart from the rest of a player, so
     /// a fight can borrow every belt at once.
     belts: Belts<V>,
@@ -537,6 +540,7 @@ impl<V: Rules> Clone for State<V> {
             visited,
             players,
             map_votes,
+            event_votes,
             belts,
             streams,
             normal_fights,
@@ -558,6 +562,7 @@ impl<V: Rules> Clone for State<V> {
         visited.copy_from(&source.visited);
         players.clone_from(&source.players);
         *map_votes = source.map_votes;
+        *event_votes = source.event_votes;
         belts.clone_from(&source.belts);
         *streams = source.streams;
         *normal_fights = source.normal_fights;
@@ -1073,6 +1078,9 @@ pub(super) struct EventSeat<V: Rules> {
     /// The health a `Combat`-layout event's monsters rolled as it opened.
     /// Empty for any other event.
     layout: Layout<V>,
+    /// The option this player voted for on a shared event's page, until
+    /// every player has voted.
+    vote: Option<u8>,
 }
 
 /// What a relic's pickup is still asking the run for.
@@ -1634,6 +1642,7 @@ impl<V: Rules> State<V> {
             visited: [at].into_iter().collect(),
             players: Players::new(host, others),
             map_votes: sts2_core::rng::named::<V, _>(raw_seed, "map_point_selection"),
+            event_votes: sts2_core::rng::named::<V, _>(raw_seed, "event_synchronizer"),
             belts: Belts::new(belt(&players[0]), players[1..].iter().map(belt).collect()),
             normal_fights: 0,
             elite_fights: 0,
@@ -5894,13 +5903,13 @@ impl<V: Rules> State<V> {
     }
 
     /// `EventSynchronizer.BeginEvent`: a copy of `event` for each player, in
-    /// seat order. Each copy's stream is seeded with its player's slot.
+    /// seat order. Each copy's stream is seeded with its player's slot, or
+    /// with none for a shared event.
     /// `floor` is the floor its room stands on.
     ///
     /// # Panics
     ///
-    /// A shared event, or one that opens on a fight, in a run of several
-    /// players.
+    /// An event that opens on a fight, in a run of several players.
     pub(super) fn opened_event(
         &mut self,
         event: V::Event,
@@ -5910,9 +5919,6 @@ impl<V: Rules> State<V> {
         use sts2_core::EventTable as _;
 
         if self.players.len() > 1 {
-            if event.shared() {
-                unimplemented!("{event:?}, which every player goes through together");
-            }
             // `GenerateInternalCombatStateIfNecessary` rolls the local
             // player's alone.
             if event.combat_layout().is_some() {
@@ -5920,8 +5926,11 @@ impl<V: Rules> State<V> {
             }
         }
         let mut seats = self.players.seats();
+        // `Rng(Seed + (IsShared ? 0 : slot) + hash)`: a shared event rolls the
+        // same for every player.
+        let shared = event.shared();
         let mut open = |seat: sts2_core::SeatIndex| {
-            let slot = u64::from(seat.0);
+            let slot = if shared { 0 } else { u64::from(seat.0) };
             let mut rng = crate::event::stream::<V, MegaRng>(self.raw_seed(), slot, event);
             let (state, layout) = self.open_event(seat, event, floor, &mut rng, streams)?;
             Ok(EventSeat {
@@ -5930,6 +5939,7 @@ impl<V: Rules> State<V> {
                 asking: None,
                 finished: false,
                 layout,
+                vote: None,
             })
         };
         let host = open(seats.next().expect("a run has a player"))?;
@@ -7181,6 +7191,10 @@ impl<V: Rules> State<V> {
             return Ok(Decided::Abandoned);
         }
         if let Some(room) = self.event_room(seat) {
+            let shared = matches!(
+                &room,
+                Room::Event { event, .. } if sts2_core::EventTable::shared(*event)
+            );
             let option = match room {
                 Room::Event { options, .. } => options.get(index as usize).cloned(),
                 _ => None,
@@ -7189,6 +7203,62 @@ impl<V: Rules> State<V> {
             if option.locked {
                 unimplemented!("a locked event option");
             }
+            // `ChooseLocalOption` in a shared event is a vote, and a proceed
+            // option runs on this machine alone.
+            if !option.proceed && shared {
+                return Ok(self.vote_for_option(seat, index));
+            }
+            return self.event_option(seat, index);
+        }
+        self.neow_option(seat, index)
+    }
+
+    /// `EventSynchronizer.PlayerVotedForSharedOptionIndex`: `seat`'s vote
+    /// for the option at `index`, which a later vote replaces. Once every
+    /// player has voted, `ChooseSharedEventOption` draws one of the votes,
+    /// and each player's copy of the event takes that option, in seat order.
+    ///
+    /// # Panics
+    ///
+    /// A shared option that opens a fight in a run of several players.
+    fn vote_for_option(&mut self, seat: sts2_core::SeatIndex, index: u8) -> Decided {
+        let Phase::Event { seats } = &mut self.phase else {
+            unreachable!("a vote is cast in an event")
+        };
+        use sts2_core::rng::GameRng as _;
+
+        seats[seat].vote = Some(index);
+        let votes: Option<SmallVec<[u8; 4]>> = seats.seated().map(|(_, each)| each.vote).collect();
+        let Some(votes) = votes else {
+            return Decided::Resolved;
+        };
+        for each in seats.iter_mut() {
+            each.vote = None;
+        }
+        let chosen = *self
+            .event_votes
+            .choose(&votes)
+            .expect("every player voted for an option");
+        let mut decided = Decided::Resolved;
+        for each in self.players.seats() {
+            // `EnterCombatWithoutExitingEvent` from every player's copy.
+            if !matches!(self.phase, Phase::Event { .. }) {
+                unimplemented!("a shared option that opens a fight, in a run of several players");
+            }
+            let outcome = self
+                .event_option(each, chosen)
+                .unwrap_or_else(|e| unimplemented!("a shared option failing for {each:?}: {e}"));
+            if each == seat {
+                decided = outcome;
+            }
+        }
+        decided
+    }
+
+    /// The option at `index` of `seat`'s copy of the event, which the player
+    /// chose or every player's votes chose.
+    fn event_option(&mut self, seat: sts2_core::SeatIndex, index: u8) -> Result<Decided, Error> {
+        {
             // The choice acts on the whole run, so the room is taken out of
             // the run for as long as it is acting and put back after. A relic
             // an event hands over is taken the way any other is.
@@ -7228,11 +7298,15 @@ impl<V: Rules> State<V> {
                     *own_rewards,
                 );
             }
-            return Ok(match self.carry_out(seat, effects) {
+            Ok(match self.carry_out(seat, effects) {
                 None => Decided::Resolved,
                 Some(asked) => self.park(seat, asked),
-            });
+            })
         }
+    }
+
+    /// Neow's option at `index` for `seat`.
+    fn neow_option(&mut self, seat: sts2_core::SeatIndex, index: u8) -> Result<Decided, Error> {
         let Phase::Neow(seats) = &mut self.phase else {
             unimplemented!("choosing an option inside a fight");
         };

@@ -135,6 +135,9 @@ block, energy, hand, deck, health, plays and belt. What is left:
     when any player's health is low.
   - The game never allows Fake Merchant in co-op.
   - War Historian Repy ends its event in co-op.
+  - An option that `ThatWillKillPlayerIf` flags as fatal cannot be
+    chosen in co-op (`NEventOptionButton.OnRelease`). Neither the mod
+    nor the sim refuses it. Nineteen events flag one.
 - `GoldenPathActMap.cs:42` drops a point type in co-op. Golden
   Compass ignores this.
 - Monster numbers:
@@ -236,15 +239,24 @@ run as its own machine sees it. The work goes in this order:
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
    Mercury Hourglass, as in a solo hunt. So the runs go deep.
-   Of sixteen seeds, 7 panicked and 9 parted, and 4,384 positions match.
+   On 2026-10-28 sixteen seeds matched 9,211 steps: 10 panicked and 6
+   parted. What they stop on is listed below, worked by class.
    Hunts stay at `--width 4`: at `--width 8` two games of sixteen failed
    in Godot itself. The golden tests follow the hunted runs in
    `coop-v0.111.0.bin` without the game. So a change to the simulator
    needs no hunt to show it keeps them. Next, in the order of
    `docs/COOP-FIGHTS.md` and where the hunted runs stop:
-   - Where they panic, besides the items below:
-     - Jungle Maze Adventure and Dense Vegetation, which every player
-       goes through together: seeds 3 and 4.
+   - Where the runs part, not yet looked at:
+     - after Iron Wave, in `Creatures`: seed 0
+     - after Defend, and after Dominate, in the hand and piles: seeds 1
+       and 15
+     - the Waterfall Giant's turn: seed 7
+     - a card selection: seed 9
+     - a reward, in `Creatures`: seed 13.
+   - Where they panic, besides the items below: v0.111.0 cards not yet
+     ported, Imitation Learning (seed 2) and Blade Symphony (seed 10).
+     Seeds 3, 12 and 14 stop on `FightView::player`, and seeds 6 and 8
+     on the second player's setup asking a question, both listed below.
    - The rest of the scheduler (steps 3 and 4 of `docs/SCHEDULER.md`). A
      question the turn loop asks belongs to no player's queue yet. Each
      phase of the turn's end panics at one in a fight of several players.
@@ -258,10 +270,9 @@ run as its own machine sees it. The work goes in this order:
      keeps one `live.turn`.
    - A question that waits on a player's own card play names no asker,
      where the game names the play.
-   - A shared event, which the players vote through, and an event that
-     opens on a fight panic in a run of several players.
-   - A fight won inside an event, which panics in a run of several
-     players.
+   - A fight inside an event panics in a run of several players. That is
+     one the event opens on, or one a shared option opens. Seeds 4, 5
+     and 11 stop on one.
    - Content that reads "the player" where the game reads an owner:
      - `FightView::player`, which about a dozen power rules read, panics
        in a fight of several players.

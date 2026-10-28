@@ -385,26 +385,34 @@ pub(super) fn perform<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
                 fight.apply(block);
             }
         }
-        // `NoiseMove`: for each target, a Dazed into the discard pile, then
-        // one into the draw pile at random. A fight here has one player.
+        // `NoiseMove`: for each player, a Dazed into the discard pile, then
+        // one into the draw pile at random.
         (__c0, __c1) if (__c0 == V::Monster::NOISEBOT && __c1 == V::MoveId::NOISE_MOVE) => {
             let dazed = V::Card::DAZED;
-            fight.add_generated_cards(
-                sts2_core::CardIdent::new(dazed),
-                sts2_core::Pile::Discard,
-                1,
-            );
-            fight.add_at_random(dazed, sts2_core::Pile::Draw);
+            for player in fight.players() {
+                fight.for_player(player, |fight| {
+                    fight.add_generated_cards(
+                        sts2_core::CardIdent::new(dazed),
+                        sts2_core::Pile::Discard,
+                        1,
+                    );
+                    fight.add_at_random(dazed, sts2_core::Pile::Draw);
+                });
+            }
         }
-        // `FlamethrowerMove`: four Burns into the hand of the one player.
+        // `FlamethrowerMove`: four Burns into each player's hand.
         (__c0, __c1)
             if (__c0 == V::Monster::MECHA_KNIGHT && __c1 == V::MoveId::FLAMETHROWER_MOVE) =>
         {
-            fight.add_generated_cards(
-                sts2_core::CardIdent::new(V::Card::BURN),
-                sts2_core::Pile::Hand,
-                4,
-            );
+            for player in fight.players() {
+                fight.for_player(player, |fight| {
+                    fight.add_generated_cards(
+                        sts2_core::CardIdent::new(V::Card::BURN),
+                        sts2_core::Pile::Hand,
+                        4,
+                    );
+                });
+            }
         }
         // `WindupMove`: fifteen block and five Strength. `IsWoundUp` picks its
         // animations alone.
