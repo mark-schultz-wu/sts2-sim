@@ -922,7 +922,10 @@ pub(super) fn orb_triggers<V: Rules>(
         let triggers = super::board::modified_by::<V>(
             super::listen::Walk { live, belts },
             num_traits::one(),
-            &[sts2_core::ModifyHook::OrbPassiveTriggerCount { first: place == 0 }],
+            &[sts2_core::ModifyHook::OrbPassiveTriggerCount {
+                player: seat.creature(),
+                first: place == 0,
+            }],
         );
         let mut orb = orb;
         for _ in 0..num_traits::ToPrimitive::to_usize(&triggers).unwrap_or(0) {

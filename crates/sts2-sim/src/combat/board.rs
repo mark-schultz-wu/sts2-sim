@@ -4386,7 +4386,10 @@ impl<V: Rules> Board<'_, V> {
         let playing = self.playing.take();
         let targets = V::orb_evoke(&orb, self);
         self.playing = playing;
-        let hook = sts2_core::EventHook::OrbEvoked { orb: orb.orb };
+        let hook = sts2_core::EventHook::OrbEvoked {
+            player: seat.creature(),
+            orb: orb.orb,
+        };
         let mut walking = super::listen::Walking::begin(self.live, self.belts, hook);
         while let Some((listener, effect)) =
             walking.as_mut().and_then(|walking| self.next_of(walking))
@@ -5033,7 +5036,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         if !super::listen::heard::<V>(self.live, self.belts, gained) {
             return;
         }
-        let hook = sts2_core::EventHook::StarsGained { amount };
+        let hook = sts2_core::EventHook::StarsGained {
+            player: seat.creature(),
+            amount,
+        };
         let mut walking = super::listen::Walking::begin(self.live, self.belts, hook);
         while let Some((listener, effect)) =
             walking.as_mut().and_then(|walking| self.next_of(walking))
@@ -5449,7 +5455,9 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         let mut walking = super::listen::Walking::begin(
             self.live,
             self.belts,
-            sts2_core::EventHook::OrbChanneled,
+            sts2_core::EventHook::OrbChanneled {
+                player: seat.creature(),
+            },
         );
         while let Some((listener, effect)) =
             walking.as_mut().and_then(|walking| self.next_of(walking))
@@ -6010,7 +6018,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .last()
             .expect("an X-cost card resolving its X is a play started this turn");
         let x = num_traits::cast(started.x).expect("an energy fits a game number");
-        modified_by::<V>(self.walk(), x, &[ModifyHook::XValue])
+        modified_by::<V>(self.walk(), x, &[ModifyHook::XValue { player: self.actor }])
     }
 
     /// `LastStarsSpent` is what the play spent, which the history's latest
@@ -6023,7 +6031,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .last()
             .expect("an X star cost resolving its X is a play started this turn");
         let x = num_traits::cast(started.stars).expect("a star count fits a game number");
-        modified_by::<V>(self.walk(), x, &[ModifyHook::XValue])
+        modified_by::<V>(self.walk(), x, &[ModifyHook::XValue { player: self.actor }])
     }
 
     fn random_target(&mut self) -> Option<CombatId> {
@@ -6629,8 +6637,14 @@ pub(super) fn energy_spent<V: Rules>(
     if !super::listen::heard::<V>(live, belts, sts2_core::ModelHook::AfterEnergySpent) {
         return None;
     }
-    let walking =
-        super::listen::Walking::begin(live, belts, sts2_core::EventHook::EnergySpent { amount });
+    let walking = super::listen::Walking::begin(
+        live,
+        belts,
+        sts2_core::EventHook::EnergySpent {
+            player: seat.creature(),
+            amount,
+        },
+    );
     let ascension = live.ascension;
     let mut board = Board::for_card(seat, live, rngs, belts, ascension, None, None);
     board.carry_out_walk(walking);

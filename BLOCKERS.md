@@ -108,12 +108,6 @@ Each of these needs the field first.
   owner. The sim buffs the block's recipient instead, which is wrong
   for a card that gives block to a teammate.
 - Single hooks:
-  - `XValue`: Chemical X.
-  - `StarCost`: Brilliant Scarf, Void Form.
-  - `OrbPassiveTriggerCount`: Gold-Plated Cables.
-  - `OrbChanneled`: Metronome, Thunder.
-  - `EnergySpent`: Orbit.
-  - `StarsGained`: Black Hole.
   - `Forged`: Hammer Time.
   - `AfterAttack`: Bone Flute, which needs the pet's owner.
   - `PotionUsed`: Reptile Trinket.

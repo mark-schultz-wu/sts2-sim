@@ -150,7 +150,11 @@ pub(super) fn costs<V: Rules>(
                 true => super::board::modified_by::<V>(
                     fight,
                     cost,
-                    &[sts2_core::ModifyHook::StarCost { card, pile }],
+                    &[sts2_core::ModifyHook::StarCost {
+                        card,
+                        player: seat.creature(),
+                        pile,
+                    }],
                 ),
                 false => cost,
             }

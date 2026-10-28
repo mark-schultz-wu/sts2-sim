@@ -3583,6 +3583,8 @@ pub enum ModifyHook<V: ContentVersion> {
     /// play.
     StarCost {
         card: (crate::CardId<V>, V::Card),
+        /// The card's `Owner.Creature`.
+        player: crate::CombatId,
         /// `Pile.Type` for the copy, or nothing for the play pile.
         pile: Option<crate::Pile>,
     },
@@ -3623,13 +3625,16 @@ pub enum ModifyHook<V: ContentVersion> {
         affliction: Option<V::Affliction>,
         pile: Option<crate::Pile>,
     },
-    /// `ModifyOrbPassiveTriggerCounts`: how many times one of the player's
+    /// `ModifyOrbPassiveTriggerCounts`: how many times one of `player`'s
     /// orbs triggers its passive. `first` is whether it is `Orbs[0]`.
     OrbPassiveTriggerCount {
+        player: crate::CombatId,
         first: bool,
     },
-    /// `ModifyXValue`: the X a card of the player's resolves to.
-    XValue,
+    /// `ModifyXValue`: the X a card of `player`'s resolves to.
+    XValue {
+        player: crate::CombatId,
+    },
     /// `ModifyOrbValue`: a number `player`'s orb shows, as its passive or its
     /// evoke reads it.
     OrbValue {
@@ -3676,7 +3681,7 @@ impl<V: ContentVersion> ModifyHook<V> {
             | ModifyHook::EnergyCost { .. }
             | ModifyHook::EnergyCostLate { .. }
             | ModifyHook::OrbPassiveTriggerCount { .. }
-            | ModifyHook::XValue
+            | ModifyHook::XValue { .. }
             | ModifyHook::OrbValue { .. }
             | ModifyHook::CardPlayCount { .. } => true,
         }
@@ -3717,7 +3722,7 @@ impl<V: ContentVersion> ModifyHook<V> {
             ModifyHook::CardPlayCount { .. } => ModelHook::ModifyCardPlayCount,
             ModifyHook::OrbValue { .. } => ModelHook::ModifyOrbValue,
             ModifyHook::OrbPassiveTriggerCount { .. } => ModelHook::ModifyOrbPassiveTriggerCounts,
-            ModifyHook::XValue => ModelHook::ModifyXValue,
+            ModifyHook::XValue { .. } => ModelHook::ModifyXValue,
         }
     }
 }
@@ -3949,7 +3954,11 @@ pub enum EventHook<V: ContentVersion> {
     EnergyGainModified,
     /// `AfterStarsGained`, once `PlayerCmd.GainStars` has added `amount` to
     /// the player's stars.
-    StarsGained { amount: V::Number },
+    StarsGained {
+        /// `gainer.Creature`.
+        player: crate::CombatId,
+        amount: V::Number,
+    },
     /// `AfterBlockGained`, once `CreatureCmd.GainBlock` has given `creature`
     /// `amount`, which is what the modifiers left, and can be none.
     BlockGained {
@@ -4166,7 +4175,11 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `AfterOrbEvoked`, once an orb's evoke has run. The creatures it hit
     /// stay with the fight, which [`HookEffect::DamageTargets`] reaches.
-    OrbEvoked { orb: V::Orb },
+    OrbEvoked {
+        /// The orb's `Owner.Creature`.
+        player: crate::CombatId,
+        orb: V::Orb,
+    },
     /// `AfterCardExhausted`, once the card lies in the exhaust pile.
     CardExhausted {
         card: V::Card,
@@ -4411,7 +4424,11 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `AfterEnergySpent`, once a card's `SpendEnergy` took `amount` off the
     /// player's pool, which can be none.
-    EnergySpent { amount: V::Number },
+    EnergySpent {
+        /// The spending card's `Owner.Creature`.
+        player: crate::CombatId,
+        amount: V::Number,
+    },
     /// `AfterForge`, once `ForgeCmd.Forge` raised the Sovereign Blades'
     /// damage by `amount`.
     Forged { amount: V::Number },
@@ -4450,8 +4467,8 @@ pub enum EventHook<V: ContentVersion> {
     /// `AfterFlush`, once `player`'s hand is flushed. The cards left in hand
     /// are the ones it retained.
     Flushed { player: crate::CombatId },
-    /// `AfterOrbChanneled`, once an orb is in the player's queue.
-    OrbChanneled,
+    /// `AfterOrbChanneled`, once an orb is in `player`'s queue.
+    OrbChanneled { player: crate::CombatId },
     /// `AfterCardDiscarded`, once a card of `player`'s is in the discard
     /// pile. `side` is the side whose turn it is.
     CardDiscarded {
@@ -4689,7 +4706,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::CombatStartingLate { .. } => ModelHook::BeforeCombatStartLate,
             EventHook::RestSiteOptions => ModelHook::TryModifyRestSiteOptions,
             EventHook::Flushed { .. } => ModelHook::AfterFlush,
-            EventHook::OrbChanneled => ModelHook::AfterOrbChanneled,
+            EventHook::OrbChanneled { .. } => ModelHook::AfterOrbChanneled,
             EventHook::CardDiscarded { .. } => ModelHook::AfterCardDiscarded,
             EventHook::PowerAmountChanging { .. } => ModelHook::BeforePowerAmountChanged,
             EventHook::BlockAmountModified { .. } => ModelHook::AfterModifyingBlockAmount,

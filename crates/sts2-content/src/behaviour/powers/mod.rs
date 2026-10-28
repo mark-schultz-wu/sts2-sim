@@ -970,6 +970,11 @@ pub(crate) fn modify_hook<V: crate::Build>(
         {
             Modify::Nothing
         }
+        (__c0, _, ModifyHook::StarCost { player, .. })
+            if player != holder && __c0 == V::Power::VOID_FORM_POWER =>
+        {
+            Modify::Nothing
+        }
         // `SlowPower.ModifyDamageMultiplicative`, which reads the cards played
         // since its owner's turn began and takes a tenth more for each.
         (
@@ -1480,9 +1485,8 @@ pub(crate) fn modify_hook<V: crate::Build>(
         }
         // `VoidFormPower.TryModifyEnergyCostInCombatLate` and
         // `TryModifyStarCost`: nothing for its owner's cards in hand or in
-        // play while fewer than its stack have been played this turn. A fight
-        // here has one player, whose cards are all its holder's. A Sly card
-        // auto-played from the discard pile pays its cost in full.
+        // play while fewer than its stack have been played this turn. A Sly
+        // card auto-played from the discard pile pays its cost in full.
         (
             __c0,
             PowerAmount::Counted(amount),
@@ -2569,10 +2573,9 @@ pub(crate) fn event_hook<V: crate::Build>(
             return;
         }
         // `OrbitPower.AfterEnergySpent`: the energy its owner spends, counted,
-        // and its stack as energy for each four of it not yet paid out. A
-        // fight here has one player, whose cards are all its owner's.
-        (__c0, PowerAmount::Counted(stack), EventHook::EnergySpent { amount })
-            if __c0 == V::Power::ORBIT_POWER && (amount > 0) =>
+        // and its stack as energy for each four of it not yet paid out.
+        (__c0, PowerAmount::Counted(stack), EventHook::EnergySpent { player, amount })
+            if __c0 == V::Power::ORBIT_POWER && player == holder && (amount > 0) =>
         {
             let State::Orbit { spent, triggers } = state else {
                 unreachable!("Orbit's state for {:?}", state.power())
@@ -2901,10 +2904,15 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         // `BlackHolePower.AfterStarsGained`: the same, for stars its owner
         // gains.
-        (__c0, PowerAmount::Counted(amount), EventHook::StarsGained { amount: gained })
-            if __c0 == V::Power::BLACK_HOLE_POWER =>
-        {
-            (gained > 0).then_some(HookEffect::DamageOpponents(amount))
+        (
+            __c0,
+            PowerAmount::Counted(amount),
+            EventHook::StarsGained {
+                player,
+                amount: gained,
+            },
+        ) if __c0 == V::Power::BLACK_HOLE_POWER => {
+            (gained > 0 && player == holder).then_some(HookEffect::DamageOpponents(amount))
         }
         (
             __c0,
@@ -6338,11 +6346,10 @@ pub(crate) fn event_hook<V: crate::Build>(
             None
         }
         // `ThunderPower.AfterOrbEvoked`: its stack to each creature a
-        // Lightning's evoke hit that is still alive, unpowered. A fight here
-        // has one player, whose every orb is its owner's.
-        (__c0, PowerAmount::Counted(amount), EventHook::OrbEvoked { orb: __c1 })
+        // Lightning of its owner's evoke hit that is still alive, unpowered.
+        (__c0, PowerAmount::Counted(amount), EventHook::OrbEvoked { player, orb: __c1 })
             if (__c0 == V::Power::THUNDER_POWER && __c1 == V::Orb::LIGHTNING_ORB)
-                && (owner == CombatSide::Player) =>
+                && player == holder =>
         {
             Some(HookEffect::DamageTargets(amount))
         }

@@ -55,7 +55,11 @@ pub(super) fn modify_hook<V: crate::Build>(
     match hook {
         // `card.Owner.Creature != base.Owner.Creature`: another player's card
         // costs what it costs.
-        ModifyHook::EnergyCostLate { player, .. } if player != owner => Modify::Nothing,
+        ModifyHook::EnergyCostLate { player, .. } | ModifyHook::StarCost { player, .. }
+            if player != owner =>
+        {
+            Modify::Nothing
+        }
         ModifyHook::EnergyCostLate { pile, .. } | ModifyHook::StarCost { pile, .. }
             if free(pile) =>
         {
