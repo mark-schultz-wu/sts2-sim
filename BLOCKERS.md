@@ -398,7 +398,9 @@ run as its own machine sees it. The work goes in this order:
    choice put to a player who ended the turn takes that end back. All
    sixteen hunted seeds match to the run's end. Hunts stay at
    `--width 4`: at `--width 8` two games of sixteen failed in Godot
-   itself. Next, in the order of `docs/COOP-FIGHTS.md` and where the
+   itself. The golden tests follow the hunted runs in
+   `coop-v0.111.0.bin` without the game. So a change to the simulator
+   needs no hunt to show it keeps them. Next, in the order of `docs/COOP-FIGHTS.md` and where the
    hunted runs stop:
    - The rest of the scheduler (steps 3 and 4 of `docs/SCHEDULER.md`). A
      question the turn loop asks belongs to no player's queue yet. Each
