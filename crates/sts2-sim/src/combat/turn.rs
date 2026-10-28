@@ -287,6 +287,10 @@ pub(super) fn enemy_turn_ends<V: Rules>(
         <V::CombatSide as SideKinds>::ENEMY,
     );
     listening.none_waits("the enemies' BeforeSideTurnEnd");
+    // `EndOfTurnCleanup` for each player, between the side's two hooks.
+    for player in seats(live) {
+        end_of_turn_cleanup::<V>(player, live);
+    }
     let ended = match ended {
         Some(ended) => Some(ended),
         None => after_turn_end::<V>(

@@ -56,14 +56,10 @@ this order:
    `EndEnemyTurnInternal` with the sim. The order of the hooks, the
    player each listener acts for, and the dead players match. What
    differs, in the order to fix it:
-   1. `EndEnemyTurnInternal` runs `EndOfTurnCleanup` for each player
-      between the side's two turn-end hooks. The sim does not, so a
-      card's "this turn" state set during the enemies' turn lasts into
-      the player's turn. Find what sets one there first.
-   2. `TurnNumber` is kept for each player, and an extra turn counts up
+   1. `TurnNumber` is kept for each player, and an extra turn counts up
       only the turns of the players taking it. The sim keeps one
       `live.turn`. This goes with co-op extra turns, which panic now.
-   3. The game moves every player to the End phase after all the
+   2. The game moves every player to the End phase after all the
       players' post-play hooks. The sim moves each player after their
       own. Only a listener that reads another player's phase there
       can see it.
