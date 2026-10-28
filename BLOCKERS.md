@@ -51,16 +51,9 @@ this order:
    They close most of classes A, B and C. All four parts are done, and
    what they leave is below.
 2. The mod's items F1 to F4 (done).
-3. The turn's phases for each player. The audit of 2026-10-28 compared
-   `StartTurn`, the two phases of the player's turn end and
-   `EndEnemyTurnInternal` with the sim. The order of the hooks, the
-   player each listener acts for, and the dead players match. What
-   differs, in the order to fix it:
-   1. `TurnNumber` is kept for each player, and an extra turn counts up
-      only the turns of the players taking it. The sim keeps one
-      `live.turn`. This goes with co-op extra turns, which panic now.
-4. Run state: Proceed after the boss, Spoils, `for_run` and the ancient
-   heal.
+3. The turn's phases for each player (done). The audit of 2026-10-28
+   found one more, which waits for the scheduler under item 2.
+4. Run state (done).
 5. The player-count rules in class E.
 6. The rest of F, then G.
 
@@ -112,14 +105,9 @@ now.
     for each player
   - Sandpit's removal, where the game kills `base.Target`. A held
     power keeps its `Target` now, so Sandpit can read it.
-- Run sites:
-  - `room_entering` TransformTo (`run/state.rs:1887`) looks only in the
-    traveller's deck
-  - `room_entered` (`run/state.rs:5760`) parks a pickup on the host
-  - `ancient_heal` (`run/travel.rs:115`) heals only the traveller, but
-    the game heals each player
-  - `Live::for_run` (`live.rs:2719`) has no seat, and the deciding seat
-    drains it.
+- Run sites: `room_entered` (`run/state.rs:5811`) parks a pickup on
+  the host. A run question does not say which player asked it, so the
+  pickup cannot name its asker yet.
 
 #### C. Hook values from one player
 
@@ -131,11 +119,6 @@ block, energy, hand, deck, health, plays and belt. What is left:
 
 #### D. State held once
 
-- `proceed(seat)` (`run/state.rs:2604`): one player's Proceed after the
-  boss moves the whole run on. The game's `ActChangeSynchronizer`
-  waits for every player.
-- `spoils` (`run/state.rs:44`) is cleared after the first player's
-  chest, so a second Spoils Map never pays.
 - `extra_rewards` (`live.rs:2705`) is one list. The game keys it by
   player. This is known, and it panics.
 - `Live` has single slots: `after_pick`, `drawn_late`, `drew`,
@@ -180,8 +163,6 @@ Medium:
 5. `Protocol.cs:628` tracks a shared event's options as before and
    after slices of the pending tasks, which is the Drowning Beacon
    shape.
-6. `Protocol.cs:845`: `_sent` does not count the move to the next act,
-   and the mod still offers Proceed after it.
 7. `Peers.cs:68` decrements `_sent` for any action the local player
    owns, not only the ones it sent.
 8. There is no move to take back the end of the turn
@@ -267,6 +248,11 @@ run as its own machine sees it. The work goes in this order:
      So does the turn's end while a player's action waits on a question.
      Card plays, potions and the turn's end go through the queues, with
      the action types, gating and cancellations.
+     Co-op extra turns come with it. `ShouldTakeExtraTurn` is asked of
+     each player after the flush, and the turn starts only for the
+     players it names, with the others ready. `TurnNumber` is kept for
+     each player, and an extra turn counts up only the takers'. The sim
+     keeps one `live.turn`.
    - A question that waits on a player's own card play names no asker,
      where the game names the play.
    - A shared event, which the players vote through, and an event that

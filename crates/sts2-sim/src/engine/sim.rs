@@ -102,7 +102,7 @@ impl<V: Rules> Sim<V> {
                 amount,
                 index,
             } => self.state.enchant(SOLO, *enchantment, *amount, *index),
-            Setup::Event { event } => self.state.event_here(SOLO, *event).map(Ok),
+            Setup::Event { event } => self.state.event_here(*event).map(Ok),
             Setup::Hp { at, hp } => self.state.set_hp(SOLO, *at, *hp).map(Ok),
         }
     }
@@ -211,7 +211,7 @@ pub(super) fn decide<V: Rules>(
         Decision::Proceed => state.proceed(seat).map(Ok),
         Decision::Buy { index } => state.buy(seat, *index).map(Ok),
         Decision::DiscardPotion { index } => state.discard_potion(seat, *index),
-        Decision::EnterRoom { room } => state.enter_room(seat, *room).map(Ok),
+        Decision::EnterRoom { room } => state.enter_room(*room).map(Ok),
         Decision::Travel { to } => match state.resolve(seat, *to) {
             Err(reason) => Ok(Err(Refusal {
                 what: "travel".into(),

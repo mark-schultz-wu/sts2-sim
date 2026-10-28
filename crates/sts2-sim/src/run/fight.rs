@@ -280,7 +280,7 @@ impl<V: Rules> State<V> {
             let fighting = self.fighting()?;
             combat::check_win_condition(fighting)
         });
-        self.asked_by_fight(seat);
+        self.asked_by_fight();
         self.forget_detached();
         self.lose_cards(seat, since);
         // `EndCombatInternal` raises the fight's last hooks before

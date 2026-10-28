@@ -2751,9 +2751,10 @@ pub(crate) struct Live<V: Rules> {
     /// What `AfterCombatEnd` asked of the run, by the seat whose listener
     /// asked, which the run carries out for it as it takes the rewards.
     pub(super) leaving: Vec<(sts2_core::SeatIndex, sts2_core::HookEffect<V>)>,
-    /// What the fight asked of the run in the middle of a decision, which the
-    /// run carries out as the decision settles.
-    pub(super) for_run: Vec<sts2_core::HookEffect<V>>,
+    /// What the fight asked of the run in the middle of a decision, by the
+    /// seat it is for. The run carries each out for its player as the
+    /// decision settles.
+    pub(super) for_run: Vec<(sts2_core::SeatIndex, sts2_core::HookEffect<V>)>,
     /// The rest of an `AfterShuffle` walk behind a listener that asked the
     /// player to pick, which waits for the pick.
     pub(super) after_pick: Option<Box<super::listen::Walking<V>>>,
@@ -3435,7 +3436,7 @@ impl<V: Rules> Live<V> {
     }
 
     /// What the fight asked of the run since the last decision settled.
-    pub(crate) fn take_for_run(&mut self) -> Vec<sts2_core::HookEffect<V>> {
+    pub(crate) fn take_for_run(&mut self) -> Vec<(sts2_core::SeatIndex, sts2_core::HookEffect<V>)> {
         std::mem::take(&mut self.for_run)
     }
 

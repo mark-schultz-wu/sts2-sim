@@ -5031,15 +5031,15 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn procure_random_potion(&mut self, stream: V::RunRngType) {
+        let seat = self.seat();
         self.ran_on();
-        self.live
-            .for_run
-            .push(sts2_core::HookEffect::ProcureRandomPotions {
-                count: 1,
-                stream,
-                in_combat: true,
-                into_gained: false,
-            });
+        let procure = sts2_core::HookEffect::ProcureRandomPotions {
+            count: 1,
+            stream,
+            in_combat: true,
+            into_gained: false,
+        };
+        self.live.for_run.push((seat, procure));
     }
 
     fn gain_max_hp(&mut self, creature: CombatId, amount: V::Number) {
@@ -6446,7 +6446,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         if let Some(card) = self.live.players[seat].deck_versions.of(playing) {
             self.live
                 .for_run
-                .push(HookEffect::WriteDeckCard { card, write });
+                .push((seat, HookEffect::WriteDeckCard { card, write }));
         }
     }
 

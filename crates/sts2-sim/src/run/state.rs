@@ -949,6 +949,9 @@ pub(super) struct RewardSeat<V: Rules> {
     /// The card removal taken and waiting on the card to remove, by its
     /// place on the screen.
     removing: Option<usize>,
+    /// `ActChangeSynchronizer`'s ready flag: this player voted to move to
+    /// the next act, and waits for the others.
+    voted_next_act: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -1379,7 +1382,9 @@ impl<V: Rules> State<V> {
             }
         }
         // `ModifyGeneratedMapLate`, over what the first pass left, which
-        // `Hook.ModifyGeneratedMap` runs as it returns.
+        // `Hook.ModifyGeneratedMap` runs as it returns. A quest the last
+        // act's map held went with that map.
+        self.spoils = None;
         let hook = sts2_core::EventHook::GeneratedMapLate { act: self.act };
         for (owner, effect) in self.notify_run_owned(hook) {
             match effect {
@@ -1877,23 +1882,23 @@ impl<V: Rules> State<V> {
     /// # Panics
     ///
     /// A listener asking for anything but a deck card's own transform.
-    pub(super) fn room_entering(
-        &mut self,
-        seat: sts2_core::SeatIndex,
-        point: Option<V::MapPointType>,
-        base: bool,
-    ) {
+    pub(super) fn room_entering(&mut self, point: Option<V::MapPointType>, base: bool) {
         let hook = sts2_core::EventHook::RoomEntering { point, base };
         self.walk_run_landing(hook, |state, listener, effect| match (listener, effect) {
-            // `CardCmd.TransformTo`: out of the deck, and the new card at its
-            // end.
-            (RunListener::DeckCard { id, .. }, sts2_core::HookEffect::TransformTo(into)) => {
-                if let Some(at) = state.players[seat]
+            // `CardCmd.TransformTo`: out of its owner's deck, and the new
+            // card at its end.
+            (
+                RunListener::DeckCard {
+                    seat: owner, id, ..
+                },
+                sts2_core::HookEffect::TransformTo(into),
+            ) => {
+                if let Some(at) = state.players[owner]
                     .deck
                     .iter()
                     .position(|held| held.id == id)
                 {
-                    state.act_on_deck(seat, sts2_core::DeckAct::TransformInto(into), &[at]);
+                    state.act_on_deck(owner, sts2_core::DeckAct::TransformInto(into), &[at]);
                 }
             }
             (listener, effect) => {
@@ -2306,8 +2311,13 @@ impl<V: Rules> State<V> {
         }
     }
 
+    /// What the fight asked of the run, each for the player it is for, in
+    /// the order it asked.
+    ///
+    /// # Panics
+    ///
     /// Something that asks the run a question.
-    pub(super) fn asked_by_fight(&mut self, seat: sts2_core::SeatIndex) {
+    pub(super) fn asked_by_fight(&mut self) {
         let Phase::Combat(live) = &mut self.phase else {
             return;
         };
@@ -2315,8 +2325,14 @@ impl<V: Rules> State<V> {
             return;
         }
         let asked = live.take_for_run();
-        if self.carry_out(seat, asked).is_some() {
-            unimplemented!("a fight asking the run a question mid-decision");
+        for run in asked.chunk_by(|one, next| one.0 == next.0) {
+            let seat = run[0].0;
+            if self
+                .carry_out(seat, run.iter().map(|&(_, effect)| effect))
+                .is_some()
+            {
+                unimplemented!("a fight asking the run a question mid-decision");
+            }
         }
     }
 
@@ -2362,6 +2378,7 @@ impl<V: Rules> State<V> {
                 combat,
                 offered,
                 removing: None,
+                voted_next_act: false,
             });
         }
         let mut seats = seats.into_iter();
@@ -2637,6 +2654,14 @@ impl<V: Rules> State<V> {
                 Some(asked) => self.park(seat, asked),
             });
         }
+        // `ActChangeSynchronizer.OnPlayerReady`: the run moves on once every
+        // player has voted to.
+        if let Phase::Rewards { seats, .. } = &mut self.phase {
+            seats[seat].voted_next_act = true;
+            if seats.any(|voter| !voter.voted_next_act) {
+                return Ok(Decided::Resolved);
+            }
+        }
         let next = self.act + 1;
         let Some(&(act, _)) = self.shared.opening.acts.get(next) else {
             if self.in_victory_room(seat) {
@@ -2649,7 +2674,7 @@ impl<V: Rules> State<V> {
                 self.phase = Phase::Won { room };
                 return Ok(Decided::Resolved);
             }
-            return self.enter_architect(seat);
+            return self.enter_architect();
         };
         self.act = next;
         self.map = Arc::new(self.generate_map(act));
@@ -5968,12 +5993,12 @@ impl<V: Rules> State<V> {
     /// `EnterRoom` of The Architect's room, which `EnterNextAct` does past the
     /// last act. The room has no map point, so the run gains no floor and
     /// stands where it stood. `AfterRoomEntered` hears the point it stands on.
-    fn enter_architect(&mut self, seat: sts2_core::SeatIndex) -> Result<Decided, Error> {
+    fn enter_architect(&mut self) -> Result<Decided, Error> {
         let point = self
             .visited
             .last()
             .and_then(|&at| self.point_type(Location::MapPoint(at)));
-        self.room_entering(seat, point, true);
+        self.room_entering(point, true);
         let event = V::the_architect();
         let mut streams = *self.streams();
         let seats = self.opened_event(event, self.floor, &mut streams)?;
@@ -6117,8 +6142,12 @@ impl<V: Rules> State<V> {
     }
 
     /// `TryHandleSpoilsMap`, where the run stands on the Spoils Map's quest
-    /// point. Each Spoils Map in the deck pays its gold and leaves the deck
-    /// through `OnQuestComplete`, and the quest is done.
+    /// point. Each Spoils Map in the player's deck pays its gold and leaves
+    /// the deck through `OnQuestComplete`.
+    ///
+    /// Each copy in a deck as the act's map is made puts its own quest on
+    /// the point. A copy comes only from a first-act event, so every copy
+    /// has a quest, whoever is paid first.
     fn spoils_paid(&mut self, seat: sts2_core::SeatIndex) {
         let (Some(&at), Some((point, card, gold))) = (self.visited.last(), self.spoils) else {
             return;
@@ -6134,7 +6163,6 @@ impl<V: Rules> State<V> {
             self.gain_gold(seat, gold);
             self.players[seat].deck_mut().remove(at);
         }
-        self.spoils = None;
     }
 
     /// `Hook.ShouldGenerateTreasure` for `seat`'s player, which a relic of
@@ -6389,12 +6417,8 @@ impl<V: Rules> State<V> {
     /// A shop is the one type this builds. It is stocked the way a shop the
     /// run travelled to is, so a scenario stands in front of the shop a run
     /// walks into.
-    pub(crate) fn enter_room(
-        &mut self,
-        seat: sts2_core::SeatIndex,
-        room: V::RoomType,
-    ) -> Result<Decided, Error> {
-        self.room_entering(seat, self.point_type(Location::NoLocation), true);
+    pub(crate) fn enter_room(&mut self, room: V::RoomType) -> Result<Decided, Error> {
+        self.room_entering(self.point_type(Location::NoLocation), true);
         if room == <V::RoomType as sts2_core::RoomKinds>::REST_SITE {
             self.enter_rest_site(Location::NoLocation);
             return Ok(Decided::Resolved);
@@ -6830,7 +6854,7 @@ impl<V: Rules> State<V> {
                 .last()
                 .map_or(Location::NoLocation, |&point| Location::MapPoint(point));
             // The fight's room stacks on the event's.
-            self.room_entering(seat, self.point_type(at), false);
+            self.room_entering(self.point_type(at), false);
             self.build_fight(
                 encounter,
                 EncounterQueue::Named,
@@ -6896,7 +6920,7 @@ impl<V: Rules> State<V> {
         seat: sts2_core::SeatIndex,
         encounter: V::Encounter,
     ) -> Result<Decided, Error> {
-        self.room_entering(seat, self.point_type(Location::NoLocation), true);
+        self.room_entering(self.point_type(Location::NoLocation), true);
         let fight = self.create_fight(encounter, EncounterQueue::Named, Location::NoLocation)?;
         self.enter_fight(seat, fight, Location::NoLocation)
     }
@@ -6906,17 +6930,13 @@ impl<V: Rules> State<V> {
     /// `EventConsoleCmd`: a map point appended to the history, then
     /// `RunManager.EnterRoom` with the event's room. That seeds the event's
     /// own stream, and counts it against the act the way travelling does.
-    pub(crate) fn event_here(
-        &mut self,
-        seat: sts2_core::SeatIndex,
-        event: V::Event,
-    ) -> Result<Decided, Error> {
+    pub(crate) fn event_here(&mut self, event: V::Event) -> Result<Decided, Error> {
         // The console lists no Architect, and the mod enters its room the way
         // the run does.
         if event == V::the_architect() {
-            return self.enter_architect(seat);
+            return self.enter_architect();
         }
-        self.room_entering(seat, self.point_type(Location::NoLocation), true);
+        self.room_entering(self.point_type(Location::NoLocation), true);
         let mut streams = *self.streams();
         let floor = self.floor + num_traits::one();
         let seats = self.opened_event(event, floor, &mut streams)?;
@@ -7979,7 +7999,7 @@ impl<V: Rules> State<V> {
             moves,
         );
         self.room_moves(seat, moves);
-        if self.can_proceed() {
+        if self.can_proceed(seat) {
             moves.push(Decision::Proceed);
         } else {
             moves.extend(
@@ -8585,7 +8605,7 @@ impl<V: Rules> State<V> {
                     visited: self.visited.to_vec(),
                     travelable: self.travelable(seat).into_vec(),
                     points: self.map.shared(),
-                    proceed: self.can_proceed(),
+                    proceed: self.can_proceed(seat),
                 },
                 rng: self.positions(seat),
                 room: self.room(seat),
@@ -8606,14 +8626,12 @@ impl<V: Rules> State<V> {
         matches!(self.phase, Phase::Combat(_))
     }
 
-    /// `MapLegality.CanProceed`, and the fight it is standing in being over.
-    /// A boss room with its combat still running is an ordinary fight, and
-    /// leaving one is not a move.
     /// `MapLegality.CanProceed`: the run stands in a boss room, and its fight
     /// is over. The room is the fight's, wherever on the map it was fought.
     ///
     /// The first of two bosses is not a way out: travel to the second is.
-    fn can_proceed(&self) -> bool {
+    /// A player who voted to move to the next act waits for the others.
+    fn can_proceed(&self, seat: sts2_core::SeatIndex) -> bool {
         let Phase::Rewards { seats, .. } = &self.phase else {
             return false;
         };
@@ -8625,6 +8643,9 @@ impl<V: Rules> State<V> {
         // `ProceedFromTerminalRewardsScreen` goes back to the event.
         if self.resuming.is_some() {
             return true;
+        }
+        if seats[seat].voted_next_act {
+            return false;
         }
         combat.encounter.is_some_and(|encounter| {
             <V::Encounter as sts2_core::EncounterTable>::room(encounter)

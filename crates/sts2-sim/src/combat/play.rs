@@ -2211,7 +2211,7 @@ fn played_effect<V: Rules, S: LendsCombat>(
                 .write_named(id, |face| face.raise_enchantment(by));
             if let Some(card) = next.players[seat].deck_versions.of(id) {
                 next.for_run
-                    .push(sts2_core::HookEffect::WriteDeckCard { card, write });
+                    .push((seat, sts2_core::HookEffect::WriteDeckCard { card, write }));
             }
         }
         // `CreatureCmd.GainBlock`, unpowered, on the power's owner,

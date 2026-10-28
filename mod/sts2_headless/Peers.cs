@@ -62,6 +62,34 @@ internal static class Peers
         RunManager.Instance.ActionQueueSynchronizer.RequestEnqueue(action);
     }
 
+    /// <summary>
+    /// The local player's vote to move to the next act, which
+    /// <c>ActChangeSynchronizer.SetLocalPlayerReady</c> queues as
+    /// <see cref="Enqueue"/> does. It builds the action, whose constructor
+    /// differs between builds.
+    /// </summary>
+    internal static void VoteForNextAct()
+    {
+        if (Shared)
+        {
+            _sent++;
+        }
+        RunManager.Instance.ActChangeSynchronizer.SetLocalPlayerReady();
+    }
+
+    private static readonly FieldInfo ReadyPlayers = typeof(ActChangeSynchronizer)
+        .GetField("_readyPlayers", BindingFlags.NonPublic | BindingFlags.Instance)!;
+
+    /// <summary>
+    /// Whether <paramref name="player"/> voted to move to the next act, and
+    /// waits for the rest. The flags clear as the run moves on.
+    /// </summary>
+    internal static bool VotedNextAct(RunState state, Player player)
+    {
+        var ready = (List<bool>)ReadyPlayers.GetValue(RunManager.Instance.ActChangeSynchronizer)!;
+        return ready[state.GetPlayerSlotIndex(player)];
+    }
+
     /// <summary>One of the local player's actions starting, which is its copy come back.</summary>
     internal static void Started(GameAction action)
     {

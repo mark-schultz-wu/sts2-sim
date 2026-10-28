@@ -850,7 +850,7 @@ internal static class Protocol
         }
         else
         {
-            RunManager.Instance.ActChangeSynchronizer.SetLocalPlayerReady();
+            Peers.VoteForNextAct();
         }
 
         bool resolved = await Driver.WaitForDecisionPoint();
