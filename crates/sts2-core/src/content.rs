@@ -3731,12 +3731,8 @@ pub enum DecisionHook<V: ContentVersion> {
     /// `PowerModel.OwnerIsSecondaryEnemy`, which the game reads off the
     /// powers on one creature rather than raising.
     ShouldCountForCombatEnd,
-    /// `ShouldClearBlock`, as `creature` starts its turn. `player` is the
-    /// player's creature, which a relic reads its owner as.
-    ShouldClearBlock {
-        creature: crate::CombatId,
-        player: crate::CombatId,
-    },
+    /// `ShouldClearBlock`, as `creature` starts its turn.
+    ShouldClearBlock { creature: crate::CombatId },
     /// `ShouldFlush`, as `player`'s turn ends. A hand any listener answers no
     /// for keeps every card.
     ShouldFlush {

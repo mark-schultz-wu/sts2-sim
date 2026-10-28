@@ -17,13 +17,15 @@ pub struct State {
 /// count again, and so does `AfterSideTurnStart` on its owner's side past
 /// the first turn. `AfterCombatEnd` leaves it.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     state: &mut State,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     match hook {
-        EventHook::CardPlayed { card, .. }
-            if <V as sts2_core::Rules>::card_kind(card) == Some(CardKind::Skill) =>
+        EventHook::CardPlayed { card, player, .. }
+            if player == owner
+                && <V as sts2_core::Rules>::card_kind(card) == Some(CardKind::Skill) =>
         {
             state.skills_played_this_turn += 1;
             if state

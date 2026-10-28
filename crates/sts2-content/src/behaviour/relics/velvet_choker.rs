@@ -16,11 +16,16 @@ pub struct State {
 
 /// `AfterCardPlayed` counts each play. `BeforeSideTurnStart` for its owner's
 /// side, `AfterRoomEntered` for a combat room and `AfterCombatEnd` set the
-/// count back to none. A relic's owner is the player, and a fight here has
-/// one, so every card is its owner's.
-pub(super) fn event_hook<V: crate::Build>(state: &mut State, hook: EventHook<V>) {
+/// count back to none.
+pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    state: &mut State,
+    hook: EventHook<V>,
+) {
     match hook {
-        EventHook::CardPlayed { .. } => state.played = state.played.saturating_add(1),
+        EventHook::CardPlayed { player, .. } if player == owner => {
+            state.played = state.played.saturating_add(1)
+        }
         EventHook::RoomEntered { room, .. } if crate::behaviour::relics::combat_room(room) => {
             state.played = 0
         }

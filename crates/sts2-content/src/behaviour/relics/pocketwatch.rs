@@ -19,9 +19,13 @@ pub struct State {
 /// last turn's before anything is drawn, and `AfterCombatEnd` forgets both.
 /// `AfterSideTurnStart` only refreshes the counter on screen, so nothing here
 /// answers it.
-pub(super) fn event_hook<V: crate::Build>(state: &mut State, hook: EventHook<V>) {
+pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    state: &mut State,
+    hook: EventHook<V>,
+) {
     match hook {
-        EventHook::CardPlayed { .. } => state.played_this_turn += 1,
+        EventHook::CardPlayed { player, .. } if player == owner => state.played_this_turn += 1,
         EventHook::BeforeSideTurnStart {
             side: CombatSide::Player,
             ..

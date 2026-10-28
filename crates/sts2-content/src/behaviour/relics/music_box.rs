@@ -24,18 +24,20 @@ impl<V: crate::Build> Default for State<V> {
 /// `BeforeCardPlayed` notes an Attack while none is noted and the turn's
 /// clone is unused. `AfterCardPlayed` of that card clones it into hand as
 /// Ethereal. `BeforeSideTurnStart` for its owner's side and `AfterCombatEnd`
-/// clear the turn's use. A relic's owner is the player, and a fight here has
-/// one, so every card is its owner's.
+/// clear the turn's use.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     state: &mut State<V>,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     match hook {
-        EventHook::CardPlaying { card, id, .. }
-            if state.playing.is_none()
-                && !state.used
-                && V::card_kind(card) == Some(CardKind::Attack) =>
+        EventHook::CardPlaying {
+            card, id, player, ..
+        } if player == owner
+            && state.playing.is_none()
+            && !state.used
+            && V::card_kind(card) == Some(CardKind::Attack) =>
         {
             state.playing = Some(id);
         }

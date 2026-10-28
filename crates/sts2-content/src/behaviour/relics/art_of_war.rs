@@ -15,9 +15,6 @@ pub struct State {
 /// turn's note to last turn's. `AfterEnergyReset` past the first turn gives
 /// its energy where last turn had no Attack, then clears both.
 /// `AfterCombatEnd` clears both.
-///
-/// A relic's owner is the player, and a fight here has one, so every card
-/// played is its owner's.
 pub(super) fn event_hook<V: crate::Build>(
     owner: sts2_core::CombatId,
 
@@ -32,8 +29,10 @@ pub(super) fn event_hook<V: crate::Build>(
         return;
     }
     match hook {
-        EventHook::CardPlayed { card, .. }
-            if V::card_kind(card) == Some(CardKind::Attack) && !state.last_turn =>
+        EventHook::CardPlayed { card, player, .. }
+            if player == owner
+                && V::card_kind(card) == Some(CardKind::Attack)
+                && !state.last_turn =>
         {
             state.this_turn = true;
         }

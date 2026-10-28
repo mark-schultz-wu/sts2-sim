@@ -3777,7 +3777,7 @@ fn clear_block<V: Rules>(
         // `Hook.ShouldClearBlock`, and the model that kept the block.
         let preventer = listen::first_deciding::<V>(
             listen::Walk { live, belts },
-            sts2_core::DecisionHook::ShouldClearBlock { creature, player },
+            sts2_core::DecisionHook::ShouldClearBlock { creature },
             false,
         );
         match preventer {

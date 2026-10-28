@@ -92,40 +92,27 @@ crates/sts2-content/src` lists about 140 of these comments.
 
 ##### The hook carries the player already, so only the content changes
 
+The relics here compare the player now. The rest are powers and cards.
+
 - `CardPlayed`:
-  - 20 relics. They are Art of War, Daughter of the Wind, Brilliant
-    Scarf, Game Piece, Helical Dart, Iron Club and Ivory Tile. Also
-    Kunai, Kusarigama, Letter Opener, Lost Wisp, Mummified Hand and
-    Nunchaku. Also Ornamental Fan, Rainbow Ring, Razor Tooth,
-    Permafrost, Pocketwatch, Ripple Basin and Velvet Choker.
-  - Tuning Fork is the 21st relic, but `tuning_fork.rs` was not
-    checked.
   - Powers: Devour Life, Master Planner, Rage, Haunt, Void Form,
     Panache, Tender, Withering Presence.
   - Cards: Pinpoint, Banshee's Cry.
   - Galvanic and Vital Spark act on `fight.player()`. The game acts on
     the card's owner.
 - `CardPlaying`:
-  - Relics: Intimidating Helmet, Music Box, Pen Nib.
   - Powers: Storm, Calamity, Serpent Form, Rupture, Afterimage,
     Monologue, Subroutine, The Sealed Throne, Spirit of Ash, Danse
     Macabre, Sloth, Chains of Binding.
   - The Stomp card.
   - Strangle and Oblivion compare with `fight.player()`. The game
     compares with the power's applier.
-- `CardEnteredCombat`: Ghost Seed, Ringing, Hex, Tangled, Sword Sage,
-  Phantom Blades.
-- `CardGeneratedForCombat`: Regalite, in both builds, and Rocket
-  Punch.
-- `EnergyCost` and `EnergyCostLate`: Spiked Gauntlets, Brilliant
-  Scarf, Corruption, Void Form, Borrowed Time, Curious, Tangled.
-- `ShouldFlush`: Runic Pyramid, Ringing Triangle, Well-Laid Plans.
-- `ShouldDraw`: Fiddle. `ShouldPlayerResetEnergy`: Ice Cream.
-- `ShouldClearBlock`: Sturdy Clamp compares with `player`, which is
-  the host's.
-- `DamageMultiplicative`: Undying Sigil reads `fight.player()`.
-- The Imbued enchantment (`AutoPrePlayPhase { player }`) needs the
-  card's owner passed to `enchantments::event_hook`.
+- `CardEnteredCombat`: Ringing, Hex, Tangled, Sword Sage, Phantom
+  Blades.
+- `CardGeneratedForCombat`: Rocket Punch.
+- `EnergyCost` and `EnergyCostLate`: Corruption, Void Form, Borrowed
+  Time, Curious, Tangled.
+- `ShouldFlush`: Well-Laid Plans.
 
 ##### The hook carries no player yet
 

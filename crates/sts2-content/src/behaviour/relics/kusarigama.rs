@@ -16,13 +16,15 @@ pub struct State {
 /// damages an enemy drawn off `CombatTargets`. `BeforeCombatStart` and the
 /// end of its owner's turn start the count again.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     state: &mut State,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     match hook {
-        EventHook::CardPlayed { card, .. }
-            if <V as sts2_core::Rules>::card_kind(card) == Some(CardKind::Attack) =>
+        EventHook::CardPlayed { card, player, .. }
+            if player == owner
+                && <V as sts2_core::Rules>::card_kind(card) == Some(CardKind::Attack) =>
         {
             state.attacks_played_this_turn += 1;
             if state

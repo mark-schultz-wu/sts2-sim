@@ -26,10 +26,16 @@ impl<V: crate::Build> Default for State<V> {
 
 /// `BeforeCardPlayed` counts each attack, and the tenth becomes the one to
 /// double. `AfterCardPlayed` lets it go once its play is done.
-pub(super) fn event_hook<V: crate::Build>(state: &mut State<V>, hook: EventHook<V>) {
+pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    state: &mut State<V>,
+    hook: EventHook<V>,
+) {
     match hook {
-        EventHook::CardPlaying { card, id, .. }
-            if <V as sts2_core::Rules>::card_kind(card) == Some(CardKind::Attack) =>
+        EventHook::CardPlaying {
+            card, id, player, ..
+        } if player == owner
+            && <V as sts2_core::Rules>::card_kind(card) == Some(CardKind::Attack) =>
         {
             state.attacks_played = (state.attacks_played + 1) % THRESHOLD;
             if state.attacks_played == 0 {

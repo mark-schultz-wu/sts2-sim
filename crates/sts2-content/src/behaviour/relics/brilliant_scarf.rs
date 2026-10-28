@@ -13,12 +13,18 @@ pub struct State {
 }
 
 /// `AfterCardPlayed` counts a play no auto-play made. `BeforeSideTurnStart`
-/// for its owner's side and `AfterCombatEnd` set the count back to none. A
-/// relic's owner is the player, and a fight here has one, so every card is
-/// its owner's.
-pub(super) fn event_hook<V: crate::Build>(state: &mut State, hook: EventHook<V>) {
+/// for its owner's side and `AfterCombatEnd` set the count back to none.
+pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    state: &mut State,
+    hook: EventHook<V>,
+) {
     match hook {
-        EventHook::CardPlayed { auto: false, .. } => {
+        EventHook::CardPlayed {
+            auto: false,
+            player,
+            ..
+        } if player == owner => {
             state.played = state.played.saturating_add(1);
         }
         EventHook::BeforeSideTurnStart {
@@ -37,12 +43,19 @@ pub(super) fn display_amount(state: &State) -> Number {
 
 /// `TryModifyEnergyCostInCombatLate` and `TryModifyStarCost`: nothing, for a
 /// card in hand or being played once four plays are made this turn.
-pub(super) fn modify_hook<V: crate::Build>(state: &State, hook: ModifyHook<V>) -> Modify<Number> {
+pub(super) fn modify_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    state: &State,
+    hook: ModifyHook<V>,
+) -> Modify<Number> {
     let free = |pile: Option<Pile>| {
         state.played == (V::Relic::BRILLIANT_SCARF_CARDS as u8) - 1
             && matches!(pile, None | Some(Pile::Hand))
     };
     match hook {
+        // `card.Owner.Creature != base.Owner.Creature`: another player's card
+        // costs what it costs.
+        ModifyHook::EnergyCostLate { player, .. } if player != owner => Modify::Nothing,
         ModifyHook::EnergyCostLate { pile, .. } | ModifyHook::StarCost { pile, .. }
             if free(pile) =>
         {

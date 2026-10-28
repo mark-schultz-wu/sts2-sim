@@ -254,7 +254,7 @@ pub(crate) fn own_shared_relic_event_hook(
         (State::Regalite(state), EventHook::CardGeneratedForCombat { creator, .. }) => {
             use crate::vars::RelicVars as _;
 
-            if creator.is_some() && !state.used_this_turn {
+            if creator == Some(owner) && !state.used_this_turn {
                 state.used_this_turn = true;
                 asked.push(HookEffect::GainBlock(Relic::REGALITE_BLOCK));
             }
