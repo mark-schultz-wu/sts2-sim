@@ -10,9 +10,9 @@ Every recorded run matches the simulator step by step, to the run's end.
 The game plays each one itself, picking at random from its own legal
 moves. The recorded runs cover:
 
-- each character, at every ascension level;
-- runs with each modifier the game's custom mode offers;
-- both builds, v0.107.1 and v0.111.0;
+- each character, at every ascension level
+- runs with each modifier the game's custom mode offers
+- both builds, v0.107.1 and v0.111.0
 - the long run 0RACLE1-REGENT-2.
 
 Two more checks say when that is enough:
@@ -26,7 +26,7 @@ Two more checks say when that is enough:
   hunt enters. This finds what the simulator never ported, which
   `reached` cannot see.
 
-Speed is a goal as well as a guard. Item 3 says the target.
+Speed is a goal as well as a guard. Item 4 says the target.
 
 ## How the list changes
 
@@ -40,7 +40,316 @@ Speed is a goal as well as a guard. Item 3 says the target.
 
 ## Open
 
-### 1. Co-op
+### 1. The co-op audit
+
+PRs #736 to #753 fixed co-op bugs that the hunted seeds reached. The
+audit of 2026-10-27 lists other code with the same shape, which no seed
+reached yet. Work it in
+this order:
+
+1. Whom a hook is about, in the four parts of `docs/HOOK-SUBJECTS.md`.
+   They close most of classes A, B and C.
+2. The mod's items F1 to F4.
+3. The turn's phases for each player: the block clear, the hooks before
+   the turn's end, and the start of a side's turn.
+4. Run state: Proceed after the boss, Spoils, `for_run` and the ancient
+   heal.
+5. The player-count rules in class E.
+6. The rest of F, then G.
+
+After PRs #736 to #753, the sixteen hunted co-op seeds match to the
+run's end. This audit sorts the bugs those PRs fixed into classes. Then it
+lists the code that has the same shape and that no seed reached yet.
+Paths are under `crates/` unless they start with `mod/`. "Game" means the
+v0.111.0 decompiled source.
+
+#### The classes
+
+| Class | Fixed in | Sites still open |
+|---|---|---|
+| A. A listener does not compare the event's player with its owner | #744, #746, #751, #752, #753 | about 150 |
+| B. A listener's effect lands on the acting player, not on its owner | #746, #751, #752 | about 20 engine sites |
+| C. A hook carries the host's or the actor's numbers | ShouldDie in #746 | about 10 |
+| D. State the game keeps for each player is held once | #737, #738, #743, #745, #747, #748 | about 12 |
+| E. The sim lacks a rule the game gives for a player count | #740, #742, #750 | about 35 |
+| F. A mod stand-in acts for one player only | #736, #743, #745 | 12 |
+| G. Co-op behaviour is a stub or an `unimplemented!` | #753 | about 8, plus 32 panics |
+
+Classes A, B and C share one root. The sim's hooks name no player, and
+`hook::apply` (`sts2-sim/src/combat/hook.rs:53-80`) sends `GainBlock`,
+`Heal`, `ApplyToOwner`, `Draw` and the damage effects to
+`fight.actor()`. Its comment says why: "a power only answers one that
+its own owner is party to". That holds only in a fight with one
+player.
+
+#### A. Missing owner checks
+
+In the game, nearly every override starts with `card.Owner !=
+base.Owner`, `player != base.Owner` or something like it. The sim
+lacks many of these checks, often with a comment that says "a fight
+here has one player". `grep -rn 'here has one'
+crates/sts2-content/src` lists about 140 of these comments.
+
+##### The hook carries the player already, so only the content changes
+
+- `CardPlayed`:
+  - 20 relics. They are Art of War, Daughter of the Wind, Brilliant
+    Scarf, Game Piece, Helical Dart, Iron Club and Ivory Tile. Also
+    Kunai, Kusarigama, Letter Opener, Lost Wisp, Mummified Hand and
+    Nunchaku. Also Ornamental Fan, Rainbow Ring, Razor Tooth,
+    Permafrost, Pocketwatch, Ripple Basin and Velvet Choker.
+  - Tuning Fork is the 21st relic, but `tuning_fork.rs` was not
+    checked.
+  - Powers: Devour Life, Master Planner, Rage, Haunt, Void Form,
+    Panache, Tender, Withering Presence.
+  - Cards: Pinpoint, Banshee's Cry.
+  - Galvanic and Vital Spark act on `fight.player()`. The game acts on
+    the card's owner.
+- `CardPlaying`:
+  - Relics: Intimidating Helmet, Music Box, Pen Nib.
+  - Powers: Storm, Calamity, Serpent Form, Rupture, Afterimage,
+    Monologue, Subroutine, The Sealed Throne, Spirit of Ash, Danse
+    Macabre, Sloth, Chains of Binding.
+  - The Stomp card.
+  - Strangle and Oblivion compare with `fight.player()`. The game
+    compares with the power's applier.
+- `CardEnteredCombat`: Ghost Seed, Ringing, Hex, Tangled, Sword Sage,
+  Phantom Blades.
+- `CardGeneratedForCombat`: Regalite, in both builds, and Rocket
+  Punch.
+- `EnergyCost` and `EnergyCostLate`: Spiked Gauntlets, Brilliant
+  Scarf, Corruption, Void Form, Borrowed Time, Curious, Tangled.
+- `ShouldFlush`: Runic Pyramid, Ringing Triangle, Well-Laid Plans.
+- `ShouldDraw`: Fiddle. `ShouldPlayerResetEnergy`: Ice Cream.
+- `ShouldClearBlock`: Sturdy Clamp compares with `player`, which is
+  the host's.
+- `DamageMultiplicative`: Undying Sigil reads `fight.player()`.
+- The Imbued enchantment (`AutoPrePlayPhase { player }`) needs the
+  card's owner passed to `enchantments::event_hook`.
+
+##### The hook carries no player yet
+
+Each of these needs the field first.
+
+- `CardDrawn` and `CardDrawnEarly`: Automation, Corrosive Wave,
+  Confused, Speedster, Iteration, Pagestorm, Chains of Binding,
+  Hellraiser.
+- `CardExhausted`: Burning Sticks, Charon's Ashes, Forgotten Soul,
+  Joss Paper, Dark Embrace, Feel No Pain.
+- `CardDiscarded`: Tingsha, Tough Bandages.
+- `CardPlayedLate`: Right Hand Hand, Make It So.
+- `Shuffled`: Biiig Hug, The Abacus, Stratagem.
+- `Flushed`: Bookmark. `FlushingLate`: Well-Laid Plans on v0.107.1.
+- `ShouldPlay`: Velvet Choker, Sloth, Chains of Binding, Normality,
+  Enthralled. One player's Normality blocks the other's cards.
+- `CardSource` carries no owner. This affects:
+  - Mystic Lighter, Miniature Cannon, Strike Dummy, Fake Strike Dummy,
+    Pen Nib, Vitruvian Minion, Pael's Legion, Vambrace
+  - Lethality, Gigantification, Dexterity, Unmovable.
+- Dexterity is a special case. The game buffs block from the card's
+  owner. The sim buffs the block's recipient instead, which is wrong
+  for a card that gives block to a teammate.
+- Single hooks:
+  - `XValue`: Chemical X.
+  - `StarCost`: Brilliant Scarf, Void Form.
+  - `OrbPassiveTriggerCount`: Gold-Plated Cables.
+  - `OrbChanneled`: Metronome, Thunder.
+  - `EnergySpent`: Orbit.
+  - `StarsGained`: Black Hole.
+  - `Forged`: Hammer Time.
+  - `AfterAttack`: Bone Flute, which needs the pet's owner.
+  - `PotionUsed`: Reptile Trinket.
+  - `PotionUsing`: Surrounded.
+- `ShouldTakeExtraTurn` and `TakingExtraTurn`: Pael's Eye and
+  Ambergris.
+- Run hooks:
+  - `GoldGained`: Dragon Fruit, Ectoplasm, Bowler Hat.
+  - `AddedToDeck`: Bing Bong, Book of Five Rings, Darkstone Periapt,
+    Lucky Fysh, Hoarder.
+  - `RestSiteHealRewards`: Dream Catcher, Tiny Mailbox.
+- Run walks that use `notify_run`, where `notify_run_for(seat)` is
+  enough. The seat is in scope at each site:
+  - `CardRewardCreationOptions`: Dingy Rug, Prismatic Gem.
+  - `CardRewardAlternatives` and `CardRewardAlternativeChosen`:
+    Pael's Wing.
+- Decision hooks asked of every seat with no player:
+  - Sozu (`ShouldProcurePotion`). One player's Sozu blocks every
+    player's potions.
+  - Miniature Tent.
+  - White Beast Statue.
+
+##### History entries record no player
+
+`HistoryEntry` (`sts2-core/src/content.rs:4883`) records no player for
+these entries: `Drawn`, `Attacked`, `BlockGained`, `EnergySpent`,
+`StarsModified`, `Afflicted`, `Discarded`, `Exhausted`, `Generated`,
+`Channelled` and `PowerReceived`. So every count of them adds up both
+players. These read such a count:
+
+- Iteration, Chains of Binding, Unmovable, Flatten
+- Murder, Rattle, Radiate, Memento Mori, Death March, Evil Eye
+- `live.rs:2821` `unprompted_plays_this_turn`, which feeds Pael's
+  Eye.
+
+#### B. Effects for the acting player
+
+- `hook::apply`, as above. These reach it:
+  - `PotionUsed`: `play.rs:1914`, `board.rs:2516` and `board.rs:2525`
+  - `EnergySpent`: `board.rs:6595`
+  - `StarsSpent`: `play.rs:2012`
+  - `belt_changed`: `play.rs:195`.
+
+  `carry_out_walk` (`board.rs:2993`) gives each relic its own seat
+  again, but not powers or cards.
+- Turn phases that walk once with `host`:
+  - `before_side_turn_start` (`turn.rs:1005`, from `turn.rs:335`).
+    This covers Channel, ApplyToOpponents and ZeroCostFromDraw. It also
+    covers the discard pile that Aggression reads.
+  - `before_turn_end` (`turn.rs:1142`, from `turn_loop.rs:355`). This
+    covers ExhaustHand, GainBlock and DamageOpponents. It also covers
+    the orbs that DamageOpponentsHolding reads.
+  - `clear_block` (`turn.rs:3706`, from `turn.rs:358`):
+    - only the host keeps their turn-1 block
+    - another seat's Anchor block is cleared
+    - `ask_relic(live, host, ..)` panics for another seat's relic
+    - BlockCleared's effects go to the host.
+- Board sites that use `self.seat()` or the actor:
+  - `amount_changed` (`board.rs:1131`): a power's Draw
+  - `board.rs:1936` `write_on`: Afflict and ClearAffliction from Hex,
+    Ringing and Tangled
+  - `card_entered_combat` and `card_generated` (`board.rs:1733`)
+  - `block_gained` (`board.rs:4233`): Juggernaut deals damage from the
+    actor, not from the player who got the block
+  - `walk_played` (`play.rs:2185`)
+  - `carry_out_drawn` (`board.rs:7740`).
+- Monster powers that use `fight.player()`:
+  - Paper Cuts, Sleight of Flesh
+  - Possess Strength and Possess Speed, where the game keeps a count
+    for each player
+  - Sandpit's removal, where the game kills `base.Target`.
+- Run sites:
+  - `room_entering` TransformTo (`run/state.rs:1887`) looks only in the
+    traveller's deck
+  - `room_entered` (`run/state.rs:5760`) parks a pickup on the host
+  - `ancient_heal` (`run/travel.rs:115`) heals only the traveller, but
+    the game heals each player
+  - `Live::for_run` (`live.rs:2719`) has no seat, and the deciding seat
+    drains it.
+
+#### C. Hook values from one player
+
+- At the turn's end, the hooks carry the host's numbers:
+  - `BeforeSideTurnEndVeryEarly { block }`, at `turn.rs:1154`
+  - `BeforeSideTurnEnd { energy, hand }`, at `turn.rs:1240`
+  - `SideTurnEnd { block }`, at `turn.rs:4118`.
+
+  This affects Orichalcum, Fake Orichalcum, Pael's Tears, Screaming
+  Flagon and Parrying Shield.
+- `BeforeSideTurnEndEarly { plays }` counts every player's plays.
+- `RoomEntered` in a fight (`start.rs:216`) carries the host's deck
+  and health. The run's walk refreshes them for each owner, but this
+  walk does not.
+- `holding_potions` on `CombatStarting` (`start.rs:422`) is the
+  host's. On `PotionUsed` (`play.rs:1903`, `board.rs:2511`) and
+  `PotionDiscarded` (`run/state.rs:2157`, `run/state.rs:2891`) it is
+  the actor's. `PotionProcured` carries no player. All of this affects
+  Belt Buckle.
+
+#### D. State held once
+
+- `proceed(seat)` (`run/state.rs:2604`): one player's Proceed after the
+  boss moves the whole run on. The game's `ActChangeSynchronizer`
+  waits for every player.
+- `spoils` (`run/state.rs:44`) is cleared after the first player's
+  chest, so a second Spoils Map never pays.
+- `extra_rewards` (`live.rs:2705`) is one list. The game keys it by
+  player. This is known, and it panics.
+- `Live` has single slots: `after_pick`, `drawn_late`, `drew`,
+  `hook_draws` and `asking`. Two players can each park one at once.
+- Fight-in-event: `resuming` and `run/fight.rs:313-410` are built for
+  one player, behind the panics.
+- Out of a fight, damage kills the player. The game heals them to 1
+  instead when there are several players (`CreatureCmd.cs:522`).
+- Possess counts the stolen stacks once, as listed under B.
+
+#### E. Player-count rules
+
+- Events:
+  - About 23 events allow themselves only if `Players.All(..)` holds,
+    and Ranwid the Elder checks `Players.Any`. `run/travel.rs:179`
+    asks one seat.
+  - Jungle Maze Adventure and Dense Vegetation are refused in co-op
+    when any player's health is low.
+  - The game never allows Fake Merchant in co-op.
+  - War Historian Repy ends its event in co-op.
+- `GoldenPathActMap.cs:42` drops a point type in co-op. Golden
+  Compass ignores this.
+- Monster numbers:
+  - Knowledge Demon's heal is `30 * Players.Count`
+  - Waterfall Giant's Siphon heal scales the same way
+  - Tough Egg's hatchling health and Test Subject's respawn health are
+    scaled by `ScaleHpForMultiplayer`.
+- In Act 3, a fight of several players panics at `monster.rs:139`.
+- `BurningBlood` and `BlackBlood` heal a dead teammate. The game checks
+  `!Owner.Creature.IsDead`.
+- Modifiers: Terminal, Cursed Run and Night Terrors act for one seat,
+  where the game acts for each player. Every modifier also panics in a
+  run of several players, at `run/state.rs:1471` and
+  `run/state.rs:4887`.
+
+#### F. The mod
+
+High confidence:
+
+1. `Patches.cs:362` `BundleWithoutAScreen`. With TestMode on, the
+   game takes `bundles[0]` for the other player before it reaches the
+   branch that waits for their choice. The seat never reads the other
+   player's pick.
+2. `Protocol.cs:630` sends a proceed event option, Trial's Double
+   Down, through `EventSynchronizer`. The screen runs it locally. The
+   other seat then shows a popup the game does not show there, and in a shared
+   event the option becomes a vote.
+3. `Moves.cs:227` offers a chest skip in co-op. `NTreasureRoom` offers
+   Skip only when `Players.Count == 1`.
+4. `MapLegality.cs:115` lets the player travel once their own chest
+   vote is in. The screen waits until every player's pick is in and
+   the relics are awarded.
+
+Medium:
+
+5. `Protocol.cs:628` tracks a shared event's options as before and
+   after slices of the pending tasks, which is the Drowning Beacon
+   shape.
+6. `Protocol.cs:845`: `_sent` does not count the move to the next act,
+   and the mod still offers Proceed after it.
+7. `Peers.cs:68` decrements `_sent` for any action the local player
+   owns, not only the ones it sent.
+8. There is no move to take back the end of the turn
+   (`UndoEndPlayerTurnAction`).
+9. A dead local player has no moves outside a fight, which can
+   deadlock the map.
+
+Low:
+
+10. `Pending.Park` allows one open question at a time.
+11. `Patches.cs:1162` marks the card removal used in every player's
+    shop.
+12. `Peers.Report` leaves out the event votes, the chest votes and
+    whether a player is ready for the next act.
+
+#### G. Stubs and panics
+
+- Powers:
+  - Sneaky: block when another player plays an Attack
+  - Beacon of Hope: shares block with teammates
+  - Tank: gives Guarded to the other players
+  - Covered: `unimplemented!`
+  - Hammer Time: forges for every other player.
+- 32 `unimplemented!` panics in `sts2-sim` name several players. Most
+  of them are in `turn_loop.rs`, `board.rs` and `run/state.rs`, and
+  `BLOCKERS.md` already lists them.
+
+### 2. Co-op
 
 Co-op is in scope, before the AI front end. The headless game plays co-op on
 v0.111.0, one game for each seat, and `cargo xtask coop` plays runs at random.
@@ -119,7 +428,7 @@ run as its own machine sees it. The work goes in this order:
 4. Co-op content, as the runs reach it. Massive Scroll, Concoct and Tag
    Team are ported.
 
-### 2. The engine's command frames as coroutines
+### 3. The engine's command frames as coroutines
 
 Every rule in content that pauses is a `diapause` coroutine, and so are
 the turn loop and the run layer's pickups (`docs/SCHEDULER.md`,
@@ -131,7 +440,7 @@ that only hold them. Each carrier moves on its own, which is step 5 of
 `docs/SCHEDULER.md`. It changes no order. Mark chose on 2026-10-27 to
 leave it until co-op fights are done, since they do not need it.
 
-### 3. Speed
+### 4. Speed
 
 The target is spire-mentor's W1 workload at its cost or less. W1 plays
 random legal moves for the Ironclad, with the starter deck, against the
@@ -147,7 +456,7 @@ copies cheaply, and a cheaper walk. Both hold a player per seat, so they
 come after co-op. `cargo xtask instructions` still guards each PR, per replayed
 step.
 
-### 4. The splits a hunt finds
+### 5. The splits a hunt finds
 
 `cargo xtask hunt` plays fresh seeds on the game and the simulator side
 by side, and keeps only the runs where they part. `--mixed` spreads the
@@ -174,7 +483,7 @@ v0.107.1 and 2 on v0.111.0, and all 5 are fixed.
 
 Next, hunt both builds again toward 3,000 runs in a row with no split.
 
-### 5. Coverage of the game's own code
+### 6. Coverage of the game's own code
 
 `cargo xtask hunt --coverage` has the mod count which methods of the
 game's rules code each run enters: models, commands, hooks and combat,
