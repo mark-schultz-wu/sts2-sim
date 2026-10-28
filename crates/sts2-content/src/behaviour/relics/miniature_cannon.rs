@@ -7,13 +7,19 @@ use crate::behaviour::relics::Number;
 
 /// `ModifyDamageAdditive`: its extra damage on a powered hit from an upgraded
 /// card. A fight here has one player, so every card is its owner's.
-pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
+pub(super) fn modify_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    hook: ModifyHook<V>,
+) -> Modify<Number> {
     match hook {
         ModifyHook::DamageAdditive {
             card: Some(source),
+            dealer,
             powered: true,
             ..
-        } if source.upgraded => Modify::Added(V::Relic::MINIATURE_CANNON_EXTRA_DAMAGE),
+        } if source.upgraded && (dealer == Some(owner) || source.owner == owner) => {
+            Modify::Added(V::Relic::MINIATURE_CANNON_EXTRA_DAMAGE)
+        }
         ModifyHook::DamageAdditive { .. } => Modify::Nothing,
         hook => unimplemented!("what MiniatureCannon does for {hook:?}"),
     }

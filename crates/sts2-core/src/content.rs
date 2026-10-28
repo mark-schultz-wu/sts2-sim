@@ -1370,6 +1370,8 @@ pub struct RelicOwner<V: ContentVersion> {
 pub struct CardSource<V: ContentVersion> {
     pub id: crate::CardId<V>,
     pub card: V::Card,
+    /// `Owner.Creature`, the player whose card it is.
+    pub owner: crate::CombatId,
     /// `Pile.Type == PileType.Play`: the card stands in the play pile, as it
     /// does while it is played. A card in hand is being previewed.
     pub playing: bool,
@@ -3503,6 +3505,8 @@ pub enum ModifyHook<V: ContentVersion> {
         powered: bool,
         /// `cardSource`: the card whose own play gives the block.
         card: Option<V::Card>,
+        /// `cardSource.Owner.Creature`.
+        player: Option<crate::CombatId>,
     },
     /// `ModifyBlockMultiplicative`, over what the additions left.
     BlockMultiplicative {
@@ -3513,6 +3517,8 @@ pub enum ModifyHook<V: ContentVersion> {
         moved: bool,
         /// `cardSource`, as [`ModifyHook::BlockAdditive`] carries it.
         card: Option<V::Card>,
+        /// `cardSource.Owner.Creature`.
+        player: Option<crate::CombatId>,
         /// `cardPlay`, as the play's [`PlayAt`].
         play: Option<PlayAt>,
         /// `cardSource`: which copy gives the block.

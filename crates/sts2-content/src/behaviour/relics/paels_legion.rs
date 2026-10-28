@@ -67,9 +67,9 @@ pub(super) fn event_hook<V: crate::Build>(
 }
 
 /// `ModifyBlockMultiplicative`: twice the block its owner's card gives
-/// while it is awake, where the block is `IsCardOrMonsterMove`. A fight
-/// here has one player, whose every card is its owner's.
+/// while it is awake, where the block is `IsCardOrMonsterMove`.
 pub(super) fn modify_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     state: &State<V>,
     hook: ModifyHook<V>,
 ) -> Modify<Number> {
@@ -77,8 +77,9 @@ pub(super) fn modify_hook<V: crate::Build>(
         ModifyHook::BlockMultiplicative {
             moved: true,
             source: Some(_),
+            player: Some(player),
             ..
-        } if state.cooldown <= 0 => Modify::Scaled(sts2_core::Fixed::new(2, 0)),
+        } if player == owner && state.cooldown <= 0 => Modify::Scaled(sts2_core::Fixed::new(2, 0)),
         ModifyHook::BlockMultiplicative { .. } => Modify::Nothing,
         hook => unimplemented!("what PaelsLegion does for {hook:?}"),
     }

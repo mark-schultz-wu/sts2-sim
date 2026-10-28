@@ -100,13 +100,6 @@ player, which the simulator does not keep.
 
 Each of these needs the field first.
 
-- `CardSource` carries no owner. This affects:
-  - Mystic Lighter, Miniature Cannon, Strike Dummy, Fake Strike Dummy,
-    Pen Nib, Vitruvian Minion, Pael's Legion, Vambrace
-  - Lethality, Gigantification, Dexterity, Unmovable.
-- Dexterity is a special case. The game buffs block from the card's
-  owner. The sim buffs the block's recipient instead, which is wrong
-  for a card that gives block to a teammate.
 - Single hooks:
   - `Forged`: Hammer Time.
 - Run hooks:

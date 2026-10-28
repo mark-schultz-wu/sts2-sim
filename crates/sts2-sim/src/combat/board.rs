@@ -3569,6 +3569,7 @@ fn hit_phases<V: Rules>(
         sts2_core::CardSource {
             id: held.id,
             card: ident.card,
+            owner: seat.creature(),
             playing,
             upgraded: ident.upgrade > 0,
             enchanted: ident.enchantment.is_some(),
@@ -3666,17 +3667,22 @@ pub(super) fn blocked<V: Rules>(
     play: Option<sts2_core::PlayAt>,
     source: Option<CardId<V>>,
 ) -> (V::Number, bool, SmallVec<[V::Relic; 1]>) {
+    let player = source
+        .and_then(|id| fight.live.card_seat(id))
+        .map(sts2_core::SeatIndex::creature);
     let phases = [
         ModifyHook::BlockAdditive {
             target: recipient,
             powered,
             card,
+            player,
         },
         ModifyHook::BlockMultiplicative {
             target: recipient,
             powered,
             moved,
             card,
+            player,
             play,
             source,
         },

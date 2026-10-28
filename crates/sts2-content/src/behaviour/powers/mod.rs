@@ -1542,7 +1542,7 @@ pub(crate) fn modify_hook<V: crate::Build>(
         // onto a powered hit from its owner's first attack of the turn. A
         // card being played has started its own play, and a replay starts
         // another, so the first attack's first play is the one that counts
-        // one. A fight here has one player, whose cards are its owner's.
+        // one.
         (
             __c0,
             PowerAmount::Counted(amount),
@@ -1551,7 +1551,7 @@ pub(crate) fn modify_hook<V: crate::Build>(
                 powered: true,
                 ..
             },
-        ) if __c0 == V::Power::LETHALITY_POWER && (owner == CombatSide::Player) => {
+        ) if __c0 == V::Power::LETHALITY_POWER && source.owner == holder => {
             use sts2_core::CardKind;
 
             let attacks = history
@@ -1615,17 +1615,17 @@ pub(crate) fn modify_hook<V: crate::Build>(
         // `GigantificationPower.ModifyDamageMultiplicative`: a powered hit
         // from a card its owner played, before it binds or from the card it
         // bound to. It reads the card's owner and not the dealer, so Osty's
-        // hit from a card counts. A fight here has one player, whose cards
-        // are all its holder's.
+        // hit from a card counts.
         (
             __c0,
             _,
             ModifyHook::DamageMultiplicative {
-                card: Some(sts2_core::CardSource { id, .. }),
+                card: Some(sts2_core::CardSource { id, owner, .. }),
                 powered: true,
                 ..
             },
         ) if __c0 == V::Power::GIGANTIFICATION_POWER
+            && owner == holder
             && (state.giant().is_none_or(|(_, source)| source == id)) =>
         {
             Modify::Scaled(GIGANTIFIED)
@@ -1843,19 +1843,23 @@ pub(crate) fn modify_hook<V: crate::Build>(
         }
         // `UnmovablePower.ModifyBlockMultiplicative`: double a card's or a
         // move's block on its owner, while fewer such gains than its stack
-        // came this turn from other plays. A fight here has one player, who
-        // alone plays Unmovable. It reads `IsCardOrMonsterMove`, on the gain
-        // and on the turn's entries.
+        // came this turn from other plays. It reads `IsCardOrMonsterMove`, on
+        // the gain and on the turn's entries. A card's block counts only where
+        // its owner holds the power, on whichever player gains it.
         (
             __c0,
             PowerAmount::Counted(amount),
             ModifyHook::BlockMultiplicative {
                 target,
                 moved: true,
+                player,
                 play,
                 ..
             },
-        ) if __c0 == V::Power::UNMOVABLE_POWER && (target == holder) => {
+        ) if __c0 == V::Power::UNMOVABLE_POWER
+            && fight.monster(target).is_none()
+            && player.is_none_or(|player| player == holder) =>
+        {
             let gained = history
                 .block_gained_this_turn()
                 .filter(|entry| entry.receiver == target && entry.moved && entry.play != play)
@@ -1871,9 +1875,13 @@ pub(crate) fn modify_hook<V: crate::Build>(
             ModifyHook::BlockMultiplicative {
                 target,
                 moved: true,
+                player,
                 ..
             },
-        ) if __c0 == V::Power::UNMOVABLE_POWER && (target == holder) => {
+        ) if __c0 == V::Power::UNMOVABLE_POWER
+            && fight.monster(target).is_none()
+            && player.is_none_or(|player| player == holder) =>
+        {
             unimplemented!("an endless Unmovable")
         }
         (__c0, _, ModifyHook::BlockMultiplicative { .. }) if __c0 == V::Power::UNMOVABLE_POWER => {
@@ -1935,27 +1943,30 @@ pub(crate) fn modify_hook<V: crate::Build>(
             Modify::AtMost(one)
         }
         // `DexterityPower.ModifyBlockAdditive` pays powered block from a card
-        // its owner plays, or powered block its owner gains otherwise. A
-        // fight here has one player, whose cards give the player block, so
-        // both are the block its holder is gaining.
+        // its owner plays, whoever gains it, or powered block its owner gains
+        // from no card.
         (
             __c0,
             PowerAmount::Counted(amount),
             ModifyHook::BlockAdditive {
                 target,
                 powered: true,
+                player,
                 ..
             },
-        ) if __c0 == V::Power::DEXTERITY_POWER && (target == holder) => Modify::Added(amount),
+        ) if __c0 == V::Power::DEXTERITY_POWER && player.unwrap_or(target) == holder => {
+            Modify::Added(amount)
+        }
         (
             __c0,
             PowerAmount::Endless,
             ModifyHook::BlockAdditive {
                 target,
                 powered: true,
+                player,
                 ..
             },
-        ) if __c0 == V::Power::DEXTERITY_POWER && (target == holder) => {
+        ) if __c0 == V::Power::DEXTERITY_POWER && player.unwrap_or(target) == holder => {
             unimplemented!("an endless Dexterity")
         }
         // `FastenPower.ModifyBlockAdditive`: its stack on powered block its
@@ -1967,6 +1978,7 @@ pub(crate) fn modify_hook<V: crate::Build>(
                 target,
                 powered: true,
                 card,
+                ..
             },
         ) if __c0 == V::Power::FASTEN_POWER
             && (target == holder && card.is_none_or(|card| card.tagged(CardTag::Defend))) =>
