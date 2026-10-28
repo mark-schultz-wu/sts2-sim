@@ -4038,10 +4038,15 @@ pub enum EventHook<V: ContentVersion> {
     /// `AfterCombatEnd`, for the fight the run has just finished, in a room
     /// of this type.
     CombatEnd { room: V::RoomType },
-    /// `AfterRestSiteHeal`, once a rest site's heal has landed. `mimicked`
-    /// for a heal an event gives the way a rest site does. `max_hp` is the
-    /// player's maximum health then.
-    RestSiteHeal { mimicked: bool, max_hp: V::Number },
+    /// `AfterRestSiteHeal`, once a rest site's heal has landed on `player`,
+    /// whom a relic compares with its owner. `mimicked` for a heal an event
+    /// gives the way a rest site does. `max_hp` is that player's maximum
+    /// health then.
+    RestSiteHeal {
+        player: crate::CombatId,
+        mimicked: bool,
+        max_hp: V::Number,
+    },
     /// `TryModifyRestSiteHealRewards`, once `AfterRestSiteHeal` has run. A
     /// listener answers with the rewards it adds.
     RestSiteHealRewards { mimicked: bool },

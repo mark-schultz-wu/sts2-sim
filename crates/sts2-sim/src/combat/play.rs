@@ -1811,6 +1811,13 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
         };
         let Some(answer) = answer else {
             let ended = effect.ended;
+            // `CardSelectCmd.UndoEndTurnIfNecessary`: a choice put to a
+            // player who ended the turn, on the players' side, takes that
+            // end back. Another player's potion is what asks one.
+            let chooser = effect.reaching(next, seat).unwrap_or(seat);
+            if next.side == <V::CombatSide as sts2_core::SideKinds>::PLAYER {
+                next.players[chooser].ready = false;
+            }
             next.asking = Some(super::live::Asking {
                 then: Then::Play {
                     effect,

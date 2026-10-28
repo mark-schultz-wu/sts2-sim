@@ -829,7 +829,7 @@ pub(crate) fn event_hook<V: crate::Build>(
         },
         State::SandCastle => sand_castle::event_hook::<V>(hook, asked),
         State::SealOfGold => seal_of_gold::event_hook::<V>(hook, asked),
-        State::StoneHumidifier => stone_humidifier::event_hook::<V>(hook, asked),
+        State::StoneHumidifier => stone_humidifier::event_hook::<V>(owner, hook, asked),
         State::Storybook => storybook::event_hook::<V>(hook, asked),
         State::StrikeDummy => strike_dummy::event_hook::<V>(hook),
         State::FakeStrikeDummy => fake_strike_dummy::event_hook::<V>(hook),

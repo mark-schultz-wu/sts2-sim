@@ -4093,8 +4093,13 @@ impl<V: Rules> State<V> {
         self.heal(seat, healed);
         let max_hp =
             num_traits::cast(self.players[seat].max_hp).expect("maximum health fits a game number");
-        if let Some(asked) = self.walk_run(sts2_core::EventHook::RestSiteHeal { mimicked, max_hp })
-        {
+        let player = seat.creature();
+        let hook = sts2_core::EventHook::RestSiteHeal {
+            player,
+            mimicked,
+            max_hp,
+        };
+        if let Some(asked) = self.walk_run(hook) {
             let pickup = asked.pickup;
             unimplemented!("a rest site's heal asking for {pickup:?}");
         }
@@ -4977,9 +4982,13 @@ impl<V: Rules> State<V> {
                 in_fight,
                 holding_potions: self.holding_potions(seat),
             },
-            EventHook::RestSiteHeal { mimicked, .. } => EventHook::RestSiteHeal {
+            // The healed player's, which an earlier listener can move.
+            EventHook::RestSiteHeal {
+                player, mimicked, ..
+            } => EventHook::RestSiteHeal {
+                player,
                 mimicked,
-                max_hp: num_traits::cast(self.players[seat].max_hp)
+                max_hp: num_traits::cast(self.players[sts2_core::SeatIndex(player.get())].max_hp)
                     .expect("maximum health fits a game number"),
             },
             hook => hook,

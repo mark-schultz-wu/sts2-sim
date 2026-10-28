@@ -341,9 +341,12 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         // `NightTerrors.AfterRestSiteHeal`: five off the maximum, which
         // keeps one, after a rest site's own heal.
-        (__c0, EventHook::RestSiteHeal { mimicked, max_hp })
-            if __c0 == V::Modifier::NIGHT_TERRORS =>
-        {
+        (
+            __c0,
+            EventHook::RestSiteHeal {
+                mimicked, max_hp, ..
+            },
+        ) if __c0 == V::Modifier::NIGHT_TERRORS => {
             if !mimicked {
                 asked.push(HookEffect::LoseMaxHp(NIGHT_TERRORS_LOSS.min(max_hp - 1)));
             }

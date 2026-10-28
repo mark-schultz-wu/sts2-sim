@@ -85,7 +85,9 @@ run as its own machine sees it. The work goes in this order:
    reach each player's own listeners. The shared relic bag passes over
    what left any player's bag. A dead player's powers hear no hook, as
    their relics, potions and cards do not. A power's turn-end asks act
-   for the player carrying it. Of sixteen hunted seeds, thirteen
+   for the player carrying it, and so do a side's turn-start asks. A
+   choice put to a player who ended the turn takes that end back. Of
+   sixteen hunted seeds, fourteen
    match to the run's end. Hunts stay at
    `--width 4`: at `--width 8` two games of sixteen failed in Godot
    itself. Next, in the order of `docs/COOP-FIGHTS.md` and where the
@@ -107,9 +109,6 @@ run as its own machine sees it. The work goes in this order:
        in a fight of several players.
      - `RoomEntered` carries the first player's deck size and health,
        which a relic and the Terminal modifier read.
-     - `AfterRestSiteHeal` reaches every player's relics, where each of
-       the game's compares the healed player with its owner. One hunted
-       run parts there, on Stone Humidifier.
      - Every relic that hears `CardPlayed` compares the card's owner
        with its own in the game, 27 in all. Shuriken does in the
        simulator, and the other 25 do not yet.

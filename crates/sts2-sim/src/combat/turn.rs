@@ -3181,6 +3181,9 @@ pub(super) fn side_turn_started<V: Rules>(
         .as_mut()
         .and_then(|walk| walk.next(seat, live, belts, &mut asked))
     {
+        // What a listener asks acts for its own player. A monster's or a
+        // modifier's acts for the side's.
+        let seat = listen::owner(live, listener).unwrap_or(seat);
         for effect in asked.drain(..) {
             match effect {
                 // `PowerCmd.Remove(this)`, from a power spent as its side begins.
