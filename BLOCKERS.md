@@ -83,9 +83,9 @@ run as its own machine sees it. The work goes in this order:
    owner. A treasure chest holds a relic for each player, and awards them
    by the players' votes. A monster's attack, and a player's death in it,
    reach each player's own listeners. The shared relic bag passes over
-   what left any player's bag. Of sixteen hunted seeds, nine match
-   to the run's
-   end. Hunts stay at
+   what left any player's bag. A dead player's powers hear no hook, as
+   their relics, potions and cards do not. Of sixteen hunted seeds, eleven
+   match to the run's end. Hunts stay at
    `--width 4`: at `--width 8` two games of sixteen failed in Godot
    itself. Next, in the order of `docs/COOP-FIGHTS.md` and where the
    hunted runs stop:
@@ -95,12 +95,9 @@ run as its own machine sees it. The work goes in this order:
      So does the turn's end while a player's action waits on a question.
      Card plays, potions and the turn's end go through the queues, with
      the action types, gating and cancellations.
-   - The simulator ticks down a dead player's Frail, and the game does
-     not. Three hunted runs part there. Two are against Corpse Slugs, whose Goop
-     lands a fresh Frail on the dead player too. The simulator's tick on
-     the next enemy turn has no skip left, and the game's Frail stays.
-     The game's side needs `cargo xtask game-trace` for a co-op run,
-     which it plays only solo now.
+   - Fossil Stalker's Strength reads 3 in the game where the simulator
+     has 6, in one hunted run. `cargo xtask game-trace --coop 11` shows
+     the game's side.
    - A question that waits on a player's own card play names no asker,
      where the game names the play. One hunted run parts there, beside
      Shuriken counting the other player's Attack.

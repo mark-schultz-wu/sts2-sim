@@ -18,7 +18,18 @@
 //!
 //! The build is `STS2_GAME_VERSION`'s, as for `follow_run`. The whole
 //! trace stays in `target/game-trace/<INDEX>.log`.
+//!
+//! With `--coop`, `INDEX` is a co-op seed's number, as `cargo xtask coop`
+//! counts them. This plays that seed through `coop_run --hunt`, one game
+//! for each seat, and each game traces to a file of its own. It prints the
+//! calls of each seat's game over the last `--moves` moves of the run, and
+//! the whole of each trace stays in `target/game-trace/<SEED>/`:
+//!
+//! ```text
+//! STS2_GAME_VERSION=v0.111.0 cargo xtask game-trace --coop 11 FrailPower
+//! ```
 
+use std::fmt::Write as _;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -38,7 +49,8 @@ pub enum Error {
 
 #[derive(clap::Args)]
 pub struct Args {
-    /// The run, by its place in the file, counted from zero.
+    /// The run, by its place in the file, counted from zero. With
+    /// `--coop`, the co-op seed's number.
     index: usize,
     /// The methods to trace.
     #[arg(required = true)]
@@ -50,6 +62,12 @@ pub struct Args {
     /// How many moves before the split to print the calls of.
     #[arg(long, default_value_t = 2)]
     moves: usize,
+    /// Play the co-op seed `INDEX` names, one game for each seat.
+    #[arg(long, conflicts_with = "file")]
+    coop: bool,
+    /// Each co-op seat's character, by id, in seat order.
+    #[arg(long, value_delimiter = ',', default_value = "IRONCLAD,SILENT")]
+    characters: Vec<String>,
 }
 
 pub fn run(
@@ -58,8 +76,13 @@ pub fn run(
         patterns,
         file,
         moves,
+        coop,
+        characters,
     }: Args,
 ) -> Result<String, Error> {
+    if coop {
+        return coop_trace(index, &patterns, moves, &characters);
+    }
     let root = crate::workspace();
     let follow = error::build_example(&root, "follow_run")?;
     let file = match file {
@@ -88,6 +111,64 @@ pub fn run(
     let mut report = last_moves(&trace, moves);
     report.push_str(String::from_utf8_lossy(&followed.stdout).trim_end());
     report.push('\n');
+    Ok(report)
+}
+
+/// The co-op seed `seed` played with the trace on, and each seat's calls over
+/// the last `moves` moves.
+///
+/// A seat's trace holds a command for each move its own player made, in the
+/// order the run's log lists them. The other players' moves reach its game
+/// over the network, with no command. So each seat's calls are cut at its
+/// own last move before the window, which leads into it.
+fn coop_trace(
+    seed: usize,
+    patterns: &[String],
+    moves: usize,
+    characters: &[String],
+) -> Result<String, Error> {
+    let root = crate::workspace();
+    let runner = error::build_example(&root, "coop_run")?;
+    let seed = format!("C{seed:09}");
+    let homes = root.join("target/game-trace").join(&seed);
+    // A trace left from an earlier run would read as this one's.
+    let _ = std::fs::remove_dir_all(&homes);
+    error::create_dir(&homes)?;
+    let played = error::spawned(
+        Command::new(&runner)
+            .args([seed.as_str(), &characters.join(",")])
+            .arg("--homes")
+            .arg(&homes)
+            .arg("--out")
+            .arg(homes.join("run.bin"))
+            .arg("--hunt")
+            .env("STS2_HEADLESS_TRACE", patterns.join(",")),
+    )?;
+    let log = String::from_utf8_lossy(&played.stdout);
+    error::write(&homes.join("moves.log"), &played.stdout)?;
+    // `<step> seat <seat>: <move>`, for each move.
+    let movers: Vec<usize> = (log.lines())
+        .filter_map(|line| {
+            let mut words = line.split_whitespace();
+            words.next()?.parse::<usize>().ok()?;
+            (words.next()? == "seat").then_some(())?;
+            words.next()?.trim_end_matches(':').parse().ok()
+        })
+        .collect();
+    let window = &movers[movers.len().saturating_sub(moves)..];
+    let mut report = String::new();
+    for seat in 0..characters.len() {
+        let file = homes.join(format!("seat{seat}.trace"));
+        if !file.exists() {
+            return Err(Error::NoTrace(file));
+        }
+        let trace = error::read(&file)?;
+        let own = window.iter().filter(|&&mover| mover == seat).count();
+        writeln!(report, "== seat {seat}").expect("a String takes a line");
+        report.push_str(&last_moves(&trace, own + 1));
+    }
+    writeln!(report, "{}", log.lines().last().unwrap_or("no word why"))
+        .expect("a String takes a line");
     Ok(report)
 }
 

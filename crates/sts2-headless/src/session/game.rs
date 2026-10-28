@@ -81,6 +81,9 @@ impl<V: sts2_content_wire::WireContentVersion> Oracle<V> {
         if let Some(home) = &config.data_home {
             proc.env("XDG_DATA_HOME", home);
         }
+        if let Some(file) = &config.trace_file {
+            proc.env("STS2_HEADLESS_TRACE_FILE", file);
+        }
         proc.current_dir(&config.game_dir)
             .args(["--headless", "--force-steam=off"])
             .env("STS2_HEADLESS_MODE", mode)

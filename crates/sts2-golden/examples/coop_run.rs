@@ -143,10 +143,20 @@ fn play<V: WireContentVersion + sts2_content::Build>(cli: Cli) -> Result<String,
         .collect::<Result<Vec<V::Character>, _>>()?;
     let game_dir = game_dir_from_env().ok_or(Error::NoGame)?;
     let port = free_port().map_err(Error::Port)?;
+    // `STS2_HEADLESS_TRACE` reaches every seat's game, and each traces to a
+    // file of its own beside its home, as `cargo xtask game-trace --coop`
+    // reads them.
+    let tracing = std::env::var_os("STS2_HEADLESS_TRACE").is_some();
     let hosts = (0..characters.len())
-        .map(|at| SeatHost {
-            config: Config::new(&game_dir).data_home(homes.join(format!("seat{at}"))),
-            port,
+        .map(|at| {
+            let config = Config::new(&game_dir).data_home(homes.join(format!("seat{at}")));
+            SeatHost {
+                config: match tracing {
+                    true => config.trace_file(homes.join(format!("seat{at}.trace"))),
+                    false => config,
+                },
+                port,
+            }
         })
         .collect();
     let mut pick = Pick::for_seed(seed.as_str());

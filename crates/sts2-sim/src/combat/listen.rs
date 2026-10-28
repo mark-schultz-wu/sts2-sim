@@ -399,7 +399,7 @@ fn listed<'a, V: Rules, S: Sought>(
     for (creature_at, creature) in live.creatures.iter().enumerate() {
         // `Contains`: a dead player's `DeactivateHooks` takes its own powers
         // out, as it does its belts, potions and cards.
-        if kinds.powers && !(live.lost && matches!(creature.model, Some(ModelId::Character(_)))) {
+        if kinds.powers && !live.deaf(creature) {
             for (at, held) in live.powers.of(creature.id).enumerate() {
                 let overrides = held.power().overrides();
                 if sought.sought_by(overrides) {
@@ -619,8 +619,7 @@ impl<V: Rules, C: Cursor<V>> Walker<V, C> {
                             None => continue,
                         },
                     };
-                    if live.lost && matches!(fighter.model, Some(sts2_core::ModelId::Character(_)))
-                    {
+                    if live.deaf(fighter) {
                         continue;
                     }
                     let carrier = fighter.carrier();
@@ -661,7 +660,7 @@ impl<V: Rules, C: Cursor<V>> Walker<V, C> {
                 }
                 Snapped::Relic { seat, slot, relic } => {
                     // `Contains`: its owner is active for hooks.
-                    if live.lost {
+                    if live.players[seat].deaf {
                         continue;
                     }
                     if belts[seat].get(usize::from(slot)).map(|held| held.relic) != Some(relic) {
@@ -674,7 +673,7 @@ impl<V: Rules, C: Cursor<V>> Walker<V, C> {
                 Snapped::Card { seat, id } => {
                     // `Contains`: still in the fight, and its owner active for
                     // hooks.
-                    if live.lost || !ask_card(seat, live, id, hook, asked) {
+                    if live.players[seat].deaf || !ask_card(seat, live, id, hook, asked) {
                         continue;
                     }
                     Listener::Card { id }
@@ -1255,6 +1254,8 @@ pub(crate) fn revive_the_dead<V: Rules>(fighting: super::Fighting<'_, V>) {
         if live.player(seat).alive {
             continue;
         }
+        // `ActivateHooks`, as the heal brings the player back.
+        live.players[seat].deaf = false;
         belts[seat].rehear();
         live.players[seat].potions.rehear();
         let mut board = super::board::Board::for_card(

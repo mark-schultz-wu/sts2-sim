@@ -2599,6 +2599,10 @@ pub(crate) struct PlayerCombat<V: Rules> {
     /// `PlayersReadyToEndTurn` holds the player: in a fight of several, it
     /// ended its turn and waits for the rest until the next turn starts.
     pub(super) ready: bool,
+    /// `IsActiveForHooks` off: the player died, and `DeactivateHooks` took
+    /// their powers, belts, potions and cards out of every hook until a
+    /// revive.
+    pub(super) deaf: bool,
     /// `CombatManager`'s card or potion effect depth for the player: how
     /// many plays or potions are between `BeginCardOrPotionEffect` and
     /// `EndCardOrPotionEffect`.
@@ -2639,6 +2643,7 @@ impl<V: Rules> Clone for PlayerCombat<V> {
             removed_from_deck,
             ending_turn,
             ready,
+            deaf,
             effect_depth,
             deck_versions,
             taken_from_deck,
@@ -2655,6 +2660,7 @@ impl<V: Rules> Clone for PlayerCombat<V> {
         removed_from_deck.clone_from(&source.removed_from_deck);
         *ending_turn = source.ending_turn;
         *ready = source.ready;
+        *deaf = source.deaf;
         *effect_depth = source.effect_depth;
         deck_versions.clone_from(&source.deck_versions);
         taken_from_deck.clone_from(&source.taken_from_deck);
@@ -3685,6 +3691,16 @@ impl<V: Rules> Live<V> {
         <V::Encounter as sts2_core::EncounterTable>::room(self.encounter)
     }
 
+    /// `Owner.Player?.IsActiveForHooks` off for `creature`: it is a dead
+    /// player's own creature. A pet has an owner and no `Player`, so its
+    /// powers hear on. A fight adds its players first, so a player's
+    /// creature is its seat.
+    #[inline(always)]
+    pub(crate) fn deaf(&self, creature: &Fighter<V>) -> bool {
+        matches!(creature.model, Some(sts2_core::ModelId::Character(_)))
+            && self.players[sts2_core::SeatIndex(creature.id.get())].deaf
+    }
+
     /// The seat of the player `creature` is, or whose pet it is. A fight
     /// adds the players first, in seat order. Nothing for a monster.
     pub(crate) fn seat_of(&self, creature: CombatId) -> Option<sts2_core::SeatIndex> {
@@ -4170,6 +4186,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             removed_from_deck: Vec::new(),
             ending_turn: false,
             ready: false,
+            deaf: false,
             effect_depth: 0,
             deck_versions: DeckVersions::none(),
             taken_from_deck: Vec::new(),

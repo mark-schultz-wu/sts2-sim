@@ -2154,8 +2154,9 @@ impl<'a, V: Rules> Board<'a, V> {
             if let Some(osty) = osty {
                 self.kill_outright(osty, force);
             }
-            // `DeactivateHooks`: the player's belts, potions and cards
-            // hear nothing after.
+            // `DeactivateHooks`: the player's powers, belts, potions and
+            // cards hear nothing after.
+            self.live.players[seat].deaf = true;
             self.belts[seat].deafen();
             self.live.players[seat].potions.deafen();
             self.live.players[seat].cards.deafen();

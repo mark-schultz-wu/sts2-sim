@@ -627,6 +627,7 @@ fn player_combat<V: Rules>(
         removed_from_deck: Vec::new(),
         ending_turn: false,
         ready: false,
+        deaf: false,
         effect_depth: 0,
         deck_versions: super::live::DeckVersions::none(),
         taken_from_deck: Vec::new(),
