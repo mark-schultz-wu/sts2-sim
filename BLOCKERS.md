@@ -95,9 +95,9 @@ run as its own machine sees it. The work goes in this order:
      So does the turn's end while a player's action waits on a question.
      Card plays, potions and the turn's end go through the queues, with
      the action types, gating and cancellations.
-   - Fossil Stalker's Strength reads 3 in the game where the simulator
-     has 6, in one hunted run. `cargo xtask game-trace --coop 11` shows
-     the game's side.
+   - A creature Living Fog brings into the fight has 15 health in the
+     game where the simulator has 7, in one hunted run. A monster spawned
+     in the fight scales by the player count too.
    - A question that waits on a player's own card play names no asker,
      where the game names the play. One hunted run parts there, beside
      Shuriken counting the other player's Attack.

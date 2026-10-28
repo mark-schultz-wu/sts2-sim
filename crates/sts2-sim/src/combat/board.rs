@@ -1200,7 +1200,8 @@ impl<'a, V: Rules> Board<'a, V> {
             if let Some(landed) =
                 self.land_hit(dealer, target, damage, powered, unblockable, card, attack)
             {
-                self.settle_hit(landed, &mut dying);
+                let hit = self.next_hit();
+                self.settle_hit(landed, hit, &mut dying);
             }
             self.kill_together(&dying);
             return;
@@ -1236,12 +1237,21 @@ impl<'a, V: Rules> Board<'a, V> {
         // lands above this one's hits, and takes its own back off.
         self.commanding = false;
         let mut dying = SmallVec::<[CombatId; 2]>::new();
+        let hit = self.next_hit();
         while self.live.landing.len() > start {
             let landed = self.live.landing.remove(start);
-            self.settle_hit(landed, &mut dying);
+            self.settle_hit(landed, hit, &mut dying);
         }
         self.kill_together(&dying);
         self.commanding = outer;
+    }
+
+    /// The hit a damage command lands as, in the attack whose results are
+    /// gathering: one past the last that landed.
+    fn next_hit(&self) -> u8 {
+        (self.landed.as_ref())
+            .and_then(|results| results.last())
+            .map_or(0, |last| last.hit + 1)
     }
 
     /// Hold the command under way behind its hit that asked: what it landed
@@ -1417,7 +1427,7 @@ impl<'a, V: Rules> Board<'a, V> {
     /// not told it was hit. It joins `dying`, to die once the command's hooks
     /// are done.
     #[inline(always)]
-    fn settle_hit(&mut self, landed: Landed<V>, dying: &mut SmallVec<[CombatId; 2]>) {
+    fn settle_hit(&mut self, landed: Landed<V>, hit: u8, dying: &mut SmallVec<[CombatId; 2]>) {
         let Landed {
             dealer,
             target,
@@ -1451,6 +1461,7 @@ impl<'a, V: Rules> Board<'a, V> {
             if let Some(landed) = self.landed.as_mut().filter(|_| attack) {
                 landed.push(sts2_core::DamageResult {
                     receiver,
+                    hit,
                     total,
                     unblocked: lost,
                     overkill,
@@ -6900,18 +6911,21 @@ impl<V: Rules> Board<'_, V> {
                     Listener::Power { owner, .. },
                     HookEffect::ApplyToOwnerPerUnblockedHit { power, per },
                 ) => {
+                    // Each hit that took health off any target counts once.
                     // A hit on a pet carries its owner's result after the
                     // pet's, which the count leaves out.
                     let mut hits = 0usize;
                     let mut stood_in_for = None;
-                    for hit in &results {
-                        if stood_in_for.take() == Some(hit.receiver) {
+                    let mut counted = None;
+                    for result in &results {
+                        if stood_in_for.take() == Some(result.receiver) {
                             continue;
                         }
                         stood_in_for = self
-                            .at(hit.receiver)
+                            .at(result.receiver)
                             .and_then(|at| self.live.creatures[at].owner);
-                        if hit.unblocked > V::Number::zero() {
+                        if result.unblocked > V::Number::zero() && counted != Some(result.hit) {
+                            counted = Some(result.hit);
                             hits += 1;
                         }
                     }
@@ -7107,7 +7121,8 @@ pub(super) fn land_held<V: Rules>(
         (Some(half), None) => {
             let mut dying = SmallVec::<[CombatId; 2]>::new();
             if let Some(landed) = board.land_rest(half) {
-                board.settle_hit(landed, &mut dying);
+                let hit = board.next_hit();
+                board.settle_hit(landed, hit, &mut dying);
             }
             board.kill_together(&dying);
         }

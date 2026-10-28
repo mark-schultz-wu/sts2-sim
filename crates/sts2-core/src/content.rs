@@ -1330,6 +1330,9 @@ impl<V: ContentVersion> EnchantmentModel<V> for EnchantmentStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DamageResult<V: ContentVersion> {
     pub receiver: crate::CombatId,
+    /// Which of the attack's hits it came from, counted from zero.
+    /// `AttackCommand.Results` holds a list of results for each hit.
+    pub hit: u8,
     /// `TotalDamage`: what the block took and what the hit points lost.
     pub total: V::Number,
     /// `UnblockedDamage`: what the hit points lost.
@@ -1340,7 +1343,8 @@ pub struct DamageResult<V: ContentVersion> {
     pub killed: bool,
 }
 
-/// `AttackCommand.Results`: every hit's results, in the order they landed.
+/// `AttackCommand.Results`: every hit's results, in the order they landed,
+/// each naming its hit.
 pub type AttackResults<V> = smallvec::SmallVec<[DamageResult<V>; 4]>;
 
 /// The player's current and maximum hit points.
