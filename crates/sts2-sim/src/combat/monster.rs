@@ -451,7 +451,8 @@ pub(super) fn summon_built<V: Rules>(
 }
 
 /// `CombatState.CreateCreature` for an enemy: the next id, and hit points
-/// `SetUniqueMonsterHpValue` rolls against the enemies already in the fight.
+/// `SetUniqueMonsterHpValue` rolls against the enemies already in the fight,
+/// scaled by the player count.
 pub(super) fn create<V: Rules>(
     live: &mut Live<V>,
     monster: V::Monster,
@@ -460,10 +461,10 @@ pub(super) fn create<V: Rules>(
 ) -> (CombatId, V::Health) {
     let id = live.next_creature();
     let used = monster_hps::<V>(&live.creatures);
-    (
-        id,
-        health::<V>(monster, model, live.ascension, &used, niche),
-    )
+    // `SetUniqueMonsterHpValue`, then `ScaleMonsterHpForMultiplayer`, as
+    // for a monster the fight opened with.
+    let rolled = health::<V>(monster, model, live.ascension, &used, niche);
+    (id, live.scaling.health::<V>(rolled))
 }
 
 /// `CombatState.AddCreature`: a monster [`create`] made, put among the
