@@ -5449,7 +5449,7 @@ pub(crate) fn event_hook<V: crate::Build>(
             *state = State::Vigor {
                 bound: Some(Bound {
                     command,
-                    source: source.map(|(id, _)| id),
+                    source: source.map(|(id, ..)| id),
                     amount,
                 }),
             };
@@ -5468,11 +5468,12 @@ pub(crate) fn event_hook<V: crate::Build>(
             PowerAmount::Counted(_),
             EventHook::BeforeAttack {
                 command,
-                source: Some((id, card)),
+                source: Some((id, card, owner)),
                 powered: true,
                 ..
             },
         ) if __c0 == V::Power::GIGANTIFICATION_POWER
+            && owner == holder
             && (state.giant().is_none()
                 && <V as sts2_core::Rules>::card_kind(card)
                     == Some(sts2_core::CardKind::Attack)) =>

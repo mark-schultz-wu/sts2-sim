@@ -148,8 +148,9 @@ pub(crate) fn health_after_added<V: crate::Build>(
     ascension: crate::generated::ascension::AscensionLevel,
     rolled: i32,
     teammates: &[i32],
+    scaled: impl Fn(i32) -> sts2_core::Decimal,
 ) -> Option<i32> {
-    hive::health_after_added::<V>(monster, ascension, rolled, teammates)
+    hive::health_after_added::<V>(monster, ascension, rolled, teammates, scaled)
 }
 
 /// A move's attack damage that the monster works out from the fight, from

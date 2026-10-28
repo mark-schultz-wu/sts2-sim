@@ -72,7 +72,7 @@ pub(crate) fn resolve<V: Rules>(
 
     // The same rules the reported hand carries, asked of the one card being
     // played. Nothing here builds the rest of the hand, or its previews.
-    let takes = legal::target_type::<V>(card, live);
+    let takes = legal::target_type::<V>(card, live, seat);
     let fight = super::listen::Walk { live, belts };
     let (refused, preventer) = legal::reasons::<V>(
         seat,
@@ -528,7 +528,7 @@ pub(super) fn auto_play_in_play<V: Rules>(
         return without_playing::<V>(seat, live, rngs, belts, &card);
     }
     let ascension = live.ascension;
-    let target = match super::legal::target_type::<V>(ident, live) {
+    let target = match super::legal::target_type::<V>(ident, live, seat) {
         kind if kind == V::TargetType::ANY_ENEMY && named.is_some() => named,
         kind if kind == V::TargetType::ANY_ENEMY => {
             let mut board =

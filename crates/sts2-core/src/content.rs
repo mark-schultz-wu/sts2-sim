@@ -2650,6 +2650,13 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("setting a creature's hit points")
     }
 
+    /// `Creature.ScaleHpForMultiplayer` of a monster's `hp`, for the fight's
+    /// player count, truncated as `SetMaxHpInternal` takes a decimal. The
+    /// same `hp` in a fight of one player.
+    fn scaled_for_players(&self, _hp: V::Health) -> V::Health {
+        unimplemented!("scaling health for the player count")
+    }
+
     /// `RunRng.Niche.NextInt(min, max)`, which stops short of `max`.
     fn niche_int(&mut self, _min: V::Number, _max: V::Number) -> V::Number {
         unimplemented!("a draw off the niche stream")
@@ -4651,8 +4658,9 @@ pub enum EventHook<V: ContentVersion> {
         /// `Attacker`.
         attacker: crate::CombatId,
         /// `ModelSource`, which is the card for a card's attack and nothing
-        /// for a monster's: which copy, and which card it is.
-        source: Option<(crate::CardId<V>, V::Card)>,
+        /// for a monster's: which copy, which card it is, and its
+        /// `Owner.Creature`.
+        source: Option<(crate::CardId<V>, V::Card, crate::CombatId)>,
         /// `DamageProps.IsPoweredAttack()`.
         powered: bool,
     },
@@ -8195,11 +8203,14 @@ pub trait Rules: Hooks + Engine {
     ///
     /// `None` is a monster that does not override it, which is nearly all of
     /// them. The rewrite is a `SetMaxAndCurrentHp`, and nothing calls one.
+    /// `scaled` is `Creature.ScaleHpForMultiplayer` for the fight, which a
+    /// rewrite can bound itself by.
     fn monster_health_after_added(
         monster: Self::Monster,
         ascension: Self::AscensionLevel,
         rolled: Self::Health,
         teammates: &[Self::Health],
+        scaled: impl Fn(Self::Health) -> crate::Decimal,
     ) -> Option<Self::Health>;
 
     /// `AfterAddedToRoom`'s `SetCurrentHpInternal`, which leaves the maximum

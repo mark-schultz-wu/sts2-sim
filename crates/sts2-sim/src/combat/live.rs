@@ -3621,11 +3621,12 @@ impl<V: Rules> Live<V> {
         })
     }
 
-    /// What a creature's next move shows, with each attack's damage as it
-    /// will land on the player.
+    /// What a creature's next move shows to `seat`'s player, with each
+    /// attack's damage as it will land on them.
     ///
     /// `Attack::damage` is the number that will land, not the one the move
-    /// prints. The game works it out on every read.
+    /// prints. The game works it out on every read, against
+    /// `LocalContext.GetMe`, so each machine shows its own player's.
     pub(crate) fn telegraphed(
         &self,
         seat: sts2_core::SeatIndex,
@@ -3639,24 +3640,19 @@ impl<V: Rules> Live<V> {
                 .then(|| Telegraphed::<V>::unset().telegraph());
         };
         let mut next = rolled.telegraph();
-        let player = self
-            .creatures
-            .iter()
-            .find(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER);
-        if let Some(player) = player {
-            for intent in &mut next.intents {
-                if let Some(attack) = &mut intent.attack {
-                    attack.damage = super::board::modified::<V>(
-                        seat,
-                        super::listen::Walk { live: self, belts },
-                        Some(fighter.id),
-                        Some(player.id),
-                        None,
-                        attack.damage,
-                        // A move's attack is powered.
-                        true,
-                    );
-                }
+        let player = seat.creature();
+        for intent in &mut next.intents {
+            if let Some(attack) = &mut intent.attack {
+                attack.damage = super::board::modified::<V>(
+                    seat,
+                    super::listen::Walk { live: self, belts },
+                    Some(fighter.id),
+                    Some(player),
+                    None,
+                    attack.damage,
+                    // A move's attack is powered.
+                    true,
+                );
             }
         }
         Some(next)

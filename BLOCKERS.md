@@ -144,8 +144,9 @@ block, energy, hand, deck, health, plays and belt. What is left:
 - Monster numbers:
   - Knowledge Demon's heal is `30 * Players.Count`
   - Waterfall Giant's Siphon heal scales the same way
-  - Tough Egg's hatchling health and Test Subject's respawn health are
-    scaled by `ScaleHpForMultiplayer`.
+  - Battleworn Dummy's options show each setting's health scaled by
+    `ScaleHpForMultiplayer`. The fight it opens panics in a run of
+    several players first.
 - In Act 3, a fight of several players panics at `monster.rs:139`.
 - `BurningBlood` and `BlackBlood` heal a dead teammate. The game checks
   `!Owner.Creature.IsDead`.
@@ -245,11 +246,6 @@ run as its own machine sees it. The work goes in this order:
    `coop-v0.111.0.bin` without the game. So a change to the simulator
    needs no hunt to show it keeps them. Next, in the order of
    `docs/COOP-FIGHTS.md` and where the hunted runs stop:
-   - Where the deeper runs part: a monster's numbers in a fight of
-     several players.
-     - An intent's damage doubles after Bash: seed 2.
-     - A Gigantification stack, and a hit three times as hard: seed 11.
-     - Ovicopter's spawn has about 2.5 times the health: seed 14.
    - Where they panic, besides the items below:
      - Fade's `BeforeApplied` (`powers/mod.rs:6675`): seed 9
      - Outrage's play, which v0.111.0 does not port: seed 10

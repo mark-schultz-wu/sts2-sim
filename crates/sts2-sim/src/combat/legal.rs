@@ -88,14 +88,18 @@ pub(super) fn first_playable<V: Rules>(
         })
 }
 
-/// What a card names as its target.
+/// What a card of `seat`'s player names as its target.
 #[inline(always)]
-pub(super) fn target_type<V: Rules>(card: CardIdent<V>, live: &Live<V>) -> V::TargetType {
+pub(super) fn target_type<V: Rules>(
+    card: CardIdent<V>,
+    live: &Live<V>,
+    seat: sts2_core::SeatIndex,
+) -> V::TargetType {
     // One of the four cards that work their target out from the fight, which
-    // they do by reading the player's own powers.
-    card.card
-        .target()
-        .unwrap_or_else(|| V::computed_card_target(card.card, &super::board::powers::<V>(live)))
+    // they do by reading their owner's own powers.
+    card.card.target().unwrap_or_else(|| {
+        V::computed_card_target(card.card, &super::board::powers::<V>(live, seat))
+    })
 }
 
 /// Whether anything in the fight answers `ShouldPlay`, asked once for a hand
@@ -307,7 +311,7 @@ impl<'a, V: Rules> InHand<'a, V> {
         facts: &HandFacts<V>,
     ) -> Self {
         let creatures = &fight.live.creatures;
-        let target = target_type::<V>(held.face.ident, fight.live);
+        let target = target_type::<V>(held.face.ident, fight.live, seat);
         let (cost, star_cost) = costs::<V>(seat, &held, Some(Pile::Hand), fight);
         let (reason, preventer) = reasons::<V>(
             seat,
@@ -416,7 +420,7 @@ pub(crate) fn moves<V: Rules>(
     let facts = HandFacts::of(seat, Walk { live, belts });
     for (at, card) in live.players[seat].cards.iter(Pile::Hand).enumerate() {
         let costs = costs::<V>(seat, &card, Some(Pile::Hand), Walk { live, belts });
-        let target = target_type::<V>(card.face.ident, live);
+        let target = target_type::<V>(card.face.ident, live, seat);
         let (refused, _) = reasons::<V>(
             seat,
             card.face.ident,
@@ -658,7 +662,7 @@ fn effect<V: Rules>(
     targets: &[CombatId],
 ) -> Previews<V> {
     let per_target = matches!(
-        Some(target_type::<V>(held.face.ident, fight.live)),
+        Some(target_type::<V>(held.face.ident, fight.live, seat)),
         Some(t) if t == <V::TargetType as TargetKinds>::ANY_ENEMY
             || t == <V::TargetType as TargetKinds>::ANY_ALLY
             || t == <V::TargetType as TargetKinds>::ANY_PLAYER

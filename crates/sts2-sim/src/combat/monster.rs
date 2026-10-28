@@ -182,14 +182,23 @@ impl Scaling {
         if self.players <= 1 {
             return hp;
         }
-        let whole: sts2_core::Decimal = num_traits::cast::<_, i64>(hp)
-            .expect("a monster's health fits an i64")
-            .into();
-        let scaled = whole * sts2_core::Decimal::from(self.players) * self.factor;
+        let scaled = self.exact::<V>(hp);
         num_traits::cast(
             num_traits::ToPrimitive::to_i64(&scaled.trunc()).expect("a scaled health fits an i64"),
         )
         .expect("a scaled health fits the build's health type")
+    }
+
+    /// `Creature.ScaleHpForMultiplayer` of `hp`, before anything truncates
+    /// it.
+    pub(crate) fn exact<V: Rules>(self, hp: V::Health) -> sts2_core::Decimal {
+        let whole: sts2_core::Decimal = num_traits::cast::<_, i64>(hp)
+            .expect("a monster's health fits an i64")
+            .into();
+        match self.players {
+            0 | 1 => whole,
+            players => whole * sts2_core::Decimal::from(players) * self.factor,
+        }
     }
 }
 
@@ -374,9 +383,13 @@ pub(crate) fn added_to_room<V: Rules>(
             .filter(|(other, creature)| *other != at && creature.side == side)
             .map(|(_, creature)| creature.max_hp)
             .collect();
-        let Some(health) =
-            V::monster_health_after_added(monster, ascension, creatures[at].max_hp, &teammates)
-        else {
+        let Some(health) = V::monster_health_after_added(
+            monster,
+            ascension,
+            creatures[at].max_hp,
+            &teammates,
+            |hp| scaling.exact::<V>(hp),
+        ) else {
             continue;
         };
         // `SetMaxAndCurrentHp`, which is both numbers at once.

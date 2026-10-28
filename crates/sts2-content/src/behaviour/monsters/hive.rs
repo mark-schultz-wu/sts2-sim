@@ -115,14 +115,18 @@ pub(super) fn starting_powers<V: crate::Build>(
 /// What a Hive monster's `AfterAddedToRoom` writes over its rolled health.
 ///
 /// `DecimillipedeSegment` is the one that does. A segment carries an even
-/// number of points, and no two in the row carry the same number. The player
-/// can then tell them apart by the bar alone. It walks up in twos from the
-/// rolled number, and wraps round its own range rather than leave it.
+/// number of points, and no two in the row carry the same number. It walks
+/// up in twos from the rolled number, and wraps round its own range, scaled
+/// for the players.
+///
+/// The game walks a decimal, which a wrap can leave fractional, and
+/// `SetMaxAndCurrentHp` truncates it.
 pub(super) fn health_after_added<V: crate::Build>(
     monster: V::Monster,
     ascension: AscensionLevel,
     rolled: Health,
     teammates: &[Health],
+    scaled: impl Fn(Health) -> sts2_core::Decimal,
 ) -> Option<Health> {
     if !(monster == V::Monster::DECIMILLIPEDE_SEGMENT_FRONT
         || monster == V::Monster::DECIMILLIPEDE_SEGMENT_MIDDLE
@@ -133,21 +137,24 @@ pub(super) fn health_after_added<V: crate::Build>(
     // `MaxInitialHp` and `MinInitialHp`, which are the same two numbers the
     // health was rolled between.
     let (min_hp, max_hp) = V::monster_hp(monster);
-    let (lowest, highest): (Health, Health) = (
-        min_hp.at(ascension as u8).into(),
-        max_hp.at(ascension as u8).into(),
+    let (lowest, highest) = (
+        scaled(min_hp.at(ascension as u8).into()),
+        scaled(max_hp.at(ascension as u8).into()),
     );
-    let mut health = rolled;
-    if health % 2 == 1 {
-        health += 1;
-    }
-    while teammates.contains(&health) {
-        health += 2;
+    let mut health = sts2_core::Decimal::from(rolled + rolled % 2);
+    let two = sts2_core::Decimal::from(2);
+    while teammates
+        .iter()
+        .any(|&teammate| sts2_core::Decimal::from(teammate) == health)
+    {
+        health += two;
         if health > highest {
             health = lowest;
         }
     }
-    Some(health)
+    Some(
+        num_traits::ToPrimitive::to_i32(&health.trunc()).expect("a segment's health fits its type"),
+    )
 }
 
 /// Which move a Hive monster selects from a conditional state.
@@ -848,7 +855,8 @@ pub(crate) fn hatch<V: crate::Build, F: Fight<V>>(
         true => (20, 23),
         false => (19, 22),
     };
-    let hp = draw(fight, min, max);
+    let drawn = draw(fight, min, max);
+    let hp = fight.scaled_for_players(drawn);
     fight.set_max_and_current_hp(egg, num_traits::cast(hp).expect("a hatchling's health"));
 }
 

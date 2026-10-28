@@ -4143,7 +4143,7 @@ pub(crate) fn var<V: Rules>(
                 .map(|held| held.face.ident.card)
                 .collect();
             let owner = sts2_core::CardOwner {
-                powers: &powers::<V>(live),
+                powers: &powers::<V>(live, seat),
                 osty,
                 osty_max_hp,
                 draw: live.players[seat].cards.len(Pile::Draw),
@@ -4162,11 +4162,7 @@ pub(crate) fn var<V: Rules>(
                 targeted: target,
                 target: targeted.as_deref(),
                 history: live.history(seat.creature()),
-                block: live
-                    .creatures
-                    .iter()
-                    .find(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER)
-                    .map_or_else(num_traits::zero, |player| player.block),
+                block: live.player(seat).block,
                 // `GetWithModifiers(CostModifiers.All)`, where the play pile
                 // holds it.
                 cost_in_play: live.players[seat]
@@ -4210,16 +4206,19 @@ pub(crate) fn var<V: Rules>(
     }
 }
 
-/// The player's own powers, which is what a card reads about the fight.
+/// `seat`'s player's own powers, which is what a card of theirs reads
+/// about the fight.
 ///
 /// Inline, because a calculated number asks for this every time it is read,
 /// and a report reads every card in hand.
-pub(super) fn powers<V: Rules>(live: &Live<V>) -> SmallVec<[Stack<V>; 8]> {
-    live.creatures
-        .iter()
-        .find(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER)
-        .map(|creature| live.powers.of(creature.id).map(HeldPower::stack).collect())
-        .unwrap_or_default()
+pub(super) fn powers<V: Rules>(
+    live: &Live<V>,
+    seat: sts2_core::SeatIndex,
+) -> SmallVec<[Stack<V>; 8]> {
+    live.powers
+        .of(seat.creature())
+        .map(HeldPower::stack)
+        .collect()
 }
 
 /// The effect one of a card's variables becomes, for a card played at
@@ -5931,7 +5930,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn card_target_type(&self, card: CardIdent<V>) -> V::TargetType {
-        super::legal::target_type::<V>(card, self.live)
+        super::legal::target_type::<V>(card, self.live, self.seat())
     }
 
     fn auto_play_card(&mut self, card: CardAt<V>) {
@@ -5985,7 +5984,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         {
             unimplemented!("{ident:?} refused an auto-play after it left the fight");
         }
-        let kind = super::legal::target_type::<V>(ident, self.live);
+        let kind = super::legal::target_type::<V>(ident, self.live, self.seat());
         if kind == V::TargetType::ANY_ENEMY || kind == V::TargetType::ANY_ALLY {
             unimplemented!("auto-playing {ident:?}, which takes a target, after it left the fight");
         }
@@ -6553,6 +6552,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .has_keyword(keyword)
     }
 
+    fn scaled_for_players(&self, hp: V::Health) -> V::Health {
+        self.live.scaling.health::<V>(hp)
+    }
+
     fn create_monster(&mut self, monster: V::Monster) -> CombatId {
         let model = sts2_core::MonsterModel::new(monster);
         let (id, hp) = super::monster::create::<V>(self.live, monster, &model, self.rngs.niche);
@@ -6917,11 +6920,12 @@ impl<V: Rules> Board<'_, V> {
         let command = sts2_core::AttackId(self.live.attacks);
         self.live.attacks += 1;
         let source = self.playing.map(|id| {
-            let card = self.live.players[self.seat()]
+            let seat = self.seat();
+            let card = self.live.players[seat]
                 .cards
                 .named(id)
                 .expect("the card making an attack is in the fight");
-            (id, card.face.ident.card)
+            (id, card.face.ident.card, seat.creature())
         });
         if let Some((listener, effect)) = super::listen::first_answer::<V>(
             self.actor_seat(),
@@ -6948,7 +6952,7 @@ impl<V: Rules> Board<'_, V> {
             attacker,
             monster,
             powered: scaling == Scaling::Dynamic,
-            source,
+            source: source.map(|(id, card, _)| (id, card)),
         };
         if !self.held.is_empty() || self.half.is_some() {
             self.live.defer(super::live::Deferred::Hits {

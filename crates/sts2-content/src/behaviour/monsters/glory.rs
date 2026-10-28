@@ -229,9 +229,10 @@ pub(super) fn amalgam_died<V: crate::Build>(
     });
 }
 
-/// `TestSubject.Revive`: `CreatureCmd.SetMaxHp`, then a heal of as much.
-/// A fight here has one player, so the health is not scaled.
+/// `TestSubject.Revive`: `CreatureCmd.SetMaxHp` of the health scaled for
+/// the players, then a heal of as much.
 fn revive_at<V: crate::Build, F: Fight<V>>(fight: &mut F, hp: Number) {
+    let hp = fight.scaled_for_players(hp);
     let actor = fight.actor();
     fight.set_max_hp(actor, hp);
     fight.heal(actor, hp);

@@ -1211,9 +1211,10 @@ macro_rules! rules {
                     ascension: Self::AscensionLevel,
                     rolled: Self::Health,
                     teammates: &[Self::Health],
+                    scaled: impl Fn(Self::Health) -> sts2_core::Decimal,
                 ) -> Option<Self::Health> {
                     crate::behaviour::rules::monster_health_after_added::<Self>(
-                        monster, ascension, rolled, teammates,
+                        monster, ascension, rolled, teammates, scaled,
                     )
                 }
 
