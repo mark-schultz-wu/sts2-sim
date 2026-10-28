@@ -1309,10 +1309,11 @@ macro_rules! rules {
                     )
                 }
 
-                fn monster_starting_aimed_powers(
+                fn monster_starting_power_aim(
                     monster: Self::Monster,
-                ) -> impl Iterator<Item = (Self::Power, PowerAmount<Self::Number>)> {
-                    crate::behaviour::monsters::starting_aimed_powers::<Self>(monster).into_iter()
+                    power: Self::Power,
+                ) -> Option<sts2_core::Aim> {
+                    crate::behaviour::monsters::starting_power_aim::<Self>(monster, power)
                 }
 
                 fn monster_starting_opponent_powers(

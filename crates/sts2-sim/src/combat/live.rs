@@ -2630,6 +2630,8 @@ pub(crate) struct PlayerCombat<V: Rules> {
     pub(super) cards: super::cards::Cards<V>,
     /// Deck cards a combat command removed permanently while this fight ran.
     pub(super) removed_from_deck: Vec<sts2_core::DeckCardId>,
+    /// How many of `removed_from_deck` the run has taken out of the deck.
+    pub(super) lost: usize,
     /// `SetReadyToEndTurn`: the player's turn ends once the play in progress
     /// is over.
     pub(super) ending_turn: bool,
@@ -2678,6 +2680,7 @@ impl<V: Rules> Clone for PlayerCombat<V> {
             potions,
             cards,
             removed_from_deck,
+            lost,
             ending_turn,
             ready,
             deaf,
@@ -2695,6 +2698,7 @@ impl<V: Rules> Clone for PlayerCombat<V> {
         *potions = source.potions;
         cards.clone_from(&source.cards);
         removed_from_deck.clone_from(&source.removed_from_deck);
+        *lost = source.lost;
         *ending_turn = source.ending_turn;
         *ready = source.ready;
         *deaf = source.deaf;
@@ -2739,7 +2743,7 @@ pub(crate) struct Live<V: Rules> {
     /// `CombatRoom.ExtraRewards`, in the order they were added. An event
     /// adds its own as the fight opens. A listener hands a card back as it
     /// dies, and a card's play adds a card reward.
-    pub(super) extra_rewards: Vec<ExtraReward<V>>,
+    pub(super) extra_rewards: Vec<(sts2_core::SeatIndex, ExtraReward<V>)>,
     /// Whether a pushed card selector answers what the fight asks, which
     /// `WhisperingEarring` pushes as its `VakuuCardSelector` while it plays
     /// the hand. A question that comes up meanwhile never reaches the player.
@@ -3313,6 +3317,15 @@ impl<V: Rules> Live<V> {
         &self.players[seat].removed_from_deck
     }
 
+    /// The deck copies the fight took from `seat`'s player that are still in
+    /// the deck, by their place in the fight's list. The run takes them out
+    /// now.
+    pub(crate) fn newly_lost(&mut self, seat: sts2_core::SeatIndex) -> std::ops::Range<usize> {
+        let player = &mut self.players[seat];
+        let from = std::mem::replace(&mut player.lost, player.removed_from_deck.len());
+        from..player.lost
+    }
+
     /// Keep a deck card the run took out for one of this fight's removals.
     pub(crate) fn take_from_deck(
         &mut self,
@@ -3327,16 +3340,21 @@ impl<V: Rules> Live<V> {
         &self.players[seat].taken_from_deck
     }
 
-    /// `CombatRoom.AddExtraReward`, which an event does as it builds its
-    /// fight's room.
-    pub(crate) fn add_extra_reward(&mut self, reward: ExtraReward<V>) {
-        self.extra_rewards.push(reward);
+    /// `CombatRoom.AddExtraReward` for `seat`'s player, which an event does
+    /// as it builds its fight's room.
+    pub(crate) fn add_extra_reward(&mut self, seat: sts2_core::SeatIndex, reward: ExtraReward<V>) {
+        self.extra_rewards.push((seat, reward));
     }
 
-    /// The rewards this fight offers beside the room's own once it is won,
-    /// in the order they were added.
-    pub(crate) fn extra_rewards(&self) -> &[ExtraReward<V>] {
-        &self.extra_rewards
+    /// The rewards this fight offers `seat`'s player beside the room's own
+    /// once it is won, in the order they were added. `AddExtraReward` keeps
+    /// a list for each player.
+    pub(crate) fn extra_rewards(&self, seat: sts2_core::SeatIndex) -> Vec<ExtraReward<V>> {
+        self.extra_rewards
+            .iter()
+            .filter(|(owner, _)| *owner == seat)
+            .map(|&(_, reward)| reward)
+            .collect()
     }
 
     /// Forget the powers taken off during the decision, unless a question
@@ -4337,6 +4355,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             potions: PotionBelt::holding(&[], sts2_core::Overrides::NONE),
             cards: super::cards::Cards::with_cards(0),
             removed_from_deck: Vec::new(),
+            lost: 0,
             ending_turn: false,
             ready: false,
             deaf: false,

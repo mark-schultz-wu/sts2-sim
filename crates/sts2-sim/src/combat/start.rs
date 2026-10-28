@@ -625,6 +625,7 @@ fn player_combat<V: Rules>(
         potions: super::live::PotionBelt::holding(player.potions, modifiers.hooks),
         cards: Cards::with_cards(0),
         removed_from_deck: Vec::new(),
+        lost: 0,
         ending_turn: false,
         ready: false,
         deaf: false,

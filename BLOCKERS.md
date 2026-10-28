@@ -103,8 +103,6 @@ now.
   - Paper Cuts, Sleight of Flesh
   - Possess Strength and Possess Speed, where the game keeps a count
     for each player
-  - Sandpit's removal, where the game kills `base.Target`. A held
-    power keeps its `Target` now, so Sandpit can read it.
 - Run sites: `room_entered` (`run/state.rs:5811`) parks a pickup on
   the host. A run question does not say which player asked it, so the
   pickup cannot name its asker yet.
@@ -119,8 +117,6 @@ block, energy, hand, deck, health, plays and belt. What is left:
 
 #### D. State held once
 
-- `extra_rewards` (`live.rs:2705`) is one list. The game keys it by
-  player. This is known, and it panics.
 - `Live` has single slots: `after_pick`, `drawn_late`, `drew`,
   `hook_draws` and `asking`. Two players can each park one at once.
 - Fight-in-event: `resuming` and `run/fight.rs:313-410` are built for
@@ -247,11 +243,6 @@ run as its own machine sees it. The work goes in this order:
    needs no hunt to show it keeps them. Next, in the order of
    `docs/COOP-FIGHTS.md` and where the hunted runs stop:
    - Where they panic, besides the items below:
-     - Thieving Hopper's theft (`board.rs:241`): seed 12. The game
-       steals a card from each living player, and each stolen card is a
-       Swipe aimed at its owner. The same class: Gremlin Merc's Thievery,
-       one for each player, the Heist it leaves, and the extra rewards
-       each hands back to its own player.
      - Jungle Maze Adventure and Dense Vegetation, which every player
        goes through together: seeds 3 and 4.
    - The rest of the scheduler (steps 3 and 4 of `docs/SCHEDULER.md`). A
@@ -269,8 +260,8 @@ run as its own machine sees it. The work goes in this order:
      where the game names the play.
    - A shared event, which the players vote through, and an event that
      opens on a fight panic in a run of several players.
-   - A fight won inside an event, and the extra rewards a monster gives,
-     which panic in a run of several players.
+   - A fight won inside an event, which panics in a run of several
+     players.
    - Content that reads "the player" where the game reads an owner:
      - `FightView::player`, which about a dozen power rules read, panics
        in a fight of several players.

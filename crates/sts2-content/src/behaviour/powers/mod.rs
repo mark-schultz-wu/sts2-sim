@@ -2432,6 +2432,37 @@ pub(crate) fn decide_hook<V: crate::Build>(
     }
 }
 
+/// `SurprisePower.AfterDeath`'s Heists: for each Thievery `holder` carries,
+/// one on `fat` of the gold it stole, from `holder`, aimed at the
+/// Thievery's target. The gold stolen in all.
+pub(crate) fn heists<V: crate::Build, F: sts2_core::Fight<V>>(
+    fight: &mut F,
+    holder: sts2_core::CombatId,
+    fat: sts2_core::CombatId,
+) -> Number {
+    let mut total = 0;
+    for (nth, (target, _)) in fight
+        .power_instances(holder, V::Power::THIEVERY_POWER)
+        .into_iter()
+        .enumerate()
+    {
+        let mut stolen = 0;
+        fight.write_power_at(holder, V::Power::THIEVERY_POWER, nth, |state| {
+            stolen = *state.stolen_gold();
+        });
+        let target = target.unwrap_or_else(|| unreachable!("a Thievery is aimed at a player"));
+        fight.apply_aimed(
+            fat,
+            V::Power::HEIST_POWER,
+            PowerAmount::Counted(stolen),
+            Some(holder),
+            target,
+        );
+        total += stolen;
+    }
+    total
+}
+
 /// `WitheringPresencePower`'s `CardsLeft` as it is applied.
 const WITHERING_CARDS: u8 = 6;
 
@@ -4306,13 +4337,11 @@ pub(crate) fn event_hook<V: crate::Build>(
         // screen, and nothing else.
         (__c0, _, EventHook::CreatureAdded { .. }) if __c0 == V::Power::SANDPIT_POWER => None,
         // `SandpitPower.AfterRemoved`: while its owner and its target both
-        // live, `CreatureCmd.Kill` on the target, forced. A fight here has one
-        // player, who is the target, and the player's death ends the fight
-        // before any pet's matters.
+        // live, `CreatureCmd.Kill` on the target, forced.
         (__c0, _, EventHook::Removed) if __c0 == V::Power::SANDPIT_POWER => {
-            let player = fight.player();
+            let target = target.unwrap_or_else(|| unreachable!("a Sandpit is aimed at a player"));
             let alive = |creature| fight.current_hp(creature).is_some_and(|hp| hp > 0);
-            (alive(holder) && alive(player)).then_some(HookEffect::KillCreature(player))
+            (alive(holder) && alive(target)).then_some(HookEffect::KillCreature(target))
         }
         // Its other overrides move the player's figure and the music.
         (
@@ -6694,25 +6723,14 @@ pub(crate) fn perform_death<V: crate::Build, F: sts2_core::Fight<V>>(
     }
     match power {
         // `SurprisePower.AfterDeath`: a Sneaky Gremlin, then a Fat Gremlin,
-        // which takes a Heist of the gold each Thievery stole. Any gold at all
-        // marks the encounter's gold stolen.
+        // which takes a Heist of the gold each Thievery stole, aimed at the
+        // Thievery's target. Any gold at all marks the encounter's gold
+        // stolen.
         __c0 if __c0 == V::Power::SURPRISE_POWER => {
             fight.summon(V::Monster::SNEAKY_GREMLIN, usize::MAX);
             let fat = fight.summon(V::Monster::FAT_GREMLIN, usize::MAX);
-            let mut stolen = None;
-            fight.write_power(holder, V::Power::THIEVERY_POWER, |state| {
-                stolen = Some(*state.stolen_gold());
-            });
-            if let Some(stolen) = stolen {
-                fight.apply_power_from(
-                    fat,
-                    V::Power::HEIST_POWER,
-                    PowerAmount::Counted(stolen),
-                    Some(holder),
-                );
-                if stolen > 0 {
-                    fight.write_encounter(crate::behaviour::encounters::State::mark_gold_stolen);
-                }
+            if heists::<V, _>(fight, holder, fat) > 0 {
+                fight.write_encounter(crate::behaviour::encounters::State::mark_gold_stolen);
             }
         }
         power => unimplemented!("what {power:?} does as its owner dies"),

@@ -64,10 +64,11 @@ pub(super) fn starting_powers<V: crate::Build>(
         __c0 if __c0 == V::Monster::PUNCH_CONSTRUCT => {
             vec![(V::Power::ARTIFACT_POWER, PowerAmount::Counted(1))]
         }
-        // Artifact, after the Withering Presence it aims at each opponent.
-        __c0 if __c0 == V::Monster::AEONGLASS => {
-            vec![(V::Power::ARTIFACT_POWER, PowerAmount::Counted(3))]
-        }
+        // A `WitheringPresencePower` aimed at each opponent, then Artifact.
+        __c0 if __c0 == V::Monster::AEONGLASS => vec![
+            (V::Power::WITHERING_PRESENCE_POWER, PowerAmount::Counted(6)),
+            (V::Power::ARTIFACT_POWER, PowerAmount::Counted(3)),
+        ],
         __c0 if __c0 == V::Monster::TORCH_HEAD_AMALGAM => {
             vec![(V::Power::MINION_POWER, PowerAmount::Counted(1))]
         }

@@ -2275,27 +2275,28 @@ impl<V: Rules> State<V> {
         }
     }
 
-    /// Remove from the deck the copies the fight took for good, from `since`
-    /// on in the fight's own list of them.
+    /// Remove from each player's deck the copies the fight took from them
+    /// for good, which the run has not taken out yet.
     ///
     /// The fight keeps every copy it took, because a won fight offers each one
-    /// back. So a decision passes the length the list had before it began, and
-    /// only what it added leaves the deck.
-    pub(super) fn lose_cards(&mut self, seat: sts2_core::SeatIndex, since: usize) {
+    /// back. One player's decision can take another's card.
+    pub(super) fn lose_cards(&mut self) {
         let Phase::Combat(live) = &mut self.phase else {
             return;
         };
-        for next in since..live.removed_from_deck(seat).len() {
-            let id = live.removed_from_deck(seat)[next];
-            let Some(at) = self.players[seat]
-                .deck
-                .iter()
-                .position(|held| held.id == id)
-            else {
-                continue;
-            };
-            let card = self.players[seat].deck_mut().remove(at);
-            live.take_from_deck(seat, card);
+        for seat in self.players.seats() {
+            for next in live.newly_lost(seat) {
+                let id = live.removed_from_deck(seat)[next];
+                let Some(at) = self.players[seat]
+                    .deck
+                    .iter()
+                    .position(|held| held.id == id)
+                else {
+                    continue;
+                };
+                let card = self.players[seat].deck_mut().remove(at);
+                live.take_from_deck(seat, card);
+            }
         }
     }
 
@@ -6594,7 +6595,7 @@ impl<V: Rules> State<V> {
         };
         // A fight its opening ended goes straight on, the way one a decision
         // ended does.
-        Ok(self.settle(seat, ended, 0))
+        Ok(self.settle(seat, ended))
     }
 
     /// `UnknownMapPointOdds.Roll`: a room other than an event, or nothing for
@@ -6868,17 +6869,20 @@ impl<V: Rules> State<V> {
         let mut live = live;
         // `AddExtraReward`, as the room is built and before the fight opens.
         for &reward in rewards.iter().chain(&own) {
-            live.add_extra_reward(match reward {
-                sts2_core::CustomReward::SpecialCard(card) => {
-                    crate::combat::ExtraReward::SpecialCard(CardIdent::new(card))
-                }
-                sts2_core::CustomReward::RolledRelic => crate::combat::ExtraReward::Relic,
-                sts2_core::CustomReward::SpecificRelic(relic) => {
-                    crate::combat::ExtraReward::SpecificRelic(relic)
-                }
-                sts2_core::CustomReward::Potion => crate::combat::ExtraReward::Potion,
-                reward => unimplemented!("{reward:?} among a fight's extra rewards"),
-            });
+            live.add_extra_reward(
+                seat,
+                match reward {
+                    sts2_core::CustomReward::SpecialCard(card) => {
+                        crate::combat::ExtraReward::SpecialCard(CardIdent::new(card))
+                    }
+                    sts2_core::CustomReward::RolledRelic => crate::combat::ExtraReward::Relic,
+                    sts2_core::CustomReward::SpecificRelic(relic) => {
+                        crate::combat::ExtraReward::SpecificRelic(relic)
+                    }
+                    sts2_core::CustomReward::Potion => crate::combat::ExtraReward::Potion,
+                    reward => unimplemented!("{reward:?} among a fight's extra rewards"),
+                },
+            );
         }
         self.drew(streams);
         let event = std::mem::replace(&mut self.phase, Phase::Combat(live));
@@ -6894,7 +6898,7 @@ impl<V: Rules> State<V> {
             None => self.turn_ended_by_play(seat)?,
             ended => ended,
         };
-        Ok(self.settle(seat, ended, 0))
+        Ok(self.settle(seat, ended))
     }
 
     /// Carry out what a fight's opening asked of the run, which asks nothing

@@ -16,7 +16,7 @@ type Number = i32;
 ///
 /// `SurprisePower.AfterDeath` makes the Fat Gremlin first, which takes the
 /// next id and rolls its health. It takes a Heist of the gold each Thievery
-/// stole while it stands off the board. The Sneaky Gremlin joins, then the
+/// stole, aimed at the Thievery's target, while it stands off the board. The Sneaky Gremlin joins, then the
 /// Fat Gremlin. Any gold at all marks the encounter's gold stolen.
 pub(crate) fn own_power_death<F: sts2_core::Fight<V>>(
     power: Power,
@@ -29,21 +29,10 @@ pub(crate) fn own_power_death<F: sts2_core::Fight<V>>(
         return None;
     }
     let fat = fight.create_monster(Monster::FatGremlin);
-    let mut stolen = None;
-    fight.write_power(holder, Power::ThieveryPower, |state| {
-        stolen = Some(*state.stolen_gold());
-    });
-    if let Some(stolen) = stolen {
-        fight.apply_power_from(
-            fat,
-            Power::HeistPower,
-            PowerAmount::Counted(stolen),
-            Some(holder),
-        );
-    }
+    let stolen = crate::behaviour::powers::heists::<V, _>(fight, holder, fat);
     fight.summon(Monster::SneakyGremlin, usize::MAX);
     fight.add_created(fat, usize::MAX);
-    if stolen.is_some_and(|stolen| stolen > 0) {
+    if stolen > 0 {
         fight.write_encounter(crate::behaviour::encounters::State::mark_gold_stolen);
     }
     Some(())

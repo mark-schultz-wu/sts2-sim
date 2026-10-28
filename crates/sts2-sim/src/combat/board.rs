@@ -871,15 +871,23 @@ impl<'a, V: Rules> Board<'a, V> {
             .filter(|creature| creature.side != <V::CombatSide as SideKinds>::ENEMY)
             .map(|creature| creature.id)
             .collect();
-        for (power, amount) in V::monster_starting_aimed_powers(monster) {
-            for &opponent in &opponents {
-                self.land_aimed(id, power, amount, Some(id), opponent);
-            }
-        }
+        // `CombatState.Players`.
+        let players: SmallVec<[CombatId; 4]> = sts2_core::Fight::players(self);
         let entering: SmallVec<[_; 2]> =
             V::monster_starting_powers(monster, self.live.ascension, side, &model).collect();
         for (power, amount) in entering {
-            self.land(id, power, amount, Some(id));
+            match V::monster_starting_power_aim(monster, power) {
+                None => self.land(id, power, amount, Some(id)),
+                Some(aim) => {
+                    let aimed = match aim {
+                        sts2_core::Aim::EachOpponent => &opponents,
+                        sts2_core::Aim::EachPlayer => &players,
+                    };
+                    for &target in aimed {
+                        self.land_aimed(id, power, amount, Some(id), target);
+                    }
+                }
+            }
         }
         let given: SmallVec<[_; 2]> =
             V::monster_starting_opponent_powers(monster, self.live.ascension).collect();
@@ -2152,16 +2160,31 @@ impl<'a, V: Rules> Board<'a, V> {
         while let Some((listener, effect)) =
             walking.as_mut().and_then(|walking| self.next_of(walking))
         {
+            // `AddExtraReward(Target.Player, ..)`: a power hands back to the
+            // player it is aimed at.
+            let to = match listener {
+                Listener::Power {
+                    owner, instance, ..
+                } => self
+                    .live
+                    .powers
+                    .of(owner)
+                    .find(|held| held.instance == instance)
+                    .and_then(|held| held.target)
+                    .and_then(|target| self.live.seat_of(target))
+                    .unwrap_or(seat),
+                _ => seat,
+            };
             match effect {
                 HookEffect::ReturnCard(card) => self
                     .live
                     .extra_rewards
-                    .push(super::live::ExtraReward::Returned(card)),
+                    .push((to, super::live::ExtraReward::Returned(card))),
                 // `CombatRoom.AddExtraReward` of a `GoldReward`.
                 HookEffect::AddGoldReward(amount) => self
                     .live
                     .extra_rewards
-                    .push(super::live::ExtraReward::Gold(amount)),
+                    .push((to, super::live::ExtraReward::Gold(amount))),
                 effect => unimplemented!("{listener:?} asking for {effect:?} before a death"),
             }
         }
@@ -4983,7 +5006,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn add_card_reward(&mut self) {
-        self.live.extra_rewards.push(super::live::ExtraReward::Card);
+        let seat = self.seat();
+        self.live
+            .extra_rewards
+            .push((seat, super::live::ExtraReward::Card));
     }
 
     fn death_triggers_fatal(&self, creature: CombatId) -> bool {
@@ -6213,6 +6239,59 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         if let Some(held) = held {
             write(&mut held.state);
         }
+    }
+
+    fn write_power_at(
+        &mut self,
+        at: CombatId,
+        power: V::Power,
+        nth: usize,
+        write: impl FnOnce(&mut V::PowerState),
+    ) {
+        let held = self
+            .live
+            .powers
+            .of_mut(at)
+            .filter(|held| held.power() == power)
+            .nth(nth);
+        if let Some(held) = held {
+            write(&mut held.state);
+        }
+    }
+
+    fn power_instances(&self, at: CombatId, power: V::Power) -> sts2_core::PowerInstances<V> {
+        self.live
+            .powers
+            .of(at)
+            .filter(|held| held.power() == power)
+            .map(|held| (held.target, held.amount.amount()))
+            .collect()
+    }
+
+    fn apply_aimed(
+        &mut self,
+        at: CombatId,
+        power: V::Power,
+        amount: PowerAmount<V::Number>,
+        applier: Option<CombatId>,
+        target: CombatId,
+    ) {
+        self.land_aimed(at, power, amount, applier, target);
+    }
+
+    fn players(&self) -> SmallVec<[CombatId; 4]> {
+        self.live
+            .players
+            .seats()
+            .map(sts2_core::SeatIndex::creature)
+            .collect()
+    }
+
+    fn for_player(&mut self, player: CombatId, act: impl FnOnce(&mut Self)) {
+        let seat = self.live.seat_of(player);
+        let was = std::mem::replace(&mut self.reaching, seat);
+        act(self);
+        self.reaching = was;
     }
 
     fn give_cards(&mut self, card: V::Card, count: usize) {

@@ -97,8 +97,7 @@ pub(super) fn starting_powers<V: crate::Build>(
         {
             Vec::new()
         }
-        // `SurprisePower`, then a Thievery aimed at each player, of which a
-        // fight here has one.
+        // `SurprisePower`, then a Thievery aimed at each player.
         __c0 if __c0 == V::Monster::GREMLIN_MERC => vec![
             (V::Power::SURPRISE_POWER, PowerAmount::Counted(1)),
             (V::Power::THIEVERY_POWER, PowerAmount::Counted(THIEVERY)),
@@ -582,34 +581,44 @@ crate::behaviour::paused::paused_play!(
     crate::behaviour::monsters::Resume::Underdocks
 );
 
-/// `TurnsUntilSummonable--`.
-/// `ThieveryPower.Steal` for the Gremlin Merc's one instance: the lesser of
-/// its stack and the player's gold, where the player stands and holds any.
+/// `ThieveryPower.Steal` for each of the Gremlin Merc's instances: the
+/// lesser of its stack and its target's gold, where the target stands and
+/// holds any.
 fn steal<V: crate::Build, F: Fight<V>>(fight: &mut F) {
     use sts2_core::CreatureView as _;
 
-    if fight.opponents().is_empty() {
-        return;
-    }
     let merc = fight.actor();
-    let Some(PowerAmount::Counted(amount)) = fight
-        .creatures()
-        .find(|creature| creature.id() == merc)
-        .and_then(|creature| creature.power(V::Power::THIEVERY_POWER))
-    else {
-        return;
-    };
-    let gold = fight.gold();
-    if gold <= 0 {
-        return;
+    for (nth, (target, amount)) in fight
+        .power_instances(merc, V::Power::THIEVERY_POWER)
+        .into_iter()
+        .enumerate()
+    {
+        let (Some(target), PowerAmount::Counted(amount)) = (target, amount) else {
+            continue;
+        };
+        let standing = fight
+            .creatures()
+            .any(|creature| creature.id() == target && creature.alive());
+        if !standing {
+            continue;
+        }
+        let mut taken = 0;
+        fight.for_player(target, |fight| {
+            let gold = fight.gold();
+            if gold > 0 {
+                taken = amount.min(gold);
+                fight.lose_gold(taken);
+            }
+        });
+        if taken > 0 {
+            fight.write_power_at(merc, V::Power::THIEVERY_POWER, nth, |state| {
+                *state.stolen_gold() += taken
+            });
+        }
     }
-    let taken = amount.min(gold);
-    fight.lose_gold(taken);
-    fight.write_power(merc, V::Power::THIEVERY_POWER, |state| {
-        *state.stolen_gold() += taken
-    });
 }
 
+/// `TurnsUntilSummonable--`.
 fn rat_waits<V: crate::Build, F: Fight<V>>(fight: &mut F) {
     fight.model(|model| {
         let crate::behaviour::monsters::Model::TwoTailedRat { summonable_in, .. } = model else {

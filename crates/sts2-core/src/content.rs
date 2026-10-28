@@ -3092,6 +3092,54 @@ pub trait Fight<V: ContentVersion> {
     ) where
         V: Hooks;
 
+    /// [`Fight::write_power`] of the `nth` instance of `power` the creature
+    /// `at` carries, in the order they were applied.
+    fn write_power_at(
+        &mut self,
+        _at: crate::CombatId,
+        _power: V::Power,
+        _nth: usize,
+        _write: impl FnOnce(&mut V::PowerState),
+    ) where
+        V: Hooks,
+    {
+        unimplemented!("a power instance's model written in a fight")
+    }
+
+    /// `GetPowerInstances`: the `Target` and the stack of each instance of
+    /// `power` the creature `at` carries, in the order they were applied.
+    fn power_instances(&self, _at: crate::CombatId, _power: V::Power) -> PowerInstances<V> {
+        unimplemented!("a power's instances read in a fight")
+    }
+
+    /// `PowerCmd.Apply` of a new instance of `power` on `at`, from
+    /// `applier`, whose `Target` its applier set to `target` first.
+    fn apply_aimed(
+        &mut self,
+        _at: crate::CombatId,
+        _power: V::Power,
+        _amount: PowerAmount<V::Number>,
+        _applier: Option<crate::CombatId>,
+        _target: crate::CombatId,
+    ) {
+        unimplemented!("an aimed power applied in a fight")
+    }
+
+    /// `CombatState.PlayerCreatures`: each player's creature, in seat order,
+    /// living or not.
+    fn players(&self) -> smallvec::SmallVec<[crate::CombatId; 4]> {
+        unimplemented!("the fight's players")
+    }
+
+    /// `act`, with the actor's command reaching `player`: their piles and
+    /// gold are what it reads and writes. The actor stays the actor.
+    fn for_player(&mut self, _player: crate::CombatId, _act: impl FnOnce(&mut Self))
+    where
+        Self: Sized,
+    {
+        unimplemented!("acting for one of several players")
+    }
+
     /// The character whose pool combat generation reads.
     fn character(&self) -> V::Character {
         unimplemented!("the character in this fight")
@@ -4876,6 +4924,23 @@ pub enum PowerVirtual {
     BeforeApplied,
     AfterApplied,
     AfterRemoved,
+}
+
+/// [`Fight::power_instances`]: each instance's `Target` and stack.
+pub type PowerInstances<V> = smallvec::SmallVec<
+    [(
+        Option<crate::CombatId>,
+        PowerAmount<<V as ContentVersion>::Number>,
+    ); 4],
+>;
+
+/// Whom a monster aims a starting power at, one instance for each.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Aim {
+    /// `CombatState.GetOpponentsOf`, pets included.
+    EachOpponent,
+    /// `CombatState.Players`.
+    EachPlayer,
 }
 
 /// One power instance a creature holds, as a card that copies it reads it.
@@ -8326,12 +8391,10 @@ pub trait Rules: Hooks + Engine {
         model: &Self::MonsterState,
     ) -> impl Iterator<Item = (Self::Power, PowerAmount<Self::Number>)>;
 
-    /// Powers a monster's `AfterAddedToRoom` applies to itself once for each
-    /// of its opponents, each aimed at that opponent as its `Target`. They
-    /// land before the ones `monster_starting_powers` lists.
-    fn monster_starting_aimed_powers(
-        monster: Self::Monster,
-    ) -> impl Iterator<Item = (Self::Power, PowerAmount<Self::Number>)>;
+    /// Whom a monster's `AfterAddedToRoom` aims a starting power at, which
+    /// lands on the monster once for each, with its `Target` set. `None` is
+    /// a power it applies once, aimed at nobody.
+    fn monster_starting_power_aim(monster: Self::Monster, power: Self::Power) -> Option<Aim>;
 
     /// Powers a monster's `AfterAddedToRoom` applies to each of its
     /// opponents, from itself.

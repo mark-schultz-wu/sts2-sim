@@ -36,7 +36,7 @@ mod step;
 pub use play::recording;
 
 pub use content::{
-    ActTable, AfflictionTable, Amount, AscensionKinds, AttackId, AttackResults, BlockGained,
+    ActTable, AfflictionTable, Aim, Amount, AscensionKinds, AttackId, AttackResults, BlockGained,
     CHOICES, CardDraw, CardFields, CardKind, CardLogic, CardModel, CardNumber, CardNumberModifier,
     CardOwner, CardRarityKinds, CardSource, CardTable, CardTagKinds, CardVars, Change,
     CharacterTable, ContentError, ContentVersion, Cost, CostPool, CreatureView, CustomReward,
@@ -49,11 +49,11 @@ pub use content::{
     MonsterKinds, MonsterModel, MonsterSpawn, MonsterTable, MonsterVirtual, MoveKinds, MoveLog,
     MoveMachine, MovePinned, MultiplayerConstraint, Offered, Opponents, Overrides, PastTurns,
     Picked, PileAct, PilePosition, PlayAt, PlayFinished, PlayStarted, Played, PlayerHealth,
-    PlayerStreamKinds, PoolFilter, PotionTable, PotionUsage, PowerAmount, PowerKinds, PowerModel,
-    PowerTable, PowerVirtual, Printed, RarityKinds, RelicModel, RelicOwner, RelicPoolKinds,
-    RelicPull, RelicTable, RestKinds, Rests, ResultPile, RewardRarity, RoomKinds, RosterEntry,
-    Rules, RunStreamKinds, Scaling, SelectedCards, Selection, SideKinds, SideTurnEnd, Spawned,
-    Stream, StreamKinds, StunResume, Table, Taken, TargetKinds, Temporary, TurnHistory,
+    PlayerStreamKinds, PoolFilter, PotionTable, PotionUsage, PowerAmount, PowerInstances,
+    PowerKinds, PowerModel, PowerTable, PowerVirtual, Printed, RarityKinds, RelicModel, RelicOwner,
+    RelicPoolKinds, RelicPull, RelicTable, RestKinds, Rests, ResultPile, RewardRarity, RoomKinds,
+    RosterEntry, Rules, RunStreamKinds, Scaling, SelectedCards, Selection, SideKinds, SideTurnEnd,
+    Spawned, Stream, StreamKinds, StunResume, Table, Taken, TargetKinds, Temporary, TurnHistory,
     TurnPhaseKinds, UnplayableReasonKinds, Version, Writing,
 };
 pub use event::{CarriedRelic, EventBehavior, EventView};

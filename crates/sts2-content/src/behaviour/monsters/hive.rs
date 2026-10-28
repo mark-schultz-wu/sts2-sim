@@ -313,20 +313,34 @@ pub(super) fn perform<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
             fight.apply_to_actor(V::Power::STRENGTH_POWER, PowerAmount::Counted(strength));
         }
         (__c0, __c1) if (__c0 == V::Monster::ROCKET && __c1 == V::MoveId::RECHARGE_MOVE) => {}
-        // `LiquifyMove`: Sandpit at four on itself, aimed at the player, then
-        // six Frantic Escapes at random places: three into the draw pile and
-        // three into the discard pile. `HasLiquified` picks its animations
-        // alone. A fight here has one player.
+        // `LiquifyMove`: Sandpit at four on itself, aimed at each player,
+        // then six Frantic Escapes for each player at random places: three
+        // into their draw pile and three into their discard pile.
+        // `HasLiquified` picks its animations alone.
         (__c0, __c1)
             if (__c0 == V::Monster::THE_INSATIABLE && __c1 == V::MoveId::LIQUIFY_GROUND_MOVE) =>
         {
-            fight.apply_to_actor(V::Power::SANDPIT_POWER, PowerAmount::Counted(SANDPIT));
-            for escape in 0..ESCAPES {
-                let pile = match escape < ESCAPES / 2 {
-                    true => Pile::Draw,
-                    false => Pile::Discard,
-                };
-                fight.add_at_random(V::Card::FRANTIC_ESCAPE, pile);
+            let insatiable = fight.actor();
+            let players = fight.players();
+            for &player in &players {
+                fight.apply_aimed(
+                    insatiable,
+                    V::Power::SANDPIT_POWER,
+                    PowerAmount::Counted(SANDPIT),
+                    Some(insatiable),
+                    player,
+                );
+            }
+            for &player in &players {
+                fight.for_player(player, |fight| {
+                    for escape in 0..ESCAPES {
+                        let pile = match escape < ESCAPES / 2 {
+                            true => Pile::Draw,
+                            false => Pile::Discard,
+                        };
+                        fight.add_at_random(V::Card::FRANTIC_ESCAPE, pile);
+                    }
+                });
             }
         }
         (__c0, __c1) if (__c0 == V::Monster::MYTE && __c1 == V::MoveId::TOXIC_MOVE) => {
@@ -659,8 +673,46 @@ fn curl_block(ascension: crate::generated::ascension::AscensionLevel) -> Number 
     }
 }
 
-/// Take the highest-priority deck card still in combat, then attack.
+/// `ThievingHopper.ThieveryMove`: from each living player, the
+/// highest-priority deck card in their draw and discard piles, at random.
+/// Then a Swipe on the Hopper for each card, aimed at its owner, and the
+/// attack.
 fn thievery<V: crate::Build, F: Fight<V>>(fight: &mut F) {
+    use sts2_core::CreatureView as _;
+
+    let hopper = fight.actor();
+    let mut stolen: Vec<(sts2_core::CombatId, sts2_core::DeckCardId)> = Vec::new();
+    for player in fight.players() {
+        let standing = fight
+            .creatures()
+            .any(|creature| creature.id() == player && creature.alive());
+        if !standing {
+            continue;
+        }
+        fight.for_player(player, |fight| {
+            if let Some(card) = steal_one::<V, F>(fight) {
+                stolen.push((player, card));
+            }
+        });
+    }
+    // `SwipePower.Steal`, then `PowerCmd.Apply`. A Swipe the fight refuses
+    // takes the card with nobody to give it back.
+    for (owner, card) in stolen {
+        fight.apply_aimed(
+            hopper,
+            V::Power::SWIPE_POWER,
+            PowerAmount::Counted(1),
+            Some(hopper),
+            owner,
+        );
+        fight.write_power(hopper, V::Power::SWIPE_POWER, |state| state.steal(card));
+    }
+    fight.attack_opponents();
+}
+
+/// One player's theft: the highest-priority deck card in their draw and
+/// discard piles, at random, out of the fight. The deck card it was.
+fn steal_one<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Option<sts2_core::DeckCardId> {
     let cards: Vec<CardAt<V>> = [Pile::Draw, Pile::Discard]
         .into_iter()
         .flat_map(|pile| fight.cards_in(pile))
@@ -690,21 +742,15 @@ fn thievery<V: crate::Build, F: Fight<V>>(fight: &mut F) {
             (!matching.is_empty()).then_some(matching)
         })
         .unwrap_or(cards);
-    if let Some(card) = fight.random_card(
+    let card = fight.random_card(
         &candidates,
         <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_GENERATION,
-    ) {
-        // `SwipePower.Steal`, then `PowerCmd.Apply`. A Swipe the fight refuses
-        // takes the card with nobody to give it back.
-        let stolen = fight
-            .deck_version(card.id())
-            .unwrap_or_else(|| unreachable!("the candidates are deck copies"));
-        fight.remove_card(card);
-        fight.apply_to_actor(V::Power::SWIPE_POWER, PowerAmount::Counted(1));
-        let actor = fight.actor();
-        fight.write_power(actor, V::Power::SWIPE_POWER, |state| state.steal(stolen));
-    }
-    fight.attack_opponents();
+    )?;
+    let stolen = fight
+        .deck_version(card.id())
+        .unwrap_or_else(|| unreachable!("the candidates are deck copies"));
+    fight.remove_card(card);
+    Some(stolen)
 }
 
 /// `CurseOfKnowledgeBranch`: a curse while any set is left, a slap once the

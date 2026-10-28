@@ -55,12 +55,11 @@ impl<V: Rules> State<V> {
         };
         // A potion aimed at `seat` asks them, and its drinker's action goes on.
         let seat = fighting.live.answering(seat);
-        let since = fighting.live.removed_from_deck(seat).len();
         let ended = match combat::answer(seat, fighting, chosen)? {
             None => self.turn_ended_by_play(seat)?,
             ended => ended,
         };
-        Ok(self.settle(seat, ended, since))
+        Ok(self.settle(seat, ended))
     }
 
     /// Play one card from the hand.
@@ -88,12 +87,11 @@ impl<V: Rules> State<V> {
             Err(reason) => return refused(reason),
         };
 
-        let since = fighting.live.removed_from_deck(seat).len();
         let ended = match combat::play(seat, fighting, play)? {
             None => self.turn_ended_by_play(seat)?,
             ended => ended,
         };
-        Ok(Ok(self.settle(seat, ended, since)))
+        Ok(Ok(self.settle(seat, ended)))
     }
 
     /// Drink one potion from the belt.
@@ -200,7 +198,6 @@ impl<V: Rules> State<V> {
                 *own_rewards,
             )?));
         };
-        let since = fighting.live.removed_from_deck(seat).len();
         let ended = combat::drink(seat, fighting, potion, target)?;
         // What the potion asks of the run beside the fight, which is its belt.
         let effects = V::on_use_on_run(potion, &self.seen_by(seat), true);
@@ -214,7 +211,7 @@ impl<V: Rules> State<V> {
             None => self.turn_ended_by_play(seat)?,
             ended => ended,
         };
-        Ok(Ok(self.settle(seat, ended, since)))
+        Ok(Ok(self.settle(seat, ended)))
     }
 
     /// `SetReadyToEndTurn`: a play that asked for the turn to end has it end
@@ -251,18 +248,16 @@ impl<V: Rules> State<V> {
             }));
         };
 
-        let since = fighting.live.removed_from_deck(seat).len();
         let ended = match combat::end_turn(seat, fighting, ascension)? {
             None => self.turn_ended_by_play(seat)?,
             ended => ended,
         };
-        Ok(Ok(self.settle(seat, ended, since)))
+        Ok(Ok(self.settle(seat, ended)))
     }
 
     /// Carry what a decision did to the fight over to the rest of the run.
     ///
-    /// `since` is how many deck copies the fight had taken before the
-    /// decision began. A decision that won the fight goes on to the rewards,
+    /// A decision that won the fight goes on to the rewards,
     /// which is `CombatManager.EndCombat` calling `RewardsCmd.Offer`. That
     /// includes a fight the decision left with no primary enemy, whatever it
     /// handed back.
@@ -271,7 +266,6 @@ impl<V: Rules> State<V> {
         &mut self,
         seat: sts2_core::SeatIndex,
         ended: Option<combat::Ended>,
-        since: usize,
     ) -> Decided {
         let ended = self
             .selector_answered(seat, ended)
@@ -282,7 +276,7 @@ impl<V: Rules> State<V> {
         });
         self.asked_by_fight();
         self.forget_detached();
-        self.lose_cards(seat, since);
+        self.lose_cards();
         // `EndCombatInternal` raises the fight's last hooks before
         // `RewardsCmd.Offer` builds the rewards.
         if ended == Some(combat::Ended::Won) {
@@ -317,10 +311,11 @@ impl<V: Rules> State<V> {
                 // not running, a play paused on another player's choice among
                 // them. They go with the fight.
                 let (mut live, belts) = self.left_fight();
-                let extra_rewards = live.extra_rewards().to_vec();
-                if seats.len() > 1 && (!extra_rewards.is_empty() || in_event) {
-                    unimplemented!("a fight of several players won inside an event or with extras");
+                if seats.len() > 1 && in_event {
+                    unimplemented!("a fight of several players won inside an event");
                 }
+                let extra_rewards: smallvec::SmallVec<[Vec<combat::ExtraReward<V>>; 2]> =
+                    seats.iter().map(|&seat| live.extra_rewards(seat)).collect();
                 let taken: smallvec::SmallVec<[Vec<sts2_core::DeckCard<V>>; 1]> = seats
                     .iter()
                     .map(|&seat| live.taken_from_deck(seat).to_vec())
@@ -346,12 +341,12 @@ impl<V: Rules> State<V> {
                 let encounter = combats[0].encounter;
                 if let Some(resuming) = self.resuming.as_mut() {
                     resuming.escaped = escaped;
-                    if !extra_rewards.is_empty() || !extra.is_empty() {
+                    if !extra_rewards[0].is_empty() || !extra.is_empty() {
                         let encounter = encounter.unwrap_or_else(|| {
                             unimplemented!("a fight with no encounter behind it")
                         });
                         resuming.extras = Some(Box::new(Extras {
-                            rewards: extra_rewards.clone(),
+                            rewards: extra_rewards[0].clone(),
                             ending: extra_of(host),
                             taken: taken[0].clone(),
                             room: reward_room::<V>(encounter),
@@ -405,15 +400,11 @@ impl<V: Rules> State<V> {
                 // order, then `BeforeCombatRewardOffered` on each set.
                 let mut screens = Vec::with_capacity(seats.len());
                 for (at, (&each, combat)) in seats.iter().zip(combats).enumerate() {
-                    let extras = match each == host {
-                        true => &extra_rewards[..],
-                        false => &[],
-                    };
                     let offered = self.combat_rewards(
                         each,
                         &combat,
                         proportion,
-                        extras,
+                        &extra_rewards[at],
                         &extra_of(each),
                         &taken[at],
                     );
