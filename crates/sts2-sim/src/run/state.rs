@@ -83,14 +83,15 @@ pub(crate) struct State<V: Rules> {
     /// four acts, and no decision inside a fight touches the list.
     visited_events: Arc<Vec<V::Event>>,
     unknown_odds: [f32; 4],
-    /// The relics dealt out of the shared bag alone, which a treasure chest
-    /// pulls from. The player's own bag still holds them, until one is
-    /// obtained.
+    /// Every relic that has left the shared bag, which a treasure chest pulls
+    /// from, in the order it left. A chest deals out of it alone. A pull from
+    /// any player's bag, a merchant's stock, an obtain and a modifier's
+    /// removal take the relic out of both.
     shared_dealt: Arc<Vec<V::Relic>>,
     /// Each time the shared bag refilled a spent rarity, which only it does:
-    /// the rarity, and how far `dealt_relics` and `shared_dealt` stood then.
-    /// What left after that left the refilled deque.
-    shared_refills: Arc<Vec<(Rarity<V>, usize, usize)>>,
+    /// the rarity, and how far `shared_dealt` stood then. What left after
+    /// that left the refilled deque.
+    shared_refills: Arc<Vec<(Rarity<V>, usize)>>,
     phase: Phase<V>,
     /// The event a fight was entered from, which the rewards' proceed goes
     /// back to: the room under the fight in `RunState`'s room stack. Only a
@@ -1635,7 +1636,7 @@ impl<V: Rules> State<V> {
             events_used: 1,
             visited_events: Arc::new(Vec::new()),
             unknown_odds,
-            shared_dealt: Arc::new(Vec::new()),
+            shared_dealt: Arc::new(out_of_bags),
             shared_refills: Arc::new(Vec::new()),
             streams,
             resuming: None,
@@ -2435,7 +2436,7 @@ impl<V: Rules> State<V> {
                     V::Relic::allowed_in_shops,
                 ),
         };
-        Arc::make_mut(&mut self.players[seat].dealt_relics).push(relic);
+        self.out_of_both_bags(seat, relic);
         relic
     }
 
@@ -2455,7 +2456,7 @@ impl<V: Rules> State<V> {
             num_traits::cast(self.floor).expect("a floor fits a usize"),
             self.players.len(),
         );
-        Arc::make_mut(&mut self.players[seat].dealt_relics).push(relic);
+        self.out_of_both_bags(seat, relic);
         relic
     }
 
@@ -2470,26 +2471,18 @@ impl<V: Rules> State<V> {
     ///
     /// A bag with nothing left at the rarity or above, where the game falls
     /// back to a relic of its own.
-    pub(super) fn deal_shared_relic(
-        &mut self,
-        seat: sts2_core::SeatIndex,
-        rarity: Rarity<V>,
-    ) -> V::Relic {
-        let mut relic = self.shared_front_at(seat, rarity);
+    pub(super) fn deal_shared_relic(&mut self, rarity: Rarity<V>) -> V::Relic {
+        let mut relic = self.shared_front_at(rarity);
         if relic.is_none() {
-            let mark = (
-                rarity,
-                self.players[seat].dealt_relics.len(),
-                self.shared_dealt.len(),
-            );
+            let mark = (rarity, self.shared_dealt.len());
             Arc::make_mut(&mut self.shared_refills).push(mark);
-            relic = self.shared_front_at(seat, rarity);
+            relic = self.shared_front_at(rarity);
         }
         let mut at = rarity;
         while relic.is_none() {
             at = super::setup::rarity_above::<V>(at)
                 .unwrap_or_else(|| unimplemented!("a shared relic bag with nothing left"));
-            relic = self.shared_front_at(seat, at);
+            relic = self.shared_front_at(at);
         }
         let relic = relic.expect("the walk stops on a relic");
         Arc::make_mut(&mut self.shared_dealt).push(relic);
@@ -2498,25 +2491,28 @@ impl<V: Rules> State<V> {
 
     /// The first relic the shared bag holds at `rarity` alone, as its deque
     /// stands since its last refill, if it had one.
-    fn shared_front_at(&self, seat: sts2_core::SeatIndex, rarity: Rarity<V>) -> Option<V::Relic> {
+    fn shared_front_at(&self, rarity: Rarity<V>) -> Option<V::Relic> {
         let floor = num_traits::cast(self.floor).expect("a floor fits a usize");
         let refill = self
             .shared_refills
             .iter()
             .rev()
             .find(|mark| mark.0 == rarity);
-        let (dealt, shared) = refill.map_or((0, 0), |&(_, dealt, shared)| (dealt, shared));
-        let (dealt, shared) = (
-            &self.players[seat].dealt_relics[dealt..],
-            &self.shared_dealt[shared..],
-        );
+        let left = &self.shared_dealt[refill.map_or(0, |&(_, since)| since)..];
         self.shared.opening.shared_relics.first_at(
             rarity,
             refill.is_some(),
             floor,
             self.players.len(),
-            |relic| dealt.contains(&relic) || shared.contains(&relic),
+            |relic| left.contains(&relic),
         )
+    }
+
+    /// `relic` taken out of `seat`'s bag and the shared one, so neither deals
+    /// it.
+    fn out_of_both_bags(&mut self, seat: sts2_core::SeatIndex, relic: V::Relic) {
+        Arc::make_mut(&mut self.players[seat].dealt_relics).push(relic);
+        Arc::make_mut(&mut self.shared_dealt).push(relic);
     }
 
     /// `Player.CanRemovePotions` off: an event that holds the potions while it
@@ -2721,7 +2717,7 @@ impl<V: Rules> State<V> {
         // where it was dealt already, since a refilled shared bag holds it
         // again until it is obtained.
         if !relic.stackable() {
-            Arc::make_mut(&mut self.players[seat].dealt_relics).push(relic);
+            self.out_of_both_bags(seat, relic);
         }
         let mut held = HeldRelic {
             wax,
@@ -3451,7 +3447,7 @@ impl<V: Rules> State<V> {
                 }
                 // `RelicGrabBag.Remove`, which counts the relic as dealt.
                 HookEffect::RemoveFromRelicBags(relic) => {
-                    Arc::make_mut(&mut self.players[seat].dealt_relics).push(relic);
+                    self.out_of_both_bags(seat, relic);
                     return Stepped::Done;
                 }
                 HookEffect::OfferRewards(_) if self.players[seat].hp == num_traits::zero() => {
@@ -5992,7 +5988,7 @@ impl<V: Rules> State<V> {
             // `SharedRelicGrabBag.PullFromFront`, which leaves the player's
             // bag holding it. Taking it from the chest obtains it, which
             // takes it out of both.
-            relics.push(self.deal_shared_relic(seat, rarity));
+            relics.push(self.deal_shared_relic(rarity));
         }
         if let Phase::Treasure { relics: chest, .. } = &mut self.phase {
             *chest = relics;
@@ -6423,6 +6419,7 @@ impl<V: Rules> State<V> {
         let added = self.merchant_card_pool();
         let mut streams = self.streams;
         let mut dealt = self.players[seat].dealt_relics.to_vec();
+        let stocked_from = dealt.len();
         let entries = super::shop::Merchant::<V> {
             streams: &mut streams,
             player_relics: &self.shared.opening.player_relics[seat.at()],
@@ -6440,6 +6437,9 @@ impl<V: Rules> State<V> {
         .stock(seat);
 
         self.streams = streams;
+        // `PullNextRelicFromBack` takes what it stocks out of the shared bag
+        // too.
+        Arc::make_mut(&mut self.shared_dealt).extend_from_slice(&dealt[stocked_from..]);
         self.players[seat].dealt_relics = Arc::new(dealt);
         // `Hook.ModifyMerchantCardCreationResults` over the cards it stocked.
         let entries = entries
@@ -8422,6 +8422,7 @@ impl<V: Rules> State<V> {
         let added = self.merchant_card_pool();
         let mut streams = self.streams;
         let mut dealt = self.players[seat].dealt_relics.to_vec();
+        let stocked_from = dealt.len();
         let (stock, cost) = super::shop::Merchant::<V> {
             streams: &mut streams,
             player_relics: &self.shared.opening.player_relics[seat.at()],
@@ -8436,6 +8437,9 @@ impl<V: Rules> State<V> {
         }
         .restock(seat, usize::from(index), stock, &on_shelves);
         self.streams = streams;
+        // `PullNextRelicFromBack` takes what it stocks out of the shared bag
+        // too.
+        Arc::make_mut(&mut self.shared_dealt).extend_from_slice(&dealt[stocked_from..]);
         self.players[seat].dealt_relics = Arc::new(dealt);
         // `Hook.ModifyMerchantCardCreationResults` over the card it stocked.
         let stock = match stock {

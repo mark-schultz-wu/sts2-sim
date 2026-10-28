@@ -82,7 +82,8 @@ run as its own machine sees it. The work goes in this order:
    free, and a relic that rewrites a card joining a deck, read the card's
    owner. A treasure chest holds a relic for each player, and awards them
    by the players' votes. A monster's attack, and a player's death in it,
-   reach each player's own listeners. Of sixteen hunted seeds, nine match
+   reach each player's own listeners. The shared relic bag passes over
+   what left any player's bag. Of sixteen hunted seeds, nine match
    to the run's
    end. Hunts stay at
    `--width 4`: at `--width 8` two games of sixteen failed in Godot
@@ -94,11 +95,12 @@ run as its own machine sees it. The work goes in this order:
      So does the turn's end while a player's action waits on a question.
      Card plays, potions and the turn's end go through the queues, with
      the action types, gating and cancellations.
-   - The shared relic bag passes over what any player's own bag dealt,
-     and the simulator passes over only the dealing player's. One hunted
-     run parts at a chest there.
    - The simulator ticks down a dead player's Frail, and the game does
-     not. Two hunted runs part there.
+     not. Three hunted runs part there. Two are against Corpse Slugs, whose Goop
+     lands a fresh Frail on the dead player too. The simulator's tick on
+     the next enemy turn has no skip left, and the game's Frail stays.
+     The game's side needs `cargo xtask game-trace` for a co-op run,
+     which it plays only solo now.
    - A question that waits on a player's own card play names no asker,
      where the game names the play. One hunted run parts there, beside
      Shuriken counting the other player's Attack.
