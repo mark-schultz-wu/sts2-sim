@@ -1056,7 +1056,7 @@ pub(crate) fn event_hook<V: crate::Build>(
         State::TuningFork(state) => tuning_fork::event_hook::<V>(state, hook, asked),
         State::LetterOpener(state) => letter_opener::event_hook::<V>(state, hook, asked),
         State::OrnamentalFan(state) => ornamental_fan::event_hook::<V>(state, hook, asked),
-        State::Shuriken(state) => shuriken::event_hook::<V>(state, hook, asked),
+        State::Shuriken(state) => shuriken::event_hook::<V>(state, owner, hook, asked),
         State::StoneCalendar(state) => stone_calendar::event_hook::<V>(state, hook, asked),
         State::CloakClasp => cloak_clasp::event_hook::<V>(hook, asked),
         State::CharonsAshes => charons_ashes::event_hook::<V>(hook, asked),

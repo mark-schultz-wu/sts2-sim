@@ -2089,6 +2089,7 @@ fn finished<V: Rules, S: LendsCombat>(
     let hook = sts2_core::EventHook::CardPlayed {
         card,
         id,
+        player: seat.creature(),
         affliction,
         ethereal,
         spent,

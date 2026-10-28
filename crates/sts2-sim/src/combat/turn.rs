@@ -3958,12 +3958,14 @@ fn walk_turn_end<V: Rules>(
                     }
                     // `CardPileCmd.Draw` for the player, once the hand is
                     // flushed.
-                    sts2_core::HookEffect::Draw(amount) => TurnEndAsk::Draw(amount),
+                    sts2_core::HookEffect::Draw(amount) => TurnEndAsk::Draw(owner, amount),
                     // `CreatureCmd.Heal` on the creature carrying the power.
                     sts2_core::HookEffect::Heal(amount) => TurnEndAsk::Heal(owner, amount),
                     sts2_core::HookEffect::Escape => TurnEndAsk::Escape(owner),
-                    sts2_core::HookEffect::EvokeLast(count) => TurnEndAsk::EvokeLast(count),
-                    sts2_core::HookEffect::ClearAffliction(to) => TurnEndAsk::ClearAffliction(to),
+                    sts2_core::HookEffect::EvokeLast(count) => TurnEndAsk::EvokeLast(owner, count),
+                    sts2_core::HookEffect::ClearAffliction(to) => {
+                        TurnEndAsk::ClearAffliction(owner, to)
+                    }
                     // `DoomPower.DoomKill`, from the first doomed creature on
                     // the owner's side alone.
                     sts2_core::HookEffect::DoomKill => {
@@ -4134,16 +4136,18 @@ enum TurnEndAsk<V: Rules> {
         unblockable: bool,
         dealer: Option<CombatId>,
     },
-    /// `CardPileCmd.Draw`.
-    Draw(V::Number),
+    /// `CardPileCmd.Draw`, for the player carrying the power.
+    Draw(CombatId, V::Number),
     /// `CreatureCmd.Heal`.
     Heal(CombatId, V::Number),
     /// `CreatureCmd.Escape`.
     Escape(CombatId),
-    /// `OrbCmd.EvokeLast`, this many times.
-    EvokeLast(V::Number),
-    /// `CardCmd.ClearAffliction` on the fight's cards.
-    ClearAffliction(sts2_core::Writing<V>),
+    /// `OrbCmd.EvokeLast`, this many times, for the player carrying the
+    /// power.
+    EvokeLast(CombatId, V::Number),
+    /// `CardCmd.ClearAffliction` on the cards of the player carrying the
+    /// power.
+    ClearAffliction(CombatId, sts2_core::Writing<V>),
     /// `DoomPower.DoomKill` of these creatures.
     DoomKill(SmallVec<[CombatId; CREATURES]>),
     /// What the relic in a slot asked for, carried out for the player.
@@ -4164,13 +4168,20 @@ fn applied<V: Rules>(
     pausing: bool,
 ) -> Option<super::Ended> {
     for ask in asked {
-        let board = Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
+        // A power's asks act for the player carrying it.
+        let acting = match ask {
+            TurnEndAsk::Draw(owner, _)
+            | TurnEndAsk::EvokeLast(owner, _)
+            | TurnEndAsk::ClearAffliction(owner, _) => live.seat_of(owner).unwrap_or(seat),
+            _ => seat,
+        };
+        let board = Board::for_card(acting, live, rngs.reborrow(), belts, ascension, None, None);
         // A draw, a power's or a relic's, can stop on a shuffle's pick. So
         // can a hit, where a relic answering it draws.
         let mut board = match (pausing, &ask) {
             (
                 true,
-                TurnEndAsk::Draw(_)
+                TurnEndAsk::Draw(..)
                 | TurnEndAsk::Relic(_, _, sts2_core::HookEffect::Draw(_))
                 | TurnEndAsk::Damage { .. },
             ) => board.blocking(),
@@ -4186,18 +4197,18 @@ fn applied<V: Rules>(
                 unblockable,
                 dealer,
             } => board.hit_unpowered(dealer, owner, amount, unblockable),
-            TurnEndAsk::Draw(amount) => {
+            TurnEndAsk::Draw(_, amount) => {
                 sts2_core::Fight::draw(&mut board, amount);
             }
             TurnEndAsk::Relic(seat, slot, effect) => board.relic_asked(seat, slot, effect),
             TurnEndAsk::Heal(at, amount) => sts2_core::Fight::heal(&mut board, at, amount),
             TurnEndAsk::Escape(at) => board.escape_creature(at),
-            TurnEndAsk::EvokeLast(count) => {
+            TurnEndAsk::EvokeLast(_, count) => {
                 for _ in 0..num_traits::cast::<_, usize>(count).unwrap_or(0) {
                     board.evoke_last();
                 }
             }
-            TurnEndAsk::ClearAffliction(to) => {
+            TurnEndAsk::ClearAffliction(_, to) => {
                 board.write_cards([sts2_core::HookEffect::ClearAffliction(to)]);
             }
             TurnEndAsk::DoomKill(doomed) => board.doom_kill(&doomed),

@@ -1739,6 +1739,7 @@ impl<'a, V: Rules> Board<'a, V> {
             sts2_core::EventHook::CardEnteredCombat {
                 at,
                 card,
+                player: seat.creature(),
                 clone,
                 afflicted,
             },

@@ -4172,6 +4172,9 @@ pub enum EventHook<V: ContentVersion> {
         card: V::Card,
         /// `CardPlay.Card`: which copy.
         id: crate::CardId<V>,
+        /// `CardPlay.Card.Owner.Creature`, which a listener compares with
+        /// its own.
+        player: crate::CombatId,
         /// `CardPlay.Card.Affliction`.
         affliction: Option<V::Affliction>,
         /// `Keywords.Contains(Ethereal)` for the copy.
@@ -4543,6 +4546,8 @@ pub enum EventHook<V: ContentVersion> {
     CardEnteredCombat {
         at: crate::CardAt<V>,
         card: V::Card,
+        /// `card.Owner`'s creature, which a listener compares with its own.
+        player: crate::CombatId,
         /// `IsClone`: the card is a clone of another, which is `CloneOf`.
         clone: bool,
         /// The card has an `Affliction`, which a clone keeps from its

@@ -84,7 +84,8 @@ run as its own machine sees it. The work goes in this order:
    by the players' votes. A monster's attack, and a player's death in it,
    reach each player's own listeners. The shared relic bag passes over
    what left any player's bag. A dead player's powers hear no hook, as
-   their relics, potions and cards do not. Of sixteen hunted seeds, eleven
+   their relics, potions and cards do not. A power's turn-end asks act
+   for the player carrying it. Of sixteen hunted seeds, thirteen
    match to the run's end. Hunts stay at
    `--width 4`: at `--width 8` two games of sixteen failed in Godot
    itself. Next, in the order of `docs/COOP-FIGHTS.md` and where the
@@ -95,14 +96,8 @@ run as its own machine sees it. The work goes in this order:
      So does the turn's end while a player's action waits on a question.
      Card plays, potions and the turn's end go through the queues, with
      the action types, gating and cancellations.
-   - Smoggy, which Living Fog's move puts on every player, afflicts the
-     cards of the player whose Skill set it off, in the game. The
-     simulator's afflicts the fight's player, and hears every player's
-     Skill. `CardPlayed` and `CardEnteredCombat` name no player yet. One
-     hunted run parts there.
    - A question that waits on a player's own card play names no asker,
-     where the game names the play. One hunted run parts there, beside
-     Shuriken counting the other player's Attack.
+     where the game names the play.
    - A shared event, which the players vote through, and an event that
      opens on a fight panic in a run of several players.
    - A fight won inside an event, and the extra rewards a monster gives,
@@ -115,7 +110,9 @@ run as its own machine sees it. The work goes in this order:
      - `AfterRestSiteHeal` reaches every player's relics, where each of
        the game's compares the healed player with its owner. One hunted
        run parts there, on Stone Humidifier.
-     - Shuriken counts another player's Attack.
+     - Every relic that hears `CardPlayed` compares the card's owner
+       with its own in the game, 27 in all. Shuriken does in the
+       simulator, and the other 25 do not yet.
      - Content whose comment says "a fight here has one" player.
      - The rest of `Board::seat`'s callers, which a card or potion reaches
        for its own player and a monster's move does not yet.

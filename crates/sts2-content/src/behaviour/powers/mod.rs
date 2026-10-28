@@ -3184,10 +3184,11 @@ pub(crate) fn event_hook<V: crate::Build>(
         (__c0, _, EventHook::SideTurnEnd { .. }) if __c0 == V::Power::RINGING_POWER => None,
         // `SmoggyPower.AfterCardPlayed`: a Skill its owner plays puts Smog on
         // every Skill its owner has with no affliction.
-        (__c0, _, EventHook::CardPlayed { card, .. })
+        (__c0, _, EventHook::CardPlayed { card, player, .. })
             if __c0 == V::Power::SMOGGY_POWER
-                && (<V as sts2_core::Rules>::card_kind(card)
-                    == Some(sts2_core::CardKind::Skill)) =>
+                && (player == holder
+                    && <V as sts2_core::Rules>::card_kind(card)
+                        == Some(sts2_core::CardKind::Skill)) =>
         {
             Some(HookEffect::Afflict {
                 to: sts2_core::Writing::EveryOfKind(sts2_core::CardKind::Skill),
@@ -3197,14 +3198,20 @@ pub(crate) fn event_hook<V: crate::Build>(
         (__c0, _, EventHook::CardPlayed { .. }) if __c0 == V::Power::SMOGGY_POWER => None,
         // `SmoggyPower.AfterCardEnteredCombat`: Smog on a Skill that arrives
         // after its owner started a Skill's play this turn.
-        (__c0, _, EventHook::CardEnteredCombat { at, card, .. })
-            if __c0 == V::Power::SMOGGY_POWER
-                && (<V as sts2_core::Rules>::card_kind(card)
+        (
+            __c0,
+            _,
+            EventHook::CardEnteredCombat {
+                at, card, player, ..
+            },
+        ) if __c0 == V::Power::SMOGGY_POWER
+            && (player == holder
+                && <V as sts2_core::Rules>::card_kind(card)
                     == Some(sts2_core::CardKind::Skill)
-                    && history.started_this_turn().any(|started| {
-                        <V as sts2_core::Rules>::card_kind(started.card)
-                            == Some(sts2_core::CardKind::Skill)
-                    })) =>
+                && history.started_this_turn().any(|started| {
+                    <V as sts2_core::Rules>::card_kind(started.card)
+                        == Some(sts2_core::CardKind::Skill)
+                })) =>
         {
             Some(HookEffect::Afflict {
                 to: sts2_core::Writing::One(at),
