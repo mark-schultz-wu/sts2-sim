@@ -51,8 +51,27 @@ this order:
    They close most of classes A, B and C. All four parts are done, and
    what they leave is below.
 2. The mod's items F1 to F4 (done).
-3. The turn's phases for each player: the block clear, the hooks before
-   the turn's end, and the start of a side's turn.
+3. The turn's phases for each player. The audit of 2026-10-28 compared
+   `StartTurn`, the two phases of the player's turn end and
+   `EndEnemyTurnInternal` with the sim. The order of the hooks, the
+   player each listener acts for, and the dead players match. What
+   differs, in the order to fix it:
+   1. An extra turn starts only for the players taking it
+      (`creaturesStartingTurn`), so a pet keeps its block and its
+      powers' turn-start amounts. The sim clears every creature on the
+      player's side, Osty too. This shows in solo, with Pael's Eye and
+      Osty holding block.
+   2. `EndEnemyTurnInternal` runs `EndOfTurnCleanup` for each player
+      between the side's two turn-end hooks. The sim does not, so a
+      card's "this turn" state set during the enemies' turn lasts into
+      the player's turn. Find what sets one there first.
+   3. `TurnNumber` is kept for each player, and an extra turn counts up
+      only the turns of the players taking it. The sim keeps one
+      `live.turn`. This goes with co-op extra turns, which panic now.
+   4. The game moves every player to the End phase after all the
+      players' post-play hooks. The sim moves each player after their
+      own. Only a listener that reads another player's phase there
+      can see it.
 4. Run state: Proceed after the boss, Spoils, `for_run` and the ancient
    heal.
 5. The player-count rules in class E.
@@ -96,10 +115,6 @@ now.
 
 #### B. Effects for the acting player
 
-- `clear_block` (`turn.rs:3706`, from `turn.rs:358`):
-  - only the host keeps their turn-1 block
-  - another seat's Anchor block is cleared
-  - `ask_relic(live, host, ..)` panics for another seat's relic.
 - Walks of a hook raised for one player build their boards for that
   player, not for the listener's owner. Part 2's owner checks make the
   two the same. These are the hand draw, the turn's start for a player,

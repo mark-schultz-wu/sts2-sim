@@ -3786,15 +3786,15 @@ fn clear_block<V: Rules>(
         .filter(|c| c.side == side)
         .map(|creature| creature.id)
         .collect();
-    let player = live.player(seat).id;
     for &creature in &clearing {
-        // `Creature.AfterTurnStart` keeps the player's block on its first
-        // turn, before it asks anything. `AfterBlockCleared` still runs.
-        if creature == player && live.turn == num_traits::one() {
+        // `Creature.AfterTurnStart` keeps a player's block on their first
+        // turn, before it asks anything. A pet's `Player` is null, so a pet's
+        // clears. `AfterBlockCleared` still runs.
+        if live.seat_of(creature).is_some() && live.turn == num_traits::one() {
             continue;
         }
         // `Hook.ShouldClearBlock`, and the model that kept the block.
-        let preventer = listen::first_deciding::<V>(
+        let preventer = listen::first_deciding_placed::<V>(
             listen::Walk { live, belts },
             sts2_core::DecisionHook::ShouldClearBlock { creature },
             false,
@@ -3805,9 +3805,9 @@ fn clear_block<V: Rules>(
                     held.block = num_traits::zero();
                 }
             }
-            // `Hook.AfterPreventingBlockClear`, asked of that model alone. A
-            // power's only flashes.
-            Some(sts2_core::ModelId::Relic(relic)) => {
+            // `Hook.AfterPreventingBlockClear`, asked of that model alone,
+            // which acts for its own player. A power's only flashes.
+            Some((sts2_core::ModelId::Relic(relic), Some(seat))) => {
                 let block = live
                     .creatures
                     .iter()
@@ -3834,6 +3834,9 @@ fn clear_block<V: Rules>(
                         }
                     }
                 }
+            }
+            Some((sts2_core::ModelId::Relic(relic), None)) => {
+                unreachable!("{relic:?} keeping block from no belt")
             }
             Some(_) => {}
         }
