@@ -738,9 +738,11 @@ pub(crate) fn on_turn_end<V: crate::Build, F: Fight<V>>(card: V::Card, fight: &m
 ///
 /// `printed` is what this copy of the card shows, which is what the model
 /// reads its own numbers off.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
     card: V::Card,
     id: sts2_core::CardId<V>,
+    owner: sts2_core::CombatId,
     pile: Option<sts2_core::Pile>,
     printed: &P,
     history: sts2_core::History<'_, V>,
@@ -748,7 +750,7 @@ pub(crate) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     // A card whose hooks are the build's own, for a hook it answers itself.
-    if V::own_card_hooks(card) && V::own_card_event_hook(card, hook, asked).is_some() {
+    if V::own_card_hooks(card) && V::own_card_event_hook(card, owner, hook, asked).is_some() {
         return;
     }
     // The fight asks only a card whose class overrides the hook.
@@ -773,7 +775,7 @@ pub(crate) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
             }
         }
         card if V::card_filed(card) == CardFiled::Ironclad => {
-            ironclad::event_hook::<V, _>(card, id, printed, history, hook, asked)
+            ironclad::event_hook::<V, _>(card, id, owner, printed, history, hook, asked)
         }
         card if V::card_filed(card) == CardFiled::Colorless => {
             colorless::event_hook::<V>(card, id, history, hook, asked)
@@ -784,7 +786,7 @@ pub(crate) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
         __c0 if __c0 == V::Card::SOVEREIGN_BLADE
             && (matches!(hook, sts2_core::EventHook::CardChangedPiles { .. })) => {}
         card if V::card_filed(card) == CardFiled::Necrobinder => {
-            necrobinder::event_hook::<V, _>(card, id, printed, history, hook, asked)
+            necrobinder::event_hook::<V, _>(card, id, owner, printed, history, hook, asked)
         }
         // `Bombardment.AfterAutoPrePlayPhaseEnteredEarly`: from the exhaust
         // pile, it plays itself.
@@ -806,16 +808,16 @@ pub(crate) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
             regent::event_hook::<V, _>(card, id, printed, history, hook, asked)
         }
         card if V::card_filed(card) == CardFiled::Silent => {
-            silent::event_hook::<V>(card, id, history, hook, asked)
+            silent::event_hook::<V>(card, id, owner, history, hook, asked)
         }
         // `RocketPunch.AfterCardGeneratedForCombat`: free until played once
         // its owner makes a Status.
         __c0 if __c0 == V::Card::ROCKET_PUNCH => match hook {
-            sts2_core::EventHook::CardGeneratedForCombat {
-                card,
-                creator: Some(_),
-                ..
-            } if <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Status) => {
+            sts2_core::EventHook::CardGeneratedForCombat { card, creator, .. }
+                if creator == Some(owner)
+                    && <V as sts2_core::Rules>::card_kind(card)
+                        == Some(sts2_core::CardKind::Status) =>
+            {
                 asked.push(sts2_core::HookEffect::ModifySelf {
                     change: sts2_core::Change::SetCost(sts2_core::CostPool::Energy, 0),
                     lasting: sts2_core::Lasting::UntilPlayed,

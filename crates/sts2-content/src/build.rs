@@ -476,6 +476,7 @@ pub trait OwnRules: ContentVersion + Sized {
     /// cards answer for it.
     fn own_card_event_hook(
         card: Self::Card,
+        owner: sts2_core::CombatId,
         hook: sts2_core::EventHook<Self>,
         asked: &mut sts2_core::HookEffects<Self>,
     ) -> Option<()>
@@ -911,6 +912,7 @@ macro_rules! rules {
                 fn card_event_hook<P: Printed<Self> + ?Sized>(
                     card: Self::Card,
                     id: sts2_core::CardId<Self>,
+                    owner: sts2_core::CombatId,
                     pile: Option<sts2_core::Pile>,
                     printed: &P,
                     history: History<'_, Self>,
@@ -918,7 +920,7 @@ macro_rules! rules {
                     asked: &mut HookEffects<Self>,
                 ) {
                     crate::behaviour::rules::card_event_hook::<Self, P>(
-                        card, id, pile, printed, history, hook, asked,
+                        card, id, owner, pile, printed, history, hook, asked,
                     )
                 }
             }

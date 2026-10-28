@@ -954,6 +954,22 @@ pub(crate) fn modify_hook<V: crate::Build>(
         return modify;
     }
     match (power, amount, hook) {
+        // `card.Owner.Creature != base.Owner`, or `.Player`: each of these
+        // leaves another player's card as it costs.
+        (__c0, _, ModifyHook::EnergyCost { player, .. })
+            if player != holder
+                && (__c0 == V::Power::BORROWED_TIME_POWER
+                    || __c0 == V::Power::CURIOUS_POWER
+                    || __c0 == V::Power::TANGLED_POWER) =>
+        {
+            Modify::Nothing
+        }
+        (__c0, _, ModifyHook::EnergyCostLate { player, .. })
+            if player != holder
+                && (__c0 == V::Power::CORRUPTION_POWER || __c0 == V::Power::VOID_FORM_POWER) =>
+        {
+            Modify::Nothing
+        }
         // `SlowPower.ModifyDamageMultiplicative`, which reads the cards played
         // since its owner's turn began and takes a tenth more for each.
         (
@@ -1229,7 +1245,7 @@ pub(crate) fn modify_hook<V: crate::Build>(
             Modify::Nothing
         }
         // `CorruptionPower.TryModifyEnergyCostInCombatLate`: nothing for a
-        // Skill its owner holds or is playing. A fight here has one player.
+        // Skill its owner holds or is playing.
         (
             __c0,
             _,
@@ -1288,8 +1304,7 @@ pub(crate) fn modify_hook<V: crate::Build>(
             Modify::Nothing
         }
         // `TangledPower.TryModifyEnergyCostInCombat`: its stack onto a card
-        // with Entangled. A fight here has one player, whose cards are its
-        // holder's.
+        // of its owner's with Entangled.
         (
             __c0,
             PowerAmount::Counted(amount),
@@ -2221,11 +2236,12 @@ pub(crate) fn decide_hook<V: crate::Build>(
     }
     match (power, hook) {
         // v0.111.0's `WellLaidPlansPower.ShouldFlush`: no for its owner, who
-        // keeps the hand. A fight here has one player. v0.107.1's picks cards
-        // to retain in `BeforeFlushLate` instead, and overrides no
-        // `ShouldFlush`.
-        (__c0, DecisionHook::ShouldFlush { .. }) if __c0 == V::Power::WELL_LAID_PLANS_POWER => {
-            HookResponse::Decision(false)
+        // keeps the hand. v0.107.1's picks cards to retain in
+        // `BeforeFlushLate` instead, and overrides no `ShouldFlush`.
+        (__c0, DecisionHook::ShouldFlush { player, .. })
+            if __c0 == V::Power::WELL_LAID_PLANS_POWER =>
+        {
+            HookResponse::Decision(player != held.holder)
         }
         // `RingingPower.ShouldPlay`: a card with Ringing waits while its owner
         // has started a play this turn. A fight here has one player, whose
@@ -2456,6 +2472,47 @@ pub(crate) fn event_hook<V: crate::Build>(
         return;
     }
     let effect = match (power, amount, hook) {
+        // `cardPlay.Card.Owner != base.Owner`, or `.Player`: each of these
+        // returns at once on another player's card.
+        (__c0, _, EventHook::CardPlaying { player, .. })
+            if player != holder
+                && (__c0 == V::Power::STORM_POWER
+                    || __c0 == V::Power::CALAMITY_POWER
+                    || __c0 == V::Power::SERPENT_FORM_POWER
+                    || __c0 == V::Power::RUPTURE_POWER
+                    || __c0 == V::Power::AFTERIMAGE_POWER
+                    || __c0 == V::Power::MONOLOGUE_POWER
+                    || __c0 == V::Power::SUBROUTINE_POWER
+                    || __c0 == V::Power::THE_SEALED_THRONE_POWER
+                    || __c0 == V::Power::SPIRIT_OF_ASH_POWER
+                    || __c0 == V::Power::DANSE_MACABRE_POWER
+                    || __c0 == V::Power::SLOTH_POWER
+                    || __c0 == V::Power::CHAINS_OF_BINDING_POWER) =>
+        {
+            None
+        }
+        (__c0, _, EventHook::CardPlayed { player, .. })
+            if player != holder
+                && (__c0 == V::Power::DEVOUR_LIFE_POWER
+                    || __c0 == V::Power::MASTER_PLANNER_POWER
+                    || __c0 == V::Power::RAGE_POWER
+                    || __c0 == V::Power::HAUNT_POWER
+                    || __c0 == V::Power::VOID_FORM_POWER
+                    || __c0 == V::Power::PANACHE_POWER
+                    || __c0 == V::Power::TENDER_POWER) =>
+        {
+            None
+        }
+        (__c0, _, EventHook::CardEnteredCombat { player, .. })
+            if player != holder
+                && (__c0 == V::Power::RINGING_POWER
+                    || __c0 == V::Power::HEX_POWER
+                    || __c0 == V::Power::TANGLED_POWER
+                    || __c0 == V::Power::SWORD_SAGE_POWER
+                    || __c0 == V::Power::PHANTOM_BLADES_POWER) =>
+        {
+            None
+        }
         // Their `AfterModifyingHandDraw` only flashes.
         (__c0, _, EventHook::HandDrawModified)
             if (__c0 == V::Power::PALE_BLUE_DOT_POWER || __c0 == V::Power::MIND_ROT_POWER) =>
@@ -2644,8 +2701,7 @@ pub(crate) fn event_hook<V: crate::Build>(
             None
         }
         // `DevourLifePower.AfterCardPlayed`: its stack as a summon of Osty for
-        // each Soul its owner plays. A fight here has one player, whose cards
-        // are all its holder's.
+        // each Soul its owner plays.
         (__c0, PowerAmount::Counted(amount), EventHook::CardPlayed { card: __c1, .. })
             if (__c0 == V::Power::DEVOUR_LIFE_POWER && __c1 == V::Card::SOUL) =>
         {
@@ -2674,8 +2730,7 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         (__c0, _, EventHook::EnergyReset { .. }) if __c0 == V::Power::SPINNER_POWER => None,
         // `StormPower.BeforeCardPlayed`: a Power its owner plays noted with
-        // the stack as it begins. A fight here has one player, whose cards
-        // are all its holder's.
+        // the stack as it begins.
         (__c0, PowerAmount::Counted(amount), EventHook::CardPlaying { card, id, .. })
             if __c0 == V::Power::STORM_POWER =>
         {
@@ -2700,7 +2755,6 @@ pub(crate) fn event_hook<V: crate::Build>(
             return;
         }
         // `CalamityPower.BeforeCardPlayed`: an Attack its owner plays noted.
-        // A fight here has one player, whose cards are all its holder's.
         (__c0, PowerAmount::Counted(amount), EventHook::CardPlaying { card, id, .. })
             if __c0 == V::Power::CALAMITY_POWER =>
         {
@@ -2726,8 +2780,7 @@ pub(crate) fn event_hook<V: crate::Build>(
             })
         }
         // `SerpentFormPower.BeforeCardPlayed`: a play of its owner's noted
-        // with the stack as it begins. A fight here has one player, whose
-        // cards are all its holder's.
+        // with the stack as it begins.
         (__c0, PowerAmount::Counted(amount), EventHook::CardPlaying { id, .. })
             if __c0 == V::Power::SERPENT_FORM_POWER =>
         {
@@ -2872,8 +2925,7 @@ pub(crate) fn event_hook<V: crate::Build>(
         // fight here has one player, who has none.
         (__c0, _, EventHook::Applied) if __c0 == V::Power::TANK_POWER => None,
         // `MasterPlannerPower.AfterCardPlayed`: Sly written on each Skill its
-        // owner plays, for as long as the copy lasts. A fight here has one
-        // player, whose cards are all its holder's.
+        // owner plays, for as long as the copy lasts.
         (__c0, _, EventHook::CardPlayed { card, id, .. })
             if __c0 == V::Power::MASTER_PLANNER_POWER
                 && (<V as sts2_core::Rules>::card_kind(card)
@@ -3349,12 +3401,11 @@ pub(crate) fn event_hook<V: crate::Build>(
             None
         }
         // `StranglePower.BeforeCardPlayed`: a play by its applier, where a
-        // player applied it, noted with the stack as it begins. A fight here
-        // has one player, whose cards are all its applier's.
-        (__c0, PowerAmount::Counted(amount), EventHook::CardPlaying { id, .. })
+        // player applied it, noted with the stack as it begins.
+        (__c0, PowerAmount::Counted(amount), EventHook::CardPlaying { id, player, .. })
             if __c0 == V::Power::STRANGLE_POWER =>
         {
-            if applier == Some(fight.player()) {
+            if applier == Some(player) {
                 note::<V>(state, id, amount);
             }
             None
@@ -3382,12 +3433,11 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         (__c0, _, EventHook::SideTurnEnd { .. }) if __c0 == V::Power::STRANGLE_POWER => None,
         // `OblivionPower.BeforeCardPlayed`: a play by its applier, where a
-        // player applied it, noted with the stack as it begins. A fight here
-        // has one player, whose cards are all its applier's.
-        (__c0, PowerAmount::Counted(amount), EventHook::CardPlaying { id, .. })
+        // player applied it, noted with the stack as it begins.
+        (__c0, PowerAmount::Counted(amount), EventHook::CardPlaying { id, player, .. })
             if __c0 == V::Power::OBLIVION_POWER =>
         {
-            if applier == Some(fight.player()) {
+            if applier == Some(player) {
                 note::<V>(state, id, amount);
             }
             None
@@ -3418,8 +3468,7 @@ pub(crate) fn event_hook<V: crate::Build>(
         ) if __c0 == V::Power::OBLIVION_POWER => Some(HookEffect::Remove),
         (__c0, _, EventHook::SideTurnEnd { .. }) if __c0 == V::Power::OBLIVION_POWER => None,
         // `AfterimagePower.BeforeCardPlayed`: a play of its owner's noted with
-        // the stack as it begins. A fight here has one player, whose cards
-        // are all the player's.
+        // the stack as it begins.
         (__c0, PowerAmount::Counted(amount), EventHook::CardPlaying { id, .. })
             if __c0 == V::Power::AFTERIMAGE_POWER && (owner == CombatSide::Player) =>
         {
@@ -3454,8 +3503,8 @@ pub(crate) fn event_hook<V: crate::Build>(
             None
         }
         // `MonologuePower.BeforeCardPlayed`: a play of its owner's noted with
-        // its Strength, which the card that applied it set to its own
-        // `Power`, one. A fight here has one player.
+        // its Strength, which the card that applied it set to its own `Power`,
+        // one.
         (__c0, _, EventHook::CardPlaying { id, .. })
             if __c0 == V::Power::MONOLOGUE_POWER && (owner == CombatSide::Player) =>
         {
@@ -3489,7 +3538,7 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         (__c0, _, EventHook::SideTurnEnd { .. }) if __c0 == V::Power::MONOLOGUE_POWER => None,
         // `SubroutinePower.BeforeCardPlayed`: a Power its owner plays noted
-        // with the stack as it begins. A fight here has one player.
+        // with the stack as it begins.
         (__c0, PowerAmount::Counted(amount), EventHook::CardPlaying { card, id, .. })
             if __c0 == V::Power::SUBROUTINE_POWER
                 && (owner == CombatSide::Player
@@ -3515,7 +3564,7 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         // `HauntPower.AfterCardPlayed`: for a Soul its owner plays, its stack
         // on an enemy drawn off `CombatTargets`, unblockable, unpowered and
-        // from nobody. A fight here has one player.
+        // from nobody.
         (__c0, PowerAmount::Counted(amount), EventHook::CardPlayed { card: __c1, .. })
             if (__c0 == V::Power::HAUNT_POWER && __c1 == V::Card::SOUL)
                 && (owner == CombatSide::Player) =>
@@ -3532,8 +3581,8 @@ pub(crate) fn event_hook<V: crate::Build>(
             unimplemented!("an endless Haunt")
         }
         (__c0, _, EventHook::CardPlayed { .. }) if __c0 == V::Power::HAUNT_POWER => None,
-        // `TheSealedThronePower.BeforeCardPlayed`: its stack as stars for
-        // each play of its owner's. A fight here has one player.
+        // `TheSealedThronePower.BeforeCardPlayed`: its stack as stars for each
+        // play of its owner's.
         (__c0, PowerAmount::Counted(amount), EventHook::CardPlaying { .. })
             if __c0 == V::Power::THE_SEALED_THRONE_POWER && (owner == CombatSide::Player) =>
         {
@@ -3971,11 +4020,12 @@ pub(crate) fn event_hook<V: crate::Build>(
             PowerAmount::Counted(amount),
             EventHook::CardPlayed {
                 affliction: Some(__c1),
+                player,
                 ..
             },
         ) if (__c0 == V::Power::GALVANIC_POWER && __c1 == V::Affliction::GALVANIZED) => {
             Some(HookEffect::DamageUnpowered {
-                target: fight.player(),
+                target: player,
                 amount,
             })
         }
@@ -4233,17 +4283,18 @@ pub(crate) fn event_hook<V: crate::Build>(
             None
         }
         // `VitalSparkPower.AfterCardPlayed`: Tainted Power by its stack on the
-        // player, from nobody, once a Tainted card's play is over.
+        // card's owner, from nobody, once a Tainted card's play is over.
         (
             __c0,
             PowerAmount::Counted(amount),
             EventHook::CardPlayed {
                 affliction: Some(__c1),
+                player,
                 ..
             },
         ) if (__c0 == V::Power::VITAL_SPARK_POWER && __c1 == V::Affliction::TAINTED) => {
             Some(HookEffect::ApplyPower {
-                target: fight.player(),
+                target: player,
                 power: V::Power::TAINTED_POWER,
                 amount: PowerAmount::Counted(amount),
                 applier: None,
@@ -4746,9 +4797,8 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         (__c0, _, EventHook::AfterDeath { .. }) if __c0 == V::Power::STOCK_POWER => None,
         // `TenderPower.AfterCardPlayed`, which counts only its owner's own
-        // cards. A fight here has one player, so every card played is theirs.
-        // Each one takes a point of Strength and of Dexterity, and the count
-        // is what gives them back.
+        // cards. Each one takes a point of Strength and of Dexterity, and the
+        // count is what gives them back.
         (__c0, _, EventHook::CardPlayed { .. }) if __c0 == V::Power::TENDER_POWER => {
             state.count(one);
             asked.extend([
@@ -5457,10 +5507,9 @@ pub(crate) fn event_hook<V: crate::Build>(
         {
             unimplemented!("an endless Automation")
         }
-        // `PanachePower.AfterCardPlayed`: each play after the one that
-        // applied it counts down, and the fifth hits every enemy for its
-        // stack, unpowered. A fight here has one player, whose cards are all
-        // its holder's.
+        // `PanachePower.AfterCardPlayed`: each play after the one that applied
+        // it counts down, and the fifth hits every enemy for its stack,
+        // unpowered.
         (__c0, PowerAmount::Counted(amount), EventHook::CardPlayed { .. })
             if __c0 == V::Power::PANACHE_POWER =>
         {
@@ -6370,8 +6419,7 @@ pub(crate) fn event_hook<V: crate::Build>(
             })
         }
         // `PhantomBladesPower.AfterCardEnteredCombat`, which gives a Shiv that
-        // joins later the same. A fight here has one player, so the Shiv is
-        // its owner's.
+        // joins later the same.
         (__c0, _, EventHook::CardEnteredCombat { at, card, .. })
             if __c0 == V::Power::PHANTOM_BLADES_POWER && (card.tagged(CardTag::Shiv)) =>
         {

@@ -843,6 +843,7 @@ fn whirlwind<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> 
 pub(super) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
     card: V::Card,
     id: sts2_core::CardId<V>,
+    owner: sts2_core::CombatId,
     printed: &P,
     history: sts2_core::History<'_, V>,
     hook: EventHook<V>,
@@ -850,10 +851,9 @@ pub(super) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
 ) {
     match (card, hook) {
         // `Stomp.BeforeCardPlayed`: one off its cost this turn for each
-        // Attack its owner plays, itself included. A fight here has one
-        // player.
-        (__c0, EventHook::CardPlaying { card, .. }) if __c0 == V::Card::STOMP => {
-            if V::card_kind(card) == Some(CardKind::Attack) {
+        // Attack its owner plays, itself included.
+        (__c0, EventHook::CardPlaying { card, player, .. }) if __c0 == V::Card::STOMP => {
+            if player == owner && V::card_kind(card) == Some(CardKind::Attack) {
                 asked.push(HookEffect::ModifySelf {
                     change: Change::ChangeCost(CostPool::Energy, -1),
                     lasting: Lasting::ThisTurn,

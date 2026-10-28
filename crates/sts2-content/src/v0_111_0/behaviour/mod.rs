@@ -73,10 +73,11 @@ impl crate::build::OwnRules for V {
 
     fn own_card_event_hook(
         card: <V as sts2_core::ContentVersion>::Card,
+        owner: sts2_core::CombatId,
         hook: sts2_core::EventHook<V>,
         asked: &mut sts2_core::HookEffects<V>,
     ) -> Option<()> {
-        cards::own_card_event_hook(card, hook, asked)
+        cards::own_card_event_hook(card, owner, hook, asked)
     }
 
     fn own_card_result_pile(

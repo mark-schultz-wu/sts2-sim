@@ -724,6 +724,7 @@ fn echoing_slash<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Ki
 pub(super) fn event_hook<V: crate::Build>(
     card: V::Card,
     id: sts2_core::CardId<V>,
+    owner: sts2_core::CombatId,
     history: sts2_core::History<'_, V>,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
@@ -731,9 +732,9 @@ pub(super) fn event_hook<V: crate::Build>(
     let skill = |card: V::Card| V::card_kind(card) == Some(CardKind::Skill);
     match (card, hook) {
         // `Pinpoint.AfterCardPlayed`: one off its cost this turn for each
-        // Skill its owner plays. A fight here has one player.
-        (__c0, EventHook::CardPlayed { card, .. }) if __c0 == V::Card::PINPOINT => {
-            if skill(card) {
+        // Skill its owner plays.
+        (__c0, EventHook::CardPlayed { card, player, .. }) if __c0 == V::Card::PINPOINT => {
+            if player == owner && skill(card) {
                 asked.push(HookEffect::ModifySelf {
                     change: Change::ChangeCost(CostPool::Energy, -1),
                     lasting: Lasting::ThisTurn,

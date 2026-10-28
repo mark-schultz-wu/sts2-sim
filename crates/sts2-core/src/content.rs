@@ -7072,9 +7072,12 @@ pub trait Hooks: ContentVersion {
     ///
     /// `history` is the fight's, which a card reads the way a power does.
     /// `pile` is where the copy stands, and nothing in the play pile.
+    /// `owner` is `Owner.Creature`, the player whose card it is.
+    #[allow(clippy::too_many_arguments)]
     fn card_event_hook<P: Printed<Self> + ?Sized>(
         card: Self::Card,
         id: crate::CardId<Self>,
+        owner: crate::CombatId,
         pile: Option<crate::Pile>,
         printed: &P,
         history: History<'_, Self>,

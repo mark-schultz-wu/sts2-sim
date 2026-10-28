@@ -281,16 +281,20 @@ pub(crate) fn enchantment_event_hook<V: crate::Build>(
     crate::behaviour::enchantments::event_hook(enchanted, id, hook, asked);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn card_event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
     card: V::Card,
     id: sts2_core::CardId<V>,
+    owner: sts2_core::CombatId,
     pile: Option<sts2_core::Pile>,
     printed: &P,
     history: sts2_core::History<'_, V>,
     hook: sts2_core::EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
-    crate::behaviour::cards::event_hook::<V, _>(card, id, pile, printed, history, hook, asked)
+    crate::behaviour::cards::event_hook::<V, _>(
+        card, id, owner, pile, printed, history, hook, asked,
+    )
 }
 
 pub(crate) fn act_layout<V: crate::Build>(act: V::Act) -> sts2_core::Layout {

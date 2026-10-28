@@ -892,6 +892,7 @@ const HANG_MOST: crate::behaviour::cards::Number = 999_999_999;
 pub(super) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
     card: V::Card,
     id: sts2_core::CardId<V>,
+    owner: sts2_core::CombatId,
     printed: &P,
     history: sts2_core::History<'_, V>,
     hook: EventHook<V>,
@@ -953,9 +954,15 @@ pub(super) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
         }),
         (__c0, EventHook::AfterDeath { .. }) if __c0 == V::Card::MELANCHOLY => {}
         // `BansheesCry.AfterCardPlayed`: its `Energy` off its cost for the
-        // rest of the fight for each Ethereal card its owner plays. A fight
-        // here has one player.
-        (__c0, EventHook::CardPlayed { ethereal: true, .. }) if __c0 == V::Card::BANSHEES_CRY => {
+        // rest of the fight for each Ethereal card its owner plays.
+        (
+            __c0,
+            EventHook::CardPlayed {
+                ethereal: true,
+                player,
+                ..
+            },
+        ) if __c0 == V::Card::BANSHEES_CRY && player == owner => {
             asked.push(HookEffect::ModifySelf {
                 change: Change::ChangeCost(CostPool::Energy, -printed.face(V::CardVar::ENERGY)),
                 lasting: Lasting::ThisFight,

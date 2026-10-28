@@ -46,6 +46,7 @@ pub(crate) fn result_pile(
 /// A card's `EventHook` in a fight, for one this build ports for itself.
 pub(crate) fn own_card_event_hook(
     card: Cards,
+    owner: sts2_core::CombatId,
     hook: sts2_core::EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) -> Option<()> {
@@ -57,13 +58,11 @@ pub(crate) fn own_card_event_hook(
         // to nothing.
         (
             Cards::Defect(DefectCard::RocketPunch),
-            sts2_core::EventHook::CardGeneratedForCombat {
-                card,
-                creator: Some(_),
-                ..
-            },
+            sts2_core::EventHook::CardGeneratedForCombat { card, creator, .. },
         ) => {
-            if V::card_kind(card) == Some(sts2_core::CardKind::Status) {
+            // `creator == Owner && card.Owner == Owner`: a Status its own
+            // player made, for that player.
+            if creator == Some(owner) && V::card_kind(card) == Some(sts2_core::CardKind::Status) {
                 asked.push(sts2_core::HookEffect::ModifySelf {
                     change: sts2_core::Change::ChangeCost(sts2_core::CostPool::Energy, -1),
                     lasting: sts2_core::Lasting::UntilPlayed,

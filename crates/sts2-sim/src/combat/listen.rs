@@ -805,6 +805,7 @@ fn ask_card<V: Rules>(
         V::card_event_hook(
             ident.card,
             id,
+            seat.creature(),
             live.players[seat].cards.pile_of(id),
             &card,
             live.history(seat.creature()),

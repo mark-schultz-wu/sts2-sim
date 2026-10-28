@@ -92,27 +92,9 @@ crates/sts2-content/src` lists about 140 of these comments.
 
 ##### The hook carries the player already, so only the content changes
 
-The relics here compare the player now. The rest are powers and cards.
-
-- `CardPlayed`:
-  - Powers: Devour Life, Master Planner, Rage, Haunt, Void Form,
-    Panache, Tender, Withering Presence.
-  - Cards: Pinpoint, Banshee's Cry.
-  - Galvanic and Vital Spark act on `fight.player()`. The game acts on
-    the card's owner.
-- `CardPlaying`:
-  - Powers: Storm, Calamity, Serpent Form, Rupture, Afterimage,
-    Monologue, Subroutine, The Sealed Throne, Spirit of Ash, Danse
-    Macabre, Sloth, Chains of Binding.
-  - The Stomp card.
-  - Strangle and Oblivion compare with `fight.player()`. The game
-    compares with the power's applier.
-- `CardEnteredCombat`: Ringing, Hex, Tangled, Sword Sage, Phantom
-  Blades.
-- `CardGeneratedForCombat`: Rocket Punch.
-- `EnergyCost` and `EnergyCostLate`: Corruption, Void Form, Borrowed
-  Time, Curious, Tangled.
-- `ShouldFlush`: Well-Laid Plans.
+Every relic, power and card here compares the player now, but one.
+Withering Presence compares the card's owner with its `Target`'s
+player, which the simulator does not keep.
 
 ##### The hook carries no player yet
 
