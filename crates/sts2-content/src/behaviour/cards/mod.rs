@@ -242,7 +242,6 @@ pub(crate) fn calculated<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
                 + printed.face(V::CardVar::EXTRA_DAMAGE) * owner.osty_max_hp.map_or(0, Number::from)
         }
         // `Murder`: a base, and more for each card its owner drew this fight.
-        // A fight here has one player, who draws every card drawn.
         (__c0, __c1) if (__c0 == V::Card::MURDER && __c1 == V::CardVar::CALCULATED_DAMAGE) => {
             let drawn = Number::try_from(owner.history.drawn_this_fight())
                 .expect("a fight's draws fit the game's numbers");
@@ -269,12 +268,12 @@ pub(crate) fn calculated<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
             printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
                 + printed.face(V::CardVar::EXTRA_DAMAGE) * souls
         }
-        // `Rattle`: a base, and more for each of one and the attacks Osty made
-        // this turn. A fight here has one player, whose Osty every Osty is.
+        // `Rattle`: a base, and more for each of one and the attacks its
+        // owner's Osty made this turn.
         (__c0, __c1) if (__c0 == V::Card::RATTLE && __c1 == V::CardVar::CALCULATED_HITS) => {
             let attacks = owner
                 .history
-                .attacked_this_turn()
+                .pet_attacked_this_turn()
                 .filter(|&monster| monster == Some(<V::Monster as crate::ids::MonsterIds>::OSTY))
                 .count();
             let hits =
@@ -514,7 +513,7 @@ pub(crate) fn calculated<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
                     * (doom / printed.face(V::CardVar::DOOM_THRESHOLD))
         }
         // `Radiate`: a base, and one more hit for each star its owner gained
-        // this turn. A fight here has one player.
+        // this turn.
         (__c0, __c1) if (__c0 == V::Card::RADIATE && __c1 == V::CardVar::CALCULATED_HITS) => {
             let gained: Number = owner
                 .history
@@ -568,7 +567,7 @@ pub(crate) fn calculated<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
                 + printed.face(V::CardVar::EXTRA_DAMAGE) * made
         }
         // `MementoMori`: a base, and more for each card its owner discarded
-        // this turn. A fight here has one player.
+        // this turn.
         (__c0, __c1)
             if (__c0 == V::Card::MEMENTO_MORI && __c1 == V::CardVar::CALCULATED_DAMAGE) =>
         {
@@ -630,7 +629,7 @@ pub(crate) fn calculated<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
                 + printed.face(V::CardVar::EXTRA_DAMAGE) * doom
         }
         // `DeathMarch`: a base, and more for each card its owner drew this
-        // turn outside the hand draw. A fight here has one player.
+        // turn outside the hand draw.
         (__c0, __c1) if (__c0 == V::Card::DEATH_MARCH && __c1 == V::CardVar::CALCULATED_DAMAGE) => {
             let drawn = owner.history.drawn_outside_hand_draw_this_turn();
             let drawn = Number::try_from(drawn).expect("a turn's draws fit the game's numbers");

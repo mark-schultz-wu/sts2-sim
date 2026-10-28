@@ -911,14 +911,18 @@ pub(super) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
             }
         }
         // `Flatten.AfterAttack`, which answers an attack by its owner's Osty
-        // alone. A fight here has one player, so any Osty is theirs.
+        // alone.
         (
             __c0,
             EventHook::AfterAttack {
                 monster: Some(__c1),
+                pet_of: Some(pet_of),
                 ..
             },
-        ) if (__c0 == V::Card::FLATTEN && __c1 == <V::Monster as crate::ids::MonsterIds>::OSTY) => {
+        ) if (__c0 == V::Card::FLATTEN
+            && __c1 == <V::Monster as crate::ids::MonsterIds>::OSTY
+            && pet_of == owner) =>
+        {
             asked.push(HookEffect::ModifySelf {
                 change: Change::SetCost(CostPool::Energy, 0),
                 lasting: Lasting::ThisTurn,
@@ -926,12 +930,11 @@ pub(super) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
         }
         (__c0, EventHook::AfterAttack { .. }) if __c0 == V::Card::FLATTEN => {}
         // `Flatten.AfterCardEnteredCombat`, which answers its own entry
-        // alone, and then only once Osty has attacked this turn. A fight here
-        // has one player, so any Osty is theirs.
+        // alone, and then only once its owner's Osty has attacked this turn.
         (__c0, EventHook::CardEnteredCombat { at, .. }) if __c0 == V::Card::FLATTEN => {
             if at.id() == id
                 && history
-                    .attacked_this_turn()
+                    .pet_attacked_this_turn()
                     .any(|monster| monster == Some(<V::Monster as crate::ids::MonsterIds>::OSTY))
             {
                 asked.push(HookEffect::ModifySelf {

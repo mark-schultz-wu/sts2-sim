@@ -4947,35 +4947,60 @@ pub enum HistoryEntry<V: ContentVersion> {
     Started(PlayStarted<V>),
     Finished(PlayFinished<V>),
     /// An `EnergySpentEntry`, by its `Amount`, which `CardModel.SpendEnergy`
-    /// records for the player's card whatever plays it.
-    EnergySpent(V::Count),
-    /// A `CardDrawnEntry`, by the card drawn and `FromHandDraw`.
+    /// records for a player's card whatever plays it. `player` is its
+    /// `Actor`, the card's owner.
+    EnergySpent {
+        amount: V::Count,
+        player: crate::CombatId,
+    },
+    /// A `CardDrawnEntry`, by the card drawn and `FromHandDraw`. `player` is
+    /// its `Actor`, the card's owner.
     Drawn {
         card: V::Card,
         hand_draw: bool,
+        player: crate::CombatId,
     },
-    /// A `CreatureAttackedEntry`, by the attacker's `Monster`: nothing for
-    /// the player.
-    Attacked(Option<V::Monster>),
+    /// A `CreatureAttackedEntry`, by the attacker's `Monster`, nothing for a
+    /// player, and the player whose pet it is, as Osty's `PetOwner`.
+    Attacked {
+        monster: Option<V::Monster>,
+        pet_of: Option<crate::CombatId>,
+    },
     BlockGained(BlockGained),
-    /// A `StarsModifiedEntry`, by its `Amount`: the change to the player's
+    /// A `StarsModifiedEntry`, by its `Amount`: the change to `player`'s
     /// stars.
-    StarsModified(V::Number),
-    /// A `CardAfflictedEntry` on one of the player's cards, by the
-    /// affliction. Its `Actor` is the card's owner.
-    Afflicted(V::Affliction),
-    /// A `CardDiscardedEntry`, by the card discarded, which is the player's.
-    Discarded(V::Card),
-    /// A `CardExhaustedEntry`, by the card exhausted, which is the player's.
-    Exhausted(V::Card),
-    /// A `CardGeneratedEntry`, by whether its `Creator` is the player.
+    StarsModified {
+        amount: V::Number,
+        player: crate::CombatId,
+    },
+    /// A `CardAfflictedEntry`, by the affliction. Its `Actor` is the card's
+    /// owner, `player`.
+    Afflicted {
+        affliction: V::Affliction,
+        player: crate::CombatId,
+    },
+    /// A `CardDiscardedEntry`, by the card discarded, of `player`'s.
+    Discarded {
+        card: V::Card,
+        player: crate::CombatId,
+    },
+    /// A `CardExhaustedEntry`, by the card exhausted, of `player`'s.
+    Exhausted {
+        card: V::Card,
+        player: crate::CombatId,
+    },
+    /// A `CardGeneratedEntry`, by its `Creator`'s creature, nothing for a
+    /// card no player made.
     Generated {
-        by_player: bool,
+        creator: Option<crate::CombatId>,
     },
     /// A `DamageReceivedEntry`.
     DamageReceived(DamageReceived<V>),
-    /// An `OrbChanneledEntry`, by the orb, which is the player's.
-    Channelled(V::Orb),
+    /// An `OrbChanneledEntry`, by the orb, of `player`'s.
+    Channelled {
+        orb: V::Orb,
+        player: crate::CombatId,
+    },
     /// A `PowerReceivedEntry`, by the power and who applied it.
     PowerReceived {
         power: V::Power,
@@ -5037,8 +5062,8 @@ impl<V: ContentVersion> Clone for TurnHistory<V> {
 
 impl<V: ContentVersion> Copy for TurnHistory<V> {}
 
-/// The turns of a fight now over that had entries, and their entries. The
-/// player's entries alone, because a fight here has one player.
+/// The turns of a fight now over that had entries, and their entries, each
+/// player's among them.
 ///
 /// A turn is written onto it as the sides switch. Copies of a fight share
 /// it, and a copy copies it only to end a turn. A fight that runs on alone
@@ -5190,11 +5215,13 @@ impl<V: ContentVersion> History<'_, V> {
             })
     }
 
-    /// Each `CreatureAttackedEntry` where `HappenedThisTurn`, by the
-    /// attacker's `Monster`.
-    pub fn attacked_this_turn(&self) -> impl Iterator<Item = Option<V::Monster>> + '_ {
+    /// Each `CreatureAttackedEntry` where `HappenedThisTurn` whose attacker is
+    /// the reader's player's pet, by the attacker's `Monster`.
+    pub fn pet_attacked_this_turn(&self) -> impl Iterator<Item = Option<V::Monster>> + '_ {
         self.this_turn.iter().filter_map(|entry| match entry {
-            HistoryEntry::Attacked(monster) => Some(*monster),
+            HistoryEntry::Attacked { monster, pet_of } if *pet_of == Some(self.player) => {
+                Some(*monster)
+            }
             _ => None,
         })
     }
@@ -5207,20 +5234,24 @@ impl<V: ContentVersion> History<'_, V> {
         })
     }
 
-    /// Each `CardDrawnEntry` where `HappenedThisTurn`, by the card drawn.
+    /// Each `CardDrawnEntry` where `HappenedThisTurn` of the reader's
+    /// player's, by the card drawn.
     pub fn drawn_this_turn(&self) -> impl Iterator<Item = V::Card> + '_ {
         self.this_turn.iter().filter_map(|entry| match entry {
-            HistoryEntry::Drawn { card, .. } => Some(*card),
+            HistoryEntry::Drawn { card, player, .. } if *player == self.player => Some(*card),
             _ => None,
         })
     }
 
-    /// `EnergySpentEntry` where `HappenedThisTurn`, summed.
+    /// `EnergySpentEntry` where `HappenedThisTurn` of the reader's player's,
+    /// summed.
     pub fn energy_spent_this_turn(&self) -> V::Count {
         self.this_turn
             .iter()
             .filter_map(|entry| match entry {
-                HistoryEntry::EnergySpent(amount) => Some(*amount),
+                HistoryEntry::EnergySpent { amount, player } if *player == self.player => {
+                    Some(*amount)
+                }
                 _ => None,
             })
             .fold(num_traits::zero(), |spent, amount| spent + amount)
@@ -5237,30 +5268,35 @@ impl<V: ContentVersion> History<'_, V> {
         })
     }
 
-    /// How many `OrbChanneledEntry` of `orb` the fight holds.
+    /// How many `OrbChanneledEntry` of `orb` of the reader's player's the
+    /// fight holds.
     pub fn channelled_this_fight(&self, orb: V::Orb) -> usize {
         let before = self.before.into_iter().flat_map(PastTurns::entries);
         self.this_turn
             .iter()
             .chain(before)
-            .filter(
-                |entry| matches!(entry, HistoryEntry::Channelled(channelled) if *channelled == orb),
-            )
+            .filter(|entry| {
+                matches!(
+                    entry,
+                    HistoryEntry::Channelled { orb: channelled, player }
+                        if *channelled == orb && *player == self.player
+                )
+            })
             .count()
     }
 
-    /// How many `CardDrawnEntry` the fight holds.
+    /// How many `CardDrawnEntry` of the reader's player's the fight holds.
     pub fn drawn_this_fight(&self) -> usize {
         let before = self.before.into_iter().flat_map(PastTurns::entries);
         self.this_turn
             .iter()
             .chain(before)
-            .filter(|entry| matches!(entry, HistoryEntry::Drawn { .. }))
+            .filter(|entry| matches!(entry, HistoryEntry::Drawn { player, .. } if *player == self.player))
             .count()
     }
 
-    /// How many `CardDrawnEntry` where `HappenedThisTurn` are not
-    /// `FromHandDraw`.
+    /// How many `CardDrawnEntry` where `HappenedThisTurn` of the reader's
+    /// player's are not `FromHandDraw`.
     pub fn drawn_outside_hand_draw_this_turn(&self) -> usize {
         self.this_turn
             .iter()
@@ -5269,53 +5305,74 @@ impl<V: ContentVersion> History<'_, V> {
                     entry,
                     HistoryEntry::Drawn {
                         hand_draw: false,
+                        player,
                         ..
-                    }
+                    } if *player == self.player
                 )
             })
             .count()
     }
 
-    /// How many `CardAfflictedEntry` of `affliction` are where
-    /// `HappenedThisTurn`.
+    /// How many `CardAfflictedEntry` of `affliction` on the reader's
+    /// player's cards are where `HappenedThisTurn`.
     pub fn afflicted_this_turn(&self, affliction: V::Affliction) -> usize {
         self.this_turn
             .iter()
-            .filter(|entry| **entry == HistoryEntry::Afflicted(affliction))
+            .filter(|entry| {
+                matches!(
+                    entry,
+                    HistoryEntry::Afflicted { affliction: afflicted, player }
+                        if *afflicted == affliction && *player == self.player
+                )
+            })
             .count()
     }
 
-    /// Each `BlockGainedEntry` where `HappenedThisTurn`.
+    /// Each `BlockGainedEntry` where `HappenedThisTurn` whose `CardPlay` is
+    /// the reader's player's.
     pub fn block_gained_this_turn(&self) -> impl Iterator<Item = BlockGained> + '_ {
         self.this_turn.iter().filter_map(|entry| match entry {
-            HistoryEntry::BlockGained(gained) => Some(*gained),
+            HistoryEntry::BlockGained(gained)
+                if gained.play.is_some_and(|PlayAt(at)| {
+                    matches!(
+                        self.this_turn.get(at as usize),
+                        Some(HistoryEntry::Started(started)) if started.player == self.player
+                    )
+                }) =>
+            {
+                Some(*gained)
+            }
             _ => None,
         })
     }
 
-    /// How many `CardDiscardedEntry` are where `HappenedThisTurn`.
+    /// How many `CardDiscardedEntry` of the reader's player's are where
+    /// `HappenedThisTurn`.
     pub fn discarded_this_turn(&self) -> usize {
         self.this_turn
             .iter()
-            .filter(|entry| matches!(entry, HistoryEntry::Discarded(_)))
+            .filter(|entry| matches!(entry, HistoryEntry::Discarded { player, .. } if *player == self.player))
             .count()
     }
 
-    /// Whether any `CardExhaustedEntry` is where `HappenedThisTurn`.
+    /// Whether any `CardExhaustedEntry` of the reader's player's is where
+    /// `HappenedThisTurn`.
     pub fn exhausted_this_turn(&self) -> bool {
-        self.this_turn
-            .iter()
-            .any(|entry| matches!(entry, HistoryEntry::Exhausted(_)))
+        self.this_turn.iter().any(|entry| {
+            matches!(entry, HistoryEntry::Exhausted { player, .. } if *player == self.player)
+        })
     }
 
-    /// How many `CardGeneratedEntry` of the fight name the player as their
-    /// `Creator`.
+    /// How many `CardGeneratedEntry` of the fight name the reader's player as
+    /// their `Creator`.
     pub fn generated_by_player(&self) -> usize {
         let before = self.before.into_iter().flat_map(PastTurns::entries);
         self.this_turn
             .iter()
             .chain(before)
-            .filter(|entry| matches!(entry, HistoryEntry::Generated { by_player: true }))
+            .filter(|entry| {
+                matches!(entry, HistoryEntry::Generated { creator } if *creator == Some(self.player))
+            })
             .count()
     }
 
@@ -5340,10 +5397,13 @@ impl<V: ContentVersion> History<'_, V> {
         })
     }
 
-    /// Each `StarsModifiedEntry` where `HappenedThisTurn`, by its `Amount`.
+    /// Each `StarsModifiedEntry` where `HappenedThisTurn` of the reader's
+    /// player's, by its `Amount`.
     pub fn stars_modified_this_turn(&self) -> impl Iterator<Item = V::Number> + '_ {
         self.this_turn.iter().filter_map(|entry| match entry {
-            HistoryEntry::StarsModified(amount) => Some(*amount),
+            HistoryEntry::StarsModified { amount, player } if *player == self.player => {
+                Some(*amount)
+            }
             _ => None,
         })
     }

@@ -2904,50 +2904,53 @@ impl<V: Rules> CombatHistory<V> {
     }
 
     /// `History.CreatureAttacked`, in the turn the fight stands in.
-    pub(super) fn attacked(&mut self, monster: Option<V::Monster>) {
+    pub(super) fn attacked(&mut self, monster: Option<V::Monster>, pet_of: Option<CombatId>) {
         self.this_turn
-            .push(sts2_core::HistoryEntry::Attacked(monster));
+            .push(sts2_core::HistoryEntry::Attacked { monster, pet_of });
     }
 
     /// `History.EnergySpent`, in the turn the fight stands in, for a spend of
     /// more than nothing.
-    pub(super) fn energy_spent(&mut self, amount: V::Count) {
+    pub(super) fn energy_spent(&mut self, amount: V::Count, player: CombatId) {
         if amount > num_traits::zero() {
             self.this_turn
-                .push(sts2_core::HistoryEntry::EnergySpent(amount));
+                .push(sts2_core::HistoryEntry::EnergySpent { amount, player });
         }
     }
 
     /// `History.CardAfflicted`, in the turn the fight stands in.
-    pub(super) fn afflicted(&mut self, affliction: V::Affliction) {
+    pub(super) fn afflicted(&mut self, affliction: V::Affliction, player: CombatId) {
         self.this_turn
-            .push(sts2_core::HistoryEntry::Afflicted(affliction));
+            .push(sts2_core::HistoryEntry::Afflicted { affliction, player });
     }
 
     /// `History.CardDrawn`, in the turn the fight stands in. `hand_draw` is
     /// `fromHandDraw`.
-    pub(super) fn draw(&mut self, card: V::Card, hand_draw: bool) {
-        self.this_turn
-            .push(sts2_core::HistoryEntry::Drawn { card, hand_draw });
+    pub(super) fn draw(&mut self, card: V::Card, hand_draw: bool, player: CombatId) {
+        self.this_turn.push(sts2_core::HistoryEntry::Drawn {
+            card,
+            hand_draw,
+            player,
+        });
     }
 
     /// `History.CardDiscarded`, in the turn the fight stands in.
-    pub(super) fn discarded(&mut self, card: V::Card) {
+    pub(super) fn discarded(&mut self, card: V::Card, player: CombatId) {
         self.this_turn
-            .push(sts2_core::HistoryEntry::Discarded(card));
+            .push(sts2_core::HistoryEntry::Discarded { card, player });
     }
 
     /// `History.CardExhausted`, in the turn the fight stands in.
-    pub(super) fn exhausted(&mut self, card: V::Card) {
+    pub(super) fn exhausted(&mut self, card: V::Card, player: CombatId) {
         self.this_turn
-            .push(sts2_core::HistoryEntry::Exhausted(card));
+            .push(sts2_core::HistoryEntry::Exhausted { card, player });
     }
 
-    /// `History.CardGenerated`, in the turn the fight stands in, by whether
-    /// the player made it.
-    pub(super) fn generated(&mut self, by_player: bool) {
+    /// `History.CardGenerated`, in the turn the fight stands in, by the
+    /// player who made it.
+    pub(super) fn generated(&mut self, creator: Option<CombatId>) {
         self.this_turn
-            .push(sts2_core::HistoryEntry::Generated { by_player });
+            .push(sts2_core::HistoryEntry::Generated { creator });
     }
 
     /// `History.PowerReceived`, in the turn the fight stands in.
@@ -2957,9 +2960,9 @@ impl<V: Rules> CombatHistory<V> {
     }
 
     /// `History.OrbChanneled`, in the turn the fight stands in.
-    pub(super) fn channelled(&mut self, orb: V::Orb) {
+    pub(super) fn channelled(&mut self, orb: V::Orb, player: CombatId) {
         self.this_turn
-            .push(sts2_core::HistoryEntry::Channelled(orb));
+            .push(sts2_core::HistoryEntry::Channelled { orb, player });
     }
 
     /// `History.DamageReceived`, in the turn the fight stands in.
@@ -2975,9 +2978,9 @@ impl<V: Rules> CombatHistory<V> {
     }
 
     /// `History.StarsModified`, in the turn the fight stands in.
-    pub(super) fn stars_modified(&mut self, amount: V::Number) {
+    pub(super) fn stars_modified(&mut self, amount: V::Number, player: CombatId) {
         self.this_turn
-            .push(sts2_core::HistoryEntry::StarsModified(amount));
+            .push(sts2_core::HistoryEntry::StarsModified { amount, player });
     }
 
     /// The play of `id` under way: the latest `CardPlayStartedEntry` of that
@@ -3240,7 +3243,7 @@ impl<V: Rules> Live<V> {
             false => self.players[seat].stars = self.players[seat].stars + count(amount),
         }
         if amount != num_traits::zero() {
-            self.history.stars_modified(amount);
+            self.history.stars_modified(amount, seat.creature());
         }
     }
 

@@ -503,8 +503,7 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             }
         }
         // `EvilEye`: its block, and again where its owner exhausted a card
-        // this turn. A fight here has one player, whose cards are all its
-        // owner's.
+        // this turn.
         __c0 if __c0 == V::Card::EVIL_EYE => {
             let twice: bool = resumed!().fight.history().exhausted_this_turn();
             block::<V, _>(resumed!().fight);

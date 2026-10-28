@@ -2461,7 +2461,7 @@ pub(super) fn act_on<V: Rules>(
                 }
                 let card = held.face.ident.card;
                 live.players[seat].cards.move_to(from, at, Pile::Discard);
-                live.history.discarded(card);
+                live.history.discarded(card, seat.creature());
                 if let Some(ended) = card_discarded::<V>(seat, live, rngs.reborrow(), belts) {
                     return (sly, Some(ended));
                 }
@@ -2625,7 +2625,8 @@ pub(super) fn exhausted<V: Rules>(
     pausable: bool,
 ) -> Option<super::Ended> {
     // `History.CardExhausted`, before the hook.
-    live.history.exhausted(card.face.ident.card);
+    live.history
+        .exhausted(card.face.ident.card, seat.creature());
     let hook = sts2_core::EventHook::CardExhausted {
         card: card.face.ident.card,
         id: card.id,
@@ -3130,7 +3131,7 @@ fn spend_resources<V: Rules>(
     let energy = super::legal::spend(cost, live.players[seat].energy)
         .unwrap_or_else(|| unimplemented!("a cost of {cost:?}"))
         .min(live.players[seat].energy);
-    live.history.energy_spent(energy);
+    live.history.energy_spent(energy, seat.creature());
     live.players[seat].energy = live.players[seat].energy - energy;
     let spent: V::Number = num_traits::cast(energy).expect("an energy cost fits a game number");
     if let Some(ended) = super::board::energy_spent::<V>(seat, live, rngs.reborrow(), belts, spent)

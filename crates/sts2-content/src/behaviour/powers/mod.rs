@@ -1862,7 +1862,7 @@ pub(crate) fn modify_hook<V: crate::Build>(
         {
             let gained = history
                 .block_gained_this_turn()
-                .filter(|entry| entry.receiver == target && entry.moved && entry.play != play)
+                .filter(|entry| entry.moved && entry.play != play)
                 .count();
             match gained >= usize::try_from(amount).unwrap_or(0) {
                 true => Modify::Nothing,

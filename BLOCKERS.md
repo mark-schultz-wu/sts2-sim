@@ -48,7 +48,7 @@ reached yet. Work it in
 this order:
 
 1. Whom a hook is about, in the four parts of `docs/HOOK-SUBJECTS.md`.
-   They close most of classes A, B and C. Parts 1 to 3 are done, and
+   They close most of classes A, B and C. All four parts are done, and
    what they leave is below.
 2. The mod's items F1 to F4.
 3. The turn's phases for each player: the block clear, the hooks before
@@ -106,19 +106,6 @@ Each of these needs the field first.
 - `CardRewardAlternativeChosen` walks every seat, where the game asks
   only the model that added the alternative. So each player's Pael's
   Wing counts every player's sacrifice.
-
-##### History entries record no player
-
-`HistoryEntry` (`sts2-core/src/content.rs:4883`) records no player for
-these entries: `Drawn`, `Attacked`, `BlockGained`, `EnergySpent`,
-`StarsModified`, `Afflicted`, `Discarded`, `Exhausted`, `Generated`,
-`Channelled` and `PowerReceived`. So every count of them adds up both
-players. These read such a count:
-
-- Iteration, Chains of Binding, Unmovable, Flatten
-- Murder, Rattle, Radiate, Memento Mori, Death March, Evil Eye
-- `live.rs:2821` `unprompted_plays_this_turn`, which feeds Pael's
-  Eye.
 
 #### B. Effects for the acting player
 

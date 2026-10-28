@@ -1768,8 +1768,7 @@ impl<'a, V: Rules> Board<'a, V> {
     /// `AfterCardEnteredCombat` for it first.
     fn card_generated(&mut self, at: CardAt<V>, card: V::Card, creator: Option<CombatId>) {
         let seat = self.seat();
-        let by_player = creator == Some(self.live.player(seat).id);
-        self.live.history.generated(by_player);
+        self.live.history.generated(creator);
         // `IterateCombatHookListeners` hands a fight that is ending no
         // listeners, as for a card made after an orb it channelled won.
         if self.over() {
@@ -1925,7 +1924,9 @@ impl<'a, V: Rules> Board<'a, V> {
                         }
                     });
                     for _ in 0..afflicted.get() {
-                        self.live.history.afflicted(affliction);
+                        self.live
+                            .history
+                            .afflicted(affliction, self.seat().creature());
                     }
                 }
                 sts2_core::HookEffect::ClearAffliction(to) => {
@@ -5466,7 +5467,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             return;
         };
         orbs.queue.push(V::channelled(orb));
-        self.live.history.channelled(orb);
+        self.live.history.channelled(orb, seat.creature());
         let mut walking = super::listen::Walking::begin(
             self.live,
             self.belts,
@@ -6925,10 +6926,10 @@ impl<V: Rules> Board<'_, V> {
         } = attack;
         // `History.CreatureAttacked`, before `AfterAttack` and whether or not
         // the fight is ending.
-        self.live.history.attacked(monster);
         let pet_of = (self.live.creatures.iter())
             .find(|creature| creature.id == attacker)
             .and_then(|creature| creature.owner);
+        self.live.history.attacked(monster, pet_of);
         // `IterateCombatHookListeners` hands a fight that is ending no
         // listeners.
         if self.over() {
@@ -7630,7 +7631,8 @@ pub(super) fn draw_pausing<V: Rules>(
         }
         // `History.CardDrawn`, before the hook, so a listener counts this
         // draw among the turn's.
-        live.history.draw(drawn.face.ident.card, hand_draw);
+        live.history
+            .draw(drawn.face.ident.card, hand_draw, seat.creature());
         // `Hook.AfterCardDrawn` makes its early pass over every listener first.
         let hook = sts2_core::EventHook::CardDrawnEarly {
             card: drawn.face.ident.card,
