@@ -30,6 +30,10 @@ use sts2_golden::recorded::{Ending, Recorded, Run, named, parted, position};
 use sts2_golden::scenario::Stamp;
 use sts2_headless::{Config, GameSeat, SeatHost, game_dir_from_env};
 
+#[path = "carried/mod.rs"]
+mod carried;
+use carried::carried_by_every_seat;
+
 /// Moves a run takes before this gives up on it.
 const STEPS: usize = 20_000;
 
@@ -170,9 +174,21 @@ fn play<V: WireContentVersion + sts2_content::Build>(cli: Cli) -> Result<String,
         modifiers: Vec::new(),
     };
     let mut coop = Coop::<V, GameSeat<V>>::begin(hosts, &start)?;
+    // What every player carries, on every seat's game, before any move.
+    let grants = carried_by_every_seat::<V>(start.players.len());
+    for (at, seat) in coop.seats_mut().iter_mut().enumerate() {
+        let seat_id = u8::try_from(at).expect("at most 256 seats");
+        for grant in &grants {
+            seat.setup(grant)?.map_err(|refusal| Error::Refused {
+                seat: seat_id,
+                what: format!("{grant:?}"),
+                refusal,
+            })?;
+        }
+    }
     let mut run = Run::of(&start, Ending::Capped);
     let mut hunt = match hunt {
-        true => match Hunt::begin(&start, homes.clone()) {
+        true => match Hunt::begin(&start, &grants, homes.clone()) {
             Ok(hunt) => Some(hunt),
             Err(why) => return Ok(format!("panicked 0 as the run began: {why}")),
         },
@@ -336,13 +352,25 @@ struct Hunt<V: sts2_core::Rules> {
 }
 
 impl<V: sts2_core::Rules> Hunt<V> {
-    /// A simulator seat for each of `start`'s players, or what the simulator
-    /// panicked with as it began.
-    fn begin(start: &Start<V>, homes: PathBuf) -> Result<Self, String> {
+    /// A simulator seat for each of `start`'s players, each given `grants`
+    /// as the games were, or what the simulator panicked with as it began.
+    fn begin(
+        start: &Start<V>,
+        grants: &[sts2_core::Setup<V>],
+        homes: PathBuf,
+    ) -> Result<Self, String> {
         let sims = (0..start.players.len())
             .map(|at| {
                 let me = sts2_core::SeatIndex(u8::try_from(at).expect("at most 256 seats"));
-                caught(|| sts2_sim::SimSeat::begin(start, me))
+                caught(|| {
+                    let mut sim = sts2_sim::SimSeat::begin(start, me);
+                    for grant in grants {
+                        sim.construct(grant)
+                            .expect("the simulator grants")
+                            .expect("and does not refuse");
+                    }
+                    sim
+                })
             })
             .collect::<Result<_, _>>()?;
         Ok(Self {

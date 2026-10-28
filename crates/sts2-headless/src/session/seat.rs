@@ -46,6 +46,15 @@ impl<V: sts2_content_wire::WireContentVersion> GameSeat<V> {
         &self.game
     }
 
+    /// Puts the seat's game into a position, as
+    /// [`sts2_core::Construct::setup`] does.
+    /// What the game logged is kept for [`GameSeat::take_logged`].
+    pub fn setup(&mut self, step: &sts2_core::Setup<V>) -> Result<sts2_core::Answered<V>, Error> {
+        let answered = sts2_core::Construct::setup(&mut self.game, step)?;
+        self.logged.extend_from_slice(self.game.logged());
+        Ok(answered)
+    }
+
     /// Where the seat stands after a reply, or the game's refusal.
     fn seated(&mut self, reply: Reply<V>) -> Result<SeatAnswered<V>, Error> {
         let applied = match self.game.receive(reply)? {

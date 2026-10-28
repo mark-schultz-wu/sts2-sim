@@ -6,7 +6,7 @@
 //! here is one machine's run, which takes every player's decisions as that
 //! machine receives them.
 
-use sts2_core::{Decision, Rules, SeatIndex, Snapshot, Start};
+use sts2_core::{Decision, Rules, SeatIndex, Setup, Snapshot, Start};
 
 use crate::combat::Error;
 use crate::run::{Settled, State};
@@ -53,5 +53,11 @@ impl<V: Rules> SimSeat<V> {
     /// it. Every seat's decisions reach every machine, its own among them.
     pub fn play(&mut self, seat: SeatIndex, decision: &Decision<V>) -> Result<Settled<V>, Error> {
         super::sim::decide(&mut self.state, seat, decision)
+    }
+
+    /// Puts the run into a position, as this machine's game does. A setup
+    /// that names no player is for this machine's own.
+    pub fn construct(&mut self, step: &Setup<V>) -> Result<Settled<V>, Error> {
+        super::sim::constructed(&mut self.state, self.me, step)
     }
 }

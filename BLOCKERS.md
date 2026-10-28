@@ -57,7 +57,7 @@ this order:
 5. The player-count rules in class E.
 6. The rest of F, then G.
 
-After PRs #736 to #753, the sixteen hunted co-op seeds match to the
+After PRs #736 to #753, the sixteen hunted co-op seeds matched to the
 run's end. This audit sorts the bugs those PRs fixed into classes. Then it
 lists the code that has the same shape and that no seed reached yet.
 Paths are under `crates/` unless they start with `mod/`. "Game" means the
@@ -235,13 +235,28 @@ run as its own machine sees it. The work goes in this order:
    what left any player's bag. A dead player's powers hear no hook, as
    their relics, potions and cards do not. A power's turn-end asks act
    for the player carrying it, and so do a side's turn-start asks. A
-   choice put to a player who ended the turn takes that end back. All
-   sixteen hunted seeds match to the run's end. Hunts stay at
-   `--width 4`: at `--width 8` two games of sixteen failed in Godot
-   itself. The golden tests follow the hunted runs in
+   choice put to a player who ended the turn takes that end back.
+
+   Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
+   Mercury Hourglass, as in a solo hunt. So the runs go deep.
+   Of sixteen seeds, 7 panicked and 9 parted, and 4,384 positions match.
+   Hunts stay at `--width 4`: at `--width 8` two games of sixteen failed
+   in Godot itself. The golden tests follow the hunted runs in
    `coop-v0.111.0.bin` without the game. So a change to the simulator
-   needs no hunt to show it keeps them. Next, in the order of `docs/COOP-FIGHTS.md` and where the
-   hunted runs stop:
+   needs no hunt to show it keeps them. Next, in the order of
+   `docs/COOP-FIGHTS.md` and where the hunted runs stop:
+   - Where the deeper runs part, which nobody looked at yet:
+     - after a reward is taken, in `Turn`: seeds 0, 5, 7, 8 and 13
+     - in `Creatures`, after Bash, after a Strike and after the turn's
+       end against Ovicopter: seeds 2, 11 and 14
+     - in `Turn`, after the turn's end against Snapping Jaxfruit: seed 6.
+   - Where they panic, besides the items below:
+     - Fade's `BeforeApplied` (`powers/mod.rs:6675`): seed 9
+     - Outrage's play, which v0.111.0 does not port: seed 10
+     - Vine Shambler's and Thieving Hopper's moves, which name no
+       player (`board.rs:241`): seeds 1, 12 and 15
+     - Jungle Maze Adventure and Dense Vegetation, which every player
+       goes through together: seeds 3 and 4.
    - The rest of the scheduler (steps 3 and 4 of `docs/SCHEDULER.md`). A
      question the turn loop asks belongs to no player's queue yet. Each
      phase of the turn's end panics at one in a fight of several players.

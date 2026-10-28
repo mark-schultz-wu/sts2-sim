@@ -21,12 +21,12 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_content::v0_111_0::V0_111_0;
 use sts2_core::{Construct as _, Gift, Play as _, SeatIndex, Setup};
-use sts2_golden::recorded::{Followed, Recorded, Run, follow, position};
+use sts2_golden::recorded::{Ending, Followed, Recorded, Run, follow, position};
 use sts2_sim::{Sim, SimSeat};
 
 #[path = "../examples/carried/mod.rs"]
 mod carried;
-use carried::carried;
+use carried::{carried, carried_by_every_seat};
 
 type V = V0_107_1;
 
@@ -129,8 +129,17 @@ fn matched<V: sts2_content::Build>(run: &Run) -> usize {
 /// `target/coop/runs.bin`, and raises the count.
 fn matched_coop<V: sts2_content::Build>(run: &Run) -> usize {
     let start = run.start::<V>();
+    let grants = carried_by_every_seat::<V>(run.players.len());
     let mut sims: Vec<SimSeat<V>> = (0..run.players.len())
-        .map(|at| SimSeat::begin(&start, SeatIndex(u8::try_from(at).expect("a seat"))))
+        .map(|at| {
+            let mut sim = SimSeat::begin(&start, SeatIndex(u8::try_from(at).expect("a seat")));
+            for grant in &grants {
+                sim.construct(grant)
+                    .expect("a grant applies")
+                    .expect("and is not refused");
+            }
+            sim
+        })
         .collect();
     let moves = run.moves.iter().zip(&run.seats);
     for (step, (&want, (&at, &seat))) in run.digests.iter().zip(moves).enumerate() {
@@ -139,10 +148,21 @@ fn matched_coop<V: sts2_content::Build>(run: &Run) -> usize {
             return step;
         }
         let decision = seen.observation.moves[usize::from(at)];
+        // A hunt stops a run on the move a simulator panicked on, refused or
+        // failed, and the run ends there, parted. That move is a known gap.
+        // A failure on any move before it is not.
+        let last = step + 1 == run.moves.len() && run.ending == Ending::Parted;
         for sim in &mut sims {
-            sim.play(seat, &decision)
-                .unwrap_or_else(|e| panic!("playing {decision:?} at step {step}: {e}"))
-                .unwrap_or_else(|refusal| panic!("{decision:?} refused at step {step}: {refusal}"));
+            let played = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                sim.play(seat, &decision)
+            }));
+            match played {
+                Ok(Ok(Ok(_))) => {}
+                _ if last => return step + 1,
+                Err(payload) => std::panic::resume_unwind(payload),
+                Ok(Err(e)) => panic!("playing {decision:?} at step {step}: {e}"),
+                Ok(Ok(Err(refusal))) => panic!("{decision:?} refused at step {step}: {refusal}"),
+            }
         }
     }
     // Then where each seat stands once the last move is played.

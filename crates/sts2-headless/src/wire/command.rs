@@ -115,7 +115,18 @@ pub enum Command<V: sts2_content_wire::WireContentVersion> {
     Buy {
         index: u8,
     },
-    Grant(WireGift<V>),
+    Grant {
+        #[serde(flatten)]
+        gift: WireGift<V>,
+        /// The player it goes to in a co-op run, by net id. None is the
+        /// game's own.
+        #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            with = "super::peers::target"
+        )]
+        target: Option<sts2_core::SeatIndex>,
+    },
     Answer(WireAnswer),
     /// The potion at `index` in the belt, thrown away.
     DiscardPotion {
@@ -224,7 +235,14 @@ impl<V: sts2_content_wire::WireContentVersion> From<&Setup<V>> for Command<V> {
                 amount: *amount,
                 index: *index,
             },
-            Setup::Grant(gift) => Self::Grant(gift.into()),
+            Setup::Grant(gift) => Self::Grant {
+                gift: gift.into(),
+                target: None,
+            },
+            Setup::GrantTo { seat, gift } => Self::Grant {
+                gift: gift.into(),
+                target: Some(*seat),
+            },
             Setup::Hp { at, hp } => Self::Hp {
                 hp: num_traits::ToPrimitive::to_u32(hp)
                     .expect("hit points fit the width the game sends"),
@@ -332,7 +350,14 @@ impl<V: sts2_content_wire::WireContentVersion> Command<V> {
                 index,
             }
             .into(),
-            Self::Grant(gift) => Setup::Grant(gift.into_domain()).into(),
+            Self::Grant { gift, target } => match target {
+                None => Setup::Grant(gift.into_domain()),
+                Some(seat) => Setup::GrantTo {
+                    seat,
+                    gift: gift.into_domain(),
+                },
+            }
+            .into(),
             Self::Hp { hp, target } => Setup::Hp {
                 at: target,
                 hp: num_traits::NumCast::from(hp)
@@ -831,6 +856,14 @@ mod tests {
             wire(Setup::Grant(Gift::Potion(Potion::FirePotion))),
             json!({"cmd": "grant", "potion": "FIRE_POTION"})
         );
+        // A co-op grant names its player by net id, as a rest option does.
+        assert_eq!(
+            wire(Setup::GrantTo {
+                seat: sts2_core::SeatIndex(1),
+                gift: Gift::Relic(Relic::Vajra),
+            }),
+            json!({"cmd": "grant", "relic": "VAJRA", "target": 1001})
+        );
     }
 
     /// Everything that can be sent can be read back as the step it was, or a
@@ -903,6 +936,11 @@ mod tests {
             Setup::Grant(Gift::Relic(Relic::Vajra)).into(),
             Setup::Grant(Gift::Card(Card::Ironclad(IroncladCard::Strike))).into(),
             Setup::Grant(Gift::Potion(Potion::FirePotion)).into(),
+            Setup::GrantTo {
+                seat: sts2_core::SeatIndex(1),
+                gift: Gift::Relic(Relic::Vajra),
+            }
+            .into(),
             Setup::Event {
                 event: Event::CrystalSphere,
             }

@@ -91,20 +91,7 @@ impl<V: Rules> Sim<V> {
     ///
     /// [`Sim::decide`], for the debug commands rather than the decisions.
     pub fn construct(&mut self, step: &Setup<V>) -> Result<Settled<V>, Error> {
-        match step {
-            Setup::Fight { encounter } => self.state.fight_here(SOLO, *encounter).map(Ok),
-            Setup::Grant(gift) => self.state.grant(SOLO, gift).map(Ok),
-            Setup::Power { at, power, amount } => {
-                self.state.apply_power(SOLO, *at, *power, *amount).map(Ok)
-            }
-            Setup::Enchant {
-                enchantment,
-                amount,
-                index,
-            } => self.state.enchant(SOLO, *enchantment, *amount, *index),
-            Setup::Event { event } => self.state.event_here(*event).map(Ok),
-            Setup::Hp { at, hp } => self.state.set_hp(SOLO, *at, *hp).map(Ok),
-        }
+        constructed(&mut self.state, SOLO, step)
     }
 
     /// Plays one line of a recording and reports what it decided.
@@ -236,5 +223,27 @@ pub(super) fn name<V: Rules>(decision: &Decision<V>) -> &'static str {
         Decision::Buy { .. } => "buy",
         Decision::Answer(_) => "answer",
         Decision::DiscardPotion { .. } => "discard_potion",
+    }
+}
+
+/// `step`, on the machine of the player in `me`, whose own player a setup
+/// that names none is for.
+pub(super) fn constructed<V: Rules>(
+    state: &mut State<V>,
+    me: sts2_core::SeatIndex,
+    step: &Setup<V>,
+) -> Result<Settled<V>, Error> {
+    match step {
+        Setup::Fight { encounter } => state.fight_here(me, *encounter).map(Ok),
+        Setup::Grant(gift) => state.grant(me, gift).map(Ok),
+        Setup::GrantTo { seat, gift } => state.grant(*seat, gift).map(Ok),
+        Setup::Power { at, power, amount } => state.apply_power(me, *at, *power, *amount).map(Ok),
+        Setup::Enchant {
+            enchantment,
+            amount,
+            index,
+        } => state.enchant(me, *enchantment, *amount, *index),
+        Setup::Event { event } => state.event_here(*event).map(Ok),
+        Setup::Hp { at, hp } => state.set_hp(me, *at, *hp).map(Ok),
     }
 }
