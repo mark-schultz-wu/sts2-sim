@@ -378,6 +378,15 @@ pub(super) fn side_starts<V: Rules>(
                 if let Some(task) = setup {
                     live.rejoin(host, task);
                 }
+                // `StartTurn` checks for a win only once every player is set
+                // up. So each later player's `SetupPlayerTurn` still runs, and
+                // its `ResetEnergy` with it. No listener hears a hook from
+                // then on, and nothing is drawn.
+                for later in seats(live).filter(|&later| later > seat) {
+                    if live.player(later).alive {
+                        live.players[later].energy = base_energy::<V>(live, later);
+                    }
+                }
                 return Ok(SideStarted::Ended(ended));
             }
             PlayerSetUp::Parked(task) if seat == host => setup = Some(task),

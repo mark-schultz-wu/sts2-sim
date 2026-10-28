@@ -245,11 +245,11 @@ run as its own machine sees it. The work goes in this order:
    `coop-v0.111.0.bin` without the game. So a change to the simulator
    needs no hunt to show it keeps them. Next, in the order of
    `docs/COOP-FIGHTS.md` and where the hunted runs stop:
-   - Where the deeper runs part, which nobody looked at yet:
-     - after a reward is taken, in `Turn`: seeds 0, 5, 7, 8 and 13
-     - in `Creatures`, after Bash, after a Strike and after the turn's
-       end against Ovicopter: seeds 2, 11 and 14
-     - in `Turn`, after the turn's end against Snapping Jaxfruit: seed 6.
+   - Where the deeper runs part: a monster's numbers in a fight of
+     several players.
+     - An intent's damage doubles after Bash: seed 2.
+     - A Gigantification stack, and a hit three times as hard: seed 11.
+     - Ovicopter's spawn has about 2.5 times the health: seed 14.
    - Where they panic, besides the items below:
      - Fade's `BeforeApplied` (`powers/mod.rs:6675`): seed 9
      - Outrage's play, which v0.111.0 does not port: seed 10
