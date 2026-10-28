@@ -518,8 +518,7 @@ pub(super) enum SideStarted<V: Rules> {
 }
 
 /// The post-play phase from `rest`, what its listeners still ask for. It
-/// runs until an auto-play asks, which is true. Otherwise it runs to its
-/// end, which turns the phase to `End`.
+/// runs until an auto-play asks, which is true, or else to its end.
 ///
 /// # Panics
 ///
@@ -623,7 +622,6 @@ pub(super) fn post_play_until_asked<V: Rules>(
             return true;
         }
     }
-    live.players[seat].phase = <V::PlayerTurnPhase as TurnPhaseKinds>::END;
     false
 }
 

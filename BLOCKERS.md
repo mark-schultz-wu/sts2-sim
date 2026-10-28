@@ -59,10 +59,6 @@ this order:
    1. `TurnNumber` is kept for each player, and an extra turn counts up
       only the turns of the players taking it. The sim keeps one
       `live.turn`. This goes with co-op extra turns, which panic now.
-   2. The game moves every player to the End phase after all the
-      players' post-play hooks. The sim moves each player after their
-      own. Only a listener that reads another player's phase there
-      can see it.
 4. Run state: Proceed after the boss, Spoils, `for_run` and the ancient
    heal.
 5. The player-count rules in class E.

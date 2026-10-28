@@ -69,6 +69,7 @@ pub(super) fn turn_loop<V: Rules>(
                     }
                 }
             }
+            post_play_over::<V>(seat, resumed!());
 
             // `BeforeSideTurnEnd`, whose `WhenAll` waits for every listener that
             // paused, each in the order it paused.
@@ -351,6 +352,11 @@ fn turn_ends_each<V: Rules>(
             unimplemented!("seat {seat:?}'s post-play phase asking in a fight of several players");
         }
     }
+    // Each player turns to `End` once every player's post-play phase is
+    // over.
+    for &seat in &seats {
+        post_play_over::<V>(seat, lent);
+    }
     // `BeforeSideTurnEnd`, once for the side.
     *skipping = std::mem::take(&mut lent.live.skip_tick);
     let over = match before_turn_end::<V>(host, ascension, lent) {
@@ -589,6 +595,11 @@ fn post_play_pass<V: Rules>(seat: sts2_core::SeatIndex, lent: &mut Lent<'_, V>) 
             turn,
         },
     )
+}
+
+/// The post-play phase over, which turns the player's phase to `End`.
+fn post_play_over<V: Rules>(seat: sts2_core::SeatIndex, lent: &mut Lent<'_, V>) {
+    lent.live.players[seat].phase = <V::PlayerTurnPhase as sts2_core::TurnPhaseKinds>::END;
 }
 
 /// The post-play phase from `pass`: true where an auto-play asked.
