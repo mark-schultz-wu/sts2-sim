@@ -1115,6 +1115,7 @@ pub(crate) fn each<V: Rules>(
                 let listener = sts2_core::Listener::Card {
                     card: ident.card,
                     id,
+                    owner: seat.creature(),
                     printed: &card,
                     pile: live.players[seat].cards.pile_of(id),
                     history: live.history(seat.creature()),

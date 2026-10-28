@@ -106,6 +106,7 @@ const NORMALITY_PLAYS: usize = 3;
 #[inline(never)]
 pub(crate) fn decide_hook<V: crate::Build>(
     card: V::Card,
+    owner: sts2_core::CombatId,
     pile: Option<sts2_core::Pile>,
     history: sts2_core::History<'_, V>,
     hook: sts2_core::DecisionHook<V>,
@@ -113,6 +114,12 @@ pub(crate) fn decide_hook<V: crate::Build>(
     use sts2_core::{DecisionHook, HookResponse};
 
     match (card, hook) {
+        // `card.Owner != base.Owner`: another player's card plays as it would.
+        (__c0, DecisionHook::ShouldPlay { player, .. })
+            if player != owner && (__c0 == V::Card::NORMALITY || __c0 == V::Card::ENTHRALLED) =>
+        {
+            HookResponse::Decision(true)
+        }
         // `Normality.ShouldPlay`: from the hand, no play once its owner has
         // started three this turn.
         (__c0, DecisionHook::ShouldPlay { .. }) if __c0 == V::Card::NORMALITY => {

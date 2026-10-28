@@ -100,10 +100,6 @@ player, which the simulator does not keep.
 
 Each of these needs the field first.
 
-- `Shuffled`: Biiig Hug, The Abacus, Stratagem.
-- `Flushed`: Bookmark. `FlushingLate`: Well-Laid Plans on v0.107.1.
-- `ShouldPlay`: Velvet Choker, Sloth, Chains of Binding, Normality,
-  Enthralled. One player's Normality blocks the other's cards.
 - `CardSource` carries no owner. This affects:
   - Mystic Lighter, Miniature Cannon, Strike Dummy, Fake Strike Dummy,
     Pen Nib, Vitruvian Minion, Pael's Legion, Vambrace

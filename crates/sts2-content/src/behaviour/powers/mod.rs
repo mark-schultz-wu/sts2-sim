@@ -2235,6 +2235,17 @@ pub(crate) fn decide_hook<V: crate::Build>(
         return response;
     }
     match (power, hook) {
+        // `card.Owner != base.Owner`, or `.Player`: another player's card
+        // plays as it would.
+        (__c0, DecisionHook::ShouldPlay { player, .. })
+            if player != held.holder
+                && (__c0 == V::Power::SLOTH_POWER
+                    || __c0 == V::Power::CHAINS_OF_BINDING_POWER
+                    || __c0 == V::Power::SMOGGY_POWER
+                    || __c0 == V::Power::RINGING_POWER) =>
+        {
+            HookResponse::Decision(true)
+        }
         // v0.111.0's `WellLaidPlansPower.ShouldFlush`: no for its owner, who
         // keeps the hand. v0.107.1's picks cards to retain in
         // `BeforeFlushLate` instead, and overrides no `ShouldFlush`.
@@ -2247,8 +2258,7 @@ pub(crate) fn decide_hook<V: crate::Build>(
         // has started a play this turn. A fight here has one player, whose
         // cards are its holder's.
         // `SlothPower.ShouldPlay`: no more once its owner has played its
-        // stack of cards this turn. A fight here has one player, whose cards
-        // are its holder's.
+        // stack of cards this turn.
         (__c0, DecisionHook::ShouldPlay { .. }) if __c0 == V::Power::SLOTH_POWER => {
             let (PowerAmount::Counted(amount), State::Sloth { played }) = (amount, state) else {
                 unimplemented!("an endless Sloth")
@@ -2584,14 +2594,18 @@ pub(crate) fn event_hook<V: crate::Build>(
         // still alive. A fight here has one player.
         (__c0, _, EventHook::Forged { .. }) if __c0 == V::Power::HAMMER_TIME_POWER => None,
         // `WellLaidPlansPower.BeforeFlushLate`: its owner picks up to its
-        // stack of cards to retain this turn. A fight here has one player,
-        // whose power it is.
-        (__c0, PowerAmount::Counted(count), EventHook::FlushingLate)
+        // stack of cards to retain this turn.
+        (__c0, _, EventHook::FlushingLate { player })
+            if __c0 == V::Power::WELL_LAID_PLANS_POWER && player != holder =>
+        {
+            None
+        }
+        (__c0, PowerAmount::Counted(count), EventHook::FlushingLate { .. })
             if __c0 == V::Power::WELL_LAID_PLANS_POWER =>
         {
             Some(HookEffect::PickToRetain(count))
         }
-        (__c0, PowerAmount::Endless, EventHook::FlushingLate)
+        (__c0, PowerAmount::Endless, EventHook::FlushingLate { .. })
             if __c0 == V::Power::WELL_LAID_PLANS_POWER =>
         {
             unimplemented!("an endless Well-Laid Plans")
@@ -5570,9 +5584,13 @@ pub(crate) fn event_hook<V: crate::Build>(
             unimplemented!("an endless Panache")
         }
         // `StratagemPower.AfterShuffle`: `FromCombatPile` over the draw pile
-        // for its stack of cards, each into hand. A fight here has one
-        // player, whose shuffle is its holder's.
-        (__c0, PowerAmount::Counted(amount), EventHook::Shuffled)
+        // for its stack of cards, each into hand, after its owner's shuffle.
+        (__c0, _, EventHook::Shuffled { player })
+            if __c0 == V::Power::STRATAGEM_POWER && player != holder =>
+        {
+            None
+        }
+        (__c0, PowerAmount::Counted(amount), EventHook::Shuffled { .. })
             if __c0 == V::Power::STRATAGEM_POWER =>
         {
             Some(HookEffect::SelectFromPile {
@@ -5581,7 +5599,9 @@ pub(crate) fn event_hook<V: crate::Build>(
                 act: sts2_core::PileAct::IntoHand,
             })
         }
-        (__c0, PowerAmount::Endless, EventHook::Shuffled) if __c0 == V::Power::STRATAGEM_POWER => {
+        (__c0, PowerAmount::Endless, EventHook::Shuffled { .. })
+            if __c0 == V::Power::STRATAGEM_POWER =>
+        {
             unimplemented!("an endless Stratagem")
         }
         // `ReflectPower.AfterDamageReceived`: what the block took off a

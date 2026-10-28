@@ -221,6 +221,7 @@ pub(super) fn reasons<V: Rules>(
                 fight,
                 sts2_core::DecisionHook::ShouldPlay {
                     card: card.card,
+                    player: seat.creature(),
                     affliction: card.affliction,
                     auto: false,
                 },

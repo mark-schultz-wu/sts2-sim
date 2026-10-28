@@ -517,6 +517,7 @@ pub(super) fn auto_play_in_play<V: Rules>(
         super::listen::Walk { live, belts },
         sts2_core::DecisionHook::ShouldPlay {
             card: ident.card,
+            player: seat.creature(),
             affliction: ident.affliction,
             auto: true,
         },

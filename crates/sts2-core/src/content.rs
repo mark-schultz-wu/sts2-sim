@@ -3745,6 +3745,8 @@ pub enum DecisionHook<V: ContentVersion> {
     /// `BlockedByHook`.
     ShouldPlay {
         card: V::Card,
+        /// `card.Owner.Creature`.
+        player: crate::CombatId,
         affliction: Option<V::Affliction>,
         /// `autoPlayType != AutoPlayType.None`: the play is an auto-play.
         auto: bool,
@@ -3959,9 +3961,9 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `AfterPreventingDraw`, once a listener answered no to `ShouldDraw`.
     DrawPrevented,
-    /// `AfterShuffle`, once the discard pile is shuffled into the draw pile.
-    /// A fight here has one player, who is the shuffler.
-    Shuffled,
+    /// `AfterShuffle`, once `player`'s discard pile is shuffled into their
+    /// draw pile.
+    Shuffled { player: crate::CombatId },
     /// `ModifyShuffleOrder`, over the draw pile just shuffled. `initial` is
     /// the shuffle a fight opens on.
     ShuffleOrder { initial: bool },
@@ -4414,8 +4416,8 @@ pub enum EventHook<V: ContentVersion> {
     /// damage by `amount`.
     Forged { amount: V::Number },
     /// `BeforeFlushLate`, the second pass of `Hook.BeforeFlush`, once
-    /// `DoTurnEnd` is over and before the hand is flushed.
-    FlushingLate,
+    /// `DoTurnEnd` is over and before `player`'s hand is flushed.
+    FlushingLate { player: crate::CombatId },
     /// `AfterAutoPostPlayPhaseEntered`, as `EndPlayerTurnPhaseOne` opens and
     /// before `BeforeTurnEnd`, in the player's `TurnNumber`.
     AutoPostPlayPhase {
@@ -4445,9 +4447,9 @@ pub enum EventHook<V: ContentVersion> {
     /// `AfterPreventingBlockClear`, asked of the one model whose
     /// `ShouldClearBlock` kept its owner's block, with the block kept.
     BlockClearPrevented { block: V::Number },
-    /// `AfterFlush`, once the player's hand is flushed. The cards left in
-    /// hand are the ones it retained.
-    Flushed,
+    /// `AfterFlush`, once `player`'s hand is flushed. The cards left in hand
+    /// are the ones it retained.
+    Flushed { player: crate::CombatId },
     /// `AfterOrbChanneled`, once an orb is in the player's queue.
     OrbChanneled,
     /// `AfterCardDiscarded`, once a card of `player`'s is in the discard
@@ -4644,13 +4646,13 @@ impl<V: ContentVersion> EventHook<V> {
     pub fn model_hook(&self) -> Option<ModelHook> {
         Some(match self {
             EventHook::ShuffleOrder { .. } => ModelHook::ModifyShuffleOrder,
-            EventHook::Shuffled => ModelHook::AfterShuffle,
+            EventHook::Shuffled { .. } => ModelHook::AfterShuffle,
             EventHook::DrawPrevented => ModelHook::AfterPreventingDraw,
             EventHook::HandDrawModified => ModelHook::AfterModifyingHandDraw,
             EventHook::EnergyGainModified => ModelHook::AfterModifyingEnergyGain,
             EventHook::StarsGained { .. } => ModelHook::AfterStarsGained,
             EventHook::BlockGained { .. } => ModelHook::AfterBlockGained,
-            EventHook::FlushingLate => ModelHook::BeforeFlushLate,
+            EventHook::FlushingLate { .. } => ModelHook::BeforeFlushLate,
             EventHook::EnergySpent { .. } => ModelHook::AfterEnergySpent,
             EventHook::Forged { .. } => ModelHook::AfterForge,
             EventHook::PotionUsing { .. } => ModelHook::BeforePotionUsed,
@@ -4686,7 +4688,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::CombatStarting { .. } => ModelHook::BeforeCombatStart,
             EventHook::CombatStartingLate { .. } => ModelHook::BeforeCombatStartLate,
             EventHook::RestSiteOptions => ModelHook::TryModifyRestSiteOptions,
-            EventHook::Flushed => ModelHook::AfterFlush,
+            EventHook::Flushed { .. } => ModelHook::AfterFlush,
             EventHook::OrbChanneled => ModelHook::AfterOrbChanneled,
             EventHook::CardDiscarded { .. } => ModelHook::AfterCardDiscarded,
             EventHook::PowerAmountChanging { .. } => ModelHook::BeforePowerAmountChanged,
@@ -6846,6 +6848,8 @@ pub enum Listener<'a, V: Hooks, P: Printed<V> + ?Sized> {
         card: V::Card,
         /// Which copy this is.
         id: crate::CardId<V>,
+        /// `Owner.Creature`, the player whose card it is.
+        owner: crate::CombatId,
         printed: &'a P,
         /// `Pile.Type`, and nothing for the play pile.
         pile: Option<crate::Pile>,

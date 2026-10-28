@@ -630,7 +630,8 @@ pub(super) fn before_flush_late<V: Rules>(
     }
     let player = live.player(seat).id;
     let turn = live.turn;
-    let mut walking = listen::Walking::begin(live, belts, sts2_core::EventHook::FlushingLate);
+    let mut walking =
+        listen::Walking::begin(live, belts, sts2_core::EventHook::FlushingLate { player });
     // Each listener runs under a pause boundary of its own, and the hook
     // waits for every one at its end.
     let mut listening = super::live::Listening::new();
@@ -3599,7 +3600,9 @@ pub(super) fn flush_hand<V: Rules>(
             .sift(Pile::Hand, Pile::Discard, Face::retains);
     }
     // `Hook.AfterFlush`, with what stayed in hand retained.
-    let hook = sts2_core::EventHook::Flushed;
+    let hook = sts2_core::EventHook::Flushed {
+        player: seat.creature(),
+    };
     let Some(mut walking) = listen::Walking::begin(live, belts, hook) else {
         return;
     };

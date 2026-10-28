@@ -45,10 +45,12 @@ pub(super) fn display_amount(state: &State) -> Number {
 
 /// `ShouldPlay`: no, once its owner has played six cards this turn.
 pub(super) fn decide_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     state: &State,
     hook: DecisionHook<V>,
 ) -> HookResponse<bool> {
     match hook {
+        DecisionHook::ShouldPlay { player, .. } if player != owner => HookResponse::Decision(true),
         DecisionHook::ShouldPlay { .. } => {
             HookResponse::Decision(state.played < (V::Relic::VELVET_CHOKER_CARDS as u8))
         }

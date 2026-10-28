@@ -109,10 +109,11 @@ pub(crate) fn decide_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
         }
         sts2_core::Listener::Card {
             card,
+            owner,
             pile,
             history,
             ..
-        } => crate::behaviour::cards::decide_hook::<V>(card, pile, history, hook),
+        } => crate::behaviour::cards::decide_hook::<V>(card, owner, pile, history, hook),
         // A raised hook reaches only a listener that overrides it, and no
         // monster this build ports overrides one of these.
         sts2_core::Listener::Monster { .. } => match hook.model_hook() {

@@ -5885,6 +5885,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             },
             sts2_core::DecisionHook::ShouldPlay {
                 card: ident.card,
+                player: self.seat().creature(),
                 affliction: ident.affliction,
                 auto: true,
             },
@@ -6693,7 +6694,9 @@ pub(super) fn shuffle_asking<V: Rules>(
         }
     }
     // `Hook.AfterShuffle`.
-    let hook = sts2_core::EventHook::Shuffled;
+    let hook = sts2_core::EventHook::Shuffled {
+        player: seat.creature(),
+    };
     let Some(walking) = super::listen::Walking::begin(live, belts, hook) else {
         return Ok(None);
     };
