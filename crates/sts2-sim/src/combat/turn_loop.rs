@@ -223,7 +223,8 @@ pub(super) fn turn_loop<V: Rules>(
     }
 
     // `StartTurn` for the player's side, to `OrbQueue.AfterTurnStart`.
-    let started: Result<SideStarted<V>, Error> = side_starts::<V>(ascension, extra, resumed!());
+    let taking: Option<sts2_core::SeatIndex> = extra.then_some(seat);
+    let started: Result<SideStarted<V>, Error> = side_starts::<V>(ascension, taking, resumed!());
     let parked: Option<Paused<V>> = match started {
         Ok(SideStarted::Started { setup, ended: None }) => setup,
         Ok(SideStarted::Started {
@@ -312,7 +313,7 @@ pub(super) fn turn_loop<V: Rules>(
 #[inline(never)]
 fn side_starts<V: Rules>(
     ascension: V::AscensionLevel,
-    extra: bool,
+    taking: Option<sts2_core::SeatIndex>,
     lent: &mut Lent<'_, V>,
 ) -> Result<SideStarted<V>, Error> {
     let fighting = lent.fighting();
@@ -321,7 +322,7 @@ fn side_starts<V: Rules>(
         fighting.streams,
         fighting.belts,
         ascension,
-        extra,
+        taking,
     )
 }
 

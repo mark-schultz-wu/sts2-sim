@@ -151,7 +151,7 @@ pub(super) fn enemy_side_starts<V: Rules>(
     live.switch_side(<V::CombatSide as SideKinds>::ENEMY);
     // `Creature.BeforeTurnStart` for each enemy, then `BeforeSideTurnStart`
     // for their side. Hardened Shell's cap starts again here.
-    let turn = live.turn;
+    let starting = starting_turn::<V>(live, <V::CombatSide as SideKinds>::ENEMY, None);
     before_side_turn_start::<V>(
         seat,
         live,
@@ -159,15 +159,9 @@ pub(super) fn enemy_side_starts<V: Rules>(
         belts,
         ascension,
         <V::CombatSide as SideKinds>::ENEMY,
-        turn,
+        &starting,
     );
-    clear_block::<V>(
-        seat,
-        live,
-        rngs.reborrow(),
-        belts,
-        <V::CombatSide as SideKinds>::ENEMY,
-    );
+    clear_block::<V>(seat, live, rngs.reborrow(), belts, &starting);
     // `AfterSideTurnStart` for the enemy, which the block clear comes before
     // and the moves come after. A power counting the cards played against its
     // owner forgets the count here.
@@ -315,8 +309,8 @@ pub(super) fn enemy_turn_ends<V: Rules>(
 }
 
 /// `StartTurn` for the player's side, from `BeforeSideTurnStart` to
-/// `OrbQueue.AfterTurnStart`. An `extra` turn is one `ShouldTakeExtraTurn`
-/// gave, which rolls no enemy move.
+/// `OrbQueue.AfterTurnStart`. `taking` is an extra turn's seat, and that
+/// turn rolls no move.
 ///
 /// `SetupPlayerTurn` runs for each player in seat order, under a pause
 /// boundary. One that stops on a question lets the turn go on around it:
@@ -328,13 +322,14 @@ pub(super) fn side_starts<V: Rules>(
     streams: &mut crate::stream::Streams<V>,
     belts: &mut crate::run::Belts<V>,
     ascension: V::AscensionLevel,
-    extra: bool,
+    taking: Option<sts2_core::SeatIndex>,
 ) -> Result<SideStarted<V>, Error> {
+    let extra = taking.is_some();
     // What no one player owns acts as the first.
     let host = sts2_core::SeatIndex(0);
     // `StartTurn` opens on `BeforeSideTurnStart`, which is where a relic
     // counting a turn's plays moves the count on for the draw to read.
-    let turn = live.turn;
+    let starting = starting_turn::<V>(live, <V::CombatSide as SideKinds>::PLAYER, taking);
     before_side_turn_start::<V>(
         host,
         live,
@@ -342,7 +337,7 @@ pub(super) fn side_starts<V: Rules>(
         belts,
         ascension,
         <V::CombatSide as SideKinds>::PLAYER,
-        turn,
+        &starting,
     );
 
     // `SetPhaseForAllPlayers`, and `PlayersReadyToEndTurn` emptied.
@@ -358,13 +353,7 @@ pub(super) fn side_starts<V: Rules>(
     }
 
     // `AfterTurnStart` on each player, then `SetupPlayerTurn`.
-    clear_block::<V>(
-        host,
-        live,
-        streams.combat(),
-        belts,
-        <V::CombatSide as SideKinds>::PLAYER,
-    );
+    clear_block::<V>(host, live, streams.combat(), belts, &starting);
     // A block the clear gives back can end the fight, through a hit it sets
     // off. `ResetEnergy` still runs, but no listener hears a hook from then
     // on, so the energy is the plain maximum and nothing is drawn.
@@ -411,6 +400,26 @@ pub(super) fn side_starts<V: Rules>(
         })
     });
     Ok(SideStarted::Started { setup, ended })
+}
+
+/// `creaturesStartingTurn`, which `StartTurn` takes before
+/// `BeforeSideTurnStart`, so a creature that hook summons is not among
+/// them. An extra turn starts only for the player `taking` it, and not for
+/// their pets.
+fn starting_turn<V: Rules>(
+    live: &Live<V>,
+    side: V::CombatSide,
+    taking: Option<sts2_core::SeatIndex>,
+) -> SmallVec<[CombatId; 8]> {
+    match taking {
+        Some(seat) => smallvec::smallvec![seat.creature()],
+        None => live
+            .creatures
+            .iter()
+            .filter(|creature| creature.side == side)
+            .map(|creature| creature.id)
+            .collect(),
+    }
 }
 
 /// Every seat in the fight, in order.
@@ -1016,20 +1025,16 @@ pub(super) fn before_side_turn_start<V: Rules>(
     belts: &mut crate::run::Belts<V>,
     ascension: V::AscensionLevel,
     side: V::CombatSide,
-    turn: V::Count,
+    starting: &[CombatId],
 ) {
     // `Creature.BeforeTurnStart`, which writes every power's stack as its
-    // side begins.
-    for creature in live
-        .creatures
-        .iter()
-        .filter(|creature| creature.side == side)
-    {
-        for held in live.powers.of_mut(creature.id) {
+    // turn begins.
+    for &creature in starting {
+        for held in live.powers.of_mut(creature) {
             held.on_turn_start = held.amount;
         }
     }
-    let round = live.round;
+    let (turn, round) = (live.turn, live.round);
     let hook = sts2_core::EventHook::BeforeSideTurnStart { side, turn, round };
     // Each listener runs under a pause boundary of its own, and nothing
     // waits for one that paused: it goes on as a queued action.
@@ -3778,15 +3783,9 @@ fn clear_block<V: Rules>(
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
     belts: &mut crate::run::Belts<V>,
-    side: V::CombatSide,
+    clearing: &[CombatId],
 ) {
-    let clearing: SmallVec<[CombatId; 8]> = live
-        .creatures
-        .iter()
-        .filter(|c| c.side == side)
-        .map(|creature| creature.id)
-        .collect();
-    for &creature in &clearing {
+    for &creature in clearing {
         // `Creature.AfterTurnStart` keeps a player's block on their first
         // turn, before it asks anything. A pet's `Player` is null, so a pet's
         // clears. `AfterBlockCleared` still runs.
@@ -3841,7 +3840,7 @@ fn clear_block<V: Rules>(
             Some(_) => {}
         }
     }
-    for creature in clearing {
+    for &creature in clearing {
         let hook = sts2_core::EventHook::BlockCleared {
             creature,
             turn: live.turn,
