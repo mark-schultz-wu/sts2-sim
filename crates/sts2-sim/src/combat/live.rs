@@ -2069,6 +2069,8 @@ pub(crate) struct HeldPower<V: Rules> {
     pub(crate) on_turn_start: Stacked,
     /// `PowerModel.Applier`.
     pub(crate) applier: Option<CombatId>,
+    /// `PowerModel.Target`, which a monster sets before it applies one.
+    pub(crate) target: Option<CombatId>,
     pub(crate) state: V::PowerState,
     /// Which instance this is. The store hands each power a new one as it
     /// arrives, so one taken off and applied again is another.
@@ -2100,22 +2102,30 @@ impl<V: Rules> HeldPower<V> {
         state: V::PowerState,
         amount: Stacked,
         applier: Option<CombatId>,
+        target: Option<CombatId>,
     ) -> Self {
         Self {
             amount,
             on_turn_start: Stacked::counted(0),
             applier,
+            target,
             state,
             instance: PowerInstance::default(),
         }
     }
 
     /// A power as `PowerCmd.Apply` lands one, its model as new as it is.
-    pub(crate) fn new(power: V::Power, amount: Stacked, applier: Option<CombatId>) -> Self {
+    pub(crate) fn new(
+        power: V::Power,
+        amount: Stacked,
+        applier: Option<CombatId>,
+        target: Option<CombatId>,
+    ) -> Self {
         Self {
             amount,
             on_turn_start: Stacked::counted(0),
             applier,
+            target,
             state: <V::PowerState as sts2_core::PowerModel<V>>::new(power),
             instance: PowerInstance::default(),
         }
@@ -2138,6 +2148,7 @@ impl<V: Rules> HeldPower<V> {
             owner: carrier.side,
             holder: carrier.id,
             applier: self.applier,
+            target: self.target,
             monster: carrier.monster,
             on_turn_start: self.on_turn_start.amount(),
             state: &self.state,
@@ -2162,6 +2173,7 @@ impl<V: Rules> HeldPower<V> {
             owner: carrier.side,
             holder: carrier.id,
             applier: self.applier,
+            target: self.target,
             monster: carrier.monster,
             on_turn_start: self.on_turn_start.amount(),
             state,
@@ -2417,6 +2429,7 @@ pub(crate) fn refreshes<V: Rules>(hook: &sts2_core::EventHook<V>) -> bool {
             | EventHook::CombatStarting { .. }
             | EventHook::PotionUsed { .. }
             | EventHook::PotionDiscarded { .. }
+            | EventHook::PotionProcured { .. }
     )
 }
 
@@ -3811,6 +3824,10 @@ impl<V: Rules> Live<V> {
                 holding_potions: holding_potions(),
             },
             EventHook::PotionDiscarded { in_fight, .. } => EventHook::PotionDiscarded {
+                in_fight,
+                holding_potions: holding_potions(),
+            },
+            EventHook::PotionProcured { in_fight, .. } => EventHook::PotionProcured {
                 in_fight,
                 holding_potions: holding_potions(),
             },

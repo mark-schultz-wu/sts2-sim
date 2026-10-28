@@ -2445,6 +2445,8 @@ pub struct Held<'a, V: crate::Build> {
     pub(crate) holder: sts2_core::CombatId,
     /// `PowerModel.Applier`.
     pub(crate) applier: Option<sts2_core::CombatId>,
+    /// `PowerModel.Target`.
+    pub(crate) target: Option<sts2_core::CombatId>,
     /// `Owner.Monster`, which is nothing for a power on the player.
     pub(crate) monster: Option<V::Monster>,
     /// `PowerModel.AmountOnTurnStart`.
@@ -2476,6 +2478,7 @@ pub(crate) fn event_hook<V: crate::Build>(
         owner,
         holder,
         applier,
+        target,
         monster,
         ..
     } = held;
@@ -2605,9 +2608,20 @@ pub(crate) fn event_hook<V: crate::Build>(
             unimplemented!("an endless Orbit")
         }
         (__c0, _, EventHook::EnergySpent { .. }) if __c0 == V::Power::ORBIT_POWER => None,
-        // `HammerTimePower.AfterForge` forges as much for each other player
-        // still alive. A fight here has one player.
-        (__c0, _, EventHook::Forged { .. }) if __c0 == V::Power::HAMMER_TIME_POWER => None,
+        // `HammerTimePower.AfterForge`: when its owner forges, from anything
+        // but a Hammer Time, as much for each other player still alive.
+        (__c0, _, EventHook::Forged { player, source, .. })
+            if __c0 == V::Power::HAMMER_TIME_POWER
+                && (source == Some(V::Power::HAMMER_TIME_POWER) || player != holder) =>
+        {
+            None
+        }
+        (__c0, _, EventHook::Forged { amount, .. }) if __c0 == V::Power::HAMMER_TIME_POWER => {
+            Some(HookEffect::ForgeOthers {
+                card: V::Card::SOVEREIGN_BLADE,
+                amount,
+            })
+        }
         // `WellLaidPlansPower.BeforeFlushLate`: its owner picks up to its
         // stack of cards to retain this turn.
         (__c0, _, EventHook::FlushingLate { player })
@@ -4807,7 +4821,13 @@ pub(crate) fn event_hook<V: crate::Build>(
             return;
         }
         // `WitheringPresencePower.AfterCardPlayed`, for each card its target
-        // plays, which is the one player: every sixth, a Wither into the hand.
+        // plays: every sixth, a Wither into the player's hand. One aimed at
+        // a pet hears none, since a pet's `Player` is null.
+        (__c0, _, EventHook::CardPlayed { player, .. })
+            if __c0 == V::Power::WITHERING_PRESENCE_POWER && Some(player) != target =>
+        {
+            None
+        }
         (__c0, _, EventHook::CardPlayed { .. }) if __c0 == V::Power::WITHERING_PRESENCE_POWER => {
             let State::WitheringPresence { cards_left } = state else {
                 unreachable!("Withering Presence holding {state:?}")

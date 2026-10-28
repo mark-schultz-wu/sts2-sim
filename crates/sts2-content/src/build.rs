@@ -1308,6 +1308,12 @@ macro_rules! rules {
                     )
                 }
 
+                fn monster_starting_aimed_powers(
+                    monster: Self::Monster,
+                ) -> impl Iterator<Item = (Self::Power, PowerAmount<Self::Number>)> {
+                    crate::behaviour::monsters::starting_aimed_powers::<Self>(monster).into_iter()
+                }
+
                 fn monster_starting_opponent_powers(
                     monster: Self::Monster,
                     ascension: Self::AscensionLevel,

@@ -328,24 +328,38 @@ pub(crate) fn added_to_room<V: Rules>(
         let (id, monster) = (held.creature, held.monster);
         // A fight opens on the player's side.
         let side = <V::CombatSide as SideKinds>::PLAYER;
-        // Each lands on the monster, an enemy, and scales.
-        for (power, amount) in V::monster_starting_powers(monster, ascension, side, &held.state) {
-            let amount = match amount {
-                sts2_core::PowerAmount::Counted(amount) => {
-                    sts2_core::PowerAmount::Counted(scaling.power::<V>(power, amount))
-                }
-                endless => endless,
-            };
-            starting::<V>(powers, id, power, Stacked::from(amount), Some(id));
-        }
         let opponents: SmallVec<[CombatId; 2]> = creatures
             .iter()
             .filter(|creature| creature.side != <V::CombatSide as SideKinds>::ENEMY)
             .map(|creature| creature.id)
             .collect();
+        // Each lands on the monster, an enemy, and scales.
+        let scaled = |power, amount| match amount {
+            sts2_core::PowerAmount::Counted(amount) => {
+                sts2_core::PowerAmount::Counted(scaling.power::<V>(power, amount))
+            }
+            endless => endless,
+        };
+        for (power, amount) in V::monster_starting_aimed_powers(monster) {
+            for &opponent in &opponents {
+                let amount = Stacked::from(scaled(power, amount));
+                starting::<V>(powers, id, power, amount, Some(id), Some(opponent));
+            }
+        }
+        for (power, amount) in V::monster_starting_powers(monster, ascension, side, &held.state) {
+            let amount = Stacked::from(scaled(power, amount));
+            starting::<V>(powers, id, power, amount, Some(id), None);
+        }
         for (power, amount) in V::monster_starting_opponent_powers(monster, ascension) {
             for &opponent in &opponents {
-                starting::<V>(powers, opponent, power, Stacked::from(amount), Some(id));
+                starting::<V>(
+                    powers,
+                    opponent,
+                    power,
+                    Stacked::from(amount),
+                    Some(id),
+                    None,
+                );
             }
         }
     }
@@ -391,6 +405,7 @@ fn starting<V: Rules>(
     power: V::Power,
     amount: Stacked,
     applier: Option<CombatId>,
+    target: Option<CombatId>,
 ) {
     let per_applier = sts2_core::PowerTable::per_applier(power);
     let fresh = sts2_core::PowerTable::instanced(power) && !per_applier;
@@ -403,7 +418,7 @@ fn starting<V: Rules>(
         held.amount = Stacked::counted(had + more);
         return;
     }
-    powers.push(creature, HeldPower::new(power, amount, applier));
+    powers.push(creature, HeldPower::new(power, amount, applier, target));
 }
 
 /// Add a monster during a fight, before the enemy side prepares its next

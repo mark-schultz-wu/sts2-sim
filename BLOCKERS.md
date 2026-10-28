@@ -91,21 +91,8 @@ lacks many of these checks, often with a comment that says "a fight
 here has one player". `grep -rn 'here has one'
 crates/sts2-content/src` lists about 140 of these comments.
 
-##### The hook carries the player already, so only the content changes
-
-Every relic, power and card here compares the player now, but one.
-Withering Presence compares the card's owner with its `Target`'s
-player, which the simulator does not keep.
-
-##### The hook carries no player yet
-
-Each of these needs the field first.
-
-- Single hooks:
-  - `Forged`: Hammer Time.
-- `CardRewardAlternativeChosen` walks every seat, where the game asks
-  only the model that added the alternative. So each player's Pael's
-  Wing counts every player's sacrifice.
+Every relic, power and card that the audit found compares the player
+now.
 
 #### B. Effects for the acting player
 
@@ -121,7 +108,8 @@ Each of these needs the field first.
   - Paper Cuts, Sleight of Flesh
   - Possess Strength and Possess Speed, where the game keeps a count
     for each player
-  - Sandpit's removal, where the game kills `base.Target`.
+  - Sandpit's removal, where the game kills `base.Target`. A held
+    power keeps its `Target` now, so Sandpit can read it.
 - Run sites:
   - `room_entering` TransformTo (`run/state.rs:1887`) looks only in the
     traveller's deck
@@ -136,7 +124,6 @@ Each of these needs the field first.
 The fight's walk and the run's fill in each listener's own player's
 block, energy, hand, deck, health, plays and belt. What is left:
 
-- `PotionProcured` carries no player, and Belt Buckle reads it.
 - A modifier reads `RoomEntered`'s numbers as the walk raised them,
   which are the first player's. Terminal reads them for every player.
 
@@ -214,8 +201,7 @@ Low:
   - Sneaky: block when another player plays an Attack
   - Beacon of Hope: shares block with teammates
   - Tank: gives Guarded to the other players
-  - Covered: `unimplemented!`
-  - Hammer Time: forges for every other player.
+  - Covered: `unimplemented!`.
 - 32 `unimplemented!` panics in `sts2-sim` name several players. Most
   of them are in `turn_loop.rs`, `board.rs` and `run/state.rs`, and
   `BLOCKERS.md` already lists them.

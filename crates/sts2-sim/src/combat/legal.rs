@@ -895,6 +895,7 @@ mod tests {
                 power,
                 crate::combat::live::Stacked::counted(amount),
                 None,
+                None,
             ),
         );
         fight

@@ -104,6 +104,20 @@ pub(crate) fn starting_powers<V: crate::Build>(
 
 /// Powers a monster's `AfterAddedToRoom` applies to each of its opponents.
 /// The Rocket surrounds the player.
+/// `Aeonglass.AfterAddedToRoom`: a `WitheringPresencePower` on itself for
+/// each opponent, pets too, aimed at it.
+pub(crate) fn starting_aimed_powers<V: crate::Build>(
+    monster: V::Monster,
+) -> Vec<(V::Power, sts2_core::PowerAmount<Number>)> {
+    match monster {
+        __c0 if __c0 == V::Monster::AEONGLASS => vec![(
+            V::Power::WITHERING_PRESENCE_POWER,
+            sts2_core::PowerAmount::Counted(6),
+        )],
+        _ => Vec::new(),
+    }
+}
+
 pub(crate) fn starting_opponent_powers<V: crate::Build>(
     monster: V::Monster,
 ) -> Vec<(V::Power, sts2_core::PowerAmount<Number>)> {

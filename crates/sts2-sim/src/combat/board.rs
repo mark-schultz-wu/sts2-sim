@@ -465,6 +465,18 @@ impl<'a, V: Rules> Board<'a, V> {
         self.land_copy(at, power, amount, applier, None);
     }
 
+    /// [`Board::land`] of a power whose `Target` its applier set first.
+    pub(super) fn land_aimed(
+        &mut self,
+        at: CombatId,
+        power: V::Power,
+        amount: PowerAmount<V::Number>,
+        applier: Option<CombatId>,
+        target: CombatId,
+    ) {
+        self.land_fresh(at, power, amount, applier, None, Some(target), false);
+    }
+
     /// [`Board::land`], where `copy` is the instance to build, a clone its
     /// caller wrote on. One that stacks onto an instance already there is
     /// dropped, as the game's is.
@@ -476,11 +488,12 @@ impl<'a, V: Rules> Board<'a, V> {
         applier: Option<CombatId>,
         copy: Option<V::PowerState>,
     ) {
-        self.land_fresh(at, power, amount, applier, copy, false);
+        self.land_fresh(at, power, amount, applier, copy, None, false);
     }
 
     /// [`Board::land_copy`], where `fraction` says the zero amount is a
     /// fraction below one the game passes the zero check with.
+    #[allow(clippy::too_many_arguments)]
     fn land_fresh(
         &mut self,
         at: CombatId,
@@ -488,6 +501,7 @@ impl<'a, V: Rules> Board<'a, V> {
         amount: PowerAmount<V::Number>,
         applier: Option<CombatId>,
         copy: Option<V::PowerState>,
+        target: Option<CombatId>,
         fraction: bool,
     ) {
         self.ran_on();
@@ -521,7 +535,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 }
                 return;
             }
-            return self.land_on_created(at, power, amount, applier, copy);
+            return self.land_on_created(at, power, amount, applier, copy, target);
         }
         let id = at;
         let Some(at) = self.at(at) else { return };
@@ -592,7 +606,7 @@ impl<'a, V: Rules> Board<'a, V> {
             }
         };
         let carrier = self.live.creatures[at].carrier();
-        let state = self.apply_fresh(carrier, power, amount, applier, copy);
+        let state = self.apply_fresh(carrier, power, amount, applier, target, copy);
         // The hook can take the creature out of the fight, or kill one that
         // stays in it, and `CanReceivePowers` is asked again.
         let Some(found) = self.at(id) else {
@@ -616,9 +630,10 @@ impl<'a, V: Rules> Board<'a, V> {
         // fraction below one is not zero there, and floors to it after.
         let landed = fraction || amount != PowerAmount::Counted(V::Number::zero());
         if landed {
-            self.live
-                .powers
-                .push(id, HeldPower::landing(state, amount.into(), applier));
+            self.live.powers.push(
+                id,
+                HeldPower::landing(state, amount.into(), applier, target),
+            );
             self.live.history.power_received(power, applier);
         }
         self.power_received(modifiers, power);
@@ -650,6 +665,7 @@ impl<'a, V: Rules> Board<'a, V> {
         amount: PowerAmount<V::Number>,
         applier: Option<CombatId>,
         copy: Option<V::PowerState>,
+        target: Option<CombatId>,
     ) {
         use sts2_core::PowerTable as _;
 
@@ -679,7 +695,14 @@ impl<'a, V: Rules> Board<'a, V> {
             false => amount,
         };
         let carrier = self.live.created[at].fighter.carrier();
-        let state = self.apply_fresh(carrier, power, PowerAmount::Counted(amount), applier, copy);
+        let state = self.apply_fresh(
+            carrier,
+            power,
+            PowerAmount::Counted(amount),
+            applier,
+            target,
+            copy,
+        );
         if amount.is_zero() {
             return;
         }
@@ -688,6 +711,7 @@ impl<'a, V: Rules> Board<'a, V> {
             state,
             PowerAmount::Counted(amount).into(),
             applier,
+            target,
         ));
         self.live.history.power_received(power, applier);
         self.power_received(modifiers, power);
@@ -839,13 +863,6 @@ impl<'a, V: Rules> Board<'a, V> {
             .iter()
             .find(|held| held.creature == id)
             .map_or_else(|| sts2_core::MonsterModel::new(monster), |held| held.state);
-        let entering: SmallVec<[_; 2]> =
-            V::monster_starting_powers(monster, self.live.ascension, side, &model).collect();
-        for (power, amount) in entering {
-            self.land(id, power, amount, Some(id));
-        }
-        let aimed: SmallVec<[_; 2]> =
-            V::monster_starting_opponent_powers(monster, self.live.ascension).collect();
         // `CombatState.GetOpponentsOf`, pets included.
         let opponents: SmallVec<[CombatId; 4]> = self
             .live
@@ -854,7 +871,19 @@ impl<'a, V: Rules> Board<'a, V> {
             .filter(|creature| creature.side != <V::CombatSide as SideKinds>::ENEMY)
             .map(|creature| creature.id)
             .collect();
-        for (power, amount) in aimed {
+        for (power, amount) in V::monster_starting_aimed_powers(monster) {
+            for &opponent in &opponents {
+                self.land_aimed(id, power, amount, Some(id), opponent);
+            }
+        }
+        let entering: SmallVec<[_; 2]> =
+            V::monster_starting_powers(monster, self.live.ascension, side, &model).collect();
+        for (power, amount) in entering {
+            self.land(id, power, amount, Some(id));
+        }
+        let given: SmallVec<[_; 2]> =
+            V::monster_starting_opponent_powers(monster, self.live.ascension).collect();
+        for (power, amount) in given {
             for &opponent in &opponents {
                 self.land(opponent, power, amount, Some(id));
             }
@@ -1621,6 +1650,7 @@ impl<'a, V: Rules> Board<'a, V> {
         power: V::Power,
         amount: PowerAmount<V::Number>,
         applier: Option<CombatId>,
+        target: Option<CombatId>,
         copy: Option<V::PowerState>,
     ) -> V::PowerState {
         // `BeforeApplied`, which runs before the power attaches. What it asks
@@ -1645,6 +1675,7 @@ impl<'a, V: Rules> Board<'a, V> {
             owner: carrier.side,
             holder: carrier.id,
             applier,
+            target,
             monster: carrier.monster,
             on_turn_start: sts2_core::PowerAmount::Counted(num_traits::zero()),
             state: &mut state,
@@ -4270,6 +4301,87 @@ pub(super) fn osty<V: Rules>(
 }
 
 impl<V: Rules> Board<'_, V> {
+    /// `ForgeCmd.Forge` for the actor's player, from `source` where a
+    /// power's hook forged.
+    pub(super) fn forge_by(&mut self, card: V::Card, amount: V::Number, source: Option<V::Power>) {
+        let seat = self.seat();
+        self.ran_on();
+        // `ForgeCmd.Forge` does nothing in a fight that is over or ending.
+        if self.over() {
+            return;
+        }
+        // It creates one when the fight holds none it can reach. The exhaust
+        // pile is not one it can reach, and is forged all the same. A full
+        // hand sends the new one to the discard pile.
+        let held = self.live.players[seat]
+            .cards
+            .any_outside_exhaust(|held| held.ident.card == card);
+        let created = (!held).then(|| {
+            let id = self.live.card_ids.mint();
+            let full =
+                self.live.players[seat].cards.len(Pile::Hand) >= super::pile::MAX_CARDS_IN_HAND;
+            let pile = if full { Pile::Discard } else { Pile::Hand };
+            let index = num_traits::NumCast::from(self.live.players[seat].cards.len(pile))
+                .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
+            self.live.players[seat]
+                .cards
+                .push(pile, CardInstance::new(CardIdent::new(card), id));
+            CardAt::new(id, pile, index)
+        });
+        // `IncreaseSovereignBladeDamage`, over `AllCards`: every copy, in
+        // every pile, the one being played among them.
+        self.live.players[seat].cards.write_all_cards(
+            |held| held.ident.card == card,
+            |held| held.add_damage(amount),
+        );
+        // The blade goes through `AddGeneratedCardToCombat`, so it enters the
+        // fight the way a generated card does. It is raised after the raise,
+        // which is the order `ForgeCmd` adds and then increases in.
+        if let Some(at) = created {
+            self.card_entered_combat(at, card, false);
+            let player = self.live.player(seat).id;
+            self.card_generated(at, card, Some(player));
+        }
+        // `Hook.AfterForge`.
+        if !super::listen::heard::<V>(self.live, self.belts, sts2_core::ModelHook::AfterForge) {
+            return;
+        }
+        let player = self.live.player(seat).id;
+        let hook = sts2_core::EventHook::Forged {
+            amount,
+            player,
+            source,
+        };
+        let mut walking = super::listen::Walking::begin(self.live, self.belts, hook);
+        while let Some((listener, effect)) =
+            walking.as_mut().and_then(|walking| self.next_of(walking))
+        {
+            match (listener, effect) {
+                (Listener::Power { power, .. }, HookEffect::ForgeOthers { card, amount }) => {
+                    // `Players.Where(p => p.Creature.IsAlive && p != forger)`.
+                    let others: SmallVec<[CombatId; 4]> = self
+                        .live
+                        .players
+                        .seats()
+                        .map(|seat| self.live.player(seat))
+                        .filter(|fighter| fighter.id != player && fighter.is_alive())
+                        .map(|fighter| fighter.id)
+                        .collect();
+                    for other in others {
+                        let actor = std::mem::replace(&mut self.actor, other);
+                        let reaching = self.reaching.take();
+                        self.forge_by(card, amount, Some(power));
+                        self.actor = actor;
+                        self.reaching = reaching;
+                    }
+                }
+                (listener, effect) => {
+                    unimplemented!("{listener:?} asking for {effect:?} once a blade is forged")
+                }
+            }
+        }
+    }
+
     /// `Hook.AfterBlockGained`, once `CreatureCmd.GainBlock` gave `creature`
     /// `amount`. The game raises it for a gain the modifiers left at none.
     pub(super) fn block_gained(&mut self, creature: CombatId, amount: V::Number, positive: bool) {
@@ -5370,53 +5482,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn forge(&mut self, card: V::Card, amount: V::Number) {
-        let seat = self.seat();
-        self.ran_on();
-        // `ForgeCmd.Forge` does nothing in a fight that is over or ending.
-        if self.over() {
-            return;
-        }
-        // It creates one when the fight holds none it can reach. The exhaust
-        // pile is not one it can reach, and is forged all the same. A full
-        // hand sends the new one to the discard pile.
-        let held = self.live.players[seat]
-            .cards
-            .any_outside_exhaust(|held| held.ident.card == card);
-        let created = (!held).then(|| {
-            let id = self.live.card_ids.mint();
-            let full =
-                self.live.players[seat].cards.len(Pile::Hand) >= super::pile::MAX_CARDS_IN_HAND;
-            let pile = if full { Pile::Discard } else { Pile::Hand };
-            let index = num_traits::NumCast::from(self.live.players[seat].cards.len(pile))
-                .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
-            self.live.players[seat]
-                .cards
-                .push(pile, CardInstance::new(CardIdent::new(card), id));
-            CardAt::new(id, pile, index)
-        });
-        // `IncreaseSovereignBladeDamage`, over `AllCards`: every copy, in
-        // every pile, the one being played among them.
-        self.live.players[seat].cards.write_all_cards(
-            |held| held.ident.card == card,
-            |held| held.add_damage(amount),
-        );
-        // The blade goes through `AddGeneratedCardToCombat`, so it enters the
-        // fight the way a generated card does. It is raised after the raise,
-        // which is the order `ForgeCmd` adds and then increases in.
-        if let Some(at) = created {
-            self.card_entered_combat(at, card, false);
-            let player = self.live.player(seat).id;
-            self.card_generated(at, card, Some(player));
-        }
-        // `Hook.AfterForge`.
-        if super::listen::heard::<V>(self.live, self.belts, sts2_core::ModelHook::AfterForge) {
-            let hook = sts2_core::EventHook::Forged { amount };
-            if let Some((listener, effect)) =
-                super::listen::first_answer::<V>(seat, self.live, self.belts, hook)
-            {
-                unimplemented!("{listener:?} asking for {effect:?} once a blade is forged");
-            }
-        }
+        self.forge_by(card, amount, None);
     }
 
     fn apply_to_actor(&mut self, power: V::Power, amount: PowerAmount<V::Number>) {
@@ -5425,7 +5491,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn apply_fraction_to_actor(&mut self, power: V::Power) {
         let zero = PowerAmount::Counted(V::Number::zero());
-        self.land_fresh(self.actor, power, zero, Some(self.actor), None, true);
+        self.land_fresh(self.actor, power, zero, Some(self.actor), None, None, true);
     }
 
     /// `OrbCmd.Channel`, which does nothing once the fight is ending.
@@ -7917,6 +7983,7 @@ mod tests {
                 power,
                 crate::combat::live::Stacked::counted(2),
                 Some(player),
+                None,
             ),
         );
         resolve::<V>(

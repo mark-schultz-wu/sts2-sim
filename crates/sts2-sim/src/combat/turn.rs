@@ -3305,9 +3305,13 @@ pub(super) fn side_turn_started<V: Rules>(
                     |card| card.modify(sts2_core::Change::Upgrade, sts2_core::Lasting::ThisFight),
                 ),
                 sts2_core::HookEffect::Forge { card, amount } => {
+                    let source = match listener {
+                        Listener::Power { power, .. } => Some(power),
+                        _ => None,
+                    };
                     let mut board =
                         Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
-                    sts2_core::Fight::forge(&mut board, card, amount);
+                    board.forge_by(card, amount, source);
                 }
                 // `PlayerCmd.GainEnergy`.
                 sts2_core::HookEffect::GainEnergy(amount) => {

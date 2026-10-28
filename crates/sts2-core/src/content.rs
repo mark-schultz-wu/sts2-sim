@@ -3928,8 +3928,12 @@ pub enum EventHook<V: ContentVersion> {
         holding_potions: bool,
     },
     /// `AfterPotionProcured`, once a potion is in a belt slot. `in_fight` is
-    /// `CombatManager.IsInProgress`.
-    PotionProcured { in_fight: bool },
+    /// `CombatManager.IsInProgress`, and `holding_potions` is
+    /// `Owner.Potions.Any()`.
+    PotionProcured {
+        in_fight: bool,
+        holding_potions: bool,
+    },
     /// `AfterPotionDiscarded`, once a potion leaves the belt unused.
     /// `in_fight` is `CombatManager.IsInProgress`, and `holding_potions` is
     /// `Owner.Potions.Any()`.
@@ -4059,9 +4063,13 @@ pub enum EventHook<V: ContentVersion> {
     ModifyRewardsLate { room: Option<V::RoomType> },
     /// `TryModifyCardRewardAlternatives`, for one card reward of `player`'s.
     CardRewardAlternatives { player: crate::CombatId },
-    /// A card reward's alternative chosen, which is its `OnSelect`. Only the
-    /// model that added it hears it.
-    CardRewardAlternativeChosen(crate::RewardAlternative),
+    /// A card reward of `player`'s, its alternative chosen, which is the
+    /// `OnSelect` of the model that added it. That model is `player`'s own,
+    /// and only it hears this.
+    CardRewardAlternativeChosen {
+        alternative: crate::RewardAlternative,
+        player: crate::CombatId,
+    },
     /// `BeforeCombatStart`, once the fight is built and before it opens, in
     /// a room of this type. `holding_potions` is `Owner.Potions.Any()`.
     CombatStarting {
@@ -4465,7 +4473,14 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `AfterForge`, once `ForgeCmd.Forge` raised the Sovereign Blades'
     /// damage by `amount`.
-    Forged { amount: V::Number },
+    Forged {
+        amount: V::Number,
+        /// `forger.Creature`.
+        player: crate::CombatId,
+        /// `source`, where a power's hook forged. Nothing for a card's or a
+        /// potion's.
+        source: Option<V::Power>,
+    },
     /// `BeforeFlushLate`, the second pass of `Hook.BeforeFlush`, once
     /// `DoTurnEnd` is over and before `player`'s hand is flushed.
     FlushingLate { player: crate::CombatId },
@@ -4736,7 +4751,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::ModifyRewards { .. } => ModelHook::TryModifyRewards,
             EventHook::ModifyRewardsLate { .. } => ModelHook::TryModifyRewardsLate,
             EventHook::CardRewardAlternatives { .. }
-            | EventHook::CardRewardAlternativeChosen(_) => {
+            | EventHook::CardRewardAlternativeChosen { .. } => {
                 ModelHook::TryModifyCardRewardAlternatives
             }
             EventHook::CombatStarting { .. } => ModelHook::BeforeCombatStart,
@@ -6440,6 +6455,12 @@ pub enum HookEffect<V: ContentVersion> {
         card: V::Card,
         amount: V::Number,
     },
+    /// `ForgeCmd.Forge` from a power hook for each living player but the
+    /// power's owner, as `HammerTimePower.AfterForge` forges.
+    ForgeOthers {
+        card: V::Card,
+        amount: V::Number,
+    },
     /// `CreatureCmd.GainBlock` on the listener's owner.
     GainBlock(V::Number),
     /// `CreatureCmd.GainBlock(target, amount, Unpowered)` on a creature the
@@ -6916,6 +6937,8 @@ pub enum Listener<'a, V: Hooks, P: Printed<V> + ?Sized> {
         holder: crate::CombatId,
         /// `PowerModel.Applier`, the creature whose command put it on.
         applier: Option<crate::CombatId>,
+        /// `PowerModel.Target`, the creature a monster aimed it at.
+        target: Option<crate::CombatId>,
         /// `Owner.Monster`, which is nothing for a power on the player.
         monster: Option<V::Monster>,
         /// `PowerModel.AmountOnTurnStart`: the stack as its holder's side
@@ -6989,6 +7012,8 @@ pub struct EventPower<'a, V: Hooks> {
     pub holder: crate::CombatId,
     /// `PowerModel.Applier`, the creature whose command put it on.
     pub applier: Option<crate::CombatId>,
+    /// `PowerModel.Target`, the creature a monster aimed it at.
+    pub target: Option<crate::CombatId>,
     /// `Owner.Monster`, which is nothing for a power on the player.
     pub monster: Option<V::Monster>,
     /// `PowerModel.AmountOnTurnStart`.
@@ -8280,6 +8305,13 @@ pub trait Rules: Hooks + Engine {
         ascension: Self::AscensionLevel,
         side: Self::CombatSide,
         model: &Self::MonsterState,
+    ) -> impl Iterator<Item = (Self::Power, PowerAmount<Self::Number>)>;
+
+    /// Powers a monster's `AfterAddedToRoom` applies to itself once for each
+    /// of its opponents, each aimed at that opponent as its `Target`. They
+    /// land before the ones `monster_starting_powers` lists.
+    fn monster_starting_aimed_powers(
+        monster: Self::Monster,
     ) -> impl Iterator<Item = (Self::Power, PowerAmount<Self::Number>)>;
 
     /// Powers a monster's `AfterAddedToRoom` applies to each of its

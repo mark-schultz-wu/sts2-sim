@@ -2183,6 +2183,7 @@ impl<V: Rules> State<V> {
         self.belt_to_fight(seat);
         let hook = sts2_core::EventHook::PotionProcured {
             in_fight: matches!(self.phase, Phase::Combat(_)),
+            holding_potions: self.holding_potions(seat),
         };
         self.belt_changed(seat, hook);
     }
@@ -5000,6 +5001,10 @@ impl<V: Rules> State<V> {
                 holding_potions: self.holding_potions(seat),
             },
             EventHook::PotionDiscarded { in_fight, .. } => EventHook::PotionDiscarded {
+                in_fight,
+                holding_potions: self.holding_potions(seat),
+            },
+            EventHook::PotionProcured { in_fight, .. } => EventHook::PotionProcured {
                 in_fight,
                 holding_potions: self.holding_potions(seat),
             },
@@ -7824,7 +7829,10 @@ impl<V: Rules> State<V> {
                 // does, reaches this reward's cards as well as the others'.
                 // The caller hands them the relics once the walk is done, and
                 // marks the reward taken after.
-                let chosen = sts2_core::EventHook::CardRewardAlternativeChosen(alternative);
+                let chosen = sts2_core::EventHook::CardRewardAlternativeChosen {
+                    alternative,
+                    player: seat.creature(),
+                };
                 let Some(walking) = self.run_walking(chosen) else {
                     if let Some(Offer::Card { taken, .. }) = offered.get_mut(take.index()) {
                         *taken = true;
