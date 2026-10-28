@@ -4999,6 +4999,10 @@ impl<V: Rules> State<V> {
                 in_fight,
                 holding_potions: self.holding_potions(seat),
             },
+            EventHook::PotionDiscarded { in_fight, .. } => EventHook::PotionDiscarded {
+                in_fight,
+                holding_potions: self.holding_potions(seat),
+            },
             // The healed player's, which an earlier listener can move.
             EventHook::RestSiteHeal {
                 player, mimicked, ..

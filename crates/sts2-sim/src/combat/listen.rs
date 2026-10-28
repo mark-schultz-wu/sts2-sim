@@ -623,6 +623,7 @@ impl<V: Rules, C: Cursor<V>> Walker<V, C> {
                         Some(held) if held.instance == instance => Some(usize::from(at)),
                         _ => live.powers.place_of(owner, instance),
                     };
+                    let hook = live.as_heard_by(|| live.seat_of(owner), hook);
                     match at {
                         Some(at) => live.ask_power_as(Some(&*belts), carrier, at, hook, asked),
                         // Taken off since the walk began: asked as a model on
@@ -663,13 +664,16 @@ impl<V: Rules, C: Cursor<V>> Walker<V, C> {
                         unimplemented!("the belt changing under a walk over {hook:?}")
                     }
                     let (state, belt) = belts[seat].state_beside(usize::from(slot));
+                    let hook = live.as_heard_by(|| Some(seat), hook);
                     V::relic_event_hook(state, belt, live.relic_owner(seat), hook, asked);
                     Listener::Relic { seat, slot }
                 }
                 Snapped::Card { seat, id } => {
                     // `Contains`: still in the fight, and its owner active for
                     // hooks.
-                    if live.players[seat].deaf || !ask_card(seat, live, id, hook, asked) {
+                    if live.players[seat].deaf
+                        || !ask_card(seat, live, id, live.as_heard_by(|| Some(seat), hook), asked)
+                    {
                         continue;
                     }
                     Listener::Card { id }

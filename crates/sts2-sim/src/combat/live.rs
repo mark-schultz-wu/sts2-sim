@@ -2401,6 +2401,25 @@ pub(crate) struct DeckVersions<V: Rules> {
     deck: Arc<[sts2_core::DeckCardId]>,
 }
 
+/// Whether `hook` carries a fact about the listener's own player, which
+/// [`Live::refreshed`] fills in.
+#[inline(always)]
+pub(crate) fn refreshes<V: Rules>(hook: &sts2_core::EventHook<V>) -> bool {
+    use sts2_core::EventHook;
+
+    matches!(
+        hook,
+        EventHook::BeforeSideTurnEndVeryEarly { .. }
+            | EventHook::BeforeSideTurnEndEarly { .. }
+            | EventHook::BeforeSideTurnEnd { .. }
+            | EventHook::SideTurnEnd { .. }
+            | EventHook::RoomEntered { .. }
+            | EventHook::CombatStarting { .. }
+            | EventHook::PotionUsed { .. }
+            | EventHook::PotionDiscarded { .. }
+    )
+}
+
 impl<V: Rules> DeckVersions<V> {
     /// A fight whose copies came from no deck.
     pub(super) fn none() -> Self {
@@ -2416,6 +2435,11 @@ impl<V: Rules> DeckVersions<V> {
             first: Some(first),
             deck,
         }
+    }
+
+    /// How many cards the deck held as the fight began.
+    pub(super) fn len(&self) -> usize {
+        self.deck.len()
     }
 
     /// The deck card `card` is a copy of.
@@ -2806,6 +2830,9 @@ const ENTRIES_INLINE: usize = 24;
 pub(crate) struct CombatHistory<V: Rules> {
     this_turn: smallvec::SmallVec<[sts2_core::HistoryEntry<V>; ENTRIES_INLINE]>,
     before: Option<std::sync::Arc<sts2_core::PastTurns<V>>>,
+    /// Each player's plays finished this turn that no auto-play made, kept
+    /// as each finishes, which a turn's end reads for every listener.
+    unprompted: smallvec::SmallVec<[(CombatId, u8); 2]>,
 }
 
 impl<V: Rules> CombatHistory<V> {
@@ -2813,18 +2840,16 @@ impl<V: Rules> CombatHistory<V> {
         CombatHistory {
             this_turn: smallvec::SmallVec::new(),
             before: None,
+            unprompted: smallvec::SmallVec::new(),
         }
     }
 
-    /// `CardPlaysFinished` where `HappenedThisTurn` and not `IsAutoPlay`, at
-    /// most 255.
-    pub(super) fn unprompted_plays_this_turn(&self) -> u8 {
-        let plays = (self.this_turn.iter())
-            .filter(|entry| {
-                matches!(entry, sts2_core::HistoryEntry::Finished(finished) if !finished.auto)
-            })
-            .count();
-        u8::try_from(plays).unwrap_or(u8::MAX)
+    /// `CardPlaysFinished` where `HappenedThisTurn`, by `player`, and not
+    /// `IsAutoPlay`, at most 255.
+    pub(super) fn unprompted_plays_this_turn(&self, player: CombatId) -> u8 {
+        (self.unprompted.iter())
+            .find(|(of, _)| *of == player)
+            .map_or(0, |&(_, plays)| plays)
     }
 
     /// `History.CardPlayStarted`, in the turn the fight stands in.
@@ -2870,6 +2895,12 @@ impl<V: Rules> CombatHistory<V> {
         };
         self.this_turn
             .push(sts2_core::HistoryEntry::Finished(finished));
+        if !auto {
+            match self.unprompted.iter_mut().find(|(of, _)| *of == player) {
+                Some((_, plays)) => *plays = plays.saturating_add(1),
+                None => self.unprompted.push((player, 1)),
+            }
+        }
     }
 
     /// `History.CreatureAttacked`, in the turn the fight stands in.
@@ -2963,6 +2994,7 @@ impl<V: Rules> CombatHistory<V> {
     /// The turn at `round` on `side`, in the player's turn `player_turn`, is
     /// over. Its entries join the past turns, unless it had none.
     fn end_turn(&mut self, round: V::Count, side: V::CombatSide, player_turn: V::Count) {
+        self.unprompted.clear();
         if self.this_turn.is_empty() {
             return;
         }
@@ -2995,12 +3027,14 @@ impl<V: Rules> Clone for CombatHistory<V> {
         CombatHistory {
             this_turn: self.this_turn.clone(),
             before: self.before.clone(),
+            unprompted: self.unprompted.clone(),
         }
     }
 
     fn clone_from(&mut self, source: &Self) {
         self.this_turn.clone_from(&source.this_turn);
         self.before.clone_from(&source.before);
+        self.unprompted.clone_from(&source.unprompted);
     }
 }
 
@@ -3704,8 +3738,97 @@ impl<V: Rules> Live<V> {
             && self.players[sts2_core::SeatIndex(creature.id.get())].deaf
     }
 
-    /// The seat of the player `creature` is, or whose pet it is. A fight
-    /// adds the players first, in seat order. Nothing for a monster.
+    /// `hook` as a listener of `seat`'s player reads it. A hook that carries
+    /// a fact about the listener's own player, such as its block or its
+    /// belt, carries that player's. Every other hook is as it was raised.
+    ///
+    /// [`refreshes`] says which hooks carry such a fact.
+    pub(crate) fn refreshed(
+        &self,
+        seat: sts2_core::SeatIndex,
+        hook: sts2_core::EventHook<V>,
+    ) -> sts2_core::EventHook<V> {
+        use sts2_core::EventHook;
+
+        let player = &self.players[seat];
+        let holding_potions = || !player.potions.is_empty();
+        match hook {
+            EventHook::BeforeSideTurnEndVeryEarly { side, .. } => {
+                EventHook::BeforeSideTurnEndVeryEarly {
+                    side,
+                    block: self.player(seat).block,
+                }
+            }
+            EventHook::BeforeSideTurnEndEarly { side, turn, .. } => {
+                EventHook::BeforeSideTurnEndEarly {
+                    side,
+                    plays: self.history.unprompted_plays_this_turn(seat.creature()),
+                    turn,
+                }
+            }
+            EventHook::BeforeSideTurnEnd { side, .. } => EventHook::BeforeSideTurnEnd {
+                side,
+                energy: player.energy,
+                hand: player.cards.len(sts2_core::Pile::Hand),
+            },
+            EventHook::SideTurnEnd { side, .. } => EventHook::SideTurnEnd {
+                side,
+                block: self.player(seat).block,
+            },
+            EventHook::RoomEntered {
+                room,
+                strayed,
+                point,
+                base,
+                ..
+            } => {
+                let fighter = self.player(seat);
+                EventHook::RoomEntered {
+                    room,
+                    strayed,
+                    point,
+                    deck: player.deck_versions.len(),
+                    player: sts2_core::PlayerHealth {
+                        hp: fighter.hp,
+                        max_hp: fighter.max_hp,
+                    },
+                    base,
+                }
+            }
+            EventHook::CombatStarting { room, point, .. } => EventHook::CombatStarting {
+                room,
+                holding_potions: holding_potions(),
+                point,
+            },
+            EventHook::PotionUsed {
+                player, in_fight, ..
+            } => EventHook::PotionUsed {
+                player,
+                in_fight,
+                holding_potions: holding_potions(),
+            },
+            EventHook::PotionDiscarded { in_fight, .. } => EventHook::PotionDiscarded {
+                in_fight,
+                holding_potions: holding_potions(),
+            },
+            hook => hook,
+        }
+    }
+
+    /// [`Live::refreshed`] for `hook`, where it carries a fact about the
+    /// listener's own player, and `hook` itself otherwise.
+    #[inline(always)]
+    pub(crate) fn as_heard_by(
+        &self,
+        seat: impl FnOnce() -> Option<sts2_core::SeatIndex>,
+        hook: sts2_core::EventHook<V>,
+    ) -> sts2_core::EventHook<V> {
+        match refreshes(&hook).then(seat).flatten() {
+            Some(seat) => self.refreshed(seat, hook),
+            None => hook,
+        }
+    }
+
     /// The seat whose player holds the copy `id`, in any pile.
     pub(crate) fn card_seat(&self, id: CardId<V>) -> Option<sts2_core::SeatIndex> {
         self.players
@@ -3714,6 +3837,8 @@ impl<V: Rules> Live<V> {
             .map(|(seat, _)| seat)
     }
 
+    /// The seat of the player `creature` is, or whose pet it is. A fight
+    /// adds the players first, in seat order. Nothing for a monster.
     pub(crate) fn seat_of(&self, creature: CombatId) -> Option<sts2_core::SeatIndex> {
         let player = |id: CombatId| {
             (usize::from(id.get()) < self.players.len()).then(|| sts2_core::SeatIndex(id.get()))

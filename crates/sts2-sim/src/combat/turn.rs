@@ -98,7 +98,7 @@ pub(super) fn takes_extra_turn<V: Rules>(
     belts: &mut crate::run::Belts<V>,
 ) -> bool {
     let extra = listen::heard::<V>(live, belts, sts2_core::ModelHook::ShouldTakeExtraTurn) && {
-        let plays = live.history.unprompted_plays_this_turn();
+        let plays = live.history.unprompted_plays_this_turn(seat.creature());
         listen::any_decides::<V>(
             listen::Walk { live, belts },
             sts2_core::DecisionHook::ShouldTakeExtraTurn {
@@ -1183,7 +1183,7 @@ pub(super) fn before_turn_end<V: Rules>(
     // Counted only where something hears the hook, as nothing else reads it.
     let plays = match listen::heard::<V>(live, belts, sts2_core::ModelHook::BeforeSideTurnEndEarly)
     {
-        true => live.history.unprompted_plays_this_turn(),
+        true => live.history.unprompted_plays_this_turn(seat.creature()),
         false => 0,
     };
     let hook = sts2_core::EventHook::BeforeSideTurnEndEarly {
@@ -1248,19 +1248,20 @@ pub(super) fn before_turn_end<V: Rules>(
             return (ended, listening);
         }
     }
-    // What a listener reads is the hand and energy as its turn comes. One
-    // before it can draw, as Regret counts its pile then.
-    let now = |live: &Live<V>| sts2_core::EventHook::BeforeSideTurnEnd {
+    // What a listener reads is its own player's hand and energy as its turn
+    // comes, which the walk fills in as it reaches each. One before it can
+    // draw, as Regret counts its pile then.
+    let hook = sts2_core::EventHook::BeforeSideTurnEnd {
         side,
         energy: live.players[seat].energy,
         hand: live.players[seat].cards.len(Pile::Hand),
     };
     let mut ended = None;
-    let mut walking = listen::Walking::begin(live, belts, now(live));
-    while let Some((listener, effect)) = walking.as_mut().and_then(|walking| {
-        walking.rehook(now(live));
-        walking.next(seat, live, belts)
-    }) {
+    let mut walking = listen::Walking::begin(live, belts, hook);
+    while let Some((listener, effect)) = walking
+        .as_mut()
+        .and_then(|walking| walking.next(seat, live, belts))
+    {
         let boundary = listening.enter(live, listener);
         // A listener acts for its owner, whichever player the walk is for.
         let acting = listen::owner(live, listener).unwrap_or(seat);

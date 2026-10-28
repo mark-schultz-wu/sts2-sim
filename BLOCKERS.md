@@ -48,7 +48,8 @@ reached yet. Work it in
 this order:
 
 1. Whom a hook is about, in the four parts of `docs/HOOK-SUBJECTS.md`.
-   They close most of classes A, B and C. Part 1 is done.
+   They close most of classes A, B and C. Parts 1 to 3 are done, and
+   what they leave is below.
 2. The mod's items F1 to F4.
 3. The turn's phases for each player: the block clear, the hooks before
    the turn's end, and the start of a side's turn.
@@ -145,22 +146,12 @@ players. These read such a count:
 
 #### C. Hook values from one player
 
-- At the turn's end, the hooks carry the host's numbers:
-  - `BeforeSideTurnEndVeryEarly { block }`, at `turn.rs:1154`
-  - `BeforeSideTurnEnd { energy, hand }`, at `turn.rs:1240`
-  - `SideTurnEnd { block }`, at `turn.rs:4118`.
+The fight's walk and the run's fill in each listener's own player's
+block, energy, hand, deck, health, plays and belt. What is left:
 
-  This affects Orichalcum, Fake Orichalcum, Pael's Tears, Screaming
-  Flagon and Parrying Shield.
-- `BeforeSideTurnEndEarly { plays }` counts every player's plays.
-- `RoomEntered` in a fight (`start.rs:216`) carries the host's deck
-  and health. The run's walk refreshes them for each owner, but this
-  walk does not.
-- `holding_potions` on `CombatStarting` (`start.rs:422`) is the
-  host's. On `PotionUsed` (`play.rs:1903`, `board.rs:2511`) and
-  `PotionDiscarded` (`run/state.rs:2157`, `run/state.rs:2891`) it is
-  the actor's. `PotionProcured` carries no player. All of this affects
-  Belt Buckle.
+- `PotionProcured` carries no player, and Belt Buckle reads it.
+- A modifier reads `RoomEntered`'s numbers as the walk raised them,
+  which are the first player's. Terminal reads them for every player.
 
 #### D. State held once
 

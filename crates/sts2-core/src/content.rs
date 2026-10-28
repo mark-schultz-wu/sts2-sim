@@ -4034,9 +4034,10 @@ pub enum EventHook<V: ContentVersion> {
         /// room stands on, whatever room it rolled. None off the map.
         point: Option<V::MapPointType>,
         /// How many cards the deck holds, which a relic reads off its owner.
+        /// The walk fills in each listener's own player's.
         deck: usize,
-        /// The first player's hit points, which `Terminal` reads for every
-        /// player.
+        /// The player's hit points, which the walk fills in for each
+        /// listener's owner. A modifier reads the first player's.
         player: PlayerHealth<V>,
         /// `room == RunState.BaseRoom`: not a room an event opened inside its
         /// own.
