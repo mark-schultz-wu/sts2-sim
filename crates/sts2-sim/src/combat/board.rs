@@ -4461,7 +4461,19 @@ impl<V: Rules> Board<'_, V> {
     /// and `CalculatedVar.SetOwner` gives a calculated number the base its
     /// `CalculationBase` prints. The card's own base can be older, as after
     /// Dampen downgrades it.
-    fn clone_face(&mut self, mut face: Face<V>, pile: Pile) -> Option<CardAt<V>> {
+    fn clone_face(&mut self, face: Face<V>, pile: Pile) -> Option<CardAt<V>> {
+        let creator = self.creator();
+        self.clone_face_by(face, pile, creator)
+    }
+
+    /// [`Board::clone_face`] into the acting player's piles, added by
+    /// `creator`.
+    fn clone_face_by(
+        &mut self,
+        mut face: Face<V>,
+        pile: Pile,
+        creator: Option<CombatId>,
+    ) -> Option<CardAt<V>> {
         let seat = self.seat();
         face.recalculate();
         let id = self.live.card_ids.mint();
@@ -4474,7 +4486,7 @@ impl<V: Rules> Board<'_, V> {
         self.live.players[seat].cards.push(pile, face.named(id));
         let at = CardAt::new(id, pile, index);
         self.card_entered_combat(at, face.ident.card, true);
-        self.card_generated(at, face.ident.card, self.creator());
+        self.card_generated(at, face.ident.card, creator);
         Some(at)
     }
 
@@ -6302,6 +6314,38 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .playing
             .unwrap_or_else(|| unimplemented!("a card cloning itself with none being played"));
         self.clone_named(playing, pile)
+    }
+
+    fn clone_this_for_each_player(&mut self, pile: Pile) {
+        let playing = self.playing.unwrap_or_else(|| {
+            unimplemented!("a card cloning itself for each player with none being played")
+        });
+        let face = self.live.players[self.seat()]
+            .cards
+            .named(playing)
+            .unwrap_or_else(|| unimplemented!("a card cloned from outside the fight"))
+            .face;
+        let creator = self.creator();
+        // `GetTeammatesOf(Owner.Creature)` where `IsAlive && IsPlayer`.
+        let players: SmallVec<[CombatId; 4]> = self
+            .live
+            .players
+            .seats()
+            .map(|seat| self.live.player(seat))
+            .filter(|fighter| fighter.is_alive())
+            .map(|fighter| fighter.id)
+            .collect();
+        for player in players {
+            self.ran_on();
+            if self.stopped() {
+                return;
+            }
+            let actor = std::mem::replace(&mut self.actor, player);
+            let reaching = self.reaching.take();
+            self.clone_face_by(face, pile, creator);
+            self.actor = actor;
+            self.reaching = reaching;
+        }
     }
 
     fn clone_card(&mut self, card: CardAt<V>, pile: Pile) -> Option<CardAt<V>> {

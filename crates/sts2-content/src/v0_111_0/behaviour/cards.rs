@@ -91,6 +91,13 @@ pub(crate) fn on_play<'a, K: sts2_core::FightKind<V>>(
             fight.apply(block);
             Some(Played::Done)
         }
+        // `Outrage`: its damage to the target, then a clone of itself into
+        // each living player's discard pile, its owner's too.
+        Cards::Ironclad(IroncladCard::Outrage) => {
+            strike(fight);
+            fight.clone_this_for_each_player(sts2_core::Pile::Discard);
+            Some(Played::Done)
+        }
         // `ForgottenRitual`: its energy, every play. v0.107.1's waited on a
         // card exhausted that turn, which the shared port reads, so this build
         // plays its generated script.

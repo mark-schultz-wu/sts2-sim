@@ -2329,6 +2329,14 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("a card cloning itself")
     }
 
+    /// `CreateCloneForPlayer`, then `CardPileCmd.AddGeneratedCardToCombat`
+    /// into `pile`, of the card being played, for each living player on its
+    /// owner's side, the owner too, in order. Each clone is its player's,
+    /// and its owner added it.
+    fn clone_this_for_each_player(&mut self, _pile: crate::Pile) {
+        unimplemented!("a card cloning itself for each player")
+    }
+
     /// [`Fight::clone_this`] for another card in the fight, as it holds
     /// now.
     fn clone_card(

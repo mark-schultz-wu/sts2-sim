@@ -247,8 +247,6 @@ run as its own machine sees it. The work goes in this order:
    needs no hunt to show it keeps them. Next, in the order of
    `docs/COOP-FIGHTS.md` and where the hunted runs stop:
    - Where they panic, besides the items below:
-     - Fade's `BeforeApplied` (`powers/mod.rs:6675`): seed 9
-     - Outrage's play, which v0.111.0 does not port: seed 10
      - Vine Shambler's and Thieving Hopper's moves, which name no
        player (`board.rs:241`): seeds 1, 12 and 15
      - Jungle Maze Adventure and Dense Vegetation, which every player

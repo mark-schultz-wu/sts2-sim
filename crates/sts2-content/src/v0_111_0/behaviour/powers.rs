@@ -285,6 +285,7 @@ pub(crate) fn own_power_decide_hook(
 pub(crate) fn own_lends(power: Power) -> Option<(Power, bool)> {
     match power {
         Power::HyperbeamFocusDownPower => Some((Power::FocusPower, false)),
+        Power::FadePower => Some((Power::DexterityPower, true)),
         _ => None,
     }
 }
