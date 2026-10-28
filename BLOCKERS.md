@@ -247,8 +247,11 @@ run as its own machine sees it. The work goes in this order:
    needs no hunt to show it keeps them. Next, in the order of
    `docs/COOP-FIGHTS.md` and where the hunted runs stop:
    - Where they panic, besides the items below:
-     - Vine Shambler's and Thieving Hopper's moves, which name no
-       player (`board.rs:241`): seeds 1, 12 and 15
+     - Thieving Hopper's theft (`board.rs:241`): seed 12. The game
+       steals a card from each living player, and each stolen card is a
+       Swipe aimed at its owner. The same class: Gremlin Merc's Thievery,
+       one for each player, the Heist it leaves, and the extra rewards
+       each hands back to its own player.
      - Jungle Maze Adventure and Dense Vegetation, which every player
        goes through together: seeds 3 and 4.
    - The rest of the scheduler (steps 3 and 4 of `docs/SCHEDULER.md`). A

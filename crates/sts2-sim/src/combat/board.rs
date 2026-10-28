@@ -913,13 +913,13 @@ impl<'a, V: Rules> Board<'a, V> {
 
     fn applied(&mut self, id: CombatId, power: V::Power) {
         // The instance that just landed, which is the last of its kind.
-        let Some(at) = self
+        let Some((at, instance)) = self
             .live
             .powers
             .of(id)
             .enumerate()
             .filter(|(_, held)| held.power() == power)
-            .map(|(at, _)| at)
+            .map(|(at, held)| (at, held.instance))
             .last()
         else {
             return;
@@ -940,7 +940,13 @@ impl<'a, V: Rules> Board<'a, V> {
         let (owned, cards): (SmallVec<[_; 2]>, SmallVec<[_; 2]>) = asked
             .into_iter()
             .partition(|effect| matches!(effect, HookEffect::ApplyToOwner(..)));
-        self.write_cards(cards);
+        // The cards it writes on are its holder's, whoever applied it.
+        let listener = Listener::Power {
+            owner: id,
+            instance,
+            power,
+        };
+        self.as_listener(listener, |board| board.write_cards(cards));
         // `PowerCmd.Apply` on the power's owner, from nobody.
         for effect in owned {
             if let HookEffect::ApplyToOwner(power, amount) = effect {
