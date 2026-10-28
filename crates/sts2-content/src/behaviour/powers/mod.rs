@@ -1032,16 +1032,30 @@ pub(crate) fn modify_hook<V: crate::Build>(
         ) if __c0 == V::Power::COVERED_POWER && (target == Some(holder)) => {
             Modify::Scaled(Fixed::new(0, 0))
         }
-        // `TagTeamPower.ModifyCardPlayCount`: more plays of an Attack another
-        // player aims at its owner. Only its own card applies it, and a fight
-        // here has one player, whose cards are all its applier's.
-        (__c0, _, ModifyHook::CardPlayCount { player, card })
-            if __c0 == V::Power::TAG_TEAM_POWER
-                && (<V as sts2_core::Rules>::card_kind(card)
-                    == Some(sts2_core::CardKind::Attack)
-                    && Some(player) != held.applier) =>
+        // `TagTeamPower.ModifyCardPlayCount`: its stack more plays of an
+        // Attack another player than its applier plays, aimed at its owner
+        // or at every enemy.
+        (
+            __c0,
+            PowerAmount::Counted(stack),
+            ModifyHook::CardPlayCount {
+                player,
+                card,
+                target,
+            },
+        ) if __c0 == V::Power::TAG_TEAM_POWER
+            && (<V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Attack)
+                && Some(player) != held.applier) =>
         {
-            unimplemented!("Tag Team over another player's Attack")
+            use crate::generated::cards::TargetType;
+            use sts2_core::CardTable as _;
+
+            match card.target() {
+                Some(TargetType::AnyEnemy) if target == Some(holder) => Modify::Added(stack),
+                Some(TargetType::AllEnemies) => Modify::Added(stack),
+                Some(_) => Modify::Nothing,
+                None => unimplemented!("which way {card:?}, which works its target out, aims"),
+            }
         }
         (__c0, _, ModifyHook::CardPlayCount { .. }) if __c0 == V::Power::TAG_TEAM_POWER => {
             Modify::Nothing
@@ -1697,7 +1711,7 @@ pub(crate) fn modify_hook<V: crate::Build>(
         }
         // `OneTwoPunchPower.ModifyCardPlayCount`: one more play of an attack
         // its owner plays.
-        (__c0, _, ModifyHook::CardPlayCount { player, card })
+        (__c0, _, ModifyHook::CardPlayCount { player, card, .. })
             if __c0 == V::Power::ONE_TWO_PUNCH_POWER
                 && (player == holder
                     && <V as sts2_core::Rules>::card_kind(card)
@@ -1720,7 +1734,7 @@ pub(crate) fn modify_hook<V: crate::Build>(
         }
         // `BurstPower.ModifyCardPlayCount`: one more play of a Skill its
         // owner plays.
-        (__c0, _, ModifyHook::CardPlayCount { player, card })
+        (__c0, _, ModifyHook::CardPlayCount { player, card, .. })
             if __c0 == V::Power::BURST_POWER
                 && (player == holder
                     && <V as sts2_core::Rules>::card_kind(card)
@@ -1733,7 +1747,7 @@ pub(crate) fn modify_hook<V: crate::Build>(
         }
         // `SignalBoostPower.ModifyCardPlayCount`: one more play of a Power
         // card its owner plays.
-        (__c0, _, ModifyHook::CardPlayCount { player, card })
+        (__c0, _, ModifyHook::CardPlayCount { player, card, .. })
             if __c0 == V::Power::SIGNAL_BOOST_POWER
                 && (player == holder
                     && <V as sts2_core::Rules>::card_kind(card)

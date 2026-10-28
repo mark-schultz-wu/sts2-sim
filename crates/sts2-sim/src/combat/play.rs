@@ -312,7 +312,7 @@ pub(crate) fn play<V: Rules>(
         .cards
         .play(sts2_core::Pile::Hand, play.index);
     let (pile, position) = result_pile::<V, _>(seat, live, streams, belts, &card, play.energy);
-    let count = play_count::<V, _>(seat, live, streams, belts, &card);
+    let count = play_count::<V, _>(seat, live, streams, belts, &card, play.target);
     // `SpendEnergy` captures what an X cost spent, and `SpendStars` what the
     // stars cost.
     let begun = CardPlay {
@@ -553,7 +553,7 @@ pub(super) fn auto_play_in_play<V: Rules>(
     let energy = super::legal::spend(cost, live.players[seat].energy)
         .unwrap_or_else(|| unimplemented!("an energy cost the count cannot hold"));
     let (pile, position) = result_pile::<V, _>(seat, live, &mut rngs, belts, &card, energy);
-    let count = play_count::<V, _>(seat, live, &mut rngs, belts, &card);
+    let count = play_count::<V, _>(seat, live, &mut rngs, belts, &card, target);
     // `AutoPlay` spends nothing, and captures an X from what the pools hold,
     // unless `skipXCapture` keeps one a payment captured.
     let x = match ident.card.cost() {
@@ -896,11 +896,13 @@ pub(super) fn play_count<V: Rules, S: LendsCombat>(
     streams: &mut S,
     belts: &mut crate::run::Belts<V>,
     card: &super::live::CardInstance<V>,
+    target: Option<CombatId>,
 ) -> V::Number {
     let player = live.player(seat).id;
     let hook = sts2_core::ModifyHook::CardPlayCount {
         player,
         card: card.face.ident.card,
+        target,
     };
     let mut count = card.face.play_count();
     let mut modifiers: SmallVec<[(CombatId, V::Power); 2]> = SmallVec::new();
@@ -961,6 +963,9 @@ pub(super) fn play_count<V: Rules, S: LendsCombat>(
             match effect {
                 sts2_core::HookEffect::Decrement => {
                     board.modify_amount(holder, power, -num_traits::one::<V::Number>())
+                }
+                sts2_core::HookEffect::Remove => {
+                    sts2_core::Fight::remove_power(&mut board, holder, power)
                 }
                 effect => unimplemented!("a power asking for {effect:?} after a play count"),
             }

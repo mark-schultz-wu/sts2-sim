@@ -86,9 +86,8 @@ run as its own machine sees it. The work goes in this order:
    what left any player's bag. A dead player's powers hear no hook, as
    their relics, potions and cards do not. A power's turn-end asks act
    for the player carrying it, and so do a side's turn-start asks. A
-   choice put to a player who ended the turn takes that end back. Of
-   sixteen hunted seeds, fourteen
-   match to the run's end. Hunts stay at
+   choice put to a player who ended the turn takes that end back. All
+   sixteen hunted seeds match to the run's end. Hunts stay at
    `--width 4`: at `--width 8` two games of sixteen failed in Godot
    itself. Next, in the order of `docs/COOP-FIGHTS.md` and where the
    hunted runs stop:
@@ -117,9 +116,8 @@ run as its own machine sees it. The work goes in this order:
        for its own player and a monster's move does not yet.
    - A player who dies inside their own card or potion beside a living
      one, and a death that leaves every standing player ready, panic.
-4. Co-op content, as the runs reach it. Massive Scroll is ported. The
-   Concoct power's `AfterDamageGiven` stops one hunted run, and Tag Team
-   over another player's Attack stops another.
+4. Co-op content, as the runs reach it. Massive Scroll, Concoct and Tag
+   Team are ported.
 
 ### 2. The engine's command frames as coroutines
 

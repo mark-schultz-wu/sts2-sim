@@ -60,6 +60,7 @@ pub(crate) fn own_power(power: Power) -> bool {
             | Power::CorruptionPower
             | Power::PaleBlueDotPower
             | Power::VulnerablePower
+            | Power::ConcoctPower
     )
 }
 
@@ -154,13 +155,16 @@ pub(crate) fn own_power_event_hook(
     match (power, hook) {
         // `PaleBlueDotPower.AfterCardPlayed`: once a turn, when its owner
         // has finished five plays this turn, its stack as
-        // `DrawCardsNextTurnPower` on its owner. A fight here has one
-        // player, whose every card is.
-        (Power::PaleBlueDotPower, EventHook::CardPlayed { .. }) => {
+        // `DrawCardsNextTurnPower` on its owner. Another player's card does
+        // nothing.
+        (Power::PaleBlueDotPower, EventHook::CardPlayed { player, .. }) => {
             let State::PaleBlueDot { activated } = state else {
                 unreachable!("a Pale Blue Dot keeps whether it activated")
             };
-            if *activated || held.history.finished_this_turn().count() < PALE_BLUE_DOT_PLAYS {
+            if player != held.holder
+                || *activated
+                || held.history.finished_this_turn().count() < PALE_BLUE_DOT_PLAYS
+            {
                 return Some(None);
             }
             *activated = true;
@@ -180,14 +184,18 @@ pub(crate) fn own_power_event_hook(
         // `CorruptionPower.AfterModifyingCardPlayResultLocation` flashes
         // alone. v0.107.1's overrode no such hook.
         (Power::CorruptionPower, EventHook::ResultPileModified { .. }) => Some(None),
-        // `JugglingPower.BeforeCardPlayed`: one more attack, and on the
-        // third, its stack of clones of that attack into hand. v0.107.1's
-        // counted after the play. A fight here has one player, whose every
-        // card is.
-        (Power::JugglingPower, EventHook::CardPlaying { card, id, .. }) => {
+        // `JugglingPower.BeforeCardPlayed`: one more of its owner's attacks,
+        // and on the third, its stack of clones of that attack into hand.
+        // v0.107.1's counted after the play.
+        (
+            Power::JugglingPower,
+            EventHook::CardPlaying {
+                card, id, player, ..
+            },
+        ) => {
             use sts2_core::Rules as _;
 
-            if V::card_kind(card) != Some(sts2_core::CardKind::Attack) {
+            if player != held.holder || V::card_kind(card) != Some(sts2_core::CardKind::Attack) {
                 return Some(None);
             }
             let PowerAmount::Counted(amount) = amount else {
@@ -201,6 +209,34 @@ pub(crate) fn own_power_event_hook(
                     writes: &[],
                 }),
             )
+        }
+        // `ConcoctPower.AfterDamageGiven`: its stack of Poison onto whoever a
+        // powered hit from its owner took hit points from.
+        (
+            Power::ConcoctPower,
+            EventHook::DamageGiven {
+                dealer,
+                target,
+                unblocked,
+                powered,
+                ..
+            },
+        ) => Some(
+            (dealer == Some(held.holder) && powered && unblocked > 0).then(|| {
+                let PowerAmount::Counted(amount) = amount else {
+                    unimplemented!("an endless Concoct")
+                };
+                HookEffect::ApplyPower {
+                    target,
+                    power: Power::PoisonPower,
+                    amount: PowerAmount::Counted(amount),
+                    applier: Some(held.holder),
+                }
+            }),
+        ),
+        // `ConcoctPower.AfterSideTurnEnd`: gone as the other side's turn ends.
+        (Power::ConcoctPower, EventHook::SideTurnEnd { side, .. }) => {
+            Some((side != held.owner).then_some(HookEffect::Remove))
         }
         // `AmbergrisPower.AfterTakingExtraTurn`: one off, for its owner's
         // turn. A fight here has one player, whose turn it is.

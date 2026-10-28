@@ -5944,7 +5944,8 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .cards
             .named(card)
             .unwrap_or_else(|| unimplemented!("a play count for a card that left the fight"));
-        super::play::play_count::<V, _>(seat, self.live, &mut self.rngs, self.belts, &held)
+        let target = self.target;
+        super::play::play_count::<V, _>(seat, self.live, &mut self.rngs, self.belts, &held, target)
     }
 
     fn next_energy_cost(&mut self, below: u8) -> V::Number {

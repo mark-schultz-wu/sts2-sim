@@ -3641,6 +3641,8 @@ pub enum ModifyHook<V: ContentVersion> {
     CardPlayCount {
         player: crate::CombatId,
         card: V::Card,
+        /// `CardPlay.Target`, which a listener can read.
+        target: Option<crate::CombatId>,
     },
 }
 
