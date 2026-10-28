@@ -347,7 +347,9 @@ internal static class SilenceKaiserCrabAnimation
 /// <remarks>
 /// The game's own early returns, choice id, sync and log, around a
 /// <see cref="BundleChoice"/>. Left alone, <c>TestMode</c> takes the first
-/// bundle without asking, which a player at the screen never does.
+/// bundle without asking, which a player at the screen never does. In co-op
+/// it takes the first for every other seat too, before the game's branch
+/// that waits for their choice.
 /// </remarks>
 [HarmonyPatch(typeof(CardSelectCmd), nameof(CardSelectCmd.FromChooseABundleScreen))]
 internal static class BundleWithoutAScreen
@@ -357,16 +359,15 @@ internal static class BundleWithoutAScreen
         IReadOnlyList<IReadOnlyList<CardModel>> bundles,
         ref Task<IEnumerable<CardModel>> __result)
     {
-        // The screen asks the local player alone. Another seat's bundle waits
-        // for that seat's choice, as the game's own code does.
-        if (!LocalContext.IsMe(player))
-        {
-            return true;
-        }
         __result = Asked(player, bundles);
         return false;
     }
 
+    /// <remarks>
+    /// The screen asks the local player alone. Another seat's bundle waits
+    /// for that seat's choice, as the game's own code does once
+    /// <c>TestMode</c> is past.
+    /// </remarks>
     private static async Task<IEnumerable<CardModel>> Asked(
         Player player, IReadOnlyList<IReadOnlyList<CardModel>> bundles)
     {
@@ -375,10 +376,20 @@ internal static class BundleWithoutAScreen
             return Array.Empty<CardModel>();
         }
         uint choiceId = RunManager.Instance.PlayerChoiceSynchronizer.ReserveChoiceId(player);
-        int index = await BundleChoice.Ask(bundles);
-        IReadOnlyList<CardModel> chosen = bundles[index];
-        RunManager.Instance.PlayerChoiceSynchronizer.SyncLocalChoice(
-            player, choiceId, PlayerChoiceResult.FromIndex(index));
+        IReadOnlyList<CardModel> chosen;
+        if (LocalContext.IsMe(player))
+        {
+            int index = await BundleChoice.Ask(bundles);
+            chosen = bundles[index];
+            RunManager.Instance.PlayerChoiceSynchronizer.SyncLocalChoice(
+                player, choiceId, PlayerChoiceResult.FromIndex(index));
+        }
+        else
+        {
+            int index = (await RunManager.Instance.PlayerChoiceSynchronizer
+                .WaitForRemoteChoice(player, choiceId)).AsIndex();
+            chosen = index >= 0 ? bundles[index] : Array.Empty<CardModel>();
+        }
         Log.Info($"Player {player.NetId} chose cards [{string.Join(",", chosen.Select(c => c.Id.Entry))}]");
         return chosen;
     }
@@ -1064,11 +1075,11 @@ internal static class ParasolWithoutAScreen
 /// screens <c>AbandonInternal</c> closes first, which take the headless
 /// process down with no message.
 ///
-/// In a co-op run the option runs on every seat, for whichever player chose
-/// it, so every seat shows the popup and asks here. Its yes is the popup's:
-/// <c>RunManager.Abandon</c>, which on the host abandons the run for every
-/// seat, through <see cref="AbandonedWithoutScreens"/>. On a client it throws,
-/// as it does with the screen.
+/// It is a proceed option, which the event screen runs on the chooser's
+/// machine alone, so only that seat asks. In a co-op run its yes is the
+/// popup's: <c>RunManager.Abandon</c>, which on the host abandons the run for
+/// every seat, through <see cref="AbandonedWithoutScreens"/>. On a client it
+/// throws, as it does with the screen.
 /// </remarks>
 [HarmonyPatch(typeof(Trial), "DoubleDown")]
 internal static class DoubleDownWithoutAPopup

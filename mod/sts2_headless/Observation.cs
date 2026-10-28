@@ -836,7 +836,7 @@ public static class Observation
                     })
                     .ToList();
 
-                if (relics != null)
+                if (relics != null && Chest.Skippable(state))
                 {
                     options.Add(new Dictionary<string, object?>
                     {

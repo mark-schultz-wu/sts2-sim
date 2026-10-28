@@ -92,7 +92,8 @@ public static class MapLegality
     /// <c>NMapRoom</c> and <c>NMerchantRoom</c> do as they open, and so does
     /// <c>NFakeMerchant</c>. <c>NRestSiteRoom</c> does once an option went
     /// through, or at once when it offers none. <c>NTreasureRoom</c> does once
-    /// the relic is taken or skipped, and <c>NEventRoom.Proceed</c> once the
+    /// the relics are awarded, or a single player skips, and
+    /// <c>NEventRoom.Proceed</c> once the
     /// event is finished. A fight's turns it on when its rewards screen
     /// proceeds, which is once no reward is left to answer.
     /// </remarks>
@@ -112,7 +113,7 @@ public static class MapLegality
                 && (model.IsFinished || model is FakeMerchant),
             RestSiteRoom => RestSiteProgress.Rested
                 || RunManager.Instance.RestSiteSynchronizer.GetLocalOptions().Count == 0,
-            TreasureRoom => !Chest.Open(Seat.Me(state)),
+            TreasureRoom => Chest.Done(state, Seat.Me(state)),
             _ => true,
         };
     }

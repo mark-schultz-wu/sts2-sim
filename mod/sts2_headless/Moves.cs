@@ -214,7 +214,8 @@ public static class Moves
                     .ToList();
             }
 
-            // The relics, then the skip one past them, while the chest is open.
+            // The relics, then the skip one past them where the chest offers
+            // it, while the chest is open.
             case TreasureRoom:
             {
                 IReadOnlyList<RelicModel>? relics =
@@ -224,7 +225,8 @@ public static class Moves
                     return new List<Dictionary<string, object?>>();
                 }
 
-                return Enumerable.Range(0, relics.Count + 1).Select(Choosing).ToList();
+                int offered = relics.Count + (Chest.Skippable(state) ? 1 : 0);
+                return Enumerable.Range(0, offered).Select(Choosing).ToList();
             }
 
             case EventRoom:

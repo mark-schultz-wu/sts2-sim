@@ -8017,7 +8017,12 @@ impl<V: Rules> State<V> {
         match &self.phase {
             Phase::Map => true,
             Phase::Shop { .. } => true,
-            Phase::Neow { .. } | Phase::Treasure { .. } => self.phase.finished(seat),
+            Phase::Neow { .. } => self.phase.finished(seat),
+            // `NTreasureRoom` turns it on for a single player's skip, and
+            // otherwise once the relics are awarded, which empties the chest.
+            Phase::Treasure { relics, .. } => {
+                relics.is_empty() || (self.player_count() == 1 && self.phase.finished(seat))
+            }
             // `NFakeMerchant` turns it on as it opens, like a merchant's room.
             Phase::Event { seats } => {
                 seats[seat].finished || matches!(self.event_room(seat), Some(Room::Shop { .. }))
@@ -8171,9 +8176,11 @@ impl<V: Rules> State<V> {
                 ),
                 _ => {}
             },
-            // Each relic, then the skip one past them.
+            // Each relic, then the skip one past them, which `NTreasureRoom`
+            // offers a single player alone.
             Phase::Treasure { relics, .. } if !self.phase.finished(seat) => {
-                moves.extend((0..=relics.len()).map(|index| Decision::ChooseOption {
+                let offered = relics.len() + usize::from(self.player_count() == 1);
+                moves.extend((0..offered).map(|index| Decision::ChooseOption {
                     index: option_index(index),
                     target: None,
                 }));
@@ -8906,15 +8913,16 @@ impl<V: Rules> State<V> {
             Phase::Event { .. } => self.event_room(seat),
             Phase::Won { room } => room.clone(),
             Phase::Treasure { relics, .. } => {
-                // The relics on offer and the skip. Awarding them empties the
-                // chest. A skip by the one player leaves them showing,
-                // answered, until the room is left.
+                // The relics on offer and, for a single player, the skip.
+                // Awarding them empties the chest. A skip by the one player
+                // leaves them showing, answered, until the room is left.
                 let finished = self.phase.finished(seat);
                 let takes = relics.iter().map(|&relic| sts2_core::Take::Relic(relic));
+                let skip = (self.player_count() == 1).then_some(sts2_core::Take::Skip);
                 let options = match relics.is_empty() {
                     true => Vec::new(),
                     false => takes
-                        .chain([sts2_core::Take::Skip])
+                        .chain(skip)
                         .enumerate()
                         .map(|(index, take)| sts2_core::ChestOption {
                             index: option_index(index),

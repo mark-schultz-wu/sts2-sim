@@ -50,7 +50,7 @@ this order:
 1. Whom a hook is about, in the four parts of `docs/HOOK-SUBJECTS.md`.
    They close most of classes A, B and C. All four parts are done, and
    what they leave is below.
-2. The mod's items F1 to F4.
+2. The mod's items F1 to F4 (done).
 3. The turn's phases for each player: the block clear, the hooks before
    the turn's end, and the start of a side's turn.
 4. Run state: Proceed after the boss, Spoils, `for_run` and the ancient
@@ -184,21 +184,7 @@ block, energy, hand, deck, health, plays and belt. What is left:
 
 #### F. The mod
 
-High confidence:
-
-1. `Patches.cs:362` `BundleWithoutAScreen`. With TestMode on, the
-   game takes `bundles[0]` for the other player before it reaches the
-   branch that waits for their choice. The seat never reads the other
-   player's pick.
-2. `Protocol.cs:630` sends a proceed event option, Trial's Double
-   Down, through `EventSynchronizer`. The screen runs it locally. The
-   other seat then shows a popup the game does not show there, and in a shared
-   event the option becomes a vote.
-3. `Moves.cs:227` offers a chest skip in co-op. `NTreasureRoom` offers
-   Skip only when `Players.Count == 1`.
-4. `MapLegality.cs:115` lets the player travel once their own chest
-   vote is in. The screen waits until every player's pick is in and
-   the relics are awarded.
+The high-confidence items, F1 to F4, are done.
 
 Medium:
 
