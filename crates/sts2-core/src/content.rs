@@ -3452,9 +3452,10 @@ pub enum Modify<N> {
 /// it. A listener reads whether it is one of them.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ModifyHook<V: ContentVersion> {
-    /// `ModifyGoldGained`: the gold the player is about to gain, outside a
-    /// fight.
-    GoldGained,
+    /// `ModifyGoldGained`: the gold `player` is about to gain.
+    GoldGained {
+        player: crate::CombatId,
+    },
     /// `ModifyRestSiteHealAmount`: what a rest site's heal gives the player,
     /// whose maximum health is `max_hp`.
     RestSiteHealAmount {
@@ -3663,7 +3664,7 @@ impl<V: ContentVersion> ModifyHook<V> {
     /// run's, which keep answering.
     pub const fn combat_listeners(&self) -> bool {
         match self {
-            ModifyHook::GoldGained
+            ModifyHook::GoldGained { .. }
             | ModifyHook::RestSiteHealAmount { .. }
             | ModifyHook::OddsIncreaseForUnrolledRoomType { .. }
             | ModifyHook::DamageAdditive { .. }
@@ -3714,7 +3715,7 @@ impl<V: ContentVersion> ModifyHook<V> {
             }
             ModifyHook::PowerAmountReceived { .. } => ModelHook::TryModifyPowerAmountReceived,
             ModifyHook::HandDrawLate { .. } => ModelHook::ModifyHandDrawLate,
-            ModifyHook::GoldGained => ModelHook::ModifyGoldGained,
+            ModifyHook::GoldGained { .. } => ModelHook::ModifyGoldGained,
             ModifyHook::RestSiteHealAmount { .. } => ModelHook::ModifyRestSiteHealAmount,
             ModifyHook::OddsIncreaseForUnrolledRoomType { .. } => {
                 ModelHook::ModifyOddsIncreaseForUnrolledRoomType
@@ -3776,7 +3777,11 @@ pub enum DecisionHook<V: ContentVersion> {
     ShouldDieLate { creature: crate::CombatId },
     /// `ShouldForcePotionReward`, as a won fight's rewards roll for a potion
     /// in a room of this type. One listener answering yes gives the potion.
-    ShouldForcePotionReward { room: V::RoomType },
+    ShouldForcePotionReward {
+        /// The player whose rewards these are.
+        player: crate::CombatId,
+        room: V::RoomType,
+    },
     /// `ShouldTakeExtraTurn`, once the player's turn is over. `plays` is the
     /// player's plays finished this turn that no auto-play made. One
     /// listener answering yes keeps the turn with the player. `turn` is the
@@ -3792,7 +3797,7 @@ pub enum DecisionHook<V: ContentVersion> {
     ShouldRefillMerchantEntry,
     /// `ShouldDisableRemainingRestSiteOptions`, once a rest site's option
     /// went through. One listener answering no keeps the other options up.
-    ShouldDisableRemainingRestSiteOptions,
+    ShouldDisableRemainingRestSiteOptions { player: crate::CombatId },
     /// `ShouldGenerateTreasure`, as a treasure room begins its relic picking.
     /// One listener answering no leaves the chest empty.
     ShouldGenerateTreasure,
@@ -3851,9 +3856,12 @@ pub enum DecisionHook<V: ContentVersion> {
     /// `ShouldAllowMerchantCardRemoval`: whether a merchant's card removal
     /// is on sale. One no marks it used as its slot fills.
     ShouldAllowMerchantCardRemoval,
-    /// `ShouldProcurePotion`: whether the player takes `potion`. One no
+    /// `ShouldProcurePotion`: whether `player` takes `potion`. One no
     /// refuses it.
-    ShouldProcurePotion { potion: V::Potion },
+    ShouldProcurePotion {
+        player: crate::CombatId,
+        potion: V::Potion,
+    },
 }
 
 impl<V: ContentVersion> DecisionHook<V> {
@@ -3885,7 +3893,7 @@ impl<V: ContentVersion> DecisionHook<V> {
             DecisionHook::ShouldForcePotionReward { .. } => ModelHook::ShouldForcePotionReward,
             DecisionHook::ShouldTakeExtraTurn { .. } => ModelHook::ShouldTakeExtraTurn,
             DecisionHook::ShouldRefillMerchantEntry => ModelHook::ShouldRefillMerchantEntry,
-            DecisionHook::ShouldDisableRemainingRestSiteOptions => {
+            DecisionHook::ShouldDisableRemainingRestSiteOptions { .. } => {
                 ModelHook::ShouldDisableRemainingRestSiteOptions
             }
             DecisionHook::ShouldGenerateTreasure => ModelHook::ShouldGenerateTreasure,
@@ -4007,7 +4015,11 @@ pub enum EventHook<V: ContentVersion> {
     /// options take a change to their pools. `elite_encounter` is a won
     /// elite's reward: `Source` is `Encounter` and `RarityOdds` is
     /// `EliteEncounter`.
-    CardRewardCreationOptions { elite_encounter: bool },
+    CardRewardCreationOptions {
+        /// The player the reward is for.
+        player: crate::CombatId,
+        elite_encounter: bool,
+    },
     /// `ModifyMerchantCardPool`, as a merchant stocks a card from the
     /// character's own pool. The colorless shelves are left out, which every
     /// listener here leaves alone.
@@ -4044,8 +4056,8 @@ pub enum EventHook<V: ContentVersion> {
     /// `TryModifyRewardsLate`, once `TryModifyRewards` is through, for the
     /// same rewards as [`EventHook::ModifyRewards`].
     ModifyRewardsLate { room: Option<V::RoomType> },
-    /// `TryModifyCardRewardAlternatives`, for one card reward.
-    CardRewardAlternatives,
+    /// `TryModifyCardRewardAlternatives`, for one card reward of `player`'s.
+    CardRewardAlternatives { player: crate::CombatId },
     /// A card reward's alternative chosen, which is its `OnSelect`. Only the
     /// model that added it hears it.
     CardRewardAlternativeChosen(crate::RewardAlternative),
@@ -4075,7 +4087,11 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `TryModifyRestSiteHealRewards`, once `AfterRestSiteHeal` has run. A
     /// listener answers with the rewards it adds.
-    RestSiteHealRewards { mimicked: bool },
+    RestSiteHealRewards {
+        /// The player healed.
+        player: crate::CombatId,
+        mimicked: bool,
+    },
     /// `AfterCombatVictoryEarly`, raised on every listener before any hears
     /// `AfterCombatVictory`.
     CombatVictoryEarly { room: V::RoomType },
@@ -4156,6 +4172,8 @@ pub enum EventHook<V: ContentVersion> {
     /// fight. `cloned` is `clonedBy` being set, for a copy a listener made.
     AddedToDeck {
         card: V::Card,
+        /// `card.Owner.Creature`, whose deck it joined.
+        player: crate::CombatId,
         id: crate::DeckCardId,
         cloned: bool,
         /// `CardCmd.Transform` landed it, which hands the hook the deck as
@@ -4474,8 +4492,8 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `AfterModifyingGoldGained`, asked of the models that changed a gain.
     GoldGainModified,
-    /// `AfterGoldGained`, once gold the player gained has landed.
-    GoldGained,
+    /// `AfterGoldGained`, once gold `player` gained has landed.
+    GoldGained { player: crate::CombatId },
     /// `AfterPreventingBlockClear`, asked of the one model whose
     /// `ShouldClearBlock` kept its owner's block, with the block kept.
     BlockClearPrevented { block: V::Number },
@@ -4716,7 +4734,8 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::MerchantCardPool => ModelHook::ModifyMerchantCardPool,
             EventHook::ModifyRewards { .. } => ModelHook::TryModifyRewards,
             EventHook::ModifyRewardsLate { .. } => ModelHook::TryModifyRewardsLate,
-            EventHook::CardRewardAlternatives | EventHook::CardRewardAlternativeChosen(_) => {
+            EventHook::CardRewardAlternatives { .. }
+            | EventHook::CardRewardAlternativeChosen(_) => {
                 ModelHook::TryModifyCardRewardAlternatives
             }
             EventHook::CombatStarting { .. } => ModelHook::BeforeCombatStart,
@@ -4772,7 +4791,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::HandEmptied { .. } => ModelHook::AfterHandEmptied,
             EventHook::BlockCleared { .. } => ModelHook::AfterBlockCleared,
             EventHook::GoldGainModified => ModelHook::AfterModifyingGoldGained,
-            EventHook::GoldGained => ModelHook::AfterGoldGained,
+            EventHook::GoldGained { .. } => ModelHook::AfterGoldGained,
             EventHook::AfterDeath { .. } => ModelHook::AfterDeath,
             EventHook::BeforeDeath { .. } => ModelHook::BeforeDeath,
             EventHook::BlockBroken { .. } => ModelHook::AfterBlockBroken,

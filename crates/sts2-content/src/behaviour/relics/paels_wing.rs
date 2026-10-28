@@ -16,12 +16,14 @@ pub struct State {
 /// reward. Its `OnSacrifice` counts one, and each second is
 /// `RelicCmd.Obtain` of the next relic off the front of the bag.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     state: &mut State,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     match hook {
-        EventHook::CardRewardAlternatives => {
+        EventHook::CardRewardAlternatives { player } if player != owner => {}
+        EventHook::CardRewardAlternatives { .. } => {
             asked.push(HookEffect::OfferRewardAlternative(
                 RewardAlternative::Sacrifice,
             ));

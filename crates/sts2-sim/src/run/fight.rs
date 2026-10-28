@@ -473,7 +473,7 @@ impl<V: Rules> State<V> {
         // rarities. The encounter carries the room it belongs to.
         let room = reward_room::<V>(encounter);
         let added = self.card_reward_added(seat, true);
-        let forced = self.potion_forced(<_ as sts2_core::EncounterTable>::room(encounter));
+        let forced = self.potion_forced(seat, <_ as sts2_core::EncounterTable>::room(encounter));
         let pool = self.reward_pool(seat, room == crate::reward::combat::Room::Elite);
         let (rng, odds) = self.rewarding(seat);
         let (mut offered, rarity) = crate::reward::combat::won::<V, _>(

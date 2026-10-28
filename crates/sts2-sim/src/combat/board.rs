@@ -4981,7 +4981,9 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.ran_on();
         // `Hook.ModifyGoldGained`, over the fight's listeners in the order
         // the game asks them, as Bowler Hat scales a gain.
-        let hook = sts2_core::ModifyHook::GoldGained;
+        let hook = sts2_core::ModifyHook::GoldGained {
+            player: seat.creature(),
+        };
         let mut gained = exact::<V>(amount);
         super::listen::each::<V>(
             self.walk(),
@@ -5009,8 +5011,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         }
         self.live.players[seat].gold = self.live.players[seat].gold + amount;
         // `AfterGoldGained`, once the gold has landed.
-        let mut walking =
-            super::listen::Walking::begin(self.live, self.belts, sts2_core::EventHook::GoldGained);
+        let mut walking = super::listen::Walking::begin(
+            self.live,
+            self.belts,
+            sts2_core::EventHook::GoldGained {
+                player: seat.creature(),
+            },
+        );
         while let Some((listener, effect)) =
             walking.as_mut().and_then(|walking| self.next_of(walking))
         {

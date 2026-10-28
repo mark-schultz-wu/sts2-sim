@@ -102,21 +102,9 @@ Each of these needs the field first.
 
 - Single hooks:
   - `Forged`: Hammer Time.
-- Run hooks:
-  - `GoldGained`: Dragon Fruit, Ectoplasm, Bowler Hat.
-  - `AddedToDeck`: Bing Bong, Book of Five Rings, Darkstone Periapt,
-    Lucky Fysh, Hoarder.
-  - `RestSiteHealRewards`: Dream Catcher, Tiny Mailbox.
-- Run walks that use `notify_run`, where `notify_run_for(seat)` is
-  enough. The seat is in scope at each site:
-  - `CardRewardCreationOptions`: Dingy Rug, Prismatic Gem.
-  - `CardRewardAlternatives` and `CardRewardAlternativeChosen`:
-    Pael's Wing.
-- Decision hooks asked of every seat with no player:
-  - Sozu (`ShouldProcurePotion`). One player's Sozu blocks every
-    player's potions.
-  - Miniature Tent.
-  - White Beast Statue.
+- `CardRewardAlternativeChosen` walks every seat, where the game asks
+  only the model that added the alternative. So each player's Pael's
+  Wing counts every player's sacrifice.
 
 ##### History entries record no player
 

@@ -2207,7 +2207,8 @@ impl<V: Rules> State<V> {
     /// that slot is open and no relic refuses it.
     fn procure_into(&mut self, seat: sts2_core::SeatIndex, potion: V::Potion, slot: usize) -> bool {
         let slot = u8::try_from(slot).expect("a belt slot fits a byte");
-        if self.procure_refused(potion) || self.players[seat].potion_positions.contains(&slot) {
+        if self.procure_refused(seat, potion) || self.players[seat].potion_positions.contains(&slot)
+        {
             return false;
         }
         let at = self.players[seat]
@@ -2222,7 +2223,7 @@ impl<V: Rules> State<V> {
     /// `PotionCmd.TryToProcure`: the potion in the first empty physical belt
     /// slot, unless a relic refuses it.
     fn procure(&mut self, seat: sts2_core::SeatIndex, potion: V::Potion) -> bool {
-        if self.procure_refused(potion) {
+        if self.procure_refused(seat, potion) {
             return false;
         }
         let slots: usize = num_traits::cast(self.players[seat].potion_slots)
@@ -3765,7 +3766,9 @@ impl<V: Rules> State<V> {
     /// [`State::gain_gold`] of a `decimal`, which the hooks scale before the
     /// fraction is dropped.
     fn gain_gold_exact(&mut self, seat: sts2_core::SeatIndex, amount: sts2_core::Decimal) {
-        let hook = sts2_core::ModifyHook::GoldGained;
+        let hook = sts2_core::ModifyHook::GoldGained {
+            player: seat.creature(),
+        };
         let mut gained = amount;
         let mut left = self.belts[seat].hearing(sts2_core::Overrides::of(hook.model_hook()));
         while left != 0 {
@@ -3795,7 +3798,10 @@ impl<V: Rules> State<V> {
         // left to gain, so `AfterGoldGained` runs only after a gain.
         if gained > sts2_core::Decimal::ZERO {
             self.players[seat].gold = self.players[seat].gold + crate::combat::whole::<V>(gained);
-            if let Some(asked) = self.walk_run(sts2_core::EventHook::GoldGained) {
+            let hook = sts2_core::EventHook::GoldGained {
+                player: seat.creature(),
+            };
+            if let Some(asked) = self.walk_run(hook) {
                 let pickup = asked.pickup;
                 unimplemented!("a relic asking for {pickup:?} as gold is gained");
             }
@@ -4145,7 +4151,10 @@ impl<V: Rules> State<V> {
         mimicked: bool,
     ) -> Option<Pickup<V>> {
         let mut rewards: Vec<sts2_core::CustomReward<V>> = Vec::new();
-        let hook = sts2_core::EventHook::RestSiteHealRewards { mimicked };
+        let hook = sts2_core::EventHook::RestSiteHealRewards {
+            player: seat.creature(),
+            mimicked,
+        };
         self.walk_run_landing(hook, |_, listener, effect| match effect {
             sts2_core::HookEffect::OfferRewards(added) => rewards.extend_from_slice(added),
             effect => unimplemented!("{listener:?} adding {effect:?} to a rest site's rewards"),
@@ -4542,16 +4551,19 @@ impl<V: Rules> State<V> {
             };
             offered.push(offer);
         }
-        self.card_reward_alternatives(offered);
+        self.card_reward_alternatives(seat, offered);
     }
 
     /// `Hook.ModifyCardRewardAlternatives` over each card reward of a set.
-    fn card_reward_alternatives(&mut self, offered: &mut [Offer<V>]) {
+    fn card_reward_alternatives(&mut self, seat: sts2_core::SeatIndex, offered: &mut [Offer<V>]) {
+        let hook = sts2_core::EventHook::CardRewardAlternatives {
+            player: seat.creature(),
+        };
         for offer in offered {
             let Offer::Card { sacrifice, .. } = offer else {
                 continue;
             };
-            for effect in self.notify_run(sts2_core::EventHook::CardRewardAlternatives) {
+            for effect in self.notify_run(hook) {
                 match effect {
                     sts2_core::HookEffect::OfferRewardAlternative(
                         sts2_core::RewardAlternative::Sacrifice,
@@ -4624,6 +4636,7 @@ impl<V: Rules> State<V> {
     ) {
         let hook = sts2_core::EventHook::AddedToDeck {
             card: card.ident.card,
+            player: seat.creature(),
             id: card.id,
             cloned: false,
             transformed,
@@ -4691,6 +4704,7 @@ impl<V: Rules> State<V> {
             self.players[seat].deck_mut().push(copy);
             let hook = EventHook::AddedToDeck {
                 card: copy.ident.card,
+                player: seat.creature(),
                 id: copy.id,
                 cloned: true,
                 transformed: false,
@@ -5394,7 +5408,10 @@ impl<V: Rules> State<V> {
         let own = self.character(seat);
         let mut pools: SmallVec<[Source<V>; 6]> = smallvec::smallvec![base];
         let mut concat = None;
-        let hook = sts2_core::EventHook::CardRewardCreationOptions { elite_encounter };
+        let hook = sts2_core::EventHook::CardRewardCreationOptions {
+            player: seat.creature(),
+            elite_encounter,
+        };
         let mut asked = self.notify_run(hook).into_iter();
         while let Some(effect) = asked.next() {
             match effect {
@@ -8258,8 +8275,11 @@ impl<V: Rules> State<V> {
 
     /// `Hook.ShouldProcurePotion`, which any relic on the belt can answer no
     /// to. A fight's other listeners never answer it.
-    fn procure_refused(&self, potion: V::Potion) -> bool {
-        let hook = sts2_core::DecisionHook::ShouldProcurePotion { potion };
+    fn procure_refused(&self, seat: sts2_core::SeatIndex, potion: V::Potion) -> bool {
+        let hook = sts2_core::DecisionHook::ShouldProcurePotion {
+            player: seat.creature(),
+            potion,
+        };
         let model_hook = sts2_core::ModelHook::ShouldProcurePotion;
         let mut refused = false;
         self.run_each(model_hook, |listener, _| {
@@ -8304,7 +8324,9 @@ impl<V: Rules> State<V> {
     /// through. `Hook.ShouldDisableRemainingRestSiteOptions` clears every
     /// option unless a relic answers no, and then only the chosen one goes.
     fn rest_option_through(&mut self, seat: sts2_core::SeatIndex) {
-        let hook = sts2_core::DecisionHook::ShouldDisableRemainingRestSiteOptions;
+        let hook = sts2_core::DecisionHook::ShouldDisableRemainingRestSiteOptions {
+            player: seat.creature(),
+        };
         let model_hook = sts2_core::ModelHook::ShouldDisableRemainingRestSiteOptions;
         let mut disable = true;
         self.run_each(model_hook, |listener, _| {
@@ -8475,8 +8497,11 @@ impl<V: Rules> State<V> {
 
     /// `Hook.ShouldForcePotionReward` for a fight won in `room`, which any
     /// relic on the belt can answer yes to.
-    pub(super) fn potion_forced(&self, room: V::RoomType) -> bool {
-        let hook = sts2_core::DecisionHook::ShouldForcePotionReward { room };
+    pub(super) fn potion_forced(&self, seat: sts2_core::SeatIndex, room: V::RoomType) -> bool {
+        let hook = sts2_core::DecisionHook::ShouldForcePotionReward {
+            player: seat.creature(),
+            room,
+        };
         let model_hook = sts2_core::ModelHook::ShouldForcePotionReward;
         let mut forced = false;
         self.run_each(model_hook, |listener, _| {
