@@ -2347,7 +2347,12 @@ fn played_late<V: Rules>(
     id: sts2_core::CardId<V>,
     energy: V::Count,
 ) {
-    let late = sts2_core::EventHook::CardPlayedLate { card, id, energy };
+    let late = sts2_core::EventHook::CardPlayedLate {
+        card,
+        id,
+        player: seat.creature(),
+        energy,
+    };
     let mut walking = super::listen::Walking::begin(next, belts, late);
     while let Some((listener, effect)) = walking
         .as_mut()

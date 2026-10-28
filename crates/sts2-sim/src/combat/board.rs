@@ -7599,6 +7599,7 @@ pub(super) fn draw_pausing<V: Rules>(
         let hook = sts2_core::EventHook::CardDrawnEarly {
             card: drawn.face.ident.card,
             id: drawn.id,
+            player: seat.creature(),
             hand_draw,
         };
         let mut walking = super::listen::Walking::begin(live, belts, hook);
@@ -7680,6 +7681,7 @@ fn card_drawn_late<V: Rules>(
     let hook = sts2_core::EventHook::CardDrawn {
         card: drawn.face.ident.card,
         id: drawn.id,
+        player: seat.creature(),
         ethereal: drawn.face.ethereal(),
         hand_draw,
         side: live.side,

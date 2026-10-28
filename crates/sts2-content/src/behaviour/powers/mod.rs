@@ -2503,6 +2503,29 @@ pub(crate) fn event_hook<V: crate::Build>(
         {
             None
         }
+        (
+            __c0,
+            _,
+            EventHook::CardDrawn { player, .. } | EventHook::CardDrawnEarly { player, .. },
+        ) if player != holder
+            && (__c0 == V::Power::AUTOMATION_POWER
+                || __c0 == V::Power::CORROSIVE_WAVE_POWER
+                || __c0 == V::Power::CONFUSED_POWER
+                || __c0 == V::Power::SPEEDSTER_POWER
+                || __c0 == V::Power::ITERATION_POWER
+                || __c0 == V::Power::PAGESTORM_POWER
+                || __c0 == V::Power::CHAINS_OF_BINDING_POWER
+                || __c0 == V::Power::HELLRAISER_POWER) =>
+        {
+            None
+        }
+        (__c0, _, EventHook::CardExhausted { player, .. })
+            if player != holder
+                && (__c0 == V::Power::DARK_EMBRACE_POWER
+                    || __c0 == V::Power::FEEL_NO_PAIN_POWER) =>
+        {
+            None
+        }
         (__c0, _, EventHook::CardEnteredCombat { player, .. })
             if player != holder
                 && (__c0 == V::Power::RINGING_POWER
@@ -4038,8 +4061,7 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         (__c0, _, EventHook::SideTurnEnd { .. }) if __c0 == V::Power::NO_DRAW_POWER => None,
         // `HellraiserPower.AfterCardDrawnEarly`: a Strike its owner draws is
-        // auto-played. A fight here has one player, whose cards are all its
-        // holder's. The cap it keeps on auto-plays counts only against
+        // auto-played. The cap it keeps on auto-plays counts only against
         // enemies whose hit points are infinite.
         (__c0, _, EventHook::CardDrawnEarly { card, id, .. })
             if __c0 == V::Power::HELLRAISER_POWER =>
@@ -4904,7 +4926,7 @@ pub(crate) fn event_hook<V: crate::Build>(
         // `DarkEmbracePower.AfterCardExhausted`: its stack of cards for each
         // of its owner's cards exhausted, and a count of those Ethereal
         // exhausted, which its `AfterSideTurnEnd` draws for once the hand is
-        // flushed. A fight here has one player, whose every card is.
+        // flushed.
         (__c0, _, EventHook::CardExhausted { ethereal: true, .. })
             if __c0 == V::Power::DARK_EMBRACE_POWER && (owner == CombatSide::Player) =>
         {
@@ -5485,8 +5507,7 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         (__c0, _, EventHook::DamageReceiving { .. }) if __c0 == V::Power::THORNS_POWER => None,
         // `AutomationPower.AfterCardDrawn`: its stack of energy each tenth
-        // card its owner draws. A fight here has one player, whose cards are
-        // all its holder's.
+        // card its owner draws.
         (__c0, PowerAmount::Counted(amount), EventHook::CardDrawn { .. })
             if __c0 == V::Power::AUTOMATION_POWER =>
         {
@@ -5670,8 +5691,7 @@ pub(crate) fn event_hook<V: crate::Build>(
         ) if __c0 == V::Power::NO_BLOCK_POWER => Some(HookEffect::Decrement),
         (__c0, _, EventHook::SideTurnEnd { .. }) if __c0 == V::Power::NO_BLOCK_POWER => None,
         // `CorrosiveWavePower.AfterCardDrawn`: its stack of Poison onto every
-        // enemy that can be hit, for each of its owner's cards drawn. A fight
-        // here has one player, whose every card is.
+        // enemy that can be hit, for each of its owner's cards drawn.
         (__c0, amount, EventHook::CardDrawn { .. })
             if __c0 == V::Power::CORROSIVE_WAVE_POWER && (owner == CombatSide::Player) =>
         {
@@ -6194,8 +6214,7 @@ pub(crate) fn event_hook<V: crate::Build>(
             None
         }
         // `PagestormPower.AfterCardDrawn`: an Ethereal card its owner draws
-        // draws its stack more. A fight here has one player, so every draw is
-        // its owner's.
+        // draws its stack more.
         (__c0, PowerAmount::Counted(amount), EventHook::CardDrawn { ethereal: true, .. })
             if __c0 == V::Power::PAGESTORM_POWER =>
         {

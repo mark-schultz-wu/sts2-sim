@@ -900,10 +900,11 @@ pub(super) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
 ) {
     match (card, hook) {
         // `RightHandHand.AfterCardPlayedLate`: back into hand from the discard
-        // pile after a play of its owner's that spent its `Energy` or more. A
-        // fight here has one player.
-        (__c0, EventHook::CardPlayedLate { energy, .. }) if __c0 == V::Card::RIGHT_HAND_HAND => {
-            if i64::from(energy) >= i64::from(printed.face(V::CardVar::ENERGY)) {
+        // pile after a play of its owner's that spent its `Energy` or more.
+        (__c0, EventHook::CardPlayedLate { energy, player, .. })
+            if __c0 == V::Card::RIGHT_HAND_HAND =>
+        {
+            if player == owner && i64::from(energy) >= i64::from(printed.face(V::CardVar::ENERGY)) {
                 asked.push(HookEffect::AddSelfToHand {
                     only_from: Some(Pile::Discard),
                 });

@@ -440,8 +440,9 @@ fn summon_forth<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, F::Kin
 
 /// `MakeItSo.AfterCardPlayedLate`: after a Skill of its owner's, into hand
 /// from outside it. That is once the Skills finished this turn come to a
-/// whole multiple of its `Cards`. A fight here has one player.
+/// whole multiple of its `Cards`.
 fn make_it_so<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
+    owner: sts2_core::CombatId,
     printed: &P,
     history: sts2_core::History<'_, V>,
     hook: sts2_core::EventHook<V>,
@@ -449,10 +450,10 @@ fn make_it_so<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
 ) {
     use sts2_core::CardKind;
 
-    let sts2_core::EventHook::CardPlayedLate { card, .. } = hook else {
+    let sts2_core::EventHook::CardPlayedLate { card, player, .. } = hook else {
         unimplemented!("what MakeItSo does for {hook:?}");
     };
-    if V::card_kind(card) != Some(CardKind::Skill) {
+    if player != owner || V::card_kind(card) != Some(CardKind::Skill) {
         return;
     }
     let skills = history
@@ -544,6 +545,7 @@ fn manifest_authority<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Played<V, 
 pub(super) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
     card: V::Card,
     id: sts2_core::CardId<V>,
+    owner: sts2_core::CombatId,
     printed: &P,
     history: sts2_core::History<'_, V>,
     hook: sts2_core::EventHook<V>,
@@ -554,7 +556,9 @@ pub(super) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
         __c0 if __c0 == V::Card::KINGLY_PUNCH => {
             uncommon::kingly_punch::<V, _>(id, printed, hook, asked)
         }
-        __c0 if __c0 == V::Card::MAKE_IT_SO => make_it_so::<V, _>(printed, history, hook, asked),
+        __c0 if __c0 == V::Card::MAKE_IT_SO => {
+            make_it_so::<V, _>(owner, printed, history, hook, asked)
+        }
         card => unimplemented!("what {card:?} does for {hook:?}"),
     }
 }

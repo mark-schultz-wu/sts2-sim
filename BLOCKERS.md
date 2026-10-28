@@ -100,13 +100,6 @@ player, which the simulator does not keep.
 
 Each of these needs the field first.
 
-- `CardDrawn` and `CardDrawnEarly`: Automation, Corrosive Wave,
-  Confused, Speedster, Iteration, Pagestorm, Chains of Binding,
-  Hellraiser.
-- `CardExhausted`: Burning Sticks, Charon's Ashes, Forgotten Soul,
-  Joss Paper, Dark Embrace, Feel No Pain.
-- `CardDiscarded`: Tingsha, Tough Bandages.
-- `CardPlayedLate`: Right Hand Hand, Make It So.
 - `Shuffled`: Biiig Hug, The Abacus, Stratagem.
 - `Flushed`: Bookmark. `FlushingLate`: Well-Laid Plans on v0.107.1.
 - `ShouldPlay`: Velvet Choker, Sloth, Chains of Binding, Normality,

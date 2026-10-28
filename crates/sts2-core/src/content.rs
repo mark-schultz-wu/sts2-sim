@@ -3932,6 +3932,8 @@ pub enum EventHook<V: ContentVersion> {
     CardPlayedLate {
         card: V::Card,
         id: crate::CardId<V>,
+        /// `CardPlay.Card.Owner.Creature`.
+        player: crate::CombatId,
         /// `CardPlay.Resources.EnergyValue`: the energy the play spent.
         energy: V::Count,
     },
@@ -4167,6 +4169,8 @@ pub enum EventHook<V: ContentVersion> {
     CardExhausted {
         card: V::Card,
         id: crate::CardId<V>,
+        /// `card.Owner.Creature`.
+        player: crate::CombatId,
         /// `causedByEthereal`: Ethereal exhausted it as its turn ended.
         ethereal: bool,
     },
@@ -4292,6 +4296,8 @@ pub enum EventHook<V: ContentVersion> {
     CardDrawnEarly {
         card: V::Card,
         id: crate::CardId<V>,
+        /// `card.Owner.Creature`.
+        player: crate::CombatId,
         /// `fromHandDraw`.
         hand_draw: bool,
     },
@@ -4303,6 +4309,8 @@ pub enum EventHook<V: ContentVersion> {
     CardDrawn {
         card: V::Card,
         id: crate::CardId<V>,
+        /// `card.Owner.Creature`.
+        player: crate::CombatId,
         /// `Keywords.Contains(Ethereal)` for the copy drawn, which a word
         /// written on it counts toward.
         ethereal: bool,
@@ -4442,9 +4450,12 @@ pub enum EventHook<V: ContentVersion> {
     Flushed,
     /// `AfterOrbChanneled`, once an orb is in the player's queue.
     OrbChanneled,
-    /// `AfterCardDiscarded`, once a card of the player's is in the discard
+    /// `AfterCardDiscarded`, once a card of `player`'s is in the discard
     /// pile. `side` is the side whose turn it is.
-    CardDiscarded { side: V::CombatSide },
+    CardDiscarded {
+        player: crate::CombatId,
+        side: V::CombatSide,
+    },
     /// `BeforePowerAmountChanged`, as `amount` of `power` is about to land on
     /// `target`, or to change what it carries.
     PowerAmountChanging {

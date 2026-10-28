@@ -2537,7 +2537,10 @@ pub(super) fn card_discarded<V: Rules>(
     rngs: CombatRngs<'_>,
     belts: &mut crate::run::Belts<V>,
 ) -> Option<super::Ended> {
-    let hook = sts2_core::EventHook::CardDiscarded { side: live.side };
+    let hook = sts2_core::EventHook::CardDiscarded {
+        player: seat.creature(),
+        side: live.side,
+    };
     let mut walking = listen::Walking::begin(live, belts, hook)?;
     let ascension = live.ascension;
     let mut board = Board::for_card(seat, live, rngs, belts, ascension, None, None);
@@ -2618,6 +2621,7 @@ pub(super) fn exhausted<V: Rules>(
     let hook = sts2_core::EventHook::CardExhausted {
         card: card.face.ident.card,
         id: card.id,
+        player: seat.creature(),
         ethereal,
     };
     let mut walking = listen::Walking::begin(live, belts, hook)?;

@@ -31,11 +31,14 @@ impl State {
 /// `AfterCombatEnd` drops what waits. Its own draw over, the count keeps
 /// to what is left.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     state: &mut State,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     match hook {
+        // `card.Owner == base.Owner`: another player's card counts nothing.
+        EventHook::CardExhausted { player, .. } if player != owner => {}
         EventHook::CardExhausted { ethereal: true, .. } => state.ethereal += 1,
         EventHook::CardExhausted { .. } => {
             state.cards_exhausted += 1;

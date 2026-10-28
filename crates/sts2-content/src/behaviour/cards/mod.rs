@@ -805,7 +805,7 @@ pub(crate) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
             asked.push(sts2_core::HookEffect::AutoPlayFromDrawIfTop(id));
         }
         card if V::card_filed(card) == CardFiled::Regent => {
-            regent::event_hook::<V, _>(card, id, printed, history, hook, asked)
+            regent::event_hook::<V, _>(card, id, owner, printed, history, hook, asked)
         }
         card if V::card_filed(card) == CardFiled::Silent => {
             silent::event_hook::<V>(card, id, owner, history, hook, asked)
