@@ -196,7 +196,8 @@ own moves.
 - `Play`, `Seat`, `Recorder`, `Tape`, `SimSeat`: into `RunTable` and the
   layers.
 - The cli's `scenario` example and `map_bench`, which nothing runs.
-  `where_it_goes`, `clone_sites`, `digest_sites` and `legal_shapes` go too.
+  `where_it_goes`, `clone_sites`, `digest_sites` and `legal_shapes` go too
+  (done).
 
 These stay as they are:
 

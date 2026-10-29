@@ -17,12 +17,10 @@
 //!   benches/replay        the whole recording, on the clock
 //!   benches/decision      one step of each kind, taken apart
 //!   benches/allocations   the allocator, counted rather than clocked
-//!   examples/where_it_goes  every step timed where it falls, by kind
-//!   examples/clone_sites    one branch and nothing else, under a profiler
 //! ```
 //!
 //! The first two are criterion, so they compare against a saved baseline. The
-//! rest print a table.
+//! third prints a table.
 
 pub mod bench;
 mod counted;

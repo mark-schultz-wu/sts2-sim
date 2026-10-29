@@ -17,10 +17,6 @@ path = "src/main.rs"
 
 # Random legal play. A tool rather than a test: it has no pass condition, it
 # runs until it finds something or the run ends.
-[[bin]]
-name = "sts2-fuzz"
-path = "src/bin/fuzz.rs"
-
 # The TUI over the simulator. No game and no daemon: the run lives in the
 # process that draws it.
 [[bin]]

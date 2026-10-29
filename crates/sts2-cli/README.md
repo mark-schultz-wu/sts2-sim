@@ -76,21 +76,13 @@ The default build is v0.107.1, which the simulator plays to the end of each
 recorded run. A path that the simulator has no port for stops the program, and
 the message names that path.
 
-## sts2-fuzz
+## Playing at random
 
-A second binary. It starts a run, grants itself a hundred `Gorget`, and takes
-legal moves at random until the run ends or something breaks.
+`just fuzz <seed> <character>` plays one run on the game, picking every
+legal move alike, through `sts2-run play --player uniform`. It stops on a
+move the game refuses after listing it, or on an error the game logs.
+`docs/RUNNERS.md` says how.
 
-Three things count as a find, and all three stop the run:
-
-- The game refuses a move that the oracle offered.
-- The game logs an error while it runs a move.
-- The game dies.
-
-The first one is the useful one. It means that the legality the oracle reports
-and the legality the game enforces do not agree. That is the exact fault that a
-simulator copies.
-
-The fuzzer found two real faults in its first three runs. A shop offered a potion
-to a full potion belt. Each run also stopped on floor 17, because the protocol
-had no command to leave a finished act.
+The fuzzer that used to live here found two faults in its first three runs.
+A shop offered a potion to a full potion belt. Each run also stopped on floor
+17, because the protocol had no command to leave a finished act.

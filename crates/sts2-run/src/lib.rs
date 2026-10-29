@@ -69,6 +69,30 @@ impl<V: ContentVersion> Player<V> for Random {
     }
 }
 
+/// Every legal move alike, backing out of a selection and throwing a potion
+/// away among them. Random play that leaves nothing out reaches states
+/// nobody builds by hand, where a move the table listed and then refuses
+/// shows.
+pub struct Uniform(random::Pick);
+
+impl Uniform {
+    /// The player a run's seed starts.
+    pub fn for_seed(seed: &str) -> Self {
+        Self(random::Pick::for_seed(seed))
+    }
+}
+
+impl<V: ContentVersion> Player<V> for Uniform {
+    fn choose<T: RunTable<V>>(
+        &mut self,
+        _: SeatIndex,
+        _: &mut T,
+        moves: &[Decision<V>],
+    ) -> Result<usize, T::Error> {
+        Ok(self.0.any(moves.len()))
+    }
+}
+
 /// Why a run stopped short of a verdict of its own: a table's fault, or a
 /// layer's refusal. It ends the run as its `end` says.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
