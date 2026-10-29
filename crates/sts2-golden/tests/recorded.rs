@@ -24,9 +24,7 @@ use sts2_core::{Construct as _, Gift, Play as _, SeatIndex, Setup};
 use sts2_golden::recorded::{Ending, Followed, Recorded, Run, follow, position};
 use sts2_sim::{Sim, SimSeat};
 
-#[path = "../examples/carried/mod.rs"]
-mod carried;
-use carried::{carried, carried_by_every_seat};
+use sts2_run::carried::{carried, carried_by_every_seat};
 
 type V = V0_107_1;
 

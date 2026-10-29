@@ -158,6 +158,24 @@ pub fn spawned(command: &mut Command) -> Result<Output, ProcessError> {
 /// read them as they run. `sts2-golden`'s build script reads them too, and
 /// with another build's game named, it asks that game for every v0.107.1
 /// scenario.
+/// `sts2-run`, the one runner, built for release. See `docs/RUNNERS.md`.
+pub fn build_runner(root: &Path) -> Result<PathBuf, ProcessError> {
+    status(
+        Command::new("cargo")
+            .args([
+                "build",
+                "-q",
+                "--release",
+                "-p",
+                "sts2-run",
+                "--bin",
+                "sts2-run",
+            ])
+            .current_dir(root),
+    )?;
+    Ok(root.join("target/release/sts2-run"))
+}
+
 pub fn build_example(root: &Path, name: &str) -> Result<PathBuf, ProcessError> {
     status(
         Command::new("cargo")

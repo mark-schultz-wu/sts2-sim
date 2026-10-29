@@ -25,6 +25,11 @@ impl SeatIndex {
         usize::from(self.0)
     }
 
+    /// Every seat of a lobby of `count`, in order.
+    pub fn all(count: usize) -> impl Iterator<Item = SeatIndex> {
+        (0..count).map(|at| SeatIndex(u8::try_from(at).expect("at most 256 seats")))
+    }
+
     /// This seat's player's creature. A fight adds every player before
     /// anything else, in seat order, so seat `k`'s creature is `k`.
     pub fn creature(self) -> crate::CombatId {

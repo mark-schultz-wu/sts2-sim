@@ -39,9 +39,7 @@ use sts2_golden::recorded::{Followed, Recorded, Run, follow, follow_noting};
 use sts2_headless::recording;
 use sts2_sim::Sim;
 
-#[path = "carried/mod.rs"]
-mod carried;
-use carried::carried;
+use sts2_run::carried::carried;
 
 /// Replay one recorded run on the simulator.
 #[derive(Parser)]

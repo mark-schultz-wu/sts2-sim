@@ -91,4 +91,6 @@ pub use play::recorder::{Recorder, Tape};
 pub use play::recording::Recording;
 pub use play::refusal::{Reason, Refusal};
 pub use play::seat::{Peer, Peers, Seat, SeatAnswered, SeatIndex, Seated};
+pub use play::table::{RunTable, Settled};
+pub use play::verdict::{End, Verdict};
 pub use play::{Answered, Applied, Construct, Decided, Play, Snapshot};

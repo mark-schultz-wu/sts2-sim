@@ -237,7 +237,7 @@ fn listed(root: &Path, file: &Path) -> Result<Vec<(String, String, Vec<String>)>
 }
 
 /// The runner's flags for a run at `ascension` with `modifiers`, which
-/// `record_run` and `random_run` both read.
+/// `record_run` and `sts2-run` both read.
 pub(crate) fn setup(ascension: String, modifiers: &[String]) -> Vec<String> {
     let mut setup = vec!["--ascension".to_owned(), ascension];
     if !modifiers.is_empty() {

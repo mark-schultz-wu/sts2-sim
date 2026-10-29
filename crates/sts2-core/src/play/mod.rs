@@ -27,6 +27,8 @@ pub mod recorder;
 pub mod recording;
 pub mod refusal;
 pub mod seat;
+pub mod table;
+pub mod verdict;
 
 use crate::{ContentVersion, Decision, Observation, Question, Refusal, Setup, Start, Step};
 

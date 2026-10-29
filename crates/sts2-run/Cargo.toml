@@ -1,0 +1,24 @@
+[package]
+name = "sts2-run"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "sts2-run"
+path = "src/main.rs"
+
+[dependencies]
+# The vocabulary every table speaks, and the run table each implements.
+sts2-core = { workspace = true }
+# The relics a run carries, by build, and each build's types.
+sts2-content = { workspace = true }
+# The simulator's table.
+sts2-sim = { workspace = true }
+# The runner's arguments.
+clap = { workspace = true }
+# Content ids, read by the names the game spells them with.
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+# A build's counts as numbers, for the belt and the verdict.
+num-traits = { workspace = true }

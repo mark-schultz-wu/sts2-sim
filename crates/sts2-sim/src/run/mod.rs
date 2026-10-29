@@ -8,6 +8,7 @@ mod travel;
 mod treasure;
 
 pub use setup::{Opening, Rarity, RelicBag, run_acts};
+pub use state::AtSeat;
 pub(crate) use state::{BELT, Belt, Belts, State};
 
 /// What one command decided, or the refusal that stopped it.

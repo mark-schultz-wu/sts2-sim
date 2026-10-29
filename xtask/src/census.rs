@@ -1,6 +1,6 @@
 //! Which unported path stops the simulator's runs, and how often.
 //!
-//! Each run is `sts2-golden`'s `random_run` for one seed and character, in a
+//! Each run is `sts2-run` on the simulator, for one seed and character, in a
 //! process of its own. It carries 25 Gorgets and a Mercury Hourglass, so a
 //! run stops on what the simulator cannot play rather than on bad play. A
 //! path nobody has ported panics, and the panic ends that run and nothing
@@ -21,6 +21,8 @@ use std::process::Command;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use sts2_core::{End, Verdict};
+
 /// The characters a census plays when none is named.
 const CHARACTERS: [&str; 5] = ["IRONCLAD", "SILENT", "REGENT", "NECROBINDER", "DEFECT"];
 
@@ -29,6 +31,18 @@ const ACTS: u32 = 3;
 
 /// Seconds a run gets before it counts as stuck.
 const TIMEOUT: &str = "120";
+
+/// The census's run: the simulator, picking at random, every player carrying
+/// the hunt's relics. v0.107.1, whatever `STS2_GAME_VERSION` says.
+const RUNNER: [&str; 7] = [
+    "--build",
+    "v0.107.1",
+    "--table",
+    "sim",
+    "--player",
+    "random",
+    "--carried",
+];
 
 /// A run the census itself did not see through, rather than one that
 /// stopped in the simulator.
@@ -113,7 +127,7 @@ pub fn run(args: Args) -> Result<String, crate::error::ProcessError> {
         characters = CHARACTERS.iter().map(|c| c.to_string()).collect();
     }
 
-    let binary = crate::error::build_example(&crate::workspace(), "random_run")?;
+    let binary = crate::error::build_runner(&crate::workspace())?;
 
     if let Some(seed) = seed {
         return Ok(characters
@@ -159,11 +173,12 @@ fn one(binary: &std::path::Path, seed: &str, character: &str, setup: &[String]) 
 /// How `run` ended, and the command line that plays it there again.
 fn replay(binary: &std::path::Path, run: &Run, setup: &[String]) -> String {
     format!(
-        "{:?}\n{} {} {} {}\n",
+        "{:?}\n{} {} {} {} {}\n",
         run.ending,
         binary.display(),
         run.seed,
         run.character,
+        RUNNER.join(" "),
         setup.join(" ")
     )
 }
@@ -179,59 +194,44 @@ fn attempt(
         .args(["-k", "5", TIMEOUT])
         .arg(binary)
         .args([seed, character])
+        .args(RUNNER)
         .args(setup)
         .output();
     let output = match output {
         Ok(output) => output,
         Err(e) => return (Ending::Broken(Broken::Launching(e.kind())), (0, 0)),
     };
+    if let Some(124 | 137) = output.status.code() {
+        return (Ending::Stuck, (0, 0));
+    }
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let reached = stdout
-        .lines()
-        .rev()
-        .filter_map(|line| line.strip_prefix("at "))
-        .find_map(|rest| {
-            let (act, floor) = rest.split_once(' ')?;
-            Some((act.parse().ok()?, floor.parse().ok()?))
-        })
-        .unwrap_or((0, 0));
-    let last = stdout.lines().last().unwrap_or_default();
-    let ending = match (output.status.code(), last) {
-        (Some(0), "over won") => Ending::Won,
-        (Some(0), "over lost") => Ending::Lost,
-        (Some(0), "capped") => Ending::Capped,
-        (Some(124 | 137), _) => Ending::Stuck,
-        _ => panicked(&stderr)
-            .or_else(|| failed(&stderr))
-            .unwrap_or(Ending::Broken(Broken::Exited(output.status.code()))),
+    let Some(verdict) = Verdict::last_in(&stdout) else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let ending = match stderr
+            .lines()
+            .last()
+            .and_then(|last| last.strip_prefix("error: "))
+        {
+            Some(message) => Ending::Failed {
+                message: message.to_owned(),
+            },
+            None => Ending::Broken(Broken::Exited(output.status.code())),
+        };
+        return (ending, (0, 0));
     };
-    (ending, reached)
-}
-
-/// The panic stderr reports: `thread '...' panicked at <where>:` and then the
-/// message on the lines after it, up to the backtrace note.
-fn panicked(stderr: &str) -> Option<Ending> {
-    let mut lines = stderr.lines();
-    let at = lines
-        .by_ref()
-        .find_map(|line| line.split_once(" panicked at ").map(|(_, at)| at))?;
-    let message = lines
-        .take_while(|line| !line.starts_with("note: "))
-        .collect::<Vec<_>>()
-        .join(" ");
-    Some(Ending::Panicked {
-        message,
-        at: at.trim_end_matches(':').to_owned(),
-    })
-}
-
-/// The error the runner names on its last line of stderr, as `error: <what>`.
-fn failed(stderr: &str) -> Option<Ending> {
-    let message = stderr.lines().last()?.strip_prefix("error: ")?;
-    Some(Ending::Failed {
-        message: message.to_owned(),
-    })
+    let ending = match verdict.end {
+        End::Won => Ending::Won,
+        End::Lost => Ending::Lost,
+        End::Capped => Ending::Capped,
+        End::Panicked => Ending::Panicked {
+            message: verdict.detail,
+            at: verdict.place.unwrap_or_default(),
+        },
+        end => Ending::Failed {
+            message: format!("{end:?}: {}", verdict.detail),
+        },
+    };
+    (ending, (verdict.act, verdict.floor))
 }
 
 /// The census as a table: how the runs stopped, then the panics by count.

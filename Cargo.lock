@@ -2003,6 +2003,7 @@ dependencies = [
  "sts2-content-wire",
  "sts2-core",
  "sts2-headless",
+ "sts2-run",
  "sts2-sim",
  "thiserror 2.0.20",
 ]
@@ -2019,6 +2020,20 @@ dependencies = [
  "sts2-content",
  "sts2-content-wire",
  "sts2-core",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "sts2-run"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "num-traits",
+ "serde",
+ "serde_json",
+ "sts2-content",
+ "sts2-core",
+ "sts2-sim",
  "thiserror 2.0.20",
 ]
 

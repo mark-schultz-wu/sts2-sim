@@ -25,14 +25,12 @@ use std::process::ExitCode;
 use clap::Parser;
 use sts2_content_wire::WireContentVersion;
 use sts2_core::{AscensionKinds as _, Coop, Player, Seat as _, Seed, Start, Turn};
-use sts2_golden::random::{Pick, making_room};
 use sts2_golden::recorded::{Ending, Recorded, Run, named, parted, position};
 use sts2_golden::scenario::Stamp;
 use sts2_headless::{Config, GameSeat, SeatHost, game_dir_from_env};
+use sts2_run::random::{Pick, making_room};
 
-#[path = "carried/mod.rs"]
-mod carried;
-use carried::carried_by_every_seat;
+use sts2_run::carried::carried_by_every_seat;
 
 /// Moves a run takes before this gives up on it.
 const STEPS: usize = 20_000;

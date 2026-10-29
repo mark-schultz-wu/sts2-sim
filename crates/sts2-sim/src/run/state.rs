@@ -9200,7 +9200,7 @@ impl<V: Rules> sts2_core::EventView<V> for AtSeat<'_, V> {
 /// The run as one seat sees it, which is what its observation and its
 /// events read.
 #[derive(Debug)]
-pub(crate) struct AtSeat<'a, V: Rules> {
+pub struct AtSeat<'a, V: Rules> {
     pub(crate) state: &'a State<V>,
     pub(crate) seat: sts2_core::SeatIndex,
 }
@@ -9242,6 +9242,12 @@ impl<V: Rules> State<V> {
             unreachable!("a voted point the host cannot reach: {reason:?}")
         });
         self.travel(host, moving)
+    }
+
+    /// Whether `seat`'s player voted where to travel, and waits for the
+    /// rest to vote.
+    pub(crate) fn voted(&self, seat: sts2_core::SeatIndex) -> bool {
+        self.players[seat].vote.is_some()
     }
 
     /// How many players the run has.

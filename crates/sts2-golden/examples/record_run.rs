@@ -30,9 +30,7 @@ use sts2_golden::recorded::{Ending, Recorded, Run, named, parted, position};
 use sts2_golden::scenario::Stamp;
 use sts2_headless::{Config, Oracle, game_dir_from_env};
 
-#[path = "carried/mod.rs"]
-mod carried;
-use carried::carried;
+use sts2_run::carried::carried;
 
 /// Decisions a run takes before this gives up on it, as the census's runner.
 const STEPS: usize = 20_000;
@@ -175,17 +173,17 @@ fn record<V: WireContentVersion + sts2_content::Build>(cli: Cli) -> Result<Outco
         modifiers
             .iter()
             .map(|text| {
-                sts2_golden::recorded::read_modifier(text).map_err(|source| Error::Id {
+                sts2_run::ids::read_modifier(text).map_err(|source| Error::Id {
                     id: text.clone(),
                     source,
                 })
             })
             .collect::<Result<_, _>>()?,
-        sts2_golden::random::wins(seed.as_str()),
+        sts2_run::random::wins(seed.as_str()),
     );
     let mut config = Config::new(game_dir_from_env().ok_or(Error::NoGame)?);
     config.data_home = data_home;
-    let mut pick = sts2_golden::random::Pick::for_seed(start.seed.as_str());
+    let mut pick = sts2_run::random::Pick::for_seed(start.seed.as_str());
     let mut game = Oracle::<V>::begin(config, &start)?;
     for (relic, count) in carried::<V>() {
         for _ in 0..count {
@@ -244,7 +242,7 @@ fn record<V: WireContentVersion + sts2_content::Build>(cli: Cli) -> Result<Outco
         if legal.is_empty() {
             return Err(Error::NothingLegal { step });
         }
-        let room = sts2_golden::random::making_room(
+        let room = sts2_run::random::making_room(
             seen.asking.as_ref(),
             seen.observation.potions.len(),
             seen.observation.potion_slots,
