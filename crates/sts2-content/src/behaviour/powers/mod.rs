@@ -2726,8 +2726,24 @@ pub(crate) fn event_hook<V: crate::Build>(
         (__c0, _, EventHook::SideTurnEnd { .. }) if __c0 == V::Power::FLANKING_POWER => None,
         // `FlankingPower.AfterApplied` writes its applier's name for the text.
         (__c0, _, EventHook::Applied) if __c0 == V::Power::FLANKING_POWER => None,
-        // `SneakyPower.AfterCardPlayed`: block for each Attack another player
-        // plays. A fight here has one player.
+        // `SneakyPower.AfterCardPlayed`: its stack of block, unpowered, for
+        // each Attack another player plays.
+        (__c0, PowerAmount::Counted(amount), EventHook::CardPlayed { card, player, .. })
+            if __c0 == V::Power::SNEAKY_POWER
+                && player != holder
+                && <V as sts2_core::Rules>::card_kind(card)
+                    == Some(sts2_core::CardKind::Attack) =>
+        {
+            Some(HookEffect::GainBlock(amount))
+        }
+        (__c0, PowerAmount::Endless, EventHook::CardPlayed { player, card, .. })
+            if __c0 == V::Power::SNEAKY_POWER
+                && player != holder
+                && <V as sts2_core::Rules>::card_kind(card)
+                    == Some(sts2_core::CardKind::Attack) =>
+        {
+            unimplemented!("an endless Sneaky")
+        }
         (__c0, _, EventHook::CardPlayed { .. }) if __c0 == V::Power::SNEAKY_POWER => None,
         // `NoEnergyGainPower.AfterSideTurnEnd`: gone once its owner's turn
         // ends.

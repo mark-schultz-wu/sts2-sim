@@ -471,7 +471,18 @@ pub(crate) fn enter<V: Rules>(
                     amount,
                 );
             }
-            (_, afflict @ HookEffect::Afflict { .. }) => afflicting[seat.at()].push(afflict),
+            // A monster's power afflicts every player's cards, as Vital Spark
+            // walks `Allies` that are players.
+            (listener, afflict @ HookEffect::Afflict { .. }) => {
+                let monsters = matches!(
+                    listener,
+                    super::listen::Listener::Power { owner, .. } if live.seat_of(owner).is_none()
+                );
+                match monsters {
+                    true => afflicting.iter_mut().for_each(|each| each.push(afflict)),
+                    false => afflicting[seat.at()].push(afflict),
+                }
+            }
             // `CardPileCmd.AddToCombatAndPreview` into the draw pile at random,
             // which the deck is in by now. It lands once the piles are dealt.
             (

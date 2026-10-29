@@ -4095,13 +4095,23 @@ impl<V: Rules> Live<V> {
                 } => self.players[seat]
                     .cards
                     .write_all_cards(|held| held.ident.card == card, |held| held.replay(amount)),
-                // `CardCmd.ClearAffliction` over `AllCards`.
+                // `CardCmd.ClearAffliction` over `AllCards`: its owner's, or
+                // every player's for a monster's power.
                 sts2_core::HookEffect::ClearAffliction(sts2_core::Writing::EveryAfflictedWith(
                     affliction,
-                )) => self.players[seat].cards.write_all_cards(
-                    |held| held.ident.affliction == Some(affliction),
-                    |held| held.ident.affliction = None,
-                ),
+                )) => {
+                    let seats: smallvec::SmallVec<[sts2_core::SeatIndex; 4]> =
+                        match self.seat_of(owner) {
+                            Some(own) => smallvec::smallvec![own],
+                            None => self.players.seats().collect(),
+                        };
+                    for each in seats {
+                        self.players[each].cards.write_all_cards(
+                            |held| held.ident.affliction == Some(affliction),
+                            |held| held.ident.affliction = None,
+                        );
+                    }
+                }
                 other => left.push(other),
             }
         }

@@ -1987,7 +1987,13 @@ impl<'a, V: Rules> Board<'a, V> {
 
     /// Write on each card `to` names.
     fn write_on(&mut self, to: sts2_core::Writing<V>, write: impl Fn(&mut Face<V>)) {
-        let seat = self.seat();
+        // One card is in its owner's piles, whichever player the walk is for.
+        let seat = match to {
+            sts2_core::Writing::One(at) => {
+                self.live.card_seat(at.id()).unwrap_or_else(|| self.seat())
+            }
+            _ => self.seat(),
+        };
         match to {
             sts2_core::Writing::One(at) => {
                 let index = self.standing(at);

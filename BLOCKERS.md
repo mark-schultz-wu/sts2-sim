@@ -181,7 +181,6 @@ Low:
 #### G. Stubs and panics
 
 - Powers:
-  - Sneaky: block when another player plays an Attack
   - Beacon of Hope: shares block with teammates
   - Tank: gives Guarded to the other players
   - Covered: `unimplemented!`.
@@ -247,9 +246,6 @@ run as its own machine sees it. The work goes in this order:
    needs no hunt to show it keeps them. Next, in the order of
    `docs/COOP-FIGHTS.md` and where the hunted runs stop:
    - Where the runs part, not yet looked at:
-     - after Iron Wave, in `Creatures`: seed 0
-     - after Defend, and after Dominate, in the hand and piles: seeds 1
-       and 15
      - the Waterfall Giant's turn: seed 7
      - a card selection: seed 9
      - a reward, in `Creatures`: seed 13.
