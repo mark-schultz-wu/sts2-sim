@@ -614,9 +614,14 @@ public static class Driver
     public static async Task<bool> WaitForDecisionPoint(
         int? turnMustAdvancePast = null, GameAction? issued = null)
     {
+        // The other seats' choices the game already waited on before this
+        // command, which this seat's own work does not wait on.
+        HashSet<ulong> awaitedBefore = Peers.Shared
+            ? Peers.AwaitedChoices().ToHashSet()
+            : new HashSet<ulong>();
         while (true)
         {
-            bool resolved = await WaitOnce(turnMustAdvancePast, issued);
+            bool resolved = await WaitOnce(awaitedBefore, turnMustAdvancePast, issued);
 
             // A question outranks owed rewards: the game is mid-action and the
             // reward offer, when it comes, will park in its turn.
@@ -653,7 +658,7 @@ public static class Driver
     }
 
     private static async Task<bool> WaitOnce(
-        int? turnMustAdvancePast = null, GameAction? issued = null)
+        HashSet<ulong> awaitedBefore, int? turnMustAdvancePast = null, GameAction? issued = null)
     {
         ActionQueueSet queue = RunManager.Instance.ActionQueueSet;
         ActionExecutor executor = RunManager.Instance.ActionExecutor;
@@ -675,10 +680,13 @@ public static class Driver
             // choice. That is as far as a command here can take it. Work this
             // seat started outside the queue, such as an event option, can be
             // what waits on that choice, and it finishes only once that seat
-            // has chosen.
+            // has chosen. A choice the game already waited on before this
+            // command is another seat's own, so this seat's work goes on
+            // around it, as an event option's delay does.
             if (!Peers.InFlight
                 && RunManager.Instance.DebugOnlyGetState() is RunState held && Peers.HeldByOthers(held)
-                && (!BackgroundWork.InFlight || Peers.AwaitedChoices().Count > 0))
+                && (!BackgroundWork.InFlight
+                    || Peers.AwaitedChoices().Any(seat => !awaitedBefore.Contains(seat))))
             {
                 return true;
             }

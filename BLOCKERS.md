@@ -236,7 +236,7 @@ run as its own machine sees it. The work goes in this order:
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
    Mercury Hourglass, as in a solo hunt. So the runs go deep.
-   On 2026-10-28 sixteen seeds matched 9,211 steps: 10 panicked and 6
+   On 2026-10-28 sixteen seeds matched 10,960 steps: 14 panicked and 2
    parted. What they stop on is listed below, worked by class.
    Hunts stay at `--width 4`: at `--width 8` two games of sixteen failed
    in Godot itself. The golden tests follow the hunted runs in
@@ -244,14 +244,15 @@ run as its own machine sees it. The work goes in this order:
    needs no hunt to show it keeps them. Next, in the order of
    `docs/COOP-FIGHTS.md` and where the hunted runs stop:
    - Where the runs part, not yet looked at:
-     - both players in Amalgamator's card selection at once: seed 9. The
-       sim gives the second player two Ultimate Strikes. The game's view
-       shows none yet, which points at the mod's one open question (F10)
-       too.
+     - after a Frantic Escape, in `Creatures`: seed 1
+     - the Knowledge Demon's turn, in the moves and the question: seed 15.
    - Where they panic, besides the items below: v0.111.0 cards not yet
      ported, Imitation Learning (seed 2) and Blade Symphony (seed 10).
-     Seeds 3, 12 and 14 stop on `FightView::player`, and seeds 6 and 8
-     on the second player's setup asking a question, both listed below.
+     The rest stop on items listed below:
+     - `FightView::player`: seeds 3, 7, 9, 12 and 14
+     - the second player's setup asking a question: seeds 6 and 8
+     - a fight inside an event: seeds 4, 5 and 11
+     - a death that leaves every player ready: seed 13.
    - The rest of the scheduler (steps 3 and 4 of `docs/SCHEDULER.md`). A
      question the turn loop asks belongs to no player's queue yet. Each
      phase of the turn's end panics at one in a fight of several players.

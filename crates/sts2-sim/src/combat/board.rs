@@ -656,8 +656,8 @@ impl<'a, V: Rules> Board<'a, V> {
     ///
     /// # Panics
     ///
-    /// A power that stacks there, an endless one, or one whose class answers
-    /// `AfterApplied`, which nothing has needed.
+    /// A power that stacks onto one there, an endless one, or one whose class
+    /// answers `AfterApplied`, which nothing has needed.
     fn land_on_created(
         &mut self,
         id: CombatId,
@@ -676,10 +676,14 @@ impl<'a, V: Rules> Board<'a, V> {
                 .expect("the creature was made")
         };
         let at = created(self.live);
-        if self.live.created[at]
-            .powers
-            .iter()
-            .any(|held| held.power() == power)
+        // An instanced power builds another instance beside any there, as
+        // the Fat Gremlin takes a Heist for each Thievery.
+        let fresh = power.instanced() && !power.per_applier();
+        if !fresh
+            && self.live.created[at]
+                .powers
+                .iter()
+                .any(|held| held.power() == power)
         {
             unimplemented!("{power:?} stacking on a creature not yet in the fight");
         }
