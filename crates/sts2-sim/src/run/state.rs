@@ -8756,14 +8756,17 @@ impl<V: Rules> State<V> {
             // A won fight is still reported for the same reason: the run has
             // not left the room it was fought in.
             Phase::Lost { combats, .. } => Some(combats[seat].clone()),
-            // The player's creature is the run's own, so what happens to it
-            // between the fight and leaving the room shows on it.
+            // Each player's creature is the run's own, so what happens to any
+            // of them between the fight and leaving the room shows on it, in
+            // every player's view.
             Phase::Rewards { seats, .. } => {
                 let mut combat = seats[seat].combat.clone();
-                let player = seat.creature();
-                if let Some(creature) = combat.creatures.iter_mut().find(|c| c.id == player) {
-                    creature.hp = self.players[seat].hp;
-                    creature.max_hp = self.players[seat].max_hp;
+                for each in self.players.seats() {
+                    let player = each.creature();
+                    if let Some(creature) = combat.creatures.iter_mut().find(|c| c.id == player) {
+                        creature.hp = self.players[each].hp;
+                        creature.max_hp = self.players[each].max_hp;
+                    }
                 }
                 Some(combat)
             }

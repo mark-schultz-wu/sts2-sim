@@ -141,8 +141,6 @@ block, energy, hand, deck, health, plays and belt. What is left:
 - `GoldenPathActMap.cs:42` drops a point type in co-op. Golden
   Compass ignores this.
 - Monster numbers:
-  - Knowledge Demon's heal is `30 * Players.Count`
-  - Waterfall Giant's Siphon heal scales the same way
   - Battleworn Dummy's options show each setting's health scaled by
     `ScaleHpForMultiplayer`. The fight it opens panics in a run of
     several players first.
@@ -246,9 +244,10 @@ run as its own machine sees it. The work goes in this order:
    needs no hunt to show it keeps them. Next, in the order of
    `docs/COOP-FIGHTS.md` and where the hunted runs stop:
    - Where the runs part, not yet looked at:
-     - the Waterfall Giant's turn: seed 7
-     - a card selection: seed 9
-     - a reward, in `Creatures`: seed 13.
+     - both players in Amalgamator's card selection at once: seed 9. The
+       sim gives the second player two Ultimate Strikes. The game's view
+       shows none yet, which points at the mod's one open question (F10)
+       too.
    - Where they panic, besides the items below: v0.111.0 cards not yet
      ported, Imitation Learning (seed 2) and Blade Symphony (seed 10).
      Seeds 3, 12 and 14 stop on `FightView::player`, and seeds 6 and 8
