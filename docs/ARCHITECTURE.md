@@ -448,7 +448,7 @@ that starts from the other build's code. A move can shift what the compiler
 inlines. The relics' and the cards' decision dispatchers stay out of line,
 since the walk inlining them cost 3.9% and 3.4%.
 
-`follow_run <file> <index> --diff <dir>` plays a recorded run on the game
+`sts2-run follow <file> <index> --diff <dir>` plays a recorded run on the game
 beside the simulator, and names the sections where they first differ. A
 temporary Harmony patch in the mod that logs a stack trace at the model in
 question finds the rest.

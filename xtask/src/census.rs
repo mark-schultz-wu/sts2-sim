@@ -161,7 +161,7 @@ fn one(binary: &std::path::Path, seed: &str, character: &str, setup: &[String]) 
 /// How `run` ended, and the command line that plays it there again.
 fn replay(binary: &std::path::Path, run: &Run, setup: &[String]) -> String {
     format!(
-        "{:?}\n{} {} {} {} {}\n",
+        "{:?}\n{} play {} {} {} {}\n",
         run.ending,
         binary.display(),
         run.seed,
@@ -181,7 +181,7 @@ fn attempt(
     let output = Command::new("timeout")
         .args(["-k", "5", TIMEOUT])
         .arg(binary)
-        .args([seed, character])
+        .args(["play", seed, character])
         .args(RUNNER)
         .args(setup)
         .output();

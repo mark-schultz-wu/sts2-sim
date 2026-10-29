@@ -3,7 +3,7 @@
 //!
 //! The action log says what each action did, and not the order of the
 //! game's steps inside one. This plays the run on the game beside the
-//! simulator, through `follow_run --diff`, with the mod's trace on. The
+//! simulator, through `sts2-run follow --diff`, with the mod's trace on. The
 //! mod writes each call of a method a pattern names, with its arguments,
 //! and each command it was sent. This prints the calls of the last
 //! `--moves` moves before the split.
@@ -16,7 +16,7 @@
 //!     'Hook.*' 'PowerCmd.*' DampenPower
 //! ```
 //!
-//! The build is `STS2_GAME_VERSION`'s, as for `follow_run`. The whole
+//! The build is `STS2_GAME_VERSION`'s, as for `sts2-run follow`. The whole
 //! trace stays in `target/game-trace/<INDEX>.log`.
 //!
 //! With `--coop`, `INDEX` is a co-op seed's number, as `cargo xtask coop`
@@ -84,7 +84,7 @@ pub fn run(
         return coop_trace(index, &patterns, moves, &characters);
     }
     let root = crate::workspace();
-    let follow = error::build_example(&root, "follow_run")?;
+    let follow = error::build_runner(&root)?;
     let file = match file {
         Some(file) => file,
         None => crate::followed::recorded_file(&root)?,
@@ -97,6 +97,7 @@ pub fn run(
     // A run that parts exits with a failure, which is the point here.
     let followed = error::spawned(
         Command::new(&follow)
+            .arg("follow")
             .arg(&file)
             .arg(index.to_string())
             .arg("--diff")
@@ -136,7 +137,7 @@ fn coop_trace(
     error::create_dir(&homes)?;
     let played = error::spawned(
         Command::new(&runner)
-            .args([seed.as_str(), &characters.join(",")])
+            .args(["play", seed.as_str(), &characters.join(",")])
             .args(["--build", &crate::runner::game_build()])
             .args(["--table", "game", "--carried", "--moves", "--hunt"])
             .arg("--home")

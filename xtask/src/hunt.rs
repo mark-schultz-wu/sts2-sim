@@ -9,7 +9,7 @@
 //! ```
 //!
 //! The build is `STS2_GAME_VERSION`'s, and its parted runs go to
-//! `target/hunt/parted-<build>.bin`. `follow_run` reads that file as it reads
+//! `target/hunt/parted-<build>.bin`. `sts2-run follow` reads that file as it reads
 //! a recorded one, and `cargo xtask split --file` writes a run of it as a
 //! scenario.
 //!
@@ -250,7 +250,8 @@ fn hunt_one(
     counted: Option<&Path>,
     retried: &AtomicUsize,
 ) -> Went {
-    let mut args = crate::runner::args([job.seed.as_str(), &job.character, "--build", build]);
+    let mut args =
+        crate::runner::args(["play", job.seed.as_str(), &job.character, "--build", build]);
     args.extend(crate::runner::args([
         "--table",
         "game",

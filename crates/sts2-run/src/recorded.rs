@@ -246,58 +246,56 @@ pub fn named<V: sts2_core::ContentVersion>(seen: &Snapshot<V>, decision: &Decisi
     }
 }
 
-/// Replays `run` on the simulator `driven`, begun on its start and carrying
-/// what it carried, and says how far the two agree.
+/// Replays `run` at `table`, begun on its start, and says how far the two
+/// agree. Each move is its recorded index into its own seat's list.
 ///
-/// The move at each step is the recorded index into the simulator's own
-/// list. The digest the step is compared on covers that list, so where the
-/// positions agree the index names the same move.
+/// Each seat's position is compared with the run's digest before it moves,
+/// and every seat's after the last move. `agreed` is told each time one
+/// more agrees. Without `checking` nothing is compared, for a table such as
+/// a hunt that compares itself.
 ///
 /// # Panics
 ///
-/// Where the simulator does: an unported path, or a move it refuses. A
-/// caller that must survive one runs this in a process of its own. And on a
-/// run of several players, which needs a simulator of several seats.
-pub fn follow<V, P>(run: &Run, driven: &mut P) -> Followed
+/// Where the table does, and on a move the table refuses.
+pub fn follow<V, T>(
+    run: &Run,
+    table: &mut T,
+    checking: bool,
+    mut agreed: impl FnMut(usize),
+) -> Result<Followed, crate::Fault>
 where
     V: sts2_core::ContentVersion,
-    P: sts2_core::Play<V>,
-    P::Error: std::fmt::Display,
+    T: sts2_core::RunTable<V>,
+    crate::Fault: From<T::Error>,
 {
-    follow_noting(run, driven, |_| {})
-}
-
-/// [`follow`], telling `agreed` the count each time one more position
-/// agrees. A caller then knows how far the run got if the simulator panics.
-pub fn follow_noting<V, P>(run: &Run, driven: &mut P, mut agreed: impl FnMut(usize)) -> Followed
-where
-    V: sts2_core::ContentVersion,
-    P: sts2_core::Play<V>,
-    P::Error: std::fmt::Display,
-{
-    if run.players.len() > 1 {
-        unimplemented!("following a run of {} players", run.players.len());
-    }
+    let mut moves = Vec::new();
     let mut after = String::from("the start");
-    for (step, &want) in run.digests.iter().enumerate() {
-        let seen = driven
-            .observe()
-            .unwrap_or_else(|e| panic!("observing step {step}: {e}"));
-        if position(&seen) != want {
-            return Followed::PartedAt { step, after };
+    for (step, (&at, &seat)) in run.moves.iter().zip(&run.seats).enumerate() {
+        let seen = table.snapshot(seat)?;
+        if checking {
+            if position(&seen) != run.digests[step] {
+                return Ok(Followed::PartedAt { step, after });
+            }
+            agreed(step + 1);
         }
-        agreed(step + 1);
-        let Some(&at) = run.moves.get(step) else {
-            break;
-        };
-        let decision = seen.observation.moves[usize::from(at)];
+        table.moves(seat, &mut moves)?;
+        let decision = moves[usize::from(at)];
         after = named(&seen, &decision);
-        driven
-            .play(&decision)
-            .unwrap_or_else(|e| panic!("playing {decision:?} at step {step}: {e}"))
-            .unwrap_or_else(|refusal| panic!("{decision:?} refused at step {step}: {refusal}"));
+        if let Err(refusal) = table.play(seat, &decision)? {
+            panic!("{decision:?} refused at step {step}: {refusal}");
+        }
     }
-    Followed::Whole
+    if checking {
+        let ends = &run.digests[run.moves.len()..];
+        for (at, (seat, &want)) in sts2_core::SeatIndex::all(ends.len()).zip(ends).enumerate() {
+            if position(&table.snapshot(seat)?) != want {
+                let step = run.moves.len() + at;
+                return Ok(Followed::PartedAt { step, after });
+            }
+            agreed(run.moves.len() + at + 1);
+        }
+    }
+    Ok(Followed::Whole)
 }
 
 impl Recorded {

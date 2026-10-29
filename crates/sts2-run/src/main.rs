@@ -1,7 +1,9 @@
-//! `sts2-run`: one run, played at a table by a player, to a verdict.
+//! `sts2-run`: one run, played at a table by a player, to a verdict, or one
+//! recorded run replayed. `following.rs` says how `follow` replays.
 //!
 //! ```text
-//! sts2-run <seed> <characters> [--build v0.107.1] [--table sim|game]
+//! sts2-run follow <file> [index] [--at <step> | --scenario | --diff <dir>]
+//! sts2-run play <seed> <characters> [--build v0.107.1] [--table sim|game]
 //!          [--player random] [--carried] [--steps N]
 //!          [--record FILE] [--hunt] [--home DIR] [--moves]
 //!          [--ascension ID] [--modifiers ID,...]
@@ -25,9 +27,20 @@ use sts2_sim::SimTable;
 /// Moves a run takes before this gives up on it.
 const STEPS: usize = 20_000;
 
-/// Play one run.
+mod following;
+
+/// Play a run, or replay a recorded one.
 #[derive(Parser)]
-struct Cli {
+enum Cli {
+    /// Play one run.
+    Play(Play),
+    /// Replay a recorded run.
+    Follow(following::Args),
+}
+
+/// Play one run.
+#[derive(clap::Args)]
+struct Play {
     /// The seed, such as `C000000042`.
     #[arg(value_parser = Seed::new)]
     seed: Seed,
@@ -110,7 +123,18 @@ enum Error {
 
 fn main() -> ExitCode {
     sts2_run::keep_panics();
-    let cli = Cli::parse();
+    let cli = match Cli::parse() {
+        Cli::Play(play) => play,
+        Cli::Follow(args) => {
+            return match following::run(args) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(e) => {
+                    eprintln!("error: {e}");
+                    ExitCode::FAILURE
+                }
+            };
+        }
+    };
     // One arm per build `sts2-content` compiles.
     let played = match cli.build.as_str() {
         "v0.107.1" => run::<sts2_content::v0_107_1::V0_107_1>(cli),
@@ -138,11 +162,11 @@ fn id<T: serde::de::DeserializeOwned>(id: &str) -> Result<T, Error> {
 }
 
 /// The run `cli` names, played to its verdict.
-fn run<V>(cli: Cli) -> Result<Verdict, Error>
+fn run<V>(cli: Play) -> Result<Verdict, Error>
 where
     V: sts2_content::Build + sts2_content_wire::WireContentVersion,
 {
-    let Cli {
+    let Play {
         seed,
         characters,
         build: _,
@@ -222,17 +246,34 @@ where
             false => at::<V, Game<V>>(host, &start, &mut player, steps),
         });
     }
-    // `STS2_HEADLESS_TRACE` reaches every seat's game, and each traces to a
-    // file of its own beside its home, as `cargo xtask game-trace --coop`
-    // reads them.
+    let seats = lobby(&game_dir, &dir, start.players.len())?;
+    let host = (moves, (hunted, (record, seats)));
+    type Lobby<V> = MovesLog<Hunted<V, Recorded<V, LogGuard<LobbyTable<V>>>>>;
+    Ok(match carried {
+        true => at::<V, Carried<Lobby<V>>>(host, &start, &mut player, steps),
+        false => at::<V, Lobby<V>>(host, &start, &mut player, steps),
+    })
+}
+
+/// A host for each of `players` seats of a lobby, on the game in `game`,
+/// each with a profile `seat<n>` under `dir`.
+///
+/// `STS2_HEADLESS_TRACE` reaches every seat's game, and each traces to a
+/// file of its own beside its profile, as `cargo xtask game-trace --coop`
+/// reads them.
+fn lobby(
+    game: &std::path::Path,
+    dir: &std::path::Path,
+    players: usize,
+) -> Result<Vec<SeatHost>, Error> {
     let tracing = std::env::var_os("STS2_HEADLESS_TRACE").is_some();
     let port = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0))
         .and_then(|socket| socket.local_addr())
         .map_err(Error::Port)?
         .port();
-    let seats = (0..start.players.len())
+    Ok((0..players)
         .map(|at| {
-            let config = Config::new(&game_dir).data_home(dir.join(format!("seat{at}")));
+            let config = Config::new(game).data_home(dir.join(format!("seat{at}")));
             SeatHost {
                 config: match tracing {
                     true => config.trace_file(dir.join(format!("seat{at}.trace"))),
@@ -241,13 +282,7 @@ where
                 port,
             }
         })
-        .collect();
-    let host = (moves, (hunted, (record, seats)));
-    type Lobby<V> = MovesLog<Hunted<V, Recorded<V, LogGuard<LobbyTable<V>>>>>;
-    Ok(match carried {
-        true => at::<V, Carried<Lobby<V>>>(host, &start, &mut player, steps),
-        false => at::<V, Lobby<V>>(host, &start, &mut player, steps),
-    })
+        .collect())
 }
 
 /// The run `start` names at a table of `T`, to its verdict.

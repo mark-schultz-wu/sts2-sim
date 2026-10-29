@@ -151,12 +151,23 @@ pub fn keep_panics() {
 
 /// The verdict on a panic [`keep_panics`] kept.
 fn panicked() -> Verdict {
-    let (place, message) = PANICKED
+    let (place, message) = taken_panic();
+    verdict(End::Panicked, None, place, message)
+}
+
+/// Where the last panic [`keep_panics`] kept was raised, and what it said.
+fn taken_panic() -> (Option<String>, String) {
+    PANICKED
         .lock()
         .ok()
         .and_then(|mut panicked| panicked.take())
-        .unwrap_or_default();
-    verdict(End::Panicked, None, place, message)
+        .unwrap_or_default()
+}
+
+/// `act`, or where it panicked and what it said. A caller that catches one
+/// reports it and plays on no further.
+pub fn catching<R>(act: impl FnOnce() -> R) -> Result<R, (Option<String>, String)> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(act)).map_err(|_| taken_panic())
 }
 
 /// Starts the run `start` names at a table of `T`, plays it with `player`

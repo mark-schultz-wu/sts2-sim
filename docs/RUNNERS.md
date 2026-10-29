@@ -88,12 +88,12 @@ trait Player<V> {
 - `Random`: `Pick`, with its end-turn odds and the room rule. A layer
   never sees the rule, because it is the player's own.
 - `Uniform`: every legal move alike, Cancel included. The fuzzer's.
-- `Replay`: the move indices of a recorded run, seat by seat.
 - `Human`: the terminal UI.
 - Later, an AI.
 
 Which seat acts next is the driver's: `Coop::step`'s rule today. A seat
-with no moves waits.
+with no moves waits. A replay is no player, because the run names the seat
+of each move: `recorded::follow` plays it on any table instead.
 
 ## Layers
 
@@ -159,10 +159,11 @@ first, with how far the run got.
 One binary, `sts2-run`:
 
 ```text
-sts2-run <seed> <characters> [--build v0.107.1] [--table sim|game]
-         [--player random|uniform|replay FILE]
-         [--carried] [--record FILE] [--hunt] [--steps N]
-         [--ascension ID] [--modifiers ID,...]
+sts2-run play <seed> <characters> [--build v0.107.1] [--table sim|game]
+              [--player random|uniform] [--carried] [--steps N]
+              [--record FILE] [--hunt] [--home DIR] [--moves]
+              [--ascension ID] [--modifiers ID,...]
+sts2-run follow <file> [index] [--at <step> | --scenario | --diff <dir>]
 ```
 
 `<characters>` is one character for a solo run, or several joined by
@@ -177,11 +178,14 @@ runs:
 | `record` | `--table game --player random --carried --record` |
 | `hunt` | the same, `--hunt`, keeping only runs that part |
 | `coop` | `hunt` with several characters |
-| `followed`, `split` | `--table sim --player replay` |
-| `game-trace` | `--table game --player replay --hunt` |
+| `followed`, `split` | `follow` |
+| `game-trace` | `follow --diff`, or `play --hunt` with several characters |
 
-`--at` and `--scenario` move from `follow_run` into `xtask followed`,
-since they read a recorded run and play nothing new.
+`sts2-run follow` replays a recorded run, solo or co-op, as each seat
+played it. It says how far the simulator follows the run. `--at` prints
+its position at one move, and `--scenario` its moves as a scenario.
+`--diff` plays the game beside the simulator: a hunt that plays the run's
+own moves.
 
 ## What goes
 
@@ -221,8 +225,9 @@ Each step is one PR, with the golden tests, the census and the hunt.
    `coop` and `game-trace --coop` move onto `sts2-run`, and `record_run`
    and `coop_run` go. The run format moves into `sts2-run`. xtask starts
    every run through one module, with one pool (done).
-3. `Replay`: `follow_run` and the golden replay tests move onto it. A
-   co-op run replays like a solo one, so `follow_noting`'s refusal goes.
+3. `recorded::follow` replays a run at any `RunTable`. `sts2-run follow`
+   and the golden replay tests use it, and `follow_run` goes. A co-op run
+   replays like a solo one, so `follow_noting`'s refusal goes (done).
 4. `Uniform`, `RefusalGuard` and `Human`: the fuzzer and `sim` go.
    `Play`, `Seat`, `Recorder` and `SimSeat` go. The `sts2` daemon reads a
    `RunTable`. The unused examples go.

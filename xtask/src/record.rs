@@ -233,7 +233,7 @@ fn record_one(
     home: &Path,
     retried: &AtomicUsize,
 ) -> Result<(), String> {
-    let mut args = crate::runner::args([seed, character, "--build", build]);
+    let mut args = crate::runner::args(["play", seed, character, "--build", build]);
     args.extend(crate::runner::args(["--table", "game", "--carried"]));
     args.extend(crate::runner::args(["--record".as_ref(), out.as_os_str()]));
     args.extend(crate::runner::args(["--home".as_ref(), home.as_os_str()]));

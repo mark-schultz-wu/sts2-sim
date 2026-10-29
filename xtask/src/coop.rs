@@ -151,7 +151,7 @@ fn play_one(
     hunt: bool,
 ) -> Result<String, String> {
     let homes = scratch.join(seed);
-    let mut args = crate::runner::args([seed, characters, "--build", build]);
+    let mut args = crate::runner::args(["play", seed, characters, "--build", build]);
     args.extend(crate::runner::args([
         "--table",
         "game",
