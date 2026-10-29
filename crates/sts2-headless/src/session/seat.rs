@@ -4,7 +4,7 @@
 //! 0 hosts on [`SeatHost::port`] and the others join it there. Each game
 //! answers for its own player only.
 
-use sts2_core::{AscensionKinds as _, Decision, Seat, SeatAnswered, SeatIndex, Seated, Start};
+use sts2_core::{AscensionKinds as _, Decision, SeatAnswered, SeatIndex, Seated, Start};
 
 use crate::session::error::Error;
 use crate::wire::peers::{net_id, peers};
@@ -74,18 +74,16 @@ impl<V: sts2_content_wire::WireContentVersion> GameSeat<V> {
     }
 }
 
-impl<V: sts2_content_wire::WireContentVersion> Seat<V> for GameSeat<V> {
-    type Error = Error;
-    type Host = SeatHost;
-
+impl<V: sts2_content_wire::WireContentVersion> GameSeat<V> {
     /// Launches the seat's game, which hosts or joins, and returns once the
-    /// run has started.
+    /// run has started. A run starts only once every seat has joined, so a
+    /// lobby begins its seats at once.
     ///
     /// # Panics
     ///
     /// On an ascension or a modifier, which the mod's co-op lobby does not
     /// set yet.
-    fn begin(host: SeatHost, start: &Start<V>, me: SeatIndex) -> Result<Self, Error> {
+    pub fn begin(host: SeatHost, start: &Start<V>, me: SeatIndex) -> Result<Self, Error> {
         if start.ascension != V::AscensionLevel::NONE || !start.modifiers.is_empty() {
             unimplemented!("a co-op run with an ascension or modifiers");
         }
@@ -118,12 +116,15 @@ impl<V: sts2_content_wire::WireContentVersion> Seat<V> for GameSeat<V> {
         })
     }
 
-    fn play(&mut self, decision: &Decision<V>) -> Result<SeatAnswered<V>, Error> {
+    /// Submits one of this seat's moves, and returns once it is submitted.
+    /// What the move does can wait on the other seats.
+    pub fn play(&mut self, decision: &Decision<V>) -> Result<SeatAnswered<V>, Error> {
         let reply = self.game.dispatch(decision)?;
         self.seated(reply)
     }
 
-    fn observe(&mut self) -> Result<Seated<V>, Error> {
+    /// Where this seat stands, without moving it.
+    pub fn observe(&mut self) -> Result<Seated<V>, Error> {
         let reply = parse_reply::<V>(&self.game.send_line(r#"{"cmd":"observe"}"#)?)?;
         match self.seated(reply)? {
             Ok(seated) => Ok(seated),

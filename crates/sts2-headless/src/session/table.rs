@@ -6,7 +6,7 @@
 //! either.
 
 use sts2_core::{
-    Construct as _, Coop, Decided, Decision, Observation, Play as _, RunTable, SeatIndex, Seated,
+    Construct as _, Decided, Decision, Observation, Play as _, RunTable, SeatIndex, Seated,
     Settled, Setup, Snapshot, Start,
 };
 
@@ -101,9 +101,18 @@ impl<V: sts2_content_wire::WireContentVersion> RunTable<V> for OracleTable<V> {
 /// on its way to the others.
 const STALLS: usize = 20;
 
+/// How many times a lobby looks again at a seat that has not caught up with
+/// the others before it calls the seats stalled. Each look waits for the
+/// seat's game to stand still, so this is a few seconds at most.
+const CATCH_UP: usize = 1000;
+
+/// Every seat as it stands, once each caught up with the others, or as they
+/// stood when one never did.
+type CaughtUp<V> = Result<Vec<Seated<V>>, Vec<Seated<V>>>;
+
 /// A run of several players, one game for each seat.
 pub struct LobbyTable<V: sts2_content_wire::WireContentVersion> {
-    coop: Coop<V, GameSeat<V>>,
+    seats: Vec<GameSeat<V>>,
     /// Where every seat stood when last looked at, once each had caught up.
     /// Nothing once a move or a setup has changed the run.
     seated: Option<Vec<Seated<V>>>,
@@ -112,7 +121,34 @@ pub struct LobbyTable<V: sts2_content_wire::WireContentVersion> {
 impl<V: sts2_content_wire::WireContentVersion> LobbyTable<V> {
     /// Each seat's game. See [`GameSeat`].
     pub fn seats(&self) -> &[GameSeat<V>] {
-        self.coop.seats()
+        &self.seats
+    }
+
+    /// Where every seat stands, once each has caught up with the others.
+    ///
+    /// Moves reach a seat over the network, so a seat can be behind another.
+    /// Each one behind is looked at again, until all have taken in as much,
+    /// with as many checksums. Seats that never catch up are the error, as
+    /// they stood.
+    fn caught_up(&mut self) -> Result<CaughtUp<V>, Error> {
+        let mut seated = (self.seats.iter_mut())
+            .map(GameSeat::observe)
+            .collect::<Result<Vec<_>, _>>()?;
+        for _ in 0..CATCH_UP {
+            let synced = seated.iter().map(|seat| seat.peers.synced).max();
+            let checksums = seated.iter().map(|seat| seat.peers.checksums).max();
+            let mut behind = false;
+            for (seat, at) in self.seats.iter_mut().zip(&mut seated) {
+                if Some(at.peers.synced) < synced || Some(at.peers.checksums) < checksums {
+                    *at = seat.observe()?;
+                    behind = true;
+                }
+            }
+            if !behind {
+                return Ok(Ok(seated));
+            }
+        }
+        Ok(Err(seated))
     }
 
     /// Where every seat stands, looked at once each has caught up with the
@@ -122,7 +158,7 @@ impl<V: sts2_content_wire::WireContentVersion> LobbyTable<V> {
         if self.seated.is_none() {
             let mut seated = Vec::new();
             for _ in 0..STALLS {
-                seated = match self.coop.settle()? {
+                seated = match self.caught_up()? {
                     Ok(seated) => seated,
                     Err(stalled) => {
                         seated = stalled;
@@ -154,15 +190,32 @@ impl<V: sts2_content_wire::WireContentVersion> RunTable<V> for LobbyTable<V> {
 
     /// Launches a game for each seat, which host or join, and returns once
     /// the run has started on all of them.
+    ///
+    /// Every seat begins at once, on a thread of its own, because the host's
+    /// run starts only when the others have joined.
+    ///
+    /// # Panics
+    ///
+    /// When the hosts and the run's players differ in number.
     fn begin(host: Vec<SeatHost>, start: &Start<V>) -> Result<Self, Error> {
+        assert_eq!(host.len(), start.players.len(), "one host for each player");
+        let begun: Vec<Result<GameSeat<V>, Error>> = std::thread::scope(|scope| {
+            let threads: Vec<_> = (host.into_iter().zip(SeatIndex::all(start.players.len())))
+                .map(|(host, me)| scope.spawn(move || GameSeat::begin(host, start, me)))
+                .collect();
+            threads
+                .into_iter()
+                .map(|thread| thread.join().expect("a seat's begin does not panic"))
+                .collect()
+        });
         Ok(Self {
-            coop: Coop::begin(host, start)?,
+            seats: begun.into_iter().collect::<Result<_, _>>()?,
             seated: None,
         })
     }
 
     fn seats(&self) -> usize {
-        self.coop.seats().len()
+        self.seats.len()
     }
 
     fn seen(&mut self, seat: SeatIndex) -> Result<Self::Seen<'_>, Error> {
@@ -179,7 +232,7 @@ impl<V: sts2_content_wire::WireContentVersion> RunTable<V> for LobbyTable<V> {
     /// so every move it takes is resolved here.
     fn play(&mut self, seat: SeatIndex, decision: &Decision<V>) -> Result<Settled<V>, Error> {
         self.seated = None;
-        let answered = sts2_core::Seat::play(&mut self.coop.seats_mut()[seat.at()], decision)?;
+        let answered = self.seats[seat.at()].play(decision)?;
         Ok(answered.map(|_| Decided::Resolved))
     }
 
@@ -189,14 +242,13 @@ impl<V: sts2_content_wire::WireContentVersion> RunTable<V> for LobbyTable<V> {
 
     fn construct(&mut self, seat: SeatIndex, setup: &Setup<V>) -> Result<Settled<V>, Error> {
         self.seated = None;
-        let answered = self.coop.seats_mut()[seat.at()].setup(setup)?;
+        let answered = self.seats[seat.at()].setup(setup)?;
         Ok(answered.map(|applied| applied.split().0))
     }
 
     fn logged(&mut self) -> Vec<(SeatIndex, String)> {
-        let seats = self.coop.seats_mut();
-        let count = seats.len();
-        seats
+        let count = self.seats.len();
+        self.seats
             .iter_mut()
             .zip(SeatIndex::all(count))
             .flat_map(|(seat, me)| seat.take_logged().into_iter().map(move |error| (me, error)))

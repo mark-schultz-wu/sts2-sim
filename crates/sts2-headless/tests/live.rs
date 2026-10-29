@@ -18,8 +18,8 @@ use sts2_core::Digested;
 use sts2_core::Seed;
 use sts2_core::fixture::{at, belt, hand};
 use sts2_core::{
-    Answer, Answered, Construct, Coord, Decision, Digest, Gift, Play, Question, Reason, Recorder,
-    Room, Setup, Start, Step, Stock, Tool,
+    Answer, Answered, Construct, Coord, Decision, Digest, Gift, Play, Question, Reason, Room,
+    Setup, Start, Step, Stock, Tool,
 };
 use sts2_core::{Decided, Snapshot};
 use sts2_headless::{Config, Error, MOD_IDENTITY, Oracle, Response, recording};
@@ -1048,13 +1048,12 @@ fn a_recorded_run_replays_into_the_same_run() {
         Decision::EndTurn.into(),
     ];
 
-    // Recorded by the middleware off the play path, not by pushing the same
-    // list twice. What is on the tape has to be what the game was actually
-    // told — a recording assembled from the caller's intentions would agree
-    // with itself no matter what the wrapper did.
+    // Each step is written down once the game took it, so what is on the
+    // tape is what the game was told and accepted.
     let path = std::env::temp_dir().join(format!("sts2-replay-{}.jsonl", std::process::id()));
-    let tape = recording::Writer::<V>::create(&path, &opening()).expect("a file to record into");
-    let mut first = Recorder::new(launched(), tape);
+    let mut tape =
+        recording::Writer::<V>::create(&path, &opening()).expect("a file to record into");
+    let mut first = launched();
     let mut digests = Vec::new();
 
     for step in &steps {
@@ -1062,13 +1061,9 @@ fn a_recorded_run_replays_into_the_same_run() {
             .step(step)
             .expect("the step should not fail at the transport level")
             .expect("the step should be accepted");
+        tape.record(step).expect("the step is written down");
         digests.push(applied.observation.digest());
     }
-    assert!(
-        first.recording(),
-        "the recording stopped part way: {:?}",
-        first.fault()
-    );
     drop(first);
 
     let file = std::io::BufReader::new(std::fs::File::open(&path).expect("the recording"));

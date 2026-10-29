@@ -13,7 +13,7 @@ use std::fs::File;
 use std::io::{self, BufRead, Write};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
-use sts2_core::{Recording, SeatIndex, Start, Step, Tape};
+use sts2_core::{Recording, SeatIndex, Start, Step};
 
 /// Writes the stamp and every step.
 ///
@@ -84,8 +84,7 @@ pub fn append_by<V: sts2_content_wire::WireContentVersion>(
 
 /// A file being written to as the run is played.
 ///
-/// The [`Tape`] a [`Recorder`](sts2_core::Recorder) writes to when the run is
-/// meant to survive the process. Flushed per step, which is the whole reason
+/// What a run is written to when it is meant to survive the process. Flushed per step, which is the whole reason
 /// the format is one line per step.
 ///
 /// Parameterised by the build, because the stamp is. A writer opened for one
@@ -192,14 +191,14 @@ impl<V: sts2_content_wire::WireContentVersion> Writer<V> {
     }
 }
 
-impl<V: sts2_content_wire::WireContentVersion> Tape<V> for Writer<V> {
-    type Error = io::Error;
-
+impl<V: sts2_content_wire::WireContentVersion> Writer<V> {
+    /// One step of a solo run, written down once the game took it.
+    ///
     /// # Panics
     ///
     /// On a run of several players, whose steps go through
     /// [`Writer::record_by`].
-    fn record(&mut self, step: &Step<V>) -> Result<(), io::Error> {
+    pub fn record(&mut self, step: &Step<V>) -> Result<(), io::Error> {
         assert_eq!(self.players, 1, "a step of a co-op run names its seat");
         append(&mut self.file, step)?;
         // Insurance, not the mechanism: `File` does not buffer, so the step is

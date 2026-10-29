@@ -13,9 +13,9 @@ parts:
 Solo is a lobby of one. Co-op is a lobby of several. Nothing else changes
 between them.
 
-## Where it stands
+## Where it stood
 
-Eleven entry points play or replay a run today. They share one random
+Before this work, eleven entry points played or replayed a run. They share one random
 pick, `Pick`. The rest is written again in each:
 
 | Piece | Copies |
@@ -28,16 +28,16 @@ pick, `Pick`. The rest is written again in each:
 | The verdict line, and a parser for each | 4 |
 | A pool of runs in xtask | 5 |
 
-Some shared parts exist, but no entry point uses them. `Recorder` wraps
-any `Play` and records it, and only tests use it. `SimSeat` is not a
-`Seat`, so `Coop` cannot drive the simulator. The co-op hunt and the
-golden test drive a `Vec<SimSeat>` by hand. `follow_noting` refuses a run
-of several players.
+Some shared parts existed, but no entry point used them. `Recorder`
+wrapped any `Play` and recorded it, and only tests used it. `SimSeat` was
+not a `Seat`, so `Coop` did not drive the simulator. The co-op hunt and
+the golden test drove a `Vec<SimSeat>` by hand. `follow_noting` refused a
+run of several players.
 
-The two traits are part of why. `Play` is one run on one machine. `Seat`
-is one player's machine in a co-op run. The game is one process for each
+The two traits were part of why. `Play` was one run on one machine. `Seat`
+was one player's machine in a co-op run. The game is one process for each
 seat. The simulator keeps one machine's view for each seat, in one value,
-and each takes every player's moves. Neither trait fits both.
+and each takes every player's moves. Neither trait fit both.
 
 ## The table
 
@@ -101,8 +101,8 @@ player is asked again.
   and reads keys until one asks for one.
 - Later, an AI.
 
-Which seat acts next is the driver's: `Coop::step`'s rule today. A seat
-with no moves waits. A replay is no player, because the run names the seat
+Which seat acts next is the driver's: the seats in turn, from the one
+after the seat that last moved. A seat with no moves waits. A replay is no player, because the run names the seat
 of each move: `recorded::follow` plays it on any table instead.
 
 ## Layers
@@ -249,7 +249,9 @@ Each step is one PR, with the golden tests, the census and the hunt.
    index, so a person can try a move the table does not list and read why
    not. `sts2 sim` plays it at the simulator's table, and a bare `sts2` at
    the daemon's, `HeldTable`. The `sts2-sim` binary goes (done).
-6. `Play`, `Construct`, `Seat`, `Coop`, `Recorder` and `SimSeat` go. The
-   command line's one command per process, the scenario replays and the
-   benches read a `RunTable`.
-7. ARCHITECTURE.md and STS2-CORE.md say what is above.
+6. `Seat`, `Coop`, `Recorder`, `Tape` and `SimSeat` go. The lobby table
+   launches its seats and waits for them to catch up itself, and the
+   driver's tests hold its order (done).
+7. `Play` and `Construct` go. The command line's one command per process,
+   the scenario replays and the benches read a `RunTable`.
+8. ARCHITECTURE.md and STS2-CORE.md say what is above.

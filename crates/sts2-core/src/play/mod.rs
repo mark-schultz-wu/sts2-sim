@@ -22,8 +22,6 @@
 //! [`Play::Error`]. A socket that died, a process that stopped answering, a
 //! reply that did not parse.
 
-pub mod coop;
-pub mod recorder;
 pub mod recording;
 pub mod refusal;
 pub mod seat;
