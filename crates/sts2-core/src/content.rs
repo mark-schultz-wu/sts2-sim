@@ -2358,6 +2358,18 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("a card added to the fight")
     }
 
+    /// [`Fight::add_generated_cards`] with the player who made them named:
+    /// `CardPileCmd.AddGeneratedCardsToCombat(cards, pile, creator)`.
+    fn add_generated_cards_by(
+        &mut self,
+        _card: crate::CardIdent<V>,
+        _pile: crate::Pile,
+        _count: usize,
+        _creator: crate::CombatId,
+    ) -> Vec<crate::CardAt<V>> {
+        unimplemented!("adding generated cards a named player made")
+    }
+
     /// Add copies of a generated card to one combat pile.
     fn add_generated_cards(
         &mut self,

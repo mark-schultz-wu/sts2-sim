@@ -158,6 +158,33 @@ pub(crate) fn on_play<'a, K: sts2_core::FightKind<V>>(
             }
             Some(Played::Done)
         }
+        // `BladeSymphony`: its `Cards` of Shivs into the hand of each living
+        // player on its owner's side, its owner too, one at a time. Each
+        // player makes their own: `Shiv.CreateInHand` with no creator.
+        Cards::Silent(SilentCard::BladeSymphony) => {
+            use sts2_core::CreatureView as _;
+
+            let count: usize = num_traits::cast(fight.var(CardVar::Cards))
+                .expect("a count of Shivs is not negative");
+            let living: Vec<_> = fight
+                .players()
+                .into_iter()
+                .filter(|&player| fight.creatures().any(|c| c.id() == player && c.alive()))
+                .collect();
+            for player in living {
+                fight.for_player(player, |fight| {
+                    for _ in 0..count {
+                        fight.add_generated_cards_by(
+                            sts2_core::CardIdent::new(Cards::Token(TokenCard::Shiv)),
+                            sts2_core::Pile::Hand,
+                            1,
+                            player,
+                        );
+                    }
+                });
+            }
+            Some(Played::Done)
+        }
         // `Tracking`: 50 Tracking on its owner, every play.
         Cards::Silent(SilentCard::Tracking) => {
             fight.apply_to_actor(

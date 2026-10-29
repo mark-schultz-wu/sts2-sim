@@ -6560,6 +6560,17 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.generate(card, pile, count, creator)
     }
 
+    fn add_generated_cards_by(
+        &mut self,
+        card: CardIdent<V>,
+        pile: Pile,
+        count: usize,
+        creator: CombatId,
+    ) -> Vec<CardAt<V>> {
+        self.ran_on();
+        self.generate(card, pile, count, Some(creator))
+    }
+
     fn cards_in(&self, pile: Pile) -> Vec<CardAt<V>> {
         let seat = self.seat();
         self.live.players[seat]
