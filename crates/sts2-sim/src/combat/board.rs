@@ -988,14 +988,35 @@ impl<'a, V: Rules> Board<'a, V> {
         // `FindExistingInstanceForStacking`: a power kept apart by its applier
         // stacks onto that applier's instance alone.
         let per_applier = sts2_core::PowerTable::per_applier(power);
-        let stacks = |held: &super::live::HeldPower<V>| {
-            held.power() == power && (!per_applier || held.applier == applier)
-        };
-        if !self.live.powers.of(id).any(stacks) {
-            return;
+        let nth = self
+            .live
+            .powers
+            .of(id)
+            .filter(|held| held.power() == power)
+            .position(|held| !per_applier || held.applier == applier);
+        if let Some(nth) = nth {
+            self.modify_nth_from(id, power, nth, offset, applier);
         }
+    }
+
+    /// `PowerCmd.ModifyAmount` on the `nth` instance of `power` that `id`
+    /// carries, in the order they were applied.
+    fn modify_nth_from(
+        &mut self,
+        id: CombatId,
+        power: V::Power,
+        nth: usize,
+        offset: V::Number,
+        applier: Option<CombatId>,
+    ) {
         let (offset, modifiers) = self.received(id, power, offset, applier);
-        let Some(held) = self.live.powers.of_mut(id).find(|held| stacks(held)) else {
+        let Some(held) = self
+            .live
+            .powers
+            .of_mut(id)
+            .filter(|held| held.power() == power)
+            .nth(nth)
+        else {
             return;
         };
         let had = held
@@ -1012,7 +1033,17 @@ impl<'a, V: Rules> Board<'a, V> {
         // `ShouldRemoveDueToAmount`, and `PowerCmd.Remove` for a power it
         // says is done.
         if spent {
-            self.remove_power_carried(id, power);
+            let at = self
+                .live
+                .powers
+                .of(id)
+                .enumerate()
+                .filter(|(_, held)| held.power() == power)
+                .nth(nth)
+                .map(|(at, _)| at);
+            if let Some(at) = at {
+                self.remove_carried_at(id, at);
+            }
         }
     }
 
@@ -1120,9 +1151,24 @@ impl<'a, V: Rules> Board<'a, V> {
 
     /// `PowerCmd.Remove`, with what its `AfterRemoved` asks carried out.
     pub(super) fn remove_power_carried(&mut self, id: CombatId, power: V::Power) {
+        let at = self
+            .live
+            .powers
+            .of(id)
+            .position(|held| held.power() == power);
+        if let Some(at) = at {
+            self.remove_carried_at(id, at);
+        }
+    }
+
+    /// [`Board::remove_power_carried`] of the instance at `at` among `id`'s
+    /// powers.
+    fn remove_carried_at(&mut self, id: CombatId, at: usize) {
+        let power = self.live.powers.of(id).nth(at).map(|held| held.power());
+        let Some(power) = power else { return };
         // What it does to cards is to its holder's player's.
         let seat = self.live.seat_of(id).unwrap_or_else(|| self.actor_seat());
-        for effect in self.live.remove_power_asking(seat, id, power) {
+        for effect in self.live.remove_power_at_asking(seat, id, at) {
             match effect {
                 HookEffect::KillCreature(creature) => self.kill_outright(creature, true),
                 // `CardCmd.Upgrade` on a copy that has left the fight writes on
@@ -6267,6 +6313,17 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         if let Some(held) = held {
             write(&mut held.state);
         }
+    }
+
+    fn modify_power_at(
+        &mut self,
+        at: CombatId,
+        power: V::Power,
+        nth: usize,
+        amount: V::Number,
+        applier: Option<CombatId>,
+    ) {
+        self.modify_nth_from(at, power, nth, amount, applier);
     }
 
     fn power_instances(&self, at: CombatId, power: V::Power) -> sts2_core::PowerInstances<V> {

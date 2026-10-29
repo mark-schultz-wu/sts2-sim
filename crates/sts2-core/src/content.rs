@@ -3106,6 +3106,19 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("a power instance's model written in a fight")
     }
 
+    /// [`Fight::modify_power_amount`] of the `nth` instance of `power` the
+    /// creature `at` carries, in the order they were applied.
+    fn modify_power_at(
+        &mut self,
+        _at: crate::CombatId,
+        _power: V::Power,
+        _nth: usize,
+        _amount: V::Number,
+        _applier: Option<crate::CombatId>,
+    ) {
+        unimplemented!("a power instance's amount moved")
+    }
+
     /// `GetPowerInstances`: the `Target` and the stack of each instance of
     /// `power` the creature `at` carries, in the order they were applied.
     fn power_instances(&self, _at: crate::CombatId, _power: V::Power) -> PowerInstances<V> {

@@ -91,7 +91,30 @@ here has one player". `grep -rn 'here has one'
 crates/sts2-content/src` lists about 140 of these comments.
 
 Every relic, power and card that the audit found compares the player
-now.
+now. Frantic Escape did not: it bumped the first Sandpit, where the game
+bumps the one aimed at the card's owner (seed 1). So the audit of
+2026-10-28 read the 49 comments left against the game. These are wrong
+with several players:
+
+- Ambergris heals its drinker and gives them its power. The game heals
+  the player it is aimed at.
+- Painful Stabs counts only the hits on one player and gives that player
+  every Wound. The game gives each player a Wound for each hit that
+  player took.
+- After the hand size is worked out, every player's Pollinous Core
+  hears `AfterModifyingHandDraw`. The game asks only the listeners that
+  changed that player's hand size. Two cores at four turns both reset on
+  the first player's draw. No run reaches it yet, so check it first.
+- Vambrace doubles block that its owner's card gives a teammate. Then
+  the sim asks its `AfterModifyingBlockAmount` on the receiver's belt,
+  because `blocked()` in `board.rs` keeps no seat beside the relic. No run
+  reaches it yet, so check it first.
+- v0.107.1 only: Diamond Diadem and Juggling count every player's
+  plays. Co-op runs on v0.111.0, so this matters only if co-op ever
+  runs on v0.107.1.
+
+The other comments describe code that is already right, and are stale.
+They go as the code near them changes.
 
 #### B. Effects for the acting player
 
@@ -119,6 +142,18 @@ block, energy, hand, deck, health, plays and belt. What is left:
 
 - `Live` has single slots: `after_pick`, `drawn_late`, `drew`,
   `hook_draws` and `asking`. Two players can each park one at once.
+  The scheduler's step 6, a question for each seat, removes `asking`.
+  The game asks several players at once here:
+  - the Knowledge Demon's Curse of Knowledge, which asks each living
+    player (`Task.WhenAll`). Seed 15 parts on it.
+  - the turn's setup for each player. The powers are Entropy, Foregone
+    Conclusion, Stratagem, Tools of the Trade and Tyranny. The relics are
+    Gambling Chip, Choices Paradox, Toasty Mittens and Toolbox. Seeds 6
+    and 8 stop on it.
+- A treasure chest awards every player a relic at once. Some relics
+  ask as they are obtained, such as Astrolabe or Pandora's Box. Such a
+  relic panics in `obtain_here`. The treasure phase keeps no question for
+  each player. About 25 relics ask in `AfterObtained`.
 - Fight-in-event: `resuming` and `run/fight.rs:313-410` are built for
   one player, behind the panics.
 - Out of a fight, damage kills the player. The game heals them to 1
@@ -180,7 +215,8 @@ Low:
 
 - Powers:
   - Beacon of Hope: shares block with teammates
-  - Tank: gives Guarded to the other players
+  - Tank: gives Guarded to the other players. Its damage taken is 1.5
+    times in v0.111.0, where the sim uses v0.107.1's 2.
   - Covered: `unimplemented!`.
 - 32 `unimplemented!` panics in `sts2-sim` name several players. Most
   of them are in `turn_loop.rs`, `board.rs` and `run/state.rs`, and
@@ -236,22 +272,24 @@ run as its own machine sees it. The work goes in this order:
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
    Mercury Hourglass, as in a solo hunt. So the runs go deep.
-   On 2026-10-28 sixteen seeds matched 10,960 steps: 14 panicked and 2
-   parted. What they stop on is listed below, worked by class.
+   On 2026-10-28 sixteen seeds matched 11,490 steps. Seed 1 agreed to
+   its end, 14 panicked and 1 parted. What they stop on is listed below, worked by class.
    Hunts stay at `--width 4`: at `--width 8` two games of sixteen failed
    in Godot itself. The golden tests follow the hunted runs in
    `coop-v0.111.0.bin` without the game. So a change to the simulator
    needs no hunt to show it keeps them. Next, in the order of
    `docs/COOP-FIGHTS.md` and where the hunted runs stop:
-   - Where the runs part, not yet looked at:
-     - after a Frantic Escape, in `Creatures`: seed 1
-     - the Knowledge Demon's turn, in the moves and the question: seed 15.
+   - Where they part: the Knowledge Demon asks each player at once, and
+     the sim asks one (seed 15). It waits on a question for each seat,
+     listed under D.
    - Where they panic, besides the items below: v0.111.0 cards not yet
      ported, Imitation Learning (seed 2) and Blade Symphony (seed 10).
+   - Solo too: v0.111.0's History Course dupes only an Attack. The sim
+     dupes an Attack or a Skill, as v0.107.1 does.
      The rest stop on items listed below:
      - `FightView::player`: seeds 3, 7, 9, 12 and 14
      - the second player's setup asking a question: seeds 6 and 8
-     - a fight inside an event: seeds 4, 5 and 11
+     - a fight inside an event: seeds 0, 4, 5 and 11
      - a death that leaves every player ready: seed 13.
    - The rest of the scheduler (steps 3 and 4 of `docs/SCHEDULER.md`). A
      question the turn loop asks belongs to no player's queue yet. Each
@@ -267,8 +305,8 @@ run as its own machine sees it. The work goes in this order:
    - A question that waits on a player's own card play names no asker,
      where the game names the play.
    - A fight inside an event panics in a run of several players. That is
-     one the event opens on, or one a shared option opens. Seeds 4, 5
-     and 11 stop on one.
+     one the event opens on, or one a shared option opens. Seeds 0, 4,
+     5 and 11 stop on one.
    - Content that reads "the player" where the game reads an owner:
      - `FightView::player`, which about a dozen power rules read, panics
        in a fight of several players.
