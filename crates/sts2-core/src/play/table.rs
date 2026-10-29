@@ -20,11 +20,11 @@ pub type Settled<V> = Result<Decided, Refusal<V>>;
 
 /// Everything that holds one run, for every seat of its lobby.
 pub trait RunTable<V: ContentVersion>: Sized {
-    /// A fault, which is not a refusal. See [`Play::Error`](super::Play::Error).
+    /// A fault, which is not a refusal. The module docs say what one is.
     type Error;
 
-    /// What it takes to reach the table's games. See
-    /// [`Play::Host`](super::Play::Host).
+    /// What it takes to reach the table's games: nothing for the simulator,
+    /// a directory for a game this launches, or a lobby's hosts.
     type Host;
 
     /// One seat's view of the run, lent. A table that holds the run reads it

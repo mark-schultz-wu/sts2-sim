@@ -3,7 +3,7 @@
 //! Not an error. A refusal is a legitimate, deterministic answer that both
 //! implementations must give. The differential test's headline finding is the
 //! game refusing a move the observation reported as legal. A *fault* is an
-//! error, and lives in [`crate::Play::Error`]. That is a socket that died, or
+//! error, and lives in the table's own error type. That is a socket that died, or
 //! an exception inside an adapter.
 //!
 //! The reason is a type rather than a sentence, and the prose belongs to a
@@ -184,7 +184,7 @@ pub enum Reason<V: ContentVersion> {
     Console { message: String },
     /// A request this crate's types cannot build.
     ///
-    /// Unreachable through [`crate::Play`]. That is a missing field, a command
+    /// Unreachable through a [`crate::RunTable`]. That is a missing field, a command
     /// that is not a command, or a number where a name belongs. Reachable
     /// through the oracle's `send_raw`, which is how the refusal path is tested
     /// at all.

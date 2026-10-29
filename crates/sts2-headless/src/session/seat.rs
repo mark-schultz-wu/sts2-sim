@@ -47,10 +47,10 @@ impl<V: sts2_content_wire::WireContentVersion> GameSeat<V> {
     }
 
     /// Puts the seat's game into a position, as
-    /// [`sts2_core::Construct::setup`] does.
+    /// [`Oracle::setup`] does.
     /// What the game logged is kept for [`GameSeat::take_logged`].
     pub fn setup(&mut self, step: &sts2_core::Setup<V>) -> Result<sts2_core::Answered<V>, Error> {
-        let answered = sts2_core::Construct::setup(&mut self.game, step)?;
+        let answered = self.game.setup(step)?;
         self.logged.extend_from_slice(self.game.logged());
         Ok(answered)
     }

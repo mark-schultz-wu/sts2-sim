@@ -204,8 +204,8 @@ own moves.
   `LogGuard`. Its coverage file and clock seed go with it.
 - `sts2-sim` (bin): `sts2 sim`, the screen as a player at the simulator's
   table (done).
-- `Play`, `Seat`, `Recorder`, `Tape`, `SimSeat`: into `RunTable` and the
-  layers.
+- `Play`, `Construct`, `Seat`, `Coop`, `Recorder`, `Tape`, `SimSeat`:
+  into `RunTable` and the layers (done).
 - The cli's `scenario` example and `map_bench`, which nothing runs.
   `where_it_goes`, `clone_sites`, `digest_sites` and `legal_shapes` go too
   (done).
@@ -252,6 +252,9 @@ Each step is one PR, with the golden tests, the census and the hunt.
 6. `Seat`, `Coop`, `Recorder`, `Tape` and `SimSeat` go. The lobby table
    launches its seats and waits for them to catch up itself, and the
    driver's tests hold its order (done).
-7. `Play` and `Construct` go. The command line's one command per process,
-   the scenario replays and the benches read a `RunTable`.
-8. ARCHITECTURE.md and STS2-CORE.md say what is above.
+7. `Play` and `Construct` go. Each implementation keeps `begin`, `play`,
+   `observe` and `setup` as its own methods. The command line's one
+   command per process plays a `HeldTable`. The scenario replays step each
+   side by hand, and the benches use `Sim`. The transcripts' commands are
+   the commands they were, so no scenario is recorded again (done).
+8. ARCHITECTURE.md and STS2-CORE.md say what is above (done).

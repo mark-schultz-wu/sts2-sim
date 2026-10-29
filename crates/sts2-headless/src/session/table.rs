@@ -6,8 +6,7 @@
 //! either.
 
 use sts2_core::{
-    Construct as _, Decided, Decision, Observation, Play as _, RunTable, SeatIndex, Seated,
-    Settled, Setup, Snapshot, Start,
+    Decided, Decision, Observation, RunTable, SeatIndex, Seated, Settled, Setup, Snapshot, Start,
 };
 
 use crate::session::error::Error;

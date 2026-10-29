@@ -6,8 +6,9 @@
 //! crate's own is everything that makes the real game answer them. Launching the
 //! process, the handshake, and the protocol's spelling of a decision.
 //!
-//! [`Oracle`] implements [`sts2_core::Play`] and [`sts2_core::Construct`], which
-//! is the whole of what it offers a caller driving a game. Everything else here
+//! [`Oracle`] begins a run, plays a decision, observes, and sets up a position.
+//! That is the whole of what it offers a caller driving a game. [`OracleTable`]
+//! and [`LobbyTable`] are the run tables over the game. Everything else here
 //! is what it takes to make the real game answer. Launching the process, the
 //! handshake, and the protocol's spelling of a decision and of an observation.
 //!
@@ -16,7 +17,7 @@
 //!
 //! ```no_run
 //! use sts2_content::v0_107_1::V0_107_1;
-//! use sts2_core::{Play, Seed, Start};
+//! use sts2_core::{Seed, Start};
 //! use sts2_headless::{Config, Oracle};
 //!
 //! // The build is named once and every id is reached through the trait, so
@@ -51,7 +52,7 @@ mod session;
 mod stamp;
 mod wire;
 
-pub use session::cached::{Cached, FromTranscript, Transport};
+pub use session::cached::{Cached, CachedTable, FromTranscript, Transport};
 pub use session::config::{Config, game_dir_from_env};
 pub use session::error::Error;
 pub use session::game::{Oracle, parse_reply};
@@ -61,8 +62,8 @@ pub use session::table::{LobbyTable, OracleTable};
 
 /// Keeping a game alive between the processes that drive it.
 ///
-/// A front end does not reach for this. It holds a [`Session`] and drives it
-/// through [`sts2_core::Play`]. What is here is for the binary that agrees to
+/// A front end does not reach for this. It holds a [`Session`], or a
+/// [`HeldTable`] over one, and drives it. What is here is for the binary that agrees to
 /// *be* the daemon. [`daemon::serve`] is the loop, and [`daemon::spawn`] takes
 /// the command that re-enters it.
 pub mod daemon {
@@ -71,7 +72,7 @@ pub mod daemon {
 // The protocol's own shape. Exported for a relay -- something that speaks to a
 // game on another process's behalf and must put the same bytes on the wire
 // without being the thing that holds the game. Anything actually driving a game
-// should build an `sts2_core::Decision` and call `Play::play`.
+// should build an `sts2_core::Decision` and play it at a table.
 pub use stamp::Stamp;
 pub use wire::command::Command;
 pub use wire::greeting::{Greeting, MOD_IDENTITY};

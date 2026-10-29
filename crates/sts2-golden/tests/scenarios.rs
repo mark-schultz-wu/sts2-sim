@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 use sts2_core::Digested;
 
 use sts2_content::v0_107_1::V0_107_1;
-use sts2_core::{Construct, ContentVersion, Play, Section, Snapshot};
+use sts2_core::{ContentVersion, Section, Snapshot};
 use sts2_golden::scenario::{Expected, Seen, Stamp, Step};
 use sts2_golden::suite::read_suite;
 
@@ -39,26 +39,34 @@ fn expected_path() -> PathBuf {
 }
 
 /// What every step a run of this recording passes through leaves showing.
-fn walk<C, E>(name: &str, driven: &mut C, steps: &[sts2_core::Step<V>]) -> Vec<Seen>
-where
-    C: Construct<V, Error = E>,
-    E: std::fmt::Display,
-{
+/// `stepped` plays one step on the implementation and says where it left the
+/// run, or why it did not take it.
+fn walk(
+    name: &str,
+    steps: &[sts2_core::Step<V>],
+    mut stepped: impl FnMut(&sts2_core::Step<V>) -> Result<Snapshot<V>, String>,
+) -> Vec<Seen> {
     steps
         .iter()
         .map(|step| {
-            driven
-                .step(step)
-                .unwrap_or_else(|e| panic!("{name}: {e}"))
-                .unwrap_or_else(|refusal| panic!("{name}: refused: {refusal}"));
-            let seen: Snapshot<V> =
-                Play::<V>::observe(driven).unwrap_or_else(|e| panic!("{name}: observing: {e}"));
+            let seen = stepped(step).unwrap_or_else(|e| panic!("{name}: {e}"));
             Seen {
                 sections: seen.observation.sections().to_vec(),
                 question: sts2_core::Digest::of_question_and_pile(seen.asking.as_ref()),
             }
         })
         .collect()
+}
+
+/// A step's answer, then where it left the run: what [`walk`] takes.
+fn stepped<E: std::fmt::Display>(
+    answered: Result<sts2_core::Answered<V>, E>,
+    observe: impl FnOnce() -> Result<Snapshot<V>, E>,
+) -> Result<Snapshot<V>, String> {
+    answered
+        .map_err(|e| e.to_string())?
+        .map_err(|refusal| format!("refused: {refusal}"))?;
+    observe().map_err(|e| format!("observing: {e}"))
 }
 
 #[test]
@@ -99,7 +107,9 @@ fn the_simulator_reaches_the_positions_the_game_reaches() {
         // scenario yet leaves its recording to be written all the same.
         if updating() {
             let mut oracle = sts2_golden::oracle_or_explain::<V>(name, recorded.start());
-            let answered = walk(name, &mut oracle, recorded.steps());
+            let answered = walk(name, recorded.steps(), |step| {
+                stepped(oracle.step(step), || oracle.observe::<V>())
+            });
             let mut steps = Vec::new();
             let mut before: Option<Seen> = None;
             for seen in answered {
@@ -114,9 +124,11 @@ fn the_simulator_reaches_the_positions_the_game_reaches() {
             .scenarios
             .get(name)
             .unwrap_or_else(|| panic!("{name} has no recorded answers; run `just scenarios`"));
-        let mut sim = sts2_sim::Sim::<V>::begin((), recorded.start())
+        let mut sim = sts2_sim::Sim::<V>::begin(recorded.start())
             .unwrap_or_else(|e| panic!("{name}: starting: {e}"));
-        let walked = walk(name, &mut sim, recorded.steps());
+        let walked = walk(name, recorded.steps(), |step| {
+            stepped(sim.step(step), || sim.observe())
+        });
         if let Some(why) = compare(steps, &walked) {
             wrong.push(format!("{name}: {why}"));
         }

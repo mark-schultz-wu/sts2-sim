@@ -91,4 +91,4 @@ pub use play::refusal::{Reason, Refusal};
 pub use play::seat::{Peer, Peers, SeatAnswered, SeatIndex, Seated};
 pub use play::table::{RunTable, Settled};
 pub use play::verdict::{End, Verdict};
-pub use play::{Answered, Applied, Construct, Decided, Play, Snapshot};
+pub use play::{Answered, Applied, Decided, Snapshot};

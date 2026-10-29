@@ -18,8 +18,8 @@ use sts2_core::Digested;
 use sts2_core::Seed;
 use sts2_core::fixture::{at, belt, hand};
 use sts2_core::{
-    Answer, Answered, Construct, Coord, Decision, Digest, Gift, Play, Question, Reason, Room,
-    Setup, Start, Step, Stock, Tool,
+    Answer, Answered, Coord, Decision, Digest, Gift, Question, Reason, Room, Setup, Start, Step,
+    Stock, Tool,
 };
 use sts2_core::{Decided, Snapshot};
 use sts2_headless::{Config, Error, MOD_IDENTITY, Oracle, Response, recording};

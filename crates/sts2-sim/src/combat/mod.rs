@@ -43,8 +43,7 @@ use sts2_core::Rules;
 /// What a decision in a fight is handed, all borrowed out of the run.
 ///
 /// A decision works on these where they stand. One the simulator cannot carry
-/// out is a fault, and [`sts2_core::Play`] makes no promise about a run after
-/// a fault. A refusal is decided before any of this is touched.
+/// out is a fault, and no table makes a promise about a run after a fault. A refusal is decided before any of this is touched.
 ///
 /// An auto-play runs inside a board, and lends that board's streams.
 pub(crate) struct Fighting<'a, V: Rules, S = crate::stream::Streams<V>> {
