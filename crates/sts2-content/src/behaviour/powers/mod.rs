@@ -51,10 +51,12 @@ pub enum State<V: crate::Build> {
         just_applied: bool,
     },
     /// `PossessStrengthPower`'s `StolenStrength` and `PossessSpeedPower`'s
-    /// `StolenDexterity`, for the one player a fight here has.
+    /// `StolenDexterity`: what it took off each player, in the order it
+    /// first took from them.
     Possess {
         power: V::Power,
-        stolen: Number,
+        from: [Option<sts2_core::CombatId>; POSSESSED],
+        stolen: [Number; POSSESSED],
     },
     /// `IllusionPower`'s `isReviving`.
     Illusion {
@@ -347,6 +349,25 @@ pub struct Bound<V: crate::Build> {
     amount: Number,
 }
 
+/// Whether `ReattachPower.AreAllOtherSegmentsDead` is false for `holder`:
+/// one of its other teammates holds Reattach and is not `IsDead`, which is
+/// `CurrentHp <= 0`. A segment the same command took to nothing is dead to
+/// it, though its own death is still to come.
+fn other_segment_standing<V: crate::Build>(
+    fight: &dyn sts2_core::FightView<V>,
+    holder: sts2_core::CombatId,
+) -> bool {
+    fight.teammates(holder).into_iter().any(|other| {
+        other != holder
+            && fight.power(other, V::Power::REATTACH_POWER).is_some()
+            && fight.current_hp(other).is_some_and(|hp| hp > 0)
+    })
+}
+
+/// The players a Possess power keeps a count for: a run's most, which
+/// `NMultiplayerHostSubmenu` hosts with `InitializeMultiplayerAsHost(netService, 4)`.
+const POSSESSED: usize = 4;
+
 /// `JugglingPower`'s third attack in a turn.
 const JUGGLING_ATTACKS: Number = 3;
 
@@ -402,7 +423,11 @@ impl<V: crate::Build> sts2_core::PowerModel<V> for State<V> {
             __c0 if __c0 == V::Power::POSSESS_STRENGTH_POWER
                 || __c0 == V::Power::POSSESS_SPEED_POWER =>
             {
-                Self::Possess { power, stolen: 0 }
+                Self::Possess {
+                    power,
+                    from: [None; POSSESSED],
+                    stolen: [0; POSSESSED],
+                }
             }
             __c0 if __c0 == V::Power::ILLUSION_POWER => Self::Illusion { reviving: false },
             __c0 if __c0 == V::Power::REATTACH_POWER => Self::Reattach { reviving: false },
@@ -600,12 +625,27 @@ impl<V: crate::Build> State<V> {
         }
     }
 
-    /// The stolen stack a Possess power keeps, to write on.
-    fn stolen_mut(&mut self) -> &mut Number {
-        let Self::Possess { stolen, .. } = self else {
+    /// The stolen stack a Possess power keeps for `player`, to write on.
+    /// A player it has not taken from yet joins the end.
+    ///
+    /// # Panics
+    ///
+    /// More players than it keeps room for.
+    fn stolen_from(&mut self, player: sts2_core::CombatId) -> &mut Number {
+        let Self::Possess { from, stolen, .. } = self else {
             unreachable!("stolen state for {:?}", self.power())
         };
-        stolen
+        let at = match from.iter().position(|&held| held == Some(player)) {
+            Some(at) => at,
+            None => {
+                let at = (from.iter().position(Option::is_none)).unwrap_or_else(|| {
+                    unimplemented!("Possess in a fight of {POSSESSED}+ players")
+                });
+                from[at] = Some(player);
+                at
+            }
+        };
+        &mut stolen[at]
     }
 
     /// `WasJustAppliedByEnemy`, set to `just_applied`, and what it held.
@@ -2338,16 +2378,9 @@ pub(crate) fn decide_hook<V: crate::Build>(
             HookResponse::Decision(false)
         }
         // `ReattachPower.ShouldOwnerDeathTriggerFatal`: `AreAllOtherSegmentsDead`,
-        // over its owner's teammates that hold Reattach. Its owner fights the
-        // player, so its living teammates are the player's living opponents.
+        // over its owner's other teammates that hold Reattach.
         (__c0, DecisionHook::ShouldOwnerDeathTriggerFatal) if __c0 == V::Power::REATTACH_POWER => {
-            let fight = held.fight;
-            let others_alive = fight
-                .living_opponents(fight.player())
-                .into_iter()
-                .filter(|&creature| creature != held.holder)
-                .any(|creature| fight.power(creature, V::Power::REATTACH_POWER).is_some());
-            HookResponse::Decision(!others_alive)
+            HookResponse::Decision(!other_segment_standing::<V>(held.fight, held.holder))
         }
         // `ShouldPowerBeRemovedAfterOwnerDeath`. A power that keeps its owner
         // in the fight keeps itself, or the creature would come back without
@@ -3052,9 +3085,49 @@ pub(crate) fn event_hook<V: crate::Build>(
             unimplemented!("an endless Juggernaut")
         }
         (__c0, _, EventHook::BlockGained { .. }) if __c0 == V::Power::JUGGERNAUT_POWER => None,
-        // `BeaconOfHopePower.AfterBlockGained` gives half the gain to each of
-        // its owner's teammates. A fight here has one player, who has none.
-        (__c0, _, EventHook::BlockGained { .. }) if __c0 == V::Power::BEACON_OF_HOPE_POWER => None,
+        // `BeaconOfHopePower.AfterBlockGained`: half of a gain of one or more
+        // its owner made on their own side's turn, unpowered, on each living
+        // player among its owner's teammates.
+        (
+            __c0,
+            _,
+            EventHook::BlockGained {
+                creature,
+                amount: gained,
+                side,
+                ..
+            },
+        ) if __c0 == V::Power::BEACON_OF_HOPE_POWER => {
+            let half = gained / 2;
+            if creature != holder
+                || gained < one
+                || fight.side_of(holder) != Some(side)
+                || half < one
+            {
+                return;
+            }
+            for teammate in fight.teammates(holder) {
+                if teammate == holder
+                    || !fight.is_player(teammate)
+                    || !fight.current_hp(teammate).is_some_and(|hp| hp > 0)
+                {
+                    continue;
+                }
+                // `HasAlreadyBeenGivenBlock` stops a teammate's own Beacon
+                // giving back to this one while it gives.
+                if fight
+                    .power(teammate, V::Power::BEACON_OF_HOPE_POWER)
+                    .is_some()
+                {
+                    unimplemented!("Beacon of Hope giving block to a teammate who holds one");
+                }
+                asked.push(HookEffect::GainBlockOf {
+                    target: teammate,
+                    amount: half,
+                });
+            }
+            return;
+        }
         // `TankPower.AfterApplied` gives Guarded to its owner's teammates. A
         // fight here has one player, who has none.
         (__c0, _, EventHook::Applied) if __c0 == V::Power::TANK_POWER => None,
@@ -3175,7 +3248,7 @@ pub(crate) fn event_hook<V: crate::Build>(
         (__c0, _, EventHook::PowerAmountChanged { .. }) if __c0 == V::Power::SHROUD_POWER => None,
         // `SleightOfFleshPower.AfterPowerAmountChanged`: its stack as damage,
         // unpowered, on an enemy its owner just debuffed, but not through a
-        // temporary power. The player's side is the player and its pets.
+        // temporary power.
         (
             __c0,
             PowerAmount::Counted(amount),
@@ -3187,8 +3260,7 @@ pub(crate) fn event_hook<V: crate::Build>(
             },
         ) if __c0 == V::Power::SLEIGHT_OF_FLESH_POWER
             && (applier == holder
-                && creature != fight.player()
-                && fight.pet_owner(creature).is_none()
+                && fight.side_of(creature) == Some(CombatSide::Enemy)
                 && lends::<V>(changed).is_none()
                 && debuff_at::<V>(changed, delta)) =>
         {
@@ -3981,7 +4053,7 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         (__c0, _, EventHook::DamageGiven { .. }) if __c0 == V::Power::ENVENOM_POWER => None,
         // `PaperCutsPower.AfterDamageGiven`: a powered hit from its owner that
-        // gets past the player's block takes its amount off their maximum.
+        // gets past a player's block takes its amount off their maximum.
         (
             __c0,
             PowerAmount::Counted(amount),
@@ -3993,7 +4065,7 @@ pub(crate) fn event_hook<V: crate::Build>(
                 ..
             },
         ) if __c0 == V::Power::PAPER_CUTS_POWER
-            && (dealer == Some(holder) && target == fight.player() && unblocked > 0) =>
+            && (dealer == Some(holder) && fight.is_player(target) && unblocked > 0) =>
         {
             Some(HookEffect::LoseMaxHpOf { target, amount })
         }
@@ -4015,11 +4087,13 @@ pub(crate) fn event_hook<V: crate::Build>(
                 ..
             },
         ) if __c0 == V::Power::RAMPART_POWER => {
-            let player = fight.player();
+            // `CombatState.Enemies`: a Living Shield holds it, so they are its
+            // teammates. `CreatureCmd.GainBlock` passes over one `IsDead`.
             asked.extend(
                 fight
-                    .living_opponents(player)
+                    .teammates(holder)
                     .into_iter()
+                    .filter(|&enemy| fight.current_hp(enemy).is_some_and(|hp| hp > 0))
                     .filter(|&enemy| fight.monster(enemy) == Some(V::Monster::TURRET_OPERATOR))
                     .map(|target| HookEffect::GainBlockOf { target, amount }),
             );
@@ -4045,11 +4119,11 @@ pub(crate) fn event_hook<V: crate::Build>(
                 _ => V::Power::DEXTERITY_POWER,
             };
             if applier == Some(holder)
-                && creature == fight.player()
+                && fight.is_player(creature)
                 && changed == possessed
                 && delta < 0
             {
-                *state.stolen_mut() += delta;
+                *state.stolen_from(creature) += delta;
             }
             None
         }
@@ -4067,16 +4141,23 @@ pub(crate) fn event_hook<V: crate::Build>(
             || __c0 == V::Power::POSSESS_SPEED_POWER)
             && (creature == holder) =>
         {
-            let stolen = *state.stolen_mut();
-            (stolen != 0).then(|| HookEffect::ApplyPower {
-                target: fight.player(),
-                power: match power {
-                    __c0 if __c0 == V::Power::POSSESS_STRENGTH_POWER => V::Power::STRENGTH_POWER,
-                    _ => V::Power::DEXTERITY_POWER,
-                },
-                amount: PowerAmount::Counted(-stolen),
-                applier: None,
-            })
+            let State::Possess { from, stolen, .. } = *state else {
+                unreachable!("a Possess keeps what it stole")
+            };
+            let gives = match power {
+                __c0 if __c0 == V::Power::POSSESS_STRENGTH_POWER => V::Power::STRENGTH_POWER,
+                _ => V::Power::DEXTERITY_POWER,
+            };
+            // Each player it took from, in the order it first took.
+            asked.extend(from.into_iter().zip(stolen).filter_map(|(player, stolen)| {
+                Some(HookEffect::ApplyPower {
+                    target: player?,
+                    power: gives,
+                    amount: PowerAmount::Counted(-stolen),
+                    applier: None,
+                })
+            }));
+            None
         }
         (__c0, _, EventHook::AfterDeath { .. })
             if (__c0 == V::Power::POSSESS_STRENGTH_POWER
@@ -4512,15 +4593,7 @@ pub(crate) fn event_hook<V: crate::Build>(
         (__c0, _, EventHook::AfterDeath { creature, .. })
             if __c0 == V::Power::REATTACH_POWER && (creature == holder) =>
         {
-            // `AreAllOtherSegmentsDead` reads `IsDead`, which is
-            // `CurrentHp <= 0`. A segment the same command took to nothing is
-            // dead to it, though its own death is still to come.
-            let others = fight.living_opponents(fight.player());
-            let standing = others.iter().any(|&other| {
-                other != holder
-                    && fight.power(other, V::Power::REATTACH_POWER).is_some()
-                    && fight.current_hp(other).is_some_and(|hp| hp > 0)
-            });
+            let standing = other_segment_standing::<V>(fight, holder);
             standing.then(|| {
                 state.set_reviving(true);
                 HookEffect::EnterMove {

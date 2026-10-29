@@ -4499,6 +4499,7 @@ impl<V: Rules> Board<'_, V> {
             creature,
             amount,
             positive,
+            side: self.live.side,
         };
         let mut walking = super::listen::Walking::begin(self.live, self.belts, hook);
         while let Some((listener, effect)) =
@@ -4507,6 +4508,9 @@ impl<V: Rules> Board<'_, V> {
             match (listener, effect) {
                 (Listener::Power { .. }, effect @ HookEffect::DamageRandomOpponent { .. }) => {
                     self.listener_asked(listener, effect)
+                }
+                (Listener::Power { .. }, effect @ HookEffect::GainBlockOf { .. }) => {
+                    super::hook::apply::<V, _>(self, [effect]);
                 }
                 (listener, effect) => {
                     unimplemented!("{listener:?} asking for {effect:?} once block is gained")

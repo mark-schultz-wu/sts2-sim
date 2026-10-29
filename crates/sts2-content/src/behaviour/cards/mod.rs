@@ -288,6 +288,14 @@ pub(crate) fn calculated<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
             printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
                 + printed.face(V::CardVar::CALCULATION_EXTRA) * twice
         }
+        // `DemonicShield`: a base, and more for each block its owner holds,
+        // whoever it is pointed at.
+        (__c0, __c1)
+            if (__c0 == V::Card::DEMONIC_SHIELD && __c1 == V::CardVar::CALCULATED_BLOCK) =>
+        {
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::CALCULATION_EXTRA) * owner.block
+        }
         // `Stack`: a base, and more for each card in its owner's discard pile.
         (__c0, __c1) if (__c0 == V::Card::STACK && __c1 == V::CardVar::CALCULATED_BLOCK) => {
             let discard =

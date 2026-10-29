@@ -118,10 +118,6 @@ They go as the code near them changes.
   player, not for the listener's owner. Part 2's owner checks make the
   two the same. These are the hand draw, the turn's start for a player,
   the flush, the energy reset and the extra turn.
-- Monster powers that use `fight.player()`:
-  - Paper Cuts, Sleight of Flesh
-  - Possess Strength and Possess Speed, where the game keeps a count
-    for each player
 - Run sites: `room_entered` (`run/state.rs:5811`) parks a pickup on
   the host. A run question does not say which player asked it, so the
   pickup cannot name its asker yet.
@@ -141,11 +137,13 @@ block, energy, hand, deck, health, plays and belt. What is left:
   The scheduler's step 6, a question for each seat, removes `asking`.
   The game asks several players at once here:
   - the Knowledge Demon's Curse of Knowledge, which asks each living
-    player (`Task.WhenAll`). Seed 15 parts on it.
+    player (`Task.WhenAll`). Seeds 2 and 15 part on it.
   - the turn's setup for each player. The powers are Entropy, Foregone
     Conclusion, Stratagem, Tools of the Trade and Tyranny. The relics are
-    Gambling Chip, Choices Paradox, Toasty Mittens and Toolbox. Seeds 6
-    and 8 stop on it.
+    Gambling Chip, Choices Paradox, Toasty Mittens and Toolbox. Seeds 3,
+    6 and 8 stop on it.
+  - a card one player plays while another's pick waits. The sim reads
+    the play as a pick on the waiting question. Seed 12 parts on it.
 - A treasure chest awards every player a relic at once. Some relics
   ask as they are obtained, such as Astrolabe or Pandora's Box. Such a
   relic panics in `obtain_here`. The treasure phase keeps no question for
@@ -154,7 +152,6 @@ block, energy, hand, deck, health, plays and belt. What is left:
   one player, behind the panics.
 - Out of a fight, damage kills the player. The game heals them to 1
   instead when there are several players (`CreatureCmd.cs:522`).
-- Possess counts the stolen stacks once, as listed under B.
 
 #### E. Player-count rules
 
@@ -267,23 +264,30 @@ run as its own machine sees it. The work goes in this order:
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
    Mercury Hourglass, as in a solo hunt. So the runs go deep.
-   On 2026-10-29 sixteen seeds matched 12,406 steps. Seed 1 agreed to
-   its end, 14 panicked and 1 parted. What they stop on is listed below, worked by class.
+   On 2026-10-29 sixteen seeds matched 15,716 steps. Seed 1 agreed to
+   its end, 12 panicked and 3 parted. What they stop on is listed below, worked by class.
    Hunts stay at `--width 4`: at `--width 8` two games of sixteen failed
    in Godot itself. The golden tests follow the hunted runs in
    `coop-v0.111.0.bin` without the game. So a change to the simulator
    needs no hunt to show it keeps them. Next, in the order of
    `docs/COOP-FIGHTS.md` and where the hunted runs stop:
-   - Where they part: the Knowledge Demon asks each player at once, and
-     the sim asks one (seed 15). It waits on a question for each seat,
-     listed under D.
+   - Where they part, both on a question for each seat, listed under D:
+     - the Knowledge Demon asks each player at once, and the sim asks
+       one (seeds 2 and 15).
+     - a card played while a teammate's pick waits (seed 12).
    - Imitation Learning copies a teammate's Power card, but no hunted run
      reaches the copy yet. Check it against the game when one does.
    - Where they panic, all on items listed below:
-     - `FightView::player`: seeds 2, 3, 7, 9, 10, 12 and 14
-     - the second player's setup asking a question: seeds 6 and 8
+     - the second player's setup asking a question: seeds 3, 6 and 8
      - a fight inside an event: seeds 0, 4, 5 and 11
      - a death that leaves every player ready: seed 13.
+   - Where they panic, on items not yet listed:
+     - The Magi Knight's move reaches a player, and the board does not
+       know which (`Board::seat_of_several`). Seeds 7 and 9.
+     - Coordinate, a card for several players only, needs a port, and
+       so does its `CoordinatePower`. Seed 10.
+     - A card picked to act on is in none of its owner's piles
+       (`turn.rs`, "a picked card that left the fight"). Seed 14.
    - The rest of the scheduler (steps 3 and 4 of `docs/SCHEDULER.md`). A
      question the turn loop asks belongs to no player's queue yet. Each
      phase of the turn's end panics at one in a fight of several players.
@@ -301,8 +305,6 @@ run as its own machine sees it. The work goes in this order:
      one the event opens on, or one a shared option opens. Seeds 0, 4,
      5 and 11 stop on one.
    - Content that reads "the player" where the game reads an owner:
-     - `FightView::player`, which about a dozen power rules read, panics
-       in a fight of several players.
      - `RoomEntered` carries the first player's deck size and health,
        which a relic and the Terminal modifier read.
      - Every relic that hears `CardPlayed` compares the card's owner

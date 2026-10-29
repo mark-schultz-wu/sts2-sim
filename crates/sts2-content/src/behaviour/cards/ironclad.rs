@@ -158,6 +158,7 @@ pub(super) fn on_play<'a, V: crate::Build, K: FightKind<V>>(
             || __c0 == V::Card::ANGER
             || __c0 == V::Card::HEADBUTT
             || __c0 == V::Card::BLOODLETTING
+            || __c0 == V::Card::DEMONIC_SHIELD
             || __c0 == V::Card::OFFERING
             || __c0 == V::Card::UPPERCUT
             || __c0 == V::Card::MOLTEN_FIST
@@ -347,6 +348,21 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             }
             let fight = &mut *resumed!().fight;
             fight.modify_energy(fight.var(V::CardVar::ENERGY));
+        }
+        // `DemonicShield`: its `HpLoss` off its owner, unblockable, then its
+        // calculated block on the ally it is pointed at.
+        __c0 if __c0 == V::Card::DEMONIC_SHIELD => {
+            lose_hp::<V, _>(resumed!().fight);
+            if resumed!().fight.waiting() {
+                yield_!(Ask::Waiting);
+            }
+            let fight = &mut *resumed!().fight;
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.target(),
+                amount: Amount::Var(V::CardVar::CALCULATED_BLOCK),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
         }
         // `Offering`: its `HpLoss` off its owner, unblockable, then its
         // energy and its cards drawn.

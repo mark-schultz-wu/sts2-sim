@@ -1991,9 +1991,16 @@ pub trait FightView<V: ContentVersion> {
     /// `Creature.Monster`, or nothing for a player.
     fn monster(&self, creature: crate::CombatId) -> Option<V::Monster>;
 
-    /// The player's creature, which a card's `Owner.Creature` is. A fight
-    /// here has one player.
-    fn player(&self) -> crate::CombatId;
+    /// `Creature.IsPlayer`: whether `creature` is a player's own creature. A
+    /// pet is not one.
+    fn is_player(&self, creature: crate::CombatId) -> bool;
+
+    /// `Creature.Side`, or nothing for a creature not in the fight.
+    fn side_of(&self, creature: crate::CombatId) -> Option<V::CombatSide>;
+
+    /// `CombatState.GetTeammatesOf(creature)`: its side's creatures, itself
+    /// and dead ones included, in fight order.
+    fn teammates(&self, creature: crate::CombatId) -> smallvec::SmallVec<[crate::CombatId; 8]>;
 
     /// The first of `AttackCommand.Results` whose receiver is `creature`, for
     /// the attack whose `AfterAttack` is being raised. Nothing outside one.
@@ -4082,6 +4089,8 @@ pub enum EventHook<V: ContentVersion> {
         /// Whether the game's decimal was above nothing. A fraction below one
         /// is, though `amount` floors it to nothing.
         positive: bool,
+        /// `CombatState.CurrentSide`: whose turn the gain falls in.
+        side: V::CombatSide,
     },
     /// `AfterPreventingDraw`, once a listener answered no to `ShouldDraw`.
     DrawPrevented,

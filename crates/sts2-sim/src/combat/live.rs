@@ -1754,16 +1754,29 @@ impl<V: Rules> sts2_core::FightView<V> for Onlookers<'_, V> {
             .map(|fighter| fighter.hp)
     }
 
-    fn player(&self) -> CombatId {
-        let mut players = self
-            .creatures
+    fn is_player(&self, creature: CombatId) -> bool {
+        self.creatures.iter().any(|fighter| {
+            fighter.id == creature
+                && matches!(fighter.model, Some(sts2_core::ModelId::Character(_)))
+        })
+    }
+
+    fn side_of(&self, creature: CombatId) -> Option<V::CombatSide> {
+        self.creatures
             .iter()
-            .filter(|creature| matches!(creature.model, Some(sts2_core::ModelId::Character(_))));
-        let first = players.next().expect("a fight has a player in it").id;
-        if players.next().is_some() {
-            unimplemented!("which player a power reads in a fight of several players");
-        }
-        first
+            .find(|fighter| fighter.id == creature)
+            .map(|fighter| fighter.side)
+    }
+
+    fn teammates(&self, creature: CombatId) -> smallvec::SmallVec<[CombatId; 8]> {
+        let Some(side) = self.side_of(creature) else {
+            return smallvec::SmallVec::new();
+        };
+        self.creatures
+            .iter()
+            .filter(|fighter| fighter.side == side)
+            .map(|fighter| fighter.id)
+            .collect()
     }
 
     /// The other side's creatures, a pet among them.
@@ -2136,6 +2149,7 @@ impl<V: Rules> HeldPower<V> {
     ///
     /// A power is held by a creature and does not know which, so the caller
     /// that found it says.
+    #[inline]
     pub(crate) fn listener<'a>(
         &'a self,
         carrier: Carrier<V>,
