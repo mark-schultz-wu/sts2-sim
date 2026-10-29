@@ -1,6 +1,6 @@
 //! The game plays co-op runs at random, one game for each seat.
 //!
-//! Each run is `sts2-golden`'s `coop_run` for one seed. There is one game
+//! Each run is `sts2-run` on the game for one seed. There is one game
 //! process for each seat over ENet, and every seat picks its moves at random
 //! from its own legal list. A run that ends is fine. A refused move, an error a game
 //! logged, or seats that stall are findings, and are named.
@@ -21,8 +21,8 @@
 
 use std::path::Path;
 use std::process::Command;
-use std::sync::Mutex;
-use std::sync::atomic::{AtomicUsize, Ordering};
+
+use sts2_core::End;
 
 #[derive(clap::Args)]
 pub struct Args {
@@ -60,34 +60,24 @@ pub fn run(args: Args) -> Result<String, Error> {
         hunt,
     } = args;
     let root = crate::workspace();
-    let runner = crate::error::build_example(&root, "coop_run")?;
+    let runner = crate::error::build_runner(&root)?;
+    let build = crate::runner::game_build();
     let merger = crate::error::build_example(&root, "merge_runs")?;
     let scratch = root.join("target/coop");
     let _ = std::fs::remove_dir_all(&scratch);
     crate::error::create_dir(&scratch)?;
 
     let seeds: Vec<String> = (first_seed..first_seed + runs)
-        .map(|at| format!("C{at:09}"))
+        .map(crate::runner::seed)
         .collect();
     let characters = characters.join(",");
-    let next = AtomicUsize::new(0);
-    let went = Mutex::new(Vec::with_capacity(seeds.len()));
-    std::thread::scope(|scope| {
-        for _ in 0..width.max(1) {
-            let (seeds, next, went, runner, scratch, characters) =
-                (&seeds, &next, &went, &runner, &scratch, &characters);
-            scope.spawn(move || {
-                while let Some(at) =
-                    Some(next.fetch_add(1, Ordering::Relaxed)).filter(|&at| at < seeds.len())
-                {
-                    let result = play_one(runner, &seeds[at], characters, scratch, hunt);
-                    went.lock().expect("no thread panics").push((at, result));
-                }
-            });
-        }
-    });
-    let mut went = went.into_inner().expect("no thread panics");
-    went.sort_by_key(|(at, _)| *at);
+    let went: Vec<(usize, Result<String, String>)> =
+        crate::runner::pool(&seeds, width, |_, at, seed| {
+            (
+                at,
+                play_one(&runner, &build, seed, &characters, &scratch, hunt),
+            )
+        });
 
     let ended = went.iter().filter(|(_, went)| went.is_ok()).count();
     let kept: Vec<_> = went
@@ -131,7 +121,7 @@ fn verdicts<'a>(lines: impl Iterator<Item = &'a str>) -> String {
         *counts.entry(verdict).or_default() += 1;
         matched += words
             .next()
-            .and_then(|step| step.trim_end_matches(',').parse::<usize>().ok())
+            .and_then(|step| step.trim_end_matches([',', ':']).parse::<usize>().ok())
             .unwrap_or(0);
     }
     let counted: Vec<String> = counts
@@ -146,42 +136,64 @@ fn run_file(scratch: &Path, seed: &str) -> std::path::PathBuf {
     scratch.join(seed).join("run.bin")
 }
 
-/// Plays one run, and says how it ended or why it did not.
+/// Plays one run, and says how it ended or why it did not. That is its
+/// verdict, as `<end> <step> seat <seat>: <detail>`. A run that stopped
+/// short names the move it came after.
 ///
 /// Each move goes to a log beside the seats' profiles, which the failure
 /// names.
 fn play_one(
     runner: &Path,
+    build: &str,
     seed: &str,
     characters: &str,
     scratch: &Path,
     hunt: bool,
 ) -> Result<String, String> {
     let homes = scratch.join(seed);
-    let output = Command::new(runner)
-        .args([seed, characters])
-        .arg("--homes")
-        .arg(&homes)
-        .arg("--out")
-        .arg(run_file(scratch, seed))
-        .args(hunt.then_some("--hunt"))
-        .output()
-        .map_err(|e| format!("launching the runner: {e}"))?;
+    let mut args = crate::runner::args([seed, characters, "--build", build]);
+    args.extend(crate::runner::args([
+        "--table",
+        "game",
+        "--carried",
+        "--moves",
+    ]));
+    args.extend(crate::runner::args([
+        "--record".as_ref(),
+        run_file(scratch, seed).as_os_str(),
+    ]));
+    args.extend(crate::runner::args(["--home".as_ref(), homes.as_os_str()]));
+    if hunt {
+        args.extend(crate::runner::args(["--hunt"]));
+    }
+    let ran = crate::runner::once(runner, &args, &[]);
     let log = homes.join("moves.log");
-    let _ = std::fs::write(&log, &output.stdout);
-    let last = |bytes: &[u8]| {
-        String::from_utf8_lossy(bytes)
-            .lines()
-            .last()
-            .unwrap_or("no word why")
-            .to_owned()
+    let _ = std::fs::write(&log, &ran.stdout);
+    let verdict = ran
+        .verdict
+        .map_err(|why| format!("{why} (moves in {})", log.display()))?;
+    let seat = verdict
+        .seat
+        .map(|seat| format!(" seat {}", seat.0))
+        .unwrap_or_default();
+    // `<step> seat <seat>: <move>`, the last one played.
+    let last = ran.stdout.lines().rev().find_map(|line| {
+        let (_, rest) = line.split_once(" seat ")?;
+        let (seat, played) = rest.split_once(": ")?;
+        Some(format!(", after seat {seat}'s {played}"))
+    });
+    let line = |after: Option<String>| {
+        format!(
+            "{} {}{seat}: {}{}",
+            verdict.end,
+            verdict.step,
+            verdict.detail,
+            after.unwrap_or_default()
+        )
     };
-    match output.status.success() {
-        true => Ok(last(&output.stdout)),
-        false => Err(format!(
-            "{} (moves in {})",
-            last(&output.stderr),
-            log.display()
-        )),
+    match verdict.end {
+        End::Won | End::Lost | End::Capped | End::Agreed | End::Parted => Ok(line(None)),
+        End::Panicked | End::Refused => Ok(line(last)),
+        _ => Err(format!("{} (moves in {})", line(last), log.display())),
     }
 }

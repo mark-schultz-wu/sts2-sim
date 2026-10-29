@@ -15,6 +15,10 @@ use crate::{ContentVersion, Decision, Start};
 /// the seat's game to stand still, so this is a few seconds at most.
 const CATCH_UP: usize = 1000;
 
+/// Every seat as it stands, once each caught up with the others, or as they
+/// stood when one never did.
+pub type CaughtUp<V> = Result<Vec<Seated<V>>, Vec<Seated<V>>>;
+
 /// The seats of one co-op run.
 pub struct Coop<V: ContentVersion, S: Seat<V>> {
     seats: Vec<S>,
@@ -92,27 +96,18 @@ impl<V: ContentVersion, S: Seat<V>> Coop<V, S> {
 
     /// Looks at every seat, and plays one move on the first that has one.
     ///
-    /// The seats are looked at in turn, from the one after the seat that last
-    /// played. `choose` is given that seat, where it stands, and its moves. It
-    /// returns the index of the move to play.
+    /// Where every seat stands, once each has caught up with the others.
     ///
-    /// # Panics
-    ///
-    /// When `choose` returns an index outside the moves it was given.
-    pub fn step(
-        &mut self,
-        mut choose: impl FnMut(SeatIndex, &Seated<V>, &[Decision<V>]) -> usize,
-    ) -> Result<Turn<V>, S::Error> {
+    /// Moves reach a seat over the network, so a seat can be behind another.
+    /// Each one behind is looked at again, until all have taken in as much,
+    /// with as many checksums. Seats that never catch up are the error, as
+    /// they stood.
+    pub fn settle(&mut self) -> Result<CaughtUp<V>, S::Error> {
         let mut seated = self
             .seats
             .iter_mut()
             .map(Seat::observe)
             .collect::<Result<Vec<_>, _>>()?;
-        // Another seat's move reaches a seat over the network, and each runs
-        // a turn's change on its own, so a seat can be looked at before it
-        // has caught up with another. Each one behind is looked at again
-        // until every seat has taken in as much as the furthest, and
-        // generated as many checksums.
         let mut looks = 0;
         loop {
             let synced = seated.iter().map(|seat| seat.peers.synced).max();
@@ -125,13 +120,30 @@ impl<V: ContentVersion, S: Seat<V>> Coop<V, S> {
                 }
             }
             if !behind {
-                break;
+                return Ok(Ok(seated));
             }
             looks += 1;
             if looks == CATCH_UP {
-                return Ok(Turn::Stalled(seated));
+                return Ok(Err(seated));
             }
         }
+    }
+
+    /// The seats are looked at in turn, from the one after the seat that last
+    /// played. `choose` is given that seat, where it stands, and its moves. It
+    /// returns the index of the move to play.
+    ///
+    /// # Panics
+    ///
+    /// When `choose` returns an index outside the moves it was given.
+    pub fn step(
+        &mut self,
+        mut choose: impl FnMut(SeatIndex, &Seated<V>, &[Decision<V>]) -> usize,
+    ) -> Result<Turn<V>, S::Error> {
+        let seated = match self.settle()? {
+            Ok(seated) => seated,
+            Err(stalled) => return Ok(Turn::Stalled(stalled)),
+        };
         let count = self.seats.len();
         let acting = (0..count)
             .map(|offset| (self.next + offset) % count)

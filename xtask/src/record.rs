@@ -1,7 +1,7 @@
 //! The game plays the census's runs, and they are kept.
 //!
-//! Each run is `sts2-golden`'s `record_run` for one seed and character: the
-//! game playing at random from its own legal moves, carrying what the census
+//! Each run is `sts2-run` on the game for one seed and character. The game
+//! plays at random from its own legal moves, carrying what the census
 //! carries. The runs go into one file, which the simulator is held to.
 //!
 //! ```text
@@ -21,18 +21,12 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
+
+use sts2_core::End;
 
 /// The characters played when none is named, which are the census's.
 const CHARACTERS: [&str; 5] = ["IRONCLAD", "SILENT", "REGENT", "NECROBINDER", "DEFECT"];
-
-/// How many times a run whose game crashed is played before it counts as
-/// failed.
-const TRIES: usize = 3;
-
-/// The exit `record_run` gives when the game stopped answering.
-const CRASHED: i32 = 3;
 
 #[derive(clap::Args)]
 pub struct Args {
@@ -106,7 +100,8 @@ pub fn run(args: Args) -> Result<String, Error> {
         (None, Some(again)) => again.clone(),
         (None, None) => crate::followed::recorded_file(&root)?,
     };
-    let recorder = crate::error::build_example(&root, "record_run")?;
+    let runner = crate::error::build_runner(&root)?;
+    let build = crate::runner::game_build();
     let merger = crate::error::build_example(&root, "merge_runs")?;
 
     // Each run to play: its seed, its character and the runner's setup flags.
@@ -119,7 +114,7 @@ pub fn run(args: Args) -> Result<String, Error> {
                 .flat_map(|character| {
                     (0..runs).map({
                         let setup = setup.clone();
-                        move |at| (format!("C{at:09}"), character.clone(), setup.clone())
+                        move |at| (crate::runner::seed(at), character.clone(), setup.clone())
                     })
                 })
                 .collect()
@@ -137,35 +132,18 @@ pub fn run(args: Args) -> Result<String, Error> {
         }
     })?;
 
-    let next = AtomicUsize::new(0);
     let retried = AtomicUsize::new(0);
-    let failed = Mutex::new(Vec::new());
-    std::thread::scope(|scope| {
-        for worker in 0..width.max(1) {
-            let home = scratch.join(format!("home{worker}"));
-            let (jobs, next, retried, failed, recorder, scratch) =
-                (&jobs, &next, &retried, &failed, &recorder, &scratch);
-            scope.spawn(move || {
-                loop {
-                    let index = next.fetch_add(1, Ordering::Relaxed);
-                    let Some((seed, character, setup)) = jobs.get(index) else {
-                        break;
-                    };
-                    let at = run_file(scratch, index, character, seed);
-                    let run = (seed.as_str(), character.as_str(), setup.as_slice());
-                    if let Err(why) = record_one(recorder, run, &at, &home, retried) {
-                        failed.lock().expect("no thread panics").push(Failed {
-                            seed: seed.clone(),
-                            character: character.clone(),
-                            why,
-                        });
-                    }
-                }
-            });
-        }
+    let went = crate::runner::pool(&jobs, width, |worker, index, (seed, character, setup)| {
+        let home = scratch.join(format!("home{worker}"));
+        let at = run_file(&scratch, index, character, seed);
+        let run = (seed.as_str(), character.as_str(), setup.as_slice());
+        record_one(&runner, &build, run, &at, &home, &retried).map_err(|why| Failed {
+            seed: seed.clone(),
+            character: character.clone(),
+            why,
+        })
     });
-
-    let failed = failed.into_inner().expect("no thread panics");
+    let failed: Vec<Failed> = went.into_iter().filter_map(Result::err).collect();
     let kept: Vec<PathBuf> = jobs
         .iter()
         .enumerate()
@@ -237,7 +215,7 @@ fn listed(root: &Path, file: &Path) -> Result<Vec<(String, String, Vec<String>)>
 }
 
 /// The runner's flags for a run at `ascension` with `modifiers`, which
-/// `record_run` and `sts2-run` both read.
+/// `sts2-run` reads.
 pub(crate) fn setup(ascension: String, modifiers: &[String]) -> Vec<String> {
     let mut setup = vec!["--ascension".to_owned(), ascension];
     if !modifiers.is_empty() {
@@ -248,32 +226,25 @@ pub(crate) fn setup(ascension: String, modifiers: &[String]) -> Vec<String> {
 
 /// Plays one run, again after a crash, and says why it failed if it did.
 fn record_one(
-    recorder: &Path,
+    runner: &Path,
+    build: &str,
     (seed, character, setup): (&str, &str, &[String]),
     out: &Path,
     home: &Path,
     retried: &AtomicUsize,
 ) -> Result<(), String> {
-    for attempt in 0..TRIES {
-        if attempt > 0 {
-            retried.fetch_add(1, Ordering::Relaxed);
-        }
-        let output = Command::new(recorder)
-            .args([seed, character])
-            .arg(out)
-            .args(setup)
-            .arg("--data-home")
-            .arg(home)
-            .output()
-            .map_err(|e| format!("launching the recorder: {e}"))?;
-        match output.status.code() {
-            Some(0) => return Ok(()),
-            Some(CRASHED) => continue,
-            _ => {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                return Err(stderr.lines().last().unwrap_or("no word why").to_owned());
-            }
+    let mut args = crate::runner::args([seed, character, "--build", build]);
+    args.extend(crate::runner::args(["--table", "game", "--carried"]));
+    args.extend(crate::runner::args(["--record".as_ref(), out.as_os_str()]));
+    args.extend(crate::runner::args(["--home".as_ref(), home.as_os_str()]));
+    args.extend(crate::runner::args(setup));
+    let verdict = crate::runner::retrying(runner, &args, &[], retried).verdict?;
+    match verdict.end {
+        End::Won | End::Lost | End::Capped => Ok(()),
+        _ => {
+            // A run that did not end its own way is not kept.
+            let _ = std::fs::remove_file(out);
+            Err(verdict.to_string())
         }
     }
-    Err(format!("the game crashed {TRIES} times"))
 }

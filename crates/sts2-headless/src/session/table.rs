@@ -1,0 +1,205 @@
+//! A run at a table, on the real game: one game process for each seat.
+//!
+//! A solo run is [`OracleTable`], one game launched for one player. A run of
+//! several players is [`LobbyTable`], one game for each seat over ENet, as
+//! [`GameSeat`] launches them. `docs/RUNNERS.md` says how a runner drives
+//! either.
+
+use sts2_core::{
+    Construct as _, Coop, Decided, Decision, Observation, Play as _, RunTable, SeatIndex, Seated,
+    Settled, Setup, Snapshot, Start,
+};
+
+use crate::session::error::Error;
+use crate::{Config, GameSeat, Oracle, SeatHost};
+
+/// A solo run on one game.
+#[derive(Debug)]
+pub struct OracleTable<V: sts2_content_wire::WireContentVersion> {
+    game: Oracle<V>,
+    /// Where the run stands, as the game's last reply said.
+    last: Snapshot<V>,
+    /// What the game logged in every reply since [`RunTable::logged`].
+    logged: Vec<String>,
+}
+
+impl<V: sts2_content_wire::WireContentVersion> OracleTable<V> {
+    /// The table's game. See [`Oracle`].
+    pub fn game(&self) -> &Oracle<V> {
+        &self.game
+    }
+
+    /// A reply's answer, keeping where it left the run and what the game
+    /// logged.
+    fn settled(&mut self, answered: sts2_core::Answered<V>) -> Settled<V> {
+        self.logged.extend_from_slice(self.game.logged());
+        let (decided, snapshot) = answered?.split();
+        self.last = snapshot;
+        Ok(decided)
+    }
+}
+
+impl<V: sts2_content_wire::WireContentVersion> RunTable<V> for OracleTable<V> {
+    type Error = Error;
+    type Host = Config;
+    type Seen<'a> = &'a Observation<V>;
+
+    /// Launches the game and starts the run.
+    ///
+    /// # Panics
+    ///
+    /// On a run of several players, which is a [`LobbyTable`]'s.
+    fn begin(host: Config, start: &Start<V>) -> Result<Self, Error> {
+        start.alone();
+        let mut game = Oracle::begin(host, start)?;
+        let last = game.observe()?;
+        Ok(Self {
+            game,
+            last,
+            logged: Vec::new(),
+        })
+    }
+
+    fn seats(&self) -> usize {
+        1
+    }
+
+    fn seen(&mut self, _: SeatIndex) -> Result<Self::Seen<'_>, Error> {
+        Ok(&self.last.observation)
+    }
+
+    fn moves(&mut self, _: SeatIndex, moves: &mut Vec<Decision<V>>) -> Result<(), Error> {
+        moves.clear();
+        moves.extend_from_slice(&self.last.observation.moves);
+        Ok(())
+    }
+
+    fn play(&mut self, _: SeatIndex, decision: &Decision<V>) -> Result<Settled<V>, Error> {
+        let answered = self.game.play(decision)?;
+        Ok(self.settled(answered))
+    }
+
+    fn snapshot(&mut self, _: SeatIndex) -> Result<Snapshot<V>, Error> {
+        Ok(self.last.clone())
+    }
+
+    fn construct(&mut self, _: SeatIndex, setup: &Setup<V>) -> Result<Settled<V>, Error> {
+        let answered = self.game.setup(setup)?;
+        Ok(self.settled(answered))
+    }
+
+    fn logged(&mut self) -> Vec<(SeatIndex, String)> {
+        std::mem::take(&mut self.logged)
+            .into_iter()
+            .map(|error| (SeatIndex(0), error))
+            .collect()
+    }
+}
+
+/// How many times a lobby looks again at seats that have no move and are not
+/// all over. Each game runs on its own, so a move one seat sent can still be
+/// on its way to the others.
+const STALLS: usize = 20;
+
+/// A run of several players, one game for each seat.
+pub struct LobbyTable<V: sts2_content_wire::WireContentVersion> {
+    coop: Coop<V, GameSeat<V>>,
+    /// Where every seat stood when last looked at, once each had caught up.
+    /// Nothing once a move or a setup has changed the run.
+    seated: Option<Vec<Seated<V>>>,
+}
+
+impl<V: sts2_content_wire::WireContentVersion> LobbyTable<V> {
+    /// Each seat's game. See [`GameSeat`].
+    pub fn seats(&self) -> &[GameSeat<V>] {
+        self.coop.seats()
+    }
+
+    /// Where every seat stands, looked at once each has caught up with the
+    /// others. They are looked at again while no seat has a move and the run
+    /// is not over on all of them. Seats that stall stand as last seen.
+    fn settled(&mut self) -> Result<&[Seated<V>], Error> {
+        if self.seated.is_none() {
+            let mut seated = Vec::new();
+            for _ in 0..STALLS {
+                seated = match self.coop.settle()? {
+                    Ok(seated) => seated,
+                    Err(stalled) => {
+                        seated = stalled;
+                        continue;
+                    }
+                };
+                let moving = seated
+                    .iter()
+                    .zip(SeatIndex::all(seated.len()))
+                    .any(|(at, me)| !at.snapshot.observation.run_over && !at.moves(me).is_empty());
+                let over = seated.iter().all(|at| at.snapshot.observation.run_over);
+                if moving || over {
+                    break;
+                }
+            }
+            self.seated = Some(seated);
+        }
+        Ok(self
+            .seated
+            .as_deref()
+            .expect("the seats were just looked at"))
+    }
+}
+
+impl<V: sts2_content_wire::WireContentVersion> RunTable<V> for LobbyTable<V> {
+    type Error = Error;
+    type Host = Vec<SeatHost>;
+    type Seen<'a> = &'a Observation<V>;
+
+    /// Launches a game for each seat, which host or join, and returns once
+    /// the run has started on all of them.
+    fn begin(host: Vec<SeatHost>, start: &Start<V>) -> Result<Self, Error> {
+        Ok(Self {
+            coop: Coop::begin(host, start)?,
+            seated: None,
+        })
+    }
+
+    fn seats(&self) -> usize {
+        self.coop.seats().len()
+    }
+
+    fn seen(&mut self, seat: SeatIndex) -> Result<Self::Seen<'_>, Error> {
+        Ok(&self.settled()?[seat.at()].snapshot.observation)
+    }
+
+    fn moves(&mut self, seat: SeatIndex, moves: &mut Vec<Decision<V>>) -> Result<(), Error> {
+        moves.clear();
+        moves.extend_from_slice(self.settled()?[seat.at()].moves(seat));
+        Ok(())
+    }
+
+    /// A seat's game says nothing of a move abandoned under a fight's end,
+    /// so every move it takes is resolved here.
+    fn play(&mut self, seat: SeatIndex, decision: &Decision<V>) -> Result<Settled<V>, Error> {
+        self.seated = None;
+        let answered = sts2_core::Seat::play(&mut self.coop.seats_mut()[seat.at()], decision)?;
+        Ok(answered.map(|_| Decided::Resolved))
+    }
+
+    fn snapshot(&mut self, seat: SeatIndex) -> Result<Snapshot<V>, Error> {
+        Ok(self.settled()?[seat.at()].snapshot.clone())
+    }
+
+    fn construct(&mut self, seat: SeatIndex, setup: &Setup<V>) -> Result<Settled<V>, Error> {
+        self.seated = None;
+        let answered = self.coop.seats_mut()[seat.at()].setup(setup)?;
+        Ok(answered.map(|applied| applied.split().0))
+    }
+
+    fn logged(&mut self) -> Vec<(SeatIndex, String)> {
+        let seats = self.coop.seats_mut();
+        let count = seats.len();
+        seats
+            .iter_mut()
+            .zip(SeatIndex::all(count))
+            .flat_map(|(seat, me)| seat.take_logged().into_iter().map(move |error| (me, error)))
+            .collect()
+    }
+}

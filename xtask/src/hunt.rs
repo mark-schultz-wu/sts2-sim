@@ -1,5 +1,5 @@
-//! The game and the simulator play runs side by side, through `sts2-golden`'s
-//! `record_run --hunt`. A run the two agree on is counted and thrown away. A
+//! The game and the simulator play runs side by side, through `sts2-run
+//! --hunt`. A run the two agree on is counted and thrown away. A
 //! run they part on is kept up to the game's position where they first differ.
 //!
 //! ```text
@@ -24,8 +24,9 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
+
+use sts2_core::End;
 
 /// The characters played when none is named, which are the census's.
 const CHARACTERS: [&str; 5] = ["IRONCLAD", "SILENT", "REGENT", "NECROBINDER", "DEFECT"];
@@ -65,15 +66,6 @@ const MODIFIERS: [&str; 17] = [
     "TERMINAL",
     "VINTAGE",
 ];
-
-/// How many times a run whose game crashed is played before it counts as
-/// failed.
-const TRIES: usize = 3;
-
-/// The exits `record_run --hunt` gives.
-const PARTED: i32 = 2;
-const CRASHED: i32 = 3;
-const PANICKED: i32 = 101;
 
 #[derive(clap::Args)]
 pub struct Args {
@@ -168,7 +160,7 @@ pub fn run(args: Args) -> Result<String, Error> {
         .flat_map(|character| {
             let setups = &setups;
             (first_seed..first_seed + runs).map(move |at| Job {
-                seed: format!("C{at:09}"),
+                seed: crate::runner::seed(at),
                 character: character.clone(),
                 setup: setups[at % setups.len()].clone(),
             })
@@ -177,7 +169,7 @@ pub fn run(args: Args) -> Result<String, Error> {
 
     let root = crate::workspace();
     let version = crate::codegen::version()?;
-    let recorder = crate::error::build_example(&root, "record_run")?;
+    let runner = crate::error::build_runner(&root)?;
     let merger = crate::error::build_example(&root, "merge_runs")?;
     let scratch = root.join("target/hunt").join(&version);
     let _ = std::fs::remove_dir_all(&scratch);
@@ -187,40 +179,27 @@ pub fn run(args: Args) -> Result<String, Error> {
         crate::error::create_dir(counts)?;
     }
 
-    let next = AtomicUsize::new(0);
     let retried = AtomicUsize::new(0);
-    let went = Mutex::new(Vec::with_capacity(jobs.len()));
-    std::thread::scope(|scope| {
-        for worker in 0..width.max(1) {
-            let home = scratch.join(format!("home{worker}"));
-            let (jobs, next, retried, went, recorder, scratch, counts) =
-                (&jobs, &next, &retried, &went, &recorder, &scratch, &counts);
-            scope.spawn(move || {
-                while let Some(at) =
-                    Some(next.fetch_add(1, Ordering::Relaxed)).filter(|&at| at < jobs.len())
-                {
-                    let out = run_file(scratch, &jobs[at]);
-                    // Named for the run, so a run played again writes over
-                    // its own counts and never adds them twice.
-                    let counted = counts.as_ref().map(|dir| {
-                        let name = out.file_stem().expect("a run file has a name");
-                        dir.join(name).with_extension("cov")
-                    });
-                    let result = hunt_one(
-                        recorder,
-                        &jobs[at],
-                        &out,
-                        &home,
-                        counted.as_deref(),
-                        retried,
-                    );
-                    went.lock().expect("no thread panics").push((at, result));
-                }
-            });
-        }
+    let went: Vec<(usize, Went)> = crate::runner::pool(&jobs, width, |worker, at, job| {
+        let home = scratch.join(format!("home{worker}"));
+        let out = run_file(&scratch, job);
+        // Named for the run, so a run played again writes over its own
+        // counts and never adds them twice.
+        let counted = counts.as_ref().map(|dir| {
+            let name = out.file_stem().expect("a run file has a name");
+            dir.join(name).with_extension("cov")
+        });
+        let went = hunt_one(
+            &runner,
+            &version,
+            job,
+            &out,
+            &home,
+            counted.as_deref(),
+            &retried,
+        );
+        (at, went)
     });
-    let mut went = went.into_inner().expect("no thread panics");
-    went.sort_by_key(|(at, _)| *at);
 
     let kept: Vec<PathBuf> = went
         .iter()
@@ -259,54 +238,48 @@ fn run_file(scratch: &Path, job: &Job) -> PathBuf {
         .join(format!("{}-{}-{setup}.bin", job.character, job.seed))
 }
 
-/// Plays one run beside the simulator, again after a crash.
+/// Plays one run beside the simulator, again after a crash. A run they part
+/// on is kept, with the line that says where. One they agree on is thrown
+/// away.
 fn hunt_one(
-    recorder: &Path,
+    runner: &Path,
+    build: &str,
     job: &Job,
     out: &Path,
     home: &Path,
     counted: Option<&Path>,
     retried: &AtomicUsize,
 ) -> Went {
-    for attempt in 0..TRIES {
-        if attempt > 0 {
-            retried.fetch_add(1, Ordering::Relaxed);
+    let mut args = crate::runner::args([job.seed.as_str(), &job.character, "--build", build]);
+    args.extend(crate::runner::args([
+        "--table",
+        "game",
+        "--carried",
+        "--hunt",
+    ]));
+    args.extend(crate::runner::args(["--record".as_ref(), out.as_os_str()]));
+    args.extend(crate::runner::args(["--home".as_ref(), home.as_os_str()]));
+    args.extend(crate::runner::args(&job.setup.1));
+    let env: Vec<(&str, std::ffi::OsString)> = counted
+        .map(|counted| ("STS2_HEADLESS_COVERAGE", counted.as_os_str().to_owned()))
+        .into_iter()
+        .collect();
+    let verdict = match crate::runner::retrying(runner, &args, &env, retried).verdict {
+        Ok(verdict) => verdict,
+        Err(why) => return Went::Failed(why),
+    };
+    match verdict.end {
+        End::Agreed => {
+            let _ = std::fs::remove_file(out);
+            Went::Agreed
         }
-        let mut command = Command::new(recorder);
-        if let Some(counted) = counted {
-            command.env("STS2_HEADLESS_COVERAGE", counted);
-        }
-        let output = match command
-            .args([&job.seed, &job.character])
-            .arg(out)
-            .args(&job.setup.1)
-            .arg("--hunt")
-            .arg("--data-home")
-            .arg(home)
-            .output()
-        {
-            Ok(output) => output,
-            Err(e) => return Went::Failed(format!("launching the recorder: {e}")),
-        };
-        let said = |prefix: &str| {
-            String::from_utf8_lossy(&output.stdout)
-                .lines()
-                .find(|line| line.starts_with(prefix))
-                .unwrap_or(prefix)
-                .to_owned()
-        };
-        match output.status.code() {
-            Some(0) => return Went::Agreed,
-            Some(PARTED) => return Went::Parted(said("parted")),
-            Some(PANICKED) if out.is_file() => return Went::Parted(said("panicked")),
-            Some(CRASHED) => continue,
-            _ => {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                return Went::Failed(stderr.lines().last().unwrap_or("no word why").to_owned());
-            }
+        End::Parted => Went::Parted(format!("parted {} {}", verdict.step, verdict.detail)),
+        End::Panicked => Went::Parted(format!("panicked {} {}", verdict.step, verdict.detail)),
+        _ => {
+            let _ = std::fs::remove_file(out);
+            Went::Failed(verdict.to_string())
         }
     }
-    Went::Failed(format!("the game crashed {TRIES} times"))
 }
 
 /// The counts by setup, each parted run, each failed one, and what the

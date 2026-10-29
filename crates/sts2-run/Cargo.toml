@@ -14,6 +14,9 @@ sts2-core = { workspace = true }
 sts2-content = { workspace = true }
 # The simulator's table.
 sts2-sim = { workspace = true }
+# The game's tables, and the stamp a build's recorded runs carry.
+sts2-headless = { workspace = true }
+sts2-content-wire = { workspace = true }
 # The runner's arguments.
 clap = { workspace = true }
 # Content ids, read by the names the game spells them with.

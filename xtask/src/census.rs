@@ -18,8 +18,6 @@
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::process::Command;
-use std::sync::Mutex;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 use sts2_core::{End, Verdict};
 
@@ -140,22 +138,12 @@ pub fn run(args: Args) -> Result<String, crate::error::ProcessError> {
     // they carry and not by the map they drew.
     let jobs: Vec<(String, String)> = characters
         .iter()
-        .flat_map(|character| (0..runs).map(move |at| (format!("C{at:09}"), character.clone())))
+        .flat_map(|character| (0..runs).map(move |at| (crate::runner::seed(at), character.clone())))
         .collect();
-    let next = AtomicUsize::new(0);
-    let done = Mutex::new(Vec::with_capacity(jobs.len()));
     let threads = std::thread::available_parallelism().map_or(4, |n| n.get());
-    std::thread::scope(|scope| {
-        for _ in 0..threads {
-            scope.spawn(|| {
-                while let Some((seed, character)) = jobs.get(next.fetch_add(1, Ordering::Relaxed)) {
-                    let run = one(&binary, seed, character, &setup);
-                    done.lock().expect("no thread panics").push(run);
-                }
-            });
-        }
+    let done = crate::runner::pool(&jobs, threads, |_, _, (seed, character)| {
+        one(&binary, seed, character, &setup)
     });
-    let done = done.into_inner().expect("no thread panics");
     Ok(report(&done, top))
 }
 

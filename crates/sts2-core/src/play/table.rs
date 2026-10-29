@@ -12,6 +12,7 @@
 
 use crate::{
     ContentVersion, Decided, Decision, Observed, Refusal, SeatIndex, Setup, Snapshot, Start,
+    Verdict,
 };
 
 /// What a move or a setup came to: what it decided, or the table's refusal.
@@ -65,5 +66,12 @@ pub trait RunTable<V: ContentVersion>: Sized {
     /// with no game logs nothing.
     fn logged(&mut self) -> Vec<(SeatIndex, String)> {
         Vec::new()
+    }
+
+    /// What the table does as the run ends, told how the run ended. A layer
+    /// can say more: a hunt can find the run parted at its end. A layer that
+    /// keeps something writes it here.
+    fn finish(&mut self, verdict: Verdict) -> Verdict {
+        verdict
     }
 }

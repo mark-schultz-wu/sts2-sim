@@ -20,7 +20,7 @@
 //! trace stays in `target/game-trace/<INDEX>.log`.
 //!
 //! With `--coop`, `INDEX` is a co-op seed's number, as `cargo xtask coop`
-//! counts them. This plays that seed through `coop_run --hunt`, one game
+//! counts them. This plays that seed through `sts2-run --hunt`, one game
 //! for each seat, and each game traces to a file of its own. It prints the
 //! calls of each seat's game over the last `--moves` moves of the run, and
 //! the whole of each trace stays in `target/game-trace/<SEED>/`:
@@ -128,8 +128,8 @@ fn coop_trace(
     characters: &[String],
 ) -> Result<String, Error> {
     let root = crate::workspace();
-    let runner = error::build_example(&root, "coop_run")?;
-    let seed = format!("C{seed:09}");
+    let runner = error::build_runner(&root)?;
+    let seed = crate::runner::seed(seed);
     let homes = root.join("target/game-trace").join(&seed);
     // A trace left from an earlier run would read as this one's.
     let _ = std::fs::remove_dir_all(&homes);
@@ -137,11 +137,12 @@ fn coop_trace(
     let played = error::spawned(
         Command::new(&runner)
             .args([seed.as_str(), &characters.join(",")])
-            .arg("--homes")
+            .args(["--build", &crate::runner::game_build()])
+            .args(["--table", "game", "--carried", "--moves", "--hunt"])
+            .arg("--home")
             .arg(&homes)
-            .arg("--out")
+            .arg("--record")
             .arg(homes.join("run.bin"))
-            .arg("--hunt")
             .env("STS2_HEADLESS_TRACE", patterns.join(",")),
     )?;
     let log = String::from_utf8_lossy(&played.stdout);

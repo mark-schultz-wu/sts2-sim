@@ -97,21 +97,44 @@ with no moves waits.
 
 ## Layers
 
-Each layer is a `RunTable` that wraps a `RunTable`, and does one job:
+Each layer is a `RunTable` that wraps a `RunTable`, and does one job. They
+are in `crates/sts2-run/src/layers.rs`:
 
 - `Carried`: grants each seat its relics before the first move: 25
   Gorgets and a Mercury Hourglass.
-- `Recorded`: writes the run as STS2REC, a seat, a move index and a
-  digest after each move. It replaces the hand-written writers, and
-  `Recorder` and `Tape` go.
-- `Hunted`: plays every move into a simulator beside the table, and
-  stops at the first seat whose view parts. It is the one compare: the
-  hunt, the co-op hunt, `follow_run --diff` and the golden tests use it.
-- `LogGuard`: stops on an error the game logs. Only the game's table
-  has a log.
+- `Hunted`: plays every move into a simulator beside the table. Before
+  each move it compares the acting seat, and it stops where the two part.
+  A run that ends is compared on every seat, then agreed or parted.
+- `Recorded`: writes the run as a file of recorded runs. For each move
+  it keeps the seat, the move's index, and where the seat stood before it.
+  As the run ends it keeps where each seat stands. It writes every run,
+  and the caller keeps what it wants of them.
+- `LogGuard`: stops on an error a game logs, after the move it logged on.
+- `MovesLog`: prints each move, for the log beside a co-op run.
 - `RefusalGuard`: stops on a move the table refuses after reporting it
-  legal. That is the fuzzer's finding, kept.
-- `Capped`: stops after a number of steps, or of steps with no move.
+  legal. That is the fuzzer's finding, kept. It comes with step 4.
+
+The game's stack nests them in this order:
+
+```text
+Carried< MovesLog< Hunted< Recorded< LogGuard< the game's table >>>>>
+```
+
+- `Carried` is outermost, so its grants reach the hunt's simulator too.
+- `Hunted` is outside `Recorded`, so a move the hunt stops before is never
+  kept.
+- `Recorded` keeps a move before it is played. A simulator that panics on
+  the move then leaves a run that reaches it.
+- `LogGuard` is next to the game, so it sees every reply.
+
+`RunTable::finish` runs from the outside in as the run ends. A hunt turns
+a won run into an agreed or a parted one there, and the recording then
+writes it with that ending. `Hunted`, `Recorded` and `MovesLog` each take
+an off setting in their host, so one stack serves every game run.
+
+The runner catches a panic once, at the top. It does not play on. It
+finishes the table, so a recorded run is written with where each seat
+stood, then prints the verdict.
 
 ## One verdict
 
@@ -193,10 +216,11 @@ Each step is one PR, with the golden tests, the census and the hunt.
    `sts2-run` on the simulator. The census moves onto it, and
    `random_run` goes (done). The simulator's table plays co-op runs too,
    so a census of several players needs no game.
-2. The game's tables, solo and co-op, and the layers `Recorded`, `Hunted`
-   and `LogGuard`. `record`, `hunt` and `coop` move onto `sts2-run`, and
-   `record_run` and `coop_run` go. The run format and the compare move
-   into `sts2-run`. One pool of runs in xtask.
+2. The game's tables, `OracleTable` and `LobbyTable`, and the layers
+   `Recorded`, `Hunted`, `LogGuard` and `MovesLog`. `record`, `hunt`,
+   `coop` and `game-trace --coop` move onto `sts2-run`, and `record_run`
+   and `coop_run` go. The run format moves into `sts2-run`. xtask starts
+   every run through one module, with one pool (done).
 3. `Replay`: `follow_run` and the golden replay tests move onto it. A
    co-op run replays like a solo one, so `follow_noting`'s refusal goes.
 4. `Uniform`, `RefusalGuard` and `Human`: the fuzzer and `sim` go.

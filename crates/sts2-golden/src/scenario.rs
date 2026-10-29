@@ -35,12 +35,7 @@ pub struct Expected {
     pub scenarios: BTreeMap<String, Vec<Step>>,
 }
 
-/// The game a set of answers came from.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct Stamp {
-    pub assembly: i64,
-    pub content: i64,
-}
+pub use sts2_run::recorded::Stamp;
 
 /// What one step left the run showing: each section of the observation,
 /// and the question the run is parked on, as [`Digest::of_question`].

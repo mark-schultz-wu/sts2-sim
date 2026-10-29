@@ -120,7 +120,7 @@ fn matched<V: sts2_content::Build>(run: &Run) -> usize {
 
 /// The positions of the co-op `run` that the simulator agrees with, from
 /// the start. Each seat has a simulator of its own, as each player has a
-/// machine. Each plays every seat's moves, as `coop_run --hunt` does beside
+/// machine. Each plays every seat's moves, as `sts2-run --hunt` does beside
 /// the games. A position is compared on the seat that played from it.
 ///
 /// A hunt whose runs reach further replaces `coop-v0.111.0.bin` with its

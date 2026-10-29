@@ -12,9 +12,9 @@
 //! half folded into the high. Four find the first step two runs part at as
 //! surely as eight do here.
 
+use crate::ids::spelled;
+pub use crate::ids::{read_modifier, spell_modifier};
 use sts2_core::{Decision, Digest, Digested as _, Room, SeatIndex, Snapshot, Start};
-use sts2_run::ids::spelled;
-pub use sts2_run::ids::{read_modifier, spell_modifier};
 
 /// What the file starts with, so a wrong one is refused rather than read.
 const MAGIC: &[u8; 8] = b"STS2REC\x00";
@@ -22,10 +22,17 @@ const MAGIC: &[u8; 8] = b"STS2REC\x00";
 /// The layout below. A change here is a re-record, not a migration.
 const VERSION: u16 = 3;
 
+/// The game a set of answers came from.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct Stamp {
+    pub assembly: i64,
+    pub content: i64,
+}
+
 /// Every recorded run, and the build that played them.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Recorded {
-    pub stamp: crate::scenario::Stamp,
+    pub stamp: Stamp,
     pub runs: Vec<Run>,
 }
 
@@ -371,7 +378,7 @@ impl Recorded {
         if version != VERSION {
             return Err(format!("version {version}, and this reads {VERSION}"));
         }
-        let stamp = crate::scenario::Stamp {
+        let stamp = Stamp {
             assembly: read.i64()?,
             content: read.i64()?,
         };
@@ -529,7 +536,7 @@ mod tests {
     #[test]
     fn a_file_reads_back_as_it_was_written() {
         let recorded = Recorded {
-            stamp: crate::scenario::Stamp {
+            stamp: Stamp {
                 assembly: 1692500715,
                 content: -3,
             },

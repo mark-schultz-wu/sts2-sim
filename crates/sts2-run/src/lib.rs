@@ -7,14 +7,17 @@
 
 pub mod carried;
 pub mod ids;
+pub mod layers;
 pub mod random;
+pub mod recorded;
+
+pub use layers::{Carried, Hunted, LogGuard, MovesLog, Recorded};
 
 use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 
 use num_traits::ToPrimitive as _;
 use sts2_core::{
-    ContentVersion, Decision, End, Gift, Observed as _, RunTable, SeatIndex, Settled, Setup,
-    Snapshot, Start, Verdict,
+    ContentVersion, Decision, End, Observed as _, RunTable, SeatIndex, Start, Verdict,
 };
 
 /// What picks one seat's moves.
@@ -72,6 +75,8 @@ impl<V: ContentVersion> Player<V> for Random {
 #[error("{detail}")]
 pub struct Fault {
     pub end: End,
+    /// The seat it is about, where it is about one.
+    pub seat: Option<SeatIndex>,
     pub detail: String,
 }
 
@@ -79,82 +84,26 @@ impl From<sts2_sim::Error> for Fault {
     fn from(error: sts2_sim::Error) -> Self {
         Self {
             end: End::Failed,
+            seat: None,
             detail: error.to_string(),
         }
     }
 }
 
-/// A table whose every player carries [`carried::carried`] from before the
-/// first move. That is 25 Gorgets and a Mercury Hourglass, so play at random
-/// reaches content instead of dying early.
-///
-/// A solo run grants its own player. A run of several players has each
-/// seat's machine make every grant, for every player, in seat order, as each
-/// game does.
-pub struct Carried<T>(pub T);
-
-impl<V, T> RunTable<V> for Carried<T>
-where
-    V: sts2_content::Build,
-    T: RunTable<V>,
-    Fault: From<T::Error>,
-{
-    type Error = Fault;
-    type Host = T::Host;
-    type Seen<'a>
-        = T::Seen<'a>
-    where
-        Self: 'a;
-
-    fn begin(host: Self::Host, start: &Start<V>) -> Result<Self, Self::Error> {
-        let mut table = T::begin(host, start)?;
-        let seats = table.seats();
-        let grants: Vec<Setup<V>> = match seats {
-            1 => carried::carried::<V>()
-                .into_iter()
-                .flat_map(|(relic, count)| {
-                    std::iter::repeat_n(Setup::Grant(Gift::Relic(relic)), count)
-                })
-                .collect(),
-            seats => carried::carried_by_every_seat::<V>(seats),
+/// A game that went away, or stopped answering, ends the run as
+/// [`End::GameGone`], which a caller plays again. Any other fault of the
+/// game's is [`End::Failed`].
+impl From<sts2_headless::Error> for Fault {
+    fn from(error: sts2_headless::Error) -> Self {
+        let end = match error {
+            sts2_headless::Error::GameGone | sts2_headless::Error::Timeout(_) => End::GameGone,
+            _ => End::Failed,
         };
-        for machine in SeatIndex::all(seats) {
-            for grant in &grants {
-                table.construct(machine, grant)?.map_err(|refusal| Fault {
-                    end: End::Refused,
-                    detail: format!("seat {}'s machine refused {grant:?}: {refusal}", machine.0),
-                })?;
-            }
+        Self {
+            end,
+            seat: None,
+            detail: error.to_string(),
         }
-        Ok(Self(table))
-    }
-
-    fn seats(&self) -> usize {
-        self.0.seats()
-    }
-
-    fn seen(&mut self, seat: SeatIndex) -> Result<Self::Seen<'_>, Self::Error> {
-        Ok(self.0.seen(seat)?)
-    }
-
-    fn moves(&mut self, seat: SeatIndex, moves: &mut Vec<Decision<V>>) -> Result<(), Self::Error> {
-        Ok(self.0.moves(seat, moves)?)
-    }
-
-    fn play(&mut self, seat: SeatIndex, decision: &Decision<V>) -> Result<Settled<V>, Self::Error> {
-        Ok(self.0.play(seat, decision)?)
-    }
-
-    fn snapshot(&mut self, seat: SeatIndex) -> Result<Snapshot<V>, Self::Error> {
-        Ok(self.0.snapshot(seat)?)
-    }
-
-    fn construct(&mut self, seat: SeatIndex, setup: &Setup<V>) -> Result<Settled<V>, Self::Error> {
-        Ok(self.0.construct(seat, setup)?)
-    }
-
-    fn logged(&mut self) -> Vec<(SeatIndex, String)> {
-        self.0.logged()
     }
 }
 
@@ -178,10 +127,12 @@ fn verdict(end: End, seat: Option<SeatIndex>, place: Option<String>, detail: Str
     }
 }
 
-/// Prints a [`End::Panicked`] verdict on stdout when the process panics,
-/// before the panic's own report on stderr. An unported path panics, and
-/// the process ends there.
-pub fn print_verdict_on_panic() {
+/// Where the last panic was raised, and what it said, for the verdict.
+static PANICKED: std::sync::Mutex<Option<(Option<String>, String)>> = std::sync::Mutex::new(None);
+
+/// Keeps where each panic was raised and what it said, for [`run`]'s
+/// verdict, before the panic's own report on stderr.
+pub fn keep_panics() {
     let report = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let message = info
@@ -191,9 +142,51 @@ pub fn print_verdict_on_panic() {
             .or_else(|| info.payload().downcast_ref::<String>().cloned())
             .unwrap_or_default();
         let place = info.location().map(ToString::to_string);
-        println!("{}", verdict(End::Panicked, None, place, message));
+        if let Ok(mut panicked) = PANICKED.try_lock() {
+            *panicked = Some((place, message));
+        }
         report(info);
     }));
+}
+
+/// The verdict on a panic [`keep_panics`] kept.
+fn panicked() -> Verdict {
+    let (place, message) = PANICKED
+        .lock()
+        .ok()
+        .and_then(|mut panicked| panicked.take())
+        .unwrap_or_default();
+    verdict(End::Panicked, None, place, message)
+}
+
+/// Starts the run `start` names at a table of `T`, plays it with `player`
+/// for at most `cap` moves, and finishes it: its verdict.
+///
+/// A panic stops the run and is its verdict. It is caught once, here, so the
+/// table's layers still finish: a recorded run is written with where each
+/// seat stood. Nothing plays on after one.
+pub fn run<V, T, P>(host: T::Host, start: &Start<V>, player: &mut P, cap: usize) -> Verdict
+where
+    V: ContentVersion,
+    T: RunTable<V>,
+    P: Player<V>,
+    Fault: From<T::Error>,
+{
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+
+    let begun = catch_unwind(AssertUnwindSafe(|| T::begin(host, start)));
+    let mut table = match begun {
+        Ok(Ok(table)) => table,
+        Ok(Err(fault)) => {
+            let fault = Fault::from(fault);
+            let detail = format!("as the run began: {}", fault.detail);
+            return verdict(fault.end, fault.seat, None, detail);
+        }
+        Err(_) => return panicked(),
+    };
+    let driven = catch_unwind(AssertUnwindSafe(|| drive(&mut table, player, cap)));
+    let verdict = driven.unwrap_or_else(|_| panicked());
+    catch_unwind(AssertUnwindSafe(|| table.finish(verdict.clone()))).unwrap_or_else(|_| panicked())
 }
 
 /// Plays the run at `table`, with `player` choosing for every seat, until it
@@ -203,7 +196,7 @@ pub fn print_verdict_on_panic() {
 /// moved. The first that is still in the run and has a move plays one. A run
 /// where no seat has a move is over once every seat says so, and stalled
 /// otherwise.
-pub fn drive<V, T, P>(table: &mut T, player: &mut P, cap: usize) -> Verdict
+fn drive<V, T, P>(table: &mut T, player: &mut P, cap: usize) -> Verdict
 where
     V: ContentVersion,
     T: RunTable<V>,
@@ -212,7 +205,7 @@ where
 {
     match drive_or_fault(table, player, cap) {
         Ok(verdict) => verdict,
-        Err(fault) => verdict(fault.end, None, None, fault.detail),
+        Err(fault) => verdict(fault.end, fault.seat, None, fault.detail),
     }
 }
 

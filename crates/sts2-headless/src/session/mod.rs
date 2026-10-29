@@ -17,6 +17,7 @@ pub(crate) mod error;
 pub(crate) mod game;
 pub(crate) mod held;
 pub(crate) mod seat;
+pub(crate) mod table;
 
 use error::Error;
 use sts2_core::Answered;

@@ -57,6 +57,13 @@ impl End {
     }
 }
 
+impl std::fmt::Display for End {
+    /// The end as a verdict line spells it, such as `game-error`.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 /// How a run came out, and where it stood then.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Verdict {
