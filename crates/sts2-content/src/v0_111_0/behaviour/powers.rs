@@ -38,6 +38,10 @@ pub(crate) fn own_power_death<F: sts2_core::Fight<V>>(
     Some(())
 }
 
+/// `TankPower`'s `DynamicVar("DamageIncrease", 1.5m)`, which only this
+/// build has.
+const TANK_DAMAGE_INCREASE: sts2_core::Fixed = sts2_core::Fixed::new(15, 1);
+
 /// Whether `power`'s rule is this build's own.
 pub(crate) fn own_power(power: Power) -> bool {
     matches!(
@@ -50,6 +54,7 @@ pub(crate) fn own_power(power: Power) -> bool {
             | Power::PaleBlueDotPower
             | Power::VulnerablePower
             | Power::ConcoctPower
+            | Power::TankPower
     )
 }
 
@@ -92,6 +97,17 @@ pub(crate) fn own_power_modify_hook(
             unimplemented!("an endless Tracking")
         }
         (Power::TrackingPower, _, ModifyHook::DamageMultiplicative { .. }) => Some(Modify::Nothing),
+        // `TankPower.ModifyDamageMultiplicative`: its `DamageIncrease` on a
+        // powered attack's damage to its owner, where v0.107.1's doubled it.
+        (
+            Power::TankPower,
+            _,
+            ModifyHook::DamageMultiplicative {
+                target: Some(target),
+                powered: true,
+                ..
+            },
+        ) if target == held.holder => Some(Modify::Scaled(TANK_DAMAGE_INCREASE)),
         // `VulnerablePower.ModifyDamageMultiplicative` reads the Cruelty of a
         // pet's owner where the pet has none. v0.107.1's read the dealer's
         // alone.

@@ -7242,17 +7242,33 @@ impl<V: Rules> Board<'_, V> {
                 (Listener::Power { owner, .. }, HookEffect::GainBlock(amount)) => {
                     self.gain_unpowered(owner, amount);
                 }
-                // A fight here has one player, whose piles take them all.
+                // Each player hit takes the cards for their own unblocked
+                // hits, into their own piles, in the order they were first
+                // hit.
                 (Listener::Power { .. }, HookEffect::GiveCardsPerUnblockedHit { card, per }) => {
-                    let player = self.live.player(self.listener_seat(listener)).id;
-                    let hits = results
-                        .iter()
-                        .filter(|hit| hit.receiver == player && hit.unblocked > V::Number::zero())
-                        .count();
-                    let count = num_traits::cast::<_, usize>(per)
-                        .unwrap_or_else(|| unimplemented!("{per:?} cards for each hit"))
-                        * hits;
-                    self.add_generated_cards(CardIdent::new(card), Pile::Discard, count);
+                    let per = num_traits::cast::<_, usize>(per)
+                        .unwrap_or_else(|| unimplemented!("{per:?} cards for each hit"));
+                    let mut hit: SmallVec<[CombatId; 4]> = SmallVec::new();
+                    for result in &results {
+                        let player = (self.live.seat_of(result.receiver))
+                            .is_some_and(|seat| self.live.player(seat).id == result.receiver);
+                        if player && !hit.contains(&result.receiver) {
+                            hit.push(result.receiver);
+                        }
+                    }
+                    for player in hit {
+                        let hits = results
+                            .iter()
+                            .filter(|r| r.receiver == player && r.unblocked > V::Number::zero())
+                            .count();
+                        self.for_player(player, |board| {
+                            board.add_generated_cards(
+                                CardIdent::new(card),
+                                Pile::Discard,
+                                per * hits,
+                            );
+                        });
+                    }
                 }
                 (
                     Listener::Power { owner, .. },

@@ -1104,8 +1104,7 @@ pub(crate) fn modify_hook<V: crate::Build>(
             unimplemented!("an endless Flanking")
         }
         // `TankPower.ModifyDamageMultiplicative`: double a powered attack's
-        // damage to its owner. Its `AfterApplied` gives Guarded to the other
-        // players, and a fight here has one.
+        // damage to its owner.
         (
             __c0,
             _,

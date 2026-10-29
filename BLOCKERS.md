@@ -93,14 +93,10 @@ crates/sts2-content/src` lists about 140 of these comments.
 Every relic, power and card that the audit found compares the player
 now. Frantic Escape did not: it bumped the first Sandpit, where the game
 bumps the one aimed at the card's owner (seed 1). So the audit of
-2026-10-28 read the 49 comments left against the game. These are wrong
-with several players:
+2026-10-28 read the 49 comments left against the game. Ambergris and
+Painful Stabs acted for the wrong player, and are fixed. These are still
+wrong with several players:
 
-- Ambergris heals its drinker and gives them its power. The game heals
-  the player it is aimed at.
-- Painful Stabs counts only the hits on one player and gives that player
-  every Wound. The game gives each player a Wound for each hit that
-  player took.
 - After the hand size is worked out, every player's Pollinous Core
   hears `AfterModifyingHandDraw`. The game asks only the listeners that
   changed that player's hand size. Two cores at four turns both reset on
@@ -215,8 +211,7 @@ Low:
 
 - Powers:
   - Beacon of Hope: shares block with teammates
-  - Tank: gives Guarded to the other players. Its damage taken is 1.5
-    times in v0.111.0, where the sim uses v0.107.1's 2.
+  - Tank: gives Guarded to the other players
   - Covered: `unimplemented!`.
 - 32 `unimplemented!` panics in `sts2-sim` name several players. Most
   of them are in `turn_loop.rs`, `board.rs` and `run/state.rs`, and
@@ -284,8 +279,6 @@ run as its own machine sees it. The work goes in this order:
      listed under D.
    - Where they panic, besides the items below: v0.111.0 cards not yet
      ported, Imitation Learning (seed 2) and Blade Symphony (seed 10).
-   - Solo too: v0.111.0's History Course dupes only an Attack. The sim
-     dupes an Attack or a Skill, as v0.107.1 does.
      The rest stop on items listed below:
      - `FightView::player`: seeds 3, 7, 9, 12 and 14
      - the second player's setup asking a question: seeds 6 and 8
