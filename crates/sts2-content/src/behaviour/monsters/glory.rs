@@ -484,17 +484,21 @@ pub(super) fn perform<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
             }
             fight.apply_to_actor(V::Power::STRENGTH_POWER, PowerAmount::Counted(3));
         }
-        // `IncreasingIntensityMove`: every Wither the player holds takes a
+        // `IncreasingIntensityMove`: every Wither each player holds takes a
         // fake upgrade, the next ones one more, and then the Withers and the
         // Strength.
         (__c0, __c1)
             if (__c0 == V::Monster::AEONGLASS && __c1 == V::MoveId::INCREASING_INTENSITY_MOVE) =>
         {
             let wither = V::Card::WITHER;
-            fight.modify_cards(
-                sts2_core::Writing::EveryCopyOf(wither),
-                sts2_core::Change::Raise(V::CardVar::DAMAGE, WITHER_RAISE),
-            );
+            for player in fight.players() {
+                fight.for_player(player, |fight| {
+                    fight.modify_cards(
+                        sts2_core::Writing::EveryCopyOf(wither),
+                        sts2_core::Change::Raise(V::CardVar::DAMAGE, WITHER_RAISE),
+                    );
+                });
+            }
             // The Withers it gives read the count this raises.
             let bonus = fight.model(|model| {
                 let crate::behaviour::monsters::Model::Aeonglass {

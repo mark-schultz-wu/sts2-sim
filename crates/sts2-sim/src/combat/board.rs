@@ -946,7 +946,7 @@ impl<'a, V: Rules> Board<'a, V> {
         );
         if asked.contains(&HookEffect::DowngradeUpgraded) {
             asked.retain(|effect| *effect != HookEffect::DowngradeUpgraded);
-            let downgraded = self.downgrade_upgraded();
+            let downgraded = self.downgrade_upgraded(id);
             self.live.kept_mut(id, power).cards.extend(downgraded);
         }
         let (owned, cards): (SmallVec<[_; 2]>, SmallVec<[_; 2]>) = asked
@@ -1147,13 +1147,14 @@ impl<'a, V: Rules> Board<'a, V> {
         }
     }
 
-    /// `CardCmd.Downgrade` on every upgraded copy the player holds, in
-    /// `AllCards` order, and the level each had.
+    /// `CardCmd.Downgrade` on every upgraded copy that `holder`'s player
+    /// holds, in `AllCards` order, and the level each had.
     ///
     /// `Downgrade` does nothing while the fight is ending, but the level is
     /// still what the copy had.
-    fn downgrade_upgraded(&mut self) -> Vec<(CardId<V>, u8)> {
-        let seat = self.seat();
+    fn downgrade_upgraded(&mut self, holder: CombatId) -> Vec<(CardId<V>, u8)> {
+        let seat = (self.live.seat_of(holder))
+            .unwrap_or_else(|| unreachable!("a power that downgrades cards is on a player"));
         let upgraded: Vec<(CardId<V>, u8)> = [Pile::Hand, Pile::Draw, Pile::Discard, Pile::Exhaust]
             .into_iter()
             .flat_map(|pile| self.live.players[seat].cards.iter(pile))

@@ -2278,6 +2278,11 @@ impl<V: Rules> State<V> {
     ///
     /// What replaces it is the caller's to say, straight after.
     pub(super) fn left_fight(&mut self) -> (Box<crate::combat::Live<V>>, &Belts<V>) {
+        // A question the fight cancelled takes the cards picked for it and
+        // not yet confirmed with it.
+        for seat in self.players.seats() {
+            self.players[seat].picked = sts2_core::Picks::none();
+        }
         match std::mem::replace(&mut self.phase, Phase::Map) {
             Phase::Combat(live) => (live, &self.belts),
             _ => unreachable!("a fight that ended is the one the run stood in"),

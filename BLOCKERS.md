@@ -142,8 +142,6 @@ block, energy, hand, deck, health, plays and belt. What is left:
     Conclusion, Stratagem, Tools of the Trade and Tyranny. The relics are
     Gambling Chip, Choices Paradox, Toasty Mittens and Toolbox. Seeds 3,
     6 and 8 stop on it.
-  - a card one player plays while another's pick waits. The sim reads
-    the play as a pick on the waiting question. Seed 12 parts on it.
 - A treasure chest awards every player a relic at once. Some relics
   ask as they are obtained, such as Astrolabe or Pandora's Box. Such a
   relic panics in `obtain_here`. The treasure phase keeps no question for
@@ -264,26 +262,23 @@ run as its own machine sees it. The work goes in this order:
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
    Mercury Hourglass, as in a solo hunt. So the runs go deep.
-   On 2026-10-29 sixteen seeds matched 15,716 steps. Seed 1 agreed to
-   its end, 12 panicked and 3 parted. What they stop on is listed below, worked by class.
+   On 2026-10-29 sixteen seeds matched 16,803 steps. Seed 1 agreed to
+   its end, 13 panicked and 2 parted. What they stop on is listed below, worked by class.
    Hunts stay at `--width 4`: at `--width 8` two games of sixteen failed
    in Godot itself. The golden tests follow the hunted runs in
    `coop-v0.111.0.bin` without the game. So a change to the simulator
    needs no hunt to show it keeps them. Next, in the order of
    `docs/COOP-FIGHTS.md` and where the hunted runs stop:
-   - Where they part, both on a question for each seat, listed under D:
-     - the Knowledge Demon asks each player at once, and the sim asks
-       one (seeds 2 and 15).
-     - a card played while a teammate's pick waits (seed 12).
+   - Where they part: the Knowledge Demon asks each player at once, and
+     the sim asks one (seeds 2 and 15). It waits on a question for each
+     seat, listed under D.
    - Imitation Learning copies a teammate's Power card, but no hunted run
      reaches the copy yet. Check it against the game when one does.
    - Where they panic, all on items listed below:
      - the second player's setup asking a question: seeds 3, 6 and 8
-     - a fight inside an event: seeds 0, 4, 5 and 11
+     - a fight inside an event: seeds 0, 4, 5, 7, 9, 11 and 12
      - a death that leaves every player ready: seed 13.
    - Where they panic, on items not yet listed:
-     - The Magi Knight's move reaches a player, and the board does not
-       know which (`Board::seat_of_several`). Seeds 7 and 9.
      - Coordinate, a card for several players only, needs a port, and
        so does its `CoordinatePower`. Seed 10.
      - A card picked to act on is in none of its owner's piles
@@ -303,7 +298,8 @@ run as its own machine sees it. The work goes in this order:
      where the game names the play.
    - A fight inside an event panics in a run of several players. That is
      one the event opens on, or one a shared option opens. Seeds 0, 4,
-     5 and 11 stop on one.
+     5, 7, 9, 11 and 12 stop on one. The Architect, which closes act 3,
+     opens on one too.
    - Content that reads "the player" where the game reads an owner:
      - `RoomEntered` carries the first player's deck size and health,
        which a relic and the Terminal modifier read.
