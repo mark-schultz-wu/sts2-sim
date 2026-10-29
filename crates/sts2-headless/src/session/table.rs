@@ -117,10 +117,35 @@ pub struct LobbyTable<V: sts2_content_wire::WireContentVersion> {
     seated: Option<Vec<Seated<V>>>,
 }
 
-impl<V: sts2_content_wire::WireContentVersion> LobbyTable<V> {
+impl<V: sts2_content_wire::WireContentVersion> LobbyTable<V>
+where
+    Seated<V>: Send,
+{
     /// Each seat's game. See [`GameSeat`].
     pub fn seats(&self) -> &[GameSeat<V>] {
         &self.seats
+    }
+
+    /// Where the seats at `which` stand, each asked of its own game. The games
+    /// are processes of their own, so they are asked at once.
+    fn looked_at(&mut self, which: &[usize]) -> Result<Vec<(usize, Seated<V>)>, Error> {
+        if let [one] = which {
+            return Ok(vec![(*one, self.seats[*one].observe()?)]);
+        }
+        let looked: Vec<(usize, Result<Seated<V>, Error>)> = std::thread::scope(|scope| {
+            let asked: Vec<_> = (self.seats.iter_mut().enumerate())
+                .filter(|(at, _)| which.contains(at))
+                .map(|(at, seat)| (at, scope.spawn(move || seat.observe())))
+                .collect();
+            asked
+                .into_iter()
+                .map(|(at, asked)| (at, asked.join().expect("a seat's look does not panic")))
+                .collect()
+        });
+        looked
+            .into_iter()
+            .map(|(at, seated)| Ok((at, seated?)))
+            .collect()
     }
 
     /// Where every seat stands, once each has caught up with the others.
@@ -130,21 +155,25 @@ impl<V: sts2_content_wire::WireContentVersion> LobbyTable<V> {
     /// with as many checksums. Seats that never catch up are the error, as
     /// they stood.
     fn caught_up(&mut self) -> Result<CaughtUp<V>, Error> {
-        let mut seated = (self.seats.iter_mut())
-            .map(GameSeat::observe)
-            .collect::<Result<Vec<_>, _>>()?;
+        let every: Vec<usize> = (0..self.seats.len()).collect();
+        let mut seated: Vec<Seated<V>> = (self.looked_at(&every)?)
+            .into_iter()
+            .map(|(_, seated)| seated)
+            .collect();
         for _ in 0..CATCH_UP {
             let synced = seated.iter().map(|seat| seat.peers.synced).max();
             let checksums = seated.iter().map(|seat| seat.peers.checksums).max();
-            let mut behind = false;
-            for (seat, at) in self.seats.iter_mut().zip(&mut seated) {
-                if Some(at.peers.synced) < synced || Some(at.peers.checksums) < checksums {
-                    *at = seat.observe()?;
-                    behind = true;
-                }
-            }
-            if !behind {
+            let behind: Vec<usize> = (0..seated.len())
+                .filter(|&at| {
+                    Some(seated[at].peers.synced) < synced
+                        || Some(seated[at].peers.checksums) < checksums
+                })
+                .collect();
+            if behind.is_empty() {
                 return Ok(Ok(seated));
+            }
+            for (at, looked) in self.looked_at(&behind)? {
+                seated[at] = looked;
             }
         }
         Ok(Err(seated))
@@ -182,7 +211,12 @@ impl<V: sts2_content_wire::WireContentVersion> LobbyTable<V> {
     }
 }
 
-impl<V: sts2_content_wire::WireContentVersion> RunTable<V> for LobbyTable<V> {
+/// The seats are looked at on threads of their own, so where one stands has
+/// to cross from one to another, as every build's does.
+impl<V: sts2_content_wire::WireContentVersion> RunTable<V> for LobbyTable<V>
+where
+    Seated<V>: Send,
+{
     type Error = Error;
     type Host = Vec<SeatHost>;
     type Seen<'a> = &'a Observation<V>;

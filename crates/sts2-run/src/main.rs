@@ -189,6 +189,7 @@ fn id<T: serde::de::DeserializeOwned>(id: &str) -> Result<T, Error> {
 fn run<V>(cli: Play) -> Result<Verdict, Error>
 where
     V: sts2_content::Build + sts2_content_wire::WireContentVersion,
+    sts2_core::Seated<V>: Send,
 {
     let Play {
         seed,

@@ -98,6 +98,7 @@ enum Mode {
 fn followed<V>(run: &Run, mode: Mode) -> Result<(), String>
 where
     V: sts2_content::Build + sts2_content_wire::WireContentVersion,
+    sts2_core::Seated<V>: Send,
 {
     let start = run.start::<V>();
     match mode {
