@@ -4435,6 +4435,8 @@ pub enum EventHook<V: ContentVersion> {
         side: V::CombatSide,
         /// `IsDupe`: the copy is a dupe, made to be played once.
         dupe: bool,
+        /// `CardPlay.IsFirstInSeries`: the first of the card's replays.
+        first: bool,
     },
     /// `AfterCardDrawnEarly`, the pass `Hook.AfterCardDrawn` makes over every
     /// listener before the one [`EventHook::CardDrawn`] names.
@@ -5482,6 +5484,16 @@ impl<V: ContentVersion> History<'_, V> {
         self.this_turn.iter().any(|entry| {
             matches!(entry, HistoryEntry::Exhausted { player, .. } if *player == self.player)
         })
+    }
+
+    /// How many `CardExhaustedEntry` the fight holds, every player's.
+    pub fn exhausted_this_fight(&self) -> usize {
+        let before = self.before.into_iter().flat_map(PastTurns::entries);
+        self.this_turn
+            .iter()
+            .chain(before)
+            .filter(|entry| matches!(entry, HistoryEntry::Exhausted { .. }))
+            .count()
     }
 
     /// How many `CardGeneratedEntry` of the fight name the reader's player as
@@ -6763,6 +6775,14 @@ pub enum HookEffect<V: ContentVersion> {
     /// [`crate::EventBehavior::potion_thrown`] carries out. It is the whole
     /// of the potion's use.
     PotionThrownAtEvent(V::Potion),
+    /// `CreateCloneForPlayer(Owner.Player)` of the card about to be played,
+    /// as it stands, kept outside every pile by the power that asked.
+    /// [`Hooks::power_kept_card`] gives that power the clone's id.
+    KeepCloneOfPlaying,
+    /// `PowerCmd.Decrement(this)`, then `CardCmd.AutoPlay` of the clone the
+    /// power keeps as `kept`, with no target named. The play pile takes the
+    /// clone first, since it stands in no pile.
+    DecrementAndAutoPlayKept(crate::CardId<V>),
 }
 
 /// One build's relic models, which is what a run holds a relic as.

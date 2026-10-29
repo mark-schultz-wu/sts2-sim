@@ -22,7 +22,10 @@ const TRACKING: Number = 50;
 
 /// Whether a shared card's in-fight hooks are this build's own.
 pub(crate) fn own_card_hooks(card: Cards) -> bool {
-    matches!(card, Cards::Defect(DefectCard::RocketPunch))
+    matches!(
+        card,
+        Cards::Defect(DefectCard::RocketPunch) | Cards::Ironclad(IroncladCard::Midnight)
+    )
 }
 
 /// `GetResultLocationForCardPlay`, for a card this build ports for itself.
@@ -46,13 +49,42 @@ pub(crate) fn result_pile(
 /// A card's `EventHook` in a fight, for one this build ports for itself.
 pub(crate) fn own_card_event_hook(
     card: Cards,
+    id: sts2_core::CardId<V>,
     owner: sts2_core::CombatId,
+    history: sts2_core::History<'_, V>,
     hook: sts2_core::EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) -> Option<()> {
     use sts2_core::Rules as _;
 
+    // `EnergyCost.AddThisCombat(-amount)`.
+    let cheaper = |amount: usize| sts2_core::HookEffect::ModifySelf {
+        change: sts2_core::Change::ChangeCost(
+            sts2_core::CostPool::Energy,
+            -Number::try_from(amount).expect("a count of exhausts fits a game number"),
+        ),
+        lasting: sts2_core::Lasting::ThisFight,
+    };
     match (card, hook) {
+        // `Midnight.AfterCardEnteredCombat`: itself, unless a clone, one
+        // cheaper for each card any player exhausted this fight.
+        (
+            Cards::Ironclad(IroncladCard::Midnight),
+            sts2_core::EventHook::CardEnteredCombat { at, clone, .. },
+        ) => {
+            // `AddThisCombat` adds nothing for none.
+            let exhausted = history.exhausted_this_fight();
+            if at.id() == id && !clone && exhausted > 0 {
+                asked.push(cheaper(exhausted));
+            }
+            Some(())
+        }
+        // `Midnight.AfterCardExhausted`: one cheaper for any card exhausted,
+        // any player's.
+        (Cards::Ironclad(IroncladCard::Midnight), sts2_core::EventHook::CardExhausted { .. }) => {
+            asked.push(cheaper(1));
+            Some(())
+        }
         // `RocketPunch.AfterCardGeneratedForCombat`: a Status its owner made
         // takes one off its cost until it is played. v0.107.1's set the cost
         // to nothing.
@@ -182,6 +214,46 @@ pub(crate) fn on_play<'a, K: sts2_core::FightKind<V>>(
                         );
                     }
                 });
+            }
+            Some(Played::Done)
+        }
+        // `ImitationLearning`: its stack more on the Imitation Learning its
+        // owner keeps for the teammate it is played at, or a new one aimed
+        // at that teammate.
+        Cards::Defect(DefectCard::ImitationLearning) => {
+            let (owner, copied) = (fight.actor(), fight.target());
+            let power = Power::ImitationLearningPower;
+            let amount = fight.power_var(CardVar::ImitationLearningPower);
+            let held = fight.power_instances(owner, power).len();
+            let mut copying = None;
+            for nth in 0..held {
+                fight.write_power_at(owner, power, nth, |state| {
+                    if let crate::behaviour::powers::State::ImitationLearning { player, .. } = state
+                        && *player == Some(copied)
+                        && copying.is_none()
+                    {
+                        copying = Some(nth);
+                    }
+                });
+            }
+            match copying {
+                Some(nth) => fight.modify_power_at(owner, power, nth, amount, Some(owner)),
+                None => {
+                    fight.apply_to_actor(power, sts2_core::PowerAmount::Counted(amount));
+                    // `PowerCmd.Apply` hands back nothing for a power it
+                    // refused, and the card then names no target.
+                    if fight.power_instances(owner, power).len() > held {
+                        fight.write_power(owner, power, |state| {
+                            if let crate::behaviour::powers::State::ImitationLearning {
+                                player,
+                                ..
+                            } = state
+                            {
+                                *player = Some(copied);
+                            }
+                        });
+                    }
+                }
             }
             Some(Played::Done)
         }

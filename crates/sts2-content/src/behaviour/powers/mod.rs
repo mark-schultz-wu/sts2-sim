@@ -190,6 +190,16 @@ pub enum State<V: crate::Build> {
     PaleBlueDot {
         activated: bool,
     },
+    /// v0.111.0's `ImitationLearningPower`: `PlayerTarget`, whose Power
+    /// cards it copies, and its `cardsAndClones`. That list holds a pair
+    /// while one of those plays is under way, from `BeforeCardPlayed` to
+    /// `AfterCardPlayed`, and the clone stands in no pile meanwhile.
+    ImitationLearning {
+        power: V::Power,
+        player: Option<sts2_core::CombatId>,
+        original: Option<sts2_core::CardId<V>>,
+        clone: Option<sts2_core::CardId<V>>,
+    },
 }
 
 impl<V: crate::Build> State<V> {
@@ -349,6 +359,12 @@ pub(crate) fn kept_card<V: crate::Build>(state: &mut State<V>, kept: sts2_core::
     match state {
         // `NightmarePower.SetSelectedCard`.
         State::Nightmare { card } => *card = Some(kept),
+        // `CreateCloneForPlayer`, paired with the card its play started.
+        State::ImitationLearning {
+            original: Some(_),
+            clone: clone @ None,
+            ..
+        } => *clone = Some(kept),
         state => unimplemented!("{:?} keeping a card", state.power()),
     }
 }
@@ -499,6 +515,7 @@ impl<V: crate::Build> sts2_core::PowerModel<V> for State<V> {
             Self::Monologue { .. } => V::Power::MONOLOGUE_POWER,
             Self::Temporary { power, .. } => *power,
             Self::PaleBlueDot { .. } => V::Power::PALE_BLUE_DOT_POWER,
+            Self::ImitationLearning { power, .. } => *power,
         }
     }
 

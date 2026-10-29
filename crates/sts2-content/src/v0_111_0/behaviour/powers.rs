@@ -55,6 +55,7 @@ pub(crate) fn own_power(power: Power) -> bool {
             | Power::VulnerablePower
             | Power::ConcoctPower
             | Power::TankPower
+            | Power::ImitationLearningPower
     )
 }
 
@@ -62,6 +63,12 @@ pub(crate) fn own_power(power: Power) -> bool {
 pub(crate) fn own_power_state(power: Power) -> Option<State<V>> {
     match power {
         Power::PaleBlueDotPower => Some(State::PaleBlueDot { activated: false }),
+        Power::ImitationLearningPower => Some(State::ImitationLearning {
+            power,
+            player: None,
+            original: None,
+            clone: None,
+        }),
         _ => None,
     }
 }
@@ -158,6 +165,58 @@ pub(crate) fn own_power_event_hook(
     hook: EventHook<V>,
 ) -> Option<Option<HookEffect<V>>> {
     match (power, hook) {
+        // `ImitationLearningPower.BeforeCardPlayed`: the first play of a
+        // Power card of the player it copies starts a clone of it for its
+        // owner, kept beside the card.
+        (
+            Power::ImitationLearningPower,
+            EventHook::CardPlaying {
+                card,
+                id,
+                player,
+                first,
+                ..
+            },
+        ) => {
+            let State::ImitationLearning {
+                player: Some(copied),
+                original,
+                ..
+            } = state
+            else {
+                unimplemented!("ImitationLearningPower applied without a player target")
+            };
+            let copies = player == *copied
+                && first
+                && <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Power);
+            if !copies {
+                return Some(None);
+            }
+            if original.is_some() {
+                unimplemented!("a second play Imitation Learning copies while one is under way");
+            }
+            *original = Some(id);
+            Some(Some(HookEffect::KeepCloneOfPlaying))
+        }
+        // `ImitationLearningPower.AfterCardPlayed`: once the copied card's
+        // play is over, one off its stack, then its clone auto-played.
+        (Power::ImitationLearningPower, EventHook::CardPlayed { id, .. }) => {
+            let State::ImitationLearning {
+                original, clone, ..
+            } = state
+            else {
+                unreachable!("an Imitation Learning keeps its clones")
+            };
+            if *original != Some(id) {
+                return Some(None);
+            }
+            let kept = clone
+                .take()
+                .unwrap_or_else(|| unimplemented!("a copied play whose clone was never kept"));
+            *original = None;
+            Some(Some(HookEffect::DecrementAndAutoPlayKept(kept)))
+        }
+        (Power::ImitationLearningPower, _) => Some(None),
         // `PaleBlueDotPower.AfterCardPlayed`: once a turn, when its owner
         // has finished five plays this turn, its stack as
         // `DrawCardsNextTurnPower` on its owner. Another player's card does

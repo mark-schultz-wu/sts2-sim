@@ -999,6 +999,28 @@ impl<'a, V: Rules> Board<'a, V> {
         }
     }
 
+    /// `PowerCmd.ModifyAmount` on the power instance `instance` that `id`
+    /// carries, from nobody. Nothing once it is off.
+    pub(super) fn modify_instance(
+        &mut self,
+        id: CombatId,
+        instance: super::live::PowerInstance,
+        offset: V::Number,
+    ) {
+        let Some(power) = (self.live.powers.of(id))
+            .find(|held| held.instance == instance)
+            .map(|held| held.power())
+        else {
+            return;
+        };
+        let nth = (self.live.powers.of(id))
+            .filter(|held| held.power() == power)
+            .position(|held| held.instance == instance);
+        if let Some(nth) = nth {
+            self.modify_nth_from(id, power, nth, offset, None);
+        }
+    }
+
     /// `PowerCmd.ModifyAmount` on the `nth` instance of `power` that `id`
     /// carries, in the order they were applied.
     fn modify_nth_from(

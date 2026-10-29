@@ -476,7 +476,9 @@ pub trait OwnRules: ContentVersion + Sized {
     /// cards answer for it.
     fn own_card_event_hook(
         card: Self::Card,
+        id: sts2_core::CardId<Self>,
         owner: sts2_core::CombatId,
+        history: sts2_core::History<'_, Self>,
         hook: sts2_core::EventHook<Self>,
         asked: &mut sts2_core::HookEffects<Self>,
     ) -> Option<()>

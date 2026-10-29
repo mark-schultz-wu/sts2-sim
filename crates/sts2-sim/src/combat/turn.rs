@@ -2677,6 +2677,14 @@ pub(super) fn exhausted<V: Rules>(
                     }
                 });
             }
+            // Written on the card that asked, wherever it stands.
+            (
+                listen::Listener::Card { id },
+                sts2_core::HookEffect::ModifySelf { change, lasting },
+            ) => {
+                let owner = board.live.card_seat(id).unwrap_or(seat);
+                board.live.modify_self(owner, id, change, lasting);
+            }
             (listener, effect) => board.listener_asked(listener, effect),
         }
     }

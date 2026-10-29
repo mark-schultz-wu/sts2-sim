@@ -326,7 +326,7 @@ pub(crate) fn play<V: Rules>(
     };
     // `BeginCardOrPotionEffect`, before the first play.
     live.players[seat].effect_depth += 1;
-    before_played::<V, _>(seat, live, streams, belts, &card, begun, play.target);
+    before_played::<V, _>(seat, live, streams, belts, &card, begun, play.target, true);
     live.history
         .start(card.face.ident.card, seat.creature(), card.id, begun, true);
     let mut board = Board::for_card(
@@ -577,7 +577,7 @@ pub(super) fn auto_play_in_play<V: Rules>(
     };
     // `BeginCardOrPotionEffect`, before the first play.
     live.players[seat].effect_depth += 1;
-    before_played::<V, _>(seat, live, &mut rngs, belts, &card, begun, target);
+    before_played::<V, _>(seat, live, &mut rngs, belts, &card, begun, target, true);
     live.history
         .start(card.face.ident.card, seat.creature(), card.id, begun, true);
     let mut board = Board::for_card(
@@ -672,6 +672,10 @@ fn without_playing<V: Rules>(
 /// A card that shifts its own cost writes it wherever it stands, and what
 /// anything else asks runs through the board. `energy` is what the play
 /// spent, which is the X an X-cost card captured.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the play's own, and whether it is the first of its series"
+)]
 fn before_played<V: Rules, S: LendsCombat>(
     seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
@@ -680,6 +684,7 @@ fn before_played<V: Rules, S: LendsCombat>(
     card: &super::live::CardInstance<V>,
     play: CardPlay<V>,
     target: Option<sts2_core::CombatId>,
+    first: bool,
 ) {
     if !super::listen::heard::<V>(live, belts, sts2_core::ModelHook::BeforeCardPlayed) {
         return;
@@ -716,6 +721,7 @@ fn before_played<V: Rules, S: LendsCombat>(
             spent: num_traits::cast(energy).expect("an energy fits a game number"),
             side: live.side,
             dupe: card.face.dupe(),
+            first,
         }
     };
     // Each listener acts as the walk reaches it.
@@ -752,6 +758,25 @@ fn before_played<V: Rules, S: LendsCombat>(
                             board.clone_written(card, sts2_core::Pile::Hand, writes);
                         }
                     });
+                }
+                // A clone of the card about to play, as it stands now, kept
+                // on the power that asked: Imitation Learning's.
+                (
+                    super::listen::Listener::Power {
+                        owner, instance, ..
+                    },
+                    sts2_core::HookEffect::KeepCloneOfPlaying,
+                ) => {
+                    let face = live.players[seat]
+                        .cards
+                        .named(card.id)
+                        .unwrap_or_else(|| unimplemented!("a clone of a card that left the play"))
+                        .face;
+                    let kept = live.card_ids.mint();
+                    live.kept_faces.push((kept, face));
+                    if let Some(held) = live.powers.of_mut(owner).find(|h| h.instance == instance) {
+                        <V as sts2_core::Hooks>::power_kept_card(&mut held.state, kept);
+                    }
                 }
                 (_, effect) => rest.push(effect),
             }
@@ -1734,7 +1759,16 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                     .cards
                     .named(card)
                     .expect("a card replaying stands in the play pile");
-                before_played::<V, _>(seat, next, streams, belts, &replaying, play, effect.target);
+                before_played::<V, _>(
+                    seat,
+                    next,
+                    streams,
+                    belts,
+                    &replaying,
+                    play,
+                    effect.target,
+                    false,
+                );
                 next.history
                     .start(played_card, seat.creature(), card, play, false);
                 let mut board = Board::for_card(
@@ -2320,6 +2354,22 @@ fn played_effect<V: Rules, S: LendsCombat>(
                 });
             }
         }
+        // `PowerCmd.Decrement(this)`, then `CardCmd.AutoPlay` of the clone the
+        // power kept, for the power's owner: Imitation Learning's.
+        (
+            super::listen::Listener::Power {
+                owner, instance, ..
+            },
+            sts2_core::HookEffect::DecrementAndAutoPlayKept(kept),
+        ) => {
+            let mut board =
+                Board::for_card(seat, next, streams.combat(), belts, ascension, None, None);
+            board.modify_instance(owner, instance, -num_traits::one::<V::Number>());
+            ended_here = board.ended();
+            ended_here = ended_here.or(auto_play_kept::<V, S>(
+                seat, next, streams, belts, ascension, kept,
+            ));
+        }
         // `CardCmd.ApplyKeyword`, on cards wherever they stand.
         (_, effect @ sts2_core::HookEffect::AddKeyword { .. }) => {
             Board::for_card(seat, next, streams.combat(), belts, ascension, None, None)
@@ -2338,6 +2388,46 @@ fn played_effect<V: Rules, S: LendsCombat>(
         }
     }
     ended_here
+}
+
+/// `CardCmd.AutoPlay` of the clone the fight keeps as `kept`, for `seat`'s
+/// player, with no target named. Nothing for a fight over or ending, or a
+/// dead player. Otherwise `CardPileCmd.Add` puts the clone in the play
+/// pile, which raises `AfterCardEnteredCombat`, and the play goes on from
+/// there.
+fn auto_play_kept<V: Rules, S: LendsCombat>(
+    seat: sts2_core::SeatIndex,
+    next: &mut Live<V>,
+    streams: &mut S,
+    belts: &mut crate::run::Belts<V>,
+    ascension: V::AscensionLevel,
+    kept: sts2_core::CardId<V>,
+) -> Option<super::Ended> {
+    if next.won
+        || next.lost
+        || super::board::ending::<V>(super::listen::Walk { live: next, belts })
+        || !next.player(seat).alive
+    {
+        return None;
+    }
+    let at = (next.kept_faces.iter())
+        .position(|(id, _)| *id == kept)
+        .unwrap_or_else(|| unimplemented!("auto-playing a kept card the fight lost"));
+    let (_, face) = next.kept_faces.remove(at);
+    let index = num_traits::NumCast::from(next.players[seat].cards.len(sts2_core::Pile::Play))
+        .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
+    next.players[seat].cards.enter_play(face.named(kept));
+    let mut board =
+        Board::for_card(seat, next, streams.combat(), belts, ascension, None, None).blocking();
+    board.card_entered_combat(
+        sts2_core::CardAt::new(kept, sts2_core::Pile::Play, index),
+        face.ident.card,
+        true,
+    );
+    if let Some(ended) = board.ended() {
+        return Some(ended);
+    }
+    auto_play_taken::<V>(seat, next, streams.combat(), belts, kept, false, true)
 }
 
 /// `AfterCardPlayedLate`, with the energy the play's started entry spent.

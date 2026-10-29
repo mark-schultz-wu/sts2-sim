@@ -267,7 +267,7 @@ run as its own machine sees it. The work goes in this order:
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
    Mercury Hourglass, as in a solo hunt. So the runs go deep.
-   On 2026-10-29 sixteen seeds matched 12,110 steps. Seed 1 agreed to
+   On 2026-10-29 sixteen seeds matched 12,406 steps. Seed 1 agreed to
    its end, 14 panicked and 1 parted. What they stop on is listed below, worked by class.
    Hunts stay at `--width 4`: at `--width 8` two games of sixteen failed
    in Godot itself. The golden tests follow the hunted runs in
@@ -277,13 +277,10 @@ run as its own machine sees it. The work goes in this order:
    - Where they part: the Knowledge Demon asks each player at once, and
      the sim asks one (seed 15). It waits on a question for each seat,
      listed under D.
-   - Where they panic, besides the items below: Imitation Learning
-     (seed 2), which waits on a design. Its power keeps a clone of a
-     teammate's Power card from the start of that play to its end, and
-     then plays the clone. The clone stands in no pile, and the sim cannot
-     hold a card outside the piles yet.
-     The rest stop on items listed below:
-     - `FightView::player`: seeds 3, 7, 9, 10, 12 and 14
+   - Imitation Learning copies a teammate's Power card, but no hunted run
+     reaches the copy yet. Check it against the game when one does.
+   - Where they panic, all on items listed below:
+     - `FightView::player`: seeds 2, 3, 7, 9, 10, 12 and 14
      - the second player's setup asking a question: seeds 6 and 8
      - a fight inside an event: seeds 0, 4, 5 and 11
      - a death that leaves every player ready: seed 13.
