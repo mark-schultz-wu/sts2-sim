@@ -29,8 +29,9 @@ use sts2_cli::control::{self, Outcome};
 use sts2_cli::oracle::{self, Held};
 use sts2_cli::tui;
 use sts2_core::Play as _;
-use sts2_headless::Session;
+use sts2_core::RunTable;
 use sts2_headless::daemon::DEFAULT_IDLE_TIMEOUT;
+use sts2_headless::{HeldTable, Session};
 
 /// The implementation this drives, named once.
 ///
@@ -100,6 +101,8 @@ enum Top {
         #[command(subcommand)]
         command: DaemonCommand,
     },
+    /// Plays a run on the simulator at the terminal, with no game behind it.
+    Sim,
 }
 
 #[derive(Debug, Subcommand)]
@@ -231,6 +234,8 @@ type Result<T, V> = std::result::Result<T, Error<V>>;
 /// A [`Machinery`] command addresses what holds the oracle between invocations.
 #[derive(Debug)]
 enum Command {
+    /// Plays a run on the simulator at the terminal.
+    Sim,
     /// Begins a run, which creates the thing that play commands use.
     Start(StartArgs),
     Run(control::Command),
@@ -261,6 +266,7 @@ fn grouped(top: Top) -> Command {
     let run = |play| Command::Run(control::Command::Step(play));
 
     match top {
+        Top::Sim => Command::Sim,
         Top::Run { command } => match command {
             RunCommand::Start(args) => Command::Start(args),
             RunCommand::Record { file } => Command::Held(Machinery::Record { file }),
@@ -358,6 +364,7 @@ fn drive<V: tui::Build>(cli: Cli) -> Result<(), V> {
     };
 
     match grouped(top) {
+        Command::Sim => simulated::<V>(),
         Command::Held(Machinery::Serve {
             detach,
             idle_timeout,
@@ -439,17 +446,45 @@ fn play<V: tui::Build>(held: &Host<V>) -> Result<(), V> {
     ratatui::run(|terminal| {
         let mut screen = tui::setup::Screen::<V>::default();
         loop {
-            let game = match attached.take() {
-                Some(game) => game,
+            let mut table = match attached.take() {
+                Some(game) => HeldTable::attached(game).map_err(Error::Start)?,
                 None => match screen.collect(terminal)? {
-                    Some(start) => Game::<V>::begin((), &start).map_err(Error::Start)?,
+                    Some(start) => {
+                        <HeldTable<V> as RunTable<V>>::begin((), &start).map_err(Error::Start)?
+                    }
                     None => return Ok(()),
                 },
             };
 
             // A run that goes away leaves the setup screen, so the daemon
             // idling out mid-session is a new run rather than a dead window.
-            if tui::play(terminal, game, options.clone())? == tui::Ended::Quit {
+            if tui::play(terminal, &mut table, options.clone())? == tui::Ended::Quit {
+                return Ok(());
+            }
+        }
+    })
+}
+
+/// The setup screen, then a run on the simulator, until the player quits.
+///
+/// The simulator's table holds the run, and the player at the terminal takes
+/// its one seat. Nothing is recorded.
+fn simulated<V: tui::Build>() -> Result<(), V> {
+    ratatui::run(|terminal| {
+        let mut screen = tui::setup::Screen::<V>::default();
+        loop {
+            let Some(start) = screen.collect(terminal)? else {
+                return Ok(());
+            };
+            let mut table = match <sts2_sim::SimTable<V> as RunTable<V>>::begin((), &start) {
+                Ok(table) => table,
+                Err(why) => {
+                    screen.refused(why.to_string());
+                    continue;
+                }
+            };
+            let options = tui::Options { recording: None };
+            if tui::play(terminal, &mut table, options)? == tui::Ended::Quit {
                 return Ok(());
             }
         }

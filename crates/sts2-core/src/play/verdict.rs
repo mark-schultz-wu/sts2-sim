@@ -31,10 +31,12 @@ pub enum End {
     GameError,
     /// A game stopped answering, or never started.
     GameGone,
+    /// A player stopped the run, as a person at a terminal leaves one.
+    Quit,
 }
 
 impl End {
-    const NAMES: [(End, &'static str); 11] = [
+    const NAMES: [(End, &'static str); 12] = [
         (End::Won, "won"),
         (End::Lost, "lost"),
         (End::Capped, "capped"),
@@ -46,6 +48,7 @@ impl End {
         (End::Failed, "failed"),
         (End::GameError, "game-error"),
         (End::GameGone, "game-gone"),
+        (End::Quit, "quit"),
     ];
 
     fn name(self) -> &'static str {

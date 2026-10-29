@@ -10,7 +10,10 @@
 
 use std::collections::VecDeque;
 
-use sts2_core::{Answered, Applied, Construct, Decision, Play, Setup, Snapshot, Start};
+use sts2_core::{
+    Answered, Applied, Construct, Decision, Observation, Play, RunTable, SeatIndex, Settled, Setup,
+    Snapshot, Start,
+};
 
 use crate::tui::check::Sent;
 
@@ -30,6 +33,8 @@ pub struct Scripted<V: crate::tui::Build> {
     sent: Sent<V>,
     constructed: Vec<Setup<V>>,
     looked: usize,
+    /// Where it last said the run stands, as a table lends it.
+    last: Option<Snapshot<V>>,
 }
 
 impl<V: crate::tui::Build> Scripted<V> {
@@ -66,6 +71,7 @@ impl<V: crate::tui::Build> Scripted<V> {
             sent: Sent::default(),
             constructed: Vec::new(),
             looked: 0,
+            last: None,
         }
     }
 
@@ -125,6 +131,67 @@ impl<V: crate::tui::Build> Play<V> for Scripted<V> {
             Ok(applied) => Ok(applied.snapshot()),
             Err(refusal) => panic!("a script refused an observation: {refusal}"),
         }
+    }
+}
+
+impl<V: crate::tui::Build> Scripted<V> {
+    /// Where the run stands, asked of the script only the first time, and
+    /// after that what the last answer left.
+    fn standing(&mut self) -> &Snapshot<V> {
+        if self.last.is_none() {
+            self.looked += 1;
+            match self.next("say where the run is standing") {
+                Ok(applied) => self.last = Some(applied.snapshot()),
+                Err(refusal) => panic!("a script refused an observation: {refusal}"),
+            }
+        }
+        self.last.as_ref().expect("the run was just looked at")
+    }
+
+    /// The next answer, keeping where it left the run.
+    fn settled(&mut self, asked: &str) -> Settled<V> {
+        let (decided, snapshot) = self.next(asked)?.split();
+        self.last = Some(snapshot);
+        Ok(decided)
+    }
+}
+
+/// A script as a table of one seat, for a front end that plays through one.
+impl<V: crate::tui::Build> RunTable<V> for Scripted<V> {
+    type Error = std::convert::Infallible;
+    type Host = Scripted<V>;
+    type Seen<'a> = &'a Observation<V>;
+
+    fn begin(host: Self::Host, start: &Start<V>) -> Result<Self, Self::Error> {
+        <Self as Play<V>>::begin(host, start)
+    }
+
+    fn seats(&self) -> usize {
+        1
+    }
+
+    fn seen(&mut self, _: SeatIndex) -> Result<Self::Seen<'_>, Self::Error> {
+        Ok(&self.standing().observation)
+    }
+
+    fn moves(&mut self, _: SeatIndex, moves: &mut Vec<Decision<V>>) -> Result<(), Self::Error> {
+        moves.clear();
+        moves.extend_from_slice(&self.standing().observation.moves);
+        Ok(())
+    }
+
+    fn play(&mut self, _: SeatIndex, decision: &Decision<V>) -> Result<Settled<V>, Self::Error> {
+        self.sent.note(*decision);
+        Ok(self.settled("play a decision"))
+    }
+
+    fn snapshot(&mut self, _: SeatIndex) -> Result<Snapshot<V>, Self::Error> {
+        Ok(self.standing().clone())
+    }
+
+    fn construct(&mut self, _: SeatIndex, step: &Setup<V>) -> Result<Settled<V>, Self::Error> {
+        self.constructed.push(step.clone());
+        Ok(self.settled("reach a position"))
     }
 }
 

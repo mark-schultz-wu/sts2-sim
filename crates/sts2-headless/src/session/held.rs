@@ -210,6 +210,83 @@ impl<V: sts2_content_wire::WireContentVersion> Construct<V> for Session<V> {
     }
 }
 
+/// The daemon's run as a table of one seat, as the terminal plays it.
+///
+/// The daemon holds the run. This keeps where it last stood, so a seat's view
+/// can be lent rather than asked for each time.
+pub struct HeldTable<V: sts2_content_wire::WireContentVersion> {
+    session: Session<V>,
+    last: Snapshot<V>,
+}
+
+impl<V: sts2_content_wire::WireContentVersion> HeldTable<V> {
+    /// The run the daemon is already holding.
+    pub fn attached(mut session: Session<V>) -> Result<Self, Error> {
+        let last = session.observe()?;
+        Ok(Self { session, last })
+    }
+
+    /// A reply's answer, keeping where it left the run.
+    fn settled(&mut self, answered: Answered<V>) -> sts2_core::Settled<V> {
+        let (decided, snapshot) = answered?.split();
+        self.last = snapshot;
+        Ok(decided)
+    }
+}
+
+impl<V: sts2_content_wire::WireContentVersion> sts2_core::RunTable<V> for HeldTable<V> {
+    type Error = Error;
+    type Host = ();
+    type Seen<'a> = &'a sts2_core::Observation<V>;
+
+    /// Asks the daemon to start a run, as [`Session`]'s `begin` does.
+    fn begin(host: Self::Host, start: &Start<V>) -> Result<Self, Error> {
+        Self::attached(Session::begin(host, start)?)
+    }
+
+    fn seats(&self) -> usize {
+        1
+    }
+
+    fn seen(&mut self, _: sts2_core::SeatIndex) -> Result<Self::Seen<'_>, Error> {
+        Ok(&self.last.observation)
+    }
+
+    fn moves(
+        &mut self,
+        _: sts2_core::SeatIndex,
+        moves: &mut Vec<Decision<V>>,
+    ) -> Result<(), Error> {
+        moves.clear();
+        moves.extend_from_slice(&self.last.observation.moves);
+        Ok(())
+    }
+
+    fn play(
+        &mut self,
+        _: sts2_core::SeatIndex,
+        decision: &Decision<V>,
+    ) -> Result<sts2_core::Settled<V>, Error> {
+        let answered = self.session.play(decision)?;
+        Ok(self.settled(answered))
+    }
+
+    /// Asked of the daemon, which can idle out from under a held run.
+    fn snapshot(&mut self, _: sts2_core::SeatIndex) -> Result<Snapshot<V>, Error> {
+        self.last = self.session.observe()?;
+        Ok(self.last.clone())
+    }
+
+    fn construct(
+        &mut self,
+        _: sts2_core::SeatIndex,
+        setup: &Setup<V>,
+    ) -> Result<sts2_core::Settled<V>, Error> {
+        let answered = self.session.setup(setup)?;
+        Ok(self.settled(answered))
+    }
+}
+
 /// One request, one answer, one connection.
 ///
 /// [`Answer::Failed`] is turned into an error here rather than handed on. It is

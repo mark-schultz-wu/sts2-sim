@@ -41,16 +41,9 @@ pub enum Error {
     },
     #[error("reading a key: {0}")]
     Key(std::io::Error),
-    #[error("asking the game where it is: {0}")]
-    Looking(Box<dyn std::error::Error + Send + Sync>),
-    #[error("sending {said}: {source}")]
-    Sending {
-        said: String,
-        source: Box<dyn std::error::Error + Send + Sync>,
-    },
 }
 pub use state::Options;
-pub use term::play;
+pub use term::{Human, play};
 
 /// What the TUI needs of a build: the spellings it draws with, and the rules
 /// a card's type is read from.

@@ -19,9 +19,6 @@ path = "src/main.rs"
 # runs until it finds something or the run ends.
 # The TUI over the simulator. No game and no daemon: the run lives in the
 # process that draws it.
-[[bin]]
-name = "sts2-sim"
-path = "src/bin/sim.rs"
 
 [dependencies]
 thiserror = { workspace = true }
@@ -32,6 +29,8 @@ ratatui = { workspace = true }
 serde_json = { workspace = true }
 sts2-content = { workspace = true }
 sts2-content-wire = { workspace = true }
+# The runner the screen plays a run through, as a player of it.
+sts2-run = { workspace = true }
 sts2-core = { workspace = true }
 sts2-headless = { workspace = true }
 sts2-sim = { workspace = true }

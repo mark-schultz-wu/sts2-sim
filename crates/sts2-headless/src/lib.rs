@@ -55,7 +55,7 @@ pub use session::cached::{Cached, FromTranscript, Transport};
 pub use session::config::{Config, game_dir_from_env};
 pub use session::error::Error;
 pub use session::game::{Oracle, parse_reply};
-pub use session::held::{Recorded, Session, Status};
+pub use session::held::{HeldTable, Recorded, Session, Status};
 pub use session::seat::{GameSeat, SeatHost};
 pub use session::table::{LobbyTable, OracleTable};
 

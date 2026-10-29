@@ -17,19 +17,30 @@ use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 
 use num_traits::ToPrimitive as _;
 use sts2_core::{
-    ContentVersion, Decision, End, Observed as _, RunTable, SeatIndex, Start, Verdict,
+    ContentVersion, Decision, End, Observed as _, RunTable, SeatIndex, Settled, Start, Verdict,
 };
 
 /// What picks one seat's moves.
 pub trait Player<V: ContentVersion> {
-    /// Which of `moves` seat `seat` makes. A player that reads more than the
-    /// moves asks `table`, which builds only what it is asked for.
+    /// Seat `seat`'s move, or nothing for a player who stops the run.
+    ///
+    /// `moves` is what the table lists. A player can choose a move it does
+    /// not list, as a person at a terminal can. The table says why not, and
+    /// [`Player::answered`] hears it. A player that reads more than the moves
+    /// asks `table`, which builds only what it is asked for.
     fn choose<T: RunTable<V>>(
         &mut self,
         seat: SeatIndex,
         table: &mut T,
         moves: &[Decision<V>],
-    ) -> Result<usize, T::Error>;
+    ) -> Result<Option<Decision<V>>, T::Error>;
+
+    /// What the table answered the move this player chose: what it decided,
+    /// or why it refused it.
+    fn answered(&mut self, _seat: SeatIndex, _decision: &Decision<V>, _settled: &Settled<V>) {}
+
+    /// How the run ended, at the table where it ended.
+    fn ended<T: RunTable<V>>(&mut self, _table: &mut T, _verdict: &Verdict) {}
 }
 
 /// Moves at random, as [`random::Pick`] picks them: the census's and the
@@ -51,7 +62,7 @@ impl<V: ContentVersion> Player<V> for Random {
         seat: SeatIndex,
         table: &mut T,
         moves: &[Decision<V>],
-    ) -> Result<usize, T::Error> {
+    ) -> Result<Option<Decision<V>>, T::Error> {
         let (held, slots) = {
             let seen = table.seen(seat)?;
             (seen.potions().len(), seen.potion_slots())
@@ -65,7 +76,7 @@ impl<V: ContentVersion> Player<V> for Random {
                 let asking = table.snapshot(seat)?.asking;
                 random::making_room(asking.as_ref(), held, slots)
             };
-        Ok(self.0.choose(moves, room))
+        Ok(Some(moves[self.0.choose(moves, room)]))
     }
 }
 
@@ -88,8 +99,8 @@ impl<V: ContentVersion> Player<V> for Uniform {
         _: SeatIndex,
         _: &mut T,
         moves: &[Decision<V>],
-    ) -> Result<usize, T::Error> {
-        Ok(self.0.any(moves.len()))
+    ) -> Result<Option<Decision<V>>, T::Error> {
+        Ok(Some(moves[self.0.any(moves.len())]))
     }
 }
 
@@ -219,8 +230,23 @@ where
         }
         Err(_) => return panicked(),
     };
-    let driven = catch_unwind(AssertUnwindSafe(|| drive(&mut table, player, cap)));
+    play_at(&mut table, player, cap)
+}
+
+/// [`run`], at a table whose run is already under way, as a daemon holds
+/// one.
+pub fn play_at<V, T, P>(table: &mut T, player: &mut P, cap: usize) -> Verdict
+where
+    V: ContentVersion,
+    T: RunTable<V>,
+    P: Player<V>,
+    Fault: From<T::Error>,
+{
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+
+    let driven = catch_unwind(AssertUnwindSafe(|| drive(table, &mut *player, cap)));
     let verdict = driven.unwrap_or_else(|_| panicked());
+    let _ = catch_unwind(AssertUnwindSafe(|| player.ended(table, &verdict)));
     catch_unwind(AssertUnwindSafe(|| table.finish(verdict.clone()))).unwrap_or_else(|_| panicked())
 }
 
@@ -254,7 +280,8 @@ where
     let seats = table.seats();
     let mut moves = Vec::new();
     let mut next = 0;
-    for step in 0..cap {
+    let mut step = 0;
+    while step < cap {
         STEP.store(step, Ordering::Relaxed);
         let mut over = 0;
         let mut acting = None;
@@ -287,13 +314,23 @@ where
         };
         // `moves` holds the acting seat's, since the look stops asking once it
         // finds one.
-        let at = player.choose(seat, table, &moves)?;
-        let decision = moves[at];
-        if let Err(refusal) = table.play(seat, &decision)? {
-            let detail = format!("{decision:?}: {refusal}");
-            return Ok(verdict(End::Refused, Some(seat), None, detail));
+        let Some(decision) = player.choose(seat, table, &moves)? else {
+            return Ok(verdict(End::Quit, Some(seat), None, String::new()));
+        };
+        let settled = table.play(seat, &decision)?;
+        player.answered(seat, &decision, &settled);
+        if let Err(refusal) = settled {
+            // A move the table listed and then refused is a fault in one or
+            // the other. One it never listed was the player's to try, and
+            // the player is asked again.
+            if moves.contains(&decision) {
+                let detail = format!("{decision:?}: {refusal}");
+                return Ok(verdict(End::Refused, Some(seat), None, detail));
+            }
+            continue;
         }
         next = (seat.at() + 1) % seats;
+        step += 1;
     }
     STEP.store(cap, Ordering::Relaxed);
     Ok(verdict(End::Capped, None, None, String::new()))
