@@ -1827,7 +1827,7 @@ impl<'a, V: Rules> Board<'a, V> {
         let seat = self.seat();
         use sts2_core::rng::GameRng as _;
 
-        if self.stopped() {
+        if self.stopped() || self.generated_for_the_dead(creator) {
             return None;
         }
         let places: i32 = num_traits::cast(self.live.players[seat].cards.len(pile) + 1)
@@ -1884,6 +1884,28 @@ impl<'a, V: Rules> Board<'a, V> {
     /// `Hook.AfterCardGeneratedForCombat`, once a card made in the fight has
     /// landed at `at`, and what it asked for. `CardPileCmd.Add` has raised
     /// `AfterCardEnteredCombat` for it first.
+    /// Whether the player the fight acts for is dead, for a card generated
+    /// for them. `AddGeneratedCardsToCombat` still counts it in the history.
+    /// `CardPileCmd.Add` puts it nowhere, so no place is drawn and it enters
+    /// no pile.
+    ///
+    /// # Panics
+    ///
+    /// Where a listener hears `AfterCardGeneratedForCombat`, which the game
+    /// raises for that card all the same.
+    fn generated_for_the_dead(&mut self, creator: Option<CombatId>) -> bool {
+        let seat = self.seat();
+        if self.live.player(seat).alive {
+            return false;
+        }
+        self.live.history.generated(creator);
+        let hook = sts2_core::ModelHook::AfterCardGeneratedForCombat;
+        if !self.over() && super::listen::heard::<V>(self.live, self.belts, hook) {
+            unimplemented!("a card generated for a dead player, which a listener hears");
+        }
+        true
+    }
+
     fn card_generated(&mut self, at: CardAt<V>, card: V::Card, creator: Option<CombatId>) {
         let seat = self.seat();
         self.live.history.generated(creator);
@@ -1945,6 +1967,9 @@ impl<'a, V: Rules> Board<'a, V> {
         }
         let mut added = Vec::with_capacity(count);
         for _ in 0..count {
+            if self.generated_for_the_dead(creator) {
+                continue;
+            }
             let at = self.put(card, pile);
             added.push(at);
             self.card_generated(at, card.card, creator);
@@ -2491,8 +2516,8 @@ impl<'a, V: Rules> Board<'a, V> {
     /// # Panics
     ///
     /// A death inside the player's own card or potion, whose cards the game
-    /// takes once the effect is over. A death that leaves every standing
-    /// player ready, which ends the turn.
+    /// takes once the effect is over. A death that readies the last standing
+    /// player who was not ready, which ends the turn.
     fn died_beside_others(&mut self, seat: sts2_core::SeatIndex) {
         let player = &mut self.live.players[seat];
         if player.effect_depth > 0 {
@@ -2502,7 +2527,8 @@ impl<'a, V: Rules> Board<'a, V> {
         player.cards.clear();
         player.energy = num_traits::zero();
         player.stars = num_traits::zero();
-        if self.live.side == <V::CombatSide as SideKinds>::PLAYER {
+        // A player who was ready already died as the turn ended, which goes on.
+        if self.live.side == <V::CombatSide as SideKinds>::PLAYER && !player.ready {
             player.ready = true;
             let live = &*self.live;
             if super::turn::seats(live).all(|other| live.players[other].ready) {
