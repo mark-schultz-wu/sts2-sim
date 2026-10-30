@@ -1083,10 +1083,13 @@ pub(crate) fn selector_picks<V: Rules>(
     Some(picks)
 }
 
-/// Resume the card play the fight parked on a selection.
+/// Resume the card play the fight parked on a selection, as `seat`.
+/// `answerer` answered it, from their own piles, who is the player a potion
+/// is aimed at, and otherwise `seat`.
 #[tracing::instrument(level = "trace", skip_all)]
 pub(crate) fn answer<V: Rules>(
     seat: sts2_core::SeatIndex,
+    answerer: sts2_core::SeatIndex,
     fighting: Fighting<'_, V>,
     chosen: sts2_core::Picks,
 ) -> Result<Option<super::Ended>, Error> {
@@ -1106,13 +1109,14 @@ pub(crate) fn answer<V: Rules>(
                 selection,
             } => {
                 // An answer names a card by where it was offered, which is
-                // not always where it lies.
-                let offered = live.offered(seat, *from);
+                // not always where it lies. The pile is the answerer's, who
+                // is the player a potion is aimed at.
+                let offered = live.offered(answerer, *from);
                 let cards: Option<sts2_core::Picked<V>> = chosen
                     .iter()
                     .map(|index| {
                         let at = *offered.get(index)?;
-                        live.players[seat].cards.get(*from, at).map(|card| {
+                        live.players[answerer].cards.get(*from, at).map(|card| {
                             let at = num_traits::NumCast::from(at).unwrap_or_else(|| {
                                 unimplemented!("a pile deeper than a fight can number")
                             });

@@ -264,8 +264,8 @@ run as its own machine sees it. The work goes in this order:
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
    Mercury Hourglass, as in a solo hunt. So the runs go deep.
-   On 2026-10-29 sixteen seeds matched 18,187 steps. Five agreed to
-   their end: seeds 0 and 1 lost, and seeds 7, 9 and 12 won. Eight
+   On 2026-10-29 sixteen seeds matched 19,466 steps. Seven agreed to
+   their end: seeds 0 and 1 lost, and seeds 7, 9, 10, 12 and 14 won. Six
    panicked and three parted. What they stop on is listed below, worked by class.
    Hunts stay at `--width 4`: at `--width 8` two games of sixteen failed
    in Godot itself. The golden tests follow the hunted runs in
@@ -282,14 +282,8 @@ run as its own machine sees it. The work goes in this order:
    - Where they panic, all on items listed below:
      - the second player's setup asking a question: seeds 3, 6 and 8
      - a potion drunk while its drinker's queue waits on a question,
-       which the scheduler's rest below queues behind it: seed 5
+       which the scheduler's rest below queues behind it: seeds 4 and 5
      - a death that leaves every player ready: seed 13.
-   - Where they panic, on items not yet listed:
-     - Coordinate, a card for several players only, needs a port, and
-       so does its `CoordinatePower`. Seed 10.
-     - Lift, a card for several players only, needs a port. Seed 4.
-     - A card picked to act on is in none of its owner's piles
-       (`turn.rs`, "a picked card that left the fight"). Seed 14.
    - The rest of the scheduler (steps 3 and 4 of `docs/SCHEDULER.md`). A
      question the turn loop asks belongs to no player's queue yet. Each
      phase of the turn's end panics at one in a fight of several players.

@@ -20,6 +20,27 @@ pub(super) fn on_play<'a, V: crate::Build, K: FightKind<V>>(
 ) -> Played<V, K> {
     match card {
         __c0 if __c0 == V::Card::VOLLEY => volley::<V, _>(fight),
+        // `Lift`: its block on the ally it is pointed at.
+        __c0 if __c0 == V::Card::LIFT => {
+            let block = fight.resolve(sts2_core::Effect::GainBlock {
+                recipient: fight.target(),
+                amount: sts2_core::Amount::Var(V::CardVar::BLOCK),
+                scaling: sts2_core::Scaling::Dynamic,
+            });
+            fight.apply(block);
+            Played::Done
+        }
+        // `Coordinate`: its `StrengthPower` as Coordinate on the ally it is
+        // pointed at, which lends that much Strength for the turn.
+        __c0 if __c0 == V::Card::COORDINATE => {
+            let strength = fight.var(V::CardVar::STRENGTH_POWER);
+            fight.apply_power(
+                fight.target(),
+                V::Power::COORDINATE_POWER,
+                sts2_core::PowerAmount::Counted(strength),
+            );
+            Played::Done
+        }
         // `Scrawl`: cards drawn until the hand is full.
         __c0 if __c0 == V::Card::SCRAWL => {
             let room =

@@ -30,7 +30,7 @@ impl<V: Rules> State<V> {
                     let Some(picks) = combat::selector_picks(seat, fighting.live) else {
                         break;
                     };
-                    combat::answer(seat, fighting, picks)?
+                    combat::answer(seat, seat, fighting, picks)?
                 }
             };
             ended = match answered {
@@ -54,8 +54,9 @@ impl<V: Rules> State<V> {
             unreachable!("a fight answer has a live fight");
         };
         // A potion aimed at `seat` asks them, and its drinker's action goes on.
+        let answerer = seat;
         let seat = fighting.live.answering(seat);
-        let ended = match combat::answer(seat, fighting, chosen)? {
+        let ended = match combat::answer(seat, answerer, fighting, chosen)? {
             None => self.turn_ended_by_play(seat)?,
             ended => ended,
         };
