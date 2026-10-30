@@ -257,7 +257,7 @@ run as its own machine sees it. The work goes in this order:
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
    Mercury Hourglass, as in a solo hunt. So the runs go deep.
-   On 2026-10-30 sixteen seeds matched 30,556 steps. Fifteen agreed to
+   On 2026-10-30 sixteen seeds matched 31,982 steps. Fifteen agreed to
    their end. Seeds 0, 1, 6 and 13 lost. Seeds 2, 3, 4, 7, 8, 9, 10,
    11, 12, 14 and 15 won. One parted, and none panicked. What they stop on is listed below, worked by class.
    Hunts stay at `--width 4`: at `--width 8` two games of sixteen failed
@@ -267,17 +267,13 @@ run as its own machine sees it. The work goes in this order:
    `docs/COOP-FIGHTS.md` and where the hunted runs stop:
    - Imitation Learning copies a teammate's Power card, but no hunted run
      reaches the copy yet. Check it against the game when one does.
-   - Where seed 5 parts: seat 0 drinks Bottled Potential once its picks
-     for seat 1's Gambler's Brew and Colorless Potion are done. On seat
-     1's machine it waits on seat 0's queue, behind the Gambler's Brew
-     hook, which never finishes there. A `game-trace --coop 5` shows why.
-     Seat 1's game waits for seat 0's choice 27. Seat 0's game sends
-     both of its picks as choice 28, the first with no cards. So the
-     choice ids of the two machines part on these aimed potions, and the
-     mod's selector is the likeliest cause. Requiring an idle executor
-     in `WaitOnce` hangs seat 1 for good, so the hunt does not compare
-     too soon. Next, trace `ReserveChoiceId` with its callers on both
-     seats from the Gambler's Brew on.
+   - Seed 5 parts at step 2407, as the enemies act in the Queen's fight.
+     Seat 1 holds Thorns. It loses 12 more health in the sim than in the
+     game. In the sim, Torch Head Amalgam's first hit lands on
+     both players, and seat 1's Thorns hits back. Then a further 12
+     lands on seat 1. In the game the second hit leaves seat 1 losing 2.
+     The block both sides gain is the same. Next, trace
+     `AttackCommand.*` and `ThornsPower.*` over that turn.
    - The rest of the scheduler (steps 3 and 4 of `docs/SCHEDULER.md`). A
      question the turn loop asks belongs to no player's queue yet. Each
      phase of the turn's end panics at one in a fight of several players.
