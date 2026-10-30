@@ -458,7 +458,8 @@ pub(crate) fn drinks<V: Rules>(
     moves: &mut Legal<V>,
 ) {
     for (at, &potion) in potions.iter().enumerate() {
-        if undrinkable::<V>(seat, potion, fight, merchant, alive, stuck).is_some() {
+        let queued = fight.is_some_and(|fight| fight.potion_queued(seat, at));
+        if undrinkable::<V>(seat, potion, fight, merchant, alive, queued, stuck).is_some() {
             continue;
         }
         let targets = match fight {
@@ -479,7 +480,8 @@ pub(crate) fn drinks<V: Rules>(
 /// The belt, and why each potion in it cannot be drunk.
 ///
 /// The order `NPotionPopup.RefreshButtons` asks in, minus the questions this
-/// slice cannot raise. Nothing is queued, because a decision resolves whole.
+/// slice cannot raise. A potion is queued only behind its owner's queue in a
+/// fight of several players.
 /// `stuck` is `CanRemovePotions` off, which an event sets while it runs.
 /// `merchant` is whether the room has a merchant a Foul Potion can be
 /// thrown at, which [`Rules::computed_potion_check`] reads.
@@ -491,8 +493,9 @@ pub(crate) fn belt<'a, V: Rules>(
     alive: bool,
     stuck: bool,
 ) -> impl ExactSizeIterator<Item = Held<V>> + 'a {
-    potions.iter().map(move |&potion| {
-        let reason = undrinkable::<V>(seat, potion, fight, merchant, alive, stuck);
+    potions.iter().enumerate().map(move |(at, &potion)| {
+        let queued = fight.is_some_and(|fight| fight.potion_queued(seat, at));
+        let reason = undrinkable::<V>(seat, potion, fight, merchant, alive, queued, stuck);
         Held {
             potion,
             // The game reads both out of its localisation tables, which
@@ -524,10 +527,15 @@ fn undrinkable<V: Rules>(
     fight: Option<&Live<V>>,
     merchant: bool,
     alive: bool,
+    queued: bool,
     stuck: bool,
 ) -> Option<Undrinkable> {
     if !alive {
         return Some(Undrinkable::Dead);
+    }
+    // `IsQueued`: its use already waits in its owner's queue.
+    if queued {
+        return Some(Undrinkable::Queued);
     }
     if stuck {
         return Some(Undrinkable::Stuck);

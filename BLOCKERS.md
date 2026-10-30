@@ -257,9 +257,9 @@ run as its own machine sees it. The work goes in this order:
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
    Mercury Hourglass, as in a solo hunt. So the runs go deep.
-   On 2026-10-30 sixteen seeds matched 28,181 steps. Fourteen agreed to
-   their end. Seeds 0, 1, 6 and 13 lost. Seeds 2, 3, 7, 8, 9, 10, 11,
-   12, 14 and 15 won. Two panicked, and none parted. What they stop on is listed below, worked by class.
+   On 2026-10-30 sixteen seeds matched 30,556 steps. Fifteen agreed to
+   their end. Seeds 0, 1, 6 and 13 lost. Seeds 2, 3, 4, 7, 8, 9, 10,
+   11, 12, 14 and 15 won. One parted, and none panicked. What they stop on is listed below, worked by class.
    Hunts stay at `--width 4`: at `--width 8` two games of sixteen failed
    in Godot itself. The golden tests follow the hunted runs in
    `coop-v0.111.0.bin` without the game. So a change to the simulator
@@ -267,9 +267,12 @@ run as its own machine sees it. The work goes in this order:
    `docs/COOP-FIGHTS.md` and where the hunted runs stop:
    - Imitation Learning copies a teammate's Power card, but no hunted run
      reaches the copy yet. Check it against the game when one does.
-   - Where they panic, all on items listed below:
-     - a potion drunk while its drinker's queue waits on a question,
-       which the scheduler's rest below queues behind it: seeds 4 and 5
+   - Where seed 5 parts: seat 0 drinks Bottled Potential once its pick
+     for seat 1's Colorless Potion is done. Seat 0's game drinks it. On
+     seat 1's machine the game queues it on seat 0's queue, and it has
+     not run when the hunt compares. So seat 1 sees the draw pile as it
+     was. Next, trace `ActionQueueSet` on both seats. That tells whether
+     a front still waits there, or the hunt compares too soon.
    - The rest of the scheduler (steps 3 and 4 of `docs/SCHEDULER.md`). A
      question the turn loop asks belongs to no player's queue yet. Each
      phase of the turn's end panics at one in a fight of several players.

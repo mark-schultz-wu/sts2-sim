@@ -3547,6 +3547,38 @@ impl<V: Rules> Live<V> {
         offered
     }
 
+    /// `PotionModel.EnqueueManualUse` in a fight of several players. Where
+    /// `seat`'s queue holds an action already, the potion in belt slot
+    /// `slot` waits at its end, and this says so. Otherwise it is drunk now.
+    pub(crate) fn queue_potion(
+        &mut self,
+        seat: sts2_core::SeatIndex,
+        slot: usize,
+        target: Option<CombatId>,
+    ) -> bool {
+        if self.players.len() == 1 || !self.queues.waits(seat) {
+            return false;
+        }
+        self.queues.enqueue_potion(seat, slot, target);
+        true
+    }
+
+    /// `PotionModel.IsQueued` for `seat`'s belt slot `slot`.
+    pub(crate) fn potion_queued(&self, seat: sts2_core::SeatIndex, slot: usize) -> bool {
+        self.queues.queued_potion(seat, slot)
+    }
+
+    /// The next queued potion whose turn has come, taken off its queue, once
+    /// nothing is in play: its owner, belt slot and target.
+    pub(crate) fn ready_potion(
+        &mut self,
+    ) -> Option<(sts2_core::SeatIndex, usize, Option<CombatId>)> {
+        if self.asking.is_some() || !self.deferred.is_empty() {
+            return None;
+        }
+        self.queues.take_ready_potion()
+    }
+
     /// In a fight of several players, the question `seat`'s decision ended
     /// on goes to the front of `seat`'s queue, with what waits behind it. The
     /// other seats act around it until `seat` answers.
@@ -3557,25 +3589,27 @@ impl<V: Rules> Live<V> {
         let Some(asking) = self.asking.take() else {
             return;
         };
+        // A potion aimed at another player asks them, and its choice stands
+        // in their queue.
+        let answerer = match &asking.then {
+            Then::Play { effect, .. } => effect.reaching(self, seat),
+            _ => None,
+        };
         let task = Paused {
             asking,
             waiting: self.deferred.take_fresh((0, None)),
             hand: self.players[seat].cards.len(sts2_core::Pile::Hand),
         };
-        self.queues.stop(seat, task);
+        self.queues.stop(seat, answerer.unwrap_or(seat), task);
     }
 
     /// The question `seat` answers, back in play with what waits behind it,
     /// where a queue stopped on one. The seat whose action goes on, which
     /// is the drinker's for a potion aimed at `seat`.
     pub(crate) fn answering(&mut self, seat: sts2_core::SeatIndex) -> sts2_core::SeatIndex {
-        let Some(owner) = self.stopped_for(seat).map(|(owner, _)| owner) else {
+        let Some((owner, task)) = self.queues.go_on(seat) else {
             return seat;
         };
-        let task = self
-            .queues
-            .go_on(owner)
-            .expect("the queue stopped on the question");
         self.rejoin(owner, task);
         owner
     }
@@ -3594,13 +3628,7 @@ impl<V: Rules> Live<V> {
         &self,
         seat: sts2_core::SeatIndex,
     ) -> Option<(sts2_core::SeatIndex, &Paused<V>)> {
-        self.queues.every_stopped().find(|&(owner, task)| {
-            let answerer = match &task.asking.then {
-                Then::Play { effect, .. } => effect.reaching(self, owner),
-                _ => None,
-            };
-            answerer.unwrap_or(owner) == seat
-        })
+        self.queues.stopped_with_owner(seat)
     }
 
     /// The card-selection question on which this fight is parked.

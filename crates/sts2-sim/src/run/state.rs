@@ -8118,19 +8118,25 @@ impl<V: Rules> State<V> {
 
     /// A discard for each potion in the belt, last in every list, as the
     /// mod's `Moves.Discards` lists them. The popup's button is shut for a
-    /// dead owner, and no potion is queued at a decision.
+    /// dead owner, and for a potion queued already.
     fn discards(&self, seat: sts2_core::SeatIndex, alive: bool, moves: &mut Legal<V>) {
         if !alive {
             return;
         }
-        moves.extend((0..self.players[seat].potions.len()).map(|at| {
-            Decision::DiscardPotion {
-                index: u8::try_from(at)
-                    .ok()
-                    .and_then(|at| sts2_core::BeltIndex::try_new(at).ok())
-                    .expect("a belt fits a byte"),
-            }
-        }));
+        let queued = |at: usize| match &self.phase {
+            Phase::Combat(live) => live.potion_queued(seat, at),
+            _ => false,
+        };
+        moves.extend(
+            (0..self.players[seat].potions.len())
+                .filter(|&at| !queued(at))
+                .map(|at| Decision::DiscardPotion {
+                    index: u8::try_from(at)
+                        .ok()
+                        .and_then(|at| sts2_core::BeltIndex::try_new(at).ok())
+                        .expect("a belt fits a byte"),
+                }),
+        );
     }
 
     /// Whether the room the run stands in lets it go to the map.

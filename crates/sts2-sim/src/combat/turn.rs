@@ -453,7 +453,7 @@ fn stop_setup<V: Rules>(
     // It runs last, once the rest of the setup is over.
     task.waiting
         .insert(0, super::live::Deferred::PrePlay { seat });
-    live.queues.stop(seat, task);
+    live.queues.stop(seat, seat, task);
 }
 
 /// `creaturesStartingTurn`, which `StartTurn` takes before
@@ -4547,7 +4547,7 @@ pub(super) fn perform_move<V: Rules>(
                         waiting: Vec::new(),
                         hand: live.players[seat].cards.len(Pile::Hand),
                     };
-                    live.queues.stop(seat, task);
+                    live.queues.stop(seat, seat, task);
                 }
                 return Moved::Stood(Stood {
                     moving,

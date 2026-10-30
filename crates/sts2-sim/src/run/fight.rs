@@ -147,6 +147,13 @@ impl<V: Rules> State<V> {
         }
 
         let potion = held.potion;
+        // `UsePotionAction` waits behind what its owner's queue holds, in a
+        // fight of several players.
+        if let Some(fighting) = self.fighting()
+            && fighting.live.queue_potion(seat, at, target)
+        {
+            return Ok(Ok(self.settle(seat, None)));
+        }
         // `RemoveBeforeUse`.
         self.drank(seat, at);
         let Some(fighting) = self.fighting() else {
@@ -215,6 +222,37 @@ impl<V: Rules> State<V> {
         Ok(Ok(self.settle(seat, ended)))
     }
 
+    /// Each queued potion whose turn has come, as its `UsePotionAction` runs:
+    /// out of the belt, then drunk. How one ended the fight, if it did.
+    fn drink_queued(&mut self) -> Result<Option<combat::Ended>, Error> {
+        loop {
+            let Some(fighting) = self.fighting() else {
+                return Ok(None);
+            };
+            let Some((owner, slot, target)) = fighting.live.ready_potion() else {
+                return Ok(None);
+            };
+            let potion = self.belt(owner)[slot].potion;
+            // `RemoveBeforeUse`.
+            self.drank(owner, slot);
+            let Some(fighting) = self.fighting() else {
+                unreachable!("a queued potion is drunk in its fight");
+            };
+            let ended = combat::drink(owner, fighting, potion, target)?;
+            let effects = V::on_use_on_run(potion, &self.seen_by(owner), true);
+            if self.carry_out(owner, effects).is_some() {
+                unimplemented!("a potion drunk in a fight that asks the run a question");
+            }
+            if ended.is_some() {
+                return Ok(ended);
+            }
+            // A question it asks waits at the front of its owner's queue.
+            if let Some(fighting) = self.fighting() {
+                fighting.live.stop_for_answer(owner);
+            }
+        }
+    }
+
     /// `SetReadyToEndTurn`: a play that asked for the turn to end has it end
     /// once the play is over and nothing waits on the player. A play during a
     /// turn's setup, as Whispering Earring's are, ends it once the setup is
@@ -225,6 +263,9 @@ impl<V: Rules> State<V> {
     ) -> Result<Option<combat::Ended>, Error> {
         let ascension = self.ascension();
         loop {
+            if let Some(ended) = self.drink_queued()? {
+                return Ok(Some(ended));
+            }
             let Some(fighting) = self.fighting() else {
                 return Ok(None);
             };

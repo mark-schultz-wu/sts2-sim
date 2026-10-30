@@ -491,12 +491,12 @@ fn pre_play_each<V: Rules>(
         if !signalled {
             continue;
         }
-        let task = lent
+        let (owner, task) = lent
             .live
             .queues
             .go_on(seat)
             .expect("the queue stopped on it");
-        lent.live.rejoin(seat, task);
+        lent.live.rejoin(owner, task);
         if let Some(ended) = come_up::<V>(seat, lent)? {
             return Ok(Some(ended));
         }
