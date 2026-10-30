@@ -949,9 +949,13 @@ impl<'a, V: Rules> Board<'a, V> {
             let downgraded = self.downgrade_upgraded(id);
             self.live.kept_mut(id, power).cards.extend(downgraded);
         }
-        let (owned, cards): (SmallVec<[_; 2]>, SmallVec<[_; 2]>) = asked
-            .into_iter()
-            .partition(|effect| matches!(effect, HookEffect::ApplyToOwner(..)));
+        let (owned, cards): (SmallVec<[_; 2]>, SmallVec<[_; 2]>) =
+            asked.into_iter().partition(|effect| {
+                matches!(
+                    effect,
+                    HookEffect::ApplyToOwner(..) | HookEffect::ApplyPower { .. }
+                )
+            });
         // The cards it writes on are its holder's, whoever applied it.
         let listener = Listener::Power {
             owner: id,
@@ -959,10 +963,18 @@ impl<'a, V: Rules> Board<'a, V> {
             power,
         };
         self.as_listener(listener, |board| board.write_cards(cards));
-        // `PowerCmd.Apply` on the power's owner, from nobody.
+        // `PowerCmd.Apply` on the power's owner from nobody, or on another
+        // creature from whom the power names.
         for effect in owned {
-            if let HookEffect::ApplyToOwner(power, amount) = effect {
-                self.land(id, power, amount, None);
+            match effect {
+                HookEffect::ApplyToOwner(power, amount) => self.land(id, power, amount, None),
+                HookEffect::ApplyPower {
+                    target,
+                    power,
+                    amount,
+                    applier,
+                } => self.land(target, power, amount, applier),
+                _ => unreachable!("only applications were set apart"),
             }
         }
     }
@@ -4515,6 +4527,17 @@ impl<V: Rules> Board<'_, V> {
         }
     }
 
+    /// [`sts2_core::PowerModel::mark_busy`] on the power instance `instance`
+    /// that `owner` carries, where it still does.
+    fn mark_busy(&mut self, owner: CombatId, instance: super::live::PowerInstance, busy: bool) {
+        use sts2_core::PowerModel as _;
+
+        if let Some(held) = (self.live.powers.of_mut(owner)).find(|held| held.instance == instance)
+        {
+            held.state.mark_busy(busy);
+        }
+    }
+
     /// `Hook.AfterBlockGained`, once `CreatureCmd.GainBlock` gave `creature`
     /// `amount`. The game raises it for a gain the modifiers left at none.
     pub(super) fn block_gained(&mut self, creature: CombatId, amount: V::Number, positive: bool) {
@@ -4536,8 +4559,17 @@ impl<V: Rules> Board<'_, V> {
                 (Listener::Power { .. }, effect @ HookEffect::DamageRandomOpponent { .. }) => {
                     self.listener_asked(listener, effect)
                 }
-                (Listener::Power { .. }, effect @ HookEffect::GainBlockOf { .. }) => {
+                // The power is busy while the block it gives lands, which a
+                // power guarding against hearing itself reads.
+                (
+                    Listener::Power {
+                        owner, instance, ..
+                    },
+                    effect @ HookEffect::GainBlockOf { .. },
+                ) => {
+                    self.mark_busy(owner, instance, true);
                     super::hook::apply::<V, _>(self, [effect]);
+                    self.mark_busy(owner, instance, false);
                 }
                 (listener, effect) => {
                     unimplemented!("{listener:?} asking for {effect:?} once block is gained")

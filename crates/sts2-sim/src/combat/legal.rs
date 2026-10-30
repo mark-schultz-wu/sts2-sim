@@ -783,8 +783,11 @@ fn previewed<V: Rules>(
                 }
                 (None, _) => None,
             };
-            // A number no hook reaches reads what the card reads.
-            (var.id, resolved.unwrap_or_else(printed))
+            // A number no hook reaches reads what the card reads. One it
+            // does not work out is what it prints, whose whole part is the
+            // game's `(int)PreviewValue`.
+            let unresolved = || if var.calculated { printed() } else { var.base };
+            (var.id, resolved.unwrap_or_else(unresolved))
         })
         .collect()
 }

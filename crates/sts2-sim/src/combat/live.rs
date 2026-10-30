@@ -957,13 +957,38 @@ impl<V: Rules> Face<V> {
         }
         let moved: V::Number =
             num_traits::NumCast::from(self.moved(at)).expect("a difference fits a game number");
+        let Some(table): Option<V::Number> = num_traits::NumCast::from(named.base) else {
+            return Self::printed_fraction(named, moved);
+        };
         let number = CardNumber {
             id: named.id,
-            base: Self::table(named) + moved,
+            base: table + moved,
             calculated: named.calculated,
             modifier: named.modifier,
         };
         (number, true)
+    }
+
+    /// [`Face::printed`] of a number whose table prints a fraction, such as
+    /// Tank's `DamageDecrease` of 0.5, with what this copy added to it.
+    #[cold]
+    #[inline(never)]
+    fn printed_fraction(
+        named: &CardNumber<V::CardVar, <V::Card as sts2_core::CardTable>::Number>,
+        moved: V::Number,
+    ) -> (CardNumber<V::CardVar, V::Number>, bool) {
+        let moved = num_traits::ToPrimitive::to_i64(&moved).expect("a game number fits a long");
+        let exact = Into::<Decimal>::into(named.base) + Decimal::from(moved);
+        let base = num_traits::ToPrimitive::to_i64(&exact.trunc())
+            .and_then(num_traits::cast)
+            .expect("a printed number fits a game number");
+        let number = CardNumber {
+            id: named.id,
+            base,
+            calculated: named.calculated,
+            modifier: named.modifier,
+        };
+        (number, exact.fract().is_zero())
     }
 
     /// [`Face::printed`] on a copy a fight wrote a fraction on.

@@ -202,10 +202,7 @@ Low:
 
 #### G. Stubs and panics
 
-- Powers:
-  - Beacon of Hope: shares block with teammates
-  - Tank: gives Guarded to the other players
-  - Covered: `unimplemented!`.
+- Powers: Covered is `unimplemented!`.
 - 32 `unimplemented!` panics in `sts2-sim` name several players. Most
   of them are in `turn_loop.rs`, `board.rs` and `run/state.rs`, and
   `BLOCKERS.md` already lists them.
@@ -260,9 +257,9 @@ run as its own machine sees it. The work goes in this order:
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
    Mercury Hourglass, as in a solo hunt. So the runs go deep.
-   On 2026-10-30 sixteen seeds matched 27,083 steps. Thirteen agreed to
-   their end: seeds 0, 1, 6 and 13 lost, and seeds 3, 7, 8, 9, 10, 11,
-   12, 14 and 15 won. Three panicked, and none parted. What they stop on is listed below, worked by class.
+   On 2026-10-30 sixteen seeds matched 28,181 steps. Fourteen agreed to
+   their end. Seeds 0, 1, 6 and 13 lost. Seeds 2, 3, 7, 8, 9, 10, 11,
+   12, 14 and 15 won. Two panicked, and none parted. What they stop on is listed below, worked by class.
    Hunts stay at `--width 4`: at `--width 8` two games of sixteen failed
    in Godot itself. The golden tests follow the hunted runs in
    `coop-v0.111.0.bin` without the game. So a change to the simulator
@@ -271,8 +268,6 @@ run as its own machine sees it. The work goes in this order:
    - Imitation Learning copies a teammate's Power card, but no hunted run
      reaches the copy yet. Check it against the game when one does.
    - Where they panic, all on items listed below:
-     - Beacon of Hope giving block to a teammate who holds one, whose
-       `HasAlreadyBeenGivenBlock` guard needs a power state: seed 2
      - a potion drunk while its drinker's queue waits on a question,
        which the scheduler's rest below queues behind it: seeds 4 and 5
    - The rest of the scheduler (steps 3 and 4 of `docs/SCHEDULER.md`). A

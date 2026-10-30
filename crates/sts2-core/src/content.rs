@@ -311,7 +311,13 @@ pub trait CardTable: Table {
     /// build spells as an exact decimal. [`num_traits::ToPrimitive`] is how a
     /// printed number reaches the run: it yields nothing for one no integer
     /// can hold.
-    type Number: std::fmt::Debug + Copy + Eq + std::hash::Hash + num_traits::ToPrimitive + 'static;
+    type Number: std::fmt::Debug
+        + Copy
+        + Eq
+        + std::hash::Hash
+        + num_traits::ToPrimitive
+        + Into<crate::Decimal>
+        + 'static;
 
     /// The character whose pool holds it, or `None` for one held by no
     /// character: colourless, curses, statuses, tokens, quest and event cards.
@@ -455,6 +461,13 @@ impl Fixed {
             self.coefficient < 0,
             self.scale as u32,
         )
+    }
+}
+
+/// The game's `decimal`, exactly.
+impl From<Fixed> for crate::Decimal {
+    fn from(number: Fixed) -> Self {
+        number.exact()
     }
 }
 
@@ -6983,6 +6996,12 @@ pub trait PowerModel<V: ContentVersion>: Copy + std::fmt::Debug + PartialEq + Eq
     ///
     /// A computed type nobody has ported.
     fn debuff(&self) -> bool;
+
+    /// Whether the effects this power's own hook asked for are being carried
+    /// out, which the fight sets around them. A power that guards against
+    /// hearing itself, as Beacon of Hope's `HasAlreadyBeenGivenBlock` does,
+    /// keeps it. Any other ignores it.
+    fn mark_busy(&mut self, _busy: bool) {}
 }
 
 /// What a card reads off its owner's side of the fight.

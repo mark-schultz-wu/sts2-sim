@@ -66,6 +66,11 @@ pub enum State<V: crate::Build> {
     Reattach {
         reviving: bool,
     },
+    /// `BeaconOfHopePower`'s `HasAlreadyBeenGivenBlock`, set while the block
+    /// it gives its teammates lands.
+    BeaconOfHope {
+        busy: bool,
+    },
     /// `AdaptablePower`'s `isReviving`.
     Adaptable {
         reviving: bool,
@@ -431,6 +436,7 @@ impl<V: crate::Build> sts2_core::PowerModel<V> for State<V> {
             }
             __c0 if __c0 == V::Power::ILLUSION_POWER => Self::Illusion { reviving: false },
             __c0 if __c0 == V::Power::REATTACH_POWER => Self::Reattach { reviving: false },
+            __c0 if __c0 == V::Power::BEACON_OF_HOPE_POWER => Self::BeaconOfHope { busy: false },
             __c0 if __c0 == V::Power::ADAPTABLE_POWER => Self::Adaptable { reviving: false },
             __c0 if __c0 == V::Power::NEMESIS_POWER => Self::Nemesis { intangible: false },
             __c0 if __c0 == V::Power::TORIC_TOUGHNESS_POWER => Self::ToricToughness { block: 0 },
@@ -513,6 +519,7 @@ impl<V: crate::Build> sts2_core::PowerModel<V> for State<V> {
             Self::Possess { power, .. } => *power,
             Self::Illusion { .. } => V::Power::ILLUSION_POWER,
             Self::Reattach { .. } => V::Power::REATTACH_POWER,
+            Self::BeaconOfHope { .. } => V::Power::BEACON_OF_HOPE_POWER,
             Self::Adaptable { .. } => V::Power::ADAPTABLE_POWER,
             Self::Nemesis { .. } => V::Power::NEMESIS_POWER,
             Self::ToricToughness { .. } => V::Power::TORIC_TOUGHNESS_POWER,
@@ -541,6 +548,12 @@ impl<V: crate::Build> sts2_core::PowerModel<V> for State<V> {
             Self::Temporary { power, .. } => *power,
             Self::PaleBlueDot { .. } => V::Power::PALE_BLUE_DOT_POWER,
             Self::ImitationLearning { power, .. } => *power,
+        }
+    }
+
+    fn mark_busy(&mut self, busy: bool) {
+        if let Self::BeaconOfHope { busy: held } = self {
+            *held = busy;
         }
     }
 
@@ -819,6 +832,9 @@ const ORBIT_ENERGY: Number = 4;
 
 /// `TankPower.ModifyDamageMultiplicative`'s `2m`.
 const TANKED: Fixed = Fixed::new(2, 0);
+
+/// `GuardedPower`'s `DamageDecrease`, 0.5.
+const GUARDED: Fixed = Fixed::new(5, 1);
 
 /// `GigantificationPower.ModifyDamageMultiplicative`'s `3m`.
 const GIGANTIFIED: Fixed = Fixed::new(3, 0);
@@ -1171,6 +1187,17 @@ pub(crate) fn modify_hook<V: crate::Build>(
                 ..
             },
         ) if __c0 == V::Power::TANK_POWER && (target == Some(holder)) => Modify::Scaled(TANKED),
+        // `GuardedPower.ModifyDamageMultiplicative`: half a powered attack's
+        // damage to its owner.
+        (
+            __c0,
+            _,
+            ModifyHook::DamageMultiplicative {
+                target,
+                powered: true,
+                ..
+            },
+        ) if __c0 == V::Power::GUARDED_POWER && (target == Some(holder)) => Modify::Scaled(GUARDED),
         // `ShrinkPower`'s `DamageDecrease` is the percentage taken off, so a hit
         // keeps the share left.
         (
@@ -2147,6 +2174,7 @@ pub(crate) fn modify_hook<V: crate::Build>(
                 || __c0 == V::Power::WEAK_POWER
                 || __c0 == V::Power::SHRINK_POWER
                 || __c0 == V::Power::TANK_POWER
+                || __c0 == V::Power::GUARDED_POWER
                 || __c0 == V::Power::FLANKING_POWER
                 || __c0 == V::Power::KNOCKDOWN_POWER
                 || __c0 == V::Power::COVERED_POWER) =>
@@ -3099,9 +3127,11 @@ pub(crate) fn event_hook<V: crate::Build>(
             },
         ) if __c0 == V::Power::BEACON_OF_HOPE_POWER => {
             let half = gained / 2;
+            let busy = matches!(state, State::BeaconOfHope { busy: true });
             if creature != holder
                 || gained < one
                 || fight.side_of(holder) != Some(side)
+                || busy
                 || half < one
             {
                 return;
@@ -3113,14 +3143,6 @@ pub(crate) fn event_hook<V: crate::Build>(
                 {
                     continue;
                 }
-                // `HasAlreadyBeenGivenBlock` stops a teammate's own Beacon
-                // giving back to this one while it gives.
-                if fight
-                    .power(teammate, V::Power::BEACON_OF_HOPE_POWER)
-                    .is_some()
-                {
-                    unimplemented!("Beacon of Hope giving block to a teammate who holds one");
-                }
                 asked.push(HookEffect::GainBlockOf {
                     target: teammate,
                     amount: half,
@@ -3128,9 +3150,42 @@ pub(crate) fn event_hook<V: crate::Build>(
             }
             return;
         }
-        // `TankPower.AfterApplied` gives Guarded to its owner's teammates. A
-        // fight here has one player, who has none.
-        (__c0, _, EventHook::Applied) if __c0 == V::Power::TANK_POWER => None,
+        // `TankPower.AfterApplied`: Guarded of its amount on each living
+        // player among its owner's teammates, from its owner.
+        (__c0, amount, EventHook::Applied) if __c0 == V::Power::TANK_POWER => {
+            for teammate in fight.teammates(holder) {
+                if teammate == holder
+                    || !fight.is_player(teammate)
+                    || !fight.current_hp(teammate).is_some_and(|hp| hp > 0)
+                {
+                    continue;
+                }
+                asked.push(HookEffect::ApplyPower {
+                    target: teammate,
+                    power: V::Power::GUARDED_POWER,
+                    amount,
+                    applier: Some(holder),
+                });
+            }
+            return;
+        }
+        // `GuardedPower.AfterDeath`: gone with whoever applied it.
+        (
+            __c0,
+            _,
+            EventHook::AfterDeath {
+                creature,
+                removal_prevented: false,
+                ..
+            },
+        ) if __c0 == V::Power::GUARDED_POWER && (Some(creature) == applier) => {
+            Some(HookEffect::Remove)
+        }
+        (__c0, _, EventHook::AfterDeath { .. } | EventHook::Applied)
+            if __c0 == V::Power::GUARDED_POWER =>
+        {
+            None
+        }
         // `MasterPlannerPower.AfterCardPlayed`: Sly written on each Skill its
         // owner plays, for as long as the copy lasts.
         (__c0, _, EventHook::CardPlayed { card, id, .. })
