@@ -29,8 +29,10 @@ pub struct JungleMazeAdventure;
 impl<V: crate::Build> EventBehavior<V> for JungleMazeAdventure {
     type State = State;
 
-    fn allowed(&self, _run: &impl EventView<V>) -> bool {
-        true
+    /// Any run of one player. With several, each player has more health
+    /// than its `SoloHp`, which the run asks of every player.
+    fn allowed(&self, run: &impl EventView<V>) -> bool {
+        !run.multiplayer() || i64::from(run.hp()) > i64::from(SOLO_HP)
     }
 
     /// `CalculateVars`: `Rng.NextFloat(-15, 15)` onto each gold, the solo

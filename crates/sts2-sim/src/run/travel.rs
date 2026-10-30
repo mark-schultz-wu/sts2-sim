@@ -174,12 +174,13 @@ impl<V: Rules> State<V> {
             }
             // `RoomSet.EnsureNextEventIsValid`, which passes over an event
             // that is not allowed or was seen already. The one it stops at
-            // is counted as its room is entered.
+            // is counted as its room is entered. `IsAllowed` asks its rule
+            // of every player, `Players.All`.
             let events = self.event_candidates();
             let event = (0..events.len())
                 .find_map(|_| {
                     let candidate = events[events_used % events.len()];
-                    if V::event_allowed(candidate, &self.seen_by(seat))
+                    if (self.seats()).all(|each| V::event_allowed(candidate, &self.seen_by(each)))
                         && !visited.contains(&candidate)
                     {
                         return Some(candidate);

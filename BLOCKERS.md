@@ -264,9 +264,9 @@ run as its own machine sees it. The work goes in this order:
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
    Mercury Hourglass, as in a solo hunt. So the runs go deep.
-   On 2026-10-29 sixteen seeds matched 19,480 steps. Eight agreed to
+   On 2026-10-29 sixteen seeds matched 20,242 steps. Eight agreed to
    their end: seeds 0, 1 and 13 lost, and seeds 7, 9, 10, 12 and 14 won.
-   Five panicked and three parted. What they stop on is listed below, worked by class.
+   Six panicked and two parted. What they stop on is listed below, worked by class.
    Hunts stay at `--width 4`: at `--width 8` two games of sixteen failed
    in Godot itself. The golden tests follow the hunted runs in
    `coop-v0.111.0.bin` without the game. So a change to the simulator
@@ -275,12 +275,11 @@ run as its own machine sees it. The work goes in this order:
    - Where they part: the Knowledge Demon asks each player at once, and
      the sim asks one (seeds 2 and 15). It waits on a question for each
      seat, listed under D.
-   - Seed 11 rolls a shop at an unknown point on floor 25, where the game
-     rolls Crystal Sphere. Nothing on this list explains it yet.
    - Imitation Learning copies a teammate's Power card, but no hunted run
      reaches the copy yet. Check it against the game when one does.
    - Where they panic, all on items listed below:
      - the second player's setup asking a question: seeds 3, 6 and 8
+     - the second player's pre-play phase asking a question: seed 11
      - a potion drunk while its drinker's queue waits on a question,
        which the scheduler's rest below queues behind it: seeds 4 and 5
    - The rest of the scheduler (steps 3 and 4 of `docs/SCHEDULER.md`). A

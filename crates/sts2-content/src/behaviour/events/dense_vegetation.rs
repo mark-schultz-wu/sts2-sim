@@ -31,8 +31,10 @@ impl<V: crate::Build> EventBehavior<V> for DenseVegetation {
     type State = State;
 
     /// Its HP check is for a run of more than one player.
-    fn allowed(&self, _run: &impl EventView<V>) -> bool {
-        true
+    /// Any run of one player. With several, each player has more health
+    /// than its `HpLoss`, which the run asks of every player.
+    fn allowed(&self, run: &impl EventView<V>) -> bool {
+        !run.multiplayer() || i64::from(run.hp()) > i64::from(HP_LOSS)
     }
 
     /// `CalculateVars`: `Rng.NextInt(61, 100)` is the gold. The heal it

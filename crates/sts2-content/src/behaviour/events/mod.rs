@@ -273,8 +273,10 @@ pub(crate) fn allowed<V: crate::Build>(event: V::Event, run: &impl EventView<V>)
         __c0 if __c0 == V::Event::THE_FUTURE_OF_POTIONS => run.potions().count() >= 2,
         // A run has every character's card pool unlocked.
         __c0 if __c0 == V::Event::COLORFUL_PHILOSOPHERS => true,
+        // Never in a run of several players.
         __c0 if __c0 == V::Event::FAKE_MERCHANT => {
             act >= 1
+                && !run.multiplayer()
                 && (gold >= 100 || run.potions().any(|potion| potion == V::Potion::FOUL_POTION))
         }
 
