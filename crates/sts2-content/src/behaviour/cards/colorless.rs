@@ -30,6 +30,13 @@ pub(super) fn on_play<'a, V: crate::Build, K: FightKind<V>>(
             fight.apply(block);
             Played::Done
         }
+        // `BelieveInYou`: its energy to the ally it is pointed at.
+        __c0 if __c0 == V::Card::BELIEVE_IN_YOU => {
+            let energy = fight.var(V::CardVar::ENERGY);
+            let target = fight.target();
+            fight.for_player(target, |fight| fight.modify_energy(energy));
+            Played::Done
+        }
         // `Coordinate`: its `StrengthPower` as Coordinate on the ally it is
         // pointed at, which lends that much Strength for the turn.
         __c0 if __c0 == V::Card::COORDINATE => {

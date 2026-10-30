@@ -410,6 +410,9 @@ pub(super) enum Deferred<V: Rules> {
     /// `SetupPlayerTurn`, stopped on a question, which goes on from where it
     /// stopped once the question is answered.
     Setup(Box<super::setup::setup::State<V>>),
+    /// `RunAutoPrePlayPhase` for `seat`, which waited for that player's setup
+    /// in a fight of several players.
+    PrePlay { seat: sts2_core::SeatIndex },
     /// A listener's task a pause boundary set aside, which goes on here
     /// where its caller waits for it.
     Rejoin(Box<Paused<V>>),

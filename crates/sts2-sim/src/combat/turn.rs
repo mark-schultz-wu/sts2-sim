@@ -389,10 +389,10 @@ pub(super) fn side_starts<V: Rules>(
                 }
                 return Ok(SideStarted::Ended(ended));
             }
-            PlayerSetUp::Parked(task) if seat == host => setup = Some(task),
-            PlayerSetUp::Parked(_) => {
-                unimplemented!("seat {seat:?}'s setup stopping on a question")
+            PlayerSetUp::Parked(task) if live.players.len() > 1 => {
+                stop_setup::<V>(live, seat, task);
             }
+            PlayerSetUp::Parked(task) => setup = Some(task),
             PlayerSetUp::Done => {}
         }
     }
@@ -413,6 +413,23 @@ pub(super) fn side_starts<V: Rules>(
         })
     });
     Ok(SideStarted::Started { setup, ended })
+}
+
+/// A setup that stopped on `seat`'s question, in a fight of several
+/// players. It waits as a hook action at the front of that player's queue,
+/// and their `RunAutoPrePlayPhase` waits behind it. The other players go on
+/// to theirs.
+/// A choice it signalled lists once the play phase opens.
+#[cold]
+fn stop_setup<V: Rules>(
+    live: &mut Live<V>,
+    seat: sts2_core::SeatIndex,
+    mut task: super::live::Paused<V>,
+) {
+    // It runs last, once the rest of the setup is over.
+    task.waiting
+        .insert(0, super::live::Deferred::PrePlay { seat });
+    live.queues.stop(seat, task);
 }
 
 /// `creaturesStartingTurn`, which `StartTurn` takes before

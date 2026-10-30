@@ -245,12 +245,9 @@ pub(super) fn turn_loop<V: Rules>(
         Err(error) => return Err(error),
     };
 
-    // `RunAutoPrePlayPhase` for each player, which no pause holds up yet in
-    // a fight of several.
+    // `RunAutoPrePlayPhase` for each player. In a fight of several, a setup
+    // that stopped on a question waits at the front of its player's queue.
     if several::<V>(resumed!()) {
-        if parked.is_some() {
-            unimplemented!("a setup stopping on a question in a fight of several players");
-        }
         return pre_play_each::<V>(resumed!(), skipping);
     }
 
@@ -431,10 +428,12 @@ fn several<V: Rules>(lent: &mut Lent<'_, V>) -> bool {
 /// `RunAutoPrePlayPhase` for each player in seat order, with no question
 /// standing.
 ///
+/// Then each setup whose choice signalled, as the play phase opens.
+///
 /// # Panics
 ///
-/// A choice that signalled, or an auto-play that asks, in a fight of
-/// several players.
+/// A choice that signalled outside a setup, or an auto-play that asks, in
+/// a fight of several players.
 fn pre_play_each<V: Rules>(
     lent: &mut Lent<'_, V>,
     skipping: Skips<V>,
@@ -451,7 +450,8 @@ fn pre_play_each<V: Rules>(
         }
     }
     for seat in crate::combat::turn::seats(lent.live) {
-        if !lent.live.player(seat).alive {
+        // A seat whose setup waits on its question runs this once it is over.
+        if !lent.live.player(seat).alive || lent.live.queues.stopped(seat).is_some() {
             continue;
         }
         match pre_play::<V>(seat, lent) {
@@ -466,6 +466,25 @@ fn pre_play_each<V: Rules>(
         }
     }
     lent.live.skip_tick = skipping;
+    // `ActionExecutor.Unpause`: a setup that signalled its choice goes on, and
+    // the choice lists now, taking its cards unasked where it can. A question
+    // it still asks waits at the front of its player's queue again.
+    for seat in crate::combat::turn::seats(lent.live) {
+        let signalled = (lent.live.queues.stopped(seat)).is_some_and(|task| task.asking.signalled);
+        if !signalled {
+            continue;
+        }
+        let task = lent
+            .live
+            .queues
+            .go_on(seat)
+            .expect("the queue stopped on it");
+        lent.live.rejoin(seat, task);
+        if let Some(ended) = come_up::<V>(seat, lent)? {
+            return Ok(Some(ended));
+        }
+        lent.live.stop_for_answer(seat);
+    }
     Ok(None)
 }
 

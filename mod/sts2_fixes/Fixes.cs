@@ -68,3 +68,28 @@ internal static class HandlersWalkTheirOwnList
     private static void Prefix(NetMessageBus __instance) =>
         CachedPairs.SetValue(__instance, Activator.CreateInstance(CachedPairs.FieldType));
 }
+
+/// <summary>
+/// Marks the queues empty again after an action they turned away.
+/// </summary>
+/// <remarks>
+/// <c>ActionQueueSet.EnqueueWithoutSynchronizing</c> opens a new
+/// <c>_queuesEmptyCompletionSource</c> before it looks at the action. A queue
+/// that is cancelling its combat actions then cancels the action rather than
+/// add it, and nothing completes the source, since no action runs to call
+/// <c>CheckIfQueuesEmpty</c>. So <c>IsEmpty</c> stays false with every queue
+/// empty. A co-op fight won as a turn starts shows it: a teammate's paused
+/// setup arrives as a hook action once the fight is over. This runs the
+/// game's own check after each enqueue, which completes the source only where
+/// every queue is empty.
+/// </remarks>
+[HarmonyPatch(typeof(ActionQueueSet), nameof(ActionQueueSet.EnqueueWithoutSynchronizing))]
+internal static class EmptyAfterATurnedAwayAction
+{
+    private static readonly MethodInfo CheckIfQueuesEmpty =
+        AccessTools.Method(typeof(ActionQueueSet), "CheckIfQueuesEmpty")
+        ?? throw new InvalidOperationException("ActionQueueSet no longer has CheckIfQueuesEmpty");
+
+    private static void Postfix(ActionQueueSet __instance) =>
+        CheckIfQueuesEmpty.Invoke(__instance, null);
+}

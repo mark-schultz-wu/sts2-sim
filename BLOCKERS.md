@@ -137,11 +137,9 @@ block, energy, hand, deck, health, plays and belt. What is left:
   The scheduler's step 6, a question for each seat, removes `asking`.
   The game asks several players at once here:
   - the Knowledge Demon's Curse of Knowledge, which asks each living
-    player (`Task.WhenAll`). Seeds 2 and 15 part on it.
-  - the turn's setup for each player. The powers are Entropy, Foregone
-    Conclusion, Stratagem, Tools of the Trade and Tyranny. The relics are
-    Gambling Chip, Choices Paradox, Toasty Mittens and Toolbox. Seeds 3,
-    6 and 8 stop on it.
+    player (`Task.WhenAll`). Seeds 2, 6, 8 and 15 part on it.
+  - the pre-play phase for each player, after the setup, which a
+    player's setup question now waits in front of. Seed 11 stops on it.
 - A treasure chest awards every player a relic at once. Some relics
   ask as they are obtained, such as Astrolabe or Pandora's Box. Such a
   relic panics in `obtain_here`. The treasure phase keeps no question for
@@ -264,21 +262,20 @@ run as its own machine sees it. The work goes in this order:
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
    Mercury Hourglass, as in a solo hunt. So the runs go deep.
-   On 2026-10-29 sixteen seeds matched 20,242 steps. Eight agreed to
-   their end: seeds 0, 1 and 13 lost, and seeds 7, 9, 10, 12 and 14 won.
-   Six panicked and two parted. What they stop on is listed below, worked by class.
+   On 2026-10-29 sixteen seeds matched 22,716 steps. Nine agreed to
+   their end: seeds 0, 1 and 13 lost, and seeds 3, 7, 9, 10, 12 and 14
+   won. Three panicked and four parted. What they stop on is listed below, worked by class.
    Hunts stay at `--width 4`: at `--width 8` two games of sixteen failed
    in Godot itself. The golden tests follow the hunted runs in
    `coop-v0.111.0.bin` without the game. So a change to the simulator
    needs no hunt to show it keeps them. Next, in the order of
    `docs/COOP-FIGHTS.md` and where the hunted runs stop:
    - Where they part: the Knowledge Demon asks each player at once, and
-     the sim asks one (seeds 2 and 15). It waits on a question for each
+     the sim asks one (seeds 2, 6, 8 and 15). It waits on a question for each
      seat, listed under D.
    - Imitation Learning copies a teammate's Power card, but no hunted run
      reaches the copy yet. Check it against the game when one does.
    - Where they panic, all on items listed below:
-     - the second player's setup asking a question: seeds 3, 6 and 8
      - the second player's pre-play phase asking a question: seed 11
      - a potion drunk while its drinker's queue waits on a question,
        which the scheduler's rest below queues behind it: seeds 4 and 5

@@ -1507,6 +1507,27 @@ fn run_deferred<V: Rules>(
             super::live::Deferred::TurnLoop(looping) => {
                 super::turn_loop::finish::<V>(seat, fighting, looping, ended, None)?
             }
+            super::live::Deferred::PrePlay { seat: player } => match ended {
+                None => {
+                    let played = super::turn::pre_play_phase::<V>(
+                        player,
+                        fighting.live,
+                        fighting.streams.combat(),
+                        fighting.belts,
+                    );
+                    match played {
+                        super::turn::PrePlayed::Over(over) => {
+                            fighting.live.players[player].phase =
+                                super::turn::after_pre_play::<V>(fighting.live);
+                            over
+                        }
+                        super::turn::PrePlayed::Asked { .. } => unimplemented!(
+                            "seat {player:?}'s pre-play phase asking once its setup is over"
+                        ),
+                    }
+                }
+                ended => ended,
+            },
             super::live::Deferred::Setup(setup) => super::turn::finish_setup::<V>(
                 fighting.live,
                 fighting.streams,
