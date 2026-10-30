@@ -8687,6 +8687,11 @@ impl<V: Rules> State<V> {
     /// Derive the comparison snapshot from the run's authoritative state.
     pub(crate) fn report(&self, seat: sts2_core::SeatIndex) -> Snapshot<V> {
         let standing = self.standing(seat);
+        // `RunState.IsGameOver`: every player is dead.
+        let over = !standing.alive
+            && (self.seats())
+                .filter(|&other| other != seat)
+                .all(|other| !self.standing(other).alive);
 
         Snapshot {
             observation: Observation {
@@ -8695,12 +8700,10 @@ impl<V: Rules> State<V> {
                 hp: standing.hp,
                 max_hp: standing.max_hp,
                 alive: standing.alive,
-                // `RunState.IsGameOver` is every player being dead, and a run
-                // with one player has its answer in `alive`.
-                run_over: !standing.alive,
+                run_over: over,
                 // `CurrentRoom.IsVictoryRoom`, asked only once the run is
                 // over, which The Architect's room is.
-                victory: (!standing.alive).then_some(matches!(self.phase, Phase::Won { .. })),
+                victory: over.then_some(matches!(self.phase, Phase::Won { .. })),
                 gold: self.players[seat].gold,
                 relics: self.carried(seat).collect(),
                 potions: self.belt(seat),

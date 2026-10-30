@@ -3984,13 +3984,12 @@ impl<V: Rules> Live<V> {
         }
     }
 
-    /// Seat `seat`'s player. A fight adds its players first, in seat order.
+    /// Seat `seat`'s player. A fight adds its players first, in seat order,
+    /// and a creature joins after them.
     pub(crate) fn player(&self, seat: sts2_core::SeatIndex) -> &Fighter<V> {
-        let id = seat.creature();
-        self.creatures
-            .iter()
-            .find(|creature| creature.id == id)
-            .expect("a fight has every player in it")
+        let player = &self.creatures[seat.at()];
+        debug_assert_eq!(player.id, seat.creature(), "the players come first");
+        player
     }
 
     /// Ask the power at `at` among `owner`'s about `hook`, with the fight in

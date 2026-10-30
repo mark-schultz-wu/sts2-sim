@@ -1762,8 +1762,8 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                 };
                 // `OnPlayWrapper` returns where it stands once the player is
                 // dead, which leaves the card in the play pile.
-                if next.lost {
-                    next.players[seat].effect_depth -= 1;
+                if owner_dead::<V>(next, seat) {
+                    end_dead_effect(next, seat);
                     return Ok(effect.ended);
                 }
                 let card = play.id;
@@ -1799,8 +1799,8 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                         .cards
                         .write_named(card, |face| face.set_enchantment_state(state));
                     // The enchantment's play can kill its owner too.
-                    if next.lost {
-                        next.players[seat].effect_depth -= 1;
+                    if owner_dead::<V>(next, seat) {
+                        end_dead_effect(next, seat);
                         return Ok(effect.ended);
                     }
                 }
@@ -1993,6 +1993,25 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
     )
 }
 
+/// Whether the player at `seat` has died.
+fn owner_dead<V: Rules>(live: &Live<V>, seat: sts2_core::SeatIndex) -> bool {
+    !live.player(seat).alive
+}
+
+/// `EndCardOrPotionEffect` for a dead player. The outermost effect's end
+/// takes the cards a death left, while another player stands. Answers
+/// whether it was the outermost.
+fn end_dead_effect<V: Rules>(live: &mut Live<V>, seat: sts2_core::SeatIndex) -> bool {
+    let player = &mut live.players[seat];
+    player.effect_depth -= 1;
+    let outermost = player.effect_depth == 0;
+    // `RemoveDeadPlayerCardsFromCombat`, which raises no hook.
+    if outermost && !live.lost {
+        player.cards.clear();
+    }
+    outermost
+}
+
 /// The end of an effect whose last play is over: `Hook.AfterPotionUsed` for
 /// a potion, and for a card the pile its play sends it to.
 fn finish_effect<V: Rules, S: LendsCombat>(
@@ -2010,8 +2029,13 @@ fn finish_effect<V: Rules, S: LendsCombat>(
     // `EndCardOrPotionEffect`, once the last play's `AfterCardPlayed` or the
     // potion's `OnUse` is over. `CheckForEmptyHand` acts only with no card
     // or potion of the player's still running.
-    next.players[seat].effect_depth -= 1;
-    let idle = next.players[seat].effect_depth == 0;
+    let idle = match owner_dead::<V>(next, seat) {
+        true => end_dead_effect(next, seat),
+        false => {
+            next.players[seat].effect_depth -= 1;
+            next.players[seat].effect_depth == 0
+        }
+    };
     let mut ended = effect.ended;
     let Asker::Card(play) = effect.asker else {
         // `Hook.AfterPotionUsed`, once the potion is done, for a fight still

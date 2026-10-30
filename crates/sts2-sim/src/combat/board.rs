@@ -2525,18 +2525,19 @@ impl<'a, V: Rules> Board<'a, V> {
     /// the fight, and their energy and stars go to nothing. On their side's
     /// turn they are ready to end it.
     ///
+    /// A death inside the player's own card or potion leaves their cards
+    /// until the outermost effect is over, as `EndCardOrPotionEffect` does.
+    ///
     /// # Panics
     ///
-    /// A death inside the player's own card or potion, whose cards the game
-    /// takes once the effect is over. A death that readies the last standing
-    /// player who was not ready, which ends the turn.
+    /// A death that readies the last standing player who was not ready,
+    /// which ends the turn.
     fn died_beside_others(&mut self, seat: sts2_core::SeatIndex) {
         let player = &mut self.live.players[seat];
-        if player.effect_depth > 0 {
-            unimplemented!("a player dying inside their own card or potion beside a living one");
-        }
         // `RemoveDeadPlayerCardsFromCombat`, which raises no hook.
-        player.cards.clear();
+        if player.effect_depth == 0 {
+            player.cards.clear();
+        }
         player.energy = num_traits::zero();
         player.stars = num_traits::zero();
         // A player who was ready already died as the turn ended, which goes on.

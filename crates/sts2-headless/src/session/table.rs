@@ -216,6 +216,8 @@ where
 impl<V: sts2_content_wire::WireContentVersion> RunTable<V> for LobbyTable<V>
 where
     Seated<V>: Send,
+    sts2_core::Answered<V>: Send,
+    Setup<V>: Sync,
 {
     type Error = Error;
     type Host = Vec<SeatHost>;
@@ -277,6 +279,25 @@ where
         self.seated = None;
         let answered = self.seats[seat.at()].setup(setup)?;
         Ok(answered.map(|applied| applied.split().0))
+    }
+
+    /// Every game at once, on a thread each: a game entering a fight waits
+    /// for the others to enter it too.
+    fn construct_everywhere(&mut self, setup: &Setup<V>) -> Result<Vec<Settled<V>>, Error> {
+        self.seated = None;
+        let answered: Vec<Result<sts2_core::Answered<V>, Error>> = std::thread::scope(|scope| {
+            let threads: Vec<_> = (self.seats.iter_mut())
+                .map(|seat| scope.spawn(move || seat.setup(setup)))
+                .collect();
+            threads
+                .into_iter()
+                .map(|thread| thread.join().expect("a seat's setup does not panic"))
+                .collect()
+        });
+        answered
+            .into_iter()
+            .map(|answered| Ok(answered?.map(|applied| applied.split().0)))
+            .collect()
     }
 
     fn logged(&mut self) -> Vec<(SeatIndex, String)> {

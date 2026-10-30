@@ -253,7 +253,9 @@ run as its own machine sees it. The work goes in this order:
    what left any player's bag. A dead player's powers hear no hook, as
    their relics, potions and cards do not. A power's turn-end asks act
    for the player carrying it, and so do a side's turn-start asks. A
-   choice put to a player who ended the turn takes that end back.
+   choice put to a player who ended the turn takes that end back. A
+   player who dies inside their own card keeps their cards until the
+   card is over. The run is over only once every player is dead.
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
    Mercury Hourglass, as in a solo hunt. So the runs go deep.
@@ -264,15 +266,16 @@ run as its own machine sees it. The work goes in this order:
    Hunts stay at `--width 4`: at `--width 8` two games of sixteen failed
    in Godot itself. The golden tests follow the hunted runs in
    `coop-v0.111.0.bin` without the game. So a change to the simulator
-   needs no hunt to show it keeps them. Next, in the order of
+   needs no hunt to show it keeps them. A rule no hunted run reaches gets
+   a co-op scenario in `crates/sts2-golden/tests/coop-scenarios/`. Next, in the order of
    `docs/COOP-FIGHTS.md` and where the hunted runs stop:
+   - A hunt at `--width 4` does not play the same run twice. On
+     2026-10-30 seed 5 lost, where the last hunt won, and seeds 6 and 11 parted
+     at steps 1152 and 1715. Alone, seed 6 agreed to its loss at 2385
+     and seed 11 to its win at 2435, twice each. So the games under load
+     differ, as seed 2's hook request did. Find the race in the mod.
    - Imitation Learning copies a teammate's Power card, but no hunted run
      reaches the copy yet. Check it against the game when one does.
-   - `AttackCommand` stops before a hit once its attacker is dead. A
-     monster's attack does so since Thorns killed Torch Head Amalgam
-     between hits in seed 5. A player's attack card loops over its hits
-     in its own port, and none checks. So in the sim, a player who dies
-     inside their own multi-hit attack, beside a living one, hits on.
    - The rest of the scheduler (steps 3 and 4 of `docs/SCHEDULER.md`). A
      question the turn loop asks belongs to no player's queue yet. Each
      phase of the turn's end panics at one in a fight of several players.
