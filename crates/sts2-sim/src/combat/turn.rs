@@ -415,6 +415,30 @@ pub(super) fn side_starts<V: Rules>(
     Ok(SideStarted::Started { setup, ended })
 }
 
+/// How `seat`'s pre-play phase came out, in a fight of several players. Its
+/// phase moves on as the solo turn's does. A question an auto-play asked
+/// stands with the rest of the phase behind it. The decision's end puts
+/// both at the front of the player's queue.
+pub(super) fn pre_played<V: Rules>(
+    seat: sts2_core::SeatIndex,
+    live: &mut Live<V>,
+    played: PrePlayed<V>,
+) -> Option<super::Ended> {
+    let over = match played {
+        PrePlayed::Over(over) => over,
+        PrePlayed::Asked { rest, next } => {
+            live.defer(super::live::Deferred::PrePlayFrom {
+                seat,
+                rest: Box::new(rest),
+                next,
+            });
+            None
+        }
+    };
+    live.players[seat].phase = after_pre_play::<V>(live);
+    over
+}
+
 /// A setup that stopped on `seat`'s question, in a fight of several
 /// players. It waits as a hook action at the front of that player's queue,
 /// and their `RunAutoPrePlayPhase` waits behind it. The other players go on

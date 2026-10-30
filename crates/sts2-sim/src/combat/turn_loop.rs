@@ -466,8 +466,19 @@ fn pre_play_each<V: Rules>(
                 return Ok(Some(ended));
             }
             PrePlayed::Over(None) => play_phase::<V>(seat, lent),
-            PrePlayed::Asked { .. } => {
-                unimplemented!("seat {seat:?}'s pre-play phase asking in a fight of several")
+            // The question waits at the front of the player's queue, with
+            // the rest of their pre-play phase behind it.
+            asked @ PrePlayed::Asked { .. } => {
+                crate::combat::turn::pre_played::<V>(seat, lent.live, asked);
+                if lent
+                    .live
+                    .asking
+                    .as_ref()
+                    .is_some_and(|asking| asking.signalled)
+                {
+                    unimplemented!("seat {seat:?}'s pre-play phase signalling a choice");
+                }
+                lent.live.stop_for_answer(seat);
             }
         }
     }

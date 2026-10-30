@@ -136,10 +136,8 @@ block, energy, hand, deck, health, plays and belt. What is left:
   `hook_draws` and `asking`. Two players can each park one at once.
   The scheduler's step 6, a question for each seat, removes `asking`.
   A question several players answer at once waits as a task on each
-  player's queue, as a setup's and the Knowledge Demon's do. The game
-  asks several players at once here too:
-  - the pre-play phase for each player, after the setup, which a
-    player's setup question now waits in front of. Seed 11 stops on it.
+  player's queue. A setup's, a pre-play phase's and the Knowledge
+  Demon's do.
 - A treasure chest awards every player a relic at once. Some relics
   ask as they are obtained, such as Astrolabe or Pandora's Box. Such a
   relic panics in `obtain_here`. The treasure phase keeps no question for
@@ -262,9 +260,9 @@ run as its own machine sees it. The work goes in this order:
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
    Mercury Hourglass, as in a solo hunt. So the runs go deep.
-   On 2026-10-30 sixteen seeds matched 26,455 steps. Twelve agreed to
-   their end: seeds 0, 1, 6 and 13 lost, and seeds 3, 7, 8, 9, 10, 12,
-   14 and 15 won. Four panicked, and none parted. What they stop on is listed below, worked by class.
+   On 2026-10-30 sixteen seeds matched 27,083 steps. Thirteen agreed to
+   their end: seeds 0, 1, 6 and 13 lost, and seeds 3, 7, 8, 9, 10, 11,
+   12, 14 and 15 won. Three panicked, and none parted. What they stop on is listed below, worked by class.
    Hunts stay at `--width 4`: at `--width 8` two games of sixteen failed
    in Godot itself. The golden tests follow the hunted runs in
    `coop-v0.111.0.bin` without the game. So a change to the simulator
@@ -273,7 +271,6 @@ run as its own machine sees it. The work goes in this order:
    - Imitation Learning copies a teammate's Power card, but no hunted run
      reaches the copy yet. Check it against the game when one does.
    - Where they panic, all on items listed below:
-     - the second player's pre-play phase asking a question: seed 11
      - Beacon of Hope giving block to a teammate who holds one, whose
        `HasAlreadyBeenGivenBlock` guard needs a power state: seed 2
      - a potion drunk while its drinker's queue waits on a question,

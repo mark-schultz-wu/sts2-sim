@@ -418,6 +418,13 @@ pub(super) enum Deferred<V: Rules> {
     /// `RunAutoPrePlayPhase` for `seat`, which waited for that player's setup
     /// in a fight of several players.
     PrePlay { seat: sts2_core::SeatIndex },
+    /// The rest of `seat`'s `RunAutoPrePlayPhase`, from where an auto-play's
+    /// question stood it still in a fight of several players.
+    PrePlayFrom {
+        seat: sts2_core::SeatIndex,
+        rest: Box<super::turn::PassRest<V>>,
+        next: usize,
+    },
     /// A listener's task a pause boundary set aside, which goes on here
     /// where its caller waits for it.
     Rejoin(Box<Paused<V>>),

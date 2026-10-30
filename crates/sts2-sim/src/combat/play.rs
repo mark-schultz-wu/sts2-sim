@@ -1545,16 +1545,25 @@ fn run_deferred<V: Rules>(
                         fighting.streams.combat(),
                         fighting.belts,
                     );
-                    match played {
-                        super::turn::PrePlayed::Over(over) => {
-                            fighting.live.players[player].phase =
-                                super::turn::after_pre_play::<V>(fighting.live);
-                            over
-                        }
-                        super::turn::PrePlayed::Asked { .. } => unimplemented!(
-                            "seat {player:?}'s pre-play phase asking once its setup is over"
-                        ),
-                    }
+                    super::turn::pre_played::<V>(player, fighting.live, played)
+                }
+                ended => ended,
+            },
+            super::live::Deferred::PrePlayFrom {
+                seat: player,
+                rest,
+                next,
+            } => match ended {
+                None => {
+                    let played = super::turn::pre_play_from::<V>(
+                        player,
+                        fighting.live,
+                        fighting.streams.combat(),
+                        fighting.belts,
+                        *rest,
+                        next,
+                    );
+                    super::turn::pre_played::<V>(player, fighting.live, played)
                 }
                 ended => ended,
             },
