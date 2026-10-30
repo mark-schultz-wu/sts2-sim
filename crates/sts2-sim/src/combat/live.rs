@@ -328,6 +328,11 @@ pub(super) enum Then<V: Rules> {
     /// A question the turn loop asked itself, a monster's move's choice,
     /// which it takes as it goes on. It waits on top of [`Live::deferred`].
     Turn,
+    /// One player's pick of a monster's move that asks every living player
+    /// at once, in a fight of several. The move goes on from `.0` for that
+    /// player alone, and the turn loop waits in [`Live::after_picks`] for
+    /// every player's.
+    MoveChoice(Box<super::board::Resume<V>>),
     /// A selection a shuffle asked for inside an effect's draw. `act` is
     /// what happens to the cards picked, and the rest of the draw waits in
     /// [`Live::deferred`].
@@ -2847,6 +2852,9 @@ pub(crate) struct Live<V: Rules> {
     /// whose question pauses only that listener. The play runs on, and the
     /// question is asked once the decision is over.
     pub(super) queues: super::queues::Queues<V>,
+    /// The turn loop, behind a monster's move that asked every living
+    /// player at once. It goes on once the last of them has picked.
+    pub(super) after_picks: Option<Box<super::turn_loop::turn_loop::State<V>>>,
     /// The results of the last attack that ended while a question waited,
     /// or whose hits landed once it was answered. A card waiting behind its
     /// own attack reads them as it goes on.
@@ -3124,6 +3132,7 @@ impl<V: Rules> Clone for Live<V> {
             asking: self.asking.clone(),
             deferred: self.deferred.clone(),
             queues: self.queues.clone(),
+            after_picks: self.after_picks.clone(),
             waited_attack: self.waited_attack.clone(),
             ..*self
         }
@@ -3171,6 +3180,7 @@ impl<V: Rules> Clone for Live<V> {
             asking,
             deferred,
             queues,
+            after_picks,
             waited_attack,
             selector_answers,
             pause_boundary,
@@ -3215,6 +3225,7 @@ impl<V: Rules> Clone for Live<V> {
         asking.clone_from(&source.asking);
         deferred.clone_from(&source.deferred);
         queues.clone_from(&source.queues);
+        after_picks.clone_from(&source.after_picks);
         waited_attack.clone_from(&source.waited_attack);
     }
 }
@@ -4440,6 +4451,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             asking: None,
             deferred: Deferrals::new(),
             queues: super::queues::Queues::new(),
+            after_picks: None,
             waited_attack: None,
         }
     }

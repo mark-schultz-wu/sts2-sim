@@ -1341,6 +1341,36 @@ fn resume_answered<V: Rules>(
                 ended,
             );
         }
+        // One player's pick of a move every living player picks at once:
+        // `IChoosable.OnChosen`, from that player. The turn loop goes on once
+        // no player's pick waits.
+        Then::MoveChoice(at) => {
+            let ascension = live.ascension;
+            let mut board =
+                Board::for_card(seat, live, streams.combat(), belts, ascension, None, None);
+            let played = V::resume_play::<super::board::BoardKind<V>>(&mut board, *at, taken);
+            let ended = board.ended();
+            let skipped = std::mem::take(&mut board.skipped);
+            merge::<V>(&mut live.skip_tick, skipped);
+            if played != sts2_core::Played::Done {
+                unimplemented!("a monster's move asking a player a second question");
+            }
+            let waiting = (live.queues.every_stopped())
+                .any(|(_, task)| matches!(task.asking.then, Then::MoveChoice(_)));
+            if !waiting && let Some(looping) = live.after_picks.take() {
+                live.defer(super::live::Deferred::TurnLoop(looping));
+            }
+            return run_deferred(
+                seat,
+                Fighting {
+                    live,
+                    streams,
+                    belts,
+                },
+                ascension,
+                ended,
+            );
+        }
         // The turn loop's own question, which it takes as it goes on.
         Then::Turn => {
             let ascension = live.ascension;

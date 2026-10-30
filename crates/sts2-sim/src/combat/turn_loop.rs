@@ -22,6 +22,8 @@ use crate::combat::turn::{InHand, Moved, PassRest, PrePlayed, SideStarted, Stood
 pub(super) enum Wait<V: Rules> {
     /// A question, which stands in [`Live::asking`](crate::combat::live::Live).
     Question,
+    /// Every living player's pick of a monster's move, each on their queue.
+    Picks,
     /// The tasks of the listeners that paused at a hook whose `WhenAll`
     /// waits for them, in the order they paused.
     Tasks(Vec<Paused<V>>),
@@ -199,7 +201,11 @@ pub(super) fn turn_loop<V: Rules>(
                         }
                     };
                     resumed!().live.skip_tick = skipping;
-                    yield_!(Wait::Question);
+                    if stood.on_picks() {
+                        yield_!(Wait::Picks);
+                    } else {
+                        yield_!(Wait::Question);
+                    }
                     skipping = std::mem::take(&mut resumed!().live.skip_tick);
                     moved = move_goes_on::<V>(seat, resumed!(), &mut skipping, stood);
                 }
@@ -777,6 +783,11 @@ fn park<V: Rules>(
             fighting
                 .live
                 .defer(crate::combat::live::Deferred::TurnLoop(looping));
+            Ok(None)
+        }
+        // `Task.WhenAll`: it goes on once the last player has picked.
+        Wait::Picks => {
+            fighting.live.after_picks = Some(looping);
             Ok(None)
         }
         Wait::Tasks(tasks) => {

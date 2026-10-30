@@ -261,7 +261,7 @@ pub(super) fn move_goes_on<V: Rules>(
                 }
             }
         }
-        (StoodOn::Question(None), None) => None,
+        (StoodOn::Question(None) | StoodOn::Picks, None) => None,
         (_, ended) => ended,
     };
     move_performed::<V>(live, moving.actor, moving.move_id);
@@ -4367,6 +4367,13 @@ pub(super) struct Stood<V: Rules> {
     on: StoodOn<V>,
 }
 
+impl<V: Rules> Stood<V> {
+    /// Whether every living player's pick is what it stands on.
+    pub(super) fn on_picks(&self) -> bool {
+        matches!(self.on, StoodOn::Picks)
+    }
+}
+
 /// What a monster's move stood still on.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum StoodOn<V: Rules> {
@@ -4376,6 +4383,10 @@ pub(super) enum StoodOn<V: Rules> {
     /// A question one of its commands asked. It goes on from `.0` once
     /// that is over, and is over where there is none.
     Question(Option<super::board::Resume<V>>),
+    /// The choice it offered every living player at once, in a fight of
+    /// several. Each player's pick waits on their queue and goes on from
+    /// there, and the move is over once the last is.
+    Picks,
 }
 
 /// How a monster's move came out.
@@ -4491,6 +4502,33 @@ pub(super) fn perform_move<V: Rules>(
         } => {
             if ended.is_some() {
                 unimplemented!("a move asking in a fight it ended");
+            }
+            // `Task.WhenAll` over a `ChooseCurse` for each player, in a
+            // fight of several: each living player's pick waits at the front
+            // of their queue.
+            if live.players.len() > 1 {
+                for seat in seats(live) {
+                    if !live.player(seat).alive {
+                        continue;
+                    }
+                    let task = super::live::Paused {
+                        asking: super::live::Asking {
+                            then: Then::MoveChoice(Box::new(at.clone())),
+                            question: super::live::Asked::Offered {
+                                offered: offered.clone(),
+                                skippable,
+                            },
+                            signalled: false,
+                        },
+                        waiting: Vec::new(),
+                        hand: live.players[seat].cards.len(Pile::Hand),
+                    };
+                    live.queues.stop(seat, task);
+                }
+                return Moved::Stood(Stood {
+                    moving,
+                    on: StoodOn::Picks,
+                });
             }
             // The choice is the move's last command, so the move is over
             // once it is answered.

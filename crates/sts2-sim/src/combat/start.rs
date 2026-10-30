@@ -137,6 +137,7 @@ pub(crate) fn enter<V: Rules>(
         asking: None,
         deferred: super::live::Deferrals::new(),
         queues: super::queues::Queues::new(),
+        after_picks: None,
         waited_attack: None,
     });
 
