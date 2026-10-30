@@ -37,7 +37,13 @@ internal static class Peers
     /// A client's goes to the host first, which sends it back, and the queue
     /// can stand empty meanwhile.
     /// </summary>
-    internal static bool InFlight => _sent > 0;
+    internal static bool InFlight => _sent > 0 || _hooks > 0;
+
+    /// <summary>
+    /// How many of the local player's hook actions this client asked the
+    /// host to queue, whose word has not come back yet.
+    /// </summary>
+    private static int _hooks;
 
     /// <summary>
     /// How many shared actions this machine has taken in, in order: what
@@ -88,6 +94,33 @@ internal static class Peers
     {
         var ready = (List<bool>)ReadyPlayers.GetValue(RunManager.Instance.ActChangeSynchronizer)!;
         return ready[state.GetPlayerSlotIndex(player)];
+    }
+
+    /// <summary>
+    /// A hook action of the local player's that a client asks the host to
+    /// queue, as a paused hook's choice does. It comes back to the queue here
+    /// only once the host sends it back, and the queue can stand empty
+    /// meanwhile.
+    /// </summary>
+    internal static void HookRequested(GenericHookGameAction action)
+    {
+        if (RunManager.Instance.NetService.Type == NetGameType.Client
+            && action.OwnerId == LocalContext.NetId)
+        {
+            _hooks++;
+        }
+    }
+
+    /// <summary>
+    /// A hook action of the local player's back from the host, queued here
+    /// or turned away, as a queue cancelling its combat actions does.
+    /// </summary>
+    internal static void HookCameBack(GameAction action)
+    {
+        if (_hooks > 0 && action is GenericHookGameAction && action.OwnerId == LocalContext.NetId)
+        {
+            _hooks--;
+        }
     }
 
     /// <summary>One of the local player's actions starting, which is its copy come back.</summary>
@@ -172,4 +205,18 @@ internal static class Peers
         ["synced"] = Synced,
         ["checksums"] = Driver.Checksums,
     };
+}
+
+/// <summary>Counts a client's hook action request as in flight, as <see cref="Peers.Enqueue"/> counts an action.</summary>
+[HarmonyLib.HarmonyPatch(typeof(ActionQueueSynchronizer), nameof(ActionQueueSynchronizer.RequestEnqueueHookAction))]
+internal static class HookRequestInFlight
+{
+    private static void Prefix(GenericHookGameAction action) => Peers.HookRequested(action);
+}
+
+/// <summary>Takes a client's hook action request out of flight once it comes back to the queue.</summary>
+[HarmonyLib.HarmonyPatch(typeof(ActionQueueSet), nameof(ActionQueueSet.EnqueueWithoutSynchronizing))]
+internal static class HookRequestBack
+{
+    private static void Postfix(GameAction gameAction) => Peers.HookCameBack(gameAction);
 }

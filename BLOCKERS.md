@@ -257,9 +257,10 @@ run as its own machine sees it. The work goes in this order:
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
    Mercury Hourglass, as in a solo hunt. So the runs go deep.
-   On 2026-10-30 sixteen seeds matched 31,982 steps. Fifteen agreed to
-   their end. Seeds 0, 1, 6 and 13 lost. Seeds 2, 3, 4, 7, 8, 9, 10,
-   11, 12, 14 and 15 won. One parted, and none panicked. What they stop on is listed below, worked by class.
+   On 2026-10-30 all sixteen seeds agreed to their end, 32,144 steps.
+   Seeds 0, 1, 6 and 13 lost. Seeds 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 14
+   and 15 won. The next hunt widens the seeds. What is still open is
+   listed below, worked by class.
    Hunts stay at `--width 4`: at `--width 8` two games of sixteen failed
    in Godot itself. The golden tests follow the hunted runs in
    `coop-v0.111.0.bin` without the game. So a change to the simulator
@@ -267,13 +268,11 @@ run as its own machine sees it. The work goes in this order:
    `docs/COOP-FIGHTS.md` and where the hunted runs stop:
    - Imitation Learning copies a teammate's Power card, but no hunted run
      reaches the copy yet. Check it against the game when one does.
-   - Seed 5 parts at step 2407, as the enemies act in the Queen's fight.
-     Seat 1 holds Thorns. It loses 12 more health in the sim than in the
-     game. In the sim, Torch Head Amalgam's first hit lands on
-     both players, and seat 1's Thorns hits back. Then a further 12
-     lands on seat 1. In the game the second hit leaves seat 1 losing 2.
-     The block both sides gain is the same. Next, trace
-     `AttackCommand.*` and `ThornsPower.*` over that turn.
+   - `AttackCommand` stops before a hit once its attacker is dead. A
+     monster's attack does so since Thorns killed Torch Head Amalgam
+     between hits in seed 5. A player's attack card loops over its hits
+     in its own port, and none checks. So in the sim, a player who dies
+     inside their own multi-hit attack, beside a living one, hits on.
    - The rest of the scheduler (steps 3 and 4 of `docs/SCHEDULER.md`). A
      question the turn loop asks belongs to no player's queue yet. Each
      phase of the turn's end panics at one in a fight of several players.

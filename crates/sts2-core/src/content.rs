@@ -2249,6 +2249,15 @@ pub trait Fight<V: ContentVersion> {
         });
         self.attack(Scaling::Dynamic, |fight| {
             for _ in 0..repeats {
+                // `if (Attacker.IsDead) break;` before each hit. A hit the
+                // attacker died during still lands on every target.
+                let actor = fight.actor();
+                let alive = (fight.creatures())
+                    .find(|creature| creature.id() == actor)
+                    .is_some_and(|creature| creature.alive());
+                if !alive {
+                    break;
+                }
                 let hit = |fight: &mut Self, target| {
                     let attack = fight.resolve(Effect::Attack {
                         dealer: fight.actor(),
