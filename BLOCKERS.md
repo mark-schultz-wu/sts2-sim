@@ -267,12 +267,17 @@ run as its own machine sees it. The work goes in this order:
    `docs/COOP-FIGHTS.md` and where the hunted runs stop:
    - Imitation Learning copies a teammate's Power card, but no hunted run
      reaches the copy yet. Check it against the game when one does.
-   - Where seed 5 parts: seat 0 drinks Bottled Potential once its pick
-     for seat 1's Colorless Potion is done. Seat 0's game drinks it. On
-     seat 1's machine the game queues it on seat 0's queue, and it has
-     not run when the hunt compares. So seat 1 sees the draw pile as it
-     was. Next, trace `ActionQueueSet` on both seats. That tells whether
-     a front still waits there, or the hunt compares too soon.
+   - Where seed 5 parts: seat 0 drinks Bottled Potential once its picks
+     for seat 1's Gambler's Brew and Colorless Potion are done. On seat
+     1's machine it waits on seat 0's queue, behind the Gambler's Brew
+     hook, which never finishes there. A `game-trace --coop 5` shows why.
+     Seat 1's game waits for seat 0's choice 27. Seat 0's game sends
+     both of its picks as choice 28, the first with no cards. So the
+     choice ids of the two machines part on these aimed potions, and the
+     mod's selector is the likeliest cause. Requiring an idle executor
+     in `WaitOnce` hangs seat 1 for good, so the hunt does not compare
+     too soon. Next, trace `ReserveChoiceId` with its callers on both
+     seats from the Gambler's Brew on.
    - The rest of the scheduler (steps 3 and 4 of `docs/SCHEDULER.md`). A
      question the turn loop asks belongs to no player's queue yet. Each
      phase of the turn's end panics at one in a fight of several players.
