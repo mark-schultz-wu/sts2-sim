@@ -146,8 +146,10 @@ block, energy, hand, deck, health, plays and belt. What is left:
   ask as they are obtained, such as Astrolabe or Pandora's Box. Such a
   relic panics in `obtain_here`. The treasure phase keeps no question for
   each player. About 25 relics ask in `AfterObtained`.
-- Fight-in-event: `resuming` and `run/fight.rs:313-410` are built for
-  one player, behind the panics.
+- Fight-in-event: `resuming` keeps one player's event to go back to.
+  `ResumeAfterCombat` runs on every player's copy. A won fight that
+  resumes its event panics in `run/fight.rs` when there are several
+  players. No hunted seed reaches one yet.
 - Out of a fight, damage kills the player. The game heals them to 1
   instead when there are several players (`CreatureCmd.cs:522`).
 
@@ -262,8 +264,9 @@ run as its own machine sees it. The work goes in this order:
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
    Mercury Hourglass, as in a solo hunt. So the runs go deep.
-   On 2026-10-29 sixteen seeds matched 16,803 steps. Seed 1 agreed to
-   its end, 13 panicked and 2 parted. What they stop on is listed below, worked by class.
+   On 2026-10-29 sixteen seeds matched 18,187 steps. Five agreed to
+   their end: seeds 0 and 1 lost, and seeds 7, 9 and 12 won. Eight
+   panicked and three parted. What they stop on is listed below, worked by class.
    Hunts stay at `--width 4`: at `--width 8` two games of sixteen failed
    in Godot itself. The golden tests follow the hunted runs in
    `coop-v0.111.0.bin` without the game. So a change to the simulator
@@ -272,15 +275,19 @@ run as its own machine sees it. The work goes in this order:
    - Where they part: the Knowledge Demon asks each player at once, and
      the sim asks one (seeds 2 and 15). It waits on a question for each
      seat, listed under D.
+   - Seed 11 rolls a shop at an unknown point on floor 25, where the game
+     rolls Crystal Sphere. Nothing on this list explains it yet.
    - Imitation Learning copies a teammate's Power card, but no hunted run
      reaches the copy yet. Check it against the game when one does.
    - Where they panic, all on items listed below:
      - the second player's setup asking a question: seeds 3, 6 and 8
-     - a fight inside an event: seeds 0, 4, 5, 7, 9, 11 and 12
+     - a potion drunk while its drinker's queue waits on a question,
+       which the scheduler's rest below queues behind it: seed 5
      - a death that leaves every player ready: seed 13.
    - Where they panic, on items not yet listed:
      - Coordinate, a card for several players only, needs a port, and
        so does its `CoordinatePower`. Seed 10.
+     - Lift, a card for several players only, needs a port. Seed 4.
      - A card picked to act on is in none of its owner's piles
        (`turn.rs`, "a picked card that left the fight"). Seed 14.
    - The rest of the scheduler (steps 3 and 4 of `docs/SCHEDULER.md`). A
@@ -296,10 +303,6 @@ run as its own machine sees it. The work goes in this order:
      keeps one `live.turn`.
    - A question that waits on a player's own card play names no asker,
      where the game names the play.
-   - A fight inside an event panics in a run of several players. That is
-     one the event opens on, or one a shared option opens. Seeds 0, 4,
-     5, 7, 9, 11 and 12 stop on one. The Architect, which closes act 3,
-     opens on one too.
    - Content that reads "the player" where the game reads an owner:
      - `RoomEntered` carries the first player's deck size and health,
        which a relic and the Terminal modifier read.

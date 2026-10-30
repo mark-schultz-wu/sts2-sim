@@ -38,6 +38,10 @@ pub trait EventView<V: ContentVersion> {
     /// The runs the profile had won with the character as this one started.
     /// See [`Start::wins`](crate::Start::wins).
     fn wins(&self) -> u32;
+    /// `LocalContext.IsMe(Owner)`: whether this player's copy of the event is
+    /// the one the machine playing the run plays. Each machine runs every
+    /// player's copy, and only its own player's reaches the screen.
+    fn local(&self) -> bool;
     /// `RunState.Modifiers`, in the order the run was started with them.
     fn modifiers(&self) -> &[crate::RunModifier<V>];
     /// The relics the run carries, in panel order.

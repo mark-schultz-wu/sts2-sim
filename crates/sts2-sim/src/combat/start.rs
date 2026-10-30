@@ -703,11 +703,12 @@ pub(super) fn hand_size<V: Rules>(
 }
 
 /// The health a `Combat`-layout event's monsters roll as it opens, off the
-/// run's `Niche` stream.
+/// run's `Niche` stream, for a fight of `players` in the act `act`.
 pub(crate) fn roll_layout<V: Rules>(
     raw_seed: u64,
     floor: V::Count,
     ascension: V::AscensionLevel,
+    (players, act): (usize, usize),
     encounter: V::Encounter,
     streams: &mut Streams<V>,
 ) -> Result<smallvec::SmallVec<[V::Health; 2]>, Error> {
@@ -715,6 +716,7 @@ pub(crate) fn roll_layout<V: Rules>(
     Ok(monster::roll_layout::<V>(
         &monsters,
         ascension,
+        monster::Scaling::of::<V>(players, encounter, act),
         streams.combat().niche,
     ))
 }

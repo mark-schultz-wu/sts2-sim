@@ -87,11 +87,19 @@ impl<V: sts2_content_wire::WireContentVersion> GameSeat<V> {
         if start.ascension != V::AscensionLevel::NONE || !start.modifiers.is_empty() {
             unimplemented!("a co-op run with an ascension or modifiers");
         }
-        let player = start.players[me.at()];
-        let character = serde_json::to_value(player.character)
-            .ok()
-            .and_then(|value| value.as_str().map(str::to_owned))
-            .expect("a character is spelled as its id");
+        let spelled = |character: V::Character| {
+            serde_json::to_value(character)
+                .ok()
+                .and_then(|value| value.as_str().map(str::to_owned))
+                .expect("a character is spelled as its id")
+        };
+        let character = spelled(start.players[me.at()].character);
+        // Every player's wins, for the profile each seat's game reads them
+        // off. A player's copy of The Architect reads the local profile's
+        // count for that player's character.
+        let wins: Vec<String> = (start.players.iter())
+            .map(|player| format!("{}={}", spelled(player.character), player.wins))
+            .collect();
         let role = match me.at() {
             0 => "host",
             _ => "client",
@@ -105,7 +113,7 @@ impl<V: sts2_content_wire::WireContentVersion> GameSeat<V> {
                 ("STS2_COOP_NETID", net_id(me).to_string()),
                 ("STS2_COOP_PLAYERS", start.players.len().to_string()),
                 ("STS2_COOP_CHARACTER", character),
-                ("STS2_COOP_WINS", player.wins.to_string()),
+                ("STS2_COOP_WINS", wins.join(",")),
                 ("STS2_COOP_SEED", start.seed.as_str().to_owned()),
             ],
         )?;

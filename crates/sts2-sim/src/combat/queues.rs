@@ -84,11 +84,16 @@ impl<V: Rules> Queues<V> {
 impl<V: Rules> Queues<V> {
     /// `task`, which stopped on `seat`'s question, at the front of `seat`'s
     /// queue until the answer comes.
+    ///
+    /// # Panics
+    ///
+    /// Where `seat`'s queue already waits on a question. The game queues the
+    /// action that asked behind the one waiting, which a potion drunk then
+    /// reaches, and the sim runs it at once.
     pub(super) fn stop(&mut self, seat: sts2_core::SeatIndex, task: Paused<V>) {
-        debug_assert!(
-            self.stopped(seat).is_none(),
-            "a queue stops on one question at a time"
-        );
+        if self.stopped(seat).is_some() {
+            unimplemented!("an action of {seat:?}'s asking while its queue waits on a question");
+        }
         self.stopped.push((seat, task));
     }
 

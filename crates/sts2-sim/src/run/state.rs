@@ -100,6 +100,10 @@ pub(crate) struct State<V: Rules> {
     /// back to: the room under the fight in `RunState`'s room stack. Only a
     /// fight an event entered with `shouldResumeAfterCombat` has one.
     pub(super) resuming: Option<Box<Resuming<V>>>,
+    /// The player whose machine this is, the game's `LocalContext`. Every
+    /// machine plays the whole run, and a few rules act only for the player
+    /// at its screen.
+    local: sts2_core::SeatIndex,
 }
 
 /// An event waiting under the fight it entered.
@@ -552,6 +556,7 @@ impl<V: Rules> Clone for State<V> {
             shared_refills,
             phase,
             resuming,
+            local,
         } = self;
         shared.clone_from(&source.shared);
         modifier_states.clone_from(&source.modifier_states);
@@ -573,6 +578,7 @@ impl<V: Rules> Clone for State<V> {
         shared_dealt.clone_from(&source.shared_dealt);
         shared_refills.clone_from(&source.shared_refills);
         resuming.clone_from(&source.resuming);
+        *local = source.local;
         match (phase, &source.phase) {
             (Phase::Combat(live), Phase::Combat(from)) => live.clone_from(from),
             (
@@ -1081,6 +1087,10 @@ pub(super) struct EventSeat<V: Rules> {
     /// The option this player voted for on a shared event's page, until
     /// every player has voted.
     vote: Option<u8>,
+    /// `EventCombatSynchronizer.ReadyToEnterCombat`: the extra rewards this
+    /// player's copy asked for as it entered the room's fight, until every
+    /// player's copy has.
+    ready: Option<Vec<sts2_core::CustomReward<V>>>,
 }
 
 /// What a relic's pickup is still asking the run for.
@@ -1654,6 +1664,7 @@ impl<V: Rules> State<V> {
             shared_refills: Arc::new(Vec::new()),
             streams,
             resuming: None,
+            local: sts2_core::SeatIndex(0),
             phase: Phase::Neow(crate::seats::BySeat::new(
                 neow_seat(0),
                 (1..players.len()).map(neow_seat).collect(),
@@ -5909,12 +5920,8 @@ impl<V: Rules> State<V> {
 
     /// `EventSynchronizer.BeginEvent`: a copy of `event` for each player, in
     /// seat order. Each copy's stream is seeded with its player's slot, or
-    /// with none for a shared event.
-    /// `floor` is the floor its room stands on.
-    ///
-    /// # Panics
-    ///
-    /// An event that opens on a fight, in a run of several players.
+    /// with none for a shared event. Then the room's one fight, for an event
+    /// that opens on one. `floor` is the floor its room stands on.
     pub(super) fn opened_event(
         &mut self,
         event: V::Event,
@@ -5923,13 +5930,6 @@ impl<V: Rules> State<V> {
     ) -> Result<crate::seats::BySeat<EventSeat<V>>, Error> {
         use sts2_core::EventTable as _;
 
-        if self.players.len() > 1 {
-            // `GenerateInternalCombatStateIfNecessary` rolls the local
-            // player's alone.
-            if event.combat_layout().is_some() {
-                unimplemented!("{event:?}, which opens on a fight, in a run of several players");
-            }
-        }
         let mut seats = self.players.seats();
         // `Rng(Seed + (IsShared ? 0 : slot) + hash)`: a shared event rolls the
         // same for every player.
@@ -5937,25 +5937,42 @@ impl<V: Rules> State<V> {
         let mut open = |seat: sts2_core::SeatIndex| {
             let slot = if shared { 0 } else { u64::from(seat.0) };
             let mut rng = crate::event::stream::<V, MegaRng>(self.raw_seed(), slot, event);
-            let (state, layout) = self.open_event(seat, event, floor, &mut rng, streams)?;
+            let state = self.open_event(seat, event, floor, &mut rng, streams)?;
             Ok(EventSeat {
                 state,
                 rng,
                 asking: None,
                 finished: false,
-                layout,
+                layout: SmallVec::new(),
                 vote: None,
+                ready: None,
             })
         };
         let host = open(seats.next().expect("a run has a player"))?;
         let others = seats.map(open).collect::<Result<Vec<_>, Error>>()?;
-        Ok(crate::seats::BySeat::new(host, others))
+        let mut opened = crate::seats::BySeat::new(host, others);
+        // `GenerateInternalCombatStateIfNecessary`, once every player's copy
+        // has its options: one fight for the room, off the run's streams, on
+        // the floor the room is about to stand on.
+        if let Some(encounter) = event.combat_layout() {
+            let layout = crate::combat::roll_layout::<V>(
+                self.raw_seed(),
+                floor,
+                self.ascension(),
+                (self.players.len(), self.act),
+                encounter,
+                streams,
+            )?;
+            for seat in opened.iter_mut() {
+                seat.layout.clone_from(&layout);
+            }
+        }
+        Ok(opened)
     }
 
-    /// The fight a `Combat`-layout event builds, then `GenerateInitialOptions`:
-    /// the event's own draws, what its options set up off the player's
-    /// rewards stream, and the relics it pulls. `floor` is the floor its room
-    /// stands on.
+    /// `GenerateInitialOptions`: the event's own draws, what its options set
+    /// up off the player's rewards stream, and the relics it pulls. `floor`
+    /// is the floor its room stands on.
     pub(super) fn open_event(
         &mut self,
         seat: sts2_core::SeatIndex,
@@ -5963,21 +5980,7 @@ impl<V: Rules> State<V> {
         floor: V::Count,
         rng: &mut crate::rng::MegaRng,
         streams: &mut Streams<V>,
-    ) -> Result<(V::EventState, Layout<V>), Error> {
-        use sts2_core::EventTable as _;
-
-        // `GenerateInternalCombatState`, before the options generate, on the
-        // floor the room is about to stand on.
-        let layout = match event.combat_layout() {
-            Some(encounter) => crate::combat::roll_layout::<V>(
-                self.raw_seed(),
-                floor,
-                self.ascension(),
-                encounter,
-                streams,
-            )?,
-            None => SmallVec::new(),
-        };
+    ) -> Result<V::EventState, Error> {
         let mut state = V::enter_event(event, &self.seen_by(seat), rng);
         V::set_up_event(
             &mut state,
@@ -5995,7 +5998,7 @@ impl<V: Rules> State<V> {
             V::hand_event_pulled_relics(&mut state, &pulled);
         }
         V::stock_event(&mut state, streams.player(seat, V::PlayerRngType::SHOPS));
-        Ok((state, layout))
+        Ok(state)
     }
 
     /// `AbstractRoom.IsVictoryRoom`: The Architect's room.
@@ -6852,6 +6855,21 @@ impl<V: Rules> State<V> {
             (true, _) => unreachable!("only an event has rewards of its own"),
             (false, _) => Vec::new(),
         };
+        // `ReadyToEnterCombat`: the fight opens once every player's copy
+        // asked for it, with each one's extra rewards.
+        let extra: SmallVec<[(sts2_core::SeatIndex, Vec<sts2_core::CustomReward<V>>); 2]> =
+            match &mut self.phase {
+                Phase::Event { seats } if self.players.len() > 1 => {
+                    seats[seat].ready = Some(rewards.iter().chain(&own).copied().collect());
+                    if seats.iter_mut().any(|each| each.ready.is_none()) {
+                        return Ok(Decided::Resolved);
+                    }
+                    (self.players.seats())
+                        .map(|each| (each, seats[each].ready.take().unwrap_or_default()))
+                        .collect()
+                }
+                _ => smallvec::smallvec![(seat, rewards.iter().chain(&own).copied().collect())],
+            };
         let CreatedFight {
             live,
             streams,
@@ -6882,10 +6900,13 @@ impl<V: Rules> State<V> {
             )?
         };
         let mut live = live;
-        // `AddExtraReward`, as the room is built and before the fight opens.
-        for &reward in rewards.iter().chain(&own) {
+        // `AddExtraReward`, as the room is built and before the fight opens,
+        // player by player.
+        let extra =
+            (extra.iter()).flat_map(|(each, own)| own.iter().map(|&reward| (*each, reward)));
+        for (each, reward) in extra {
             live.add_extra_reward(
-                seat,
+                each,
                 match reward {
                     sts2_core::CustomReward::SpecialCard(card) => {
                         crate::combat::ExtraReward::SpecialCard(CardIdent::new(card))
@@ -7246,9 +7267,10 @@ impl<V: Rules> State<V> {
             .expect("every player voted for an option");
         let mut decided = Decided::Resolved;
         for each in self.players.seats() {
-            // `EnterCombatWithoutExitingEvent` from every player's copy.
+            // `EnterCombatWithoutExitingEvent` from every player's copy. The
+            // last one's opens the fight.
             if !matches!(self.phase, Phase::Event { .. }) {
-                unimplemented!("a shared option that opens a fight, in a run of several players");
+                unreachable!("a fight opened before every player's copy chose");
             }
             let outcome = self
                 .event_option(each, chosen)
@@ -9165,6 +9187,10 @@ impl<V: Rules> sts2_core::EventView<V> for AtSeat<'_, V> {
         self.state.players[self.seat].wins
     }
 
+    fn local(&self) -> bool {
+        self.seat == self.state.local
+    }
+
     fn modifiers(&self) -> &[sts2_core::RunModifier<V>] {
         &self.state.shared.modifiers
     }
@@ -9263,6 +9289,17 @@ impl<V: Rules> State<V> {
     /// Every seat, in order.
     pub(crate) fn seats(&self) -> impl Iterator<Item = sts2_core::SeatIndex> + use<V> {
         self.players.seats()
+    }
+
+    /// Whether this machine's player has won, which `WinRun` does on their
+    /// own machine alone.
+    pub(crate) fn run_won(&self) -> bool {
+        matches!(self.phase, Phase::Won { .. })
+    }
+
+    /// Make this the machine of `seat`'s player. A run opens as seat 0's.
+    pub(crate) fn play_as(&mut self, seat: sts2_core::SeatIndex) {
+        self.local = seat;
     }
 
     pub(crate) fn seen_by(&self, seat: sts2_core::SeatIndex) -> AtSeat<'_, V> {

@@ -27,11 +27,16 @@ impl<V: Rules> RunTable<V> for SimTable<V> {
     /// copy it.
     fn begin(_: Self::Host, start: &Start<V>) -> Result<Self, Self::Error> {
         let first = super::sim::started(start);
-        let mut machines = SmallVec::with_capacity(start.players.len());
+        let mut machines: SmallVec<[State<V>; 1]> = SmallVec::with_capacity(start.players.len());
         for _ in 1..start.players.len() {
             machines.push(first.clone());
         }
         machines.push(first);
+        for (at, machine) in machines.iter_mut().enumerate() {
+            machine.play_as(SeatIndex(
+                u8::try_from(at).expect("a lobby's seats fit a u8"),
+            ));
+        }
         Ok(Self { machines })
     }
 
@@ -71,7 +76,9 @@ impl<V: Rules> RunTable<V> for SimTable<V> {
             return Ok(own);
         }
         for (at, machine) in self.machines.iter_mut().enumerate() {
-            if at == seat.at() {
+            // A machine whose player has won shows the end of the run, and
+            // what the other players still choose changes nothing it shows.
+            if at == seat.at() || machine.run_won() {
                 continue;
             }
             match super::sim::decide(machine, seat, decision) {
