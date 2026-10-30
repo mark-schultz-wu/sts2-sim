@@ -46,15 +46,6 @@ internal static class Peers
     private static int _hooks;
 
     /// <summary>
-    /// How many shared actions this machine has taken in, in order: what
-    /// <c>ActionQueueSynchronizer</c> enqueues or resumes, which the host does
-    /// on request and every client does on the host's word. Every seat comes
-    /// to the same count once it has caught up, so a client can tell it has
-    /// not yet taken in a move another seat made.
-    /// </summary>
-    internal static ulong Synced;
-
-    /// <summary>
     /// Queues one of the local player's actions, as a screen does: through
     /// <c>ActionQueueSynchronizer.RequestEnqueue</c>, which in a co-op run sends
     /// it to every seat and alone queues it here.
@@ -202,8 +193,8 @@ internal static class Peers
         }).ToList(),
         ["awaiting"] = AwaitedChoices(),
         ["inFlight"] = InFlight,
-        ["synced"] = Synced,
-        ["checksums"] = Driver.Checksums,
+        ["still"] = Driver.Still(new HashSet<ulong>(), null),
+        ["links"] = Traffic.Report(),
     };
 }
 

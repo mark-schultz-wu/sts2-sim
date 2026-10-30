@@ -14,10 +14,16 @@ names the step and the seat:
 
     an-attacker-who-dies-mid-attack-stops: step 5, seat 0 differs in run
 
-What the games answered lives in `../coop-scenarios.bin`. To write it,
-deploy the mod for v0.111.0 and run:
+What the games answered lives in `../coop-scenarios.bin`. To write it:
 
-    STS2_GAME_VERSION=v0.111.0 STS2_GAME_DIR=<the v0.111.0 game> \
-        STS2_UPDATE=1 cargo test -p sts2-golden --test coop_scenarios
+1. Build `sts2-golden` in the default environment, with the mod deployed
+   for v0.107.1. The build script asks that game for each solo transcript
+   it lacks. Under the v0.111.0 environment it asks the wrong game.
+2. Deploy the mod for v0.111.0, and run:
+
+       STS2_GAME_VERSION=v0.111.0 STS2_GAME_DIR=<the v0.111.0 game> \
+           STS2_UPDATE=1 cargo test -p sts2-golden --test coop_scenarios
+
+3. Deploy the mod for v0.107.1 again.
 
 Without `STS2_UPDATE` the test reads the file and needs no game.

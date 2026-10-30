@@ -1373,30 +1373,6 @@ internal static class ThrownAtTheFakeMerchant
 }
 
 /// <summary>
-/// Counts the shared actions this machine takes in, for <see cref="Peers.Synced"/>.
-/// </summary>
-/// <remarks>
-/// Each of the three is where <c>ActionQueueSynchronizer</c> puts a shared
-/// action into the queues here, after it has passed it on to the clients
-/// where this machine hosts. Counting changes nothing the game does.
-/// </remarks>
-[HarmonyPatch(typeof(ActionQueueSynchronizer))]
-internal static class CountSyncedActions
-{
-    [HarmonyPostfix]
-    [HarmonyPatch("EnqueueAction")]
-    private static void Enqueued() => Peers.Synced++;
-
-    [HarmonyPostfix]
-    [HarmonyPatch("EnqueueHookAction")]
-    private static void HookEnqueued() => Peers.Synced++;
-
-    [HarmonyPostfix]
-    [HarmonyPatch("ResumeActionAfterPlayerChoice")]
-    private static void Resumed() => Peers.Synced++;
-}
-
-/// <summary>
 /// Drops the question a cancelled action asked, for <see cref="Pending.DropFor"/>.
 /// </summary>
 /// <remarks>

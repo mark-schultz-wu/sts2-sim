@@ -260,20 +260,19 @@ run as its own machine sees it. The work goes in this order:
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
    Mercury Hourglass, as in a solo hunt. So the runs go deep.
    On 2026-10-30 all sixteen seeds agreed to their end, 32,144 steps.
-   Seeds 0, 1, 6 and 13 lost. Seeds 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 14
+   Seeds 0, 1, 5, 6 and 13 lost. Seeds 2, 3, 4, 7, 8, 9, 10, 11, 12, 14
    and 15 won. The next hunt widens the seeds. What is still open is
    listed below, worked by class.
    Hunts stay at `--width 4`: at `--width 8` two games of sixteen failed
-   in Godot itself. The golden tests follow the hunted runs in
+   in Godot itself. A lobby moves only once every game stands still and
+   every link's reliable packets are all taken in, so load changes no
+   run. Two hunts at `--width 4` on 2026-10-30 played the same sixteen
+   runs, step for step. Each machine logs the shared actions in the
+   order it took them in, in `order.jsonl` under its profile. The golden tests follow the hunted runs in
    `coop-v0.111.0.bin` without the game. So a change to the simulator
    needs no hunt to show it keeps them. A rule no hunted run reaches gets
    a co-op scenario in `crates/sts2-golden/tests/coop-scenarios/`. Next, in the order of
    `docs/COOP-FIGHTS.md` and where the hunted runs stop:
-   - A hunt at `--width 4` does not play the same run twice. On
-     2026-10-30 seed 5 lost, where the last hunt won, and seeds 6 and 11 parted
-     at steps 1152 and 1715. Alone, seed 6 agreed to its loss at 2385
-     and seed 11 to its win at 2435, twice each. So the games under load
-     differ, as seed 2's hook request did. Find the race in the mod.
    - Imitation Learning copies a teammate's Power card, but no hunted run
      reaches the copy yet. Check it against the game when one does.
    - The rest of the scheduler (steps 3 and 4 of `docs/SCHEDULER.md`). A

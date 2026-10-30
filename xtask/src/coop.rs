@@ -192,7 +192,13 @@ fn play_one(
         )
     };
     match verdict.end {
-        End::Won | End::Lost | End::Capped | End::Agreed | End::Parted => Ok(line(None)),
+        // Every machine's game logs the shared actions in the order it took
+        // them in, and every machine follows the host's.
+        End::Parted => Ok(line(Some(format!(
+            " (the host's order in {})",
+            homes.join("seat0/SlayTheSpire2/order.jsonl").display()
+        )))),
+        End::Won | End::Lost | End::Capped | End::Agreed => Ok(line(None)),
         End::Panicked | End::Refused => Ok(line(last)),
         _ => Err(format!("{} (moves in {})", line(last), log.display())),
     }

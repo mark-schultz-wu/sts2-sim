@@ -100,14 +100,30 @@ impl<V: sts2_content_wire::WireContentVersion> RunTable<V> for OracleTable<V> {
 /// on its way to the others.
 const STALLS: usize = 20;
 
-/// How many times a lobby looks again at a seat that has not caught up with
-/// the others before it calls the seats stalled. Each look waits for the
-/// seat's game to stand still, so this is a few seconds at most.
+/// How many times a lobby looks at every seat again before it calls the
+/// seats stalled. Each look waits for the seat's game to stand still, so
+/// this is a few seconds at most.
 const CATCH_UP: usize = 1000;
 
 /// Every seat as it stands, once each caught up with the others, or as they
 /// stood when one never did.
 type CaughtUp<V> = Result<Vec<Seated<V>>, Vec<Seated<V>>>;
+
+/// Whether every game stands still with nothing on its way between them.
+///
+/// A game alone cannot tell a packet is on its way to it. So each counts
+/// the reliable packets it sent to each other game, and those it took in
+/// from each. Where each end of every link took in what the other sent,
+/// no packet is on its way.
+fn quiet<V: sts2_core::ContentVersion>(seated: &[Seated<V>]) -> bool {
+    let still = seated.iter().all(|seat| seat.peers.still);
+    let balanced = (seated.iter().enumerate()).all(|(from, seat)| {
+        (seat.peers.links.iter().enumerate())
+            .filter(|&(to, _)| to != from)
+            .all(|(to, link)| link.sent == seated[to].peers.links[from].received)
+    });
+    still && balanced
+}
 
 /// A run of several players, one game for each seat.
 pub struct LobbyTable<V: sts2_content_wire::WireContentVersion> {
@@ -148,32 +164,22 @@ where
             .collect()
     }
 
-    /// Where every seat stands, once each has caught up with the others.
+    /// Where every seat stands, once nothing is on its way between them.
     ///
-    /// Moves reach a seat over the network, so a seat can be behind another.
-    /// Each one behind is looked at again, until all have taken in as much,
-    /// with as many checksums. Seats that never catch up are the error, as
-    /// they stood.
+    /// A still game moves only when a packet or a command reaches it. So
+    /// once every game is still and [`quiet`] finds every link balanced, the
+    /// run stands still on every machine. Until then every seat is looked
+    /// at again. Seats that never settle are the error, as they stood.
     fn caught_up(&mut self) -> Result<CaughtUp<V>, Error> {
         let every: Vec<usize> = (0..self.seats.len()).collect();
-        let mut seated: Vec<Seated<V>> = (self.looked_at(&every)?)
-            .into_iter()
-            .map(|(_, seated)| seated)
-            .collect();
+        let mut seated: Vec<Seated<V>> = Vec::new();
         for _ in 0..CATCH_UP {
-            let synced = seated.iter().map(|seat| seat.peers.synced).max();
-            let checksums = seated.iter().map(|seat| seat.peers.checksums).max();
-            let behind: Vec<usize> = (0..seated.len())
-                .filter(|&at| {
-                    Some(seated[at].peers.synced) < synced
-                        || Some(seated[at].peers.checksums) < checksums
-                })
+            seated = (self.looked_at(&every)?)
+                .into_iter()
+                .map(|(_, seated)| seated)
                 .collect();
-            if behind.is_empty() {
+            if quiet(&seated) {
                 return Ok(Ok(seated));
-            }
-            for (at, looked) in self.looked_at(&behind)? {
-                seated[at] = looked;
             }
         }
         Ok(Err(seated))

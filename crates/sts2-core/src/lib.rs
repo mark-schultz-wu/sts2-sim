@@ -88,7 +88,7 @@ pub use step::start::{Player, RunModifier, Start};
 
 pub use play::recording::Recording;
 pub use play::refusal::{Reason, Refusal};
-pub use play::seat::{Peer, Peers, SeatAnswered, SeatIndex, Seated};
+pub use play::seat::{Link, Peer, Peers, SeatAnswered, SeatIndex, Seated};
 pub use play::table::{RunTable, Settled};
 pub use play::verdict::{End, Verdict};
 pub use play::{Answered, Applied, Decided, Snapshot};
