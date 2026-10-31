@@ -167,8 +167,9 @@ enum Resolved<V: Rules> {
         play: Option<sts2_core::PlayAt>,
         /// `cardSource`: which copy gives it.
         source: Option<CardId<V>>,
-        /// The belts whose block hooks changed it.
-        modifying: SmallVec<[V::Relic; 1]>,
+        /// The relics whose block hooks changed it, each beside the seat
+        /// whose belt holds it.
+        modifying: Modifying<V>,
         /// Whether the decimal was above nothing before the floor.
         positive: bool,
     },
@@ -3876,6 +3877,15 @@ pub(crate) fn orb_value<V: Rules>(
     modified_by::<V>(fight, base, &[ModifyHook::OrbValue { player, orb }])
 }
 
+/// The relics whose answer moved a number, each beside the seat whose belt
+/// holds it.
+pub(super) type Modifying<V> = SmallVec<
+    [(
+        sts2_core::SeatIndex,
+        <V as sts2_core::ContentVersion>::Relic,
+    ); 1],
+>;
+
 /// One block gain after every listener in the fight has had its say, which
 /// is `Hook.ModifyBlock`.
 ///
@@ -3895,7 +3905,7 @@ pub(super) fn blocked<V: Rules>(
     card: Option<V::Card>,
     play: Option<sts2_core::PlayAt>,
     source: Option<CardId<V>>,
-) -> (V::Number, bool, SmallVec<[V::Relic; 1]>) {
+) -> (V::Number, bool, Modifying<V>) {
     let player = source
         .and_then(|id| fight.live.card_seat(id))
         .map(sts2_core::SeatIndex::creature);
@@ -3950,9 +3960,9 @@ pub(super) fn blocked<V: Rules>(
                     answer => unimplemented!("a relic answering {answer:?} for block"),
                 };
                 let (seat, slot) = super::relic::place_of::<V>(fight.belts, state);
-                let held = &fight.belts[seat][slot];
-                if moved && !modifying.contains(&held.relic) {
-                    modifying.push(held.relic);
+                let held = (seat, fight.belts[seat][slot].relic);
+                if moved && !modifying.contains(&held) {
+                    modifying.push(held);
                 }
             });
         }
@@ -5025,13 +5035,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                     return;
                 }
                 // `Hook.AfterModifyingBlockAmount`, asked of each relic that
-                // changed the gain, before it lands. They are the belt of the
-                // player who gains it.
-                let seat = match modifying.is_empty() {
-                    true => sts2_core::SeatIndex(0),
-                    false => self.live.seat_of(recipient).unwrap_or_else(|| self.seat()),
-                };
-                for relic in modifying {
+                // changed the gain, before it lands, on its own player's belt.
+                // A relic on the giver's belt, as Vambrace is, changes the
+                // block its owner's card gives a teammate.
+                for (seat, relic) in modifying {
                     let hook = sts2_core::EventHook::BlockAmountModified { amount, source };
                     if let Some(effect) =
                         super::listen::ask_relic(&*self.live, seat, self.belts, relic, hook).first()

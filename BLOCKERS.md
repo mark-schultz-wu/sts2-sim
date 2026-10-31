@@ -101,10 +101,6 @@ wrong with several players:
   hears `AfterModifyingHandDraw`. The game asks only the listeners that
   changed that player's hand size. Two cores at four turns both reset on
   the first player's draw. No run reaches it yet, so check it first.
-- Vambrace doubles block that its owner's card gives a teammate. Then
-  the sim asks its `AfterModifyingBlockAmount` on the receiver's belt,
-  because `blocked()` in `board.rs` keeps no seat beside the relic. No run
-  reaches it yet, so check it first.
 - v0.107.1 only: Diamond Diadem and Juggling count every player's
   plays. Co-op runs on v0.111.0, so this matters only if co-op ever
   runs on v0.107.1.
@@ -308,7 +304,8 @@ run as its own machine sees it. The work goes in this order:
        simulator, and the other 25 do not yet.
      - Content whose comment says "a fight here has one" player.
      - The rest of `Board::seat`'s callers, which a card or potion reaches
-       for its own player and a monster's move does not yet.
+       for its own player and a monster's move does not yet. The Test
+       Subject's move reaches one (Silent and Defect seed 4).
    - A death that leaves every standing player ready panics.
    - The hand screen checks a pick again whenever the fight changes
      (`NPlayerHand.RevalidateSelectionAfterStateChange`). A pick the
