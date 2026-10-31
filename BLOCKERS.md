@@ -253,7 +253,8 @@ run as its own machine sees it. The work goes in this order:
    player who dies inside their own card keeps their cards until the
    card is over. The run is over only once every player is dead. A
    player who earns an extra turn takes it alone, while the others wait
-   ready.
+   ready. Whispering Earring's pushed selector answers its picks as they
+   come up, before the next player's pre-play phase.
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
    Mercury Hourglass, as in a solo hunt. So the runs go deep.
@@ -313,9 +314,6 @@ run as its own machine sees it. The work goes in this order:
    - The splits the hunt of 2026-10-30 found, by where they show:
      - A shop purchase draws a different number (Defect and Necrobinder
        seeds 3 and 14, Silent and Defect seed 9).
-     - Travel into a fight parts in the turn, the creatures, the hand and
-       the moves. Ironclad and Silent seed 40 shows it, and so do Defect
-       and Necrobinder seed 11 and Regent and Ironclad seed 11.
      - A co-op scenario's `enter_room` setup hangs: the host leaves its
        room and enters none, and the reply never comes. The mod's
        `EnterRoom` calls `EnterRoomDebug`, where `fight` goes through the

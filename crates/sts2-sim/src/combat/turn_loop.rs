@@ -491,6 +491,17 @@ fn pre_play_each<V: Rules>(
             // the rest of their pre-play phase behind it.
             asked @ PrePlayed::Asked { .. } => {
                 crate::combat::turn::pre_played::<V>(seat, lent.live, asked);
+                // A pushed selector, as Whispering Earring's, answers as the
+                // question comes up, and the phase goes on before the next
+                // player's. The game's selector stack is the same for every
+                // player.
+                while let Some(picks) = crate::combat::selector_picks(seat, lent.live) {
+                    let answered = crate::combat::play::answer(seat, seat, lent.fighting(), picks)?;
+                    if let Some(ended) = answered {
+                        lent.live.skip_tick = skipping;
+                        return Ok(Some(ended));
+                    }
+                }
                 if lent
                     .live
                     .asking
