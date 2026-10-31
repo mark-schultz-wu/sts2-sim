@@ -313,6 +313,30 @@ pub(super) fn on_play<'a, V: crate::Build, K: FightKind<V>>(
     fight: &mut K::Fight<'a>,
 ) -> Played<V, K> {
     match card {
+        // `LegionOfBone`: its `Summon` of Osty for each living player, its
+        // owner too.
+        __c0 if __c0 == V::Card::LEGION_OF_BONE => {
+            let summon = fight.var(V::CardVar::SUMMON);
+            for player in crate::behaviour::cards::teammates::<V, _>(fight) {
+                fight.for_player(player, |fight| fight.summon_osty(summon));
+            }
+            Played::Done
+        }
+        // `GlimpseBeyond`: its `Cards` of Souls into each living player's draw
+        // pile at random, its owner's too, made by its owner.
+        __c0 if __c0 == V::Card::GLIMPSE_BEYOND => {
+            let cards = fight.var(V::CardVar::CARDS);
+            for player in crate::behaviour::cards::teammates::<V, _>(fight) {
+                fight.for_player(player, |fight| {
+                    for _ in 0..cards {
+                        if fight.add_at_random(V::Card::SOUL, Pile::Draw).is_none() {
+                            break;
+                        }
+                    }
+                });
+            }
+            Played::Done
+        }
         // `DeathsDoor`: its block, and its `Repeat` times more where its owner
         // applied Doom this turn.
         __c0 if __c0 == V::Card::DEATHS_DOOR => {

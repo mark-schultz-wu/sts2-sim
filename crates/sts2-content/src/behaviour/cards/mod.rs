@@ -60,6 +60,20 @@ pub(crate) fn upgrade<V: crate::Build>(card: V::Card) -> &'static [sts2_core::Ch
     V::generated_upgrade(card)
 }
 
+/// `GetTeammatesOf(Owner.Creature)` with `IsAlive && IsPlayer`: every living
+/// player, the card's owner among them, in seat order.
+pub(crate) fn teammates<V: crate::Build, F: Fight<V>>(
+    fight: &F,
+) -> smallvec::SmallVec<[sts2_core::CombatId; 4]> {
+    use sts2_core::CreatureView as _;
+
+    let mut players = fight.players();
+    players.retain(|player| {
+        (fight.creatures()).any(|creature| creature.id() == *player && creature.alive())
+    });
+    players
+}
+
 /// Where `card` stands now, found again by its id, or nothing where no pile
 /// holds it. A card auto-played more than once moves between its plays, and
 /// `CardCmd.AutoPlay` plays it wherever it is.
@@ -84,9 +98,18 @@ pub(crate) fn computed_target<V: crate::Build>(
     card: V::Card,
     powers: &[sts2_core::Stack<V>],
 ) -> crate::generated::cards::TargetType {
+    computed_target_by::<V>(card, |power| powers.iter().any(|held| held.power == power))
+}
+
+/// [`computed_target`], where `carries` says whether the card's owner
+/// carries a power.
+pub(crate) fn computed_target_by<V: crate::Build>(
+    card: V::Card,
+    carries: impl Fn(V::Power) -> bool,
+) -> crate::generated::cards::TargetType {
     match card {
         card if V::card_filed(card) == CardFiled::Token => {
-            token::computed_target::<V>(card, powers)
+            token::computed_target::<V>(card, carries)
         }
         // `Malaise.TargetType`, which names what its constructor does.
         __c0 if __c0 == V::Card::MALAISE => crate::generated::cards::TargetType::AnyEnemy,
@@ -355,6 +378,30 @@ pub(crate) fn calculated<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
             let started = Number::try_from(started).expect("three fits the game's numbers");
             printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
                 + printed.face(V::CardVar::CALCULATION_EXTRA) * started
+        }
+        // `GangUp`: a base, and more for each powered hit its target took
+        // this turn from a creature on its owner's side other than its owner.
+        (__c0, __c1) if (__c0 == V::Card::GANG_UP && __c1 == V::CardVar::CALCULATED_DAMAGE) => {
+            let hits = owner
+                .history
+                .damage_received_this_turn()
+                .filter(|received| {
+                    Some(received.receiver) == owner.targeted
+                        && received.powered
+                        && received.dealer.is_some_and(|dealer| {
+                            dealer != owner.player && owner.allies.contains(&dealer)
+                        })
+                })
+                .count();
+            let hits = Number::try_from(hits).expect("a turn's hits fit the game's numbers");
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::EXTRA_DAMAGE) * hits
+        }
+        // `Mimic`: a base, and more for each point of block on the ally it is
+        // pointed at.
+        (__c0, __c1) if (__c0 == V::Card::MIMIC && __c1 == V::CardVar::CALCULATED_BLOCK) => {
+            printed.face(<V::CardVar as crate::ids::CardVarIds>::CALCULATION_BASE)
+                + printed.face(V::CardVar::CALCULATION_EXTRA) * owner.target_block.unwrap_or(0)
         }
         // `BeatIntoShape`: a base, and more for each powered hit its owner
         // landed on its target this turn.

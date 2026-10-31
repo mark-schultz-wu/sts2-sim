@@ -953,7 +953,9 @@ impl<'a, V: Rules> Board<'a, V> {
             asked.into_iter().partition(|effect| {
                 matches!(
                     effect,
-                    HookEffect::ApplyToOwner(..) | HookEffect::ApplyPower { .. }
+                    HookEffect::ApplyToOwner(..)
+                        | HookEffect::ApplyPower { .. }
+                        | HookEffect::Cover { .. }
                 )
             });
         // The cards it writes on are its holder's, whoever applied it.
@@ -974,6 +976,21 @@ impl<'a, V: Rules> Board<'a, V> {
                     amount,
                     applier,
                 } => self.land(target, power, amount, applier),
+                HookEffect::Cover {
+                    interceptor,
+                    covered,
+                    power,
+                } => {
+                    let carries =
+                        (self.live.powers.of(interceptor)).any(|held| held.power() == power);
+                    if !carries {
+                        let one = sts2_core::PowerAmount::Counted(num_traits::one());
+                        self.land(interceptor, power, one, Some(covered));
+                    }
+                    sts2_core::Fight::write_power(self, interceptor, power, |state| {
+                        sts2_core::PowerModel::add_covered(state, covered)
+                    });
+                }
                 _ => unreachable!("only applications were set apart"),
             }
         }
@@ -990,6 +1007,7 @@ impl<'a, V: Rules> Board<'a, V> {
     }
 
     /// [`Board::modify_amount`] for the creature whose command it is.
+    #[inline(always)]
     fn modify_amount_from(
         &mut self,
         id: CombatId,
@@ -1284,6 +1302,7 @@ impl<'a, V: Rules> Board<'a, V> {
                     let block = resolve::<V>(
                         self.actor_seat(),
                         self.walk(),
+                        None,
                         None,
                         Effect::GainBlock {
                             recipient: owner,
@@ -1951,17 +1970,46 @@ impl<'a, V: Rules> Board<'a, V> {
         // lends it no enchantment.
         let playing = self.playing.take();
         for (listener, effect) in rest {
-            self.listener_asked(listener, effect);
+            match (listener, effect) {
+                // New copies into the power owner's draw pile, made by the
+                // owner. The power is busy while they land, which a power
+                // guarding against hearing itself reads.
+                (
+                    Listener::Power {
+                        owner, instance, ..
+                    },
+                    HookEffect::AddToDrawAtRandom {
+                        card,
+                        count,
+                        by_owner,
+                    },
+                ) => {
+                    let count: usize = num_traits::cast(count)
+                        .unwrap_or_else(|| unimplemented!("{count:?} cards into the draw pile"));
+                    self.mark_busy(owner, instance, true);
+                    self.as_listener(listener, |board| {
+                        for _ in 0..count {
+                            board.add_to_draw_at_random(card, by_owner.then_some(owner));
+                        }
+                    });
+                    self.mark_busy(owner, instance, false);
+                }
+                (listener, effect) => self.listener_asked(listener, effect),
+            }
         }
         self.playing = playing;
     }
 
-    /// Who a card the acting creature makes is made by: the player, where
-    /// the player acts. A monster's cards are made by nobody.
+    /// Who a card the acting creature makes is made by: the acting player.
+    /// That holds where they make it for a teammate too, as Glimpse Beyond
+    /// names its owner for every player's Souls. A monster's cards are made
+    /// by nobody.
     fn creator(&self) -> Option<CombatId> {
-        let seat = self.seat();
-        let player = self.live.player(seat).id;
-        (self.actor == player).then_some(player)
+        let players = self.live.players.len();
+        self.live.creatures[..players]
+            .iter()
+            .any(|player| player.id == self.actor)
+            .then_some(self.actor)
     }
 
     /// `CardPileCmd.AddGeneratedCardsToCombat` of `count` new copies into
@@ -3372,6 +3420,7 @@ impl<'a, V: Rules> Board<'a, V> {
                         self.actor_seat(),
                         self.walk(),
                         None,
+                        None,
                         Effect::Attack {
                             dealer: owner,
                             target,
@@ -3752,6 +3801,7 @@ fn hit_phases<V: Rules>(
             playing,
             upgraded: ident.upgrade > 0,
             enchanted: ident.enchantment.is_some(),
+            cost: (!playing).then(|| super::legal::costs::<V>(seat, held, None, fight).0),
         }
     });
     [
@@ -4088,6 +4138,7 @@ pub(crate) fn resolve<V: Rules>(
     seat: sts2_core::SeatIndex,
     fight: Walk<'_, V>,
     playing: Option<&CardInstance<V>>,
+    target: Option<CombatId>,
     effect: Effect<V>,
 ) -> ResolvedEffect<V> {
     let effect = match effect {
@@ -4129,7 +4180,7 @@ pub(crate) fn resolve<V: Rules>(
         } => {
             // A block effect names who gains it, and no creature the card
             // points at.
-            let amount = carried::<V>(seat, playing, fight, amount, None);
+            let amount = carried::<V>(seat, playing, fight, amount, target);
             // `Hook.ModifyBlock` asks the played card's enchantment whatever
             // the block's props, since `GainBlock` always runs it.
             let amount = match playing.and_then(|held| {
@@ -4289,6 +4340,11 @@ pub(crate) fn var<V: Rules>(
                 .iter(Pile::Hand)
                 .map(|held| held.face.ident.card)
                 .collect();
+            let side = live.player(seat).side;
+            let allies: SmallVec<[CombatId; 8]> = (live.creatures.iter())
+                .filter(|creature| creature.side == side)
+                .map(|creature| creature.id)
+                .collect();
             let owner = sts2_core::CardOwner {
                 powers: &powers::<V>(live, seat),
                 osty,
@@ -4347,6 +4403,12 @@ pub(crate) fn var<V: Rules>(
                         .count_all(|face| osty_attack(face.ident.card))
                         - usize::from(osty_attack(held.face.ident.card))
                 },
+                target_block: target.and_then(|target| {
+                    (live.creatures.iter())
+                        .find(|creature| creature.id == target)
+                        .map(|creature| creature.block)
+                }),
+                allies: &allies,
             };
             V::calculated_card_var(held.face.ident.card, key, held, owner)
         }
@@ -4714,6 +4776,7 @@ impl<V: Rules> Board<'_, V> {
                                 seat,
                                 board.walk(),
                                 None,
+                                None,
                                 Effect::Attack {
                                     dealer: owner,
                                     target,
@@ -4857,7 +4920,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 effect: Resolved::Held(effect),
             };
         }
-        resolve::<V>(seat, self.walk(), self.acting().as_ref(), effect)
+        resolve::<V>(
+            seat,
+            self.walk(),
+            self.acting().as_ref(),
+            self.target,
+            effect,
+        )
     }
 
     fn orb_value(&self, orb: V::Orb, base: V::Number) -> V::Number {
@@ -4946,8 +5015,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 positive,
             } => {
                 // `CreatureCmd.GainBlock` gives nothing once the fight is over
-                // or ending, as after a hit that killed the player.
-                if self.over() {
+                // or ending, as after a hit that killed the player, nor to a
+                // dead creature.
+                if self.over()
+                    || self
+                        .at(recipient)
+                        .is_none_or(|at| !self.live.creatures[at].alive)
+                {
                     return;
                 }
                 // `Hook.AfterModifyingBlockAmount`, asked of each relic that
@@ -8306,6 +8380,7 @@ mod tests {
                 belts: &Belts::new(crate::run::Belt::new(), Vec::new()),
             },
             Some(&card),
+            None,
             Effect::Attack {
                 dealer: player,
                 target: player,

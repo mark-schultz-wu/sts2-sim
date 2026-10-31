@@ -58,6 +58,10 @@ pub enum State<V: crate::Build> {
         from: [Option<sts2_core::CombatId>; POSSESSED],
         stolen: [Number; POSSESSED],
     },
+    /// `InterceptPower`'s `coveredCreatures`, in the order they were added.
+    Intercept {
+        covered: [Option<sts2_core::CombatId>; POSSESSED],
+    },
     /// `IllusionPower`'s `isReviving`.
     Illusion {
         reviving: bool,
@@ -70,6 +74,16 @@ pub enum State<V: crate::Build> {
     /// it gives its teammates lands.
     BeaconOfHope {
         busy: bool,
+    },
+    /// `SoulboundPower`'s `IsAddingSoul`, set while the Souls it adds land.
+    Soulbound {
+        power: V::Power,
+        busy: bool,
+    },
+    /// `CacophonyPower`'s `Cards`: the draws left until it hits.
+    Cacophony {
+        power: V::Power,
+        cards_left: u8,
     },
     /// `AdaptablePower`'s `isReviving`.
     Adaptable {
@@ -369,7 +383,8 @@ fn other_segment_standing<V: crate::Build>(
     })
 }
 
-/// The players a Possess power keeps a count for: a run's most, which
+/// The players a Possess power keeps a count for, and Intercept covers: a
+/// run's most, which
 /// `NMultiplayerHostSubmenu` hosts with `InitializeMultiplayerAsHost(netService, 4)`.
 const POSSESSED: usize = 4;
 
@@ -434,6 +449,9 @@ impl<V: crate::Build> sts2_core::PowerModel<V> for State<V> {
                     stolen: [0; POSSESSED],
                 }
             }
+            __c0 if __c0 == V::Power::INTERCEPT_POWER => Self::Intercept {
+                covered: [None; POSSESSED],
+            },
             __c0 if __c0 == V::Power::ILLUSION_POWER => Self::Illusion { reviving: false },
             __c0 if __c0 == V::Power::REATTACH_POWER => Self::Reattach { reviving: false },
             __c0 if __c0 == V::Power::BEACON_OF_HOPE_POWER => Self::BeaconOfHope { busy: false },
@@ -517,9 +535,12 @@ impl<V: crate::Build> sts2_core::PowerModel<V> for State<V> {
             Self::Imbalanced { .. } => V::Power::IMBALANCED_POWER,
             Self::Ritual { .. } => V::Power::RITUAL_POWER,
             Self::Possess { power, .. } => *power,
+            Self::Intercept { .. } => V::Power::INTERCEPT_POWER,
             Self::Illusion { .. } => V::Power::ILLUSION_POWER,
             Self::Reattach { .. } => V::Power::REATTACH_POWER,
             Self::BeaconOfHope { .. } => V::Power::BEACON_OF_HOPE_POWER,
+            Self::Soulbound { power, .. } => *power,
+            Self::Cacophony { power, .. } => *power,
             Self::Adaptable { .. } => V::Power::ADAPTABLE_POWER,
             Self::Nemesis { .. } => V::Power::NEMESIS_POWER,
             Self::ToricToughness { .. } => V::Power::TORIC_TOUGHNESS_POWER,
@@ -552,9 +573,21 @@ impl<V: crate::Build> sts2_core::PowerModel<V> for State<V> {
     }
 
     fn mark_busy(&mut self, busy: bool) {
-        if let Self::BeaconOfHope { busy: held } = self {
+        if let Self::BeaconOfHope { busy: held } | Self::Soulbound { busy: held, .. } = self {
             *held = busy;
         }
+    }
+
+    fn add_covered(&mut self, creature: sts2_core::CombatId) {
+        let Self::Intercept { covered } = self else {
+            unimplemented!("{:?} covering a creature", self.power())
+        };
+        if covered.contains(&Some(creature)) {
+            return;
+        }
+        let free = (covered.iter_mut().find(|at| at.is_none()))
+            .unwrap_or_else(|| unimplemented!("Intercept covering {POSSESSED}+ creatures"));
+        *free = Some(creature);
     }
 
     fn debuff(&self) -> bool {
@@ -1126,6 +1159,29 @@ pub(crate) fn modify_hook<V: crate::Build>(
         ) if __c0 == V::Power::COVERED_POWER && (target == Some(holder)) => {
             Modify::Scaled(Fixed::new(0, 0))
         }
+        // `InterceptPower.ModifyDamageMultiplicative`: a powered attack's
+        // damage to its owner, times one more than those it covers.
+        (
+            __c0,
+            _,
+            ModifyHook::DamageMultiplicative {
+                target,
+                powered: true,
+                ..
+            },
+        ) if __c0 == V::Power::INTERCEPT_POWER && (target == Some(holder)) => {
+            let State::Intercept { covered } = state else {
+                unreachable!("Intercept's state is its own")
+            };
+            let covering = covered.iter().flatten().count();
+            Modify::Scaled(Fixed::new(
+                Number::try_from(covering + 1).expect("a lobby's players fit a game number"),
+                0,
+            ))
+        }
+        (__c0, _, ModifyHook::DamageMultiplicative { .. }) if __c0 == V::Power::INTERCEPT_POWER => {
+            Modify::Nothing
+        }
         // `TagTeamPower.ModifyCardPlayCount`: its stack more plays of an
         // Attack another player than its applier plays, aimed at its owner
         // or at every enemy.
@@ -1144,11 +1200,15 @@ pub(crate) fn modify_hook<V: crate::Build>(
             use crate::generated::cards::TargetType;
             use sts2_core::CardTable as _;
 
-            match card.target() {
-                Some(TargetType::AnyEnemy) if target == Some(holder) => Modify::Added(stack),
-                Some(TargetType::AllEnemies) => Modify::Added(stack),
-                Some(_) => Modify::Nothing,
-                None => unimplemented!("which way {card:?}, which works its target out, aims"),
+            let aims = card.target().unwrap_or_else(|| {
+                crate::behaviour::cards::computed_target_by::<V>(card, |power| {
+                    fight.power(player, power).is_some()
+                })
+            });
+            match aims {
+                TargetType::AnyEnemy if target == Some(holder) => Modify::Added(stack),
+                TargetType::AllEnemies => Modify::Added(stack),
+                _ => Modify::Nothing,
             }
         }
         (__c0, _, ModifyHook::CardPlayCount { .. }) if __c0 == V::Power::TAG_TEAM_POWER => {
@@ -2782,13 +2842,28 @@ pub(crate) fn event_hook<V: crate::Build>(
             Some(HookEffect::Remove)
         }
         (__c0, _, EventHook::AfterDeath { .. }) if __c0 == V::Power::COVERED_POWER => None,
-        // `CoveredPower.AfterApplied` gives its applier Intercept, which takes
-        // the hits meant for whoever it covers. Intercept, the one card that
-        // applies it, aims at another living player, and a fight here has
-        // none.
+        // `CoveredPower.AfterApplied` gives its applier Intercept, from its
+        // owner, unless the applier carries one, and adds its owner to those
+        // the Intercept covers.
         (__c0, _, EventHook::Applied) if __c0 == V::Power::COVERED_POWER => {
-            unimplemented!("Covered applied, which takes another player")
+            let interceptor =
+                applier.unwrap_or_else(|| unimplemented!("Covered applied by nobody"));
+            Some(HookEffect::Cover {
+                interceptor,
+                covered: holder,
+                power: V::Power::INTERCEPT_POWER,
+            })
         }
+        // `InterceptPower.AfterSideTurnEnd`: gone once the enemies end a turn.
+        (
+            __c0,
+            _,
+            EventHook::SideTurnEnd {
+                side: CombatSide::Enemy,
+                ..
+            },
+        ) if __c0 == V::Power::INTERCEPT_POWER => Some(HookEffect::Remove),
+        (__c0, _, EventHook::SideTurnEnd { .. }) if __c0 == V::Power::INTERCEPT_POWER => None,
         // `TagTeamPower.AfterModifyingCardPlayCount`: gone once it added plays.
         (__c0, _, EventHook::PlayCountModified { .. }) if __c0 == V::Power::TAG_TEAM_POWER => {
             Some(HookEffect::Remove)

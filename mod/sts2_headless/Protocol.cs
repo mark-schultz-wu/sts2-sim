@@ -917,7 +917,7 @@ internal static class Protocol
             return;
         }
 
-        if (!card.CanPlayTargeting(target))
+        if (!Moves.Aimable(card, target))
         {
             await Error("play_card", Refusals.WrongTarget(card, target?.CombatId));
             return;

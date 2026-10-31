@@ -259,15 +259,22 @@ run as its own machine sees it. The work goes in this order:
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
    Mercury Hourglass, as in a solo hunt. So the runs go deep.
-   On 2026-10-30 all sixteen seeds agreed to their end, 32,144 steps.
-   Seeds 0, 1, 5, 6 and 13 lost. Seeds 2, 3, 4, 7, 8, 9, 10, 11, 12, 14
-   and 15 won. The next hunt widens the seeds. What is still open is
-   listed below, worked by class.
+   On 2026-10-30 a hunt of 96 seeds covered four pairs of characters.
+   Ironclad and Silent played seeds 0 to 47. Defect and Necrobinder,
+   Regent and Ironclad, and Silent and Defect played seeds 0 to 15. 53 seeds
+   agreed to their end. What is still open is listed below, worked by
+   class, with the seeds that show it.
    Hunts stay at `--width 4`: at `--width 8` two games of sixteen failed
    in Godot itself. A lobby moves only once every game stands still and
    every link's reliable packets are all taken in, so load changes no
-   run. Two hunts at `--width 4` on 2026-10-30 played the same sixteen
-   runs, step for step. Each machine logs the shared actions in the
+   run. A game whose player ended the turn or voted stands still only
+   while another player is yet to. Once all are done, it is on its way
+   to the next turn or room. Two recordings of the co-op scenarios on
+   2026-10-30 came out the same, byte for byte. The narrower ally
+   targets changed the moves the hunted runs chose from, so
+   `coop-v0.111.0.bin` holds the sixteen Ironclad and Silent seeds hunted
+   again. Eleven agree to their end, and the simulator follows 25,307 of
+   their 25,317 positions. Each machine logs the shared actions in the
    order it took them in, in `order.jsonl` under its profile. The golden tests follow the hunted runs in
    `coop-v0.111.0.bin` without the game. So a change to the simulator
    needs no hunt to show it keeps them. A rule no hunted run reaches gets
@@ -275,6 +282,11 @@ run as its own machine sees it. The work goes in this order:
    `docs/COOP-FIGHTS.md` and where the hunted runs stop:
    - Imitation Learning copies a teammate's Power card, but no hunted run
      reaches the copy yet. Check it against the game when one does.
+   - A card whose pick another player makes splits its play, as
+     `BranchingPlayerChoiceContext` does. The play ends there, and the
+     pick and the rest of the card go on as a hook action on the
+     chooser's queue. Tutor is `unimplemented!` until the scheduler has
+     this (Defect and Necrobinder seed 4).
    - The rest of the scheduler (steps 3 and 4 of `docs/SCHEDULER.md`). A
      question the turn loop asks belongs to no player's queue yet. Each
      phase of the turn's end panics at one in a fight of several players.
@@ -285,7 +297,8 @@ run as its own machine sees it. The work goes in this order:
      each player after the flush, and the turn starts only for the
      players it names, with the others ready. `TurnNumber` is kept for
      each player, and an extra turn counts up only the takers'. The sim
-     keeps one `live.turn`.
+     keeps one `live.turn`. Ironclad and Silent seeds 22, 25, 27, 32,
+     36, 38, 42 and 47, and Regent and Ironclad seed 10, panic here.
    - A question that waits on a player's own card play names no asker,
      where the game names the play.
    - Content that reads "the player" where the game reads an owner:
@@ -297,10 +310,47 @@ run as its own machine sees it. The work goes in this order:
      - Content whose comment says "a fight here has one" player.
      - The rest of `Board::seat`'s callers, which a card or potion reaches
        for its own player and a monster's move does not yet.
-   - A player who dies inside their own card or potion beside a living
-     one, and a death that leaves every standing player ready, panic.
-4. Co-op content, as the runs reach it. Massive Scroll, Concoct and Tag
-   Team are ported.
+   - A death that leaves every standing player ready panics.
+   - The hand screen checks a pick again whenever the fight changes
+     (`NPlayerHand.RevalidateSelectionAfterStateChange`). A pick the
+     filter no longer lets through drops, and a pick left with nothing
+     picked and nothing to pick ends with no cards. Neither the mod nor
+     the simulator does this yet. Both offer the hand as it stands.
+   - The splits the hunt of 2026-10-30 found, by where they show:
+     - A shop purchase draws a different number (Defect and Necrobinder
+       seeds 3 and 14, Silent and Defect seed 9).
+     - Travel (Defect and Necrobinder seed 11, Regent and Ironclad seed
+       11, Silent and Defect seed 11). The lobby counted a game as still
+       once every vote was in, before the party moved. Ironclad and
+       Silent seed 6 still parts after travel with that fixed, in the
+       map and the question.
+     - The end of the turn in a fight: the creatures, or the question.
+       Ironclad and Silent seed 30 shows it at Spiny Toad, and seed 44
+       at Ceremonial Beast. Silent and Defect seed 4 shows it at Globe
+       Head, seed 10 at Ovicopter, and seed 13 at Knowledge Demon. The
+       lobby counted a game as still once every player ended the turn,
+       so hunt these again first.
+     - A potion. Defect and Necrobinder show it with Power Potion (seed
+       5) and Touch of Insanity (seed 15). Ironclad and Silent show it
+       with Entropic Brew (seeds 9 and 46) and Gambler's Brew (seed 3).
+       Silent and Defect show it with Swift Potion (seed 15).
+     - Golden Compass in the map (Ironclad and Silent seeds 28 and 45).
+       `GoldenPathActMap` drops a point type in co-op, under class E.
+     - Outrage's question (Ironclad and Silent seed 24), Battleworn
+       Dummy's options (seed 37), and a card selection's piles (Regent
+       and Ironclad seed 9).
+     - The piles at the run's end (Ironclad and Silent seed 39, Defect
+       and Necrobinder seed 10).
+   - The game itself fails, as a player dies outside of combat in
+     multiplayer (Regent and Ironclad seed 14). Class D's
+     death out of a fight is the likely cause.
+4. Co-op content, as the runs reach it. Massive Scroll, Concoct, Tag
+   Team and the rest of v0.111.0's co-op cards are ported, but for The
+   Ball. After each play it goes into a random teammate's draw pile
+   (`CardPileCmd.GiveToAnotherPlayer`), so a card changes owner. The
+   simulator keeps each player's cards apart, and its result pile names
+   no player. Regent and Ironclad seed 7, and Silent and Defect seed 7,
+   panic at it.
 
 ### 3. The engine's command frames as coroutines
 

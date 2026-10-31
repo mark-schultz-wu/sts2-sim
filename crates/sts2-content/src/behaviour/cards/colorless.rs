@@ -30,6 +30,40 @@ pub(super) fn on_play<'a, V: crate::Build, K: FightKind<V>>(
             fight.apply(block);
             Played::Done
         }
+        // `Mimic`: its `CalculatedBlock`, worked out from the ally it is
+        // pointed at, on its owner.
+        __c0 if __c0 == V::Card::MIMIC => {
+            let block = fight.resolve(sts2_core::Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: sts2_core::Amount::Var(V::CardVar::CALCULATED_BLOCK),
+                scaling: sts2_core::Scaling::Dynamic,
+            });
+            fight.apply(block);
+            Played::Done
+        }
+        // `Rally`: its block on each living player, its owner too.
+        __c0 if __c0 == V::Card::RALLY => {
+            for player in crate::behaviour::cards::teammates::<V, _>(fight) {
+                let block = fight.resolve(sts2_core::Effect::GainBlock {
+                    recipient: player,
+                    amount: sts2_core::Amount::Var(V::CardVar::BLOCK),
+                    scaling: sts2_core::Scaling::Dynamic,
+                });
+                fight.apply(block);
+            }
+            Played::Done
+        }
+        // `HuddleUp`: its `Cards` drawn by each living player, its owner too,
+        // one after another.
+        __c0 if __c0 == V::Card::HUDDLE_UP => {
+            let cards = fight.var(V::CardVar::CARDS);
+            for player in crate::behaviour::cards::teammates::<V, _>(fight) {
+                fight.for_player(player, |fight| {
+                    fight.draw(cards);
+                });
+            }
+            Played::Done
+        }
         // `BelieveInYou`: its energy to the ally it is pointed at.
         __c0 if __c0 == V::Card::BELIEVE_IN_YOU => {
             let energy = fight.var(V::CardVar::ENERGY);

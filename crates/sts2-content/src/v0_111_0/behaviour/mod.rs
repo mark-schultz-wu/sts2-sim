@@ -11,6 +11,7 @@ pub(crate) mod cards;
 pub(crate) mod enchantments;
 pub mod events;
 pub(crate) mod monsters;
+pub(crate) mod orbs;
 pub(crate) mod potions;
 pub(crate) mod powers;
 pub(crate) mod relics;
@@ -196,6 +197,20 @@ impl crate::build::OwnRules for V {
         fight: &mut K::Fight<'a>,
     ) -> crate::behaviour::Played<V, K> {
         super::generated::monster_moves::perform::<K>(monster, move_id, fight)
+    }
+
+    fn own_orb_passive<F: sts2_core::Fight<V>>(
+        orb: &mut sts2_core::Channelled<V>,
+        fight: &mut F,
+    ) -> Option<()> {
+        orbs::own_passive(orb, fight)
+    }
+
+    fn own_orb_evoke<F: sts2_core::Fight<V>>(
+        orb: &sts2_core::Channelled<V>,
+        fight: &mut F,
+    ) -> Option<sts2_core::Opponents> {
+        orbs::own_evoke(orb, fight)
     }
 
     fn own_power_death<F: sts2_core::Fight<V>>(

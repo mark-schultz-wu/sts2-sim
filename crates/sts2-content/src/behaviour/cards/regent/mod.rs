@@ -56,6 +56,25 @@ pub(super) fn on_play<'a, V: crate::Build, K: FightKind<V>>(
     fight: &mut K::Fight<'a>,
 ) -> Played<V, K> {
     match card {
+        // `Largesse`: one colorless card made for the ally it is pointed at,
+        // off its owner's `CombatCardGeneration`, upgraded where Largesse
+        // is, into that ally's hand.
+        __c0 if __c0 == V::Card::LARGESSE => {
+            use sts2_core::RunStreamKinds as _;
+
+            let target = fight.target();
+            let upgrade = u8::from(fight.upgraded());
+            fight.for_player(target, |fight| {
+                let mut pool = V::combat_colorless_cards(fight.multiplayer()).to_vec();
+                let stream = <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_GENERATION;
+                let [card] = fight
+                    .generate_cards::<1>(&mut pool, stream)
+                    .unwrap_or_else(|_| unimplemented!("an empty colorless pool"));
+                let card = sts2_core::CardIdent { upgrade, ..card };
+                fight.add_generated_cards(card, sts2_core::Pile::Hand, 1);
+            });
+            Played::Done
+        }
         // `Stardust`: its damage once for each star its X spent, each hit at
         // an enemy drawn at random.
         __c0 if __c0 == V::Card::STARDUST => {

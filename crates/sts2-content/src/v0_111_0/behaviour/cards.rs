@@ -123,6 +123,37 @@ pub(crate) fn on_play<'a, K: sts2_core::FightKind<V>>(
             fight.apply(block);
             Some(Played::Done)
         }
+        // `Plot`: its `Cards` as `DrawCardsNextTurnPower` on each living
+        // player, its owner too.
+        Cards::Regent(RegentCard::Plot) => {
+            let cards = fight.power_var(CardVar::Cards);
+            for player in crate::behaviour::cards::teammates::<V, _>(fight) {
+                fight.apply_power(
+                    player,
+                    Power::DrawCardsNextTurnPower,
+                    sts2_core::PowerAmount::Counted(cards),
+                );
+            }
+            Some(Played::Done)
+        }
+        // `Constellation`: its `Cards` drawn by the ally it is pointed at,
+        // then its energy to them, then its block on them.
+        Cards::Regent(RegentCard::Constellation) => {
+            let target = fight.target();
+            let cards = fight.var(CardVar::Cards);
+            let energy = fight.var(CardVar::Energy);
+            fight.for_player(target, |fight| {
+                fight.draw(cards);
+                fight.modify_energy(energy);
+            });
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: target,
+                amount: Amount::Var(CardVar::Block),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+            Some(Played::Done)
+        }
         // `Outrage`: its damage to the target, then a clone of itself into
         // each living player's discard pile, its owner's too.
         Cards::Ironclad(IroncladCard::Outrage) => {
@@ -279,6 +310,34 @@ pub(crate) fn on_play<'a, K: sts2_core::FightKind<V>>(
             Some(Played::Done)
         }
         Cards::Necrobinder(NecrobinderCard::Misery) => Some(misery(fight)),
+        // `Hibernate`: one Hibernate on its owner, then its `Repeat` of Frost
+        // orbs channelled.
+        Cards::Defect(DefectCard::Hibernate) => {
+            fight.apply_to_actor(Power::HibernatePower, sts2_core::PowerAmount::Counted(1));
+            for _ in 0..fight.var(CardVar::Repeat) {
+                fight.channel(super::super::generated::orbs::Orb::FrostOrb);
+            }
+            Some(Played::Done)
+        }
+        // `OneForAll`: its `OneForAllPower` on every player, the dead too,
+        // one after another.
+        Cards::Defect(DefectCard::OneForAll) => {
+            let amount = fight.power_var(CardVar::OneForAllPower);
+            for player in fight.players() {
+                fight.apply_power(
+                    player,
+                    Power::OneForAllPower,
+                    sts2_core::PowerAmount::Counted(amount),
+                );
+            }
+            Some(Played::Done)
+        }
+        // `Tutor`'s pick is the ally's, so its play branches: the play
+        // ends, and the pick and the rest go on as a hook action on the
+        // ally's queue. The scheduler has no branch yet.
+        Cards::Regent(RegentCard::Tutor) => {
+            unimplemented!("Tutor's pick branching onto the ally's queue")
+        }
         Cards::Defect(DefectCard::Hyperbeam)
         | Cards::Defect(DefectCard::Scrape)
         | Cards::Silent(SilentCard::Expertise)

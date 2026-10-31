@@ -197,6 +197,20 @@ impl crate::build::OwnRules for V {
         super::generated::monster_moves::perform::<K>(monster, move_id, fight)
     }
 
+    fn own_orb_passive<F: sts2_core::Fight<V>>(
+        _orb: &mut sts2_core::Channelled<V>,
+        _fight: &mut F,
+    ) -> Option<()> {
+        None
+    }
+
+    fn own_orb_evoke<F: sts2_core::Fight<V>>(
+        _orb: &sts2_core::Channelled<V>,
+        _fight: &mut F,
+    ) -> Option<sts2_core::Opponents> {
+        None
+    }
+
     fn own_power_death<F: sts2_core::Fight<V>>(
         _power: <V as sts2_core::ContentVersion>::Power,
         _holder: sts2_core::CombatId,

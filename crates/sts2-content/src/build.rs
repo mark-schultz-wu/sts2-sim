@@ -589,6 +589,24 @@ pub trait OwnRules: ContentVersion + Sized {
         rng: &mut R,
     ) -> Option<<Self::OwnEvents as sts2_core::EventBehavior<Self>>::State>;
 
+    /// An orb's `Passive(null)`, for an orb whose passive the build ports
+    /// for itself, or nothing for a shared one.
+    fn own_orb_passive<F: sts2_core::Fight<Self>>(
+        orb: &mut sts2_core::Channelled<Self>,
+        fight: &mut F,
+    ) -> Option<()>
+    where
+        Self: Build;
+
+    /// An orb's `Evoke`, and the creatures it names, for an orb whose evoke
+    /// the build ports for itself, or nothing for a shared one.
+    fn own_orb_evoke<F: sts2_core::Fight<Self>>(
+        orb: &sts2_core::Channelled<Self>,
+        fight: &mut F,
+    ) -> Option<sts2_core::Opponents>
+    where
+        Self: Build;
+
     /// A power's `AfterDeath` commands, for a power whose death the build
     /// ports for itself, or nothing for a shared one.
     fn own_power_death<F: sts2_core::Fight<Self>>(

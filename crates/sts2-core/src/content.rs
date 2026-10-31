@@ -1392,6 +1392,10 @@ pub struct CardSource<V: ContentVersion> {
     pub upgraded: bool,
     /// Whether an enchantment sits on it.
     pub enchanted: bool,
+    /// `EnergyCost.GetWithModifiers(CostModifiers.All)`, for a card not
+    /// being played, as a preview reads it. Nothing while it is played,
+    /// where the play's own spending is in the history.
+    pub cost: Option<Cost>,
 }
 
 /// A number an enchantment works out for the card it is on.
@@ -6190,6 +6194,14 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CreatureCmd.Damage` on every enemy that can be hit, from the
     /// listener's owner, for a number no power scales.
     DamageOpponents(V::Number),
+    /// `CoveredPower.AfterApplied`: `power`, which is Intercept, onto
+    /// `interceptor` from `covered` unless it carries one, then `covered`
+    /// added to those it covers.
+    Cover {
+        interceptor: crate::CombatId,
+        covered: crate::CombatId,
+        power: V::Power,
+    },
     /// `PowerCmd.Apply<P>(target, amount, applier)`, onto a creature the
     /// listener names, from the creature it names or from nobody.
     ApplyPower {
@@ -7011,6 +7023,16 @@ pub trait PowerModel<V: ContentVersion>: Copy + std::fmt::Debug + PartialEq + Eq
     /// hearing itself, as Beacon of Hope's `HasAlreadyBeenGivenBlock` does,
     /// keeps it. Any other ignores it.
     fn mark_busy(&mut self, _busy: bool) {}
+
+    /// `InterceptPower.AddCoveredCreature`: `creature` among those it covers,
+    /// once.
+    ///
+    /// # Panics
+    ///
+    /// A power that covers nobody.
+    fn add_covered(&mut self, _creature: crate::CombatId) {
+        unimplemented!("{:?} covering a creature", self.power())
+    }
 }
 
 /// What a card reads off its owner's side of the fight.
@@ -7062,6 +7084,12 @@ pub struct CardOwner<'a, V: ContentVersion> {
     /// How many of the owner's cards in the fight, every pile included, are
     /// tagged `OstyAttack`, this one left out.
     pub osty_attacks_besides: usize,
+    /// `Block` of the creature the card is pointed at, where it is pointed
+    /// at one.
+    pub target_block: Option<V::Number>,
+    /// The creatures on the owner's `Side`, the owner among them, living or
+    /// not.
+    pub allies: &'a [crate::CombatId],
 }
 
 /// What one copy of a card prints, as a rule reads it.

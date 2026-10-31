@@ -89,7 +89,7 @@ pub(crate) fn resolve<V: Rules>(
             preventer,
         });
     }
-    let targets = legal::targets::<V>(takes, &live.creatures, false);
+    let targets = legal::targets::<V>(seat, takes, live, false);
 
     // `CanPlayTargeting`: a card that names a creature is pointed at one its
     // own target type accepts, and a card that names none at nothing.
