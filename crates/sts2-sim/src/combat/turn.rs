@@ -1575,35 +1575,15 @@ pub(super) enum Listened {
 
 /// Stop `SetupPlayerTurn` on `question`, which picks cards to `act` on.
 pub(super) fn ask_setup<V: Rules>(
-    seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
     act: sts2_core::PileAct,
     question: super::live::Asked<V>,
     signalled: bool,
 ) -> Listened {
-    // `CardSelectCmd.FromHand` lists the hand as it asks. The setup's task
-    // pauses there, and `AfterSideTurnStart` runs on while it waits, so a
-    // card a listener adds then is not among the choices. A build that
-    // signals before it lists keeps the question on the live hand.
-    let question = match question {
-        super::live::Asked::Pile {
-            pile: Pile::Hand,
-            selection,
-        } if !V::signals_choice_before_listing() => super::live::Asked::Among {
-            cards: live.players[seat]
-                .cards
-                .iter(Pile::Hand)
-                .enumerate()
-                .map(|(at, held)| {
-                    let at = num_traits::NumCast::from(at)
-                        .unwrap_or_else(|| unimplemented!("a hand deeper than a fight can number"));
-                    sts2_core::CardAt::new(held.id, Pile::Hand, at)
-                })
-                .collect(),
-            selection,
-        },
-        question => question,
-    };
+    // The question offers the hand as it stands when it is answered, as the
+    // hand screen does. The setup's task pauses there, and
+    // `AfterSideTurnStart` runs on while it waits, so a card a listener adds
+    // then is among the choices.
     live.asking = Some(super::live::Asking {
         then: Then::Setup { act },
         question,
@@ -1802,11 +1782,11 @@ pub(super) fn before_hand_draw<V: Rules>(
             };
             if pauses::<V>(live, belts) {
                 let question = super::live::Asked::Pile { pile, selection };
-                return ask_setup::<V>(seat, live, act, question, true);
+                return ask_setup::<V>(live, act, question, true);
             }
             match select::<V>(seat, live, rngs.reborrow(), belts, pile, selection, act) {
                 Err(question) => {
-                    return ask_setup::<V>(seat, live, act, question, false);
+                    return ask_setup::<V>(live, act, question, false);
                 }
                 Ok(Some(ended)) => return Listened::Ended(ended),
                 Ok(None) => {}
@@ -1819,11 +1799,11 @@ pub(super) fn before_hand_draw<V: Rules>(
         } => {
             if pauses::<V>(live, belts) {
                 let question = super::live::Asked::Pile { pile, selection };
-                return ask_setup::<V>(seat, live, act, question, true);
+                return ask_setup::<V>(live, act, question, true);
             }
             match select::<V>(seat, live, rngs.reborrow(), belts, pile, selection, act) {
                 Err(question) => {
-                    return ask_setup::<V>(seat, live, act, question, false);
+                    return ask_setup::<V>(live, act, question, false);
                 }
                 Ok(Some(ended)) => return Listened::Ended(ended),
                 Ok(None) => {}
@@ -1986,12 +1966,12 @@ fn draw_step<V: Rules>(
             } => {
                 if pauses::<V>(live, belts) {
                     let question = super::live::Asked::Pile { pile, selection };
-                    ask_setup::<V>(seat, live, act, question, true);
+                    ask_setup::<V>(live, act, question, true);
                     return Ok(Drew::Parked { left });
                 }
                 match select::<V>(seat, live, rngs, belts, pile, selection, act) {
                     Err(question) => {
-                        ask_setup::<V>(seat, live, act, question, false);
+                        ask_setup::<V>(live, act, question, false);
                         Drew::Parked { left }
                     }
                     Ok(Some(ended)) => Drew::Done(Some(ended)),
@@ -2073,11 +2053,11 @@ pub(super) fn after_player_turn_start<V: Rules>(
         } => {
             if pauses::<V>(live, belts) {
                 let question = super::live::Asked::Pile { pile, selection };
-                return ask_setup::<V>(seat, live, act, question, true);
+                return ask_setup::<V>(live, act, question, true);
             }
             match select::<V>(seat, live, rngs.reborrow(), belts, pile, selection, act) {
                 Err(question) => {
-                    return ask_setup::<V>(seat, live, act, question, false);
+                    return ask_setup::<V>(live, act, question, false);
                 }
                 Ok(Some(ended)) => return Listened::Ended(ended),
                 Ok(None) => {}

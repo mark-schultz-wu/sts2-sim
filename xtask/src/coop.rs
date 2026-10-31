@@ -62,7 +62,6 @@ pub fn run(args: Args) -> Result<String, Error> {
     let root = crate::workspace();
     let runner = crate::error::build_runner(&root)?;
     let build = crate::runner::game_build();
-    let merger = crate::error::build_example(&root, "merge_runs")?;
     let scratch = root.join("target/coop");
     let _ = std::fs::remove_dir_all(&scratch);
     crate::error::create_dir(&scratch)?;
@@ -89,7 +88,11 @@ pub fn run(args: Args) -> Result<String, Error> {
         .collect();
     let file = scratch.join("runs.bin");
     if !kept.is_empty() {
-        crate::error::status(Command::new(&merger).arg(&file).args(&kept))?;
+        crate::error::status(
+            Command::new(crate::error::merger(&root)?)
+                .arg(&file)
+                .args(&kept),
+        )?;
     }
     let mut out = String::new();
     for (at, went) in &went {

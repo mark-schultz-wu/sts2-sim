@@ -302,7 +302,7 @@ run as its own machine sees it. The work goes in this order:
      game's do. Each listener checks them where the game does. The work
      goes in this order:
      1. The hooks carry their participants, and relics check them (done).
-     2. Powers check them.
+     2. Powers check them (done).
      3. Cards, monsters, enchantments and the rest check them.
      4. `TurnNumber` is kept for each player, and a listener reads its
         owner's. The sim keeps one `live.turn`.
