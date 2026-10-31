@@ -1360,6 +1360,22 @@ pub struct DamageResult<V: ContentVersion> {
 /// each naming its hit.
 pub type AttackResults<V> = smallvec::SmallVec<[DamageResult<V>; 4]>;
 
+/// Whose a played card is once its play is over, which
+/// `GetResultLocationForCardPlay`'s `player` names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResultHolder {
+    /// Its owner's, as the base class answers.
+    Owner,
+    /// A living teammate's, other than the owner, drawn off `CombatTargets`,
+    /// as The Ball's override picks. Where none stands, the base location
+    /// stands instead.
+    RandomTeammate,
+}
+
+/// Where a played card goes once its play is over, where in that pile, and
+/// whose it is then.
+pub type CardResult = (Option<crate::Pile>, PilePosition, ResultHolder);
+
 /// The most players a fight holds.
 pub const MAX_PLAYERS: usize = 4;
 
@@ -5712,6 +5728,9 @@ pub enum PoolFilter {
 pub enum PilePosition {
     Top,
     Bottom,
+    /// `CardPilePosition.Random`: a place drawn off `Shuffle`, as
+    /// `CardPileCmd.Add` draws one.
+    Random,
 }
 
 /// A card about to leave play, as `ModifyCardPlayResultPileTypeAndPosition`
@@ -7410,7 +7429,7 @@ pub trait Hooks: ContentVersion {
     fn card_result_pile(
         card: Self::Card,
         base: (Option<crate::Pile>, PilePosition),
-    ) -> crate::HookResponse<(Option<crate::Pile>, PilePosition)>;
+    ) -> crate::HookResponse<CardResult>;
 
     /// `write` carried out on the deck card a fight's copy came from.
     fn write_deck_card(card: &mut DeckCard<Self>, write: Self::DeckWrite);

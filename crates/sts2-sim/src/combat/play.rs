@@ -311,7 +311,8 @@ pub(crate) fn play<V: Rules>(
     let card = live.players[seat]
         .cards
         .play(sts2_core::Pile::Hand, play.index);
-    let (pile, position) = result_pile::<V, _>(seat, live, streams, belts, &card, play.energy);
+    let (pile, position, holder) =
+        result_pile::<V, _>(seat, live, streams, belts, &card, play.energy);
     let count = play_count::<V, _>(seat, live, streams, belts, &card, play.target);
     // `SpendEnergy` captures what an X cost spent, and `SpendStars` what the
     // stars cost.
@@ -323,6 +324,7 @@ pub(crate) fn play<V: Rules>(
         stars: play.stars,
         pile,
         position,
+        holder,
     };
     // `BeginCardOrPotionEffect`, before the first play.
     live.players[seat].effect_depth += 1;
@@ -569,7 +571,7 @@ pub(super) fn auto_play_in_play<V: Rules>(
         super::legal::costs::<V>(seat, &card, stood, super::listen::Walk { live, belts });
     let energy = super::legal::spend(cost, live.players[seat].energy)
         .unwrap_or_else(|| unimplemented!("an energy cost the count cannot hold"));
-    let (pile, position) = result_pile::<V, _>(seat, live, &mut rngs, belts, &card, energy);
+    let (pile, position, holder) = result_pile::<V, _>(seat, live, &mut rngs, belts, &card, energy);
     let count = play_count::<V, _>(seat, live, &mut rngs, belts, &card, target);
     // `AutoPlay` spends nothing, and captures an X from what the pools hold,
     // unless `skipXCapture` keeps one a payment captured.
@@ -590,6 +592,7 @@ pub(super) fn auto_play_in_play<V: Rules>(
         stars,
         pile,
         position,
+        holder,
     };
     // `BeginCardOrPotionEffect`, before the first play.
     live.players[seat].effect_depth += 1;
@@ -835,7 +838,11 @@ fn result_pile<V: Rules, S: LendsCombat>(
     belts: &mut crate::run::Belts<V>,
     card: &super::live::CardInstance<V>,
     energy: V::Count,
-) -> (Option<sts2_core::Pile>, sts2_core::PilePosition) {
+) -> (
+    Option<sts2_core::Pile>,
+    sts2_core::PilePosition,
+    Option<sts2_core::SeatIndex>,
+) {
     let played = card.face.ident.card;
     // `ExhaustOnNextPlay`, which the pile it picks clears.
     let marked = live.players[seat]
@@ -855,9 +862,30 @@ fn result_pile<V: Rules, S: LendsCombat>(
         false => Some(sts2_core::Pile::Discard),
     };
     let base = (pile, sts2_core::PilePosition::Bottom);
-    let mut result = match V::card_result_pile(played, base) {
-        sts2_core::HookResponse::Decision(location) => location,
-        sts2_core::HookResponse::DoesNotImplement => base,
+    let (mut result, holder) = match V::card_result_pile(played, base) {
+        sts2_core::HookResponse::Decision((pile, position, sts2_core::ResultHolder::Owner)) => {
+            ((pile, position), None)
+        }
+        // `GetTeammatesOf(Owner.Creature)` alive and other than its owner,
+        // and one drawn off `CombatTargets`. With none, the base stands.
+        sts2_core::HookResponse::Decision((
+            pile,
+            position,
+            sts2_core::ResultHolder::RandomTeammate,
+        )) => {
+            use sts2_core::rng::GameRng as _;
+
+            let teammates: SmallVec<[sts2_core::SeatIndex; 4]> = live
+                .players
+                .seats()
+                .filter(|&other| other != seat && live.player(other).alive)
+                .collect();
+            match streams.combat().targets.choose(&teammates).ok().copied() {
+                Some(teammate) => ((pile, position), Some(teammate)),
+                None => (base, None),
+            }
+        }
+        sts2_core::HookResponse::DoesNotImplement => (base, None),
     };
     let player = live.player(seat).id;
     let mut modifiers: SmallVec<[(CombatId, V::Power); 2]> = SmallVec::new();
@@ -927,7 +955,7 @@ fn result_pile<V: Rules, S: LendsCombat>(
             }
         }
     }
-    result
+    (result.0, result.1, holder)
 }
 
 /// `GeneratePlayCount`: the copy's own plays, run through
@@ -2122,6 +2150,29 @@ fn play_over<V: Rules, S: LendsCombat>(
     Some((played_card, card))
 }
 
+/// Where `CardPileCmd.Add` puts a card in a pile of `places` cards, counted
+/// from the top: `Rng.Shuffle.NextInt(count + 1)` for a random place.
+fn place_in<S: LendsCombat>(
+    streams: &mut S,
+    places: usize,
+    position: sts2_core::PilePosition,
+) -> usize {
+    use sts2_core::rng::GameRng as _;
+
+    match position {
+        sts2_core::PilePosition::Top => 0,
+        sts2_core::PilePosition::Bottom => places,
+        sts2_core::PilePosition::Random => {
+            let bound = sts2_core::rng::Bound::try_new(
+                num_traits::cast(places + 1).expect("a pile's places fit the RNG integer"),
+            )
+            .expect("a pile has a place");
+            num_traits::cast(streams.combat().shuffle.next_int(bound))
+                .expect("a draw below the bound is a place")
+        }
+    }
+}
+
 /// Whether the player at `seat` has died.
 fn owner_dead<V: Rules>(live: &Live<V>, seat: sts2_core::SeatIndex) -> bool {
     !live.player(seat).alive
@@ -2211,6 +2262,35 @@ fn finish_effect<V: Rules, S: LendsCombat>(
         return Ok(ended);
     }
 
+    // `CardPileCmd.GiveToAnotherPlayer`, where the result location named a
+    // teammate: the card leaves play for their pile, and is theirs from now
+    // on. It gives nothing once the fight is over or ending, or to a dead
+    // player, and the card goes where its owner's result pile says.
+    if let Some(teammate) = play.holder
+        && let Some(pile) = play.pile
+        && !(next.won
+            || next.lost
+            || super::board::ending::<V>(super::listen::Walk { live: next, belts }))
+        && next.player(teammate).alive
+    {
+        let at = (next.players[seat].cards)
+            .find(sts2_core::Pile::Play, play.id)
+            .expect("a card leaving play stands in the play pile");
+        let card = next.players[seat].cards.remove(sts2_core::Pile::Play, at);
+        let places = next.players[teammate].cards.len(pile);
+        let place = place_in(streams, places, play.position);
+        next.players[teammate].cards.insert(pile, place, card);
+        // `AfterCardPlayedCleanup`, on the copy now the teammate's.
+        next.players[teammate]
+            .cards
+            .write_named(play.id, super::live::Face::was_played);
+        let ended = match idle {
+            true => check_for_empty_hand::<V, _>(seat, next, streams, belts, ascension, ended),
+            false => ended,
+        };
+        return Ok(ended);
+    }
+
     // Where the result pile said, worked out before the first play. A full
     // hand sends the card to the discard pile instead.
     let to = match play.pile {
@@ -2232,7 +2312,31 @@ fn finish_effect<V: Rules, S: LendsCombat>(
         Some(sts2_core::Pile::Exhaust) => sts2_core::PilePosition::Bottom,
         _ => play.position,
     };
-    next.players[seat].cards.leave_play(play.id, to, position);
+    // `CardPileCmd.Add` adds nothing to a combat pile once the fight is
+    // ending, so it draws no random place.
+    let over = || {
+        next.won
+            || next.lost
+            || super::board::ending::<V>(super::listen::Walk { live: next, belts })
+    };
+    match (to, position) {
+        (Some(_), sts2_core::PilePosition::Random) if over() => {
+            next.players[seat]
+                .cards
+                .leave_play(play.id, to, sts2_core::PilePosition::Bottom);
+        }
+        // `CardPilePosition.Random`, which `leave_play` has no draw for.
+        (Some(pile), sts2_core::PilePosition::Random) => {
+            let at = (next.players[seat].cards)
+                .find(sts2_core::Pile::Play, play.id)
+                .expect("a card leaving play stands in the play pile");
+            let card = next.players[seat].cards.remove(sts2_core::Pile::Play, at);
+            let places = next.players[seat].cards.len(pile);
+            let place = place_in(streams, places, position);
+            next.players[seat].cards.insert(pile, place, card);
+        }
+        _ => next.players[seat].cards.leave_play(play.id, to, position),
+    }
     // `CardCmd.Exhaust` for a card that exhausts as it is played, whose hook
     // follows the card into the pile. A fight already over exhausts nothing.
     let ended = match (ended, exhausting) {

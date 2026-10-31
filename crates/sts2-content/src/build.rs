@@ -486,12 +486,16 @@ pub trait OwnRules: ContentVersion + Sized {
     where
         Self: Build;
 
+    /// The fields a copy of a card of the build's own starts with, or
+    /// nothing for a shared card or one that keeps none.
+    fn own_card_fields(card: Self::Card) -> Option<crate::behaviour::cards::Fields>;
+
     /// Where a played card goes, for a card whose `GetResultLocationForCardPlay`
     /// is the build's own, or nothing for a shared one.
     fn own_card_result_pile(
         card: Self::Card,
         base: (Option<sts2_core::Pile>, sts2_core::PilePosition),
-    ) -> Option<sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)>>;
+    ) -> Option<sts2_core::HookResponse<sts2_core::CardResult>>;
 
     /// What a card of the build's own does when it is played, or nothing for
     /// a shared one.
@@ -823,8 +827,7 @@ macro_rules! rules {
                 fn card_result_pile(
                     card: Self::Card,
                     base: (Option<sts2_core::Pile>, sts2_core::PilePosition),
-                ) -> sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)>
-                {
+                ) -> sts2_core::HookResponse<sts2_core::CardResult> {
                     crate::behaviour::rules::card_result_pile::<Self>(card, base)
                 }
 

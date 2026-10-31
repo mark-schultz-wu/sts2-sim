@@ -188,8 +188,8 @@ pub(crate) fn is_playable<V: crate::Build>(
 pub(crate) fn result_pile<V: crate::Build>(
     card: V::Card,
     base: (Option<sts2_core::Pile>, sts2_core::PilePosition),
-) -> sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)> {
-    use sts2_core::{HookResponse, Pile};
+) -> sts2_core::HookResponse<sts2_core::CardResult> {
+    use sts2_core::{HookResponse, Pile, ResultHolder};
 
     if let Some(own) = V::own_card_result_pile(card, base) {
         return own;
@@ -197,8 +197,8 @@ pub(crate) fn result_pile<V: crate::Build>(
     match card {
         // `ParticleWall`: back into the hand where the base class discards.
         __c0 if __c0 == V::Card::PARTICLE_WALL => HookResponse::Decision(match base {
-            (Some(Pile::Discard), position) => (Some(Pile::Hand), position),
-            base => base,
+            (Some(Pile::Discard), position) => (Some(Pile::Hand), position, ResultHolder::Owner),
+            (pile, position) => (pile, position, ResultHolder::Owner),
         }),
         _ => HookResponse::DoesNotImplement,
     }
@@ -1003,7 +1003,7 @@ const GENETIC_ALGORITHM_BLOCK: Number = 1;
 const SOVEREIGN_BLADE_DAMAGE: Number = 10;
 
 /// `number` as a [`Field`].
-fn field(number: impl TryInto<i16>) -> Field {
+pub(crate) fn field(number: impl TryInto<i16>) -> Field {
     nonmax::NonMaxI16::new(number.try_into().ok()?)
 }
 
@@ -1033,6 +1033,9 @@ fn set<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
 
 impl<V: crate::Build> sts2_core::CardFields<V> for Fields {
     fn new(card: V::Card) -> Self {
+        if let Some(own) = V::own_card_fields(card) {
+            return own;
+        }
         let zero = field(0);
         match card {
             __c0 if __c0 == V::Card::CLAW => Self::Claw { extra_damage: zero },

@@ -326,7 +326,8 @@ run as its own machine sees it. The work goes in this order:
      - The end of the turn in a fight: the creatures, or the question.
        Ironclad and Silent seed 30 shows it at Spiny Toad, and seed 44
        at Ceremonial Beast. Silent and Defect seed 4 shows it at Globe
-       Head, seed 10 at Ovicopter, and seed 13 at Knowledge Demon. The
+       Head, seed 10 at Ovicopter, and seed 13 at Knowledge Demon.
+       Regent and Ironclad seed 10 shows it at Aeonglass. The
        lobby counted a game as still once every player ended the turn,
        so hunt these again first.
      - A potion thrown at a player who ended the turn. Its choice takes
@@ -340,21 +341,18 @@ run as its own machine sees it. The work goes in this order:
        parted once (Silent and Defect seed 15).
      - Golden Compass in the map (Ironclad and Silent seeds 28 and 45).
        `GoldenPathActMap` drops a point type in co-op, under class E.
-     - Outrage's question (Ironclad and Silent seed 24), Battleworn
-       Dummy's options (seed 37), and a card selection's piles (Regent
-       and Ironclad seed 9).
+     - Outrage's question (Ironclad and Silent seed 24). Regent and
+       Ironclad seed 7 parts there too.
+     - Battleworn Dummy's options (Ironclad and Silent seed 37), and a
+       card selection's piles (Regent and Ironclad seed 9).
      - The piles at the run's end (Ironclad and Silent seed 39, Defect
        and Necrobinder seed 10).
    - The game itself fails, as a player dies outside of combat in
      multiplayer (Regent and Ironclad seed 14). Class D's
      death out of a fight is the likely cause.
 4. Co-op content, as the runs reach it. Massive Scroll, Concoct, Tag
-   Team and the rest of v0.111.0's co-op cards are ported, but for The
-   Ball. After each play it goes into a random teammate's draw pile
-   (`CardPileCmd.GiveToAnotherPlayer`), so a card changes owner. The
-   simulator keeps each player's cards apart, and its result pile names
-   no player. Regent and Ironclad seed 7, and Silent and Defect seed 7,
-   panic at it.
+   Team and the rest of v0.111.0's co-op cards are ported. The Ball
+   goes to a teammate as `CardPileCmd.GiveToAnotherPlayer` gives it.
 
 ### 3. The engine's command frames as coroutines
 

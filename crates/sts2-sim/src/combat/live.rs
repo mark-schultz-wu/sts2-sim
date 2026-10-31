@@ -108,6 +108,9 @@ pub(super) struct CardPlay<V: Rules> {
     /// the first play. Nothing for a card that leaves the fight.
     pub(super) pile: Option<sts2_core::Pile>,
     pub(super) position: sts2_core::PilePosition,
+    /// `GetResultLocationForCardPlay`'s `player`, where it names a
+    /// teammate the card goes to: `CardPileCmd.GiveToAnotherPlayer`.
+    pub(super) holder: Option<sts2_core::SeatIndex>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
