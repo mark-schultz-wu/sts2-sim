@@ -145,7 +145,7 @@ block, energy, hand, deck, health, plays and belt. What is left:
 - Fight-in-event: `resuming` keeps one player's event to go back to.
   `ResumeAfterCombat` runs on every player's copy. A won fight that
   resumes its event panics in `run/fight.rs` when there are several
-  players. No hunted seed reaches one yet.
+  players. Ironclad and Silent seed 22 reaches one.
 - Out of a fight, damage kills the player. The game heals them to 1
   instead when there are several players (`CreatureCmd.cs:522`).
 
@@ -255,7 +255,9 @@ run as its own machine sees it. The work goes in this order:
    for the player carrying it, and so do a side's turn-start asks. A
    choice put to a player who ended the turn takes that end back. A
    player who dies inside their own card keeps their cards until the
-   card is over. The run is over only once every player is dead.
+   card is over. The run is over only once every player is dead. A
+   player who earns an extra turn takes it alone, while the others wait
+   ready.
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
    Mercury Hourglass, as in a solo hunt. So the runs go deep.
@@ -294,20 +296,6 @@ run as its own machine sees it. The work goes in this order:
      Ironclad and Silent seeds 27 and 32 panic at these.
      Card plays, potions and the turn's end go through the queues, with
      the action types, gating and cancellations.
-   - Co-op extra turns. `ShouldTakeExtraTurn` is asked of each player
-     after the flush, and the turn starts only for the players it names,
-     with the others ready. Ironclad and Silent seeds 22, 25, 36, 38, 42
-     and 47, and Regent and Ironclad seed 10, panic here. Mark chose on
-     2026-10-30 that each side turn hook carries its participants, as the
-     game's do. Each listener checks them where the game does. The work
-     goes in this order:
-     1. The hooks carry their participants, and relics check them (done).
-     2. Powers check them (done).
-     3. Cards, monsters, enchantments and the rest check them (done).
-     4. `TurnNumber` is kept for each player, and a listener reads its
-        owner's (done).
-     5. The extra turns: the takers' turn ends, flushes and starts alone,
-        and an extra turn counts up only the takers' `TurnNumber`.
    - A question that waits on a player's own card play names no asker,
      where the game names the play.
    - Content that reads "the player" where the game reads an owner:

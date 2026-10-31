@@ -2788,6 +2788,9 @@ pub(crate) struct Live<V: Rules> {
     /// Whether the players' `TurnNumber`s differ, which only an extra turn
     /// some of them take makes so. Set where it does, and never cleared.
     pub(super) turns_apart: bool,
+    /// `PlayersTakingExtraTurn`: the seats taking an extra turn, a bit for
+    /// each. Empty for a turn every player takes.
+    pub(super) taking: u8,
     /// The creatures ending the side's turn, which its end hooks name as
     /// taking part. Taken as the end begins.
     pub(super) ending: sts2_core::Participants,
@@ -3207,6 +3210,7 @@ impl<V: Rules> Clone for Live<V> {
             round,
             starting,
             turns_apart,
+            taking,
             ending,
             side,
             history,
@@ -3252,6 +3256,7 @@ impl<V: Rules> Clone for Live<V> {
         *round = source.round;
         *starting = source.starting;
         *turns_apart = source.turns_apart;
+        *taking = source.taking;
         *ending = source.ending;
         *side = source.side;
         history.clone_from(&source.history);
@@ -4063,6 +4068,18 @@ impl<V: Rules> Live<V> {
         }
     }
 
+    /// `IsPartOfPlayerTurn`: whether `seat` takes part in the player turn,
+    /// which every seat does but where some take an extra turn alone.
+    pub(crate) fn part_of_turn(&self, seat: sts2_core::SeatIndex) -> bool {
+        self.taking == 0 || self.taking & (1 << seat.0) != 0
+    }
+
+    /// The seats taking part in the player turn, in seat order:
+    /// `playersStartingTurn` and `playersEndingTurn`.
+    pub(crate) fn turn_seats(&self) -> impl Iterator<Item = sts2_core::SeatIndex> + '_ {
+        self.players.seats().filter(|&seat| self.part_of_turn(seat))
+    }
+
     /// The `TurnNumber` of the player `creature` is, or of the first player
     /// for a creature that is no player's, which no listener reads it of.
     pub(crate) fn turn_of(&self, creature: CombatId) -> V::Count {
@@ -4559,6 +4576,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             round: 1,
             starting: sts2_core::Participants::default(),
             turns_apart: false,
+            taking: 0,
             ending: sts2_core::Participants::default(),
             side: CombatSide::Player,
             history: CombatHistory::new(),

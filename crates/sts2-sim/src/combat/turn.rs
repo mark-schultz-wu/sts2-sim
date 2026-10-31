@@ -89,45 +89,54 @@ pub(super) fn ended_at_turn_end<V: Rules>(live: &mut Live<V>, ended: super::Ende
     }
 }
 
-/// `SwitchFromPlayerToEnemySide` asks `ShouldTakeExtraTurn` first. A yes
-/// keeps the side with the player, whose turn counts up while the round
-/// does not, and `AfterTakingExtraTurn` follows. True where it said yes.
-pub(super) fn takes_extra_turn<V: Rules>(
-    seat: sts2_core::SeatIndex,
-    live: &mut Live<V>,
-    belts: &mut crate::run::Belts<V>,
-) -> bool {
-    let extra = listen::heard::<V>(live, belts, sts2_core::ModelHook::ShouldTakeExtraTurn) && {
-        let plays = live.history.unprompted_plays_this_turn(seat.creature());
-        listen::any_decides::<V>(
-            listen::Walk { live, belts },
-            sts2_core::DecisionHook::ShouldTakeExtraTurn {
-                player: seat.creature(),
-                plays,
-                turn: live.players[seat].turn,
-            },
-            true,
-        )
-    };
-    if !extra {
+/// `SwitchFromPlayerToEnemySide` asks each player `ShouldTakeExtraTurn`
+/// first, and those that say yes are `PlayersTakingExtraTurn`. Where any
+/// does, the side stays with the players, and `SwitchSides` counts up the
+/// takers' turns alone, while the round does not. `AfterTakingExtraTurn`
+/// follows for each taker. True where any said yes.
+pub(super) fn extra_turns<V: Rules>(live: &mut Live<V>, belts: &mut crate::run::Belts<V>) -> bool {
+    live.taking = 0;
+    if listen::heard::<V>(live, belts, sts2_core::ModelHook::ShouldTakeExtraTurn) {
+        for seat in seats(live).collect::<SmallVec<[sts2_core::SeatIndex; 4]>>() {
+            let plays = live.history.unprompted_plays_this_turn(seat.creature());
+            let takes = listen::any_decides::<V>(
+                listen::Walk { live, belts },
+                sts2_core::DecisionHook::ShouldTakeExtraTurn {
+                    player: seat.creature(),
+                    plays,
+                    turn: live.players[seat].turn,
+                },
+                true,
+            );
+            if takes {
+                live.taking |= 1 << seat.0;
+            }
+        }
+    }
+    if live.taking == 0 {
         return false;
     }
     for player in live.players.iter_mut() {
         player.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::NONE;
     }
     live.switch_side(<V::CombatSide as SideKinds>::PLAYER);
-    live.players[seat].turn = live.players[seat].turn + num_traits::one();
-    live.turns_apart |= live.players.len() > 1;
+    let takers: SmallVec<[sts2_core::SeatIndex; 4]> = live.turn_seats().collect();
+    for &seat in &takers {
+        live.players[seat].turn = live.players[seat].turn + num_traits::one();
+    }
+    live.turns_apart |= takers.len() < live.players.len();
     // `PowerCmd.Decrement` of a power asking runs inside the walk.
-    let taking = sts2_core::EventHook::TakingExtraTurn {
-        player: seat.creature(),
-    };
-    let mut walking = listen::Walking::begin(live, belts, taking);
-    if let Some((listener, effect)) = walking
-        .as_mut()
-        .and_then(|walking| walking.next(seat, live, belts))
-    {
-        unimplemented!("{listener:?} asking for {effect:?} as an extra turn is taken");
+    for seat in takers {
+        let taking = sts2_core::EventHook::TakingExtraTurn {
+            player: seat.creature(),
+        };
+        let mut walking = listen::Walking::begin(live, belts, taking);
+        if let Some((listener, effect)) = walking
+            .as_mut()
+            .and_then(|walking| walking.next(seat, live, belts))
+        {
+            unimplemented!("{listener:?} asking for {effect:?} as an extra turn is taken");
+        }
     }
     true
 }
@@ -152,7 +161,7 @@ pub(super) fn enemy_side_starts<V: Rules>(
     live.switch_side(<V::CombatSide as SideKinds>::ENEMY);
     // `Creature.BeforeTurnStart` for each enemy, then `BeforeSideTurnStart`
     // for their side. Hardened Shell's cap starts again here.
-    let starting = starting_turn::<V>(live, <V::CombatSide as SideKinds>::ENEMY, None);
+    let starting = starting_turn::<V>(live, <V::CombatSide as SideKinds>::ENEMY);
     before_side_turn_start::<V>(
         seat,
         live,
@@ -329,14 +338,13 @@ pub(super) fn side_starts<V: Rules>(
     streams: &mut crate::stream::Streams<V>,
     belts: &mut crate::run::Belts<V>,
     ascension: V::AscensionLevel,
-    taking: Option<sts2_core::SeatIndex>,
 ) -> Result<SideStarted<V>, Error> {
-    let extra = taking.is_some();
+    let extra = live.taking != 0;
     // What no one player owns acts as the first.
     let host = sts2_core::SeatIndex(0);
     // `StartTurn` opens on `BeforeSideTurnStart`, which is where a relic
     // counting a turn's plays moves the count on for the draw to read.
-    let starting = starting_turn::<V>(live, <V::CombatSide as SideKinds>::PLAYER, taking);
+    let starting = starting_turn::<V>(live, <V::CombatSide as SideKinds>::PLAYER);
     before_side_turn_start::<V>(
         host,
         live,
@@ -366,14 +374,18 @@ pub(super) fn side_starts<V: Rules>(
     // on, so the energy is the plain maximum and nothing is drawn.
     if live.won && super::board::ending::<V>(listen::Walk { live, belts }) {
         for seat in seats(live) {
-            live.players[seat].energy = base_energy::<V>(live, seat);
+            if live.part_of_turn(seat) {
+                live.players[seat].energy = base_energy::<V>(live, seat);
+            }
         }
         return Ok(SideStarted::Ended(super::Ended::Won));
     }
     let mut setup = None;
+    // `SetupPlayerTurn` for each of `playersStartingTurn`, which an extra
+    // turn's takers alone are.
     for seat in seats(live) {
         // `SetupPlayerTurn` does nothing for a dead player.
-        if !live.player(seat).alive {
+        if !live.part_of_turn(seat) || !live.player(seat).alive {
             continue;
         }
         match player_setup::<V>(seat, live, streams, belts, ascension) {
@@ -386,7 +398,7 @@ pub(super) fn side_starts<V: Rules>(
                 // its `ResetEnergy` with it. No listener hears a hook from
                 // then on, and nothing is drawn.
                 for later in seats(live).filter(|&later| later > seat) {
-                    if live.player(later).alive {
+                    if live.player(later).alive && live.part_of_turn(later) {
                         live.players[later].energy = base_energy::<V>(live, later);
                     }
                 }
@@ -411,8 +423,9 @@ pub(super) fn side_starts<V: Rules>(
     // `OrbQueue.AfterTurnStart` for each player, once the side's turn has
     // started.
     .or_else(|| {
-        seats(live).find_map(|seat| {
-            orbs_at_turn_start::<V>(seat, live, streams.combat(), belts, ascension)
+        seats(live).find_map(|seat| match live.part_of_turn(seat) {
+            true => orbs_at_turn_start::<V>(seat, live, streams.combat(), belts, ascension),
+            false => None,
         })
     });
     Ok(SideStarted::Started { setup, ended })
@@ -461,16 +474,13 @@ fn stop_setup<V: Rules>(
 
 /// `creaturesStartingTurn`, which `StartTurn` takes before
 /// `BeforeSideTurnStart`, so a creature that hook summons is not among
-/// them. An extra turn starts only for the player `taking` it, and not for
+/// them. An extra turn starts only for the players taking it, and not for
 /// their pets.
-fn starting_turn<V: Rules>(
-    live: &Live<V>,
-    side: V::CombatSide,
-    taking: Option<sts2_core::SeatIndex>,
-) -> SmallVec<[CombatId; 8]> {
-    match taking {
-        Some(seat) => smallvec::smallvec![seat.creature()],
-        None => live
+fn starting_turn<V: Rules>(live: &Live<V>, side: V::CombatSide) -> SmallVec<[CombatId; 8]> {
+    let extra = live.taking != 0 && side == <V::CombatSide as SideKinds>::PLAYER;
+    match extra {
+        true => live.turn_seats().map(|seat| seat.creature()).collect(),
+        false => live
             .creatures
             .iter()
             .filter(|creature| creature.side == side)
@@ -484,7 +494,7 @@ fn starting_turn<V: Rules>(
 /// enemy side's are the creatures on it, `CreaturesOnCurrentSide`.
 fn ending<V: Rules>(live: &Live<V>, side: V::CombatSide) -> sts2_core::Participants {
     match side == <V::CombatSide as SideKinds>::PLAYER {
-        true => seats(live).map(|seat| live.player(seat).id).collect(),
+        true => live.turn_seats().map(|seat| live.player(seat).id).collect(),
         false => (live.creatures.iter())
             .filter(|creature| creature.side == side)
             .map(|creature| creature.id)

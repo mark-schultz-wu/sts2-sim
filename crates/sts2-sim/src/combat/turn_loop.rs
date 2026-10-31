@@ -56,6 +56,7 @@ pub(super) fn turn_loop<V: Rules>(
             if let Some(ended) = turn_ends_each::<V>(ascension, resumed!(), &mut skipping) {
                 return Ok(Some(ended));
             }
+            extra = extra_turns::<V>(resumed!());
         } else {
             // The post-play phase. An auto-play there that asks stands the turn's
             // end still behind the answer.
@@ -166,7 +167,7 @@ pub(super) fn turn_loop<V: Rules>(
                 crate::combat::turn::ended_at_turn_end::<V>(lent.live, by_turn_end);
                 return Ok(Some(by_turn_end));
             }
-            extra = extra_turn::<V>(seat, resumed!());
+            extra = extra_turns::<V>(resumed!());
         }
         if !extra {
             // `SwitchSides` to the enemy and its `StartTurn`, then
@@ -230,8 +231,7 @@ pub(super) fn turn_loop<V: Rules>(
     }
 
     // `StartTurn` for the player's side, to `OrbQueue.AfterTurnStart`.
-    let taking: Option<sts2_core::SeatIndex> = extra.then_some(seat);
-    let started: Result<SideStarted<V>, Error> = side_starts::<V>(ascension, taking, resumed!());
+    let started: Result<SideStarted<V>, Error> = side_starts::<V>(ascension, resumed!());
     let parked: Option<Paused<V>> = match started {
         Ok(SideStarted::Started { setup, ended: None }) => setup,
         Ok(SideStarted::Started {
@@ -317,7 +317,6 @@ pub(super) fn turn_loop<V: Rules>(
 #[inline(never)]
 fn side_starts<V: Rules>(
     ascension: V::AscensionLevel,
-    taking: Option<sts2_core::SeatIndex>,
     lent: &mut Lent<'_, V>,
 ) -> Result<SideStarted<V>, Error> {
     let fighting = lent.fighting();
@@ -326,26 +325,26 @@ fn side_starts<V: Rules>(
         fighting.streams,
         fighting.belts,
         ascension,
-        taking,
     )
 }
 
 /// `EndPlayerTurnPhaseOne` and `EndPlayerTurnPhaseTwo` in a fight of
-/// several players. Each phase runs for every player in seat order, and the
-/// side's hooks run once. How the fight ended, if it did.
+/// several players. Each phase runs for every player ending the turn, in
+/// seat order, and the side's hooks run once. An extra turn's takers alone
+/// end it. How the fight ended, if it did.
 ///
 /// # Panics
 ///
-/// A phase that stops on a question, a listener that pauses, and an extra
-/// turn, which nothing here waits for or takes yet.
+/// A phase that stops on a question, or a listener that pauses, which
+/// nothing here waits for yet.
 #[inline(never)]
 fn turn_ends_each<V: Rules>(
     ascension: V::AscensionLevel,
     lent: &mut Lent<'_, V>,
     skipping: &mut Skips<V>,
 ) -> Option<crate::combat::Ended> {
-    let seats: SmallVec<[sts2_core::SeatIndex; 4]> =
-        crate::combat::turn::seats(lent.live).collect();
+    // `playersEndingTurn`: an extra turn's takers, or every player.
+    let seats: SmallVec<[sts2_core::SeatIndex; 4]> = lent.live.turn_seats().collect();
     // What no one player owns acts as the first.
     let host = sts2_core::SeatIndex(0);
     // `AfterAutoPostPlayPhaseEntered` for each player.
@@ -417,12 +416,6 @@ fn turn_ends_each<V: Rules>(
         crate::combat::turn::ended_at_turn_end::<V>(lent.live, by_turn_end);
         return Some(by_turn_end);
     }
-    // `ShouldTakeExtraTurn` for each player.
-    for &seat in &seats {
-        if extra_turn::<V>(seat, lent) {
-            unimplemented!("seat {seat:?} taking an extra turn in a fight of several players");
-        }
-    }
     None
 }
 
@@ -447,17 +440,20 @@ fn pre_play_each<V: Rules>(
     if crate::combat::signalled(lent.live) {
         unimplemented!("a choice signalled in a fight of several players");
     }
-    // A dead player is ready to end the turn as it starts, and runs no
-    // pre-play phase.
+    // A dead player is ready to end the turn as it starts, and so is one
+    // not taking an extra turn others take. Neither runs a pre-play phase.
     let live = &mut *lent.live;
     for seat in crate::combat::turn::seats(live) {
-        if !live.player(seat).alive {
+        if !live.player(seat).alive || !live.part_of_turn(seat) {
             live.players[seat].ready = true;
         }
     }
     for seat in crate::combat::turn::seats(lent.live) {
         // A seat whose setup waits on its question runs this once it is over.
-        if !lent.live.player(seat).alive || lent.live.queues.stopped(seat).is_some() {
+        if !lent.live.player(seat).alive
+            || !lent.live.part_of_turn(seat)
+            || lent.live.queues.stopped(seat).is_some()
+        {
             continue;
         }
         match pre_play::<V>(seat, lent) {
@@ -537,9 +533,9 @@ fn play_phase<V: Rules>(seat: sts2_core::SeatIndex, lent: &mut Lent<'_, V>) {
 }
 
 /// Whether the player takes an extra turn, with it set up where so.
-fn extra_turn<V: Rules>(seat: sts2_core::SeatIndex, lent: &mut Lent<'_, V>) -> bool {
+fn extra_turns<V: Rules>(lent: &mut Lent<'_, V>) -> bool {
     let (live, _, belts) = lent.parts();
-    crate::combat::turn::takes_extra_turn::<V>(seat, live, belts)
+    crate::combat::turn::extra_turns::<V>(live, belts)
 }
 
 /// The enemy side's turn start, and the enemies that act in it.
