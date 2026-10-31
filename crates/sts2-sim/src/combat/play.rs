@@ -1080,6 +1080,19 @@ fn signal_pauses<V: Rules>(live: &Live<V>) -> bool {
     live.pause_boundary && V::signals_choice_before_listing()
 }
 
+/// Whether the question in play is a pick an effect branched onto another
+/// player's queue, which waits there.
+pub(crate) fn branched<V: Rules>(live: &Live<V>) -> bool {
+    matches!(
+        &live.asking,
+        Some(super::live::Asking {
+            signalled: true,
+            then: Then::Play { effect, .. },
+            ..
+        }) if effect.branched
+    )
+}
+
 /// Whether the fight stands on a choice that signalled under a pause
 /// boundary and has not listed yet, which [`come_up`] lists.
 pub(crate) fn signalled<V: Rules>(live: &Live<V>) -> bool {
@@ -1412,13 +1425,7 @@ pub(crate) fn fronts_come_up<V: Rules>(
     if live.players.len() == 1 {
         return Ok(None);
     }
-    if let Some(super::live::Asking {
-        signalled: true,
-        then: Then::Play { effect, .. },
-        ..
-    }) = &live.asking
-        && effect.branched
-    {
+    if branched(live) {
         live.stop_for_answer(seat);
     }
     if live.asking.is_some() {

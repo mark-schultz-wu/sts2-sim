@@ -256,7 +256,10 @@ run as its own machine sees it. The work goes in this order:
    ready. A filtered card choice lists its pile once its choice has
    signalled. So a potion thrown at a player lists their hand once their
    queue reaches it. A pick from any pile but the hand keeps the cards it
-   listed, whatever joins the pile while it waits. Whispering Earring's pushed selector answers its picks as they
+   listed, whatever joins the pile while it waits. An auto-play whose
+   pick is another player's ends as the pick begins, and the pre-play
+   phase goes on. The other player's own pre-play phase runs all the
+   same. Whispering Earring's pushed selector answers its picks as they
    come up, before the next player's pre-play phase.
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
@@ -324,8 +327,6 @@ run as its own machine sees it. The work goes in this order:
      - A setup that jumps out of a fight into a room keeps the health the
        game set inside the fight, and the simulator drops it. A scenario
        that sets health with `hp` and then enters a room shows it.
-     - The end of the turn at Aeonglass parts in the turn (Regent and
-       Ironclad seed 10).
      - Gambler's Brew's seed parts at a later confirm, in the run, the
        belt and the moves (Ironclad and Silent seed 3). Swift Potion
        parted once (Silent and Defect seed 15).

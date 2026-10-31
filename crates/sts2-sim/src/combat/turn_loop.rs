@@ -475,13 +475,26 @@ fn pre_play_each<V: Rules>(
     }
     for seat in crate::combat::turn::seats(lent.live) {
         // A seat whose setup waits on its question runs this once it is over.
-        if !lent.live.player(seat).alive
-            || !lent.live.part_of_turn(seat)
-            || lent.live.queues.stopped(seat).is_some()
-        {
+        // Another player's pick that branched onto its queue holds nothing
+        // back, since the phase runs off the queues.
+        let setup_waits =
+            (lent.live.queues.stopped_with_owner(seat)).is_some_and(|(owner, _)| owner == seat);
+        if !lent.live.player(seat).alive || !lent.live.part_of_turn(seat) || setup_waits {
             continue;
         }
-        match pre_play::<V>(seat, lent) {
+        let mut played = pre_play::<V>(seat, lent);
+        // `BranchingPlayerChoiceContext`: an auto-play whose pick another
+        // player makes ends as the pick begins. The pick waits on that
+        // player's queue, and the phase goes on.
+        while let PrePlayed::Asked { rest, next } = played {
+            if !crate::combat::play::branched(lent.live) {
+                played = PrePlayed::Asked { rest, next };
+                break;
+            }
+            lent.live.stop_for_answer(seat);
+            played = pre_play_from::<V>(seat, lent, (rest, next));
+        }
+        match played {
             PrePlayed::Over(Some(ended)) => {
                 lent.live.skip_tick = skipping;
                 return Ok(Some(ended));
