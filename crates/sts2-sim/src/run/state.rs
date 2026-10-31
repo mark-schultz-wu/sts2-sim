@@ -2923,9 +2923,18 @@ impl<V: Rules> State<V> {
                     }
                     return Stepped::Done;
                 }
+                // `TaskHelper.RunSafely(PurchaseEverything(...))`: the
+                // purchases run on their own, and the walk that asked goes on
+                // at once. A question they ask waits on their owner.
                 HookEffect::PurchaseEverything => {
                     let steps = self.purchase_everything(seat, None);
-                    return Stepped::Nested(seat, steps, After::Done);
+                    if let Some(asked) = self.carry_out(seat, steps) {
+                        if self.phase.asking(seat).is_some() {
+                            unimplemented!("a detached purchase asking beside another question");
+                        }
+                        self.park(seat, asked);
+                    }
+                    return Stepped::Done;
                 }
                 HookEffect::ItemPurchased(gold) => {
                     self.item_purchased(seat, gold);
@@ -5848,11 +5857,8 @@ impl<V: Rules> State<V> {
             base: true,
         };
         if let Some(asked) = self.walk_run(entered) {
-            if !matches!(self.phase, Phase::Shop { .. }) {
-                let pickup = asked.pickup;
-                unimplemented!("entering a room asking for {pickup:?}");
-            }
-            self.park(host, asked);
+            let pickup = asked.pickup;
+            unimplemented!("entering a room asking for {pickup:?}");
         }
     }
 

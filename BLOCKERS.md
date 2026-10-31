@@ -315,11 +315,16 @@ run as its own machine sees it. The work goes in this order:
    - The splits the hunt of 2026-10-30 found, by where they show:
      - A shop purchase draws a different number (Defect and Necrobinder
        seeds 3 and 14, Silent and Defect seed 9).
-     - Travel (Defect and Necrobinder seed 11, Regent and Ironclad seed
-       11, Silent and Defect seed 11). The lobby counted a game as still
-       once every vote was in, before the party moved. Ironclad and
-       Silent seed 6 still parts after travel with that fixed, in the
-       map and the question.
+     - Travel into a fight parts in the turn, the creatures, the hand and
+       the moves. Ironclad and Silent seed 40 shows it, and so do Defect
+       and Necrobinder seed 11 and Regent and Ironclad seed 11.
+     - A co-op scenario's `enter_room` setup hangs: the host leaves its
+       room and enters none, and the reply never comes. The mod's
+       `EnterRoom` calls `EnterRoomDebug`, where `fight` goes through the
+       console's own command. So no co-op scenario enters a shop yet.
+     - A setup that jumps out of a fight into a room keeps the health the
+       game set inside the fight, and the simulator drops it. A scenario
+       that sets health with `hp` and then enters a room shows it.
      - The end of the turn in a fight: the creatures, or the question.
        Ironclad and Silent seed 30 shows it at Spiny Toad, and seed 44
        at Ceremonial Beast. Silent and Defect seed 4 shows it at Globe
