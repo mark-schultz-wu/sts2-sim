@@ -248,7 +248,7 @@ pub(super) fn turn_loop<V: Rules>(
             ended: Some(at_side_start),
         }) => {
             if let Some(task) = setup {
-                resumed!().live.rejoin(sts2_core::SeatIndex(0), task);
+                resumed!().live.rejoin(task);
             }
             resumed!().live.skip_tick = skipping;
             return Ok(Some(at_side_start));
@@ -523,12 +523,12 @@ fn pre_play_each<V: Rules>(
         if !signalled {
             continue;
         }
-        let (owner, task) = lent
+        let (_, task) = lent
             .live
             .queues
             .go_on(seat)
             .expect("the queue stopped on it");
-        lent.live.rejoin(owner, task);
+        lent.live.rejoin(task);
         if let Some(ended) = come_up::<V>(seat, lent)? {
             return Ok(Some(ended));
         }
@@ -845,7 +845,7 @@ fn park<V: Rules>(
                 .live
                 .defer(crate::combat::live::Deferred::TurnLoop(looping));
             if let Some(first) = first {
-                fighting.live.rejoin(seat, first);
+                fighting.live.rejoin(first);
             }
             Ok(None)
         }
@@ -855,7 +855,7 @@ fn park<V: Rules>(
             fighting
                 .live
                 .defer(crate::combat::live::Deferred::TurnLoop(looping));
-            fighting.live.rejoin(seat, task);
+            fighting.live.rejoin(task);
             let came_up = crate::combat::play::come_up(
                 seat,
                 Fighting {

@@ -195,6 +195,14 @@ impl<V: Rules> Queues<V> {
         !self.stopped.is_empty()
     }
 
+    /// The front stopped last, made the first of those its answerer's queue
+    /// waits on.
+    pub(super) fn last_to_front(&mut self) {
+        if let Some(last) = self.stopped.pop() {
+            self.stopped.insert(0, last);
+        }
+    }
+
     /// The front of `seat`'s queue that waits on their question, taken off
     /// to go on with the answer, beside whose task it is.
     pub(super) fn go_on(

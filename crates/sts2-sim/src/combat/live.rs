@@ -178,6 +178,13 @@ pub(super) enum Asked<V: Rules> {
         cards: smallvec::SmallVec<[sts2_core::CardAt<V>; sts2_core::MAX_CARDS_IN_HAND]>,
         selection: sts2_core::Selection,
     },
+    /// A selection through a filter whose choice signalled and has not
+    /// listed yet. It lists as [`Asked::Among`] once its task goes on.
+    Filtered {
+        pile: sts2_core::Pile,
+        filter: V::CardFilter,
+        selection: sts2_core::Selection,
+    },
     Offered {
         offered: sts2_core::Offered<V>,
         skippable: bool,
@@ -192,8 +199,6 @@ pub(super) struct Paused<V: Rules> {
     pub(super) asking: Asking<V>,
     /// What waits behind it.
     pub(super) waiting: Vec<Deferred<V>>,
-    /// How many cards the hand held as it was set aside.
-    pub(super) hand: usize,
 }
 
 /// The listeners of one hook that the game runs each under a pause boundary
@@ -257,23 +262,18 @@ impl<V: Rules> Listening<V> {
     /// Close the boundary [`Listening::enter`] opened, and set the listener
     /// aside where it paused.
     #[inline]
-    pub(super) fn leave(
-        &mut self,
-        seat: sts2_core::SeatIndex,
-        live: &mut Live<V>,
-        entered: Boundary<V>,
-    ) {
+    pub(super) fn leave(&mut self, live: &mut Live<V>, entered: Boundary<V>) {
         live.pause_boundary = entered.boundary;
         match live.asking.is_some() {
-            true => self.set_aside(seat, live, entered),
+            true => self.set_aside(live, entered),
             false => live.deferred.keep_fresh(entered.fresh),
         }
     }
 
     /// The listener [`Listening::leave`] found paused, set aside.
     #[cold]
-    fn set_aside(&mut self, seat: sts2_core::SeatIndex, live: &mut Live<V>, entered: Boundary<V>) {
-        self.aside.push(live.set_aside(seat, entered.fresh));
+    fn set_aside(&mut self, live: &mut Live<V>, entered: Boundary<V>) {
+        self.aside.push(live.set_aside(entered.fresh));
         self.listeners.extend(entered.listener);
     }
 
@@ -3488,11 +3488,7 @@ impl<V: Rules> Live<V> {
     /// The task a pause boundary waited on, which paused on the question
     /// asked: the question, and what it deferred since `fresh` was opened.
     /// The boundary's caller runs on without it.
-    pub(super) fn set_aside(
-        &mut self,
-        seat: sts2_core::SeatIndex,
-        fresh: (usize, Option<usize>),
-    ) -> Paused<V> {
+    pub(super) fn set_aside(&mut self, fresh: (usize, Option<usize>)) -> Paused<V> {
         let asking = self
             .asking
             .take()
@@ -3500,7 +3496,6 @@ impl<V: Rules> Live<V> {
         Paused {
             asking,
             waiting: self.deferred.take_fresh(fresh),
-            hand: self.players[seat].cards.len(sts2_core::Pile::Hand),
         }
     }
 
@@ -3509,26 +3504,10 @@ impl<V: Rules> Live<V> {
     ///
     /// # Panics
     ///
-    /// Where the caller asked a question of its own as it ran on. Where a
-    /// filtered choice signalled and the hand changed since: the choice
-    /// listed the hand as it stopped, and the game lists it now.
-    pub(super) fn rejoin(
-        &mut self,
-        seat: sts2_core::SeatIndex,
-        Paused {
-            asking,
-            waiting,
-            hand,
-        }: Paused<V>,
-    ) {
+    /// Where the caller asked a question of its own as it ran on.
+    pub(super) fn rejoin(&mut self, Paused { asking, waiting }: Paused<V>) {
         if let Some(other) = &self.asking {
             unimplemented!("{other:?} asked while a paused task waited to rejoin");
-        }
-        if let Asked::Among { cards, .. } = &asking.question
-            && asking.signalled
-            && self.players[seat].cards.len(sts2_core::Pile::Hand) != hand
-        {
-            unimplemented!("a filtered choice over {cards:?} whose hand changed as it paused");
         }
         self.asking = Some(asking);
         self.deferred.put_back(waiting);
@@ -3556,8 +3535,8 @@ impl<V: Rules> Live<V> {
         if self.asking.is_some() || !self.deferred.is_empty() {
             return;
         }
-        if let Some((owner, task)) = self.queues.take_next() {
-            self.rejoin(owner, task);
+        if let Some((_, task)) = self.queues.take_next() {
+            self.rejoin(task);
         }
     }
 
@@ -3652,9 +3631,18 @@ impl<V: Rules> Live<V> {
         let task = Paused {
             asking,
             waiting: self.deferred.take_fresh((0, None)),
-            hand: self.players[seat].cards.len(sts2_core::Pile::Hand),
         };
         self.queues.stop(seat, answerer.unwrap_or(seat), task);
+    }
+
+    /// [`Live::stop_for_answer`], with the question at the front of its
+    /// answerer's queue, where its task stood before it listed.
+    pub(super) fn stop_at_front(&mut self, seat: sts2_core::SeatIndex) {
+        if self.asking.is_none() {
+            return;
+        }
+        self.stop_for_answer(seat);
+        self.queues.last_to_front();
     }
 
     /// The question `seat` answers, back in play with what waits behind it,
@@ -3664,7 +3652,7 @@ impl<V: Rules> Live<V> {
         let Some((owner, task)) = self.queues.go_on(seat) else {
             return seat;
         };
-        self.rejoin(owner, task);
+        self.rejoin(task);
         owner
     }
 
@@ -3703,6 +3691,7 @@ impl<V: Rules> Live<V> {
                 piles.all(|pile| pile == first).then_some(first).flatten()
             }
             Asked::Offered { .. } => None,
+            Asked::Filtered { .. } => unreachable!("a filtered choice lists before it is shown"),
         };
         let options: Vec<_> = match &asked.question {
             Asked::Pile { pile, .. } => self
@@ -3729,6 +3718,7 @@ impl<V: Rules> Live<V> {
                 })
                 .collect(),
             Asked::Offered { offered, .. } => offered.to_vec(),
+            Asked::Filtered { .. } => unreachable!("a filtered choice lists before it is shown"),
         };
         Some(sts2_core::Question::SelectCards {
             min,
@@ -3778,6 +3768,7 @@ impl<V: Rules> Live<V> {
                 (min, max, cards.len())
             }
             Asked::Offered { offered, skippable } => (u32::from(!skippable), 1, offered.len()),
+            Asked::Filtered { .. } => unreachable!("a filtered choice lists before it is shown"),
         })
     }
 

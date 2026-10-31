@@ -326,6 +326,14 @@ impl<V: Rules> State<V> {
         seat: sts2_core::SeatIndex,
         ended: Option<combat::Ended>,
     ) -> Decided {
+        let ended = match (ended, self.fighting()) {
+            (None, Some(fighting)) => {
+                combat::fronts_come_up(seat, fighting).unwrap_or_else(|error| {
+                    unimplemented!("a choice listing at its queue's front failing: {error}")
+                })
+            }
+            (ended, _) => ended,
+        };
         let ended = self
             .selector_answered(seat, ended)
             .unwrap_or_else(|error| unimplemented!("a pushed selector's answer failing: {error}"));

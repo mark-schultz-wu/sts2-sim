@@ -2866,7 +2866,7 @@ impl<'a, V: Rules> Board<'a, V> {
             if let Some(fresh) = fresh {
                 match self.live.asking.is_some() {
                     true => {
-                        let mut task = self.live.set_aside(seat, fresh);
+                        let mut task = self.live.set_aside(fresh);
                         // `CardSelectCmd` lists the pile as it asks. The play
                         // can change the pile before the question comes up,
                         // and the list stays as it was. A build that signals
@@ -3105,7 +3105,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 Listener::Relic { seat, slot } => self.relic_asked(seat, slot, effect),
                 listener => unimplemented!("{listener:?} asking for {effect:?} after Doom kills"),
             }
-            listening.leave(seat, self.live, boundary);
+            listening.leave(self.live, boundary);
         }
         let seat = self.seat();
         listening.queue(seat, self.live);

@@ -253,7 +253,9 @@ run as its own machine sees it. The work goes in this order:
    player who dies inside their own card keeps their cards until the
    card is over. The run is over only once every player is dead. A
    player who earns an extra turn takes it alone, while the others wait
-   ready. Whispering Earring's pushed selector answers its picks as they
+   ready. A filtered card choice lists its pile once its choice has
+   signalled. So a potion thrown at a player lists their hand once their
+   queue reaches it. Whispering Earring's pushed selector answers its picks as they
    come up, before the next player's pre-play phase.
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
@@ -321,19 +323,8 @@ run as its own machine sees it. The work goes in this order:
      - A setup that jumps out of a fight into a room keeps the health the
        game set inside the fight, and the simulator drops it. A scenario
        that sets health with `hp` and then enters a room shows it.
-     - The end of the turn in a fight: the creatures, or the question.
-       Ironclad and Silent seed 30 shows it at Spiny Toad, and seed 44
-       at Ceremonial Beast. Silent and Defect seed 4 shows it at Globe
-       Head, seed 10 at Ovicopter, and seed 13 at Knowledge Demon.
-       Regent and Ironclad seed 10 shows it at Aeonglass. The
-       lobby counted a game as still once every player ended the turn,
-       so hunt these again first.
-     - A potion thrown at a player who ended the turn. Its choice takes
-       that end back, and the game resumes the player's paused
-       `EndPlayerTurnAction` once the choice is over. After the player
-       ends the turn again, the game still offers them the end of the
-       turn, and the simulator offers nothing. Touch of Insanity shows it
-       (Defect and Necrobinder seed 15, Silent and Defect seed 13).
+     - The end of the turn at Aeonglass parts in the turn (Regent and
+       Ironclad seed 10).
      - Gambler's Brew's seed parts at a later confirm, in the run, the
        belt and the moves (Ironclad and Silent seed 3). Swift Potion
        parted once (Silent and Defect seed 15).

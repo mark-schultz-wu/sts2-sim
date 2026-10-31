@@ -1107,6 +1107,7 @@ pub(crate) fn selector_picks<V: Rules>(
         Asked::Pile { pile, selection } => most(selection).min(live.offered(seat, *pile).len()),
         Asked::Among { cards, selection } => most(selection).min(cards.len()),
         Asked::Offered { offered, .. } => offered.len().min(1),
+        Asked::Filtered { .. } => unreachable!("a filtered choice lists before it is answered"),
     };
     let mut picks = sts2_core::Picks::none();
     for option in 0..take {
@@ -1175,6 +1176,7 @@ pub(crate) fn answer<V: Rules>(
                     unimplemented!("a selection with the wrong number of cards")
                 }))
             }
+            Asked::Filtered { .. } => unreachable!("a filtered choice lists before it is answered"),
             Asked::Offered { offered, skippable } => {
                 let chosen = if chosen.is_empty() {
                     if !*skippable {
@@ -1225,6 +1227,40 @@ pub(crate) fn come_up<V: Rules>(
             live: &*live,
             belts: &*belts,
         });
+        // `CardSelectCmd` lists through its filter once the choice has
+        // signalled, from the chooser's pile as it stands now.
+        if let Some(super::live::Asking {
+            question:
+                Asked::Filtered {
+                    pile,
+                    filter,
+                    selection,
+                },
+            then: Then::Play { effect, .. },
+            ..
+        }) = &live.asking
+        {
+            let (pile, filter, selection, effect) =
+                (*pile, filter.clone(), *selection, effect.clone());
+            let cards = match ending {
+                true => smallvec::SmallVec::new(),
+                false => listed::<V, _>(
+                    seat,
+                    Fighting {
+                        live: &mut *live,
+                        streams: &mut *streams,
+                        belts: &mut *belts,
+                    },
+                    &effect,
+                    pile,
+                    &filter,
+                ),
+            };
+            live.asking
+                .as_mut()
+                .expect("a signalled choice stands")
+                .question = Asked::Among { cards, selection };
+        }
         let Some(asking) = &live.asking else {
             unreachable!("a signalled choice stands");
         };
@@ -1238,6 +1274,7 @@ pub(crate) fn come_up<V: Rules>(
                 selection.validate_automatic(cards.iter().copied().collect())
             }
             Asked::Offered { .. } => unimplemented!("a choose-a-card screen that signalled"),
+            Asked::Filtered { .. } => unreachable!("a filtered choice listed above"),
         };
         let Some(picked) = picked else {
             return Ok(None);
@@ -1256,6 +1293,116 @@ pub(crate) fn come_up<V: Rules>(
         if ended.is_some() {
             return Ok(ended);
         }
+    }
+}
+
+/// The cards of the chooser's `pile` that `filter` lets through, as
+/// `CardSelectCmd` lists them for an effect `seat` plays.
+///
+/// `FromCombatPile` hands a draw pile's cards over sorted by rarity and then
+/// by id, a stable sort.
+fn listed<V: Rules, S: LendsCombat>(
+    seat: sts2_core::SeatIndex,
+    fighting: Fighting<'_, V, S>,
+    effect: &Resuming<V>,
+    pile: sts2_core::Pile,
+    filter: &V::CardFilter,
+) -> smallvec::SmallVec<[sts2_core::CardAt<V>; sts2_core::MAX_CARDS_IN_HAND]> {
+    use sts2_core::CardTable as _;
+
+    let Fighting {
+        live,
+        streams,
+        belts,
+    } = fighting;
+    let playing = match &effect.asker {
+        Asker::Card(card) => Some(card.id),
+        Asker::Potion(_) => None,
+    };
+    let reaching = effect.reaching(live, seat);
+    let ascension = live.ascension;
+    let board = Board::for_card(
+        seat,
+        live,
+        streams.combat(),
+        belts,
+        ascension,
+        effect.target,
+        playing,
+    )
+    .reaching(reaching);
+    let mut cards = V::among(&board, pile, filter);
+    drop(board);
+    if pile == sts2_core::Pile::Draw {
+        let chooser = reaching.unwrap_or(seat);
+        cards.sort_by_key(|card| {
+            let card = live.players[chooser]
+                .cards
+                .named(card.id())
+                .expect("an offered card stands in its pile")
+                .face
+                .ident
+                .card;
+            (card.rarity(), card.order())
+        });
+    }
+    cards
+}
+
+/// In a fight of several players, each choice that signalled and stands at
+/// the front of its chooser's queue. It lists now, as the game's hook action
+/// does once that queue runs it. One that needs its chooser goes back to the
+/// front of their queue.
+///
+/// A choice `seat`'s decision branched onto another player's queue goes
+/// there first, behind what already waits on them.
+pub(crate) fn fronts_come_up<V: Rules>(
+    seat: sts2_core::SeatIndex,
+    fighting: Fighting<'_, V>,
+) -> Result<Option<super::Ended>, Error> {
+    let Fighting {
+        live,
+        streams,
+        belts,
+    } = fighting;
+    if live.players.len() == 1 {
+        return Ok(None);
+    }
+    if let Some(super::live::Asking {
+        signalled: true,
+        then: Then::Play { effect, .. },
+        ..
+    }) = &live.asking
+        && effect.branched
+    {
+        live.stop_for_answer(seat);
+    }
+    if live.asking.is_some() {
+        return Ok(None);
+    }
+    loop {
+        let front = super::turn::seats(live)
+            .find(|&seat| (live.queues.stopped(seat)).is_some_and(|task| task.asking.signalled));
+        let Some(answerer) = front else {
+            return Ok(None);
+        };
+        let (owner, task) = live
+            .queues
+            .go_on(answerer)
+            .expect("the queue stopped on it");
+        live.rejoin(task);
+        let ended = come_up(
+            owner,
+            Fighting {
+                live: &mut *live,
+                streams: &mut *streams,
+                belts: &mut *belts,
+            },
+        )?;
+        if ended.is_some() {
+            return Ok(ended);
+        }
+        live.stop_at_front(owner);
     }
 }
 
@@ -1563,7 +1710,7 @@ fn run_deferred<V: Rules>(
                 finish_effect(seat, fighting, ascension, effect, outermost)?
             }
             super::live::Deferred::Rejoin(task) => {
-                fighting.live.rejoin(seat, *task);
+                fighting.live.rejoin(*task);
                 ended
             }
             super::live::Deferred::TurnLoop(looping) => {
@@ -1916,41 +2063,53 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
             // `FromHand` over what its filter lets through, which takes them
             // all unasked the way an unfiltered selection does.
             sts2_core::Played::AskingAmong {
-                mut cards,
+                pile,
+                filter,
                 selection,
                 at,
             } => {
-                use sts2_core::CardTable as _;
-
-                if super::board::ending::<V>(super::listen::Walk { live: next, belts }) {
-                    cards.clear();
-                } else {
-                    signalled = signal_pauses::<V>(next);
+                let ending = super::board::ending::<V>(super::listen::Walk { live: next, belts });
+                // `BranchingPlayerChoiceContext`: a choice another player
+                // makes signals here, and its command lists once their queue
+                // runs the rest.
+                let branches = !ending
+                    && !effect.branched
+                    && next.players.len() > 1
+                    && effect
+                        .reaching(next, seat)
+                        .is_some_and(|chooser| chooser != seat);
+                signalled = !ending && (signal_pauses::<V>(next) || branches);
+                match signalled {
+                    true => (
+                        at,
+                        Asked::Filtered {
+                            pile,
+                            filter,
+                            selection,
+                        },
+                        None,
+                    ),
+                    false => {
+                        let cards = match ending {
+                            true => smallvec::SmallVec::new(),
+                            false => listed::<V, _>(
+                                seat,
+                                Fighting {
+                                    live: &mut *next,
+                                    streams: &mut *streams,
+                                    belts: &mut *belts,
+                                },
+                                &effect,
+                                pile,
+                                &filter,
+                            ),
+                        };
+                        let taken = selection
+                            .validate_automatic(cards.iter().copied().collect())
+                            .map(sts2_core::Taken::Selected);
+                        (at, Asked::Among { cards, selection }, taken)
+                    }
                 }
-                // `FromCombatPile` hands a draw pile's cards over sorted by
-                // rarity and then by id, a stable sort.
-                if cards
-                    .iter()
-                    .all(|card| card.pile() == sts2_core::Pile::Draw)
-                {
-                    cards.sort_by_key(|card| {
-                        let card = next.players[seat]
-                            .cards
-                            .named(card.id())
-                            .expect("an offered card stands in its pile")
-                            .face
-                            .ident
-                            .card;
-                        (card.rarity(), card.order())
-                    });
-                }
-                let taken = match signalled {
-                    true => None,
-                    false => selection
-                        .validate_automatic(cards.iter().copied().collect())
-                        .map(sts2_core::Taken::Selected),
-                };
-                (at, Asked::Among { cards, selection }, taken)
             }
             sts2_core::Played::Choosing {
                 offered,

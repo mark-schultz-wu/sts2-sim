@@ -727,6 +727,7 @@ pub trait Build:
     + ContentVersion<
         EnchantmentState = crate::behaviour::enchantments::State,
         CardWrite = crate::behaviour::cards::CardWrite,
+        CardFilter = crate::behaviour::CardFilter<Self>,
     >
 {
 }
@@ -746,6 +747,7 @@ impl<V> Build for V where
         + ContentVersion<
             EnchantmentState = crate::behaviour::enchantments::State,
             CardWrite = crate::behaviour::cards::CardWrite,
+            CardFilter = crate::behaviour::CardFilter<V>,
         >
 {
 }
@@ -1089,6 +1091,15 @@ macro_rules! rules {
 
                 fn on_card_turn_end<F: Fight<Self>>(card: Self::Card, fight: &mut F) {
                     crate::behaviour::rules::on_card_turn_end::<Self, F>(card, fight)
+                }
+
+                fn among<F: Fight<Self>>(
+                    fight: &F,
+                    pile: sts2_core::Pile,
+                    filter: &Self::CardFilter,
+                ) -> smallvec::SmallVec<[sts2_core::CardAt<Self>; sts2_core::MAX_CARDS_IN_HAND]>
+                {
+                    crate::behaviour::filter::among::<Self, F>(fight, pile, filter)
                 }
 
                 fn resume_play<'a, K: sts2_core::FightKind<Self>>(

@@ -3400,11 +3400,12 @@ pub enum Played<V: ContentVersion, R> {
         /// Where the card stopped, in the card's own words.
         at: R,
     },
-    /// The play stopped on a `CardSelectCmd` whose filter lets these cards
-    /// through, which are the ones it offers. They stand in one pile, in its
-    /// order.
+    /// The play stopped on a `CardSelectCmd` over the cards of `pile` that
+    /// `filter` lets through. The command lists them once its choice has
+    /// signalled, which [`Rules::among`] does.
     AskingAmong {
-        cards: smallvec::SmallVec<[crate::CardAt<V>; MAX_CARDS_IN_HAND]>,
+        pile: crate::Pile,
+        filter: V::CardFilter,
         /// How many it takes, which decides whether it asks at all.
         selection: Selection,
         at: R,
@@ -7863,6 +7864,10 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
     /// that rest reaches the fight through `K`'s type.
     type Resume<K: FightKind<Self>>: std::fmt::Debug + Clone + Eq + std::hash::Hash + 'static;
 
+    /// The filter a `CardSelectCmd` lists one pile's cards through, which
+    /// [`Rules::among`] applies.
+    type CardFilter: std::fmt::Debug + Clone + Eq + std::hash::Hash + 'static;
+
     /// Where a card sits in one of a fight's piles.
     ///
     /// Named here so the repository picks the width once. A pile is as large
@@ -8341,6 +8346,14 @@ pub trait Rules: Hooks + Engine {
 
     /// `CardModel.OnTurnEnd`, for a card that remains in the hand.
     fn on_card_turn_end<F: Fight<Self>>(card: Self::Card, fight: &mut F);
+
+    /// The cards of `pile` that `filter` lets through, in the pile's order,
+    /// as a `CardSelectCmd` lists them for the fight's player.
+    fn among<F: Fight<Self>>(
+        fight: &F,
+        pile: crate::Pile,
+        filter: &Self::CardFilter,
+    ) -> smallvec::SmallVec<[crate::CardAt<Self>; MAX_CARDS_IN_HAND]>;
 
     /// Continue a card that stopped, with the answer it awaited.
     ///

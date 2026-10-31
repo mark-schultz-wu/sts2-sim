@@ -391,7 +391,7 @@ pub(super) fn side_starts<V: Rules>(
         match player_setup::<V>(seat, live, streams, belts, ascension) {
             PlayerSetUp::Ended(ended) => {
                 if let Some(task) = setup {
-                    live.rejoin(host, task);
+                    live.rejoin(task);
                 }
                 // `StartTurn` checks for a win only once every player is set
                 // up. So each later player's `SetupPlayerTurn` still runs, and
@@ -576,7 +576,7 @@ fn player_setup<V: Rules>(
             live.deferred.keep_fresh(fresh);
             PlayerSetUp::Done
         }
-        Carried::Parked => PlayerSetUp::Parked(live.set_aside(seat, fresh)),
+        Carried::Parked => PlayerSetUp::Parked(live.set_aside(fresh)),
     }
 }
 
@@ -746,7 +746,7 @@ pub(super) fn before_flush_late<V: Rules>(
             }
             effect => unimplemented!("{listener:?} asking for {effect:?} before the hand flushes"),
         }
-        listening.leave(seat, live, boundary);
+        listening.leave(live, boundary);
     }
     // The turn's end from the flush on waits for every paused listener.
     listening.into_tasks()
@@ -1053,7 +1053,7 @@ pub(super) fn orbs_at_turn_start<V: Rules>(
     let mut listening = super::live::Listening::new();
     let boundary = listening.enter_task(live);
     let ended = orb_triggers::<V>(seat, live, rngs, belts, ascension, OrbMoment::TurnStart);
-    listening.leave(seat, live, boundary);
+    listening.leave(live, boundary);
     listening.queue(seat, live);
     ended
 }
@@ -1182,7 +1182,7 @@ pub(super) fn before_side_turn_start<V: Rules>(
             }
             (_, effect) => unimplemented!("a listener asking for {effect:?} before a turn starts"),
         }
-        listening.leave(seat, live, boundary);
+        listening.leave(live, boundary);
     }
     listening.queue(seat, live);
 }
@@ -1275,7 +1275,7 @@ pub(super) fn before_turn_end<V: Rules>(
                 unimplemented!("{listener:?} asking for {effect:?} as a turn is about to end")
             }
         }
-        listening.leave(seat, live, boundary);
+        listening.leave(live, boundary);
     }
     // Counted only where something hears the hook, as nothing else reads it.
     let plays = match listen::heard::<V>(live, belts, sts2_core::ModelHook::BeforeSideTurnEndEarly)
@@ -1341,7 +1341,7 @@ pub(super) fn before_turn_end<V: Rules>(
             }
             (_, effect) => unimplemented!("a listener asking for {effect:?} before a turn ends"),
         }
-        listening.leave(seat, live, boundary);
+        listening.leave(live, boundary);
         if ended.is_some() {
             return (ended, listening);
         }
@@ -1536,7 +1536,7 @@ pub(super) fn before_turn_end<V: Rules>(
                 }
             }
         }
-        listening.leave(seat, live, boundary);
+        listening.leave(live, boundary);
     }
     (ended, listening)
 }
@@ -4185,7 +4185,7 @@ fn walk_turn_end<V: Rules>(
                 break;
             }
         }
-        listening.leave(seat, live, boundary);
+        listening.leave(live, boundary);
     }
     (ended, listening)
 }
@@ -4579,7 +4579,6 @@ pub(super) fn perform_move<V: Rules>(
                             signalled: false,
                         },
                         waiting: Vec::new(),
-                        hand: live.players[seat].cards.len(Pile::Hand),
                     };
                     live.queues.stop(seat, seat, task);
                 }
