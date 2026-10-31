@@ -476,6 +476,19 @@ fn starting_turn<V: Rules>(
     }
 }
 
+/// The `participants` a side's turn end names. The player side's are the
+/// players ending the turn, `playersEndingTurn`, without their pets. The
+/// enemy side's are the creatures on it, `CreaturesOnCurrentSide`.
+fn ending<V: Rules>(live: &Live<V>, side: V::CombatSide) -> sts2_core::Participants {
+    match side == <V::CombatSide as SideKinds>::PLAYER {
+        true => seats(live).map(|seat| live.player(seat).id).collect(),
+        false => (live.creatures.iter())
+            .filter(|creature| creature.side == side)
+            .map(|creature| creature.id)
+            .collect(),
+    }
+}
+
 /// Every seat in the fight, in order.
 pub(super) fn seats<V: Rules>(
     live: &Live<V>,
@@ -1086,8 +1099,14 @@ pub(super) fn before_side_turn_start<V: Rules>(
             held.on_turn_start = held.amount;
         }
     }
+    live.starting = starting.iter().copied().collect();
     let (turn, round) = (live.turn, live.round);
-    let hook = sts2_core::EventHook::BeforeSideTurnStart { side, turn, round };
+    let hook = sts2_core::EventHook::BeforeSideTurnStart {
+        side,
+        participants: live.starting,
+        turn,
+        round,
+    };
     // Each listener runs under a pause boundary of its own, and nothing
     // waits for one that paused: it goes on as a queued action.
     let mut listening = super::live::Listening::new();
@@ -1217,7 +1236,14 @@ pub(super) fn before_turn_end<V: Rules>(
     // and the hook waits for every one at its end.
     let mut listening = super::live::Listening::new();
     let block = live.player(seat).block;
-    let hook = sts2_core::EventHook::BeforeSideTurnEndVeryEarly { side, block };
+    // Taken once, as the side's turn ends, for every hook of that end.
+    live.ending = ending::<V>(live, side);
+    let participants = live.ending;
+    let hook = sts2_core::EventHook::BeforeSideTurnEndVeryEarly {
+        side,
+        participants,
+        block,
+    };
     let mut walking = listen::Walking::begin(live, belts, hook);
     while let Some((listener, effect)) = walking
         .as_mut()
@@ -1245,6 +1271,7 @@ pub(super) fn before_turn_end<V: Rules>(
     };
     let hook = sts2_core::EventHook::BeforeSideTurnEndEarly {
         side,
+        participants,
         plays,
         turn: live.turn,
     };
@@ -1310,6 +1337,7 @@ pub(super) fn before_turn_end<V: Rules>(
     // draw, as Regret counts its pile then.
     let hook = sts2_core::EventHook::BeforeSideTurnEnd {
         side,
+        participants,
         energy: live.players[seat].energy,
         hand: live.players[seat].cards.len(Pile::Hand),
     };
@@ -3297,6 +3325,7 @@ pub(super) fn side_turn_started<V: Rules>(
     let mut ended = None;
     let hook = sts2_core::EventHook::SideTurnStart {
         side,
+        participants: live.starting,
         turn,
         round: live.round,
         room: live.room(),
@@ -3629,7 +3658,10 @@ pub(super) fn side_turn_started<V: Rules>(
     }
     // `Hook.AfterSideTurnStartLate`. A power's `PowerCmd.Decrement(this)`
     // has ticked by the time this hears it.
-    let hook = sts2_core::EventHook::SideTurnStartLate { side };
+    let hook = sts2_core::EventHook::SideTurnStartLate {
+        side,
+        participants: live.starting,
+    };
     let mut walking = listen::Walking::begin(live, belts, hook);
     while let Some((listener, effect)) = walking
         .as_mut()
@@ -4263,12 +4295,14 @@ pub(super) fn after_turn_end_pass<V: Rules>(
     pass: TurnEndPass,
     pausing: bool,
 ) -> (Option<super::Ended>, super::live::Listening<V>) {
+    let participants = live.ending;
     let hook = match pass {
         TurnEndPass::Main => sts2_core::EventHook::SideTurnEnd {
             side,
+            participants,
             block: live.player(seat).block,
         },
-        TurnEndPass::Late => sts2_core::EventHook::SideTurnEndLate { side },
+        TurnEndPass::Late => sts2_core::EventHook::SideTurnEndLate { side, participants },
     };
     walk_turn_end::<V>(seat, live, rngs, belts, ascension, skipping, hook, pausing)
 }

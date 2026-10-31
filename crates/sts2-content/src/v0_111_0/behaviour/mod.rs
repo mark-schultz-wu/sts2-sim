@@ -62,10 +62,11 @@ impl crate::build::OwnRules for V {
 
     fn own_relic_event_hook(
         state: &mut crate::behaviour::relics::State<V>,
+        owner: sts2_core::CombatId,
         hook: sts2_core::EventHook<V>,
         asked: &mut sts2_core::HookEffects<V>,
     ) {
-        relics::own_relic_event_hook(state, hook, asked);
+        relics::own_relic_event_hook(state, owner, hook, asked);
     }
 
     fn own_card_hooks(card: <V as sts2_core::ContentVersion>::Card) -> bool {

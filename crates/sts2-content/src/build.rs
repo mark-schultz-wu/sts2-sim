@@ -462,6 +462,7 @@ pub trait OwnRules: ContentVersion + Sized {
     /// A relic's `EventHook`, for a relic whose rule is the build's own.
     fn own_relic_event_hook(
         state: &mut crate::behaviour::relics::State<Self>,
+        owner: sts2_core::CombatId,
         hook: sts2_core::EventHook<Self>,
         asked: &mut sts2_core::HookEffects<Self>,
     ) where

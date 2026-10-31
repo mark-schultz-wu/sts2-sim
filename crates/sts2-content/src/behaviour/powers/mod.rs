@@ -3947,7 +3947,7 @@ pub(crate) fn event_hook<V: crate::Build>(
         (__c0, _, EventHook::SideTurnStart { .. }) if __c0 == V::Power::WRAITH_FORM_POWER => None,
         // `DisintegrationPower.AfterSideTurnEndLate`: its stack off its owner,
         // dealt by the owner and unpowered, as its owner's side's turn ends.
-        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnEndLate { side })
+        (__c0, PowerAmount::Counted(amount), EventHook::SideTurnEndLate { side, .. })
             if __c0 == V::Power::DISINTEGRATION_POWER && (side == owner) =>
         {
             Some(HookEffect::DamageOwnerInFight {
@@ -3956,7 +3956,7 @@ pub(crate) fn event_hook<V: crate::Build>(
                 self_dealt: true,
             })
         }
-        (__c0, PowerAmount::Endless, EventHook::SideTurnEndLate { side })
+        (__c0, PowerAmount::Endless, EventHook::SideTurnEndLate { side, .. })
             if __c0 == V::Power::DISINTEGRATION_POWER && (side == owner) =>
         {
             unimplemented!("an endless Disintegration")
@@ -4573,6 +4573,7 @@ pub(crate) fn event_hook<V: crate::Build>(
             _,
             EventHook::SideTurnStartLate {
                 side: CombatSide::Enemy,
+                ..
             },
         ) if __c0 == V::Power::SANDPIT_POWER => Some(HookEffect::Decrement),
         (__c0, _, EventHook::SideTurnStartLate { .. }) if __c0 == V::Power::SANDPIT_POWER => None,

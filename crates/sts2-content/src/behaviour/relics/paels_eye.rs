@@ -58,10 +58,19 @@ pub(super) fn event_hook<V: crate::Build>(
     let player = <V as sts2_core::ContentVersion>::CombatSide::PLAYER;
     match hook {
         EventHook::Obtained { .. } => state.was_owner_part_of_last_player_turn = true,
-        EventHook::SideTurnStart { side, .. } if side == player && !state.used_this_combat => {
-            state.was_owner_part_of_last_player_turn = true;
+        // On its owner's side, while unused: whether its owner takes part
+        // in this turn.
+        EventHook::SideTurnStart {
+            side, participants, ..
+        } if side == player && !state.used_this_combat => {
+            state.was_owner_part_of_last_player_turn = participants.contains(owner);
         }
-        EventHook::BeforeSideTurnEndEarly { side, plays, turn } if side == player => {
+        EventHook::BeforeSideTurnEndEarly {
+            participants,
+            plays,
+            turn,
+            ..
+        } if participants.contains(owner) => {
             if state.takes_the_turn::<V>(belt, plays, turn) {
                 asked.push(HookEffect::ExhaustHand);
             }

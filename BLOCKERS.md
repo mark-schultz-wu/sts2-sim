@@ -291,14 +291,23 @@ run as its own machine sees it. The work goes in this order:
      question the turn loop asks belongs to no player's queue yet. Each
      phase of the turn's end panics at one in a fight of several players.
      So does the turn's end while a player's action waits on a question.
+     Ironclad and Silent seeds 27 and 32 panic at these.
      Card plays, potions and the turn's end go through the queues, with
      the action types, gating and cancellations.
-     Co-op extra turns come with it. `ShouldTakeExtraTurn` is asked of
-     each player after the flush, and the turn starts only for the
-     players it names, with the others ready. `TurnNumber` is kept for
-     each player, and an extra turn counts up only the takers'. The sim
-     keeps one `live.turn`. Ironclad and Silent seeds 22, 25, 27, 32,
-     36, 38, 42 and 47, and Regent and Ironclad seed 10, panic here.
+   - Co-op extra turns. `ShouldTakeExtraTurn` is asked of each player
+     after the flush, and the turn starts only for the players it names,
+     with the others ready. Ironclad and Silent seeds 22, 25, 36, 38, 42
+     and 47, and Regent and Ironclad seed 10, panic here. Mark chose on
+     2026-10-30 that each side turn hook carries its participants, as the
+     game's do. Each listener checks them where the game does. The work
+     goes in this order:
+     1. The hooks carry their participants, and relics check them (done).
+     2. Powers check them.
+     3. Cards, monsters, enchantments and the rest check them.
+     4. `TurnNumber` is kept for each player, and a listener reads its
+        owner's. The sim keeps one `live.turn`.
+     5. The extra turns: the takers' turn ends, flushes and starts alone,
+        and an extra turn counts up only the takers' `TurnNumber`.
    - A question that waits on a player's own card play names no asker,
      where the game names the play.
    - Content that reads "the player" where the game reads an owner:

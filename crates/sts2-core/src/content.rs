@@ -1360,6 +1360,50 @@ pub struct DamageResult<V: ContentVersion> {
 /// each naming its hit.
 pub type AttackResults<V> = smallvec::SmallVec<[DamageResult<V>; 4]>;
 
+/// The most creatures a side's turn names as taking part.
+///
+/// Four players and a pet each, or an encounter's six slots and their
+/// summons. Fixed, so an [`EventHook`] stays `Copy` and no larger than its
+/// other variants make it.
+pub const PARTICIPANTS: usize = 10;
+
+/// The creatures a side's turn hook names as taking part, which is its
+/// `participants`.
+///
+/// A turn's start names the creatures starting it: the side's, or in an
+/// extra turn its takers' alone. The player side's end names the players
+/// ending the turn, and the enemy side's end the enemies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Participants([Option<crate::CombatId>; PARTICIPANTS]);
+
+impl Participants {
+    /// `participants.Contains(creature)`.
+    #[inline]
+    pub fn contains(&self, creature: crate::CombatId) -> bool {
+        self.0.contains(&Some(creature))
+    }
+
+    /// Each one, in the order the game lists them.
+    pub fn iter(&self) -> impl Iterator<Item = crate::CombatId> + '_ {
+        self.0.iter().map_while(|c| *c)
+    }
+}
+
+impl FromIterator<crate::CombatId> for Participants {
+    /// # Panics
+    ///
+    /// More than [`PARTICIPANTS`] creatures.
+    fn from_iter<I: IntoIterator<Item = crate::CombatId>>(creatures: I) -> Self {
+        let mut list = [None; PARTICIPANTS];
+        for (at, creature) in creatures.into_iter().enumerate() {
+            *list.get_mut(at).unwrap_or_else(|| {
+                unimplemented!("more than {PARTICIPANTS} creatures taking part in a turn")
+            }) = Some(creature);
+        }
+        Self(list)
+    }
+}
+
 /// The player's current and maximum hit points.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlayerHealth<V: ContentVersion> {
@@ -4030,7 +4074,11 @@ impl<V: ContentVersion> DecisionHook<V> {
 pub enum EventHook<V: ContentVersion> {
     /// `AfterSideTurnStartLate`, once every listener has answered
     /// [`EventHook::SideTurnStart`].
-    SideTurnStartLate { side: V::CombatSide },
+    SideTurnStartLate {
+        side: V::CombatSide,
+        /// The creatures taking part, which is `participants`.
+        participants: Participants,
+    },
     /// `BeforePotionUsed`, as the player drinks a potion in a fight, before
     /// it leaves the belt.
     PotionUsing {
@@ -4261,6 +4309,8 @@ pub enum EventHook<V: ContentVersion> {
     /// turn ends.
     BeforeSideTurnEndVeryEarly {
         side: V::CombatSide,
+        /// The creatures taking part, which is `participants`.
+        participants: Participants,
         /// The player's `Block`, which a relic reads off its owner.
         block: V::Number,
     },
@@ -4513,6 +4563,8 @@ pub enum EventHook<V: ContentVersion> {
     /// `RoundNumber`, which an extra turn does not move on.
     BeforeSideTurnStart {
         side: V::CombatSide,
+        /// The creatures taking part, which is `participants`.
+        participants: Participants,
         turn: V::Count,
         round: V::Count,
     },
@@ -4520,6 +4572,8 @@ pub enum EventHook<V: ContentVersion> {
     /// this type.
     SideTurnStart {
         side: V::CombatSide,
+        /// The creatures taking part, which is `participants`.
+        participants: Participants,
         turn: V::Count,
         /// `RoundNumber`, which an extra turn does not move on.
         round: V::Count,
@@ -4533,6 +4587,8 @@ pub enum EventHook<V: ContentVersion> {
     },
     BeforeSideTurnEndEarly {
         side: V::CombatSide,
+        /// The creatures taking part, which is `participants`.
+        participants: Participants,
         /// The player's plays finished this turn that no auto-play made,
         /// which a listener reads off `CardPlaysFinished`, at most 255.
         plays: u8,
@@ -4544,6 +4600,8 @@ pub enum EventHook<V: ContentVersion> {
     /// `BeforeSideTurnEnd`, the last of the three before a side's turn ends.
     BeforeSideTurnEnd {
         side: V::CombatSide,
+        /// The creatures taking part, which is `participants`.
+        participants: Participants,
         /// The player's `PlayerCombatState.Energy`, which a listener reads.
         energy: V::Count,
         /// How many cards the player's hand holds, which a card in it reads
@@ -4552,11 +4610,17 @@ pub enum EventHook<V: ContentVersion> {
     },
     SideTurnEnd {
         side: V::CombatSide,
+        /// The creatures taking part, which is `participants`.
+        participants: Participants,
         /// The player's `Creature.Block`, which a listener reads.
         block: V::Number,
     },
     /// `AfterSideTurnEndLate`, once every `AfterSideTurnEnd` has run.
-    SideTurnEndLate { side: V::CombatSide },
+    SideTurnEndLate {
+        side: V::CombatSide,
+        /// The creatures taking part, which is `participants`.
+        participants: Participants,
+    },
     /// `AfterStarsSpent`: `SpendStars` took `amount` from `player`, which is
     /// more than none.
     StarsSpent {

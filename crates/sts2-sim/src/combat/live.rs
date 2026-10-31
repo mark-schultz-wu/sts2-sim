@@ -2775,6 +2775,13 @@ pub(crate) struct Live<V: Rules> {
     pub(crate) turn: V::Count,
     pub(super) modifiers: RunModifiers<V>,
     pub(super) round: V::Count,
+    /// `creaturesStartingTurn`: the creatures that started the side's turn
+    /// now under way, taken before `BeforeSideTurnStart`. The turn's start
+    /// hooks name them as taking part.
+    pub(super) starting: sts2_core::Participants,
+    /// The creatures ending the side's turn, which its end hooks name as
+    /// taking part. Taken as the end begins.
+    pub(super) ending: sts2_core::Participants,
     /// `ICombatState.CurrentSide`: whose turn it is.
     pub(super) side: V::CombatSide,
     /// `CombatManager.History`.
@@ -3179,6 +3186,8 @@ impl<V: Rules> Clone for Live<V> {
             turn,
             modifiers,
             round,
+            starting,
+            ending,
             side,
             history,
             kept,
@@ -3222,6 +3231,8 @@ impl<V: Rules> Clone for Live<V> {
         *turn = source.turn;
         *modifiers = source.modifiers;
         *round = source.round;
+        *starting = source.starting;
+        *ending = source.ending;
         *side = source.side;
         history.clone_from(&source.history);
         kept.clone_from(&source.kept);
@@ -3872,26 +3883,37 @@ impl<V: Rules> Live<V> {
         let player = &self.players[seat];
         let holding_potions = || !player.potions.is_empty();
         match hook {
-            EventHook::BeforeSideTurnEndVeryEarly { side, .. } => {
-                EventHook::BeforeSideTurnEndVeryEarly {
-                    side,
-                    block: self.player(seat).block,
-                }
-            }
-            EventHook::BeforeSideTurnEndEarly { side, turn, .. } => {
-                EventHook::BeforeSideTurnEndEarly {
-                    side,
-                    plays: self.history.unprompted_plays_this_turn(seat.creature()),
-                    turn,
-                }
-            }
-            EventHook::BeforeSideTurnEnd { side, .. } => EventHook::BeforeSideTurnEnd {
+            EventHook::BeforeSideTurnEndVeryEarly {
+                side, participants, ..
+            } => EventHook::BeforeSideTurnEndVeryEarly {
                 side,
+                participants,
+                block: self.player(seat).block,
+            },
+            EventHook::BeforeSideTurnEndEarly {
+                side,
+                participants,
+                turn,
+                ..
+            } => EventHook::BeforeSideTurnEndEarly {
+                side,
+                participants,
+                plays: self.history.unprompted_plays_this_turn(seat.creature()),
+                turn,
+            },
+            EventHook::BeforeSideTurnEnd {
+                side, participants, ..
+            } => EventHook::BeforeSideTurnEnd {
+                side,
+                participants,
                 energy: player.energy,
                 hand: player.cards.len(sts2_core::Pile::Hand),
             },
-            EventHook::SideTurnEnd { side, .. } => EventHook::SideTurnEnd {
+            EventHook::SideTurnEnd {
+                side, participants, ..
+            } => EventHook::SideTurnEnd {
                 side,
+                participants,
                 block: self.player(seat).block,
             },
             EventHook::RoomEntered {
@@ -4468,6 +4490,8 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             turn: 1,
             modifiers: RunModifiers::holding(&[]),
             round: 1,
+            starting: sts2_core::Participants::default(),
+            ending: sts2_core::Participants::default(),
             side: CombatSide::Player,
             history: CombatHistory::new(),
             kept: Vec::new(),
