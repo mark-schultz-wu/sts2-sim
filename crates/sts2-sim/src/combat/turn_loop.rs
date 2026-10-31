@@ -622,7 +622,7 @@ fn after_turn_end<V: Rules>(
 fn post_play_pass<V: Rules>(seat: sts2_core::SeatIndex, lent: &mut Lent<'_, V>) -> PassRest<V> {
     let (live, _, belts) = lent.parts();
     live.players[seat].phase = <V::PlayerTurnPhase as sts2_core::TurnPhaseKinds>::AUTO_POST_PLAY;
-    let turn = live.turn;
+    let turn = live.players[seat].turn;
     PassRest::walk(
         live,
         belts,

@@ -1360,6 +1360,12 @@ pub struct DamageResult<V: ContentVersion> {
 /// each naming its hit.
 pub type AttackResults<V> = smallvec::SmallVec<[DamageResult<V>; 4]>;
 
+/// The most players a fight holds.
+pub const MAX_PLAYERS: usize = 4;
+
+/// Each player's `TurnNumber`, by seat. A seat the fight lacks holds zero.
+pub type PlayerTurns<V> = [<V as ContentVersion>::Count; MAX_PLAYERS];
+
 /// The most creatures a side's turn names as taking part.
 ///
 /// Four players and a pet each, or an encounter's six slots and their
@@ -5267,10 +5273,11 @@ pub struct TurnHistory<V: ContentVersion> {
     pub round: V::Count,
     /// `CurrentSide` of that turn.
     pub side: V::CombatSide,
-    /// The player's `TurnNumber` through that turn. It counts up as the
-    /// player's side takes a turn, so the enemies' turn after a player's
+    /// Each player's `TurnNumber` through that turn, by seat, which is what
+    /// `CombatHistoryEntry` keeps for each player. A player's counts up as
+    /// that player takes a turn, so the enemies' turn after a player's
     /// shares its number.
-    pub player_turn: V::Count,
+    pub player_turns: PlayerTurns<V>,
     /// Where its entries end among the fight's. They start where the turn
     /// before it ends them.
     end: u32,
@@ -5328,8 +5335,8 @@ impl<V: ContentVersion> Default for PastTurns<V> {
 }
 
 impl<V: ContentVersion> PastTurns<V> {
-    /// The turn at `round` on `side`, in the player's turn `player_turn`, is
-    /// over, with `entries`, oldest first.
+    /// The turn at `round` on `side`, with each player's `TurnNumber` in
+    /// `player_turns`, is over, with `entries`, oldest first.
     ///
     /// # Panics
     ///
@@ -5338,14 +5345,14 @@ impl<V: ContentVersion> PastTurns<V> {
         &mut self,
         round: V::Count,
         side: V::CombatSide,
-        player_turn: V::Count,
+        player_turns: PlayerTurns<V>,
         entries: impl IntoIterator<Item = HistoryEntry<V>>,
     ) {
         self.entries.extend(entries);
         self.turns.push(TurnHistory {
             round,
             side,
-            player_turn,
+            player_turns,
             end: u32::try_from(self.entries.len()).expect("a fight's entries fit a u32"),
         });
     }
@@ -5401,11 +5408,14 @@ impl<V: ContentVersion> History<'_, V> {
         turn: V::Count,
     ) -> impl Iterator<Item = PlayFinished<V>> + '_ {
         let last = turn - num_traits::one::<V::Count>();
+        // The players come first among the fight's creatures, so a player's
+        // creature is its seat.
+        let seat = usize::from(self.player.get());
         self.before
             .into_iter()
             .flat_map(PastTurns::latest_first)
-            .take_while(move |(before, _)| before.player_turn >= last)
-            .filter(move |(before, _)| before.player_turn == last)
+            .take_while(move |(before, _)| before.player_turns[seat] >= last)
+            .filter(move |(before, _)| before.player_turns[seat] == last)
             .flat_map(|(_, entries)| entries.iter())
             .filter_map(|entry| match entry {
                 HistoryEntry::Finished(finished) if finished.player == self.player => {

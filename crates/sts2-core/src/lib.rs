@@ -56,7 +56,7 @@ pub use content::{
     Spawned, Stream, StreamKinds, StunResume, Table, Taken, TargetKinds, Temporary, TurnHistory,
     TurnPhaseKinds, UnplayableReasonKinds, Version, Writing,
 };
-pub use content::{PARTICIPANTS, Participants};
+pub use content::{MAX_PLAYERS, PARTICIPANTS, Participants, PlayerTurns};
 pub use event::{CarriedRelic, EventBehavior, EventView};
 pub use hook_response::HookResponse;
 pub use ident::{

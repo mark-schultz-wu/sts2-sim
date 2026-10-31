@@ -1681,7 +1681,7 @@ impl<'a, V: Rules> Board<'a, V> {
                             side: self.live.side,
                             fully_blocked: aimed && fully_blocked,
                             unblockable,
-                            turn: self.live.turn,
+                            turn: self.live.turn_of(receiver),
                             in_progress: self.live.in_progress,
                         },
                     );
@@ -3858,7 +3858,7 @@ pub(crate) fn max_energy<V: Rules>(
         base,
         &[ModifyHook::MaxEnergy {
             player,
-            turn: fight.live.turn,
+            turn: fight.live.players[seat].turn,
         }],
     );
     num_traits::cast(energy).expect("a max energy fits the build's count type")

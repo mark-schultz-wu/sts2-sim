@@ -2475,7 +2475,9 @@ pub(crate) fn refreshes<V: Rules>(hook: &sts2_core::EventHook<V>) -> bool {
 
     matches!(
         hook,
-        EventHook::BeforeSideTurnEndVeryEarly { .. }
+        EventHook::BeforeSideTurnStart { .. }
+            | EventHook::SideTurnStart { .. }
+            | EventHook::BeforeSideTurnEndVeryEarly { .. }
             | EventHook::BeforeSideTurnEndEarly { .. }
             | EventHook::BeforeSideTurnEnd { .. }
             | EventHook::SideTurnEnd { .. }
@@ -2672,6 +2674,9 @@ fn hooks_of<V: Rules>(potions: &[V::Potion]) -> sts2_core::Overrides {
 #[derive(Debug)]
 pub(crate) struct PlayerCombat<V: Rules> {
     pub(super) character: V::Character,
+    /// `PlayerCombatState.TurnNumber`: the player's turns so far, the one
+    /// under way among them. An extra turn counts up only its takers'.
+    pub(super) turn: V::Count,
     pub(super) phase: V::PlayerTurnPhase,
     pub(super) energy: V::Count,
     pub(super) stars: V::Count,
@@ -2727,6 +2732,7 @@ impl<V: Rules> Clone for PlayerCombat<V> {
     fn clone_from(&mut self, source: &Self) {
         let PlayerCombat {
             character,
+            turn,
             phase,
             energy,
             stars,
@@ -2745,6 +2751,7 @@ impl<V: Rules> Clone for PlayerCombat<V> {
             orbs,
         } = self;
         *character = source.character;
+        *turn = source.turn;
         *phase = source.phase;
         *energy = source.energy;
         *stars = source.stars;
@@ -2772,13 +2779,15 @@ pub(crate) struct Live<V: Rules> {
     /// What the run is being played at, which a card or a move reads for the
     /// numbers the level moves.
     pub(super) ascension: V::AscensionLevel,
-    pub(crate) turn: V::Count,
     pub(super) modifiers: RunModifiers<V>,
     pub(super) round: V::Count,
     /// `creaturesStartingTurn`: the creatures that started the side's turn
     /// now under way, taken before `BeforeSideTurnStart`. The turn's start
     /// hooks name them as taking part.
     pub(super) starting: sts2_core::Participants,
+    /// Whether the players' `TurnNumber`s differ, which only an extra turn
+    /// some of them take makes so. Set where it does, and never cleared.
+    pub(super) turns_apart: bool,
     /// The creatures ending the side's turn, which its end hooks name as
     /// taking part. Taken as the end begins.
     pub(super) ending: sts2_core::Participants,
@@ -3076,15 +3085,26 @@ impl<V: Rules> CombatHistory<V> {
         ))
     }
 
-    /// The turn at `round` on `side`, in the player's turn `player_turn`, is
+    /// The turn at `round` on `side`, with each player's `TurnNumber` in
+    /// `player_turns`, is
     /// over. Its entries join the past turns, unless it had none.
-    fn end_turn(&mut self, round: V::Count, side: V::CombatSide, player_turn: V::Count) {
+    fn end_turn(
+        &mut self,
+        round: V::Count,
+        side: V::CombatSide,
+        player_turns: sts2_core::PlayerTurns<V>,
+    ) {
         self.unprompted.clear();
         if self.this_turn.is_empty() {
             return;
         }
         let past = self.before.get_or_insert_with(Default::default);
-        std::sync::Arc::make_mut(past).end_turn(round, side, player_turn, self.this_turn.drain(..));
+        std::sync::Arc::make_mut(past).end_turn(
+            round,
+            side,
+            player_turns,
+            self.this_turn.drain(..),
+        );
     }
 
     /// What `player`'s listeners read, `player` being their owner's
@@ -3183,10 +3203,10 @@ impl<V: Rules> Clone for Live<V> {
         let Live {
             players,
             ascension,
-            turn,
             modifiers,
             round,
             starting,
+            turns_apart,
             ending,
             side,
             history,
@@ -3228,10 +3248,10 @@ impl<V: Rules> Clone for Live<V> {
         } = self;
         players.clone_from(&source.players);
         *ascension = source.ascension;
-        *turn = source.turn;
         *modifiers = source.modifiers;
         *round = source.round;
         *starting = source.starting;
+        *turns_apart = source.turns_apart;
         *ending = source.ending;
         *side = source.side;
         history.clone_from(&source.history);
@@ -3846,7 +3866,11 @@ impl<V: Rules> Live<V> {
     /// `SwitchSides`: the turn now over joins the history, and `side` takes
     /// its turn. `OnSideSwitch` clears every monster's `SpawnedThisTurn`.
     pub(super) fn switch_side(&mut self, side: V::CombatSide) {
-        self.history.end_turn(self.round, self.side, self.turn);
+        let mut turns: sts2_core::PlayerTurns<V> = [num_traits::zero(); sts2_core::MAX_PLAYERS];
+        for (seat, player) in self.players.seated() {
+            turns[seat.at()] = player.turn;
+        }
+        self.history.end_turn(self.round, self.side, turns);
         self.side = side;
         for held in &mut self.machines {
             held.spawned_this_turn = false;
@@ -3891,15 +3915,40 @@ impl<V: Rules> Live<V> {
                 block: self.player(seat).block,
             },
             EventHook::BeforeSideTurnEndEarly {
-                side,
-                participants,
-                turn,
-                ..
+                side, participants, ..
             } => EventHook::BeforeSideTurnEndEarly {
                 side,
                 participants,
                 plays: self.history.unprompted_plays_this_turn(seat.creature()),
-                turn,
+                turn: player.turn,
+            },
+            EventHook::BeforeSideTurnStart {
+                side,
+                participants,
+                round,
+                ..
+            } => EventHook::BeforeSideTurnStart {
+                side,
+                participants,
+                turn: player.turn,
+                round,
+            },
+            EventHook::SideTurnStart {
+                side,
+                participants,
+                round,
+                room,
+                extra,
+                players,
+                ..
+            } => EventHook::SideTurnStart {
+                side,
+                participants,
+                turn: player.turn,
+                round,
+                room,
+                extra,
+                players,
             },
             EventHook::BeforeSideTurnEnd {
                 side, participants, ..
@@ -3968,7 +4017,15 @@ impl<V: Rules> Live<V> {
         seat: impl FnOnce() -> Option<sts2_core::SeatIndex>,
         hook: sts2_core::EventHook<V>,
     ) -> sts2_core::EventHook<V> {
-        match refreshes(&hook).then(seat).flatten() {
+        // A turn's start carries only the turn number for its listener's
+        // player, which is everyone's alike until an extra turn parts them.
+        let starts = matches!(
+            hook,
+            sts2_core::EventHook::BeforeSideTurnStart { .. }
+                | sts2_core::EventHook::SideTurnStart { .. }
+        );
+        let fills = refreshes(&hook) && (!starts || self.turns_apart);
+        match fills.then(seat).flatten() {
             Some(seat) => self.refreshed(seat, hook),
             None => hook,
         }
@@ -4003,6 +4060,16 @@ impl<V: Rules> Live<V> {
                 hp: player.hp,
                 max_hp: player.max_hp,
             },
+        }
+    }
+
+    /// The `TurnNumber` of the player `creature` is, or of the first player
+    /// for a creature that is no player's, which no listener reads it of.
+    pub(crate) fn turn_of(&self, creature: CombatId) -> V::Count {
+        let seat = sts2_core::SeatIndex(creature.get());
+        match usize::from(creature.get()) < self.players.len() {
+            true => self.players[seat].turn,
+            false => self.players[sts2_core::SeatIndex(0)].turn,
         }
     }
 
@@ -4251,7 +4318,7 @@ impl<V: Rules> Live<V> {
             })
             .collect();
         Combat {
-            turn: self.turn,
+            turn: self.players[seat].turn,
             phase: self.players[seat].phase,
             energy: self.players[seat].energy,
             stars: self.players[seat].stars,
@@ -4467,6 +4534,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
 
         let player = PlayerCombat {
             character: Character::Regent,
+            turn: 1,
             phase: PlayerTurnPhase::Play,
             energy: 3,
             stars: 0,
@@ -4487,10 +4555,10 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
         Live {
             players: crate::seats::BySeat::new(player, Vec::new()),
             ascension: AscensionLevel::None,
-            turn: 1,
             modifiers: RunModifiers::holding(&[]),
             round: 1,
             starting: sts2_core::Participants::default(),
+            turns_apart: false,
             ending: sts2_core::Participants::default(),
             side: CombatSide::Player,
             history: CombatHistory::new(),

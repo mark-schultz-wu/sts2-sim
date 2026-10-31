@@ -2722,7 +2722,7 @@ impl<V: Rules> State<V> {
     /// otherwise the last one's.
     fn player_turn(&self, seat: sts2_core::SeatIndex) -> Option<V::Count> {
         match &self.phase {
-            Phase::Combat(live) => Some(live.turn),
+            Phase::Combat(live) => Some(live.turn_of(seat.creature())),
             _ => self.players[seat].last_turn,
         }
     }

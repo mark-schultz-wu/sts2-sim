@@ -104,7 +104,7 @@ pub(super) fn takes_extra_turn<V: Rules>(
             sts2_core::DecisionHook::ShouldTakeExtraTurn {
                 player: seat.creature(),
                 plays,
-                turn: live.turn,
+                turn: live.players[seat].turn,
             },
             true,
         )
@@ -116,7 +116,8 @@ pub(super) fn takes_extra_turn<V: Rules>(
         player.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::NONE;
     }
     live.switch_side(<V::CombatSide as SideKinds>::PLAYER);
-    live.turn = live.turn + num_traits::one();
+    live.players[seat].turn = live.players[seat].turn + num_traits::one();
+    live.turns_apart |= live.players.len() > 1;
     // `PowerCmd.Decrement` of a power asking runs inside the walk.
     let taking = sts2_core::EventHook::TakingExtraTurn {
         player: seat.creature(),
@@ -303,12 +304,14 @@ pub(super) fn enemy_turn_ends<V: Rules>(
             <V::CombatSide as SideKinds>::ENEMY,
         ),
     };
-    // The round and the turn both count up, because this is not an extra
-    // turn. A fight that ended above switches too: its win check clears
-    // `IsInProgress`, which `IsEnding` then reads as not ending.
+    // The round and every player's turn count up, because this is not an
+    // extra turn. A fight that ended above switches too: its win check
+    // clears `IsInProgress`, which `IsEnding` then reads as not ending.
     live.switch_side(<V::CombatSide as SideKinds>::PLAYER);
     live.round = live.round + num_traits::one();
-    live.turn = live.turn + num_traits::one();
+    for player in live.players.iter_mut() {
+        player.turn = player.turn + num_traits::one();
+    }
     ended
 }
 
@@ -529,7 +532,7 @@ fn player_setup<V: Rules>(
         listen::Walk { live, belts },
         sts2_core::DecisionHook::ShouldPlayerResetEnergy {
             player,
-            turn: live.turn,
+            turn: live.players[seat].turn,
         },
         false,
     );
@@ -548,7 +551,7 @@ fn player_setup<V: Rules>(
     energy_reset_late::<V>(seat, live, streams.combat(), belts, ascension);
     let hook = sts2_core::EventHook::BeforeHandDraw {
         player,
-        turn: live.turn,
+        turn: live.players[seat].turn,
     };
     let asked = listen::Walking::begin(live, belts, hook).map(Box::new);
     // A relic's damage can end the fight, and a fight ended in
@@ -706,7 +709,7 @@ pub(super) fn before_flush_late<V: Rules>(
         return Vec::new();
     }
     let player = live.player(seat).id;
-    let turn = live.turn;
+    let turn = live.players[seat].turn;
     let mut walking =
         listen::Walking::begin(live, belts, sts2_core::EventHook::FlushingLate { player });
     // Each listener runs under a pause boundary of its own, and the hook
@@ -1100,7 +1103,8 @@ pub(super) fn before_side_turn_start<V: Rules>(
         }
     }
     live.starting = starting.iter().copied().collect();
-    let (turn, round) = (live.turn, live.round);
+    // The first player's, which the walk fills in with each listener's own.
+    let (turn, round) = (live.turn_of(sts2_core::SeatIndex(0).creature()), live.round);
     let hook = sts2_core::EventHook::BeforeSideTurnStart {
         side,
         participants: live.starting,
@@ -1273,7 +1277,7 @@ pub(super) fn before_turn_end<V: Rules>(
         side,
         participants,
         plays,
-        turn: live.turn,
+        turn: live.turn_of(seat.creature()),
     };
     let mut walking = listen::Walking::begin(live, belts, hook);
     while let Some((listener, effect)) = walking
@@ -1869,12 +1873,12 @@ pub(super) fn hand_draw<V: Rules>(
     if live.won {
         return Err(super::Ended::Won);
     }
-    let mut drawn = hand_size::<V>(seat, listen::Walk { live, belts }, live.turn);
+    let mut drawn = hand_size::<V>(seat, listen::Walk { live, belts }, live.players[seat].turn);
     super::start::after_modifying_hand_draw::<V>(seat, live, belts);
     // On turn one a card whose enchantment says
     // `ShouldStartAtBottomOfDrawPile` sinks, then the innate cards
     // go on top and are all drawn, up to a full hand.
-    if live.turn == num_traits::one() {
+    if live.players[seat].turn == num_traits::one() {
         let innate = live.players[seat].cards.innate_to_top(|face| {
             face.ident.enchantment.is_some_and(|enchanted| {
                 V::should_start_at_bottom_of_draw_pile(enchanted.enchantment)
@@ -2223,7 +2227,7 @@ pub(super) fn after_player_turn_start_late<V: Rules>(
 ) {
     let hook = sts2_core::EventHook::PlayerTurnStartLate {
         player,
-        turn: live.turn,
+        turn: live.turn_of(player),
     };
     let mut walking = listen::Walking::begin(live, belts, hook);
     while let Some((listener, effect)) = walking
@@ -2997,7 +3001,7 @@ pub(super) fn pre_play_from<V: Rules>(
     rest: PassRest<V>,
     next: usize,
 ) -> PrePlayed<V> {
-    let turn = live.turn;
+    let turn = live.players[seat].turn;
     let player = seat.creature();
     let passes = [
         sts2_core::EventHook::AutoPrePlayPhaseEarly { player, turn },
@@ -3053,8 +3057,11 @@ pub(super) fn pre_play_from<V: Rules>(
                 // the plays, which answers every question they ask.
                 sts2_core::HookEffect::AutoPlayHand { mut left } => {
                     live.selector_answers = true;
-                    let start = live.turn;
-                    while left > 0 && !live.players[seat].ending_turn && live.turn == start {
+                    let start = live.players[seat].turn;
+                    while left > 0
+                        && !live.players[seat].ending_turn
+                        && live.players[seat].turn == start
+                    {
                         let Some(first) = first_playable::<V>(seat, live, belts) else {
                             break;
                         };
@@ -3301,7 +3308,8 @@ pub(super) fn side_turn_started<V: Rules>(
     side: V::CombatSide,
     extra: bool,
 ) -> Option<super::Ended> {
-    let turn = live.turn;
+    // The first player's, which the walk fills in with each listener's own.
+    let turn = live.turn_of(sts2_core::SeatIndex(0).creature());
     let mut ended = None;
     let hook = sts2_core::EventHook::SideTurnStart {
         side,
@@ -3677,7 +3685,7 @@ pub(super) fn flush_hand<V: Rules>(
     ascension: V::AscensionLevel,
 ) {
     let player = live.player(seat).id;
-    let turn = live.turn;
+    let turn = live.players[seat].turn;
     let fight = listen::Walk { live, belts };
     if !listen::any_decides::<V>(
         fight,
@@ -3746,7 +3754,7 @@ pub(super) fn energy_reset<V: Rules>(
     let player = live.player(seat).id;
     let hook = sts2_core::EventHook::EnergyReset {
         player,
-        turn: live.turn,
+        turn: live.players[seat].turn,
     };
     let mut ended = None;
     let mut walking = listen::Walking::begin(live, belts, hook);
@@ -3819,7 +3827,7 @@ pub(super) fn energy_reset_late<V: Rules>(
     let player = live.player(seat).id;
     let hook = sts2_core::EventHook::EnergyResetLate {
         player,
-        turn: live.turn,
+        turn: live.players[seat].turn,
     };
     let mut walking = listen::Walking::begin(live, belts, hook);
     while let Some((_, effect)) = walking
@@ -3861,7 +3869,9 @@ fn clear_block<V: Rules>(
         // `Creature.AfterTurnStart` keeps a player's block on their first
         // turn, before it asks anything. A pet's `Player` is null, so a pet's
         // clears. `AfterBlockCleared` still runs.
-        if live.seat_of(creature).is_some() && live.turn == num_traits::one() {
+        if usize::from(creature.get()) < live.players.len()
+            && live.turn_of(creature) == num_traits::one()
+        {
             continue;
         }
         // `Hook.ShouldClearBlock`, and the model that kept the block.
@@ -3915,7 +3925,7 @@ fn clear_block<V: Rules>(
     for &creature in clearing {
         let hook = sts2_core::EventHook::BlockCleared {
             creature,
-            turn: live.turn,
+            turn: live.turn_of(creature),
         };
         let mut walking = listen::Walking::begin(live, belts, hook);
         while let Some((listener, effect)) = walking

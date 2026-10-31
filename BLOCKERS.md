@@ -305,7 +305,7 @@ run as its own machine sees it. The work goes in this order:
      2. Powers check them (done).
      3. Cards, monsters, enchantments and the rest check them (done).
      4. `TurnNumber` is kept for each player, and a listener reads its
-        owner's. The sim keeps one `live.turn`.
+        owner's (done).
      5. The extra turns: the takers' turn ends, flushes and starts alone,
         and an extra turn counts up only the takers' `TurnNumber`.
    - A question that waits on a player's own card play names no asker,
