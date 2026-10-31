@@ -826,7 +826,7 @@ pub(crate) fn event_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
             status::event_hook::<V, _>(card, id, printed, hook, asked)
         }
         card if V::card_filed(card) == CardFiled::Curse => {
-            curse::event_hook::<V>(card, pile, hook, asked)
+            curse::event_hook::<V>(card, owner, pile, hook, asked)
         }
         // `HowlFromBeyond.AfterAutoPostPlayPhaseEntered`: from the exhaust
         // pile, it plays itself.
