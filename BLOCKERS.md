@@ -280,11 +280,9 @@ run as its own machine sees it. The work goes in this order:
    `docs/COOP-FIGHTS.md` and where the hunted runs stop:
    - Imitation Learning copies a teammate's Power card, but no hunted run
      reaches the copy yet. Check it against the game when one does.
-   - A card whose pick another player makes splits its play, as
-     `BranchingPlayerChoiceContext` does. The play ends there, and the
-     pick and the rest of the card go on as a hook action on the
-     chooser's queue. Tutor is `unimplemented!` until the scheduler has
-     this (Defect and Necrobinder seed 4).
+   - A card or potion whose pick another player makes splits as
+     `BranchingPlayerChoiceContext` does, but for a card with replays,
+     which is still `unimplemented!`.
    - The rest of the scheduler (steps 3 and 4 of `docs/SCHEDULER.md`). A
      question the post-play phase asks in a fight of several players
      waits on its player's queue, and the turn's end waits for every

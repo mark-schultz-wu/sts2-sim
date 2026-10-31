@@ -3374,6 +3374,9 @@ pub enum Played<V: ContentVersion, R> {
     Done,
     /// The play stopped on a `CardSelectCmd`, which is a question.
     Asking {
+        /// The player who picks, from their own pile, which is
+        /// `CardSelectCmd`'s `player`. Nothing for the card's owner.
+        of: Option<crate::CombatId>,
         /// The pile it selects from.
         pile: crate::Pile,
         /// How many it takes, which decides whether it asks at all.

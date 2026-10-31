@@ -362,6 +362,7 @@ pub(crate) fn play<V: Rules>(
             target: play.target,
             ended,
             branched: false,
+            chooser: None,
         },
         played,
         true,
@@ -629,6 +630,7 @@ pub(super) fn auto_play_in_play<V: Rules>(
             target,
             ended,
             branched: false,
+            chooser: None,
         },
         played,
         false,
@@ -1792,51 +1794,11 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                 let Asker::Card(play) = effect.asker else {
                     break;
                 };
-                // `OnPlayWrapper` returns where it stands once the player is
-                // dead, which leaves the card in the play pile.
-                if owner_dead::<V>(next, seat) {
-                    end_dead_effect(next, seat);
-                    return Ok(effect.ended);
+                // A branched card's end ran as its choice began.
+                if effect.branched {
+                    break;
                 }
-                let card = play.id;
-                let face = next.players[seat]
-                    .cards
-                    .named(card)
-                    .unwrap_or_else(|| {
-                        unimplemented!("a card that left play before its play ended")
-                    })
-                    .face;
-                let played_card = face.ident.card;
-                let ethereal = face.ethereal();
-                // `EnchantmentModel.OnPlay`, after the card's own and before
-                // the play is finished.
-                if let Some(enchanted) = face.ident.enchantment {
-                    let mut state = face.enchantment_state();
-                    let mut board = Board::for_card(
-                        seat,
-                        next,
-                        streams.combat(),
-                        belts,
-                        ascension,
-                        effect.target,
-                        Some(card),
-                    )
-                    .blocking();
-                    V::enchantment_on_play(enchanted, &mut state, &mut board);
-                    effect.ended = effect.ended.or(board.ended());
-                    let skipped = std::mem::take(&mut board.skipped);
-                    merge::<V>(&mut next.skip_tick, skipped);
-                    // The model is the card's, wherever its play put it.
-                    next.players[seat]
-                        .cards
-                        .write_named(card, |face| face.set_enchantment_state(state));
-                    // The enchantment's play can kill its owner too.
-                    if owner_dead::<V>(next, seat) {
-                        end_dead_effect(next, seat);
-                        return Ok(effect.ended);
-                    }
-                }
-                let ended = finished::<V, _>(
+                let Some((played_card, card)) = play_over::<V, _>(
                     seat,
                     Fighting {
                         live: &mut *next,
@@ -1844,13 +1806,11 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                         belts: &mut *belts,
                     },
                     ascension,
-                    played_card,
-                    card,
-                    ethereal,
+                    &mut effect,
                     play,
-                    effect.plays.done >= effect.plays.count,
-                );
-                effect.ended = effect.ended.or(ended);
+                ) else {
+                    return Ok(effect.ended);
+                };
                 if effect.plays.done >= effect.plays.count {
                     break;
                 }
@@ -1900,16 +1860,24 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
             // Every `CardSelectCmd` a card plays through takes nothing once
             // the fight is ending, and the card carries on with none.
             sts2_core::Played::Asking {
+                of,
                 pile,
                 selection,
                 at,
             } => {
+                // A card's `CardSelectCmd` over another player's pile asks
+                // that player.
+                if let Asker::Card(_) = effect.asker {
+                    effect.chooser = (of.and_then(|player| next.seat_of(player)))
+                        .filter(|&chooser| chooser != seat);
+                }
                 let ending = super::board::ending::<V>(super::listen::Walk { live: next, belts });
                 signalled = !ending && signal_pauses::<V>(next);
+                let chooser = effect.reaching(next, seat).unwrap_or(seat);
                 let taken = match (ending, signalled) {
                     (true, _) => selection.validate_automatic(sts2_core::Picked::new()),
                     (false, true) => None,
-                    (false, false) => taken::<V>(seat, next, pile, selection),
+                    (false, false) => taken::<V>(chooser, next, pile, selection),
                 };
                 (
                     at,
@@ -1964,31 +1932,57 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
             sts2_core::Played::Waiting { .. } => unreachable!("a waiting effect resumed above"),
         };
         let Some(answer) = answer else {
-            // `BranchingPlayerChoiceContext`: a potion whose choice is
-            // another player's ends here, as the choice begins. The rest
+            // `BranchingPlayerChoiceContext`: a card or potion whose choice
+            // is another player's ends here, as the choice begins. The rest
             // goes on as that player's hook action, once they answer.
-            let branches = matches!(effect.asker, Asker::Potion(_))
-                && !effect.branched
+            let branches = !effect.branched
                 && next.players.len() > 1
                 && effect
                     .reaching(next, seat)
                     .is_some_and(|chooser| chooser != seat);
             if branches {
-                let ended = finish_effect(
-                    seat,
-                    Fighting {
-                        live: &mut *next,
-                        streams: &mut *streams,
-                        belts: &mut *belts,
-                    },
-                    ascension,
-                    effect.clone(),
-                    outermost,
-                )?;
+                let mut end = effect.clone();
+                // A card's `OnPlayWrapper` goes on past its `OnPlay`: the
+                // enchantment's, the play finished and `AfterCardPlayed`.
+                let alive = match end.asker {
+                    Asker::Card(play) => {
+                        if end.plays.count > num_traits::one() {
+                            unimplemented!("a card with replays whose choice branches");
+                        }
+                        end.plays.done = end.plays.count;
+                        play_over::<V, _>(
+                            seat,
+                            Fighting {
+                                live: &mut *next,
+                                streams: &mut *streams,
+                                belts: &mut *belts,
+                            },
+                            ascension,
+                            &mut end,
+                            play,
+                        )
+                        .is_some()
+                    }
+                    Asker::Potion(_) => true,
+                };
+                let ended = match alive {
+                    true => finish_effect(
+                        seat,
+                        Fighting {
+                            live: &mut *next,
+                            streams: &mut *streams,
+                            belts: &mut *belts,
+                        },
+                        ascension,
+                        end.clone(),
+                        outermost,
+                    )?,
+                    false => end.ended,
+                };
                 effect.branched = true;
-                effect.ended = effect.ended.or(ended);
+                effect.ended = effect.ended.or(end.ended).or(ended);
                 if next.asking.is_some() {
-                    unimplemented!("a potion's end asking as its choice branches");
+                    unimplemented!("an effect's end asking as its choice branches");
                 }
             }
             let ended = effect.ended;
@@ -2050,6 +2044,82 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
         effect,
         outermost,
     )
+}
+
+/// The rest of `OnPlayWrapper` once one of a card's plays is over: the
+/// enchantment's `OnPlay`, then the play finished and `AfterCardPlayed`.
+/// The card and its copy, or nothing where its owner died, which leaves the
+/// card in the play pile.
+fn play_over<V: Rules, S: LendsCombat>(
+    seat: sts2_core::SeatIndex,
+    fighting: Fighting<'_, V, S>,
+    ascension: V::AscensionLevel,
+    effect: &mut Resuming<V>,
+    play: CardPlay<V>,
+) -> Option<(V::Card, sts2_core::CardId<V>)> {
+    let Fighting {
+        live: next,
+        streams,
+        belts,
+    } = fighting;
+    // `OnPlayWrapper` returns where it stands once the player is
+    // dead, which leaves the card in the play pile.
+    if owner_dead::<V>(next, seat) {
+        end_dead_effect(next, seat);
+        return None;
+    }
+    let card = play.id;
+    let face = next.players[seat]
+        .cards
+        .named(card)
+        .unwrap_or_else(|| unimplemented!("a card that left play before its play ended"))
+        .face;
+    let played_card = face.ident.card;
+    let ethereal = face.ethereal();
+    // `EnchantmentModel.OnPlay`, after the card's own and before
+    // the play is finished.
+    if let Some(enchanted) = face.ident.enchantment {
+        let mut state = face.enchantment_state();
+        let mut board = Board::for_card(
+            seat,
+            next,
+            streams.combat(),
+            belts,
+            ascension,
+            effect.target,
+            Some(card),
+        )
+        .blocking();
+        V::enchantment_on_play(enchanted, &mut state, &mut board);
+        effect.ended = effect.ended.or(board.ended());
+        let skipped = std::mem::take(&mut board.skipped);
+        merge::<V>(&mut next.skip_tick, skipped);
+        // The model is the card's, wherever its play put it.
+        next.players[seat]
+            .cards
+            .write_named(card, |face| face.set_enchantment_state(state));
+        // The enchantment's play can kill its owner too.
+        if owner_dead::<V>(next, seat) {
+            end_dead_effect(next, seat);
+            return None;
+        }
+    }
+    let ended = finished::<V, _>(
+        seat,
+        Fighting {
+            live: &mut *next,
+            streams: &mut *streams,
+            belts: &mut *belts,
+        },
+        ascension,
+        played_card,
+        card,
+        ethereal,
+        play,
+        effect.plays.done >= effect.plays.count,
+    );
+    effect.ended = effect.ended.or(ended);
+    Some((played_card, card))
 }
 
 /// Whether the player at `seat` has died.

@@ -332,13 +332,8 @@ pub(crate) fn on_play<'a, K: sts2_core::FightKind<V>>(
             }
             Some(Played::Done)
         }
-        // `Tutor`'s pick is the ally's, so its play branches: the play
-        // ends, and the pick and the rest go on as a hook action on the
-        // ally's queue. The scheduler has no branch yet.
-        Cards::Regent(RegentCard::Tutor) => {
-            unimplemented!("Tutor's pick branching onto the ally's queue")
-        }
-        Cards::Defect(DefectCard::Hyperbeam)
+        Cards::Regent(RegentCard::Tutor)
+        | Cards::Defect(DefectCard::Hyperbeam)
         | Cards::Defect(DefectCard::Scrape)
         | Cards::Silent(SilentCard::Expertise)
         | Cards::Necrobinder(NecrobinderCard::Eidolon)
@@ -464,6 +459,24 @@ fn misery<F: Fight<V>>(fight: &mut F) -> Played<V, F::Kind> {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub fn paused<K: FightKind<V>>(card: Cards) {
     match card {
+        // `Tutor`: the ally it is pointed at picks one card of their draw
+        // pile, which goes into their hand. The pick is the ally's, so the
+        // play ends as it begins, and the rest goes on as the ally's.
+        Cards::Regent(RegentCard::Tutor) => {
+            let player: sts2_core::CombatId = resumed!().fight.target();
+            yield_!(Ask::AskingOf {
+                player,
+                pile: sts2_core::Pile::Draw,
+                selection: sts2_core::Selection::Exactly(nonmax::NonMaxUsize::ONE),
+            });
+            let Lent { fight, taken } = resumed!();
+            fight.for_player(player, |fight| {
+                fight.act_on(
+                    sts2_core::PileAct::IntoHand,
+                    crate::behaviour::paused::selected::<V>(taken).as_slice(),
+                );
+            });
+        }
         // `Hyperbeam`: its damage to every enemy, then its Focus as a
         // `HyperbeamFocusDownPower` on its owner.
         Cards::Defect(DefectCard::Hyperbeam) => {

@@ -121,6 +121,9 @@ pub(super) struct Resuming<V: Rules> {
     /// does where another player picks. The effect's end ran as the choice
     /// began, and the rest goes on as that player's hook action.
     pub(super) branched: bool,
+    /// The other player a card's `CardSelectCmd` asks, for whom the rest of
+    /// its effect acts. Nothing while the card's owner picks.
+    pub(super) chooser: Option<sts2_core::SeatIndex>,
 }
 
 impl<V: Rules> Resuming<V> {
@@ -134,7 +137,7 @@ impl<V: Rules> Resuming<V> {
     ) -> Option<sts2_core::SeatIndex> {
         match self.asker {
             Asker::Potion(_) => potion_reaching(live, seat, self.target),
-            Asker::Card(_) => None,
+            Asker::Card(_) => self.chooser,
         }
     }
 }
