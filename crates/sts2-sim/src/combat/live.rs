@@ -117,6 +117,10 @@ pub(super) struct Resuming<V: Rules> {
     pub(super) ended: Option<super::Ended>,
     /// Where this effect is in `GeneratePlayCount`'s loop.
     pub(super) plays: Plays<V>,
+    /// Whether its choice branched it, as `BranchingPlayerChoiceContext`
+    /// does where another player picks. The effect's end ran as the choice
+    /// began, and the rest goes on as that player's hook action.
+    pub(super) branched: bool,
 }
 
 impl<V: Rules> Resuming<V> {

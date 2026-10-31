@@ -361,6 +361,7 @@ pub(crate) fn play<V: Rules>(
             asker: Asker::Card(begun),
             target: play.target,
             ended,
+            branched: false,
         },
         played,
         true,
@@ -627,6 +628,7 @@ pub(super) fn auto_play_in_play<V: Rules>(
             asker: Asker::Card(begun),
             target,
             ended,
+            branched: false,
         },
         played,
         false,
@@ -1962,6 +1964,33 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
             sts2_core::Played::Waiting { .. } => unreachable!("a waiting effect resumed above"),
         };
         let Some(answer) = answer else {
+            // `BranchingPlayerChoiceContext`: a potion whose choice is
+            // another player's ends here, as the choice begins. The rest
+            // goes on as that player's hook action, once they answer.
+            let branches = matches!(effect.asker, Asker::Potion(_))
+                && !effect.branched
+                && next.players.len() > 1
+                && effect
+                    .reaching(next, seat)
+                    .is_some_and(|chooser| chooser != seat);
+            if branches {
+                let ended = finish_effect(
+                    seat,
+                    Fighting {
+                        live: &mut *next,
+                        streams: &mut *streams,
+                        belts: &mut *belts,
+                    },
+                    ascension,
+                    effect.clone(),
+                    outermost,
+                )?;
+                effect.branched = true;
+                effect.ended = effect.ended.or(ended);
+                if next.asking.is_some() {
+                    unimplemented!("a potion's end asking as its choice branches");
+                }
+            }
             let ended = effect.ended;
             // `CardSelectCmd.UndoEndTurnIfNecessary`: a choice put to a
             // player who ended the turn, on the players' side, takes that
@@ -2056,6 +2085,10 @@ fn finish_effect<V: Rules, S: LendsCombat>(
         streams,
         belts,
     } = fighting;
+    // A branched effect's end ran as its choice began.
+    if effect.branched {
+        return Ok(effect.ended);
+    }
     // `EndCardOrPotionEffect`, once the last play's `AfterCardPlayed` or the
     // potion's `OnUse` is over. `CheckForEmptyHand` acts only with no card
     // or potion of the player's still running.

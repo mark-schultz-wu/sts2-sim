@@ -65,6 +65,7 @@ pub(crate) fn drink<V: Rules>(
             asker: super::live::Asker::Potion(potion),
             target,
             ended,
+            branched: false,
         },
         used,
         true,

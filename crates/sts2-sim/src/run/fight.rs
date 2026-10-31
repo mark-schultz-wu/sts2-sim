@@ -207,9 +207,11 @@ impl<V: Rules> State<V> {
             )?));
         };
         let ended = combat::drink(seat, fighting, potion, target)?;
-        // What the potion asks of the run beside the fight, which is its belt.
-        let effects = V::on_use_on_run(potion, &self.seen_by(seat), true);
-        if self.carry_out(seat, effects).is_some() {
+        // What the potion asks of the run beside the fight, which is its
+        // target's belt.
+        let aimed = self.aimed_seat(seat, target);
+        let effects = V::on_use_on_run(potion, &self.seen_by(aimed), true);
+        if self.carry_out(aimed, effects).is_some() {
             unimplemented!("a potion drunk in a fight that asks the run a question");
         }
         // What a death's listener asked inside the potion, as the decision
@@ -220,6 +222,20 @@ impl<V: Rules> State<V> {
             ended => ended,
         };
         Ok(Ok(self.settle(seat, ended)))
+    }
+
+    /// The player a potion drunk by `drinker` acts for: the player it is
+    /// aimed at, as Entropic Brew fills `target.Player`'s belt, or its
+    /// drinker. A fight adds its players first, so creature `k` is seat `k`.
+    fn aimed_seat(
+        &self,
+        drinker: sts2_core::SeatIndex,
+        target: Option<sts2_core::CombatId>,
+    ) -> sts2_core::SeatIndex {
+        target
+            .map(|target| sts2_core::SeatIndex(target.get()))
+            .filter(|seat| seat.at() < self.player_count())
+            .unwrap_or(drinker)
     }
 
     /// Each queued potion whose turn has come, as its `UsePotionAction` runs:
@@ -239,8 +255,9 @@ impl<V: Rules> State<V> {
                 unreachable!("a queued potion is drunk in its fight");
             };
             let ended = combat::drink(owner, fighting, potion, target)?;
-            let effects = V::on_use_on_run(potion, &self.seen_by(owner), true);
-            if self.carry_out(owner, effects).is_some() {
+            let aimed = self.aimed_seat(owner, target);
+            let effects = V::on_use_on_run(potion, &self.seen_by(aimed), true);
+            if self.carry_out(aimed, effects).is_some() {
                 unimplemented!("a potion drunk in a fight that asks the run a question");
             }
             if ended.is_some() {

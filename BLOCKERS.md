@@ -326,10 +326,15 @@ run as its own machine sees it. The work goes in this order:
        Head, seed 10 at Ovicopter, and seed 13 at Knowledge Demon. The
        lobby counted a game as still once every player ended the turn,
        so hunt these again first.
-     - A potion. Defect and Necrobinder show it with Power Potion (seed
-       5) and Touch of Insanity (seed 15). Ironclad and Silent show it
-       with Entropic Brew (seeds 9 and 46) and Gambler's Brew (seed 3).
-       Silent and Defect show it with Swift Potion (seed 15).
+     - A potion thrown at a player who ended the turn. Its choice takes
+       that end back, and the game resumes the player's paused
+       `EndPlayerTurnAction` once the choice is over. After the player
+       ends the turn again, the game still offers them the end of the
+       turn, and the simulator offers nothing. Touch of Insanity shows it
+       (Defect and Necrobinder seed 15, Silent and Defect seed 13).
+     - Gambler's Brew's seed parts at a later confirm, in the run, the
+       belt and the moves (Ironclad and Silent seed 3). Swift Potion
+       parted once (Silent and Defect seed 15).
      - Golden Compass in the map (Ironclad and Silent seeds 28 and 45).
        `GoldenPathActMap` drops a point type in co-op, under class E.
      - Outrage's question (Ironclad and Silent seed 24), Battleworn
