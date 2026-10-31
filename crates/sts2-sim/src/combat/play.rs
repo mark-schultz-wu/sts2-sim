@@ -1269,7 +1269,22 @@ pub(crate) fn come_up<V: Rules>(
             Asked::Pile { selection, .. } | Asked::Among { selection, .. } if ending => {
                 selection.validate_automatic(sts2_core::Picked::new())
             }
-            Asked::Pile { pile, selection } => taken::<V>(seat, live, *pile, *selection),
+            Asked::Pile { pile, selection } => {
+                let chooser = match &asking.then {
+                    Then::Play { effect, .. } => effect.reaching(live, seat),
+                    _ => None,
+                }
+                .unwrap_or(seat);
+                let (pile, selection) = (*pile, *selection);
+                let picked = taken::<V>(chooser, live, pile, selection);
+                if picked.is_none() {
+                    live.asking
+                        .as_mut()
+                        .expect("a signalled choice stands")
+                        .question = listed_pile::<V>(chooser, live, pile, selection);
+                }
+                picked
+            }
             Asked::Among { cards, selection } => {
                 selection.validate_automatic(cards.iter().copied().collect())
             }
@@ -1294,6 +1309,35 @@ pub(crate) fn come_up<V: Rules>(
             return Ok(ended);
         }
     }
+}
+
+/// The question a `CardSelectCmd` over the chooser's whole `pile` asks once
+/// it lists. A pick from the hand offers the hand as it stands, as
+/// `NPlayerHand.SelectCards` does. Any other pile's grid keeps the cards it
+/// listed, whatever joins the pile while it waits.
+fn listed_pile<V: Rules>(
+    chooser: sts2_core::SeatIndex,
+    live: &Live<V>,
+    pile: sts2_core::Pile,
+    selection: sts2_core::Selection,
+) -> Asked<V> {
+    if pile == sts2_core::Pile::Hand {
+        return Asked::Pile { pile, selection };
+    }
+    let cards = live
+        .offered(chooser, pile)
+        .into_iter()
+        .map(|at| {
+            let held = live.players[chooser]
+                .cards
+                .get(pile, at)
+                .expect("an offered card stands in its pile");
+            let at = num_traits::NumCast::from(at)
+                .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
+            sts2_core::CardAt::new(held.id, pile, at)
+        })
+        .collect();
+    Asked::Among { cards, selection }
 }
 
 /// The cards of the chooser's `pile` that `filter` lets through, as
@@ -2047,18 +2091,27 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                         .filter(|&chooser| chooser != seat);
                 }
                 let ending = super::board::ending::<V>(super::listen::Walk { live: next, belts });
-                signalled = !ending && signal_pauses::<V>(next);
+                // `BranchingPlayerChoiceContext`: a choice another player
+                // makes signals here, and its command lists once their queue
+                // runs the rest.
+                let branches = !ending
+                    && !effect.branched
+                    && next.players.len() > 1
+                    && effect
+                        .reaching(next, seat)
+                        .is_some_and(|chooser| chooser != seat);
+                signalled = !ending && (signal_pauses::<V>(next) || branches);
                 let chooser = effect.reaching(next, seat).unwrap_or(seat);
                 let taken = match (ending, signalled) {
                     (true, _) => selection.validate_automatic(sts2_core::Picked::new()),
                     (false, true) => None,
                     (false, false) => taken::<V>(chooser, next, pile, selection),
                 };
-                (
-                    at,
-                    Asked::Pile { pile, selection },
-                    taken.map(sts2_core::Taken::Selected),
-                )
+                let asked = match (signalled, &taken) {
+                    (false, None) => listed_pile::<V>(chooser, next, pile, selection),
+                    _ => Asked::Pile { pile, selection },
+                };
+                (at, asked, taken.map(sts2_core::Taken::Selected))
             }
             // `FromHand` over what its filter lets through, which takes them
             // all unasked the way an unfiltered selection does.

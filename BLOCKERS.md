@@ -255,7 +255,8 @@ run as its own machine sees it. The work goes in this order:
    player who earns an extra turn takes it alone, while the others wait
    ready. A filtered card choice lists its pile once its choice has
    signalled. So a potion thrown at a player lists their hand once their
-   queue reaches it. Whispering Earring's pushed selector answers its picks as they
+   queue reaches it. A pick from any pile but the hand keeps the cards it
+   listed, whatever joins the pile while it waits. Whispering Earring's pushed selector answers its picks as they
    come up, before the next player's pre-play phase.
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
@@ -330,8 +331,6 @@ run as its own machine sees it. The work goes in this order:
        parted once (Silent and Defect seed 15).
      - Golden Compass in the map (Ironclad and Silent seeds 28 and 45).
        `GoldenPathActMap` drops a point type in co-op, under class E.
-     - Outrage's question (Ironclad and Silent seed 24). Regent and
-       Ironclad seed 7 parts there too.
      - Battleworn Dummy's options (Ironclad and Silent seed 37), and a
        card selection's piles (Regent and Ironclad seed 9).
      - The piles at the run's end (Ironclad and Silent seed 39, Defect
