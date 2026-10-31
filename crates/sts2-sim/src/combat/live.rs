@@ -425,6 +425,14 @@ pub(super) enum Deferred<V: Rules> {
         rest: Box<super::turn::PassRest<V>>,
         next: usize,
     },
+    /// The rest of `seat`'s `AfterAutoPostPlayPhaseEntered`, from where an
+    /// auto-play's question stood it still in a fight of several players.
+    /// The turn loop waits in [`Live::after_picks`] until no player's is
+    /// left.
+    PostPlayFrom {
+        seat: sts2_core::SeatIndex,
+        rest: Box<super::turn::PassRest<V>>,
+    },
     /// A listener's task a pause boundary set aside, which goes on here
     /// where its caller waits for it.
     Rejoin(Box<Paused<V>>),
@@ -4065,6 +4073,25 @@ impl<V: Rules> Live<V> {
                 hp: player.hp,
                 max_hp: player.max_hp,
             },
+        }
+    }
+
+    /// `EndPlayerTurnPhaseOne` waits for each player's post-play phase in
+    /// seat order, and turns each player's phase to `End` as theirs is
+    /// over. So each player before the first whose phase still waits on a
+    /// question turns to `End`.
+    pub(crate) fn post_plays_end(&mut self) {
+        let auto = <V::PlayerTurnPhase as sts2_core::TurnPhaseKinds>::AUTO_POST_PLAY;
+        for seat in self.players.seats() {
+            let waits = self.queues.stopped(seat).is_some_and(|task| {
+                (task.waiting.iter()).any(|w| matches!(w, Deferred::PostPlayFrom { .. }))
+            });
+            if waits {
+                break;
+            }
+            if self.part_of_turn(seat) && self.players[seat].phase == auto {
+                self.players[seat].phase = <V::PlayerTurnPhase as sts2_core::TurnPhaseKinds>::END;
+            }
         }
     }
 

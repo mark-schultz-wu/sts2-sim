@@ -53,6 +53,15 @@ pub(super) fn turn_loop<V: Rules>(
         // A fight of several players runs each phase for every player, and no
         // pause holds it up yet.
         if several::<V>(resumed!()) {
+            // `AfterAutoPostPlayPhaseEntered` for each player, each under its
+            // own context. One that asks waits at the front of its player's
+            // queue, and the turn's end waits for every one.
+            if post_play_each::<V>(resumed!()) {
+                yield_!(Wait::Picks);
+                if let Some(ended) = resumed!().ended {
+                    return Ok(Some(ended));
+                }
+            }
             if let Some(ended) = turn_ends_each::<V>(ascension, resumed!(), &mut skipping) {
                 return Ok(Some(ended));
             }
@@ -347,13 +356,6 @@ fn turn_ends_each<V: Rules>(
     let seats: SmallVec<[sts2_core::SeatIndex; 4]> = lent.live.turn_seats().collect();
     // What no one player owns acts as the first.
     let host = sts2_core::SeatIndex(0);
-    // `AfterAutoPostPlayPhaseEntered` for each player.
-    for &seat in &seats {
-        let mut pass = post_play_pass::<V>(seat, lent);
-        if post_play::<V>(seat, lent, &mut pass) {
-            unimplemented!("seat {seat:?}'s post-play phase asking in a fight of several players");
-        }
-    }
     // Each player turns to `End` once every player's post-play phase is
     // over.
     for &seat in &seats {
@@ -417,6 +419,29 @@ fn turn_ends_each<V: Rules>(
         return Some(by_turn_end);
     }
     None
+}
+
+/// `AfterAutoPostPlayPhaseEntered` for each player ending the turn, in seat
+/// order. One whose auto-play asks waits at the front of its player's
+/// queue, and the rest of its phase waits behind the question. The next
+/// player's runs. Whether any waits.
+fn post_play_each<V: Rules>(lent: &mut Lent<'_, V>) -> bool {
+    let seats: SmallVec<[sts2_core::SeatIndex; 4]> = lent.live.turn_seats().collect();
+    let mut waits = false;
+    for seat in seats {
+        let mut pass = post_play_pass::<V>(seat, lent);
+        if post_play::<V>(seat, lent, &mut pass) {
+            let live = &mut *lent.live;
+            live.defer(crate::combat::live::Deferred::PostPlayFrom {
+                seat,
+                rest: Box::new(pass),
+            });
+            live.stop_for_answer(seat);
+            waits = true;
+        }
+    }
+    lent.live.post_plays_end();
+    waits
 }
 
 /// Whether the fight has several players.

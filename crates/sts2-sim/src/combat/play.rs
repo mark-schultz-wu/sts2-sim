@@ -1567,6 +1567,36 @@ fn run_deferred<V: Rules>(
                 }
                 ended => ended,
             },
+            super::live::Deferred::PostPlayFrom { seat: player, rest } => match ended {
+                None => {
+                    let mut rest = rest;
+                    let asked = super::turn::post_play_until_asked::<V>(
+                        player,
+                        fighting.live,
+                        fighting.streams.combat(),
+                        fighting.belts,
+                        &mut rest,
+                    );
+                    let live = &mut *fighting.live;
+                    if asked {
+                        // It waits at the front of the player's queue again.
+                        live.defer(super::live::Deferred::PostPlayFrom { seat: player, rest });
+                    } else {
+                        live.post_plays_end();
+                        // `WaitForCompletion` on each player's post-play
+                        // phase: the turn's end goes on once none waits.
+                        let waiting = (live.queues.every_stopped()).any(|(_, task)| {
+                            (task.waiting.iter())
+                                .any(|w| matches!(w, super::live::Deferred::PostPlayFrom { .. }))
+                        });
+                        if !waiting && let Some(looping) = live.after_picks.take() {
+                            live.defer(super::live::Deferred::TurnLoop(looping));
+                        }
+                    }
+                    None
+                }
+                ended => ended,
+            },
             super::live::Deferred::Setup(setup) => super::turn::finish_setup::<V>(
                 fighting.live,
                 fighting.streams,

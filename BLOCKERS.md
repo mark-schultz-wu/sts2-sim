@@ -290,10 +290,12 @@ run as its own machine sees it. The work goes in this order:
      chooser's queue. Tutor is `unimplemented!` until the scheduler has
      this (Defect and Necrobinder seed 4).
    - The rest of the scheduler (steps 3 and 4 of `docs/SCHEDULER.md`). A
-     question the turn loop asks belongs to no player's queue yet. Each
-     phase of the turn's end panics at one in a fight of several players.
-     So does the turn's end while a player's action waits on a question.
-     Ironclad and Silent seeds 27 and 32 panic at these.
+     question the post-play phase asks in a fight of several players
+     waits on its player's queue, and the turn's end waits for every
+     player's. The turn's other phases still panic at a question there:
+     `DoTurnEnd`'s cards, the pick before the flush, and a side hook's
+     listener that pauses. So does the turn's end while a player's
+     action waits on a question. No hunted seed reaches these now.
      Card plays, potions and the turn's end go through the queues, with
      the action types, gating and cancellations.
    - A question that waits on a player's own card play names no asker,
