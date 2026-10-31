@@ -3795,7 +3795,6 @@ impl<V: Rules> Live<V> {
         for intent in &mut next.intents {
             if let Some(attack) = &mut intent.attack {
                 attack.damage = super::board::modified::<V>(
-                    seat,
                     super::listen::Walk { live: self, belts },
                     Some(fighter.id),
                     Some(player),

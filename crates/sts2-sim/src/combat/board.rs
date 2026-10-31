@@ -1702,7 +1702,6 @@ impl<'a, V: Rules> Board<'a, V> {
         amount: V::Number,
         unblockable: bool,
     ) {
-        let seat = self.seat();
         // `CreatureCmd.Damage` lands nothing from a dealer with no hit points
         // left, though its death is still to come.
         if dealer
@@ -1711,7 +1710,7 @@ impl<'a, V: Rules> Board<'a, V> {
         {
             return;
         }
-        let damage = modified::<V>(seat, self.walk(), dealer, Some(target), None, amount, false);
+        let damage = modified::<V>(self.walk(), dealer, Some(target), None, amount, false);
         self.hit(dealer, target, damage, false, unblockable, None, false);
     }
 
@@ -3704,32 +3703,30 @@ fn after_osty<V: Rules>(
 /// The target is absent for a hit previewed against nobody, and the hook
 /// runs anyway. `powered` is `IsPoweredAttack`, which each listener reads.
 pub(crate) fn modified<V: Rules>(
-    seat: sts2_core::SeatIndex,
     fight: Walk<'_, V>,
     dealer: Option<CombatId>,
     target: Option<CombatId>,
-    card: Option<&CardInstance<V>>,
+    card: Option<(sts2_core::SeatIndex, &CardInstance<V>)>,
     damage: V::Number,
     powered: bool,
 ) -> V::Number {
-    let (added, scale) = enchanted_hit::<V>(card, powered);
-    let phases = hit_phases::<V>(seat, fight, dealer, target, card, powered);
+    let (added, scale) = enchanted_hit::<V>(card.map(|(_, held)| held), powered);
+    let phases = hit_phases::<V>(fight, dealer, target, card, powered);
     scaled_by::<V>(fight, damage + added, scale, &phases).max(V::Number::zero())
 }
 
 /// [`modified`] before the floor, which is the decimal `Hook.ModifyDamage`
 /// hands back.
 fn modified_exactly<V: Rules>(
-    seat: sts2_core::SeatIndex,
     fight: Walk<'_, V>,
     dealer: Option<CombatId>,
     target: Option<CombatId>,
-    card: Option<&CardInstance<V>>,
+    card: Option<(sts2_core::SeatIndex, &CardInstance<V>)>,
     damage: Decimal,
     powered: bool,
 ) -> Decimal {
-    let (added, scale) = enchanted_hit::<V>(card, powered);
-    let phases = hit_phases::<V>(seat, fight, dealer, target, card, powered);
+    let (added, scale) = enchanted_hit::<V>(card.map(|(_, held)| held), powered);
+    let phases = hit_phases::<V>(fight, dealer, target, card, powered);
     scaled_exactly::<V>(fight, damage + exact::<V>(added), scale, &phases)
 }
 
@@ -3781,18 +3778,19 @@ pub(crate) fn enchant_scaled<V: Rules>(
 }
 
 /// `Hook.ModifyDamage`'s three phases for one hit.
+///
+/// A dealing card comes with the seat of the player whose piles hold it.
 fn hit_phases<V: Rules>(
-    seat: sts2_core::SeatIndex,
     fight: Walk<'_, V>,
     dealer: Option<CombatId>,
     target: Option<CombatId>,
-    card: Option<&CardInstance<V>>,
+    card: Option<(sts2_core::SeatIndex, &CardInstance<V>)>,
     powered: bool,
 ) -> [ModifyHook<V>; 3] {
     // `cardSource` is the model as it stands now. An attack's own numbers
     // are the ones it was built with, but a listener reads the card live, as
     // after Dampen comes off in the middle of the hits.
-    let card = card.map(|held| {
+    let card = card.map(|(seat, held)| {
         let (playing, ident) = (fight.live.players[seat].cards.standing_ident(held.id))
             .unwrap_or((false, &held.face.ident));
         sts2_core::CardSource {
@@ -4171,11 +4169,10 @@ pub(crate) fn resolve<V: Rules>(
                     (damage, _) => {
                         let damage = carried::<V>(seat, playing, fight, damage, Some(target));
                         modified::<V>(
-                            seat,
                             fight,
                             Some(dealer),
                             Some(target),
-                            playing,
+                            playing.map(|held| (seat, held)),
                             damage,
                             powered,
                         )
@@ -4252,15 +4249,14 @@ pub(crate) fn card_hit<V: Rules>(
 ) -> V::Number {
     if !held.face.fractional() {
         let damage = var::<V>(seat, held, key, fight, target);
-        return modified::<V>(seat, fight, dealer, target, Some(held), damage, powered);
+        return modified::<V>(fight, dealer, target, Some((seat, held)), damage, powered);
     }
     let damage = exact_var::<V>(seat, held, key, fight, target);
     whole::<V>(modified_exactly::<V>(
-        seat,
         fight,
         dealer,
         target,
-        Some(held),
+        Some((seat, held)),
         damage,
         powered,
     ))
@@ -6115,7 +6111,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         let seat = self.seat();
         self.ran_on();
         let dealer = Some(self.actor);
-        let damage = modified::<V>(seat, self.walk(), dealer, Some(target), None, amount, false);
+        let damage = modified::<V>(self.walk(), dealer, Some(target), None, amount, false);
         let card = self
             .playing
             .and_then(|id| self.live.players[seat].cards.named(id))
@@ -6172,11 +6168,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .expect("a card stands where it was found");
         let player = self.live.player(seat).id;
         modified_exactly::<V>(
-            seat,
             self.walk(),
             Some(player),
             None,
-            Some(&held),
+            Some((seat, &held)),
             damage,
             true,
         )

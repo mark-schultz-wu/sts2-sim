@@ -309,8 +309,8 @@ run as its own machine sees it. The work goes in this order:
        simulator, and the other 25 do not yet.
      - Content whose comment says "a fight here has one" player.
      - The rest of `Board::seat`'s callers, which a card or potion reaches
-       for its own player and a monster's move does not yet. The Test
-       Subject's move reaches one (Silent and Defect seed 4).
+       for its own player and a monster's move does not yet. No hunted
+       seed reaches one now.
    - A death that leaves every standing player ready panics.
    - The hand screen checks a pick again whenever the fight changes
      (`NPlayerHand.RevalidateSelectionAfterStateChange`). A pick the
