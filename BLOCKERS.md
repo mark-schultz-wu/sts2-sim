@@ -233,7 +233,9 @@ run as its own machine sees it. The work goes in this order:
    the actions still waiting, as the game's does. A merchant stocks an
    inventory for each player, who buys from it alone. An item's purchase
    runs on the buyer's machine, and its results reach the other machines
-   once it is over. Each player goes
+   once it is over. Each room a travel enters syncs every machine's copy
+   of each other player from that player's own machine, as
+   `CombatStateSynchronizer` does. Each player goes
    through their own copy of an event. A potion aimed at a player acts
    for that player, who answers what it asks, and its drinker applies its
    powers. A fresh power on
@@ -265,7 +267,10 @@ run as its own machine sees it. The work goes in this order:
    On 2026-10-30 a hunt of 96 seeds covered four pairs of characters.
    Ironclad and Silent played seeds 0 to 47. Defect and Necrobinder,
    Regent and Ironclad, and Silent and Defect played seeds 0 to 15. 53 seeds
-   agreed to their end. What is still open is listed below, worked by
+   agreed to their end. On 2026-11-01 a fresh hunt
+   of seeds 0 to 15 for each of the four pairs agreed on 63 of the 64
+   seeds. The last, Silent and Defect seed 2, needed the room-entry sync,
+   and agrees too. What is still open is listed below, worked by
    class, with the seeds that show it.
    Hunts stay at `--width 4`: at `--width 8` two games of sixteen failed
    in Godot itself. A lobby moves only once every game stands still and
@@ -276,9 +281,9 @@ run as its own machine sees it. The work goes in this order:
    2026-10-30 came out the same, byte for byte. The narrower ally
    targets changed the moves the hunted runs chose from. So
    `coop-v0.111.0.bin` holds the sixteen Ironclad and Silent seeds hunted
-   again. It holds Ironclad and Silent seeds 37 and 39, and Defect and
-   Necrobinder seeds 3, 10 and 14, too. The simulator follows 34,911 of
-   their 34,912 positions. Each machine logs the shared actions in the
+   again. It holds Ironclad and Silent seeds 37 and 39, Defect and
+   Necrobinder seeds 3, 10 and 14, and Silent and Defect seed 2, too. The
+   simulator follows 36,822 of their 36,823 positions. Each machine logs the shared actions in the
    order it took them in, in `order.jsonl` under its profile. The golden tests follow the hunted runs in
    `coop-v0.111.0.bin` without the game. So a change to the simulator
    needs no hunt to show it keeps them. A rule no hunted run reaches gets

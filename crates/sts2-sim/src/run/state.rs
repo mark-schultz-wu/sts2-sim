@@ -62,8 +62,8 @@ pub(crate) struct State<V: Rules> {
     event_votes: MegaRng,
     /// Each player's relics, by seat. Apart from the rest of a player, so
     /// a fight can borrow every belt at once.
-    belts: Belts<V>,
-    streams: Streams<V>,
+    pub(super) belts: Belts<V>,
+    pub(super) streams: Streams<V>,
     /// How many of this act's normal fights the run has walked into.
     ///
     /// The act's list is dealt at the start of the run and met in order, so
@@ -90,11 +90,11 @@ pub(crate) struct State<V: Rules> {
     /// from, in the order it left. A chest deals out of it alone. A pull from
     /// any player's bag, a merchant's stock, an obtain and a modifier's
     /// removal take the relic out of both.
-    shared_dealt: Arc<Vec<V::Relic>>,
+    pub(super) shared_dealt: Arc<Vec<V::Relic>>,
     /// Each time the shared bag refilled a spent rarity, which only it does:
     /// the rarity, and how far `shared_dealt` stood then. What left after
     /// that left the refilled deque.
-    shared_refills: Arc<Vec<(Rarity<V>, usize)>>,
+    pub(super) shared_refills: Arc<Vec<(Rarity<V>, usize)>>,
     pub(super) phase: Phase<V>,
     /// The event a fight was entered from, which the rewards' proceed goes
     /// back to: the room under the fight in `RunState`'s room stack. Only a
@@ -107,6 +107,9 @@ pub(crate) struct State<V: Rules> {
     /// The shop purchases running on one machine, which the others wait on.
     /// Nothing in a run of one player.
     pub(super) relay: Option<Box<super::relay::Relay<V>>>,
+    /// Every machine as it stood before the decision, which a room this
+    /// decision enters syncs from. Nothing outside a table's decision.
+    pub(super) sync: Option<Arc<[State<V>]>>,
 }
 
 /// An event waiting under the fight it entered.
@@ -514,6 +517,25 @@ pub(crate) struct Player<V: Rules> {
     vote: Option<Coord>,
 }
 
+impl<V: Rules> Player<V> {
+    /// `SyncWithSerializedPlayer`: what `ToSerializable` carries of `theirs`,
+    /// their own machine's copy. Health, gold, potion slots, the deck, the
+    /// potions, the odds, the relic bag and `ExtraFields`.
+    pub(super) fn synced_with(&mut self, theirs: &Self) {
+        self.potions = theirs.potions;
+        self.potion_positions = theirs.potion_positions;
+        self.deck = Arc::clone(&theirs.deck);
+        self.minted = theirs.minted;
+        self.hp = theirs.hp;
+        self.max_hp = theirs.max_hp;
+        self.gold = theirs.gold;
+        self.potion_slots = theirs.potion_slots;
+        self.odds = theirs.odds;
+        self.dealt_relics = Arc::clone(&theirs.dealt_relics);
+        self.removals_used = theirs.removals_used;
+    }
+}
+
 impl<V: Rules> Clone for State<V> {
     fn clone(&self) -> Self {
         Self {
@@ -529,6 +551,7 @@ impl<V: Rules> Clone for State<V> {
             phase: self.phase.clone(),
             resuming: self.resuming.clone(),
             relay: self.relay.clone(),
+            sync: self.sync.clone(),
             ..*self
         }
     }
@@ -562,6 +585,7 @@ impl<V: Rules> Clone for State<V> {
             resuming,
             local,
             relay,
+            sync,
         } = self;
         shared.clone_from(&source.shared);
         modifier_states.clone_from(&source.modifier_states);
@@ -585,6 +609,7 @@ impl<V: Rules> Clone for State<V> {
         resuming.clone_from(&source.resuming);
         *local = source.local;
         relay.clone_from(&source.relay);
+        sync.clone_from(&source.sync);
         match (phase, &source.phase) {
             (Phase::Combat(live), Phase::Combat(from)) => live.clone_from(from),
             (
@@ -1675,6 +1700,7 @@ impl<V: Rules> State<V> {
             resuming: None,
             local: sts2_core::SeatIndex(0),
             relay: None,
+            sync: None,
             phase: Phase::Neow(crate::seats::BySeat::new(
                 neow_seat(0),
                 (1..players.len()).map(neow_seat).collect(),

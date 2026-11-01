@@ -71,6 +71,33 @@ impl<V: Rules> RunTable<V> for SimTable<V> {
     /// Another machine refusing the move, or faulting on it, where the seat's
     /// own took it. The machines of one run never part on a move.
     fn play(&mut self, seat: SeatIndex, decision: &Decision<V>) -> Result<Settled<V>, Self::Error> {
+        // A travel can enter a room, which syncs every machine from how each
+        // stood before it.
+        if self.machines.len() > 1 && matches!(decision, Decision::Travel { .. }) {
+            let before: std::sync::Arc<[State<V>]> = self.machines.iter().cloned().collect();
+            for machine in &mut self.machines {
+                machine.sync_from(Some(std::sync::Arc::clone(&before)));
+            }
+        }
+        let own = self.decided(seat, decision);
+        for machine in &mut self.machines {
+            machine.sync_from(None);
+        }
+        own
+    }
+
+    fn snapshot(&mut self, seat: SeatIndex) -> Result<Snapshot<V>, Self::Error> {
+        Ok(self.machines[seat.at()].report(seat))
+    }
+
+    fn construct(&mut self, seat: SeatIndex, setup: &Setup<V>) -> Result<Settled<V>, Self::Error> {
+        super::sim::constructed(&mut self.machines[seat.at()], seat, setup)
+    }
+}
+
+impl<V: Rules> SimTable<V> {
+    /// Seat `seat`'s move on every machine, its own first.
+    fn decided(&mut self, seat: SeatIndex, decision: &Decision<V>) -> Result<Settled<V>, Error> {
         let own = super::sim::decide(&mut self.machines[seat.at()], seat, decision)?;
         if own.is_err() {
             return Ok(own);
@@ -100,13 +127,5 @@ impl<V: Rules> RunTable<V> for SimTable<V> {
             }
         }
         Ok(own)
-    }
-
-    fn snapshot(&mut self, seat: SeatIndex) -> Result<Snapshot<V>, Self::Error> {
-        Ok(self.machines[seat.at()].report(seat))
-    }
-
-    fn construct(&mut self, seat: SeatIndex, setup: &Setup<V>) -> Result<Settled<V>, Self::Error> {
-        super::sim::constructed(&mut self.machines[seat.at()], seat, setup)
     }
 }
