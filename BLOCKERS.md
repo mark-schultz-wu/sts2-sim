@@ -138,10 +138,6 @@ block, energy, hand, deck, health, plays and belt. What is left:
   ask as they are obtained, such as Astrolabe or Pandora's Box. Such a
   relic panics in `obtain_here`. The treasure phase keeps no question for
   each player. About 25 relics ask in `AfterObtained`.
-- Fight-in-event: `resuming` keeps one player's event to go back to.
-  `ResumeAfterCombat` runs on every player's copy. A won fight that
-  resumes its event panics in `run/fight.rs` when there are several
-  players. Ironclad and Silent seeds 22 and 37 reach one.
 - Out of a fight, damage kills the player. The game heals them to 1
   instead when there are several players (`CreatureCmd.cs:522`).
 
@@ -160,8 +156,7 @@ block, energy, hand, deck, health, plays and belt. What is left:
     nor the sim refuses it. Nineteen events flag one.
 - Monster numbers:
   - Battleworn Dummy's options show each setting's health scaled by
-    `ScaleHpForMultiplayer`. The fight it opens panics in a run of
-    several players first.
+    `ScaleHpForMultiplayer`.
 - In Act 3, a fight of several players panics at `monster.rs:139`.
 - `BurningBlood` and `BlackBlood` heal a dead teammate. The game checks
   `!Owner.Creature.IsDead`.
@@ -234,7 +229,8 @@ run as its own machine sees it. The work goes in this order:
    one leaves the fight's cards, and a win revives them. A player whose
    teammates the same command brought to nothing keeps them. The host's
    yes to Trial's Double Down abandons the run for every player, and a
-   client's does nothing. A win cancels
+   client's does nothing. A fight an event entered, once won, resumes
+   every player's copy of the event. A win cancels
    the actions still waiting, as the game's does. A merchant stocks an
    inventory for each player, who buys from it alone. An item's purchase
    runs on the buyer's machine, and its results reach the other machines
@@ -329,6 +325,8 @@ run as its own machine sees it. The work goes in this order:
      - A setup that jumps out of a fight into a room keeps the health the
        game set inside the fight, and the simulator drops it. A scenario
        that sets health with `hp` and then enters a room shows it.
+   - A won Aeonglass fight shows a player's energy at nothing, where the
+     game keeps the energy left to them (Ironclad and Silent seed 37).
    - The game itself fails, as a player dies outside of combat in
      multiplayer (Regent and Ironclad seed 14). Class D's
      death out of a fight is the likely cause.

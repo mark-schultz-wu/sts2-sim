@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 mod observed;
-mod pickup;
+pub(super) mod pickup;
 
 use crate::bounded::Bounded;
 use crate::rng::MegaRng;
@@ -95,7 +95,7 @@ pub(crate) struct State<V: Rules> {
     /// the rarity, and how far `shared_dealt` stood then. What left after
     /// that left the refilled deque.
     shared_refills: Arc<Vec<(Rarity<V>, usize)>>,
-    phase: Phase<V>,
+    pub(super) phase: Phase<V>,
     /// The event a fight was entered from, which the rewards' proceed goes
     /// back to: the room under the fight in `RunState`'s room stack. Only a
     /// fight an event entered with `shouldResumeAfterCombat` has one.
@@ -116,9 +116,9 @@ pub(super) struct Resuming<V: Rules> {
     pub(super) event: Phase<V>,
     /// Whether an enemy escaped the fight, once it is over.
     pub(super) escaped: bool,
-    /// What the fight, won, left in `CombatRoom.ExtraRewards`, where it left
-    /// anything.
-    pub(super) extras: Option<Box<super::fight::Extras<V>>>,
+    /// What the fight, won, left in `CombatRoom.ExtraRewards` for each
+    /// player by seat, where it left them anything.
+    pub(super) extras: SmallVec<[Option<Box<super::fight::Extras<V>>>; 1]>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -878,7 +878,7 @@ impl<V: Rules> Player<V> {
     }
 
     /// A new id for a card joining the deck.
-    fn mint(&mut self) -> sts2_core::DeckCardId {
+    pub(super) fn mint(&mut self) -> sts2_core::DeckCardId {
         let id = self.minted;
         self.minted = id.next();
         id
@@ -1220,7 +1220,7 @@ impl<V: Rules> Phase<V> {
     }
 
     /// The question a pickup or an event option parked `seat`'s room on.
-    fn asking(&self, seat: sts2_core::SeatIndex) -> Option<&Asked<V>> {
+    pub(super) fn asking(&self, seat: sts2_core::SeatIndex) -> Option<&Asked<V>> {
         match self {
             Phase::Neow(seats) => seats[seat].asking.as_ref(),
             Phase::Shop { seats } => seats[seat].asking.as_ref(),
@@ -1939,7 +1939,7 @@ impl<V: Rules> State<V> {
 
     /// Carry `act` out on the deck cards at `taken`, in the order they were
     /// taken.
-    fn act_on_deck(
+    pub(super) fn act_on_deck(
         &mut self,
         seat: sts2_core::SeatIndex,
         act: sts2_core::DeckAct<V>,
@@ -2661,9 +2661,43 @@ impl<V: Rules> State<V> {
             let Resuming {
                 event,
                 escaped,
-                extras,
+                mut extras,
             } = *resuming;
             self.phase = event;
+            // `ResumeEvents`: every player's copy, in seat order. This
+            // machine's own player is offered their rewards. Each other
+            // player's are made here too, and that player takes them on
+            // their own machine.
+            let copies: SmallVec<[sts2_core::SeatIndex; 4]> = match self.players.len() {
+                1 => smallvec::smallvec![seat],
+                _ => self.players.seats().collect(),
+            };
+            let mut decided = Decided::Resolved;
+            for each in copies {
+                let theirs = extras.get_mut(each.at()).and_then(Option::take);
+                let resumed = self.resume_copy(each, escaped, theirs);
+                // Another player's screen waits here until their next move
+                // shows it closed, its takes arriving as messages.
+                if each == seat {
+                    decided = resumed;
+                }
+            }
+            return Ok(decided);
+        }
+        // `ActChangeSynchronizer.OnPlayerReady`: the run moves on once every
+        // player has voted to.
+        self.proceed_to_next_act(seat)
+    }
+
+    /// `EventModel.Resume` of `seat`'s copy of the event, after the fight it
+    /// entered, with `extras` what the fight left that player.
+    fn resume_copy(
+        &mut self,
+        seat: sts2_core::SeatIndex,
+        escaped: bool,
+        extras: Option<Box<super::fight::Extras<V>>>,
+    ) -> Decided {
+        {
             let Phase::Event { seats } = &mut self.phase else {
                 unreachable!("only an event resumes after its fight")
             };
@@ -2672,7 +2706,7 @@ impl<V: Rules> State<V> {
                 matches!(effect, sts2_core::HookEffect::OfferRewardsWithRoomExtras(_))
             });
             if let (Some(at), Some(extras)) = (offering, extras) {
-                return Ok(self.offer_with_extras(seat, &effects, at, &extras));
+                return self.offer_with_extras(seat, &effects, at, &extras);
             }
             let effects: sts2_core::HookEffects<V> = effects
                 .into_iter()
@@ -2685,11 +2719,15 @@ impl<V: Rules> State<V> {
                     effect => Some(effect),
                 })
                 .collect();
-            return Ok(match self.carry_out(seat, effects) {
+            match self.carry_out(seat, effects) {
                 None => Decided::Resolved,
                 Some(asked) => self.park(seat, asked),
-            });
+            }
         }
+    }
+
+    /// `RunManager.EnterNextAct`, once every player votes to.
+    fn proceed_to_next_act(&mut self, seat: sts2_core::SeatIndex) -> Result<Decided, Error> {
         // `ActChangeSynchronizer.OnPlayerReady`: the run moves on once every
         // player has voted to.
         if let Phase::Rewards { seats, .. } = &mut self.phase {
@@ -2857,6 +2895,9 @@ impl<V: Rules> State<V> {
         asked: Asked<V>,
         answer: &Answer,
     ) -> Decided {
+        // An answer inside an obtain this machine runs alone goes to the
+        // other machines with its results, as `SyncLocalChoice` sends it.
+        self.picked_for_purchase(seat, answer);
         let Asked { mut rest, .. } = asked;
         let lent = pickup::Lent {
             run: self,
@@ -3626,11 +3667,6 @@ impl<V: Rules> State<V> {
                     let mut offered = self.offered(seat, act);
                     let rng = self.streams.run(V::RunRngType::NICHE);
                     sts2_core::rng::GameRng::unstable_shuffle(rng, &mut offered);
-                    // Another player's pick, as their machine sent it.
-                    if let Some(taken) = self.synced_pick(seat) {
-                        self.act_on_deck(seat, act, &taken);
-                        return Stepped::Done;
-                    }
                     if offered.len() <= count {
                         let taken: Vec<usize> = offered.into_iter().map(|(at, _)| at).collect();
                         self.act_on_deck(seat, act, &taken);
@@ -3644,11 +3680,6 @@ impl<V: Rules> State<V> {
                 }
                 HookEffect::SelectFromDeck { act, count } => {
                     let offered = self.offered(seat, act);
-                    // Another player's pick, as their machine sent it.
-                    if let Some(taken) = self.synced_pick(seat) {
-                        self.act_on_deck(seat, act, &taken);
-                        return Stepped::Done;
-                    }
                     if offered.len() <= count {
                         let taken: Vec<usize> = offered.into_iter().map(|(at, _)| at).collect();
                         self.act_on_deck(seat, act, &taken);
@@ -3662,11 +3693,6 @@ impl<V: Rules> State<V> {
                 }
                 HookEffect::SelectFromDeckConfirmed { act, min, max } => {
                     if self.offered(seat, act).is_empty() {
-                        return Stepped::Done;
-                    }
-                    // Another player's pick, as their machine sent it.
-                    if let Some(taken) = self.synced_pick(seat) {
-                        self.act_on_deck(seat, act, &taken);
                         return Stepped::Done;
                     }
                     Pickup::FromDeck {
@@ -3845,7 +3871,7 @@ impl<V: Rules> State<V> {
     /// # Panics
     ///
     /// A relic answering one of the hooks in a way nothing here carries out.
-    fn gain_gold(&mut self, seat: sts2_core::SeatIndex, amount: V::Number) {
+    pub(super) fn gain_gold(&mut self, seat: sts2_core::SeatIndex, amount: V::Number) {
         self.gain_gold_exact(seat, crate::combat::exact::<V>(amount));
     }
 
@@ -6974,7 +7000,7 @@ impl<V: Rules> State<V> {
             self.resuming = Some(Box::new(Resuming {
                 event,
                 escaped: false,
-                extras: None,
+                extras: SmallVec::new(),
             }));
         }
         self.arrived(arriving);
@@ -7599,7 +7625,6 @@ impl<V: Rules> State<V> {
                         "a deck selection of other than {min} to {count} different cards"
                     );
                 }
-                self.picked_for_purchase(seat, &taken);
                 self.act_on_deck(seat, act, &taken);
                 Stepped::Done
             }

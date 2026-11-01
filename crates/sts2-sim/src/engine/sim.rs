@@ -158,11 +158,9 @@ pub(super) fn decide<V: Rules>(
     seat: sts2_core::SeatIndex,
     decision: &Decision<V>,
 ) -> Result<Settled<V>, Error> {
-    // What another player answers inside a purchase on their own machine,
-    // which this one never asked.
-    if let Decision::Answer(_) = decision
-        && state.buying_elsewhere(seat)
-    {
+    // What another player does on a screen of their own machine, which
+    // this one never shows. Its results reach this machine as messages.
+    if state.answers_elsewhere(seat, decision) {
         return Ok(Ok(sts2_core::Decided::Resolved));
     }
     let pending = state.pending(seat);
