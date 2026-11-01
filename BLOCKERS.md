@@ -260,7 +260,9 @@ run as its own machine sees it. The work goes in this order:
    pick is another player's ends as the pick begins, and the pre-play
    phase goes on. The other player's own pre-play phase runs all the
    same. Whispering Earring's pushed selector answers its picks as they
-   come up, before the next player's pre-play phase.
+   come up, before the next player's pre-play phase. Each player's turn
+   end runs their orbs, even after a teammate's turn end wins the
+   fight.
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
    Mercury Hourglass, as in a solo hunt. So the runs go deep.
@@ -320,6 +322,19 @@ run as its own machine sees it. The work goes in this order:
      filter no longer lets through drops, and a pick left with nothing
      picked and nothing to pick ends with no cards. Neither the mod nor
      the simulator does this yet. Both offer the hand as it stands.
+   - The splits a hunt of seeds 16 to 31 for the four pairs found on
+     2026-11-01, where 55 of the 64 seeds agreed:
+     - A remote machine refuses a `DiscardPotion` as out of range, with
+       the player's belt empty in its copy. Ironclad and Silent seed 26
+       at step 332, Regent and Ironclad seed 23 at step 1285.
+     - Largesse's question. Regent and Ironclad seed 22 at step 1371.
+     - Constellation's question. Regent and Ironclad seed 27 at step
+       1584.
+     - Whispering Earring aims a card at an ally, which is
+       `unimplemented!`. Defect and Necrobinder seed 23 at step 1067.
+     - Distilled Chaos. Silent and Defect seed 18 at step 392, and seed
+       31 at step 2014.
+     - A travel. Silent and Defect seed 28 at step 1107.
    - The splits the hunt of 2026-10-30 found, by where they show:
      - A co-op scenario's `enter_room` setup hangs: the host leaves its
        room and enters none, and the reply never comes. The mod's
