@@ -2579,18 +2579,11 @@ impl<'a, V: Rules> Board<'a, V> {
     }
 
     /// `HandlePlayerDeath` for a player who died while another stands, and
-    /// the end of turn `CreatureCmd.Kill` asks for them. Their cards leave
-    /// the fight, and their energy and stars go to nothing while it is not
-    /// ending. On their side's
-    /// turn they are ready to end it.
-    ///
-    /// A death inside the player's own card or potion leaves their cards
-    /// until the outermost effect is over, as `EndCardOrPotionEffect` does.
-    ///
-    /// # Panics
-    ///
-    /// A death that readies the last standing player who was not ready,
-    /// which ends the turn.
+    /// `CreatureCmd.Kill`'s end of turn for them. Their cards leave, and
+    /// their energy and stars go while the fight is not ending. On their
+    /// side's turn they are ready, and the last ready asks for the turn to
+    /// end. A death inside their own card or potion leaves the cards until
+    /// the outermost effect is over, as `EndCardOrPotionEffect` does.
     fn died_beside_others(&mut self, seat: sts2_core::SeatIndex) {
         // `PlayerCmd.SetEnergy` and `SetStars` do nothing once the fight is
         // ending, as it is where the last enemy fell first.
@@ -2609,7 +2602,7 @@ impl<'a, V: Rules> Board<'a, V> {
             player.ready = true;
             let live = &*self.live;
             if super::turn::seats(live).all(|other| live.players[other].ready) {
-                unimplemented!("a player's death leaving every player ready to end the turn");
+                self.live.players[seat].ending_turn = true;
             }
         }
     }

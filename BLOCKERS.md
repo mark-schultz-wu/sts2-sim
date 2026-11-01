@@ -225,7 +225,8 @@ run as its own machine sees it. The work goes in this order:
    health and rolls their own rewards. A player who dies beside a living
    one leaves the fight's cards, and a win revives them. A player whose
    teammates the same command brought to nothing keeps them, and one who
-   dies as the fight ends keeps their energy. A run of several players
+   dies as the fight ends keeps their energy. A death that readies the
+   last player not yet ready ends the turn once the play is over. A run of several players
    never offers an event option that kills its player, Trial's Double
    Down among them. A fight an event entered, once won, resumes
    every player's copy of the event. A win cancels
@@ -309,8 +310,6 @@ run as its own machine sees it. The work goes in this order:
      - The rest of `Board::seat`'s callers, which a card or potion reaches
        for its own player and a monster's move does not yet. No hunted
        seed reaches one now.
-   - A death that leaves every standing player ready panics (Regent and
-     Ironclad seed 14).
    - The hand screen checks a pick again whenever the fight changes
      (`NPlayerHand.RevalidateSelectionAfterStateChange`). A pick the
      filter no longer lets through drops, and a pick left with nothing

@@ -287,11 +287,14 @@ impl<V: Rules> State<V> {
                 return Ok(None);
             };
             fighting.live.ask_paused();
-            if !fighting.live.ending_turn(seat) || fighting.live.question(seat).is_some() {
+            let Some(ending) = fighting.live.turn_to_end(seat) else {
+                return Ok(None);
+            };
+            if fighting.live.question(ending).is_some() {
                 return Ok(None);
             }
-            fighting.live.take_ending_turn(seat);
-            if let Some(ended) = combat::end_turn(seat, fighting, ascension)? {
+            fighting.live.take_ending_turn(ending);
+            if let Some(ended) = combat::end_turn(ending, fighting, ascension)? {
                 return Ok(Some(ended));
             }
         }

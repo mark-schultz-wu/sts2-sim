@@ -3417,9 +3417,12 @@ impl<V: Rules> Live<V> {
         self.players[seat].ready
     }
 
-    /// Whether a play asked for the turn to end.
-    pub(crate) fn ending_turn(&self, seat: sts2_core::SeatIndex) -> bool {
-        self.players[seat].ending_turn
+    /// The player whose turn ends once the decision is over. That is `seat`
+    /// where its play asked, or else the first player who asked.
+    pub(crate) fn turn_to_end(&self, seat: sts2_core::SeatIndex) -> Option<sts2_core::SeatIndex> {
+        std::iter::once(seat)
+            .chain(self.players.seats())
+            .find(|&each| self.players[each].ending_turn)
     }
 
     /// Clear a play's ask for the turn to end, as the turn ends.
