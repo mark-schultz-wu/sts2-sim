@@ -151,9 +151,6 @@ block, energy, hand, deck, health, plays and belt. What is left:
     when any player's health is low.
   - The game never allows Fake Merchant in co-op.
   - War Historian Repy ends its event in co-op.
-  - An option that `ThatWillKillPlayerIf` flags as fatal cannot be
-    chosen in co-op (`NEventOptionButton.OnRelease`). Neither the mod
-    nor the sim refuses it. Nineteen events flag one.
 - Monster numbers:
   - Battleworn Dummy's options show each setting's health scaled by
     `ScaleHpForMultiplayer`.
@@ -228,9 +225,9 @@ run as its own machine sees it. The work goes in this order:
    health and rolls their own rewards. A player who dies beside a living
    one leaves the fight's cards, and a win revives them. A player whose
    teammates the same command brought to nothing keeps them, and one who
-   dies as the fight ends keeps their energy. The host's
-   yes to Trial's Double Down abandons the run for every player, and a
-   client's does nothing. A fight an event entered, once won, resumes
+   dies as the fight ends keeps their energy. A run of several players
+   never offers an event option that kills its player, Trial's Double
+   Down among them. A fight an event entered, once won, resumes
    every player's copy of the event. A win cancels
    the actions still waiting, as the game's does. A merchant stocks an
    inventory for each player, who buys from it alone. An item's purchase
@@ -312,7 +309,8 @@ run as its own machine sees it. The work goes in this order:
      - The rest of `Board::seat`'s callers, which a card or potion reaches
        for its own player and a monster's move does not yet. No hunted
        seed reaches one now.
-   - A death that leaves every standing player ready panics.
+   - A death that leaves every standing player ready panics (Regent and
+     Ironclad seed 14).
    - The hand screen checks a pick again whenever the fight changes
      (`NPlayerHand.RevalidateSelectionAfterStateChange`). A pick the
      filter no longer lets through drops, and a pick left with nothing
@@ -326,9 +324,6 @@ run as its own machine sees it. The work goes in this order:
      - A setup that jumps out of a fight into a room keeps the health the
        game set inside the fight, and the simulator drops it. A scenario
        that sets health with `hp` and then enters a room shows it.
-   - The game itself fails, as a player dies outside of combat in
-     multiplayer (Regent and Ironclad seed 14). Class D's
-     death out of a fight is the likely cause.
 4. Co-op content, as the runs reach it. Massive Scroll, Concoct, Tag
    Team and the rest of v0.111.0's co-op cards are ported. The Ball
    goes to a teammate as `CardPileCmd.GiveToAnotherPlayer` gives it.

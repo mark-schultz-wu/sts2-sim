@@ -8810,6 +8810,10 @@ pub trait Rules: Hooks + Engine {
         run: &impl crate::EventView<Self>,
     ) -> crate::Room<Self>;
 
+    /// [`crate::EventBehavior::kills`] for the event entered.
+    fn event_kills(state: &Self::EventState, option: u8, run: &impl crate::EventView<Self>)
+    -> bool;
+
     /// Whether the event's `BeforeEventStarted` sets `CanRemovePotions` off,
     /// which its `OnEventFinished` puts back.
     fn event_holds_potions(state: &Self::EventState) -> bool;

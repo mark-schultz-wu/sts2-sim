@@ -7303,6 +7303,9 @@ impl<V: Rules> State<V> {
             if option.locked {
                 unimplemented!("a locked event option");
             }
+            if self.option_kills(seat, index) {
+                unimplemented!("an event option that kills its player in a run of several");
+            }
             // `ChooseLocalOption` in a shared event is a vote, and a proceed
             // option runs on this machine alone.
             if !option.proceed && shared {
@@ -7560,19 +7563,15 @@ impl<V: Rules> State<V> {
                 let Answer::Confirm(yes) = *answer else {
                     unimplemented!("answering the abandon-run popup with {answer:?}");
                 };
-                // `RunManager.Abandon`. In a run of several players the host's
-                // `RunLobby.AbandonRun` ends it for every player, and a
-                // client's throws, which leaves the popup's page as it was.
+                // `RunManager.Abandon`. Double Down kills, so a run of several
+                // players never offers it.
                 if yes {
-                    match self.players.len() > 1 {
-                        false => self.players[seat].hp = num_traits::zero(),
-                        true if seat == sts2_core::SeatIndex(0) => {
-                            for each in self.players.seats() {
-                                self.players[each].hp = num_traits::zero();
-                            }
-                        }
-                        true => {}
+                    if self.players.len() > 1 {
+                        unimplemented!(
+                            "a run of several players abandoned, which no option can ask"
+                        );
                     }
+                    self.players[seat].hp = num_traits::zero();
                 }
                 Stepped::Done
             }
@@ -8384,7 +8383,11 @@ impl<V: Rules> State<V> {
                 Some(Room::Event { options, .. }) => moves.extend(
                     options
                         .iter()
-                        .filter(|option| !option.locked && !option.chosen)
+                        .filter(|option| {
+                            !option.locked
+                                && !option.chosen
+                                && !self.option_kills(seat, option.index)
+                        })
                         .map(|option| Decision::ChooseOption {
                             index: option.index,
                             target: None,
@@ -9062,6 +9065,15 @@ impl<V: Rules> State<V> {
             options.clear();
         }
         Some(room)
+    }
+
+    /// `NEventOptionButton.OnRelease`: in a run of several players, an
+    /// option that kills the player who chooses it does nothing.
+    fn option_kills(&self, seat: sts2_core::SeatIndex, option: u8) -> bool {
+        let Phase::Event { seats } = &self.phase else {
+            return false;
+        };
+        self.players.len() > 1 && V::event_kills(&seats[seat].state, option, &self.seen_by(seat))
     }
 
     /// The room the run is standing in, as its report shows it.
