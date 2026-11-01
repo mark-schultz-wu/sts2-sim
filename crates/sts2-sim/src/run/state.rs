@@ -1336,7 +1336,10 @@ impl<V: Rules> State<V> {
             FixedPath,
         }
         let mut made = Made::Standard;
-        let hook = sts2_core::EventHook::GeneratedMap { act: self.act };
+        let hook = sts2_core::EventHook::GeneratedMap {
+            act: self.act,
+            players: self.players.len(),
+        };
         for effect in self.notify_run(hook) {
             match effect {
                 sts2_core::HookEffect::SpoilsMap => {

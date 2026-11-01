@@ -4206,8 +4206,9 @@ pub enum EventHook<V: ContentVersion> {
         /// `RunState.CurrentActIndex`.
         act: usize,
     },
-    /// `ModifyGeneratedMap`, as the act at this index has its map generated.
-    GeneratedMap { act: usize },
+    /// `ModifyGeneratedMap`, as the act at this index has its map generated,
+    /// in a run of `players` players.
+    GeneratedMap { act: usize, players: usize },
     /// `ModifyGeneratedMapLate`, once every listener has heard
     /// [`EventHook::GeneratedMap`].
     GeneratedMapLate { act: usize },

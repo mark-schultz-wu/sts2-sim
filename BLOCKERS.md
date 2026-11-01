@@ -141,7 +141,7 @@ block, energy, hand, deck, health, plays and belt. What is left:
 - Fight-in-event: `resuming` keeps one player's event to go back to.
   `ResumeAfterCombat` runs on every player's copy. A won fight that
   resumes its event panics in `run/fight.rs` when there are several
-  players. Ironclad and Silent seed 22 reaches one.
+  players. Ironclad and Silent seeds 22 and 37 reach one.
 - Out of a fight, damage kills the player. The game heals them to 1
   instead when there are several players (`CreatureCmd.cs:522`).
 
@@ -158,8 +158,6 @@ block, energy, hand, deck, health, plays and belt. What is left:
   - An option that `ThatWillKillPlayerIf` flags as fatal cannot be
     chosen in co-op (`NEventOptionButton.OnRelease`). Neither the mod
     nor the sim refuses it. Nineteen events flag one.
-- `GoldenPathActMap.cs:42` drops a point type in co-op. Golden
-  Compass ignores this.
 - Monster numbers:
   - Battleworn Dummy's options show each setting's health scaled by
     `ScaleHpForMultiplayer`. The fight it opens panics in a run of
@@ -319,7 +317,7 @@ run as its own machine sees it. The work goes in this order:
      the simulator does this yet. Both offer the hand as it stands.
    - The splits the hunt of 2026-10-30 found, by where they show:
      - A shop purchase draws a different number (Defect and Necrobinder
-       seeds 3 and 14, Silent and Defect seed 9).
+       seeds 3 and 14).
      - A co-op scenario's `enter_room` setup hangs: the host leaves its
        room and enters none, and the reply never comes. The mod's
        `EnterRoom` calls `EnterRoomDebug`, where `fight` goes through the
@@ -330,10 +328,6 @@ run as its own machine sees it. The work goes in this order:
      - Gambler's Brew's seed parts at a later confirm, in the run, the
        belt and the moves (Ironclad and Silent seed 3). Swift Potion
        parted once (Silent and Defect seed 15).
-     - Golden Compass in the map (Ironclad and Silent seeds 28 and 45).
-       `GoldenPathActMap` drops a point type in co-op, under class E.
-     - Battleworn Dummy's options (Ironclad and Silent seed 37), and a
-       card selection's piles (Regent and Ironclad seed 9).
      - The piles at the run's end (Ironclad and Silent seed 39, Defect
        and Necrobinder seed 10).
    - The game itself fails, as a player dies outside of combat in

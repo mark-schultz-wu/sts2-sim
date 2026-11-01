@@ -1226,7 +1226,9 @@ pub(crate) fn deck_event_hook<V: crate::Build>(
         }
         // `SpoilsMap.ModifyGeneratedMap`: a `SpoilsActMap` in place of its
         // act's own.
-        (__c0, _, sts2_core::EventHook::GeneratedMap { act }) if __c0 == V::Card::SPOILS_MAP => {
+        (__c0, _, sts2_core::EventHook::GeneratedMap { act, .. })
+            if __c0 == V::Card::SPOILS_MAP =>
+        {
             if act == SPOILS_ACT {
                 asked.push(sts2_core::HookEffect::SpoilsMap);
             }
