@@ -227,7 +227,8 @@ run as its own machine sees it. The work goes in this order:
    other players act around it. A won fight hands each player back their
    health and rolls their own rewards. A player who dies beside a living
    one leaves the fight's cards, and a win revives them. A player whose
-   teammates the same command brought to nothing keeps them. The host's
+   teammates the same command brought to nothing keeps them, and one who
+   dies as the fight ends keeps their energy. The host's
    yes to Trial's Double Down abandons the run for every player, and a
    client's does nothing. A fight an event entered, once won, resumes
    every player's copy of the event. A win cancels
@@ -277,9 +278,9 @@ run as its own machine sees it. The work goes in this order:
    2026-10-30 came out the same, byte for byte. The narrower ally
    targets changed the moves the hunted runs chose from. So
    `coop-v0.111.0.bin` holds the sixteen Ironclad and Silent seeds hunted
-   again. It holds Ironclad and Silent seed 39, and Defect and Necrobinder
-   seeds 3, 10 and 14, too. The simulator follows 32,909 of their 32,910
-   positions. Each machine logs the shared actions in the
+   again. It holds Ironclad and Silent seeds 37 and 39, and Defect and
+   Necrobinder seeds 3, 10 and 14, too. The simulator follows 34,911 of
+   their 34,912 positions. Each machine logs the shared actions in the
    order it took them in, in `order.jsonl` under its profile. The golden tests follow the hunted runs in
    `coop-v0.111.0.bin` without the game. So a change to the simulator
    needs no hunt to show it keeps them. A rule no hunted run reaches gets
@@ -325,8 +326,6 @@ run as its own machine sees it. The work goes in this order:
      - A setup that jumps out of a fight into a room keeps the health the
        game set inside the fight, and the simulator drops it. A scenario
        that sets health with `hp` and then enters a room shows it.
-   - A won Aeonglass fight shows a player's energy at nothing, where the
-     game keeps the energy left to them (Ironclad and Silent seed 37).
    - The game itself fails, as a player dies outside of combat in
      multiplayer (Regent and Ironclad seed 14). Class D's
      death out of a fight is the likely cause.

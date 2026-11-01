@@ -2580,7 +2580,8 @@ impl<'a, V: Rules> Board<'a, V> {
 
     /// `HandlePlayerDeath` for a player who died while another stands, and
     /// the end of turn `CreatureCmd.Kill` asks for them. Their cards leave
-    /// the fight, and their energy and stars go to nothing. On their side's
+    /// the fight, and their energy and stars go to nothing while it is not
+    /// ending. On their side's
     /// turn they are ready to end it.
     ///
     /// A death inside the player's own card or potion leaves their cards
@@ -2591,13 +2592,18 @@ impl<'a, V: Rules> Board<'a, V> {
     /// A death that readies the last standing player who was not ready,
     /// which ends the turn.
     fn died_beside_others(&mut self, seat: sts2_core::SeatIndex) {
+        // `PlayerCmd.SetEnergy` and `SetStars` do nothing once the fight is
+        // ending, as it is where the last enemy fell first.
+        let ending = self.ending();
         let player = &mut self.live.players[seat];
         // `RemoveDeadPlayerCardsFromCombat`, which raises no hook.
         if player.effect_depth == 0 {
             player.cards.clear();
         }
-        player.energy = num_traits::zero();
-        player.stars = num_traits::zero();
+        if !ending {
+            player.energy = num_traits::zero();
+            player.stars = num_traits::zero();
+        }
         // A player who was ready already died as the turn ended, which goes on.
         if self.live.side == <V::CombatSide as SideKinds>::PLAYER && !player.ready {
             player.ready = true;
