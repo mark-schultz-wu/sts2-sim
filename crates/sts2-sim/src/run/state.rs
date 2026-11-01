@@ -53,7 +53,7 @@ pub(crate) struct State<V: Rules> {
     ///
     /// Inline: an act's own height bounds it, and a coordinate is two bytes.
     visited: Bounded<Coord, VISITED>,
-    players: Players<V>,
+    pub(super) players: Players<V>,
     /// `MapSelectionSynchronizer`'s `map_point_selection` stream, which the
     /// host draws a run of several players' destination from.
     map_votes: MegaRng,
@@ -103,7 +103,10 @@ pub(crate) struct State<V: Rules> {
     /// The player whose machine this is, the game's `LocalContext`. Every
     /// machine plays the whole run, and a few rules act only for the player
     /// at its screen.
-    local: sts2_core::SeatIndex,
+    pub(super) local: sts2_core::SeatIndex,
+    /// The shop purchases running on one machine, which the others wait on.
+    /// Nothing in a run of one player.
+    pub(super) relay: Option<Box<super::relay::Relay<V>>>,
 }
 
 /// An event waiting under the fight it entered.
@@ -480,7 +483,7 @@ pub(crate) struct Player<V: Rules> {
     /// one.
     hp: V::Health,
     max_hp: V::Health,
-    gold: V::Number,
+    pub(super) gold: V::Number,
     potion_slots: V::Count,
     /// `IsActiveForHooks` off: the player died, and their deck, relics and
     /// potions hear no hook after.
@@ -525,6 +528,7 @@ impl<V: Rules> Clone for State<V> {
             shared_refills: Arc::clone(&self.shared_refills),
             phase: self.phase.clone(),
             resuming: self.resuming.clone(),
+            relay: self.relay.clone(),
             ..*self
         }
     }
@@ -557,6 +561,7 @@ impl<V: Rules> Clone for State<V> {
             phase,
             resuming,
             local,
+            relay,
         } = self;
         shared.clone_from(&source.shared);
         modifier_states.clone_from(&source.modifier_states);
@@ -579,6 +584,7 @@ impl<V: Rules> Clone for State<V> {
         shared_refills.clone_from(&source.shared_refills);
         resuming.clone_from(&source.resuming);
         *local = source.local;
+        relay.clone_from(&source.relay);
         match (phase, &source.phase) {
             (Phase::Combat(live), Phase::Combat(from)) => live.clone_from(from),
             (
@@ -1668,6 +1674,7 @@ impl<V: Rules> State<V> {
             streams,
             resuming: None,
             local: sts2_core::SeatIndex(0),
+            relay: None,
             phase: Phase::Neow(crate::seats::BySeat::new(
                 neow_seat(0),
                 (1..players.len()).map(neow_seat).collect(),
@@ -2251,7 +2258,7 @@ impl<V: Rules> State<V> {
 
     /// `PotionCmd.TryToProcure`: the potion in the first empty physical belt
     /// slot, unless a relic refuses it.
-    fn procure(&mut self, seat: sts2_core::SeatIndex, potion: V::Potion) -> bool {
+    pub(super) fn procure(&mut self, seat: sts2_core::SeatIndex, potion: V::Potion) -> bool {
         if self.procure_refused(seat, potion) {
             return false;
         }
@@ -2760,7 +2767,7 @@ impl<V: Rules> State<V> {
 
     /// `RelicCmd.Obtain`, of a relic set up for `named` first where it names
     /// a character, up to its `AfterObtained`: the steps of its pickup.
-    fn obtained_held(
+    pub(super) fn obtained_held(
         &mut self,
         seat: sts2_core::SeatIndex,
         relic: V::Relic,
@@ -3619,6 +3626,11 @@ impl<V: Rules> State<V> {
                     let mut offered = self.offered(seat, act);
                     let rng = self.streams.run(V::RunRngType::NICHE);
                     sts2_core::rng::GameRng::unstable_shuffle(rng, &mut offered);
+                    // Another player's pick, as their machine sent it.
+                    if let Some(taken) = self.synced_pick(seat) {
+                        self.act_on_deck(seat, act, &taken);
+                        return Stepped::Done;
+                    }
                     if offered.len() <= count {
                         let taken: Vec<usize> = offered.into_iter().map(|(at, _)| at).collect();
                         self.act_on_deck(seat, act, &taken);
@@ -3632,6 +3644,11 @@ impl<V: Rules> State<V> {
                 }
                 HookEffect::SelectFromDeck { act, count } => {
                     let offered = self.offered(seat, act);
+                    // Another player's pick, as their machine sent it.
+                    if let Some(taken) = self.synced_pick(seat) {
+                        self.act_on_deck(seat, act, &taken);
+                        return Stepped::Done;
+                    }
                     if offered.len() <= count {
                         let taken: Vec<usize> = offered.into_iter().map(|(at, _)| at).collect();
                         self.act_on_deck(seat, act, &taken);
@@ -3645,6 +3662,11 @@ impl<V: Rules> State<V> {
                 }
                 HookEffect::SelectFromDeckConfirmed { act, min, max } => {
                     if self.offered(seat, act).is_empty() {
+                        return Stepped::Done;
+                    }
+                    // Another player's pick, as their machine sent it.
+                    if let Some(taken) = self.synced_pick(seat) {
+                        self.act_on_deck(seat, act, &taken);
                         return Stepped::Done;
                     }
                     Pickup::FromDeck {
@@ -6241,6 +6263,22 @@ impl<V: Rules> State<V> {
             unimplemented!("buying a shelf this run cannot afford");
         }
         let spent: u32 = num_traits::cast(cost).expect("a price is no less than nothing");
+        let bought = match stock {
+            sts2_core::Stock::Card(Some(on_sale)) => Some(super::relay::Bought::Card(on_sale.card)),
+            sts2_core::Stock::Relic(Some(relic)) => Some(super::relay::Bought::Relic(relic)),
+            sts2_core::Stock::Potion(Some(potion)) => Some(super::relay::Bought::Potion(potion)),
+            _ => None,
+        };
+        // An item's purchase runs on the buyer's machine alone, and its
+        // results reach this one once it is over. Card removal runs on every
+        // machine, as `OneOffSynchronizer` replays it.
+        if let Some(bought) = bought {
+            if self.bought_elsewhere(seat) {
+                self.wait_on_purchase(seat);
+                return Ok(Decided::Resolved);
+            }
+            self.begin_purchase(seat, cost, bought);
+        }
 
         // `PlayerCmd.LoseGold` runs after the entry's own purchase in the
         // game. Nothing between the two reads the gold, so it is spent here,
@@ -6272,6 +6310,7 @@ impl<V: Rules> State<V> {
             sts2_core::Stock::Potion(Some(potion)) => {
                 if !self.procure(seat, potion) {
                     self.players[seat].gold = self.players[seat].gold + cost;
+                    self.purchase_refused(seat);
                     return Ok(Decided::Resolved);
                 }
             }
@@ -7549,6 +7588,7 @@ impl<V: Rules> State<V> {
                         "a deck selection of other than {min} to {count} different cards"
                     );
                 }
+                self.picked_for_purchase(seat, &taken);
                 self.act_on_deck(seat, act, &taken);
                 Stepped::Done
             }
@@ -8534,6 +8574,7 @@ impl<V: Rules> State<V> {
     fn purchased(&mut self, seat: sts2_core::SeatIndex, index: u8, spent: V::Number) {
         self.clear_or_restock(seat, index);
         self.item_purchased(seat, spent);
+        self.purchase_over(seat);
     }
 
     /// `Hook.AfterItemPurchased`, once an entry's purchase has returned and

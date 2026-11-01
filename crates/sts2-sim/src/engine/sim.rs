@@ -158,6 +158,13 @@ pub(super) fn decide<V: Rules>(
     seat: sts2_core::SeatIndex,
     decision: &Decision<V>,
 ) -> Result<Settled<V>, Error> {
+    // What another player answers inside a purchase on their own machine,
+    // which this one never asked.
+    if let Decision::Answer(_) = decision
+        && state.buying_elsewhere(seat)
+    {
+        return Ok(Ok(sts2_core::Decided::Resolved));
+    }
     let pending = state.pending(seat);
     // A reward screen leaves the belt open, so a discard is the one
     // other decision it takes.

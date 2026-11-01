@@ -233,7 +233,9 @@ run as its own machine sees it. The work goes in this order:
    health and rolls their own rewards. A player who dies beside a living
    one leaves the fight's cards, and a win revives them. A win cancels
    the actions still waiting, as the game's does. A merchant stocks an
-   inventory for each player, who buys from it alone. Each player goes
+   inventory for each player, who buys from it alone. An item's purchase
+   runs on the buyer's machine, and its results reach the other machines
+   once it is over. Each player goes
    through their own copy of an event. A potion aimed at a player acts
    for that player, who answers what it asks, and its drinker applies its
    powers. A fresh power on
@@ -274,10 +276,10 @@ run as its own machine sees it. The work goes in this order:
    while another player is yet to. Once all are done, it is on its way
    to the next turn or room. Two recordings of the co-op scenarios on
    2026-10-30 came out the same, byte for byte. The narrower ally
-   targets changed the moves the hunted runs chose from, so
+   targets changed the moves the hunted runs chose from. So
    `coop-v0.111.0.bin` holds the sixteen Ironclad and Silent seeds hunted
-   again. Eleven agree to their end, and the simulator follows 25,307 of
-   their 25,317 positions. Each machine logs the shared actions in the
+   again. It holds Defect and Necrobinder seeds 3 and 14 too. The simulator follows
+   29,495 of their 29,496 positions. Each machine logs the shared actions in the
    order it took them in, in `order.jsonl` under its profile. The golden tests follow the hunted runs in
    `coop-v0.111.0.bin` without the game. So a change to the simulator
    needs no hunt to show it keeps them. A rule no hunted run reaches gets
@@ -316,8 +318,6 @@ run as its own machine sees it. The work goes in this order:
      picked and nothing to pick ends with no cards. Neither the mod nor
      the simulator does this yet. Both offer the hand as it stands.
    - The splits the hunt of 2026-10-30 found, by where they show:
-     - A shop purchase draws a different number (Defect and Necrobinder
-       seeds 3 and 14).
      - A co-op scenario's `enter_room` setup hangs: the host leaves its
        room and enters none, and the reply never comes. The mod's
        `EnterRoom` calls `EnterRoomDebug`, where `fight` goes through the

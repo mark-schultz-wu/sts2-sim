@@ -90,6 +90,15 @@ impl<V: Rules> RunTable<V> for SimTable<V> {
                 ),
             }
         }
+        // What the seat's machine sent once a purchase there was over, which
+        // reaches every other machine.
+        for purchase in self.machines[seat.at()].take_sent() {
+            for (at, machine) in self.machines.iter_mut().enumerate() {
+                if at != seat.at() && !machine.run_won() {
+                    machine.receive(purchase.clone());
+                }
+            }
+        }
         Ok(own)
     }
 
