@@ -1118,7 +1118,9 @@ pub(crate) fn selector_picks<V: Rules>(
     };
     let take = match &asking.question {
         Asked::Pile { pile, selection } => most(selection).min(live.offered(seat, *pile).len()),
-        Asked::Among { cards, selection } => most(selection).min(cards.len()),
+        Asked::Among {
+            cards, selection, ..
+        } => most(selection).min(cards.len()),
         Asked::Offered { offered, .. } => offered.len().min(1),
         Asked::Filtered { .. } => unreachable!("a filtered choice lists before it is answered"),
     };
@@ -1178,7 +1180,9 @@ pub(crate) fn answer<V: Rules>(
             }
             // Each card named where it stood as the selection asked, which
             // nothing moves while it waits.
-            Asked::Among { cards, selection } => {
+            Asked::Among {
+                cards, selection, ..
+            } => {
                 let picked: Option<sts2_core::Picked<V>> = chosen
                     .iter()
                     .map(|index| cards.get(index).copied())
@@ -1272,7 +1276,11 @@ pub(crate) fn come_up<V: Rules>(
             live.asking
                 .as_mut()
                 .expect("a signalled choice stands")
-                .question = Asked::Among { cards, selection };
+                .question = Asked::Among {
+                cards,
+                selection,
+                hand: (pile == sts2_core::Pile::Hand).then_some(filter),
+            };
         }
         let Some(asking) = &live.asking else {
             unreachable!("a signalled choice stands");
@@ -1298,9 +1306,9 @@ pub(crate) fn come_up<V: Rules>(
                 }
                 picked
             }
-            Asked::Among { cards, selection } => {
-                selection.validate_automatic(cards.iter().copied().collect())
-            }
+            Asked::Among {
+                cards, selection, ..
+            } => selection.validate_automatic(cards.iter().copied().collect()),
             Asked::Offered { .. } => unimplemented!("a choose-a-card screen that signalled"),
             Asked::Filtered { .. } => unreachable!("a filtered choice listed above"),
         };
@@ -1320,6 +1328,89 @@ pub(crate) fn come_up<V: Rules>(
         )?;
         if ended.is_some() {
             return Ok(ended);
+        }
+    }
+}
+
+/// Each waiting pick from the hand through a filter, listed again from the
+/// hand as it stands. `NPlayerHand.SelectCards` shows the hand as it is, so
+/// a card that joins it while the pick waits is offered too. `seat` made the
+/// decision just settled, and plays what the fight's own question asks for
+/// a potion.
+pub(crate) fn relist_hand_picks<V: Rules>(seat: sts2_core::SeatIndex, fighting: Fighting<'_, V>) {
+    let Fighting {
+        live,
+        streams,
+        belts,
+    } = fighting;
+    if live.asking.is_none() && !live.queues.any_stopped() {
+        return;
+    }
+    // Whose effect each pick is, with its filter, by where it waits: the
+    // fight's own question first, then each queue's stopped front.
+    let mut picks: smallvec::SmallVec<[(Option<usize>, sts2_core::SeatIndex); 2]> =
+        smallvec::SmallVec::new();
+    if let Some(super::live::Asking {
+        question: Asked::Among { hand: Some(_), .. },
+        then: Then::Play { effect, .. },
+        ..
+    }) = &live.asking
+    {
+        let owner = match effect.asker {
+            Asker::Card(card) => (live.players.seated())
+                .find(|(_, player)| player.cards.find(sts2_core::Pile::Play, card.id).is_some())
+                .map_or(seat, |(owner, _)| owner),
+            Asker::Potion(_) => seat,
+        };
+        picks.push((None, owner));
+    }
+    for (at, (owner, task)) in live.queues.every_stopped().enumerate() {
+        if let super::live::Asking {
+            question: Asked::Among { hand: Some(_), .. },
+            then: Then::Play { .. },
+            ..
+        } = &task.asking
+        {
+            picks.push((Some(at), owner));
+        }
+    }
+    for (place, owner) in picks {
+        let asking = match place {
+            None => live.asking.as_ref(),
+            Some(at) => (live.queues.every_stopped().nth(at)).map(|(_, task)| &task.asking),
+        };
+        let Some(super::live::Asking {
+            question: Asked::Among {
+                hand: Some(filter), ..
+            },
+            then: Then::Play { effect, .. },
+            ..
+        }) = asking
+        else {
+            unreachable!("a pick found above stands");
+        };
+        let (filter, effect) = (filter.clone(), effect.clone());
+        let fresh = listed::<V, _>(
+            owner,
+            Fighting {
+                live: &mut *live,
+                streams: &mut *streams,
+                belts: &mut *belts,
+            },
+            &effect,
+            sts2_core::Pile::Hand,
+            &filter,
+        );
+        let asking = match place {
+            None => live.asking.as_mut(),
+            Some(at) => (live.queues.every_stopped_mut().nth(at)).map(|(_, task)| &mut task.asking),
+        };
+        if let Some(super::live::Asking {
+            question: Asked::Among { cards, .. },
+            ..
+        }) = asking
+        {
+            *cards = fresh;
         }
     }
 }
@@ -1350,7 +1441,11 @@ fn listed_pile<V: Rules>(
             sts2_core::CardAt::new(held.id, pile, at)
         })
         .collect();
-    Asked::Among { cards, selection }
+    Asked::Among {
+        cards,
+        selection,
+        hand: None,
+    }
 }
 
 /// The cards of the chooser's `pile` that `filter` lets through, as
@@ -2167,7 +2262,16 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                         let taken = selection
                             .validate_automatic(cards.iter().copied().collect())
                             .map(sts2_core::Taken::Selected);
-                        (at, Asked::Among { cards, selection }, taken)
+                        let hand = (pile == sts2_core::Pile::Hand).then_some(filter);
+                        (
+                            at,
+                            Asked::Among {
+                                cards,
+                                selection,
+                                hand,
+                            },
+                            taken,
+                        )
                     }
                 }
             }

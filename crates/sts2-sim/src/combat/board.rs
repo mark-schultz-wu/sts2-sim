@@ -2902,7 +2902,11 @@ impl<'a, V: Rules> Board<'a, V> {
                                     CardAt::new(held.id, pile, at)
                                 })
                                 .collect();
-                            task.asking.question = super::live::Asked::Among { cards, selection };
+                            task.asking.question = super::live::Asked::Among {
+                                cards,
+                                selection,
+                                hand: None,
+                            };
                         }
                         self.live.queues.enqueue_hook(seat, task);
                         paused = Some(listener);

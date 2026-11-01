@@ -190,6 +190,15 @@ impl<V: Rules> Queues<V> {
         self.stopped.iter().map(|(owner, _, task)| (*owner, task))
     }
 
+    /// [`Queues::every_stopped`], to change.
+    pub(super) fn every_stopped_mut(
+        &mut self,
+    ) -> impl Iterator<Item = (sts2_core::SeatIndex, &mut Paused<V>)> {
+        self.stopped
+            .iter_mut()
+            .map(|(owner, _, task)| (*owner, task))
+    }
+
     /// Whether any queue's front waits on a question.
     pub(super) fn any_stopped(&self) -> bool {
         !self.stopped.is_empty()

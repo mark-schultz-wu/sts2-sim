@@ -798,7 +798,11 @@ fn pick_to_retain<V: Rules>(
                 then: Then::Pick {
                     act: sts2_core::PileAct::RetainThisTurn,
                 },
-                question: super::live::Asked::Among { cards, selection },
+                question: super::live::Asked::Among {
+                    cards,
+                    selection,
+                    hand: None,
+                },
                 signalled,
             });
         }

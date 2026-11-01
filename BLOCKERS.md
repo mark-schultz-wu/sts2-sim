@@ -263,7 +263,9 @@ run as its own machine sees it. The work goes in this order:
    come up, before the next player's pre-play phase. Each player's turn
    end runs their orbs, even after a teammate's turn end wins the
    fight. A potion discard reaches the other machines by its slot, and
-   does nothing where their copy of the slot is empty.
+   does nothing where their copy of the slot is empty. A filtered pick
+   from the hand lists it again after each decision. So it offers a card
+   a teammate gives while it waits.
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
    Mercury Hourglass, as in a solo hunt. So the runs go deep.
@@ -325,9 +327,6 @@ run as its own machine sees it. The work goes in this order:
      the simulator does this yet. Both offer the hand as it stands.
    - The splits a hunt of seeds 16 to 31 for the four pairs found on
      2026-11-01, where 55 of the 64 seeds agreed:
-     - Largesse's question. Regent and Ironclad seed 22 at step 1371.
-     - Constellation's question. Regent and Ironclad seed 27 at step
-       1584.
      - Whispering Earring aims a card at an ally, which is
        `unimplemented!`. Defect and Necrobinder seed 23 at step 1067.
      - Distilled Chaos. Silent and Defect seed 18 at step 392, and seed

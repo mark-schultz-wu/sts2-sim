@@ -177,6 +177,9 @@ pub(super) enum Asked<V: Rules> {
     Among {
         cards: smallvec::SmallVec<[sts2_core::CardAt<V>; sts2_core::MAX_CARDS_IN_HAND]>,
         selection: sts2_core::Selection,
+        /// The filter of a pick from the hand, which lists the hand as it
+        /// stands each time it is shown, as `NPlayerHand.SelectCards` does.
+        hand: Option<V::CardFilter>,
     },
     /// A selection through a filter whose choice signalled and has not
     /// listed yet. It lists as [`Asked::Among`] once its task goes on.
@@ -3766,7 +3769,9 @@ impl<V: Rules> Live<V> {
                 let (min, max) = bounds(*selection);
                 (min, max, self.players[seat].cards.len(*pile))
             }
-            Asked::Among { cards, selection } => {
+            Asked::Among {
+                cards, selection, ..
+            } => {
                 let (min, max) = bounds(*selection);
                 (min, max, cards.len())
             }
