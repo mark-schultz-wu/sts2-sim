@@ -7534,8 +7534,19 @@ impl<V: Rules> State<V> {
                 let Answer::Confirm(yes) = *answer else {
                     unimplemented!("answering the abandon-run popup with {answer:?}");
                 };
+                // `RunManager.Abandon`. In a run of several players the host's
+                // `RunLobby.AbandonRun` ends it for every player, and a
+                // client's throws, which leaves the popup's page as it was.
                 if yes {
-                    self.players[seat].hp = num_traits::zero();
+                    match self.players.len() > 1 {
+                        false => self.players[seat].hp = num_traits::zero(),
+                        true if seat == sts2_core::SeatIndex(0) => {
+                            for each in self.players.seats() {
+                                self.players[each].hp = num_traits::zero();
+                            }
+                        }
+                        true => {}
+                    }
                 }
                 Stepped::Done
             }

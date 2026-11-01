@@ -232,7 +232,9 @@ run as its own machine sees it. The work goes in this order:
    other players act around it. A won fight hands each player back their
    health and rolls their own rewards. A player who dies beside a living
    one leaves the fight's cards, and a win revives them. A player whose
-   teammates the same command brought to nothing keeps them. A win cancels
+   teammates the same command brought to nothing keeps them. The host's
+   yes to Trial's Double Down abandons the run for every player, and a
+   client's does nothing. A win cancels
    the actions still waiting, as the game's does. A merchant stocks an
    inventory for each player, who buys from it alone. An item's purchase
    runs on the buyer's machine, and its results reach the other machines
@@ -327,9 +329,6 @@ run as its own machine sees it. The work goes in this order:
      - A setup that jumps out of a fight into a room keeps the health the
        game set inside the fight, and the simulator drops it. A scenario
        that sets health with `hp` and then enters a room shows it.
-     - Gambler's Brew's seed parts at a later confirm, in the run, the
-       belt and the moves (Ironclad and Silent seed 3). Swift Potion
-       parted once (Silent and Defect seed 15).
    - The game itself fails, as a player dies outside of combat in
      multiplayer (Regent and Ironclad seed 14). Class D's
      death out of a fight is the likely cause.
