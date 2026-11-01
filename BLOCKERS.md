@@ -231,7 +231,8 @@ run as its own machine sees it. The work goes in this order:
    stops on a question waits at the front of its player's queue, and the
    other players act around it. A won fight hands each player back their
    health and rolls their own rewards. A player who dies beside a living
-   one leaves the fight's cards, and a win revives them. A win cancels
+   one leaves the fight's cards, and a win revives them. A player whose
+   teammates the same command brought to nothing keeps them. A win cancels
    the actions still waiting, as the game's does. A merchant stocks an
    inventory for each player, who buys from it alone. An item's purchase
    runs on the buyer's machine, and its results reach the other machines
@@ -278,8 +279,9 @@ run as its own machine sees it. The work goes in this order:
    2026-10-30 came out the same, byte for byte. The narrower ally
    targets changed the moves the hunted runs chose from. So
    `coop-v0.111.0.bin` holds the sixteen Ironclad and Silent seeds hunted
-   again. It holds Defect and Necrobinder seeds 3 and 14 too. The simulator follows
-   29,495 of their 29,496 positions. Each machine logs the shared actions in the
+   again. It holds Ironclad and Silent seed 39, and Defect and Necrobinder
+   seeds 3, 10 and 14, too. The simulator follows 32,909 of their 32,910
+   positions. Each machine logs the shared actions in the
    order it took them in, in `order.jsonl` under its profile. The golden tests follow the hunted runs in
    `coop-v0.111.0.bin` without the game. So a change to the simulator
    needs no hunt to show it keeps them. A rule no hunted run reaches gets
@@ -328,8 +330,6 @@ run as its own machine sees it. The work goes in this order:
      - Gambler's Brew's seed parts at a later confirm, in the run, the
        belt and the moves (Ironclad and Silent seed 3). Swift Potion
        parted once (Silent and Defect seed 15).
-     - The piles at the run's end (Ironclad and Silent seed 39, Defect
-       and Necrobinder seed 10).
    - The game itself fails, as a player dies outside of combat in
      multiplayer (Regent and Ironclad seed 14). Class D's
      death out of a fight is the likely cause.

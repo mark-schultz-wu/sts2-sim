@@ -2405,7 +2405,17 @@ impl<'a, V: Rules> Board<'a, V> {
             self.live.players[seat].potions.deafen();
             self.live.players[seat].cards.deafen();
             if standing {
-                self.died_beside_others(seat);
+                // `HandlePlayerDeath` reads `IsDead`, hit points at nothing.
+                // A player the same command brought there counts as dead
+                // already, though their own death is still to come.
+                let beside_living = self.live.creatures.iter().any(|creature| {
+                    creature.side == <V::CombatSide as SideKinds>::PLAYER
+                        && creature.owner.is_none()
+                        && creature.hp > num_traits::zero()
+                });
+                if beside_living {
+                    self.died_beside_others(seat);
+                }
                 return;
             }
             self.ended = Some(super::Ended::Lost);
