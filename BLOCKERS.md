@@ -262,7 +262,8 @@ run as its own machine sees it. The work goes in this order:
    same. Whispering Earring's pushed selector answers its picks as they
    come up, before the next player's pre-play phase. Each player's turn
    end runs their orbs, even after a teammate's turn end wins the
-   fight.
+   fight. A potion discard reaches the other machines by its slot, and
+   does nothing where their copy of the slot is empty.
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
    Mercury Hourglass, as in a solo hunt. So the runs go deep.
@@ -324,9 +325,6 @@ run as its own machine sees it. The work goes in this order:
      the simulator does this yet. Both offer the hand as it stands.
    - The splits a hunt of seeds 16 to 31 for the four pairs found on
      2026-11-01, where 55 of the 64 seeds agreed:
-     - A remote machine refuses a `DiscardPotion` as out of range, with
-       the player's belt empty in its copy. Ironclad and Silent seed 26
-       at step 332, Regent and Ironclad seed 23 at step 1285.
      - Largesse's question. Regent and Ironclad seed 22 at step 1371.
      - Constellation's question. Regent and Ironclad seed 27 at step
        1584.

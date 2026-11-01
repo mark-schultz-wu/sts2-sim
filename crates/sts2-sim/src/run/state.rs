@@ -2212,6 +2212,12 @@ impl<V: Rules> State<V> {
                 },
             }));
         }
+        self.discarded(seat, at);
+        Ok(Ok(Decided::Resolved))
+    }
+
+    /// `PotionCmd.Discard` for the potion at `at` on `seat`'s belt.
+    fn discarded(&mut self, seat: sts2_core::SeatIndex, at: usize) {
         self.drank(seat, at);
         self.belt_changed(
             seat,
@@ -2220,7 +2226,40 @@ impl<V: Rules> State<V> {
                 holding_potions: self.holding_potions(seat),
             },
         );
-        Ok(Ok(Decided::Resolved))
+    }
+
+    /// The physical belt slot the potion at `index` on `seat`'s belt
+    /// stands in, which `NetDiscardPotionGameAction` carries to the other
+    /// machines.
+    pub(crate) fn belt_slot(
+        &self,
+        seat: sts2_core::SeatIndex,
+        index: sts2_core::BeltIndex,
+    ) -> Option<u8> {
+        (self.players[seat].potion_positions)
+            .get(usize::from(index.get()))
+            .copied()
+    }
+
+    /// `DiscardPotionGameAction` for `seat`'s player, as another player's
+    /// machine sent it. A slot this machine holds no potion in cancels the
+    /// action, and nothing happens. That is so while the player's own
+    /// machine runs a purchase whose results have not come here yet.
+    ///
+    /// # Panics
+    ///
+    /// A slot past the belt's slots, which the game throws on.
+    pub(crate) fn discard_slot(&mut self, seat: sts2_core::SeatIndex, slot: u8) {
+        let slots: usize = num_traits::cast(self.players[seat].potion_slots)
+            .expect("the belt has an addressable number of slots");
+        if usize::from(slot) >= slots {
+            unimplemented!("another machine discarding slot {slot} of {slots}");
+        }
+        let Some(at) = (self.players[seat].potion_positions.iter()).position(|held| *held == slot)
+        else {
+            return;
+        };
+        self.discarded(seat, at);
     }
 
     /// `Owner.Potions.Any()`.
