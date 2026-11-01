@@ -265,7 +265,8 @@ run as its own machine sees it. The work goes in this order:
    fight. A potion discard reaches the other machines by its slot, and
    does nothing where their copy of the slot is empty. A filtered pick
    from the hand lists it again after each decision. So it offers a card
-   a teammate gives while it waits.
+   a teammate gives while it waits. Whispering Earring aims a card at an
+   ally drawn at random from the other living players.
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
    Mercury Hourglass, as in a solo hunt. So the runs go deep.
@@ -327,8 +328,6 @@ run as its own machine sees it. The work goes in this order:
      the simulator does this yet. Both offer the hand as it stands.
    - The splits a hunt of seeds 16 to 31 for the four pairs found on
      2026-11-01, where 55 of the 64 seeds agreed:
-     - Whispering Earring aims a card at an ally, which is
-       `unimplemented!`. Defect and Necrobinder seed 23 at step 1067.
      - Distilled Chaos. Silent and Defect seed 18 at step 392, and seed
        31 at step 2014.
      - A travel. Silent and Defect seed 28 at step 1107.

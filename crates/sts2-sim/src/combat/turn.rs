@@ -3076,7 +3076,8 @@ pub(super) fn pre_play_from<V: Rules>(
                         && !live.players[seat].ending_turn
                         && live.players[seat].turn == start
                     {
-                        let Some(first) = first_playable::<V>(seat, live, belts) else {
+                        let Some(first) = first_playable::<V>(seat, live, rngs.reborrow(), belts)
+                        else {
                             break;
                         };
                         let captured =
@@ -3160,17 +3161,16 @@ struct FirstPlayable<V: Rules> {
     costs: (sts2_core::Cost, sts2_core::Cost),
 }
 
-/// The hand's first card that `CanPlay`.
-///
-/// # Panics
-///
-/// A card that targets an ally, which the game draws off `CombatTargets`.
+/// The hand's first card that `CanPlay`, with the target `GetTarget`
+/// names for it.
 fn first_playable<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &Live<V>,
+    rngs: CombatRngs<'_>,
     belts: &crate::run::Belts<V>,
 ) -> Option<FirstPlayable<V>> {
     use sts2_core::TargetKinds;
+    use sts2_core::rng::GameRng as _;
 
     let walk = listen::Walk { live, belts };
     let payable =
@@ -3198,8 +3198,19 @@ fn first_playable<V: Rules>(
             enemies.into_iter().next()
         }
         t if t == <V::TargetType as TargetKinds>::ANY_PLAYER => Some(live.player(seat).id),
+        // `NextItem` off `CombatTargets` over the other living players.
         t if t == <V::TargetType as TargetKinds>::ANY_ALLY => {
-            unimplemented!("Whispering Earring aiming a card at an ally")
+            let own = live.player(seat).id;
+            let allies: SmallVec<[CombatId; 4]> = (live.creatures.iter())
+                .filter(|creature| {
+                    creature.side == <V::CombatSide as SideKinds>::PLAYER
+                        && creature.alive
+                        && creature.id != own
+                        && live.seat_of(creature.id).is_some()
+                })
+                .map(|creature| creature.id)
+                .collect();
+            rngs.targets.choose(&allies).ok().copied()
         }
         _ => None,
     };
