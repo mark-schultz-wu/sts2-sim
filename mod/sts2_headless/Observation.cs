@@ -663,7 +663,7 @@ public static class Observation
                 // affliction, an enchantment, a run modifier, a badge. So the
                 // category travels with it.
                 ["preventer"] = preventer is null ? null : Id(preventer.Id),
-                ["targets"] = alive.Where(card.CanPlayTargeting).Select(c => c.CombatId).ToList(),
+                ["targets"] = alive.Where(c => Moves.Aimable(card, c)).Select(c => c.CombatId).ToList(),
                 ["effect"] = Effects(card, alive),
             };
         }
@@ -703,7 +703,7 @@ public static class Observation
         // and Self resolve the same way whoever is hovered, and previewing them
         // once per enemy would report the same numbers three times.
         List<Creature?> targets = card.TargetType is TargetType.AnyEnemy or TargetType.AnyAlly or TargetType.AnyPlayer
-            ? alive.Where(card.CanPlayTargeting).Select(c => (Creature?)c).ToList()
+            ? alive.Where(c => Moves.Aimable(card, c)).Select(c => (Creature?)c).ToList()
             : new List<Creature?>();
 
         // A targeted card with nothing legal to hit still has numbers, and a
@@ -836,7 +836,7 @@ public static class Observation
                     })
                     .ToList();
 
-                if (relics != null)
+                if (relics != null && Chest.Skippable(state))
                 {
                     options.Add(new Dictionary<string, object?>
                     {

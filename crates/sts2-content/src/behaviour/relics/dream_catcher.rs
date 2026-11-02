@@ -3,17 +3,18 @@
 use sts2_core::{EventHook, HookEffect};
 
 /// `TryModifyRestSiteHealRewards`: a monster room's card reward for its
-/// owner. `ModifyExtraRestSiteHealText` only adds a line on screen. A run
-/// here has one player.
+/// owner. `ModifyExtraRestSiteHealText` only adds a line on screen.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     match hook {
-        EventHook::RestSiteHealRewards { .. } => {
+        EventHook::RestSiteHealRewards { player, .. } if player == owner => {
             asked.push(HookEffect::OfferRewards(V::DREAM_CATCHER_REWARDS))
         }
-        EventHook::Obtained { .. } => {}
+        // `player != base.Owner`: another player's rest does nothing.
+        EventHook::RestSiteHealRewards { .. } | EventHook::Obtained { .. } => {}
         hook => unimplemented!("what DreamCatcher does for {hook:?}"),
     }
 }
