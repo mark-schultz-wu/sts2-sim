@@ -4,7 +4,6 @@ use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, Modify, ModifyHook};
 
 use crate::behaviour::relics::Number;
-use crate::generated::runstate::CombatSide;
 
 /// `_cardsPlayedThisTurn` and `_cardsPlayedLastTurn`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -19,13 +18,14 @@ pub struct State {
 /// last turn's before anything is drawn, and `AfterCombatEnd` forgets both.
 /// `AfterSideTurnStart` only refreshes the counter on screen, so nothing here
 /// answers it.
-pub(super) fn event_hook<V: crate::Build>(state: &mut State, hook: EventHook<V>) {
+pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    state: &mut State,
+    hook: EventHook<V>,
+) {
     match hook {
-        EventHook::CardPlayed { .. } => state.played_this_turn += 1,
-        EventHook::BeforeSideTurnStart {
-            side: CombatSide::Player,
-            ..
-        } => {
+        EventHook::CardPlayed { player, .. } if player == owner => state.played_this_turn += 1,
+        EventHook::BeforeSideTurnStart { participants, .. } if participants.contains(owner) => {
             state.played_last_turn = state.played_this_turn;
             state.played_this_turn = 0;
         }
@@ -37,10 +37,14 @@ pub(super) fn event_hook<V: crate::Build>(state: &mut State, hook: EventHook<V>)
 /// `ModifyHandDraw`: three more cards for a turn that followed a quiet one.
 ///
 /// The first turn of a fight follows nothing and draws its printed hand.
-pub(super) fn modify_hook<V: crate::Build>(state: &State, hook: ModifyHook<V>) -> Modify<Number> {
+pub(super) fn modify_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    state: &State,
+    hook: ModifyHook<V>,
+) -> Modify<Number> {
     match hook {
-        // A relic's owner is the player, and a fight here has one, so the
-        // player drawing is always its own.
+        // `player != base.Owner`: another player's number is left as it is.
+        ModifyHook::HandDraw { player, .. } if player != owner => Modify::Nothing,
         ModifyHook::HandDraw { turn, .. }
             if turn > 1 && state.played_last_turn <= V::Relic::POCKETWATCH_CARD_THRESHOLD =>
         {

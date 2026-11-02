@@ -1,0 +1,10 @@
+# The Ironclad plays The Ball at the last enemy, and the hit wins the
+# fight. `GiveToAnotherPlayer` gives nothing once the fight is over or
+# ending, and `CardPileCmd.Add` adds nothing to a combat pile then. The
+# teammate is drawn as the play starts, but no random place in a draw
+# pile is drawn after it.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"IRONCLAD"},{"character":"SILENT"}]}
+{"cmd":"fight","encounter":"NIBBITS_WEAK","seat":0}
+{"cmd":"grant","card":"THE_BALL","target":1,"seat":0}
+{"cmd":"hp","hp":1,"target":2,"seat":0}
+{"cmd":"play_card","index":5,"target":2,"seat":0}

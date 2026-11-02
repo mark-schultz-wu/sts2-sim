@@ -14,10 +14,18 @@ pub struct State {
 /// `AfterRoomEntered` at a rest site sets it to give. `AfterEnergyReset` then
 /// gives its energy, once.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+
     state: &mut State,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
+    // `player != Owner`: another player's turn is not its owner's.
+    if let EventHook::EnergyReset { player, .. } = hook
+        && player != owner
+    {
+        return;
+    }
     match hook {
         EventHook::RoomEntered {
             room: RoomType::RestSite,

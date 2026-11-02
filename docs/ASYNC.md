@@ -278,7 +278,6 @@ The order:
    `docs/SCHEDULER.md` is its design.
 4. Co-op fights, on top.
 
-## Open question
-
-1. Do the run layer's pauses (`Pickup`, `Unfinished`) move with the
-   fight's, or stay hand-written?
+The run layer's pauses, `Pickup` and `Unfinished`, move to coroutines too,
+before co-op fights. Mark chose that on 2026-10-26, so every pause is held
+the same way.

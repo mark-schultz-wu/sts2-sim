@@ -9,13 +9,15 @@ use crate::behaviour::relics::Number;
 /// below half their maximum. What it does before a fight and as health
 /// changes only sets how it looks.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::RelicOwner<V>,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
+    let health = owner.health;
     match hook {
-        EventHook::CombatVictoryEarly { player, .. }
-            if Number::from(player.hp)
-                <= Number::from(player.max_hp) * V::Relic::MEAT_ON_THE_BONE_HP_THRESHOLD / 100 =>
+        EventHook::CombatVictoryEarly { .. }
+            if Number::from(health.hp)
+                <= Number::from(health.max_hp) * V::Relic::MEAT_ON_THE_BONE_HP_THRESHOLD / 100 =>
         {
             asked.push(HookEffect::Heal(V::Relic::MEAT_ON_THE_BONE_HEAL));
         }

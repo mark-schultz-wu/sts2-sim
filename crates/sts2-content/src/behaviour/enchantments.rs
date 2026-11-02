@@ -385,7 +385,7 @@ pub(crate) fn event_hook<V: crate::Build>(
         }
         // `AfterAutoPrePlayPhaseEntered` on its owner's first turn: its own
         // card auto-played, wherever it stands.
-        (__c0, EventHook::AutoPrePlayPhase { turn }) if __c0 == V::Enchantment::IMBUED => {
+        (__c0, EventHook::AutoPrePlayPhase { turn, .. }) if __c0 == V::Enchantment::IMBUED => {
             if turn <= 1 {
                 asked.push(HookEffect::AutoPlay(id));
             }
