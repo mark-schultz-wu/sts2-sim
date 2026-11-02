@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Reflection;
 using System.Threading.Tasks;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Debug;
@@ -501,6 +502,13 @@ internal static class Protocol
     /// entirely when `ShouldDisableRemainingRestSiteOptions` fires. So an index
     /// is only meaningful against the observation it came from.
     /// </remarks>
+    /// <summary>
+    /// <c>EventSynchronizer._pendingOptionTasks</c>: the task of each event
+    /// option chosen in the room, every player's, until the next event.
+    /// </summary>
+    private static readonly FieldInfo PendingOptionTasks = typeof(EventSynchronizer)
+        .GetField("_pendingOptionTasks", BindingFlags.NonPublic | BindingFlags.Instance)!;
+
     private static async Task ChooseOption(JsonElement req)
     {
         if (!req.TryGetProperty("index", out JsonElement el) || !el.TryGetInt32(out int index))
@@ -586,12 +594,11 @@ internal static class Protocol
                 }
 
                 // One past the relics is the skip, which is what the screen's
-                // own button does.
-                if (index < 0 || index > relics.Count)
+                // own button does, for a single player alone.
+                int offered = relics.Count + (Chest.Skippable(_state) ? 1 : 0);
+                if (index < 0 || index >= offered)
                 {
-                    // One past the relics is the skip, so the count offered is
-                    // one more than the relics on the screen.
-                    await Error("choose_option", Refusals.OutOfRange(index, relics.Count + 1));
+                    await Error("choose_option", Refusals.OutOfRange(index, offered));
                     return;
                 }
 
@@ -617,6 +624,23 @@ internal static class Protocol
                     return;
                 }
 
+                if (Moves.Kills(sync.GetLocalEvent(), options[index]))
+                {
+                    await Error("choose_option", Refusals.OptionWouldKill());
+                    return;
+                }
+
+                // `NEventRoom.OptionButtonClicked` runs a proceed option on
+                // this machine alone, and sends every other through the
+                // synchronizer.
+                if (options[index].IsProceed)
+                {
+                    BackgroundWork.Track(options[index].Chosen());
+                    break;
+                }
+
+                List<Task> pending = (List<Task>)PendingOptionTasks.GetValue(sync)!;
+                int before = pending.Count;
                 sync.ChooseLocalOption(index);
 
                 // Tracked, never awaited here. ChooseLocalOption returns void
@@ -624,7 +648,12 @@ internal static class Protocol
                 // option reads as never chosen. But awaiting the tasks directly
                 // deadlocks: an event option may park a question for the client,
                 // and a handler blocked here could never send it.
-                BackgroundWork.Track(sync.AwaitPendingOptionTasks());
+                //
+                // Only the tasks this choice started. In a co-op run another
+                // player's option in the same room can wait on that player,
+                // such as a reward screen it put up, and this seat's choice
+                // does not wait for it.
+                BackgroundWork.Track(Task.WhenAll(pending.Skip(before).ToList()));
                 break;
             }
 
@@ -827,7 +856,7 @@ internal static class Protocol
         }
         else
         {
-            RunManager.Instance.ActChangeSynchronizer.SetLocalPlayerReady();
+            Peers.VoteForNextAct();
         }
 
         bool resolved = await Driver.WaitForDecisionPoint();
@@ -894,7 +923,7 @@ internal static class Protocol
             return;
         }
 
-        if (!card.CanPlayTargeting(target))
+        if (!Moves.Aimable(card, target))
         {
             await Error("play_card", Refusals.WrongTarget(card, target?.CombatId));
             return;

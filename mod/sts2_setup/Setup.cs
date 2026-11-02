@@ -267,7 +267,23 @@ public static class Setup
 
     internal static async Task Grant(JsonElement req)
     {
-        Player me = Seat.Me(Protocol.State);
+        // A co-op grant names its player by net id. It is a local change, which
+        // sends no action, so every seat's game makes the same one.
+        Player player = Seat.Me(Protocol.State);
+        if (req.TryGetProperty("target", out JsonElement aim) && aim.ValueKind != JsonValueKind.Null)
+        {
+            Player? named = aim.TryGetUInt64(out ulong netId)
+                ? Protocol.State.Players.FirstOrDefault(p => p.NetId == netId)
+                : null;
+            if (named == null)
+            {
+                await Protocol.Error("grant", Refusals.Malformed("grant's 'target' is a player's net id"));
+                return;
+            }
+
+            player = named;
+        }
+
         string? card = Protocol.Str(req, "card");
         string? relic = Protocol.Str(req, "relic");
         string? potion = Protocol.Str(req, "potion");
@@ -318,12 +334,12 @@ public static class Setup
 
         if (grantCard != null)
         {
-            BackgroundWork.Track(Cheats.GrantCard(Protocol.State, grantCard));
+            BackgroundWork.Track(Cheats.GrantCard(Protocol.State, grantCard, player));
         }
 
         if (grantRelic != null)
         {
-            BackgroundWork.Track(RelicCmd.Obtain(grantRelic.ToMutable(), me));
+            BackgroundWork.Track(RelicCmd.Obtain(grantRelic.ToMutable(), player));
         }
 
         // The same procure the game runs when a potion is picked up, so a full
@@ -331,7 +347,7 @@ public static class Setup
         // the observation, where `potions` will simply not have grown.
         if (grantPotion != null)
         {
-            BackgroundWork.Track(PotionCmd.TryToProcure(grantPotion.ToMutable(), me));
+            BackgroundWork.Track(PotionCmd.TryToProcure(grantPotion.ToMutable(), player));
         }
 
         bool resolved = await Driver.WaitForDecisionPoint();
@@ -665,9 +681,15 @@ public static class Cheats
     /// command does, and then runs <c>AfterCreated</c>. A card built and only
     /// registered skips that, which leaves Spoils Map's act at -1.
     /// </remarks>
-    public static async Task GrantCard(RunState state, CardModel canonical)
+    public static Task GrantCard(RunState state, CardModel canonical) =>
+        GrantCard(state, canonical, Seat.Me(state));
+
+    /// <summary>
+    /// <see cref="GrantCard(RunState, CardModel)"/> for <paramref name="me"/>,
+    /// which in a co-op run can be another seat's player.
+    /// </summary>
+    public static async Task GrantCard(RunState state, CardModel canonical, Player me)
     {
-        Player me = Seat.Me(state);
         CombatState? combat = (state.CurrentRoom as CombatRoom)?.CombatState;
 
         if (combat != null && CombatManager.Instance.IsInProgress)

@@ -17,12 +17,10 @@
 //!   benches/replay        the whole recording, on the clock
 //!   benches/decision      one step of each kind, taken apart
 //!   benches/allocations   the allocator, counted rather than clocked
-//!   examples/where_it_goes  every step timed where it falls, by kind
-//!   examples/clone_sites    one branch and nothing else, under a profiler
 //! ```
 //!
 //! The first two are criterion, so they compare against a saved baseline. The
-//! rest print a table.
+//! third prints a table.
 
 pub mod bench;
 mod counted;
@@ -43,8 +41,7 @@ pub fn golden_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden")
 }
 
-pub mod random;
-pub mod recorded;
+pub use sts2_run::recorded;
 pub mod scenario;
 pub mod suite;
 
@@ -134,7 +131,7 @@ pub fn oracle_or_explain<V: sts2_content_wire::WireContentVersion>(
     run: &str,
     start: &sts2_core::Start<V>,
 ) -> Cached<NoGame> {
-    let begun = sts2_core::Play::<V>::begin(
+    let begun = Cached::begin::<V>(
         FromTranscript {
             path: Path::new(env!("STS2_ORACLE_CACHE")).join(format!("{run}.jsonl")),
             inner: None,

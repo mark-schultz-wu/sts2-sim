@@ -16,7 +16,7 @@ use clap::Parser;
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_content::v0_107_1::characters::Character;
 use sts2_content::v0_107_1::events::Event;
-use sts2_core::{Play as _, Room, Seed, Setup, Start};
+use sts2_core::{Room, Seed, Setup, Start};
 use sts2_sim::Sim;
 
 type V = V0_107_1;
@@ -101,7 +101,7 @@ fn run(cli: Cli) -> Result<(), Error> {
             seed: seed.clone(),
             source,
         };
-        let mut run = Sim::<V>::begin((), &start).map_err(sim)?;
+        let mut run = Sim::<V>::begin(&start).map_err(sim)?;
         if let Some(event) = event
             && let Err(refusal) = run.construct(&Setup::Event { event }).map_err(sim)?
         {
