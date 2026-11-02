@@ -1713,13 +1713,19 @@ pub(super) fn before_hand_draw<V: Rules>(
                     .expect("a card stands where the walk found it");
                 let index = num_traits::NumCast::from(at)
                     .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
+                // `CardCmd.Exhaust`, whose listeners can ask: a draw that
+                // shuffles into Stratagem's pick. The setup waits on it.
                 let mut board =
-                    Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None);
+                    Board::for_card(seat, live, rngs.reborrow(), belts, ascension, None, None)
+                        .blocking();
                 sts2_core::Fight::act_on(
                     &mut board,
                     sts2_core::PileAct::Exhaust,
                     &[sts2_core::CardAt::new(card.id, Pile::Draw, index)],
                 );
+                if live.asking.is_some() {
+                    return Listened::Parked;
+                }
             }
         }
         // `PowerCmd.Apply` on the player, from a relic.

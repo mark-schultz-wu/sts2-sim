@@ -1,0 +1,14 @@
+# Entropy asks for a card as the turn starts, then Crimson Mantle's damage
+# kills the player on 1 HP. The death comes in the setup's paused part, after
+# `StartTurn` checks for the dead, so the turn goes on to its play phase and
+# not to its end phase. Plating keeps the player alive through the first
+# enemy turn.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"CRIMSON_MANTLE"}
+{"cmd":"power","power":"ENTROPY_POWER","amount":1,"target":0}
+{"cmd":"power","power":"PLATING_POWER","amount":50,"target":0}
+{"cmd":"play_card","index":5}
+{"cmd":"hp","hp":1}
+{"cmd":"end_turn"}
+{"cmd":"answer","cards":[0]}

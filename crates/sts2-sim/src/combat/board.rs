@@ -372,7 +372,9 @@ impl<'a, V: Rules> Board<'a, V> {
 
     /// `Creature.CanReceivePowers` for a creature in the fight: no listener's
     /// `ShouldAllowHitting` refuses it. `IsAlive` is `CurrentHp > 0`, so a
-    /// creature a hit took to nothing is dead to it before it dies.
+    /// creature a hit took to nothing is dead to it before it dies. A fight
+    /// over or ending has no listeners. So a power lands on the last enemy
+    /// even where its own `BeforeApplied` killed it.
     fn can_receive_powers(&self, creature: CombatId) -> bool {
         let alive = self
             .live
@@ -384,7 +386,7 @@ impl<'a, V: Rules> Board<'a, V> {
             self.walk(),
             sts2_core::DecisionHook::ShouldAllowHitting { creature, alive },
             false,
-        )
+        ) || self.over()
     }
 
     /// The card whose effect this is, as the fight holds it now.

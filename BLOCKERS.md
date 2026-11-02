@@ -397,6 +397,8 @@ its split, as a scenario. A fix lands with its run, recorded whole, in
 `hunted-v0.111.0.bin`. A split that many runs share becomes its own item, above this
 one.
 
+`sts2-run follow <parted file> <index> --diff <dir>` plays a kept run on
+the game beside the simulator, and writes both sides where they part.
 `cargo xtask game-trace <index> --file <parted file> <pattern>...`
 prints the game's own calls in the moves before a kept run's split.
 `cargo xtask pause-sites --why <method>` prints a chain of calls from a
@@ -411,7 +413,25 @@ A third round, from seed 20000, parted 1 run on v0.107.1 and 3 on
 v0.111.0. All 4 are fixed. A fourth round, from seed 30000, parted 3 on
 v0.107.1 and 2 on v0.111.0, and all 5 are fixed.
 
-Next, hunt both builds again toward 3,000 runs in a row with no split.
+A fifth round, from seed 40000, parted 2 on v0.107.1 and 3 on v0.111.0.
+Three are fixed. Two v0.111.0 runs are left:
+
+1. DEFECT C000040507 with HOARDER parts at 248 in the deck. A Thieving
+   Hopper stole a White Noise+, and a reward gave it back. The deck held
+   three: the one a card reward gave, and Hoarder's two copies of it. The
+   simulator stole a copy, which Hoarder does not copy again. The game
+   copied the card it got back, so it stole the card the reward gave.
+   Nothing compares which of three like cards stands where. The game's
+   draw pile is the deck in order, then shuffled, as ours is. To find
+   where the order parts, the mod's trace needs to name each card.
+2. IRONCLAD C000040448 with DEADLY_EVENTS parts at 792 in the legal
+   moves: Cinder+ costs 3 in the simulator and 2 in the game. The player
+   is Confused by Snecko Eye, and the turn's hand draw shuffles.
+   Stratagem asks for a card of the draw pile. Each card drawn after that
+   takes a cost off `CombatEnergyCosts`, so the two take a cost for a
+   different card.
+
+Then hunt both builds again toward 3,000 runs in a row with no split.
 
 ### 6. Coverage of the game's own code
 

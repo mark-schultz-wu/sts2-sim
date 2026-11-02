@@ -272,6 +272,18 @@ pub(super) fn turn_loop<V: Rules>(
         Some(task) => {
             yield_!(Wait::Setup { task, skipping });
             if let Some(by_setup) = resumed!().ended {
+                // A death in the setup's paused part comes after
+                // `StartTurn` checks for the dead, and `LoseCombat` only
+                // marks the loss pending. So `RunAutoPrePlayPhase` runs on
+                // to the play phase.
+                if matches!(by_setup, crate::combat::Ended::Lost) {
+                    match pre_play::<V>(seat, resumed!()) {
+                        PrePlayed::Over(_) => play_phase::<V>(seat, resumed!()),
+                        PrePlayed::Asked { .. } => {
+                            unimplemented!("an auto-play asking once its player is dead")
+                        }
+                    }
+                }
                 return Ok(Some(by_setup));
             }
             pre_play::<V>(seat, resumed!())
