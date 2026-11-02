@@ -18,7 +18,7 @@ use std::process::ExitCode;
 
 use clap::Parser;
 use sts2_content::v0_107_1::V0_107_1;
-use sts2_core::{Construct, Digested as _, Play, Snapshot};
+use sts2_core::{Digested as _, Snapshot};
 
 type V = V0_107_1;
 
@@ -73,22 +73,18 @@ fn main() -> ExitCode {
     }
 }
 
-/// One step on one side, and what it leaves showing.
-fn step<C: Construct<V>>(
+/// One step's answer on one side, then what it leaves showing.
+fn step<E: std::fmt::Display>(
     side: &'static str,
     at: usize,
-    driven: &mut C,
-    step: &sts2_core::Step<V>,
-) -> Result<Snapshot<V>, Error>
-where
-    C::Error: std::fmt::Display,
-{
+    answered: Result<sts2_core::Answered<V>, E>,
+    observe: impl FnOnce() -> Result<Snapshot<V>, E>,
+) -> Result<Snapshot<V>, Error> {
     let failed = |message: String| Error::Step { side, at, message };
-    driven
-        .step(step)
+    answered
         .map_err(|e| failed(e.to_string()))?
         .map_err(|refusal| failed(format!("refused: {refusal}")))?;
-    Play::<V>::observe(driven).map_err(|e| failed(e.to_string()))
+    observe().map_err(|e| failed(e.to_string()))
 }
 
 fn run(
@@ -115,14 +111,13 @@ fn run(
             source,
         })?;
 
-    let mut sim =
-        sts2_sim::Sim::<V>::begin((), recorded.start()).map_err(|source| Error::Begin {
-            name: name.clone(),
-            source,
-        })?;
+    let mut sim = sts2_sim::Sim::<V>::begin(recorded.start()).map_err(|source| Error::Begin {
+        name: name.clone(),
+        source,
+    })?;
     if alone {
         for (at, taken) in recorded.steps().iter().enumerate() {
-            step("the simulator", at + 1, &mut sim, taken)?;
+            step("the simulator", at + 1, sim.step(taken), || sim.observe())?;
         }
         println!("the simulator takes all {} steps", recorded.steps().len());
         return Ok(());
@@ -130,8 +125,8 @@ fn run(
     let mut game = sts2_golden::oracle_or_explain::<V>(&name, recorded.start());
     for (at, taken) in recorded.steps().iter().enumerate() {
         let at = at + 1;
-        let simulated = step("the simulator", at, &mut sim, taken)?;
-        let played = step("the game", at, &mut game, taken)?;
+        let simulated = step("the simulator", at, sim.step(taken), || sim.observe())?;
+        let played = step("the game", at, game.step(taken), || game.observe::<V>())?;
         let sections: Vec<_> = simulated
             .observation
             .sections()

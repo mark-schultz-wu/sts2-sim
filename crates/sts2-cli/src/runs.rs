@@ -5,7 +5,7 @@
 //! envelope. It is how *the oracle* stays alive between two invocations, and a
 //! simulator has no such problem. It lives in `sts2-headless` now, behind
 //! [`sts2_headless::Session`], and this front end holds a
-//! [`Play`](sts2_core::Play) like any other caller.
+//! [`RunTable`](sts2_core::RunTable) like any other caller.
 
 use std::path::PathBuf;
 
