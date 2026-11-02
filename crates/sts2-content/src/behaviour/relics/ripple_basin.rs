@@ -3,8 +3,6 @@
 use crate::vars::RelicVars as _;
 use sts2_core::{CardKind, EventHook, HookEffect};
 
-use crate::generated::runstate::CombatSide;
-
 /// Whether one of its owner's attacks finished a play this turn, which
 /// `BeforeSideTurnEnd` reads off `CardPlaysFinished`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -27,15 +25,15 @@ pub(super) fn event_hook<V: crate::Build>(
         {
             state.attacked = true;
         }
-        EventHook::BeforeSideTurnEnd {
-            side: CombatSide::Player,
-            ..
-        } if !state.attacked => asked.push(HookEffect::GainBlock(V::Relic::RIPPLE_BASIN_BLOCK)),
-        EventHook::BeforeSideTurnStart {
-            side: CombatSide::Player,
-            ..
+        EventHook::BeforeSideTurnEnd { participants, .. }
+            if participants.contains(owner) && !state.attacked =>
+        {
+            asked.push(HookEffect::GainBlock(V::Relic::RIPPLE_BASIN_BLOCK))
         }
-        | EventHook::CombatEnd { .. } => state.attacked = false,
+        EventHook::BeforeSideTurnStart { participants, .. } if participants.contains(owner) => {
+            state.attacked = false
+        }
+        EventHook::CombatEnd { .. } => state.attacked = false,
         _ => {}
     }
 }
