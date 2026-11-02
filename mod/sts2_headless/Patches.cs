@@ -347,7 +347,9 @@ internal static class SilenceKaiserCrabAnimation
 /// <remarks>
 /// The game's own early returns, choice id, sync and log, around a
 /// <see cref="BundleChoice"/>. Left alone, <c>TestMode</c> takes the first
-/// bundle without asking, which a player at the screen never does.
+/// bundle without asking, which a player at the screen never does. In co-op
+/// it takes the first for every other seat too, before the game's branch
+/// that waits for their choice.
 /// </remarks>
 [HarmonyPatch(typeof(CardSelectCmd), nameof(CardSelectCmd.FromChooseABundleScreen))]
 internal static class BundleWithoutAScreen
@@ -357,16 +359,15 @@ internal static class BundleWithoutAScreen
         IReadOnlyList<IReadOnlyList<CardModel>> bundles,
         ref Task<IEnumerable<CardModel>> __result)
     {
-        // The screen asks the local player alone. Another seat's bundle waits
-        // for that seat's choice, as the game's own code does.
-        if (!LocalContext.IsMe(player))
-        {
-            return true;
-        }
         __result = Asked(player, bundles);
         return false;
     }
 
+    /// <remarks>
+    /// The screen asks the local player alone. Another seat's bundle waits
+    /// for that seat's choice, as the game's own code does once
+    /// <c>TestMode</c> is past.
+    /// </remarks>
     private static async Task<IEnumerable<CardModel>> Asked(
         Player player, IReadOnlyList<IReadOnlyList<CardModel>> bundles)
     {
@@ -375,10 +376,20 @@ internal static class BundleWithoutAScreen
             return Array.Empty<CardModel>();
         }
         uint choiceId = RunManager.Instance.PlayerChoiceSynchronizer.ReserveChoiceId(player);
-        int index = await BundleChoice.Ask(bundles);
-        IReadOnlyList<CardModel> chosen = bundles[index];
-        RunManager.Instance.PlayerChoiceSynchronizer.SyncLocalChoice(
-            player, choiceId, PlayerChoiceResult.FromIndex(index));
+        IReadOnlyList<CardModel> chosen;
+        if (LocalContext.IsMe(player))
+        {
+            int index = await BundleChoice.Ask(bundles);
+            chosen = bundles[index];
+            RunManager.Instance.PlayerChoiceSynchronizer.SyncLocalChoice(
+                player, choiceId, PlayerChoiceResult.FromIndex(index));
+        }
+        else
+        {
+            int index = (await RunManager.Instance.PlayerChoiceSynchronizer
+                .WaitForRemoteChoice(player, choiceId)).AsIndex();
+            chosen = index >= 0 ? bundles[index] : Array.Empty<CardModel>();
+        }
         Log.Info($"Player {player.NetId} chose cards [{string.Join(",", chosen.Select(c => c.Id.Entry))}]");
         return chosen;
     }
@@ -848,7 +859,8 @@ internal static class ScreenPathSelections
             uint choiceId = RunManager.Instance.PlayerChoiceSynchronizer.ReserveChoiceId(player);
             await GameApi.SignalChoiceBegun(context, player, PlayerChoiceOptions.CancelPlayCardActions);
             result = (await CardSelection.Ask(list, 1, 1,
-                RunManager.Instance.ActionExecutor.CurrentlyRunningAction?.ToString())).FirstOrDefault();
+                RunManager.Instance.ActionExecutor.CurrentlyRunningAction?.ToString(),
+                () => PileType.Hand.GetPile(player).Cards.Where(c => c.IsUpgradable).ToList())).FirstOrDefault();
             RunManager.Instance.PlayerChoiceSynchronizer.SyncLocalChoice(
                 player, choiceId, PlayerChoiceResult.FromMutableCombatCard(result));
             await context.SignalPlayerChoiceEnded();
@@ -873,7 +885,8 @@ internal static class ScreenPathSelections
         else
         {
             result = await AskAsTheScreenDoes(
-                context, player, PlayerChoiceOptions.CancelPlayCardActions, list, prefs);
+                context, player, PlayerChoiceOptions.CancelPlayCardActions, list, prefs,
+                () => PileType.Hand.GetPile(player).Cards.Where(filter ?? (_ => true)).ToList());
         }
         LogChoice(player, result);
         return result;
@@ -918,12 +931,13 @@ internal static class ScreenPathSelections
     /// <summary>The screen branch, with the question parked where the screen would be.</summary>
     private static async Task<IEnumerable<CardModel>> AskAsTheScreenDoes(
         PlayerChoiceContext context, Player player, PlayerChoiceOptions options,
-        List<CardModel> offered, CardSelectorPrefs prefs)
+        List<CardModel> offered, CardSelectorPrefs prefs,
+        Func<IReadOnlyList<CardModel>>? live = null)
     {
         uint choiceId = RunManager.Instance.PlayerChoiceSynchronizer.ReserveChoiceId(player);
         await GameApi.SignalChoiceBegun(context, player, options);
         List<CardModel> result = (await CardSelection.Ask(offered, prefs.MinSelect, prefs.MaxSelect,
-            RunManager.Instance.ActionExecutor.CurrentlyRunningAction?.ToString())).ToList();
+            RunManager.Instance.ActionExecutor.CurrentlyRunningAction?.ToString(), live)).ToList();
         RunManager.Instance.PlayerChoiceSynchronizer.SyncLocalChoice(
             player, choiceId, PlayerChoiceResult.FromMutableCombatCards(result));
         await context.SignalPlayerChoiceEnded();
@@ -1064,11 +1078,11 @@ internal static class ParasolWithoutAScreen
 /// screens <c>AbandonInternal</c> closes first, which take the headless
 /// process down with no message.
 ///
-/// In a co-op run the option runs on every seat, for whichever player chose
-/// it, so every seat shows the popup and asks here. Its yes is the popup's:
-/// <c>RunManager.Abandon</c>, which on the host abandons the run for every
-/// seat, through <see cref="AbandonedWithoutScreens"/>. On a client it throws,
-/// as it does with the screen.
+/// It is a proceed option, which the event screen runs on the chooser's
+/// machine alone, so only that seat asks. In a co-op run its yes is the
+/// popup's: <c>RunManager.Abandon</c>, which on the host abandons the run for
+/// every seat, through <see cref="AbandonedWithoutScreens"/>. On a client it
+/// throws, as it does with the screen.
 /// </remarks>
 [HarmonyPatch(typeof(Trial), "DoubleDown")]
 internal static class DoubleDownWithoutAPopup
@@ -1362,30 +1376,6 @@ internal static class ThrownAtTheFakeMerchant
 }
 
 /// <summary>
-/// Counts the shared actions this machine takes in, for <see cref="Peers.Synced"/>.
-/// </summary>
-/// <remarks>
-/// Each of the three is where <c>ActionQueueSynchronizer</c> puts a shared
-/// action into the queues here, after it has passed it on to the clients
-/// where this machine hosts. Counting changes nothing the game does.
-/// </remarks>
-[HarmonyPatch(typeof(ActionQueueSynchronizer))]
-internal static class CountSyncedActions
-{
-    [HarmonyPostfix]
-    [HarmonyPatch("EnqueueAction")]
-    private static void Enqueued() => Peers.Synced++;
-
-    [HarmonyPostfix]
-    [HarmonyPatch("EnqueueHookAction")]
-    private static void HookEnqueued() => Peers.Synced++;
-
-    [HarmonyPostfix]
-    [HarmonyPatch("ResumeActionAfterPlayerChoice")]
-    private static void Resumed() => Peers.Synced++;
-}
-
-/// <summary>
 /// Drops the question a cancelled action asked, for <see cref="Pending.DropFor"/>.
 /// </summary>
 /// <remarks>
@@ -1399,4 +1389,45 @@ internal static class DropCancelledQuestion
 {
     [HarmonyPostfix]
     private static void Cancelled(GameAction __instance) => Pending.DropFor(__instance);
+}
+
+/// <summary>
+/// Where a pick from the hand reads its options, for the selector to take up.
+/// </summary>
+/// <remarks>
+/// On a build that asks <c>LocalSelector</c>, the selector is handed the
+/// hand as a list, fixed as the pick opens. The screen it stands in for,
+/// <c>NPlayerHand.SelectCards</c>, offers the hand as it stands, so a card
+/// another player puts into it while the pick is open can be picked. Each
+/// hand pick notes here how to read its hand, and the selector takes that up
+/// when the list it is handed is that hand.
+/// </remarks>
+[HarmonyPatch(typeof(CardSelectCmd))]
+internal static class HandPicksLive
+{
+    private static Func<IReadOnlyList<CardModel>>? _hand;
+
+    [HarmonyPrepare]
+    private static bool Prepare() => !GameApi.AsksThroughTheScreen;
+
+    [HarmonyPrefix]
+    [HarmonyPatch(nameof(CardSelectCmd.FromHand))]
+    private static void FromHand(Player player, Func<CardModel, bool>? filter) =>
+        _hand = () => PileType.Hand.GetPile(player).Cards.Where(filter ?? (_ => true)).ToList();
+
+    [HarmonyPrefix]
+    [HarmonyPatch(nameof(CardSelectCmd.FromHandForUpgrade))]
+    private static void FromHandForUpgrade(Player player) =>
+        _hand = () => PileType.Hand.GetPile(player).Cards.Where(c => c.IsUpgradable).ToList();
+
+    /// <summary>
+    /// How to read the hand <paramref name="offered"/> came from, once, or
+    /// null for a pick that is not from the hand.
+    /// </summary>
+    internal static Func<IReadOnlyList<CardModel>>? Take(IReadOnlyList<CardModel> offered)
+    {
+        Func<IReadOnlyList<CardModel>>? hand = _hand;
+        _hand = null;
+        return hand != null && hand().SequenceEqual(offered) ? hand : null;
+    }
 }

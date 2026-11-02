@@ -15,14 +15,18 @@ pub struct State {
 /// that joins again from no pile is taken off and not copied. A pile in a
 /// fight is never the deck, and every card is its owner's.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     state: &mut State,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     match hook {
         EventHook::AddedToDeck {
-            id, cloned: false, ..
-        } => match state.skip.iter().position(|&held| held == id) {
+            id,
+            player,
+            cloned: false,
+            ..
+        } if player == owner => match state.skip.iter().position(|&held| held == id) {
             Some(at) => {
                 state.skip.remove(at);
             }
@@ -30,7 +34,7 @@ pub(super) fn event_hook<V: crate::Build>(
         },
         // `CardsToSkip.Add` of the copy its own `CloneCard` made.
         EventHook::CopyMade { id } => state.skip.push(id),
-        EventHook::AddedToDeck { cloned: true, .. }
+        EventHook::AddedToDeck { .. }
         | EventHook::CardChangedPiles { .. }
         | EventHook::Obtained { .. } => {}
         hook => unimplemented!("what BingBong does for {hook:?}"),

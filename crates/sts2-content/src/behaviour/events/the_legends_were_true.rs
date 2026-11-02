@@ -40,6 +40,11 @@ impl<V: crate::Build> EventBehavior<V> for TheLegendsWereTrue {
         )
     }
 
+    /// `WillKillPlayer`, for `SlowlyFindAnExit`: its damage.
+    fn kills(&self, _state: &State, option: u8, run: &impl EventView<V>) -> bool {
+        option == 1 && run.hp() <= DAMAGE
+    }
+
     /// `NabTheMap`: Spoils Map into the deck. `SlowlyFindAnExit`: the damage,
     /// then a reward of one potion drawn off the rewards stream. Each
     /// finishes the event.
