@@ -19,7 +19,7 @@ use clap::Parser;
 
 use sts2_content::ids::CharacterIds as _;
 use sts2_content::v0_107_1::V0_107_1;
-use sts2_core::{Observed as _, Play as _, Setup, Start};
+use sts2_core::{Observed as _, Setup, Start};
 use sts2_sim::Sim;
 
 type V = V0_107_1;
@@ -92,7 +92,7 @@ fn main() {
                 ascension: sts2_content::generated::ascension::AscensionLevel::None,
                 modifiers: Vec::new(),
             };
-            let mut sim = Sim::<V>::begin((), &start).expect("a run starts");
+            let mut sim = Sim::<V>::begin(&start).expect("a run starts");
             let encounter = encounters[(s % encounters.len() as u64) as usize];
             sim.construct(&Setup::Fight { encounter })
                 .expect("no fault")
