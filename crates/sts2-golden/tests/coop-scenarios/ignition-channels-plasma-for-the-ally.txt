@@ -1,0 +1,5 @@
+# Ignition channels a Plasma orb for the ally it is pointed at.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"IRONCLAD"},{"character":"DEFECT"}]}
+{"cmd":"fight","encounter":"NIBBITS_WEAK","seat":0}
+{"cmd":"grant","card":"IGNITION","target":1,"seat":0}
+{"cmd":"play_card","index":5,"target":1,"seat":0}

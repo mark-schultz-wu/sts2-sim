@@ -482,6 +482,12 @@ impl<'de> Deserialize<'de> for WireAnswer {
                                 ));
                             }
                         },
+                        // A co-op recording names the seat on the same
+                        // line, and its reader takes it from there.
+                        "seat" => {
+                            map.next_value::<serde::de::IgnoredAny>()?;
+                            continue;
+                        }
                         other => {
                             return Err(serde::de::Error::unknown_field(
                                 other,

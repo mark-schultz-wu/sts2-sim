@@ -94,7 +94,8 @@ divergence:
     cargo test -p sts2-golden --test divergence -- --nocapture
 
 # What the game answers for every scenario, as one file. Needs the game and the
-# mod, and is the only thing in the suite that launches one.
+# mod. The co-op scenarios record the same way, on v0.111.0: see
+# crates/sts2-golden/tests/coop-scenarios/README.md.
 [doc("Rewrite the recorded scenario answers")]
 scenarios: deploy
     STS2_UPDATE=1 cargo test -p sts2-golden --test scenarios -- --nocapture
