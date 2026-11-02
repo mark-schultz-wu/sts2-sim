@@ -63,10 +63,11 @@ fn monster_hps<V: Rules>(creatures: &[Fighter<V>]) -> SmallVec<[V::Health; CREAT
 /// `GenerateInternalCombatState`: the health each of an encounter's
 /// monsters rolls as a `Combat`-layout event builds its fight, in the order
 /// they stand. `CombatState.CreateCreature` rolls it off `Niche` against the
-/// ones before.
+/// ones before, then scales it for the players the fight already holds.
 pub(crate) fn roll_layout<V: Rules>(
     monsters: &[sts2_core::Spawned<V>],
     ascension: V::AscensionLevel,
+    scaling: Scaling,
     niche: &mut MegaRng,
 ) -> SmallVec<[V::Health; 2]> {
     let mut rolled: SmallVec<[V::Health; 2]> = SmallVec::new();
@@ -78,7 +79,7 @@ pub(crate) fn roll_layout<V: Rules>(
             &rolled,
             niche,
         );
-        rolled.push(hp);
+        rolled.push(scaling.health::<V>(hp));
     }
     rolled
 }
@@ -115,10 +116,98 @@ impl<V: Rules> Clone for Machine<V> {
 
 impl<V: Rules> Copy for Machine<V> {}
 
+/// `MultiplayerScalingModel` for a fight of `players`: how much more health a
+/// monster has with more than one.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct Scaling {
+    pub(crate) players: usize,
+    /// `GetMultiplayerScaling`: the act's factor.
+    pub(crate) factor: sts2_core::Decimal,
+}
+
+impl Scaling {
+    /// The scaling of a fight of `players` in the act `act`, counted from
+    /// zero. The factor is 1.1 in the first act and 1.2 in the second. In
+    /// the third it is 1.3 for a boss and 1.2 otherwise.
+    pub(crate) fn of<V: Rules>(players: usize, encounter: V::Encounter, act: usize) -> Self {
+        use sts2_core::{EncounterTable as _, RoomKinds as _};
+
+        let tenths = match act {
+            0 => 11,
+            1 => 12,
+            2 if encounter.room() == <V::Encounter as sts2_core::EncounterTable>::Room::BOSS => 13,
+            2 => 12,
+            act => unimplemented!("a fight of several players in act {act}"),
+        };
+        Scaling {
+            players,
+            factor: sts2_core::Decimal::new(tenths, 1),
+        }
+    }
+
+    /// `ModifyBlockMultiplicative`'s factor on an enemy's powered block: the
+    /// player count for two players, and that times the act's factor for
+    /// more. Nothing for one player, whose factor is one.
+    pub(crate) fn block(self) -> Option<sts2_core::Decimal> {
+        match self.players {
+            0 | 1 => None,
+            2 => Some(sts2_core::Decimal::from(2)),
+            players => Some(sts2_core::Decimal::from(players) * self.factor),
+        }
+    }
+
+    /// `GetScaledAmountForMultiplayer`, which `PowerCmd.Apply` asks of a
+    /// fresh power landing on an enemy in a fight of several players.
+    /// `ApplyInternal` truncates what it gives.
+    #[inline]
+    pub(crate) fn power<V: Rules>(self, power: V::Power, amount: V::Number) -> V::Number {
+        if self.players <= 1 {
+            return amount;
+        }
+        let exact = sts2_core::Decimal::from(
+            num_traits::ToPrimitive::to_i64(&amount).expect("a power's amount fits an i64"),
+        );
+        match V::power_scaled_for_multiplayer(power, exact, self.players, self.factor) {
+            None => amount,
+            Some(scaled) => num_traits::cast(
+                num_traits::ToPrimitive::to_i64(&scaled.trunc())
+                    .expect("a scaled amount fits an i64"),
+            )
+            .expect("a scaled amount fits the build's number"),
+        }
+    }
+
+    /// `ScaleMonsterHpForMultiplayer`: `hp * players * factor`, truncated
+    /// as `SetMaxHpInternal` stores it.
+    pub(crate) fn health<V: Rules>(self, hp: V::Health) -> V::Health {
+        if self.players <= 1 {
+            return hp;
+        }
+        let scaled = self.exact::<V>(hp);
+        num_traits::cast(
+            num_traits::ToPrimitive::to_i64(&scaled.trunc()).expect("a scaled health fits an i64"),
+        )
+        .expect("a scaled health fits the build's health type")
+    }
+
+    /// `Creature.ScaleHpForMultiplayer` of `hp`, before anything truncates
+    /// it.
+    pub(crate) fn exact<V: Rules>(self, hp: V::Health) -> sts2_core::Decimal {
+        let whole: sts2_core::Decimal = num_traits::cast::<_, i64>(hp)
+            .expect("a monster's health fits an i64")
+            .into();
+        match self.players {
+            0 | 1 => whole,
+            players => whole * sts2_core::Decimal::from(players) * self.factor,
+        }
+    }
+}
+
 /// Roll health and the first move in encounter order, advancing the two run
 /// streams that own those draws.
 pub(crate) fn initialize<V: Rules>(
     ascension: V::AscensionLevel,
+    scaling: Scaling,
     encounter: V::Encounter,
     streams: &mut Streams<V>,
     roster: Roster<'_, V>,
@@ -148,12 +237,15 @@ pub(crate) fn initialize<V: Rules>(
     ) in monsters.iter().enumerate()
     {
         let state = spawned_model(&monsters[index]);
-        // A fight an event built as it opened rolled its health then.
+        // A fight an event built as it opened rolled its health then, scaled
+        // already.
         let hp = match rolled.get(index) {
             Some(&hp) => hp,
+            // `SetUniqueMonsterHpValue`, against the health of those standing
+            // already, then `ScaleMonsterHpForMultiplayer`.
             None => {
                 let used = monster_hps::<V>(&creatures[first..]);
-                health::<V>(monster, &state, ascension, &used, rngs.niche)
+                scaling.health::<V>(health::<V>(monster, &state, ascension, &used, rngs.niche))
             }
         };
 
@@ -161,10 +253,10 @@ pub(crate) fn initialize<V: Rules>(
             .ok()
             .and_then(nonmax::NonMaxU8::new)
             .ok_or(Error::CreatureIdOverflow)?;
-        // `CombatId` counts from the player, so the monsters start at one.
+        // `CombatId` counts from the players, so the monsters start after them.
         let id = position
             .get()
-            .checked_add(1)
+            .checked_add(u8::try_from(first).expect("a fight's players fit a u8"))
             .and_then(nonmax::NonMaxU8::new)
             .map(CombatId::new)
             .ok_or(Error::CreatureIdOverflow)?;
@@ -235,6 +327,7 @@ pub(crate) fn initialize<V: Rules>(
 /// order cannot be seen.
 pub(crate) fn added_to_room<V: Rules>(
     ascension: V::AscensionLevel,
+    scaling: Scaling,
     creatures: &mut Creatures<V>,
     powers: &mut PowerStore<V>,
     machines: &Bounded<Machine<V>, CREATURES>,
@@ -243,17 +336,50 @@ pub(crate) fn added_to_room<V: Rules>(
         let (id, monster) = (held.creature, held.monster);
         // A fight opens on the player's side.
         let side = <V::CombatSide as SideKinds>::PLAYER;
-        for (power, amount) in V::monster_starting_powers(monster, ascension, side, &held.state) {
-            starting::<V>(powers, id, power, Stacked::from(amount), Some(id));
-        }
         let opponents: SmallVec<[CombatId; 2]> = creatures
             .iter()
             .filter(|creature| creature.side != <V::CombatSide as SideKinds>::ENEMY)
             .map(|creature| creature.id)
             .collect();
+        let players: SmallVec<[CombatId; 2]> = creatures
+            .iter()
+            .filter(|creature| creature.side != <V::CombatSide as SideKinds>::ENEMY)
+            .filter(|creature| creature.owner.is_none())
+            .map(|creature| creature.id)
+            .collect();
+        // Each lands on the monster, an enemy, and scales: once, or once for
+        // each creature it is aimed at.
+        let scaled = |power, amount| match amount {
+            sts2_core::PowerAmount::Counted(amount) => {
+                sts2_core::PowerAmount::Counted(scaling.power::<V>(power, amount))
+            }
+            endless => endless,
+        };
+        for (power, amount) in V::monster_starting_powers(monster, ascension, side, &held.state) {
+            let amount = Stacked::from(scaled(power, amount));
+            match V::monster_starting_power_aim(monster, power) {
+                None => starting::<V>(powers, id, power, amount, Some(id), None),
+                Some(aim) => {
+                    let aimed = match aim {
+                        sts2_core::Aim::EachOpponent => &opponents,
+                        sts2_core::Aim::EachPlayer => &players,
+                    };
+                    for &target in aimed {
+                        starting::<V>(powers, id, power, amount, Some(id), Some(target));
+                    }
+                }
+            }
+        }
         for (power, amount) in V::monster_starting_opponent_powers(monster, ascension) {
             for &opponent in &opponents {
-                starting::<V>(powers, opponent, power, Stacked::from(amount), Some(id));
+                starting::<V>(
+                    powers,
+                    opponent,
+                    power,
+                    Stacked::from(amount),
+                    Some(id),
+                    None,
+                );
             }
         }
     }
@@ -268,9 +394,13 @@ pub(crate) fn added_to_room<V: Rules>(
             .filter(|(other, creature)| *other != at && creature.side == side)
             .map(|(_, creature)| creature.max_hp)
             .collect();
-        let Some(health) =
-            V::monster_health_after_added(monster, ascension, creatures[at].max_hp, &teammates)
-        else {
+        let Some(health) = V::monster_health_after_added(
+            monster,
+            ascension,
+            creatures[at].max_hp,
+            &teammates,
+            |hp| scaling.exact::<V>(hp),
+        ) else {
             continue;
         };
         // `SetMaxAndCurrentHp`, which is both numbers at once.
@@ -299,6 +429,7 @@ fn starting<V: Rules>(
     power: V::Power,
     amount: Stacked,
     applier: Option<CombatId>,
+    target: Option<CombatId>,
 ) {
     let per_applier = sts2_core::PowerTable::per_applier(power);
     let fresh = sts2_core::PowerTable::instanced(power) && !per_applier;
@@ -311,7 +442,7 @@ fn starting<V: Rules>(
         held.amount = Stacked::counted(had + more);
         return;
     }
-    powers.push(creature, HeldPower::new(power, amount, applier));
+    powers.push(creature, HeldPower::new(power, amount, applier, target));
 }
 
 /// Add a monster during a fight, before the enemy side prepares its next
@@ -359,7 +490,8 @@ pub(super) fn summon_built<V: Rules>(
 }
 
 /// `CombatState.CreateCreature` for an enemy: the next id, and hit points
-/// `SetUniqueMonsterHpValue` rolls against the enemies already in the fight.
+/// `SetUniqueMonsterHpValue` rolls against the enemies already in the fight,
+/// scaled by the player count.
 pub(super) fn create<V: Rules>(
     live: &mut Live<V>,
     monster: V::Monster,
@@ -368,10 +500,10 @@ pub(super) fn create<V: Rules>(
 ) -> (CombatId, V::Health) {
     let id = live.next_creature();
     let used = monster_hps::<V>(&live.creatures);
-    (
-        id,
-        health::<V>(monster, model, live.ascension, &used, niche),
-    )
+    // `SetUniqueMonsterHpValue`, then `ScaleMonsterHpForMultiplayer`, as
+    // for a monster the fight opened with.
+    let rolled = health::<V>(monster, model, live.ascension, &used, niche);
+    (id, live.scaling.health::<V>(rolled))
 }
 
 /// `CombatState.AddCreature`: a monster [`create`] made, put among the
@@ -489,6 +621,7 @@ mod tests {
             (Creatures::new(), PowerStore::new(), Bounded::new());
         initialize::<V0_107_1>(
             AscensionLevel::None,
+            Scaling::of::<V0_107_1>(1, Encounter::SlimesWeak, 0),
             Encounter::SlimesWeak,
             &mut streams,
             Roster {
@@ -499,7 +632,13 @@ mod tests {
             &mut machines,
         )
         .unwrap();
-        added_to_room::<V0_107_1>(AscensionLevel::None, &mut creatures, &mut powers, &machines);
+        added_to_room::<V0_107_1>(
+            AscensionLevel::None,
+            Scaling::of::<V0_107_1>(1, Encounter::SlimesWeak, 0),
+            &mut creatures,
+            &mut powers,
+            &machines,
+        );
 
         assert_eq!(
             creatures.iter().map(|c| c.max_hp).collect::<Vec<_>>(),
@@ -579,6 +718,7 @@ mod tests {
             (Creatures::new(), PowerStore::new(), Bounded::new());
         initialize::<V0_107_1>(
             AscensionLevel::None,
+            Scaling::of::<V0_107_1>(1, Encounter::DecimillipedeElite, 0),
             Encounter::DecimillipedeElite,
             &mut streams,
             Roster {
@@ -589,7 +729,13 @@ mod tests {
             &mut machines,
         )
         .unwrap();
-        added_to_room::<V0_107_1>(AscensionLevel::None, &mut creatures, &mut powers, &machines);
+        added_to_room::<V0_107_1>(
+            AscensionLevel::None,
+            Scaling::of::<V0_107_1>(1, Encounter::SlimesWeak, 0),
+            &mut creatures,
+            &mut powers,
+            &machines,
+        );
 
         assert_eq!(
             creatures
@@ -615,6 +761,7 @@ mod tests {
             (Creatures::new(), PowerStore::new(), Bounded::new());
         initialize::<V0_107_1>(
             AscensionLevel::None,
+            Scaling::of::<V0_107_1>(1, Encounter::SlimesWeak, 0),
             Encounter::SlimesWeak,
             &mut streams,
             Roster {
@@ -625,7 +772,13 @@ mod tests {
             &mut machines,
         )
         .unwrap();
-        added_to_room::<V0_107_1>(AscensionLevel::None, &mut creatures, &mut powers, &machines);
+        added_to_room::<V0_107_1>(
+            AscensionLevel::None,
+            Scaling::of::<V0_107_1>(1, Encounter::SlimesWeak, 0),
+            &mut creatures,
+            &mut powers,
+            &machines,
+        );
 
         assert_eq!(
             creatures.iter().map(|c| c.max_hp).collect::<Vec<_>>(),

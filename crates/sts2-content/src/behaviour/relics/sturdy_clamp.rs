@@ -8,11 +8,12 @@ use crate::behaviour::relics::Number;
 const KEPT: Number = 10;
 
 /// `ShouldClearBlock`: its owner's block is kept.
-pub(super) fn decide_hook<V: crate::Build>(hook: DecisionHook<V>) -> HookResponse<bool> {
+pub(super) fn decide_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    hook: DecisionHook<V>,
+) -> HookResponse<bool> {
     match hook {
-        DecisionHook::ShouldClearBlock { creature, player } => {
-            HookResponse::Decision(creature != player)
-        }
+        DecisionHook::ShouldClearBlock { creature } => HookResponse::Decision(creature != owner),
         _ => HookResponse::DoesNotImplement,
     }
 }

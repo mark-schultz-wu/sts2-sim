@@ -364,6 +364,9 @@ impl<V: Rules, P: Piles> Cards<V, P> {
         match to {
             Some(to) => {
                 self.piles.move_to(Place::Play, at, to.into());
+                if position == sts2_core::PilePosition::Random {
+                    unreachable!("a random place is drawn before the card leaves play");
+                }
                 // `CardPilePosition.Top` is the front, where a draw takes from.
                 if position == sts2_core::PilePosition::Top {
                     self.piles.arrange(to.into(), |cards| cards.rotate_right(1));
