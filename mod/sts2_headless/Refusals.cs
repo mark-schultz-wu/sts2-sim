@@ -136,6 +136,8 @@ internal static class Refusals
 
     public static Dictionary<string, object?> OptionLocked() => Kind("option_locked");
 
+    public static Dictionary<string, object?> OptionWouldKill() => Kind("option_would_kill");
+
     public static Dictionary<string, object?> AlreadyAnswered() => Kind("already_answered");
 
     public static Dictionary<string, object?> Unpurchasable(

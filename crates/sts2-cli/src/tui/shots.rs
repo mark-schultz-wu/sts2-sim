@@ -16,7 +16,6 @@ use sts2_core::Applied;
 
 use super::app::App;
 use super::state::Options;
-use crate::scripted::Scripted;
 
 type V = sts2_content::v0_107_1::V0_107_1;
 
@@ -27,14 +26,14 @@ fn painted(
     applied: Applied<V>,
     w: u16,
     h: u16,
-    before: impl FnOnce(&mut App<V, Scripted<V>>),
+    before: impl FnOnce(&mut App<V>),
 ) -> ratatui::buffer::Buffer {
-    let mut app = App::playing(Scripted::saying(applied), Options::default());
+    let mut app = App::new(Options::default());
     let mut terminal = Terminal::new(TestBackend::new(w, h)).expect("a test terminal");
     terminal
         .draw(|frame| super::screen::draw(frame, &app))
         .expect("a first frame");
-    app.look_now();
+    app.show(applied.snapshot());
     before(&mut app);
     terminal
         .draw(|frame| super::screen::draw(frame, &app))
@@ -43,14 +42,9 @@ fn painted(
 }
 
 /// Draws one frame at `w` by `h` and gives back what is on it.
-fn shot(
-    applied: Applied<V>,
-    w: u16,
-    h: u16,
-    before: impl FnOnce(&mut App<V, Scripted<V>>),
-) -> String {
-    let mut app = App::playing(Scripted::saying(applied), Options::default());
-    // The app looks once on the way in, which is what puts the fixture in it.
+fn shot(applied: Applied<V>, w: u16, h: u16, before: impl FnOnce(&mut App<V>)) -> String {
+    let mut app = App::new(Options::default());
+    // Drawn once with nothing shown, then showing the fixture.
     let mut terminal = Terminal::new(TestBackend::new(w, h)).expect("a test terminal");
     terminal
         .draw(|frame| {
@@ -58,7 +52,7 @@ fn shot(
         })
         .expect("a first frame");
 
-    app.look_now();
+    app.show(applied.snapshot());
     before(&mut app);
 
     terminal
@@ -392,7 +386,9 @@ mod tests {
             fixture::applied(json!({"relics": ["BURNING_BLOOD"]})),
             100,
             34,
-            |app| app.press(super::super::keys::Action::ShowRelics),
+            |app| {
+                app.press(super::super::keys::Action::ShowRelics);
+            },
         );
         assert!(out.contains("Burning Blood"), "{out}");
         assert!(out.contains("At the end of combat, heal 6 HP."), "{out}");
@@ -466,11 +462,10 @@ mod tests {
     fn the_screen_plays_on_any_backend_with_its_own_keys() {
         use crate::tui::input::{Key, KeyCode};
 
-        let mut app = App::playing(Scripted::saying(a_fight()), Options::default());
-        app.look_now();
+        let mut app = App::new(Options::default());
+        app.show(a_fight().snapshot());
         let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("a test terminal");
-        app.key(Key::from(KeyCode::Char('d')))
-            .expect("the key is read");
+        app.key(Key::from(KeyCode::Char('d')));
         terminal.draw(|frame| app.draw(frame)).expect("a frame");
         let buffer = terminal.backend().buffer();
         let text: String = (0..buffer.area.height)
@@ -768,12 +763,11 @@ mod tests {
         assert_ne!(colour('M'), Some(Color::Green));
     }
 
-    /// The screen over the simulator, as `sts2-sim` draws it. A run opens,
-    /// and pressing on takes it past Neow, with every frame drawn.
+    /// The screen over the simulator's table, as `sts2 sim` plays it. A run
+    /// opens, and pressing on takes it past Neow, with every frame drawn.
     #[test]
     fn the_simulator_plays_on_the_screen() {
         use super::super::keys::Action;
-        use sts2_core::Play as _;
 
         let start = sts2_core::Start::<V> {
             seed: sts2_core::Seed::new("C000000042").expect("a seed"),
@@ -784,21 +778,20 @@ mod tests {
             ascension: crate::cli::ascension::<V>("None").expect("no ascension"),
             modifiers: Vec::new(),
         };
-        let sim = sts2_sim::Sim::<V>::begin((), &start).expect("the run starts");
-        let mut app = App::playing(sim, Options::default());
+        let table = <sts2_sim::SimTable<V> as sts2_core::RunTable<V>>::begin((), &start)
+            .expect("the run starts");
+        let (mut app, _) = crate::tui::check::Driven::new(table);
         let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("a test terminal");
-        let mut frame = |app: &App<V, sts2_sim::Sim<V>>| {
+        let mut frame = |app: &App<V>| {
             terminal
                 .draw(|frame| super::super::screen::draw(frame, app))
                 .expect("a frame");
             format!("{:?}", terminal.backend().buffer())
         };
-        frame(&app);
-        app.look_now();
         let opening = frame(&app);
         assert!(opening.contains("Neow"), "{opening}");
 
-        let floor = |app: &App<V, sts2_sim::Sim<V>>| app.view().map(|seen| seen.floor);
+        let floor = |app: &App<V>| app.view().map(|seen| seen.floor);
         let before = floor(&app);
         for _ in 0..12 {
             if app.moves().is_empty() {
@@ -823,8 +816,6 @@ mod tests {
     #[test]
     #[ignore = "prints screens to look at; asserts nothing"]
     fn screens_of_a_run() {
-        use sts2_core::Play as _;
-
         let seed = std::env::var("SHOTS_SEED").unwrap_or_else(|_| "C000000077".into());
         let (w, h) = std::env::var("SHOTS_SIZE")
             .ok()
@@ -842,7 +833,7 @@ mod tests {
             ascension: crate::cli::ascension::<V>("None").expect("no ascension"),
             modifiers: Vec::new(),
         };
-        let mut sim = sts2_sim::Sim::<V>::begin((), &start).expect("the run starts");
+        let mut sim = sts2_sim::Sim::<V>::begin(&start).expect("the run starts");
         let mut printed: std::collections::BTreeMap<String, usize> = Default::default();
         // xorshift, so the run is the same each time without a dependency.
         let mut x: u64 = 0x9E37_79B9_7F4A_7C15;
@@ -863,12 +854,12 @@ mod tests {
             let count = printed.entry(kind.clone()).or_default();
             *count += 1;
             if *count <= 2 {
-                let mut app = App::playing(sim.clone(), Options::default());
+                let mut app = App::new(Options::default());
                 let mut terminal = Terminal::new(TestBackend::new(w, h)).expect("a test terminal");
                 terminal
                     .draw(|frame| super::super::screen::draw(frame, &app))
                     .expect("a frame");
-                app.look_now();
+                app.show(standing.clone());
                 terminal
                     .draw(|frame| super::super::screen::draw(frame, &app))
                     .expect("a frame");

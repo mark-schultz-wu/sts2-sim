@@ -14,7 +14,6 @@
 //! rather than a divergence being hidden.
 
 mod combat;
-pub mod coverage;
 pub mod map;
 mod next;
 pub mod prose;
