@@ -365,6 +365,7 @@ pub(crate) fn play<V: Rules>(
             ended,
             branched: false,
             chooser: None,
+            context: None,
         },
         played,
         true,
@@ -438,6 +439,7 @@ pub(super) fn auto_play_capturing<V: Rules>(
         named,
         pausable,
         captured,
+        None,
     )
 }
 
@@ -465,7 +467,12 @@ fn auto_play_at_random<V: Rules>(
 
 /// `AutoPlayFromDrawPile`'s play of one card it took into the play pile:
 /// `ExhaustOnNextPlay = forceExhaust`, then `CardCmd.AutoPlay`. A card whose
-/// owner has died stays where it is, unplayed.
+/// owner has died stays where it is, unplayed. `context` is the other
+/// player whose effect took it, in whose choice context it plays.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the pile command's own, and the context it runs in"
+)]
 pub(super) fn auto_play_taken<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &mut Live<V>,
@@ -474,6 +481,7 @@ pub(super) fn auto_play_taken<V: Rules>(
     id: sts2_core::CardId<V>,
     force_exhaust: bool,
     pausable: bool,
+    context: Option<sts2_core::SeatIndex>,
 ) -> Option<super::Ended> {
     if !live.player(seat).alive {
         return None;
@@ -485,7 +493,9 @@ pub(super) fn auto_play_taken<V: Rules>(
     let Some(card) = live.players[seat].cards.named(id) else {
         unimplemented!("auto-playing {id:?}, which left the fight first");
     };
-    auto_play_in_play::<V>(seat, live, rngs, belts, card, None, None, pausable, None)
+    auto_play_in_play::<V>(
+        seat, live, rngs, belts, card, None, None, pausable, None, context,
+    )
 }
 
 /// `CardCmd.AutoPlay` for a card already in the play pile. `named` is the
@@ -508,6 +518,7 @@ pub(super) fn auto_play_in_play<V: Rules>(
     named: Option<CombatId>,
     pausable: bool,
     captured: Option<(V::Count, V::Count)>,
+    context: Option<sts2_core::SeatIndex>,
 ) -> Option<super::Ended> {
     use sts2_core::{CardTable as _, TargetKinds as _};
 
@@ -544,14 +555,14 @@ pub(super) fn auto_play_in_play<V: Rules>(
         }
         kind if kind == V::TargetType::ANY_ALLY && named.is_some() => named,
         // `CombatState.Allies`: a living player other than the card's owner,
-        // drawn off `CombatTargets`.
+        // drawn off `CombatTargets`. `IsPlayer` leaves out pets.
         kind if kind == V::TargetType::ANY_ALLY => {
             use sts2_core::rng::GameRng as _;
 
             let owner = seat.creature();
             let allies: smallvec::SmallVec<[CombatId; 4]> = (live.creatures.iter())
                 .filter(|creature| creature.alive && creature.id != owner)
-                .filter(|creature| live.seat_of(creature.id).is_some())
+                .filter(|creature| matches!(creature.model, Some(sts2_core::ModelId::Character(_))))
                 .map(|creature| creature.id)
                 .collect();
             let Some(target) = rngs.targets.choose(&allies).ok().copied() else {
@@ -634,6 +645,7 @@ pub(super) fn auto_play_in_play<V: Rules>(
             ended,
             branched: false,
             chooser: None,
+            context,
         },
         played,
         false,
@@ -1828,7 +1840,11 @@ fn run_deferred<V: Rules>(
                 ),
                 ended => ended,
             },
-            super::live::Deferred::AutoPlayTaken { id, force_exhaust } => match ended {
+            super::live::Deferred::AutoPlayTaken {
+                id,
+                force_exhaust,
+                context,
+            } => match ended {
                 None => auto_play_taken::<V>(
                     seat,
                     fighting.live,
@@ -1837,6 +1853,7 @@ fn run_deferred<V: Rules>(
                     id,
                     force_exhaust,
                     true,
+                    context,
                 ),
                 ended => ended,
             },
@@ -2199,9 +2216,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                 let branches = !ending
                     && !effect.branched
                     && next.players.len() > 1
-                    && effect
-                        .reaching(next, seat)
-                        .is_some_and(|chooser| chooser != seat);
+                    && effect.chooser_elsewhere(next, seat);
                 signalled = !ending && (signal_pauses::<V>(next) || branches);
                 let chooser = effect.reaching(next, seat).unwrap_or(seat);
                 let taken = match (ending, signalled) {
@@ -2230,9 +2245,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                 let branches = !ending
                     && !effect.branched
                     && next.players.len() > 1
-                    && effect
-                        .reaching(next, seat)
-                        .is_some_and(|chooser| chooser != seat);
+                    && effect.chooser_elsewhere(next, seat);
                 signalled = !ending && (signal_pauses::<V>(next) || branches);
                 match signalled {
                     true => (
@@ -2286,11 +2299,8 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
             // `BranchingPlayerChoiceContext`: a card or potion whose choice
             // is another player's ends here, as the choice begins. The rest
             // goes on as that player's hook action, once they answer.
-            let branches = !effect.branched
-                && next.players.len() > 1
-                && effect
-                    .reaching(next, seat)
-                    .is_some_and(|chooser| chooser != seat);
+            let branches =
+                !effect.branched && next.players.len() > 1 && effect.chooser_elsewhere(next, seat);
             if branches {
                 let mut end = effect.clone();
                 // A card's `OnPlayWrapper` goes on past its `OnPlay`: the
@@ -3089,7 +3099,7 @@ fn auto_play_kept<V: Rules, S: LendsCombat>(
     if let Some(ended) = board.ended() {
         return Some(ended);
     }
-    auto_play_taken::<V>(seat, next, streams.combat(), belts, kept, false, true)
+    auto_play_taken::<V>(seat, next, streams.combat(), belts, kept, false, true, None)
 }
 
 /// `AfterCardPlayedLate`, with the energy the play's started entry spent.
