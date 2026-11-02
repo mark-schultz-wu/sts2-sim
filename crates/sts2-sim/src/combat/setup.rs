@@ -11,22 +11,33 @@ use super::listen::{self, Walking};
 use super::live::Live;
 use super::turn::{Drew, Listened};
 use crate::run::Belts;
-use crate::stream::CombatRngs;
+use crate::stream::{CombatRngs, Streams};
 
-/// The fight, as a start or resume of the setup lends it for one step.
+/// The fight, as a start or resume of a coroutine lends it for one step.
 ///
-/// A paused setup waits inside [`Live`], so it keeps none of this.
+/// A paused coroutine waits inside [`Live`], so it keeps none of this.
 pub(super) struct Lent<'a, V: Rules> {
     pub(super) live: &'a mut Live<V>,
-    pub(super) rngs: CombatRngs<'a>,
+    pub(super) streams: &'a mut Streams<V>,
     pub(super) belts: &'a mut Belts<V>,
     /// How the answer the setup waited for ended the fight, if it did.
     pub(super) ended: Option<crate::combat::Ended>,
+    /// The player's answer, where the coroutine asked the question itself.
+    pub(super) taken: Option<sts2_core::Taken<V>>,
 }
 
 impl<V: Rules> Lent<'_, V> {
     pub(super) fn parts(&mut self) -> (&mut Live<V>, CombatRngs<'_>, &mut Belts<V>) {
-        (&mut *self.live, self.rngs.reborrow(), &mut *self.belts)
+        (&mut *self.live, self.streams.combat(), &mut *self.belts)
+    }
+
+    /// The whole fight, for what takes it as one.
+    pub(super) fn fighting(&mut self) -> super::Fighting<'_, V> {
+        super::Fighting {
+            live: &mut *self.live,
+            streams: &mut *self.streams,
+            belts: &mut *self.belts,
+        }
     }
 }
 
@@ -103,7 +114,7 @@ pub(super) fn setup<V: Rules>(
         let player = live.player(seat).id;
         let hook = sts2_core::EventHook::PlayerTurnStart {
             player,
-            turn: live.turn,
+            turn: live.players[seat].turn,
         };
         walk = listen::Walking::begin(live, belts, hook).map(Box::new);
         player

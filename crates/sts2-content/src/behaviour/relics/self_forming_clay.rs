@@ -7,17 +7,18 @@ use sts2_core::{EventHook, HookEffect, PowerAmount};
 /// `AfterDamageReceived` on its owner in a fight in progress, for a hit that
 /// took hit points: its block as Self-Forming Clay.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     if let EventHook::DamageReceived {
         target,
         unblocked,
-        player,
         in_progress: true,
         ..
     } = hook
-        && target == player
+        && target == owner
         && unblocked > 0
     {
         asked.push(HookEffect::ApplyToOwner(

@@ -1,0 +1,14 @@
+# Both players fight Battleworn Dummy's first setting, which gives no
+# rewards of its own and goes back to the event once won. Every machine
+# resumes every player's copy of the event, and each copy offers its
+# player a potion off their own `Rewards` stream. The Ironclad skips
+# theirs, and the Silent takes theirs.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"IRONCLAD"},{"character":"SILENT"}]}
+{"cmd":"event","event":"BATTLEWORN_DUMMY","seat":0}
+{"cmd":"choose_option","index":0,"seat":0}
+{"cmd":"choose_option","index":0,"seat":1}
+{"cmd":"grant","card":"STRIKE_IRONCLAD","target":1,"seat":0}
+{"cmd":"hp","hp":1,"target":2,"seat":0}
+{"cmd":"play_card","index":5,"target":2,"seat":0}
+{"cmd":"answer","skip":true,"seat":0}
+{"cmd":"answer","take":[{"index":0}],"seat":1}
