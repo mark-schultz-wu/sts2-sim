@@ -6,9 +6,6 @@ use sts2_core::{CardKind, EventHook, Fight, FightKind, HookEffect, Pile, PileAct
 use crate::behaviour::cards::Number;
 use crate::behaviour::paused::{Ask, Lent};
 
-/// Cards a play offers from a pile.
-type Cards<V> = smallvec::SmallVec<[sts2_core::CardAt<V>; sts2_core::MAX_CARDS_IN_HAND]>;
-
 /// One card, as a pick asks for it.
 const ONE: Selection = Selection::Exactly(nonmax::NonMaxUsize::ONE);
 use crate::generated::cards::{CardKeyword, CardRarity};
@@ -218,9 +215,10 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
             if resumed!().fight.waiting() {
                 yield_!(Ask::Waiting);
             }
-            let offered: Cards<V> = seeker_strike_offer::<V, _>(resumed!().fight);
+            let offered = seeker_strike_offer::<V, _>(resumed!().fight);
             yield_!(Ask::AskingAmong {
-                cards: offered,
+                pile: Pile::Draw,
+                filter: crate::behaviour::CardFilter::OneOf(offered),
                 selection: ONE,
             });
             into_hand_taken::<V, K>(resumed!());
@@ -248,18 +246,18 @@ pub fn paused<V: crate::Build, K: FightKind<V>>(card: V::Card) {
         }
         // `SecretWeapon`: one Attack of the draw pile picked, into hand.
         __c0 if __c0 == V::Card::SECRET_WEAPON => {
-            let attacks: Cards<V> = of_kind_in_draw::<V, _>(resumed!().fight, CardKind::Attack);
             yield_!(Ask::AskingAmong {
-                cards: attacks,
+                pile: Pile::Draw,
+                filter: crate::behaviour::CardFilter::Kind(CardKind::Attack),
                 selection: ONE,
             });
             into_hand_taken::<V, K>(resumed!());
         }
         // `SecretTechnique`: one Skill of the draw pile picked, into hand.
         __c0 if __c0 == V::Card::SECRET_TECHNIQUE => {
-            let skills: Cards<V> = of_kind_in_draw::<V, _>(resumed!().fight, CardKind::Skill);
             yield_!(Ask::AskingAmong {
-                cards: skills,
+                pile: Pile::Draw,
+                filter: crate::behaviour::CardFilter::Kind(CardKind::Skill),
                 selection: ONE,
             });
             into_hand_taken::<V, K>(resumed!());
@@ -385,15 +383,6 @@ fn block<V: crate::Build, F: Fight<V>>(fight: &mut F, amount: Number) {
         scaling: Scaling::Dynamic,
     });
     fight.apply(block);
-}
-
-/// The cards of the draw pile of `kind`.
-fn of_kind_in_draw<V: crate::Build, F: Fight<V>>(fight: &F, kind: CardKind) -> Cards<V> {
-    fight
-        .cards_in(Pile::Draw)
-        .into_iter()
-        .filter(|&at| V::card_kind(fight.card_ident(at).card) == Some(kind))
-        .collect()
 }
 
 /// `CardPileCmd.Add` of the one a pick took, into hand.
@@ -633,7 +622,9 @@ fn dealt<V: crate::Build>(results: &sts2_core::AttackResults<V>) -> Number {
 
 /// `SeekerStrike`'s offer, once its attack is over: its `Cards` of the draw
 /// pile drawn off `CombatCardSelection`, in the pile's order.
-fn seeker_strike_offer<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Cards<V> {
+fn seeker_strike_offer<V: crate::Build, F: Fight<V>>(
+    fight: &mut F,
+) -> smallvec::SmallVec<[sts2_core::CardId<V>; sts2_core::MAX_CARDS_IN_HAND]> {
     use sts2_core::RunStreamKinds as _;
 
     let stream = <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_SELECTION;
@@ -641,11 +632,7 @@ fn seeker_strike_offer<V: crate::Build, F: Fight<V>>(fight: &mut F) -> Cards<V> 
     fight.stable_shuffle_cards(&mut shuffled, stream);
     let options = usize::try_from(fight.var(V::CardVar::CARDS)).expect("a few cards");
     shuffled.truncate(options);
-    fight
-        .cards_in(Pile::Draw)
-        .into_iter()
-        .filter(|card| shuffled.contains(card))
-        .collect()
+    shuffled.iter().map(|card| card.id()).collect()
 }
 
 /// The rest of `Jackpot`, once its attack is over: its `Cards` of the
