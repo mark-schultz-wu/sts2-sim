@@ -343,8 +343,17 @@ pub(super) fn perform<'a, V: crate::Build, K: sts2_core::FightKind<V>>(
                 });
             }
         }
+        // `ToxicMove`: two Toxics into each player's hand.
         (__c0, __c1) if (__c0 == V::Monster::MYTE && __c1 == V::MoveId::TOXIC_MOVE) => {
-            fight.add_generated_cards(sts2_core::CardIdent::new(V::Card::TOXIC), Pile::Hand, 2);
+            for player in fight.players() {
+                fight.for_player(player, |fight| {
+                    fight.add_generated_cards(
+                        sts2_core::CardIdent::new(V::Card::TOXIC),
+                        Pile::Hand,
+                        2,
+                    );
+                });
+            }
         }
         // `SpikesMove`: Thorns at five on itself. `IsSpiny` picks its
         // animations alone.
@@ -854,11 +863,12 @@ fn ponder<V: crate::Build, F: Fight<V>>(fight: &mut F) {
     // `ThrowingPlayerChoiceContext`'s `PowerCmd.Apply<StrengthPower>`.
     const PONDER_STRENGTH: Number = 2;
     const DEADLY_PONDER_STRENGTH: Number = 3;
-    // `30 * Players.Count`, and a fight here has one player.
+    // `30 * Players.Count`.
     const PONDER_HEAL: Number = 30;
 
     let actor = fight.actor();
-    fight.heal(actor, PONDER_HEAL);
+    let players = Number::try_from(fight.players().len()).expect("a fight's players fit a number");
+    fight.heal(actor, PONDER_HEAL * players);
     let strength = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
         true => DEADLY_PONDER_STRENGTH,
         false => PONDER_STRENGTH,

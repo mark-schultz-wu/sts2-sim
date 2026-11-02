@@ -38,6 +38,10 @@ pub(crate) fn own_power_death<F: sts2_core::Fight<V>>(
     Some(())
 }
 
+/// `TankPower`'s `DynamicVar("DamageIncrease", 1.5m)`, which only this
+/// build has.
+const TANK_DAMAGE_INCREASE: sts2_core::Fixed = sts2_core::Fixed::new(15, 1);
+
 /// Whether `power`'s rule is this build's own.
 pub(crate) fn own_power(power: Power) -> bool {
     matches!(
@@ -50,6 +54,13 @@ pub(crate) fn own_power(power: Power) -> bool {
             | Power::PaleBlueDotPower
             | Power::VulnerablePower
             | Power::ConcoctPower
+            | Power::TankPower
+            | Power::ImitationLearningPower
+            | Power::HibernatePower
+            | Power::OneForAllPower
+            | Power::SoulboundPower
+            | Power::UnderworldPower
+            | Power::CacophonyPower
     )
 }
 
@@ -57,6 +68,17 @@ pub(crate) fn own_power(power: Power) -> bool {
 pub(crate) fn own_power_state(power: Power) -> Option<State<V>> {
     match power {
         Power::PaleBlueDotPower => Some(State::PaleBlueDot { activated: false }),
+        Power::SoulboundPower => Some(State::Soulbound { power, busy: false }),
+        Power::CacophonyPower => Some(State::Cacophony {
+            power,
+            cards_left: CACOPHONY_CARDS,
+        }),
+        Power::ImitationLearningPower => Some(State::ImitationLearning {
+            power,
+            player: None,
+            original: None,
+            clone: None,
+        }),
         _ => None,
     }
 }
@@ -92,6 +114,17 @@ pub(crate) fn own_power_modify_hook(
             unimplemented!("an endless Tracking")
         }
         (Power::TrackingPower, _, ModifyHook::DamageMultiplicative { .. }) => Some(Modify::Nothing),
+        // `TankPower.ModifyDamageMultiplicative`: its `DamageIncrease` on a
+        // powered attack's damage to its owner, where v0.107.1's doubled it.
+        (
+            Power::TankPower,
+            _,
+            ModifyHook::DamageMultiplicative {
+                target: Some(target),
+                powered: true,
+                ..
+            },
+        ) if target == held.holder => Some(Modify::Scaled(TANK_DAMAGE_INCREASE)),
         // `VulnerablePower.ModifyDamageMultiplicative` reads the Cruelty of a
         // pet's owner where the pet has none. v0.107.1's read the dealer's
         // alone.
@@ -107,6 +140,38 @@ pub(crate) fn own_power_modify_hook(
         ) if target == held.holder => Some(Modify::Scaled(
             crate::behaviour::powers::vulnerable::<V>(held.fight, held.holder, dealer, true),
         )),
+        // `OneForAllPower.ModifyDamageAdditive`: its stack on a powered hit
+        // from a card of its owner's that cost nothing. A play reads what it
+        // spent, which an auto-play spends none of. A preview reads the
+        // card's cost. An X cost never counts.
+        (
+            Power::OneForAllPower,
+            PowerAmount::Counted(stack),
+            ModifyHook::DamageAdditive {
+                card: Some(source),
+                powered: true,
+                ..
+            },
+        ) if source.owner == held.holder => {
+            use sts2_core::CardTable as _;
+
+            let free = match (source.card.cost(), source.cost) {
+                (sts2_core::Cost::X, _) => false,
+                (_, Some(cost)) => cost == sts2_core::Cost::Fixed(nonmax::NonMaxU8::ZERO),
+                (_, None) => (held.history.started_this_turn())
+                    .filter(|started| started.id == source.id)
+                    .last()
+                    .is_some_and(|started| started.auto || started.energy == 0),
+            };
+            Some(match free {
+                true => Modify::Added(stack),
+                false => Modify::Nothing,
+            })
+        }
+        (Power::OneForAllPower, PowerAmount::Endless, ModifyHook::DamageAdditive { .. }) => {
+            unimplemented!("an endless One For All")
+        }
+        (Power::OneForAllPower, _, ModifyHook::DamageAdditive { .. }) => Some(Modify::Nothing),
         _ => None,
     }
 }
@@ -142,6 +207,58 @@ pub(crate) fn own_power_event_hook(
     hook: EventHook<V>,
 ) -> Option<Option<HookEffect<V>>> {
     match (power, hook) {
+        // `ImitationLearningPower.BeforeCardPlayed`: the first play of a
+        // Power card of the player it copies starts a clone of it for its
+        // owner, kept beside the card.
+        (
+            Power::ImitationLearningPower,
+            EventHook::CardPlaying {
+                card,
+                id,
+                player,
+                first,
+                ..
+            },
+        ) => {
+            let State::ImitationLearning {
+                player: Some(copied),
+                original,
+                ..
+            } = state
+            else {
+                unimplemented!("ImitationLearningPower applied without a player target")
+            };
+            let copies = player == *copied
+                && first
+                && <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Power);
+            if !copies {
+                return Some(None);
+            }
+            if original.is_some() {
+                unimplemented!("a second play Imitation Learning copies while one is under way");
+            }
+            *original = Some(id);
+            Some(Some(HookEffect::KeepCloneOfPlaying))
+        }
+        // `ImitationLearningPower.AfterCardPlayed`: once the copied card's
+        // play is over, one off its stack, then its clone auto-played.
+        (Power::ImitationLearningPower, EventHook::CardPlayed { id, .. }) => {
+            let State::ImitationLearning {
+                original, clone, ..
+            } = state
+            else {
+                unreachable!("an Imitation Learning keeps its clones")
+            };
+            if *original != Some(id) {
+                return Some(None);
+            }
+            let kept = clone
+                .take()
+                .unwrap_or_else(|| unimplemented!("a copied play whose clone was never kept"));
+            *original = None;
+            Some(Some(HookEffect::DecrementAndAutoPlayKept(kept)))
+        }
+        (Power::ImitationLearningPower, _) => Some(None),
         // `PaleBlueDotPower.AfterCardPlayed`: once a turn, when its owner
         // has finished five plays this turn, its stack as
         // `DrawCardsNextTurnPower` on its owner. Another player's card does
@@ -162,10 +279,10 @@ pub(crate) fn own_power_event_hook(
                 amount,
             )))
         }
-        // `AfterSideTurnEnd` on its owner's side clears the turn's
-        // activation.
-        (Power::PaleBlueDotPower, EventHook::SideTurnEnd { side, .. }) => {
-            if side == held.owner {
+        // `AfterSideTurnEnd` clears the turn's activation where its owner
+        // takes part.
+        (Power::PaleBlueDotPower, EventHook::SideTurnEnd { participants, .. }) => {
+            if participants.contains(held.holder) {
                 *state = State::PaleBlueDot { activated: false };
             }
             Some(None)
@@ -227,6 +344,90 @@ pub(crate) fn own_power_event_hook(
         (Power::ConcoctPower, EventHook::SideTurnEnd { side, .. }) => {
             Some((side != held.owner).then_some(HookEffect::Remove))
         }
+        // `SoulboundPower.AfterCardGeneratedForCombat`: a Soul its applier
+        // made puts its stack of Souls into its owner's draw pile at random,
+        // made by its owner. Not while it is adding them.
+        (Power::SoulboundPower, EventHook::CardGeneratedForCombat { card, creator, .. }) => {
+            let State::Soulbound { busy, .. } = *state else {
+                unreachable!("Soulbound's state is its own")
+            };
+            let PowerAmount::Counted(stack) = amount else {
+                unimplemented!("an endless Soulbound")
+            };
+            let soul = crate::ids::CardIds::SOUL;
+            Some(
+                (creator.is_some() && creator == held.applier && card == soul && !busy).then_some(
+                    HookEffect::AddToDrawAtRandom {
+                        card: soul,
+                        count: stack,
+                        by_owner: true,
+                    },
+                ),
+            )
+        }
+        // `UnderworldPower.AfterDamageGiven`: a powered hit that dealt any
+        // damage, from another creature on its owner's side that is not its
+        // owner's pet, puts the damage times its stack of Doom on the target,
+        // applied by its owner.
+        (
+            Power::UnderworldPower,
+            EventHook::DamageGiven {
+                dealer: Some(dealer),
+                pet_of,
+                target,
+                total,
+                powered,
+                ..
+            },
+        ) => {
+            let PowerAmount::Counted(stack) = amount else {
+                unimplemented!("an endless Underworld")
+            };
+            let teammate = dealer != held.holder
+                && held.fight.side_of(dealer) == Some(held.owner)
+                && pet_of != Some(held.holder);
+            Some(
+                (teammate && powered && total > 0).then_some(HookEffect::ApplyPower {
+                    target,
+                    power: Power::DoomPower,
+                    amount: PowerAmount::Counted(total * stack),
+                    applier: Some(held.holder),
+                }),
+            )
+        }
+        // `UnderworldPower.AfterSideTurnEnd`: gone once the enemies end a
+        // turn.
+        (Power::UnderworldPower, EventHook::SideTurnEnd { side, .. }) => Some(
+            (side == crate::generated::runstate::CombatSide::Enemy).then_some(HookEffect::Remove),
+        ),
+        (Power::UnderworldPower, _) => Some(None),
+        // `CacophonyPower.AfterCardDrawn`: every card anyone draws counts
+        // down, and the 33rd hits one enemy that can be hit, drawn off
+        // `CombatTargets`, for its stack, unpowered, from its owner.
+        (Power::CacophonyPower, EventHook::CardDrawn { .. }) => {
+            let State::Cacophony { cards_left, .. } = state else {
+                unreachable!("Cacophony's state is its own")
+            };
+            let PowerAmount::Counted(stack) = amount else {
+                unimplemented!("an endless Cacophony")
+            };
+            *cards_left -= 1;
+            if *cards_left > 0 {
+                return Some(None);
+            }
+            *cards_left = CACOPHONY_CARDS;
+            Some(Some(HookEffect::DamageRandomOpponent {
+                amount: stack,
+                unblockable: false,
+                from_owner: true,
+            }))
+        }
+        (Power::CacophonyPower, _) => Some(None),
+        // `HibernatePower.AfterPlayerTurnStart`: one off as its owner's turn
+        // starts.
+        (Power::HibernatePower, EventHook::PlayerTurnStart { player, .. }) => {
+            Some((player == held.holder).then_some(HookEffect::Decrement))
+        }
         // `AmbergrisPower.AfterTakingExtraTurn`: one off, for its owner's
         // turn.
         (Power::AmbergrisPower, EventHook::TakingExtraTurn { player }) => {
@@ -235,6 +436,9 @@ pub(crate) fn own_power_event_hook(
         _ => None,
     }
 }
+
+/// `CacophonyPower`'s `CardsVar(33)`.
+const CACOPHONY_CARDS: u8 = 33;
 
 /// `PaleBlueDotPower`'s `cardPlayThresholdValue`.
 const PALE_BLUE_DOT_PLAYS: usize = 5;
