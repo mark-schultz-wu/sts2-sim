@@ -1,0 +1,11 @@
+[package]
+name = "sts2-pack"
+version = "0.1.0"
+edition = "2024"
+
+# Reading files out of the game's Godot pack. Its own crate so that a build
+# script can read the game's text from the player's install, as `xtask` reads
+# it for the dumps.
+
+[dependencies]
+thiserror = { workspace = true }

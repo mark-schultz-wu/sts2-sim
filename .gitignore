@@ -19,3 +19,7 @@ mod/*/bin/
 mod/*/obj/
 tools/pause_sites/bin/
 tools/pause_sites/obj/
+
+# The game's text is the game's own writing. sts2-cli's build script reads it
+# from the player's install, and nothing here keeps a copy.
+crates/sts2-content/src/*/dumps/text/

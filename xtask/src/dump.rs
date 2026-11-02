@@ -2,7 +2,8 @@
 //! Each mode is one launch of the real game with `STS2_HEADLESS_MODE` set. Each prints its table to stdout, between `[<mode>] begin` and `[<mode>] end` markers.
 //! The mod prints instead of writing files. A mod that writes into the game directory is a worse habit than a caller that extracts. This is that caller.
 //! Most modes describe content. They land beside each other under the version directory, where [`crate::codegen`] reads them. Two are ground truth for tests, which is not content and lands beside those tests.
-//! Three modes launch nothing. `cardplaydump` and `monstermovedump` read what cards and monsters do off the decompiled assembly, which [`crate::plays`] explains. `textdump` copies the English text tables out of the build's pack.
+//! Two modes launch nothing. `cardplaydump` and `monstermovedump` read what cards and monsters do off the decompiled assembly, which [`crate::plays`] explains.
+//! The game's text is not dumped here. It is the game's own writing, so the repository holds none of it, and `sts2-cli`'s build script reads it from the player's install.
 //! Nothing here checks that two dumps came from the same build. Codegen refuses to generate from dumps whose content hashes disagree. That catches a half-finished re-dump before it can do damage.
 
 use std::path::{Path, PathBuf};
@@ -22,16 +23,13 @@ enum Destination {
     /// Beside the content dumps, read off the decompiled assembly rather than
     /// printed by the game. The reader, then what it says of the table it read.
     Decompiled(&'static str, Reader, fn(&str) -> String),
-    /// Beside the content dumps under `text/`: the English text tables, read
-    /// out of the build's pack rather than printed by the game.
-    Packed(&'static [&'static str]),
 }
 
 /// A reader of the decompiled assembly: the game directory, the build it has
 /// to hold, and where that build's dumps live.
 type Reader = fn(&Path, &str, &Path) -> Result<String, crate::plays::Error>;
 
-use Destination::{At, Content, Decompiled, Packed};
+use Destination::{At, Content, Decompiled};
 
 /// Every mode the dump mod answers to. The marker it prints is its own name, so only the destination is worth writing down.
 const DUMPS: &[(&str, Destination)] = &[
@@ -70,28 +68,8 @@ const DUMPS: &[(&str, Destination)] = &[
             crate::plays::monsters::tally,
         ),
     ),
-    ("textdump", Packed(TEXT)),
     ("rngdump", At("crates/sts2-sim/tests/rng/megarandom.txt")),
     ("setupdump", At("crates/sts2-golden/tests/setup.txt")),
-];
-
-/// The English text tables a front end draws from: what each card, relic,
-/// power, potion and enchantment says, and the words around them.
-const TEXT: &[&str] = &[
-    "afflictions",
-    "ancients",
-    "card_keywords",
-    "cards",
-    "characters",
-    "enchantments",
-    "events",
-    "intents",
-    "monsters",
-    "orbs",
-    "potions",
-    "powers",
-    "relics",
-    "static_hover_tips",
 ];
 
 #[derive(clap::Args)]
@@ -109,8 +87,6 @@ pub enum Error {
     Version(#[from] crate::codegen::VersionError),
     #[error(transparent)]
     Plays(#[from] crate::plays::Error),
-    #[error(transparent)]
-    Pack(#[from] crate::pck::Error),
     #[error(
         "STS2_GAME_DIR is not set. The repo .envrc exports it: run `direnv allow` in the repo root, or set it by hand"
     )]
@@ -144,18 +120,6 @@ pub fn run(args: Args) -> Result<String, Error> {
     let mut done = Vec::new();
 
     for (mode, destination) in wanted {
-        if let Packed(tables) = destination {
-            let mut pack = crate::pck::Pack::open(&game.join("SlayTheSpire2.pck"))?;
-            let dir = version_dir()?.join("dumps").join("text");
-            error::create_dir(&dir)?;
-            for table in *tables {
-                let text = pack.text(&format!("localization/eng/{table}.json"))?;
-                error::write(&dir.join(format!("{table}.json")), &text)?;
-            }
-            println!("{mode} -> {} ({} tables)", dir.display(), tables.len());
-            done.push(mode);
-            continue;
-        }
         let (table, path) = match destination {
             Decompiled(name, read, tally) => {
                 let table = read(&game, &crate::codegen::version()?, &version_dir()?)?;
@@ -166,7 +130,6 @@ pub fn run(args: Args) -> Result<String, Error> {
                 extract(&launch(&game, mode)?, mode)?,
                 version_dir()?.join("dumps").join(name),
             ),
-            Packed(_) => unreachable!("handled above"),
             At(path) => {
                 let version = crate::codegen::version()?;
                 if version != "v0.107.1" {

@@ -35,6 +35,11 @@ sts2-core = { workspace = true }
 sts2-headless = { workspace = true }
 sts2-sim = { workspace = true }
 
+# The game's text, read from the player's install. `build.rs` says why.
+[build-dependencies]
+sha2 = { workspace = true }
+sts2-pack = { workspace = true }
+
 [dev-dependencies]
 # The `at` a test spells a creature with. See `sts2_core::fixture`.
 sts2-core = { workspace = true, features = ["fixture"] }
