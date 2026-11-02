@@ -14,13 +14,15 @@ pub struct State {
 
 /// `AfterCardPlayed` counts each attack its owner plays, and every tenth
 /// gives its energy. The game gives none once the fight is over, and energy
-/// left then is never spent. A fight here has one player.
+/// left then is never spent.
 pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
     state: &mut State,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
-    if let EventHook::CardPlayed { card, .. } = hook
+    if let EventHook::CardPlayed { card, player, .. } = hook
+        && player == owner
         && <V as sts2_core::Rules>::card_kind(card) == Some(CardKind::Attack)
     {
         state.attacks_played += 1;

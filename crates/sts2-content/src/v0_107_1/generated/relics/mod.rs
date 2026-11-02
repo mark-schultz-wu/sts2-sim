@@ -1256,6 +1256,11 @@ impl sts2_core::RelicTable for Relic {
         self.data().flags.get(RelicFlag::UponPickup) == Field::Constant(true)
     }
 
+    /// Where this relic sorts: `ModelId.CompareTo`, ordinal over its id.
+    fn order(self) -> u16 {
+        self as u16
+    }
+
     /// What a merchant charges before the haggle.
     fn merchant_price(self) -> Option<u16> {
         match self.data().price {

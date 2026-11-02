@@ -14,14 +14,15 @@ pub(super) fn used_up(state: &State) -> bool {
     state.was_used
 }
 
-/// `ShouldDieLate`: its owner does not die while it is unused.
+/// `ShouldDieLate`: its `owner` does not die while it is unused.
 pub(super) fn decide_hook<V: crate::Build>(
     state: &State,
+    owner: sts2_core::CombatId,
     hook: DecisionHook<V>,
 ) -> HookResponse<bool> {
     match hook {
-        DecisionHook::ShouldDieLate { creature, player } => {
-            HookResponse::Decision(creature != player || state.was_used)
+        DecisionHook::ShouldDieLate { creature } => {
+            HookResponse::Decision(creature != owner || state.was_used)
         }
         _ => HookResponse::DoesNotImplement,
     }

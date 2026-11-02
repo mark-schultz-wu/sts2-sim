@@ -64,6 +64,83 @@ pub trait Observed<V: ContentVersion> {
     fn moves(&self) -> impl ExactSizeIterator<Item = crate::Decision<V>> + '_;
 }
 
+/// A run lent by reference reads as the run, as a table that keeps its last
+/// report lends it.
+impl<V: ContentVersion, T: Observed<V> + ?Sized> Observed<V> for &T {
+    fn act(&self) -> V::Count {
+        (**self).act()
+    }
+    fn floor(&self) -> V::Count {
+        (**self).floor()
+    }
+    fn hp(&self) -> V::Health {
+        (**self).hp()
+    }
+    fn max_hp(&self) -> V::Health {
+        (**self).max_hp()
+    }
+    fn alive(&self) -> bool {
+        (**self).alive()
+    }
+    fn run_over(&self) -> bool {
+        (**self).run_over()
+    }
+    fn victory(&self) -> Option<bool> {
+        (**self).victory()
+    }
+    fn gold(&self) -> V::Number {
+        (**self).gold()
+    }
+    fn relics(&self) -> impl ExactSizeIterator<Item = impl Borrow<Carried<V>>> + '_ {
+        (**self).relics()
+    }
+    fn potions(&self) -> impl ExactSizeIterator<Item = impl Borrow<Held<V>>> + '_ {
+        (**self).potions()
+    }
+    fn potion_slots(&self) -> V::Count {
+        (**self).potion_slots()
+    }
+    fn deck(&self) -> impl ExactSizeIterator<Item = CardIdent<V>> + '_ {
+        (**self).deck()
+    }
+    fn in_combat(&self) -> bool {
+        (**self).in_combat()
+    }
+    fn at(&self) -> Option<Coord> {
+        (**self).at()
+    }
+    fn visited(&self) -> impl ExactSizeIterator<Item = Coord> + '_ {
+        (**self).visited()
+    }
+    fn travelable(&self) -> impl ExactSizeIterator<Item = Reachable<V>> + '_ {
+        (**self).travelable()
+    }
+    fn points(&self) -> &[Node<V>] {
+        (**self).points()
+    }
+    fn points_digest(&self) -> Digest {
+        (**self).points_digest()
+    }
+    fn proceed(&self) -> bool {
+        (**self).proceed()
+    }
+    fn run_streams(&self) -> impl ExactSizeIterator<Item = (V::RunRngType, Position)> + '_ {
+        (**self).run_streams()
+    }
+    fn player_streams(&self) -> impl ExactSizeIterator<Item = (V::PlayerRngType, Position)> + '_ {
+        (**self).player_streams()
+    }
+    fn room(&self) -> Option<impl Borrow<Room<V>> + '_> {
+        (**self).room()
+    }
+    fn combat(&self) -> Option<impl ObservedFight<V> + '_> {
+        (**self).combat()
+    }
+    fn moves(&self) -> impl ExactSizeIterator<Item = crate::Decision<V>> + '_ {
+        (**self).moves()
+    }
+}
+
 /// A fight, as a digest reads it. What [`Combat`] holds.
 pub trait ObservedFight<V: ContentVersion> {
     fn turn(&self) -> V::Count;
