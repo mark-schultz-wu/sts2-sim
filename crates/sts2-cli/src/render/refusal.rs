@@ -121,6 +121,7 @@ impl<V: sts2_content_wire::WireContentVersion> fmt::Display for Prose<'_, V> {
                 None => f.write_str("that option needs another player to aim at"),
             },
             Reason::OptionLocked => f.write_str("that option is locked"),
+            Reason::OptionWouldKill => f.write_str("that option would kill you"),
             Reason::AlreadyAnswered => f.write_str("this chest has already been answered"),
             Reason::Unpurchasable {
                 index,

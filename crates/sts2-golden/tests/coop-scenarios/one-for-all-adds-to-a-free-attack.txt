@@ -1,0 +1,8 @@
+# One For All adds its stack to a powered hit from a card that cost its
+# owner nothing. Claw costs nothing, and Strike does not.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"IRONCLAD"},{"character":"DEFECT"}]}
+{"cmd":"fight","encounter":"NIBBITS_WEAK","seat":0}
+{"cmd":"grant","card":"ONE_FOR_ALL","target":1001,"seat":0}
+{"cmd":"play_card","index":5,"target":null,"seat":1}
+{"cmd":"grant","card":"CLAW","target":1,"seat":0}
+{"cmd":"play_card","index":5,"target":2,"seat":0}
