@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Godot;
 using MegaCrit.Sts2.Core.Assets;
+using MegaCrit.Sts2.Core.Entities.Multiplayer;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Multiplayer;
@@ -64,7 +65,9 @@ public static class Net
             lobby.SetSeed(session.Seed);
             lobby.SetLocalCharacter(session.Character);
             Log.Info($"[net] hosting on {session.Port} for {session.Seats} seats");
-            while (lobby.Players.Count < session.Seats)
+            // The run's players follow the lobby's join order, so the host
+            // starts once every seat has joined, in seat order.
+            while (!InSeatOrder(lobby.Players.Select(player => player.id).ToList(), session.Seats))
             {
                 await tree.ToSignal(tree, SceneTree.SignalName.ProcessFrame);
             }
@@ -126,7 +129,18 @@ public static class Net
             {
                 JoinResult joined = await join.Begin(
                     new ENetClientConnectionInitializer(session.NetId, "127.0.0.1", session.Port), tree);
-                return (join, joined);
+                // A seat that joined ahead of an earlier one leaves and joins
+                // again, as a player can, so the join order is the seat order.
+                int seat = (int)(session.NetId - FirstClientNetId) + 1;
+                var inLobby = joined.joinResponse?.playersInLobby?.Select(player => player.id).ToList()
+                    ?? new List<ulong>();
+                if (InSeatOrder(inLobby, seat + 1))
+                {
+                    return (join, joined);
+                }
+                Log.Info($"[net] seat {seat} joined ahead of an earlier seat; joining again");
+                join.NetService?.Disconnect(NetError.Quit, now: true);
+                await tree.ToSignal(tree.CreateTimer(0.25 * seat), SceneTreeTimer.SignalName.Timeout);
             }
             catch (ClientConnectionFailedException e)
             {
@@ -135,6 +149,19 @@ public static class Net
             }
         }
     }
+
+    /// <summary>The net id the first client plays under, as the driver gives it.</summary>
+    private const ulong FirstClientNetId = 1001;
+
+    /// <summary>
+    /// Whether the players' net ids, in join order, are the host's and then
+    /// the clients' up to <paramref name="count"/> players, in seat order and
+    /// no more.
+    /// </summary>
+    private static bool InSeatOrder(IReadOnlyList<ulong> ids, int count) =>
+        ids.Count == count
+        && ids.Select((id, at) => id == (at == 0 ? 1UL : FirstClientNetId + (ulong)at - 1))
+            .All(inPlace => inPlace);
 
     private static async Task Pump(INetGameService service, SceneTree tree)
     {

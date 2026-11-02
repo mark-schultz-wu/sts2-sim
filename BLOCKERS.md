@@ -266,7 +266,11 @@ run as its own machine sees it. The work goes in this order:
    does nothing where their copy of the slot is empty. A filtered pick
    from the hand lists it again after each decision. So it offers a card
    a teammate gives while it waits. Whispering Earring aims a card at an
-   ally drawn at random from the other living players.
+   ally drawn at random from the other living players. A card another
+   player's potion auto-plays runs in the drinker's choice context, so
+   its owner's pick branches onto the owner's queue. A lobby's clients
+   join in seat order, so a run of three players seats them the same way
+   every time.
 
    Since 2026-10-28 each player in a co-op hunt carries 25 Gorgets and a
    Mercury Hourglass, as in a solo hunt. So the runs go deep.
@@ -328,8 +332,6 @@ run as its own machine sees it. The work goes in this order:
      the simulator does this yet. Both offer the hand as it stands.
    - The splits a hunt of seeds 16 to 31 for the four pairs found on
      2026-11-01, where 55 of the 64 seeds agreed:
-     - Distilled Chaos. Silent and Defect seed 18 at step 392, and seed
-       31 at step 2014.
      - A travel. Silent and Defect seed 28 at step 1107.
    - The splits the hunt of 2026-10-30 found, by where they show:
      - A co-op scenario's `enter_room` setup hangs: the host leaves its

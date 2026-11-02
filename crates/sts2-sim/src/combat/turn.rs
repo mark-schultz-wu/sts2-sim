@@ -3004,7 +3004,7 @@ fn auto_play_dupe_of_last_play<V: Rules>(
     if let Some(ended) = board.ended() {
         return Some(ended);
     }
-    super::play::auto_play_taken::<V>(seat, live, rngs, belts, id, false, true)
+    super::play::auto_play_taken::<V>(seat, live, rngs, belts, id, false, true, None)
 }
 
 pub(super) fn pre_play_from<V: Rules>(

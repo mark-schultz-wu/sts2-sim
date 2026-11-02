@@ -6066,6 +6066,11 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         }
         let pausable = self.pausable();
         let ascension = self.ascension;
+        // Another player's potion aimed at `seat` plays the cards in its
+        // drinker's context.
+        let context = (self.reaching)
+            .and(self.live.seat_of(self.actor))
+            .filter(|&drinker| drinker != seat);
         let ended = auto_play_from_draw::<V>(
             seat,
             self.live,
@@ -6076,6 +6081,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 left: count,
                 taken: SmallVec::new(),
                 force_exhaust,
+                context,
             },
             pausable,
             false,
@@ -7821,6 +7827,9 @@ pub(super) struct AutoPlayFromDraw<V: Rules> {
     pub(super) left: usize,
     pub(super) taken: SmallVec<[CardId<V>; 4]>,
     pub(super) force_exhaust: bool,
+    /// The other player whose effect plays the cards, in whose choice
+    /// context they run.
+    pub(super) context: Option<sts2_core::SeatIndex>,
 }
 
 /// The rest of an `AfterShuffle` walk once its pick is made, and how it
@@ -7864,6 +7873,7 @@ pub(super) fn auto_play_from_draw<V: Rules>(
         left,
         mut taken,
         force_exhaust,
+        context,
     } = from;
     // The `AfterShuffle` listeners that waited for the pick this resumes
     // from.
@@ -7902,6 +7912,7 @@ pub(super) fn auto_play_from_draw<V: Rules>(
                         left: left - taking,
                         taken,
                         force_exhaust,
+                        context,
                     }));
                     return None;
                 }
@@ -7917,7 +7928,11 @@ pub(super) fn auto_play_from_draw<V: Rules>(
         // the play pile until it is answered.
         if pausable && live.asking.is_some() {
             for &id in &taken[at..] {
-                live.defer(super::live::Deferred::AutoPlayTaken { id, force_exhaust });
+                live.defer(super::live::Deferred::AutoPlayTaken {
+                    id,
+                    force_exhaust,
+                    context,
+                });
             }
             return None;
         }
@@ -7929,9 +7944,16 @@ pub(super) fn auto_play_from_draw<V: Rules>(
             id,
             force_exhaust,
             pausable,
+            context,
         );
         if ended.is_some() {
             return ended;
+        }
+        // `BranchingPlayerChoiceContext`: a card whose choice is its owner's
+        // ends as the choice begins, which waits on its owner's queue. The
+        // drinker's effect goes on with the next card.
+        if context.is_some() && super::play::branched(live) {
+            live.stop_for_answer(seat);
         }
     }
     None
