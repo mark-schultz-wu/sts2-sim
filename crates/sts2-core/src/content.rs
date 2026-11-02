@@ -4855,8 +4855,12 @@ pub enum EventHook<V: ContentVersion> {
     /// `AfterCardGeneratedForCombat`, once a card made in the fight has
     /// landed where `at` says.
     CardGeneratedForCombat {
-        at: crate::CardAt<V>,
+        /// Nothing for a card made for a dead player, which
+        /// `CardPileCmd.Add` puts in no pile.
+        at: Option<crate::CardAt<V>>,
         card: V::Card,
+        /// `card.Owner.Creature`.
+        player: crate::CombatId,
         /// The player that made it. Nothing for a card a monster gave.
         creator: Option<crate::CombatId>,
     },
@@ -8809,6 +8813,10 @@ pub trait Rules: Hooks + Engine {
         state: &Self::EventState,
         run: &impl crate::EventView<Self>,
     ) -> crate::Room<Self>;
+
+    /// [`crate::EventBehavior::kills`] for the event entered.
+    fn event_kills(state: &Self::EventState, option: u8, run: &impl crate::EventView<Self>)
+    -> bool;
 
     /// Whether the event's `BeforeEventStarted` sets `CanRemovePotions` off,
     /// which its `OnEventFinished` puts back.

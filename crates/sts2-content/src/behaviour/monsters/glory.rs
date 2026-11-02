@@ -190,10 +190,11 @@ pub(super) fn computed_repeats<V: crate::Build>(
 const WITHER_RAISE: Number = 3;
 
 /// `Aeonglass.AfterCardGeneratedForCombat`: a Wither made in the fight takes
-/// every fake upgrade the Aeonglass has given the ones before it.
+/// every fake upgrade the Aeonglass has given the ones before it. One made
+/// for a dead player is in no pile, and its upgrades reach nothing.
 pub(super) fn wither_generated<V: crate::Build>(
     model: &crate::behaviour::monsters::Model<V>,
-    at: sts2_core::CardAt<V>,
+    at: Option<sts2_core::CardAt<V>>,
     card: V::Card,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
@@ -203,7 +204,10 @@ pub(super) fn wither_generated<V: crate::Build>(
     else {
         unreachable!("an Aeonglass holding {model:?}")
     };
-    if card == V::Card::WITHER && wither_upgrades > 0 {
+    if let Some(at) = at
+        && card == V::Card::WITHER
+        && wither_upgrades > 0
+    {
         asked.push(sts2_core::HookEffect::ModifyCards {
             to: sts2_core::Writing::One(at),
             change: sts2_core::Change::Raise(

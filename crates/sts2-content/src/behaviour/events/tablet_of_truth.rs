@@ -54,6 +54,17 @@ impl<V: crate::Build> EventBehavior<V> for TabletOfTruth {
         )
     }
 
+    /// `WillKillPlayer`, for `Decipher`: the page's cost to the maximum.
+    /// The last page sets it one short of the maximum.
+    fn kills(&self, state: &State, option: u8, run: &impl EventView<V>) -> bool {
+        option == 0
+            && run.max_hp()
+                <= DECIPHER_COSTS
+                    .get(usize::from(state.deciphered))
+                    .copied()
+                    .unwrap_or(run.max_hp() - 1)
+    }
+
     /// `Decipher`: `CreatureCmd.LoseMaxHp` by its cost, then one upgradable
     /// deck card upgraded, drawn off the event's stream. The fifth upgrades
     /// every one, costs all but one Max HP, and finishes the event. The rest

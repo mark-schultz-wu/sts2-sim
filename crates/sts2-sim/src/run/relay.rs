@@ -1,15 +1,16 @@
-//! A shop purchase in a run of several players, which runs on the buyer's
-//! machine alone.
+//! What runs on one player's machine alone in a run of several players.
 //!
 //! `MerchantEntry.OnTryPurchase` runs where the player clicked. Once it
 //! returns, with every pick its `RelicCmd.Obtain` asked answered, the
 //! buyer's machine sends `RewardSynchronizer`'s `GoldLostMessage` and
 //! `RewardObtainedMessage`. Each other machine then loses the gold and
-//! obtains the thing for that player itself. A pick that obtain asks takes
-//! the cards the buyer's `SyncLocalChoice` sent.
+//! obtains the thing for that player itself. A question that obtain asks
+//! takes the answer the buyer's `SyncLocalChoice` sent. So each machine
+//! keeps what it waits on, and the table hands each machine's messages to
+//! the others.
 //!
-//! So each machine keeps what it is waiting on, and the table hands each
-//! purchase's results from the buyer's machine to the others.
+//! A reward screen is not one of these: it syncs each choice with
+//! `PlayerChoiceSynchronizer`, and every machine runs it.
 
 use std::collections::VecDeque;
 
@@ -18,28 +19,26 @@ use sts2_core::{CardIdent, Rules, SeatIndex};
 
 use super::State;
 
-/// What a machine knows of the purchases running on its own machine and on
-/// the others'.
+/// What a machine knows of what runs on its own machine and on the others'.
 #[derive(Debug, Clone)]
 pub(super) struct Relay<V: Rules> {
-    /// The purchase this machine's own player is making, with the deck picks
-    /// its obtain took so far.
-    buying: Option<Purchase<V>>,
-    /// The purchases this machine finished, which the table hands to the
-    /// other machines.
-    outbox: Vec<Purchase<V>>,
+    /// The purchase this machine's own player is in the middle of, with the
+    /// answers its questions took so far.
+    open: Option<Open<V>>,
+    /// What this machine sent, which the table hands to the other machines.
+    outbox: Vec<Message<V>>,
     /// The players whose purchase runs on their own machine and has not come
     /// back.
     elsewhere: SmallVec<[SeatIndex; 4]>,
-    /// The deck picks a relayed purchase's obtain takes, in the order the
-    /// buyer made them.
-    synced: VecDeque<Vec<usize>>,
+    /// The answers a relayed obtain's questions take, in the order the
+    /// player gave them.
+    synced: VecDeque<sts2_core::Answer>,
 }
 
 impl<V: Rules> Default for Relay<V> {
     fn default() -> Self {
         Self {
-            buying: None,
+            open: None,
             outbox: Vec::new(),
             elsewhere: SmallVec::new(),
             synced: VecDeque::new(),
@@ -47,29 +46,41 @@ impl<V: Rules> Default for Relay<V> {
     }
 }
 
-/// One purchase's results, as the buyer's machine sends them.
+/// A purchase under way on this machine.
 #[derive(Debug, Clone)]
-pub(crate) struct Purchase<V: Rules> {
+struct Open<V: Rules> {
     seat: SeatIndex,
-    /// `GoldLostMessage`'s gold.
     spent: V::Number,
-    /// `RewardObtainedMessage`'s model.
     bought: Bought<V>,
-    /// Each deck pick the obtain took, as the deck's places of the cards.
-    picks: Vec<Vec<usize>>,
+    picks: Vec<sts2_core::Answer>,
+}
+
+/// One of `RewardSynchronizer`'s messages, from the machine of the player it
+/// is about.
+#[derive(Debug, Clone)]
+pub(crate) enum Message<V: Rules> {
+    /// `GoldLostMessage`.
+    GoldLost { seat: SeatIndex, gold: V::Number },
+    /// `RewardObtainedMessage`, with the answer to each question its obtain
+    /// asked, which `SyncLocalChoice` sent.
+    Obtained {
+        seat: SeatIndex,
+        bought: Bought<V>,
+        picks: Vec<sts2_core::Answer>,
+    },
 }
 
 /// What a purchase obtained.
 #[derive(Debug, Clone, Copy)]
-pub(super) enum Bought<V: Rules> {
+pub(crate) enum Bought<V: Rules> {
     Relic(V::Relic),
     Potion(V::Potion),
     Card(CardIdent<V>),
 }
 
 impl<V: Rules> State<V> {
-    /// Whether `seat`'s purchase runs on another machine than this one. A
-    /// run of one player has no other.
+    /// Whether what `seat` does on their own screen runs on another machine
+    /// than this one. A run of one player has no other.
     pub(super) fn bought_elsewhere(&self, seat: SeatIndex) -> bool {
         self.players.len() > 1 && seat != self.local
     }
@@ -79,24 +90,28 @@ impl<V: Rules> State<V> {
         self.relay.get_or_insert_default().elsewhere.push(seat);
     }
 
-    /// Whether `seat` is buying on their own machine, whose answers this one
-    /// never sees asked.
-    pub(crate) fn buying_elsewhere(&self, seat: SeatIndex) -> bool {
-        self.relay
-            .as_ref()
-            .is_some_and(|relay| relay.elsewhere.contains(&seat))
+    /// Whether `decision` is `seat`'s answer inside a purchase that runs on
+    /// their own machine, which this one never asked.
+    pub(crate) fn answers_elsewhere(
+        &self,
+        seat: SeatIndex,
+        decision: &sts2_core::Decision<V>,
+    ) -> bool {
+        matches!(decision, sts2_core::Decision::Answer(_))
+            && self.bought_elsewhere(seat)
+            && (self.relay.as_ref()).is_some_and(|relay| relay.elsewhere.contains(&seat))
     }
 
     /// This machine's own player begins a purchase, in a run of several.
     pub(super) fn begin_purchase(&mut self, seat: SeatIndex, spent: V::Number, bought: Bought<V>) {
-        if self.players.len() == 1 {
+        if self.players.len() == 1 || seat != self.local {
             return;
         }
         let relay = self.relay.get_or_insert_default();
-        if let Some(open) = &relay.buying {
+        if let Some(open) = &relay.open {
             unimplemented!("{open:?} still open as {bought:?} is bought");
         }
-        relay.buying = Some(Purchase {
+        relay.open = Some(Open {
             seat,
             spent,
             bought,
@@ -104,24 +119,26 @@ impl<V: Rules> State<V> {
         });
     }
 
-    /// A deck pick this machine's own player made, which the purchase sends
-    /// with its results.
-    pub(super) fn picked_for_purchase(&mut self, seat: SeatIndex, taken: &[usize]) {
-        if let Some(Purchase {
-            seat: buyer, picks, ..
-        }) = self.relay.as_mut().and_then(|relay| relay.buying.as_mut())
-            && *buyer == seat
+    /// An answer this machine's own player gave inside the open purchase,
+    /// which it sends with its results.
+    pub(super) fn picked_for_purchase(&mut self, seat: SeatIndex, answer: &sts2_core::Answer) {
+        if let Some(Open {
+            seat: buying,
+            picks,
+            ..
+        }) = self.relay.as_mut().and_then(|relay| relay.open.as_mut())
+            && *buying == seat
         {
-            picks.push(taken.to_vec());
+            picks.push(*answer);
         }
     }
 
     /// `TryToProcure` refused the potion, and the purchase sends nothing.
     pub(super) fn purchase_refused(&mut self, seat: SeatIndex) {
         if let Some(relay) = self.relay.as_mut()
-            && relay.buying.as_ref().is_some_and(|open| open.seat == seat)
+            && relay.open.as_ref().is_some_and(|open| open.seat == seat)
         {
-            relay.buying = None;
+            relay.open = None;
         }
     }
 
@@ -131,68 +148,90 @@ impl<V: Rules> State<V> {
         let Some(relay) = self.relay.as_mut() else {
             return;
         };
-        if relay.buying.as_ref().is_some_and(|open| open.seat == seat) {
-            let done = relay.buying.take().expect("an open purchase");
-            relay.outbox.push(done);
+        if relay.open.as_ref().is_some_and(|open| open.seat == seat) {
+            let Open {
+                seat,
+                spent,
+                bought,
+                picks,
+            } = relay.open.take().expect("an open purchase");
+            relay.outbox.push(Message::GoldLost { seat, gold: spent });
+            relay.outbox.push(Message::Obtained {
+                seat,
+                bought,
+                picks,
+            });
         }
     }
 
-    /// The purchases this machine finished since it was last asked.
-    pub(crate) fn take_sent(&mut self) -> Vec<Purchase<V>> {
+    /// What this machine sent since it was last asked.
+    pub(crate) fn take_sent(&mut self) -> Vec<Message<V>> {
         self.relay
             .as_mut()
             .map(|relay| std::mem::take(&mut relay.outbox))
             .unwrap_or_default()
     }
 
-    /// The deck pick a relayed purchase's obtain takes next, as the buyer
-    /// made it.
-    pub(super) fn synced_pick(&mut self, seat: SeatIndex) -> Option<Vec<usize>> {
-        if !self.bought_elsewhere(seat) {
-            return None;
-        }
-        self.relay.as_mut()?.synced.pop_front()
-    }
-
-    /// `HandleGoldLostMessage`, then `HandleRewardObtainedMessage`, for
-    /// another machine's purchase.
+    /// `RewardSynchronizer`'s handler for one of another machine's messages.
     ///
     /// # Panics
     ///
-    /// An obtain that asks something the buyer's picks do not answer.
-    pub(crate) fn receive(&mut self, purchase: Purchase<V>) {
-        let Purchase {
-            seat,
-            spent,
-            bought,
-            picks,
-        } = purchase;
-        let relay = self.relay.get_or_insert_default();
-        relay.elsewhere.retain(|waiting| *waiting != seat);
-        relay.synced = picks.into();
-        // `PlayerCmd.LoseGold`.
-        self.players[seat].gold = self.players[seat].gold - spent;
-        match bought {
-            Bought::Relic(relic) => {
-                let steps = self.obtained_held(seat, relic, false, None);
-                if let Some(asked) = self.carry_out(seat, steps) {
-                    unimplemented!(
-                        "another player's relic asking {:?} on this machine",
-                        asked.pickup
-                    );
+    /// An obtain that asks something the buyer never answered.
+    pub(crate) fn receive(&mut self, message: Message<V>) {
+        match message {
+            // `PlayerCmd.LoseGold`, which a purchase sends once it is over.
+            Message::GoldLost { seat, gold } => {
+                if let Some(relay) = self.relay.as_mut() {
+                    relay.elsewhere.retain(|waiting| *waiting != seat);
+                }
+                self.players[seat].gold = self.players[seat].gold - gold;
+            }
+            Message::Obtained {
+                seat,
+                bought,
+                picks,
+            } => {
+                self.relay.get_or_insert_default().synced = picks.into();
+                match bought {
+                    // Each question its obtain asks takes the answer the
+                    // buyer's machine sent.
+                    Bought::Relic(relic) => {
+                        let steps = self.obtained_held(seat, relic, false, None);
+                        let mut asking = self.carry_out(seat, steps);
+                        while let Some(super::state::Asked { pickup, mut rest }) = asking {
+                            let answer =
+                                (self.relay.as_mut()).and_then(|relay| relay.synced.pop_front());
+                            let Some(answer) = answer else {
+                                unimplemented!(
+                                    "another player's relic asking {pickup:?}, which they never answered"
+                                );
+                            };
+                            let lent = super::state::pickup::Lent {
+                                run: &mut *self,
+                                answer: Some(answer),
+                            };
+                            asking = match diapause::Coroutine::resume(&mut *rest, lent) {
+                                diapause::CoroutineState::Yielded(pickup) => {
+                                    Some(super::state::Asked { pickup, rest })
+                                }
+                                diapause::CoroutineState::Complete(()) => None,
+                            };
+                        }
+                    }
+                    // `PotionCmd.TryToProcure`, which a full belt refuses here
+                    // too.
+                    Bought::Potion(potion) => {
+                        self.procure(seat, potion);
+                    }
+                    // `RunState.AddCard`, then `CardPileCmd.Add` to the deck.
+                    Bought::Card(card) => self.add_to_deck(seat, card),
+                }
+                if let Some(relay) = self.relay.as_mut()
+                    && !relay.synced.is_empty()
+                {
+                    unimplemented!("another player's obtain leaving picks it never asked");
                 }
             }
-            // `PotionCmd.TryToProcure`, which a full belt refuses here too.
-            Bought::Potion(potion) => {
-                self.procure(seat, potion);
-            }
-            // `RunState.AddCard`, then `CardPileCmd.Add` to the deck.
-            Bought::Card(card) => self.add_to_deck(seat, card),
-        }
-        if let Some(relay) = self.relay.as_mut()
-            && !relay.synced.is_empty()
-        {
-            unimplemented!("another player's purchase leaving picks it never asked");
         }
     }
 }

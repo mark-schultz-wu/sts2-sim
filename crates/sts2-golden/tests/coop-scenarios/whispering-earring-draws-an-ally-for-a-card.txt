@@ -1,0 +1,23 @@
+# The Silent holds Whispering Earring, and a deck of Believe In You. On
+# the first turn Vakuu plays them, and each needs an ally. `GetTarget`
+# draws one off `CombatTargets` from the other living players, so the
+# energy goes to the Ironclad or the Defect as the draws fall.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"SILENT"},{"character":"IRONCLAD"},{"character":"DEFECT"}]}
+{"cmd":"grant","relic":"WHISPERING_EARRING","target":1,"seat":0}
+{"cmd":"grant","card":"BELIEVE_IN_YOU","target":1,"seat":0}
+{"cmd":"grant","card":"BELIEVE_IN_YOU","target":1,"seat":0}
+{"cmd":"grant","card":"BELIEVE_IN_YOU","target":1,"seat":0}
+{"cmd":"grant","card":"BELIEVE_IN_YOU","target":1,"seat":0}
+{"cmd":"grant","card":"BELIEVE_IN_YOU","target":1,"seat":0}
+{"cmd":"grant","card":"BELIEVE_IN_YOU","target":1,"seat":0}
+{"cmd":"grant","card":"BELIEVE_IN_YOU","target":1,"seat":0}
+{"cmd":"grant","card":"BELIEVE_IN_YOU","target":1,"seat":0}
+{"cmd":"grant","card":"BELIEVE_IN_YOU","target":1,"seat":0}
+{"cmd":"grant","card":"BELIEVE_IN_YOU","target":1,"seat":0}
+{"cmd":"grant","card":"BELIEVE_IN_YOU","target":1,"seat":0}
+{"cmd":"grant","card":"BELIEVE_IN_YOU","target":1,"seat":0}
+{"cmd":"grant","card":"BELIEVE_IN_YOU","target":1,"seat":0}
+{"cmd":"grant","card":"BELIEVE_IN_YOU","target":1,"seat":0}
+{"cmd":"grant","card":"BELIEVE_IN_YOU","target":1,"seat":0}
+{"cmd":"fight","encounter":"NIBBITS_WEAK","seat":0}
+{"cmd":"end_turn","seat":1}
