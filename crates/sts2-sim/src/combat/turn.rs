@@ -391,7 +391,7 @@ pub(super) fn side_starts<V: Rules>(
         match player_setup::<V>(seat, live, streams, belts, ascension) {
             PlayerSetUp::Ended(ended) => {
                 if let Some(task) = setup {
-                    live.rejoin(host, task);
+                    live.rejoin(task);
                 }
                 // `StartTurn` checks for a win only once every player is set
                 // up. So each later player's `SetupPlayerTurn` still runs, and
@@ -576,7 +576,7 @@ fn player_setup<V: Rules>(
             live.deferred.keep_fresh(fresh);
             PlayerSetUp::Done
         }
-        Carried::Parked => PlayerSetUp::Parked(live.set_aside(seat, fresh)),
+        Carried::Parked => PlayerSetUp::Parked(live.set_aside(fresh)),
     }
 }
 
@@ -746,7 +746,7 @@ pub(super) fn before_flush_late<V: Rules>(
             }
             effect => unimplemented!("{listener:?} asking for {effect:?} before the hand flushes"),
         }
-        listening.leave(seat, live, boundary);
+        listening.leave(live, boundary);
     }
     // The turn's end from the flush on waits for every paused listener.
     listening.into_tasks()
@@ -798,7 +798,11 @@ fn pick_to_retain<V: Rules>(
                 then: Then::Pick {
                     act: sts2_core::PileAct::RetainThisTurn,
                 },
-                question: super::live::Asked::Among { cards, selection },
+                question: super::live::Asked::Among {
+                    cards,
+                    selection,
+                    hand: None,
+                },
                 signalled,
             });
         }
@@ -1053,7 +1057,7 @@ pub(super) fn orbs_at_turn_start<V: Rules>(
     let mut listening = super::live::Listening::new();
     let boundary = listening.enter_task(live);
     let ended = orb_triggers::<V>(seat, live, rngs, belts, ascension, OrbMoment::TurnStart);
-    listening.leave(seat, live, boundary);
+    listening.leave(live, boundary);
     listening.queue(seat, live);
     ended
 }
@@ -1182,7 +1186,7 @@ pub(super) fn before_side_turn_start<V: Rules>(
             }
             (_, effect) => unimplemented!("a listener asking for {effect:?} before a turn starts"),
         }
-        listening.leave(seat, live, boundary);
+        listening.leave(live, boundary);
     }
     listening.queue(seat, live);
 }
@@ -1275,7 +1279,7 @@ pub(super) fn before_turn_end<V: Rules>(
                 unimplemented!("{listener:?} asking for {effect:?} as a turn is about to end")
             }
         }
-        listening.leave(seat, live, boundary);
+        listening.leave(live, boundary);
     }
     // Counted only where something hears the hook, as nothing else reads it.
     let plays = match listen::heard::<V>(live, belts, sts2_core::ModelHook::BeforeSideTurnEndEarly)
@@ -1341,7 +1345,7 @@ pub(super) fn before_turn_end<V: Rules>(
             }
             (_, effect) => unimplemented!("a listener asking for {effect:?} before a turn ends"),
         }
-        listening.leave(seat, live, boundary);
+        listening.leave(live, boundary);
         if ended.is_some() {
             return (ended, listening);
         }
@@ -1536,7 +1540,7 @@ pub(super) fn before_turn_end<V: Rules>(
                 }
             }
         }
-        listening.leave(seat, live, boundary);
+        listening.leave(live, boundary);
     }
     (ended, listening)
 }
@@ -3000,7 +3004,7 @@ fn auto_play_dupe_of_last_play<V: Rules>(
     if let Some(ended) = board.ended() {
         return Some(ended);
     }
-    super::play::auto_play_taken::<V>(seat, live, rngs, belts, id, false, true)
+    super::play::auto_play_taken::<V>(seat, live, rngs, belts, id, false, true, None)
 }
 
 pub(super) fn pre_play_from<V: Rules>(
@@ -3072,7 +3076,8 @@ pub(super) fn pre_play_from<V: Rules>(
                         && !live.players[seat].ending_turn
                         && live.players[seat].turn == start
                     {
-                        let Some(first) = first_playable::<V>(seat, live, belts) else {
+                        let Some(first) = first_playable::<V>(seat, live, rngs.reborrow(), belts)
+                        else {
                             break;
                         };
                         let captured =
@@ -3156,17 +3161,16 @@ struct FirstPlayable<V: Rules> {
     costs: (sts2_core::Cost, sts2_core::Cost),
 }
 
-/// The hand's first card that `CanPlay`.
-///
-/// # Panics
-///
-/// A card that targets an ally, which the game draws off `CombatTargets`.
+/// The hand's first card that `CanPlay`, with the target `GetTarget`
+/// names for it.
 fn first_playable<V: Rules>(
     seat: sts2_core::SeatIndex,
     live: &Live<V>,
+    rngs: CombatRngs<'_>,
     belts: &crate::run::Belts<V>,
 ) -> Option<FirstPlayable<V>> {
     use sts2_core::TargetKinds;
+    use sts2_core::rng::GameRng as _;
 
     let walk = listen::Walk { live, belts };
     let payable =
@@ -3194,8 +3198,20 @@ fn first_playable<V: Rules>(
             enemies.into_iter().next()
         }
         t if t == <V::TargetType as TargetKinds>::ANY_PLAYER => Some(live.player(seat).id),
+        // `NextItem` off `CombatTargets` over the other living players, and
+        // no pet.
         t if t == <V::TargetType as TargetKinds>::ANY_ALLY => {
-            unimplemented!("Whispering Earring aiming a card at an ally")
+            let own = live.player(seat).id;
+            let allies: SmallVec<[CombatId; 4]> = (live.creatures.iter())
+                .filter(|creature| {
+                    creature.side == <V::CombatSide as SideKinds>::PLAYER
+                        && creature.alive
+                        && creature.id != own
+                        && matches!(creature.model, Some(sts2_core::ModelId::Character(_)))
+                })
+                .map(|creature| creature.id)
+                .collect();
+            rngs.targets.choose(&allies).ok().copied()
         }
         _ => None,
     };
@@ -4185,7 +4201,7 @@ fn walk_turn_end<V: Rules>(
                 break;
             }
         }
-        listening.leave(seat, live, boundary);
+        listening.leave(live, boundary);
     }
     (ended, listening)
 }
@@ -4579,7 +4595,6 @@ pub(super) fn perform_move<V: Rules>(
                             signalled: false,
                         },
                         waiting: Vec::new(),
-                        hand: live.players[seat].cards.len(Pile::Hand),
                     };
                     live.queues.stop(seat, seat, task);
                 }

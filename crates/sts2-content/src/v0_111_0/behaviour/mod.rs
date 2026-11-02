@@ -84,10 +84,16 @@ impl crate::build::OwnRules for V {
         cards::own_card_event_hook(card, id, owner, history, hook, asked)
     }
 
+    fn own_card_fields(
+        card: <V as sts2_core::ContentVersion>::Card,
+    ) -> Option<crate::behaviour::cards::Fields> {
+        cards::own_fields(card)
+    }
+
     fn own_card_result_pile(
         card: <V as sts2_core::ContentVersion>::Card,
         base: (Option<sts2_core::Pile>, sts2_core::PilePosition),
-    ) -> Option<sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)>> {
+    ) -> Option<sts2_core::HookResponse<sts2_core::CardResult>> {
         cards::result_pile(card, base)
     }
 
