@@ -1468,12 +1468,13 @@ impl<V: Rules> State<V> {
     /// `FurCoat.AddMarkedRooms` on `map`: the relic's marks kept where every
     /// one stands on a Monster or Elite point, and `count` new ones otherwise.
     /// The new ones are the map's Monster and Elite points, column by column.
-    /// `UnstableShuffle` orders them off a stream of the run's seed and the
-    /// relic's id.
+    /// `UnstableShuffle` orders them off `new Rng(Owner, Id)`: a stream of
+    /// the run's seed, the owner's slot and the relic's id.
     ///
     /// # Panics
     ///
-    /// A relic that is not on the belt.
+    /// A relic that is not on the belt. Another player's relic of the same
+    /// kind that marked points too, whose quests the game leaves out.
     fn mark_combat_points(
         &mut self,
         seat: sts2_core::SeatIndex,
@@ -1488,6 +1489,13 @@ impl<V: Rules> State<V> {
             kind == <V::MapPointType as sts2_core::MapPointKinds>::MONSTER
                 || kind == <V::MapPointType as sts2_core::MapPointKinds>::ELITE
         };
+        if (self.belts.seated()).any(|(other, belt)| {
+            other != seat
+                && (belt.iter())
+                    .any(|held| held.relic == relic && !held.state.marked_points().is_empty())
+        }) {
+            unimplemented!("two players' {relic:?} marking the map");
+        }
         let held = (self.belts[seat].iter_mut())
             .find(|held| held.relic == relic)
             .expect("a relic marking points is on the belt");
@@ -1505,7 +1513,8 @@ impl<V: Rules> State<V> {
             .collect();
         // `GetAllMapPoints` walks the grid a column at a time.
         points.sort_unstable();
-        let mut rng: MegaRng = sts2_core::rng::named::<V, _>(self.shared.raw_seed, name);
+        let seed = self.shared.raw_seed.wrapping_add(u64::from(seat.0));
+        let mut rng: MegaRng = sts2_core::rng::named::<V, _>(seed, name);
         sts2_core::rng::GameRng::unstable_shuffle(&mut rng, &mut points);
         points.truncate(count);
         held.state.mark_points(&points);
@@ -2212,6 +2221,12 @@ impl<V: Rules> State<V> {
                 },
             }));
         }
+        self.discarded(seat, at);
+        Ok(Ok(Decided::Resolved))
+    }
+
+    /// `PotionCmd.Discard` for the potion at `at` on `seat`'s belt.
+    fn discarded(&mut self, seat: sts2_core::SeatIndex, at: usize) {
         self.drank(seat, at);
         self.belt_changed(
             seat,
@@ -2220,7 +2235,40 @@ impl<V: Rules> State<V> {
                 holding_potions: self.holding_potions(seat),
             },
         );
-        Ok(Ok(Decided::Resolved))
+    }
+
+    /// The physical belt slot the potion at `index` on `seat`'s belt
+    /// stands in, which `NetDiscardPotionGameAction` carries to the other
+    /// machines.
+    pub(crate) fn belt_slot(
+        &self,
+        seat: sts2_core::SeatIndex,
+        index: sts2_core::BeltIndex,
+    ) -> Option<u8> {
+        (self.players[seat].potion_positions)
+            .get(usize::from(index.get()))
+            .copied()
+    }
+
+    /// `DiscardPotionGameAction` for `seat`'s player, as another player's
+    /// machine sent it. A slot this machine holds no potion in cancels the
+    /// action, and nothing happens. That is so while the player's own
+    /// machine runs a purchase whose results have not come here yet.
+    ///
+    /// # Panics
+    ///
+    /// A slot past the belt's slots, which the game throws on.
+    pub(crate) fn discard_slot(&mut self, seat: sts2_core::SeatIndex, slot: u8) {
+        let slots: usize = num_traits::cast(self.players[seat].potion_slots)
+            .expect("the belt has an addressable number of slots");
+        if usize::from(slot) >= slots {
+            unimplemented!("another machine discarding slot {slot} of {slots}");
+        }
+        let Some(at) = (self.players[seat].potion_positions.iter()).position(|held| *held == slot)
+        else {
+            return;
+        };
+        self.discarded(seat, at);
     }
 
     /// `Owner.Potions.Any()`.

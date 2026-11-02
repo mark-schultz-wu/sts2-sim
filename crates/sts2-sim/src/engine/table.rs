@@ -98,6 +98,12 @@ impl<V: Rules> RunTable<V> for SimTable<V> {
 impl<V: Rules> SimTable<V> {
     /// Seat `seat`'s move on every machine, its own first.
     fn decided(&mut self, seat: SeatIndex, decision: &Decision<V>) -> Result<Settled<V>, Error> {
+        // `NetDiscardPotionGameAction` names the slot as the player's own
+        // machine holds it.
+        let slot = match decision {
+            Decision::DiscardPotion { index } => self.machines[seat.at()].belt_slot(seat, *index),
+            _ => None,
+        };
         let own = super::sim::decide(&mut self.machines[seat.at()], seat, decision)?;
         if own.is_err() {
             return Ok(own);
@@ -106,6 +112,10 @@ impl<V: Rules> SimTable<V> {
             // A machine whose player has won shows the end of the run, and
             // what the other players still choose changes nothing it shows.
             if at == seat.at() || machine.run_won() {
+                continue;
+            }
+            if let Some(slot) = slot {
+                machine.discard_slot(seat, slot);
                 continue;
             }
             match super::sim::decide(machine, seat, decision) {
