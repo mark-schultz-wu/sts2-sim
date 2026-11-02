@@ -1,0 +1,13 @@
+# The Necrobinder carries Necro Mastery, and both players end the turn.
+# The Nibbit's attacks take hit points from Osty, and Necro Mastery deals
+# as much to every enemy, from the Necrobinder. It answers inside the
+# monster's move, which names no player, and the hit is its holder's.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"IRONCLAD"},{"character":"NECROBINDER"}]}
+{"cmd":"fight","encounter":"NIBBITS_WEAK","seat":0}
+{"cmd":"power","power":"NECRO_MASTERY_POWER","amount":1,"target":1,"seat":0}
+{"cmd":"end_turn","seat":0}
+{"cmd":"end_turn","seat":1}
+{"cmd":"end_turn","seat":0}
+{"cmd":"end_turn","seat":1}
+{"cmd":"end_turn","seat":0}
+{"cmd":"end_turn","seat":1}

@@ -1,0 +1,35 @@
+# The Defect throws Distilled Chaos at the Silent, whose deck is all
+# Survivors. Each Survivor it plays asks the Silent for a discard, in the
+# Defect's choice context, so each branches: the card's play ends as its
+# pick begins, and the pick waits on the Silent's queue. Then the Silent
+# answers the three picks in turn.
+{"cmd":"start","seed":"0RACLE1","ascension":"None","players":[{"character":"SILENT"},{"character":"DEFECT"}]}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"grant","card":"SURVIVOR","target":1,"seat":0}
+{"cmd":"fight","encounter":"NIBBITS_WEAK","seat":0}
+{"cmd":"grant","potion":"DISTILLED_CHAOS","target":1001,"seat":0}
+{"cmd":"use_potion","index":0,"target":0,"seat":1}
+{"cmd":"answer","pick":0,"seat":0}
+{"cmd":"answer","done":true,"seat":0}
+{"cmd":"answer","pick":0,"seat":0}
+{"cmd":"answer","done":true,"seat":0}
+{"cmd":"answer","pick":0,"seat":0}
+{"cmd":"answer","done":true,"seat":0}

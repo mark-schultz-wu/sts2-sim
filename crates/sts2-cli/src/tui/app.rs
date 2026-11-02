@@ -1,18 +1,18 @@
-//! The loop: draw, wait for a key, turn it into a move, send it, draw again.
+//! The screen's state: what it shows, and what each key asks of the run.
 //!
-//! Everything the game is asked is a `Decision<V>`, and everything drawn comes
-//! out of the view of the `Applied<V>` that came back. So this module is the
-//! only one that knows both. The screens read, and this decides.
+//! It holds no game. A player shows it where the run stands, and it turns a
+//! key into an [`Intent`]: a move, a fresh look, or nothing. What the table
+//! answered the move comes back to it, for the log. [`super::Human`] is the
+//! player that runs it at a terminal.
 //!
 //! Two rules it holds to. A key that cannot mean anything here does nothing and
 //! says nothing, because a beep on every stray press is worse than silence. And
 //! a move the game refuses is a *line in the log* rather than an error. A
 //! refusal is the game answering, and the run carries on.
 
-use super::Error;
 use sts2_core::{
-    Answer, BeltIndex, CombatId, Cost, Decided, Decision, HandIndex, Picks, Play, Question, Room,
-    Snapshot, TakeReward, View,
+    Answer, BeltIndex, CombatId, Cost, Decided, Decision, HandIndex, Picks, Question, Room,
+    Settled, Snapshot, TakeReward, View,
 };
 
 use super::input::Key;
@@ -100,8 +100,7 @@ pub enum Ended {
     NoRun,
 }
 
-pub struct App<V: crate::tui::Build, G: Play<V>> {
-    game: G,
+pub struct App<V: crate::tui::Build> {
     /// Why the loop will stop, read once it has.
     ended: Ended,
     /// What the player can see of where the game last stood. `None` only
@@ -110,6 +109,9 @@ pub struct App<V: crate::tui::Build, G: Play<V>> {
     /// The view and never the snapshot, so nothing the game keeps off its
     /// own screen can reach one of these.
     seen: Option<View<V>>,
+    /// What the last move decided, until the screen shows where it left the
+    /// run.
+    decided: Option<Decided>,
     stage: Stage,
     /// The run being set up, when there is no run.
     ///
@@ -119,21 +121,16 @@ pub struct App<V: crate::tui::Build, G: Play<V>> {
     pub options: Options,
 }
 
-impl<V, G> App<V, G>
-where
-    V: crate::tui::Build,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
-{
+impl<V: crate::tui::Build> App<V> {
     /// A screen in front of a run.
     ///
     /// The only kind there is. Starting one is [`super::setup`]'s, and it has
     /// happened by the time this exists.
-    pub fn playing(game: G, options: Options) -> App<V, G> {
+    pub fn new(options: Options) -> App<V> {
         App {
-            game,
             ended: Ended::Quit,
             seen: None,
+            decided: None,
             stage: Stage::Nothing,
             ui: Ui::default(),
             options,
@@ -156,54 +153,35 @@ where
         self.ended
     }
 
-    /// One look, for a caller that draws its own frames.
-    ///
-    /// Public because `check` drives the front end without a terminal under it.
-    /// A fault is a panic here rather than a `Result`. The callers are tests,
-    /// and a game that cannot answer `observe` has nothing for them to check.
-    pub fn look_now(&mut self) {
-        self.look().expect("the game answered `observe`");
+    /// Whether the player has left.
+    pub fn leaving(&self) -> bool {
+        self.ui.leaving
     }
 
-    /// One action, for a caller that has no keyboard.
-    pub fn press(&mut self, action: Action) {
+    /// One action, for a caller that has no keyboard, and what it asks.
+    pub fn press(&mut self, action: Action) -> Intent<V> {
         self.ui.toast = None;
-        let intent = self.act(action);
-        self.perform(intent)
-            .expect("the game answered the decision");
+        self.act(action)
     }
 
-    /// One key press.
+    /// One key press, and what it asks.
     ///
     /// Raw rather than an [`Action`], for a caller that has one.
-    pub fn key(&mut self, key: Key) -> Result<(), Error> {
+    pub fn key(&mut self, key: Key) -> Intent<V> {
         // A toast lasts until the next key, which has read it or moved on.
         self.ui.toast = None;
-        let intent = self.decide(key);
-        self.perform(intent)
+        self.decide(key)
     }
 
     /// What a key press changes on the screen, and what it leaves to ask.
     ///
     /// Every handler it reaches is a state transition, and none of them can
-    /// fail. Asking the game is [`App::perform`]'s, and happens after the
-    /// screen has finished changing.
+    /// fail. Asking the run is the player's, and happens after the screen has
+    /// finished changing.
     pub fn decide(&mut self, key: Key) -> Intent<V> {
         match keys::map(key) {
             Some(action) => self.act(action),
             None => Intent::Nothing,
-        }
-    }
-
-    /// Asks the game for what the keyboard decided to ask.
-    ///
-    /// The one place in the front end that talks to the game while it is being
-    /// played.
-    fn perform(&mut self, intent: Intent<V>) -> Result<(), Error> {
-        match intent {
-            Intent::Nothing => Ok(()),
-            Intent::Look => self.look(),
-            Intent::Send(decision) => self.send(decision).map(drop),
         }
     }
 
@@ -755,41 +733,21 @@ where
     }
 
     // -----------------------------------------------------------------------
-    // Talking to the game.
+    // What the run says.
     // -----------------------------------------------------------------------
 
-    pub(super) fn look(&mut self) -> Result<(), Error> {
-        let standing = self
-            .game
-            .observe()
-            .map_err(|e| Error::Looking(Box::new(e)))?;
-        self.arrive(standing);
-        Ok(())
-    }
-
-    /// Sends one decision, and reports whether the game accepted it.
-    fn send(&mut self, decision: Decision<V>) -> Result<bool, Error> {
-        let said = moves::describe(&decision);
-        let answered = match self.game.play(&decision) {
-            Ok(answered) => answered,
-            Err(e) => {
-                return Err(Error::Sending {
-                    said,
-                    source: Box::new(e),
-                });
-            }
-        };
-        Ok(self.accept(answered, Some(said)))
-    }
-
-    /// Takes what the game said, whichever half it said.
-    ///
-    /// A refusal is a value here rather than an error. The game answered, the
-    /// run is where it was, and the reason belongs on the screen where the
-    /// player can act on it.
     /// Takes where the run now stands, and resets the log when the screen
     /// behind it changes.
-    fn arrive(&mut self, standing: Snapshot<V>) {
+    pub fn show(&mut self, standing: Snapshot<V>) {
+        // A parked decision is not resolved either, and that is ordinary: the
+        // question is what tells the two apart. Without the second test this
+        // fired on every card selection in the game, including Neow's.
+        if self.decided.take() == Some(Decided::Abandoned) && standing.asking.is_none() {
+            self.ui.say(
+                Tone::Warned,
+                "the game abandoned that mid-cascade — the fight ended under it",
+            );
+        }
         let mut seen = standing.view();
         // The game's words, for whatever the run did not say itself.
         crate::text::fill(&mut seen);
@@ -812,40 +770,28 @@ where
         self.seen = Some(seen);
     }
 
-    fn accept(&mut self, answered: sts2_core::Answered<V>, said: Option<String>) -> bool {
-        let accepted = answered.is_ok();
-        match answered {
-            Ok(applied) => {
-                if let Some(said) = said {
-                    self.ui.say(Tone::Did, said);
-                }
-                let (decided, snapshot) = applied.split();
-                // A parked decision is not resolved either, and that is
-                // ordinary — the question is what tells the two apart. Without
-                // the second test this fired on every card selection in the
-                // game, including Neow's.
-                if decided == Decided::Abandoned && snapshot.asking.is_none() {
-                    self.ui.say(
-                        Tone::Warned,
-                        "the game abandoned that mid-cascade — the fight ended under it",
-                    );
-                }
-                self.arrive(snapshot);
+    /// What the run answered a move, whichever half it said.
+    ///
+    /// A refusal is a value here rather than an error. The game answered, the
+    /// run is where it was, and the reason belongs on the screen where the
+    /// player can act on it.
+    pub fn answered(&mut self, decision: &Decision<V>, settled: &Settled<V>) {
+        match settled {
+            Ok(decided) => {
+                self.ui.say(Tone::Did, moves::describe(decision));
+                self.decided = Some(*decided);
             }
-            Err(refusal) => {
-                // "No run" is not a refusal to report, it is a run waiting to
-                // be started. Anything else is the game saying no to something
-                // that was asked, which belongs in the log.
-                if matches!(refusal.reason, sts2_core::Reason::NoRun) {
-                    self.ended = Ended::NoRun;
-                    self.ui.leaving = true;
-                } else {
-                    self.ui
-                        .say(Tone::Refused, crate::render::refusal::refusal(&refusal));
-                }
+            // "No run" is not a refusal to report, it is a run waiting to be
+            // started. Anything else is the game saying no to something that
+            // was asked, which belongs in the log.
+            Err(refusal) if matches!(refusal.reason, sts2_core::Reason::NoRun) => {
+                self.ended = Ended::NoRun;
+                self.ui.leaving = true;
             }
+            Err(refusal) => self
+                .ui
+                .say(Tone::Refused, crate::render::refusal::refusal(refusal)),
         }
-        accepted
     }
 
     /// Puts the card under the cursor into the detail panel.
@@ -954,7 +900,6 @@ mod tests {
 
     use super::{App, Intent, Stage, priced};
     use crate::fixture::{self, playable, unplayable};
-    use crate::scripted::Scripted;
     use crate::tui::keys::Action;
     use crate::tui::state::{Aim, Options};
 
@@ -976,17 +921,16 @@ mod tests {
                 {"cmd": "answer", "cancel": true}
             ]}
         }));
-        let game = Scripted::saying(applied);
-        let sent = game.sent();
-        let mut app = App::playing(game, Options::default());
-        app.look_now();
-        app.press(Action::Mark);
-        app.press(Action::Cancel);
-        assert!(sent.all().is_empty(), "the first esc puts the mark down");
-        app.press(Action::Cancel);
+        let mut app = showing(applied);
+        assert_eq!(app.press(Action::Mark), Intent::Nothing);
         assert_eq!(
-            sent.all().last(),
-            Some(&Decision::Answer(sts2_core::Answer::Cancel)),
+            app.press(Action::Cancel),
+            Intent::Nothing,
+            "the first esc puts the mark down"
+        );
+        assert_eq!(
+            app.press(Action::Cancel),
+            Intent::Send(Decision::Answer(sts2_core::Answer::Cancel)),
         );
     }
 
@@ -995,26 +939,23 @@ mod tests {
     #[test]
     fn backspace_in_the_belt_throws_a_potion_away() {
         let belt = |moves: serde_json::Value| {
-            let game = Scripted::saying(fixture::applied(json!({
+            let mut app = showing(fixture::applied(json!({
                 "potions": ["FIRE_POTION"],
                 "moves": moves,
             })));
-            let sent = game.sent();
-            let mut app = App::playing(game, Options::default());
-            app.look_now();
             app.press(Action::ShowPotions);
-            app.press(Action::Discard);
-            sent.all()
+            app.press(Action::Discard)
         };
         let listed = belt(json!([{"cmd": "discard_potion", "index": 0}]));
         assert_eq!(
-            listed.last(),
-            Some(&Decision::DiscardPotion {
+            listed,
+            Intent::Send(Decision::DiscardPotion {
                 index: sts2_core::BeltIndex::try_new(0).expect("a belt index"),
             }),
         );
-        assert!(
-            belt(json!([])).is_empty(),
+        assert_eq!(
+            belt(json!([])),
+            Intent::Nothing,
             "nothing sent where none is listed"
         );
     }
@@ -1034,10 +975,7 @@ mod tests {
             "picked": [], "pile": "Draw",
             "state": {}
         }));
-        let game = Scripted::saying(applied);
-        let sent = game.sent();
-        let mut app = App::playing(game, Options::default());
-        app.look_now();
+        let mut app = showing(applied);
         let Some(sts2_core::Question::SelectCards { options, .. }) =
             app.view().and_then(|view| view.asking.as_ref())
         else {
@@ -1046,10 +984,9 @@ mod tests {
         // Bash is Basic and Inflame Uncommon, so Bash is listed first.
         assert_eq!(options.iter().map(|o| o.index).collect::<Vec<_>>(), [1, 0]);
 
-        app.press(Action::Confirm);
         assert_eq!(
-            sent.all().last(),
-            Some(&Decision::Answer(sts2_core::Answer::Cards(
+            app.press(Action::Confirm),
+            Intent::Send(Decision::Answer(sts2_core::Answer::Cards(
                 [1].into_iter().collect()
             ))),
         );
@@ -1128,18 +1065,16 @@ mod tests {
         assert_eq!(priced(Unpriced, Unpriced), "costs nothing");
     }
 
-    /// The front end, standing at what the game last said.
-    ///
-    /// The game under it fails the test if it is asked anything. Deciding what
-    /// a key press means must not reach it, and that is what holds it to that.
-    fn showing(applied: Applied<V>) -> App<V, Scripted<V>> {
-        let mut app = App::playing(Scripted::untouchable(), Options::default());
-        app.accept(Ok(applied), None);
+    /// The front end, standing at what the game last said. It holds no game,
+    /// so deciding what a key press means asks nothing of one.
+    fn showing(applied: Applied<V>) -> App<V> {
+        let mut app = App::new(Options::default());
+        app.show(applied.snapshot());
         app
     }
 
     /// A room with one numbered option in it.
-    fn in_an_event() -> App<V, Scripted<V>> {
+    fn in_an_event() -> App<V> {
         showing(fixture::applied(json!({
             "room": {"type": "Event", "id": "WELCOME_TO_WONGOS",
                      "options": [{"index": 6,
@@ -1149,7 +1084,7 @@ mod tests {
     }
 
     /// A fight, with one card that needs aiming and one that cannot be played.
-    fn in_a_fight() -> App<V, Scripted<V>> {
+    fn in_a_fight() -> App<V> {
         showing(fixture::applied(json!({
             "inCombat": true,
             "combat": fixture::combat(json!({

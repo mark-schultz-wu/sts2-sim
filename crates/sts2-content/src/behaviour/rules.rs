@@ -26,6 +26,7 @@ pub(crate) fn modify_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
             owner,
             holder,
             applier,
+            target,
             monster,
             on_turn_start,
             state,
@@ -36,6 +37,7 @@ pub(crate) fn modify_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
                 owner,
                 holder,
                 applier,
+                target,
                 monster,
                 on_turn_start,
                 history,
@@ -80,6 +82,7 @@ pub(crate) fn decide_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
             owner,
             holder,
             applier,
+            target,
             monster,
             on_turn_start,
             state,
@@ -91,6 +94,7 @@ pub(crate) fn decide_hook<V: crate::Build, P: sts2_core::Printed<V> + ?Sized>(
                 owner,
                 holder,
                 applier,
+                target,
                 monster,
                 on_turn_start,
                 history,
@@ -134,6 +138,7 @@ pub(crate) fn power_event_hook<V: crate::Build>(
         owner,
         holder,
         applier,
+        target,
         monster,
         on_turn_start,
         state,
@@ -144,6 +149,7 @@ pub(crate) fn power_event_hook<V: crate::Build>(
         owner,
         holder,
         applier,
+        target,
         monster,
         on_turn_start,
         history,
@@ -176,7 +182,7 @@ pub(crate) fn enchanted_changes<V: crate::Build>(
 pub(crate) fn card_result_pile<V: crate::Build>(
     card: V::Card,
     base: (Option<sts2_core::Pile>, sts2_core::PilePosition),
-) -> sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)> {
+) -> sts2_core::HookResponse<sts2_core::CardResult> {
     crate::behaviour::cards::result_pile::<V>(card, base)
 }
 
@@ -534,8 +540,11 @@ pub(crate) fn monster_health_after_added<V: crate::Build>(
     ascension: crate::generated::ascension::AscensionLevel,
     rolled: i32,
     teammates: &[i32],
+    scaled: impl Fn(i32) -> sts2_core::Decimal,
 ) -> Option<i32> {
-    crate::behaviour::monsters::health_after_added::<V>(monster, ascension, rolled, teammates)
+    crate::behaviour::monsters::health_after_added::<V>(
+        monster, ascension, rolled, teammates, scaled,
+    )
 }
 
 pub(crate) fn encounter_gold_proportion<V: crate::Build>(
@@ -892,6 +901,14 @@ pub(crate) fn observe_event<V: crate::Build>(
     run: &impl sts2_core::EventView<V>,
 ) -> sts2_core::Room<V> {
     crate::behaviour::events::observe::<V>(state, run)
+}
+
+pub(crate) fn event_kills<V: crate::Build>(
+    state: &V::EventState,
+    option: u8,
+    run: &impl sts2_core::EventView<V>,
+) -> bool {
+    crate::behaviour::events::kills::<V>(state, option, run)
 }
 
 pub(crate) fn choose_event<V: crate::Build, R: sts2_core::rng::GameRng>(
