@@ -56,6 +56,7 @@ pub use content::{
     Spawned, Stream, StreamKinds, StunResume, Table, Taken, TargetKinds, Temporary, TurnHistory,
     TurnPhaseKinds, UnplayableReasonKinds, Version, Writing,
 };
+pub use content::{CardResult, MAX_PLAYERS, PARTICIPANTS, Participants, PlayerTurns, ResultHolder};
 pub use event::{CarriedRelic, EventBehavior, EventView};
 pub use hook_response::HookResponse;
 pub use ident::{
@@ -86,9 +87,9 @@ pub use step::decision::{BeltIndex, Decision, HandIndex};
 pub use step::setup::{Gift, Setup};
 pub use step::start::{Player, RunModifier, Start};
 
-pub use play::coop::{Coop, Turn};
-pub use play::recorder::{Recorder, Tape};
 pub use play::recording::Recording;
 pub use play::refusal::{Reason, Refusal};
-pub use play::seat::{Peer, Peers, Seat, SeatAnswered, SeatIndex, Seated};
-pub use play::{Answered, Applied, Construct, Decided, Play, Snapshot};
+pub use play::seat::{Link, Peer, Peers, SeatAnswered, SeatIndex, Seated};
+pub use play::table::{RunTable, Settled};
+pub use play::verdict::{End, Verdict};
+pub use play::{Answered, Applied, Decided, Snapshot};

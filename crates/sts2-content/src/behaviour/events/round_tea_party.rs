@@ -55,6 +55,11 @@ impl<V: crate::Build> EventBehavior<V> for RoundTeaParty {
         crate::behaviour::events::page::<V>(V::Event::ROUND_TEA_PARTY, options, state.chosen)
     }
 
+    /// `WillKillPlayer`, for `PickFight`: its damage.
+    fn kills(&self, state: &State, option: u8, run: &impl EventView<V>) -> bool {
+        matches!(state.page, Page::Initial) && option == 1 && run.hp() <= DAMAGE
+    }
+
     /// `EnjoyTea`: Royal Poison, then a heal to full health, which finishes
     /// the event. `PickFight`: the page that goes on with it.
     /// `ContinueFight`: the damage, then the next relic from the front of the
