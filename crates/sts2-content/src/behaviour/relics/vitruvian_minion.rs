@@ -8,15 +8,20 @@ use crate::generated::cards::CardTag;
 /// `ModifyDamageMultiplicative` and `ModifyBlockMultiplicative`: twice the
 /// number a card tagged Minion deals or gives. A fight here has one player,
 /// whose every card is its owner's.
-pub(super) fn modify_hook<V: crate::Build>(hook: ModifyHook<V>) -> Modify<Number> {
+pub(super) fn modify_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    hook: ModifyHook<V>,
+) -> Modify<Number> {
     let doubled = Modify::Scaled(Fixed::new(2, 0));
     match hook {
         ModifyHook::DamageMultiplicative {
             card: Some(source), ..
-        } if source.card.tagged(CardTag::MINION) => doubled,
+        } if source.owner == owner && source.card.tagged(CardTag::MINION) => doubled,
         ModifyHook::BlockMultiplicative {
-            card: Some(card), ..
-        } if card.tagged(CardTag::MINION) => doubled,
+            card: Some(card),
+            player: Some(player),
+            ..
+        } if player == owner && card.tagged(CardTag::MINION) => doubled,
         ModifyHook::DamageMultiplicative { .. } | ModifyHook::BlockMultiplicative { .. } => {
             Modify::Nothing
         }

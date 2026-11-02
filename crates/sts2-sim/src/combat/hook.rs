@@ -3,6 +3,8 @@
 //! `Hook` hands each listener the notification and takes back what it wants
 //! done. A power, a relic and a card all answer in the same vocabulary, so
 //! this is where that vocabulary becomes commands, whichever kind asked.
+//! The fight acts for the listener's owner, which `Board::as_listener` sets
+//! as its actor.
 
 use sts2_core::{Fight, HookEffect, Rules};
 
@@ -71,12 +73,8 @@ pub(crate) fn apply<V: Rules, F: Fight<V>>(
                 });
                 fight.apply(block);
             }
-            // `PowerCmd.Apply` on the creature carrying the listener. Every
-            // hook delivered here names the creature acting, and a power only
-            // answers one that its own owner is party to, so the two are the
-            // same creature. `GainBlock` above reads the actor for that
-            // reason. A listener that could answer for someone else would need
-            // the owner carried alongside the effect.
+            // `PowerCmd.Apply` on the creature carrying the listener, which
+            // the board acts for.
             HookEffect::ApplyToOwner(power, amount) => fight.apply_to_actor(power, amount),
             // `PowerCmd.Apply<P>(HittableEnemies, amount, Owner)`, the list
             // taken before the first lands.

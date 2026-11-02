@@ -4,7 +4,6 @@ use crate::vars::RelicVars as _;
 use sts2_core::{EventHook, Modify, ModifyHook};
 
 use crate::behaviour::relics::Number;
-use crate::generated::runstate::CombatSide;
 
 /// `TurnsSeen`, a saved property, so a fight's end leaves it as it is.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -15,15 +14,16 @@ pub struct State {
 /// `BeforeSideTurnStart` counts its owner's turns, and `AfterModifyingHandDraw`
 /// starts the count again once the hand it changed is worked out. Its
 /// `AfterCombatEnd` only resets the counter's look.
-///
-/// A relic's owner is the player, and a fight here has one, so the player's
-/// side holds its owner.
-pub(super) fn event_hook<V: crate::Build>(state: &mut State, hook: EventHook<V>) {
+/// Each acts where its owner takes part in the turn.
+pub(super) fn event_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    state: &mut State,
+    hook: EventHook<V>,
+) {
     match hook {
-        EventHook::BeforeSideTurnStart {
-            side: CombatSide::Player,
-            ..
-        } => state.turns_seen += 1,
+        EventHook::BeforeSideTurnStart { participants, .. } if participants.contains(owner) => {
+            state.turns_seen += 1
+        }
         // The game hands this hook only to a listener that changed the hand,
         // which this one did on the paying turn alone.
         EventHook::HandDrawModified if state.turns_seen == V::Relic::POLLINOUS_CORE_TURNS => {
@@ -34,8 +34,14 @@ pub(super) fn event_hook<V: crate::Build>(state: &mut State, hook: EventHook<V>)
 }
 
 /// `ModifyHandDraw`: its cards on the paying turn.
-pub(super) fn modify_hook<V: crate::Build>(state: &State, hook: ModifyHook<V>) -> Modify<Number> {
+pub(super) fn modify_hook<V: crate::Build>(
+    owner: sts2_core::CombatId,
+    state: &State,
+    hook: ModifyHook<V>,
+) -> Modify<Number> {
     match hook {
+        // `player != base.Owner`: another player's number is left as it is.
+        ModifyHook::HandDraw { player, .. } if player != owner => Modify::Nothing,
         ModifyHook::HandDraw { .. } if state.turns_seen == V::Relic::POLLINOUS_CORE_TURNS => {
             Modify::Added(V::Relic::POLLINOUS_CORE_CARDS)
         }
